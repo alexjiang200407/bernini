@@ -35,7 +35,9 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
 
 add_executable (Bernini WIN32 ${SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE d3d11.lib)
+find_package(spdlog REQUIRED)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog d3d11.lib)
 
 target_include_directories(
 	${PROJECT_NAME}

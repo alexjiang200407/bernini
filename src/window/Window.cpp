@@ -1,4 +1,4 @@
-#include "Window.h"
+#include "window/Window.h"
 
 HINSTANCE Window::WindowClass::hInstance;
 
@@ -6,7 +6,7 @@ Window::Window()
 {
 	// Creates window
 	hWnd = CreateWindowEx(
-		0, WindowClass::wndClassName, L"Bernini", WS_SYSMENU,
+		0, WindowClass::WND_CLASS_NAME, L"Bernini", WS_SYSMENU,
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 		NULL,
 		NULL,
@@ -51,13 +51,23 @@ LRESULT Window::s_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 LRESULT Window::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-
 	switch (uMsg)
 	{
 	case WM_CLOSE:
 		PostQuitMessage(0);
 		break;
+	case WM_KEYDOWN:
+	{
+		kbd.KeyPress((int)wParam, lParam & 0xffff, lParam & (0x1 << 24), !(lParam & (0x1 << 30)));
+		break;
 	}
+	case WM_KEYUP:
+	{
+		kbd.KeyRelease((int)wParam);
+		break;
+	}
+	}
+
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
@@ -67,7 +77,7 @@ void Window::WindowClass::Register()
 
 	WNDCLASSEX wcex = {0};
 	wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.lpszClassName = wndClassName;
+    wcex.lpszClassName = WND_CLASS_NAME;
     wcex.style = CS_HREDRAW | CS_VREDRAW;
 	wcex.lpfnWndProc = s_WndProc;
 	wcex.cbClsExtra = 0;
@@ -84,5 +94,5 @@ void Window::WindowClass::Register()
 
 void Window::WindowClass::Unregister()
 {
-	UnregisterClass(wndClassName, hInstance);
+	UnregisterClass(WND_CLASS_NAME, hInstance);
 }

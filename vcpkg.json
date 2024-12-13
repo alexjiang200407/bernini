@@ -2,8 +2,6 @@
   "name": "bernini",
   "description": "Bernini 3D Graphics Engine",
   "dependencies": [
-    "glad",
-    "glfw3",
-    "glm"
+    "spdlog"
   ]
 }

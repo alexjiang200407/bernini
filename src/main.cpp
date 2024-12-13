@@ -1,10 +1,11 @@
-#include "BerniniWin.h"
-#include "Window.h"
+#include "window/BerniniWin.h"
+#include "window/Window.h"
 #include <d3d11.h>
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pCmdLine, int nCmdShow)
 {
 	Window::WindowClass::Register();
+	logger::Init();
 
 	Window wnd;
 
