@@ -26,5 +26,4 @@ private:
 	bool extended = false;
 	bool first = false;
 	TimePoint pressedStart;
-	float heldMs;
 };

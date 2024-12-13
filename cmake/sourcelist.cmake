@@ -1,11 +1,17 @@
 set(SOURCES
+src/events/KeyEventListener.cpp
 src/input/Keyboard.cpp
+src/input/KeyEvent.cpp
 src/input/KeyState.cpp
 src/input/Mouse.cpp
 src/main.cpp
 src/util/logger.cpp
 src/window/Window.cpp
+include/events/EventListener.h
+include/events/EventSource.h
+include/events/KeyEventListener.h
 include/input/Keyboard.h
+include/input/KeyEvent.h
 include/input/KeyState.h
 include/input/Mouse.h
 include/PCH.h

@@ -1,4 +1,5 @@
 #include "window/Window.h"
+#include "input/KeyEvent.h"
 
 HINSTANCE Window::WindowClass::hInstance;
 
@@ -67,7 +68,6 @@ LRESULT Window::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 	}
 	}
-
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 

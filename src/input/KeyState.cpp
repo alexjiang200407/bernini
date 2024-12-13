@@ -23,8 +23,7 @@ void KeyState::Press(int repeat, bool extended, bool isFirst)
 	TimePoint now = high_resolution_clock::now();
 	if(isFirst)
 		pressedStart = now;
-	duration<float, std::milli> elapsed = now - pressedStart;
-	heldMs = elapsed.count();
+
 }
 
 void KeyState::Release()
@@ -33,4 +32,11 @@ void KeyState::Release()
 	this->type = KeyState::Type::Release;
 }
 
-float KeyState::GetHeldMs() const { return heldMs; }
+float KeyState::GetHeldMs() const
+{
+	using namespace std::chrono;
+	TimePoint now = high_resolution_clock::now();
+	duration<float, std::milli> elapsed = now - pressedStart;
+
+	return elapsed.count();
+}
