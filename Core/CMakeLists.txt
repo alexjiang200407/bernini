@@ -22,21 +22,16 @@ target_link_libraries(
         spdlog::spdlog_header_only
 )
 
-target_precompile_headers(Core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/Core/pch.h
+target_precompile_headers(Core
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/Core/pch.h
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}/PCH/pch.h
 )
 
 target_include_directories(Core
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
-    PREFIX "Source Files"
-    FILES ${CORE_SOURCES})
+target_sources(Core PRIVATE ${CORE_SOURCES} ${CORE_HEADERS})
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/include/Core
-    PREFIX "Header Files"
-    FILES ${CORE_HEADERS})
-
-source_group("Precompile Header File"
-    FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/Core/pch.h)

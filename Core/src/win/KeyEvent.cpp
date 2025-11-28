@@ -36,18 +36,6 @@ namespace core::win
 		visitor.Visit(*this);
 	}
 
-	KeyEvent*
-	IWindowEvent::AsKeyEvent() noexcept
-	{
-		return nullptr;
-	}
-
-	MouseEvent*
-	IWindowEvent::AsMouseEvent() noexcept
-	{
-		return nullptr;
-	}
-
 	void
 	IWindowEvent::AddToQueue(Window& wnd, std::unique_ptr<IWindowEvent>&& evt)
 	{
@@ -55,7 +43,7 @@ namespace core::win
 			"Event types are invalid" && evt->GetType() > IWindowEvent::kInvalid ||
 			evt->GetType() < IWindowEvent::kCount);
 
-		wnd.queues[static_cast<size_t>(evt->GetType())].emplace_back(std::move(evt));
+		wnd.queue.emplace_back(std::move(evt));
 	}
 
 }

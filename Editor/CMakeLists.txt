@@ -15,6 +15,11 @@ add_executable(Editor WIN32
 
 target_link_libraries(Editor PRIVATE Core Renderer)
 
+target_precompile_headers(Editor
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+)
+
 source_group(
     TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
     PREFIX "Source Files"

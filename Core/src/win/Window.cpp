@@ -13,53 +13,102 @@ namespace core::win
 {
 	std::atomic_size_t glfwInitializedCount = 0u;
 
-	Window::Window(int width, int height, std::string_view title) noexcept
+	Window::Window(const WindowOptions& opts) noexcept
 	{
 		std::size_t prev = glfwInitializedCount.fetch_add(1);
 		assert(prev != std::numeric_limits<std::size_t>::max());
 		if (prev == 0)
 			glfwInit();
 
-		glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+		glfwWindowHint(GLFW_VISIBLE, opts.visible ? GLFW_TRUE : GLFW_FALSE);
+		glfwWindowHint(GLFW_RESIZABLE, opts.resizable ? GLFW_TRUE : GLFW_FALSE);
+		glfwWindowHint(GLFW_DECORATED, opts.decorated ? GLFW_TRUE : GLFW_FALSE);
 
-		// Auto get width and height if set to 0
-		if (width == 0 || height == 0)
+		GLFWmonitor*       monitor = glfwGetPrimaryMonitor();
+		const GLFWvidmode* vidMode = nullptr;
+		if (monitor)
+			vidMode = glfwGetVideoMode(monitor);
+
+		int width  = opts.width;
+		int height = opts.height;
+
+		// Use video mode dimensions if width/height not specified
+		if ((width == 0 || height == 0) && vidMode)
 		{
-			GLFWmonitor* primary = glfwGetPrimaryMonitor();
-			if (primary)
-			{
-				const GLFWvidmode* mode = glfwGetVideoMode(primary);
-				if (mode)
-				{
-					if (width == 0)
-						width = mode->width;
-					if (height == 0)
-						height = mode->height;
-				}
-			}
+			if (width == 0)
+				width = vidMode->width;
+			if (height == 0)
+				height = vidMode->height;
 		}
 
-		glfwWindow = glfwCreateWindow(width, height, title.data(), nullptr, nullptr);
+		// Fallback dimensions
+		if (width == 0)
+			width = 800;
+		if (height == 0)
+			height = 600;
+
+		GLFWmonitor* windowMonitor = nullptr;
+
+		switch (opts.mode)
+		{
+		case WindowOptions::Mode::Windowed:
+			break;
+
+		case WindowOptions::Mode::Fullscreen:
+			windowMonitor = monitor;
+			if (vidMode)
+			{
+				width  = vidMode->width;
+				height = vidMode->height;
+			}
+			break;
+
+		case WindowOptions::Mode::BorderlessFullscreen:
+			windowMonitor = nullptr;
+			if (vidMode)
+			{
+				width  = vidMode->width;
+				height = vidMode->height;
+			}
+			glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+			break;
+		}
+
+		glfwWindow = glfwCreateWindow(width, height, opts.title.data(), windowMonitor, nullptr);
+		if (!glfwWindow)
+		{
+			return;
+		}
+
+		if (opts.mode == WindowOptions::Mode::BorderlessFullscreen && monitor && vidMode)
+		{
+			glfwSetWindowMonitor(
+				glfwWindow,
+				nullptr,
+				0,
+				0,
+				vidMode->width,
+				vidMode->height,
+				vidMode->refreshRate);
+		}
 
 		glfwSetWindowUserPointer(glfwWindow, this);
-
 		glfwSetKeyCallback(glfwWindow, KeyEvent::GLFWCallback);
 		glfwSetCursorPosCallback(glfwWindow, MouseEvent::GLFWCursorPosCallback);
 		glfwSetMouseButtonCallback(glfwWindow, MouseEvent::GLFWMouseButtonCallback);
 		glfwSetScrollCallback(glfwWindow, MouseEvent::GLFWScrollCallback);
 
-		glfwShowWindow(glfwWindow);
+		if (opts.visible)
+			glfwShowWindow(glfwWindow);
 	}
 
 	void
 	Window::Accept(IWindowEventVisitor& visitor) noexcept
 	{
-		for (auto& row : queues)
+		for (auto& evt : queue)
 		{
-			for (auto& evt : row)
-			{
-				evt->Accept(visitor);
-			}
+			evt->Accept(visitor);
 		}
 	}
 
@@ -89,10 +138,7 @@ namespace core::win
 	void
 	Window::Flush() noexcept
 	{
-		for (auto& row : queues)
-		{
-			row.clear();
-		}
+		queue.clear();
 	}
 
 }
