@@ -5,12 +5,6 @@
 
 namespace core::win
 {
-	KeyEvent*
-	MouseEvent::AsKeyEvent() noexcept
-	{
-		return nullptr;
-	}
-
 	MouseEvent*
 	MouseEvent::AsMouseEvent() noexcept
 	{

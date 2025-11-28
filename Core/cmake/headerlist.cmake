@@ -1,9 +1,0 @@
-set(CORE_HEADERS
-	include/Core/pch.h
-	include/Core/win/IWindowEvent.h
-	include/Core/win/IWindowEventVisitor.h
-	include/Core/win/KeyEvent.h
-	include/Core/win/MouseEvent.h
-	include/Core/win/WinAPI.h
-	include/Core/win/Window.h
-)

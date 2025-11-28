@@ -18,10 +18,10 @@ namespace core::win
 		virtual ~IWindowEvent() noexcept = default;
 
 		virtual class KeyEvent*
-		AsKeyEvent() noexcept = 0;
+		AsKeyEvent() noexcept;
 
 		virtual class MouseEvent*
-		AsMouseEvent() noexcept = 0;
+		AsMouseEvent() noexcept;
 
 		virtual void
 		Accept(class IWindowEventVisitor& visitor) const = 0;

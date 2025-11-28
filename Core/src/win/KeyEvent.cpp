@@ -30,16 +30,22 @@ namespace core::win
 		return this;
 	}
 
-	MouseEvent*
-	KeyEvent::AsMouseEvent() noexcept
-	{
-		return nullptr;
-	}
-
 	void
 	KeyEvent::Accept(IWindowEventVisitor& visitor) const
 	{
 		visitor.Visit(*this);
+	}
+
+	KeyEvent*
+	IWindowEvent::AsKeyEvent() noexcept
+	{
+		return nullptr;
+	}
+
+	MouseEvent*
+	IWindowEvent::AsMouseEvent() noexcept
+	{
+		return nullptr;
 	}
 
 	void

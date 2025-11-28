@@ -1,5 +1,6 @@
 #include <Core/win/WinAPI.h>
 #include <Core/win/Window.h>
+#include <Renderer/Renderer.h>
 
 int APIENTRY
 wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
@@ -27,6 +28,8 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		wnd.Accept(visitor);
 		wnd.Flush();
 	}
+
+	OutputDebugString(DummyExport());
 
 	return 0;
 }

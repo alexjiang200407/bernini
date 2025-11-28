@@ -1,0 +1,68 @@
+
+file(GLOB_RECURSE RENDERER_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+)
+
+file(GLOB_RECURSE RENDERER_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp
+)
+
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsl
+)
+
+foreach(SHADER ${SHADER_FILES})
+    set_source_files_properties(${SHADER}
+        PROPERTIES
+            VS_SHADER_TYPE Pixel
+            VS_SHADER_MODEL "5.0"
+            VS_SHADER_ENTRYPOINT "main"
+            VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
+            VS_SHADER_FLAGS "/Od"
+            VS_SHADER_ENABLE_DEBUG "true"
+    )
+endforeach()
+
+add_library(Renderer SHARED
+    ${RENDERER_SOURCES}
+    ${RENDERER_HEADERS}
+    ${SHADER_FILES}
+)
+
+# Define export macro for DLL
+target_compile_definitions(Renderer PRIVATE RENDERER_EXPORTS)
+
+target_include_directories(Renderer
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_precompile_headers(Renderer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/Renderer/pch.h
+)
+
+target_link_libraries(Renderer PRIVATE Core)
+
+source_group(
+    TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PREFIX "Source Files"
+    FILES ${RENDERER_SOURCES}
+)
+
+source_group(
+    TREE ${CMAKE_CURRENT_SOURCE_DIR}/include/Renderer
+    PREFIX "Header Files"
+    FILES ${RENDERER_HEADERS}
+)
+
+source_group(
+    TREE ${CMAKE_CURRENT_SOURCE_DIR}/shaders
+    PREFIX "Shaders"
+    FILES ${SHADER_FILES}
+)
+
+source_group("Precompile Header File"
+    FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/Renderer/pch.h
+)

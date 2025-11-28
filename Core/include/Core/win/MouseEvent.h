@@ -23,9 +23,6 @@ namespace core::win
 		GLFWScrollCallback(GLFWwindow* wnd, double xoffset, double yoffset);
 
 	public:
-		KeyEvent*
-		AsKeyEvent() noexcept override;
-
 		MouseEvent*
 		AsMouseEvent() noexcept override;
 

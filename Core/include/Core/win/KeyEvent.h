@@ -20,9 +20,6 @@ namespace core::win
 		KeyEvent*
 		AsKeyEvent() noexcept override;
 
-		MouseEvent*
-		AsMouseEvent() noexcept override;
-
 		void
 		Accept(class IWindowEventVisitor& visitor) const override;
 

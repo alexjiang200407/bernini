@@ -1,2 +1,0 @@
-set(BERNINI_HEADERS
-)
