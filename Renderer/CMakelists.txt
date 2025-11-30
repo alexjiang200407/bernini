@@ -30,6 +30,7 @@ target_link_libraries(
     Renderer
     PRIVATE
         Core
+        fg::FrameGraph
 )
 
 target_include_directories(Renderer

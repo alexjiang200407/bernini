@@ -1,5 +1,5 @@
 #include "dx11/DXError.h"
-#include <Renderer/Renderer.h>
+#include <Renderer/IRenderer.h>
 
 namespace renderer
 {

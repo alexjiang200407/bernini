@@ -1,15 +1,5 @@
 #pragma once
 
-#ifdef _WIN32
-#	ifdef RENDERER_EXPORTS
-#		define RENDERER_API __declspec(dllexport)
-#	else
-#		define RENDERER_API __declspec(dllimport)
-#	endif
-#else
-#	define RENDERER_API
-#endif
-
 namespace renderer
 {
 	class RendererException : public std::exception
@@ -38,23 +28,4 @@ namespace renderer
 		std::string          message;
 		std::source_location loc;
 	};
-
-	struct RendererOptions
-	{
-		int width  = 0;
-		int height = 0;
-	};
-
-	class IRenderer
-	{
-	public:
-		virtual ~IRenderer() = default;
-
-		virtual void
-		StartFrame() = 0;
-
-		static std::unique_ptr<IRenderer>
-		Create(const RendererOptions& options = {});
-	};
-
 }

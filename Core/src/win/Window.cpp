@@ -6,7 +6,7 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <glfw/glfw3native.h>
 
-#include "Core/win/KeyEvent.h"
+#include <Core/win/KeyEvent.h>
 #include <Core/win/MouseEvent.h>
 
 namespace core::win
