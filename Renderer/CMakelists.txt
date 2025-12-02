@@ -1,6 +1,6 @@
-file(GLOB_RECURSE RENDERER_COMMON_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.c
+file(GLOB RENDERER_COMMON_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
 
 file(GLOB_RECURSE RENDERER_SHARED_HEADERS CONFIGURE_DEPENDS
@@ -8,20 +8,18 @@ file(GLOB_RECURSE RENDERER_SHARED_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Renderer/*.hpp
 )
 
-file(GLOB_RECURSE RENDERER_COMMON_HEADERS CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.hpp
+file(GLOB RENDERER_COMMON_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
 add_library(Renderer STATIC
-    ${RENDERER_SHARED_SOURCES}
     ${RENDERER_SHARED_HEADERS}
     ${RENDERER_COMMON_HEADERS}
+    ${RENDERER_COMMON_SOURCES}
 )
 
 target_precompile_headers(Renderer
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/common/pch.h
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h
 )
@@ -31,6 +29,7 @@ target_link_libraries(
     PRIVATE
         Core
         fg::FrameGraph
+        rhi
 )
 
 target_include_directories(Renderer

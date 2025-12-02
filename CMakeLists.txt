@@ -10,5 +10,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(Core)
 add_subdirectory(extern/FrameGraph)
+add_subdirectory(RHI)
 add_subdirectory(Renderer)
 add_subdirectory(Editor)

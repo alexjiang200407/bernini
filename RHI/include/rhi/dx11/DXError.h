@@ -1,7 +1,6 @@
 #pragma once
-#include <Renderer/RendererException.h>
 
-namespace renderer
+namespace rhi::dx11
 {
 	// Result returned from a DirectX function call
 	struct DXResult
@@ -14,7 +13,7 @@ namespace renderer
 		std::source_location loc;
 	};
 
-	class DXException : public RendererException
+	class DXException : public std::runtime_error
 	{
 	public:
 		DXException(DXResult&& result) noexcept;

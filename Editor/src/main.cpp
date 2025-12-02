@@ -1,6 +1,6 @@
 #include <Core/win/WinAPI.h>
 #include <Core/win/Window.h>
-#include <Renderer/IRenderer.h>
+#include <Renderer/Renderer.h>
 
 int APIENTRY
 wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
@@ -13,7 +13,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		opts.height = 600;
 
 		auto wnd      = core::win::Window{ opts };
-		auto renderer = renderer::IRenderer::Create();
+		auto renderer = renderer::Renderer{};
 
 		while (wnd.PollEvents())
 		{
@@ -36,7 +36,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			wnd.Accept(visitor);
 			wnd.Flush();
 
-			renderer->DrawFrame();
+			renderer.DrawFrame();
 		}
 	}
 	catch (const renderer::RendererException& e)

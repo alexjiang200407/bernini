@@ -1,11 +1,11 @@
-#include "dx11/DXError.h"
 #include <Core/str/str.h>
 #include <Core/win/WinAPI.h>
+#include <rhi/dx11/DXError.h>
 
 namespace
 {
 	std::wstring
-	GetErrorDescription(HRESULT hr)
+	GetErrorDescription(HRESULT hr, std::source_location /* TODO: Use me*/)
 	{
 		wchar_t*   descriptionWinalloc = nullptr;
 		const auto result              = FormatMessageW(
@@ -32,7 +32,7 @@ namespace
 	}
 }
 
-namespace renderer
+namespace rhi::dx11
 {
 	DXResult::DXResult(unsigned int hr, std::source_location loc) noexcept : hr{ hr }, loc{ loc } {}
 
@@ -46,7 +46,7 @@ namespace renderer
 	}
 
 	DXException::DXException(DXResult&& result) noexcept :
-		RendererException{ core::str::wide_to_string(GetErrorDescription(result.hr)), result.loc },
+		std::runtime_error{ core::str::wide_to_string(GetErrorDescription(result.hr, result.loc)) },
 		code{ result.hr }
 	{}
 
