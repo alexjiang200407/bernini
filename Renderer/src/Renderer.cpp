@@ -1,6 +1,6 @@
 #include <Renderer/Renderer.h>
 #include <fg/FrameGraph.hpp>
-#include <rhi/dx11/Device.h>
+#include <rhi/rhi.h>
 
 //namespace renderer::dx
 //{
@@ -60,7 +60,7 @@ namespace renderer
 	Renderer::Renderer(const RendererOptions& opts)
 	{
 		(void)opts;
-		auto device = rhi::dx11::Device::Create();
+		auto device = rhi::IDevice::Create();
 	}
 
 	void

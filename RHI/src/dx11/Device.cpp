@@ -1,12 +1,12 @@
-#include <rhi/dx11/Device.h>
+#include "dx11/Device.h"
 
 namespace rhi::dx11
 {
-	DeviceHandle
-	Device::Create()
-	{
-		return DeviceHandle(new Device());
-	}
-
 	Device::Device() {}
+}
+
+rhi::IDevice::Handle
+rhi::IDevice::Create()
+{
+	return Handle(new dx11::Device());
 }

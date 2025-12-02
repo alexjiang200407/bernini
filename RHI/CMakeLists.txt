@@ -3,6 +3,8 @@ file(GLOB_RECURSE RHI_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/detail/*.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/detail/*.h
 
 )
 

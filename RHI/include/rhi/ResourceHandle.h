@@ -1,8 +1,9 @@
+#pragma once
 
 namespace rhi
 {
 	template <typename T>
-		requires std::derived_from<T, IResource>
+	//requires std::derived_from<T, IResource>
 	class ResourceHandle
 	{
 	public:

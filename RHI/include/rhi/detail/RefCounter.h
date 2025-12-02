@@ -6,19 +6,19 @@ namespace rhi::detail
 	class RefCounter : public T
 	{
 	private:
-		std::atomic<unsigned long> m_refCount = 1;
+		std::atomic<unsigned long> refCount = 1;
 
 	public:
 		virtual unsigned long
 		AddRef() override
 		{
-			return ++m_refCount;
+			return ++refCount;
 		}
 
 		virtual unsigned long
 		Release() override
 		{
-			unsigned long result = --m_refCount;
+			unsigned long result = --refCount;
 			if (result == 0)
 			{
 				delete this;
@@ -29,7 +29,7 @@ namespace rhi::detail
 		virtual unsigned long
 		GetRefCount() override
 		{
-			return m_refCount.load();
+			return refCount.load();
 		}
 	};
 }

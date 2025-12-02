@@ -7,8 +7,13 @@ namespace rhi
 	class IDevice : public IResource
 	{
 	public:
-		~IDevice() = default;
-	};
+		using Handle = ResourceHandle<IDevice>;
 
-	using DeviceHandle = ResourceHandle<IDevice>;
+	public:
+		~IDevice() = default;
+
+		[[nodiscard]]
+		static Handle
+		Create();
+	};
 }
