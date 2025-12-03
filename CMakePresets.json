@@ -11,8 +11,7 @@
       "hidden": true,
       "cacheVariables": {
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
-        "RENDERER_BACKEND": "DX11"
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
       }
     },
     {
@@ -22,12 +21,20 @@
       "toolset": "v143"
     },
     {
+      "name": "dx11",
+      "hidden": true,
+      "cacheVariables": {
+        "RENDERER_BACKEND": "DX11",
+        "NVRHI_WITH_DX11": "ON"
+      }
+    },
+    {
       "name": "msvc",
       "hidden": true,
       "cacheVariables": {
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_CXX_FLAGS": "/EHsc /MP /W4 /WX /external:W0 /we4265 /wd4996 /we4244 /we4267 /we4800 /we4305",
-        "CMAKE_CXX_FLAGS_RELEASE": "/O2 /DNDEBUG /EHsc /W4 /WX /external:W0 /we4265 /wd4996 /we4244 /we4267 /we4800 /we4305"
+        "CMAKE_CXX_FLAGS": "/EHsc /MP /external:W0",
+        "CMAKE_CXX_FLAGS_RELEASE": "/O2 /DNDEBUG /EHsc /external:W0"
       }
     },
     {
@@ -38,7 +45,8 @@
         "vcpkg",
         "windows",
         "vs2022",
-        "msvc"
+        "msvc",
+        "dx11"
       ]
     },
     {
@@ -49,7 +57,8 @@
         "vcpkg",
         "windows",
         "vs2022",
-        "msvc"
+        "msvc",
+        "dx11"
       ]
     }
   ],
