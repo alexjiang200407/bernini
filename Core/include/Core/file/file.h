@@ -4,4 +4,8 @@ namespace core::file
 {
 	std::vector<std::byte>
 	readFileBytes(const std::string& filePath);
+
+	std::filesystem::path
+	getLibraryPath();
+
 }

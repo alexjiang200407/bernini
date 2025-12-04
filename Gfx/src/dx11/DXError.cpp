@@ -46,7 +46,7 @@ namespace gfx::dx
 	}
 
 	DXException::DXException(DXResult&& result) noexcept :
-		RendererException{ BERNINI_GFX_RENDERER_RESULT_ERROR_DIRECTX11_ERROR,
+		GfxException{ GFX_RESULT_ERROR_DIRECTX11_ERROR,
 		                   "DirectX 11 Error",
 		                   core::str::wide_to_string(GetErrorDescription(result.hr)),
 		                   result.loc },

@@ -1,12 +1,12 @@
 #pragma once
-#include <gfx/gfx.h>
+#include <gfx/common.h>
 
 namespace game
 {
 	class GfxHandle
 	{
 	public:
-		explicit GfxHandle(Bernini_GfxObj handle) noexcept;
+		explicit GfxHandle(GfxObj handle) noexcept;
 
 		GfxHandle() noexcept;
 
@@ -20,17 +20,17 @@ namespace game
 		GfxHandle&
 		operator=(GfxHandle&& other) noexcept;
 
-		operator Bernini_GfxObj() const noexcept;
+		operator GfxObj() const noexcept;
 
 		~GfxHandle() { Reset(); }
 
-		Bernini_GfxObj*
+		GfxObj*
 		operator&() noexcept
 		{
 			return &handle_;
 		}
 
-		Bernini_GfxObj
+		GfxObj
 		Release() noexcept;
 
 		void
@@ -42,14 +42,14 @@ namespace game
 			return handle_.destroy != nullptr && handle_.data != nullptr;
 		}
 
-		Bernini_GfxObj
+		GfxObj
 		GetNative() const noexcept
 		{
 			return handle_;
 		}
 
 	private:
-		Bernini_GfxObj handle_;
+		GfxObj handle_;
 	};
 
 }

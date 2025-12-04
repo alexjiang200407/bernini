@@ -1,15 +1,15 @@
-#include "RendererException.h"
-#include <gfx/Renderer.h>
+#include "GfxException.h"
+#include <gfx/common.h>
 
 namespace gfx
 {
-	Bernini_GfxErrorInfo
-	RendererException::GenerateErrorInfo(
-		Bernini_GfxResult res,
+	GfxErrorInfo
+	GfxException::GenerateErrorInfo(
+		GfxResult res,
 		std::string_view  title,
 		std::string_view  body) noexcept
 	{
-		Bernini_GfxErrorInfo info{};
+		GfxErrorInfo info{};
 
 		info.result = res;
 		std::strncpy(info.title, title.data(), sizeof(info.title));

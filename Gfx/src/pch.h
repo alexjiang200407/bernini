@@ -12,4 +12,5 @@
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/utils.h>
 
-#include "mathutil.h"
+#include "logger.h"
+#include "math/util.h"

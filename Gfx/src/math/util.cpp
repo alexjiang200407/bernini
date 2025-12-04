@@ -1,4 +1,4 @@
-#include "mathutil.h"
+#include "math/util.h"
 
 namespace gfx::math
 {

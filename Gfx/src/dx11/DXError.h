@@ -1,5 +1,5 @@
 #pragma once
-#include "RendererException.h"
+#include "GfxException.h"
 
 namespace gfx::dx
 {
@@ -14,7 +14,7 @@ namespace gfx::dx
 		std::source_location loc;
 	};
 
-	class DXException : public RendererException
+	class DXException : public GfxException
 	{
 	public:
 		DXException(DXResult&& result) noexcept;

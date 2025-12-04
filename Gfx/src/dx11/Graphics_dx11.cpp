@@ -1,17 +1,16 @@
 #include "GfxBase.h"
-#include "RendererException.h"
-#include "dx11/DXError.h"
-#include "ffiUtil.h"
+#include "ffi/util.h"
+#include "graphics/Graphics.h"
 #include <Core/except/BerniniException.h>
-#include <gfx/Renderer.h>
+#include <gfx/gfx.h>
 
 namespace gfx
 {
-	class Renderer : public GfxBase
+	class Graphics : public IGraphics
 	{
 	public:
-		Renderer(const Bernini_RendererOptions& opts);
-		~Renderer();
+		Graphics(const GraphicsOptions& opts);
+		~Graphics();
 
 		void
 		DrawFrame();
@@ -22,11 +21,9 @@ namespace gfx
 		nvrhi::RefCountPtr<ID3D11Device>        device;
 		nvrhi::RefCountPtr<ID3D11Texture2D>     backBuffer;
 		nvrhi::TextureHandle                    nvrhiBackBuffer;
-		nvrhi::DeviceHandle                     nvrhiDevice;
-		nvrhi::FramebufferHandle                nvrhiFramebuffer;
 	};
 
-	Renderer::Renderer(const Bernini_RendererOptions& opts)
+	Graphics::Graphics(const GraphicsOptions& opts)
 	{
 		constexpr static unsigned int bufferCount = 2u;
 
@@ -96,10 +93,10 @@ namespace gfx
 		}
 	}
 
-	Renderer::~Renderer() {}
+	Graphics::~Graphics() {}
 
 	void
-	Renderer::DrawFrame()
+	Graphics::DrawFrame()
 	{
 		nvrhi::CommandListHandle commandList = nvrhiDevice->createCommandList();
 		nvrhi::utils::ClearColorAttachment(
@@ -115,48 +112,14 @@ namespace gfx
 	}
 }
 
-Bernini_GfxResult
-bernini_createRenderer(Bernini_RendererOptions options, Bernini_GfxObj* out)
+GfxResult
+createGraphics(GraphicsOptions options, Graphics* out)
 {
-	try
-	{
-		if (out == nullptr)
-		{
-			throw gfx::RendererException{ BERNINI_GFX_RENDERER_RESULT_ERROR_INVALID_ARGUMENT,
-				                          "Invalid Argument",
-				                          "<out> cannot be nullptr" };
-		}
-		auto renderer = new gfx::Renderer{ options };
-		out->destroy  = gfx::ffi::handleDeleteThunk<gfx::Renderer>;
+	return gfx::ffi::apiInvoke([=]() -> GfxResult {
+		gfx::ffi::validatePtr(out, "out");
+		out->destroy = gfx::ffi::deleteThunk;
 
-		out->data = renderer;
-		return BERNINI_GFX_RENDERER_RESULT_OK;
-	}
-	catch (const gfx::RendererException& ex)
-	{
-		return ex.GetErrorResult();
-	}
-	catch (...)
-	{
-		return BERNINI_GFX_RENDERER_RESULT_ERROR_UNKNOWN;
-	}
-}
-
-Bernini_GfxResult
-bernini_drawFrame(Bernini_GfxObj renderer)
-{
-	try
-	{
-		auto* ren = gfx::ffi::gfxObjCast<gfx::Renderer>(renderer);
-		ren->DrawFrame();
-		return BERNINI_GFX_RENDERER_RESULT_OK;
-	}
-	catch (const gfx::RendererException& ex)
-	{
-		return ex.GetErrorResult();
-	}
-	catch (...)
-	{
-		return BERNINI_GFX_RENDERER_RESULT_ERROR_UNKNOWN;
-	}
+		out->data = new gfx::Graphics(options);
+		return GFX_RESULT_OK;
+	});
 }

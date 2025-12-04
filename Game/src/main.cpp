@@ -3,20 +3,20 @@
 #include <Core/win/Window.h>
 #include <gfx/gfx.h>
 
-struct BerniniRenderereErrorChecker
+struct BerniniGraphicseErrorChecker
 {};
 
-static const inline BerniniRenderereErrorChecker berniniErrChecker;
+static const inline BerniniGraphicseErrorChecker berniniErrChecker;
 
 namespace
 {
 	void
-	operator>>(Bernini_GfxResult berniniResult, BerniniRenderereErrorChecker)
+	operator>>(GfxResult berniniResult, BerniniGraphicseErrorChecker)
 	{
-		if (berniniResult != BERNINI_GFX_RENDERER_RESULT_OK)
+		if (berniniResult != GFX_RESULT_OK)
 		{
-			auto errorInfo = bernini_getLastError();
-			if (errorInfo.result == BERNINI_GFX_RENDERER_RESULT_OK)
+			auto errorInfo = getLastError();
+			if (errorInfo.result == GFX_RESULT_OK)
 			{
 				errorInfo = { .result  = berniniResult,
 					          .title   = "Unknown Error",
@@ -32,6 +32,8 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
 	try
 	{
+		initializeGfx(LOG_LEVEL_INFO) >> berniniErrChecker;
+
 		auto opts = core::win::WindowOptions{};
 
 		opts.width  = 800;
@@ -39,11 +41,9 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto wnd = core::win::Window{ opts };
 
-		game::GfxHandle renderer;
+		game::GfxHandle graphics;
 
-		bernini_createRenderer(
-			{ .wnd = { .hwnd = nullptr }, .width = 800u, .height = 600u },
-			&renderer) >>
+		createGraphics({ .wnd = { .hwnd = nullptr }, .width = 800u, .height = 600u }, &graphics) >>
 			berniniErrChecker;
 
 		while (wnd.PollEvents())
@@ -67,7 +67,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			wnd.Accept(visitor);
 			wnd.Flush();
 
-			bernini_drawFrame(renderer) >> berniniErrChecker;
+			drawFrame(graphics) >> berniniErrChecker;
 		}
 	}
 	catch (const std::runtime_error& e)

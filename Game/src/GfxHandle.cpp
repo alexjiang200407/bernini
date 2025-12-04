@@ -2,7 +2,7 @@
 
 namespace game
 {
-	GfxHandle::GfxHandle(Bernini_GfxObj handle) noexcept : handle_(handle) {}
+	GfxHandle::GfxHandle(GfxObj handle) noexcept : handle_(handle) {}
 
 	GfxHandle::GfxHandle() noexcept
 	{
@@ -12,7 +12,7 @@ namespace game
 
 	GfxHandle::GfxHandle(GfxHandle&& other) noexcept : handle_(other.handle_)
 	{
-		other.handle_ = { nullptr, nullptr };
+		other.handle_ = { nullptr, 0u };
 	}
 
 	GfxHandle&
@@ -22,18 +22,18 @@ namespace game
 		{
 			Reset();
 			handle_       = other.handle_;
-			other.handle_ = { nullptr, nullptr };
+			other.handle_ = { nullptr, 0u };
 		}
 		return *this;
 	}
 
-	GfxHandle::operator Bernini_GfxObj() const noexcept { return handle_; }
+	GfxHandle::operator GfxObj() const noexcept { return handle_; }
 
-	Bernini_GfxObj
+	GfxObj
 	GfxHandle::Release() noexcept
 	{
-		Bernini_GfxObj tmp = handle_;
-		handle_            = { nullptr, nullptr };
+		GfxObj tmp = handle_;
+		handle_            = { nullptr, 0u };
 		return tmp;
 	}
 

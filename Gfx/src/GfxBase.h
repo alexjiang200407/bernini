@@ -7,4 +7,7 @@ namespace gfx
 	public:
 		virtual ~GfxBase() = default;
 	};
+
+	bool
+	isGfxInitialized() noexcept;
 }

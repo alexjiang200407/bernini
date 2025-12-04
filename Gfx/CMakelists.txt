@@ -29,10 +29,12 @@ target_compile_definitions(gfx
 )
 
 target_precompile_headers(gfx
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h
+
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+
 )
 
 find_package(glm CONFIG REQUIRED)
