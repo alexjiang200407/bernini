@@ -3,12 +3,15 @@
 
 namespace gfx
 {
+	class Camera;
+
 	class IGraphics : public GfxBase
 	{
 	public:
 		virtual void
-		DrawFrame() = 0;
+		DrawFrame(Camera& camera) = 0;
 
+		[[nodiscard]]
 		nvrhi::DeviceHandle
 		GetDevice() noexcept
 		{
@@ -19,6 +22,7 @@ namespace gfx
 		}
 
 	protected:
+		int                      windowWidth = 0, windowHeight = 0;
 		nvrhi::DeviceHandle      nvrhiDevice;
 		nvrhi::FramebufferHandle nvrhiFramebuffer;
 	};

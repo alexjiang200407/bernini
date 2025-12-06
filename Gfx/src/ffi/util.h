@@ -61,6 +61,20 @@ namespace gfx::ffi
 		{
 			return ex.GetErrorResult();
 		}
+		catch (const core::except::BerniniException& ex)
+		{
+			return GfxException::SetLastErrorInfo(
+				GFX_RESULT_ERROR_UNKNOWN,
+				ex.Title().data(),
+				ex.Body().data());
+		}
+		catch (const std::exception& ex)
+		{
+			return GfxException::SetLastErrorInfo(
+				GFX_RESULT_ERROR_UNKNOWN,
+				"C++ Exception",
+				ex.what());
+		}
 		catch (...)
 		{
 			return GFX_RESULT_ERROR_UNKNOWN;

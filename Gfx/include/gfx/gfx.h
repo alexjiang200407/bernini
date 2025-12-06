@@ -41,7 +41,7 @@ extern "C"
 #endif
 	};
 
-	struct GraphicsOptions
+	struct GfxOptions
 	{
 		WindowHandle wnd;
 		int          width  = 0;
@@ -55,7 +55,7 @@ extern "C"
 	/// <param name="out">Output graphics null if invalid</param>
 	/// <returns>Error code</returns>
 	GFX_API GfxResult
-	createGraphics(GraphicsOptions options, Graphics* out);
+	createGraphics(GfxOptions options, Gfx* out);
 
 	/// <summary>
 	/// Draws a single frame using the given graphics. Remember to submit jobs before calling this.
@@ -63,7 +63,7 @@ extern "C"
 	/// <param name="gfx">The graphics object</param>
 	/// <returns>Error code</returns>
 	GFX_API GfxResult
-	drawFrame(Graphics gfx);
+	drawFrame(Gfx gfx, GfxCamera cam);
 
 #ifdef __cplusplus
 }

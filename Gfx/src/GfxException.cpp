@@ -3,11 +3,20 @@
 
 namespace gfx
 {
+	GfxResult
+	GfxException::SetLastErrorInfo(
+		GfxResult        result,
+		std::string_view title,
+		std::string_view message) noexcept
+	{
+		return SetLastErrorInfo(GenerateErrorInfo(result, title, message));
+	}
+
 	GfxErrorInfo
 	GfxException::GenerateErrorInfo(
-		GfxResult res,
-		std::string_view  title,
-		std::string_view  body) noexcept
+		GfxResult        res,
+		std::string_view title,
+		std::string_view body) noexcept
 	{
 		GfxErrorInfo info{};
 

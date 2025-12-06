@@ -8,7 +8,7 @@ namespace gfx
 	{
 	public:
 		GfxException(
-			GfxResult                   result,
+			GfxResult                           result,
 			std::string_view                    title = "Graphics Error"sv,
 			std::string_view                    body  = "An unknown graphics error occurred."sv,
 			std::optional<std::source_location> loc   = std::source_location::current()) noexcept :
@@ -38,12 +38,15 @@ namespace gfx
 			return lastGraphicsErrorInfo.result;
 		}
 
+		static GfxResult
+		SetLastErrorInfo(
+			GfxResult         result,
+			std ::string_view title,
+			std::string_view  message) noexcept;
+
 	private:
 		static GfxErrorInfo
-		GenerateErrorInfo(
-			GfxResult res,
-			std::string_view  title,
-			std::string_view  body) noexcept;
+		GenerateErrorInfo(GfxResult res, std::string_view title, std::string_view body) noexcept;
 
 	private:
 		GfxResult                               result;

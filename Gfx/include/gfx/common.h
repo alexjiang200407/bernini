@@ -34,7 +34,7 @@ struct GfxErrorInfo
 #	define GFX_API __declspec(dllimport)
 #endif
 
-typedef GfxObj Graphics;
-typedef GfxObj Camera;
+typedef GfxObj Gfx;
+typedef GfxObj GfxCamera;
 
 #endif

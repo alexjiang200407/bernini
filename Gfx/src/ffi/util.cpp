@@ -1,26 +1,29 @@
 #include "ffi/util.h"
 
-void
-gfx::ffi::deleteThunk(GfxObj obj)
+namespace gfx::ffi
 {
-	auto* data = reinterpret_cast<GfxBase*>(obj.data);
-	if (data)
+	void
+	deleteThunk(GfxObj obj)
 	{
-		delete data;
+		auto* data = reinterpret_cast<GfxBase*>(obj.data);
+		if (data)
+		{
+			delete data;
+		}
+		else
+		{
+			logger::error("Attempted to delete bad GfxObj");
+		}
 	}
-	else
-	{
-		logger::error("Attempted to delete bad GfxObj");
-	}
-}
 
-void
-gfx::ffi::validatePtr(void* ptr, std::string_view name)
-{
-	if (ptr == nullptr)
+	void
+	validatePtr(void* ptr, std::string_view name)
 	{
-		throw gfx::GfxException{ GFX_RESULT_ERROR_INVALID_ARGUMENT,
-			                     "Invalid Argument",
-			                     std::format("<{}> cannot be nullptr", name) };
+		if (ptr == nullptr)
+		{
+			throw gfx::GfxException{ GFX_RESULT_ERROR_INVALID_ARGUMENT,
+				                     "Invalid Argument",
+				                     std::format("<{}> cannot be nullptr", name) };
+		}
 	}
 }

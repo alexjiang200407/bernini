@@ -41,9 +41,21 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto wnd = core::win::Window{ opts };
 
-		game::GfxHandle graphics;
+		game::GfxHandle graphics, camera;
 
 		createGraphics({ .wnd = { .hwnd = nullptr }, .width = 800u, .height = 600u }, &graphics) >>
+			berniniErrChecker;
+
+		createCamera(
+			graphics,
+			{
+				.position    = { 0.0f, 0.0f, -10.0f },
+				.fovYDegrees = 60.0f,
+				.aspectRatio = 800.0f / 600.0f,
+				.nearZ       = 0.1f,
+				.farZ        = 100.0f,
+			},
+			&camera) >>
 			berniniErrChecker;
 
 		while (wnd.PollEvents())
@@ -67,7 +79,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			wnd.Accept(visitor);
 			wnd.Flush();
 
-			drawFrame(graphics) >> berniniErrChecker;
+			drawFrame(graphics, camera) >> berniniErrChecker;
 		}
 	}
 	catch (const std::runtime_error& e)

@@ -7,7 +7,16 @@ namespace gfx::geom
 	public:
 		Cube(nvrhi::DeviceHandle& device);
 
-	private:
+		void
+		Draw(nvrhi::CommandListHandle cmdList, nvrhi::GraphicsState& state) const;
+
+		nvrhi::InputLayoutHandle
+		GetInputLayout() const noexcept
+		{
+			return inputLayout;
+		}
+
+	public:
 		nvrhi::BufferHandle      indexBuffer;
 		nvrhi::BufferHandle      vertexBuffer;
 		nvrhi::InputLayoutHandle inputLayout;

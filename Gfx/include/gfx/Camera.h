@@ -17,20 +17,14 @@ extern "C"
 {
 #endif
 
-	typedef enum CameraProjectionType
-	{
-		CAMERA_PERSPECTIVE = 0,
-		CAMERA_ORTHOGRAPHIC
-	} CameraProjectionType;
-
-	typedef struct CameraOptions
+	typedef struct GfxCameraOptions
 	{
 		float position[3];
 		float fovYDegrees;
 		float aspectRatio;
 		float nearZ;
 		float farZ;
-	} CameraOptions;
+	} GfxCameraOptions;
 
 	/// <summary>
 	///
@@ -39,7 +33,7 @@ extern "C"
 	/// <param name="out"></param>
 	/// <returns></returns>
 	GFX_API GfxResult
-	createCamera(Graphics gfx, CameraOptions options, Camera* out);
+	createCamera(Gfx gfx, GfxCameraOptions options, GfxCamera* out);
 
 #ifdef __cplusplus
 }
