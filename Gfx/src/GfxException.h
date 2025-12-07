@@ -1,6 +1,6 @@
 #pragma once
 #include <Core/except/BerniniException.h>
-#include <gfx/common.h>
+#include <gfx/ffi/common.h>
 
 namespace gfx
 {

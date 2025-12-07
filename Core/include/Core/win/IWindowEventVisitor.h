@@ -11,9 +11,9 @@ namespace core::win
 		virtual ~IWindowEventVisitor() noexcept = default;
 
 		virtual void
-		Visit(const KeyEvent& evt) = 0;
+		Visit(const KeyEvent& evt, float dt) = 0;
 
 		virtual void
-		Visit(const MouseEvent& evt) = 0;
+		Visit(const MouseEvent& evt, float dt) = 0;
 	};
 }

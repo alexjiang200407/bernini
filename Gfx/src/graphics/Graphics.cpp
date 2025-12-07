@@ -1,7 +1,7 @@
 #include "graphics/Graphics.h"
 #include "camera/Camera.h"
 #include "ffi/util.h"
-#include <gfx/gfx.h>
+#include <gfx/ffi/gfx.h>
 
 GfxResult
 drawFrame(Gfx graphics, GfxCamera camera)

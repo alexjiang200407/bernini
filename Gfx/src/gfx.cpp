@@ -1,7 +1,7 @@
 #include "GfxException.h"
 #include "ffi/util.h"
 #include <Core/file/file.h>
-#include <gfx/gfx.h>
+#include <gfx/ffi/gfx.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
 namespace fs = std::filesystem;
@@ -58,3 +58,5 @@ namespace gfx
 		return initialized.load(std::memory_order_acquire);
 	}
 }
+
+const GfxVec3 GFX_UP_VECTOR = { .x = 0.0f, .y = 1.0f, .z = 0.0f };

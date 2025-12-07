@@ -4,7 +4,7 @@
 #include "geometry/Cube.h"
 #include "graphics/Graphics.h"
 #include <Core/except/BerniniException.h>
-#include <gfx/gfx.h>
+#include <gfx/ffi/gfx.h>
 
 namespace
 {
@@ -169,6 +169,8 @@ namespace gfx
 			0,
 			nvrhi::Color{ 0.0f, 0.0f, 0.0f, 1.0f });
 		nvrhi::utils::ClearDepthStencilAttachment(commandList, nvrhiFramebuffer, 1.0f, 0);
+
+		camera.UpdateBuffer(commandList);
 
 		auto renderState = nvrhi::RenderState{}
 		                       .setRasterState(nvrhi::RasterState{}

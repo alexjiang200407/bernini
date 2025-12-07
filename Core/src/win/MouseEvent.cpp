@@ -12,9 +12,9 @@ namespace core::win
 	}
 
 	void
-	MouseEvent::Accept(IWindowEventVisitor& visitor) const
+	MouseEvent::Accept(IWindowEventVisitor& visitor, float dt) const
 	{
-		visitor.Visit(*this);
+		visitor.Visit(*this, dt);
 	}
 
 	void
@@ -25,6 +25,12 @@ namespace core::win
 		auto evt  = std::unique_ptr<MouseEvent>{ new MouseEvent() };
 		evt->xpos = xpos;
 		evt->ypos = ypos;
+
+		evt->dx = xpos - window->lastMouseX;
+		evt->dy = ypos - window->lastMouseY;
+
+		window->lastMouseX = xpos;
+		window->lastMouseY = ypos;
 
 		evt->button = -1;
 		evt->action = 0;
@@ -62,8 +68,8 @@ namespace core::win
 		evt->button4Pressed = (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_4) == GLFW_PRESS);
 		evt->button5Pressed = (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_5) == GLFW_PRESS);
 
-		evt->xoffset = 0.0;
-		evt->yoffset = 0.0;
+		evt->scrollX = 0.0;
+		evt->scrollY = 0.0;
 
 		AddToQueue(*window, std::move(evt));
 	}
@@ -81,8 +87,8 @@ namespace core::win
 		evt->xpos = xpos;
 		evt->ypos = ypos;
 
-		evt->xoffset = xoffset;
-		evt->yoffset = yoffset;
+		evt->scrollX = xoffset;
+		evt->scrollY = yoffset;
 
 		evt->button = -1;
 		evt->action = 0;

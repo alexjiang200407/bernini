@@ -1,8 +1,8 @@
 #ifndef GFX_H
 #define GFX_H
 
-#include <gfx/camera.h>
-#include <gfx/common.h>
+#include <gfx/ffi/camera.h>
+#include <gfx/ffi/common.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

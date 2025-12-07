@@ -13,7 +13,7 @@ add_executable(Game WIN32
     ${GAME_HEADERS}
 )
 
-target_link_libraries(Game PRIVATE Core gfx)
+target_link_libraries(Game PRIVATE Core gfx gfxsdk_cxx)
 
 target_precompile_headers(Game
     PUBLIC

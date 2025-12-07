@@ -1,5 +1,5 @@
 #pragma once
-#include <gfx/common.h>
+#include <gfx/ffi/common.h>
 
 namespace game
 {

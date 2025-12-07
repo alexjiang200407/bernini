@@ -6,6 +6,7 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <glfw/glfw3native.h>
 
+#include <Core/except/BerniniException.h>
 #include <Core/win/KeyEvent.h>
 #include <Core/win/MouseEvent.h>
 
@@ -13,7 +14,7 @@ namespace core::win
 {
 	std::atomic_size_t glfwInitializedCount = 0u;
 
-	Window::Window(const WindowOptions& opts) noexcept
+	Window::Window(const WindowOptions& opts)
 	{
 		std::size_t prev = glfwInitializedCount.fetch_add(1);
 		assert(prev != std::numeric_limits<std::size_t>::max());
@@ -78,7 +79,10 @@ namespace core::win
 		glfwWindow = glfwCreateWindow(width, height, opts.title.data(), windowMonitor, nullptr);
 		if (!glfwWindow)
 		{
-			return;
+			throw core::except::BerniniException{
+				"Failed to create GLFW window",
+				"glfwCreateWindow failed",
+			};
 		}
 
 		if (opts.mode == WindowOptions::Mode::BorderlessFullscreen && monitor && vidMode)
@@ -99,8 +103,22 @@ namespace core::win
 		glfwSetMouseButtonCallback(glfwWindow, MouseEvent::GLFWMouseButtonCallback);
 		glfwSetScrollCallback(glfwWindow, MouseEvent::GLFWScrollCallback);
 
+		if (glfwRawMouseMotionSupported())
+		{
+			glfwSetInputMode(glfwWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+		}
+		else
+		{
+			throw core::except::BerniniException{
+				"Failed to create GLFW window",
+				"Raw mouse motion not supported",
+			};
+		}
+
 		if (opts.visible)
 			glfwShowWindow(glfwWindow);
+
+		currentTime = glfwGetTime();
 	}
 
 	void
@@ -108,7 +126,7 @@ namespace core::win
 	{
 		for (auto& evt : queue)
 		{
-			evt->Accept(visitor);
+			evt->Accept(visitor, static_cast<float>(dt));
 		}
 	}
 
@@ -125,11 +143,13 @@ namespace core::win
 	}
 
 	bool
-	Window::PollEvents() const noexcept
+	Window::PollEvents() noexcept
 	{
 		auto shouldContinue = !glfwWindowShouldClose(glfwWindow);
 		if (shouldContinue)
 		{
+			dt = glfwGetTime() - currentTime;
+			glfwGetCursorPos(glfwWindow, &lastMouseX, &lastMouseY);
 			glfwPollEvents();
 		}
 		return shouldContinue;

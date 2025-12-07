@@ -9,6 +9,24 @@ struct GfxObj
 	void* data;
 };
 
+#pragma warning(push)
+#pragma warning(disable: 4201)
+
+typedef union
+{
+	float xyz[3];
+	struct
+	{
+		float x, y, z;
+	};
+	struct
+	{
+		float pitch, yaw, roll;
+	};
+} GfxVec3;
+
+#pragma warning(pop)
+
 enum GfxResult
 {
 	GFX_RESULT_OK                     = 0,

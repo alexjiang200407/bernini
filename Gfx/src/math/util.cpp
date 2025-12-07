@@ -2,15 +2,11 @@
 
 namespace gfx::math
 {
-	glm::mat4
-	toShaderLayout(const glm::mat4& matrix) noexcept
+
+	glm::vec3
+	toGlm(GfxVec3 v)
 	{
-#ifdef RENDERER_DX11
-		glm::mat4 leftHanded = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, -1.0f)) * matrix;
-		return glm::transpose(leftHanded);
-#else
-		return matrix;
-#endif
+		return glm::vec3{ v.x, v.y, v.z };
 	}
 
 }

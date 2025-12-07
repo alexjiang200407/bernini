@@ -24,6 +24,24 @@ namespace core::win
 		AddToQueue(*window, std::move(evt));
 	}
 
+	bool
+	KeyEvent::IsPressed() const noexcept
+	{
+		return action == GLFW_PRESS;
+	}
+
+	bool
+	KeyEvent::IsReleased() const noexcept
+	{
+		return action == GLFW_RELEASE;
+	}
+
+	bool
+	KeyEvent::IsRepeat() const noexcept
+	{
+		return action == GLFW_REPEAT;
+	}
+
 	KeyEvent*
 	KeyEvent::AsKeyEvent() noexcept
 	{
@@ -31,9 +49,9 @@ namespace core::win
 	}
 
 	void
-	KeyEvent::Accept(IWindowEventVisitor& visitor) const
+	KeyEvent::Accept(IWindowEventVisitor& visitor, float dt) const
 	{
-		visitor.Visit(*this);
+		visitor.Visit(*this, dt);
 	}
 
 	void

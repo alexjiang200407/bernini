@@ -1,5 +1,6 @@
 #pragma once
 #include <Core/win/IWindowEvent.h>
+#include <Core/win/Key.h>
 
 class GLFWwindow;
 
@@ -21,7 +22,7 @@ namespace core::win
 		AsKeyEvent() noexcept override;
 
 		void
-		Accept(class IWindowEventVisitor& visitor) const override;
+		Accept(class IWindowEventVisitor& visitor, float dt) const override;
 
 		static constexpr Type
 		GetTypeStatic() noexcept
@@ -33,6 +34,21 @@ namespace core::win
 		GetType() const noexcept override
 		{
 			return GetTypeStatic();
+		}
+
+		bool
+		IsPressed() const noexcept;
+
+		bool
+		IsReleased() const noexcept;
+
+		bool
+		IsRepeat() const noexcept;
+
+		KeyCode
+		GetKey() const noexcept
+		{
+			return static_cast<KeyCode>(key);
 		}
 
 	private:

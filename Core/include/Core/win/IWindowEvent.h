@@ -24,7 +24,7 @@ namespace core::win
 		AsMouseEvent() noexcept;
 
 		virtual void
-		Accept(class IWindowEventVisitor& visitor) const = 0;
+		Accept(class IWindowEventVisitor& visitor, float dt) const = 0;
 
 		static constexpr Type
 		GetTypeStatic() noexcept

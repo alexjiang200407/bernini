@@ -1,4 +1,4 @@
-#include "GfxHandle.h"
+#include <gfx/GfxHandle.h>
 
 namespace game
 {
@@ -33,7 +33,7 @@ namespace game
 	GfxHandle::Release() noexcept
 	{
 		GfxObj tmp = handle_;
-		handle_            = { nullptr, 0u };
+		handle_    = { nullptr, 0u };
 		return tmp;
 	}
 

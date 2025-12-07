@@ -27,7 +27,7 @@ namespace core::win
 		AsMouseEvent() noexcept override;
 
 		void
-		Accept(IWindowEventVisitor& visitor) const override;
+		Accept(IWindowEventVisitor& visitor, float dt) const override;
 
 		static constexpr Type
 		GetTypeStatic() noexcept
@@ -41,11 +41,25 @@ namespace core::win
 			return GetTypeStatic();
 		}
 
+		double
+		GetDeltaX() const noexcept
+		{
+			return dx;
+		}
+
+		double
+		GetDeltaY() const noexcept
+		{
+			return dy;
+		}
+
 	private:
 		double xpos    = 0.0;
 		double ypos    = 0.0;
-		double xoffset = 0.0;
-		double yoffset = 0.0;
+		double scrollX = 0.0;
+		double scrollY = 0.0;
+		double dx      = 0.0;
+		double dy      = 0.0;
 		int    button  = -1;
 		int    action  = 0;
 		int    mods    = 0;
