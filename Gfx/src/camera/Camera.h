@@ -10,7 +10,7 @@ namespace gfx
 {
 	class IGraphics;
 
-	struct CameraData
+	struct CameraCBuf
 	{
 		math::ShaderMatrix viewMatrix;
 		math::ShaderMatrix projMatrix;
@@ -28,7 +28,7 @@ namespace gfx
 		const nvrhi::BindingLayoutHandle&
 		GetBindingLayout() const noexcept
 		{
-			return bindingLayout;
+			return m_bindingLayout;
 		}
 
 		[[nodiscard]]
@@ -38,7 +38,7 @@ namespace gfx
 		void
 		SetShouldUpdated() noexcept
 		{
-			shouldUpdate = true;
+			m_shouldUpdate = true;
 		}
 
 		void
@@ -58,13 +58,13 @@ namespace gfx
 		UpdateProjection(const GfxCameraProjectionOptions& projection) noexcept;
 
 	private:
-		CameraData                 data;
-		glm::vec3                  forwardUnit;
-		glm::vec3                  position;
-		nvrhi::BufferHandle        cbuf;
-		nvrhi::BindingLayoutHandle bindingLayout;
-		bool                       shouldUpdate = true;
-		float                      pitch        = 0.0f;
-		float                      yaw          = 0.0f;
+		CameraCBuf                 m_cbufData;
+		glm::vec3                  m_forwardUnit;
+		glm::vec3                  m_position;
+		nvrhi::BufferHandle        m_cbuf;
+		nvrhi::BindingLayoutHandle m_bindingLayout;
+		bool                       m_shouldUpdate = true;
+		float                      m_pitch        = 0.0f;
+		float                      m_yaw          = 0.0f;
 	};
 }

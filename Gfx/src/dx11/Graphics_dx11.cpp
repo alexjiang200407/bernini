@@ -12,7 +12,7 @@ namespace
 	CreateDepthTexture(
 		const GfxOptions&                           opts,
 		nvrhi::RefCountPtr<ID3D11Device>            device,
-		nvrhi::DeviceHandle                         nvrhiDevice,
+		nvrhi::DeviceHandle                         m_nvrhiDevice,
 		nvrhi::RefCountPtr<ID3D11DepthStencilView>& dsvOut)
 	{
 		D3D11_TEXTURE2D_DESC depthDesc{};
@@ -49,7 +49,7 @@ namespace
 		nvrhiDepthDesc.isRenderTarget = true;
 		nvrhiDepthDesc.isUAV          = false;
 
-		return nvrhiDevice->createHandleForNativeTexture(
+		return m_nvrhiDevice->createHandleForNativeTexture(
 			nvrhi::ObjectTypes::D3D11_Resource,
 			nvrhi::Object{ depthTexture.Get() },
 			nvrhiDepthDesc);
@@ -68,14 +68,14 @@ namespace gfx
 		DrawFrame(Camera& camera) override;
 
 	private:
-		nvrhi::RefCountPtr<IDXGISwapChain>         swap;
-		nvrhi::RefCountPtr<ID3D11DeviceContext>    context;
-		nvrhi::RefCountPtr<ID3D11Device>           device;
-		nvrhi::RefCountPtr<ID3D11Texture2D>        backBuffer;
-		nvrhi::RefCountPtr<ID3D11DepthStencilView> depthBuffer;
-		nvrhi::TextureHandle                       nvrhiDepthBuffer;
-		nvrhi::TextureHandle                       nvrhiBackBuffer;
-		nvrhi::FramebufferInfo                     framebufferInfo;
+		nvrhi::RefCountPtr<IDXGISwapChain>         m_swap;
+		nvrhi::RefCountPtr<ID3D11DeviceContext>    m_context;
+		nvrhi::RefCountPtr<ID3D11Device>           m_device;
+		nvrhi::RefCountPtr<ID3D11Texture2D>        m_backBuffer;
+		nvrhi::RefCountPtr<ID3D11DepthStencilView> m_depthBuffer;
+		nvrhi::TextureHandle                       m_nvrhiDepthBuffer;
+		nvrhi::TextureHandle                       m_nvrhiBackBuffer;
+		nvrhi::FramebufferInfo                     m_framebufferInfo;
 		std::unique_ptr<geom::Cube>                cube;
 	};
 
@@ -119,17 +119,17 @@ namespace gfx
 			0,
 			D3D11_SDK_VERSION,
 			&sd,
-			&swap,
-			&device,
+			&m_swap,
+			&m_device,
 			nullptr,
-			&context) >>
+			&m_context) >>
 			gfx::dx::dxErrorChecker;
 
-		nvrhiDevice = nvrhi::d3d11::createDevice({ .context = context });
+		m_nvrhiDevice = nvrhi::d3d11::createDevice({ .context = m_context });
 
-		cube = std::make_unique<geom::Cube>(nvrhiDevice);
+		cube = std::make_unique<geom::Cube>(m_nvrhiDevice);
 
-		swap->GetBuffer(0, IID_PPV_ARGS(&backBuffer)) >> gfx::dx::dxErrorChecker;
+		m_swap->GetBuffer(0, IID_PPV_ARGS(&m_backBuffer)) >> gfx::dx::dxErrorChecker;
 
 		{
 			nvrhi::TextureDesc textureDesc;
@@ -142,18 +142,18 @@ namespace gfx
 			textureDesc.isRenderTarget = true;
 			textureDesc.isUAV          = false;
 
-			nvrhiBackBuffer = nvrhiDevice->createHandleForNativeTexture(
+			m_nvrhiBackBuffer = m_nvrhiDevice->createHandleForNativeTexture(
 				nvrhi::ObjectTypes::D3D11_Resource,
-				nvrhi::Object{ backBuffer.Get() },
+				nvrhi::Object{ m_backBuffer.Get() },
 				textureDesc);
 
-			nvrhiDepthBuffer = CreateDepthTexture(opts, device, nvrhiDevice, depthBuffer);
+			m_nvrhiDepthBuffer = CreateDepthTexture(opts, m_device, m_nvrhiDevice, m_depthBuffer);
 			nvrhiFramebuffer =
-				nvrhiDevice->createFramebuffer(nvrhi::FramebufferDesc{}
-			                                       .addColorAttachment(nvrhiBackBuffer)
-			                                       .setDepthAttachment(nvrhiDepthBuffer));
+				m_nvrhiDevice->createFramebuffer(nvrhi::FramebufferDesc{}
+			                                         .addColorAttachment(m_nvrhiBackBuffer)
+			                                         .setDepthAttachment(m_nvrhiDepthBuffer));
 
-			framebufferInfo = nvrhi::FramebufferInfo{}.addColorFormat(nvrhi::Format::BGRA8_UNORM);
+			m_framebufferInfo = nvrhi::FramebufferInfo{}.addColorFormat(nvrhi::Format::BGRA8_UNORM);
 		}
 	}
 
@@ -162,7 +162,7 @@ namespace gfx
 	void
 	Graphics::DrawFrame(gfx::Camera& camera)
 	{
-		nvrhi::CommandListHandle commandList = nvrhiDevice->createCommandList();
+		nvrhi::CommandListHandle commandList = m_nvrhiDevice->createCommandList();
 		nvrhi::utils::ClearColorAttachment(
 			commandList,
 			nvrhiFramebuffer,
@@ -192,9 +192,9 @@ namespace gfx
 		                        .setRenderState(renderState);
 
 		nvrhi::GraphicsPipelineHandle graphicsPipeline =
-			nvrhiDevice->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+			m_nvrhiDevice->createGraphicsPipeline(pipelineDesc, m_framebufferInfo);
 
-		auto                 cameraBindingSet = camera.GetBindingSet(nvrhiDevice);
+		auto                 cameraBindingSet = camera.GetBindingSet(m_nvrhiDevice);
 		nvrhi::GraphicsState globalGraphicsState =
 			nvrhi::GraphicsState{}
 				.setPipeline(graphicsPipeline)
@@ -207,9 +207,9 @@ namespace gfx
 		cube->Draw(commandList, globalGraphicsState);
 
 		commandList->close();
-		nvrhiDevice->executeCommandList(commandList);
+		m_nvrhiDevice->executeCommandList(commandList);
 
-		swap->Present(1, 0);
+		m_swap->Present(1, 0);
 	}
 }
 

@@ -40,6 +40,6 @@ namespace core::win
 
 	protected:
 		static void
-		AddToQueue(class Window& wnd, std::unique_ptr<IWindowEvent>&& evt);
+		AddToQueue(class IWindow& wnd, std::unique_ptr<IWindowEvent>&& evt);
 	};
 }

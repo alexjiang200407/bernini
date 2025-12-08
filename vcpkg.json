@@ -2,7 +2,6 @@
   "name": "bernini",
   "version": "0.0.1",
   "dependencies": [
-    "glfw3",
     "spdlog",
     "glm"
   ],

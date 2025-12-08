@@ -9,13 +9,10 @@ namespace core::win
 	class KeyEvent : public IWindowEvent
 	{
 	private:
-		friend class Window;
+		friend class IWindow;
 
 	private:
 		KeyEvent() noexcept = default;
-
-		static void
-		GLFWCallback(GLFWwindow* wnd, int key, int sc, int action, int mods);
 
 	public:
 		KeyEvent*
@@ -36,25 +33,6 @@ namespace core::win
 			return GetTypeStatic();
 		}
 
-		bool
-		IsPressed() const noexcept;
-
-		bool
-		IsReleased() const noexcept;
-
-		bool
-		IsRepeat() const noexcept;
-
-		KeyCode
-		GetKey() const noexcept
-		{
-			return static_cast<KeyCode>(key);
-		}
-
 	private:
-		int key    = 0;
-		int sc     = 0;
-		int action = 0;
-		int mods   = 0;
 	};
 }

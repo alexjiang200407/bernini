@@ -6,8 +6,6 @@
 
 #include <string>
 
-class GLFWwindow;
-
 namespace core::win
 {
 	struct WindowOptions
@@ -16,7 +14,7 @@ namespace core::win
 		{
 			Windowed,
 			Fullscreen,
-			BorderlessFullscreen
+			BorderlessWindowed
 		};
 
 		Mode             mode      = Mode::Windowed;
@@ -29,7 +27,7 @@ namespace core::win
 	};
 
 	// Not thread safe
-	class Window
+	class IWindow
 	{
 	public:
 		friend class IWindowEvent;
@@ -37,11 +35,10 @@ namespace core::win
 		friend class MouseEvent;
 
 	public:
-		Window(const WindowOptions& opts = {});
-		~Window() noexcept;
+		virtual ~IWindow() noexcept = default;
 
-		bool
-		PollEvents() noexcept;
+		virtual bool
+		PollEvents() noexcept = 0;
 
 		void
 		Accept(class IWindowEventVisitor& visitor) noexcept;
@@ -49,26 +46,11 @@ namespace core::win
 		void
 		Flush() noexcept;
 
-		double
-		GetLastMouseX() const noexcept
-		{
-			return lastMouseX;
-		}
-
-		double
-		GetLastMouseY() const noexcept
-		{
-			return lastMouseY;
-		}
+		[[nodiscard]]
+		static std::unique_ptr<IWindow>
+		Create(const WindowOptions& options) noexcept;
 
 	private:
-		static constexpr size_t EVENT_TYPE_COUNT = static_cast<size_t>(IWindowEvent::kCount);
-
 		std::vector<std::unique_ptr<IWindowEvent>> queue;
-		GLFWwindow*                                glfwWindow;
-		double                                     currentTime = 0.0;
-		double                                     dt          = 0.0;
-		double                                     lastMouseX  = 0.0;
-		double                                     lastMouseY  = 0.0;
 	};
 }

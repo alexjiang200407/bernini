@@ -57,12 +57,12 @@ namespace gfx
 		UpdateTransform(desc.transform);
 		UpdateProjection(desc.projection);
 
-		cbuf = device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
-			sizeof(CameraData),
+		m_cbuf = device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
+			sizeof(CameraCBuf),
 			"CameraConstantBuffer",
 			16));
 
-		bindingLayout = device->createBindingLayout(
+		m_bindingLayout = device->createBindingLayout(
 			nvrhi::BindingLayoutDesc{}
 				.setVisibility(nvrhi::ShaderType::All)
 				.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(BindingSlots::CameraCB)));
@@ -71,38 +71,38 @@ namespace gfx
 	nvrhi::BufferHandle
 	Camera::UpdateBuffer(nvrhi::CommandListHandle cmdList)
 	{
-		if (!shouldUpdate)
+		if (!m_shouldUpdate)
 		{
-			return cbuf;
+			return m_cbuf;
 		}
 
-		cmdList->writeBuffer(cbuf, &data, sizeof(data));
-		shouldUpdate = false;
-		return cbuf;
+		cmdList->writeBuffer(m_cbuf, &m_cbufData, sizeof(m_cbufData));
+		m_shouldUpdate = false;
+		return m_cbuf;
 	}
 
 	void
 	Camera::MoveAlongView(float delta) noexcept
 	{
-		position += forwardUnit * delta;
+		m_position += m_forwardUnit * delta;
 
-		glm::vec3 target = position + forwardUnit;
-		data.viewMatrix  = glm::lookAt(position, target, math::constants::UP_VEC);
+		glm::vec3 target      = m_position + m_forwardUnit;
+		m_cbufData.viewMatrix = glm::lookAt(m_position, target, math::constants::UP_VEC);
 
-		shouldUpdate = true;
+		m_shouldUpdate = true;
 	}
 
 	void
 	Camera::MoveAlongRight(float delta) noexcept
 	{
-		glm::vec3 right = glm::normalize(glm::cross(forwardUnit, math::constants::UP_VEC));
+		glm::vec3 right = glm::normalize(glm::cross(m_forwardUnit, math::constants::UP_VEC));
 
-		position += right * delta;
+		m_position += right * delta;
 
-		glm::vec3 target = position + forwardUnit;
-		data.viewMatrix  = glm::lookAt(position, target, math::constants::UP_VEC);
+		glm::vec3 target      = m_position + m_forwardUnit;
+		m_cbufData.viewMatrix = glm::lookAt(m_position, target, math::constants::UP_VEC);
 
-		shouldUpdate = true;
+		m_shouldUpdate = true;
 	}
 
 	void
@@ -110,18 +110,18 @@ namespace gfx
 	{
 		const float maxPitch = glm::radians(89.0f);
 		const float minPitch = glm::radians(-89.0f);
-		pitch                = glm::clamp(pitchDelta, minPitch, maxPitch);
-		yaw += yawDelta;
+		m_pitch              = glm::clamp(pitchDelta, minPitch, maxPitch);
+		m_yaw += yawDelta;
 
-		forwardUnit.x = cos(pitch) * sin(yaw);
-		forwardUnit.y = sin(pitch);
-		forwardUnit.z = cos(pitch) * cos(yaw);
-		forwardUnit   = glm::normalize(forwardUnit);
+		m_forwardUnit.x = cos(m_pitch) * sin(m_yaw);
+		m_forwardUnit.y = sin(m_pitch);
+		m_forwardUnit.z = cos(m_pitch) * cos(m_yaw);
+		m_forwardUnit   = glm::normalize(m_forwardUnit);
 
-		glm::vec3 target = position + forwardUnit;
-		data.viewMatrix  = glm::lookAt(position, target, math::constants::UP_VEC);
+		glm::vec3 target      = m_position + m_forwardUnit;
+		m_cbufData.viewMatrix = glm::lookAt(m_position, target, math::constants::UP_VEC);
 
-		shouldUpdate = true;
+		m_shouldUpdate = true;
 	}
 
 	void
@@ -136,22 +136,22 @@ namespace gfx
 				                "Camera forward vector cannot be zero." };
 		}
 
-		position = math::toGlm(tr.position);
+		m_position = math::toGlm(tr.position);
 
-		forwardUnit = glm::normalize(forward);
-		pitch       = glm::asin(forwardUnit.y);
-		yaw         = glm::atan(forwardUnit.x, forwardUnit.z);
+		m_forwardUnit = glm::normalize(forward);
+		m_pitch       = glm::asin(m_forwardUnit.y);
+		m_yaw         = glm::atan(m_forwardUnit.x, m_forwardUnit.z);
 
-		glm::vec3 target = position + forwardUnit;
+		glm::vec3 target = m_position + m_forwardUnit;
 
-		data.viewMatrix = glm::lookAt(position, target, math::constants::UP_VEC);
+		m_cbufData.viewMatrix = glm::lookAt(m_position, target, math::constants::UP_VEC);
 	}
 
 	void
 	Camera::UpdateProjection(const GfxCameraProjectionOptions& projection) noexcept
 	{
 		const float fovYRadians = glm::radians(projection.fovYDeg);
-		data.projMatrix         = glm::perspective(
+		m_cbufData.projMatrix   = glm::perspective(
             fovYRadians,
             projection.aspectRatio,
             projection.nearZ,
@@ -163,8 +163,8 @@ namespace gfx
 	{
 		return device->createBindingSet(
 			nvrhi::BindingSetDesc{}.addItem(
-				nvrhi::BindingSetItem::ConstantBuffer(BindingSlots::CameraCB, cbuf)),
-			bindingLayout);
+				nvrhi::BindingSetItem::ConstantBuffer(BindingSlots::CameraCB, m_cbuf)),
+			m_bindingLayout);
 	}
 
 }

@@ -17,23 +17,23 @@ namespace
 
 namespace gfx::math
 {
-	ShaderMatrix::ShaderMatrix(const glm::mat4& mat) noexcept : data(toShaderLayout(mat)) {}
-	ShaderMatrix::ShaderMatrix(glm::mat4&& mat) noexcept : data(toShaderLayout(mat)) {}
+	ShaderMatrix::ShaderMatrix(const glm::mat4& mat) noexcept : m_data(toShaderLayout(mat)) {}
+	ShaderMatrix::ShaderMatrix(glm::mat4&& mat) noexcept : m_data(toShaderLayout(mat)) {}
 
 	ShaderMatrix&
 	ShaderMatrix::operator=(const glm::mat4& mat) noexcept
 	{
-		data = toShaderLayout(mat);
+		m_data = toShaderLayout(mat);
 		return *this;
 	}
 
 	ShaderMatrix&
 	ShaderMatrix::operator=(glm::mat4&& mat) noexcept
 	{
-		data = toShaderLayout(mat);
+		m_data = toShaderLayout(mat);
 		return *this;
 	}
 
-	ShaderMatrix::operator const glm::mat4&() const noexcept { return data; }
-	ShaderMatrix::operator glm::mat4() const noexcept { return data; }
+	ShaderMatrix::operator const glm::mat4&() const noexcept { return m_data; }
+	ShaderMatrix::operator glm::mat4() const noexcept { return m_data; }
 }

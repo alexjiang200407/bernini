@@ -1,6 +1,8 @@
 #include "dx11/DXError.h"
 #include <Core/str/str.h>
-#include <Core/win/WinAPI.h>
+
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
 namespace
 {
@@ -34,12 +36,14 @@ namespace
 
 namespace gfx::dx
 {
-	DXResult::DXResult(unsigned int hr, std::source_location loc) noexcept : hr{ hr }, loc{ loc } {}
+	DXResult::DXResult(unsigned int hr, std::source_location loc) noexcept :
+		m_hr{ hr }, m_loc{ loc }
+	{}
 
 	void
 	operator>>(DXResult dxErr, DXErrorChecker)
 	{
-		if (!FAILED(dxErr.hr))
+		if (!FAILED(dxErr.m_hr))
 			return;
 
 		throw DXException(std::move(dxErr));
@@ -47,10 +51,10 @@ namespace gfx::dx
 
 	DXException::DXException(DXResult&& result) noexcept :
 		GfxException{ GFX_RESULT_ERROR_DIRECTX11_ERROR,
-		                   "DirectX 11 Error",
-		                   core::str::wide_to_string(GetErrorDescription(result.hr)),
-		                   result.loc },
-		code{ result.hr }
+		              "DirectX 11 Error",
+		              core::str::wide_to_string(GetErrorDescription(result.m_hr)),
+		              result.m_loc },
+		m_code{ result.m_hr }
 	{}
 
 }

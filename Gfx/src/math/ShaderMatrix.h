@@ -9,7 +9,7 @@ namespace gfx::math
 	class ShaderMatrix
 	{
 	public:
-		ShaderMatrix() noexcept : data(1.0f) {}
+		ShaderMatrix() noexcept : m_data(1.0f) {}
 
 		explicit ShaderMatrix(const glm::mat4& mat) noexcept;
 
@@ -25,7 +25,7 @@ namespace gfx::math
 		operator glm::mat4() const noexcept;
 
 	private:
-		glm::mat4 data;
+		glm::mat4 m_data;
 	};
 
 	static_assert(sizeof(ShaderMatrix) == 64, "ShaderMatrix size must be 64 bytes");
