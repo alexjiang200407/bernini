@@ -1,4 +1,4 @@
-#include <Core/win/IWindowEvent.h>
+#include <core/win/IWindowEvent.h>
 
 namespace core::win
 {
@@ -10,6 +10,12 @@ namespace core::win
 
 	MouseEvent*
 	IWindowEvent::AsMouseEvent() noexcept
+	{
+		return nullptr;
+	}
+
+	CharEvent*
+	IWindowEvent::AsCharEvent() noexcept
 	{
 		return nullptr;
 	}

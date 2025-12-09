@@ -4,6 +4,7 @@ namespace core::win
 {
 	class KeyEvent;
 	class MouseEvent;
+	class CharEvent;
 
 	class IWindowEventVisitor
 	{
@@ -11,9 +12,23 @@ namespace core::win
 		virtual ~IWindowEventVisitor() noexcept = default;
 
 		virtual void
-		Visit(const KeyEvent& evt) = 0;
+		Visit(const KeyEvent& evt, float dt)
+		{
+			(void)evt;
+			(void)dt;
+		}
 
 		virtual void
-		Visit(const MouseEvent& evt) = 0;
+		Visit(const MouseEvent& evt, float dt)
+		{
+			(void)evt;
+			(void)dt;
+		}
+
+		virtual void
+		Visit(const CharEvent& evt)
+		{
+			(void)evt;
+		}
 	};
 }

@@ -23,23 +23,10 @@ namespace core::win
 		virtual class MouseEvent*
 		AsMouseEvent() noexcept;
 
+		virtual class CharEvent*
+		AsCharEvent() noexcept;
+
 		virtual void
-		Accept(class IWindowEventVisitor& visitor) const = 0;
-
-		static constexpr Type
-		GetTypeStatic() noexcept
-		{
-			return kInvalid;
-		}
-
-		virtual Type
-		GetType() const noexcept
-		{
-			return GetTypeStatic();
-		}
-
-	protected:
-		static void
-		AddToQueue(class Window& wnd, std::unique_ptr<IWindowEvent>&& evt);
+		Accept(class IWindowEventVisitor& visitor, float dt) const = 0;
 	};
 }

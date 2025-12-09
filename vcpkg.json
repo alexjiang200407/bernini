@@ -2,8 +2,8 @@
   "name": "bernini",
   "version": "0.0.1",
   "dependencies": [
-    "glfw3",
-    "spdlog"
+    "spdlog",
+    "glm"
   ],
   "builtin-baseline": "4d22d579c2299aaf1e0bd6b7aa64832658330c88"
 }
