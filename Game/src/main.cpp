@@ -60,6 +60,12 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 	Visit(const core::win::KeyEvent& e, float dt) override
 	{
 		float moveSpeed = dt * 2.0f;
+
+		if (e.GetKeyCode() == 16)  // Shift
+		{
+			shiftDown = e.IsHeld();
+		}
+
 		if (!e.IsHeld())
 		{
 			return;
@@ -110,7 +116,7 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 			{ Action::kMRelease, "Middle Release" },
 		};
 
-		if (actions.All(Action::kMove))
+		if (actions.All(Action::kMove) && shiftDown)
 		{
 			const auto& delta = e.GetDelta();
 			mouseDeltaX += (static_cast<float>(delta.dx) * 0.05f * dt);
@@ -133,6 +139,7 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 	float rightDelta      = 0.0f;
 	float mouseDeltaX     = 0.0f;
 	float mouseDeltaY     = 0.0f;
+	bool  shiftDown       = false;
 };
 
 namespace fs = std::filesystem;

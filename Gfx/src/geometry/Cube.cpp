@@ -104,7 +104,7 @@ namespace gfx::geom
 		cmdList->setGraphicsState(state);
 
 		cmdList->drawIndexed(nvrhi::DrawArguments{}
-		                         .setVertexCount(static_cast<uint32_t>(std::size(cubeVertices)))
+		                         .setVertexCount(std::size(cubeIndices))
 		                         .setStartIndexLocation(0)
 		                         .setInstanceCount(1));
 	}
