@@ -8,11 +8,10 @@
 namespace core::win
 {
 	void
-	IWindow::Accept(IWindowEventVisitor& visitor) noexcept
+	IWindow::Accept(IWindowEventVisitor& visitor, float dt) noexcept
 	{
 		using clock = std::chrono::steady_clock;
 		auto now    = clock::now();
-		auto dt     = std::chrono::duration<float>(now - m_lastTime).count();
 
 		for (auto& evt : m_queue)
 		{
@@ -26,8 +25,16 @@ namespace core::win
 		m_queue.clear();
 	}
 
+	void
+	IWindow::Reset() noexcept
+	{
+		m_mouseState = MouseState{};
+		m_keysHeld.clear();
+		m_queue.clear();
+	}
+
 	IWindow::WindowProcessResult
-	IWindow::Process() noexcept
+	IWindow::Process(IWindowEventVisitor* visitor) noexcept
 	{
 		using clock       = std::chrono::steady_clock;
 		using MouseAction = MouseEvent::Action;
@@ -38,7 +45,7 @@ namespace core::win
 		{
 			auto currentTime = clock::now();
 			auto dt          = std::chrono::duration<float>(currentTime - m_lastTime).count();
-			if (dt > UPDATE_DELTA_TIME_MS)
+			if (dt > m_processDeltaTimeSeconds)
 			{
 				m_lastTime = currentTime;
 
@@ -54,7 +61,20 @@ namespace core::win
 				{
 					CreateMouseEvent(MouseAction::kMHeld, m_mouseState, {});
 				}
-				return kContinue;
+
+				for (const auto& keyCode : m_keysHeld)
+				{
+					CreateKeyEvent(keyCode, KeyEvent::Type::kHeld);
+				}
+
+				if (visitor)
+				{
+					Accept(*visitor, dt);
+				}
+
+				Flush();
+
+				return kProcess;
 			}
 
 			return kSkip;

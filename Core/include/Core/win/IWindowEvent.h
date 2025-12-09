@@ -23,6 +23,9 @@ namespace core::win
 		virtual class MouseEvent*
 		AsMouseEvent() noexcept;
 
+		virtual class CharEvent*
+		AsCharEvent() noexcept;
+
 		virtual void
 		Accept(class IWindowEventVisitor& visitor, float dt) const = 0;
 	};

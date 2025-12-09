@@ -1,6 +1,7 @@
 #include "win32/util.h"
 #include "win32/winapi.h"
 #include <core/except/BerniniException.h>
+#include <core/str/str.h>
 #include <core/win/Window.h>
 
 namespace core::win
@@ -167,8 +168,7 @@ namespace core::win
 
 			case WM_KILLFOCUS:
 				{
-					m_queue.clear();
-					m_mouseState = MouseState{};
+					IWindow::Reset();
 					break;
 				}
 
@@ -211,7 +211,7 @@ namespace core::win
 					}
 					else if (raw->header.dwType == RIM_TYPEKEYBOARD)
 					{
-						//HandleKeyboard(raw->data.keyboard);
+						HandleKeyboard(raw->data.keyboard);
 					}
 				}
 				break;
@@ -289,6 +289,47 @@ namespace core::win
 			CreateMouseEvent(actions, m_mouseState, delta);
 		}
 
+		void
+		HandleKeyboard(RAWKEYBOARD& kb)
+		{
+			bool keyDown = !(kb.Flags & RI_KEY_BREAK);
+			UINT vkey    = kb.VKey;
+
+			if (keyDown)
+			{
+				CreateKeyEvent(vkey, KeyEvent::Type::kPress);
+
+				BYTE keyboardState[256];
+				GetKeyboardState(keyboardState) >> win32::errorChecker;
+
+				char16_t buffer[5] = {};
+				int      count     = ToUnicode(
+                    vkey,
+                    kb.MakeCode,
+                    keyboardState,
+                    reinterpret_cast<wchar_t*>(buffer),
+                    4,
+                    0);
+
+				if (count)
+				{
+					std::array<char32_t, 2> utf32 = {};
+					size_t retcount = str::toUtf32(std::span{ buffer }, std::span{ utf32 });
+					for (size_t i = 0; i < retcount; ++i)
+					{
+						if (utf32[i] != 0)
+						{
+							CreateCharEvent(utf32[i]);
+						}
+					}
+				}
+			}
+			else
+			{
+				CreateKeyEvent(vkey, KeyEvent::Type::kRelease);
+			}
+		}
+
 		bool
 		PollEvents() noexcept override
 		{
@@ -308,7 +349,7 @@ namespace core::win
 	};
 
 	std::unique_ptr<IWindow>
-	IWindow::Create(const WindowOptions& options) noexcept
+	IWindow::Create(const WindowOptions& options)
 	{
 		return std::make_unique<WindowWin32>(options);
 	}

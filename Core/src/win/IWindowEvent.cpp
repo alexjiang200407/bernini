@@ -13,4 +13,10 @@ namespace core::win
 	{
 		return nullptr;
 	}
+
+	CharEvent*
+	IWindowEvent::AsCharEvent() noexcept
+	{
+		return nullptr;
+	}
 }

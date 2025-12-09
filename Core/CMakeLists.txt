@@ -1,5 +1,6 @@
 file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/file.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/str.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/win/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/win/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/win/*.hpp

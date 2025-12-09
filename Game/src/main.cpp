@@ -51,42 +51,43 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 	}
 
 	void
+	Visit(const core::win::CharEvent& e) override
+	{
+		spdlog::info("Char Event: U+{:04X}", static_cast<uint32_t>(e.GetChar()));
+	}
+
+	void
 	Visit(const core::win::KeyEvent& e, float dt) override
 	{
-		(void)e;
-		(void)dt;
+		float moveSpeed = dt * 2.0f;
+		if (!e.IsHeld())
+		{
+			return;
+		}
+		spdlog::info("Key Event: KeyCode={}", static_cast<int>(e.GetKeyCode()));
+
+		switch (e.GetKeyCode())
+		{
+		case 87:  // W
+			changedPosition = true;
+			forwardDelta -= moveSpeed;
+			break;
+		case 65:  // A
+			changedPosition = true;
+			rightDelta -= moveSpeed;
+			break;
+		case 83:  // S
+			changedPosition = true;
+			forwardDelta += moveSpeed;
+			break;
+		case 68:  // D
+			changedPosition = true;
+			rightDelta += moveSpeed;
+			break;
+		default:
+			break;
+		}
 	}
-	//{
-	//	float moveSpeed = 0.2f * dt;
-	//	if (e.IsReleased())
-	//	{
-	//		return;
-	//	}
-
-	//	using KeyCode = core::win::KeyCode;
-
-	//	switch (e.GetKey())
-	//	{
-	//	case KeyCode::W:
-	//		changedPosition = true;
-	//		forwardDelta -= moveSpeed;
-	//		break;
-	//	case KeyCode::A:
-	//		changedPosition = true;
-	//		rightDelta -= moveSpeed;
-	//		break;
-	//	case KeyCode::S:
-	//		changedPosition = true;
-	//		forwardDelta += moveSpeed;
-	//		break;
-	//	case KeyCode::D:
-	//		changedPosition = true;
-	//		rightDelta += moveSpeed;
-	//		break;
-	//	default:
-	//		break;
-	//	}
-	//}
 
 	void
 	Visit(const core::win::MouseEvent& e, float dt) override
@@ -112,8 +113,8 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 		if (actions.All(Action::kMove))
 		{
 			const auto& delta = e.GetDelta();
-			mouseDeltaX += (static_cast<float>(delta.dx) * 0.1f * dt);
-			mouseDeltaY += (static_cast<float>(delta.dy) * 0.1f * dt);
+			mouseDeltaX += (static_cast<float>(delta.dx) * 0.05f * dt);
+			mouseDeltaY += (static_cast<float>(delta.dy) * 0.05f * dt);
 			changedRotation = true;
 		}
 
@@ -180,28 +181,25 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto visitor = EventVisitor{};
 
-		using clock   = std::chrono::steady_clock;
-		auto lastTime = clock::now();
-
-		for (auto res = wnd->Process(); res != core::win::IWindow::kClose; res = wnd->Process())
+		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
+		     res      = wnd->Process(&visitor))
 		{
-			wnd->Accept(visitor);
-			wnd->Flush();
-
-			//	if (visitor.changedPosition)
-			//	{
-			//		cameraMoveAlongView(camera, visitor.forwardDelta) >> berniniErrChecker;
-			//		cameraMoveAlongRight(camera, visitor.rightDelta) >> berniniErrChecker;
-			//	}
-			if (visitor.changedRotation)
+			if (res == core::win::IWindow::kProcess)
 			{
-				cameraRotateYawPitch(camera, visitor.mouseDeltaX, visitor.mouseDeltaY) >>
-					berniniErrChecker;
+				if (visitor.changedPosition)
+				{
+					cameraMoveAlongView(camera, visitor.forwardDelta) >> berniniErrChecker;
+					cameraMoveAlongRight(camera, visitor.rightDelta) >> berniniErrChecker;
+				}
+				if (visitor.changedRotation)
+				{
+					cameraRotateYawPitch(camera, visitor.mouseDeltaX, visitor.mouseDeltaY) >>
+						berniniErrChecker;
+				}
+				visitor.Reset();
 			}
 
 			drawFrame(graphics, camera) >> berniniErrChecker;
-
-			visitor.Reset();
 		}
 	}
 	catch (const std::runtime_error& e)
