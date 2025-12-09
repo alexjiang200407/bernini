@@ -1,0 +1,98 @@
+file(GLOB_RECURSE GFX_COMMON_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+)
+
+list(FILTER GFX_COMMON_SOURCES EXCLUDE REGEX ".*/src/dx11/.*")
+
+file(GLOB_RECURSE GFX_SHARED_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/gfx/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/gfx/*.hpp
+)
+
+file(GLOB_RECURSE GFX_COMMON_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
+)
+
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsl
+)
+if (MSVC)
+    foreach(SHADER ${SHADER_FILES})
+        get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+
+        if(SHADER_NAME MATCHES "^VS_")
+            set_source_files_properties(${SHADER} PROPERTIES
+                VS_SHADER_TYPE "Vertex"
+                VS_SHADER_MODEL "5.0"
+                VS_SHADER_ENTRYPOINT "main"
+                VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
+                VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
+                VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:ON>
+            )
+    
+        elseif(SHADER_NAME MATCHES "^PS_")
+            set_source_files_properties(${SHADER} PROPERTIES
+                VS_SHADER_TYPE "Pixel"
+                VS_SHADER_MODEL "5.0"
+                VS_SHADER_ENTRYPOINT "main"
+                VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
+                VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
+                VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:ON>
+            )
+    
+        endif()
+    endforeach()
+endif()
+
+list(FILTER GFX_COMMON_HEADERS EXCLUDE REGEX ".*/dx11/.*")
+
+add_library(gfx SHARED
+    ${GFX_SHARED_HEADERS}
+    ${GFX_COMMON_HEADERS}
+    ${GFX_COMMON_SOURCES}
+    ${SHADER_FILES}
+)
+
+target_compile_definitions(gfx
+    PUBLIC
+        GFX_EXPORTS
+)
+
+target_precompile_headers(gfx
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+
+)
+
+find_package(glm CONFIG REQUIRED)
+
+target_link_libraries(
+    gfx
+    PRIVATE
+        Core
+        fg::FrameGraph
+        nvrhi
+        glm::glm
+)
+
+target_include_directories(gfx
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+if (RENDERER_BACKEND STREQUAL "DX11")
+    add_subdirectory(src/dx11)
+    target_compile_definitions(gfx
+        PRIVATE
+            RENDERER_BACKEND_DX11
+    )
+else()
+    message(FATAL_ERROR "Unknown backend: ${RENDERER_BACKEND}")
+endif()
+
+target_sources(gfx PRIVATE ${GFX_COMMON_SOURCES} ${GFX_COMMON_HEADERS} ${SHADER_FILES} PUBLIC ${GFX_SHARED_HEADERS})

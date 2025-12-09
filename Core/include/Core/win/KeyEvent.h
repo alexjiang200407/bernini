@@ -1,44 +1,59 @@
 #pragma once
-#include <Core/win/IWindowEvent.h>
-
-class GLFWwindow;
+#include <core/win/IWindowEvent.h>
 
 namespace core::win
 {
 	class KeyEvent : public IWindowEvent
 	{
+	public:
+		enum Type
+		{
+			kPress,
+			kRelease,
+			kHeld,
+			kInvalid
+		};
+
 	private:
-		friend class Window;
+		friend class IWindow;
 
 	private:
 		KeyEvent() noexcept = default;
-
-		static void
-		GLFWCallback(GLFWwindow* wnd, int key, int sc, int action, int mods);
+		KeyEvent(unsigned int keyCode, Type type) noexcept : m_keyCode{ keyCode }, m_type{ type } {}
 
 	public:
 		KeyEvent*
 		AsKeyEvent() noexcept override;
 
 		void
-		Accept(class IWindowEventVisitor& visitor) const override;
+		Accept(class IWindowEventVisitor& visitor, float dt) const override;
 
-		static constexpr Type
-		GetTypeStatic() noexcept
+		bool
+		IsReleased() const noexcept
 		{
-			return kKey;
+			return m_type == kRelease;
 		}
 
-		Type
-		GetType() const noexcept override
+		bool
+		IsPress() const noexcept
 		{
-			return GetTypeStatic();
+			return m_type == kPress;
+		}
+
+		bool
+		IsHeld() const noexcept
+		{
+			return m_type == kHeld;
+		}
+
+		unsigned int
+		GetKeyCode() const noexcept
+		{
+			return m_keyCode;
 		}
 
 	private:
-		int key    = 0;
-		int sc     = 0;
-		int action = 0;
-		int mods   = 0;
+		unsigned int m_keyCode = 0u;
+		Type         m_type    = kInvalid;
 	};
 }
