@@ -1,6 +1,6 @@
-#include <Core/win/IWindowEventVisitor.h>
-#include <Core/win/MouseEvent.h>
-#include <Core/win/Window.h>
+#include <core/win/IWindowEventVisitor.h>
+#include <core/win/MouseEvent.h>
+#include <core/win/Window.h>
 
 namespace core::win
 {

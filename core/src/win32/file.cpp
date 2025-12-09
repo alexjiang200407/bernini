@@ -1,6 +1,6 @@
-#include "win32/WinAPI.h"
-#include <Core/except/BerniniException.h>
-#include <Core/file/file.h>
+#include "win32/winapi.h"
+#include <core/except/BerniniException.h>
+#include <core/file/file.h>
 
 namespace core::file
 {

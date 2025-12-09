@@ -21,18 +21,6 @@ namespace core::win
 		void
 		Accept(class IWindowEventVisitor& visitor, float dt) const override;
 
-		static constexpr Type
-		GetTypeStatic() noexcept
-		{
-			return kKey;
-		}
-
-		Type
-		GetType() const noexcept override
-		{
-			return GetTypeStatic();
-		}
-
 	private:
 	};
 }

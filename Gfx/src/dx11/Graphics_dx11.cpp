@@ -3,7 +3,7 @@
 #include "ffi/util.h"
 #include "geometry/Cube.h"
 #include "graphics/Graphics.h"
-#include <Core/except/BerniniException.h>
+#include <core/except/BerniniException.h>
 #include <gfx/ffi/gfx.h>
 
 namespace

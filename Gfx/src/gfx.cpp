@@ -1,6 +1,6 @@
 #include "GfxException.h"
 #include "ffi/util.h"
-#include <Core/file/file.h>
+#include <core/file/file.h>
 #include <gfx/ffi/gfx.h>
 #include <spdlog/sinks/basic_file_sink.h>
 

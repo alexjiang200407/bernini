@@ -1,4 +1,4 @@
-#include <Core/type_traits.h>
+#include <core/type_traits.h>
 #include <gfx/ffi/common.h>
 
 GfxVec3

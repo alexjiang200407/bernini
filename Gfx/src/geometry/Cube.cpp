@@ -1,5 +1,5 @@
 #include "geometry/Cube.h"
-#include <Core/file/file.h>
+#include <core/file/file.h>
 
 struct Vertex
 {

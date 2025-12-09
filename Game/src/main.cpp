@@ -1,6 +1,6 @@
-#include <Core/type_traits.h>
-#include <Core/win/Window.h>
 #include <concepts>
+#include <core/type_traits.h>
+#include <core/win/Window.h>
 #include <gfx/GfxHandle.h>
 #include <gfx/Vec3.h>
 #include <gfx/ffi/gfx.h>
@@ -8,6 +8,10 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+
+#include <core/file/file.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
 
 struct BerniniGraphicseErrorChecker
 {};
@@ -33,78 +37,125 @@ namespace
 	}
 }
 
-//struct EventVisitor : public core::win::IWindowEventVisitor
-//{
-//	void
-//	Reset()
-//	{
-//		changedPosition = false;
-//		changedRotation = false;
-//		rightDelta      = 0.0f;
-//		forwardDelta    = 0.0f;
-//		mouseDeltaX     = 0.0f;
-//		mouseDeltaY     = 0.0f;
-//	}
-//
-//	void
-//	Visit(const core::win::KeyEvent& e, float dt) override
-//	{
-//		float moveSpeed = 0.2f * dt;
-//		if (e.IsReleased())
-//		{
-//			return;
-//		}
-//
-//		using KeyCode = core::win::KeyCode;
-//
-//		switch (e.GetKey())
-//		{
-//		case KeyCode::W:
-//			changedPosition = true;
-//			forwardDelta -= moveSpeed;
-//			break;
-//		case KeyCode::A:
-//			changedPosition = true;
-//			rightDelta -= moveSpeed;
-//			break;
-//		case KeyCode::S:
-//			changedPosition = true;
-//			forwardDelta += moveSpeed;
-//			break;
-//		case KeyCode::D:
-//			changedPosition = true;
-//			rightDelta += moveSpeed;
-//			break;
-//		default:
-//			break;
-//		}
-//	}
-//
-//	void
-//	Visit(const core::win::MouseEvent& e, float dt) override
-//	{
-//		mouseDeltaX += static_cast<float>(e.GetDeltaX()) * dt * 0.005f;
-//		mouseDeltaY += static_cast<float>(e.GetDeltaY()) * dt * 0.005f;
-//
-//		if (std::abs(mouseDeltaX) > 0.0f || std::abs(mouseDeltaY) > 0.0f)
-//		{
-//			changedRotation = true;
-//		}
-//	}
-//
-//	bool  changedPosition = false;
-//	bool  changedRotation = false;
-//	float forwardDelta    = 0.0f;
-//	float rightDelta      = 0.0f;
-//	float mouseDeltaX     = 0.0f;
-//	float mouseDeltaY     = 0.0f;
-//};
+struct EventVisitor : public core::win::IWindowEventVisitor
+{
+	void
+	Reset()
+	{
+		changedPosition = false;
+		changedRotation = false;
+		rightDelta      = 0.0f;
+		forwardDelta    = 0.0f;
+		mouseDeltaX     = 0.0f;
+		mouseDeltaY     = 0.0f;
+	}
+
+	void
+	Visit(const core::win::KeyEvent& e, float dt) override
+	{
+		(void)e;
+		(void)dt;
+	}
+	//{
+	//	float moveSpeed = 0.2f * dt;
+	//	if (e.IsReleased())
+	//	{
+	//		return;
+	//	}
+
+	//	using KeyCode = core::win::KeyCode;
+
+	//	switch (e.GetKey())
+	//	{
+	//	case KeyCode::W:
+	//		changedPosition = true;
+	//		forwardDelta -= moveSpeed;
+	//		break;
+	//	case KeyCode::A:
+	//		changedPosition = true;
+	//		rightDelta -= moveSpeed;
+	//		break;
+	//	case KeyCode::S:
+	//		changedPosition = true;
+	//		forwardDelta += moveSpeed;
+	//		break;
+	//	case KeyCode::D:
+	//		changedPosition = true;
+	//		rightDelta += moveSpeed;
+	//		break;
+	//	default:
+	//		break;
+	//	}
+	//}
+
+	void
+	Visit(const core::win::MouseEvent& e, float dt) override
+	{
+		(void)dt;
+		auto actions = e.GetActions();
+		using Action = core::win::MouseEvent::Action;
+
+		struct ActionInfo
+		{
+			Action      flag;
+			const char* name;
+		};
+
+		constexpr ActionInfo allActions[] = {
+			{ Action::kLPress, "Left Press" },       { Action::kLHeld, "Left Held" },
+			{ Action::kLRelease, "Left Release" },   { Action::kRPress, "Right Press" },
+			{ Action::kRHeld, "Right Held" },        { Action::kRRelease, "Right Release" },
+			{ Action::kMPress, "Middle Press" },     { Action::kMHeld, "Middle Held" },
+			{ Action::kMRelease, "Middle Release" },
+		};
+
+		if (actions.All(Action::kMove))
+		{
+			const auto& delta = e.GetDelta();
+			mouseDeltaX += (static_cast<float>(delta.dx) * 0.1f * dt);
+			mouseDeltaY += (static_cast<float>(delta.dy) * 0.1f * dt);
+			changedRotation = true;
+		}
+
+		for (const auto& info : allActions)
+		{
+			if (actions.All(info.flag))
+			{
+				spdlog::info("Mouse Action: {}", info.name);
+			}
+		}
+	}
+
+	bool  changedPosition = false;
+	bool  changedRotation = false;
+	float forwardDelta    = 0.0f;
+	float rightDelta      = 0.0f;
+	float mouseDeltaX     = 0.0f;
+	float mouseDeltaY     = 0.0f;
+};
+
+namespace fs = std::filesystem;
 
 int APIENTRY
 wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
 	try
 	{
+		{
+			auto     libraryPath = core::file::getLibraryPath();
+			fs::path logPath     = libraryPath.parent_path() / "game.log";
+
+			auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), true);
+
+			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
+
+			log->set_level(spdlog::level::info);
+			log->flush_on(spdlog::level::info);
+
+			spdlog::set_default_logger(std::move(log));
+			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v"s);
+		}
+
 		initializeGfx(LOG_LEVEL_INFO) >> berniniErrChecker;
 
 		auto opts = core::win::WindowOptions{};
@@ -127,27 +178,30 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			                                             .farZ        = 500.0f } };
 		createCamera(graphics, cameraDesc, &camera) >> berniniErrChecker;
 
-		//auto visitor = EventVisitor{};
+		auto visitor = EventVisitor{};
 
-		while (wnd->PollEvents())
+		using clock   = std::chrono::steady_clock;
+		auto lastTime = clock::now();
+
+		for (auto res = wnd->Process(); res != core::win::IWindow::kClose; res = wnd->Process())
 		{
-			//	wnd.Accept(visitor);
-			//	wnd.Flush();
+			wnd->Accept(visitor);
+			wnd->Flush();
 
 			//	if (visitor.changedPosition)
 			//	{
 			//		cameraMoveAlongView(camera, visitor.forwardDelta) >> berniniErrChecker;
 			//		cameraMoveAlongRight(camera, visitor.rightDelta) >> berniniErrChecker;
 			//	}
-			//	if (visitor.changedRotation)
-			//	{
-			//		cameraRotateYawPitch(camera, visitor.mouseDeltaX, visitor.mouseDeltaY) >>
-			//			berniniErrChecker;
-			//	}
+			if (visitor.changedRotation)
+			{
+				cameraRotateYawPitch(camera, visitor.mouseDeltaX, visitor.mouseDeltaY) >>
+					berniniErrChecker;
+			}
 
-			//	drawFrame(graphics, camera) >> berniniErrChecker;
+			drawFrame(graphics, camera) >> berniniErrChecker;
 
-			//	visitor.Reset();
+			visitor.Reset();
 		}
 	}
 	catch (const std::runtime_error& e)

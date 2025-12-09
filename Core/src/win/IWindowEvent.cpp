@@ -1,4 +1,4 @@
-#include <Core/win/IWindowEvent.h>
+#include <core/win/IWindowEvent.h>
 
 namespace core::win
 {

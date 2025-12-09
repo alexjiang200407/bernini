@@ -1,5 +1,5 @@
 #include "dx11/DXError.h"
-#include <Core/str/str.h>
+#include <core/str/str.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>

@@ -1,5 +1,5 @@
-#include <Core/except/BerniniException.h>
-#include <Core/file/file.h>
+#include <core/except/BerniniException.h>
+#include <core/file/file.h>
 
 namespace core::file
 {

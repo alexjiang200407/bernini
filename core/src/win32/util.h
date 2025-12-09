@@ -1,7 +1,7 @@
 #include "WinAPI.h"
-#include <Core/except/BerniniException.h>
-#include <Core/str/str.h>
 #include <concepts>
+#include <core/except/BerniniException.h>
+#include <core/str/str.h>
 
 namespace core::win::win32
 {

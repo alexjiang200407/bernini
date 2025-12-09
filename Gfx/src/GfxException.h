@@ -1,5 +1,5 @@
 #pragma once
-#include <Core/except/BerniniException.h>
+#include <core/except/BerniniException.h>
 #include <gfx/ffi/common.h>
 
 namespace gfx

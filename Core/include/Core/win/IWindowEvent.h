@@ -25,21 +25,5 @@ namespace core::win
 
 		virtual void
 		Accept(class IWindowEventVisitor& visitor, float dt) const = 0;
-
-		static constexpr Type
-		GetTypeStatic() noexcept
-		{
-			return kInvalid;
-		}
-
-		virtual Type
-		GetType() const noexcept
-		{
-			return GetTypeStatic();
-		}
-
-	protected:
-		static void
-		AddToQueue(class IWindow& wnd, std::unique_ptr<IWindowEvent>&& evt);
 	};
 }

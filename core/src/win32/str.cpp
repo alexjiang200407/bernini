@@ -1,5 +1,5 @@
-#include "win32/WinAPI.h"
-#include <Core/str/str.h>
+#include "win32/winapi.h"
+#include <core/str/str.h>
 
 std::wstring
 core::str::string_to_wide(std::string_view str)

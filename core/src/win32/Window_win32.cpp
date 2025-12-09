@@ -1,14 +1,17 @@
-#include "win32/Win32Util.h"
-#include "win32/WinAPI.h"
-#include <Core/except/BerniniException.h>
-#include <Core/win/Window.h>
+#include "win32/util.h"
+#include "win32/winapi.h"
+#include <core/except/BerniniException.h>
+#include <core/win/Window.h>
 
 namespace core::win
 {
+	using MouseActions = core::win::MouseEvent::Actions;
+	using MouseAction  = core::win::MouseEvent::Action;
+
 	class WindowWin32 : public IWindow
 	{
 	public:
-		WindowWin32(const WindowOptions& options)
+		WindowWin32(const WindowOptions& options) : IWindow{ options }
 		{
 			RegisterWin32(options);
 			RegisterRawInput();
@@ -79,6 +82,8 @@ namespace core::win
 				hinstance,
 				this);
 
+			ShowCursor(FALSE) >> win32::errorChecker;
+
 			if (options.visible)
 				ShowWindow(m_hWnd, SW_SHOW) >> win32::errorChecker;
 
@@ -148,12 +153,140 @@ namespace core::win
 		{
 			switch (uMsg)
 			{
-			case WM_DESTROY:
+			case WM_CLOSE:
 				PostQuitMessage(0);
 				return 0;
+
+			case WM_SETFOCUS:
+				if (m_windowMode == WindowOptions::Mode::BorderlessWindowed)
+				{
+					RECT rect = { 0, 0, static_cast<LONG>(m_width), static_cast<LONG>(m_height) };
+					ClipCursor(&rect) >> win32::errorChecker;
+				}
+				break;
+
+			case WM_KILLFOCUS:
+				{
+					m_queue.clear();
+					m_mouseState = MouseState{};
+					break;
+				}
+
+			case WM_DESTROY:
+				return 0;
+
+			case WM_INPUT:
+				{
+					UINT dwSize = 0;
+					GetRawInputData(
+						reinterpret_cast<HRAWINPUT>(lParam),
+						RID_INPUT,
+						nullptr,
+						&dwSize,
+						sizeof(RAWINPUTHEADER));
+					if (dwSize == 0 || dwSize == static_cast<UINT>(-1))
+					{
+						throw core::except::BerniniException{ "Raw Input Error",
+							                                  "Failed to get Raw input data" };
+					}
+
+					std::vector<BYTE> lpb(dwSize);
+					if (const auto copied = GetRawInputData(
+							reinterpret_cast<HRAWINPUT>(lParam),
+							RID_INPUT,
+							lpb.data(),
+							&dwSize,
+							sizeof(RAWINPUTHEADER));
+					    copied != dwSize || copied == static_cast<UINT>(-1))
+					{
+						throw core::except::BerniniException{ "Raw Input Error",
+							                                  "Failed to get Raw input data" };
+					}
+
+					RAWINPUT* raw = reinterpret_cast<RAWINPUT*>(lpb.data());
+
+					if (raw->header.dwType == RIM_TYPEMOUSE)
+					{
+						HandleMouse(raw->data.mouse);
+					}
+					else if (raw->header.dwType == RIM_TYPEKEYBOARD)
+					{
+						//HandleKeyboard(raw->data.keyboard);
+					}
+				}
+				break;
 			default:
 				return DefWindowProc(hWnd, uMsg, wParam, lParam);
 			}
+			return DefWindowProc(hWnd, uMsg, wParam, lParam);
+		}
+
+		void
+		HandleMouse(RAWMOUSE& rawMouse)
+		{
+			auto delta   = MouseDelta{};
+			auto actions = MouseActions{};
+
+			if (rawMouse.usFlags == MOUSE_MOVE_RELATIVE)
+			{
+				delta.dx = rawMouse.lLastX;
+				delta.dy = rawMouse.lLastY;
+
+				m_mouseState.x += delta.dx;
+				m_mouseState.y += delta.dy;
+
+				actions.Set(MouseAction::kMove);
+			}
+			else
+			{
+				actions.Reset(MouseAction::kMove);
+			}
+
+			if (rawMouse.usButtonFlags & RI_MOUSE_WHEEL)
+			{
+				short zDelta = static_cast<short>(rawMouse.usButtonData);
+				m_mouseState.wheelPos += zDelta;
+				delta.wheelDelta = zDelta;
+
+				actions.Set(MouseAction::kWheel);
+			}
+			else
+			{
+				actions.Reset(MouseAction::kWheel);
+			}
+			auto updateButton = [&](auto buttonFlag, auto actionPress, auto rawDown, auto rawUp) {
+				if (rawDown)
+				{
+					m_mouseState.flags.Set(buttonFlag);
+					actions.Set(actionPress);
+				}
+
+				if (rawUp)
+				{
+					m_mouseState.flags.Reset(buttonFlag);
+					actions.Reset(actionPress);
+				}
+			};
+
+			updateButton(
+				MouseStateFlagsEnum::kLeftDown,
+				MouseAction::kLPress,
+				rawMouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN,
+				rawMouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP);
+
+			updateButton(
+				MouseStateFlagsEnum::kRightDown,
+				MouseAction::kRPress,
+				rawMouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN,
+				rawMouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP);
+
+			updateButton(
+				MouseStateFlagsEnum::kMiddleDown,
+				MouseAction::kMPress,
+				rawMouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN,
+				rawMouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP);
+
+			CreateMouseEvent(actions, m_mouseState, delta);
 		}
 
 		bool
@@ -167,6 +300,7 @@ namespace core::win
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
+
 			return true;
 		}
 

@@ -1,8 +1,8 @@
 #pragma once
-#include <Core/win/IWindowEvent.h>
-#include <Core/win/IWindowEventVisitor.h>
-#include <Core/win/KeyEvent.h>
-#include <Core/win/MouseEvent.h>
+#include <core/win/IWindowEvent.h>
+#include <core/win/IWindowEventVisitor.h>
+#include <core/win/KeyEvent.h>
+#include <core/win/MouseEvent.h>
 
 #include <string>
 
@@ -30,15 +30,22 @@ namespace core::win
 	class IWindow
 	{
 	public:
-		friend class IWindowEvent;
-		friend class KeyEvent;
-		friend class MouseEvent;
+		enum WindowProcessResult
+		{
+			kContinue,
+			kSkip,
+			kClose
+		};
 
 	public:
-		virtual ~IWindow() noexcept = default;
+		IWindow(const WindowOptions& options) noexcept :
+			m_width{ options.width }, m_height{ options.height }, m_windowMode{ options.mode }
+		{
+			using clock = std::chrono::steady_clock;
+			m_lastTime  = clock::now();
+		}
 
-		virtual bool
-		PollEvents() noexcept = 0;
+		virtual ~IWindow() noexcept = default;
 
 		void
 		Accept(class IWindowEventVisitor& visitor) noexcept;
@@ -50,7 +57,30 @@ namespace core::win
 		static std::unique_ptr<IWindow>
 		Create(const WindowOptions& options) noexcept;
 
+		WindowProcessResult
+		Process() noexcept;
+
+	protected:
+		void
+		CreateMouseEvent(
+			MouseEvent::Actions actions,
+			const MouseState&   state,
+			const MouseDelta&   delta) noexcept
+		{
+			m_queue.emplace_back(new MouseEvent(actions, state, delta));
+		}
+
 	private:
-		std::vector<std::unique_ptr<IWindowEvent>> queue;
+		virtual bool
+		PollEvents() noexcept = 0;
+
+	protected:
+		std::vector<std::unique_ptr<IWindowEvent>> m_queue;
+		MouseState                                 m_mouseState{};
+		WindowOptions::Mode                        m_windowMode;
+		int                                        m_width;
+		int                                        m_height;
+		std::chrono::steady_clock::time_point      m_lastTime;
+		static constexpr float                     UPDATE_DELTA_TIME_MS = 0.05f;
 	};
 }

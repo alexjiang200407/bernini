@@ -108,10 +108,11 @@ namespace gfx
 	void
 	Camera::RotateYawPitch(float yawDelta, float pitchDelta) noexcept
 	{
-		const float maxPitch = glm::radians(89.0f);
-		const float minPitch = glm::radians(-89.0f);
-		m_pitch              = glm::clamp(pitchDelta, minPitch, maxPitch);
-		m_yaw += yawDelta;
+		static const float maxPitch = glm::radians(89.0f);
+		static const float minPitch = glm::radians(-89.0f);
+
+		m_pitch = glm::clamp(m_pitch + pitchDelta, minPitch, maxPitch);
+		m_yaw   = fmod(m_yaw + yawDelta, glm::two_pi<float>());
 
 		m_forwardUnit.x = cos(m_pitch) * sin(m_yaw);
 		m_forwardUnit.y = sin(m_pitch);
