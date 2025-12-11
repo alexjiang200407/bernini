@@ -3,7 +3,9 @@
 #include "ffi/util.h"
 #include "geometry/Cube.h"
 #include "graphics/Graphics.h"
+#include "passes/GBufferPass.h"
 #include <core/except/BerniniException.h>
+#include <fg/Blackboard.hpp>
 #include <gfx/ffi/gfx.h>
 
 namespace
@@ -73,10 +75,10 @@ namespace gfx
 		nvrhi::RefCountPtr<ID3D11Device>           m_device;
 		nvrhi::RefCountPtr<ID3D11Texture2D>        m_backBuffer;
 		nvrhi::RefCountPtr<ID3D11DepthStencilView> m_depthBuffer;
-		nvrhi::TextureHandle                       m_nvrhiDepthBuffer;
-		nvrhi::TextureHandle                       m_nvrhiBackBuffer;
-		nvrhi::FramebufferInfo                     m_framebufferInfo;
-		std::unique_ptr<geom::Cube>                cube;
+
+		std::vector<std::unique_ptr<IDrawable>> cubes;
+
+		GBufferPass m_gBufferPass;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
@@ -127,7 +129,7 @@ namespace gfx
 
 		m_nvrhiDevice = nvrhi::d3d11::createDevice({ .context = m_context });
 
-		cube = std::make_unique<geom::Cube>(m_nvrhiDevice);
+		cubes.push_back(std::make_unique<Cube>(m_nvrhiDevice));
 
 		m_swap->GetBuffer(0, IID_PPV_ARGS(&m_backBuffer)) >> gfx::dx::dxErrorChecker;
 
@@ -148,10 +150,10 @@ namespace gfx
 				textureDesc);
 
 			m_nvrhiDepthBuffer = CreateDepthTexture(opts, m_device, m_nvrhiDevice, m_depthBuffer);
-			nvrhiFramebuffer =
-				m_nvrhiDevice->createFramebuffer(nvrhi::FramebufferDesc{}
-			                                         .addColorAttachment(m_nvrhiBackBuffer)
-			                                         .setDepthAttachment(m_nvrhiDepthBuffer));
+			m_nvrhiFramebuffer = m_nvrhiDevice->createFramebuffer(
+				nvrhi::FramebufferDesc{}
+					.addColorAttachment(m_nvrhiBackBuffer)
+					.setDepthAttachment(m_nvrhiDepthBuffer));
 
 			m_framebufferInfo = nvrhi::FramebufferInfo{}.addColorFormat(nvrhi::Format::BGRA8_UNORM);
 		}
@@ -165,49 +167,68 @@ namespace gfx
 		nvrhi::CommandListHandle commandList = m_nvrhiDevice->createCommandList();
 		nvrhi::utils::ClearColorAttachment(
 			commandList,
-			nvrhiFramebuffer,
+			m_nvrhiFramebuffer,
 			0,
 			nvrhi::Color{ 0.0f, 0.0f, 0.0f, 1.0f });
-		nvrhi::utils::ClearDepthStencilAttachment(commandList, nvrhiFramebuffer, 1.0f, 0);
+		nvrhi::utils::ClearDepthStencilAttachment(commandList, m_nvrhiFramebuffer, 1.0f, 0);
 
-		camera.UpdateBuffer(commandList);
+		//camera.UpdateBuffer(commandList);
 
-		auto renderState = nvrhi::RenderState{}
-		                       .setRasterState(nvrhi::RasterState{}
-		                                           .setCullMode(nvrhi::RasterCullMode::None)
-		                                           .setFillMode(nvrhi::RasterFillMode::Solid))
-		                       .setDepthStencilState(nvrhi::DepthStencilState{}
-		                                                 .setDepthTestEnable(true)
-		                                                 .setDepthWriteEnable(true)
-		                                                 .setDepthFunc(nvrhi::ComparisonFunc::Less)
-		                                                 .setStencilEnable(false));
+		//auto renderState = nvrhi::RenderState{}
+		//                       .setRasterState(
+		//						   nvrhi::RasterState{}
+		//							   .setCullMode(nvrhi::RasterCullMode::None)
+		//							   .setFillMode(nvrhi::RasterFillMode::Solid))
+		//                       .setDepthStencilState(
+		//						   nvrhi::DepthStencilState{}
+		//							   .setDepthTestEnable(true)
+		//							   .setDepthWriteEnable(true)
+		//							   .setDepthFunc(nvrhi::ComparisonFunc::Less)
+		//							   .setStencilEnable(false));
 
-		// Per-Material
-		auto pipelineDesc = nvrhi::GraphicsPipelineDesc{}
-		                        .addBindingLayout(camera.GetBindingLayout())
-		                        .setVertexShader(cube->vertexShader)
-		                        .setPixelShader(cube->pixelShader)
-		                        .setInputLayout(cube->GetInputLayout())
-		                        .setPrimType(nvrhi::PrimitiveType::TriangleList)
-		                        .setRenderState(renderState);
+		//// Per-Material
+		//auto pipelineDesc = nvrhi::GraphicsPipelineDesc{}
+		//                        .addBindingLayout(camera.GetBindingLayout())
+		//                        .setVertexShader(cube->vertexShader)
+		//                        .setPixelShader(cube->pixelShader)
+		//                        .setInputLayout(cube->GetInputLayout())
+		//                        .setPrimType(nvrhi::PrimitiveType::TriangleList)
+		//                        .setRenderState(renderState);
 
-		nvrhi::GraphicsPipelineHandle graphicsPipeline =
-			m_nvrhiDevice->createGraphicsPipeline(pipelineDesc, m_framebufferInfo);
+		//nvrhi::GraphicsPipelineHandle graphicsPipeline =
+		//	m_nvrhiDevice->createGraphicsPipeline(pipelineDesc, m_framebufferInfo);
 
-		auto                 cameraBindingSet = camera.GetBindingSet(m_nvrhiDevice);
-		nvrhi::GraphicsState globalGraphicsState =
-			nvrhi::GraphicsState{}
-				.setPipeline(graphicsPipeline)
-				.setFramebuffer(nvrhiFramebuffer)
-				.addBindingSet(cameraBindingSet)
-				.setViewport(nvrhi::ViewportState{}.addViewportAndScissorRect(
-					nvrhi::Viewport{ static_cast<float>(windowWidth),
-		                             static_cast<float>(windowHeight) }));
+		//auto                 cameraBindingSet = camera.GetBindingSet(m_nvrhiDevice);
+		//nvrhi::GraphicsState globalGraphicsState =
+		//	nvrhi::GraphicsState{}
+		//		.setPipeline(graphicsPipeline)
+		//		.setFramebuffer(nvrhiFramebuffer)
+		//		.addBindingSet(cameraBindingSet)
+		//		.setViewport(
+		//			nvrhi::ViewportState{}.addViewportAndScissorRect(
+		//				nvrhi::Viewport{ static_cast<float>(windowWidth),
+		//                                 static_cast<float>(windowHeight) }));
 
-		cube->Draw(commandList, globalGraphicsState);
+		//cube->Draw(commandList, globalGraphicsState);
 
 		commandList->close();
 		m_nvrhiDevice->executeCommandList(commandList);
+
+		auto fg           = FrameGraph{};
+		auto fgBlackboard = FrameGraphBlackboard{};
+
+		auto renderArgs = RenderArgs{
+			.screenWidth   = static_cast<float>(windowWidth),
+			.screenHeight  = static_cast<float>(windowHeight),
+			.device        = m_nvrhiDevice,
+			.outBuffer     = m_nvrhiFramebuffer,
+			.outBufferInfo = m_framebufferInfo,
+		};
+
+		m_gBufferPass.AttachToFrameGraph(fg, fgBlackboard, renderArgs, camera, cubes);
+
+		fg.compile();
+		fg.execute();
 
 		m_swap->Present(1, 0);
 	}

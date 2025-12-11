@@ -22,6 +22,12 @@
       "toolset": "v143"
     },
     {
+      "name": "vs2026",
+      "hidden": true,
+      "generator": "Visual Studio 18 2026",
+      "toolset": "v145"
+    },
+    {
       "name": "dx11",
       "hidden": true,
       "cacheVariables": {
@@ -39,7 +45,7 @@
       }
     },
     {
-      "name": "windows-msvc-debug",
+      "name": "windows-vs2022-msvc-debug",
       "displayName": "Windows MSVC Debug",
       "binaryDir": "${sourceDir}/build/msvc-debug",
       "inherits": [
@@ -51,7 +57,7 @@
       ]
     },
     {
-      "name": "windows-msvc-release",
+      "name": "windows-vs2022-msvc-release",
       "displayName": "Windows MSVC Release",
       "binaryDir": "${sourceDir}/build/msvc-release",
       "inherits": [
@@ -61,17 +67,51 @@
         "msvc",
         "dx11"
       ]
+    },
+    {
+      "name": "windows-vs2026-msvc-debug",
+      "displayName": "Windows MSVC Debug VS2026",
+      "binaryDir": "${sourceDir}/build/msvc-debug",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "vs2026",
+        "msvc",
+        "dx11"
+      ]
+    },
+    {
+      "name": "windows-vs2026-msvc-release",
+      "displayName": "Windows MSVC Release VS2026",
+      "binaryDir": "${sourceDir}/build/msvc-release",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "vs2026",
+        "msvc",
+        "dx11"
+      ]
     }
   ],
   "buildPresets": [
     {
-      "name": "windows-msvc-release",
-      "configurePreset": "windows-msvc-release",
+      "name": "windows-vs2022-msvc-release",
+      "configurePreset": "windows-vs2022-msvc-release",
       "configuration": "Release"
     },
     {
-      "name": "windows-msvc-debug",
-      "configurePreset": "windows-msvc-debug",
+      "name": "windows-vs2022-msvc-debug",
+      "configurePreset": "windows-vs2022-msvc-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-vs2026-msvc-release",
+      "configurePreset": "windows-vs2026-msvc-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2026-msvc-debug",
+      "configurePreset": "windows-vs2026-msvc-debug",
       "configuration": "Debug"
     }
   ]

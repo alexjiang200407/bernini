@@ -1,6 +1,6 @@
 #include "math/util.h"
 
-namespace gfx::math
+namespace gfx
 {
 
 	glm::vec3

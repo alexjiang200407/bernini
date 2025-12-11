@@ -9,6 +9,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(core)
+set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/FrameGraph)
 add_subdirectory(extern/NVRHI)
 add_subdirectory(gfx)

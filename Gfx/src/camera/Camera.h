@@ -10,30 +10,10 @@ namespace gfx
 {
 	class IGraphics;
 
-	struct CameraCBuf
-	{
-		math::ShaderMatrix viewMatrix;
-		math::ShaderMatrix projMatrix;
-	};
-
 	class Camera : public GfxBase
 	{
 	public:
-		explicit Camera(nvrhi::DeviceHandle graphics, const GfxCameraDesc& desc);
-
-		nvrhi::BufferHandle
-		UpdateBuffer(nvrhi::CommandListHandle cmdList);
-
-		[[nodiscard]]
-		const nvrhi::BindingLayoutHandle&
-		GetBindingLayout() const noexcept
-		{
-			return m_bindingLayout;
-		}
-
-		[[nodiscard]]
-		nvrhi::BindingSetHandle
-		GetBindingSet(nvrhi::DeviceHandle device) const noexcept;
+		explicit Camera(const GfxCameraDesc& desc);
 
 		void
 		SetShouldUpdated() noexcept
@@ -50,6 +30,30 @@ namespace gfx
 		void
 		RotateYawPitch(float yaw, float pitch) noexcept;
 
+		bool
+		ShouldUpdate() const noexcept
+		{
+			return m_shouldUpdate;
+		}
+
+		void
+		OnUpdated() noexcept
+		{
+			m_shouldUpdate = false;
+		}
+
+		ShaderMatrix
+		GetViewMatrix() const noexcept
+		{
+			return viewMatrix;
+		}
+
+		ShaderMatrix
+		GetProjMatrix() const noexcept
+		{
+			return projMatrix;
+		}
+
 	private:
 		void
 		UpdateTransform(const GfxCameraTransformOptions& transform);
@@ -58,13 +62,12 @@ namespace gfx
 		UpdateProjection(const GfxCameraProjectionOptions& projection) noexcept;
 
 	private:
-		CameraCBuf                 m_cbufData;
-		glm::vec3                  m_forwardUnit;
-		glm::vec3                  m_position;
-		nvrhi::BufferHandle        m_cbuf;
-		nvrhi::BindingLayoutHandle m_bindingLayout;
-		bool                       m_shouldUpdate = true;
-		float                      m_pitch        = 0.0f;
-		float                      m_yaw          = 0.0f;
+		ShaderMatrix viewMatrix;
+		ShaderMatrix projMatrix;
+		glm::vec3    m_forwardUnit;
+		glm::vec3    m_position;
+		bool         m_shouldUpdate = true;
+		float        m_pitch        = 0.0f;
+		float        m_yaw          = 0.0f;
 	};
 }

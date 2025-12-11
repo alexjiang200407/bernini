@@ -24,7 +24,10 @@ namespace gfx
 	protected:
 		int                      windowWidth = 0, windowHeight = 0;
 		nvrhi::DeviceHandle      m_nvrhiDevice;
-		nvrhi::FramebufferHandle nvrhiFramebuffer;
+		nvrhi::FramebufferHandle m_nvrhiFramebuffer;
+		nvrhi::TextureHandle     m_nvrhiDepthBuffer;
+		nvrhi::TextureHandle     m_nvrhiBackBuffer;
+		nvrhi::FramebufferInfo   m_framebufferInfo;
 	};
 
 }
