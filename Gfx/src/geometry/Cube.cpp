@@ -21,9 +21,9 @@ static const Vertex cubeVertices[] = {
 static const uint16_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
 	                                    5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
 
-namespace gfx::geom
+namespace gfx
 {
-	Cube::Cube(nvrhi::DeviceHandle& device)
+	Cube::Cube(nvrhi::DeviceHandle& device) : IDrawable{ {} }
 	{
 		{
 			auto vertexBufferDesc = nvrhi::BufferDesc{};
@@ -72,7 +72,7 @@ namespace gfx::geom
 			                                            .setBufferIndex(0)
 			                                            .setElementStride(sizeof(Vertex)) };
 
-		inputLayout = device->createInputLayout(
+		vertexLayout = device->createInputLayout(
 			attributes,
 			static_cast<uint32_t>(std::size(attributes)),
 			vertexShader);
@@ -86,8 +86,29 @@ namespace gfx::geom
 	}
 
 	void
-	Cube::Draw(nvrhi::CommandListHandle cmdList, nvrhi::GraphicsState& state) const
+	Cube::AttachVertexLayout(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
 	{
+		pipelineDesc.setInputLayout(vertexLayout);
+	}
+
+	void
+	Cube::AttachVertexShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
+	{
+		pipelineDesc.setVertexShader(vertexShader);
+	}
+
+	void
+	Cube::AttachPixelShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
+	{
+		pipelineDesc.setPixelShader(pixelShader);
+	}
+
+	void
+	Cube::Draw(DrawParams params)
+	{
+		auto& state   = params.gfxState;
+		auto  cmdList = params.commandList;
+
 		nvrhi::VertexBufferBinding vbufBinding;
 		vbufBinding.buffer = vertexBuffer;
 		vbufBinding.slot   = 0;
@@ -103,9 +124,10 @@ namespace gfx::geom
 
 		cmdList->setGraphicsState(state);
 
-		cmdList->drawIndexed(nvrhi::DrawArguments{}
-		                         .setVertexCount(std::size(cubeIndices))
-		                         .setStartIndexLocation(0)
-		                         .setInstanceCount(1));
+		cmdList->drawIndexed(
+			nvrhi::DrawArguments{}
+				.setVertexCount(std::size(cubeIndices))
+				.setStartIndexLocation(0)
+				.setInstanceCount(1));
 	}
 }

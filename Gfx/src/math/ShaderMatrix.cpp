@@ -15,7 +15,7 @@ namespace
 	}
 }
 
-namespace gfx::math
+namespace gfx
 {
 	ShaderMatrix::ShaderMatrix(const glm::mat4& mat) noexcept : m_data(toShaderLayout(mat)) {}
 	ShaderMatrix::ShaderMatrix(glm::mat4&& mat) noexcept : m_data(toShaderLayout(mat)) {}

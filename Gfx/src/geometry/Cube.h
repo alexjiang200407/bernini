@@ -1,25 +1,29 @@
 #pragma once
+#include "drawable/IDrawable.h"
 
-namespace gfx::geom
+namespace gfx
 {
-	class Cube
+	class Cube : public IDrawable
 	{
 	public:
 		Cube(nvrhi::DeviceHandle& device);
 
 		void
-		Draw(nvrhi::CommandListHandle cmdList, nvrhi::GraphicsState& state) const;
+		AttachVertexLayout(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept override;
 
-		nvrhi::InputLayoutHandle
-		GetInputLayout() const noexcept
-		{
-			return inputLayout;
-		}
+		void
+		AttachVertexShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept override;
+
+		void
+		AttachPixelShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept override;
+
+		void
+		Draw(DrawParams params) override;
 
 	public:
 		nvrhi::BufferHandle      indexBuffer;
 		nvrhi::BufferHandle      vertexBuffer;
-		nvrhi::InputLayoutHandle inputLayout;
+		nvrhi::InputLayoutHandle vertexLayout;
 		nvrhi::ShaderHandle      vertexShader;
 		nvrhi::ShaderHandle      pixelShader;
 	};
