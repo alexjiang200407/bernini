@@ -10,17 +10,26 @@ file(GLOB_RECURSE DX11_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
 )
 
-target_link_libraries(gfx PRIVATE d3d11 dxgi nvrhi_d3d11)
-
-target_compile_definitions(gfx PUBLIC RENDERER_DX11)
-
-target_precompile_headers(gfx
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/pch.h
+target_sources(gfx_objects PRIVATE 
+    ${DX11_SOURCES} 
+    ${DX11_HEADERS}
 )
 
-target_sources(gfx PRIVATE ${DX11_SOURCES} ${DX11_HEADERS})
+target_include_directories(gfx_objects PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
-target_compile_definitions(gfx PRIVATE RENDERER_BACKEND_DX11)
+target_precompile_headers(gfx_objects PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/pch.h
+)
 
-target_include_directories(gfx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(gfx_objects PUBLIC 
+    d3d11
+    dxgi
+    nvrhi_d3d11 
+    d3dcompiler
+)
+
+target_compile_definitions(gfx_objects PUBLIC 
+    RENDERER_DX11
+)

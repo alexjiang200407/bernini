@@ -25,7 +25,6 @@ namespace gfx
 		std::span<std::unique_ptr<IDrawable>> drawables)
 	{
 		(void)blackBoard;
-		GeomPass::Setup(renderArgs.device);
 
 		frameGraph.addCallbackPass(
 			"GBufferPass",
@@ -67,8 +66,6 @@ namespace gfx
 
 					pipelineDesc.addBindingLayout(bindingLayout);
 					gfxState.addBindingSet(bindingSet);
-
-
 
 					drawable->AttachVertexLayout(pipelineDesc);
 
