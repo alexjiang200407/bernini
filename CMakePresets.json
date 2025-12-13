@@ -45,6 +45,20 @@
       }
     },
     {
+      "name": "debug",
+      "hidden": true,
+      "cacheVariables": {
+        "BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "hidden": true,
+      "cacheVariables": {
+        "BUILD_TESTS": "OFF"
+      }
+    },
+    {
       "name": "windows-vs2022-msvc-debug",
       "displayName": "Windows MSVC Debug",
       "binaryDir": "${sourceDir}/build/msvc-debug",
@@ -53,7 +67,8 @@
         "windows",
         "vs2022",
         "msvc",
-        "dx11"
+        "dx11",
+        "debug"
       ]
     },
     {
@@ -65,7 +80,8 @@
         "windows",
         "vs2022",
         "msvc",
-        "dx11"
+        "dx11",
+        "release"
       ]
     },
     {
@@ -77,7 +93,8 @@
         "windows",
         "vs2026",
         "msvc",
-        "dx11"
+        "dx11",
+        "debug"
       ]
     },
     {
@@ -89,7 +106,8 @@
         "windows",
         "vs2026",
         "msvc",
-        "dx11"
+        "dx11",
+        "release"
       ]
     }
   ],

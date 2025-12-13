@@ -22,4 +22,10 @@ namespace core::file
 		}
 		return buffer;
 	}
+
+	std::vector<std::byte>
+	readFileBytes(std::string_view filePath)
+	{
+		return readFileBytes(std::string{ filePath });
+	}
 }

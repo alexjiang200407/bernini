@@ -1,4 +1,5 @@
 #pragma once
+#include "buffer/DynamicConstantBuffer.h"
 
 namespace gfx
 {
@@ -15,10 +16,14 @@ namespace gfx
 			ShaderMatrix*         modelTransform;
 		};
 
-	protected:
+	public:
 		static void
 		Setup(nvrhi::DeviceHandle device);
 
+		static void
+		Shutdown();
+
+	protected:
 		nvrhi::BindingSetItem
 		GetCameraBindingSetItem() const noexcept;
 
@@ -53,8 +58,8 @@ namespace gfx
 			const noexcept;
 
 	protected:
-		static inline nvrhi::BufferHandle m_cameraCBuf;
-		static inline nvrhi::BufferHandle m_transformCBuf;
+		static inline DynamicConstantBuffer m_cameraCBuf;
+		static inline DynamicConstantBuffer m_transformCBuf;
 	};
 
 }

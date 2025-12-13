@@ -55,8 +55,8 @@ namespace gfx
 			device->executeCommandList(uploadCmdList);
 		}
 
-		auto vertexShaderData = core::file::readFileBytes("shaders/VS_cube.cso");
-		auto pixelShaderData  = core::file::readFileBytes("shaders/PS_cube.cso");
+		auto vertexShaderData = core::file::readFileBytes("shaders/VS_cube.cso"sv);
+		auto pixelShaderData  = core::file::readFileBytes("shaders/PS_cube.cso"sv);
 
 		vertexShader = device->createShader(
 			nvrhi::ShaderDesc{}

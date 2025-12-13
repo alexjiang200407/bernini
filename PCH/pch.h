@@ -5,6 +5,7 @@
 #include <bitset>
 #include <cassert>
 #include <chrono>
+#include <concepts>
 #include <execution>
 #include <filesystem>
 #include <format>

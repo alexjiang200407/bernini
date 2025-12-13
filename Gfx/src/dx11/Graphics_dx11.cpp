@@ -157,9 +157,11 @@ namespace gfx
 
 			m_framebufferInfo = nvrhi::FramebufferInfo{}.addColorFormat(nvrhi::Format::BGRA8_UNORM);
 		}
+
+		GeomPass::Setup(m_nvrhiDevice);
 	}
 
-	Graphics::~Graphics() {}
+	Graphics::~Graphics() { GeomPass::Shutdown(); }
 
 	void
 	Graphics::DrawFrame(gfx::Camera& camera)
@@ -171,45 +173,6 @@ namespace gfx
 			0,
 			nvrhi::Color{ 0.0f, 0.0f, 0.0f, 1.0f });
 		nvrhi::utils::ClearDepthStencilAttachment(commandList, m_nvrhiFramebuffer, 1.0f, 0);
-
-		//camera.UpdateBuffer(commandList);
-
-		//auto renderState = nvrhi::RenderState{}
-		//                       .setRasterState(
-		//						   nvrhi::RasterState{}
-		//							   .setCullMode(nvrhi::RasterCullMode::None)
-		//							   .setFillMode(nvrhi::RasterFillMode::Solid))
-		//                       .setDepthStencilState(
-		//						   nvrhi::DepthStencilState{}
-		//							   .setDepthTestEnable(true)
-		//							   .setDepthWriteEnable(true)
-		//							   .setDepthFunc(nvrhi::ComparisonFunc::Less)
-		//							   .setStencilEnable(false));
-
-		//// Per-Material
-		//auto pipelineDesc = nvrhi::GraphicsPipelineDesc{}
-		//                        .addBindingLayout(camera.GetBindingLayout())
-		//                        .setVertexShader(cube->vertexShader)
-		//                        .setPixelShader(cube->pixelShader)
-		//                        .setInputLayout(cube->GetInputLayout())
-		//                        .setPrimType(nvrhi::PrimitiveType::TriangleList)
-		//                        .setRenderState(renderState);
-
-		//nvrhi::GraphicsPipelineHandle graphicsPipeline =
-		//	m_nvrhiDevice->createGraphicsPipeline(pipelineDesc, m_framebufferInfo);
-
-		//auto                 cameraBindingSet = camera.GetBindingSet(m_nvrhiDevice);
-		//nvrhi::GraphicsState globalGraphicsState =
-		//	nvrhi::GraphicsState{}
-		//		.setPipeline(graphicsPipeline)
-		//		.setFramebuffer(nvrhiFramebuffer)
-		//		.addBindingSet(cameraBindingSet)
-		//		.setViewport(
-		//			nvrhi::ViewportState{}.addViewportAndScissorRect(
-		//				nvrhi::Viewport{ static_cast<float>(windowWidth),
-		//                                 static_cast<float>(windowHeight) }));
-
-		//cube->Draw(commandList, globalGraphicsState);
 
 		commandList->close();
 		m_nvrhiDevice->executeCommandList(commandList);
