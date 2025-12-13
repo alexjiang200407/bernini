@@ -1,7 +1,7 @@
 #include "buffer/DynamicBuffer.h"
 #include <catch2/catch_test_macros.hpp>
 
-TEST_CASE("Add element")
+TEST_CASE("Add element", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("pos", gfx::ElementType::kFloat3);
@@ -29,7 +29,7 @@ TEST_CASE("Add element")
 	CHECK(dbuf.GetDesc().GetTotalSize() == 12);
 }
 
-TEST_CASE("Multiple element")
+TEST_CASE("Multiple element", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("a", gfx::ElementType::kFloat3);
@@ -74,7 +74,7 @@ TEST_CASE("Multiple element")
 	CHECK(dbuf.GetDesc().GetTotalSize() == 88);
 }
 
-TEST_CASE("Attribute doesn't exist")
+TEST_CASE("Attribute doesn't exist", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("pos", gfx::ElementType::kFloat3);
@@ -95,7 +95,7 @@ TEST_CASE("Attribute doesn't exist")
 	}
 }
 
-TEST_CASE("Index out of bounds")
+TEST_CASE("Index out of bounds", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("pos", gfx::ElementType::kFloat3);
@@ -109,7 +109,7 @@ TEST_CASE("Index out of bounds")
 	CHECK_THROWS(dbuf[-1].At("pos"));
 }
 
-TEST_CASE("Read after write")
+TEST_CASE("Read after write", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("data", gfx::ElementType::kFloat4);
@@ -127,7 +127,7 @@ TEST_CASE("Read after write")
 	CHECK(readVal.w == 4.5f);
 }
 
-TEST_CASE("equality")
+TEST_CASE("equality", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("data", gfx::ElementType::kFloat4);
@@ -142,7 +142,7 @@ TEST_CASE("equality")
 	CHECK(dbuf[0]["data"] != glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f });
 }
 
-TEST_CASE("Element size mismatch")
+TEST_CASE("Element size mismatch", "[dynamic_buffer]")
 {
 	auto dbufDesc = gfx::DynamicBufferDesc{};
 	dbufDesc.AddElement("pos", gfx::ElementType::kFloat3);

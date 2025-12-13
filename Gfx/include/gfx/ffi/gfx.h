@@ -44,8 +44,9 @@ extern "C"
 	struct GfxOptions
 	{
 		WindowHandle wnd;
-		int          width  = 0;
-		int          height = 0;
+		int          width;
+		int          height;
+		bool         headless;
 	};
 
 	/// <summary>

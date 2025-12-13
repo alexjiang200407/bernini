@@ -23,17 +23,22 @@ static const uint16_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4
 
 namespace gfx
 {
-	Cube::Cube(nvrhi::DeviceHandle& device) : IDrawable{ {} }
+	Cube::Cube(nvrhi::DeviceHandle device) : IDrawable{ {} }
 	{
 		{
-			auto vertexBufferDesc = nvrhi::BufferDesc{};
-			vertexBufferDesc.setByteSize(sizeof(cubeVertices))
-				.setIsVertexBuffer(true)
-				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setKeepInitialState(false)
-				.setDebugName("Cube Vertex Buffer");
+			auto desc = DynamicBufferDesc{};
+			desc.AddElement("POSITION", ElementType::kFloat3)
+				.AddElement("NORMAL", ElementType::kFloat3)
+				.SetName("Cube Vertex Buffer");
 
-			vertexBuffer = device->createBuffer(vertexBufferDesc);
+			auto size = static_cast<uint32_t>(std::size(cubeVertices));
+
+			m_vertexBuffer = std::move(DynamicVertexBuffer{ device, desc, size });
+
+			for (uint32_t i = 0; i < size; ++i)
+			{
+				m_vertexBuffer[i]["POSITION"] = cubeVertices[i].pos;
+			}
 		}
 
 		{
@@ -43,14 +48,14 @@ namespace gfx
 				.setInitialState(nvrhi::ResourceStates::CopyDest)
 				.setKeepInitialState(false)
 				.setDebugName("Cube Index Buffer");
-			indexBuffer = device->createBuffer(indexDesc);
+			m_indexBuffer = device->createBuffer(indexDesc);
 		}
 
 		{
 			nvrhi::CommandListHandle uploadCmdList = device->createCommandList();
 			uploadCmdList->open();
-			uploadCmdList->writeBuffer(vertexBuffer, cubeVertices, sizeof(cubeVertices));
-			uploadCmdList->writeBuffer(indexBuffer, cubeIndices, sizeof(cubeIndices));
+			m_vertexBuffer.Update(uploadCmdList);
+			uploadCmdList->writeBuffer(m_indexBuffer, cubeIndices, sizeof(cubeIndices));
 			uploadCmdList->close();
 			device->executeCommandList(uploadCmdList);
 		}
@@ -65,30 +70,19 @@ namespace gfx
 			vertexShaderData.data(),
 			vertexShaderData.size());
 
-		nvrhi::VertexAttributeDesc attributes[] = { nvrhi::VertexAttributeDesc{}
-			                                            .setName("POSITION")
-			                                            .setFormat(nvrhi::Format::RGB32_FLOAT)
-			                                            .setOffset(0)
-			                                            .setBufferIndex(0)
-			                                            .setElementStride(sizeof(Vertex)) };
-
-		vertexLayout = device->createInputLayout(
-			attributes,
-			static_cast<uint32_t>(std::size(attributes)),
-			vertexShader);
-
-		pixelShader = device->createShader(
-			nvrhi::ShaderDesc()
-				.setShaderType(nvrhi::ShaderType::Pixel)
-				.setDebugName("Cube Pixel Shader"),
-			pixelShaderData.data(),
-			pixelShaderData.size());
+		m_vertexLayout = m_vertexBuffer.GenerateVertexLayout(device, vertexShader);
+		pixelShader    = device->createShader(
+            nvrhi::ShaderDesc()
+                .setShaderType(nvrhi::ShaderType::Pixel)
+                .setDebugName("Cube Pixel Shader"),
+            pixelShaderData.data(),
+            pixelShaderData.size());
 	}
 
 	void
 	Cube::AttachVertexLayout(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
 	{
-		pipelineDesc.setInputLayout(vertexLayout);
+		pipelineDesc.setInputLayout(m_vertexLayout);
 	}
 
 	void
@@ -110,12 +104,12 @@ namespace gfx
 		auto  cmdList = params.commandList;
 
 		nvrhi::VertexBufferBinding vbufBinding;
-		vbufBinding.buffer = vertexBuffer;
+		vbufBinding.buffer = m_vertexBuffer;
 		vbufBinding.slot   = 0;
 		vbufBinding.offset = 0;
 
 		nvrhi::IndexBufferBinding ibufBinding;
-		ibufBinding.buffer = indexBuffer;
+		ibufBinding.buffer = m_indexBuffer;
 		ibufBinding.format = nvrhi::Format::R16_UINT;
 		ibufBinding.offset = 0;
 

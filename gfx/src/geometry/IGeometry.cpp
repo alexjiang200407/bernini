@@ -12,6 +12,6 @@ namespace gfx
                 .setDebugName("Vertex Shader"),
             vertexShaderData.data(),
             vertexShaderData.size());
-		m_shaderInput = ShaderInput{ m_vertexShader };
+		m_shaderInput = ShaderVertexInput{ m_vertexShader };
 	}
 }

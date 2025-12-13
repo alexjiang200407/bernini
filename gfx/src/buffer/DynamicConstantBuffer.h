@@ -7,7 +7,7 @@ namespace gfx
 	{
 	public:
 		DynamicConstantBuffer() noexcept = default;
-		DynamicConstantBuffer(nvrhi::DeviceHandle device, DynamicBufferDesc elementDesc);
+		DynamicConstantBuffer(nvrhi::DeviceHandle device, const DynamicBufferDesc& elementDesc);
 
 		DynamicBufferItem::View
 		operator[](std::string_view name);
