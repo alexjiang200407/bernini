@@ -1,13 +1,19 @@
 #pragma once
 #include "buffer/DynamicBuffer.h"
+#include "shader_reflect/ShaderInput.h"
 
 namespace gfx
 {
 	class DynamicVertexBuffer : public DynamicBuffer
 	{
 	public:
-		DynamicVertexBuffer(nvrhi::DeviceHandle, DynamicBufferDesc elementDesc, uint32_t count) :
-			DynamicBuffer{ elementDesc, count }
-		{}
+		DynamicVertexBuffer() noexcept = default;
+		DynamicVertexBuffer(
+			nvrhi::DeviceHandle      device,
+			const DynamicBufferDesc& elementDesc,
+			uint32_t                 count);
+
+		nvrhi::InputLayoutHandle
+		GenerateVertexLayout(nvrhi::DeviceHandle device, nvrhi::ShaderHandle vertexShader) const;
 	};
 }

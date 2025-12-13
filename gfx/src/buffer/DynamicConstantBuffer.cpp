@@ -3,11 +3,11 @@
 namespace gfx
 {
 	DynamicConstantBuffer::DynamicConstantBuffer(
-		nvrhi::DeviceHandle device,
-		DynamicBufferDesc   elementDesc) : DynamicBuffer{ elementDesc, 1 }
+		nvrhi::DeviceHandle      device,
+		const DynamicBufferDesc& elementDesc) : DynamicBuffer{ elementDesc, 1 }
 	{
 		auto bufferDesc = nvrhi::BufferDesc{};
-		bufferDesc.setByteSize(static_cast<uint32_t>(elementDesc.GetTotalSize()))
+		bufferDesc.setByteSize(elementDesc.GetTotalSize())
 			.setIsConstantBuffer(true)
 			.setInitialState(nvrhi::ResourceStates::ConstantBuffer)
 			.setKeepInitialState(false)

@@ -2,7 +2,13 @@
 
 namespace gfx
 {
-	class ShaderInput
+	bool
+	semanticMatches(
+		std::string_view elementName,
+		std::string_view semanticName,
+		uint32_t         semanticIndex);
+
+	class ShaderVertexInput
 	{
 	public:
 		enum class Attribute
@@ -19,6 +25,8 @@ namespace gfx
 		{
 			Attribute     attribute     = Attribute::kInvalid;
 			uint32_t      semanticIndex = 0u;
+			std::string   semanticName  = "";
+			std::string   semanticId    = "";
 			nvrhi::Format format        = nvrhi::Format::UNKNOWN;
 		};
 
@@ -26,8 +34,8 @@ namespace gfx
 		using const_iterator = std::vector<VertexInput>::const_iterator;
 
 	public:
-		ShaderInput() = default;
-		ShaderInput(nvrhi::ShaderHandle vertexShader);
+		ShaderVertexInput() = default;
+		ShaderVertexInput(nvrhi::ShaderHandle vertexShader);
 
 		iterator
 		begin() noexcept
@@ -71,8 +79,22 @@ namespace gfx
 			return m_vertexInputs.empty();
 		}
 
+		size_t
+		Size() const noexcept
+		{
+			return m_vertexInputs.size();
+		}
+
+		const VertexInput&
+		operator[](size_t index) const noexcept
+		{
+			return m_vertexInputs[index];
+		}
+
 	private:
 		std::vector<VertexInput> m_vertexInputs;
 	};
 
+	ShaderVertexInput::Attribute
+	mapSemantic(const char* semantic);
 }

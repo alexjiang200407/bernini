@@ -22,6 +22,26 @@ namespace gfx
 		return 0;
 	}
 
+	nvrhi::Format
+	elementTypeToNvrhiFormat(ElementType type)
+	{
+		switch (type)
+		{
+		case ElementType::kFloat:
+			return nvrhi::Format::R32_FLOAT;
+		case ElementType::kFloat2:
+			return nvrhi::Format::RG32_FLOAT;
+		case ElementType::kFloat3:
+			return nvrhi::Format::RGB32_FLOAT;
+		case ElementType::kFloat4:
+			return nvrhi::Format::RGBA32_FLOAT;
+		case ElementType::kFloat4x4:
+			return nvrhi::Format::RGBA32_FLOAT;
+		}
+
+		return nvrhi::Format::UNKNOWN;
+	}
+
 	DynamicBufferItem::DynamicBufferItem(void* baseData, const DynamicBufferDesc& desc)
 	{
 		m_data          = baseData;
@@ -91,7 +111,7 @@ namespace gfx
 	DynamicBuffer::operator[](uint32_t index)
 	{
 		if (index >= m_count)
-			throw std::runtime_error("DynamicBuffer index out of range");
+			throw core::except::BerniniException{ "DynamicBuffer exception", "Index out of range" };
 		void* elementData = reinterpret_cast<uint8_t*>(m_data) + index * m_desc.GetTotalSize();
 		return DynamicBufferItem{ elementData, m_desc };
 	}

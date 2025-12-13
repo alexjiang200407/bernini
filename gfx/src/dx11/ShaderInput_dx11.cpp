@@ -2,27 +2,8 @@
 
 namespace
 {
-	using namespace gfx;
-
-	ShaderInput::Attribute
-	MapSemantic(const char* semantic)
-	{
-		using Attribute = ShaderInput::Attribute;
-
-		if (strcmp(semantic, "POSITION") == 0)
-			return Attribute::kPosition;
-		if (strcmp(semantic, "NORMAL") == 0)
-			return Attribute::kNormal;
-		if (strcmp(semantic, "TEXCOORD") == 0)
-			return Attribute::kUV;
-		if (strcmp(semantic, "TANGENT") == 0)
-			return Attribute::kTangent;
-
-		return Attribute::kInvalid;
-	}
-
 	nvrhi::Format
-	MapFormat(const D3D11_SIGNATURE_PARAMETER_DESC& desc)
+	mapFormat(const D3D11_SIGNATURE_PARAMETER_DESC& desc)
 	{
 		uint32_t componentCount = (desc.Mask & 1 ? 1 : 0) + (desc.Mask & 2 ? 1 : 0) +
 		                          (desc.Mask & 4 ? 1 : 0) + (desc.Mask & 8 ? 1 : 0);
@@ -48,9 +29,25 @@ namespace
 
 namespace gfx
 {
-	ShaderInput::ShaderInput(nvrhi::ShaderHandle vertexShader)
+	ShaderVertexInput::Attribute
+	mapSemantic(const char* semantic)
 	{
-		auto inputs    = std::vector<VertexInput>{};
+		using Attribute = ShaderVertexInput::Attribute;
+
+		if (strcmp(semantic, "POSITION") == 0)
+			return Attribute::kPosition;
+		if (strcmp(semantic, "NORMAL") == 0)
+			return Attribute::kNormal;
+		if (strcmp(semantic, "TEXCOORD") == 0)
+			return Attribute::kUV;
+		if (strcmp(semantic, "TANGENT") == 0)
+			return Attribute::kTangent;
+
+		return Attribute::kInvalid;
+	}
+
+	ShaderVertexInput::ShaderVertexInput(nvrhi::ShaderHandle vertexShader)
+	{
 		auto reflector = nvrhi::RefCountPtr<ID3D11ShaderReflection>{};
 
 		auto vertexShaderBytecode = static_cast<const void*>(nullptr);
@@ -71,7 +68,7 @@ namespace gfx
 			if (paramDesc.SystemValueType != D3D_NAME_UNDEFINED)
 				continue;
 
-			auto attr = MapSemantic(paramDesc.SemanticName);
+			auto attr = mapSemantic(paramDesc.SemanticName);
 
 			if (attr == Attribute::kInvalid)
 				continue;
@@ -79,9 +76,11 @@ namespace gfx
 			auto input          = VertexInput{};
 			input.attribute     = attr;
 			input.semanticIndex = paramDesc.SemanticIndex;
-			input.format        = MapFormat(paramDesc);
+			input.semanticName  = std::string{ paramDesc.SemanticName };
+			input.semanticId = std::format("{}{}", paramDesc.SemanticName, paramDesc.SemanticIndex);
+			input.format     = mapFormat(paramDesc);
 
-			inputs.push_back(input);
+			m_vertexInputs.push_back(input);
 		}
 	}
 

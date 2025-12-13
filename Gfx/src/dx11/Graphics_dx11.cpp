@@ -79,14 +79,17 @@ namespace gfx
 		std::vector<std::unique_ptr<IDrawable>> cubes;
 
 		GBufferPass m_gBufferPass;
+		bool        m_isHeadless;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
 	{
 		constexpr static unsigned int bufferCount = 2u;
 
-		windowHeight = opts.height;
-		windowWidth  = opts.width;
+		m_isHeadless = opts.headless;
+
+		m_windowHeight = opts.height;
+		m_windowWidth  = opts.width;
 
 		DXGI_SWAP_CHAIN_DESC sd               = {};
 		sd.BufferDesc.Width                   = static_cast<UINT>(opts.width);
@@ -106,32 +109,67 @@ namespace gfx
 
 		sd.OutputWindow = opts.wnd.hwnd ? static_cast<HWND>(opts.wnd.hwnd) : GetActiveWindow();
 
-		UINT swapCreateFlags = 0u;
+		UINT d3dFlags = 0u;
 
 #ifdef _DEBUG
-		swapCreateFlags |= D3D11_CREATE_DEVICE_DEBUG;
+		d3dFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-		D3D11CreateDeviceAndSwapChain(
-			nullptr,
-			D3D_DRIVER_TYPE_HARDWARE,
-			nullptr,
-			swapCreateFlags,
-			nullptr,
-			0,
-			D3D11_SDK_VERSION,
-			&sd,
-			&m_swap,
-			&m_device,
-			nullptr,
-			&m_context) >>
-			gfx::dx::dxErrorChecker;
+		if (m_isHeadless)
+		{
+			D3D11CreateDevice(
+				nullptr,
+				D3D_DRIVER_TYPE_HARDWARE,
+				nullptr,
+				d3dFlags,
+				nullptr,
+				0,
+				D3D11_SDK_VERSION,
+				&m_device,
+				nullptr,
+				&m_context) >>
+				gfx::dx::dxErrorChecker;
+		}
+		else
+		{
+			D3D11CreateDeviceAndSwapChain(
+				nullptr,
+				D3D_DRIVER_TYPE_HARDWARE,
+				nullptr,
+				d3dFlags,
+				nullptr,
+				0,
+				D3D11_SDK_VERSION,
+				&sd,
+				&m_swap,
+				&m_device,
+				nullptr,
+				&m_context) >>
+				gfx::dx::dxErrorChecker;
+		}
 
 		m_nvrhiDevice = nvrhi::d3d11::createDevice({ .context = m_context });
 
 		cubes.push_back(std::make_unique<Cube>(m_nvrhiDevice));
 
-		m_swap->GetBuffer(0, IID_PPV_ARGS(&m_backBuffer)) >> gfx::dx::dxErrorChecker;
+		if (m_isHeadless)
+		{
+			D3D11_TEXTURE2D_DESC desc{};
+			desc.Width            = opts.width;
+			desc.Height           = opts.height;
+			desc.MipLevels        = 1;
+			desc.ArraySize        = 1;
+			desc.Format           = DXGI_FORMAT_B8G8R8A8_UNORM;
+			desc.SampleDesc.Count = 1;
+			desc.Usage            = D3D11_USAGE_DEFAULT;
+			desc.BindFlags        = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+			m_device->CreateTexture2D(&desc, nullptr, &m_backBuffer) >> gfx::dx::dxErrorChecker;
+		}
+		else
+		{
+			m_swap->GetBuffer(0, IID_PPV_ARGS(&m_backBuffer)) >> gfx::dx::dxErrorChecker;
+		}
 
 		{
 			nvrhi::TextureDesc textureDesc;
@@ -140,7 +178,7 @@ namespace gfx
 			textureDesc.sampleCount    = sd.SampleDesc.Count;
 			textureDesc.sampleQuality  = sd.SampleDesc.Quality;
 			textureDesc.format         = nvrhi::Format::BGRA8_UNORM;
-			textureDesc.debugName      = "SwapChainBuffer";
+			textureDesc.debugName      = m_isHeadless ? "OffscreenRT" : "SwapChainBuffer";
 			textureDesc.isRenderTarget = true;
 			textureDesc.isUAV          = false;
 
@@ -181,8 +219,8 @@ namespace gfx
 		auto fgBlackboard = FrameGraphBlackboard{};
 
 		auto renderArgs = RenderArgs{
-			.screenWidth   = static_cast<float>(windowWidth),
-			.screenHeight  = static_cast<float>(windowHeight),
+			.screenWidth   = static_cast<float>(m_windowWidth),
+			.screenHeight  = static_cast<float>(m_windowHeight),
 			.device        = m_nvrhiDevice,
 			.outBuffer     = m_nvrhiFramebuffer,
 			.outBufferInfo = m_framebufferInfo,
@@ -193,18 +231,15 @@ namespace gfx
 		fg.compile();
 		fg.execute();
 
-		m_swap->Present(1, 0);
+		if (!m_isHeadless)
+		{
+			m_swap->Present(1, 0);
+		}
 	}
-}
 
-GfxResult
-createGraphics(GfxOptions options, Gfx* out)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		gfx::ffi::validatePtr(out, "out");
-		out->destroy = gfx::ffi::deleteThunk;
-
-		out->data = new gfx::Graphics(options);
-		return GFX_RESULT_OK;
-	});
+	IGraphics*
+	IGraphics::Create(const GfxOptions& options)
+	{
+		return new Graphics{ options };
+	}
 }

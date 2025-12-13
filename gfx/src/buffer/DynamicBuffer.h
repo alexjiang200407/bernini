@@ -17,10 +17,19 @@ namespace gfx
 	uint32_t
 	sizeOfElementType(ElementType format);
 
+	nvrhi::Format
+	elementTypeToNvrhiFormat(ElementType type);
+
 	struct DynamicBufferDescElement
 	{
 		std::string name;
 		ElementType type;
+
+		uint32_t
+		Size() const noexcept
+		{
+			return sizeOfElementType(type);
+		}
 	};
 
 	struct DynamicBufferDesc

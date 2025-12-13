@@ -1,4 +1,5 @@
 #pragma once
+#include "buffer/DynamicVertexBuffer.h"
 #include "drawable/IDrawable.h"
 
 namespace gfx
@@ -6,7 +7,7 @@ namespace gfx
 	class Cube : public IDrawable
 	{
 	public:
-		Cube(nvrhi::DeviceHandle& device);
+		Cube(nvrhi::DeviceHandle device);
 
 		void
 		AttachVertexLayout(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept override;
@@ -21,10 +22,11 @@ namespace gfx
 		Draw(DrawParams params) override;
 
 	public:
-		nvrhi::BufferHandle      indexBuffer;
-		nvrhi::BufferHandle      vertexBuffer;
-		nvrhi::InputLayoutHandle vertexLayout;
-		nvrhi::ShaderHandle      vertexShader;
-		nvrhi::ShaderHandle      pixelShader;
+		nvrhi::BufferHandle      m_indexBuffer;
+		DynamicVertexBuffer      m_vertexBuffer;
+		nvrhi::InputLayoutHandle m_vertexLayout;
+
+		nvrhi::ShaderHandle vertexShader;
+		nvrhi::ShaderHandle pixelShader;
 	};
 }

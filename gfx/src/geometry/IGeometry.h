@@ -24,6 +24,6 @@ namespace gfx
 
 	protected:
 		nvrhi::ShaderHandle m_vertexShader;
-		ShaderInput         m_shaderInput;
+		ShaderVertexInput         m_shaderInput;
 	};
 }
