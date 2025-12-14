@@ -150,7 +150,7 @@ namespace gfx
 
 		m_nvrhiDevice = nvrhi::d3d11::createDevice({ .context = m_context });
 
-		cubes.push_back(std::make_unique<Cube>(m_nvrhiDevice));
+		cubes.push_back(std::make_unique<Cube>(m_nvrhiDevice, "shaders/VS_cube.cso"sv));
 
 		if (m_isHeadless)
 		{

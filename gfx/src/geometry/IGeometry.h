@@ -22,8 +22,14 @@ namespace gfx
 		virtual uint32_t
 		GetIndexCount() const noexcept = 0;
 
+		nvrhi::ShaderHandle
+		GetVertexShader() const noexcept;
+
+		void
+		AttachGeometry(nvrhi::GraphicsState& state) const noexcept;
+
 	protected:
 		nvrhi::ShaderHandle m_vertexShader;
-		ShaderVertexInput         m_shaderInput;
+		ShaderVertexInput   m_shaderInput;
 	};
 }
