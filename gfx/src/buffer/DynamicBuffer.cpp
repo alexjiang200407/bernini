@@ -84,13 +84,25 @@ namespace gfx
 		return view;
 	}
 
-	DynamicBuffer::DynamicBuffer(DynamicBufferDesc elementDesc, uint32_t count) :
+	DynamicBuffer::DynamicBuffer(const DynamicBufferDesc& elementDesc, uint32_t count) :
 		m_desc{ elementDesc }, m_count(count)
 	{
 		m_totalSize = m_desc.GetTotalSize() * count;
 		m_data      = std::malloc(m_totalSize);
 		if (!m_data)
 			throw std::bad_alloc();
+	}
+
+	DynamicBuffer::DynamicBuffer(DynamicBuffer&& other)
+	{
+		m_buf             = std::move(other.m_buf);
+		m_desc            = other.m_desc;
+		m_count           = other.m_count;
+		m_data            = other.m_data;
+		m_totalSize       = other.m_totalSize;
+		other.m_count     = 0u;
+		other.m_data      = nullptr;
+		other.m_totalSize = 0u;
 	}
 
 	DynamicBuffer::~DynamicBuffer() noexcept { Release(); }
@@ -195,7 +207,8 @@ namespace gfx
 	std::string_view
 	DynamicBuffer::GetName() const noexcept
 	{
-		return m_desc.name.size() ? m_desc.name : "Unnamed Buffer";
+		return m_desc.name.empty() ? std::string_view{ "Unnamed Buffer" } :
+		                             std::string_view{ m_desc.name };
 	}
 
 	bool

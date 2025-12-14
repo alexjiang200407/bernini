@@ -1,77 +1,13 @@
 #include "geometry/Cube.h"
 #include <core/file/file.h>
 
-struct Vertex
-{
-	glm::vec3 pos;
-};
-
-static const Vertex cubeVertices[] = {
-	// 8 unique vertices of a cube
-	{ { -1, -1, -1 } },  // 0: left-bottom-back
-	{ { 1, -1, -1 } },   // 1: right-bottom-back
-	{ { 1, 1, -1 } },    // 2: right-top-back
-	{ { -1, 1, -1 } },   // 3: left-top-back
-	{ { -1, -1, 1 } },   // 4: left-bottom-front
-	{ { 1, -1, 1 } },    // 5: right-bottom-front
-	{ { 1, 1, 1 } },     // 6: right-top-front
-	{ { -1, 1, 1 } }     // 7: left-top-front
-};
-
-static const uint16_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
-	                                    5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
-
 namespace gfx
 {
-	Cube::Cube(nvrhi::DeviceHandle device) : IDrawable{ {} }
+	Cube::Cube(nvrhi::DeviceHandle device, std::string_view vertexShader) :
+		IDrawable{ {} }, m_geom{ device, vertexShader }
 	{
-		{
-			auto desc = DynamicBufferDesc{};
-			desc.AddElement("POSITION", ElementType::kFloat3)
-				.AddElement("NORMAL", ElementType::kFloat3)
-				.SetName("Cube Vertex Buffer");
-
-			auto size = static_cast<uint32_t>(std::size(cubeVertices));
-
-			m_vertexBuffer = std::move(DynamicVertexBuffer{ device, desc, size });
-
-			for (uint32_t i = 0; i < size; ++i)
-			{
-				m_vertexBuffer[i]["POSITION"] = cubeVertices[i].pos;
-			}
-		}
-
-		{
-			nvrhi::BufferDesc indexDesc;
-			indexDesc.setByteSize(sizeof(cubeIndices))
-				.setIsIndexBuffer(true)
-				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setKeepInitialState(false)
-				.setDebugName("Cube Index Buffer");
-			m_indexBuffer = device->createBuffer(indexDesc);
-		}
-
-		{
-			nvrhi::CommandListHandle uploadCmdList = device->createCommandList();
-			uploadCmdList->open();
-			m_vertexBuffer.Update(uploadCmdList);
-			uploadCmdList->writeBuffer(m_indexBuffer, cubeIndices, sizeof(cubeIndices));
-			uploadCmdList->close();
-			device->executeCommandList(uploadCmdList);
-		}
-
-		auto vertexShaderData = core::file::readFileBytes("shaders/VS_cube.cso"sv);
-		auto pixelShaderData  = core::file::readFileBytes("shaders/PS_cube.cso"sv);
-
-		vertexShader = device->createShader(
-			nvrhi::ShaderDesc{}
-				.setShaderType(nvrhi::ShaderType::Vertex)
-				.setDebugName("Cube Vertex Shader"),
-			vertexShaderData.data(),
-			vertexShaderData.size());
-
-		m_vertexLayout = m_vertexBuffer.GenerateVertexLayout(device, vertexShader);
-		pixelShader    = device->createShader(
+		auto pixelShaderData = core::file::readFileBytes("shaders/PS_cube.cso"sv);
+		m_pixelShader        = device->createShader(
             nvrhi::ShaderDesc()
                 .setShaderType(nvrhi::ShaderType::Pixel)
                 .setDebugName("Cube Pixel Shader"),
@@ -82,19 +18,19 @@ namespace gfx
 	void
 	Cube::AttachVertexLayout(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
 	{
-		pipelineDesc.setInputLayout(m_vertexLayout);
+		pipelineDesc.setInputLayout(m_geom.GetVertexLayout());
 	}
 
 	void
 	Cube::AttachVertexShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
 	{
-		pipelineDesc.setVertexShader(vertexShader);
+		pipelineDesc.setVertexShader(m_geom.GetVertexShader());
 	}
 
 	void
 	Cube::AttachPixelShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept
 	{
-		pipelineDesc.setPixelShader(pixelShader);
+		pipelineDesc.setPixelShader(m_pixelShader);
 	}
 
 	void
@@ -103,24 +39,13 @@ namespace gfx
 		auto& state   = params.gfxState;
 		auto  cmdList = params.commandList;
 
-		nvrhi::VertexBufferBinding vbufBinding;
-		vbufBinding.buffer = m_vertexBuffer;
-		vbufBinding.slot   = 0;
-		vbufBinding.offset = 0;
-
-		nvrhi::IndexBufferBinding ibufBinding;
-		ibufBinding.buffer = m_indexBuffer;
-		ibufBinding.format = nvrhi::Format::R16_UINT;
-		ibufBinding.offset = 0;
-
-		state.addVertexBuffer(vbufBinding);
-		state.setIndexBuffer(ibufBinding);
+		m_geom.AttachGeometry(state);
 
 		cmdList->setGraphicsState(state);
 
 		cmdList->drawIndexed(
 			nvrhi::DrawArguments{}
-				.setVertexCount(std::size(cubeIndices))
+				.setVertexCount(m_geom.GetIndexCount())
 				.setStartIndexLocation(0)
 				.setInstanceCount(1));
 	}

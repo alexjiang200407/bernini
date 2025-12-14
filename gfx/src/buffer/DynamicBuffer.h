@@ -193,8 +193,8 @@ namespace gfx
 	{
 	public:
 		DynamicBuffer() noexcept = default;
-		DynamicBuffer(DynamicBufferDesc elementDesc, uint32_t count);
-		DynamicBuffer(DynamicBuffer&&) = default;
+		DynamicBuffer(const DynamicBufferDesc& elementDesc, uint32_t count);
+		DynamicBuffer(DynamicBuffer&& other);
 
 		~DynamicBuffer() noexcept;
 
