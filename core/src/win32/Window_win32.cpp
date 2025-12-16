@@ -18,6 +18,15 @@ namespace core::win
 			RegisterRawInput();
 		}
 
+		~WindowWin32()
+		{
+			if (m_hWnd)
+			{
+				DestroyWindow(m_hWnd);
+				m_hWnd = nullptr;
+			}
+		}
+
 		void
 		RegisterWin32(const WindowOptions& options)
 		{
@@ -136,6 +145,11 @@ namespace core::win
 					const CREATESTRUCTW* const pCreate = reinterpret_cast<CREATESTRUCTW*>(lParam);
 					auto* const pWnd = static_cast<WindowWin32*>(pCreate->lpCreateParams);
 
+					if (!pWnd->m_hWnd)
+					{
+						pWnd->m_hWnd = hWnd;
+					}
+
 					SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pWnd)) >>
 						win32::errorChecker;
 					SetWindowLongPtr(
@@ -168,7 +182,7 @@ namespace core::win
 
 			case WM_KILLFOCUS:
 				{
-					IWindow::Reset();
+					Reset();
 					break;
 				}
 

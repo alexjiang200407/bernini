@@ -1,4 +1,4 @@
-#include "drawable/IDrawable.h"
+#include "drawable/Drawable.h"
 #include "passes/GeomPass.h"
 
 class FrameGraph;
@@ -20,10 +20,10 @@ namespace gfx
 	public:
 		void
 		AttachToFrameGraph(
-			FrameGraph&                           frameGraph,
-			FrameGraphBlackboard&                 blackBoard,
-			RenderArgs                            renderArgs,
-			Camera&                               camera,
-			std::span<std::unique_ptr<IDrawable>> draw);
+			FrameGraph&                          frameGraph,
+			FrameGraphBlackboard&                blackBoard,
+			RenderArgs                           renderArgs,
+			Camera&                              camera,
+			std::span<std::unique_ptr<Drawable>> draw);
 	};
 }
