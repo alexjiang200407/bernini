@@ -1,8 +1,10 @@
 #include "GfxBase.h"
 #include "camera/Camera.h"
+#include "drawable/Drawable.h"
 #include "ffi/util.h"
-#include "geometry/Cube.h"
 #include "graphics/Graphics.h"
+#include "material/Material.h"
+#include "mesh/MeshFactory.h"
 #include "passes/GBufferPass.h"
 #include <core/except/BerniniException.h>
 #include <fg/Blackboard.hpp>
@@ -75,8 +77,9 @@ namespace gfx
 		nvrhi::RefCountPtr<ID3D11Device>           m_device;
 		nvrhi::RefCountPtr<ID3D11Texture2D>        m_backBuffer;
 		nvrhi::RefCountPtr<ID3D11DepthStencilView> m_depthBuffer;
+		std::vector<std::unique_ptr<Drawable>>     m_drawable;
 
-		std::vector<std::unique_ptr<IDrawable>> cubes;
+		std::unique_ptr<MeshFactory> m_meshFactory;
 
 		GBufferPass m_gBufferPass;
 		bool        m_isHeadless;
@@ -150,7 +153,13 @@ namespace gfx
 
 		m_nvrhiDevice = nvrhi::d3d11::createDevice({ .context = m_context });
 
-		cubes.push_back(std::make_unique<Cube>(m_nvrhiDevice, "shaders/VS_cube.cso"sv));
+		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice);
+
+		auto drawable = std::make_unique<Drawable>(ShaderMatrix{});
+		drawable->SetMesh(m_meshFactory->CreateSphere("shaders/VS_cube.cso"sv));
+		drawable->SetMaterial(std::make_shared<Material>(m_nvrhiDevice, "shaders/PS_cube.cso"sv));
+
+		m_drawable.push_back(std::move(drawable));
 
 		if (m_isHeadless)
 		{
@@ -226,7 +235,7 @@ namespace gfx
 			.outBufferInfo = m_framebufferInfo,
 		};
 
-		m_gBufferPass.AttachToFrameGraph(fg, fgBlackboard, renderArgs, camera, cubes);
+		m_gBufferPass.AttachToFrameGraph(fg, fgBlackboard, renderArgs, camera, m_drawable);
 
 		fg.compile();
 		fg.execute();

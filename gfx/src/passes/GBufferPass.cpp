@@ -18,11 +18,11 @@ namespace gfx
 
 	void
 	GBufferPass::AttachToFrameGraph(
-		FrameGraph&                           frameGraph,
-		FrameGraphBlackboard&                 blackBoard,
-		RenderArgs                            renderArgs,
-		Camera&                               camera,
-		std::span<std::unique_ptr<IDrawable>> drawables)
+		FrameGraph&                          frameGraph,
+		FrameGraphBlackboard&                blackBoard,
+		RenderArgs                           renderArgs,
+		Camera&                              camera,
+		std::span<std::unique_ptr<Drawable>> drawables)
 	{
 		(void)blackBoard;
 
@@ -58,7 +58,6 @@ namespace gfx
 
 				for (const auto& drawable : drawables)
 				{
-					drawable->AttachBindingLayoutItems(bindingSetDesc);
 					GeomPass::UpdateTransformBuffer(mainCommandList, drawable->GetTransform());
 
 					auto bindingLayout = device->createBindingLayout(vertexBindingLayoutDesc);
