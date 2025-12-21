@@ -44,7 +44,7 @@ extern "C"
 	/// <param name="out"></param>
 	/// <returns></returns>
 	GFX_API GfxResult
-	createCamera(Gfx gfx, GfxCameraDesc desc, GfxCamera* out);
+	createCamera(GfxCameraDesc desc, GfxCamera* out);
 
 	/// <summary>
 	/// Move the camera in the current foward direction by delta units.

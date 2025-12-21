@@ -7,14 +7,11 @@
 #include <gfx/ffi/camera.h>
 
 GfxResult
-createCamera(Gfx gfx, GfxCameraDesc desc, GfxCamera* out)
+createCamera(GfxCameraDesc desc, GfxCamera* out)
 {
-	(void)gfx;
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
 		gfx::ffi::validatePtr(out, "out");
 
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(gfx);
-		(void)gfx_;
 		out->data    = new gfx::Camera{ desc };
 		out->destroy = gfx::ffi::deleteThunk;
 

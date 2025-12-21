@@ -48,7 +48,7 @@
       "name": "debug",
       "hidden": true,
       "cacheVariables": {
-        "BUILD_TESTS": "OFF"
+        "BUILD_TESTS": "ON"
       }
     },
     {

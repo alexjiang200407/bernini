@@ -15,7 +15,6 @@ namespace gfx
                 .setDebugName(vertexShaderPath.data()),
             vertexShaderData.data(),
             vertexShaderData.size());
-		m_shaderInput  = ShaderVertexInput{ m_vertexShader };
 		m_vertexLayout = m_sharedMeshData->vertexBuf.GenerateVertexLayout(device, m_vertexShader);
 	}
 

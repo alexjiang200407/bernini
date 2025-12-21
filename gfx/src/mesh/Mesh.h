@@ -42,7 +42,6 @@ namespace gfx
 	private:
 		nvrhi::InputLayoutHandle          m_vertexLayout;
 		nvrhi::ShaderHandle               m_vertexShader;
-		ShaderVertexInput                 m_shaderInput;
 		std::shared_ptr<const SharedData> m_sharedMeshData;
 
 		friend class MeshFactory;

@@ -1,5 +1,6 @@
 #include "passes/GeomPass.h"
 #include "BindingSlots.h"
+#include "buffer/ElementType.h"
 #include "camera/Camera.h"
 #include "math/ShaderMatrix.h"
 
@@ -10,7 +11,7 @@ namespace gfx
 	{
 		if (!m_cameraCBuf.Initialized())
 		{
-			auto cameraBufDesc = DynamicBufferDesc{};
+			auto cameraBufDesc = DynamicConstantBufferDesc{};
 			cameraBufDesc.AddElement("viewMatrix", ElementType::kFloat4x4)
 				.AddElement("projMatrix", ElementType::kFloat4x4)
 				.SetName("CameraConstantBuffer");
@@ -19,7 +20,7 @@ namespace gfx
 
 		if (!m_transformCBuf.Initialized())
 		{
-			auto transformBufDesc = DynamicBufferDesc{};
+			auto transformBufDesc = DynamicConstantBufferDesc{};
 			transformBufDesc.AddElement("transformMatrix", ElementType::kFloat4x4)
 				.SetName("ModelTransformBuffer")
 				.SetUpdateFrequency(DynamicBufferDesc::UpdateFrequency::kPerDraw);
@@ -38,25 +39,25 @@ namespace gfx
 	nvrhi::BindingSetItem
 	GeomPass::GetCameraBindingSetItem() const noexcept
 	{
-		return m_cameraCBuf.GetBindingSetItem(BindingSlots::CameraVCB);
+		return m_cameraCBuf.GetBindingSetItem(getBindingSpace(BINDINGS::CAMERA_VCB));
 	}
 
 	nvrhi::BindingSetItem
 	GeomPass::GetTransformBindingSetItem() const noexcept
 	{
-		return m_transformCBuf.GetBindingSetItem(BindingSlots::ObjectTransformVCB);
+		return m_transformCBuf.GetBindingSetItem(getBindingSpace(BINDINGS::OBJECT_TRANSFORM_VCB));
 	}
 
 	nvrhi::BindingLayoutItem
 	GeomPass::GetCameraBindingLayoutItem() const noexcept
 	{
-		return m_cameraCBuf.GetBindingLayoutItem(BindingSlots::CameraVCB);
+		return m_cameraCBuf.GetBindingLayoutItem(getBindingSlot(BINDINGS::CAMERA_VCB));
 	}
 
 	nvrhi::BindingLayoutItem
 	GeomPass::GetTransformBindingLayoutItem() const noexcept
 	{
-		return m_transformCBuf.GetBindingLayoutItem(BindingSlots::ObjectTransformVCB);
+		return m_transformCBuf.GetBindingLayoutItem(getBindingSlot(BINDINGS::OBJECT_TRANSFORM_VCB));
 	}
 
 	void
