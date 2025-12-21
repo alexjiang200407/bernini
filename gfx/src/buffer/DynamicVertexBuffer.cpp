@@ -23,11 +23,11 @@ namespace gfx
 		nvrhi::DeviceHandle device,
 		nvrhi::ShaderHandle vertexShader) const
 	{
-		ShaderVertexInput input{ vertexShader };
-		const auto&       elemDesc = GetDesc();
+		auto        input    = getVertexAttributes(vertexShader);
+		const auto& elemDesc = GetDesc();
 
 		std::vector<nvrhi::VertexAttributeDesc> vertexAttrs;
-		vertexAttrs.reserve(input.Size());
+		vertexAttrs.reserve(input.size());
 
 		uint32_t bufIdx = 0;
 
@@ -36,12 +36,12 @@ namespace gfx
 			uint32_t offset = 0;
 			bool     found  = false;
 
-			for (const auto& elem : elemDesc.elements)
+			for (const auto& elem : elemDesc.GetElements())
 			{
-				if (semanticMatches(elem.name, attr.semanticName, attr.semanticIndex))
+				if (semanticMatches(elem.GetName(), attr.semanticName, attr.semanticIndex))
 				{
 					// Not same format exit.
-					if (attr.format != elementTypeToNvrhiFormat(elem.type))
+					if (attr.format != elementTypeToNvrhiFormat(elem.GetType()))
 					{
 						break;
 					}

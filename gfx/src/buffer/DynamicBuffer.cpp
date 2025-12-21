@@ -1,4 +1,5 @@
 #include "buffer/DynamicBuffer.h"
+#include "math/util.h"
 
 namespace gfx
 {
@@ -7,6 +8,8 @@ namespace gfx
 	{
 		switch (type)
 		{
+		case ElementType::kEmpty:
+			return 0;
 		case ElementType::kFloat:
 			return 4;
 		case ElementType::kFloat2:
@@ -17,6 +20,13 @@ namespace gfx
 			return 16;
 		case ElementType::kFloat4x4:
 			return 64;
+		case ElementType::kShort:
+		case ElementType::kUShort:
+			return 2;
+		case ElementType::kBool:
+		case ElementType::kInt:
+		case ElementType::kUInt:
+			return 4;
 		}
 
 		return 0;
@@ -27,6 +37,8 @@ namespace gfx
 	{
 		switch (type)
 		{
+		case ElementType::kEmpty:
+			return nvrhi::Format::UNKNOWN;
 		case ElementType::kFloat:
 			return nvrhi::Format::R32_FLOAT;
 		case ElementType::kFloat2:
@@ -37,6 +49,16 @@ namespace gfx
 			return nvrhi::Format::RGBA32_FLOAT;
 		case ElementType::kFloat4x4:
 			return nvrhi::Format::RGBA32_FLOAT;
+		case ElementType::kShort:
+			return nvrhi::Format::R16_SINT;
+		case ElementType::kUShort:
+			return nvrhi::Format::R16_UINT;
+		case ElementType::kInt:
+			return nvrhi::Format::R32_SINT;
+		case ElementType::kUInt:
+			return nvrhi::Format::R32_UINT;
+		case ElementType::kBool:
+			return nvrhi::Format::R32_UINT;
 		}
 
 		return nvrhi::Format::UNKNOWN;
@@ -46,14 +68,18 @@ namespace gfx
 	{
 		m_data          = baseData;
 		uint32_t offset = 0;
-		for (auto& [name, type] : desc.elements)
+		for (auto& elem : desc.GetElements())
 		{
-			auto entry         = EntryDesc{};
-			entry.offset       = offset;
-			entry.type         = type;
-			m_elementMap[name] = entry;
-			offset += sizeOfElementType(entry.type);
+			offset += elem.GetOffset();
+
+			auto entry              = EntryDesc{};
+			entry.offset            = offset;
+			entry.type              = elem.type;
+			m_elementMap[elem.name] = entry;
+
+			offset += elem.Size();
 		}
+
 		m_totalSize = offset;
 	}
 
@@ -88,12 +114,12 @@ namespace gfx
 		m_desc{ elementDesc }, m_count(count)
 	{
 		m_totalSize = m_desc.GetTotalSize() * count;
-		m_data      = std::malloc(m_totalSize);
+		m_data      = std::calloc(count, m_desc.GetTotalSize());
 		if (!m_data)
 			throw std::bad_alloc();
 	}
 
-	DynamicBuffer::DynamicBuffer(DynamicBuffer&& other)
+	DynamicBuffer::DynamicBuffer(DynamicBuffer&& other) noexcept
 	{
 		m_buf             = std::move(other.m_buf);
 		m_desc            = other.m_desc;
@@ -123,7 +149,9 @@ namespace gfx
 	DynamicBuffer::operator[](uint32_t index)
 	{
 		if (index >= m_count)
-			throw core::except::BerniniException{ "DynamicBuffer exception", "Index out of range" };
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicBuffer exception",
+				                "Index out of range" };
 		void* elementData = reinterpret_cast<uint8_t*>(m_data) + index * m_desc.GetTotalSize();
 		return DynamicBufferItem{ elementData, m_desc };
 	}
@@ -141,14 +169,25 @@ namespace gfx
 	}
 
 	DynamicBufferDesc&
-	DynamicBufferDesc::AddElement(std::string_view name, ElementType type)
+	DynamicBufferDesc::AddElement(std::string_view name, ElementType type, uint32_t offset)
 	{
-		elements.emplace_back(std::string{ name }, type);
+		if (std::find_if(
+				elements.begin(),
+				elements.end(),
+				[name](const DynamicBufferDescElement& val) { return val.name == name; }) !=
+		    elements.end())
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicBufferDesc exception",
+				                "Element with the same name already exists" };
+		}
+
+		elements.emplace_back(std::string{ name }, type, offset);
 		return *this;
 	}
 
 	DynamicBufferDesc&
-	gfx::DynamicBufferDesc::SetUpdateFrequency(UpdateFrequency freq)
+	gfx::DynamicBufferDesc::SetUpdateFrequency(UpdateFrequency freq) noexcept
 	{
 		this->updateFrequency = freq;
 		return *this;
@@ -158,7 +197,11 @@ namespace gfx
 	DynamicBufferDesc::GetTotalSize() const noexcept
 	{
 		uint32_t total = 0;
-		for (const auto& e : elements) total += sizeOfElementType(e.type);
+		for (const auto& e : elements) total += e.TotalSize();
+
+		if (alignment > 0)
+			return align(total, alignment);
+
 		return total;
 	}
 
@@ -166,6 +209,13 @@ namespace gfx
 	DynamicBufferDesc::SetName(std::string_view name)
 	{
 		this->name = std::string(name);
+		return *this;
+	}
+
+	DynamicBufferDesc&
+	DynamicBufferDesc::SetAlignment(uint32_t alignment) noexcept
+	{
+		this->alignment = alignment;
 		return *this;
 	}
 
@@ -254,6 +304,11 @@ namespace gfx
 	{
 		switch (view.m_type)
 		{
+		case ElementType::kEmpty:
+			{
+				os << "<Empty>";
+				break;
+			}
 		case ElementType::kFloat:
 			{
 				const auto& val = view.As<float>();
@@ -300,11 +355,51 @@ namespace gfx
 				os << "]";
 				break;
 			}
+
+		case ElementType::kInt:
+			{
+				const auto& val = view.As<int32_t>();
+				os << val;
+				break;
+			}
+
+		case ElementType::kUInt:
+			{
+				const auto& val = view.As<uint32_t>();
+				os << val;
+				break;
+			}
+
+		case ElementType::kShort:
+			{
+				const auto& val = view.As<int16_t>();
+				os << val;
+				break;
+			}
+		case ElementType::kUShort:
+			{
+				const auto& val = view.As<uint16_t>();
+				os << val;
+				break;
+			}
+
 		default:
 			os << "<Invalid DynamicBufferItem::View>";
 			break;
 		}
 
 		return os;
+	}
+
+	uint32_t
+	DynamicBufferDescElement::Size() const noexcept
+	{
+		return sizeOfElementType(type);
+	}
+
+	uint32_t
+	DynamicBufferDescElement::GetOffset() const noexcept
+	{
+		return offset;
 	}
 }

@@ -6,8 +6,6 @@
 
 TEST_CASE("Shader Input", "[shader_input][shader_reflection]")
 {
-	using Attribute = gfx::ShaderVertexInput::Attribute;
-
 	auto gfxDesc     = GfxOptions{};
 	gfxDesc.headless = true;
 	gfxDesc.width    = 800;
@@ -30,10 +28,10 @@ TEST_CASE("Shader Input", "[shader_input][shader_reflection]")
 			vertexShaderBytecode.data(),
 			vertexShaderBytecode.size());
 
-		auto shaderInput = gfx::ShaderVertexInput{ shader };
-		REQUIRE(shaderInput.Size() == 1u);
+		auto shaderInput = gfx::getVertexAttributes(shader);
+		REQUIRE(shaderInput.size() == 1u);
 
-		CHECK(shaderInput[0].attribute == Attribute::kPosition);
+		CHECK(shaderInput[0].type == gfx::VertexAttribute::kPosition);
 		CHECK(shaderInput[0].format == nvrhi::Format::RGB32_FLOAT);
 		CHECK(shaderInput[0].semanticName == "POSITION");
 		CHECK(shaderInput[0].semanticIndex == 0);
@@ -50,34 +48,34 @@ TEST_CASE("Shader Input", "[shader_input][shader_reflection]")
 			vertexShaderBytecode.data(),
 			vertexShaderBytecode.size());
 
-		auto shaderInput = gfx::ShaderVertexInput{ shader };
-		REQUIRE(shaderInput.Size() == 5u);
+		auto shaderInput = gfx::getVertexAttributes(shader);
+		REQUIRE(shaderInput.size() == 5u);
 
-		CHECK(shaderInput[0].attribute == Attribute::kPosition);
+		CHECK(shaderInput[0].type == gfx::VertexAttribute::kPosition);
 		CHECK(shaderInput[0].format == nvrhi::Format::RGB32_FLOAT);
 		CHECK(shaderInput[0].semanticName == "POSITION");
 		CHECK(shaderInput[0].semanticId == "POSITION0");
 		CHECK(shaderInput[0].semanticIndex == 0);
 
-		CHECK(shaderInput[1].attribute == Attribute::kPosition);
+		CHECK(shaderInput[1].type == gfx::VertexAttribute::kPosition);
 		CHECK(shaderInput[1].format == nvrhi::Format::RGB32_FLOAT);
 		CHECK(shaderInput[1].semanticName == "POSITION");
 		CHECK(shaderInput[1].semanticId == "POSITION1");
 		CHECK(shaderInput[1].semanticIndex == 1);
 
-		CHECK(shaderInput[2].attribute == Attribute::kUV);
+		CHECK(shaderInput[2].type == gfx::VertexAttribute::kUV);
 		CHECK(shaderInput[2].format == nvrhi::Format::RG32_FLOAT);
 		CHECK(shaderInput[2].semanticName == "TEXCOORD");
 		CHECK(shaderInput[2].semanticId == "TEXCOORD0");
 		CHECK(shaderInput[2].semanticIndex == 0);
 
-		CHECK(shaderInput[3].attribute == Attribute::kNormal);
+		CHECK(shaderInput[3].type == gfx::VertexAttribute::kNormal);
 		CHECK(shaderInput[3].format == nvrhi::Format::RGB32_FLOAT);
 		CHECK(shaderInput[3].semanticName == "NORMAL");
 		CHECK(shaderInput[3].semanticId == "NORMAL0");
 		CHECK(shaderInput[3].semanticIndex == 0);
 
-		CHECK(shaderInput[4].attribute == Attribute::kTangent);
+		CHECK(shaderInput[4].type == gfx::VertexAttribute::kTangent);
 		CHECK(shaderInput[4].format == nvrhi::Format::RGB32_FLOAT);
 		CHECK(shaderInput[4].semanticName == "TANGENT");
 		CHECK(shaderInput[4].semanticId == "TANGENT0");
@@ -125,7 +123,7 @@ TEST_CASE("VertexLayoutGen", "[vertex_layout_gen][shader_reflection][dynamic_ver
 		vertexShaderBytecode.data(),
 		vertexShaderBytecode.size());
 
-	auto inputLayout = dvb.GenerateInputLayout(device, shader);
+	auto inputLayout = dvb.GenerateVertexLayout(device, shader);
 	CHECK(inputLayout->getNumAttributes() == 1);
 
 	auto attrDesc = inputLayout->getAttributeDesc(0);

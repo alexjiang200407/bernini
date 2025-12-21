@@ -184,7 +184,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			                                             .aspectRatio = 800.0f / 600.0f,
 			                                             .nearZ       = 0.5f,
 			                                             .farZ        = 500.0f } };
-		createCamera(graphics, cameraDesc, &camera) >> berniniErrChecker;
+		createCamera(cameraDesc, &camera) >> berniniErrChecker;
 
 		auto visitor = EventVisitor{};
 

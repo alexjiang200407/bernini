@@ -1,60 +1,101 @@
 #pragma once
-#include <core/except/BerniniException.h>
+#include "GfxException.h"
+#include "buffer/ElementType.h"
 #include <core/type_traits.h>
 
 namespace gfx
 {
-	enum class ElementType
-	{
-		kInvalid = -1,
-		kFloat,
-		kFloat2,
-		kFloat3,
-		kFloat4,
-		kFloat4x4,
-	};
-
 	uint32_t
 	sizeOfElementType(ElementType format);
 
 	nvrhi::Format
 	elementTypeToNvrhiFormat(ElementType type);
 
-	struct DynamicBufferDescElement
+	class DynamicBufferDescElement
 	{
-		std::string name;
-		ElementType type;
+	public:
+		DynamicBufferDescElement(std::string_view name, ElementType type, uint32_t offset = 0u) :
+			name(name), type(type), offset(offset)
+		{}
 
 		uint32_t
-		Size() const noexcept
+		Size() const noexcept;
+
+		uint32_t
+		GetOffset() const noexcept;
+
+		uint32_t
+		TotalSize() const noexcept
 		{
-			return sizeOfElementType(type);
+			return Size() + GetOffset();
 		}
+
+		std::string_view
+		GetName() const noexcept
+		{
+			return name;
+		}
+
+		ElementType
+		GetType() const noexcept
+		{
+			return type;
+		}
+
+	private:
+		std::string name;
+		ElementType type;
+		uint32_t    offset = 0u;
+
+		friend class DynamicBufferDesc;
+		friend class DynamicBufferItem;
 	};
 
 	struct DynamicBufferDesc
 	{
+	public:
 		enum class UpdateFrequency
 		{
 			kPerFrame,
 			kPerDraw,
+			kPerMaterial,
 		};
 
-		UpdateFrequency                       updateFrequency{ UpdateFrequency::kPerFrame };
-		std::vector<DynamicBufferDescElement> elements{};
-		std::string                           name{};
+		DynamicBufferDesc&
+		AddElement(std::string_view name, ElementType format, uint32_t offset = 0u);
 
 		DynamicBufferDesc&
-		AddElement(std::string_view name, ElementType format);
+		SetUpdateFrequency(UpdateFrequency freq) noexcept;
 
-		DynamicBufferDesc&
-		SetUpdateFrequency(UpdateFrequency freq);
+		UpdateFrequency
+		GetUpdateFrequency() const noexcept
+		{
+			return updateFrequency;
+		}
+
+		std::span<const DynamicBufferDescElement>
+		GetElements() const noexcept
+		{
+			return std::span<const DynamicBufferDescElement>{ elements.data(), elements.size() };
+		}
 
 		uint32_t
 		GetTotalSize() const noexcept;
 
 		DynamicBufferDesc&
 		SetName(std::string_view name);
+
+		DynamicBufferDesc&
+		SetAlignment(uint32_t alignment) noexcept;
+
+	private:
+		UpdateFrequency                       updateFrequency{ UpdateFrequency::kPerFrame };
+		std::vector<DynamicBufferDescElement> elements{};
+		std::string                           name{};
+		uint32_t                              alignment = 0u;
+
+		friend class DynamicBuffer;
+		friend class DynamicBufferItem;
 	};
 
 	class DynamicBufferItem
@@ -119,12 +160,14 @@ namespace gfx
 			Assign(const T& val)
 			{
 				if (m_data == nullptr || m_type == ElementType::kInvalid)
-					throw core::except::BerniniException{ "DynamicBuffer exception",
-						                                  "Empty View used for View::Assign" };
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicBuffer exception",
+						                "Empty View used for View::Assign" };
 
 				if (sizeof(T) != sizeOfElementType(m_type))
-					throw core::except::BerniniException{ "DynamicBuffer exception",
-						                                  "Size mismatch in View::Assign" };
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicBuffer exception",
+						                "Size mismatch in View::Assign" };
 
 				auto& ref = *static_cast<T*>(m_data);
 				std::memcpy(m_data, &val, sizeof(T));
@@ -159,10 +202,9 @@ namespace gfx
 		{
 			auto it = m_elementMap.find(name);
 			if (it == m_elementMap.end())
-				throw core::except::BerniniException{
-					"DynamicBuffer exception",
-					"Element not found in DynamicBufferItem::Set"
-				};
+				throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+					                "DynamicBuffer exception",
+					                "Element not found in DynamicBufferItem::Set" };
 			EntryDesc& desc = it->second;
 			std::memcpy(reinterpret_cast<uint8_t*>(m_data) + desc.offset, &value, sizeof(T));
 		}
@@ -174,10 +216,9 @@ namespace gfx
 		{
 			auto it = m_elementMap.find(std::string{ name });
 			if (it == m_elementMap.end())
-				throw core::except::BerniniException{
-					"DynamicBuffer exception",
-					"Element not found in DynamicBufferItem::Get"
-				};
+				throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+					                "DynamicBuffer exception",
+					                "Element not found in DynamicBufferItem::Get" };
 			auto& desc  = const_cast<EntryDesc&>(it->second);
 			auto  value = T{};
 			std::memcpy(&value, reinterpret_cast<uint8_t*>(m_data) + desc.offset, sizeof(T));
@@ -194,7 +235,7 @@ namespace gfx
 	public:
 		DynamicBuffer() noexcept = default;
 		DynamicBuffer(const DynamicBufferDesc& elementDesc, uint32_t count);
-		DynamicBuffer(DynamicBuffer&& other);
+		DynamicBuffer(DynamicBuffer&& other) noexcept;
 
 		~DynamicBuffer() noexcept;
 
@@ -233,6 +274,14 @@ namespace gfx
 
 		void
 		Release() noexcept;
+
+		// Unsafe
+		[[nodiscard]] [[deprecated("Unsafe: only use for testing or inspection purposes")]]
+		std::byte*
+		GetRawData() noexcept
+		{
+			return static_cast<std::byte*>(m_data);
+		}
 
 	protected:
 		nvrhi::BufferHandle m_buf;

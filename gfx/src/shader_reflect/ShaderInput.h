@@ -1,4 +1,5 @@
 #pragma once
+#include "buffer/ElementType.h"
 
 namespace gfx
 {
@@ -8,10 +9,25 @@ namespace gfx
 		std::string_view semanticName,
 		uint32_t         semanticIndex);
 
-	class ShaderVertexInput
+	struct ConstantBufferInput
 	{
-	public:
-		enum class Attribute
+		struct Entry
+		{
+			std::string name   = "";
+			uint32_t    offset = 0;
+			ElementType type   = ElementType::kInvalid;
+		};
+
+		std::string        name  = "";
+		uint32_t           slot  = 0u;
+		uint32_t           space = 0u;
+		uint32_t           size  = 0u;
+		std::vector<Entry> entries;
+	};
+
+	struct VertexAttribute
+	{
+		enum Type
 		{
 			kInvalid = -1,
 			kPosition,
@@ -21,80 +37,20 @@ namespace gfx
 			kTotal,
 		};
 
-		struct VertexInput
-		{
-			Attribute     attribute     = Attribute::kInvalid;
-			uint32_t      semanticIndex = 0u;
-			std::string   semanticName  = "";
-			std::string   semanticId    = "";
-			nvrhi::Format format        = nvrhi::Format::UNKNOWN;
-		};
-
-		using iterator       = std::vector<VertexInput>::iterator;
-		using const_iterator = std::vector<VertexInput>::const_iterator;
-
-	public:
-		ShaderVertexInput() = default;
-		ShaderVertexInput(nvrhi::ShaderHandle vertexShader);
-
-		iterator
-		begin() noexcept
-		{
-			return m_vertexInputs.begin();
-		}
-
-		iterator
-		end() noexcept
-		{
-			return m_vertexInputs.end();
-		}
-
-		const_iterator
-		begin() const noexcept
-		{
-			return m_vertexInputs.begin();
-		}
-
-		const_iterator
-		end() const noexcept
-		{
-			return m_vertexInputs.end();
-		}
-
-		const_iterator
-		cbegin() const noexcept
-		{
-			return m_vertexInputs.cbegin();
-		}
-
-		const_iterator
-		cend() const noexcept
-		{
-			return m_vertexInputs.cend();
-		}
-
-		bool
-		Empty() const noexcept
-		{
-			return m_vertexInputs.empty();
-		}
-
-		size_t
-		Size() const noexcept
-		{
-			return m_vertexInputs.size();
-		}
-
-		const VertexInput&
-		operator[](size_t index) const noexcept
-		{
-			return m_vertexInputs[index];
-		}
-
-	private:
-		std::vector<VertexInput> m_vertexInputs;
+		Type          type          = kInvalid;
+		uint32_t      semanticIndex = 0u;
+		std::string   semanticName  = "";
+		std::string   semanticId    = "";
+		nvrhi::Format format        = nvrhi::Format::UNKNOWN;
 	};
 
-	ShaderVertexInput::Attribute
+	VertexAttribute::Type
 	mapSemantic(const char* semantic);
+
+	std::vector<VertexAttribute>
+	getVertexAttributes(nvrhi::ShaderHandle shader);
+
+	std::vector<ConstantBufferInput>
+	getConstantBufferInputs(nvrhi::ShaderHandle shader);
+
 }

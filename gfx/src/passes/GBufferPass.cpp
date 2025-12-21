@@ -1,4 +1,5 @@
 #include "passes/GBufferPass.h"
+#include "BindingSlots.h"
 #include "camera/Camera.h"
 #include "fg/FrameGraph.hpp"
 
@@ -51,23 +52,48 @@ namespace gfx
 							nvrhi::ViewportState{}.addViewportAndScissorRect(
 								nvrhi::Viewport{ screenW, screenH }));
 
-				auto bindingSetDesc          = nvrhi::BindingSetDesc{};
-				auto vertexBindingLayoutDesc = nvrhi::BindingLayoutDesc{};
-				GeomPass::AttachBindingSetItems(bindingSetDesc);
-				GeomPass::AttachVertexBindingLayoutItems(vertexBindingLayoutDesc);
+				auto perFrameBindingLayout = nvrhi::BindingLayoutHandle{};
+				auto perFrameBindingSet    = nvrhi::BindingSetHandle{};
+
+				{
+					auto perFrameBindingSetDesc    = nvrhi::BindingSetDesc{};
+					auto perFrameBindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+					AttachPerFrameBindingSetItems(perFrameBindingSetDesc);
+					AttachPerFrameBindingLayoutItems(perFrameBindingLayoutDesc);
+
+					perFrameBindingLayout = device->createBindingLayout(perFrameBindingLayoutDesc);
+
+					perFrameBindingSet =
+						device->createBindingSet(perFrameBindingSetDesc, perFrameBindingLayout);
+
+					pipelineDesc.addBindingLayout(perFrameBindingLayout);
+					gfxState.addBindingSet(perFrameBindingSet);
+				}
 
 				for (const auto& drawable : drawables)
 				{
+					auto perObjBindingLayout = nvrhi::BindingLayoutHandle{};
+					auto perObjBindingSet    = nvrhi::BindingSetHandle{};
+
+					{
+						auto perObjBindingSetDesc    = nvrhi::BindingSetDesc{};
+						auto perObjBindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+
+						AttachPerObjBindingSetItems(perObjBindingSetDesc);
+						AttachPerObjBindingLayoutItems(perObjBindingLayoutDesc);
+
+						perObjBindingLayout = device->createBindingLayout(perObjBindingLayoutDesc);
+
+						perObjBindingSet =
+							device->createBindingSet(perObjBindingSetDesc, perObjBindingLayout);
+
+						pipelineDesc.addBindingLayout(perObjBindingLayout);
+						gfxState.addBindingSet(perObjBindingSet);
+					}
+
 					GeomPass::UpdateTransformBuffer(mainCommandList, drawable->GetTransform());
 
-					auto bindingLayout = device->createBindingLayout(vertexBindingLayoutDesc);
-					auto bindingSet    = device->createBindingSet(bindingSetDesc, bindingLayout);
-
-					pipelineDesc.addBindingLayout(bindingLayout);
-					gfxState.addBindingSet(bindingSet);
-
 					drawable->AttachVertexLayout(pipelineDesc);
-
 					drawable->AttachVertexShader(pipelineDesc);
 					drawable->AttachPixelShader(pipelineDesc);
 

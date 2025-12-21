@@ -37,16 +37,28 @@ namespace gfx
 		GetTransformBindingLayoutItem() const noexcept;
 
 		nvrhi::BindingSetDesc&
-		AttachBindingSetItems(nvrhi::BindingSetDesc& desc) const noexcept
+		AttachPerFrameBindingSetItems(nvrhi::BindingSetDesc& desc) const noexcept
 		{
-			return desc.addItem(GetCameraBindingSetItem()).addItem(GetTransformBindingSetItem());
+			return desc.addItem(GetCameraBindingSetItem());
+		}
+
+		nvrhi::BindingSetDesc&
+		AttachPerObjBindingSetItems(nvrhi::BindingSetDesc& desc) const noexcept
+		{
+			return desc.addItem(GetTransformBindingSetItem());
 		}
 
 		nvrhi::BindingLayoutDesc&
-		AttachVertexBindingLayoutItems(nvrhi::BindingLayoutDesc& desc) const noexcept
+		AttachPerFrameBindingLayoutItems(nvrhi::BindingLayoutDesc& desc) const noexcept
 		{
 			return desc.setVisibility(nvrhi::ShaderType::Vertex)
-			    .addItem(GetCameraBindingLayoutItem())
+			    .addItem(GetCameraBindingLayoutItem());
+		}
+
+		nvrhi::BindingLayoutDesc&
+		AttachPerObjBindingLayoutItems(nvrhi::BindingLayoutDesc& desc) const noexcept
+		{
+			return desc.setVisibility(nvrhi::ShaderType::Vertex)
 			    .addItem(GetTransformBindingLayoutItem());
 		}
 
