@@ -1,8 +1,170 @@
 #include "buffer/DynamicConstantBuffer.h"
 #include "math/util.h"
+#include <core/OrderedMap.h>
 
 namespace gfx
 {
+	DynamicConstantBufferDesc::Node::~Node() {}
+
+	class DynamicConstantBufferDesc::StructNode : public DynamicConstantBufferDesc::Node
+	{
+	private:
+		using StructChildren = core::OrderedMap<
+			std::string,
+			std::unique_ptr<Node>,
+			core::str::StringViewHash,
+			core::str::StringViewEq>;
+
+	public:
+		StructNode(std::string_view name) : m_name{ name } {}
+
+		void
+		AddNode(std::string_view path, std::unique_ptr<Node>&& toAdd) override
+		{
+			auto [head, tail] = core::str::splitOnce(path, ".");
+
+			if (tail.empty())
+			{
+				if (m_children.Contains(head))
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBufferDesc::StructNode::AddNode",
+						                "Node already exists: " + std::string{ head } };
+				}
+				m_children.Emplace(head, std::move(toAdd));
+			}
+			else
+			{
+				auto* child = m_children.Find(head);
+				if (!child)
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBufferDesc::StructNode::AddNode",
+						                "Node not found: " + std::string{ head } };
+				}
+				(*child)->AddNode(tail, std::move(toAdd));
+			}
+		}
+
+		void
+		BuildDynamicBufferDesc(DynamicBufferDesc& desc, BuildDynamicBufferContext& ctx)
+			const noexcept override
+		{
+			// Constant buffers need to start on a 16-byte boundary
+			ctx.alignNext = true;
+			for (const auto& child : m_children)
+			{
+				child->BuildDynamicBufferDesc(desc, ctx);
+			}
+		}
+
+	private:
+		std::string    m_name;
+		StructChildren m_children;
+	};
+
+	class DynamicConstantBufferDesc::ElementNode : public DynamicConstantBufferDesc::Node
+	{
+	public:
+		ElementNode(std::string_view name, ElementType type) : m_name{ name }, m_type{ type } {};
+
+		void
+		AddNode(std::string_view, std::unique_ptr<Node>&&) override
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::ElementNode::AddNode",
+				                "Cannot add node from ElementNode" };
+		}
+
+		void
+		BuildDynamicBufferDesc(DynamicBufferDesc& desc, BuildDynamicBufferContext& ctx)
+			const noexcept
+		{
+			const uint32_t elemSize    = sizeOfElementType(m_type);
+			const uint32_t offsetInReg = ctx.offset & 15u;
+			const uint32_t remaining   = 16u - offsetInReg;
+
+			uint32_t padding = 0;
+
+			// Small types (<=4 bytes) cannot cross 4-byte boundaries
+			if (elemSize <= 4 && (ctx.offset & 3u) + elemSize > 4)
+			{
+				padding = 4 - (ctx.offset & 3u);
+				ctx.offset += padding;
+			}
+
+			// If element would cross 16-byte boundary, align to next 16-byte boundary
+			if (elemSize > remaining || ctx.alignNext)
+			{
+				const uint32_t alignedOffset = align(ctx.offset, 16u);
+				padding                      = alignedOffset - ctx.offset;
+				ctx.offset                   = alignedOffset;
+				ctx.alignNext                = false;
+			}
+
+			desc.AddElement(m_name, m_type, padding);
+			ctx.offset += elemSize;
+		}
+
+	private:
+		std::string m_name;
+		ElementType m_type;
+	};
+
+	class DynamicConstantBufferDesc::ElementArrayNode : public DynamicConstantBufferDesc::Node
+	{
+	public:
+		ElementArrayNode(std::string_view name, uint32_t count, ElementType type) noexcept :
+			m_count{ count }, m_type{ type }
+		{}
+
+		void
+		AddNode(std::string_view, std::unique_ptr<Node>&&) override
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::ElementNode::AddNode",
+				                "Cannot add node from ElementNode" };
+		}
+
+		void
+		BuildDynamicBufferDesc(DynamicBufferDesc&, BuildDynamicBufferContext&)
+			const noexcept override
+		{}
+
+	private:
+		uint32_t    m_count;
+		ElementType m_type;
+	};
+
+	class DynamicConstantBufferDesc::StructArrayNode : public DynamicConstantBufferDesc::Node
+	{
+	public:
+		StructArrayNode(std::string_view name, uint32_t count) noexcept :
+			m_name{ name }, m_count{ count }
+		{}
+
+		void
+		AddNode(std::string_view path, std::unique_ptr<Node>&& toAdd) override
+		{
+			m_structNode.AddNode(path, std::move(toAdd));
+		}
+
+		void
+		BuildDynamicBufferDesc(DynamicBufferDesc&, BuildDynamicBufferContext&)
+			const noexcept override
+		{}
+
+	private:
+		std::string m_name;
+		StructNode  m_structNode{ "" };
+		uint32_t    m_count;
+	};
+
+	DynamicConstantBufferDesc::DynamicConstantBufferDesc()
+	{
+		root = std::make_unique<StructNode>("root");
+	}
+
 	DynamicConstantBuffer::DynamicConstantBuffer(
 		nvrhi::DeviceHandle              device,
 		const DynamicConstantBufferDesc& elementDesc) :
@@ -55,239 +217,66 @@ namespace gfx
 		return nvrhi::BindingSetItem::ConstantBuffer(slot, m_buf);
 	}
 
-	DynamicConstantBufferDesc&
-	DynamicConstantBufferDesc::AddStruct(std::string_view path)
-	{
-		struct AddStructVisitor : public Node::PathVisitor
-		{
-			std::string_view structPath;
-
-			void
-			VisitLeaf(Node& node) override
-			{
-				if (node.AsElement())
-				{
-					std::string description = std::format("'{}' already exists", node.m_path);
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBufferDesc exception",
-						                description };
-				}
-			}
-
-			void
-			VisitStruct(Node& node, Node::StructChildren&) override
-			{
-				auto path = std::string_view(node.m_path);
-				if (!path.empty() && path.substr(1) == structPath)
-				{
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBufferDesc exception",
-						                std::format("'{}' already exists", node.m_path) };
-				}
-			}
-
-			void
-			VisitStructInvalid(
-				Node&                 node,
-				Node::StructChildren& structChildren,
-				std::string_view      invalid,
-				std::string_view      next) override
-			{
-				if (!next.empty())
-				{
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBufferDesc exception",
-						                "Element doesn't exists: "s + std::string(invalid) };
-				}
-				auto path = std::format("{}.{}", node.m_path, invalid);
-				structChildren.Emplace(invalid, path, Node::StructChildren{});
-			}
-		} visitor;
-
-		visitor.structPath = path;
-
-		root.Walk(path, visitor);
-
-		return *this;
-	}
-
-	DynamicConstantBufferDesc&
-	DynamicConstantBufferDesc::AddElement(std::string_view path, ElementType format)
-	{
-		if (path.empty())
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-				                "DynamicConstantBufferDesc exception",
-				                "Element name cannot be empty" };
-
-		struct AddElementVisitor : public Node::PathVisitor
-		{
-			ElementType format = ElementType::kInvalid;
-
-			void
-			VisitLeaf(Node& node) override
-			{
-				if (node.AsElement())
-				{
-					std::string description = std::format("'{}' already exists", node.m_path);
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBufferDesc exception",
-						                description };
-				}
-			}
-
-			void
-			VisitStructInvalid(
-				Node&                 node,
-				Node::StructChildren& structChildren,
-				std::string_view      invalid,
-				std::string_view      next) override
-			{
-				if (!next.empty())
-				{
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBufferDesc exception",
-						                "Element doesn't exists: "s + std::string(invalid) };
-				}
-				auto path = std::format("{}.{}", node.m_path, invalid);
-				structChildren.Emplace(invalid, path, Node::Element{ invalid, format });
-			}
-		} visitor;
-
-		visitor.format = format;
-		root.Walk(path, visitor);
-
-		return *this;
-	}
-
-	void
-	DynamicConstantBufferDesc::Node::Walk(std::string_view path, PathVisitor& vis)
-	{
-		auto [head, tail] = core::str::splitOnce(path, ".");
-
-		if (tail.empty())
-		{
-			vis.VisitLeaf(*this);
-		}
-
-		if (auto* structChildren = AsStruct())
-		{
-			vis.VisitStruct(*this, *structChildren);
-
-			if (head.empty())
-				return;
-
-			auto* childNode = structChildren->Find(head);
-
-			if (!childNode)
-				vis.VisitStructInvalid(*this, *structChildren, head, tail);
-			else
-			{
-				childNode->Walk(tail, vis);
-			}
-		}
-		else if (AsArray())
-		{
-			// TODO:
-			//vis.VisitArray(AsArray());
-		}
-	}
-
-	void
-	DynamicConstantBufferDesc::Node::Dfs(Visitor& vis) const
-	{
-		if (AsElement())
-		{
-			// All elements are leaves
-			vis.VisitLeaf(*this);
-		}
-		else if (auto* structChildren = AsStruct())
-		{
-			if (structChildren->Empty())
-			{
-				vis.VisitLeaf(*this);
-				return;
-			}
-
-			vis.VisitStruct(*this, *structChildren);
-			for (auto& children : *structChildren)
-			{
-				children.Dfs(vis);
-			}
-		}
-		else if (AsArray())
-		{
-			// TODO:
-			//vis.VisitArray(AsArray());
-		}
-	}
-
 	DynamicBufferDesc
 	DynamicConstantBufferDesc::ToDynamicBufferDesc() const
 	{
 		auto desc = DynamicBufferDesc{};
 		desc.SetName(name).SetAlignment(16);
 
-		struct ToDynamicBufferDescVisitor : public Node::Visitor
-		{
-			uint32_t totalOffset     = 0u;
-			bool     shouldAlignNext = false;
-
-			ToDynamicBufferDescVisitor(DynamicBufferDesc& desc) : desc{ desc } {}
-			DynamicBufferDesc& desc;
-
-			void
-			VisitLeaf(const Node& node) override
-			{
-				auto path = std::string_view(node.m_path).substr(1);
-				if (auto elem = node.AsElement())
-				{
-					const uint32_t elemSz = sizeOfElementType(elem->GetType());
-
-					uint32_t padding = 0;
-
-					{
-						const uint32_t offsetInDword  = totalOffset & 3u;
-						const uint32_t remainingDword = 4u - offsetInDword;
-
-						if (elemSz > remainingDword)
-						{
-							const uint32_t alignedOffset = align(totalOffset, 4u);
-							padding += alignedOffset - totalOffset;
-							totalOffset = alignedOffset;
-						}
-					}
-
-					{
-						const uint32_t offsetInReg = totalOffset & 15u;
-						const uint32_t remaining   = 16u - offsetInReg;
-
-						if (elemSz > remaining || shouldAlignNext)
-						{
-							const uint32_t alignedOffset = align(totalOffset, 16u);
-							padding += alignedOffset - totalOffset;
-							totalOffset     = alignedOffset;
-							shouldAlignNext = false;
-						}
-					}
-
-					desc.AddElement(path, elem->GetType(), padding);
-					totalOffset += elemSz;
-				}
-			}
-
-			void
-			VisitStruct(const Node& node, const Node::StructChildren& structChildren) override
-			{
-				if (!structChildren.Empty())
-				{
-					shouldAlignNext = true;
-				}
-			}
-
-		} visitor{ desc };
-
-		root.Dfs(visitor);
+		auto ctx = BuildDynamicBufferContext{};
+		root->BuildDynamicBufferDesc(desc, ctx);
 
 		return desc;
+	}
+
+	DynamicConstantBufferDesc&
+	DynamicConstantBufferDesc::AddStruct(std::string_view name)
+	{
+		if (name.empty())
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::AddStruct",
+				                "Struct name cannot be empty" };
+		}
+		root->AddNode(name, std::make_unique<StructNode>(name));
+		return *this;
+	}
+
+	DynamicConstantBufferDesc&
+	DynamicConstantBufferDesc::AddElementArray(
+		std::string_view name,
+		ElementType      type,
+		uint32_t         count)
+	{
+		if (type == ElementType::kInvalid)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::AddElementArray",
+				                "Invalid ElementType specified" };
+		}
+
+		if (name.empty())
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::AddElementArray",
+				                "Element array name cannot be empty" };
+		}
+
+		root->AddNode(name, std::make_unique<ElementArrayNode>(name, count, type));
+		return *this;
+	}
+
+	DynamicConstantBufferDesc&
+	DynamicConstantBufferDesc::AddElement(std::string_view name, ElementType format)
+	{
+		if (name.empty())
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::AddElement",
+				                "Element name cannot be empty" };
+		}
+
+		root->AddNode(name, std::make_unique<ElementNode>(name, format));
+		return *this;
 	}
 }
