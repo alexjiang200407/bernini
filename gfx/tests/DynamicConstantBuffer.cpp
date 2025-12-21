@@ -340,6 +340,29 @@ TEST_CASE("Constant buffer alignment", "[dynamic_constant_buffer][dynamic_buffer
 
 		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
 	}
+
+	/*SECTION("Arrays")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("abcd", gfx::ElementType::kFloat, 4);
+		auto     desc1     = desc.ToDynamicBufferDesc();
+		uint32_t totalSize = desc1.GetTotalSize();
+		CHECK(totalSize == 48);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("before").Assign(glm::vec2{ 1.0f, 2.0f }));
+		REQUIRE_NOTHROW(cb.At("inner.a").Assign(3.0f));
+		REQUIRE_NOTHROW(cb.At("inner.b").Assign(glm::vec3{ 1.0f, 2.0f, 3.0f }));
+		REQUIRE_NOTHROW(cb.At("inner.c").Assign(3.0f));
+		REQUIRE_NOTHROW(cb.At("after").Assign(glm::vec3{ 1.0f, 2.0f, 3.0f }));
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected;
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}*/
 }
 
 TEST_CASE("Constant buffer struct", "[dynamic_constant_buffer][dynamic_buffer]")
