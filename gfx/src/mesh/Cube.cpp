@@ -34,7 +34,7 @@ namespace gfx
 			.SetName("Cube Geometry Vertex Buffer");
 
 		auto size           = static_cast<uint32_t>(std::size(cubeVertices));
-		shared->vertexBuf   = std::move(DynamicVertexBuffer{ m_device, desc, size });
+		shared->vertexBuf   = std::move(DynamicVertexBuffer{ m_device, std::move(desc), size });
 		shared->indexCount  = static_cast<uint32_t>(std::size(cubeIndices));
 		auto indexBufSz     = sizeof(uint16_t) * shared->indexCount;
 		shared->indexBuffer = m_device->createBuffer(

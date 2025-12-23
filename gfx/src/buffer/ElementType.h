@@ -20,4 +20,11 @@ namespace gfx
 
 		kBool,
 	};
+
+	uint32_t
+	sizeOfElementType(ElementType format);
+
+	nvrhi::Format
+	elementTypeToNvrhiFormat(ElementType type);
+
 }

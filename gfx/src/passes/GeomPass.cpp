@@ -23,7 +23,7 @@ namespace gfx
 			auto transformBufDesc = DynamicConstantBufferDesc{};
 			transformBufDesc.AddElement("transformMatrix", ElementType::kFloat4x4)
 				.SetName("ModelTransformBuffer")
-				.SetUpdateFrequency(DynamicBufferDesc::UpdateFrequency::kPerDraw);
+				.SetUpdateFrequency(UpdateFrequency::kPerDraw);
 
 			m_transformCBuf = std::move(DynamicConstantBuffer{ device, transformBufDesc });
 		}
