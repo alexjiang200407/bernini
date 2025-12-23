@@ -47,14 +47,36 @@ namespace gfx
 		}
 
 		void
-		BuildDynamicBufferDesc(DynamicBufferDesc& desc, BuildDynamicBufferContext& ctx)
-			const noexcept override
+		BuildLayoutMap(LayoutMap* layoutMap, BuildLayoutMapContext& ctx) const noexcept override
 		{
+			if (m_children.Empty())
+				return;
+
 			// Constant buffers need to start on a 16-byte boundary
-			ctx.alignNext = true;
+			ctx.offset           = align(ctx.offset, 16u);
+			auto parentOffsetCpy = ctx.parentOffset;
+			ctx.parentOffset     = ctx.offset;
+
+			auto prevOffset = ctx.offset;
 			for (const auto& child : m_children)
 			{
-				child->BuildDynamicBufferDesc(desc, ctx);
+				child->BuildLayoutMap(layoutMap, ctx);
+			}
+
+			ctx.parentOffset = parentOffsetCpy;
+
+			auto elemSize = ctx.offset - prevOffset;
+
+			if (layoutMap)
+			{
+				layoutMap->emplace(
+					m_name,
+					LayoutEntry{
+						.relativeOffset = prevOffset - ctx.parentOffset,
+						.elemSize       = elemSize,
+						.stride         = 0,
+						.count          = 1,
+					});
 			}
 		}
 
@@ -77,12 +99,11 @@ namespace gfx
 		}
 
 		void
-		BuildDynamicBufferDesc(DynamicBufferDesc& desc, BuildDynamicBufferContext& ctx)
-			const noexcept
+		BuildLayoutMap(LayoutMap* layoutMap, BuildLayoutMapContext& ctx) const noexcept
 		{
-			const uint32_t elemSize    = sizeOfElementType(m_type);
-			const uint32_t offsetInReg = ctx.offset & 15u;
-			const uint32_t remaining   = 16u - offsetInReg;
+			auto elemSize    = sizeOfElementType(m_type);
+			auto offsetInReg = ctx.offset & 15u;
+			auto remaining   = 16u - offsetInReg;
 
 			uint32_t padding = 0;
 
@@ -94,15 +115,24 @@ namespace gfx
 			}
 
 			// If element would cross 16-byte boundary, align to next 16-byte boundary
-			if (elemSize > remaining || ctx.alignNext)
+			if (elemSize > remaining)
 			{
 				const uint32_t alignedOffset = align(ctx.offset, 16u);
 				padding                      = alignedOffset - ctx.offset;
 				ctx.offset                   = alignedOffset;
-				ctx.alignNext                = false;
 			}
 
-			desc.AddElement(m_name, m_type, padding);
+			if (layoutMap)
+			{
+				layoutMap->emplace(
+					m_name,
+					LayoutEntry{
+						.relativeOffset = ctx.offset - ctx.parentOffset,
+						.elemSize       = elemSize,
+						.stride         = 0,
+						.count          = 1,
+					});
+			}
 			ctx.offset += elemSize;
 		}
 
@@ -115,7 +145,7 @@ namespace gfx
 	{
 	public:
 		ElementArrayNode(std::string_view name, uint32_t count, ElementType type) noexcept :
-			m_count{ count }, m_type{ type }
+			m_name{ name }, m_count{ count }, m_type{ type }
 		{}
 
 		void
@@ -127,11 +157,27 @@ namespace gfx
 		}
 
 		void
-		BuildDynamicBufferDesc(DynamicBufferDesc&, BuildDynamicBufferContext&)
-			const noexcept override
-		{}
+		BuildLayoutMap(LayoutMap* layoutMap, BuildLayoutMapContext& ctx) const noexcept override
+		{
+			auto elemSize    = sizeOfElementType(m_type);
+			auto startOffset = align(ctx.offset, 16u);
+			ctx.offset       = startOffset + align(elemSize, 16u) * m_count;
+
+			if (layoutMap)
+			{
+				layoutMap->emplace(
+					m_name,
+					LayoutEntry{
+						.relativeOffset = startOffset,
+						.elemSize       = elemSize,
+						.stride         = align(elemSize, 16u),
+						.count          = m_count,
+					});
+			}
+		}
 
 	private:
+		std::string m_name;
 		uint32_t    m_count;
 		ElementType m_type;
 	};
@@ -150,9 +196,27 @@ namespace gfx
 		}
 
 		void
-		BuildDynamicBufferDesc(DynamicBufferDesc&, BuildDynamicBufferContext&)
-			const noexcept override
-		{}
+		BuildLayoutMap(LayoutMap* layoutMap, BuildLayoutMapContext& ctx) const noexcept override
+		{
+			auto startOffset = align(ctx.offset, 16u);
+
+			auto ctx1 = BuildLayoutMapContext{};
+			m_structNode.BuildLayoutMap(layoutMap, ctx1);
+
+			ctx.offset = startOffset + align(ctx1.offset, 16u) * m_count;
+
+			if (layoutMap)
+			{
+				layoutMap->emplace(
+					m_name,
+					LayoutEntry{
+						.relativeOffset = startOffset,
+						.elemSize       = ctx1.offset,
+						.stride         = align(ctx1.offset, 16u),
+						.count          = m_count,
+					});
+			}
+		}
 
 	private:
 		std::string m_name;
@@ -167,44 +231,133 @@ namespace gfx
 
 	DynamicConstantBuffer::DynamicConstantBuffer(
 		nvrhi::DeviceHandle              device,
-		const DynamicConstantBufferDesc& elementDesc) :
-		DynamicBuffer{ elementDesc.ToDynamicBufferDesc(), 1 }
+		const DynamicConstantBufferDesc& elementDesc)
 	{
-		auto& parentDesc = GetDesc();
+		auto ctx = DynamicConstantBufferDesc::BuildLayoutMapContext{};
+		elementDesc.root->BuildLayoutMap(&m_layoutMap, ctx);
+		auto totalSize = align(ctx.offset, 16u);
+		DynamicBuffer::Init(device, totalSize, elementDesc.updateFrequency, elementDesc.name);
+	}
 
-		auto bufferDesc = nvrhi::BufferDesc{};
-		bufferDesc.setByteSize(parentDesc.GetTotalSize())
-			.setIsConstantBuffer(true)
-			.setInitialState(nvrhi::ResourceStates::ConstantBuffer)
-			.setKeepInitialState(false)
-			.setDebugName(std::string{ GetName() });
+	DynamicConstantBuffer::View
+	DynamicConstantBuffer::View::At(std::string_view key) const
+	{
+		if (IsNull())
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::View::At",
+				                "Cannot at using a null view" };
 
-		if (parentDesc.GetUpdateFrequency() == DynamicBufferDesc::UpdateFrequency::kPerFrame)
+		if (key.find('.') != std::string_view::npos)
 		{
-			static constexpr auto maxVersions = 16u;
-			bufferDesc.setIsVolatile(true);
-			bufferDesc.setMaxVersions(maxVersions);
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::View::At",
+				                "Nested keys are not supported in At(): " + std::string{ key } };
 		}
 
-		m_buf = device->createBuffer(bufferDesc);
+		auto  joined = std::format("{}.{}", m_key, key);
+		auto& entry  = m_parent->GetLayoutEntry(joined);
+		return View{ m_totalOffset + entry.relativeOffset, m_parent, joined };
 	}
 
-	DynamicBufferItem::View
+	DynamicConstantBuffer::View
+	DynamicConstantBuffer::View::At(uint32_t index) const
+	{
+		if (IsNull())
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::View::At",
+				                "Cannot at using a null view" };
+
+		auto& entry = m_parent->GetLayoutEntry(m_key);
+
+		if (index >= entry.count)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::View::At",
+				                "Index out of range for entry: " + m_key };
+		}
+
+		if (entry.count == 1)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::View::At",
+				                "Cannot index a non-array entry: " + m_key };
+		}
+
+		return View{ m_totalOffset + index * entry.stride, m_parent, m_key };
+	}
+
+	DynamicConstantBuffer::View
+	DynamicConstantBuffer::View::operator[](std::string_view name) noexcept
+	{
+		try
+		{
+			return At(name);
+		}
+		catch (...)
+		{
+			return View{};
+		}
+	}
+
+	DynamicConstantBuffer::View
+	DynamicConstantBuffer::View::operator[](uint32_t idx) noexcept
+	{
+		try
+		{
+			return At(idx);
+		}
+		catch (...)
+		{
+			return View{};
+		}
+	}
+
+	const LayoutEntry&
+	DynamicConstantBuffer::GetLayoutEntry(std::string_view name) const
+	{
+		if (auto it = m_layoutMap.find(name); it != m_layoutMap.end())
+		{
+			return it->second;
+		}
+
+		throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			                "DynamicConstantBuffer::GetLayoutEntry",
+			                "Could not find entry" };
+	}
+
+	DynamicConstantBuffer::View
 	DynamicConstantBuffer::operator[](std::string_view name) noexcept
 	{
-		return DynamicBuffer::operator[](0)[name];
+		try
+		{
+			return At(name);
+		}
+		catch (...)
+		{
+			return View{};
+		}
 	}
 
-	DynamicBufferItem::View
-	DynamicConstantBuffer::At(std::string_view name)
+	const DynamicConstantBuffer::View
+	DynamicConstantBuffer::At(std::string_view name) const
 	{
-		return operator[](0).At(name);
+		if (name.find('.') != std::string_view::npos)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::At",
+				                "Nested keys are not supported in At(): " + std::string{ name } };
+		}
+
+		auto& entry = GetLayoutEntry(name);
+		return View{ entry.relativeOffset,
+			         const_cast<gfx::DynamicConstantBuffer*>(this),
+			         std::string(name) };
 	}
 
 	nvrhi::BindingLayoutItem
 	DynamicConstantBuffer::GetBindingLayoutItem(uint32_t slot) const noexcept
 	{
-		if (GetDesc().GetUpdateFrequency() == DynamicBufferDesc::UpdateFrequency::kPerDraw)
+		if (GetUpdateFrequency() == UpdateFrequency::kPerDraw)
 		{
 			return nvrhi::BindingLayoutItem::VolatileConstantBuffer(slot);
 		}
@@ -214,19 +367,7 @@ namespace gfx
 	nvrhi::BindingSetItem
 	DynamicConstantBuffer::GetBindingSetItem(uint32_t slot) const noexcept
 	{
-		return nvrhi::BindingSetItem::ConstantBuffer(slot, m_buf);
-	}
-
-	DynamicBufferDesc
-	DynamicConstantBufferDesc::ToDynamicBufferDesc() const
-	{
-		auto desc = DynamicBufferDesc{};
-		desc.SetName(name).SetAlignment(16);
-
-		auto ctx = BuildDynamicBufferContext{};
-		root->BuildDynamicBufferDesc(desc, ctx);
-
-		return desc;
+		return nvrhi::BindingSetItem::ConstantBuffer(slot, GetBufferHandle());
 	}
 
 	DynamicConstantBufferDesc&
@@ -239,6 +380,19 @@ namespace gfx
 				                "Struct name cannot be empty" };
 		}
 		root->AddNode(name, std::make_unique<StructNode>(name));
+		return *this;
+	}
+
+	DynamicConstantBufferDesc&
+	DynamicConstantBufferDesc::AddStructArray(std::string_view name, uint32_t count)
+	{
+		if (name.empty())
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBufferDesc::AddStructArray",
+				                "Struct name cannot be empty" };
+		}
+		root->AddNode(name, std::make_unique<StructArrayNode>(name, count));
 		return *this;
 	}
 

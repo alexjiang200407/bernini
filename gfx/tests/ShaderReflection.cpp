@@ -104,7 +104,7 @@ TEST_CASE("VertexLayoutGen", "[vertex_layout_gen][shader_reflection][dynamic_ver
 		.AddElement("TANGENT", gfx::ElementType::kFloat4)
 		.SetName("Test");
 
-	auto dvb = gfx::DynamicVertexBuffer{ device, dvbDesc, 10 };
+	auto dvb = gfx::DynamicVertexBuffer{ device, std::move(dvbDesc), 10 };
 
 	for (int i = 0; i < 10; i++)
 	{

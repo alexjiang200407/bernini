@@ -81,7 +81,7 @@ namespace gfx
 			.SetName("Sphere Geometry Vertex Buffer");
 
 		uint32_t            size = static_cast<uint32_t>(vertices.size());
-		DynamicVertexBuffer vb{ m_device, desc, size };
+		DynamicVertexBuffer vb{ m_device, std::move(desc), size };
 
 		for (uint32_t i = 0; i < size; ++i)
 		{

@@ -9,7 +9,7 @@ namespace
 	generateMaterialConstantBufDesc(std::string_view name, nvrhi::ShaderHandle shader)
 	{
 		auto desc = DynamicConstantBufferDesc{};
-		desc.SetName(name).SetUpdateFrequency(DynamicBufferDesc::UpdateFrequency::kPerMaterial);
+		desc.SetName(name).SetUpdateFrequency(UpdateFrequency::kPerMaterial);
 
 		auto cbufInputs = getConstantBufferInputs(shader);
 		for (const auto& cbufInput : cbufInputs)
