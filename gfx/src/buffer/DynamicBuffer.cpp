@@ -4,34 +4,20 @@ namespace gfx
 {
 
 	void
-	DynamicBuffer::Init(
-		nvrhi::DeviceHandle device,
-		uint32_t            totalSize,
-		UpdateFrequency     updateFreq,
-		std::string_view    name)
+	DynamicBuffer::Init(nvrhi::DeviceHandle device, const nvrhi::BufferDesc& bufferDesc)
 	{
 		assert(device.Get() != nullptr);
 		assert(!Initialized() && "DynamicBuffer::Init called twice");
 
-		m_name          = std::string(name);
-		auto bufferDesc = nvrhi::BufferDesc{};
-		bufferDesc.setByteSize(totalSize)
-			.setIsVertexBuffer(true)
-			.setInitialState(nvrhi::ResourceStates::VertexBuffer)
-			.setKeepInitialState(false)
-			.setDebugName(m_name);
-
-		m_buf             = device->createBuffer(bufferDesc);
-		m_updateFrequency = updateFreq;
-		m_totalSize       = totalSize;
-		m_data            = std::make_unique<std::byte[]>(m_totalSize);
-		std::memset(m_data.get(), 0, m_totalSize);
+		m_bufferDesc = bufferDesc;
+		m_buf        = device->createBuffer(bufferDesc);
+		m_data       = std::make_unique<std::byte[]>(m_bufferDesc.byteSize);
+		std::memset(m_data.get(), 0, m_bufferDesc.byteSize);
 	}
 
 	DynamicBuffer::DynamicBuffer(DynamicBuffer&& other) noexcept :
 		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data)),
-		m_totalSize(std::exchange(other.m_totalSize, 0)),
-		m_updateFrequency(other.m_updateFrequency), m_name(std::move(other.m_name))
+		m_bufferDesc{ std::move(other.m_bufferDesc) }
 	{}
 
 	DynamicBuffer&
@@ -41,11 +27,9 @@ namespace gfx
 		{
 			Release();
 
-			m_buf             = std::move(other.m_buf);
-			m_data            = std::move(other.m_data);
-			m_totalSize       = std::exchange(other.m_totalSize, 0);
-			m_updateFrequency = std::exchange(other.m_updateFrequency, UpdateFrequency::kPerFrame);
-			m_name            = std::move(other.m_name);
+			m_buf        = std::move(other.m_buf);
+			m_data       = std::move(other.m_data);
+			m_bufferDesc = std::move(other.m_bufferDesc);
 		}
 		return *this;
 	}
@@ -54,7 +38,7 @@ namespace gfx
 	DynamicBuffer::Update(nvrhi::CommandListHandle cmdList) noexcept
 	{
 		assert(m_buf.Get());
-		cmdList->writeBuffer(m_buf, m_data.get(), m_totalSize);
+		cmdList->writeBuffer(m_buf, m_data.get(), m_bufferDesc.byteSize);
 	}
 
 	bool
@@ -67,7 +51,7 @@ namespace gfx
 	DynamicBuffer::Release() noexcept
 	{
 		m_data.reset();
-		m_totalSize = 0;
+		m_bufferDesc = {};
 		m_buf.Reset();
 	}
 }

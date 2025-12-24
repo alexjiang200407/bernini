@@ -236,7 +236,19 @@ namespace gfx
 		auto ctx = DynamicConstantBufferDesc::BuildLayoutMapContext{};
 		elementDesc.root->BuildLayoutMap(&m_layoutMap, ctx);
 		auto totalSize = align(ctx.offset, 16u);
-		DynamicBuffer::Init(device, totalSize, elementDesc.updateFrequency, elementDesc.name);
+
+		auto desc = nvrhi::BufferDesc{};
+		desc.setByteSize(totalSize)
+			.setIsConstantBuffer(true)
+			.setDebugName(elementDesc.name)
+			.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
+
+		if (elementDesc.updateFrequency == UpdateFrequency::kPerFrame)
+		{
+			desc.setIsVolatile(true);
+		}
+
+		DynamicBuffer::Init(device, desc);
 	}
 
 	DynamicConstantBuffer::View
@@ -357,7 +369,7 @@ namespace gfx
 	nvrhi::BindingLayoutItem
 	DynamicConstantBuffer::GetBindingLayoutItem(uint32_t slot) const noexcept
 	{
-		if (GetUpdateFrequency() == UpdateFrequency::kPerDraw)
+		if (IsVolatile())
 		{
 			return nvrhi::BindingLayoutItem::VolatileConstantBuffer(slot);
 		}

@@ -263,11 +263,18 @@ namespace gfx
 		DynamicBufferDesc&& elementDesc,
 		uint32_t            count)
 	{
-		DynamicBuffer::Init(
-			device,
-			elementDesc.GetTotalSize() * count,
-			elementDesc.updateFrequency,
-			elementDesc.name);
+		auto desc = nvrhi::BufferDesc{};
+		desc.setByteSize(elementDesc.GetTotalSize() * count)
+			.setIsVertexBuffer(true)
+			.setInitialState(nvrhi::ResourceStates::VertexBuffer)
+			.setDebugName(elementDesc.name);
+
+		if (elementDesc.updateFrequency == UpdateFrequency::kPerDraw)
+		{
+			desc.setIsVolatile(true);
+		}
+
+		DynamicBuffer::Init(device, desc);
 
 		m_elements = std::move(elementDesc.elements);
 		m_count    = count;
