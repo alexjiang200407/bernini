@@ -384,6 +384,9 @@ TEST_CASE("Constant buffer struct", "[dynamic_constant_buffer][dynamic_buffer][s
 
 		REQUIRE_THROWS_AS(cb.At("Transform").At("scale"), core::except::BerniniException);
 		REQUIRE_THROWS_AS(cb.At("NonExistent").At("value"), core::except::BerniniException);
+
+		REQUIRE_NOTHROW(cb["Transform"]["scale"]);
+		REQUIRE_NOTHROW(cb["NonExistent"]["value"]);
 	}
 
 	SECTION("Element or struct names containing dot should throw")

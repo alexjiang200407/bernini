@@ -23,7 +23,7 @@ namespace gfx
 		std::string_view
 		GetName() const noexcept
 		{
-			return m_name;
+			return m_bufferDesc.debugName;
 		}
 
 		[[nodiscard]] operator nvrhi::BufferHandle() const noexcept { return m_buf; }
@@ -52,32 +52,26 @@ namespace gfx
 		}
 
 		[[nodiscard]]
-		UpdateFrequency
-		GetUpdateFrequency() const noexcept
-		{
-			return m_updateFrequency;
-		}
-
-		[[nodiscard]]
 		uint32_t
 		GetTotalSize() const noexcept
 		{
-			return m_totalSize;
+			return m_bufferDesc.byteSize;
 		}
 
 	protected:
 		void
-		Init(
-			nvrhi::DeviceHandle device,
-			uint32_t            totalSize,
-			UpdateFrequency     updateFreq,
-			std::string_view    name);
+		Init(nvrhi::DeviceHandle device, const nvrhi::BufferDesc& bufferDesc);
+
+		[[nodiscard]]
+		bool
+		IsVolatile() const noexcept
+		{
+			return m_bufferDesc.isVolatile;
+		}
 
 	private:
-		std::string                  m_name;
-		UpdateFrequency              m_updateFrequency = UpdateFrequency::kPerFrame;
+		nvrhi::BufferDesc            m_bufferDesc;
 		nvrhi::BufferHandle          m_buf;
 		std::unique_ptr<std::byte[]> m_data;
-		uint32_t                     m_totalSize = 0u;
 	};
 }
