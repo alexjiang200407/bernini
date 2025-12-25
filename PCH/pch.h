@@ -5,6 +5,7 @@
 #include <bitset>
 #include <cassert>
 #include <chrono>
+#include <concepts>
 #include <execution>
 #include <filesystem>
 #include <format>
@@ -18,6 +19,7 @@
 #include <optional>
 #include <queue>
 #include <random>
+#include <ranges>
 #include <set>
 #include <source_location>
 #include <span>
