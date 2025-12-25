@@ -7,9 +7,6 @@ namespace gfx
 	{
 	public:
 		MaterialConstantBuffer() noexcept = default;
-		MaterialConstantBuffer(
-			nvrhi::DeviceHandle device,
-			std::string_view    name,
-			nvrhi::ShaderHandle shader);
+		MaterialConstantBuffer(nvrhi::DeviceHandle device, std::string_view shader);
 	};
 }
