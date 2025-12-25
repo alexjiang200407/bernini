@@ -13,3 +13,15 @@ drawFrame(Gfx graphics, GfxCamera camera)
 		return GFX_RESULT_OK;
 	});
 }
+
+GfxResult
+createGraphics(GfxOptions options, Gfx* out)
+{
+	return gfx::ffi::apiInvoke([=]() -> GfxResult {
+		gfx::ffi::validatePtr(out, "out");
+		out->destroy = gfx::ffi::deleteThunk;
+
+		out->data = gfx::IGraphics::Create(options);
+		return GFX_RESULT_OK;
+	});
+}
