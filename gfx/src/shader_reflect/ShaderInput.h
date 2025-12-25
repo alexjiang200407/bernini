@@ -1,4 +1,5 @@
 #pragma once
+#include "buffer/DynamicConstantBufferDesc.h"
 #include "buffer/ElementType.h"
 
 namespace gfx
@@ -50,7 +51,9 @@ namespace gfx
 	std::vector<VertexAttribute>
 	getVertexAttributes(nvrhi::ShaderHandle shader);
 
-	std::vector<ConstantBufferInput>
-	getConstantBufferInputs(nvrhi::ShaderHandle shader);
+	DynamicConstantBufferDesc
+	getDynamicConstantBufferDesc(
+		std::span<const std::byte> shaderByteCode,
+		uint32_t                   constantBufferIdx);
 
 }

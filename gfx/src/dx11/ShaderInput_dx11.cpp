@@ -43,6 +43,17 @@ namespace
 
 	void
 	getReflectorAndShaderDesc(
+		std::span<const std::byte>                  shaderByteCode,
+		nvrhi::RefCountPtr<ID3D11ShaderReflection>& outReflector,
+		D3D11_SHADER_DESC&                          outDesc)
+	{
+		D3DReflect(shaderByteCode.data(), shaderByteCode.size(), IID_PPV_ARGS(&outReflector)) >>
+			dx::dxErrorChecker;
+		outReflector->GetDesc(&outDesc);
+	}
+
+	void
+	getReflectorAndShaderDesc(
 		nvrhi::ShaderHandle                         shader,
 		nvrhi::RefCountPtr<ID3D11ShaderReflection>& outReflector,
 		D3D11_SHADER_DESC&                          outDesc)
@@ -51,8 +62,10 @@ namespace
 		auto size           = size_t{};
 
 		shader->getBytecode(&shaderByteCode, &size);
-		D3DReflect(shaderByteCode, size, IID_PPV_ARGS(&outReflector)) >> dx::dxErrorChecker;
-		outReflector->GetDesc(&outDesc);
+		getReflectorAndShaderDesc(
+			std::span(reinterpret_cast<const std::byte*>(shaderByteCode), size),
+			outReflector,
+			outDesc);
 	}
 
 	nvrhi::Format
@@ -79,6 +92,66 @@ namespace
 		throw GfxException{ GFX_RESULT_ERROR_SHADER_REFLECT,
 			                "Shader Reflection Error",
 			                description };
+	}
+
+	void
+	emitType(
+		gfx::DynamicConstantBufferDesc& desc,
+		ID3D11ShaderReflectionType*     type,
+		const D3D11_SHADER_TYPE_DESC&   typeDesc,
+		std::string_view                path)
+	{
+		if (typeDesc.Class == D3D_SVC_STRUCT)
+		{
+			desc.AddStruct(path);
+
+			for (UINT i = 0; i < typeDesc.Members; ++i)
+			{
+				auto* memberType = type->GetMemberTypeByIndex(i);
+				auto  memberDesc = D3D11_SHADER_TYPE_DESC{};
+				memberType->GetDesc(&memberDesc);
+
+				const char* memberName = type->GetMemberTypeName(i);
+
+				std::string childPath = std::string(path) + "." + memberName;
+
+				emitType(desc, memberType, memberDesc, childPath);
+			}
+			return;
+		}
+
+		if (typeDesc.Elements > 0)
+		{
+			if (typeDesc.Class == D3D_SVC_STRUCT)
+			{
+				desc.AddStructArray(path, typeDesc.Elements);
+
+				auto* elemType = type->GetSubType();
+				auto  elemDesc = D3D11_SHADER_TYPE_DESC{};
+				elemType->GetDesc(&elemDesc);
+
+				for (UINT i = 0; i < elemDesc.Members; ++i)
+				{
+					auto* memberType = elemType->GetMemberTypeByIndex(i);
+					auto  memberDesc = D3D11_SHADER_TYPE_DESC{};
+					memberType->GetDesc(&memberDesc);
+
+					const char* memberName = elemType->GetMemberTypeName(i);
+
+					emitType(desc, memberType, memberDesc, std::string(path) + "." + memberName);
+				}
+			}
+			else
+			{
+				desc.AddElementArray(
+					path,
+					shaderVarTypeToConstantBufferType(typeDesc),
+					typeDesc.Elements);
+			}
+			return;
+		}
+
+		desc.AddElement(path, shaderVarTypeToConstantBufferType(typeDesc));
 	}
 }
 
@@ -144,54 +217,56 @@ namespace gfx
 		return vertexInputs;
 	}
 
-	std::vector<ConstantBufferInput>
-	getConstantBufferInputs(nvrhi::ShaderHandle shader)
+	gfx::DynamicConstantBufferDesc
+	getDynamicConstantBufferDesc(
+		std::span<const std::byte> shaderBytes,
+		uint32_t                   constantBufferSlot)
 	{
 		auto reflector  = nvrhi::RefCountPtr<ID3D11ShaderReflection>{};
 		auto shaderDesc = D3D11_SHADER_DESC{};
-		getReflectorAndShaderDesc(shader, reflector, shaderDesc);
+		getReflectorAndShaderDesc(shaderBytes, reflector, shaderDesc);
 
-		auto cbufCount = shaderDesc.ConstantBuffers;
-		auto cbufs     = std::vector<gfx::ConstantBufferInput>{};
+		gfx::DynamicConstantBufferDesc        desc;
+		ID3D11ShaderReflectionConstantBuffer* cbReflect = nullptr;
 
-		for (UINT i = 0; i < cbufCount; ++i)
+		for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
 		{
-			auto cbDesc = D3D11_SHADER_BUFFER_DESC{};
-			reflector->GetConstantBufferByIndex(i)->GetDesc(&cbDesc);
+			D3D11_SHADER_INPUT_BIND_DESC bindDesc{};
+			reflector->GetResourceBindingDesc(i, &bindDesc);
 
-			for (UINT cbIdx = 0; cbIdx < cbDesc.Variables; ++cbIdx)
+			if (bindDesc.Type == D3D_SIT_CBUFFER && bindDesc.BindPoint == constantBufferSlot)
 			{
-				auto*               cbReflect = reflector->GetConstantBufferByIndex(cbIdx);
-				ConstantBufferInput cb;
-				cb.name = cbDesc.Name;
-				cb.size = cbDesc.Size;
-				cb.slot = i;
-				cb.space;
-
-				auto cbDesc = D3D11_SHADER_BUFFER_DESC{};
-				cbReflect->GetDesc(&cbDesc);
-
-				for (UINT varIdx = 0; varIdx < cbDesc.Variables; ++varIdx)
-				{
-					auto* var         = cbReflect->GetVariableByIndex(varIdx);
-					auto  varDesc     = D3D11_SHADER_VARIABLE_DESC{};
-					auto* varType     = var->GetType();
-					auto  varTypeDesc = D3D11_SHADER_TYPE_DESC{};
-
-					varType->GetDesc(&varTypeDesc);
-					var->GetDesc(&varDesc);
-
-					cb.entries.emplace_back(
-						varDesc.Name,
-						varDesc.StartOffset,
-						shaderVarTypeToConstantBufferType(varTypeDesc));
-				}
-
-				cbufs.push_back(std::move(cb));
+				cbReflect = reflector->GetConstantBufferByName(bindDesc.Name);
+				break;
 			}
 		}
 
-		return cbufs;
+		if (!cbReflect)
+		{
+			return desc;
+		}
+
+		D3D11_SHADER_BUFFER_DESC cbDesc{};
+		cbReflect->GetDesc(&cbDesc);
+
+		if (cbDesc.Name)
+			desc.SetName(cbDesc.Name);
+
+		for (UINT varIdx = 0; varIdx < cbDesc.Variables; ++varIdx)
+		{
+			auto* var = cbReflect->GetVariableByIndex(varIdx);
+
+			D3D11_SHADER_VARIABLE_DESC varDesc{};
+			var->GetDesc(&varDesc);
+
+			auto*                  type = var->GetType();
+			D3D11_SHADER_TYPE_DESC typeDesc{};
+			type->GetDesc(&typeDesc);
+
+			emitType(desc, type, typeDesc, varDesc.Name);
+		}
+
+		return desc;
 	}
 
 }

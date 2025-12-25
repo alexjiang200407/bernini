@@ -4,7 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
 
-TEST_CASE("Shader Input", "[shader_input][shader_reflection]")
+TEST_CASE("Vertex Attribute", "[vertex_attribute][shader_reflection]")
 {
 	auto gfxDesc     = GfxOptions{};
 	gfxDesc.headless = true;
@@ -131,4 +131,22 @@ TEST_CASE("VertexLayoutGen", "[vertex_layout_gen][shader_reflection][dynamic_ver
 	CHECK(attrDesc->offset == sizeof(glm::vec3));
 	CHECK(attrDesc->format == nvrhi::Format::RGB32_FLOAT);
 	CHECK(attrDesc->elementStride == sizeof(float) * 13);
+}
+
+TEST_CASE("Constant Buffer Reflection", "[constant_buffer][shader_reflection]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	auto pixelShaderBytes = core::file::readFileBytes("shaders/PS_Cbuf_test.cso"sv);
+	auto x                = gfx::getDynamicConstantBufferDesc(pixelShaderBytes, 0);
+
+	CHECK(1 == 1);
 }

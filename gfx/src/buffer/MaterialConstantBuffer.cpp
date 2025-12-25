@@ -1,35 +1,18 @@
 #include "buffer/MaterialConstantBuffer.h"
+#include "BindingSlots.h"
 #include "shader_reflect/ShaderInput.h"
+#include <core/file/file.h>
 
-namespace
+namespace gfx
 {
-	using namespace gfx;
-
-	DynamicConstantBufferDesc
-	generateMaterialConstantBufDesc(std::string_view name, nvrhi::ShaderHandle shader)
+	MaterialConstantBuffer::MaterialConstantBuffer(
+		nvrhi::DeviceHandle device,
+		std::string_view    pixelShaderPath)
 	{
-		auto desc = DynamicConstantBufferDesc{};
-		desc.SetName(name).SetUpdateFrequency(UpdateFrequency::kPerMaterial);
+		auto shaderByteCode = core::file::readFileBytes(pixelShaderPath);
+		auto desc = getDynamicConstantBufferDesc(shaderByteCode, BindingSlots::PerMaterialSpace);
+		desc.SetUpdateFrequency(UpdateFrequency::kPerMaterial);
 
-		auto cbufInputs = getConstantBufferInputs(shader);
-		for (const auto& cbufInput : cbufInputs)
-		{
-			if (cbufInput.name == name)
-			{
-				for (const auto& entry : cbufInput.entries)
-				{
-					desc.AddElement(entry.name, entry.type);
-				}
-			}
-		}
-		return desc;
+		Init(device, desc);
 	}
-
 }
-
-gfx::MaterialConstantBuffer::MaterialConstantBuffer(
-	nvrhi::DeviceHandle device,
-	std::string_view    name,
-	nvrhi::ShaderHandle shader) :
-	DynamicConstantBuffer{ device, generateMaterialConstantBufDesc(name, shader) }
-{}

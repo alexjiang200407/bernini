@@ -2,94 +2,13 @@
 #include "ElementType.h"
 #include "GfxException.h"
 #include "buffer/DynamicBuffer.h"
+#include "buffer/DynamicConstantBufferDesc.h"
 #include "buffer/UpdateFrequency.h"
 #include <core/str/str.h>
 #include <core/type_traits.h>
 
 namespace gfx
 {
-	struct LayoutEntry
-	{
-		uint32_t relativeOffset;
-		uint32_t elemSize;
-		uint32_t stride;  // 0 if not array
-		uint32_t count;   // 1 if not array
-	};
-
-	using LayoutMap = std::
-		unordered_map<std::string, LayoutEntry, core::str::StringViewHash, core::str::StringViewEq>;
-
-	class DynamicConstantBufferDesc
-	{
-	private:
-		struct BuildLayoutMapContext
-		{
-			uint32_t offset       = 0;
-			uint32_t parentOffset = 0;
-		};
-
-		class Node
-		{
-		public:
-			virtual ~Node();
-
-			virtual void
-			AddNode(std::string_view path, std::unique_ptr<Node>&& toAdd) = 0;
-
-			virtual void
-			BuildLayoutMap(LayoutMap*, BuildLayoutMapContext&) const noexcept = 0;
-		};
-
-		class StructNode;
-		class ElementNode;
-		class ElementArrayNode;
-		class StructArrayNode;
-
-	public:
-		constexpr static uint32_t CONSTANT_BUFFER_ALIGNMENT = 16;
-
-		DynamicConstantBufferDesc();
-
-		DynamicConstantBufferDesc&
-		AddStruct(std::string_view name);
-
-		DynamicConstantBufferDesc&
-		AddElementArray(std::string_view name, ElementType type, uint32_t count);
-
-		DynamicConstantBufferDesc&
-		AddStructArray(std::string_view name, uint32_t count);
-
-		DynamicConstantBufferDesc&
-		AddElement(std::string_view name, ElementType format);
-
-		DynamicConstantBufferDesc&
-		SetName(std::string_view name)
-		{
-			this->name = name;
-			return *this;
-		}
-
-		std::string_view
-		GetName() const noexcept
-		{
-			return name;
-		}
-
-		DynamicConstantBufferDesc&
-		SetUpdateFrequency(UpdateFrequency updateFrequency)
-		{
-			this->updateFrequency = updateFrequency;
-			return *this;
-		}
-
-	private:
-		std::unique_ptr<Node> root;
-		std::string           name;
-		UpdateFrequency       updateFrequency = UpdateFrequency::kPerFrame;
-
-		friend class DynamicConstantBuffer;
-	};
-
 	class DynamicConstantBuffer : public DynamicBuffer
 	{
 	public:
@@ -166,6 +85,31 @@ namespace gfx
 				return m_key == "" || m_parent == nullptr;
 			}
 
+			[[nodiscard]] bool
+			IsValid() const noexcept
+			{
+				return !IsNull();
+			}
+
+			[[nodiscard]] uint32_t
+			Size() const noexcept
+			{
+				if (IsNull())
+					return 0;
+				auto& entry = m_parent->GetLayoutEntry(m_key);
+
+				return entry.elemSize * entry.count;
+			}
+
+			[[nodiscard]] bool
+			IsArray() const noexcept
+			{
+				if (IsNull())
+					return false;
+				auto& entry = m_parent->GetLayoutEntry(m_key);
+				return entry.stride != 0;
+			}
+
 			View
 			operator[](std::string_view name) noexcept;
 
@@ -218,8 +162,13 @@ namespace gfx
 
 		DynamicConstantBuffer(DynamicConstantBuffer&&) noexcept = default;
 
+	protected:
+		void
+		Init(nvrhi::DeviceHandle device, const DynamicConstantBufferDesc& elementDesc);
+
 	private:
 		LayoutMap m_layoutMap;
+
 		friend class View;
 	};
 }

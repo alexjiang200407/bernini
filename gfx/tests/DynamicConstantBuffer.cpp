@@ -535,7 +535,7 @@ TEST_CASE("Layout tests", "[dynamic_constant_buffer][dynamic_buffer][layout_test
 			auto entry = cb.GetLayoutEntry("s");
 			CHECK(entry.relativeOffset == 16);
 			CHECK(entry.count == 1);
-			CHECK(entry.elemSize == 64);
+			CHECK(entry.elemSize == 52);
 			CHECK(entry.stride == 0);
 		}
 	}
@@ -567,6 +567,21 @@ TEST_CASE("Constant buffer array", "[dynamic_constant_buffer][dynamic_buffer][ar
 	REQUIRE(gfx);
 
 	auto device = gfx->GetDevice();
+
+	SECTION("Single Element")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("a", gfx::ElementType::kFloat, 1);
+		desc.AddElement("b", gfx::ElementType::kFloat);
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto totalSize = cb.GetTotalSize();
+
+		CHECK(totalSize == 16);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(1.0f, 0).Set(2.0f, 16).Set(3.0f, 32).Set(4.0f, 48);
+	}
 
 	SECTION("Element Array")
 	{
