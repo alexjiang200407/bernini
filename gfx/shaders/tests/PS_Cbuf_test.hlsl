@@ -4,7 +4,7 @@ cbuffer TestCBuffer : register(b0)
     float4 testColor;
 };
 
-cbuffer TestMaterialCBuffer : register(b2)
+cbuffer TestMaterialCBuffer : register(b16)
 {
     float4 a;
     float2 b;

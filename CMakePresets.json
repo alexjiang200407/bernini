@@ -36,6 +36,14 @@
       }
     },
     {
+      "name": "dx12",
+      "hidden": true,
+      "cacheVariables": {
+        "RENDERER_BACKEND": "DX12",
+        "NVRHI_WITH_DX12": "ON"
+      }
+    },
+    {
       "name": "msvc",
       "hidden": true,
       "cacheVariables": {
@@ -59,8 +67,8 @@
       }
     },
     {
-      "name": "windows-vs2022-msvc-debug",
-      "displayName": "Windows MSVC Debug",
+      "name": "windows-vs2022-msvc-dx11-debug",
+      "displayName": "Windows MSVC Debug VS2022 - DirectX 11",
       "binaryDir": "${sourceDir}/build/msvc-debug",
       "inherits": [
         "vcpkg",
@@ -72,8 +80,8 @@
       ]
     },
     {
-      "name": "windows-vs2022-msvc-release",
-      "displayName": "Windows MSVC Release",
+      "name": "windows-vs2022-msvc-dx11-release",
+      "displayName": "Windows MSVC Release VS2022 - DirectX 11",
       "binaryDir": "${sourceDir}/build/msvc-release",
       "inherits": [
         "vcpkg",
@@ -85,8 +93,8 @@
       ]
     },
     {
-      "name": "windows-vs2026-msvc-debug",
-      "displayName": "Windows MSVC Debug VS2026",
+      "name": "windows-vs2026-msvc-dx11-debug",
+      "displayName": "Windows MSVC Debug VS2026 - DirectX 11",
       "binaryDir": "${sourceDir}/build/msvc-debug",
       "inherits": [
         "vcpkg",
@@ -98,8 +106,8 @@
       ]
     },
     {
-      "name": "windows-vs2026-msvc-release",
-      "displayName": "Windows MSVC Release VS2026",
+      "name": "windows-vs2026-msvc-dx11-release",
+      "displayName": "Windows MSVC Release VS2026 - DirectX 11",
       "binaryDir": "${sourceDir}/build/msvc-release",
       "inherits": [
         "vcpkg",
@@ -107,29 +115,102 @@
         "vs2026",
         "msvc",
         "dx11",
+        "release"
+      ]
+    },
+    {
+      "name": "windows-vs2022-msvc-dx12-debug",
+      "displayName": "Windows MSVC Debug VS2022 - DirectX 12",
+      "binaryDir": "${sourceDir}/build/msvc-debug",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "vs2022",
+        "msvc",
+        "dx12",
+        "debug"
+      ]
+    },
+    {
+      "name": "windows-vs2022-msvc-dx12-release",
+      "displayName": "Windows MSVC Release VS2022 - DirectX 12",
+      "binaryDir": "${sourceDir}/build/msvc-release",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "vs2022",
+        "msvc",
+        "dx12",
+        "release"
+      ]
+    },
+    {
+      "name": "windows-vs2026-msvc-dx12-debug",
+      "displayName": "Windows MSVC Debug VS2026 - DirectX 12",
+      "binaryDir": "${sourceDir}/build/msvc-debug",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "vs2026",
+        "msvc",
+        "dx12",
+        "debug"
+      ]
+    },
+    {
+      "name": "windows-vs2026-msvc-dx12-release",
+      "displayName": "Windows MSVC Release VS2026 - DirectX 12",
+      "binaryDir": "${sourceDir}/build/msvc-release",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "vs2026",
+        "msvc",
+        "dx12",
         "release"
       ]
     }
+
   ],
   "buildPresets": [
     {
-      "name": "windows-vs2022-msvc-release",
-      "configurePreset": "windows-vs2022-msvc-release",
+      "name": "windows-vs2022-msvc-dx11-release",
+      "configurePreset": "windows-vs2022-msvc-dx11-release",
       "configuration": "Release"
     },
     {
-      "name": "windows-vs2022-msvc-debug",
-      "configurePreset": "windows-vs2022-msvc-debug",
+      "name": "windows-vs2022-msvc-dx11-debug",
+      "configurePreset": "windows-vs2022-msvc-dx11-debug",
       "configuration": "Debug"
     },
     {
-      "name": "windows-vs2026-msvc-release",
-      "configurePreset": "windows-vs2026-msvc-release",
+      "name": "windows-vs2026-msvc-dx11-release",
+      "configurePreset": "windows-vs2026-msvc-dx11-release",
       "configuration": "Release"
     },
     {
-      "name": "windows-vs2026-msvc-debug",
-      "configurePreset": "windows-vs2026-msvc-debug",
+      "name": "windows-vs2026-msvc-dx11-debug",
+      "configurePreset": "windows-vs2026-msvc-dx11-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-vs2022-msvc-dx12-release",
+      "configurePreset": "windows-vs2022-msvc-dx12-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2022-msvc-dx12-debug",
+      "configurePreset": "windows-vs2022-msvc-dx12-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-vs2026-msvc-dx12-release",
+      "configurePreset": "windows-vs2026-msvc-dx12-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2026-msvc-dx12-debug",
+      "configurePreset": "windows-vs2026-msvc-dx12-debug",
       "configuration": "Debug"
     }
   ]

@@ -95,8 +95,8 @@ namespace gfx
 			nvrhi::BufferDesc{}
 				.setByteSize(static_cast<uint32_t>(sizeof(uint16_t) * indices.size()))
 				.setIsIndexBuffer(true)
-				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setKeepInitialState(false)
+				.setInitialState(nvrhi::ResourceStates::IndexBuffer)
+				.setKeepInitialState(true)
 				.setDebugName("Sphere Geometry Index Buffer"));
 
 		auto indexBufSz = sizeof(uint16_t) * retval->indexCount;

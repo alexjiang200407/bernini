@@ -22,11 +22,12 @@ namespace gfx
 		desc.setByteSize(totalSize)
 			.setIsConstantBuffer(true)
 			.setDebugName(elementDesc.name)
+			.setKeepInitialState(true)
 			.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
 
 		if (elementDesc.updateFrequency == UpdateFrequency::kPerFrame)
 		{
-			desc.setIsVolatile(true);
+			desc.setIsVolatile(true).setMaxVersions(16);
 		}
 
 		DynamicBuffer::Init(device, desc);

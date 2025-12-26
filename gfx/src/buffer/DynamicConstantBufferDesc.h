@@ -43,8 +43,6 @@ namespace gfx
 		class StructArrayNode;
 
 	public:
-		constexpr static uint32_t CONSTANT_BUFFER_ALIGNMENT = 16;
-
 		DynamicConstantBufferDesc();
 
 		DynamicConstantBufferDesc&

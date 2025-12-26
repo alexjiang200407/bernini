@@ -2,11 +2,47 @@
 
 namespace gfx
 {
+#ifdef RENDERER_DX11
+	constexpr uint32_t BINDING_SPACE_STRIDE = 8;
+
+	constexpr uint32_t
+	makeBindingID(uint16_t space, uint16_t slot) noexcept
+	{
+		return space * BINDING_SPACE_STRIDE + slot;
+	}
+
+	constexpr uint32_t
+	getBindingSpace(uint32_t bindingID) noexcept
+	{
+		return bindingID / BINDING_SPACE_STRIDE;
+	}
+
+	constexpr uint32_t
+	getBindingSlot(uint32_t bindingID) noexcept
+	{
+		return bindingID % BINDING_SPACE_STRIDE;
+	}
+
+#else
 	constexpr uint32_t
 	makeBindingID(uint16_t space, uint16_t slot) noexcept
 	{
 		return space << 16 | slot;
 	}
+
+	constexpr uint32_t
+	getBindingSpace(uint32_t bindingID) noexcept
+	{
+		return bindingID >> 16;
+	}
+
+	constexpr uint32_t
+	getBindingSlot(uint32_t bindingID) noexcept
+	{
+		return bindingID & 0xffff;
+	}
+
+#endif
 
 	namespace BindingSlots
 	{
@@ -28,18 +64,6 @@ namespace gfx
 		constexpr auto DIFFUSE_TEXTURE  = makeBindingID(BindingSlots::PerMaterialSpace, 0);
 		constexpr auto NORMAL_TEXTURE   = makeBindingID(BindingSlots::PerMaterialSpace, 1);
 		constexpr auto SPECULAR_TEXTURE = makeBindingID(BindingSlots::PerMaterialSpace, 2);
-	}
-
-	constexpr uint32_t
-	getBindingSpace(uint32_t bindingID) noexcept
-	{
-		return bindingID >> 16;
-	}
-
-	constexpr uint32_t
-	getBindingSlot(uint32_t bindingID) noexcept
-	{
-		return bindingID & 0xffff;
 	}
 
 	constexpr uint32_t TEXTURE_COUNT = 3;

@@ -266,12 +266,13 @@ namespace gfx
 		auto desc = nvrhi::BufferDesc{};
 		desc.setByteSize(elementDesc.GetTotalSize() * count)
 			.setIsVertexBuffer(true)
+			.setKeepInitialState(true)
 			.setInitialState(nvrhi::ResourceStates::VertexBuffer)
 			.setDebugName(elementDesc.name);
 
 		if (elementDesc.updateFrequency == UpdateFrequency::kPerDraw)
 		{
-			desc.setIsVolatile(true);
+			desc.setIsVolatile(true).setMaxVersions(16);
 		}
 
 		DynamicBuffer::Init(device, desc);

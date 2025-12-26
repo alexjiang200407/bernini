@@ -1,5 +1,3 @@
-include(${CMAKE_SOURCE_DIR}/cmake/target_force_include.cmake)
-
 file(GLOB_RECURSE GFX_COMMON_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -21,30 +19,9 @@ file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsl
 )
 
-if (MSVC)
-    foreach(SHADER ${SHADER_FILES})
-        get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
-        if(SHADER_NAME MATCHES "^VS_")
-            set_source_files_properties(${SHADER} PROPERTIES
-                VS_SHADER_TYPE "Vertex"
-                VS_SHADER_MODEL "5.0"
-                VS_SHADER_ENTRYPOINT "main"
-                VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
-                VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
-                VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:ON>
-            )
-        elseif(SHADER_NAME MATCHES "^PS_")
-            set_source_files_properties(${SHADER} PROPERTIES
-                VS_SHADER_TYPE "Pixel"
-                VS_SHADER_MODEL "5.0"
-                VS_SHADER_ENTRYPOINT "main"
-                VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
-                VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
-                VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:ON>
-            )
-        endif()
-    endforeach()
-endif()
+file(GLOB_RECURSE SHADER_INCLUDE_FILES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsli
+)
 
 find_package(glm CONFIG REQUIRED)
 
@@ -78,6 +55,9 @@ target_link_libraries(gfx_objects
 if (RENDERER_BACKEND STREQUAL "DX11")
     add_subdirectory(src/dx11)
     target_compile_definitions(gfx_objects PRIVATE RENDERER_BACKEND_DX11)
+elseif(RENDERER_BACKEND STREQUAL "DX12")
+    add_subdirectory(src/dx12)
+    target_compile_definitions(gfx_objects PRIVATE RENDERER_BACKEND_DX12)
 else()
     message(FATAL_ERROR "Unknown backend: ${RENDERER_BACKEND}")
 endif()
@@ -85,8 +65,109 @@ endif()
 add_library(gfx SHARED
     $<TARGET_OBJECTS:gfx_objects>
     ${SHADER_FILES}
+    ${SHADER_INCLUDE_FILES}
     ${GFX_SHARED_HEADERS}
 )
+
+if (RENDERER_BACKEND STREQUAL "DX11")
+    if(MSVC)
+        foreach(SHADER ${SHADER_FILES})
+            get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+
+            if(SHADER_NAME MATCHES "^VS_")
+                set_source_files_properties(${SHADER} PROPERTIES
+                    VS_SHADER_TYPE "Vertex"
+                    VS_SHADER_MODEL "${SHADER_MODEL}"
+                    VS_SHADER_ENTRYPOINT "main"
+                    VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
+                    VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
+                    VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:ON>
+                    VS_SHADER_FLAGS "/Qembed_debug"
+                )
+            elseif(SHADER_NAME MATCHES "^PS_")
+                set_source_files_properties(${SHADER} PROPERTIES
+                    VS_SHADER_TYPE "Pixel"
+                    VS_SHADER_MODEL "${SHADER_MODEL}"
+                    VS_SHADER_ENTRYPOINT "main"
+                    VS_SHADER_OBJECT_FILE_NAME "$(OutDir)shaders/%(Filename).cso"
+                    VS_SHADER_DISABLE_OPTIMIZATIONS $<$<CONFIG:Debug>:ON>
+                    VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:ON>
+                    VS_SHADER_FLAGS "/Qembed_debug"
+                )
+            endif()
+        endforeach()
+
+        foreach(SHADER_INCLUDE ${SHADER_INCLUDE_FILES})
+            set_source_files_properties(${SHADER_INCLUDE} PROPERTIES
+                VS_SHADER_TYPE "None"
+                HEADER_FILE_ONLY TRUE
+            )
+        endforeach()
+    else()
+        message(WARNING "Shader compilation is only supported on MSVC currently.")
+    endif()
+elseif (RENDERER_BACKEND STREQUAL "DX12")
+
+    find_program(DXC_EXECUTABLE
+        NAMES dxc.exe
+        DOC "DirectX Shader Compiler (DXC)"
+    )
+
+    if(NOT DXC_EXECUTABLE)
+        message(FATAL_ERROR "DXC not found. Make sure dxc.exe is in your PATH.")
+    else()
+        message(STATUS "Found DXC at ${DXC_EXECUTABLE}")
+    endif()
+
+    set(SHADER_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+    file(MAKE_DIRECTORY "${SHADER_OUT_DIR}")
+
+    set(DX12_SHADERS "")
+
+    foreach(SHADER ${SHADER_FILES})
+        get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+
+        if(SHADER_NAME MATCHES "^VS_")
+            set(SHADER_TYPE "vs")
+        elseif(SHADER_NAME MATCHES "^PS_")
+            set(SHADER_TYPE "ps")
+        elseif(SHADER_NAME MATCHES "^CS_")
+            set(SHADER_TYPE "cs")
+        else()
+            message(WARNING "Unknown shader type for ${SHADER_NAME}, skipping")
+            continue()
+        endif()
+
+        set(OUT_CSO "${SHADER_OUT_DIR}/${SHADER_NAME}.cso")
+
+        add_custom_command(
+            OUTPUT "${OUT_CSO}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUT_DIR}"
+            COMMAND ${DXC_EXECUTABLE}
+                    -T ${SHADER_TYPE}_6_0
+                    -Fo "${OUT_CSO}"
+                    -Zi
+                    -Qembed_debug
+                    "${SHADER}"
+            DEPENDS "${SHADER}"
+            COMMENT "Compiling DX12 shader ${SHADER_NAME} -> DXIL"
+            VERBATIM
+        )
+
+        list(APPEND DX12_SHADERS "${OUT_CSO}")
+    endforeach()
+
+    set_source_files_properties(${SHADER_FILES} PROPERTIES VS_TOOL_OVERRIDE "None")
+    set(GFX_SHADER_DIR "$<TARGET_FILE_DIR:gfx>/shaders")
+    add_custom_target(CopyDX12Shaders ALL
+        DEPENDS ${DX12_SHADERS}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${SHADER_OUT_DIR}"
+                "${GFX_SHADER_DIR}"
+        COMMENT "Copying DX12 shaders to gfx.dll folder"
+    )
+endif()
+
 
 target_include_directories(gfx
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -101,6 +182,15 @@ target_compile_definitions(gfx PUBLIC
 
 if (RENDERER_BACKEND STREQUAL "DX11")
     target_compile_definitions(gfx PRIVATE RENDERER_BACKEND_DX11)
+elseif(RENDERER_BACKEND STREQUAL "DX12")
+    target_compile_definitions(gfx PRIVATE RENDERER_BACKEND_DX12)
+
+    set(D3D_DLLS
+        "${CMAKE_SOURCE_DIR}/extern/d3d12_dlls/D3D12"
+        "${CMAKE_SOURCE_DIR}/extern/d3d12_dlls/dxcompiler.dll"
+    )
+
+    copy_to_target(gfx ITEMS ${D3D_DLLS})
 endif()
 
 if (BUILD_TESTS)
@@ -131,5 +221,7 @@ if (BUILD_TESTS)
 
     if (RENDERER_BACKEND STREQUAL "DX11")
         target_compile_definitions(gfx_tests PRIVATE RENDERER_BACKEND_DX11)
+    elseif(RENDERER_BACKEND STREQUAL "DX12")
+        target_compile_definitions(gfx_tests PRIVATE RENDERER_BACKEND_DX12)
     endif()
 endif()
