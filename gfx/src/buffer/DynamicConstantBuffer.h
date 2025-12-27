@@ -106,7 +106,7 @@ namespace gfx
 				if (IsNull())
 					return false;
 				auto& entry = m_parent->GetLayoutEntry(m_key);
-				return entry.stride != 0;
+				return entry.IsArray();
 			}
 
 			View
