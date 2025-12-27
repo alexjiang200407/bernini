@@ -3,7 +3,6 @@
 #include "GfxException.h"
 #include "buffer/DynamicBuffer.h"
 #include "buffer/DynamicConstantBufferDesc.h"
-#include "buffer/UpdateFrequency.h"
 #include <core/str/str.h>
 #include <core/type_traits.h>
 
@@ -129,6 +128,13 @@ namespace gfx
 		DynamicConstantBuffer(
 			nvrhi::DeviceHandle              device,
 			const DynamicConstantBufferDesc& elementDesc);
+
+		DynamicConstantBuffer(
+			nvrhi::DeviceHandle device,
+			std::string_view    shaderPath,
+			uint32_t            bindingSlot,
+			uint32_t            bindingSpace,
+			bool                isVolatile = false);
 
 		View
 		operator[](std::string_view name) noexcept;

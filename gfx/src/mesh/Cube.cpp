@@ -41,8 +41,8 @@ namespace gfx
 			nvrhi::BufferDesc{}
 				.setByteSize(indexBufSz)
 				.setIsIndexBuffer(true)
-				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setKeepInitialState(false)
+				.setInitialState(nvrhi::ResourceStates::IndexBuffer)
+				.setKeepInitialState(true)
 				.setDebugName("Primitive Geometry Index Buffer"));
 
 		for (uint32_t i = 0; i < size; ++i)

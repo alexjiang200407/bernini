@@ -1,7 +1,12 @@
-cbuffer CameraCB : register(b0)
+cbuffer CameraCB : register(b0, space0)
 {
     float4x4 viewMatrix;
     float4x4 projMatrix;
+};
+
+cbuffer ModelCB : register(b0, space1)
+{
+    float4x4 modelTransform;
 };
 
 struct VSInput
@@ -18,8 +23,13 @@ VSOutput main(VSInput input)
 {
     VSOutput output;
 
-    float4 worldPos = float4(input.position, 1.0f);
+    float4 localPos = float4(input.position, 1.0f);
 
-    output.position = mul(projMatrix, mul(viewMatrix, worldPos));
+    float4 worldPos = mul(modelTransform, localPos);
+
+    float4 viewPos = mul(viewMatrix, worldPos);
+
+    output.position = mul(projMatrix, viewPos);
+
     return output;
 }

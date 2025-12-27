@@ -2,7 +2,6 @@
 #include "GfxException.h"
 #include "buffer/DynamicBuffer.h"
 #include "buffer/ElementType.h"
-#include "buffer/UpdateFrequency.h"
 #include <core/type_traits.h>
 
 namespace gfx
@@ -55,12 +54,13 @@ namespace gfx
 		AddElement(std::string_view name, ElementType format, uint32_t offset = 0u);
 
 		DynamicBufferDesc&
-		SetUpdateFrequency(UpdateFrequency freq) noexcept;
+		SetIsVolatile(bool isVolatile) noexcept;
 
-		UpdateFrequency
-		GetUpdateFrequency() const noexcept
+		[[nodiscard]]
+		bool
+		IsVolatile() const noexcept
 		{
-			return updateFrequency;
+			return isVolatile;
 		}
 
 		std::span<const DynamicBufferDescElement>
@@ -76,7 +76,7 @@ namespace gfx
 		SetName(std::string_view name);
 
 	private:
-		UpdateFrequency                       updateFrequency{ UpdateFrequency::kPerFrame };
+		bool                                  isVolatile = false;
 		std::vector<DynamicBufferDescElement> elements{};
 		std::string                           name{};
 

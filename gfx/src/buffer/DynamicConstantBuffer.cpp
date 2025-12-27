@@ -1,5 +1,6 @@
 #include "buffer/DynamicConstantBuffer.h"
-
+#include "shader_reflect/ShaderInput.h"
+#include <core/file/file.h>
 namespace gfx
 {
 	DynamicConstantBuffer::DynamicConstantBuffer(
@@ -7,6 +8,20 @@ namespace gfx
 		const DynamicConstantBufferDesc& elementDesc)
 	{
 		DynamicConstantBuffer::Init(device, elementDesc);
+	}
+
+	DynamicConstantBuffer::DynamicConstantBuffer(
+		nvrhi::DeviceHandle device,
+		std::string_view    shaderPath,
+		uint32_t            bindingSlot,
+		uint32_t            bindingSpace,
+		bool                isVolatile)
+	{
+		auto shaderByteCode = core::file::readFileBytes(shaderPath);
+		auto desc = getDynamicConstantBufferDesc(shaderByteCode, bindingSlot, bindingSpace);
+		desc.SetIsVolatile(isVolatile);
+
+		Init(device, desc);
 	}
 
 	void
@@ -22,11 +37,12 @@ namespace gfx
 		desc.setByteSize(totalSize)
 			.setIsConstantBuffer(true)
 			.setDebugName(elementDesc.name)
+			.setKeepInitialState(true)
 			.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
 
-		if (elementDesc.updateFrequency == UpdateFrequency::kPerFrame)
+		if (elementDesc.isVolatile)
 		{
-			desc.setIsVolatile(true);
+			desc.setIsVolatile(true).setMaxVersions(16);
 		}
 
 		DynamicBuffer::Init(device, desc);

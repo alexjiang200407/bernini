@@ -2,6 +2,15 @@
 #include "math/util.h"
 #include <core/OrderedMap.h>
 
+namespace
+{
+	constexpr uint32_t
+	align16(uint32_t value)
+	{
+		return gfx::align(value, 16u);
+	}
+}
+
 namespace gfx
 {
 	class DynamicConstantBufferDesc::StructNode : public DynamicConstantBufferDesc::Node
@@ -51,7 +60,7 @@ namespace gfx
 				return;
 
 			// Constant buffers need to start on a 16-byte boundary
-			ctx.offset           = align(ctx.offset, 16u);
+			ctx.offset           = align16(ctx.offset);
 			auto parentOffsetCpy = ctx.parentOffset;
 			ctx.parentOffset     = ctx.offset;
 
@@ -115,7 +124,7 @@ namespace gfx
 			// If element would cross 16-byte boundary, align to next 16-byte boundary
 			if (elemSize > remaining)
 			{
-				const uint32_t alignedOffset = align(ctx.offset, 16u);
+				const uint32_t alignedOffset = align16(ctx.offset);
 				padding                      = alignedOffset - ctx.offset;
 				ctx.offset                   = alignedOffset;
 			}
@@ -158,8 +167,8 @@ namespace gfx
 		BuildLayoutMap(LayoutMap* layoutMap, BuildLayoutMapContext& ctx) const noexcept override
 		{
 			auto elemSize    = sizeOfElementType(m_type);
-			auto startOffset = align(ctx.offset, 16u);
-			ctx.offset       = startOffset + align(elemSize, 16u) * (m_count - 1) + elemSize;
+			auto startOffset = align16(ctx.offset);
+			ctx.offset       = startOffset + align16(elemSize) * (m_count - 1) + elemSize;
 
 			if (layoutMap)
 			{
@@ -168,7 +177,7 @@ namespace gfx
 					LayoutEntry{
 						.relativeOffset = startOffset,
 						.elemSize       = elemSize,
-						.stride         = align(elemSize, 16u),
+						.stride         = align16(elemSize),
 						.count          = m_count,
 					});
 			}
@@ -196,12 +205,12 @@ namespace gfx
 		void
 		BuildLayoutMap(LayoutMap* layoutMap, BuildLayoutMapContext& ctx) const noexcept override
 		{
-			auto startOffset = align(ctx.offset, 16u);
+			auto startOffset = align16(ctx.offset);
 
 			auto ctx1 = BuildLayoutMapContext{};
 			m_structNode.BuildLayoutMap(layoutMap, ctx1);
 
-			ctx.offset = startOffset + align(ctx1.offset, 16u) * (m_count - 1) + ctx1.offset;
+			ctx.offset = startOffset + align16(ctx1.offset) * (m_count - 1) + ctx1.offset;
 
 			if (layoutMap)
 			{
@@ -210,7 +219,7 @@ namespace gfx
 					LayoutEntry{
 						.relativeOffset = startOffset,
 						.elemSize       = ctx1.offset,
-						.stride         = align(ctx1.offset, 16u),
+						.stride         = align16(ctx1.offset),
 						.count          = m_count,
 					});
 			}
