@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(BerniniEngine)
 
+include(${CMAKE_SOURCE_DIR}/cmake/target_force_include.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/copy_to_target.cmake)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

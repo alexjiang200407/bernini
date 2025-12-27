@@ -1,5 +1,4 @@
 #pragma once
-#include "buffer/UpdateFrequency.h"
 
 namespace gfx
 {

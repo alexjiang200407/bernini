@@ -23,7 +23,7 @@ namespace gfx
 			auto transformBufDesc = DynamicConstantBufferDesc{};
 			transformBufDesc.AddElement("transformMatrix", ElementType::kFloat4x4)
 				.SetName("ModelTransformBuffer")
-				.SetUpdateFrequency(UpdateFrequency::kPerDraw);
+				.SetIsVolatile(true);
 
 			m_transformCBuf = std::move(DynamicConstantBuffer{ device, transformBufDesc });
 		}
@@ -39,25 +39,25 @@ namespace gfx
 	nvrhi::BindingSetItem
 	GeomPass::GetCameraBindingSetItem() const noexcept
 	{
-		return m_cameraCBuf.GetBindingSetItem(getBindingSpace(BINDINGS::CAMERA_VCB));
+		return m_cameraCBuf.GetBindingSetItem(BindingSlots::CameraVCB);
 	}
 
 	nvrhi::BindingSetItem
 	GeomPass::GetTransformBindingSetItem() const noexcept
 	{
-		return m_transformCBuf.GetBindingSetItem(getBindingSpace(BINDINGS::OBJECT_TRANSFORM_VCB));
+		return m_transformCBuf.GetBindingSetItem(BindingSlots::TransformVCB);
 	}
 
 	nvrhi::BindingLayoutItem
 	GeomPass::GetCameraBindingLayoutItem() const noexcept
 	{
-		return m_cameraCBuf.GetBindingLayoutItem(getBindingSlot(BINDINGS::CAMERA_VCB));
+		return m_cameraCBuf.GetBindingLayoutItem(BindingSlots::CameraVCB);
 	}
 
 	nvrhi::BindingLayoutItem
 	GeomPass::GetTransformBindingLayoutItem() const noexcept
 	{
-		return m_transformCBuf.GetBindingLayoutItem(getBindingSlot(BINDINGS::OBJECT_TRANSFORM_VCB));
+		return m_transformCBuf.GetBindingLayoutItem(BindingSlots::TransformVCB);
 	}
 
 	void

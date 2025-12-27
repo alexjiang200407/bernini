@@ -1,3 +1,4 @@
+#include "buffer/DynamicConstantBuffer.h"
 #include "buffer/DynamicVertexBuffer.h"
 #include "graphics/Graphics.h"
 #include "shader_reflect/ShaderInput.h"
@@ -133,7 +134,7 @@ TEST_CASE("VertexLayoutGen", "[vertex_layout_gen][shader_reflection][dynamic_ver
 	CHECK(attrDesc->elementStride == sizeof(float) * 13);
 }
 
-TEST_CASE("Constant Buffer Reflection", "[constant_buffer][shader_reflection]")
+TEST_CASE("Material constant buffer", "[constant_buffer][shader_reflection]")
 {
 	auto gfxDesc     = GfxOptions{};
 	gfxDesc.headless = true;
@@ -145,8 +146,20 @@ TEST_CASE("Constant Buffer Reflection", "[constant_buffer][shader_reflection]")
 
 	auto device = gfx->GetDevice();
 
-	auto pixelShaderBytes = core::file::readFileBytes("shaders/PS_Cbuf_test.cso"sv);
-	auto x                = gfx::getDynamicConstantBufferDesc(pixelShaderBytes, 0);
+	SECTION("Simple test")
+	{
+		auto cb = gfx::DynamicConstantBuffer(gfx->GetDevice(), "shaders/PS_Cbuf_test.cso"sv, 3, 3);
 
-	CHECK(1 == 1);
+		CHECK(cb["a"].IsValid());
+		CHECK(cb["b"].IsValid());
+		CHECK(cb["c"].IsValid());
+		CHECK(cb["d"].IsValid());
+
+		CHECK(cb["a"].Size() == 16);
+		CHECK(cb["b"].Size() == 8);
+		CHECK(cb["c"].Size() == 4);
+		CHECK(cb["d"].Size() == 4);
+
+		CHECK(cb.GetTotalSize() == 32);
+	}
 }

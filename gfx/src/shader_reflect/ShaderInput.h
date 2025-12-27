@@ -54,6 +54,7 @@ namespace gfx
 	DynamicConstantBufferDesc
 	getDynamicConstantBufferDesc(
 		std::span<const std::byte> shaderByteCode,
-		uint32_t                   constantBufferIdx);
+		uint32_t                   constantBufferSpace,
+		uint32_t                   constantBufferSlot);
 
 }

@@ -115,9 +115,9 @@ namespace gfx
 	}
 
 	DynamicBufferDesc&
-	gfx::DynamicBufferDesc::SetUpdateFrequency(UpdateFrequency freq) noexcept
+	gfx::DynamicBufferDesc::SetIsVolatile(bool isVolatile) noexcept
 	{
-		this->updateFrequency = freq;
+		this->isVolatile = isVolatile;
 		return *this;
 	}
 
@@ -266,12 +266,13 @@ namespace gfx
 		auto desc = nvrhi::BufferDesc{};
 		desc.setByteSize(elementDesc.GetTotalSize() * count)
 			.setIsVertexBuffer(true)
+			.setKeepInitialState(true)
 			.setInitialState(nvrhi::ResourceStates::VertexBuffer)
 			.setDebugName(elementDesc.name);
 
-		if (elementDesc.updateFrequency == UpdateFrequency::kPerDraw)
+		if (elementDesc.IsVolatile())
 		{
-			desc.setIsVolatile(true);
+			desc.setIsVolatile(true).setMaxVersions(16);
 		}
 
 		DynamicBuffer::Init(device, desc);

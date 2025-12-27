@@ -1,6 +1,5 @@
 #pragma once
 #include "buffer/ElementType.h"
-#include "buffer/UpdateFrequency.h"
 #include <core/str/str.h>
 
 namespace gfx
@@ -43,8 +42,6 @@ namespace gfx
 		class StructArrayNode;
 
 	public:
-		constexpr static uint32_t CONSTANT_BUFFER_ALIGNMENT = 16;
-
 		DynamicConstantBufferDesc();
 
 		DynamicConstantBufferDesc&
@@ -73,16 +70,16 @@ namespace gfx
 		}
 
 		DynamicConstantBufferDesc&
-		SetUpdateFrequency(UpdateFrequency updateFrequency)
+		SetIsVolatile(bool isVolatile)
 		{
-			this->updateFrequency = updateFrequency;
+			this->isVolatile = isVolatile;
 			return *this;
 		}
 
 	private:
 		std::unique_ptr<Node> root;
 		std::string           name;
-		UpdateFrequency       updateFrequency = UpdateFrequency::kPerFrame;
+		bool                  isVolatile = false;
 
 		friend class DynamicConstantBuffer;
 	};
