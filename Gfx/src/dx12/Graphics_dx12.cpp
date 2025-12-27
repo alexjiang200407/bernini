@@ -14,6 +14,8 @@
 
 namespace gfx
 {
+	constexpr auto bufferCount = 2u;
+
 	class ErrorCallback : public nvrhi::IMessageCallback
 	{
 		void
@@ -49,46 +51,57 @@ namespace gfx
 	private:
 		void
 		CreateDevice();
+
 		void
 		CreateSwapChain(HWND hwnd);
+
 		void
 		CreateDepthBuffer();
+
 		void
 		CreateRenderTargets();
+
 		void
 		ReleaseRenderTargets();
 
+		nvrhi::DeviceHandle
+		GetDevice() noexcept override
+		{
+			return m_nvrhiDevice;
+		}
+
 	private:
-		nvrhi::RefCountPtr<ID3D12Device>                m_device;
-		nvrhi::RefCountPtr<ID3D12CommandQueue>          m_commandQueue;
-		nvrhi::RefCountPtr<IDXGISwapChain3>             m_swapChain;
-		nvrhi::RefCountPtr<ID3D12Resource>              m_depthBuffer;
-		std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_backBuffers;
-
-#ifdef _DEBUG
-		nvrhi::RefCountPtr<ID3D12Debug>     m_debugController;
-		nvrhi::RefCountPtr<IDXGIInfoQueue>  m_dxgiInfoQueue;
-		nvrhi::RefCountPtr<ID3D12InfoQueue> m_infoQueue;
-#endif
-
 		nvrhi::DeviceHandle               m_nvrhiDevice;
-		nvrhi::FramebufferHandle          m_nvrhiFramebuffer;
 		nvrhi::TextureHandle              m_nvrhiDepthBuffer;
 		std::vector<nvrhi::TextureHandle> m_nvrhiBackBuffers;
 		nvrhi::FramebufferInfo            m_framebufferInfo;
+
+		nvrhi::RefCountPtr<ID3D12Device>       m_device;
+		nvrhi::RefCountPtr<ID3D12CommandQueue> m_commandQueue;
+		nvrhi::RefCountPtr<IDXGISwapChain3>    m_swapChain;
+
+		nvrhi::RefCountPtr<ID3D12Resource>              m_depthBuffer;
+		std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_backBuffers;
 
 		std::unique_ptr<MeshFactory>           m_meshFactory;
 		GBufferPass                            m_gBufferPass;
 		std::vector<std::unique_ptr<Drawable>> m_drawable;
 
-		bool m_isHeadless;
-		UINT m_windowWidth;
-		UINT m_windowHeight;
-		UINT m_frameCount = 0;
-
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
-		ErrorCallback                   m_errorCB;
+
+#ifdef _DEBUG
+		nvrhi::RefCountPtr<ID3D12Debug1>    m_debugController;
+		nvrhi::RefCountPtr<IDXGIInfoQueue>  m_dxgiInfoQueue;
+		nvrhi::RefCountPtr<ID3D12InfoQueue> m_infoQueue;
+#endif
+
+		ErrorCallback m_errorCB;
+
+		bool   m_isHeadless   = false;
+		UINT   m_windowWidth  = 0;
+		UINT   m_windowHeight = 0;
+		UINT64 m_frameCount   = 1;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
@@ -99,15 +112,21 @@ namespace gfx
 
 #ifdef _DEBUG
 		{
-			D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)) >> gfx::dx::dxErrorChecker;
+			D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)) >> dx::dxErrorChecker;
 			m_debugController->EnableDebugLayer();
 		}
 #endif
 
 		CreateDevice();
 
+		m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_frameFence)) >>
+			dx::dxErrorChecker;
+
+		for (UINT i = 0; i < bufferCount; i++)
+			m_frameFenceEvents.push_back(CreateEvent(nullptr, false, true, nullptr));
+
 #ifdef _DEBUG
-		DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_dxgiInfoQueue)) >> gfx::dx::dxErrorChecker;
+		DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_dxgiInfoQueue)) >> dx::dxErrorChecker;
 
 		m_dxgiInfoQueue->SetBreakOnSeverity(
 			DXGI_DEBUG_ALL,
@@ -144,7 +163,10 @@ namespace gfx
 			CreateRenderTargets();
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice);
-		auto drawable = std::make_unique<Drawable>(ShaderMatrix{});
+
+		auto mat      = glm::mat4{ 1.0f };
+		mat[3][0]     = 5.0f;
+		auto drawable = std::make_unique<Drawable>(static_cast<ShaderMatrix>(mat));
 		drawable->SetMesh(m_meshFactory->CreateSphere("shaders/VS_cube.cso"sv));
 		drawable->SetMaterial(std::make_shared<Material>(m_nvrhiDevice, "shaders/PS_cube.cso"sv));
 		m_drawable.push_back(std::move(drawable));
@@ -155,7 +177,34 @@ namespace gfx
 	Graphics::~Graphics()
 	{
 		ReleaseRenderTargets();
+
+		for (auto fenceEvent : m_frameFenceEvents)
+		{
+			WaitForSingleObject(fenceEvent, INFINITE);
+		}
+
+		m_nvrhiDevice.Reset();
+
+		for (auto fenceEvent : m_frameFenceEvents)
+		{
+			CloseHandle(fenceEvent);
+		}
+		m_frameFenceEvents.clear();
+
+		if (m_swapChain)
+		{
+			m_swapChain->SetFullscreenState(false, nullptr);
+		}
+
 		GeomPass::Shutdown();
+
+#ifdef _DEBUG
+		if (m_infoQueue)
+			m_infoQueue->ClearStoredMessages();
+
+		if (m_dxgiInfoQueue)
+			m_dxgiInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
+#endif
 	}
 
 	void
@@ -184,7 +233,7 @@ namespace gfx
 		sd.Width       = m_windowWidth;
 		sd.Height      = m_windowHeight;
 		sd.Format      = DXGI_FORMAT_B8G8R8A8_UNORM;
-		sd.BufferCount = 2;
+		sd.BufferCount = bufferCount;
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		sd.Scaling     = DXGI_SCALING_STRETCH;
@@ -245,16 +294,18 @@ namespace gfx
 	void
 	Graphics::CreateRenderTargets()
 	{
-		constexpr UINT bufferCount = 2;
 		m_backBuffers.resize(bufferCount);
 		m_nvrhiBackBuffers.resize(bufferCount);
 
-		nvrhi::TextureDesc texDesc;
-		texDesc.width          = m_windowWidth;
-		texDesc.height         = m_windowHeight;
-		texDesc.sampleCount    = 1;
-		texDesc.format         = nvrhi::Format::BGRA8_UNORM;
-		texDesc.isRenderTarget = true;
+		auto texDesc = nvrhi::TextureDesc{};
+		texDesc.setIsRenderTarget(true)
+			.setFormat(nvrhi::Format::BGRA8_UNORM)
+			.setSampleCount(1)
+			.setWidth(m_windowWidth)
+			.setHeight(m_windowHeight)
+			.setInitialState(nvrhi::ResourceStates::Present)
+			.setKeepInitialState(true)
+			.setDebugName("BackBuffer");
 
 		for (UINT i = 0; i < bufferCount; i++)
 		{
@@ -265,45 +316,73 @@ namespace gfx
 				texDesc);
 		}
 
-		nvrhi::TextureDesc depthDesc;
-		depthDesc.width          = m_windowWidth;
-		depthDesc.height         = m_windowHeight;
-		depthDesc.format         = nvrhi::Format::D24S8;
-		depthDesc.isRenderTarget = true;
+		// TODO: Move this to gbuffer pass
+		auto depthDesc = nvrhi::TextureDesc{};
+		depthDesc.setWidth(m_windowWidth)
+			.setHeight(m_windowHeight)
+			.setFormat(nvrhi::Format::D24S8)
+			.setIsRenderTarget(true)
+			.setInitialState(nvrhi::ResourceStates::DepthWrite)
+			.setKeepInitialState(true)
+			.setIsTypeless(true)
+			.setDebugName("DepthBuffer");
 
 		m_nvrhiDepthBuffer = m_nvrhiDevice->createHandleForNativeTexture(
 			nvrhi::ObjectTypes::D3D12_Resource,
 			m_depthBuffer.Get(),
 			depthDesc);
 
-		m_nvrhiFramebuffer = m_nvrhiDevice->createFramebuffer(
-			nvrhi::FramebufferDesc{}
-				.addColorAttachment(m_nvrhiBackBuffers[0])
-				.setDepthAttachment(m_nvrhiDepthBuffer));
-
-		m_framebufferInfo = nvrhi::FramebufferInfo{}.addColorFormat(nvrhi::Format::BGRA8_UNORM);
+		m_framebufferInfo = nvrhi::FramebufferInfo{}
+		                        .addColorFormat(nvrhi::Format::BGRA8_UNORM)
+		                        .setDepthFormat(nvrhi::Format::D24S8);
 	}
 
 	void
 	Graphics::ReleaseRenderTargets()
 	{
+		if (m_nvrhiDevice)
+		{
+			auto success = m_nvrhiDevice->waitForIdle();
+			if (!success)
+			{
+				logger::error("Failed to wait for device idle during Graphics shutdown");
+			}
+			m_nvrhiDevice->runGarbageCollection();
+		}
+
+		for (auto e : m_frameFenceEvents) SetEvent(e);
+
+		m_nvrhiDepthBuffer.Reset();
 		m_nvrhiBackBuffers.clear();
+
 		m_backBuffers.clear();
-		m_nvrhiFramebuffer = nullptr;
-		m_nvrhiDepthBuffer = nullptr;
+		m_depthBuffer.Reset();
 	}
 
 	void
 	Graphics::DrawFrame(Camera& camera)
 	{
+		auto backBufferIndex  = m_swapChain->GetCurrentBackBufferIndex();
+		auto nvrhiFramebuffer = m_nvrhiDevice->createFramebuffer(
+			nvrhi::FramebufferDesc{}
+				.addColorAttachment(m_nvrhiBackBuffers[backBufferIndex])
+				.setDepthAttachment(m_nvrhiDepthBuffer));
+
+		WaitForSingleObject(m_frameFenceEvents[backBufferIndex], INFINITE);
+
 		auto cmdList = m_nvrhiDevice->createCommandList();
+		cmdList->open();
+
 		nvrhi::utils::ClearColorAttachment(
 			cmdList,
-			m_nvrhiFramebuffer,
+			nvrhiFramebuffer,
 			0,
 			nvrhi::Color{ 0, 0, 0, 1 });
-		nvrhi::utils::ClearDepthStencilAttachment(cmdList, m_nvrhiFramebuffer, 1.0f, 0);
+
+		nvrhi::utils::ClearDepthStencilAttachment(cmdList, nvrhiFramebuffer, 1.0f, 0);
+
 		cmdList->close();
+
 		m_nvrhiDevice->executeCommandList(cmdList);
 
 		FrameGraph           fg;
@@ -311,14 +390,20 @@ namespace gfx
 		RenderArgs           args{ .screenWidth   = static_cast<float>(m_windowWidth),
 			                       .screenHeight  = static_cast<float>(m_windowHeight),
 			                       .device        = m_nvrhiDevice,
-			                       .outBuffer     = m_nvrhiFramebuffer,
+			                       .outBuffer     = nvrhiFramebuffer,
 			                       .outBufferInfo = m_framebufferInfo };
 		m_gBufferPass.AttachToFrameGraph(fg, blackboard, args, camera, m_drawable);
+
 		fg.compile();
 		fg.execute();
 
 		if (!m_isHeadless)
 			m_swapChain->Present(1, 0);
+
+		m_commandQueue->Signal(m_frameFence.Get(), m_frameCount);
+		m_frameFence->SetEventOnCompletion(m_frameCount, m_frameFenceEvents[backBufferIndex]);
+
+		++m_frameCount;
 	}
 
 	IGraphics*

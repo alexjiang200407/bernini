@@ -168,7 +168,7 @@ namespace gfx
 		{
 			auto elemSize    = sizeOfElementType(m_type);
 			auto startOffset = align16(ctx.offset);
-			ctx.offset       = startOffset + align16(elemSize) + elemSize;
+			ctx.offset       = startOffset + align16(elemSize) * (m_count - 1) + elemSize;
 
 			if (layoutMap)
 			{
@@ -210,7 +210,7 @@ namespace gfx
 			auto ctx1 = BuildLayoutMapContext{};
 			m_structNode.BuildLayoutMap(layoutMap, ctx1);
 
-			ctx.offset = startOffset + align16(ctx1.offset) + ctx1.offset;
+			ctx.offset = startOffset + align16(ctx1.offset) * (m_count - 1) + ctx1.offset;
 
 			if (layoutMap)
 			{

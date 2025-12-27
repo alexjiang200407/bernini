@@ -23,8 +23,13 @@ VSOutput main(VSInput input)
 {
     VSOutput output;
 
-    float4 worldPos = float4(input.position, 1.0f);
+    float4 localPos = float4(input.position, 1.0f);
 
-    output.position = mul(projMatrix, mul(viewMatrix, worldPos));
+    float4 worldPos = mul(modelTransform, localPos);
+
+    float4 viewPos = mul(viewMatrix, worldPos);
+
+    output.position = mul(projMatrix, viewPos);
+
     return output;
 }

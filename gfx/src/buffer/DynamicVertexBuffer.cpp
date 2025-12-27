@@ -115,9 +115,9 @@ namespace gfx
 	}
 
 	DynamicBufferDesc&
-	gfx::DynamicBufferDesc::SetUpdateFrequency(UpdateFrequency freq) noexcept
+	gfx::DynamicBufferDesc::SetIsVolatile(bool isVolatile) noexcept
 	{
-		this->updateFrequency = freq;
+		this->isVolatile = isVolatile;
 		return *this;
 	}
 
@@ -270,7 +270,7 @@ namespace gfx
 			.setInitialState(nvrhi::ResourceStates::VertexBuffer)
 			.setDebugName(elementDesc.name);
 
-		if (elementDesc.updateFrequency == UpdateFrequency::kPerDraw)
+		if (elementDesc.IsVolatile())
 		{
 			desc.setIsVolatile(true).setMaxVersions(16);
 		}

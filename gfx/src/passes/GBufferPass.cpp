@@ -38,6 +38,7 @@ namespace gfx
 				auto outputFramebuffer = renderArgs.outBuffer;
 
 				auto mainCommandList = device->createCommandList();
+				mainCommandList->open();
 
 				GeomPass::UpdateCameraBuffer(mainCommandList, camera);
 
@@ -58,6 +59,8 @@ namespace gfx
 				{
 					auto perFrameBindingSetDesc    = nvrhi::BindingSetDesc{};
 					auto perFrameBindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+
+					perFrameBindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace);
 					AttachPerFrameBindingSetItems(perFrameBindingSetDesc);
 					AttachPerFrameBindingLayoutItems(perFrameBindingLayoutDesc);
 
@@ -79,6 +82,7 @@ namespace gfx
 						auto perObjBindingSetDesc    = nvrhi::BindingSetDesc{};
 						auto perObjBindingLayoutDesc = nvrhi::BindingLayoutDesc{};
 
+						perObjBindingLayoutDesc.setRegisterSpace(BindingSpaces::PerObjectSpace);
 						AttachPerObjBindingSetItems(perObjBindingSetDesc);
 						AttachPerObjBindingLayoutItems(perObjBindingLayoutDesc);
 

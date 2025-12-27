@@ -40,37 +40,28 @@ namespace
 		nvrhi::RefCountPtr<ID3D12ShaderReflection>& outReflector,
 		D3D12_SHADER_DESC&                          outDesc)
 	{
-		nvrhi::RefCountPtr<IDxcContainerReflection> container;
-		HRESULT hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&container));
-		if (FAILED(hr))
-			throw std::runtime_error("Failed to create DXC container reflection.");
+		auto container = nvrhi::RefCountPtr<IDxcContainerReflection>{};
+
+		DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&container)) >>
+			dx::dxErrorChecker;
 
 		nvrhi::RefCountPtr<IDxcBlobEncoding> blob;
 		nvrhi::RefCountPtr<IDxcLibrary>      library;
-		hr = DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&library));
+		DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&library)) >> dx::dxErrorChecker;
 
-		hr = library->CreateBlobWithEncodingFromPinned(
+		library->CreateBlobWithEncodingFromPinned(
 			shaderByteCode.data(),
 			static_cast<UINT32>(shaderByteCode.size()),
 			0,  // CP_ACP, code page (ignored for binary)
-			&blob);
+			&blob) >>
+			dx::dxErrorChecker;
 
-		hr = container->Load(blob);
-		if (FAILED(hr))
-			throw std::runtime_error("Failed to load DXIL shader container.");
+		container->Load(blob) >> dx::dxErrorChecker;
 
 		UINT partIndex = 0;
-		hr             = container->FindFirstPartKind(DXC_PART_DXIL, &partIndex);
-		if (FAILED(hr))
-			throw std::runtime_error("DXIL part not found in shader container.");
-
-		hr = container->GetPartReflection(partIndex, IID_PPV_ARGS(&outReflector));
-		if (FAILED(hr))
-			throw std::runtime_error("Failed to get DXIL shader reflection.");
-
-		hr = outReflector->GetDesc(&outDesc);
-		if (FAILED(hr))
-			throw std::runtime_error("Failed to get shader descriptor.");
+		container->FindFirstPartKind(DXC_PART_DXIL, &partIndex) >> dx::dxErrorChecker;
+		container->GetPartReflection(partIndex, IID_PPV_ARGS(&outReflector)) >> dx::dxErrorChecker;
+		outReflector->GetDesc(&outDesc) >> dx::dxErrorChecker;
 	}
 
 	void
@@ -85,19 +76,15 @@ namespace
 			desc.AddStruct(path);
 			for (UINT i = 0; i < typeDesc.Members; ++i)
 			{
-				auto*                  memberType = type->GetMemberTypeByIndex(i);
-				D3D12_SHADER_TYPE_DESC memberDesc{};
+				auto* memberType = type->GetMemberTypeByIndex(i);
+				auto  memberDesc = D3D12_SHADER_TYPE_DESC{};
 				memberType->GetDesc(&memberDesc);
-				emitType(
-					desc,
-					memberType,
-					memberDesc,
-					std::string(path) + "." + type->GetMemberTypeName(i));
-			}
-			return;
-		}
 
-		if (typeDesc.Elements > 0)
+				auto fullPath = std::format("{}.{}", path, type->GetMemberTypeName(i));
+				emitType(desc, memberType, memberDesc, fullPath);
+			}
+		}
+		else if (typeDesc.Elements > 0)
 		{
 			if (typeDesc.Class == D3D_SVC_STRUCT)
 			{
@@ -111,11 +98,9 @@ namespace
 					auto*                  memberType = elemType->GetMemberTypeByIndex(i);
 					D3D12_SHADER_TYPE_DESC memberDesc{};
 					memberType->GetDesc(&memberDesc);
-					emitType(
-						desc,
-						memberType,
-						memberDesc,
-						std::string(path) + "." + elemType->GetMemberTypeName(i));
+
+					auto fullPath = std::format("{}.{}", path, elemType->GetMemberTypeName(i));
+					emitType(desc, memberType, memberDesc, fullPath);
 				}
 			}
 			else
@@ -125,10 +110,11 @@ namespace
 					shaderVarTypeToConstantBufferType(typeDesc),
 					typeDesc.Elements);
 			}
-			return;
 		}
-
-		desc.AddElement(path, shaderVarTypeToConstantBufferType(typeDesc));
+		else
+		{
+			desc.AddElement(path, shaderVarTypeToConstantBufferType(typeDesc));
+		}
 	}
 
 	nvrhi::Format
@@ -177,10 +163,10 @@ namespace gfx
 	std::vector<VertexAttribute>
 	getVertexAttributes(nvrhi::ShaderHandle shader)
 	{
-		nvrhi::RefCountPtr<ID3D12ShaderReflection> reflector{};
-		D3D12_SHADER_DESC                          shaderDesc{};
-		const void*                                bytecode;
-		size_t                                     bytecodeSize;
+		auto        reflector  = nvrhi::RefCountPtr<ID3D12ShaderReflection>{};
+		auto        shaderDesc = D3D12_SHADER_DESC{};
+		const void* bytecode;
+		size_t      bytecodeSize;
 		shader->getBytecode(&bytecode, &bytecodeSize);
 
 		getReflectorAndShaderDescDXIL(
@@ -191,7 +177,7 @@ namespace gfx
 		if (D3D12_SHVER_GET_TYPE(shaderDesc.Version) != D3D12_SHVER_VERTEX_SHADER)
 			throw std::runtime_error("Provided shader is not a vertex shader.");
 
-		std::vector<VertexAttribute> vertexInputs;
+		auto vertexInputs = std::vector<VertexAttribute>{};
 
 		for (UINT i = 0; i < shaderDesc.InputParameters; ++i)
 		{
@@ -218,24 +204,26 @@ namespace gfx
 
 	DynamicConstantBufferDesc
 	getDynamicConstantBufferDesc(
-		std::span<const std::byte> shaderBytes,
+		std::span<const std::byte> shaderByteCode,
+		uint32_t                   constantBufferSpace,
 		uint32_t                   constantBufferSlot)
 	{
-		nvrhi::RefCountPtr<ID3D12ShaderReflection> reflector{};
-		D3D12_SHADER_DESC                          shaderDesc{};
-		getReflectorAndShaderDescDXIL(shaderBytes, reflector, shaderDesc);
+		auto reflector  = nvrhi::RefCountPtr<ID3D12ShaderReflection>{};
+		auto shaderDesc = D3D12_SHADER_DESC{};
+		getReflectorAndShaderDescDXIL(shaderByteCode, reflector, shaderDesc);
 
-		DynamicConstantBufferDesc desc;
+		auto desc = DynamicConstantBufferDesc{};
 
 		for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
 		{
 			D3D12_SHADER_INPUT_BIND_DESC bindDesc{};
 			reflector->GetResourceBindingDesc(i, &bindDesc);
 
-			if (bindDesc.Type == D3D_SIT_CBUFFER && bindDesc.BindPoint == constantBufferSlot)
+			if (bindDesc.Type == D3D_SIT_CBUFFER && bindDesc.BindPoint == constantBufferSlot &&
+			    bindDesc.Space == constantBufferSpace)
 			{
 				auto cbReflect = reflector->GetConstantBufferByName(bindDesc.Name);
-				D3D12_SHADER_BUFFER_DESC cbDesc{};
+				auto cbDesc    = D3D12_SHADER_BUFFER_DESC{};
 				cbReflect->GetDesc(&cbDesc);
 
 				if (cbDesc.Name)
@@ -243,12 +231,12 @@ namespace gfx
 
 				for (UINT varIdx = 0; varIdx < cbDesc.Variables; ++varIdx)
 				{
-					auto*                      var = cbReflect->GetVariableByIndex(varIdx);
-					D3D12_SHADER_VARIABLE_DESC varDesc{};
+					auto* var     = cbReflect->GetVariableByIndex(varIdx);
+					auto  varDesc = D3D12_SHADER_VARIABLE_DESC{};
 					var->GetDesc(&varDesc);
 
-					auto*                  type = var->GetType();
-					D3D12_SHADER_TYPE_DESC typeDesc{};
+					auto* type     = var->GetType();
+					auto  typeDesc = D3D12_SHADER_TYPE_DESC{};
 					type->GetDesc(&typeDesc);
 
 					emitType(desc, type, typeDesc, varDesc.Name);

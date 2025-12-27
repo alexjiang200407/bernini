@@ -5,7 +5,7 @@ namespace
 	glm::mat4
 	toShaderLayout(const glm::mat4& matrix) noexcept
 	{
-#ifdef RENDERER_DX11
+#ifdef RENDERER_DX12
 		// Right-handed to left-handed conversion for hlsl
 		glm::mat4 scaleZ = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, -1.0f));
 		return matrix * scaleZ;
@@ -34,6 +34,14 @@ namespace gfx
 		return *this;
 	}
 
-	ShaderMatrix::operator const glm::mat4&() const noexcept { return m_data; }
-	ShaderMatrix::operator glm::mat4() const noexcept { return m_data; }
+	ShaderMatrix::
+	operator const glm::mat4&() const noexcept
+	{
+		return m_data;
+	}
+	ShaderMatrix::
+	operator glm::mat4() const noexcept
+	{
+		return m_data;
+	}
 }
