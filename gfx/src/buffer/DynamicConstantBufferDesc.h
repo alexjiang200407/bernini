@@ -10,6 +10,12 @@ namespace gfx
 		uint32_t elemSize;
 		uint32_t stride;  // 0 if not array
 		uint32_t count;   // 1 if not array
+
+		[[nodiscard]] bool
+		IsArray() const noexcept
+		{
+			return stride != 0;
+		}
 	};
 
 	using LayoutMap = std::
