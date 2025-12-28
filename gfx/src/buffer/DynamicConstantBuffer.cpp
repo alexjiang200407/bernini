@@ -85,7 +85,7 @@ namespace gfx
 				                "Index out of range for entry: " + m_key };
 		}
 
-		if (entry.count == 1)
+		if (!entry.IsArray())
 		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::View::At",
