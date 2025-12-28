@@ -49,6 +49,7 @@ extern "C"
 		bool         headless;
 		bool         enableDebugLayer;
 		bool         enableGPUValidationLayer;
+		bool         enablePixDebug;
 	};
 
 	/// <summary>

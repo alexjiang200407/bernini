@@ -111,6 +111,11 @@ namespace gfx
 		m_enableDebugLayer         = opts.enableDebugLayer;
 		m_enableGPUValidationLayer = opts.enableDebugLayer && opts.enableGPUValidationLayer;
 
+		if (opts.enablePixDebug)
+		{
+			LoadLibraryA("WinPixGpuCapturer.dll");
+		}
+
 		if (m_enableDebugLayer)
 		{
 			D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)) >> dx::dxErrorChecker;
