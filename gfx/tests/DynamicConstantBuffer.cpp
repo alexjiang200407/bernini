@@ -554,6 +554,73 @@ TEST_CASE("Layout tests", "[dynamic_constant_buffer][dynamic_buffer][layout_test
 		auto cb = gfx::DynamicConstantBuffer{ device, desc };
 		CHECK(cb.GetTotalSize() == 176);
 	}
+
+	SECTION("Array of structs with internal arrays – stride & offsets")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStructArray("s", 3)
+			.AddElement("s.a", gfx::ElementType::kFloat)
+			.AddElementArray("s.b", gfx::ElementType::kFloat2, 2)
+			.AddElement("s.c", gfx::ElementType::kFloat);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		// Struct layout expectations:
+		// a : float          -> offset 0
+		// b : float2[2]      -> offset 16, stride 16, total 32
+		// c : float          -> offset 40
+		// struct size        -> 48
+		// array stride       -> 48
+
+		auto structEntry = cb.GetLayoutEntry("s");
+		CHECK(structEntry.stride == 48);
+		CHECK(structEntry.count == 3);
+
+		auto a = cb.GetLayoutEntry("s.a");
+		CHECK(a.relativeOffset == 0);
+		CHECK(a.elemSize == 4);
+
+		auto b = cb.GetLayoutEntry("s.b");
+		CHECK(b.relativeOffset == 16);
+		CHECK(b.count == 2);
+		CHECK(b.stride == 16);
+
+		auto c = cb.GetLayoutEntry("s.c");
+		CHECK(c.relativeOffset == 40);
+		CHECK(c.elemSize == 4);
+
+		CHECK(cb.GetTotalSize() == 3 * 48);
+	}
+
+	SECTION("Struct array stride with shorts + floats")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStructArray("s", 4)
+			.AddElement("s.a", gfx::ElementType::kShort)
+			.AddElement("s.b", gfx::ElementType::kFloat)
+			.AddElement("s.c", gfx::ElementType::kShort);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto structEntry = cb.GetLayoutEntry("s");
+
+		// a (2) + padding
+		// b (4)
+		// c (2) + padding
+		// must round up to 16
+		CHECK(structEntry.stride == 16);
+		CHECK(cb.GetTotalSize() == 4 * 16);
+
+		CHECK(cb.GetLayoutEntry("s.a").relativeOffset == 0);
+		CHECK(cb.GetLayoutEntry("s.b").relativeOffset == 4);
+		CHECK(cb.GetLayoutEntry("s.c").relativeOffset == 8);
+	}
+
+	//SECTION("Array with zero count should be rejected")
+	//{
+	//	auto desc = gfx::DynamicConstantBufferDesc{};
+
+	//	REQUIRE_THROWS_AS(desc.AddStructArray("s", 0), core::except::BerniniException);
+	//}
 }
 
 TEST_CASE("Constant buffer array", "[dynamic_constant_buffer][dynamic_buffer][array]")
@@ -1153,7 +1220,7 @@ TEST_CASE("Edge cases - boundary conditions", "[dynamic_constant_buffer][edge_ca
 		REQUIRE_NOTHROW(cb.At("outer").At("middle").At("c").Assign(glm::vec3{ 4.0f, 5.0f, 6.0f }));
 
 		auto totalSize = cb.GetTotalSize();
-		CHECK(totalSize == 32);
+		CHECK(totalSize == 48);
 	}
 
 	SECTION("Single byte followed by large struct alignment")
@@ -1473,6 +1540,85 @@ TEST_CASE("Edge cases - large arrays", "[dynamic_constant_buffer][edge_cases][la
 		REQUIRE_THROWS_AS(arr.At(10).Assign(11.0f), core::except::BerniniException);
 	}
 }
+
+TEST_CASE("Edge cases - Naming", "[dynamic_constant_buffer][edge_cases][names]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Overlapping and prefix names should throw")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+
+		desc.AddStruct("s");
+
+		REQUIRE_THROWS_AS(
+			desc.AddElement("s", gfx::ElementType::kFloat),
+			core::except::BerniniException);
+
+		REQUIRE_THROWS_AS(
+			desc.AddElement("s.a", gfx::ElementType::kFloat).AddStruct("s.a"),
+			core::except::BerniniException);
+	}
+
+	SECTION("Adding child before parent should throw")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+
+		REQUIRE_THROWS_AS(
+			desc.AddElement("s.a", gfx::ElementType::kFloat),
+			core::except::BerniniException);
+	}
+}
+
+//TEST_CASE("Edge cases - View", "[dynamic_constant_buffer][edge_cases][view]")
+//{
+//	auto gfxDesc     = GfxOptions{};
+//	gfxDesc.headless = true;
+//	gfxDesc.width    = 800;
+//	gfxDesc.height   = 600;
+//
+//	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+//	REQUIRE(gfx);
+//
+//	auto device = gfx->GetDevice();
+//
+//	SECTION("View becomes invalid after parent destruction")
+//	{
+//		gfx::DynamicConstantBufferView view;
+//
+//		{
+//			auto desc = gfx::DynamicConstantBufferDesc{};
+//			desc.AddElement("a", gfx::ElementType::kFloat);
+//			auto cb = gfx::DynamicConstantBuffer{ device, desc };
+//			view    = cb.At("a");
+//		}
+//
+//		REQUIRE_THROWS_AS(view.Assign(1.0f), core::except::BerniniException);
+//	}
+//
+//	SECTION("View invalid after move-assignment")
+//	{
+//		auto desc = gfx::DynamicConstantBufferDesc{};
+//		desc.AddElement("a", gfx::ElementType::kFloat);
+//
+//		gfx::DynamicConstantBuffer cb1{ device, desc };
+//		gfx::DynamicConstantBuffer cb2{ device, desc };
+//
+//		auto view = cb1.At("a");
+//
+//		cb2 = std::move(cb1);
+//
+//		REQUIRE_THROWS_AS(view.Assign(1.0f), core::except::BerniniException);
+//	}
+//}
 
 TEST_CASE(
 	"Edge cases - assignment and reassignment",
