@@ -47,6 +47,8 @@ extern "C"
 		int          width;
 		int          height;
 		bool         headless;
+		bool         enableDebugLayer;
+		bool         enableGPUValidationLayer;
 	};
 
 	/// <summary>

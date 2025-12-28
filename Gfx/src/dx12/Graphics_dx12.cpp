@@ -5,12 +5,9 @@
 #include "material/Material.h"
 #include "mesh/MeshFactory.h"
 #include "passes/GBufferPass.h"
+#include <dxgidebug.h>
 #include <fg/Blackboard.hpp>
 #include <nvrhi/validation.h>
-
-#ifdef _DEBUG
-#	include <dxgidebug.h>
-#endif
 
 namespace gfx
 {
@@ -90,32 +87,37 @@ namespace gfx
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
 
-#ifdef _DEBUG
 		nvrhi::RefCountPtr<ID3D12Debug1>    m_debugController;
 		nvrhi::RefCountPtr<IDXGIInfoQueue>  m_dxgiInfoQueue;
 		nvrhi::RefCountPtr<ID3D12InfoQueue> m_infoQueue;
-#endif
 
 		ErrorCallback m_errorCB;
 
-		bool   m_isHeadless   = false;
-		UINT   m_windowWidth  = 0;
-		UINT   m_windowHeight = 0;
-		UINT64 m_frameCount   = 1;
+		bool   m_isHeadless               = false;
+		UINT   m_windowWidth              = 0;
+		UINT   m_windowHeight             = 0;
+		UINT64 m_frameCount               = 1;
+		bool   m_enableGPUValidationLayer = false;
+		bool   m_enableDebugLayer         = false;
+
+		nvrhi::CommandListHandle m_mainCommandList;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
 	{
-		m_isHeadless   = opts.headless;
-		m_windowWidth  = opts.width;
-		m_windowHeight = opts.height;
+		m_isHeadless               = opts.headless;
+		m_windowWidth              = opts.width;
+		m_windowHeight             = opts.height;
+		m_enableDebugLayer         = opts.enableDebugLayer;
+		m_enableGPUValidationLayer = opts.enableDebugLayer && opts.enableGPUValidationLayer;
 
-#ifdef _DEBUG
+		if (m_enableDebugLayer)
 		{
 			D3D12GetDebugInterface(IID_PPV_ARGS(&m_debugController)) >> dx::dxErrorChecker;
 			m_debugController->EnableDebugLayer();
+			if (m_enableGPUValidationLayer)
+				m_debugController->SetEnableGPUBasedValidation(TRUE);
 		}
-#endif
 
 		CreateDevice();
 
@@ -125,19 +127,20 @@ namespace gfx
 		for (UINT i = 0; i < bufferCount; i++)
 			m_frameFenceEvents.push_back(CreateEvent(nullptr, false, true, nullptr));
 
-#ifdef _DEBUG
-		DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_dxgiInfoQueue)) >> dx::dxErrorChecker;
+		if (m_enableDebugLayer)
+		{
+			DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_dxgiInfoQueue)) >> dx::dxErrorChecker;
 
-		m_dxgiInfoQueue->SetBreakOnSeverity(
-			DXGI_DEBUG_ALL,
-			DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR,
-			TRUE);
+			m_dxgiInfoQueue->SetBreakOnSeverity(
+				DXGI_DEBUG_ALL,
+				DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR,
+				TRUE);
 
-		m_dxgiInfoQueue->SetBreakOnSeverity(
-			DXGI_DEBUG_ALL,
-			DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION,
-			TRUE);
-#endif
+			m_dxgiInfoQueue->SetBreakOnSeverity(
+				DXGI_DEBUG_ALL,
+				DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION,
+				TRUE);
+		}
 
 		if (!m_isHeadless)
 		{
@@ -153,16 +156,18 @@ namespace gfx
 		deviceDesc.errorCB               = &m_errorCB;
 		m_nvrhiDevice                    = nvrhi::d3d12::createDevice(deviceDesc);
 
-#ifdef _DEBUG
+		m_gBufferPass.Init(m_nvrhiDevice);
+
+		if (m_enableDebugLayer)
 		{
 			m_nvrhiDevice = nvrhi::validation::createValidationLayer(m_nvrhiDevice);
 		}
-#endif
 
 		if (!m_isHeadless)
 			CreateRenderTargets();
 
-		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice);
+		m_meshFactory     = std::make_unique<MeshFactory>(m_nvrhiDevice);
+		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
 		auto mat      = glm::mat4{ 1.0f };
 		mat[3][0]     = 5.0f;
@@ -198,13 +203,11 @@ namespace gfx
 
 		GeomPass::Shutdown();
 
-#ifdef _DEBUG
 		if (m_infoQueue)
 			m_infoQueue->ClearStoredMessages();
 
 		if (m_dxgiInfoQueue)
 			m_dxgiInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
-#endif
 	}
 
 	void
@@ -213,23 +216,24 @@ namespace gfx
 		D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)) >>
 			gfx::dx::dxErrorChecker;
 
-		D3D12_COMMAND_QUEUE_DESC cqDesc{};
+		auto cqDesc  = D3D12_COMMAND_QUEUE_DESC{};
 		cqDesc.Type  = D3D12_COMMAND_LIST_TYPE_DIRECT;
 		cqDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 		m_device->CreateCommandQueue(&cqDesc, IID_PPV_ARGS(&m_commandQueue)) >>
 			gfx::dx::dxErrorChecker;
 
-#ifdef _DEBUG
-		m_device->QueryInterface(IID_PPV_ARGS(&m_infoQueue));
-		if (m_infoQueue)
-			m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-#endif
+		if (m_enableDebugLayer)
+		{
+			m_device->QueryInterface(IID_PPV_ARGS(&m_infoQueue));
+			if (m_infoQueue)
+				m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+		}
 	}
 
 	void
 	Graphics::CreateSwapChain(HWND hwnd)
 	{
-		DXGI_SWAP_CHAIN_DESC1 sd{};
+		auto sd        = DXGI_SWAP_CHAIN_DESC1{};
 		sd.Width       = m_windowWidth;
 		sd.Height      = m_windowHeight;
 		sd.Format      = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -242,16 +246,19 @@ namespace gfx
 		sd.SampleDesc.Count   = 1;
 		sd.SampleDesc.Quality = 0;
 
-		nvrhi::RefCountPtr<IDXGIFactory4> factory;
+		auto factory = nvrhi::RefCountPtr<IDXGIFactory4>{};
 
-#ifdef _DEBUG
-		CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&factory)) >>
-			gfx::dx::dxErrorChecker;
-#else
-		CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)) >> gfx::dx::dxErrorChecker;
-#endif  // DEBUG
+		if (m_enableDebugLayer)
+		{
+			CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&factory)) >>
+				gfx::dx::dxErrorChecker;
+		}
+		else
+		{
+			CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)) >> gfx::dx::dxErrorChecker;
+		}
 
-		nvrhi::RefCountPtr<IDXGISwapChain1> swap;
+		auto swap = nvrhi::RefCountPtr<IDXGISwapChain1>{};
 		factory->CreateSwapChainForHwnd(m_commandQueue.Get(), hwnd, &sd, nullptr, nullptr, &swap) >>
 			gfx::dx::dxErrorChecker;
 
@@ -263,7 +270,7 @@ namespace gfx
 	void
 	Graphics::CreateDepthBuffer()
 	{
-		D3D12_RESOURCE_DESC desc{};
+		auto desc             = D3D12_RESOURCE_DESC{};
 		desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		desc.Width            = m_windowWidth;
 		desc.Height           = m_windowHeight;
@@ -274,10 +281,10 @@ namespace gfx
 		desc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		desc.SampleDesc.Count = 1;
 
-		D3D12_HEAP_PROPERTIES heapProps{};
+		auto heapProps = D3D12_HEAP_PROPERTIES{};
 		heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-		D3D12_CLEAR_VALUE clear{};
+		auto clear               = D3D12_CLEAR_VALUE{};
 		clear.Format             = DXGI_FORMAT_D24_UNORM_S8_UINT;
 		clear.DepthStencil.Depth = 1.0f;
 
@@ -370,20 +377,19 @@ namespace gfx
 
 		WaitForSingleObject(m_frameFenceEvents[backBufferIndex], INFINITE);
 
-		auto cmdList = m_nvrhiDevice->createCommandList();
-		cmdList->open();
+		m_mainCommandList->open();
 
 		nvrhi::utils::ClearColorAttachment(
-			cmdList,
+			m_mainCommandList,
 			nvrhiFramebuffer,
 			0,
 			nvrhi::Color{ 0, 0, 0, 1 });
 
-		nvrhi::utils::ClearDepthStencilAttachment(cmdList, nvrhiFramebuffer, 1.0f, 0);
+		nvrhi::utils::ClearDepthStencilAttachment(m_mainCommandList, nvrhiFramebuffer, 1.0f, 0);
 
-		cmdList->close();
+		m_mainCommandList->close();
 
-		m_nvrhiDevice->executeCommandList(cmdList);
+		m_nvrhiDevice->executeCommandList(m_mainCommandList);
 
 		FrameGraph           fg;
 		FrameGraphBlackboard blackboard;
@@ -402,6 +408,9 @@ namespace gfx
 
 		m_commandQueue->Signal(m_frameFence.Get(), m_frameCount);
 		m_frameFence->SetEventOnCompletion(m_frameCount, m_frameFenceEvents[backBufferIndex]);
+
+		//std::this_thread::sleep_for(std::chrono::milliseconds(0));
+		//m_nvrhiDevice->runGarbageCollection();
 
 		++m_frameCount;
 	}

@@ -175,8 +175,15 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		game::GfxHandle graphics, camera;
 
-		createGraphics({ .wnd = { .hwnd = nullptr }, .width = 800u, .height = 600u }, &graphics) >>
-			berniniErrChecker;
+		auto gfxOpts                     = GfxOptions{};
+		gfxOpts.wnd.hwnd                 = nullptr;
+		gfxOpts.width                    = opts.width;
+		gfxOpts.height                   = opts.height;
+		gfxOpts.headless                 = false;
+		gfxOpts.enableDebugLayer         = true;
+		gfxOpts.enableGPUValidationLayer = true;
+
+		createGraphics(gfxOpts, &graphics) >> berniniErrChecker;
 
 		auto cameraDesc = GfxCameraDesc{ .transform  = { .position = { 0.0f, 0.0f, -20.0f },
 			                                             .forward  = { 0.0f, 0.0f, -1.0f } },

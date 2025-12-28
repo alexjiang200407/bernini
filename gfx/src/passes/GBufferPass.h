@@ -19,11 +19,20 @@ namespace gfx
 	{
 	public:
 		void
+		Init(nvrhi::DeviceHandle device)
+		{
+			m_mainCommandList = device->createCommandList();
+		}
+
+		void
 		AttachToFrameGraph(
 			FrameGraph&                          frameGraph,
 			FrameGraphBlackboard&                blackBoard,
 			RenderArgs                           renderArgs,
 			Camera&                              camera,
 			std::span<std::unique_ptr<Drawable>> draw);
+
+	private:
+		nvrhi::CommandListHandle m_mainCommandList;
 	};
 }

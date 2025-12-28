@@ -37,10 +37,9 @@ namespace gfx
 				auto screenH           = renderArgs.screenHeight;
 				auto outputFramebuffer = renderArgs.outBuffer;
 
-				auto mainCommandList = device->createCommandList();
-				mainCommandList->open();
+				m_mainCommandList->open();
 
-				GeomPass::UpdateCameraBuffer(mainCommandList, camera);
+				GeomPass::UpdateCameraBuffer(m_mainCommandList, camera);
 
 				auto pipelineDesc = nvrhi::GraphicsPipelineDesc{};
 
@@ -95,7 +94,7 @@ namespace gfx
 						gfxState.addBindingSet(perObjBindingSet);
 					}
 
-					GeomPass::UpdateTransformBuffer(mainCommandList, drawable->GetTransform());
+					GeomPass::UpdateTransformBuffer(m_mainCommandList, drawable->GetTransform());
 
 					drawable->AttachVertexLayout(pipelineDesc);
 					drawable->AttachVertexShader(pipelineDesc);
@@ -109,14 +108,14 @@ namespace gfx
 					auto params = DrawParams{
 						.gfxState    = gfxState,
 						.device      = device,
-						.commandList = mainCommandList,
+						.commandList = m_mainCommandList,
 					};
 
 					drawable->Draw(params);
 				}
 
-				mainCommandList->close();
-				device->executeCommandList(mainCommandList);
+				m_mainCommandList->close();
+				device->executeCommandList(m_mainCommandList);
 			});
 	}
 
