@@ -1,13 +1,14 @@
 #include "buffer/DynamicConstantBuffer.h"
 #include "shader_reflect/ShaderInput.h"
 #include <core/file/file.h>
+
 namespace gfx
 {
 	DynamicConstantBuffer::DynamicConstantBuffer(
 		nvrhi::DeviceHandle              device,
 		const DynamicConstantBufferDesc& elementDesc)
 	{
-		DynamicConstantBuffer::Init(device, elementDesc);
+		Init(device, elementDesc);
 	}
 
 	DynamicConstantBuffer::DynamicConstantBuffer(
@@ -24,11 +25,33 @@ namespace gfx
 		Init(device, desc);
 	}
 
+	DynamicConstantBuffer::DynamicConstantBuffer(DynamicConstantBuffer&& other) noexcept :
+		m_layoutMap(std::move(other.m_layoutMap)), m_bufferDesc(std::move(other.m_bufferDesc)),
+		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data))
+	{}
+
+	DynamicConstantBuffer&
+	DynamicConstantBuffer::operator=(DynamicConstantBuffer&& other) noexcept
+	{
+		if (this != std::addressof(other))
+		{
+			Release();
+			m_layoutMap  = std::move(other.m_layoutMap);
+			m_bufferDesc = std::move(other.m_bufferDesc);
+			m_buf        = std::move(other.m_buf);
+			m_data       = std::move(other.m_data);
+		}
+		return *this;
+	}
+
 	void
 	DynamicConstantBuffer::Init(
 		nvrhi::DeviceHandle              device,
 		const DynamicConstantBufferDesc& elementDesc)
 	{
+		assert(device.Get() != nullptr);
+		assert(!Initialized() && "DynamicConstantBuffer::Init called twice");
+
 		auto ctx = DynamicConstantBufferDesc::BuildLayoutMapContext{};
 		elementDesc.root->BuildLayoutMap(&m_layoutMap, ctx);
 		auto totalSize = align(ctx.offset, 16u);
@@ -45,7 +68,10 @@ namespace gfx
 			desc.setIsVolatile(true).setMaxVersions(16);
 		}
 
-		DynamicBuffer::Init(device, desc);
+		m_bufferDesc = desc;
+		m_buf        = device->createBuffer(m_bufferDesc);
+		m_data       = std::make_unique<std::byte[]>(m_bufferDesc.byteSize);
+		std::memset(m_data.get(), 0, m_bufferDesc.byteSize);
 	}
 
 	DynamicConstantBuffer::View
@@ -177,5 +203,27 @@ namespace gfx
 	DynamicConstantBuffer::GetBindingSetItem(uint32_t slot) const noexcept
 	{
 		return nvrhi::BindingSetItem::ConstantBuffer(slot, GetBufferHandle());
+	}
+
+	void
+	DynamicConstantBuffer::Update(nvrhi::CommandListHandle cmdList) noexcept
+	{
+		assert(m_buf.Get());
+		cmdList->writeBuffer(m_buf, m_data.get(), m_bufferDesc.byteSize);
+	}
+
+	bool
+	DynamicConstantBuffer::Initialized() const noexcept
+	{
+		return m_buf != nullptr;
+	}
+
+	void
+	DynamicConstantBuffer::Release() noexcept
+	{
+		m_data.reset();
+		m_bufferDesc = {};
+		m_buf.Reset();
+		m_layoutMap.clear();
 	}
 }

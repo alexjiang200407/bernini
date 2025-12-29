@@ -1,14 +1,13 @@
 #pragma once
 #include "ElementType.h"
 #include "GfxException.h"
-#include "buffer/DynamicBuffer.h"
 #include "buffer/DynamicConstantBufferDesc.h"
 #include <core/str/str.h>
 #include <core/type_traits.h>
 
 namespace gfx
 {
-	class DynamicConstantBuffer : public DynamicBuffer
+	class DynamicConstantBuffer
 	{
 	public:
 		class View
@@ -61,11 +60,6 @@ namespace gfx
 				return *this;
 			}
 
-			/// <summary>
-			/// Assignment but swallow any exceptions
-			/// </summary>
-			/// <typeparam name="T">Any type that is trivially copyable</typeparam>
-			/// <param name="val">value</param>
 			template <core::type_traits::trivially_copyable T>
 			void
 			operator=(T val) noexcept
@@ -124,7 +118,10 @@ namespace gfx
 		};
 
 	public:
-		DynamicConstantBuffer() noexcept = default;
+		DynamicConstantBuffer() noexcept                    = default;
+		DynamicConstantBuffer(const DynamicConstantBuffer&) = delete;
+		DynamicConstantBuffer(DynamicConstantBuffer&&) noexcept;
+
 		DynamicConstantBuffer(
 			nvrhi::DeviceHandle              device,
 			const DynamicConstantBufferDesc& elementDesc);
@@ -136,13 +133,19 @@ namespace gfx
 			uint32_t            bindingSpace,
 			bool                isVolatile = false);
 
+		DynamicConstantBuffer&
+		operator=(const DynamicConstantBuffer&) = delete;
+
+		DynamicConstantBuffer&
+		operator=(DynamicConstantBuffer&&) noexcept;
+
 		View
 		operator[](std::string_view name) noexcept;
 
 		const View
 		operator[](std::string_view name) const noexcept
 		{
-			const_cast<const DynamicConstantBuffer&>(*this).At(name);
+			return const_cast<DynamicConstantBuffer*>(this)->At(name);
 		}
 
 		const View
@@ -163,17 +166,61 @@ namespace gfx
 		const LayoutEntry&
 		GetLayoutEntry(std::string_view name) const;
 
-		DynamicConstantBuffer&
-		operator=(DynamicConstantBuffer&&) noexcept = default;
+		void
+		Update(nvrhi::CommandListHandle cmdList) noexcept;
 
-		DynamicConstantBuffer(DynamicConstantBuffer&&) noexcept = default;
+		[[nodiscard]]
+		std::string_view
+		GetName() const noexcept
+		{
+			return m_bufferDesc.debugName;
+		}
 
-	protected:
+		[[nodiscard]] operator nvrhi::BufferHandle() const noexcept { return m_buf; }
+		[[nodiscard]] operator nvrhi::IBuffer*() const noexcept { return m_buf.Get(); }
+
+		[[nodiscard]]
+		bool
+		Initialized() const noexcept;
+
+		void
+		Release() noexcept;
+
+		[[nodiscard]] [[deprecated("Unsafe: only use for testing or inspection purposes")]]
+		std::byte*
+		GetRawData() noexcept
+		{
+			return m_data.get();
+		}
+
+		const nvrhi::BufferHandle
+		GetBufferHandle() const noexcept
+		{
+			return m_buf;
+		}
+
+		[[nodiscard]]
+		uint32_t
+		GetTotalSize() const noexcept
+		{
+			return m_bufferDesc.byteSize;
+		}
+
+	private:
 		void
 		Init(nvrhi::DeviceHandle device, const DynamicConstantBufferDesc& elementDesc);
 
-	private:
-		LayoutMap m_layoutMap;
+		[[nodiscard]]
+		bool
+		IsVolatile() const noexcept
+		{
+			return m_bufferDesc.isVolatile;
+		}
+
+		LayoutMap                    m_layoutMap;
+		nvrhi::BufferDesc            m_bufferDesc;
+		nvrhi::BufferHandle          m_buf;
+		std::unique_ptr<std::byte[]> m_data;
 
 		friend class View;
 	};
