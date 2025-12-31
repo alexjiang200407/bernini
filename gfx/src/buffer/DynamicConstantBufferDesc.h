@@ -10,6 +10,16 @@ namespace gfx
 		uint32_t elemSize;
 		uint32_t stride;  // 0 if not array
 		uint32_t count;   // 1 if not array
+
+		GroupType   groupType;
+		ElementType elemType;
+	};
+
+	enum class GroupType : uint8_t
+	{
+		Single,  // leaf value (float, int, float3, etc.)
+		Struct,  // struct node
+		Array    // array of elements or structs
 	};
 
 	using LayoutMap = std::

@@ -10,53 +10,112 @@ namespace gfx
 	class DynamicConstantBuffer
 	{
 	public:
-		class View
+		class Accessor
 		{
 		private:
-			View() = default;
-			View(uint32_t totalOffset, DynamicConstantBuffer* parent, std::string key) :
+			Accessor() = default;
+			Accessor(uint32_t totalOffset, DynamicConstantBuffer* parent, std::string key) :
 				m_totalOffset{ totalOffset }, m_parent{ parent }, m_key{ std::move(key) }
 			{}
 
 		public:
-			View
+			Accessor
 			At(std::string_view key) const;
 
-			View
+			Accessor
 			At(uint32_t index) const;
 
-			View
+			Accessor
 			At(std::string_view key)
 			{
-				return const_cast<const View&>(*this).At(key);
+				return const_cast<const Accessor&>(*this).At(key);
 			}
 
-			View
+			Accessor
 			At(uint32_t index)
 			{
-				return const_cast<const View&>(*this).At(index);
+				return const_cast<const Accessor&>(*this).At(index);
 			}
 
 			template <core::type_traits::trivially_copyable T>
-			View&
-			Assign(T val)
+			operator T() const
 			{
 				if (IsNull())
+				{
 					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBuffer::View::Assign",
-						                "Cannot assign using a null view" };
+						                "DynamicConstantBuffer::Accessor::operator T()",
+						                "Cannot read from a null accessor" };
+				}
 
-				auto& entry = m_parent->GetLayoutEntry(m_key);
+				const auto& entry = m_parent->GetLayoutEntry(m_key);
+
+				if (entry.groupType != GroupType::Single)
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBuffer::Accessor::operator T()",
+						                "Cannot read non-leaf entry: " + m_key };
+				}
+
+				if (entry.elemType != ElementTypeOf<T>)
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBuffer::Accessor::operator T()",
+						                "Requested type does not match element type for entry: " +
+						                    m_key };
+				}
+
 				if (sizeof(T) != entry.elemSize)
 				{
 					throw GfxException{
 						GFX_RESULT_DYNAMIC_BUFFER,
-						"DynamicConstantBuffer::View::Assign",
+						"DynamicConstantBuffer::Accessor::operator T()",
+						"Requested type size does not match element size for entry: " + m_key
+					};
+				}
+
+				T value{};
+				std::memcpy(&value, m_parent->GetRawData() + m_totalOffset, sizeof(T));
+				return value;
+			}
+
+			template <core::type_traits::trivially_copyable T>
+			Accessor&
+			Assign(T val)
+			{
+				if (IsNull())
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBuffer::Accessor::Assign",
+						                "Cannot assign using a null accessor" };
+				}
+
+				const auto& entry = m_parent->GetLayoutEntry(m_key);
+
+				if (entry.groupType != GroupType::Single)
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBuffer::Accessor::Assign",
+						                "Cannot assign to non-leaf entry: " + m_key };
+				}
+
+				if (entry.elemType != ElementTypeOf<T>)
+				{
+					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+						                "DynamicConstantBuffer::Accessor::Assign",
+						                "Assigned type does not match element type for entry: " +
+						                    m_key };
+				}
+
+				if (sizeof(T) != entry.elemSize)
+				{
+					throw GfxException{
+						GFX_RESULT_DYNAMIC_BUFFER,
+						"DynamicConstantBuffer::Accessor::Assign",
 						"Size of assigned value does not match element size for entry: " + m_key
 					};
 				}
-				std::memcpy(m_parent->GetRawData() + m_totalOffset, &val, sizeof(T));
 
+				std::memcpy(m_parent->GetRawData() + m_totalOffset, &val, sizeof(T));
 				return *this;
 			}
 
@@ -103,16 +162,77 @@ namespace gfx
 				return entry.stride != 0;
 			}
 
-			View
+			Accessor
 			operator[](std::string_view name) noexcept;
 
-			View
+			Accessor
 			operator[](uint32_t idx) noexcept;
 
 		private:
 			uint32_t               m_totalOffset = 0;
 			DynamicConstantBuffer* m_parent      = nullptr;
 			std::string            m_key         = "";
+
+			friend class DynamicConstantBuffer;
+		};
+
+		class View
+		{
+		public:
+			View(View&& rhs) noexcept : m_ptr(rhs.m_ptr) { rhs.m_ptr = nullptr; }
+
+			View(const View& rhs) noexcept : m_ptr(rhs.m_ptr) {}
+
+			View() = default;
+
+			[[nodiscard]] bool
+			IsNull() const noexcept
+			{
+				return m_ptr == nullptr;
+			}
+			[[nodiscard]] bool
+			IsValid() const noexcept
+			{
+				return m_ptr != nullptr;
+			}
+
+			const Accessor
+			At(std::string_view name) const
+			{
+				return m_ptr->At(name);
+			}
+
+			const Accessor
+			operator[](std::string_view name) const noexcept
+			{
+				return m_ptr->operator[](name);
+			}
+
+			View&
+			operator=(const View& rhs)
+			{
+				if (this != &rhs)
+				{
+					m_ptr = rhs.m_ptr;
+				}
+				return *this;
+			}
+
+			View&
+			operator=(View&& rhs) noexcept
+			{
+				if (this != &rhs)
+				{
+					m_ptr     = rhs.m_ptr;
+					rhs.m_ptr = nullptr;
+				}
+				return *this;
+			}
+
+		private:
+			View(DynamicConstantBuffer const* ptr) noexcept : m_ptr(ptr) {}
+
+			DynamicConstantBuffer const* m_ptr = nullptr;
 
 			friend class DynamicConstantBuffer;
 		};
@@ -139,19 +259,25 @@ namespace gfx
 		DynamicConstantBuffer&
 		operator=(DynamicConstantBuffer&&) noexcept;
 
-		View
+		Accessor
 		operator[](std::string_view name) noexcept;
 
-		const View
+		const Accessor
 		operator[](std::string_view name) const noexcept
 		{
 			return const_cast<DynamicConstantBuffer*>(this)->At(name);
 		}
 
-		const View
+		View
+		GetView() const noexcept
+		{
+			return View{ this };
+		}
+
+		const Accessor
 		At(std::string_view name) const;
 
-		View
+		Accessor
 		At(std::string_view name)
 		{
 			return const_cast<const DynamicConstantBuffer&>(*this).At(name);
@@ -222,6 +348,6 @@ namespace gfx
 		nvrhi::BufferHandle          m_buf;
 		std::unique_ptr<std::byte[]> m_data;
 
-		friend class View;
+		friend class Accessor;
 	};
 }

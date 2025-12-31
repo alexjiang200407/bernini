@@ -74,55 +74,76 @@ namespace gfx
 		std::memset(m_data.get(), 0, m_bufferDesc.byteSize);
 	}
 
-	DynamicConstantBuffer::View
-	DynamicConstantBuffer::View::At(std::string_view key) const
+	DynamicConstantBuffer::Accessor
+	DynamicConstantBuffer::Accessor::At(std::string_view name) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Cannot at using a null view" };
-
-		if (key.find('.') != std::string_view::npos)
 		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Nested keys are not supported in At(): " + std::string{ key } };
+				                "DynamicConstantBuffer::Accessor::At(name)",
+				                "Cannot access using a null accessor" };
 		}
 
-		auto  joined = std::format("{}.{}", m_key, key);
-		auto& entry  = m_parent->GetLayoutEntry(joined);
-		return View{ m_totalOffset + entry.relativeOffset, m_parent, joined };
+		// Disallow dotted (nested) names in the single-step At(name) API.
+		if (name.find('.') != std::string_view::npos)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::Accessor::At(name)",
+				                "Nested keys are not supported in At(): " + std::string{ name } };
+		}
+
+		// Current entry must be a struct in order to access a child by name
+		const auto& entry = m_parent->GetLayoutEntry(m_key);
+		if (entry.groupType != GroupType::Struct)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::Accessor::At(name)",
+				                "Attempted to access member of non-struct entry: " + m_key };
+		}
+
+		// Build the full key and look up the child's layout entry
+		const std::string fullKey =
+			m_key.empty() ? std::string{ name } : (m_key + "." + std::string{ name });
+		const auto& childEntry = m_parent->GetLayoutEntry(fullKey);
+
+		// childEntry.relativeOffset is relative to the struct start, so add to current offset
+		return Accessor{ m_totalOffset + childEntry.relativeOffset, m_parent, fullKey };
 	}
 
-	DynamicConstantBuffer::View
-	DynamicConstantBuffer::View::At(uint32_t index) const
+	DynamicConstantBuffer::Accessor
+	DynamicConstantBuffer::Accessor::At(uint32_t index) const
 	{
 		if (IsNull())
+		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Cannot at using a null view" };
+				                "DynamicConstantBuffer::Accessor::At(index)",
+				                "Cannot index using a null accessor" };
+		}
 
-		auto& entry = m_parent->GetLayoutEntry(m_key);
+		const auto& entry = m_parent->GetLayoutEntry(m_key);
+
+		// Must be an array to index
+		if (entry.groupType != GroupType::Array)
+		{
+			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+				                "DynamicConstantBuffer::Accessor::At(index)",
+				                "Attempted to index non-array entry: " + m_key };
+		}
 
 		if (index >= entry.count)
 		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
+				                "DynamicConstantBuffer::Accessor::At(index)",
 				                "Index out of range for entry: " + m_key };
 		}
 
-		if (entry.count == 1)
-		{
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Cannot index a non-array entry: " + m_key };
-		}
+		const uint32_t newOffset = m_totalOffset + index * entry.stride;
 
-		return View{ m_totalOffset + index * entry.stride, m_parent, m_key };
+		return Accessor{ newOffset, m_parent, m_key };
 	}
 
-	DynamicConstantBuffer::View
-	DynamicConstantBuffer::View::operator[](std::string_view name) noexcept
+	DynamicConstantBuffer::Accessor
+	DynamicConstantBuffer::Accessor::operator[](std::string_view name) noexcept
 	{
 		try
 		{
@@ -130,12 +151,12 @@ namespace gfx
 		}
 		catch (...)
 		{
-			return View{};
+			return Accessor{};
 		}
 	}
 
-	DynamicConstantBuffer::View
-	DynamicConstantBuffer::View::operator[](uint32_t idx) noexcept
+	DynamicConstantBuffer::Accessor
+	DynamicConstantBuffer::Accessor::operator[](uint32_t idx) noexcept
 	{
 		try
 		{
@@ -143,7 +164,7 @@ namespace gfx
 		}
 		catch (...)
 		{
-			return View{};
+			return Accessor{};
 		}
 	}
 
@@ -160,7 +181,7 @@ namespace gfx
 			                "Could not find entry" };
 	}
 
-	DynamicConstantBuffer::View
+	DynamicConstantBuffer::Accessor
 	DynamicConstantBuffer::operator[](std::string_view name) noexcept
 	{
 		try
@@ -169,11 +190,11 @@ namespace gfx
 		}
 		catch (...)
 		{
-			return View{};
+			return Accessor{};
 		}
 	}
 
-	const DynamicConstantBuffer::View
+	const DynamicConstantBuffer::Accessor
 	DynamicConstantBuffer::At(std::string_view name) const
 	{
 		if (name.find('.') != std::string_view::npos)
@@ -184,9 +205,9 @@ namespace gfx
 		}
 
 		auto& entry = GetLayoutEntry(name);
-		return View{ entry.relativeOffset,
-			         const_cast<gfx::DynamicConstantBuffer*>(this),
-			         std::string(name) };
+		return Accessor{ entry.relativeOffset,
+			             const_cast<gfx::DynamicConstantBuffer*>(this),
+			             std::string(name) };
 	}
 
 	nvrhi::BindingLayoutItem

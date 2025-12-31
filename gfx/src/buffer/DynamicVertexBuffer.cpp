@@ -24,20 +24,20 @@ namespace gfx
 		m_totalSize = offset;
 	}
 
-	DynamicBufferItem::View
+	DynamicBufferItem::Accessor
 	DynamicBufferItem::operator[](std::string_view name) noexcept
 	{
 		auto it = m_elementMap.find(std::string{ name });
 		if (it == m_elementMap.end())
 			return {};
 		auto& desc  = it->second;
-		auto  view  = View{};
+		auto  view  = Accessor{};
 		view.m_data = reinterpret_cast<uint8_t*>(m_data) + desc.offset;
 		view.m_type = desc.type;
 		return view;
 	}
 
-	DynamicBufferItem::View
+	DynamicBufferItem::Accessor
 	DynamicBufferItem::At(std::string_view name)
 	{
 		auto it = m_elementMap.find(std::string{ name });
@@ -45,7 +45,7 @@ namespace gfx
 			throw core::except::BerniniException{ "DynamicBuffer exception",
 				                                  "Element not found in DynamicBufferItem::At" };
 		auto& desc  = it->second;
-		auto  view  = View{};
+		auto  view  = Accessor{};
 		view.m_data = reinterpret_cast<uint8_t*>(m_data) + desc.offset;
 		view.m_type = desc.type;
 		return view;
@@ -60,7 +60,7 @@ namespace gfx
 	DynamicVertexBuffer::~DynamicVertexBuffer() noexcept { Release(); }
 
 	bool
-	DynamicBufferItem::View::operator==(const View& rhs) const noexcept
+	DynamicBufferItem::Accessor::operator==(const Accessor& rhs) const noexcept
 	{
 		if (!Valid() || !rhs.Valid())
 			return false;
@@ -90,11 +90,7 @@ namespace gfx
 		return m_count;
 	}
 
-	DynamicBufferItem::View::
-	operator bool() const noexcept
-	{
-		return Valid();
-	}
+	DynamicBufferItem::Accessor::operator bool() const noexcept { return Valid(); }
 
 	DynamicBufferDesc&
 	DynamicBufferDesc::AddElement(std::string_view name, ElementType type, uint32_t offset)
@@ -149,13 +145,13 @@ namespace gfx
 	}
 
 	bool
-	DynamicBufferItem::View::Valid() const noexcept
+	DynamicBufferItem::Accessor::Valid() const noexcept
 	{
 		return m_data != nullptr && m_type != ElementType::kInvalid;
 	}
 
 	std::ostream&
-	operator<<(std::ostream& os, const DynamicBufferItem::View& view) noexcept
+	operator<<(std::ostream& os, const DynamicBufferItem::Accessor& view) noexcept
 	{
 		switch (view.m_type)
 		{
@@ -239,7 +235,7 @@ namespace gfx
 			}
 
 		default:
-			os << "<Invalid DynamicBufferItem::View>";
+			os << "<Invalid DynamicBufferItem::Accessor>";
 			break;
 		}
 
@@ -310,14 +306,13 @@ namespace gfx
 					//	break;
 					//}
 
-					vertexAttrs.emplace_back(
-						nvrhi::VertexAttributeDesc{}
-							.setName(attr.semanticName)
-							.setFormat(attr.format)
-							.setBufferIndex(bufIdx)
-							.setOffset(offset)
-							.setElementStride(stride)
-							.setIsInstanced(false));
+					vertexAttrs.emplace_back(nvrhi::VertexAttributeDesc{}
+					                             .setName(attr.semanticName)
+					                             .setFormat(attr.format)
+					                             .setBufferIndex(bufIdx)
+					                             .setOffset(offset)
+					                             .setElementStride(stride)
+					                             .setIsInstanced(false));
 
 					found = true;
 					break;

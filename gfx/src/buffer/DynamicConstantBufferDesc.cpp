@@ -78,12 +78,12 @@ namespace gfx
 			{
 				layoutMap->emplace(
 					m_name,
-					LayoutEntry{
-						.relativeOffset = prevOffset - ctx.parentOffset,
-						.elemSize       = elemSize,
-						.stride         = 0,
-						.count          = 1,
-					});
+					LayoutEntry{ .relativeOffset = prevOffset - ctx.parentOffset,
+				                 .elemSize       = elemSize,
+				                 .stride         = 0,
+				                 .count          = 1,
+				                 .groupType      = GroupType::Struct,
+				                 .elemType       = ElementType::kInvalid });
 			}
 		}
 
@@ -133,12 +133,12 @@ namespace gfx
 			{
 				layoutMap->emplace(
 					m_name,
-					LayoutEntry{
-						.relativeOffset = ctx.offset - ctx.parentOffset,
-						.elemSize       = elemSize,
-						.stride         = 0,
-						.count          = 1,
-					});
+					LayoutEntry{ .relativeOffset = ctx.offset - ctx.parentOffset,
+				                 .elemSize       = elemSize,
+				                 .stride         = 0,
+				                 .count          = 1,
+				                 .groupType      = GroupType::Single,
+				                 .elemType       = m_type });
 			}
 			ctx.offset += elemSize;
 		}
@@ -174,12 +174,12 @@ namespace gfx
 			{
 				layoutMap->emplace(
 					m_name,
-					LayoutEntry{
-						.relativeOffset = startOffset,
-						.elemSize       = elemSize,
-						.stride         = align16(elemSize),
-						.count          = m_count,
-					});
+					LayoutEntry{ .relativeOffset = startOffset,
+				                 .elemSize       = elemSize,
+				                 .stride         = align16(elemSize),
+				                 .count          = m_count,
+				                 .groupType      = GroupType::Array,
+				                 .elemType       = m_type });
 			}
 		}
 
@@ -216,12 +216,12 @@ namespace gfx
 			{
 				layoutMap->emplace(
 					m_name,
-					LayoutEntry{
-						.relativeOffset = startOffset,
-						.elemSize       = ctx1.offset,
-						.stride         = align16(ctx1.offset),
-						.count          = m_count,
-					});
+					LayoutEntry{ .relativeOffset = startOffset,
+				                 .elemSize       = ctx1.offset,
+				                 .stride         = align16(ctx1.offset),
+				                 .count          = m_count,
+				                 .groupType      = GroupType::Array,
+				                 .elemType       = ElementType::kInvalid });
 			}
 		}
 

@@ -94,14 +94,14 @@ namespace gfx
 		};
 
 	public:
-		class View
+		class Accessor
 		{
 			friend class DynamicBufferItem;
 			friend std::ostream&
-			operator<<(std::ostream& os, const View& view) noexcept;
+			operator<<(std::ostream& os, const Accessor& view) noexcept;
 
 		private:
-			View() = default;
+			Accessor() = default;
 
 		public:
 			template <core::type_traits::trivially_copyable T>
@@ -118,7 +118,7 @@ namespace gfx
 			}
 
 			[[nodiscard]] bool
-			operator==(const View& rhs) const noexcept;
+			operator==(const Accessor& rhs) const noexcept;
 
 			explicit
 			operator bool() const noexcept;
@@ -148,12 +148,12 @@ namespace gfx
 				if (m_data == nullptr || m_type == ElementType::kInvalid)
 					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 						                "DynamicBuffer exception",
-						                "Empty View used for View::Assign" };
+						                "Empty Accessor used for Accessor::Assign" };
 
 				if (sizeof(T) != sizeOfElementType(m_type))
 					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 						                "DynamicBuffer exception",
-						                "Size mismatch in View::Assign" };
+						                "Size mismatch in Accessor::Assign" };
 
 				auto& ref = *static_cast<T*>(m_data);
 				std::memcpy(m_data, &val, sizeof(T));
@@ -176,10 +176,10 @@ namespace gfx
 	public:
 		DynamicBufferItem(void* baseData, std::span<const DynamicBufferDescElement> elements);
 
-		View
+		Accessor
 		operator[](std::string_view name) noexcept;
 
-		View
+		Accessor
 		At(std::string_view name);
 
 		template <typename T>
@@ -250,5 +250,5 @@ namespace gfx
 	};
 
 	std::ostream&
-	operator<<(std::ostream& os, const DynamicBufferItem::View& view) noexcept;
+	operator<<(std::ostream& os, const DynamicBufferItem::Accessor& view) noexcept;
 }

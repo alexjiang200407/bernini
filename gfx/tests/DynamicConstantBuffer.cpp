@@ -604,3 +604,193 @@ TEST_CASE("Constant buffer array", "[dynamic_constant_buffer][dynamic_buffer][ar
 		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
 	}
 }
+
+template <typename T>
+concept AssignableFromFloat = requires(T v) {
+	{ v = 1.0f };
+};
+
+template <typename T>
+concept HasAssign = requires(T v) {
+	{ v.Assign(1.0f) };
+};
+
+TEST_CASE("Read-only view immutability", "[dynamic_constant_buffer][view][immutable]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	auto desc = gfx::DynamicConstantBufferDesc{};
+	desc.AddElement("a", gfx::ElementType::kFloat).SetName("PerFrameConstantBuffer");
+
+	auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+	using AccessorType = decltype(cb.GetView()["a"]);
+
+	SECTION("Compile-time immutability")
+	{
+		static_assert(
+			!AssignableFromFloat<AccessorType>,
+			"View-accessed accessor must not be assignable");
+
+		static_assert(!HasAssign<AccessorType>, "View-accessed accessor must not expose Assign()");
+	}
+
+	SECTION("Raw view can read data")
+	{
+		cb.At("a").Assign(3.14159f);
+
+		auto view = cb.GetView();
+
+		CHECK(static_cast<float>(view.At("a")) == 3.14159f);
+	}
+
+	SECTION("Buffer layout and memory")
+	{
+		cb.At("a").Assign(3.14159f);
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 16);
+
+		auto raw      = std::span{ cb.GetRawData(), totalSize };
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(3.14159f, 0);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+}
+
+TEST_CASE(
+	"DynamicConstantBuffer Accessor conversion operator",
+	"[dynamic_constant_buffer][accessor][conversion]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	auto desc = gfx::DynamicConstantBufferDesc{};
+	desc.AddElement("a", gfx::ElementType::kFloat);
+	desc.AddElement("b", gfx::ElementType::kInt);
+	desc.SetName("TestCB");
+
+	auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+	SECTION("Reads back assigned float value")
+	{
+		cb.At("a").Assign(3.5f);
+
+		float value = cb.GetView()["a"];
+		CHECK(value == 3.5f);
+	}
+
+	SECTION("Reads back assigned int value")
+	{
+		cb.At("b").Assign(42);
+
+		int value = cb.GetView()["b"];
+		CHECK(value == 42);
+	}
+
+	SECTION("Read does not modify underlying buffer")
+	{
+		cb.At("a").Assign(1.25f);
+
+		float v1 = cb.GetView()["a"];
+		float v2 = cb.GetView()["a"];
+
+		CHECK(v1 == 1.25f);
+		CHECK(v2 == 1.25f);
+	}
+}
+
+TEST_CASE(
+	"Accessor conversion operator behavior",
+	"[dynamic_constant_buffer][accessor][conversion]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	auto desc = gfx::DynamicConstantBufferDesc{};
+	desc.AddElement("a", gfx::ElementType::kFloat).SetName("PerFrameConstantBuffer");
+	desc.AddElement("b", gfx::ElementType::kInt).SetName("SomeIntBuffer");
+	auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+	SECTION("Valid conversion reads correctly")
+	{
+		cb.At("a").Assign(3.14159f);
+		float val = static_cast<float>(cb.GetView()["a"]);
+		CHECK(val == 3.14159f);
+	}
+
+	SECTION("Assign and read int element")
+	{
+		cb.At("b").Assign(42);
+		int val = static_cast<int>(cb.GetView()["b"]);
+		CHECK(val == 42);
+	}
+
+	SECTION("Reading with wrong trivially-copyable type throws")
+	{
+		cb.At("a").Assign(1.23f);
+
+		REQUIRE_THROWS_AS(static_cast<double>(cb.GetView()["a"]), gfx::GfxException);
+		REQUIRE_THROWS_AS(static_cast<int>(cb.GetView()["a"]), gfx::GfxException);
+	}
+
+	SECTION("Conversion throws on size mismatch")
+	{
+		// Build an element whose size != sizeof(float)
+		desc.AddElement("c", gfx::ElementType::kFloat3);  // 3 floats = 12 bytes
+		cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		// Assign valid data
+		cb.At("c").Assign(glm::vec3{ 1.0f, 2.0f, 3.0f });
+
+		// Valid accessor, but conversion requests wrong size
+		auto view = cb.GetView().At("c");
+
+		// sizeof(float) != sizeof(Float3) → conversion operator must throw
+		REQUIRE_THROWS_AS(static_cast<float>(view), gfx::GfxException);
+	}
+
+	SECTION("Assigning and reading array element")
+	{
+		desc.AddStruct("arrStruct")
+			.AddStructArray("arrStruct.arr", 4)
+			.AddElement("arrStruct.arr.value", gfx::ElementType::kFloat);
+
+		cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto arrStruct = cb.At("arrStruct");
+		REQUIRE(arrStruct.IsValid());
+
+		auto arr = arrStruct.At("arr");
+		REQUIRE(arr.IsValid());
+		REQUIRE(arr.IsArray());
+
+		auto elem = arr.At(2);
+		REQUIRE(elem.IsValid());
+
+		elem.At("value").Assign(9.81f);
+
+		float val = static_cast<float>(elem.At("value"));
+		CHECK(val == 9.81f);
+	}
+}
