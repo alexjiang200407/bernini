@@ -679,31 +679,32 @@ TEST_CASE(
 	REQUIRE(gfx);
 	auto device = gfx->GetDevice();
 
-	auto desc = gfx::DynamicConstantBufferDesc{};
-	desc.AddElement("a", gfx::ElementType::kFloat);
-	desc.AddElement("b", gfx::ElementType::kInt);
-	desc.SetName("TestCB");
-
-	auto cb = gfx::DynamicConstantBuffer{ device, desc };
-
-	SECTION("Reads back assigned float value")
+	SECTION("Reads back assigned float and int values")
 	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kFloat);
+		desc.AddElement("b", gfx::ElementType::kInt);
+		desc.SetName("TestCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
 		cb.At("a").Assign(3.5f);
+		float f = cb.GetView()["a"];
+		CHECK(f == 3.5f);
 
-		float value = cb.GetView()["a"];
-		CHECK(value == 3.5f);
-	}
-
-	SECTION("Reads back assigned int value")
-	{
 		cb.At("b").Assign(42);
-
-		int value = cb.GetView()["b"];
-		CHECK(value == 42);
+		int i = cb.GetView()["b"];
+		CHECK(i == 42);
 	}
 
 	SECTION("Read does not modify underlying buffer")
 	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kFloat);
+		desc.SetName("TestCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
 		cb.At("a").Assign(1.25f);
 
 		float v1 = cb.GetView()["a"];
@@ -712,11 +713,63 @@ TEST_CASE(
 		CHECK(v1 == 1.25f);
 		CHECK(v2 == 1.25f);
 	}
+
+	SECTION("Conversion throws on element-type mismatch (trivially-copyable but wrong type)")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kFloat);
+		desc.SetName("TestCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		cb.At("a").Assign(1.23f);
+
+		// double and int are trivially copyable but ElementType::kFloat expects float
+		REQUIRE_THROWS_AS(static_cast<double>(cb.GetView()["a"]), gfx::GfxException);
+		REQUIRE_THROWS_AS(static_cast<int>(cb.GetView()["a"]), gfx::GfxException);
+	}
+
+	SECTION("Conversion throws on size mismatch")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("c", gfx::ElementType::kFloat3);
+		desc.SetName("TestCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		cb.At("c").Assign(glm::vec3{ 1.0f, 2.0f, 3.0f });
+
+		auto view = cb.GetView().At("c");
+
+		REQUIRE_THROWS_AS(static_cast<float>(view), gfx::GfxException);
+	}
+
+	SECTION("Assign rejects wrong element type; operator= swallows exceptions")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kFloat);
+		desc.SetName("TestCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		// Assign wrong type using Assign -> should throw
+		REQUIRE_THROWS_AS(cb.At("a").Assign(static_cast<int>(5)), gfx::GfxException);
+
+		// operator= is noexcept and swallows errors; value should remain unchanged
+		cb.At("a").Assign(2.0f);
+
+		// create non-const copy of Accessor to call operator=
+		auto a = cb.GetView()["a"];
+		a      = static_cast<int>(7);  // no throw, swallowed
+
+		float v = static_cast<float>(cb.GetView()["a"]);  // value remains 2.0f
+		CHECK(v == 2.0f);
+	}
 }
 
 TEST_CASE(
-	"Accessor conversion operator behavior",
-	"[dynamic_constant_buffer][accessor][conversion]")
+	"DynamicConstantBuffer Accessor nested structs and arrays",
+	"[dynamic_constant_buffer][accessor][arrays][structs]")
 {
 	auto gfxDesc     = GfxOptions{};
 	gfxDesc.headless = true;
@@ -727,70 +780,88 @@ TEST_CASE(
 	REQUIRE(gfx);
 	auto device = gfx->GetDevice();
 
-	auto desc = gfx::DynamicConstantBufferDesc{};
-	desc.AddElement("a", gfx::ElementType::kFloat).SetName("PerFrameConstantBuffer");
-	desc.AddElement("b", gfx::ElementType::kInt).SetName("SomeIntBuffer");
-	auto cb = gfx::DynamicConstantBuffer{ device, desc };
-
-	SECTION("Valid conversion reads correctly")
+	SECTION("Assigning and reading a single struct member")
 	{
-		cb.At("a").Assign(3.14159f);
-		float val = static_cast<float>(cb.GetView()["a"]);
-		CHECK(val == 3.14159f);
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("myStruct")
+			.AddElement("myStruct.value", gfx::ElementType::kFloat)
+			.SetName("StructCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto s = cb.At("myStruct");
+		s.At("value").Assign(9.42f);
+
+		float v = static_cast<float>(s.At("value"));
+		CHECK(v == 9.42f);
 	}
 
-	SECTION("Assign and read int element")
+	SECTION("Assigning and reading an array of floats")
 	{
-		cb.At("b").Assign(42);
-		int val = static_cast<int>(cb.GetView()["b"]);
-		CHECK(val == 42);
-	}
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("arr", gfx::ElementType::kFloat, 4).SetName("ArrayCB");
 
-	SECTION("Reading with wrong trivially-copyable type throws")
-	{
-		cb.At("a").Assign(1.23f);
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
 
-		REQUIRE_THROWS_AS(static_cast<double>(cb.GetView()["a"]), gfx::GfxException);
-		REQUIRE_THROWS_AS(static_cast<int>(cb.GetView()["a"]), gfx::GfxException);
-	}
-
-	SECTION("Conversion throws on size mismatch")
-	{
-		// Build an element whose size != sizeof(float)
-		desc.AddElement("c", gfx::ElementType::kFloat3);  // 3 floats = 12 bytes
-		cb = gfx::DynamicConstantBuffer{ device, desc };
-
-		// Assign valid data
-		cb.At("c").Assign(glm::vec3{ 1.0f, 2.0f, 3.0f });
-
-		// Valid accessor, but conversion requests wrong size
-		auto view = cb.GetView().At("c");
-
-		// sizeof(float) != sizeof(Float3) → conversion operator must throw
-		REQUIRE_THROWS_AS(static_cast<float>(view), gfx::GfxException);
-	}
-
-	SECTION("Assigning and reading array element")
-	{
-		desc.AddStruct("arrStruct")
-			.AddStructArray("arrStruct.arr", 4)
-			.AddElement("arrStruct.arr.value", gfx::ElementType::kFloat);
-
-		cb = gfx::DynamicConstantBuffer{ device, desc };
-
-		auto arrStruct = cb.At("arrStruct");
-		REQUIRE(arrStruct.IsValid());
-
-		auto arr = arrStruct.At("arr");
-		REQUIRE(arr.IsValid());
+		auto arr = cb.At("arr");
 		REQUIRE(arr.IsArray());
 
-		auto elem = arr.At(2);
-		REQUIRE(elem.IsValid());
+		arr.At(0).Assign(1.0f);
+		arr.At(1).Assign(2.0f);
+		arr.At(2).Assign(3.0f);
+		arr.At(3).Assign(4.0f);
 
-		elem.At("value").Assign(9.81f);
+		for (uint32_t i = 0; i < 4; ++i)
+		{
+			float val = static_cast<float>(arr.At(i));
+			CHECK(val == static_cast<float>(i + 1));
+		}
+	}
 
-		float val = static_cast<float>(elem.At("value"));
-		CHECK(val == 9.81f);
+	SECTION("Assigning and reading a struct array with nested member")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("structArray")
+			.AddStructArray("structArray.items", 3)
+			.AddElement("structArray.items.value", gfx::ElementType::kInt)
+			.SetName("StructArrayCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto structArr = cb.At("structArray").At("items");
+		REQUIRE(structArr.IsArray());
+
+		// Assign values to nested member 'value' of each element
+		for (uint32_t i = 0; i < 3; ++i)
+		{
+			structArr.At(i).At("value").Assign(static_cast<int>(i * 10));
+		}
+
+		// Verify
+		for (uint32_t i = 0; i < 3; ++i)
+		{
+			int val = static_cast<int>(structArr.At(i).At("value"));
+			CHECK(val == static_cast<int>(i * 10));
+		}
+	}
+
+	SECTION("Indexing non-array or accessing non-struct throws")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("f", gfx::ElementType::kFloat)
+			.AddStruct("s")
+			.AddElement("s.value", gfx::ElementType::kInt)
+			.SetName("ErrorCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		// Attempt to index a non-array element
+		REQUIRE_THROWS_AS(cb.At("f").At(0), gfx::GfxException);
+
+		// Attempt to access a member on a non-struct element
+		REQUIRE_THROWS_AS(cb.At("f").At("value"), gfx::GfxException);
+
+		// Attempt to access a non-existent struct member
+		REQUIRE_THROWS_AS(cb.At("s").At("missing"), gfx::GfxException);
 	}
 }

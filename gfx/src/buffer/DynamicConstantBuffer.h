@@ -2,11 +2,46 @@
 #include "ElementType.h"
 #include "GfxException.h"
 #include "buffer/DynamicConstantBufferDesc.h"
+#include <core/EnumSet.h>
 #include <core/str/str.h>
 #include <core/type_traits.h>
 
 namespace gfx
 {
+	//template <typename T>
+	//constexpr ElementType
+	//ElementTypeOf()
+	//{
+	//	using U = std::remove_cv_t<std::remove_reference_t<T>>;
+
+	//	if constexpr (std::is_same_v<U, float>)
+	//		return ElementType::kFloat;
+	//	else if constexpr (std::is_same_v<U, int>)
+	//		return ElementType::kInt;
+	//	else if constexpr (std::is_same_v<U, uint32_t>)
+	//		return ElementType::kUInt;
+	//	else if constexpr (std::is_same_v<U, short>)
+	//		return ElementType::kShort;
+	//	else if constexpr (std::is_same_v<U, unsigned short>)
+	//		return ElementType::kUShort;
+	//	else if constexpr (std::is_same_v<U, bool> || std::is_same_v<U, BOOL>)
+	//		return ElementType::kBool;
+
+	//	// Vector types
+	//	else if constexpr (std::is_same_v<U, glm::vec2>)
+	//		return ElementType::kFloat2;
+	//	else if constexpr (std::is_same_v<U, glm::vec3>)
+	//		return ElementType::kFloat3;
+	//	else if constexpr (std::is_same_v<U, glm::vec4>)
+	//		return ElementType::kFloat4;
+
+	//	// Matrix
+	//	else if constexpr (std::is_same_v<U, glm::mat4>)
+	//		return ElementType::kMat4;
+
+	//	else
+	//		return ElementType::kInvalid;
+	//}
 	class DynamicConstantBuffer
 	{
 	public:
@@ -47,35 +82,139 @@ namespace gfx
 						                "Cannot read from a null accessor" };
 				}
 
-				const auto& entry = m_parent->GetLayoutEntry(m_key);
+				const auto&              entry = m_parent->GetLayoutEntry(m_key);
+				core::EnumSet<GroupType> entrySet{ entry.groupType };
 
-				if (entry.groupType != GroupType::Single)
+				if (!entrySet.Any(GroupType::Single, GroupType::Array) ||
+				    entrySet.Any(GroupType::Struct))
 				{
 					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 						                "DynamicConstantBuffer::Accessor::operator T()",
 						                "Cannot read non-leaf entry: " + m_key };
 				}
 
-				if (entry.elemType != ElementTypeOf<T>)
+				const std::byte* src = m_parent->GetRawData() + m_totalOffset;
+
+				switch (entry.elemType)
 				{
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBuffer::Accessor::operator T()",
-						                "Requested type does not match element type for entry: " +
-						                    m_key };
+				case ElementType::kBool:
+					{
+						if constexpr (std::is_integral_v<T> || std::is_same_v<T, bool>)
+						{
+							uint32_t v{};
+							std::memcpy(&v, src, sizeof(uint32_t));
+							return static_cast<T>(v != 0);
+						}
+						break;
+					}
+
+				case ElementType::kShort:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							int16_t v{};
+							std::memcpy(&v, src, sizeof(int16_t));
+							return static_cast<T>(v);
+						}
+						break;
+					}
+
+				case ElementType::kUShort:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							uint16_t v{};
+							std::memcpy(&v, src, sizeof(uint16_t));
+							return static_cast<T>(v);
+						}
+						break;
+					}
+
+				case ElementType::kInt:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							int32_t v{};
+							std::memcpy(&v, src, sizeof(int32_t));
+							return static_cast<T>(v);
+						}
+						break;
+					}
+
+				case ElementType::kUInt:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							uint32_t v{};
+							std::memcpy(&v, src, sizeof(uint32_t));
+							return static_cast<T>(v);
+						}
+						break;
+					}
+
+				case ElementType::kFloat:
+					{
+						if constexpr (std::is_same_v<T, float>)
+						{
+							float v{};
+							std::memcpy(&v, src, sizeof(float));
+							return v;
+						}
+						break;
+					}
+
+				case ElementType::kFloat2:
+					{
+						if constexpr (std::is_same_v<T, glm::vec2>)
+						{
+							glm::vec2 v{};
+							std::memcpy(&v, src, sizeof(glm::vec2));
+							return v;
+						}
+						break;
+					}
+
+				case ElementType::kFloat3:
+					{
+						if constexpr (std::is_same_v<T, glm::vec3>)
+						{
+							glm::vec3 v{};
+							std::memcpy(&v, src, sizeof(glm::vec3));
+							return v;
+						}
+						break;
+					}
+
+				case ElementType::kFloat4:
+					{
+						if constexpr (std::is_same_v<T, glm::vec4>)
+						{
+							glm::vec4 v{};
+							std::memcpy(&v, src, sizeof(glm::vec4));
+							return v;
+						}
+						break;
+					}
+
+				case ElementType::kFloat4x4:
+					{
+						if constexpr (std::is_same_v<T, glm::mat4>)
+						{
+							glm::mat4 v{};
+							std::memcpy(&v, src, sizeof(glm::mat4));
+							return v;
+						}
+						break;
+					}
+
+				default:
+					break;
 				}
 
-				if (sizeof(T) != entry.elemSize)
-				{
-					throw GfxException{
-						GFX_RESULT_DYNAMIC_BUFFER,
-						"DynamicConstantBuffer::Accessor::operator T()",
-						"Requested type size does not match element size for entry: " + m_key
-					};
-				}
-
-				T value{};
-				std::memcpy(&value, m_parent->GetRawData() + m_totalOffset, sizeof(T));
-				return value;
+				throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+					                "DynamicConstantBuffer::Accessor::operator T()",
+					                "Requested type does not match element type for entry: " +
+					                    m_key };
 			}
 
 			template <core::type_traits::trivially_copyable T>
@@ -89,34 +228,125 @@ namespace gfx
 						                "Cannot assign using a null accessor" };
 				}
 
-				const auto& entry = m_parent->GetLayoutEntry(m_key);
+				const auto&              entry = m_parent->GetLayoutEntry(m_key);
+				core::EnumSet<GroupType> entrySet{ entry.groupType };
 
-				if (entry.groupType != GroupType::Single)
+				if (!entrySet.Any(GroupType::Single, GroupType::Array) ||
+				    entrySet.Any(GroupType::Struct))
 				{
 					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 						                "DynamicConstantBuffer::Accessor::Assign",
 						                "Cannot assign to non-leaf entry: " + m_key };
 				}
 
-				if (entry.elemType != ElementTypeOf<T>)
+				std::byte* dst = m_parent->GetRawData() + m_totalOffset;
+
+				switch (entry.elemType)
 				{
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
-						                "DynamicConstantBuffer::Accessor::Assign",
-						                "Assigned type does not match element type for entry: " +
-						                    m_key };
+				case ElementType::kBool:
+					{
+						if constexpr (std::is_integral_v<T> || std::is_same_v<T, bool>)
+						{
+							uint32_t v = (val != 0) ? 1u : 0u;
+							std::memcpy(dst, &v, sizeof(uint32_t));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kShort:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							int16_t v = static_cast<int16_t>(val);
+							std::memcpy(dst, &v, sizeof(int16_t));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kUShort:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							uint16_t v = static_cast<uint16_t>(val);
+							std::memcpy(dst, &v, sizeof(uint16_t));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kInt:
+					{
+						if constexpr (std::is_integral_v<T> || std::is_same_v<T, bool>)
+						{
+							uint32_t v = static_cast<uint32_t>(val);
+							std::memcpy(dst, &v, sizeof(uint32_t));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kUInt:
+					{
+						if constexpr (std::is_integral_v<T>)
+						{
+							uint32_t v = static_cast<uint32_t>(val);
+							std::memcpy(dst, &v, sizeof(uint32_t));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kFloat:
+					{
+						if constexpr (std::is_same_v<T, float>)
+						{
+							std::memcpy(dst, &val, sizeof(float));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kFloat2:
+					{
+						if constexpr (std::is_same_v<T, glm::vec2>)
+						{
+							std::memcpy(dst, &val, sizeof(glm::vec2));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kFloat3:
+					{
+						if constexpr (std::is_same_v<T, glm::vec3>)
+						{
+							std::memcpy(dst, &val, sizeof(glm::vec3));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kFloat4:
+					{
+						if constexpr (std::is_same_v<T, glm::vec4>)
+						{
+							std::memcpy(dst, &val, sizeof(glm::vec4));
+							return *this;
+						}
+						break;
+					}
+				case ElementType::kFloat4x4:
+					{
+						if constexpr (std::is_same_v<T, glm::mat4>)
+						{
+							std::memcpy(dst, &val, sizeof(glm::mat4));
+							return *this;
+						}
+						break;
+					}
+
+				default:
+					break;
 				}
 
-				if (sizeof(T) != entry.elemSize)
-				{
-					throw GfxException{
-						GFX_RESULT_DYNAMIC_BUFFER,
-						"DynamicConstantBuffer::Accessor::Assign",
-						"Size of assigned value does not match element size for entry: " + m_key
-					};
-				}
-
-				std::memcpy(m_parent->GetRawData() + m_totalOffset, &val, sizeof(T));
-				return *this;
+				throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+					                "DynamicConstantBuffer::Accessor::Assign",
+					                "Assigned type does not match element type for entry: " +
+					                    m_key };
 			}
 
 			template <core::type_traits::trivially_copyable T>

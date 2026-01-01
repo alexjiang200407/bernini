@@ -220,8 +220,8 @@ namespace gfx
 				                 .elemSize       = ctx1.offset,
 				                 .stride         = align16(ctx1.offset),
 				                 .count          = m_count,
-				                 .groupType      = GroupType::Array,
-				                 .elemType       = ElementType::kInvalid });
+				                 .groupType{ GroupType::Array, GroupType::Struct },
+				                 .elemType = ElementType::kInvalid });
 			}
 		}
 

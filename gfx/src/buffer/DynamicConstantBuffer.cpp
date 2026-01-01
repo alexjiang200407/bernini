@@ -94,7 +94,7 @@ namespace gfx
 
 		// Current entry must be a struct in order to access a child by name
 		const auto& entry = m_parent->GetLayoutEntry(m_key);
-		if (entry.groupType != GroupType::Struct)
+		if (!entry.groupType.All(GroupType::Struct))
 		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::Accessor::At(name)",
@@ -123,7 +123,7 @@ namespace gfx
 		const auto& entry = m_parent->GetLayoutEntry(m_key);
 
 		// Must be an array to index
-		if (entry.groupType != GroupType::Array)
+		if (!entry.groupType.All(GroupType::Array))
 		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::Accessor::At(index)",

@@ -1,3 +1,4 @@
+#pragma once
 namespace core
 {
 	template <class E, class U = std::underlying_type_t<E>>

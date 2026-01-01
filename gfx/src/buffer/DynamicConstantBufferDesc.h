@@ -1,9 +1,17 @@
 #pragma once
 #include "buffer/ElementType.h"
+#include <core/EnumSet.h>
 #include <core/str/str.h>
 
 namespace gfx
 {
+	enum class GroupType : uint8_t
+	{
+		Single = 1,       // leaf value (float, int, float3, etc.)
+		Struct = 1 << 1,  // struct node
+		Array  = 1 << 2   // array of elements or structs
+	};
+
 	struct LayoutEntry
 	{
 		uint32_t relativeOffset;
@@ -11,15 +19,8 @@ namespace gfx
 		uint32_t stride;  // 0 if not array
 		uint32_t count;   // 1 if not array
 
-		GroupType   groupType;
-		ElementType elemType;
-	};
-
-	enum class GroupType : uint8_t
-	{
-		Single,  // leaf value (float, int, float3, etc.)
-		Struct,  // struct node
-		Array    // array of elements or structs
+		core::EnumSet<GroupType> groupType;
+		ElementType              elemType;
 	};
 
 	using LayoutMap = std::
