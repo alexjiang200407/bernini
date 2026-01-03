@@ -8,40 +8,6 @@
 
 namespace gfx
 {
-	//template <typename T>
-	//constexpr ElementType
-	//ElementTypeOf()
-	//{
-	//	using U = std::remove_cv_t<std::remove_reference_t<T>>;
-
-	//	if constexpr (std::is_same_v<U, float>)
-	//		return ElementType::kFloat;
-	//	else if constexpr (std::is_same_v<U, int>)
-	//		return ElementType::kInt;
-	//	else if constexpr (std::is_same_v<U, uint32_t>)
-	//		return ElementType::kUInt;
-	//	else if constexpr (std::is_same_v<U, short>)
-	//		return ElementType::kShort;
-	//	else if constexpr (std::is_same_v<U, unsigned short>)
-	//		return ElementType::kUShort;
-	//	else if constexpr (std::is_same_v<U, bool> || std::is_same_v<U, BOOL>)
-	//		return ElementType::kBool;
-
-	//	// Vector types
-	//	else if constexpr (std::is_same_v<U, glm::vec2>)
-	//		return ElementType::kFloat2;
-	//	else if constexpr (std::is_same_v<U, glm::vec3>)
-	//		return ElementType::kFloat3;
-	//	else if constexpr (std::is_same_v<U, glm::vec4>)
-	//		return ElementType::kFloat4;
-
-	//	// Matrix
-	//	else if constexpr (std::is_same_v<U, glm::mat4>)
-	//		return ElementType::kMat4;
-
-	//	else
-	//		return ElementType::kInvalid;
-	//}
 	class DynamicConstantBuffer
 	{
 	public:
@@ -95,6 +61,15 @@ namespace gfx
 
 				const std::byte* src = m_parent->GetRawData() + m_totalOffset;
 
+				// helpers for integer checks
+				const auto elemSize       = entry.elemSize;
+				const bool elemIsIntegral = entry.elemType == ElementType::kShort ||
+				                            entry.elemType == ElementType::kUShort ||
+				                            entry.elemType == ElementType::kInt ||
+				                            entry.elemType == ElementType::kUInt;
+				const bool elemIsSigned =
+					entry.elemType == ElementType::kShort || entry.elemType == ElementType::kInt;
+
 				switch (entry.elemType)
 				{
 				case ElementType::kBool:
@@ -112,6 +87,15 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							// require same size and signedness
+							if (sizeof(T) != elemSize || std::is_signed_v<T> != elemIsSigned)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::operator T()",
+									                "Requested integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							int16_t v{};
 							std::memcpy(&v, src, sizeof(int16_t));
 							return static_cast<T>(v);
@@ -123,6 +107,14 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							if (sizeof(T) != elemSize || std::is_signed_v<T> != elemIsSigned)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::operator T()",
+									                "Requested integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							uint16_t v{};
 							std::memcpy(&v, src, sizeof(uint16_t));
 							return static_cast<T>(v);
@@ -134,6 +126,14 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							if (sizeof(T) != elemSize || std::is_signed_v<T> != elemIsSigned)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::operator T()",
+									                "Requested integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							int32_t v{};
 							std::memcpy(&v, src, sizeof(int32_t));
 							return static_cast<T>(v);
@@ -145,6 +145,14 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							if (sizeof(T) != elemSize || std::is_signed_v<T> != elemIsSigned)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::operator T()",
+									                "Requested integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							uint32_t v{};
 							std::memcpy(&v, src, sizeof(uint32_t));
 							return static_cast<T>(v);
@@ -241,6 +249,14 @@ namespace gfx
 
 				std::byte* dst = m_parent->GetRawData() + m_totalOffset;
 
+				const auto elemSize       = entry.elemSize;
+				const bool elemIsIntegral = entry.elemType == ElementType::kShort ||
+				                            entry.elemType == ElementType::kUShort ||
+				                            entry.elemType == ElementType::kInt ||
+				                            entry.elemType == ElementType::kUInt;
+				const bool elemIsSigned =
+					entry.elemType == ElementType::kShort || entry.elemType == ElementType::kInt;
+
 				switch (entry.elemType)
 				{
 				case ElementType::kBool:
@@ -257,6 +273,15 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							// reject if size or signedness doesn't match
+							if (std::is_signed_v<T> != elemIsSigned || sizeof(T) > elemSize)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::Assign",
+									                "Assigned integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							int16_t v = static_cast<int16_t>(val);
 							std::memcpy(dst, &v, sizeof(int16_t));
 							return *this;
@@ -267,6 +292,14 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							if (std::is_signed_v<T> != elemIsSigned || sizeof(T) > elemSize)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::Assign",
+									                "Assigned integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							uint16_t v = static_cast<uint16_t>(val);
 							std::memcpy(dst, &v, sizeof(uint16_t));
 							return *this;
@@ -277,8 +310,16 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T> || std::is_same_v<T, bool>)
 						{
-							uint32_t v = static_cast<uint32_t>(val);
-							std::memcpy(dst, &v, sizeof(uint32_t));
+							if (std::is_signed_v<T> != elemIsSigned || sizeof(T) > elemSize)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::Assign",
+									                "Assigned integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
+							int32_t v = static_cast<int32_t>(val);
+							std::memcpy(dst, &v, sizeof(int32_t));
 							return *this;
 						}
 						break;
@@ -287,6 +328,14 @@ namespace gfx
 					{
 						if constexpr (std::is_integral_v<T>)
 						{
+							if (std::is_signed_v<T> != elemIsSigned || sizeof(T) > elemSize)
+							{
+								throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+									                "DynamicConstantBuffer::Accessor::Assign",
+									                "Assigned integer type does not match stored "
+									                "element for entry: " +
+									                    m_key };
+							}
 							uint32_t v = static_cast<uint32_t>(val);
 							std::memcpy(dst, &v, sizeof(uint32_t));
 							return *this;
@@ -389,7 +438,7 @@ namespace gfx
 				if (IsNull())
 					return false;
 				auto& entry = m_parent->GetLayoutEntry(m_key);
-				return entry.stride != 0;
+				return entry.IsArray();
 			}
 
 			Accessor

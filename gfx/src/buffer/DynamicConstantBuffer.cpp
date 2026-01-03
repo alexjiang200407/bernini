@@ -84,7 +84,6 @@ namespace gfx
 				                "Cannot access using a null accessor" };
 		}
 
-		// Disallow dotted (nested) names in the single-step At(name) API.
 		if (name.find('.') != std::string_view::npos)
 		{
 			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
@@ -92,7 +91,6 @@ namespace gfx
 				                "Nested keys are not supported in At(): " + std::string{ name } };
 		}
 
-		// Current entry must be a struct in order to access a child by name
 		const auto& entry = m_parent->GetLayoutEntry(m_key);
 		if (!entry.groupType.All(GroupType::Struct))
 		{
@@ -101,12 +99,10 @@ namespace gfx
 				                "Attempted to access member of non-struct entry: " + m_key };
 		}
 
-		// Build the full key and look up the child's layout entry
 		const std::string fullKey =
 			m_key.empty() ? std::string{ name } : (m_key + "." + std::string{ name });
 		const auto& childEntry = m_parent->GetLayoutEntry(fullKey);
 
-		// childEntry.relativeOffset is relative to the struct start, so add to current offset
 		return Accessor{ m_totalOffset + childEntry.relativeOffset, m_parent, fullKey };
 	}
 

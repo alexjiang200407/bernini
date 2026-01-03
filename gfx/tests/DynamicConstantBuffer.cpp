@@ -333,6 +333,252 @@ TEST_CASE("Constant buffer alignment", "[dynamic_constant_buffer][dynamic_buffer
 	}
 }
 
+TEST_CASE(
+	"All element types - basic assign/read",
+	"[dynamic_constant_buffer][element_types][roundtrip]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	SECTION("kFloat roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("v", gfx::ElementType::kFloat).SetName("FloatCB");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("v").Assign(3.14159f));
+		float out = static_cast<float>(cb.At("v"));
+		CHECK(out == 3.14159f);
+	}
+
+	SECTION("kFloat2 roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("v", gfx::ElementType::kFloat2).SetName("Float2CB");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("v").Assign(glm::vec2{ 1.0f, 2.0f }));
+		auto out = static_cast<glm::vec2>(cb.At("v"));
+		CHECK(out == glm::vec2{ 1.0f, 2.0f });
+	}
+
+	SECTION("kFloat3 roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("v", gfx::ElementType::kFloat3).SetName("Float3CB");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("v").Assign(glm::vec3{ 1.0f, 2.0f, 3.0f }));
+		auto out = static_cast<glm::vec3>(cb.At("v"));
+		CHECK(out == glm::vec3{ 1.0f, 2.0f, 3.0f });
+	}
+
+	SECTION("kFloat4 roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("v", gfx::ElementType::kFloat4).SetName("Float4CB");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("v").Assign(glm::vec4{ 1, 2, 3, 4 }));
+		auto out = static_cast<glm::vec4>(cb.At("v"));
+		CHECK(out == glm::vec4{ 1, 2, 3, 4 });
+	}
+
+	SECTION("kFloat4x4 roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("m", gfx::ElementType::kFloat4x4).SetName("MatCB");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		glm::mat4 m{ 1.0f };
+		REQUIRE_NOTHROW(cb.At("m").Assign(m));
+		auto outRaw   = std::span<std::byte>(cb.GetRawData(), cb.GetTotalSize());
+		auto expected = ByteBuffer{ cb.GetTotalSize() };
+		expected.Set(m, 0);
+		CHECK(std::memcmp(outRaw.data(), expected.GetData(), cb.GetTotalSize()) == 0);
+	}
+
+	SECTION("kShort / kUShort / kInt / kUInt / kBool roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("s", gfx::ElementType::kShort)
+			.AddElement("us", gfx::ElementType::kUShort)
+			.AddElement("i", gfx::ElementType::kInt)
+			.AddElement("ui", gfx::ElementType::kUInt)
+			.AddElement("b", gfx::ElementType::kBool)
+			.SetName("IntsCB");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("s").Assign(static_cast<int16_t>(-7)));
+		REQUIRE_NOTHROW(cb.At("us").Assign(static_cast<uint16_t>(13)));
+		REQUIRE_NOTHROW(cb.At("i").Assign(static_cast<int32_t>(-42)));
+		REQUIRE_NOTHROW(cb.At("ui").Assign(static_cast<uint32_t>(42u)));
+		REQUIRE_NOTHROW(cb.At("b").Assign(TRUE));
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), cb.GetTotalSize());
+
+		// Read back with conversion operator (matching types)
+		CHECK(static_cast<int16_t>(cb.At("s")) == static_cast<int16_t>(-7));
+		CHECK(static_cast<uint16_t>(cb.At("us")) == static_cast<uint16_t>(13));
+		CHECK(static_cast<int32_t>(cb.At("i")) == static_cast<int32_t>(-42));
+		CHECK(static_cast<uint32_t>(cb.At("ui")) == static_cast<uint32_t>(42u));
+		CHECK(static_cast<bool>(cb.At("b")) == true);
+	}
+}
+
+TEST_CASE(
+	"Element-type mismatch reads should throw",
+	"[dynamic_constant_buffer][conversion][mismatch]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	SECTION("Reading float as int throws")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("f", gfx::ElementType::kFloat).SetName("MismatchCB");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		cb.At("f").Assign(1.5f);
+		REQUIRE_THROWS_AS(static_cast<int>(cb.At("f")), gfx::GfxException);
+	}
+
+	SECTION("Reading int as float throws")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("x", gfx::ElementType::kInt).SetName("Mismatch2");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		cb.At("x").Assign(static_cast<int32_t>(10));
+		REQUIRE_THROWS_AS(static_cast<float>(cb.At("x")), gfx::GfxException);
+	}
+
+	SECTION("Reading small-int-size as 32-bit integral throws when sizes mismatch")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("s", gfx::ElementType::kShort).SetName("ShortRead");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		cb.At("s").Assign(static_cast<int16_t>(7));
+		// reading as int32 should fail because stored size differs (2 vs 4)
+		REQUIRE_THROWS_AS(static_cast<int32_t>(cb.At("s")), gfx::GfxException);
+	}
+}
+
+TEST_CASE(
+	"Integral assignment promotion / rejection rules",
+	"[dynamic_constant_buffer][integral][promote]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	SECTION("Assign short into kInt succeeds (promotion)")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("i", gfx::ElementType::kInt).SetName("Promote");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		// assigning a smaller integral into a 32-bit element should be allowed
+		REQUIRE_NOTHROW(cb.At("i").Assign(static_cast<int16_t>(123)));
+		CHECK(static_cast<int32_t>(cb.At("i")) == static_cast<int32_t>(123));
+	}
+
+	SECTION("Assign int into kShort fails (would truncate)")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("s", gfx::ElementType::kShort).SetName("Narrow");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_THROWS_AS(cb.At("s").Assign(static_cast<int32_t>(12345)), gfx::GfxException);
+	}
+
+	SECTION("Unsigned / signed distinctions")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("us", gfx::ElementType::kUShort)
+			.AddElement("ui", gfx::ElementType::kUInt)
+			.SetName("UnsignedTest");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("us").Assign(static_cast<uint16_t>(500u)));
+		REQUIRE_NOTHROW(cb.At("ui").Assign(static_cast<uint32_t>(5000u)));
+
+		REQUIRE_THROWS_AS(cb.At("us").Assign(static_cast<int16_t>(-1)), gfx::GfxException);
+		REQUIRE_THROWS_AS(cb.At("ui").Assign(static_cast<int32_t>(-1)), gfx::GfxException);
+	}
+}
+
+TEST_CASE("Misc conversions and arrays", "[dynamic_constant_buffer][arrays][matrices][vectors]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	SECTION("Array of vec3 roundtrip")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("vals", gfx::ElementType::kFloat3, 3).SetName("Vec3Array");
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("vals").At(0).Assign(glm::vec3{ 1, 2, 3 }));
+		REQUIRE_NOTHROW(cb.At("vals").At(1).Assign(glm::vec3{ 4, 5, 6 }));
+		REQUIRE_NOTHROW(cb.At("vals").At(2).Assign(glm::vec3{ 7, 8, 9 }));
+
+		CHECK(static_cast<glm::vec3>(cb.At("vals").At(0)) == glm::vec3{ 1, 2, 3 });
+		CHECK(static_cast<glm::vec3>(cb.At("vals").At(1)) == glm::vec3{ 4, 5, 6 });
+		CHECK(static_cast<glm::vec3>(cb.At("vals").At(2)) == glm::vec3{ 7, 8, 9 });
+	}
+
+	SECTION("Matrix inside struct and following scalar align correctly")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.mat", gfx::ElementType::kFloat4x4)
+			.AddElement("after", gfx::ElementType::kFloat)
+			.SetName("MatrixStruct");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		glm::mat4 m = glm::mat4(1.0f);
+		REQUIRE_NOTHROW(cb.At("s").At("mat").Assign(m));
+		REQUIRE_NOTHROW(cb.At("after").Assign(2.5f));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize >= 68u);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(m, 0).Set(2.5f, 64);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+}
+
 TEST_CASE("Constant buffer struct", "[dynamic_constant_buffer][dynamic_buffer][struct]")
 {
 	auto gfxDesc     = GfxOptions{};
@@ -554,6 +800,56 @@ TEST_CASE("Layout tests", "[dynamic_constant_buffer][dynamic_buffer][layout_test
 		auto cb = gfx::DynamicConstantBuffer{ device, desc };
 		CHECK(cb.GetTotalSize() == 176);
 	}
+
+	SECTION("Array of structs with internal arrays – stride & offsets")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStructArray("s", 3)
+			.AddElement("s.a", gfx::ElementType::kFloat)
+			.AddElementArray("s.b", gfx::ElementType::kFloat2, 2)
+			.AddElement("s.c", gfx::ElementType::kFloat);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto structEntry = cb.GetLayoutEntry("s");
+		CHECK(structEntry.stride == 48);
+		CHECK(structEntry.count == 3);
+
+		auto a = cb.GetLayoutEntry("s.a");
+		CHECK(a.relativeOffset == 0);
+		CHECK(a.elemSize == 4);
+
+		auto b = cb.GetLayoutEntry("s.b");
+		CHECK(b.relativeOffset == 16);
+		CHECK(b.count == 2);
+		CHECK(b.stride == 16);
+
+		auto c = cb.GetLayoutEntry("s.c");
+		CHECK(c.relativeOffset == 40);
+		CHECK(c.elemSize == 4);
+
+		CHECK(cb.GetTotalSize() == 3 * 48);
+	}
+
+	SECTION("Struct array stride with shorts + floats")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStructArray("s", 4)
+			.AddElement("s.a", gfx::ElementType::kShort)
+			.AddElement("s.b", gfx::ElementType::kFloat)
+			.AddElement("s.c", gfx::ElementType::kShort);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto structEntry = cb.GetLayoutEntry("s");
+
+		CHECK(structEntry.stride == 16);
+		CHECK(cb.GetTotalSize() == 4 * 16);
+
+		CHECK(cb.GetLayoutEntry("s.a").relativeOffset == 0);
+		CHECK(cb.GetLayoutEntry("s.b").relativeOffset == 4);
+		CHECK(cb.GetLayoutEntry("s.c").relativeOffset == 8);
+	}
 }
 
 TEST_CASE("Constant buffer array", "[dynamic_constant_buffer][dynamic_buffer][array]")
@@ -601,6 +897,988 @@ TEST_CASE("Constant buffer array", "[dynamic_constant_buffer][dynamic_buffer][ar
 		expected.Set(1.0f, 0).Set(2.0f, 16).Set(3.0f, 32).Set(4.0f, 48);
 
 		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Nested array")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("a", gfx::ElementType::kFloat, 4);
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		auto a = cb.At("a");
+		REQUIRE_NOTHROW(a.At(0).Assign(1.0f));
+		REQUIRE_NOTHROW(a.At(1).Assign(2.0f));
+		REQUIRE_NOTHROW(a.At(2).Assign(3.0f));
+		REQUIRE_NOTHROW(a.At(3).Assign(4.0f));
+		REQUIRE_THROWS_AS(a.At(4).Assign(1.0f), core::except::BerniniException);
+
+		auto totalSize = cb.GetTotalSize();
+		auto expected  = ByteBuffer{ totalSize };
+		expected.Set(1.0f, 0).Set(2.0f, 16).Set(3.0f, 32).Set(4.0f, 48);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Struct larger than 16 bytes (float3 + float2)")
+	{
+		struct BigStruct
+		{
+			glm::vec3 a;  // 12
+			glm::vec2 b;  // 8  -> total 20, padded to 32
+		};
+
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.a", gfx::ElementType::kFloat3)
+			.AddElement("s.b", gfx::ElementType::kFloat2)
+			.SetName("PerFrame");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(glm::vec3{ 1, 2, 3 }));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec2{ 4, 5 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 32);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(glm::vec3{ 1, 2, 3 }, 0).Set(glm::vec2{ 4, 5 }, 16);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+}
+
+TEST_CASE("Constant buffer alignment", "[dynamic_constant_buffer][dynamic_buffer][array]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Struct larger than 16 bytes (float3 + float2)")
+	{
+		struct BigStruct
+		{
+			glm::vec3 a;  // 12
+			glm::vec2 b;  // 8  -> total 20, padded to 32
+		};
+
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.a", gfx::ElementType::kFloat3)
+			.AddElement("s.b", gfx::ElementType::kFloat2)
+			.SetName("PerFrame");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(glm::vec3{ 1, 2, 3 }));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec2{ 4, 5 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 32);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(glm::vec3{ 1, 2, 3 }, 0).Set(glm::vec2{ 4, 5 }, 16);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Struct 28 bytes padded to 32")
+	{
+		struct BigStruct
+		{
+			glm::vec4 a;  // 16
+			glm::vec3 b;  // 12 -> total 28
+		};
+
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.a", gfx::ElementType::kFloat4)
+			.AddElement("s.b", gfx::ElementType::kFloat3)
+			.SetName("PerFrame");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(glm::vec4{ 1, 2, 3, 4 }));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec3{ 5, 6, 7 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 32);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(glm::vec4{ 1, 2, 3, 4 }, 0).Set(glm::vec3{ 5, 6, 7 }, 16);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Struct larger than 32 bytes spills to multiple registers")
+	{
+		struct HugeStruct
+		{
+			glm::vec4 a;  // 16
+			glm::vec4 b;  // 16
+			glm::vec2 c;  // 8  -> total 40, padded to 48
+		};
+
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.a", gfx::ElementType::kFloat4)
+			.AddElement("s.b", gfx::ElementType::kFloat4)
+			.AddElement("s.c", gfx::ElementType::kFloat2)
+			.SetName("PerFrame");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(glm::vec4{ 1, 2, 3, 4 }));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec4{ 5, 6, 7, 8 }));
+		REQUIRE_NOTHROW(cb.At("s").At("c").Assign(glm::vec2{ 9, 10 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 48);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(glm::vec4{ 1, 2, 3, 4 }, 0)
+			.Set(glm::vec4{ 5, 6, 7, 8 }, 16)
+			.Set(glm::vec2{ 9, 10 }, 32);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Large struct followed by element aligns correctly")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.a", gfx::ElementType::kFloat3)
+			.AddElement("s.b", gfx::ElementType::kFloat2)  // struct = 20 → 32
+			.AddElement("after", gfx::ElementType::kFloat);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(glm::vec3{ 1, 2, 3 }));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec2{ 4, 5 }));
+		REQUIRE_NOTHROW(cb.At("after").Assign(6.0f));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 32);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(glm::vec3{ 1, 2, 3 }, 0).Set(glm::vec2{ 4, 5 }, 16).Set(6.0f, 24);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Float array followed by scalar aligns to next register")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("x", gfx::ElementType::kFloat, 2)
+			.AddElement("b", gfx::ElementType::kFloat)
+			.SetName("PerFrame");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("x").At(0).Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("x").At(1).Assign(2.0f));
+		REQUIRE_NOTHROW(cb.At("b").Assign(3.0f));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 32);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected
+			.Set(1.0f, 0)    // x[0]
+			.Set(2.0f, 16)   // x[1]
+			.Set(3.0f, 20);  // b starts in next register
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+}
+
+TEST_CASE("Move semantics tests", "[dynamic_constant_buffer][dynamic_buffer][move_tests]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	auto desc = gfx::DynamicConstantBufferDesc{};
+	desc.AddStruct("S")
+		.AddElement("S.v", gfx::ElementType::kFloat4)
+		.AddElementArray("S.arr", gfx::ElementType::kFloat, 2)
+		.AddStructArray("S.nested", 1)
+		.AddElement("S.nested.a", gfx::ElementType::kFloat3);
+
+	SECTION("Move constructor preserves contents")
+	{
+		gfx::DynamicConstantBuffer src(device, desc);
+		src.At("S").At("v").Assign(glm::vec4{ 1, 2, 3, 4 });
+
+		gfx::DynamicConstantBuffer dst(std::move(src));
+
+		REQUIRE_NOTHROW(dst.At("S").At("v"));
+		REQUIRE_NOTHROW(dst.At("S").At("v").Assign(glm::vec4{ 4, 3, 2, 1 }));
+	}
+
+	SECTION("Move assignment overwrites existing state")
+	{
+		gfx::DynamicConstantBuffer a(device, desc);
+		gfx::DynamicConstantBuffer b(device, desc);
+
+		a.At("S").At("v").Assign(glm::vec4{ 1, 1, 1, 1 });
+		b.At("S").At("v").Assign(glm::vec4{ 9, 9, 9, 9 });
+
+		b = std::move(a);
+
+		REQUIRE_NOTHROW(b.At("S").At("v"));
+		REQUIRE_NOTHROW(b.At("S").At("v").Assign(glm::vec4{ 2, 2, 2, 2 }));
+	}
+
+	SECTION("Moved-from buffer can be reused")
+	{
+		gfx::DynamicConstantBuffer a(device, desc);
+		gfx::DynamicConstantBuffer b(std::move(a));
+
+		a = gfx::DynamicConstantBuffer(device, desc);
+
+		REQUIRE_NOTHROW(a.At("S").At("v"));
+		REQUIRE_NOTHROW(a.At("S").At("v").Assign(glm::vec4{ 7, 7, 7, 7 }));
+	}
+
+	SECTION("Self move assignment is safe")
+	{
+		gfx::DynamicConstantBuffer buf(device, desc);
+		buf.At("S").At("v").Assign(glm::vec4{ 1, 2, 3, 4 });
+
+		buf = std::move(buf);
+
+		REQUIRE_NOTHROW(buf.At("S").At("v"));
+		REQUIRE_NOTHROW(buf.At("S").At("v").Assign(glm::vec4{ 4, 3, 2, 1 }));
+	}
+
+	SECTION("View obtained before move does not remain valid")
+	{
+		gfx::DynamicConstantBuffer a(device, desc);
+		auto                       view = a.At("S").At("v");
+
+		gfx::DynamicConstantBuffer b(std::move(a));
+
+		REQUIRE_THROWS(view.Assign(glm::vec4{ 1, 1, 1, 1 }));
+	}
+
+	SECTION("Nested layout survives move")
+	{
+		gfx::DynamicConstantBuffer a(device, desc);
+		a.At("S").At("v").Assign(glm::vec4{ 1, 2, 3, 4 });
+
+		gfx::DynamicConstantBuffer b(std::move(a));
+
+		REQUIRE_NOTHROW(b.At("S").At("v"));
+		REQUIRE_NOTHROW(b.At("S").At("v").Assign(glm::vec4{ 4, 3, 2, 1 }));
+	}
+
+	SECTION("Move empty buffer")
+	{
+		gfx::DynamicConstantBuffer empty;
+		gfx::DynamicConstantBuffer moved(std::move(empty));
+
+		REQUIRE(moved.GetTotalSize() == 0);
+		REQUIRE_THROWS_AS(moved.At("S").At("v"), core::except::BerniniException);
+	}
+
+	SECTION("Move large buffer preserves all data")
+	{
+		gfx::DynamicConstantBuffer buf(device, desc);
+		buf.At("S").At("v").Assign(glm::vec4{ 1, 2, 3, 4 });
+		buf.At("S").At("arr").At(0).Assign(10.0f);
+		buf.At("S").At("arr").At(1).Assign(20.0f);
+		buf.At("S").At("nested").At(0).At("a").Assign(glm::vec3{ 5, 6, 7 });
+
+		gfx::DynamicConstantBuffer moved(std::move(buf));
+
+		CHECK_NOTHROW(moved.At("S").At("v").Assign(glm::vec4{ 4, 3, 2, 1 }));
+		CHECK_NOTHROW(moved.At("S").At("arr").At(1).Assign(30.0f));
+		CHECK_NOTHROW(moved.At("S").At("nested").At(0).At("a").Assign(glm::vec3{ 7, 8, 9 }));
+	}
+
+	SECTION("Move assignment overwrites existing data")
+	{
+		gfx::DynamicConstantBuffer a(device, desc);
+		gfx::DynamicConstantBuffer b(device, desc);
+
+		a.At("S").At("v").Assign(glm::vec4{ 1, 1, 1, 1 });
+		b.At("S").At("v").Assign(glm::vec4{ 9, 9, 9, 9 });
+
+		b = std::move(a);
+
+		CHECK_NOTHROW(b.At("S").At("v").Assign(glm::vec4{ 2, 2, 2, 2 }));
+	}
+
+	SECTION("Nested arrays survive move")
+	{
+		gfx::DynamicConstantBuffer buf(device, desc);
+		buf.At("S").At("arr").At(0).Assign(1.0f);
+		buf.At("S").At("arr").At(1).Assign(2.0f);
+
+		gfx::DynamicConstantBuffer moved(std::move(buf));
+
+		CHECK_NOTHROW(moved.At("S").At("arr").At(0).Assign(10.0f));
+		CHECK_NOTHROW(moved.At("S").At("arr").At(1).Assign(20.0f));
+	}
+
+	SECTION("View obtained before move becomes invalid")
+	{
+		gfx::DynamicConstantBuffer buf(device, desc);
+		auto                       view = buf.At("S").At("v");
+
+		gfx::DynamicConstantBuffer moved(std::move(buf));
+
+		REQUIRE_THROWS(view.Assign(glm::vec4{ 1, 1, 1, 1 }));
+	}
+
+	SECTION("Self move assignment is safe")
+	{
+		gfx::DynamicConstantBuffer buf(device, desc);
+		buf.At("S").At("v").Assign(glm::vec4{ 1, 2, 3, 4 });
+
+		buf = std::move(buf);
+
+		CHECK_NOTHROW(buf.At("S").At("v").Assign(glm::vec4{ 4, 3, 2, 1 }));
+	}
+
+	SECTION("Move after partial initialization")
+	{
+		gfx::DynamicConstantBuffer buf(device, desc);
+		buf.At("S").At("v").Assign(glm::vec4{ 1, 1, 1, 1 });
+
+		gfx::DynamicConstantBuffer moved(std::move(buf));
+
+		REQUIRE_FALSE(moved.At("S").At("v").IsNull());
+
+		REQUIRE_NOTHROW(moved.At("S").At("arr").At(0).Assign(3.0f));
+	}
+
+	SECTION("Move of buffer with only arrays")
+	{
+		gfx::DynamicConstantBufferDesc arrayDesc;
+		arrayDesc.AddElementArray("arr", gfx::ElementType::kFloat, 8);
+
+		gfx::DynamicConstantBuffer buf(device, arrayDesc);
+		buf.At("arr").At(0).Assign(1.0f);
+		buf.At("arr").At(7).Assign(8.0f);
+
+		gfx::DynamicConstantBuffer moved(std::move(buf));
+
+		CHECK_NOTHROW(moved.At("arr").At(0).Assign(10.0f));
+		CHECK_NOTHROW(moved.At("arr").At(7).Assign(80.0f));
+	}
+}
+
+TEST_CASE(
+	"Edge cases - integer and matrix types",
+	"[dynamic_constant_buffer][edge_cases][integer_matrix]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("All integer types mix")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kInt)
+			.AddElement("b", gfx::ElementType::kUInt)
+			.AddElement("c", gfx::ElementType::kShort)
+			.AddElement("d", gfx::ElementType::kUShort)
+			.SetName("IntegerBuffer");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("a").Assign(static_cast<int32_t>(-42)));
+		REQUIRE_NOTHROW(cb.At("b").Assign(static_cast<uint32_t>(100)));
+		REQUIRE_NOTHROW(cb.At("c").Assign(static_cast<int16_t>(-10)));
+		REQUIRE_NOTHROW(cb.At("d").Assign(static_cast<uint16_t>(20)));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 16);
+
+		auto raw = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(static_cast<int32_t>(-42), 0)
+			.Set(static_cast<uint32_t>(100), 4)
+			.Set(static_cast<int16_t>(-10), 8)
+			.Set(static_cast<uint16_t>(20), 10);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Float4x4 matrix single element")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("transform", gfx::ElementType::kFloat4x4).SetName("MatrixBuffer");
+
+		auto cb        = gfx::DynamicConstantBuffer{ device, desc };
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 64);
+
+		auto matrix = glm::mat4{ 1.0f };
+		REQUIRE_NOTHROW(cb.At("transform").Assign(matrix));
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(matrix, 0);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Float4x4 matrix with preceding float")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("scale", gfx::ElementType::kFloat)
+			.AddElement("transform", gfx::ElementType::kFloat4x4)
+			.SetName("MatrixBuffer");
+
+		auto cb        = gfx::DynamicConstantBuffer{ device, desc };
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 80);
+
+		REQUIRE_NOTHROW(cb.At("scale").Assign(2.0f));
+		auto matrix = glm::mat4{ 1.0f };
+		REQUIRE_NOTHROW(cb.At("transform").Assign(matrix));
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(2.0f, 0).Set(matrix, 16);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Multiple matrix elements in struct")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("matrices")
+			.AddElement("matrices.view", gfx::ElementType::kFloat4x4)
+			.AddElement("matrices.projection", gfx::ElementType::kFloat4x4)
+			.SetName("MatricesBuffer");
+
+		auto cb        = gfx::DynamicConstantBuffer{ device, desc };
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 128);
+
+		auto view = glm::mat4{ 1.0f };
+		auto proj = glm::mat4{ 2.0f };
+		REQUIRE_NOTHROW(cb.At("matrices").At("view").Assign(view));
+		REQUIRE_NOTHROW(cb.At("matrices").At("projection").Assign(proj));
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(view, 0).Set(proj, 64);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+}
+
+TEST_CASE("Edge cases - boundary conditions", "[dynamic_constant_buffer][edge_cases][boundaries]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Multiple structs with staggered sizes")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s1")
+			.AddElement("s1.a", gfx::ElementType::kFloat)
+			.AddStruct("s2")
+			.AddElement("s2.b", gfx::ElementType::kFloat2)
+			.AddStruct("s3")
+			.AddElement("s3.c", gfx::ElementType::kFloat3)
+			.SetName("StaggeredStructs");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s1").At("a").Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("s2").At("b").Assign(glm::vec2{ 2.0f, 3.0f }));
+		REQUIRE_NOTHROW(cb.At("s3").At("c").Assign(glm::vec3{ 4.0f, 5.0f, 6.0f }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 48);
+	}
+
+	SECTION("Deeply nested structures")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("outer")
+			.AddElement("outer.a", gfx::ElementType::kFloat)
+			.AddStruct("outer.middle")
+			.AddElement("outer.middle.b", gfx::ElementType::kFloat2)
+			.AddElement("outer.middle.c", gfx::ElementType::kFloat3)
+			.SetName("DeeplyNested");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("outer").At("a").Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("outer").At("middle").At("b").Assign(glm::vec2{ 2.0f, 3.0f }));
+		REQUIRE_NOTHROW(cb.At("outer").At("middle").At("c").Assign(glm::vec3{ 4.0f, 5.0f, 6.0f }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 48);
+	}
+
+	SECTION("Single byte followed by large struct alignment")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("single", gfx::ElementType::kBool)
+			.AddStruct("s")
+			.AddElement("s.vec4", gfx::ElementType::kFloat4)
+			.AddElement("s.vec4_2", gfx::ElementType::kFloat4)
+			.SetName("ByteBeforeLargeStruct");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("single").Assign(TRUE));
+		REQUIRE_NOTHROW(cb.At("s").At("vec4").Assign(glm::vec4{ 1, 2, 3, 4 }));
+		REQUIRE_NOTHROW(cb.At("s").At("vec4_2").Assign(glm::vec4{ 5, 6, 7, 8 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 48);
+	}
+
+	SECTION("Maximum packing in 16-byte register")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("f", gfx::ElementType::kFloat)
+			.AddElement("s1", gfx::ElementType::kShort)
+			.AddElement("s2", gfx::ElementType::kShort)
+			.AddElement("s3", gfx::ElementType::kShort)
+			.AddElement("s4", gfx::ElementType::kShort)
+			.SetName("MaxPackedRegister");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("f").Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("s1").Assign(static_cast<int16_t>(1)));
+		REQUIRE_NOTHROW(cb.At("s2").Assign(static_cast<int16_t>(2)));
+		REQUIRE_NOTHROW(cb.At("s3").Assign(static_cast<int16_t>(3)));
+		REQUIRE_NOTHROW(cb.At("s4").Assign(static_cast<int16_t>(4)));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 16);
+	}
+
+	SECTION("Array of struct containing array")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStructArray("items", 3)
+			.AddElement("items.id", gfx::ElementType::kFloat)
+			.AddElementArray("items.data", gfx::ElementType::kFloat, 2)
+			.SetName("NestedArray");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("items").At(0).At("id").Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("items").At(1).At("data").At(0).Assign(2.0f));
+		REQUIRE_NOTHROW(cb.At("items").At(2).At("id").Assign(3.0f));
+
+		auto totalSize = cb.GetTotalSize();
+
+		CHECK(totalSize == 144);
+	}
+}
+
+TEST_CASE("Edge cases - boundary crossing", "[dynamic_constant_buffer][edge_cases][crossing]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Float3 at end of register crosses boundary")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kFloat)
+			.AddElement("b", gfx::ElementType::kFloat)
+			.AddElement("c", gfx::ElementType::kFloat)
+			.AddElement("d", gfx::ElementType::kFloat3)
+			.SetName("CrossesBoundary");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("a").Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("b").Assign(2.0f));
+		REQUIRE_NOTHROW(cb.At("c").Assign(3.0f));
+		REQUIRE_NOTHROW(cb.At("d").Assign(glm::vec3{ 4, 5, 6 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 32);
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(1.0f, 0).Set(2.0f, 4).Set(3.0f, 8).Set(glm::vec3{ 4, 5, 6 }, 16);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Float2 at unaligned offset wraps correctly")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("a", gfx::ElementType::kShort)
+			.AddElement("b", gfx::ElementType::kShort)
+			.AddElement("c", gfx::ElementType::kFloat2)
+			.SetName("UnalignedWrap");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("a").Assign(static_cast<int16_t>(1)));
+		REQUIRE_NOTHROW(cb.At("b").Assign(static_cast<int16_t>(2)));
+		REQUIRE_NOTHROW(cb.At("c").Assign(glm::vec2{ 3.0f, 4.0f }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 16);
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(static_cast<int16_t>(1), 0)
+			.Set(static_cast<int16_t>(2), 2)
+			.Set(glm::vec2{ 3.0f, 4.0f }, 4);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Array elements each aligned to 16-byte boundaries")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("values", gfx::ElementType::kFloat3, 3).SetName("AlignedArray");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("values").At(0).Assign(glm::vec3{ 1, 2, 3 }));
+		REQUIRE_NOTHROW(cb.At("values").At(1).Assign(glm::vec3{ 4, 5, 6 }));
+		REQUIRE_NOTHROW(cb.At("values").At(2).Assign(glm::vec3{ 7, 8, 9 }));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 48);
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(glm::vec3{ 1, 2, 3 }, 0)
+			.Set(glm::vec3{ 4, 5, 6 }, 16)
+			.Set(glm::vec3{ 7, 8, 9 }, 32);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+}
+
+TEST_CASE("Edge cases - zero and extreme values", "[dynamic_constant_buffer][edge_cases][values]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("All zero values")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("f", gfx::ElementType::kFloat)
+			.AddElement("i", gfx::ElementType::kInt)
+			.AddElement("v3", gfx::ElementType::kFloat3)
+			.SetName("ZeroValues");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("f").Assign(0.0f));
+		REQUIRE_NOTHROW(cb.At("i").Assign(0));
+		REQUIRE_NOTHROW(cb.At("v3").Assign(glm::vec3{ 0 }));
+
+		auto totalSize = cb.GetTotalSize();
+		auto raw       = std::span<std::byte>(cb.GetRawData(), totalSize);
+
+		for (size_t i = 0; i < totalSize; ++i)
+		{
+			CHECK(raw[i] == std::byte{ 0 });
+		}
+	}
+
+	SECTION("Extreme float values")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("tiny", gfx::ElementType::kFloat)
+			.AddElement("huge", gfx::ElementType::kFloat)
+			.AddElement("negative", gfx::ElementType::kFloat)
+			.SetName("ExtremeValues");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("tiny").Assign(std::numeric_limits<float>::min()));
+		REQUIRE_NOTHROW(cb.At("huge").Assign(std::numeric_limits<float>::max()));
+		REQUIRE_NOTHROW(cb.At("negative").Assign(-1e6f));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 16);
+
+		auto raw      = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected = ByteBuffer{ totalSize };
+		expected.Set(std::numeric_limits<float>::min(), 0)
+			.Set(std::numeric_limits<float>::max(), 4)
+			.Set(-1e6f, 8);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Integer boundary values")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("u_max", gfx::ElementType::kUInt)
+			.AddElement("i_min", gfx::ElementType::kInt)
+			.AddElement("i_max", gfx::ElementType::kInt)
+			.SetName("IntBoundaries");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("u_max").Assign(std::numeric_limits<uint32_t>::max()));
+		REQUIRE_NOTHROW(cb.At("i_min").Assign(std::numeric_limits<int32_t>::min()));
+		REQUIRE_NOTHROW(cb.At("i_max").Assign(std::numeric_limits<int32_t>::max()));
+
+		auto totalSize = cb.GetTotalSize();
+		auto raw       = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected  = ByteBuffer{ totalSize };
+		expected.Set(std::numeric_limits<uint32_t>::max(), 0)
+			.Set(std::numeric_limits<int32_t>::min(), 4)
+			.Set(std::numeric_limits<int32_t>::max(), 8);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Negative integer values")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("s", gfx::ElementType::kShort)
+			.AddElement("i", gfx::ElementType::kInt)
+			.SetName("NegativeValues");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("s").Assign(static_cast<int16_t>(-32768)));
+		REQUIRE_NOTHROW(cb.At("i").Assign(static_cast<int32_t>(-2147483648)));
+
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 16);
+	}
+}
+
+TEST_CASE("Edge cases - large arrays", "[dynamic_constant_buffer][edge_cases][large_arrays]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Large element array")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("data", gfx::ElementType::kFloat, 64).SetName("LargeArray");
+
+		auto cb        = gfx::DynamicConstantBuffer{ device, desc };
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 1024);
+
+		for (uint32_t i = 0; i < 64; ++i)
+		{
+			REQUIRE_NOTHROW(cb.At("data").At(i).Assign(static_cast<float>(i)));
+		}
+	}
+
+	SECTION("Large struct array")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStructArray("items", 16)
+			.AddElement("items.value", gfx::ElementType::kFloat)
+			.SetName("LargeStructArray");
+
+		auto cb        = gfx::DynamicConstantBuffer{ device, desc };
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 256);
+
+		for (uint32_t i = 0; i < 16; ++i)
+		{
+			REQUIRE_NOTHROW(cb.At("items").At(i).At("value").Assign(static_cast<float>(i)));
+		}
+	}
+
+	SECTION("Array of vectors")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("vectors", gfx::ElementType::kFloat4, 8).SetName("VectorArray");
+
+		auto cb        = gfx::DynamicConstantBuffer{ device, desc };
+		auto totalSize = cb.GetTotalSize();
+		CHECK(totalSize == 128);
+
+		for (uint32_t i = 0; i < 8; ++i)
+		{
+			REQUIRE_NOTHROW(cb.At("vectors").At(i).Assign(glm::vec4{ i, i + 1, i + 2, i + 3 }));
+		}
+	}
+
+	SECTION("Array bounds checking")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("arr", gfx::ElementType::kFloat, 10).SetName("BoundsCheck");
+
+		auto cb  = gfx::DynamicConstantBuffer{ device, desc };
+		auto arr = cb.At("arr");
+
+		REQUIRE_NOTHROW(arr.At(0).Assign(1.0f));
+		REQUIRE_NOTHROW(arr.At(9).Assign(10.0f));
+		REQUIRE_THROWS_AS(arr.At(10).Assign(11.0f), core::except::BerniniException);
+	}
+}
+
+TEST_CASE("Edge cases - Naming", "[dynamic_constant_buffer][edge_cases][names]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Overlapping and prefix names should throw")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+
+		desc.AddStruct("s");
+
+		REQUIRE_THROWS_AS(
+			desc.AddElement("s", gfx::ElementType::kFloat),
+			core::except::BerniniException);
+
+		REQUIRE_THROWS_AS(
+			desc.AddElement("s.a", gfx::ElementType::kFloat).AddStruct("s.a"),
+			core::except::BerniniException);
+	}
+
+	SECTION("Adding child before parent should throw")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+
+		REQUIRE_THROWS_AS(
+			desc.AddElement("s.a", gfx::ElementType::kFloat),
+			core::except::BerniniException);
+	}
+}
+
+TEST_CASE(
+	"Edge cases - assignment and reassignment",
+	"[dynamic_constant_buffer][edge_cases][reassign]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+
+	auto device = gfx->GetDevice();
+
+	SECTION("Multiple reassignments to same field")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElement("value", gfx::ElementType::kFloat).SetName("Reassign");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("value").Assign(1.0f));
+		auto* raw1 = cb.GetRawData();
+		CHECK(*reinterpret_cast<float*>(raw1) == 1.0f);
+
+		REQUIRE_NOTHROW(cb.At("value").Assign(2.0f));
+		auto* raw2 = cb.GetRawData();
+		CHECK(*reinterpret_cast<float*>(raw2) == 2.0f);
+
+		REQUIRE_NOTHROW(cb.At("value").Assign(3.0f));
+		auto* raw3 = cb.GetRawData();
+		CHECK(*reinterpret_cast<float*>(raw3) == 3.0f);
+	}
+
+	SECTION("Reassignment in struct fields")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddStruct("s")
+			.AddElement("s.a", gfx::ElementType::kFloat)
+			.AddElement("s.b", gfx::ElementType::kFloat2)
+			.SetName("StructReassign");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec2{ 2, 3 }));
+
+		REQUIRE_NOTHROW(cb.At("s").At("a").Assign(10.0f));
+		REQUIRE_NOTHROW(cb.At("s").At("b").Assign(glm::vec2{ 20, 30 }));
+
+		auto totalSize = cb.GetTotalSize();
+		auto raw       = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected  = ByteBuffer{ totalSize };
+		expected.Set(10.0f, 0).Set(glm::vec2{ 20, 30 }, 4);
+
+		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
+	}
+
+	SECTION("Array element reassignment")
+	{
+		auto desc = gfx::DynamicConstantBufferDesc{};
+		desc.AddElementArray("arr", gfx::ElementType::kFloat, 3).SetName("ArrayReassign");
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_NOTHROW(cb.At("arr").At(0).Assign(1.0f));
+		REQUIRE_NOTHROW(cb.At("arr").At(1).Assign(2.0f));
+		REQUIRE_NOTHROW(cb.At("arr").At(2).Assign(3.0f));
+
+		REQUIRE_NOTHROW(cb.At("arr").At(1).Assign(20.0f));
+
+		auto totalSize = cb.GetTotalSize();
+		auto raw       = std::span<std::byte>(cb.GetRawData(), totalSize);
+		auto expected  = ByteBuffer{ totalSize };
+		expected.Set(1.0f, 0).Set(2.0f, 16).Set(3.0f, 32);
+		expected.Set(20.0f, 16);
+
 		CHECK(std::memcmp(raw.data(), expected.GetData(), totalSize) == 0);
 	}
 }
@@ -724,7 +2002,6 @@ TEST_CASE(
 
 		cb.At("a").Assign(1.23f);
 
-		// double and int are trivially copyable but ElementType::kFloat expects float
 		REQUIRE_THROWS_AS(static_cast<double>(cb.GetView()["a"]), gfx::GfxException);
 		REQUIRE_THROWS_AS(static_cast<int>(cb.GetView()["a"]), gfx::GfxException);
 	}
@@ -752,17 +2029,14 @@ TEST_CASE(
 
 		auto cb = gfx::DynamicConstantBuffer{ device, desc };
 
-		// Assign wrong type using Assign -> should throw
 		REQUIRE_THROWS_AS(cb.At("a").Assign(static_cast<int>(5)), gfx::GfxException);
 
-		// operator= is noexcept and swallows errors; value should remain unchanged
 		cb.At("a").Assign(2.0f);
 
-		// create non-const copy of Accessor to call operator=
 		auto a = cb.GetView()["a"];
-		a      = static_cast<int>(7);  // no throw, swallowed
+		a      = static_cast<int>(7);
 
-		float v = static_cast<float>(cb.GetView()["a"]);  // value remains 2.0f
+		float v = static_cast<float>(cb.GetView()["a"]);
 		CHECK(v == 2.0f);
 	}
 }
@@ -831,13 +2105,11 @@ TEST_CASE(
 		auto structArr = cb.At("structArray").At("items");
 		REQUIRE(structArr.IsArray());
 
-		// Assign values to nested member 'value' of each element
 		for (uint32_t i = 0; i < 3; ++i)
 		{
 			structArr.At(i).At("value").Assign(static_cast<int>(i * 10));
 		}
 
-		// Verify
 		for (uint32_t i = 0; i < 3; ++i)
 		{
 			int val = static_cast<int>(structArr.At(i).At("value"));
@@ -855,13 +2127,217 @@ TEST_CASE(
 
 		auto cb = gfx::DynamicConstantBuffer{ device, desc };
 
-		// Attempt to index a non-array element
 		REQUIRE_THROWS_AS(cb.At("f").At(0), gfx::GfxException);
 
-		// Attempt to access a member on a non-struct element
 		REQUIRE_THROWS_AS(cb.At("f").At("value"), gfx::GfxException);
 
-		// Attempt to access a non-existent struct member
 		REQUIRE_THROWS_AS(cb.At("s").At("missing"), gfx::GfxException);
+	}
+}
+
+TEST_CASE(
+	"Integral promotion on assignment (signed)",
+	"[dynamic_constant_buffer][assign][integral]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+
+	auto desc = gfx::DynamicConstantBufferDesc{};
+
+	desc.AddElement("i", gfx::ElementType::kInt);
+
+	SECTION("int8_t promotes to int32_t")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("i").Assign(static_cast<int8_t>(-5)));
+		CHECK(static_cast<int32_t>(cb.At("i")) == -5);
+	}
+
+	SECTION("int16_t promotes to int32_t")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("i").Assign(static_cast<int16_t>(123)));
+		CHECK(static_cast<int32_t>(cb.At("i")) == 123);
+	}
+}
+
+TEST_CASE(
+	"Integral promotion on assignment (unsigned)",
+	"[dynamic_constant_buffer][assign][integral]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+	auto desc   = gfx::DynamicConstantBufferDesc{};
+
+	desc.AddElement("u", gfx::ElementType::kUInt);
+
+	SECTION("uint8_t promotes to uint32_t")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("u").Assign(static_cast<uint8_t>(200u)));
+		CHECK(static_cast<uint32_t>(cb.At("u")) == 200u);
+	}
+
+	SECTION("uint16_t promotes to uint32_t")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("u").Assign(static_cast<uint16_t>(50000u)));
+		CHECK(static_cast<uint32_t>(cb.At("u")) == 50000u);
+	}
+}
+
+TEST_CASE("Reject signed/unsigned mismatches", "[dynamic_constant_buffer][assign][integral]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+	auto desc   = gfx::DynamicConstantBufferDesc{};
+
+	desc.AddElement("i", gfx::ElementType::kInt).AddElement("u", gfx::ElementType::kUInt);
+
+	SECTION("signed to unsigned rejected")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_THROWS_AS(cb.At("u").Assign(static_cast<int16_t>(-1)), gfx::GfxException);
+	}
+
+	SECTION("unsigned to signed rejected")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_THROWS_AS(cb.At("i").Assign(static_cast<uint16_t>(123u)), gfx::GfxException);
+	}
+}
+
+TEST_CASE("Integral reads are strict (no narrowing)", "[dynamic_constant_buffer][read][integral]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+	auto desc   = gfx::DynamicConstantBufferDesc{};
+
+	desc.AddElement("i", gfx::ElementType::kInt);
+
+	auto cb = gfx::DynamicConstantBuffer{ device, desc };
+	cb.At("i").Assign(static_cast<int32_t>(123));
+
+	SECTION("Reading kInt as int16_t throws")
+	{
+		REQUIRE_THROWS_AS(static_cast<int16_t>(cb.At("i")), gfx::GfxException);
+	}
+
+	SECTION("Reading kInt as int32_t succeeds") { CHECK(static_cast<int32_t>(cb.At("i")) == 123); }
+}
+
+TEST_CASE("Bool assignment semantics", "[dynamic_constant_buffer][bool]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+	auto desc   = gfx::DynamicConstantBufferDesc{};
+	desc.AddElement("b", gfx::ElementType::kBool);
+
+	SECTION("Zero maps to false")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("b").Assign(0));
+		CHECK(static_cast<bool>(cb.At("b")) == false);
+	}
+
+	SECTION("Non-zero maps to true")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("b").Assign(42));
+		CHECK(static_cast<bool>(cb.At("b")) == true);
+	}
+
+	SECTION("Negative maps to true")
+	{
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_NOTHROW(cb.At("b").Assign(-1));
+		CHECK(static_cast<bool>(cb.At("b")) == true);
+	}
+}
+
+TEST_CASE(
+	"operator= swallow-exception preserves original value",
+	"[dynamic_constant_buffer][view][immutable]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+	auto desc   = gfx::DynamicConstantBufferDesc{};
+	desc.AddElement("f", gfx::ElementType::kFloat);
+
+	auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+	cb.At("f").Assign(2.5f);
+
+	auto view = cb.GetView()["f"];
+
+	SECTION("Invalid assignment via operator= does not mutate value")
+	{
+		view = static_cast<int>(7);
+		CHECK(static_cast<float>(cb.GetView()["f"]) == 2.5f);
+	}
+}
+
+TEST_CASE("Reject float/int cross-type assignment", "[dynamic_constant_buffer][assign][type]")
+{
+	auto gfxDesc     = GfxOptions{};
+	gfxDesc.headless = true;
+	gfxDesc.width    = 800;
+	gfxDesc.height   = 600;
+
+	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
+	REQUIRE(gfx);
+	auto device = gfx->GetDevice();
+	auto desc   = gfx::DynamicConstantBufferDesc{};
+
+	SECTION("Assign int to float element throws")
+	{
+		desc.AddElement("f", gfx::ElementType::kFloat);
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+
+		REQUIRE_THROWS_AS(cb.At("f").Assign(1), gfx::GfxException);
+	}
+
+	SECTION("Assign float to int element throws")
+	{
+		desc.AddElement("i", gfx::ElementType::kInt);
+
+		auto cb = gfx::DynamicConstantBuffer{ device, desc };
+		REQUIRE_THROWS_AS(cb.At("i").Assign(1.0f), gfx::GfxException);
 	}
 }

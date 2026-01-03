@@ -7,9 +7,9 @@ namespace gfx
 {
 	enum class GroupType : uint8_t
 	{
-		Single = 1,       // leaf value (float, int, float3, etc.)
-		Struct = 1 << 1,  // struct node
-		Array  = 1 << 2   // array of elements or structs
+		Single = 1,
+		Struct = 1 << 1,
+		Array  = 1 << 2
 	};
 
 	struct LayoutEntry
@@ -21,6 +21,12 @@ namespace gfx
 
 		core::EnumSet<GroupType> groupType;
 		ElementType              elemType;
+
+		[[nodiscard]] bool
+		IsArray() const noexcept
+		{
+			return stride != 0;
+		}
 	};
 
 	using LayoutMap = std::
