@@ -1,4 +1,5 @@
 #include "mesh/MeshFactory.h"
+#include "mesh/MeshRegistry.h"
 
 namespace
 {
@@ -12,7 +13,7 @@ namespace
 	constexpr uint32_t kSlices = 32;
 
 	void
-	BuildSphere(std::vector<SphereVertex>& vertices, std::vector<uint16_t>& indices)
+	BuildSphere(std::vector<SphereVertex>& vertices, std::vector<uint32_t>& indices)
 	{
 		vertices.clear();
 		indices.clear();
@@ -47,10 +48,10 @@ namespace
 		{
 			for (uint32_t slice = 0; slice < kSlices; ++slice)
 			{
-				uint16_t i0 = uint16_t(stack * stride + slice);
-				uint16_t i1 = uint16_t(i0 + stride);
-				uint16_t i2 = uint16_t(i0 + 1);
-				uint16_t i3 = uint16_t(i1 + 1);
+				auto i0 = uint32_t(stack * stride + slice);
+				auto i1 = uint32_t(i0 + stride);
+				auto i2 = uint32_t(i0 + 1);
+				auto i3 = uint32_t(i1 + 1);
 
 				indices.push_back(i0);
 				indices.push_back(i1);
@@ -66,49 +67,26 @@ namespace
 
 namespace gfx
 {
-	std::shared_ptr<Mesh::SharedData>
-	MeshFactory::CreateSphereSharedData() const
+	Mesh::InfoID
+	MeshFactory::CreateSphereInfo(MeshRegistry& registry)
 	{
-		auto retval   = Mesh::CreateSharedData();
 		auto vertices = std::vector<SphereVertex>{};
-		auto indices  = std::vector<uint16_t>{};
-
+		auto indices  = std::vector<uint32_t>{};
 		BuildSphere(vertices, indices);
 
-		DynamicBufferDesc desc{};
-		desc.AddElement("POSITION", ElementType::kFloat3)
-			.AddElement("NORMAL", ElementType::kFloat3)
-			.SetName("Sphere Geometry Vertex Buffer");
+		const auto baseVertex = registry.m_vertices.Size();
+		const auto startIndex = registry.m_indices.Size();
 
-		uint32_t            size = static_cast<uint32_t>(vertices.size());
-		DynamicVertexBuffer vb{ m_device, std::move(desc), size };
-
-		for (uint32_t i = 0; i < size; ++i)
+		for (const auto& v : vertices)
 		{
-			vb[i]["POSITION"] = vertices[i].pos;
-			vb[i]["NORMAL"]   = vertices[i].normal;
+			registry.AddVertex(v.pos, v.normal, glm::vec2{ 0.0f, 0.0f });
 		}
 
-		retval->vertexBuf   = std::move(vb);
-		retval->indexCount  = static_cast<uint32_t>(indices.size());
-		retval->indexBuffer = m_device->createBuffer(
-			nvrhi::BufferDesc{}
-				.setByteSize(static_cast<uint32_t>(sizeof(uint16_t) * indices.size()))
-				.setIsIndexBuffer(true)
-				.setInitialState(nvrhi::ResourceStates::IndexBuffer)
-				.setKeepInitialState(true)
-				.setDebugName("Sphere Geometry Index Buffer"));
+		for (auto idx : indices)
+		{
+			registry.AddIndex(static_cast<uint32_t>(idx));
+		}
 
-		auto indexBufSz = sizeof(uint16_t) * retval->indexCount;
-
-		auto uploadCmdList = m_device->createCommandList();
-
-		uploadCmdList->open();
-		retval->vertexBuf.Update(uploadCmdList);
-		uploadCmdList->writeBuffer(retval->indexBuffer, indices.data(), indexBufSz);
-		uploadCmdList->close();
-		m_device->executeCommandList(uploadCmdList);
-
-		return retval;
+		return registry.AddInfo(startIndex, indices.size(), baseVertex);
 	}
 }

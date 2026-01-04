@@ -1,11 +1,11 @@
-#include "drawable/Drawable.h"
-#include "passes/GeomPass.h"
-
 class FrameGraph;
 class FrameGraphBlackboard;
 
 namespace gfx
 {
+	struct FrameData;
+	class MeshRegistry;
+
 	struct RenderArgs
 	{
 		float                    screenWidth;
@@ -15,24 +15,22 @@ namespace gfx
 		nvrhi::FramebufferInfo   outBufferInfo;
 	};
 
-	class GBufferPass : public GeomPass
+	class GBufferPass
 	{
 	public:
 		void
-		Init(nvrhi::DeviceHandle device)
-		{
-			m_mainCommandList = device->createCommandList();
-		}
+		Init(nvrhi::DeviceHandle device);
 
 		void
 		AttachToFrameGraph(
-			FrameGraph&                          frameGraph,
-			FrameGraphBlackboard&                blackBoard,
-			RenderArgs                           renderArgs,
-			Camera&                              camera,
-			std::span<std::unique_ptr<Drawable>> draw);
+			FrameGraph&           frameGraph,
+			FrameGraphBlackboard& blackBoard,
+			RenderArgs            renderArgs);
 
 	private:
-		nvrhi::CommandListHandle m_mainCommandList;
+		nvrhi::CommandListHandle      m_mainCommandList;
+		nvrhi::GraphicsPipelineHandle m_graphicsPipeline;
+		nvrhi::ShaderHandle           m_vertexShader;
+		nvrhi::ShaderHandle           m_pixelShader;
 	};
 }

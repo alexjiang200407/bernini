@@ -1,9 +1,9 @@
 #include "camera/Camera.h"
-#include "drawable/Drawable.h"
 #include "ffi/util.h"
 #include "graphics/Graphics.h"
 #include "material/Material.h"
 #include "mesh/MeshFactory.h"
+#include "passes/CullingPass.h"
 #include "passes/GBufferPass.h"
 #include <dxgidebug.h>
 #include <fg/Blackboard.hpp>
@@ -45,6 +45,12 @@ namespace gfx
 		void
 		DrawFrame(Camera& camera) override;
 
+		nvrhi::DeviceHandle
+		GetDevice() noexcept override
+		{
+			return m_nvrhiDevice;
+		}
+
 	private:
 		void
 		CreateDevice();
@@ -61,12 +67,6 @@ namespace gfx
 		void
 		ReleaseRenderTargets();
 
-		nvrhi::DeviceHandle
-		GetDevice() noexcept override
-		{
-			return m_nvrhiDevice;
-		}
-
 	private:
 		nvrhi::DeviceHandle               m_nvrhiDevice;
 		nvrhi::TextureHandle              m_nvrhiDepthBuffer;
@@ -80,9 +80,9 @@ namespace gfx
 		nvrhi::RefCountPtr<ID3D12Resource>              m_depthBuffer;
 		std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_backBuffers;
 
-		std::unique_ptr<MeshFactory>           m_meshFactory;
-		GBufferPass                            m_gBufferPass;
-		std::vector<std::unique_ptr<Drawable>> m_drawable;
+		std::unique_ptr<MeshFactory> m_meshFactory;
+		GBufferPass                  m_gBufferPass;
+		CullingPass                  m_cullingPass;
 
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
@@ -101,6 +101,7 @@ namespace gfx
 		bool   m_enableDebugLayer         = false;
 
 		nvrhi::CommandListHandle m_mainCommandList;
+		MeshRegistry             m_meshRegistry;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
@@ -161,7 +162,7 @@ namespace gfx
 		deviceDesc.errorCB               = &m_errorCB;
 		m_nvrhiDevice                    = nvrhi::d3d12::createDevice(deviceDesc);
 
-		m_gBufferPass.Init(m_nvrhiDevice);
+		//m_gBufferPass.Init(m_nvrhiDevice);
 
 		if (m_enableDebugLayer)
 		{
@@ -171,17 +172,18 @@ namespace gfx
 		if (!m_isHeadless)
 			CreateRenderTargets();
 
-		m_meshFactory     = std::make_unique<MeshFactory>(m_nvrhiDevice);
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
-		auto mat      = glm::mat4{ 1.0f };
-		mat[3][0]     = 5.0f;
-		auto drawable = std::make_unique<Drawable>(static_cast<ShaderMatrix>(mat));
-		drawable->SetMesh(m_meshFactory->CreateSphere("shaders/VS_cube.cso"sv));
-		drawable->SetMaterial(std::make_shared<Material>(m_nvrhiDevice, "shaders/PS_cube.cso"sv));
-		m_drawable.push_back(std::move(drawable));
+		auto mat  = glm::mat4{ 1.0f };
+		mat[3][0] = 5.0f;
 
-		GeomPass::Setup(m_nvrhiDevice);
+		m_meshRegistry.Init(m_nvrhiDevice);
+		m_cullingPass.Init(m_meshRegistry, m_nvrhiDevice, m_windowWidth, m_windowHeight);
+		m_gBufferPass.Init(m_nvrhiDevice);
+
+		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
+
+		auto _ = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
 	}
 
 	Graphics::~Graphics()
@@ -206,7 +208,7 @@ namespace gfx
 			m_swapChain->SetFullscreenState(false, nullptr);
 		}
 
-		GeomPass::Shutdown();
+		//GeomPass::Shutdown();
 
 		if (m_infoQueue)
 			m_infoQueue->ClearStoredMessages();
@@ -398,15 +400,27 @@ namespace gfx
 
 		FrameGraph           fg;
 		FrameGraphBlackboard blackboard;
-		RenderArgs           args{ .screenWidth   = static_cast<float>(m_windowWidth),
-			                       .screenHeight  = static_cast<float>(m_windowHeight),
-			                       .device        = m_nvrhiDevice,
-			                       .outBuffer     = nvrhiFramebuffer,
-			                       .outBufferInfo = m_framebufferInfo };
-		m_gBufferPass.AttachToFrameGraph(fg, blackboard, args, camera, m_drawable);
+
+		m_cullingPass.AttachToFrameGraph(
+			m_meshRegistry,
+			m_windowWidth,
+			m_windowHeight,
+			fg,
+			blackboard,
+			m_nvrhiDevice,
+			camera);
+
+		{
+			auto args = RenderArgs{ .screenWidth   = static_cast<float>(m_windowWidth),
+				                    .screenHeight  = static_cast<float>(m_windowHeight),
+				                    .device        = m_nvrhiDevice,
+				                    .outBuffer     = nvrhiFramebuffer,
+				                    .outBufferInfo = m_framebufferInfo };
+			m_gBufferPass.AttachToFrameGraph(fg, blackboard, args);
+		}
 
 		fg.compile();
-		fg.execute();
+		fg.execute(this, this);
 
 		if (!m_isHeadless)
 			m_swapChain->Present(1, 0);

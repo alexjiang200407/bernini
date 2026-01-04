@@ -42,7 +42,7 @@ namespace gfx
 			Assign(T val)
 			{
 				if (IsNull())
-					throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+					throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 						                "DynamicConstantBuffer::View::Assign",
 						                "Cannot assign using a null view" };
 
@@ -50,7 +50,7 @@ namespace gfx
 				if (sizeof(T) != entry.elemSize)
 				{
 					throw GfxException{
-						GFX_RESULT_DYNAMIC_BUFFER,
+						GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 						"DynamicConstantBuffer::View::Assign",
 						"Size of assigned value does not match element size for entry: " + m_key
 					};

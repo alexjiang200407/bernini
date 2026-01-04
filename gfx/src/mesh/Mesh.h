@@ -1,49 +1,33 @@
 #pragma once
-#include "buffer/DynamicVertexBuffer.h"
-#include "shader_reflect/ShaderInput.h"
 
 namespace gfx
 {
+
 	class Mesh final
 	{
+	public:
+		using InstanceID = uint32_t;
+		using InfoID     = uint32_t;
+
 	private:
-		struct SharedData
+		struct Instance final
 		{
-			uint32_t            indexCount{};
-			DynamicVertexBuffer vertexBuf{};
-			nvrhi::BufferHandle indexBuffer{};
+			InfoID    infoID;
+			glm::mat4 modelTransform;
 		};
 
-		static std::shared_ptr<SharedData>
-		CreateSharedData()
+		struct Info final
 		{
-			return std::make_shared<SharedData>();
-		}
+			uint32_t startIndex;
+			uint32_t indexCount;
+			uint32_t baseVertex;
+			uint32_t materialID;
+		};
 
 	private:
-		Mesh(
-			std::shared_ptr<SharedData> sharedData,
-			nvrhi::DeviceHandle         device,
-			std::string_view            shaderPath);
+		InstanceID m_instanceID = 0;
+		InfoID     m_infoID     = 0;
 
-	public:
-		void
-		AttachVertexLayout(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept;
-
-		uint32_t
-		GetIndexCount() const noexcept;
-
-		void
-		AttachVertexShader(nvrhi::GraphicsPipelineDesc& pipelineDesc) const noexcept;
-
-		void
-		AttachMesh(nvrhi::GraphicsState& state) const noexcept;
-
-	private:
-		nvrhi::InputLayoutHandle          m_vertexLayout;
-		nvrhi::ShaderHandle               m_vertexShader;
-		std::shared_ptr<const SharedData> m_sharedMeshData;
-
-		friend class MeshFactory;
+		friend class MeshRegistry;
 	};
 }

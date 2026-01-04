@@ -1,22 +1,23 @@
 #include "mesh/MeshFactory.h"
+#include "mesh/MeshRegistry.h"
 
 namespace gfx
 {
-	MeshFactory::MeshFactory(nvrhi::DeviceHandle device) : m_device{ device }
+	MeshFactory::MeshFactory(nvrhi::DeviceHandle device, MeshRegistry& registry) :
+		m_device{ device }
 	{
-		m_cubeSharedData   = CreateCubeSharedData();
-		m_sphereSharedData = CreateSphereSharedData();
+		m_cubeInfoID   = CreateCubeInfo(registry);
+		m_sphereInfoID = CreateSphereInfo(registry);
 	}
 
-	std::shared_ptr<Mesh>
-	MeshFactory::CreateCube(std::string_view vertexShaderPath) const
+	Mesh::InstanceID
+	MeshFactory::CreateCubeInstance(MeshRegistry& registry, glm::mat4 modelTransform) const
 	{
-		return std::shared_ptr<Mesh>{ new Mesh{ m_cubeSharedData, m_device, vertexShaderPath } };
+		return registry.AddInstance(m_cubeInfoID, modelTransform);
 	}
-
-	std::shared_ptr<Mesh>
-	MeshFactory::CreateSphere(std::string_view vertexShaderPath) const
+	Mesh::InstanceID
+	MeshFactory::CreateSphereInstance(MeshRegistry& registry, glm::mat4 modelTransform) const
 	{
-		return std::shared_ptr<Mesh>{ new Mesh{ m_sphereSharedData, m_device, vertexShaderPath } };
+		return registry.AddInstance(m_sphereInfoID, modelTransform);
 	}
 }

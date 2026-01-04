@@ -78,13 +78,13 @@ namespace gfx
 	DynamicConstantBuffer::View::At(std::string_view key) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Cannot at using a null view" };
 
 		if (key.find('.') != std::string_view::npos)
 		{
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Nested keys are not supported in At(): " + std::string{ key } };
 		}
@@ -98,7 +98,7 @@ namespace gfx
 	DynamicConstantBuffer::View::At(uint32_t index) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Cannot at using a null view" };
 
@@ -106,14 +106,14 @@ namespace gfx
 
 		if (index >= entry.count)
 		{
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Index out of range for entry: " + m_key };
 		}
 
 		if (entry.count == 1)
 		{
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Cannot index a non-array entry: " + m_key };
 		}
@@ -155,7 +155,7 @@ namespace gfx
 			return it->second;
 		}
 
-		throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+		throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 			                "DynamicConstantBuffer::GetLayoutEntry",
 			                "Could not find entry" };
 	}
@@ -178,7 +178,7 @@ namespace gfx
 	{
 		if (name.find('.') != std::string_view::npos)
 		{
-			throw GfxException{ GFX_RESULT_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
 				                "DynamicConstantBuffer::At",
 				                "Nested keys are not supported in At(): " + std::string{ name } };
 		}

@@ -107,6 +107,7 @@ if (RENDERER_BACKEND STREQUAL "DX12")
                     -T ${SHADER_TYPE}_6_0
                     -Fo "${OUT_CSO}"
                     -Zi
+                    -E ${SHADER_NAME} 
                     -Qembed_debug
                     "${SHADER}"
             DEPENDS "${SHADER}"
