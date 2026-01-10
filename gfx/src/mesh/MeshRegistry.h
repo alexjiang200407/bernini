@@ -42,6 +42,12 @@ namespace gfx
 			return m_indices;
 		}
 
+		const StructuredBufferSRV<Mesh::Instance>&
+		GetInstances() const noexcept
+		{
+			return m_meshInstances;
+		}
+
 	private:
 		Mesh::InstanceID
 		AddInstance(Mesh::InfoID id, glm::mat4 modelTransform = {})

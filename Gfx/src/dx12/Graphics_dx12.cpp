@@ -183,7 +183,20 @@ namespace gfx
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
 
-		auto _ = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
+		auto a = m_meshFactory->CreateCubeInstance(
+			m_meshRegistry,
+			glm::translate(glm::mat4(1.0f), glm::vec3(-4.f, 0.f, 0.f)));
+
+		auto b = m_meshFactory->CreateSphereInstance(
+			m_meshRegistry,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.f, 0.f, 0.f)));
+
+		auto c = m_meshFactory->CreateCubeInstance(
+			m_meshRegistry,
+			glm::translate(glm::mat4(1.0f), glm::vec3(4.f, 0.f, 0.f)));
+
+		//auto _3 = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
+		//auto _2 = m_meshFactory->CreateCubeInstance(m_meshRegistry, { 1 });
 	}
 
 	Graphics::~Graphics()

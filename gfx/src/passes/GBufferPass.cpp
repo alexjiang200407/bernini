@@ -13,17 +13,16 @@
 
 namespace gfx
 {
-	static auto renderState = nvrhi::RenderState{}
-	                              .setRasterState(
-									  nvrhi::RasterState{}
-										  .setCullMode(nvrhi::RasterCullMode::None)
-										  .setFillMode(nvrhi::RasterFillMode::Solid))
-	                              .setDepthStencilState(
-									  nvrhi::DepthStencilState{}
-										  .setDepthTestEnable(true)
-										  .setDepthWriteEnable(true)
-										  .setDepthFunc(nvrhi::ComparisonFunc::Less)
-										  .setStencilEnable(false));
+	static auto renderState =
+		nvrhi::RenderState{}
+			.setRasterState(nvrhi::RasterState{}
+	                            .setCullMode(nvrhi::RasterCullMode::None)
+	                            .setFillMode(nvrhi::RasterFillMode::Solid))
+			.setDepthStencilState(nvrhi::DepthStencilState{}
+	                                  .setDepthTestEnable(true)
+	                                  .setDepthWriteEnable(true)
+	                                  .setDepthFunc(nvrhi::ComparisonFunc::Less)
+	                                  .setStencilEnable(false));
 
 	void
 	GBufferPass::Init(nvrhi::DeviceHandle device)
@@ -64,59 +63,55 @@ namespace gfx
 			[=](FrameGraph::Builder& builder, auto&) {
 				builder.read(frameData.frameConstantsBindingSet);
 				builder.read(frameData.frameConstantsBindingLayout);
-				builder.read(frameData.drawIndirectBuffer);
-				builder.read(frameData.drawIndirectCountBuffer);
+				builder.read(frameData.drawIndirectArgs);
+				builder.read(frameData.drawIndirectCount);
+				builder.read(frameData.visibleInstanceBuffer);
+				builder.read(frameData.visibleInstanceCount);
 				builder.read(frameData.indexBuffer);
 				builder.read(frameData.vertexBuffer);
 				builder.setSideEffect();
 			},
 			[this, renderArgs, frameData](auto&, FrameGraphPassResources& resources, void*) {
 				auto device            = renderArgs.device;
-				auto frameBufferInfo   = renderArgs.outBufferInfo;
 				auto screenW           = renderArgs.screenWidth;
 				auto screenH           = renderArgs.screenHeight;
 				auto outputFramebuffer = renderArgs.outBuffer;
 
 				if (!m_graphicsPipeline)
 				{
-					auto& frameDataBindingLayout =
-						resources.get<FrameGraphView<nvrhi::BindingLayoutHandle>>(
-							frameData.frameConstantsBindingLayout);
+					auto& layout = resources.get<FrameGraphView<nvrhi::BindingLayoutHandle>>(
+						frameData.frameConstantsBindingLayout);
 
-					auto pipelineDesc = nvrhi::GraphicsPipelineDesc{};
-
-					pipelineDesc.setPixelShader(m_pixelShader)
-						.setVertexShader(m_vertexShader)
+					nvrhi::GraphicsPipelineDesc desc{};
+					desc.setVertexShader(m_vertexShader)
+						.setPixelShader(m_pixelShader)
 						.setRenderState(renderState)
-						.addBindingLayout(frameDataBindingLayout.Get())
+						.addBindingLayout(layout.Get())
 						.setInputLayout(device->createInputLayout(nullptr, 0, m_vertexShader));
 
-					m_graphicsPipeline =
-						device->createGraphicsPipeline(pipelineDesc, outputFramebuffer);
+					m_graphicsPipeline = device->createGraphicsPipeline(desc, outputFramebuffer);
 				}
 
-				auto gfxState = nvrhi::GraphicsState{};
+				nvrhi::GraphicsState gfxState{};
 
-				const nvrhi::BindingSetHandle& frameDataBindingSet =
-					resources.get<FrameGraphView<nvrhi::BindingSetHandle>>(
-						frameData.frameConstantsBindingSet);
-				gfxState.addBindingSet(frameDataBindingSet.Get());
+				gfxState.addBindingSet(resources
+			                               .get<FrameGraphView<nvrhi::BindingSetHandle>>(
+											   frameData.frameConstantsBindingSet)
+			                               .Get());
 
 				gfxState.setFramebuffer(outputFramebuffer)
-					.setViewport(
-						nvrhi::ViewportState{}.addViewportAndScissorRect(
-							nvrhi::Viewport{ screenW, screenH }))
+					.setViewport(nvrhi::ViewportState{}.addViewportAndScissorRect(
+						nvrhi::Viewport{ screenW, screenH }))
 					.setPipeline(m_graphicsPipeline);
 
 				m_mainCommandList->open();
 
-				auto& drawArgsBuffer = resources
-			                               .get<StructuredBufferUAV<DrawIndexedArgs>::View>(
-											   frameData.drawIndirectBuffer)
-			                               .Get();
-				auto& drawCountBuffer =
+				auto& drawArgsBuffer =
 					resources
-						.get<StructuredBufferUAV<uint32_t>::View>(frameData.drawIndirectCountBuffer)
+						.get<StructuredBufferUAV<DrawIndexedArgs>::View>(frameData.drawIndirectArgs)
+						.Get();
+				auto& drawCountBuffer =
+					resources.get<StructuredBufferUAV<uint32_t>::View>(frameData.drawIndirectCount)
 						.Get();
 
 				auto& vertexBuffer =
@@ -163,5 +158,4 @@ namespace gfx
 				device->executeCommandList(m_mainCommandList);
 			});
 	}
-
 }
