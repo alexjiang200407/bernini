@@ -48,6 +48,12 @@ namespace gfx
 			return m_meshInstances;
 		}
 
+		const size_t
+		GetMeshInfosCount() const noexcept
+		{
+			return m_meshInfos.Size();
+		}
+
 	private:
 		Mesh::InstanceID
 		AddInstance(Mesh::InfoID id, glm::mat4 modelTransform = {})

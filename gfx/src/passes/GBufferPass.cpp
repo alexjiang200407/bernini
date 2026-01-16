@@ -65,8 +65,10 @@ namespace gfx
 				builder.read(frameData.frameConstantsBindingLayout);
 				builder.read(frameData.drawIndirectArgs);
 				builder.read(frameData.drawIndirectCount);
-				builder.read(frameData.visibleInstanceBuffer);
-				builder.read(frameData.visibleInstanceCount);
+				//builder.read(frameData.meshInstanceCounts);
+				//builder.read(frameData.meshInstanceOffsets);
+				//builder.read(frameData.meshWriteCursor);
+				builder.read(frameData.compactedInstances);
 				builder.read(frameData.indexBuffer);
 				builder.read(frameData.vertexBuffer);
 				builder.setSideEffect();

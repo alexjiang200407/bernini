@@ -3,6 +3,7 @@
 #include "buffer/DynamicConstantBuffer.h"
 #include "buffer/StructuredBufferUAV.h"
 #include "mesh/DrawIndexedArgs.h"
+#include "mesh/Mesh.h"
 
 class FrameGraph;
 class FrameGraphBlackboard;
@@ -11,15 +12,6 @@ namespace gfx
 {
 	class MeshRegistry;
 	class Camera;
-
-	struct MeshInstance
-	{
-		float    modelTransform[16];  // float4x4 = 16 floats = 64 bytes
-		uint32_t infoID;              // 4 bytes
-	};
-
-	// Hard guarantee layout correctness
-	static_assert(sizeof(MeshInstance) == 68, "MeshInstance size must match HLSL");
 
 	class CullingPass
 	{
@@ -48,20 +40,26 @@ namespace gfx
 		CreateBindingSet(MeshRegistry& registry, nvrhi::DeviceHandle device);
 
 	private:
-		//StructuredBufferUAV<DrawIndexedArgs> m_drawIndirectBuffer;
-		//StructuredBufferUAV<uint32_t>        m_drawIndirectBufferCounter;
 		StructuredBufferUAV<DrawIndexedArgs> m_drawIndirectArgsBuffer;
 		StructuredBufferUAV<uint32_t>        m_drawIndirectCountBuffer;
-		DynamicConstantBuffer                m_frameConstants;
-		StructuredBufferUAV<uint32_t>        m_visibleInstanceCount;
-		StructuredBufferUAV<MeshInstance>    m_visibleInstanceBuffer;
-		nvrhi::CommandListHandle             m_cmdList;
-		nvrhi::ShaderHandle                  m_cullingCS;
-		nvrhi::ShaderHandle                  m_buildArgsCS;
-		nvrhi::ComputePipelineHandle         m_computePipeline;
-		nvrhi::ComputePipelineHandle         m_buildArgsPipeline;
-		nvrhi::BindingLayoutHandle           m_bindingLayout;
-		nvrhi::BindingSetHandle              m_bindingSet;
-		nvrhi::BindingSetItem                m_cameraBindingSetItem;
+		StructuredBufferUAV<uint32_t>        m_meshVisibleCountBuffer;
+		StructuredBufferUAV<uint32_t>        m_meshInstanceOffsetBuffer;
+		StructuredBufferUAV<uint32_t>        m_meshWriteCursor;
+		StructuredBufferUAV<Mesh::Instance>  m_compactedInstanceBuffer;
+		//StructuredBufferSRV<Mesh::Instance>  m_compactedInstanceBufferSRV;
+
+		DynamicConstantBuffer        m_frameConstants;
+		nvrhi::CommandListHandle     m_cmdList;
+		nvrhi::ShaderHandle          m_cullHistogramCS;
+		nvrhi::ShaderHandle          m_prefixSumCS;
+		nvrhi::ShaderHandle          m_cullScatterCS;
+		nvrhi::ShaderHandle          m_buildArgsCS;
+		nvrhi::ComputePipelineHandle m_histogramPipeline;
+		nvrhi::ComputePipelineHandle m_prefixSumPipeline;
+		nvrhi::ComputePipelineHandle m_scatterPipeline;
+		nvrhi::ComputePipelineHandle m_buildArgsPipeline;
+		nvrhi::BindingLayoutHandle   m_bindingLayout;
+		nvrhi::BindingSetHandle      m_bindingSet;
+		nvrhi::BindingSetItem        m_cameraBindingSetItem;
 	};
 }

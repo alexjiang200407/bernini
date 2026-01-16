@@ -34,48 +34,89 @@ namespace gfx
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
 				.SetKeepInitialState(true));
 
-		m_visibleInstanceBuffer.Init(
+		m_meshVisibleCountBuffer.Init(
 			device,
 			StructuredBufferUAVDesc{}
-				.SetName("VisibleInstanceBuffer")
-				.SetStartingLen(1024u)
+				.SetName("MeshVisibleCounts")
+				.SetStartingLen(1024)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
 				.SetKeepInitialState(true));
 
-		m_visibleInstanceCount.Init(
+		m_meshInstanceOffsetBuffer.Init(
 			device,
 			StructuredBufferUAVDesc{}
-				.SetName("VisibleInstanceCount")
-				.SetStartingLen(1u)
+				.SetName("MeshInstanceOffsets")
+				.SetStartingLen(1024)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
+				.SetKeepInitialState(true));
+
+		m_meshWriteCursor.Init(
+			device,
+			StructuredBufferUAVDesc{}
+				.SetName("MeshWriteCursor")
+				.SetStartingLen(1024)
+				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
+				.SetKeepInitialState(true));
+
+		m_compactedInstanceBuffer.Init(
+			device,
+			StructuredBufferUAVDesc{}
+				.SetName("CompactedInstances")
+				.SetStartingLen(1024)
+				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
+				.SetKeepInitialState(true));
+
+		m_drawIndirectArgsBuffer.Init(
+			device,
+			StructuredBufferUAVDesc{}
+				.SetName("DrawIndirectArgs")
+				.SetStartingLen(1024)
+				.SetIsDrawIndirect()
+				.SetInitialState(nvrhi::ResourceStates::IndirectArgument)
 				.SetKeepInitialState(true));
 
 		auto frameConstantsDesc = DynamicConstantBufferDesc{};
 		frameConstantsDesc.AddElement("viewMatrix", ElementType::kFloat4x4)
 			.AddElement("projMatrix", ElementType::kFloat4x4)
 			.AddElement("instanceCount", ElementType::kUInt)
+			.AddElement("meshCount", ElementType::kUInt)
 			.SetName("FrameConstantBuffer");
 
 		m_frameConstants = std::move(DynamicConstantBuffer{ device, frameConstantsDesc });
 
 		m_cmdList = device->createCommandList();
 
-		auto cullingShaderByteCode = core::file::readFileBytes("shaders/CS_CullAndCompact.cso"sv);
-		m_cullingCS                = device->createShader(
+		auto histogramShaderByteCode = core::file::readFileBytes("shaders/CS_CullHistogram.cso"sv);
+		m_cullHistogramCS            = device->createShader(
             nvrhi::ShaderDesc{}
                 .setShaderType(nvrhi::ShaderType::Compute)
                 .setDebugName("CullingComputeShader"),
-            cullingShaderByteCode.data(),
-            cullingShaderByteCode.size());
+            histogramShaderByteCode.data(),
+            histogramShaderByteCode.size());
+
+		auto prefixSumShaderByteCode = core::file::readFileBytes("shaders/CS_PrefixSum.cso"sv);
+		m_prefixSumCS                = device->createShader(
+            nvrhi::ShaderDesc{}
+                .setShaderType(nvrhi::ShaderType::Compute)
+                .setDebugName("PrefixSumComputeShader"),
+            prefixSumShaderByteCode.data(),
+            prefixSumShaderByteCode.size());
+
+		auto scatterShaderByteCode = core::file::readFileBytes("shaders/CS_CullScatter.cso"sv);
+		m_cullScatterCS            = device->createShader(
+            nvrhi::ShaderDesc{}
+                .setShaderType(nvrhi::ShaderType::Compute)
+                .setDebugName("ScatterComputeShader"),
+            scatterShaderByteCode.data(),
+            scatterShaderByteCode.size());
 
 		auto buildArgsCSByteCode = core::file::readFileBytes("shaders/CS_BuildDrawArgs.cso"sv);
-
-		m_buildArgsCS = device->createShader(
-			nvrhi::ShaderDesc{}
-				.setShaderType(nvrhi::ShaderType::Compute)
-				.setDebugName("BuildDrawArgsCS"),
-			buildArgsCSByteCode.data(),
-			buildArgsCSByteCode.size());
+		m_buildArgsCS            = device->createShader(
+            nvrhi::ShaderDesc{}
+                .setShaderType(nvrhi::ShaderType::Compute)
+                .setDebugName("BuildDrawArgsCS"),
+            buildArgsCSByteCode.data(),
+            buildArgsCSByteCode.size());
 
 		namespace CB  = BindingSlots::CB;
 		namespace SRV = BindingSlots::SRV;
@@ -89,9 +130,12 @@ namespace gfx
 			.addItem(bindingLayoutItem)
 			.addItem(m_drawIndirectArgsBuffer.GetBindingLayoutItem(UAV::DrawIndirectArgs))
 			.addItem(m_drawIndirectCountBuffer.GetBindingLayoutItem(UAV::DrawIndirectCount))
-			.addItem(m_visibleInstanceBuffer.GetBindingLayoutItem(UAV::VisibleInstances))
-			.addItem(m_visibleInstanceCount.GetBindingLayoutItem(UAV::VisibleInstanceCount))
+			.addItem(m_meshVisibleCountBuffer.GetBindingLayoutItem(UAV::MeshVisibleCounts))
+			.addItem(m_meshInstanceOffsetBuffer.GetBindingLayoutItem(UAV::MeshInstanceOffsets))
+			.addItem(m_meshWriteCursor.GetBindingLayoutItem(UAV::MeshWriteCursor))
+			.addItem(m_compactedInstanceBuffer.GetBindingLayoutItem(UAV::CompactedInstances))
 			.addItem(registry.GetInstances().GetBindingLayoutItem(SRV::InstanceBuffer))
+			.addItem(registry.GetInstances().GetBindingLayoutItem(SRV::CompactedInstances))
 			.setVisibility(nvrhi::ShaderType::AllGraphics);
 
 		registry.AttachBindingLayoutItems(bindingLayoutDesc);
@@ -100,15 +144,17 @@ namespace gfx
 
 		CreateBindingSet(registry, device);
 
-		auto pipelineDesc = nvrhi::ComputePipelineDesc{};
-		pipelineDesc.setComputeShader(m_cullingCS);
-		pipelineDesc.addBindingLayout(m_bindingLayout);
-		m_computePipeline = device->createComputePipeline(pipelineDesc);
+		auto makePipeline = [&](nvrhi::ShaderHandle cs) {
+			nvrhi::ComputePipelineDesc pd;
+			pd.setComputeShader(cs);
+			pd.addBindingLayout(m_bindingLayout);
+			return device->createComputePipeline(pd);
+		};
 
-		nvrhi::ComputePipelineDesc buildArgsPipelineDesc{};
-		buildArgsPipelineDesc.setComputeShader(m_buildArgsCS);
-		buildArgsPipelineDesc.addBindingLayout(m_bindingLayout);
-		m_buildArgsPipeline = device->createComputePipeline(buildArgsPipelineDesc);
+		m_histogramPipeline = makePipeline(m_cullHistogramCS);
+		m_prefixSumPipeline = makePipeline(m_prefixSumCS);
+		m_scatterPipeline   = makePipeline(m_cullScatterCS);
+		m_buildArgsPipeline = makePipeline(m_buildArgsCS);
 	}
 
 	void
@@ -151,21 +197,35 @@ namespace gfx
 				}
 
 				{
-					data.visibleInstanceCount =
-						builder.create<decltype(m_visibleInstanceCount)::View>(
-							"Visible Instance Count"sv,
-							{ m_visibleInstanceCount });
+					data.meshVisibleCounts =
+						builder.create<decltype(m_meshVisibleCountBuffer)::View>(
+							"MeshVisibleCounts",
+							{ m_meshVisibleCountBuffer });
 
-					data.visibleInstanceCount = builder.write(data.visibleInstanceCount);
+					data.meshVisibleCounts = builder.write(data.meshVisibleCounts);
 				}
 
 				{
-					data.visibleInstanceBuffer =
-						builder.create<decltype(m_visibleInstanceBuffer)::View>(
-							"Visible Instance Buffer"sv,
-							{ m_visibleInstanceBuffer });
+					data.meshInstanceOffsets =
+						builder.create<decltype(m_meshInstanceOffsetBuffer)::View>(
+							"MeshInstanceOffsets",
+							{ m_meshInstanceOffsetBuffer });
+					data.meshInstanceOffsets = builder.write(data.meshInstanceOffsets);
+				}
 
-					data.visibleInstanceBuffer = builder.write(data.visibleInstanceBuffer);
+				{
+					data.meshWriteCursor = builder.create<decltype(m_meshWriteCursor)::View>(
+						"MeshWriteCursor",
+						{ m_meshWriteCursor });
+					data.meshWriteCursor = builder.write(data.meshWriteCursor);
+				}
+
+				{
+					data.compactedInstances =
+						builder.create<decltype(m_compactedInstanceBuffer)::View>(
+							"CompactedInstanceBuffer"sv,
+							{ m_compactedInstanceBuffer });
+					data.compactedInstances = builder.write(data.compactedInstances);
 				}
 
 				{
@@ -214,6 +274,8 @@ namespace gfx
 
 				auto instanceCount                = registry.GetInstancesCount();
 				m_frameConstants["instanceCount"] = instanceCount;
+				auto meshCount                = static_cast<uint32_t>(registry.GetMeshInfosCount());
+				m_frameConstants["meshCount"] = meshCount;
 
 				m_cmdList->open();
 
@@ -225,38 +287,119 @@ namespace gfx
 				auto constexpr resetCounter = std::array<uint32_t, 1>{ 0 };
 
 				m_cmdList->beginTrackingBufferState(
-					m_visibleInstanceBuffer.GetBuffer(),
+					m_meshVisibleCountBuffer.GetBuffer(),
 					nvrhi::ResourceStates::UnorderedAccess);
 
 				m_cmdList->beginTrackingBufferState(
-					m_visibleInstanceCount.GetBuffer(),
+					m_meshInstanceOffsetBuffer.GetBuffer(),
 					nvrhi::ResourceStates::UnorderedAccess);
 
 				m_cmdList->beginTrackingBufferState(
-					m_drawIndirectArgsBuffer.GetBuffer(),
+					m_meshWriteCursor.GetBuffer(),
 					nvrhi::ResourceStates::UnorderedAccess);
 
-				m_visibleInstanceCount.Update(m_cmdList, resetCounter);
+				m_cmdList->beginTrackingBufferState(
+					m_meshWriteCursor.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				m_cmdList->beginTrackingBufferState(
+					m_compactedInstanceBuffer.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				m_meshVisibleCountBuffer.Update(m_cmdList, resetCounter);
 				m_frameConstants.Update(m_cmdList);
 
-				auto computeState = nvrhi::ComputeState{};
-				computeState.setPipeline(m_computePipeline).addBindingSet(m_bindingSet);
-				m_cmdList->setComputeState(computeState);
+				const auto threadsPerGroup = 64u;
+				const auto numGroups = (instanceCount + threadsPerGroup - 1) / threadsPerGroup;
 
-				auto buildArgsState = nvrhi::ComputeState{};
-				buildArgsState.setPipeline(m_buildArgsPipeline);
-				buildArgsState.addBindingSet(m_bindingSet);
+				m_cmdList->setBufferState(
+					m_meshVisibleCountBuffer.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+				m_cmdList->commitBarriers();
+
+				{
+					nvrhi::ComputeState cs;
+					cs.setPipeline(m_histogramPipeline).addBindingSet(m_bindingSet);
+					m_cmdList->setComputeState(cs);
+					m_cmdList->dispatch(numGroups, 1, 1);
+				}
+
+				m_cmdList->setBufferState(
+					m_meshVisibleCountBuffer.GetBuffer(),
+					nvrhi::ResourceStates::ShaderResource);
+
+				m_cmdList->setBufferState(
+					m_meshInstanceOffsetBuffer.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				m_cmdList->setBufferState(
+					m_meshWriteCursor.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				m_cmdList->commitBarriers();
+
+				{
+					nvrhi::ComputeState cs;
+					cs.setPipeline(m_prefixSumPipeline).addBindingSet(m_bindingSet);
+					m_cmdList->setComputeState(cs);
+					m_cmdList->dispatch(1, 1, 1);
+				}
+
+				m_cmdList->setBufferState(
+					m_meshWriteCursor.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				m_cmdList->setBufferState(
+					m_compactedInstanceBuffer.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				m_cmdList->setBufferState(
+					registry.GetInstances().GetBuffer(),
+					nvrhi::ResourceStates::ShaderResource);
+
+				m_cmdList->commitBarriers();
+
+				{
+					nvrhi::ComputeState cs;
+					cs.setPipeline(m_scatterPipeline).addBindingSet(m_bindingSet);
+					m_cmdList->setComputeState(cs);
+					m_cmdList->dispatch(numGroups, 1, 1);
+				}
+
+				m_cmdList->setBufferState(
+					m_meshVisibleCountBuffer.GetBuffer(),
+					nvrhi::ResourceStates::ShaderResource);
+
+				m_cmdList->setBufferState(
+					m_meshInstanceOffsetBuffer.GetBuffer(),
+					nvrhi::ResourceStates::ShaderResource);
 
 				m_cmdList->setBufferState(
 					m_drawIndirectArgsBuffer.GetBuffer(),
 					nvrhi::ResourceStates::UnorderedAccess);
 
-				const auto threadsPerGroup = 64u;
-				const auto numGroups = (instanceCount + threadsPerGroup - 1) / threadsPerGroup;
-				m_cmdList->dispatch(numGroups, 1, 1);
+				m_cmdList->setBufferState(
+					m_drawIndirectCountBuffer.GetBuffer(),
+					nvrhi::ResourceStates::UnorderedAccess);
 
-				m_cmdList->setComputeState(buildArgsState);
-				m_cmdList->dispatch(1, 1, 1);
+				m_cmdList->commitBarriers();
+
+				{
+					nvrhi::ComputeState cs;
+					cs.setPipeline(m_buildArgsPipeline).addBindingSet(m_bindingSet);
+					m_cmdList->setComputeState(cs);
+					m_cmdList->dispatch(1, 1, 1);
+				}
+
+				m_cmdList->setBufferState(
+					m_drawIndirectArgsBuffer.GetBuffer(),
+					nvrhi::ResourceStates::IndirectArgument);
+
+				m_cmdList->setBufferState(
+					m_drawIndirectCountBuffer.GetBuffer(),
+					nvrhi::ResourceStates::IndirectArgument);
+
+				m_cmdList->commitBarriers();
 
 				m_cmdList->close();
 				device->executeCommandList(m_cmdList);
@@ -273,9 +416,12 @@ namespace gfx
 		bindingSetDesc.addItem(m_cameraBindingSetItem)
 			.addItem(m_drawIndirectArgsBuffer.GetBindingSetItem(UAV::DrawIndirectArgs))
 			.addItem(m_drawIndirectCountBuffer.GetBindingSetItem(UAV::DrawIndirectCount))
-			.addItem(m_visibleInstanceBuffer.GetBindingSetItem(UAV::VisibleInstances))
-			.addItem(m_visibleInstanceCount.GetBindingSetItem(UAV::VisibleInstanceCount))
-			.addItem(registry.GetInstances().GetBindingSetItem(SRV::InstanceBuffer));
+			.addItem(m_meshVisibleCountBuffer.GetBindingSetItem(UAV::MeshVisibleCounts))
+			.addItem(m_meshInstanceOffsetBuffer.GetBindingSetItem(UAV::MeshInstanceOffsets))
+			.addItem(m_meshWriteCursor.GetBindingSetItem(UAV::MeshWriteCursor))
+			.addItem(m_compactedInstanceBuffer.GetBindingSetItem(UAV::CompactedInstances))
+			.addItem(registry.GetInstances().GetBindingSetItem(SRV::InstanceBuffer))
+			.addItem(registry.GetInstances().GetBindingSetItem(SRV::CompactedInstances));
 
 		registry.AttachBindingSetItems(bindingSetDesc);
 

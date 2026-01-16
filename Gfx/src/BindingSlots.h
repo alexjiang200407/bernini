@@ -20,19 +20,22 @@ namespace gfx
 
 		namespace SRV
 		{
-			constexpr uint32_t MeshInstance   = 0;
-			constexpr uint32_t MeshInfo       = 1;
-			constexpr uint32_t IndexBuffer    = 2;
-			constexpr uint32_t VertexBuffer   = 3;
-			constexpr uint32_t InstanceBuffer = 4;
+			constexpr uint32_t MeshInstance       = 0;
+			constexpr uint32_t MeshInfo           = 1;
+			constexpr uint32_t IndexBuffer        = 2;
+			constexpr uint32_t VertexBuffer       = 3;
+			constexpr uint32_t InstanceBuffer     = 4;
+			constexpr uint32_t CompactedInstances = 5;
 		}
 
 		namespace UAV
 		{
-			constexpr uint32_t DrawIndirectArgs     = 0;
-			constexpr uint32_t DrawIndirectCount    = 1;
-			constexpr uint32_t VisibleInstances     = 2;
-			constexpr uint32_t VisibleInstanceCount = 3;
+			constexpr uint32_t DrawIndirectArgs    = 0;
+			constexpr uint32_t DrawIndirectCount   = 1;
+			constexpr uint32_t MeshVisibleCounts   = 2;
+			constexpr uint32_t MeshInstanceOffsets = 3;
+			constexpr uint32_t MeshWriteCursor     = 4;
+			constexpr uint32_t CompactedInstances  = 5;
 
 			// Phong Material Textures
 			constexpr uint32_t DiffuseTex  = 0;

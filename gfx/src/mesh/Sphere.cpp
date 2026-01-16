@@ -84,7 +84,7 @@ namespace gfx
 
 		for (auto idx : indices)
 		{
-			registry.AddIndex(static_cast<uint32_t>(idx));
+			registry.AddIndex(static_cast<uint32_t>(idx) + baseVertex);
 		}
 
 		return registry.AddInfo(startIndex, indices.size(), baseVertex);

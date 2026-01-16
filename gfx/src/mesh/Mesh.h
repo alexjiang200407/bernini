@@ -9,13 +9,13 @@ namespace gfx
 		using InstanceID = uint32_t;
 		using InfoID     = uint32_t;
 
-	private:
 		struct Instance final
 		{
 			InfoID    infoID;
 			glm::mat4 modelTransform;
 		};
 
+	private:
 		struct Info final
 		{
 			uint32_t startIndex;

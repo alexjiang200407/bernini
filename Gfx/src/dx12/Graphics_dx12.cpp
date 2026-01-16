@@ -174,26 +174,20 @@ namespace gfx
 
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
-		auto mat  = glm::mat4{ 1.0f };
-		mat[3][0] = 5.0f;
-
 		m_meshRegistry.Init(m_nvrhiDevice);
 		m_cullingPass.Init(m_meshRegistry, m_nvrhiDevice, m_windowWidth, m_windowHeight);
 		m_gBufferPass.Init(m_nvrhiDevice);
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
+		auto mat      = glm::mat4{ 1.0f };
+		auto a        = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
 
-		auto a = m_meshFactory->CreateCubeInstance(
-			m_meshRegistry,
-			glm::translate(glm::mat4(1.0f), glm::vec3(-4.f, 0.f, 0.f)));
+		mat[3][0] = -5.0f;
 
-		auto b = m_meshFactory->CreateSphereInstance(
-			m_meshRegistry,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0.f, 0.f, 0.f)));
+		auto b = m_meshFactory->CreateSphereInstance(m_meshRegistry, mat);
 
-		auto c = m_meshFactory->CreateCubeInstance(
-			m_meshRegistry,
-			glm::translate(glm::mat4(1.0f), glm::vec3(4.f, 0.f, 0.f)));
+		mat[3][0] = -10.0f;
+		auto c    = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
 
 		//auto _3 = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
 		//auto _2 = m_meshFactory->CreateCubeInstance(m_meshRegistry, { 1 });
@@ -441,8 +435,8 @@ namespace gfx
 		m_commandQueue->Signal(m_frameFence.Get(), m_frameCount);
 		m_frameFence->SetEventOnCompletion(m_frameCount, m_frameFenceEvents[backBufferIndex]);
 
-		//std::this_thread::sleep_for(std::chrono::milliseconds(0));
-		//m_nvrhiDevice->runGarbageCollection();
+		std::this_thread::sleep_for(std::chrono::milliseconds(0));
+		m_nvrhiDevice->runGarbageCollection();
 
 		++m_frameCount;
 	}

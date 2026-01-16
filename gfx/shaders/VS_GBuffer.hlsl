@@ -1,7 +1,8 @@
 #include "common/Mesh.hlsli"
 
-StructuredBuffer<MeshInstance> visibleInstanceBuffer;
+StructuredBuffer<uint> indexBuffer : register(t2, space0);
 StructuredBuffer<Vertex> vertexBuffer : register(t3, space0);
+StructuredBuffer<MeshInstance> visibleInstanceBuffer : register(t5, space0);
 
 cbuffer FrameConstants : register(b0, space0)
 {
@@ -25,7 +26,7 @@ VSOutput VS_GBuffer(uint vID : SV_VertexID, uint instanceID : SV_InstanceID)
     float3 rawPosition = vertexBuffer[vID].position;
 
     float4 worldPos = mul(instance.modelTransform, float4(rawPosition, 1.0f));
-    float4 viewPos = mul(viewMatrix, worldPos);
+    float4 viewPos  = mul(viewMatrix, worldPos);
     output.position = mul(projMatrix, viewPos);
 
     return output;

@@ -5,13 +5,16 @@ namespace gfx
 {
 	struct FrameData
 	{
-		//FrameGraphResource drawIndirectBuffer;
-		//FrameGraphResource drawIndirectCountBuffer;
 		FrameGraphResource frameConstants;
 		FrameGraphResource drawIndirectArgs;
 		FrameGraphResource drawIndirectCount;
-		FrameGraphResource visibleInstanceCount;
-		FrameGraphResource visibleInstanceBuffer;
+		//FrameGraphResource visibleInstanceCount;
+		//FrameGraphResource visibleInstanceBuffer;
+		FrameGraphResource meshVisibleCounts;
+		FrameGraphResource meshInstanceOffsets;
+		FrameGraphResource meshWriteCursor;
+		FrameGraphResource compactedInstances;
+		FrameGraphResource compactedInstancesSRV;
 		FrameGraphResource indexBuffer;
 		FrameGraphResource vertexBuffer;
 
