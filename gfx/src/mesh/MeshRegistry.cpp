@@ -1,0 +1,54 @@
+#include "mesh/MeshRegistry.h"
+#include "BindingSlots.h"
+
+namespace gfx
+{
+	void
+	MeshRegistry::Init(nvrhi::DeviceHandle device)
+	{
+		m_meshInfos.Init(device, StructuredBufferDesc{}.SetName("Mesh Info Structured Buffer"));
+		m_vertices.Init(
+			device,
+			StructuredBufferDesc{}.SetName("Vertex Structured Buffer").SetIsVertexBuffer());
+		m_indices.Init(
+			device,
+			StructuredBufferDesc{}.SetName("Index Structured Buffer").SetIsIndexBuffer());
+		m_meshInstances.Init(
+			device,
+			StructuredBufferDesc{}.SetName("Mesh Instance Structured Buffer"));
+	}
+
+	void
+	MeshRegistry::AttachBindingSetItems(nvrhi::BindingSetDesc& bindingSet)
+	{
+		namespace SRV = BindingSlots::SRV;
+		namespace UAV = BindingSlots::UAV;
+
+		bindingSet.addItem(m_meshInstances.GetBindingSetItemSRV(SRV::InstanceBuffer))
+			.addItem(m_meshInfos.GetBindingSetItemSRV(SRV::MeshInfo))
+			.addItem(m_indices.GetBindingSetItemSRV(SRV::IndexBuffer))
+			.addItem(m_vertices.GetBindingSetItemSRV(SRV::VertexBuffer));
+	}
+
+	void
+	MeshRegistry::AttachBindingLayoutItems(nvrhi::BindingLayoutDesc& bindingLayout)
+	{
+		namespace SRV = BindingSlots::SRV;
+		namespace UAV = BindingSlots::UAV;
+
+		bindingLayout.addItem(m_meshInstances.GetBindingLayoutItemSRV(SRV::InstanceBuffer))
+			.addItem(m_meshInfos.GetBindingLayoutItemSRV(SRV::MeshInfo))
+			.addItem(m_indices.GetBindingLayoutItemSRV(SRV::IndexBuffer))
+			.addItem(m_vertices.GetBindingLayoutItemSRV(SRV::VertexBuffer));
+	}
+
+	bool
+	MeshRegistry::Update(nvrhi::CommandListHandle cmdList, nvrhi::DeviceHandle device)
+	{
+		auto ret = m_meshInfos.Update(cmdList, device);
+		ret |= m_vertices.Update(cmdList, device);
+		ret |= m_indices.Update(cmdList, device);
+		ret |= m_meshInstances.Update(cmdList, device);
+		return ret;
+	}
+}

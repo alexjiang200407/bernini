@@ -12,7 +12,7 @@ struct VSOutput
     float4 position : SV_POSITION;
 };
 
-VSOutput main(VSInput input)
+VSOutput VS_test0(VSInput input)
 {
     VSOutput output;
     output.position = float4(input.position, 1.0f);

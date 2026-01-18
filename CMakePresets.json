@@ -10,9 +10,17 @@
       "name": "windows",
       "hidden": true,
       "cacheVariables": {
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
         "PLATFORM": "WINDOWS"
+      }
+    },
+    {
+      "name": "ninja",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "ninja"
       }
     },
     {
@@ -109,6 +117,32 @@
         "dx12",
         "release"
       ]
+    },
+    {
+      "name": "windows-ninja-msvc-dx12-debug",
+      "displayName": "Windows MSVC Debug ninja - DirectX 12",
+      "binaryDir": "${sourceDir}/build/msvc-debug",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "ninja",
+        "msvc",
+        "dx12",
+        "debug"
+      ]
+    },
+    {
+      "name": "windows-ninja-msvc-dx12-release",
+      "displayName": "Windows MSVC Release ninja - DirectX 12",
+      "binaryDir": "${sourceDir}/build/msvc-release",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "ninja",
+        "msvc",
+        "dx12",
+        "release"
+      ]
     }
 
   ],
@@ -131,6 +165,16 @@
     {
       "name": "windows-vs2026-msvc-dx12-debug",
       "configurePreset": "windows-vs2026-msvc-dx12-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-ninja-msvc-dx12-release",
+      "configurePreset": "windows-ninja-msvc-dx12-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-ninja-msvc-dx12-debug",
+      "configurePreset": "windows-ninja-msvc-dx12-debug",
       "configuration": "Debug"
     }
   ]

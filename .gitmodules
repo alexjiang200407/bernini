@@ -3,4 +3,4 @@
 	url = git@github.com:alexjiang200407/FrameGraph.git
 [submodule "extern/NVRHI"]
 	path = extern/NVRHI
-	url = https://github.com/NVIDIA-RTX/NVRHI.git
+	url = git@github.com:alexjiang200407/NVRHI.git

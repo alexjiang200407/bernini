@@ -1,0 +1,44 @@
+#!/bin/bash
+
+DIRECTORY="${1:-src}"
+CHECK_MODE=false
+FORMAT="clang-format"
+if [[ "$@" == *"--check"* ]]; then
+    CHECK_MODE=true
+fi
+if ! command -v "$FORMAT" &> /dev/null; then
+    echo "Error: $FORMAT not found in PATH"
+    exit 1
+fi
+FILES=$(find "$DIRECTORY" \
+    -path "$DIRECTORY/build*" -prune -o \
+    -path "$DIRECTORY/lib*" -prune -o \
+    -path "$DIRECTORY/out*" -prune -o \
+    -type f \( -name "*.h" -o -name "*.hpp" -o -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.m" -o -name "*.mm" \) \
+    -print)
+
+ERROR_COUNT=0
+for file in $FILES; do
+    if [ "$CHECK_MODE" = true ]; then
+        if ! "$FORMAT" --dry-run --Werror "$file" &> /dev/null; then
+            echo "[ERROR] $file needs formatting"
+            ((ERROR_COUNT++))
+        fi
+    else
+        echo "Formatting $file"
+        "$FORMAT" -i "$file"
+    fi
+done
+
+if [ "$CHECK_MODE" = true ]; then
+    if [ "$ERROR_COUNT" -gt 0 ]; then
+        echo "Found $ERROR_COUNT files that need formatting"
+        exit 1
+    else
+        echo "All files are properly formatted"
+        exit 0
+    fi
+fi
+
+echo "Formatting complete"
+exit 0

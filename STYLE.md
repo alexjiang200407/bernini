@@ -9,6 +9,13 @@ int s_globalVariable; // s_ prefix for static/global variables
 
 ```
 
+Try to maximize use of `auto`.
+
+```cpp
+auto myVariable = 42;
+auto abcd = Type{};
+```
+
 
 # Const correctness
 
