@@ -2,28 +2,32 @@
 
 namespace gfx
 {
+	class MeshRegistry;
+
 	class MeshFactory
 	{
 	public:
-		MeshFactory(nvrhi::DeviceHandle device);
+		MeshFactory(nvrhi::DeviceHandle device, MeshRegistry& registry);
 
-		std::shared_ptr<Mesh>
-		CreateCube(std::string_view vertexShaderPath) const;
+		[[nodiscard]]
+		Mesh::InstanceID
+		CreateCubeInstance(MeshRegistry& registry, glm::mat4 modelTransform = {}) const;
 
-		std::shared_ptr<Mesh>
-		CreateSphere(std::string_view vertexShaderPath) const;
-
-	private:
-		std::shared_ptr<Mesh::SharedData>
-		CreateCubeSharedData() const;
-
-		std::shared_ptr<Mesh::SharedData>
-		CreateSphereSharedData() const;
+		[[nodiscard]]
+		Mesh::InstanceID
+		CreateSphereInstance(MeshRegistry& registry, glm::mat4 modelTransform = {}) const;
 
 	private:
-		nvrhi::DeviceHandle               m_device;
-		std::shared_ptr<Mesh::SharedData> m_cubeSharedData;
-		std::shared_ptr<Mesh::SharedData> m_sphereSharedData;
+		static Mesh::InfoID
+		CreateCubeInfo(MeshRegistry& registry);
+
+		static Mesh::InfoID
+		CreateSphereInfo(MeshRegistry& registry);
+
+	private:
+		nvrhi::DeviceHandle m_device;
+		Mesh::InfoID        m_cubeInfoID;
+		Mesh::InfoID        m_sphereInfoID;
 	};
 
 }

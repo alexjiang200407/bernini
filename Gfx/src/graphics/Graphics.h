@@ -1,5 +1,6 @@
 #pragma once
 #include "GfxBase.h"
+#include "mesh/MeshRegistry.h"
 #include <gfx/ffi/gfx.h>
 
 namespace gfx

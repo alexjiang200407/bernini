@@ -17,7 +17,7 @@ struct PSInput
     float4 position : SV_POSITION;
 };
 
-float4 main(PSInput input) : SV_TARGET
+float4 PS_Cbuf_test(PSInput input) : SV_TARGET
 {
     return float4(testColor.r, testColor.g, a.r, 1.0);
 }
