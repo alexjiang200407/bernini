@@ -39,16 +39,16 @@ namespace gfx
 	};
 
 	template <core::type_traits::trivially_copyable T>
-	class StructuredBufferSRV
+	class StructuredUploadBuffer
 	{
 	public:
-		using View = FrameGraphView<StructuredBufferSRV<T>>;
+		using View = FrameGraphView<StructuredUploadBuffer<T>>;
 
 	public:
-		StructuredBufferSRV() noexcept                  = default;
-		StructuredBufferSRV(const StructuredBufferSRV&) = delete;
+		StructuredUploadBuffer() noexcept                     = default;
+		StructuredUploadBuffer(const StructuredUploadBuffer&) = delete;
 
-		StructuredBufferSRV(nvrhi::DeviceHandle device, const StructuredBufferDesc& desc)
+		StructuredUploadBuffer(nvrhi::DeviceHandle device, const StructuredBufferDesc& desc)
 		{
 			Init(device, desc);
 		}
@@ -85,13 +85,13 @@ namespace gfx
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetBindingLayoutItem(uint32_t slot) const
+		GetBindingLayoutItemSRV(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetBindingSetItem(uint32_t slot) const
+		GetBindingSetItemSRV(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_buffer);
 		}
@@ -135,4 +135,7 @@ namespace gfx
 		std::vector<T>      m_data;
 		bool                dirty = false;
 	};
+
+	template <typename T>
+	using StructuredUploadBufferView = StructuredUploadBuffer<T>::View;
 }

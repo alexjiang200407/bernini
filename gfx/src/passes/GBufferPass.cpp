@@ -1,10 +1,11 @@
 #include "passes/GBufferPass.h"
 #include "BindingSlots.h"
-#include "buffer/StructuredBufferSRV.h"
-#include "buffer/StructuredBufferUAV.h"
+#include "buffer/StructuredBufferGPU.h"
+#include "buffer/StructuredUploadBuffer.h"
 #include "camera/Camera.h"
 #include "frame_graph/FrameGraphView.h"
 #include "mesh/DrawIndexedArgs.h"
+#include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
 #include "passes/FrameData.h"
 #include <core/file/file.h>
@@ -13,16 +14,17 @@
 
 namespace gfx
 {
-	static auto renderState =
-		nvrhi::RenderState{}
-			.setRasterState(nvrhi::RasterState{}
-	                            .setCullMode(nvrhi::RasterCullMode::None)
-	                            .setFillMode(nvrhi::RasterFillMode::Solid))
-			.setDepthStencilState(nvrhi::DepthStencilState{}
-	                                  .setDepthTestEnable(true)
-	                                  .setDepthWriteEnable(true)
-	                                  .setDepthFunc(nvrhi::ComparisonFunc::Less)
-	                                  .setStencilEnable(false));
+	static auto renderState = nvrhi::RenderState{}
+	                              .setRasterState(
+									  nvrhi::RasterState{}
+										  .setCullMode(nvrhi::RasterCullMode::None)
+										  .setFillMode(nvrhi::RasterFillMode::Solid))
+	                              .setDepthStencilState(
+									  nvrhi::DepthStencilState{}
+										  .setDepthTestEnable(true)
+										  .setDepthWriteEnable(true)
+										  .setDepthFunc(nvrhi::ComparisonFunc::Less)
+										  .setStencilEnable(false));
 
 	void
 	GBufferPass::Init(nvrhi::DeviceHandle device)
@@ -65,9 +67,6 @@ namespace gfx
 				builder.read(frameData.frameConstantsBindingLayout);
 				builder.read(frameData.drawIndirectArgs);
 				builder.read(frameData.drawIndirectCount);
-				//builder.read(frameData.meshInstanceCounts);
-				//builder.read(frameData.meshInstanceOffsets);
-				//builder.read(frameData.meshWriteCursor);
 				builder.read(frameData.compactedInstances);
 				builder.read(frameData.indexBuffer);
 				builder.read(frameData.vertexBuffer);
@@ -94,53 +93,37 @@ namespace gfx
 					m_graphicsPipeline = device->createGraphicsPipeline(desc, outputFramebuffer);
 				}
 
-				nvrhi::GraphicsState gfxState{};
-
-				gfxState.addBindingSet(resources
-			                               .get<FrameGraphView<nvrhi::BindingSetHandle>>(
-											   frameData.frameConstantsBindingSet)
-			                               .Get());
+				auto  gfxState       = nvrhi::GraphicsState{};
+				auto& drawBindingSet = resources.get<FrameGraphView<nvrhi::BindingSetHandle>>(
+					frameData.frameConstantsBindingSet);
+				gfxState.addBindingSet(drawBindingSet.Get());
 
 				gfxState.setFramebuffer(outputFramebuffer)
-					.setViewport(nvrhi::ViewportState{}.addViewportAndScissorRect(
-						nvrhi::Viewport{ screenW, screenH }))
+					.setViewport(
+						nvrhi::ViewportState{}.addViewportAndScissorRect(
+							nvrhi::Viewport{ screenW, screenH }))
 					.setPipeline(m_graphicsPipeline);
 
 				m_mainCommandList->open();
 
 				auto& drawArgsBuffer =
 					resources
-						.get<StructuredBufferUAV<DrawIndexedArgs>::View>(frameData.drawIndirectArgs)
+						.get<StructuredBufferGPU<DrawIndexedArgs>::View>(frameData.drawIndirectArgs)
 						.Get();
 				auto& drawCountBuffer =
-					resources.get<StructuredBufferUAV<uint32_t>::View>(frameData.drawIndirectCount)
+					resources.get<StructuredBufferGPU<uint32_t>::View>(frameData.drawIndirectCount)
 						.Get();
 
+				auto& compactedInstances = resources
+			                                   .get<StructuredBufferGPU<Mesh::Instance>::View>(
+												   frameData.compactedInstances)
+			                                   .Get();
+
 				auto& vertexBuffer =
-					resources.get<StructuredBufferSRV<Vertex>::View>(frameData.vertexBuffer).Get();
+					resources.get<StructuredUploadBufferView<Vertex>>(frameData.vertexBuffer).Get();
 				auto& indexBuffer =
-					resources.get<StructuredBufferSRV<uint32_t>::View>(frameData.indexBuffer).Get();
-
-				m_mainCommandList->beginTrackingBufferState(
-					drawArgsBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-				m_mainCommandList->beginTrackingBufferState(
-					drawCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				drawArgsBuffer.SetResourceState(
-					m_mainCommandList,
-					nvrhi::ResourceStates::IndirectArgument);
-				drawCountBuffer.SetResourceState(
-					m_mainCommandList,
-					nvrhi::ResourceStates::IndirectArgument);
-
-				m_mainCommandList->beginTrackingBufferState(
-					drawArgsBuffer.GetBuffer(),
-					nvrhi::ResourceStates::IndirectArgument);
-				m_mainCommandList->beginTrackingBufferState(
-					drawCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::IndirectArgument);
+					resources.get<StructuredUploadBufferView<uint32_t>>(frameData.indexBuffer)
+						.Get();
 
 				m_mainCommandList->setResourceStatesForFramebuffer(outputFramebuffer.Get());
 
@@ -150,9 +133,7 @@ namespace gfx
 					.setIndirectCount(drawCountBuffer.GetBuffer())
 					.setMaxDrawCount(1024);
 
-				m_mainCommandList->setEnableAutomaticBarriers(false);
 				m_mainCommandList->setGraphicsState(gfxState);
-				m_mainCommandList->setEnableAutomaticBarriers(true);
 
 				m_mainCommandList->drawIndexedIndirect();
 

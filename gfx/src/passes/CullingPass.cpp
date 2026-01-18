@@ -20,7 +20,7 @@ namespace gfx
 	{
 		m_drawIndirectArgsBuffer.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("DrawIndirectArgs")
 				.SetStartingLen(1024)
 				.SetIsDrawIndirect()
@@ -28,7 +28,7 @@ namespace gfx
 
 		m_drawIndirectCountBuffer.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("DrawIndirectCount")
 				.SetStartingLen(1u)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
@@ -36,7 +36,7 @@ namespace gfx
 
 		m_meshVisibleCountBuffer.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("MeshVisibleCounts")
 				.SetStartingLen(1024)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
@@ -44,7 +44,7 @@ namespace gfx
 
 		m_meshInstanceOffsetBuffer.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("MeshInstanceOffsets")
 				.SetStartingLen(1024)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
@@ -52,7 +52,7 @@ namespace gfx
 
 		m_meshWriteCursor.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("MeshWriteCursor")
 				.SetStartingLen(1024)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
@@ -60,7 +60,7 @@ namespace gfx
 
 		m_compactedInstanceBuffer.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("CompactedInstances")
 				.SetStartingLen(1024)
 				.SetInitialState(nvrhi::ResourceStates::UnorderedAccess)
@@ -68,7 +68,7 @@ namespace gfx
 
 		m_drawIndirectArgsBuffer.Init(
 			device,
-			StructuredBufferUAVDesc{}
+			StructuredBufferGPUDesc{}
 				.SetName("DrawIndirectArgs")
 				.SetStartingLen(1024)
 				.SetIsDrawIndirect()
@@ -122,32 +122,47 @@ namespace gfx
 		namespace SRV = BindingSlots::SRV;
 		namespace UAV = BindingSlots::UAV;
 
-		auto bindingLayoutItem = m_frameConstants.GetBindingLayoutItem(CB::FrameConstants);
-		m_cameraBindingSetItem = m_frameConstants.GetBindingSetItem(CB::FrameConstants);
+		auto frameConstantsBindingLayout =
+			m_frameConstants.GetBindingLayoutItem(CB::FrameConstants);
+		m_frameConstantsBindingSetItem = m_frameConstants.GetBindingSetItem(CB::FrameConstants);
+		// Compute draw args binding layout
+		{
+			auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+			bindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace)
+				.addItem(frameConstantsBindingLayout)
+				.addItem(m_drawIndirectArgsBuffer.GetBindingLayoutItemUAV(UAV::DrawIndirectArgs))
+				.addItem(m_drawIndirectCountBuffer.GetBindingLayoutItemUAV(UAV::DrawIndirectCount))
+				.addItem(m_meshVisibleCountBuffer.GetBindingLayoutItemUAV(UAV::MeshVisibleCounts))
+				.addItem(
+					m_meshInstanceOffsetBuffer.GetBindingLayoutItemUAV(UAV::MeshInstanceOffsets))
+				.addItem(m_meshWriteCursor.GetBindingLayoutItemUAV(UAV::MeshWriteCursor))
+				.addItem(m_compactedInstanceBuffer.GetBindingLayoutItemUAV(UAV::CompactedInstances))
+				.setVisibility(nvrhi::ShaderType::Compute);
 
-		auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
-		bindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace)
-			.addItem(bindingLayoutItem)
-			.addItem(m_drawIndirectArgsBuffer.GetBindingLayoutItem(UAV::DrawIndirectArgs))
-			.addItem(m_drawIndirectCountBuffer.GetBindingLayoutItem(UAV::DrawIndirectCount))
-			.addItem(m_meshVisibleCountBuffer.GetBindingLayoutItem(UAV::MeshVisibleCounts))
-			.addItem(m_meshInstanceOffsetBuffer.GetBindingLayoutItem(UAV::MeshInstanceOffsets))
-			.addItem(m_meshWriteCursor.GetBindingLayoutItem(UAV::MeshWriteCursor))
-			.addItem(m_compactedInstanceBuffer.GetBindingLayoutItem(UAV::CompactedInstances))
-			.addItem(registry.GetInstances().GetBindingLayoutItem(SRV::InstanceBuffer))
-			.addItem(registry.GetInstances().GetBindingLayoutItem(SRV::CompactedInstances))
-			.setVisibility(nvrhi::ShaderType::AllGraphics);
+			registry.AttachBindingLayoutItems(bindingLayoutDesc);
 
-		registry.AttachBindingLayoutItems(bindingLayoutDesc);
+			m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		}
 
-		m_bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		// Draw binding layout
+		{
+			auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+			bindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace)
+				.addItem(frameConstantsBindingLayout)
+				.addItem(m_compactedInstanceBuffer.GetBindingLayoutItemSRV(SRV::CompactedInstances))
+				.setVisibility(nvrhi::ShaderType::AllGraphics);
+
+			registry.AttachBindingLayoutItems(bindingLayoutDesc);
+
+			m_drawBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		}
 
 		CreateBindingSet(registry, device);
 
 		auto makePipeline = [&](nvrhi::ShaderHandle cs) {
 			nvrhi::ComputePipelineDesc pd;
 			pd.setComputeShader(cs);
-			pd.addBindingLayout(m_bindingLayout);
+			pd.addBindingLayout(m_computeBindingLayout);
 			return device->createComputePipeline(pd);
 		};
 
@@ -232,7 +247,7 @@ namespace gfx
 					data.frameConstantsBindingSet =
 						builder.create<FrameGraphView<nvrhi::BindingSetHandle>>(
 							"Frame Constants Binding Set"sv,
-							{ m_bindingSet });
+							{ m_drawBindingSet });
 
 					data.frameConstantsBindingSet = builder.write(data.frameConstantsBindingSet);
 				}
@@ -241,14 +256,14 @@ namespace gfx
 					data.frameConstantsBindingLayout =
 						builder.create<FrameGraphView<nvrhi::BindingLayoutHandle>>(
 							"Frame Constants Binding Layout"sv,
-							{ m_bindingLayout });
+							{ m_drawBindingLayout });
 
 					data.frameConstantsBindingLayout =
 						builder.write(data.frameConstantsBindingLayout);
 				}
 
 				{
-					data.vertexBuffer = builder.create<StructuredBufferSRV<Vertex>::View>(
+					data.vertexBuffer = builder.create<StructuredUploadBuffer<Vertex>::View>(
 						"Vertex Buffer"sv,
 						{ registry.GetVertices() });
 
@@ -256,7 +271,7 @@ namespace gfx
 				}
 
 				{
-					data.indexBuffer = builder.create<StructuredBufferSRV<uint32_t>::View>(
+					data.indexBuffer = builder.create<StructuredUploadBuffer<uint32_t>::View>(
 						"Index Buffer"sv,
 						{ registry.GetIndices() });
 
@@ -286,118 +301,53 @@ namespace gfx
 				}
 				auto constexpr resetCounter = std::array<uint32_t, 1>{ 0 };
 
-				m_cmdList->beginTrackingBufferState(
-					m_meshVisibleCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->beginTrackingBufferState(
-					m_meshInstanceOffsetBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->beginTrackingBufferState(
-					m_meshWriteCursor.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->beginTrackingBufferState(
-					m_meshWriteCursor.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->beginTrackingBufferState(
-					m_compactedInstanceBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
 				m_meshVisibleCountBuffer.Update(m_cmdList, resetCounter);
 				m_frameConstants.Update(m_cmdList);
 
 				const auto threadsPerGroup = 64u;
 				const auto numGroups = (instanceCount + threadsPerGroup - 1) / threadsPerGroup;
 
-				m_cmdList->setBufferState(
-					m_meshVisibleCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-				m_cmdList->commitBarriers();
-
 				{
 					nvrhi::ComputeState cs;
-					cs.setPipeline(m_histogramPipeline).addBindingSet(m_bindingSet);
+					cs.setPipeline(m_histogramPipeline).addBindingSet(m_computeBindingSet);
 					m_cmdList->setComputeState(cs);
 					m_cmdList->dispatch(numGroups, 1, 1);
 				}
 
-				m_cmdList->setBufferState(
-					m_meshVisibleCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::ShaderResource);
-
-				m_cmdList->setBufferState(
-					m_meshInstanceOffsetBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->setBufferState(
-					m_meshWriteCursor.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
+				{
+					nvrhi::ComputeState cs;
+					cs.setPipeline(m_prefixSumPipeline).addBindingSet(m_computeBindingSet);
+					m_cmdList->setComputeState(cs);
+					m_cmdList->dispatch(1, 1, 1);
+				}
 
 				m_cmdList->commitBarriers();
 
 				{
 					nvrhi::ComputeState cs;
-					cs.setPipeline(m_prefixSumPipeline).addBindingSet(m_bindingSet);
+					cs.setPipeline(m_scatterPipeline).addBindingSet(m_computeBindingSet);
+					m_cmdList->setComputeState(cs);
+					m_cmdList->dispatch(numGroups, 1, 1);
+				}
+
+				{
+					nvrhi::ComputeState cs;
+					cs.setPipeline(m_buildArgsPipeline).addBindingSet(m_computeBindingSet);
 					m_cmdList->setComputeState(cs);
 					m_cmdList->dispatch(1, 1, 1);
 				}
 
 				m_cmdList->setBufferState(
-					m_meshWriteCursor.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
+					m_drawIndirectArgsBuffer.GetBuffer(),
+					nvrhi::ResourceStates::IndirectArgument);
+
+				m_cmdList->setBufferState(
+					m_drawIndirectCountBuffer.GetBuffer(),
+					nvrhi::ResourceStates::IndirectArgument);
 
 				m_cmdList->setBufferState(
 					m_compactedInstanceBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->setBufferState(
-					registry.GetInstances().GetBuffer(),
 					nvrhi::ResourceStates::ShaderResource);
-
-				m_cmdList->commitBarriers();
-
-				{
-					nvrhi::ComputeState cs;
-					cs.setPipeline(m_scatterPipeline).addBindingSet(m_bindingSet);
-					m_cmdList->setComputeState(cs);
-					m_cmdList->dispatch(numGroups, 1, 1);
-				}
-
-				m_cmdList->setBufferState(
-					m_meshVisibleCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::ShaderResource);
-
-				m_cmdList->setBufferState(
-					m_meshInstanceOffsetBuffer.GetBuffer(),
-					nvrhi::ResourceStates::ShaderResource);
-
-				m_cmdList->setBufferState(
-					m_drawIndirectArgsBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->setBufferState(
-					m_drawIndirectCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::UnorderedAccess);
-
-				m_cmdList->commitBarriers();
-
-				{
-					nvrhi::ComputeState cs;
-					cs.setPipeline(m_buildArgsPipeline).addBindingSet(m_bindingSet);
-					m_cmdList->setComputeState(cs);
-					m_cmdList->dispatch(1, 1, 1);
-				}
-
-				m_cmdList->setBufferState(
-					m_drawIndirectArgsBuffer.GetBuffer(),
-					nvrhi::ResourceStates::IndirectArgument);
-
-				m_cmdList->setBufferState(
-					m_drawIndirectCountBuffer.GetBuffer(),
-					nvrhi::ResourceStates::IndirectArgument);
 
 				m_cmdList->commitBarriers();
 
@@ -412,20 +362,30 @@ namespace gfx
 		namespace SRV = BindingSlots::SRV;
 		namespace UAV = BindingSlots::UAV;
 
-		auto bindingSetDesc = nvrhi::BindingSetDesc{};
-		bindingSetDesc.addItem(m_cameraBindingSetItem)
-			.addItem(m_drawIndirectArgsBuffer.GetBindingSetItem(UAV::DrawIndirectArgs))
-			.addItem(m_drawIndirectCountBuffer.GetBindingSetItem(UAV::DrawIndirectCount))
-			.addItem(m_meshVisibleCountBuffer.GetBindingSetItem(UAV::MeshVisibleCounts))
-			.addItem(m_meshInstanceOffsetBuffer.GetBindingSetItem(UAV::MeshInstanceOffsets))
-			.addItem(m_meshWriteCursor.GetBindingSetItem(UAV::MeshWriteCursor))
-			.addItem(m_compactedInstanceBuffer.GetBindingSetItem(UAV::CompactedInstances))
-			.addItem(registry.GetInstances().GetBindingSetItem(SRV::InstanceBuffer))
-			.addItem(registry.GetInstances().GetBindingSetItem(SRV::CompactedInstances));
+		{
+			auto bindingSetDesc = nvrhi::BindingSetDesc{};
+			bindingSetDesc.addItem(m_frameConstantsBindingSetItem)
+				.addItem(m_drawIndirectArgsBuffer.GetBindingSetItemUAV(UAV::DrawIndirectArgs))
+				.addItem(m_drawIndirectCountBuffer.GetBindingSetItemUAV(UAV::DrawIndirectCount))
+				.addItem(m_meshVisibleCountBuffer.GetBindingSetItemUAV(UAV::MeshVisibleCounts))
+				.addItem(m_meshInstanceOffsetBuffer.GetBindingSetItemUAV(UAV::MeshInstanceOffsets))
+				.addItem(m_meshWriteCursor.GetBindingSetItemUAV(UAV::MeshWriteCursor))
+				.addItem(m_compactedInstanceBuffer.GetBindingSetItemUAV(UAV::CompactedInstances));
 
-		registry.AttachBindingSetItems(bindingSetDesc);
+			registry.AttachBindingSetItems(bindingSetDesc);
 
-		m_bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout);
+			m_computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);
+		}
+
+		{
+			auto bindingSetDesc = nvrhi::BindingSetDesc{};
+			bindingSetDesc.addItem(m_frameConstantsBindingSetItem)
+				.addItem(m_compactedInstanceBuffer.GetBindingSetItemSRV(SRV::CompactedInstances));
+
+			registry.AttachBindingSetItems(bindingSetDesc);
+
+			m_drawBindingSet = device->createBindingSet(bindingSetDesc, m_drawBindingLayout);
+		}
 	}
 
 }

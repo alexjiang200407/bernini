@@ -162,8 +162,6 @@ namespace gfx
 		deviceDesc.errorCB               = &m_errorCB;
 		m_nvrhiDevice                    = nvrhi::d3d12::createDevice(deviceDesc);
 
-		//m_gBufferPass.Init(m_nvrhiDevice);
-
 		if (m_enableDebugLayer)
 		{
 			m_nvrhiDevice = nvrhi::validation::createValidationLayer(m_nvrhiDevice);
@@ -188,9 +186,6 @@ namespace gfx
 
 		mat[3][0] = -10.0f;
 		auto c    = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
-
-		//auto _3 = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
-		//auto _2 = m_meshFactory->CreateCubeInstance(m_meshRegistry, { 1 });
 	}
 
 	Graphics::~Graphics()
@@ -214,8 +209,6 @@ namespace gfx
 		{
 			m_swapChain->SetFullscreenState(false, nullptr);
 		}
-
-		//GeomPass::Shutdown();
 
 		if (m_infoQueue)
 			m_infoQueue->ClearStoredMessages();
@@ -435,7 +428,7 @@ namespace gfx
 		m_commandQueue->Signal(m_frameFence.Get(), m_frameCount);
 		m_frameFence->SetEventOnCompletion(m_frameCount, m_frameFenceEvents[backBufferIndex]);
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(0));
+		std::this_thread::yield();
 		m_nvrhiDevice->runGarbageCollection();
 
 		++m_frameCount;

@@ -4,41 +4,41 @@
 
 namespace gfx
 {
-	struct StructuredBufferUAVDesc
+	struct StructuredBufferGPUDesc
 	{
 		uint32_t startingLen = 1;
 
 		nvrhi::BufferDesc bufferDesc;
 
-		StructuredBufferUAVDesc&
+		StructuredBufferGPUDesc&
 		SetName(const std::string& val)
 		{
 			bufferDesc.setDebugName(val);
 			return *this;
 		}
 
-		StructuredBufferUAVDesc&
+		StructuredBufferGPUDesc&
 		SetStartingLen(uint32_t val)
 		{
 			startingLen = val;
 			return *this;
 		}
 
-		StructuredBufferUAVDesc&
+		StructuredBufferGPUDesc&
 		SetIsDrawIndirect(bool isDrawIndirect = true)
 		{
 			bufferDesc.setIsDrawIndirectArgs(isDrawIndirect);
 			return *this;
 		}
 
-		StructuredBufferUAVDesc&
+		StructuredBufferGPUDesc&
 		SetKeepInitialState(bool keepInitial = true)
 		{
 			bufferDesc.setKeepInitialState(keepInitial);
 			return *this;
 		}
 
-		StructuredBufferUAVDesc&
+		StructuredBufferGPUDesc&
 		SetInitialState(nvrhi::ResourceStates state)
 		{
 			bufferDesc.setInitialState(state);
@@ -47,22 +47,22 @@ namespace gfx
 	};
 
 	template <core::type_traits::trivially_copyable T>
-	class StructuredBufferUAV
+	class StructuredBufferGPU
 	{
 	public:
-		using View = FrameGraphView<StructuredBufferUAV<T>>;
+		using View = FrameGraphView<StructuredBufferGPU<T>>;
 
 	public:
-		StructuredBufferUAV() noexcept                  = default;
-		StructuredBufferUAV(const StructuredBufferUAV&) = delete;
+		StructuredBufferGPU() noexcept                  = default;
+		StructuredBufferGPU(const StructuredBufferGPU&) = delete;
 
-		StructuredBufferUAV(nvrhi::DeviceHandle device, const StructuredBufferUAVDesc& desc)
+		StructuredBufferGPU(nvrhi::DeviceHandle device, const StructuredBufferGPUDesc& desc)
 		{
 			Init(device, desc);
 		}
 
 		void
-		Init(nvrhi::DeviceHandle device, const StructuredBufferUAVDesc& desc)
+		Init(nvrhi::DeviceHandle device, const StructuredBufferGPUDesc& desc)
 		{
 			auto bufferDesc = desc.bufferDesc;
 			bufferDesc.setStructStride(sizeof(T)).setCanHaveUAVs(true).setByteSize(
@@ -80,15 +80,27 @@ namespace gfx
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetBindingLayoutItem(uint32_t slot) const
+		GetBindingLayoutItemUAV(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_UAV(slot);
 		}
 
+		[[nodiscard]] nvrhi::BindingLayoutItem
+		GetBindingLayoutItemSRV(uint32_t slot) const
+		{
+			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
+		}
+
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetBindingSetItem(uint32_t slot) const
+		GetBindingSetItemUAV(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_UAV(slot, m_buffer);
+		}
+
+		[[nodiscard]] nvrhi::BindingSetItem
+		GetBindingSetItemSRV(uint32_t slot) const
+		{
+			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_buffer);
 		}
 
 		void
@@ -97,7 +109,7 @@ namespace gfx
 			if (data.size() * sizeof(T) > m_buffer->getDesc().byteSize)
 			{
 				throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-					                "StructuredBufferUAV::Update",
+					                "StructuredBufferGPU::Update",
 					                "Data size exceeds buffer size." };
 			}
 

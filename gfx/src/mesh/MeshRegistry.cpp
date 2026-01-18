@@ -24,10 +24,10 @@ namespace gfx
 		namespace SRV = BindingSlots::SRV;
 		namespace UAV = BindingSlots::UAV;
 
-		bindingSet.addItem(m_meshInstances.GetBindingSetItem(SRV::MeshInstance))
-			.addItem(m_meshInfos.GetBindingSetItem(SRV::MeshInfo))
-			.addItem(m_indices.GetBindingSetItem(SRV::IndexBuffer))
-			.addItem(m_vertices.GetBindingSetItem(SRV::VertexBuffer));
+		bindingSet.addItem(m_meshInstances.GetBindingSetItemSRV(SRV::InstanceBuffer))
+			.addItem(m_meshInfos.GetBindingSetItemSRV(SRV::MeshInfo))
+			.addItem(m_indices.GetBindingSetItemSRV(SRV::IndexBuffer))
+			.addItem(m_vertices.GetBindingSetItemSRV(SRV::VertexBuffer));
 	}
 
 	void
@@ -36,10 +36,10 @@ namespace gfx
 		namespace SRV = BindingSlots::SRV;
 		namespace UAV = BindingSlots::UAV;
 
-		bindingLayout.addItem(m_meshInstances.GetBindingLayoutItem(SRV::MeshInstance))
-			.addItem(m_meshInfos.GetBindingLayoutItem(SRV::MeshInfo))
-			.addItem(m_indices.GetBindingLayoutItem(SRV::IndexBuffer))
-			.addItem(m_vertices.GetBindingLayoutItem(SRV::VertexBuffer));
+		bindingLayout.addItem(m_meshInstances.GetBindingLayoutItemSRV(SRV::InstanceBuffer))
+			.addItem(m_meshInfos.GetBindingLayoutItemSRV(SRV::MeshInfo))
+			.addItem(m_indices.GetBindingLayoutItemSRV(SRV::IndexBuffer))
+			.addItem(m_vertices.GetBindingLayoutItemSRV(SRV::VertexBuffer));
 	}
 
 	bool

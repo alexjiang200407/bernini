@@ -1,7 +1,7 @@
 #pragma once
 
 #include "buffer/DynamicConstantBuffer.h"
-#include "buffer/StructuredBufferUAV.h"
+#include "buffer/StructuredBufferGPU.h"
 #include "mesh/DrawIndexedArgs.h"
 #include "mesh/Mesh.h"
 
@@ -40,13 +40,12 @@ namespace gfx
 		CreateBindingSet(MeshRegistry& registry, nvrhi::DeviceHandle device);
 
 	private:
-		StructuredBufferUAV<DrawIndexedArgs> m_drawIndirectArgsBuffer;
-		StructuredBufferUAV<uint32_t>        m_drawIndirectCountBuffer;
-		StructuredBufferUAV<uint32_t>        m_meshVisibleCountBuffer;
-		StructuredBufferUAV<uint32_t>        m_meshInstanceOffsetBuffer;
-		StructuredBufferUAV<uint32_t>        m_meshWriteCursor;
-		StructuredBufferUAV<Mesh::Instance>  m_compactedInstanceBuffer;
-		//StructuredBufferSRV<Mesh::Instance>  m_compactedInstanceBufferSRV;
+		StructuredBufferGPU<DrawIndexedArgs> m_drawIndirectArgsBuffer;
+		StructuredBufferGPU<uint32_t>        m_drawIndirectCountBuffer;
+		StructuredBufferGPU<uint32_t>        m_meshVisibleCountBuffer;
+		StructuredBufferGPU<uint32_t>        m_meshInstanceOffsetBuffer;
+		StructuredBufferGPU<uint32_t>        m_meshWriteCursor;
+		StructuredBufferGPU<Mesh::Instance>  m_compactedInstanceBuffer;
 
 		DynamicConstantBuffer        m_frameConstants;
 		nvrhi::CommandListHandle     m_cmdList;
@@ -58,8 +57,10 @@ namespace gfx
 		nvrhi::ComputePipelineHandle m_prefixSumPipeline;
 		nvrhi::ComputePipelineHandle m_scatterPipeline;
 		nvrhi::ComputePipelineHandle m_buildArgsPipeline;
-		nvrhi::BindingLayoutHandle   m_bindingLayout;
-		nvrhi::BindingSetHandle      m_bindingSet;
-		nvrhi::BindingSetItem        m_cameraBindingSetItem;
+		nvrhi::BindingLayoutHandle   m_computeBindingLayout;
+		nvrhi::BindingSetHandle      m_computeBindingSet;
+		nvrhi::BindingLayoutHandle   m_drawBindingLayout;
+		nvrhi::BindingSetHandle      m_drawBindingSet;
+		nvrhi::BindingSetItem        m_frameConstantsBindingSetItem;
 	};
 }

@@ -1,5 +1,5 @@
 #pragma once
-#include "buffer/StructuredBufferSRV.h"
+#include "buffer/StructuredUploadBuffer.h"
 #include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
 
@@ -30,19 +30,19 @@ namespace gfx
 			return m_meshInstances.Size();
 		}
 
-		const StructuredBufferSRV<Vertex>&
+		const StructuredUploadBuffer<Vertex>&
 		GetVertices() const noexcept
 		{
 			return m_vertices;
 		}
 
-		const StructuredBufferSRV<uint32_t>&
+		const StructuredUploadBuffer<uint32_t>&
 		GetIndices() const noexcept
 		{
 			return m_indices;
 		}
 
-		const StructuredBufferSRV<Mesh::Instance>&
+		const StructuredUploadBuffer<Mesh::Instance>&
 		GetInstances() const noexcept
 		{
 			return m_meshInstances;
@@ -80,10 +80,10 @@ namespace gfx
 		}
 
 	private:
-		StructuredBufferSRV<Mesh::Instance> m_meshInstances;
-		StructuredBufferSRV<Mesh::Info>     m_meshInfos;
-		StructuredBufferSRV<Vertex>         m_vertices;
-		StructuredBufferSRV<uint32_t>       m_indices;
+		StructuredUploadBuffer<Mesh::Instance> m_meshInstances;
+		StructuredUploadBuffer<Mesh::Info>     m_meshInfos;
+		StructuredUploadBuffer<Vertex>         m_vertices;
+		StructuredUploadBuffer<uint32_t>       m_indices;
 
 		friend class MeshFactory;
 	};
