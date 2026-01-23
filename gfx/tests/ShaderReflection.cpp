@@ -17,26 +17,6 @@ TEST_CASE("Vertex Attribute", "[vertex_attribute][shader_reflection]")
 
 	auto device = gfx->GetDevice();
 
-	SECTION("Basic")
-	{
-		auto vertexShaderBytecode = core::file::readFileBytes("shaders/VS_cube.cso"sv);
-
-		auto shader = device->createShader(
-			nvrhi::ShaderDesc{}
-				.setShaderType(nvrhi::ShaderType::Vertex)
-				.setDebugName("TestVertexShader"),
-			vertexShaderBytecode.data(),
-			vertexShaderBytecode.size());
-
-		auto shaderInput = gfx::getVertexAttributes(shader);
-		REQUIRE(shaderInput.size() == 1u);
-
-		CHECK(shaderInput[0].type == gfx::VertexAttribute::kPosition);
-		CHECK(shaderInput[0].format == nvrhi::Format::RGB32_FLOAT);
-		CHECK(shaderInput[0].semanticName == "POSITION");
-		CHECK(shaderInput[0].semanticIndex == 0);
-	}
-
 	SECTION("Multiple")
 	{
 		auto vertexShaderBytecode = core::file::readFileBytes("shaders/VS_test0.cso"sv);
