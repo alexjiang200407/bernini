@@ -3,7 +3,6 @@
 #include "graphics/Graphics.h"
 #include "material/Material.h"
 #include "mesh/MeshFactory.h"
-#include "passes/CullingPass.h"
 #include "passes/GBufferPass.h"
 #include <dxgidebug.h>
 #include <fg/Blackboard.hpp>
@@ -82,7 +81,6 @@ namespace gfx
 
 		std::unique_ptr<MeshFactory> m_meshFactory;
 		GBufferPass                  m_gBufferPass;
-		CullingPass                  m_cullingPass;
 
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
@@ -173,7 +171,6 @@ namespace gfx
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
 		m_meshRegistry.Init(m_nvrhiDevice);
-		m_cullingPass.Init(m_meshRegistry, m_nvrhiDevice, m_windowWidth, m_windowHeight);
 		m_gBufferPass.Init(m_nvrhiDevice);
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
@@ -400,15 +397,6 @@ namespace gfx
 
 		FrameGraph           fg;
 		FrameGraphBlackboard blackboard;
-
-		m_cullingPass.AttachToFrameGraph(
-			m_meshRegistry,
-			m_windowWidth,
-			m_windowHeight,
-			fg,
-			blackboard,
-			m_nvrhiDevice,
-			camera);
 
 		{
 			auto args = RenderArgs{ .screenWidth   = static_cast<float>(m_windowWidth),
