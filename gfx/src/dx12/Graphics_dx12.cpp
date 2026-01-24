@@ -171,7 +171,7 @@ namespace gfx
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
 		m_meshRegistry.Init(m_nvrhiDevice);
-		m_gBufferPass.Init(m_nvrhiDevice);
+		m_gBufferPass.Init(m_nvrhiDevice, m_meshRegistry);
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
 		auto mat      = glm::mat4{ 1.0f };
@@ -404,7 +404,8 @@ namespace gfx
 				                    .device        = m_nvrhiDevice,
 				                    .outBuffer     = nvrhiFramebuffer,
 				                    .outBufferInfo = m_framebufferInfo };
-			m_gBufferPass.AttachToFrameGraph(fg, blackboard, args);
+
+			m_gBufferPass.AttachToFrameGraph(fg, blackboard, m_meshRegistry, camera, args);
 		}
 
 		fg.compile();

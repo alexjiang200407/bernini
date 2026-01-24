@@ -10,24 +10,24 @@ namespace gfx
 		MeshFactory(nvrhi::DeviceHandle device, MeshRegistry& registry);
 
 		[[nodiscard]]
-		Mesh::InstanceID
+		MeshInstance::ID
 		CreateCubeInstance(MeshRegistry& registry, glm::mat4 modelTransform = {}) const;
 
 		[[nodiscard]]
-		Mesh::InstanceID
+		MeshInstance::ID
 		CreateSphereInstance(MeshRegistry& registry, glm::mat4 modelTransform = {}) const;
 
 	private:
-		static Mesh::InfoID
+		static MeshInfo::ID
 		CreateCubeInfo(MeshRegistry& registry);
 
-		static Mesh::InfoID
+		static MeshInfo::ID
 		CreateSphereInfo(MeshRegistry& registry);
 
 	private:
 		nvrhi::DeviceHandle m_device;
-		Mesh::InfoID        m_cubeInfoID;
-		Mesh::InfoID        m_sphereInfoID;
+		MeshInfo::ID        m_cubeInfoID;
+		MeshInfo::ID        m_sphereInfoID;
 	};
 
 }

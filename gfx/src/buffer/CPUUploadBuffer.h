@@ -4,33 +4,33 @@
 
 namespace gfx
 {
-	struct StructuredBufferDesc
+	struct CPUUploadBufferDesc
 	{
 		uint32_t          startingCapacity = 128;
 		nvrhi::BufferDesc bufferDesc;
 
-		StructuredBufferDesc&
+		CPUUploadBufferDesc&
 		SetStartingCapacity(uint32_t value)
 		{
 			startingCapacity = value;
 			return *this;
 		}
 
-		StructuredBufferDesc&
+		CPUUploadBufferDesc&
 		SetName(const std::string& value)
 		{
 			bufferDesc.setDebugName(value);
 			return *this;
 		}
 
-		StructuredBufferDesc&
+		CPUUploadBufferDesc&
 		SetIsVertexBuffer(bool value = true)
 		{
 			bufferDesc.setIsVertexBuffer(value);
 			return *this;
 		}
 
-		StructuredBufferDesc&
+		CPUUploadBufferDesc&
 		SetIsIndexBuffer(bool value = true)
 		{
 			bufferDesc.setIsIndexBuffer(value);
@@ -39,34 +39,34 @@ namespace gfx
 	};
 
 	template <core::type_traits::trivially_copyable T>
-	class StructuredUploadBuffer
+	class CPUUploadBuffer
 	{
 	public:
-		using View = FrameGraphView<StructuredUploadBuffer<T>>;
+		using View = FrameGraphView<CPUUploadBuffer<T>>;
 
 	public:
-		StructuredUploadBuffer() noexcept                     = default;
-		StructuredUploadBuffer(const StructuredUploadBuffer&) = delete;
+		CPUUploadBuffer() noexcept              = default;
+		CPUUploadBuffer(const CPUUploadBuffer&) = delete;
 
-		StructuredUploadBuffer(nvrhi::DeviceHandle device, const StructuredBufferDesc& desc)
+		CPUUploadBuffer(nvrhi::DeviceHandle device, const CPUUploadBufferDesc& desc)
 		{
 			Init(device, desc);
 		}
 
 		void
-		Init(nvrhi::DeviceHandle device, const StructuredBufferDesc& desc)
+		Init(nvrhi::DeviceHandle device, const CPUUploadBufferDesc& desc)
 		{
 			m_data.reserve(desc.startingCapacity);
 
 			m_bufferDesc = desc.bufferDesc;
 			m_bufferDesc.setStructStride(sizeof(T))
 				.setInitialState(nvrhi::ResourceStates::ShaderResource)
-				.setKeepInitialState(true);
+				.setKeepInitialState(true)
+				.setByteSize(sizeof(T));
 
-			m_bufferDesc.byteSize = sizeof(T);
-			m_buffer              = device->createBuffer(m_bufferDesc);
+			m_buffer = device->createBuffer(m_bufferDesc);
 
-			dirty = false;
+			m_dirty = false;
 		}
 
 		size_t
@@ -79,7 +79,7 @@ namespace gfx
 		uint32_t
 		Emplace(Args&&... args)
 		{
-			dirty = true;
+			m_dirty = true;
 			m_data.emplace_back(std::forward<Args>(args)...);
 			return static_cast<uint32_t>(m_data.size() - 1);
 		}
@@ -100,7 +100,7 @@ namespace gfx
 		bool
 		Update(nvrhi::CommandListHandle cmdList, nvrhi::DeviceHandle device)
 		{
-			if (!dirty || m_data.empty())
+			if (!m_dirty || m_data.empty())
 				return false;
 
 			const auto     requiredBytes    = m_data.size() * sizeof(T);
@@ -117,7 +117,7 @@ namespace gfx
 			if (requiredBytes > 0)
 			{
 				cmdList->writeBuffer(m_buffer, m_data.data(), requiredBytes);
-				dirty = false;
+				m_dirty = false;
 			}
 
 			return recreatedBuffer;
@@ -133,9 +133,9 @@ namespace gfx
 		nvrhi::BufferDesc   m_bufferDesc;
 		nvrhi::BufferHandle m_buffer;
 		std::vector<T>      m_data;
-		bool                dirty = false;
+		bool                m_dirty = false;
 	};
 
 	template <typename T>
-	using StructuredUploadBufferView = StructuredUploadBuffer<T>::View;
+	using CPUUploadBufferView = CPUUploadBuffer<T>::View;
 }
