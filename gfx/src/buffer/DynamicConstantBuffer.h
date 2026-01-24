@@ -126,13 +126,6 @@ namespace gfx
 			nvrhi::DeviceHandle              device,
 			const DynamicConstantBufferDesc& elementDesc);
 
-		DynamicConstantBuffer(
-			nvrhi::DeviceHandle device,
-			std::string_view    shaderPath,
-			uint32_t            bindingSlot,
-			uint32_t            bindingSpace,
-			bool                isVolatile = false);
-
 		DynamicConstantBuffer&
 		operator=(const DynamicConstantBuffer&) = delete;
 

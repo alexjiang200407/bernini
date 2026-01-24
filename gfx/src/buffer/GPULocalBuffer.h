@@ -1,44 +1,45 @@
 #pragma once
+#include "GfxException.h"
 #include "frame_graph/FrameGraphView.h"
 #include <core/type_traits.h>
 
 namespace gfx
 {
-	struct StructuredBufferGPUDesc
+	struct GPULocalBufferDesc
 	{
 		uint32_t startingLen = 1;
 
 		nvrhi::BufferDesc bufferDesc;
 
-		StructuredBufferGPUDesc&
+		GPULocalBufferDesc&
 		SetName(const std::string& val)
 		{
 			bufferDesc.setDebugName(val);
 			return *this;
 		}
 
-		StructuredBufferGPUDesc&
+		GPULocalBufferDesc&
 		SetStartingLen(uint32_t val)
 		{
 			startingLen = val;
 			return *this;
 		}
 
-		StructuredBufferGPUDesc&
+		GPULocalBufferDesc&
 		SetIsDrawIndirect(bool isDrawIndirect = true)
 		{
 			bufferDesc.setIsDrawIndirectArgs(isDrawIndirect);
 			return *this;
 		}
 
-		StructuredBufferGPUDesc&
+		GPULocalBufferDesc&
 		SetKeepInitialState(bool keepInitial = true)
 		{
 			bufferDesc.setKeepInitialState(keepInitial);
 			return *this;
 		}
 
-		StructuredBufferGPUDesc&
+		GPULocalBufferDesc&
 		SetInitialState(nvrhi::ResourceStates state)
 		{
 			bufferDesc.setInitialState(state);
@@ -47,22 +48,22 @@ namespace gfx
 	};
 
 	template <core::type_traits::trivially_copyable T>
-	class StructuredBufferGPU
+	class GPULocalBuffer
 	{
 	public:
-		using View = FrameGraphView<StructuredBufferGPU<T>>;
+		using View = FrameGraphView<GPULocalBuffer<T>>;
 
 	public:
-		StructuredBufferGPU() noexcept                  = default;
-		StructuredBufferGPU(const StructuredBufferGPU&) = delete;
+		GPULocalBuffer() noexcept             = default;
+		GPULocalBuffer(const GPULocalBuffer&) = delete;
 
-		StructuredBufferGPU(nvrhi::DeviceHandle device, const StructuredBufferGPUDesc& desc)
+		GPULocalBuffer(nvrhi::DeviceHandle device, const GPULocalBufferDesc& desc)
 		{
 			Init(device, desc);
 		}
 
 		void
-		Init(nvrhi::DeviceHandle device, const StructuredBufferGPUDesc& desc)
+		Init(nvrhi::DeviceHandle device, const GPULocalBufferDesc& desc)
 		{
 			auto bufferDesc = desc.bufferDesc;
 			bufferDesc.setStructStride(sizeof(T)).setCanHaveUAVs(true).setByteSize(
@@ -109,7 +110,7 @@ namespace gfx
 			if (data.size() * sizeof(T) > m_buffer->getDesc().byteSize)
 			{
 				throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-					                "StructuredBufferGPU::Update",
+					                "GPULocalBuffer::Update",
 					                "Data size exceeds buffer size." };
 			}
 
