@@ -1578,48 +1578,6 @@ TEST_CASE("Edge cases - Naming", "[dynamic_constant_buffer][edge_cases][names]")
 	}
 }
 
-//TEST_CASE("Edge cases - View", "[dynamic_constant_buffer][edge_cases][view]")
-//{
-//	auto gfxDesc     = GfxOptions{};
-//	gfxDesc.headless = true;
-//	gfxDesc.width    = 800;
-//	gfxDesc.height   = 600;
-//
-//	auto gfx = std::unique_ptr<gfx::IGraphics>{ gfx::IGraphics::Create(gfxDesc) };
-//	REQUIRE(gfx);
-//
-//	auto device = gfx->GetDevice();
-//
-//	SECTION("View becomes invalid after parent destruction")
-//	{
-//		gfx::DynamicConstantBufferView view;
-//
-//		{
-//			auto desc = gfx::DynamicConstantBufferDesc{};
-//			desc.AddElement("a", gfx::ElementType::kFloat);
-//			auto cb = gfx::DynamicConstantBuffer{ device, desc };
-//			view    = cb.At("a");
-//		}
-//
-//		REQUIRE_THROWS_AS(view.Assign(1.0f), core::except::BerniniException);
-//	}
-//
-//	SECTION("View invalid after move-assignment")
-//	{
-//		auto desc = gfx::DynamicConstantBufferDesc{};
-//		desc.AddElement("a", gfx::ElementType::kFloat);
-//
-//		gfx::DynamicConstantBuffer cb1{ device, desc };
-//		gfx::DynamicConstantBuffer cb2{ device, desc };
-//
-//		auto view = cb1.At("a");
-//
-//		cb2 = std::move(cb1);
-//
-//		REQUIRE_THROWS_AS(view.Assign(1.0f), core::except::BerniniException);
-//	}
-//}
-
 TEST_CASE(
 	"Edge cases - assignment and reassignment",
 	"[dynamic_constant_buffer][edge_cases][reassign]")
