@@ -1,5 +1,4 @@
 #include "buffer/DynamicConstantBuffer.h"
-#include "shader_reflect/ShaderInput.h"
 #include <core/file/file.h>
 
 namespace gfx
@@ -9,20 +8,6 @@ namespace gfx
 		const DynamicConstantBufferDesc& elementDesc)
 	{
 		Init(device, elementDesc);
-	}
-
-	DynamicConstantBuffer::DynamicConstantBuffer(
-		nvrhi::DeviceHandle device,
-		std::string_view    shaderPath,
-		uint32_t            bindingSlot,
-		uint32_t            bindingSpace,
-		bool                isVolatile)
-	{
-		auto shaderByteCode = core::file::readFileBytes(shaderPath);
-		auto desc = getDynamicConstantBufferDesc(shaderByteCode, bindingSlot, bindingSpace);
-		desc.SetIsVolatile(isVolatile);
-
-		Init(device, desc);
 	}
 
 	DynamicConstantBuffer::DynamicConstantBuffer(DynamicConstantBuffer&& other) noexcept :

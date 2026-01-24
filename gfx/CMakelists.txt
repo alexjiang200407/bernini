@@ -93,6 +93,10 @@ if (RENDERER_BACKEND STREQUAL "DX12")
             set(SHADER_TYPE "ps")
         elseif(SHADER_NAME MATCHES "^CS_")
             set(SHADER_TYPE "cs")
+        elseif(SHADER_NAME MATCHES "^MS_")
+            set(SHADER_TYPE "ms")
+        elseif(SHADER_NAME MATCHES "^AS_")
+            set(SHADER_TYPE "as")
         else()
             message(WARNING "Unknown shader type for ${SHADER_NAME}, skipping")
             continue()
@@ -104,7 +108,7 @@ if (RENDERER_BACKEND STREQUAL "DX12")
             OUTPUT "${OUT_CSO}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUT_DIR}"
             COMMAND ${DXC_EXECUTABLE}
-                    -T ${SHADER_TYPE}_6_0
+                    -T ${SHADER_TYPE}_6_5
                     -Fo "${OUT_CSO}"
                     -Zi
                     -E ${SHADER_NAME} 

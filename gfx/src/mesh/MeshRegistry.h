@@ -1,5 +1,5 @@
 #pragma once
-#include "buffer/StructuredUploadBuffer.h"
+#include "buffer/CPUUploadBuffer.h"
 #include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
 
@@ -30,19 +30,19 @@ namespace gfx
 			return m_meshInstances.Size();
 		}
 
-		const StructuredUploadBuffer<Vertex>&
+		const CPUUploadBuffer<Vertex>&
 		GetVertices() const noexcept
 		{
 			return m_vertices;
 		}
 
-		const StructuredUploadBuffer<uint32_t>&
+		const CPUUploadBuffer<uint32_t>&
 		GetIndices() const noexcept
 		{
 			return m_indices;
 		}
 
-		const StructuredUploadBuffer<Mesh::Instance>&
+		const CPUUploadBuffer<MeshInstance>&
 		GetInstances() const noexcept
 		{
 			return m_meshInstances;
@@ -55,22 +55,52 @@ namespace gfx
 		}
 
 	private:
-		Mesh::InstanceID
-		AddInstance(Mesh::InfoID id, glm::mat4 modelTransform = {})
+		MeshInstance::ID
+		AddInstance(const MeshInstance& instance)
 		{
-			return m_meshInstances.Emplace(id, modelTransform);
+			return m_meshInstances.Emplace(instance);
 		}
 
-		Mesh::InfoID
-		AddInfo(uint32_t indexStart, uint32_t indexCount, uint32_t vertexStart)
+		MeshInstance::ID
+		AddInstance(MeshInstance&& instance)
 		{
-			return m_meshInfos.Emplace(indexStart, indexCount, vertexStart, 0 /* materialID */);
+			return m_meshInstances.Emplace(std::move(instance));
+		}
+
+		MeshInfo::ID
+		AddInfo(const MeshInfo& info)
+		{
+			return m_meshInfos.Emplace(info);
+		}
+
+		MeshInfo::ID
+		AddInfo(MeshInfo&& info)
+		{
+			return m_meshInfos.Emplace(std::move(info));
+		}
+
+		Meshlet::ID
+		AddMeshlet(const Meshlet& meshlet)
+		{
+			return m_meshlets.Emplace(meshlet);
+		}
+
+		Meshlet::ID
+		AddMeshlet(Meshlet&& meshlet)
+		{
+			return m_meshlets.Emplace(std::move(meshlet));
 		}
 
 		void
-		AddVertex(glm::vec3 position, glm::vec3 normal, glm::vec2 uv)
+		AddVertex(const Vertex& vertex)
 		{
-			m_vertices.Emplace(position, normal, uv);
+			m_vertices.Emplace(vertex);
+		}
+
+		void
+		AddVertex(Vertex&& vertex)
+		{
+			m_vertices.Emplace(std::move(vertex));
 		}
 
 		void
@@ -79,11 +109,19 @@ namespace gfx
 			m_indices.Emplace(idx);
 		}
 
+		void
+		AddVertexMapIdx(uint32_t idx)
+		{
+			m_vertexMap.Emplace(idx);
+		}
+
 	private:
-		StructuredUploadBuffer<Mesh::Instance> m_meshInstances;
-		StructuredUploadBuffer<Mesh::Info>     m_meshInfos;
-		StructuredUploadBuffer<Vertex>         m_vertices;
-		StructuredUploadBuffer<uint32_t>       m_indices;
+		CPUUploadBuffer<MeshInstance> m_meshInstances;
+		CPUUploadBuffer<MeshInfo>     m_meshInfos;
+		CPUUploadBuffer<Meshlet>      m_meshlets;
+		CPUUploadBuffer<Vertex>       m_vertices;
+		CPUUploadBuffer<uint32_t>     m_indices;
+		CPUUploadBuffer<uint32_t>     m_vertexMap;
 
 		friend class MeshFactory;
 	};

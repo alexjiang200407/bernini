@@ -1,13 +1,10 @@
 #include "passes/GBufferPass.h"
 #include "BindingSlots.h"
-#include "buffer/StructuredBufferGPU.h"
-#include "buffer/StructuredUploadBuffer.h"
 #include "camera/Camera.h"
 #include "frame_graph/FrameGraphView.h"
-#include "mesh/DrawIndexedArgs.h"
 #include "mesh/Mesh.h"
+#include "mesh/MeshRegistry.h"
 #include "mesh/Vertex.h"
-#include "passes/FrameData.h"
 #include <core/file/file.h>
 #include <fg/Blackboard.hpp>
 #include <fg/FrameGraph.hpp>
@@ -25,20 +22,19 @@ namespace gfx
 										  .setDepthWriteEnable(true)
 										  .setDepthFunc(nvrhi::ComparisonFunc::Less)
 										  .setStencilEnable(false));
-
 	void
-	GBufferPass::Init(nvrhi::DeviceHandle device)
+	GBufferPass::Init(nvrhi::DeviceHandle device, MeshRegistry& registry)
 	{
 		m_mainCommandList = device->createCommandList();
 
 		{
-			auto vertexShaderBytecode = core::file::readFileBytes("shaders/VS_GBuffer.cso"sv);
-			m_vertexShader            = device->createShader(
+			auto meshShaderBytecode = core::file::readFileBytes("shaders/MS_GBuffer.cso"sv);
+			m_meshShader            = device->createShader(
                 nvrhi::ShaderDesc{}
-                    .setShaderType(nvrhi::ShaderType::Vertex)
-                    .setDebugName("GBuffer Vertex Shader"),
-                vertexShaderBytecode.data(),
-                vertexShaderBytecode.size());
+                    .setShaderType(nvrhi::ShaderType::Mesh)
+                    .setDebugName("GBuffer Mesh Shader"),
+                meshShaderBytecode.data(),
+                meshShaderBytecode.size());
 		}
 
 		{
@@ -50,92 +46,116 @@ namespace gfx
                 pixelShaderBytecode.data(),
                 pixelShaderBytecode.size());
 		}
+
+		{
+			auto ampShaderBytecode = core::file::readFileBytes("shaders/AS_GBuffer.cso"sv);
+			m_ampShader            = device->createShader(
+                nvrhi::ShaderDesc{}
+                    .setShaderType(nvrhi::ShaderType::Amplification)
+                    .setDebugName("GBuffer Amplification Shader"),
+                ampShaderBytecode.data(),
+                ampShaderBytecode.size());
+		}
+
+		{
+			auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+			bindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace)
+				.addItem(m_frameConstants.GetBindingLayoutItem(BindingSlots::CB::FrameConstants))
+				.setVisibility(nvrhi::ShaderType::Compute);
+
+			registry.AttachBindingLayoutItems(bindingLayoutDesc);
+
+			m_bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		}
+
+		auto frameConstantsDesc = DynamicConstantBufferDesc{};
+		frameConstantsDesc.AddElement("viewMatrix", ElementType::kFloat4x4)
+			.AddElement("projMatrix", ElementType::kFloat4x4)
+			.AddElement("instanceCount", ElementType::kUInt)
+			.AddElement("meshCount", ElementType::kUInt)
+			.SetName("FrameConstantBuffer");
+
+		m_frameConstants = std::move(DynamicConstantBuffer{ device, frameConstantsDesc });
+	}
+
+	void
+	GBufferPass::CreateBindingSet(MeshRegistry& registry, nvrhi::DeviceHandle device)
+	{
+		namespace SRV = BindingSlots::SRV;
+		namespace UAV = BindingSlots::UAV;
+
+		{
+			auto bindingSetDesc = nvrhi::BindingSetDesc{};
+			bindingSetDesc.addItem(
+				m_frameConstants.GetBindingSetItem(BindingSlots::CB::FrameConstants));
+			registry.AttachBindingSetItems(bindingSetDesc);
+
+			m_bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout);
+		}
 	}
 
 	void
 	GBufferPass::AttachToFrameGraph(
 		FrameGraph&           frameGraph,
 		FrameGraphBlackboard& blackBoard,
+		MeshRegistry&         registry,
+		Camera&               camera,
 		RenderArgs            renderArgs)
 	{
-		const auto frameData = blackBoard.get<FrameData>();
-
 		frameGraph.addCallbackPass(
 			"GBufferPass",
-			[=](FrameGraph::Builder& builder, auto&) {
-				builder.read(frameData.frameConstantsBindingSet);
-				builder.read(frameData.frameConstantsBindingLayout);
-				builder.read(frameData.drawIndirectArgs);
-				builder.read(frameData.drawIndirectCount);
-				builder.read(frameData.compactedInstances);
-				builder.read(frameData.indexBuffer);
-				builder.read(frameData.vertexBuffer);
-				builder.setSideEffect();
-			},
-			[this, renderArgs, frameData](auto&, FrameGraphPassResources& resources, void*) {
+			[](FrameGraph::Builder& builder, auto&) { builder.setSideEffect(); },
+			[this, renderArgs, &registry, &camera](const auto&, FrameGraphPassResources&, void*) {
 				auto device            = renderArgs.device;
 				auto screenW           = renderArgs.screenWidth;
 				auto screenH           = renderArgs.screenHeight;
 				auto outputFramebuffer = renderArgs.outBuffer;
-
-				if (!m_graphicsPipeline)
-				{
-					auto& layout = resources.get<FrameGraphView<nvrhi::BindingLayoutHandle>>(
-						frameData.frameConstantsBindingLayout);
-
-					nvrhi::GraphicsPipelineDesc desc{};
-					desc.setVertexShader(m_vertexShader)
-						.setPixelShader(m_pixelShader)
-						.setRenderState(renderState)
-						.addBindingLayout(layout.Get())
-						.setInputLayout(device->createInputLayout(nullptr, 0, m_vertexShader));
-
-					m_graphicsPipeline = device->createGraphicsPipeline(desc, outputFramebuffer);
-				}
-
-				auto  gfxState       = nvrhi::GraphicsState{};
-				auto& drawBindingSet = resources.get<FrameGraphView<nvrhi::BindingSetHandle>>(
-					frameData.frameConstantsBindingSet);
-				gfxState.addBindingSet(drawBindingSet.Get());
-
-				gfxState.setFramebuffer(outputFramebuffer)
-					.setViewport(
-						nvrhi::ViewportState{}.addViewportAndScissorRect(
-							nvrhi::Viewport{ screenW, screenH }))
-					.setPipeline(m_graphicsPipeline);
+				auto frameBufferInfo   = renderArgs.outBufferInfo;
+				auto instanceCount     = registry.GetInstancesCount();
 
 				m_mainCommandList->open();
 
-				auto& drawArgsBuffer =
-					resources
-						.get<StructuredBufferGPU<DrawIndexedArgs>::View>(frameData.drawIndirectArgs)
-						.Get();
-				auto& drawCountBuffer =
-					resources.get<StructuredBufferGPU<uint32_t>::View>(frameData.drawIndirectCount)
-						.Get();
+				auto state = nvrhi::MeshletState{};
 
-				auto& compactedInstances = resources
-			                                   .get<StructuredBufferGPU<Mesh::Instance>::View>(
-												   frameData.compactedInstances)
-			                                   .Get();
+				// TODO: Could move this into init?
+				if (!m_pipeline)
+				{
+					auto psoDesc = nvrhi::MeshletPipelineDesc{};
 
-				auto& vertexBuffer =
-					resources.get<StructuredUploadBufferView<Vertex>>(frameData.vertexBuffer).Get();
-				auto& indexBuffer =
-					resources.get<StructuredUploadBufferView<uint32_t>>(frameData.indexBuffer)
-						.Get();
+					psoDesc.setAmplificationShader(m_ampShader)
+						.setMeshShader(m_meshShader)
+						.setPixelShader(m_pixelShader)
+						.setPrimType(nvrhi::PrimitiveType::TriangleList)
+						.setRenderState(renderState)
+						.addBindingLayout(m_bindingLayout);
 
-				m_mainCommandList->setResourceStatesForFramebuffer(outputFramebuffer.Get());
+					m_pipeline = device->createMeshletPipeline(psoDesc, frameBufferInfo);
+				}
 
-				gfxState.setIndexBuffer({ indexBuffer.GetBuffer(), nvrhi::Format::R32_UINT, 0 })
-					.addVertexBuffer({ vertexBuffer.GetBuffer(), 0, 0 })
-					.setIndirectParams(drawArgsBuffer.GetBuffer())
-					.setIndirectCount(drawCountBuffer.GetBuffer())
-					.setMaxDrawCount(1024);
+				if (camera.ShouldUpdate())
+				{
+					m_frameConstants["viewMatrix"] = camera.GetViewMatrix();
+					m_frameConstants["projMatrix"] = camera.GetProjMatrix();
+				}
 
-				m_mainCommandList->setGraphicsState(gfxState);
+				m_frameConstants["instanceCount"] = instanceCount;
 
-				m_mainCommandList->drawIndexedIndirect();
+				if (registry.Update(m_mainCommandList, device))
+				{
+					CreateBindingSet(registry, device);
+				}
+
+				m_frameConstants.Update(m_mainCommandList);
+
+				state.setPipeline(m_pipeline)
+					.addBindingSet(m_bindingSet)
+					.setFramebuffer(outputFramebuffer)
+					.setViewport(
+						nvrhi::ViewportState{}.addViewportAndScissorRect(
+							nvrhi::Viewport{ screenW, screenH }));
+
+				m_mainCommandList->setMeshletState(state);
+				m_mainCommandList->dispatchMesh(instanceCount);
 
 				m_mainCommandList->close();
 				device->executeCommandList(m_mainCommandList);
