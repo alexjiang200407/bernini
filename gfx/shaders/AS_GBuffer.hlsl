@@ -12,7 +12,7 @@ StructuredBuffer<Meshlet> meshletBuffer : register(t5, space0);
 [numthreads(64, 1, 1)]
 void AS_GBuffer(uint gtid : SV_GroupThreadID, uint gid : SV_GroupID)
 {
-    uint instanceID = gid;
+    uint instanceID = gid + 1;
     MeshInstance instance = instanceBuffer[instanceID];
     MeshInfo info = meshInfoBuffer[instance.infoID];
 

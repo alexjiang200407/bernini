@@ -44,6 +44,19 @@ namespace gfx
 	public:
 		using View = FrameGraphView<CPUUploadBuffer<T>>;
 
+	private:
+		struct FreeBlock
+		{
+			uint32_t startingIndex;
+			uint32_t count;
+
+			bool
+			operator<(const FreeBlock& other) const
+			{
+				return startingIndex < other.startingIndex;
+			}
+		};
+
 	public:
 		CPUUploadBuffer() noexcept              = default;
 		CPUUploadBuffer(const CPUUploadBuffer&) = delete;
@@ -56,32 +69,124 @@ namespace gfx
 		void
 		Init(nvrhi::DeviceHandle device, const CPUUploadBufferDesc& desc)
 		{
+			m_data.clear();
+			m_freeBlocks.clear();
+
 			m_data.reserve(desc.startingCapacity);
+
+			m_data.emplace_back(T{});
 
 			m_bufferDesc = desc.bufferDesc;
 			m_bufferDesc.setStructStride(sizeof(T))
 				.setInitialState(nvrhi::ResourceStates::ShaderResource)
 				.setKeepInitialState(true)
-				.setByteSize(sizeof(T));
+				.setByteSize(m_data.size() * sizeof(T));
 
 			m_buffer = device->createBuffer(m_bufferDesc);
-
-			m_dirty = false;
+			m_dirty  = true;
 		}
 
-		size_t
+		[[nodiscard]] uint32_t
 		Size() const noexcept
 		{
-			return m_data.size();
+			return static_cast<uint32_t>(m_data.size());
 		}
 
 		template <typename... Args>
-		uint32_t
+		[[nodiscard]] uint32_t
 		Emplace(Args&&... args)
 		{
+			T element(std::forward<Args>(args)...);
+			return EmplaceRange(std::span<const T>(&element, 1));
+		}
+
+		[[nodiscard]] uint32_t
+		EmplaceRange(std::span<const T> elements)
+		{
+			const uint32_t count = static_cast<uint32_t>(elements.size());
+			if (count == 0)
+				return 0;
+
 			m_dirty = true;
-			m_data.emplace_back(std::forward<Args>(args)...);
-			return static_cast<uint32_t>(m_data.size() - 1);
+
+			for (auto it = m_freeBlocks.begin(); it != m_freeBlocks.end(); ++it)
+			{
+				if (it->count >= count)
+				{
+					uint32_t offset = it->startingIndex;
+
+					std::copy(elements.begin(), elements.end(), m_data.begin() + offset);
+
+					if (it->count == count)
+					{
+						m_freeBlocks.erase(it);
+					}
+					else
+					{
+						it->startingIndex += count;
+						it->count -= count;
+					}
+					return offset;
+				}
+			}
+
+			uint32_t startingIndex = static_cast<uint32_t>(m_data.size());
+			m_data.insert(m_data.end(), elements.begin(), elements.end());
+
+			return startingIndex;
+		}
+
+		void
+		EraseRange(uint32_t startingIndex, uint32_t count)
+		{
+			if (count == 0 || startingIndex == 0)
+				return;
+			m_dirty = true;
+
+			auto it = std::lower_bound(
+				m_freeBlocks.begin(),
+				m_freeBlocks.end(),
+				FreeBlock{ startingIndex, count });
+
+			bool mergedNext = false;
+			if (it != m_freeBlocks.end())
+			{
+				if (startingIndex + count == it->startingIndex)
+				{
+					it->startingIndex = startingIndex;
+					it->count += count;
+					mergedNext = true;
+				}
+			}
+
+			if (it != m_freeBlocks.begin())
+			{
+				auto prev = std::prev(it);
+				if (prev->startingIndex + prev->count == startingIndex)
+				{
+					if (mergedNext)
+					{
+						prev->count += it->count;
+						m_freeBlocks.erase(it);
+					}
+					else
+					{
+						prev->count += count;
+					}
+					return;
+				}
+			}
+
+			if (!mergedNext)
+			{
+				m_freeBlocks.insert(it, { startingIndex, count });
+			}
+		}
+
+		void
+		Erase(uint32_t index)
+		{
+			EraseRange(index, 1);
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
@@ -130,10 +235,11 @@ namespace gfx
 		}
 
 	private:
-		nvrhi::BufferDesc   m_bufferDesc;
-		nvrhi::BufferHandle m_buffer;
-		std::vector<T>      m_data;
-		bool                m_dirty = false;
+		nvrhi::BufferDesc      m_bufferDesc;
+		nvrhi::BufferHandle    m_buffer;
+		std::vector<T>         m_data;
+		std::vector<FreeBlock> m_freeBlocks;
+		bool                   m_dirty = false;
 	};
 
 	template <typename T>

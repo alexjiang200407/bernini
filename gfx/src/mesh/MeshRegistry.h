@@ -27,32 +27,13 @@ namespace gfx
 		uint32_t
 		GetInstancesCount() const noexcept
 		{
-			return m_meshInstances.Size();
+			// First is null instance
+			return m_meshInstances.Size() - 1;
 		}
 
-		const CPUUploadBuffer<Vertex>&
-		GetVertices() const noexcept
-		{
-			return m_vertices;
-		}
-
-		const CPUUploadBuffer<uint32_t>&
-		GetIndices() const noexcept
-		{
-			return m_indices;
-		}
-
-		const CPUUploadBuffer<MeshInstance>&
-		GetInstances() const noexcept
-		{
-			return m_meshInstances;
-		}
-
-		const size_t
-		GetMeshInfosCount() const noexcept
-		{
-			return m_meshInfos.Size();
-		}
+		void
+		RemoveMeshInstance()
+		{}
 
 	private:
 		MeshInstance::ID
@@ -80,39 +61,27 @@ namespace gfx
 		}
 
 		Meshlet::ID
-		AddMeshlet(const Meshlet& meshlet)
+		AddMeshlets(std::span<const Meshlet> meshlets)
 		{
-			return m_meshlets.Emplace(meshlet);
+			return m_meshlets.EmplaceRange(meshlets);
 		}
 
-		Meshlet::ID
-		AddMeshlet(Meshlet&& meshlet)
+		uint32_t
+		AddVertices(std::span<const Vertex> vertices)
 		{
-			return m_meshlets.Emplace(std::move(meshlet));
+			return m_vertices.EmplaceRange(vertices);
 		}
 
-		void
-		AddVertex(const Vertex& vertex)
+		uint32_t
+		AddIndices(std::span<const uint32_t> indices)
 		{
-			m_vertices.Emplace(vertex);
+			return m_indices.EmplaceRange(indices);
 		}
 
-		void
-		AddVertex(Vertex&& vertex)
+		uint32_t
+		AddVertexMapIdx(std::span<const uint32_t> mapIndices)
 		{
-			m_vertices.Emplace(std::move(vertex));
-		}
-
-		void
-		AddIndex(uint32_t idx)
-		{
-			m_indices.Emplace(idx);
-		}
-
-		void
-		AddVertexMapIdx(uint32_t idx)
-		{
-			m_vertexMap.Emplace(idx);
+			return m_vertexMap.EmplaceRange(mapIndices);
 		}
 
 	private:

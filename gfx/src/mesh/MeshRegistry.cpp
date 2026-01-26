@@ -9,27 +9,15 @@ namespace gfx
 		m_meshInfos.Init(device, CPUUploadBufferDesc{}.SetName("Mesh Info Structured Buffer"));
 		m_vertices.Init(
 			device,
-			CPUUploadBufferDesc{}
-				.SetStartingCapacity(1024)
-				.SetName("Vertex Structured Buffer")
-				.SetIsVertexBuffer());
+			CPUUploadBufferDesc{}.SetName("Vertex Structured Buffer").SetIsVertexBuffer());
 		m_indices.Init(
 			device,
-			CPUUploadBufferDesc{}
-				.SetStartingCapacity(2048)
-				.SetName("Index Structured Buffer")
-				.SetIsIndexBuffer());
+			CPUUploadBufferDesc{}.SetName("Index Structured Buffer").SetIsIndexBuffer());
 		m_meshInstances.Init(
 			device,
-			CPUUploadBufferDesc{}.SetStartingCapacity(1024).SetName(
-				"Mesh Instance Structured Buffer"));
-		m_meshlets.Init(
-			device,
-			CPUUploadBufferDesc{}.SetStartingCapacity(2048).SetName("Meshlet Structured Buffer"));
-		m_vertexMap.Init(
-			device,
-			CPUUploadBufferDesc{}.SetStartingCapacity(1024).SetName(
-				"Vertex Map Structured Buffer"));
+			CPUUploadBufferDesc{}.SetName("Mesh Instance Structured Buffer"));
+		m_meshlets.Init(device, CPUUploadBufferDesc{}.SetName("Meshlet Structured Buffer"));
+		m_vertexMap.Init(device, CPUUploadBufferDesc{}.SetName("Vertex Map Structured Buffer"));
 	}
 
 	void
