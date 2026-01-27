@@ -24,14 +24,17 @@ void MS_GBuffer(
     out vertices MeshVertexOut verts[MAX_VERTICES_PER_MESHLET]
 )
 {
+    if (gid >= i_payload.visibleCount)
+        return;
+
     MeshInstance instance = instanceBuffer[i_payload.instanceID];
     MeshInfo info = meshInfoBuffer[instance.infoID];
         
-    uint meshletIndex = info.meshletBaseIndex + gid;
+    uint meshletIndex = i_payload.visibleIndices[gid];
     Meshlet m = meshletBuffer[meshletIndex];
-    
+
     SetMeshOutputCounts(m.vertexCount, m.triangleCount);
-    
+
     if (gtid < m.vertexCount)
     {
         uint globalVertexIdx = vertexMapBuffer[m.vertexMapOffset + gtid];
