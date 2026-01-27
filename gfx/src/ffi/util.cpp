@@ -5,7 +5,7 @@ namespace gfx::ffi
 	void
 	deleteThunk(GfxObj obj)
 	{
-		auto* data = reinterpret_cast<GfxBase*>(obj.data);
+		auto* data = reinterpret_cast<GfxBase*>(obj.ptr);
 		if (data)
 		{
 			delete data;

@@ -1,11 +1,12 @@
 #pragma once
 #include "GfxBase.h"
-#include "mesh/MeshRegistry.h"
 #include <gfx/ffi/gfx.h>
 
 namespace gfx
 {
 	class Camera;
+	class MeshRegistry;
+	class MeshFactory;
 
 	class IGraphics : public GfxBase
 	{
@@ -19,6 +20,12 @@ namespace gfx
 
 		static IGraphics*
 		Create(const GfxOptions& options = {});
+
+		virtual MeshFactory&
+		GetMeshFactory() noexcept = 0;
+
+		virtual MeshRegistry&
+		GetMeshRegistry() = 0;
 
 	protected:
 		int m_windowWidth = 0, m_windowHeight = 0;

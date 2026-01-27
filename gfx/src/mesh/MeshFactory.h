@@ -11,11 +11,11 @@ namespace gfx
 
 		[[nodiscard]]
 		MeshInstance::ID
-		CreateCubeInstance(MeshRegistry& registry, glm::mat4 modelTransform = {}) const;
+		CreateCubeInstance(glm::mat4 modelTransform = {}) const;
 
 		[[nodiscard]]
 		MeshInstance::ID
-		CreateSphereInstance(MeshRegistry& registry, glm::mat4 modelTransform = {}) const;
+		CreateSphereInstance(glm::mat4 modelTransform = {}) const;
 
 	private:
 		static MeshInfo::ID
@@ -26,8 +26,7 @@ namespace gfx
 
 	private:
 		nvrhi::DeviceHandle m_device;
-		MeshInfo::ID        m_cubeInfoID;
-		MeshInfo::ID        m_sphereInfoID;
+		MeshRegistry&       m_registry;
 	};
 
 }

@@ -12,7 +12,7 @@ createCamera(GfxCameraDesc desc, GfxCamera* out)
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
 		gfx::ffi::validatePtr(out, "out");
 
-		out->data    = new gfx::Camera{ desc };
+		out->ptr     = new gfx::Camera{ desc };
 		out->destroy = gfx::ffi::deleteThunk;
 
 		return GFX_RESULT_OK;

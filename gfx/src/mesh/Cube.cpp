@@ -22,6 +22,11 @@ namespace gfx
 	MeshInfo::ID
 	MeshFactory::CreateCubeInfo(MeshRegistry& registry)
 	{
+		if (auto existingCubeId = registry.GetMeshInfoIDByName("$Cube"))
+		{
+			return existingCubeId;
+		}
+
 		const auto baseVertexGlobal = registry.AddVertices(cubeVertices);
 
 		auto mapIndices = std::vector<uint32_t>(std::size(cubeVertices));
@@ -48,6 +53,6 @@ namespace gfx
 		info.meshletCount     = 1;
 		info.materialID       = 0;
 
-		return registry.AddInfo(std::move(info));
+		return registry.AddInfo("$Cube", info, baseVertexGlobal, std::size(cubeVertices));
 	}
 }

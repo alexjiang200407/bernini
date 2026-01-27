@@ -18,6 +18,120 @@ namespace gfx
 			CPUUploadBufferDesc{}.SetName("Mesh Instance Structured Buffer"));
 		m_meshlets.Init(device, CPUUploadBufferDesc{}.SetName("Meshlet Structured Buffer"));
 		m_vertexMap.Init(device, CPUUploadBufferDesc{}.SetName("Vertex Map Structured Buffer"));
+
+		// For the null mesh info
+		m_meshInfoMeta.push_back({});
+	}
+
+	MeshInfo::ID
+	MeshRegistry::GetMeshInfoIDByName(std::string_view nameId) const
+	{
+		if (auto it = m_infoNameMap.find(nameId.data()); it != m_infoNameMap.end())
+		{
+			return it->second;
+		}
+		return MeshInfo::ID{ 0u };
+	}
+
+	void
+	MeshRegistry::RemoveMeshInstance(MeshInstance::ID id)
+	{
+		const MeshInstance& instance = m_meshInstances.At(id);
+		MeshInfo::ID        infoID   = instance.infoID;
+
+		if (id >= m_meshInstances.Size() || id == 0)
+		{
+			auto msg = std::format("Mesh instance ID {} does not exist.", id);
+			throw GfxException(
+				GFX_RESULT_ERROR_MESH_DOES_NOT_EXIST,
+				"RemoveMeshInstance error",
+				msg);
+		}
+
+		m_meshInstances.Erase(id);
+
+		if (infoID < m_meshInfoMeta.size())
+		{
+			auto& meta = m_meshInfoMeta[infoID];
+			if (meta.refCount > 0)
+			{
+				meta.refCount--;
+				if (meta.refCount == 0)
+				{
+					RemoveMeshInfo(infoID);
+				}
+			}
+		}
+	}
+
+	MeshInfo::ID
+	MeshRegistry::AddInfo(
+		std::string_view nameId,
+		const MeshInfo&  info,
+		uint32_t         vOffset,
+		uint32_t         vCount)
+	{
+		if (auto it = m_infoNameMap.find(nameId.data()); it != m_infoNameMap.end())
+		{
+			return it->second;
+		}
+
+		MeshInfo::ID id = m_meshInfos.Emplace(info);
+
+		if (id >= m_meshInfoMeta.size())
+		{
+			m_meshInfoMeta.resize(id + 1);
+		}
+
+		m_meshInfoMeta[id]                 = { vOffset, vCount, 0 };
+		m_infoNameMap[std::string(nameId)] = id;
+
+		return id;
+	}
+
+	MeshInstance::ID
+	MeshRegistry::AddInstance(const MeshInstance& instance)
+	{
+		assert(instance.infoID < m_meshInfoMeta.size());
+		auto id = m_meshInstances.Emplace(instance);
+
+		++m_meshInfoMeta[instance.infoID].refCount;
+
+		return id;
+	}
+
+	void
+	MeshRegistry::RemoveMeshInfo(MeshInfo::ID id)
+	{
+		const MeshInfo& info = m_meshInfos.At(id);
+		const auto&     meta = m_meshInfoMeta[id];
+
+		for (uint32_t i = 0; i < info.meshletCount; ++i)
+		{
+			uint32_t       meshletIdx = info.meshletBaseIndex + i;
+			const Meshlet& m          = m_meshlets.At(meshletIdx);
+
+			m_indices.EraseRange(m.indexOffset, m.indexCount);
+			m_vertexMap.EraseRange(m.vertexMapOffset, m.vertexCount);
+		}
+
+		m_meshlets.EraseRange(info.meshletBaseIndex, info.meshletCount);
+
+		m_vertices.EraseRange(meta.vertexOffset, meta.vertexCount);
+
+		m_meshInfos.Erase(id);
+
+		for (auto it = m_infoNameMap.begin(); it != m_infoNameMap.end(); ++it)
+		{
+			if (it->second == id)
+			{
+				m_infoNameMap.erase(it);
+				break;
+			}
+		}
+
+		// Clear metadata but keep size (to keep indices stable)
+		m_meshInfoMeta[id] = {};
 	}
 
 	void

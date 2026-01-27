@@ -7,6 +7,14 @@ namespace gfx
 {
 	class MeshRegistry final
 	{
+	private:
+		struct MeshInfoMetadata
+		{
+			uint32_t vertexOffset = 0u;
+			uint32_t vertexCount  = 0u;
+			uint32_t refCount     = 0u;
+		};
+
 	public:
 		MeshRegistry()  = default;
 		~MeshRegistry() = default;
@@ -31,34 +39,21 @@ namespace gfx
 			return m_meshInstances.Size() - 1;
 		}
 
+		MeshInfo::ID
+		GetMeshInfoIDByName(std::string_view nameId) const;
+
 		void
-		RemoveMeshInstance()
-		{}
+		RemoveMeshInstance(MeshInstance::ID id);
 
 	private:
-		MeshInstance::ID
-		AddInstance(const MeshInstance& instance)
-		{
-			return m_meshInstances.Emplace(instance);
-		}
+		void
+		RemoveMeshInfo(MeshInfo::ID id);
 
 		MeshInstance::ID
-		AddInstance(MeshInstance&& instance)
-		{
-			return m_meshInstances.Emplace(std::move(instance));
-		}
+		AddInstance(const MeshInstance& instance);
 
 		MeshInfo::ID
-		AddInfo(const MeshInfo& info)
-		{
-			return m_meshInfos.Emplace(info);
-		}
-
-		MeshInfo::ID
-		AddInfo(MeshInfo&& info)
-		{
-			return m_meshInfos.Emplace(std::move(info));
-		}
+		AddInfo(std::string_view nameId, const MeshInfo& info, uint32_t vOffset, uint32_t vCount);
 
 		Meshlet::ID
 		AddMeshlets(std::span<const Meshlet> meshlets)
@@ -85,12 +80,14 @@ namespace gfx
 		}
 
 	private:
-		CPUUploadBuffer<MeshInstance> m_meshInstances;
-		CPUUploadBuffer<MeshInfo>     m_meshInfos;
-		CPUUploadBuffer<Meshlet>      m_meshlets;
-		CPUUploadBuffer<Vertex>       m_vertices;
-		CPUUploadBuffer<uint32_t>     m_indices;
-		CPUUploadBuffer<uint32_t>     m_vertexMap;
+		CPUUploadBuffer<MeshInstance>                 m_meshInstances;
+		CPUUploadBuffer<MeshInfo>                     m_meshInfos;
+		CPUUploadBuffer<Meshlet>                      m_meshlets;
+		CPUUploadBuffer<Vertex>                       m_vertices;
+		CPUUploadBuffer<uint32_t>                     m_indices;
+		CPUUploadBuffer<uint32_t>                     m_vertexMap;
+		std::unordered_map<std::string, MeshInfo::ID> m_infoNameMap;
+		std::vector<MeshInfoMetadata>                 m_meshInfoMeta;
 
 		friend class MeshFactory;
 	};

@@ -189,6 +189,22 @@ namespace gfx
 			EraseRange(index, 1);
 		}
 
+		[[nodiscard]] const T&
+		At(uint32_t index) const
+		{
+			if (index >= m_data.size())
+			{
+				throw GfxException(
+					GFX_RESULT_ERROR_CPU_UPLOAD_BUFFER,
+					"CPUUploadBuffer::At - Index out of bounds",
+					"Attempted to access index " + std::to_string(index) +
+						" but the buffer only contains " + std::to_string(m_data.size()) +
+						" elements.");
+			}
+
+			return m_data[index];
+		}
+
 		[[nodiscard]] nvrhi::BindingLayoutItem
 		GetBindingLayoutItemSRV(uint32_t slot) const
 		{

@@ -5,6 +5,7 @@
 #include <gfx/Vec3.h>
 #include <gfx/ffi/gfx.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -185,6 +186,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enablePixDebug           = true;
 
 		createGraphics(gfxOpts, &graphics) >> berniniErrChecker;
+		auto    mat  = glm::mat4{ 1.0f };
+		auto*   data = glm::value_ptr(mat);
+		GfxMesh cube;
+		createCube(graphics, data, &cube) >> berniniErrChecker;
+		destroyMesh(graphics, cube) >> berniniErrChecker;
 
 		auto cameraDesc = GfxCameraDesc{ .transform  = { .position = { 0.0f, 0.0f, -20.0f },
 			                                             .forward  = { 0.0f, 0.0f, -1.0f } },

@@ -71,6 +71,11 @@ namespace gfx
 	MeshInfo::ID
 	MeshFactory::CreateSphereInfo(MeshRegistry& registry)
 	{
+		if (auto existingSphereId = registry.GetMeshInfoIDByName("$Sphere"))
+		{
+			return existingSphereId;
+		}
+
 		std::vector<Vertex>   sphereVerts;
 		std::vector<uint32_t> sphereIndices;
 
@@ -178,11 +183,11 @@ namespace gfx
 
 		uint32_t baseMeshletGlobal = registry.AddMeshlets(generatedMeshlets);
 
-		MeshInfo info{};
+		auto info             = MeshInfo{};
 		info.meshletBaseIndex = baseMeshletGlobal;
 		info.meshletCount     = static_cast<uint32_t>(generatedMeshlets.size());
 		info.materialID       = 0;
 
-		return registry.AddInfo(std::move(info));
+		return registry.AddInfo("$Sphere", info, baseVertexGlobal, sphereVerts.size());
 	}
 }
