@@ -9,17 +9,21 @@ StructuredBuffer<Vertex> vertexBuffer : register(t3, space0);
 StructuredBuffer<MeshInstance> instanceBuffer : register(t4, space0);
 StructuredBuffer<Meshlet> meshletBuffer : register(t5, space0);
 
+StructuredBuffer<uint> meshInfoRedirectBuffer : register(t6, space0);
+
 [numthreads(64, 1, 1)]
 void AS_GBuffer(uint gtid : SV_GroupThreadID, uint gid : SV_GroupID)
 {
-    uint instanceID = gid + 1;
-    MeshInstance instance = instanceBuffer[instanceID];
-    MeshInfo info = meshInfoBuffer[instance.infoID];
+    uint physicalInstanceID = gid + 1;
+    MeshInstance instance = instanceBuffer[physicalInstanceID];
+    
+    uint physicalMeshID = meshInfoRedirectBuffer[instance.infoID];
+    MeshInfo info = meshInfoBuffer[physicalMeshID];
 
     if (gtid == 0)
     {
-        s_payload.instanceID = instanceID;
-        s_payload.meshletBaseIndex = info.meshletBaseIndex;
+        s_payload.instanceID = physicalInstanceID;
+        s_payload.meshletBaseIndex = info.meshletBaseIndex; // TODO: Map virtual meshlet ID
     }
 
     GroupMemoryBarrierWithGroupSync();

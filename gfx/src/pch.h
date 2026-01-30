@@ -14,3 +14,5 @@
 
 #include "logger.h"
 #include "math/util.h"
+
+#include "GfxException.h"

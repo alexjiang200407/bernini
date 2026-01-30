@@ -67,6 +67,36 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 			shiftDown = e.IsHeld();
 		}
 
+		if (e.IsPress())
+		{
+			switch (e.GetKeyCode())
+			case 49:  // 1 key
+			case 50:  // 2 key
+			case 51:  // 3 key
+			{
+				if (e.IsPress())
+				{
+					auto idx = e.GetKeyCode() - 49;
+					if (meshes[idx])
+					{
+						destroyMesh(gfx, meshes[idx]) >> berniniErrChecker;
+						meshes[idx] = 0;
+					}
+					else
+					{
+						auto mat  = glm::mat4{ 1.0f };
+						mat[3][0] = static_cast<float>(idx) * -5.0f;
+
+						auto* data = glm::value_ptr(mat);
+
+						createCube(gfx, data, &meshes[idx]) >> berniniErrChecker;
+					}
+				}
+
+				break;
+			}
+		}
+
 		if (!e.IsHeld())
 		{
 			return;
@@ -91,6 +121,7 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 			changedPosition = true;
 			rightDelta += moveSpeed;
 			break;
+
 		default:
 			break;
 		}
@@ -134,13 +165,15 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 		}
 	}
 
-	bool  changedPosition = false;
-	bool  changedRotation = false;
-	float forwardDelta    = 0.0f;
-	float rightDelta      = 0.0f;
-	float mouseDeltaX     = 0.0f;
-	float mouseDeltaY     = 0.0f;
-	bool  shiftDown       = false;
+	bool                 changedPosition = false;
+	bool                 changedRotation = false;
+	float                forwardDelta    = 0.0f;
+	float                rightDelta      = 0.0f;
+	float                mouseDeltaX     = 0.0f;
+	float                mouseDeltaY     = 0.0f;
+	bool                 shiftDown       = false;
+	std::vector<GfxMesh> meshes;
+	Gfx                  gfx;
 };
 
 namespace fs = std::filesystem;
@@ -186,11 +219,19 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enablePixDebug           = true;
 
 		createGraphics(gfxOpts, &graphics) >> berniniErrChecker;
-		auto    mat  = glm::mat4{ 1.0f };
-		auto*   data = glm::value_ptr(mat);
-		GfxMesh cube;
-		createCube(graphics, data, &cube) >> berniniErrChecker;
-		destroyMesh(graphics, cube) >> berniniErrChecker;
+		auto  mat   = glm::mat4{ 1.0f };
+		auto* data  = glm::value_ptr(mat);
+		auto  cubes = std::vector<GfxMesh>(3);
+
+		createCube(graphics, data, &cubes[0]) >> berniniErrChecker;
+
+		mat[3][0] = -5.0f;
+
+		createCube(graphics, data, &cubes[1]) >> berniniErrChecker;
+
+		mat[3][0] = -10.0f;
+
+		createCube(graphics, data, &cubes[2]) >> berniniErrChecker;
 
 		auto cameraDesc = GfxCameraDesc{ .transform  = { .position = { 0.0f, 0.0f, -20.0f },
 			                                             .forward  = { 0.0f, 0.0f, -1.0f } },
@@ -200,7 +241,9 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			                                             .farZ        = 500.0f } };
 		createCamera(cameraDesc, &camera) >> berniniErrChecker;
 
-		auto visitor = EventVisitor{};
+		auto visitor   = EventVisitor{};
+		visitor.meshes = std::move(cubes);
+		visitor.gfx    = graphics;
 
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))

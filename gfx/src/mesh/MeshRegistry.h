@@ -1,4 +1,5 @@
 #pragma once
+#include "buffer/CPUAppendBuffer.h"
 #include "buffer/CPUUploadBuffer.h"
 #include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
@@ -80,8 +81,8 @@ namespace gfx
 		}
 
 	private:
-		CPUUploadBuffer<MeshInstance>                 m_meshInstances;
-		CPUUploadBuffer<MeshInfo>                     m_meshInfos;
+		CPUAppendBuffer<MeshInstance>                 m_meshInstances;
+		CPUAppendBuffer<MeshInfo>                     m_meshInfos;
 		CPUUploadBuffer<Meshlet>                      m_meshlets;
 		CPUUploadBuffer<Vertex>                       m_vertices;
 		CPUUploadBuffer<uint32_t>                     m_indices;

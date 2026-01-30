@@ -6,16 +6,20 @@ namespace gfx
 	void
 	MeshRegistry::Init(nvrhi::DeviceHandle device)
 	{
-		m_meshInfos.Init(device, CPUUploadBufferDesc{}.SetName("Mesh Info Structured Buffer"));
+		m_meshInfos.Init(device, CPUAppendBufferDesc{}.SetName("Mesh Info Structured Buffer"));
+		m_meshInstances.Init(
+			device,
+			CPUAppendBufferDesc{}
+				.SetName("Mesh Instance Structured Buffer")
+				.SetUseRedirectTableOnGPU(false));
+
 		m_vertices.Init(
 			device,
 			CPUUploadBufferDesc{}.SetName("Vertex Structured Buffer").SetIsVertexBuffer());
 		m_indices.Init(
 			device,
 			CPUUploadBufferDesc{}.SetName("Index Structured Buffer").SetIsIndexBuffer());
-		m_meshInstances.Init(
-			device,
-			CPUUploadBufferDesc{}.SetName("Mesh Instance Structured Buffer"));
+
 		m_meshlets.Init(device, CPUUploadBufferDesc{}.SetName("Meshlet Structured Buffer"));
 		m_vertexMap.Init(device, CPUUploadBufferDesc{}.SetName("Vertex Map Structured Buffer"));
 
@@ -38,15 +42,6 @@ namespace gfx
 	{
 		const MeshInstance& instance = m_meshInstances.At(id);
 		MeshInfo::ID        infoID   = instance.infoID;
-
-		if (id >= m_meshInstances.Size() || id == 0)
-		{
-			auto msg = std::format("Mesh instance ID {} does not exist.", id);
-			throw GfxException(
-				GFX_RESULT_ERROR_MESH_DOES_NOT_EXIST,
-				"RemoveMeshInstance error",
-				msg);
-		}
 
 		m_meshInstances.Erase(id);
 
@@ -76,7 +71,7 @@ namespace gfx
 			return it->second;
 		}
 
-		MeshInfo::ID id = m_meshInfos.Emplace(info);
+		MeshInfo::ID id = m_meshInfos.EmplaceBack(info);
 
 		if (id >= m_meshInfoMeta.size())
 		{
@@ -93,7 +88,7 @@ namespace gfx
 	MeshRegistry::AddInstance(const MeshInstance& instance)
 	{
 		assert(instance.infoID < m_meshInfoMeta.size());
-		auto id = m_meshInstances.Emplace(instance);
+		auto id = m_meshInstances.EmplaceBack(instance);
 
 		++m_meshInfoMeta[instance.infoID].refCount;
 
@@ -145,7 +140,8 @@ namespace gfx
 			.addItem(m_indices.GetBindingSetItemSRV(SRV::IndexBuffer))
 			.addItem(m_vertices.GetBindingSetItemSRV(SRV::VertexBuffer))
 			.addItem(m_vertexMap.GetBindingSetItemSRV(SRV::VertexMap))
-			.addItem(m_meshlets.GetBindingSetItemSRV(SRV::MeshletBuffer));
+			.addItem(m_meshlets.GetBindingSetItemSRV(SRV::MeshletBuffer))
+			.addItem(m_meshInfos.GetRedirectTableBindingSetItemSRV(SRV::MeshInfoRedirectBuffer));
 	}
 
 	void
@@ -159,7 +155,8 @@ namespace gfx
 			.addItem(m_indices.GetBindingLayoutItemSRV(SRV::IndexBuffer))
 			.addItem(m_vertices.GetBindingLayoutItemSRV(SRV::VertexBuffer))
 			.addItem(m_vertexMap.GetBindingLayoutItemSRV(SRV::VertexMap))
-			.addItem(m_meshlets.GetBindingLayoutItemSRV(SRV::MeshletBuffer));
+			.addItem(m_meshlets.GetBindingLayoutItemSRV(SRV::MeshletBuffer))
+			.addItem(m_meshInfos.GetRedirectTableBindingLayoutItemSRV(SRV::MeshInfoRedirectBuffer));
 	}
 
 	bool

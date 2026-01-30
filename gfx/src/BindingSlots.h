@@ -26,6 +26,8 @@ namespace gfx
 			constexpr uint32_t VertexBuffer   = 3;
 			constexpr uint32_t InstanceBuffer = 4;
 			constexpr uint32_t MeshletBuffer  = 5;
+
+			constexpr uint32_t MeshInfoRedirectBuffer = 6;
 		}
 
 		namespace UAV

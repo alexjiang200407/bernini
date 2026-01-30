@@ -59,7 +59,7 @@ namespace core::win
 		Create(const WindowOptions& options);
 
 		WindowProcessResult
-		Process(IWindowEventVisitor* visitor = nullptr) noexcept;
+		Process(IWindowEventVisitor* visitor = nullptr);
 
 	protected:
 		void
@@ -96,7 +96,7 @@ namespace core::win
 		PollEvents() noexcept = 0;
 
 		void
-		Accept(class IWindowEventVisitor& visitor, float dt) noexcept;
+		Accept(class IWindowEventVisitor& visitor, float dt);
 
 	protected:
 		std::vector<std::unique_ptr<IWindowEvent>> m_queue;

@@ -38,8 +38,12 @@ namespace gfx
 		}
 	};
 
-	template <core::type_traits::trivially_copyable T>
-	class CPUUploadBuffer
+	template <typename T>
+	concept CPUUploadBufferTConcept =
+		core::type_traits::default_constructible<T> && core::type_traits::trivially_copyable<T>;
+
+	template <CPUUploadBufferTConcept T>
+	class CPUUploadBuffer final
 	{
 	public:
 		using View = FrameGraphView<CPUUploadBuffer<T>>;
@@ -235,11 +239,8 @@ namespace gfx
 				recreatedBuffer = true;
 			}
 
-			if (requiredBytes > 0)
-			{
-				cmdList->writeBuffer(m_buffer, m_data.data(), requiredBytes);
-				m_dirty = false;
-			}
+			cmdList->writeBuffer(m_buffer, m_data.data(), requiredBytes);
+			m_dirty = false;
 
 			return recreatedBuffer;
 		}

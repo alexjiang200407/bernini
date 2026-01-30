@@ -14,6 +14,7 @@ StructuredBuffer<Vertex> vertexBuffer : register(t3, space0);
 StructuredBuffer<MeshInstance> instanceBuffer : register(t4, space0);
 StructuredBuffer<Meshlet> meshletBuffer : register(t5, space0);
 
+
 [NumThreads(64, 1, 1)]
 [OutputTopology("triangle")]
 void MS_GBuffer(
