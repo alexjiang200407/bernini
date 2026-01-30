@@ -1,5 +1,5 @@
 #pragma once
-#include "buffer/ElementType.h"
+#include "buffer/types/ElementType.h"
 #include <core/str/str.h>
 
 namespace gfx

@@ -103,16 +103,14 @@ namespace gfx
 
 		for (uint32_t i = 0; i < info.meshletCount; ++i)
 		{
-			uint32_t       meshletIdx = info.meshletBaseIndex + i;
-			const Meshlet& m          = m_meshlets.At(meshletIdx);
+			const Meshlet& m = m_meshlets.At(info.meshletSegment, i);
 
-			m_indices.EraseRange(m.indexOffset, m.indexCount);
-			m_vertexMap.EraseRange(m.vertexMapOffset, m.vertexCount);
+			m_indices.Erase(m.indexSegment);
+			m_vertexMap.Erase(m.vertexMapSegment);
 		}
 
-		m_meshlets.EraseRange(info.meshletBaseIndex, info.meshletCount);
-
-		m_vertices.EraseRange(meta.vertexOffset, meta.vertexCount);
+		m_meshlets.Erase(info.meshletSegment);
+		m_vertices.Erase(meta.vertexSegment);
 
 		m_meshInfos.Erase(id);
 
@@ -141,7 +139,11 @@ namespace gfx
 			.addItem(m_vertices.GetBindingSetItemSRV(SRV::VertexBuffer))
 			.addItem(m_vertexMap.GetBindingSetItemSRV(SRV::VertexMap))
 			.addItem(m_meshlets.GetBindingSetItemSRV(SRV::MeshletBuffer))
-			.addItem(m_meshInfos.GetRedirectTableBindingSetItemSRV(SRV::MeshInfoRedirectBuffer));
+			.addItem(m_meshInfos.GetRedirectTableBindingSetItemSRV(SRV::MeshInfoRedirectBuffer))
+			.addItem(m_vertexMap.GetRedirectTableBindingSetItemSRV(SRV::VertexMapRedirectBuffer))
+			.addItem(m_indices.GetRedirectTableBindingSetItemSRV(SRV::IndexRedirectBuffer))
+			.addItem(m_vertices.GetRedirectTableBindingSetItemSRV(SRV::VertexRedirectBuffer))
+			.addItem(m_meshlets.GetRedirectTableBindingSetItemSRV(SRV::MeshletRedirectBuffer));
 	}
 
 	void
@@ -156,7 +158,11 @@ namespace gfx
 			.addItem(m_vertices.GetBindingLayoutItemSRV(SRV::VertexBuffer))
 			.addItem(m_vertexMap.GetBindingLayoutItemSRV(SRV::VertexMap))
 			.addItem(m_meshlets.GetBindingLayoutItemSRV(SRV::MeshletBuffer))
-			.addItem(m_meshInfos.GetRedirectTableBindingLayoutItemSRV(SRV::MeshInfoRedirectBuffer));
+			.addItem(m_meshInfos.GetRedirectTableBindingLayoutItemSRV(SRV::MeshInfoRedirectBuffer))
+			.addItem(m_vertexMap.GetRedirectTableBindingLayoutItemSRV(SRV::VertexMapRedirectBuffer))
+			.addItem(m_indices.GetRedirectTableBindingLayoutItemSRV(SRV::IndexRedirectBuffer))
+			.addItem(m_vertices.GetRedirectTableBindingLayoutItemSRV(SRV::VertexRedirectBuffer))
+			.addItem(m_meshlets.GetRedirectTableBindingLayoutItemSRV(SRV::MeshletRedirectBuffer));
 	}
 
 	bool

@@ -37,21 +37,21 @@ namespace gfx
 		const uint32_t baseMapGlobal   = registry.AddVertexMapIdx(mapIndices);
 		const auto     baseIndexGlobal = registry.AddIndices(cubeIndices);
 
-		auto m            = Meshlet{};
-		m.vertexMapOffset = baseMapGlobal;
-		m.vertexCount     = static_cast<uint32_t>(std::size(cubeVertices));
-		m.indexOffset     = baseIndexGlobal;
-		m.triangleCount   = static_cast<uint32_t>(std::size(cubeIndices)) / 3;
-		m.boundingCenter  = glm::vec3{ 0.0f };
-		m.boundingRadius  = glm::sqrt(3.0f);
+		auto m             = Meshlet{};
+		m.vertexMapSegment = baseMapGlobal;
+		m.vertexCount      = static_cast<uint32_t>(std::size(cubeVertices));
+		m.indexSegment     = baseIndexGlobal;
+		m.triangleCount    = static_cast<uint32_t>(std::size(cubeIndices)) / 3;
+		m.boundingCenter   = glm::vec3{ 0.0f };
+		m.boundingRadius   = glm::sqrt(3.0f);
 
 		const auto meshlet           = std::span<const Meshlet>{ &m, 1 };
 		const auto baseMeshletGlobal = registry.AddMeshlets(meshlet);
 
-		auto info             = MeshInfo{};
-		info.meshletBaseIndex = baseMeshletGlobal;
-		info.meshletCount     = 1;
-		info.materialID       = 0;
+		auto info           = MeshInfo{};
+		info.meshletSegment = baseMeshletGlobal;
+		info.meshletCount   = 1;
+		info.materialID     = 0;
 
 		return registry.AddInfo("$Cube", info, baseVertexGlobal, std::size(cubeVertices));
 	}

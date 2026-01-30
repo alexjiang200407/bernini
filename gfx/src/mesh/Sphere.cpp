@@ -163,10 +163,10 @@ namespace gfx
 				trianglesProcessed++;
 			}
 
-			m.vertexMapOffset = registry.AddVertexMapIdx(localVertexMap);
-			m.indexOffset     = registry.AddIndices(localIndices);
-			m.vertexCount     = localVertexCount;
-			m.triangleCount   = localTriangleCount;
+			m.vertexMapSegment = registry.AddVertexMapIdx(localVertexMap);
+			m.indexSegment     = registry.AddIndices(localIndices);
+			m.vertexCount      = localVertexCount;
+			m.triangleCount    = localTriangleCount;
 
 			glm::vec3 minBound(1e10f);
 			glm::vec3 maxBound(-1e10f);
@@ -183,10 +183,10 @@ namespace gfx
 
 		uint32_t baseMeshletGlobal = registry.AddMeshlets(generatedMeshlets);
 
-		auto info             = MeshInfo{};
-		info.meshletBaseIndex = baseMeshletGlobal;
-		info.meshletCount     = static_cast<uint32_t>(generatedMeshlets.size());
-		info.materialID       = 0;
+		auto info           = MeshInfo{};
+		info.meshletSegment = baseMeshletGlobal;
+		info.meshletCount   = static_cast<uint32_t>(generatedMeshlets.size());
+		info.materialID     = 0;
 
 		return registry.AddInfo("$Sphere", info, baseVertexGlobal, sphereVerts.size());
 	}

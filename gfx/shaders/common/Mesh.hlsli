@@ -10,7 +10,7 @@ struct MeshInstance
 
 struct MeshInfo
 {
-    uint meshletBaseIndex;
+    uint meshletSegment;
     uint meshletCount;
     uint materialID;
 };
@@ -32,9 +32,9 @@ struct MeshVertexOut
 
 struct Meshlet
 {
-    uint vertexMapOffset;
+    uint vertexMapSegment;
     uint vertexCount;
-    uint indexOffset;
+    uint indexSegment;
     uint indexCount;
     uint triangleCount;
     float3 boundingCenter;
@@ -47,7 +47,7 @@ struct Meshlet
 struct MeshletPayload
 {
     uint instanceID;
-    uint meshletBaseIndex;
+    uint meshletSegment;
 };
 
 #endif

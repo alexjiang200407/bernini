@@ -73,13 +73,13 @@ namespace gfx
 			m_data.reserve(desc.startingCapacity);
 			m_data.emplace_back(T{});  // Index 0 reserved
 
-			m_v2p.clear();
-			m_v2p.reserve(desc.startingCapacity);
-			m_v2p.emplace_back(0);  // Virtual index 0 -> Physical index 0
+			m_segmentId2Idx.clear();
+			m_segmentId2Idx.reserve(desc.startingCapacity);
+			m_segmentId2Idx.emplace_back(0);  // Virtual index 0 -> Physical index 0
 
-			m_p2v.clear();
-			m_p2v.reserve(desc.startingCapacity);
-			m_p2v.emplace_back(0);  // Physical index 0 -> Virtual index 0
+			m_idx2SegmentId.clear();
+			m_idx2SegmentId.reserve(desc.startingCapacity);
+			m_idx2SegmentId.emplace_back(0);  // Physical index 0 -> Virtual index 0
 
 			// Create main data buffer
 			auto bufferDesc = desc.bufferDesc;
@@ -94,7 +94,7 @@ namespace gfx
 			redirectDesc.setStructStride(sizeof(uint32_t))
 				.setInitialState(nvrhi::ResourceStates::ShaderResource)
 				.setKeepInitialState(true)
-				.setByteSize(m_v2p.size() * sizeof(uint32_t));
+				.setByteSize(m_segmentId2Idx.size() * sizeof(uint32_t));
 			m_redirectTable = device->createBuffer(redirectDesc);
 
 			m_dirty = true;
@@ -103,13 +103,13 @@ namespace gfx
 		void
 		Erase(uint32_t virtualIndex)
 		{
-			if (virtualIndex == 0 || virtualIndex >= m_v2p.size())
+			if (virtualIndex == 0 || virtualIndex >= m_segmentId2Idx.size())
 				throw GfxException(
 					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
 					"CPUAppendBuffer::Erase",
 					"Invalid Virtual Index");
 
-			uint32_t physicalIndex = m_v2p[virtualIndex];
+			uint32_t physicalIndex = m_segmentId2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex == 0 ||
 			    physicalIndex >= m_data.size())
 				throw GfxException(
@@ -128,16 +128,16 @@ namespace gfx
 				m_data[physicalIndex] = m_data[lastPhysicalIndex];
 
 				// Update the virtual index that pointed to the last element
-				uint32_t lastVirtualIndex = m_p2v[lastPhysicalIndex];
-				m_v2p[lastVirtualIndex]   = physicalIndex;
-				m_p2v[physicalIndex]      = lastVirtualIndex;
+				uint32_t lastVirtualIndex         = m_idx2SegmentId[lastPhysicalIndex];
+				m_segmentId2Idx[lastVirtualIndex] = physicalIndex;
+				m_idx2SegmentId[physicalIndex]    = lastVirtualIndex;
 			}
 
 			m_data.pop_back();
-			m_p2v.pop_back();
+			m_idx2SegmentId.pop_back();
 
 			// Mark virtual index as free
-			m_v2p[virtualIndex] = INVALID_PHYSICAL_INDEX;
+			m_segmentId2Idx[virtualIndex] = INVALID_PHYSICAL_INDEX;
 		}
 
 		template <typename... Args>
@@ -154,16 +154,16 @@ namespace gfx
 			uint32_t virtualIndex = AllocateVirtualIndex();
 
 			// Update mappings
-			if (virtualIndex < m_v2p.size())
+			if (virtualIndex < m_segmentId2Idx.size())
 			{
-				m_v2p[virtualIndex] = physicalIndex;
+				m_segmentId2Idx[virtualIndex] = physicalIndex;
 			}
 			else
 			{
-				m_v2p.push_back(physicalIndex);
+				m_segmentId2Idx.push_back(physicalIndex);
 			}
 
-			m_p2v.push_back(virtualIndex);
+			m_idx2SegmentId.push_back(virtualIndex);
 
 			return virtualIndex;
 		}
@@ -174,23 +174,17 @@ namespace gfx
 			return static_cast<uint32_t>(m_data.size());
 		}
 
-		[[nodiscard]] uint32_t
-		VirtualSize() const noexcept
-		{
-			return static_cast<uint32_t>(m_v2p.size());
-		}
-
 		[[nodiscard]] const T&
 		At(uint32_t virtualIndex) const
 		{
-			if (virtualIndex >= m_v2p.size())
+			if (virtualIndex >= m_segmentId2Idx.size())
 			{
 				throw GfxException(
 					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
 					"CPUAppendBuffer::At",
 					"Invalid Virtual Index");
 			}
-			uint32_t physicalIndex = m_v2p[virtualIndex];
+			uint32_t physicalIndex = m_segmentId2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
 				throw GfxException(
@@ -204,14 +198,14 @@ namespace gfx
 		[[nodiscard]] T&
 		At(uint32_t virtualIndex)
 		{
-			if (virtualIndex >= m_v2p.size())
+			if (virtualIndex >= m_segmentId2Idx.size())
 			{
 				throw GfxException(
 					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
 					"CPUAppendBuffer::At",
 					"Invalid Virtual Index");
 			}
-			uint32_t physicalIndex = m_v2p[virtualIndex];
+			uint32_t physicalIndex = m_segmentId2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
 				throw GfxException(
@@ -226,8 +220,9 @@ namespace gfx
 		[[nodiscard]] bool
 		IsValid(uint32_t virtualIndex) const noexcept
 		{
-			return virtualIndex < m_v2p.size() && m_v2p[virtualIndex] != INVALID_PHYSICAL_INDEX &&
-			       m_v2p[virtualIndex] < m_data.size();
+			return virtualIndex < m_segmentId2Idx.size() &&
+			       m_segmentId2Idx[virtualIndex] != INVALID_PHYSICAL_INDEX &&
+			       m_segmentId2Idx[virtualIndex] < m_data.size();
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
@@ -262,7 +257,7 @@ namespace gfx
 				return false;
 
 			const size_t requiredDataSize = m_data.size() * sizeof(T);
-			const size_t requiredV2PSize  = m_v2p.size() * sizeof(uint32_t);
+			const size_t requiredV2PSize  = m_segmentId2Idx.size() * sizeof(uint32_t);
 			bool         recreated        = false;
 
 			// Update main data buffer
@@ -303,7 +298,7 @@ namespace gfx
 					m_redirectTable = device->createBuffer(redirectDesc);
 					recreated       = true;
 				}
-				cmdList->writeBuffer(m_redirectTable, m_v2p.data(), requiredV2PSize);
+				cmdList->writeBuffer(m_redirectTable, m_segmentId2Idx.data(), requiredV2PSize);
 			}
 
 			m_dirty = false;
@@ -329,24 +324,26 @@ namespace gfx
 		AllocateVirtualIndex()
 		{
 			// Search for first free virtual index starting from 1 (0 is reserved)
-			for (uint32_t i = 1; i < m_v2p.size(); ++i)
+			for (uint32_t i = 1; i < m_segmentId2Idx.size(); ++i)
 			{
-				if (m_v2p[i] == INVALID_PHYSICAL_INDEX)
+				if (m_segmentId2Idx[i] == INVALID_PHYSICAL_INDEX)
 				{
 					return i;
 				}
 			}
 			// No free index found, return next available
-			return static_cast<uint32_t>(m_v2p.size());
+			return static_cast<uint32_t>(m_segmentId2Idx.size());
 		}
 
-		std::vector<T>        m_data;    // Physical storage [physical_index] -> data
-		std::vector<uint32_t> m_v2p;     // Virtual to Physical [virtual_index] -> physical_index
-		std::vector<uint32_t> m_p2v;     // Physical to Virtual [physical_index] -> virtual_index
-		nvrhi::BufferHandle   m_buffer;  // Main data buffer (GPU)
-		nvrhi::BufferHandle   m_redirectTable;
-		bool                  m_dirty = false;
-		bool                  m_useRedirectTableOnGPU;
+		std::vector<T> m_data;  // Physical storage [physical_index] -> data
+		std::vector<uint32_t>
+			m_segmentId2Idx;  // Virtual to Physical [virtual_index] -> physical_index
+		std::vector<uint32_t>
+			m_idx2SegmentId;           // Physical to Virtual [physical_index] -> virtual_index
+		nvrhi::BufferHandle m_buffer;  // Main data buffer (GPU)
+		nvrhi::BufferHandle m_redirectTable;
+		bool                m_dirty = false;
+		bool                m_useRedirectTableOnGPU;
 	};
 
 	template <typename T>

@@ -11,9 +11,9 @@ namespace gfx
 	private:
 		struct MeshInfoMetadata
 		{
-			uint32_t vertexOffset = 0u;
-			uint32_t vertexCount  = 0u;
-			uint32_t refCount     = 0u;
+			uint32_t vertexSegment = 0u;
+			uint32_t vertexCount   = 0u;
+			uint32_t refCount      = 0u;
 		};
 
 	public:
