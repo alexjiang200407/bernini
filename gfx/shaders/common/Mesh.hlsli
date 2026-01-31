@@ -43,11 +43,15 @@ struct Meshlet
 
 #define MAX_PRIMS_PER_MESHLET 124
 #define MAX_VERTICES_PER_MESHLET 64
+#define MAX_AS_MESHLETS 64
 
 struct MeshletPayload
 {
     uint instanceID;
+    uint meshletBaseIndex;
     uint meshletSegment;
+    uint visibleCount;
+    uint visibleIndices[MAX_AS_MESHLETS];
 };
 
 #endif

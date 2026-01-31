@@ -30,6 +30,9 @@ void MS_GBuffer(
     out vertices MeshVertexOut verts[MAX_VERTICES_PER_MESHLET]
 )
 {
+    if (gid >= i_payload.visibleCount)
+        return;
+
     MeshInstance instance = instanceBuffer[i_payload.instanceID];
     
     // Use redirect buffer to get physical mesh info index
@@ -42,7 +45,7 @@ void MS_GBuffer(
     Meshlet m = meshletBuffer[physicalMeshletIndex];
     
     SetMeshOutputCounts(m.vertexCount, m.triangleCount);
-    
+
     if (gtid < m.vertexCount)
     {
         // Use redirect buffer to get physical base for vertex map segment, then add thread offset
