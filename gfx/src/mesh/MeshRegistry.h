@@ -1,5 +1,6 @@
 #pragma once
-#include "buffer/CPUUploadBuffer.h"
+#include "buffer/AppendBuffer.h"
+#include "buffer/SegmentBuffer.h"
 #include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
 
@@ -7,6 +8,14 @@ namespace gfx
 {
 	class MeshRegistry final
 	{
+	private:
+		struct MeshInfoMetadata
+		{
+			uint32_t vertexSegment = 0u;
+			uint32_t vertexCount   = 0u;
+			uint32_t refCount      = 0u;
+		};
+
 	public:
 		MeshRegistry()  = default;
 		~MeshRegistry() = default;
@@ -27,101 +36,59 @@ namespace gfx
 		uint32_t
 		GetInstancesCount() const noexcept
 		{
-			return m_meshInstances.Size();
-		}
-
-		const CPUUploadBuffer<Vertex>&
-		GetVertices() const noexcept
-		{
-			return m_vertices;
-		}
-
-		const CPUUploadBuffer<uint32_t>&
-		GetIndices() const noexcept
-		{
-			return m_indices;
-		}
-
-		const CPUUploadBuffer<MeshInstance>&
-		GetInstances() const noexcept
-		{
-			return m_meshInstances;
-		}
-
-		const size_t
-		GetMeshInfosCount() const noexcept
-		{
-			return m_meshInfos.Size();
-		}
-
-	private:
-		MeshInstance::ID
-		AddInstance(const MeshInstance& instance)
-		{
-			return m_meshInstances.Emplace(instance);
-		}
-
-		MeshInstance::ID
-		AddInstance(MeshInstance&& instance)
-		{
-			return m_meshInstances.Emplace(std::move(instance));
+			// First is null instance
+			return m_meshInstances.Size() - 1;
 		}
 
 		MeshInfo::ID
-		AddInfo(const MeshInfo& info)
-		{
-			return m_meshInfos.Emplace(info);
-		}
+		GetMeshInfoIDByName(std::string_view nameId) const;
+
+		void
+		RemoveMeshInstance(MeshInstance::ID id);
+
+	private:
+		void
+		RemoveMeshInfo(MeshInfo::ID id);
+
+		MeshInstance::ID
+		AddInstance(const MeshInstance& instance);
 
 		MeshInfo::ID
-		AddInfo(MeshInfo&& info)
-		{
-			return m_meshInfos.Emplace(std::move(info));
-		}
+		AddInfo(std::string_view nameId, const MeshInfo& info, uint32_t vOffset, uint32_t vCount);
 
 		Meshlet::ID
-		AddMeshlet(const Meshlet& meshlet)
+		AddMeshlets(std::span<const Meshlet> meshlets)
 		{
-			return m_meshlets.Emplace(meshlet);
+			return m_meshlets.EmplaceRange(meshlets);
 		}
 
-		Meshlet::ID
-		AddMeshlet(Meshlet&& meshlet)
+		uint32_t
+		AddVertices(std::span<const Vertex> vertices)
 		{
-			return m_meshlets.Emplace(std::move(meshlet));
+			return m_vertices.EmplaceRange(vertices);
 		}
 
-		void
-		AddVertex(const Vertex& vertex)
+		uint32_t
+		AddIndices(std::span<const uint32_t> indices)
 		{
-			m_vertices.Emplace(vertex);
+			return m_indices.EmplaceRange(indices);
 		}
 
-		void
-		AddVertex(Vertex&& vertex)
+		uint32_t
+		AddVertexMapIdx(std::span<const uint32_t> mapIndices)
 		{
-			m_vertices.Emplace(std::move(vertex));
-		}
-
-		void
-		AddIndex(uint32_t idx)
-		{
-			m_indices.Emplace(idx);
-		}
-
-		void
-		AddVertexMapIdx(uint32_t idx)
-		{
-			m_vertexMap.Emplace(idx);
+			return m_vertexMap.EmplaceRange(mapIndices);
 		}
 
 	private:
-		CPUUploadBuffer<MeshInstance> m_meshInstances;
-		CPUUploadBuffer<MeshInfo>     m_meshInfos;
-		CPUUploadBuffer<Meshlet>      m_meshlets;
-		CPUUploadBuffer<Vertex>       m_vertices;
-		CPUUploadBuffer<uint32_t>     m_indices;
-		CPUUploadBuffer<uint32_t>     m_vertexMap;
+		AppendBuffer<MeshInstance>                    m_meshInstances;
+		AppendBuffer<MeshInfo>                        m_meshInfos;
+		SegmentBuffer<Meshlet>                        m_meshlets;
+		SegmentBuffer<Vertex>                         m_vertices;
+		SegmentBuffer<uint32_t>                       m_indices;
+		SegmentBuffer<uint32_t>                       m_vertexMap;
+		std::unordered_map<std::string, MeshInfo::ID> m_infoNameMap;
+		std::vector<MeshInfoMetadata>                 m_meshInfoMeta;
 
 		friend class MeshFactory;
 	};

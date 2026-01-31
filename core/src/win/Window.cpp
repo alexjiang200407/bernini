@@ -8,7 +8,7 @@
 namespace core::win
 {
 	void
-	IWindow::Accept(IWindowEventVisitor& visitor, float dt) noexcept
+	IWindow::Accept(IWindowEventVisitor& visitor, float dt)
 	{
 		using clock = std::chrono::steady_clock;
 		auto now    = clock::now();
@@ -34,7 +34,7 @@ namespace core::win
 	}
 
 	IWindow::WindowProcessResult
-	IWindow::Process(IWindowEventVisitor* visitor) noexcept
+	IWindow::Process(IWindowEventVisitor* visitor)
 	{
 		using clock       = std::chrono::steady_clock;
 		using MouseAction = MouseEvent::Action;

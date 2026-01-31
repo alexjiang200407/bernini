@@ -3,6 +3,7 @@
 #include "graphics/Graphics.h"
 #include "material/Material.h"
 #include "mesh/MeshFactory.h"
+#include "mesh/MeshRegistry.h"
 #include "passes/GBufferPass.h"
 #include <dxgidebug.h>
 #include <fg/Blackboard.hpp>
@@ -48,6 +49,15 @@ namespace gfx
 		GetDevice() noexcept override
 		{
 			return m_nvrhiDevice;
+		}
+
+		MeshFactory&
+		GetMeshFactory() noexcept override;
+
+		MeshRegistry&
+		GetMeshRegistry() noexcept override
+		{
+			return m_meshRegistry;
 		}
 
 	private:
@@ -174,15 +184,6 @@ namespace gfx
 		m_gBufferPass.Init(m_nvrhiDevice, m_meshRegistry);
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
-		auto mat      = glm::mat4{ 1.0f };
-		auto a        = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
-
-		mat[3][0] = -5.0f;
-
-		auto b = m_meshFactory->CreateSphereInstance(m_meshRegistry, mat);
-
-		mat[3][0] = -10.0f;
-		auto c    = m_meshFactory->CreateCubeInstance(m_meshRegistry, mat);
 	}
 
 	Graphics::~Graphics()
@@ -421,6 +422,12 @@ namespace gfx
 		m_nvrhiDevice->runGarbageCollection();
 
 		++m_frameCount;
+	}
+
+	MeshFactory&
+	Graphics::GetMeshFactory() noexcept
+	{
+		return *m_meshFactory;
 	}
 
 	IGraphics*

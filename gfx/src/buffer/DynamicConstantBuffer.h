@@ -1,7 +1,7 @@
 #pragma once
-#include "ElementType.h"
 #include "GfxException.h"
 #include "buffer/DynamicConstantBufferDesc.h"
+#include "buffer/types/ElementType.h"
 #include <core/str/str.h>
 #include <core/type_traits.h>
 

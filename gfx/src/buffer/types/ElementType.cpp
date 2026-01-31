@@ -1,4 +1,4 @@
-#include "ElementType.h"
+#include "buffer/types/ElementType.h"
 
 namespace gfx
 {

@@ -16,47 +16,43 @@ namespace gfx
 		{ { -1, 1, 1 } }     // 7: left-top-front
 	};
 
-	static const uint16_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
+	static const uint32_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
 		                                    5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
 
 	MeshInfo::ID
 	MeshFactory::CreateCubeInfo(MeshRegistry& registry)
 	{
-		const auto baseVertexGlobal  = static_cast<uint32_t>(registry.m_vertices.Size());
-		const auto baseIndexGlobal   = static_cast<uint32_t>(registry.m_indices.Size());
-		const auto baseMapGlobal     = static_cast<uint32_t>(registry.m_vertexMap.Size());
-		const auto baseMeshletGlobal = static_cast<uint32_t>(registry.m_meshlets.Size());
-
-		for (const auto& v : cubeVertices)
+		if (auto existingCubeId = registry.GetMeshInfoIDByName("$Cube"))
 		{
-			registry.AddVertex(Vertex{ v.position, v.normal, v.uv });
+			return existingCubeId;
 		}
 
-		for (uint32_t i = 0; i < std::size(cubeVertices); ++i)
+		const auto baseVertexGlobal = registry.AddVertices(cubeVertices);
+
+		auto mapIndices = std::vector<uint32_t>(std::size(cubeVertices));
+		for (uint32_t i = 0; i < mapIndices.size(); ++i)
 		{
-			registry.AddVertexMapIdx(baseVertexGlobal + i);
+			mapIndices[i] = baseVertexGlobal + i;
 		}
+		const uint32_t baseMapGlobal   = registry.AddVertexMapIdx(mapIndices);
+		const auto     baseIndexGlobal = registry.AddIndices(cubeIndices);
 
-		for (auto idx : cubeIndices)
-		{
-			registry.AddIndex(static_cast<uint32_t>(idx));
-		}
+		auto m             = Meshlet{};
+		m.vertexMapSegment = baseMapGlobal;
+		m.vertexCount      = static_cast<uint32_t>(std::size(cubeVertices));
+		m.indexSegment     = baseIndexGlobal;
+		m.triangleCount    = static_cast<uint32_t>(std::size(cubeIndices)) / 3;
+		m.boundingCenter   = glm::vec3{ 0.0f };
+		m.boundingRadius   = glm::sqrt(3.0f);
 
-		auto m            = Meshlet{};
-		m.vertexMapOffset = baseMapGlobal;
-		m.vertexCount     = static_cast<uint32_t>(std::size(cubeVertices));
-		m.indexOffset     = baseIndexGlobal;
-		m.triangleCount   = static_cast<uint32_t>(std::size(cubeIndices)) / 3;
-		m.boundingCenter  = glm::vec3{ 0.0f };
-		m.boundingRadius  = glm::sqrt(3.0f);
+		const auto meshlet           = std::span<const Meshlet>{ &m, 1 };
+		const auto baseMeshletGlobal = registry.AddMeshlets(meshlet);
 
-		registry.AddMeshlet(std::move(m));
+		auto info           = MeshInfo{};
+		info.meshletSegment = baseMeshletGlobal;
+		info.meshletCount   = 1;
+		info.materialID     = 0;
 
-		auto info             = MeshInfo{};
-		info.meshletBaseIndex = baseMeshletGlobal;
-		info.meshletCount     = 1;
-		info.materialID       = 0;
-
-		return registry.AddInfo(std::move(info));
+		return registry.AddInfo("$Cube", info, baseVertexGlobal, std::size(cubeVertices));
 	}
 }

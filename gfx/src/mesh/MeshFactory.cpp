@@ -4,21 +4,20 @@
 namespace gfx
 {
 	MeshFactory::MeshFactory(nvrhi::DeviceHandle device, MeshRegistry& registry) :
-		m_device{ device }
+		m_device{ device }, m_registry{ registry }
+	{}
+
+	MeshInstance::ID
+	MeshFactory::CreateCubeInstance(glm::mat4 modelTransform) const
 	{
-		m_cubeInfoID   = CreateCubeInfo(registry);
-		m_sphereInfoID = CreateSphereInfo(registry);
+		auto m_cubeInfoID = CreateCubeInfo(m_registry);
+		return m_registry.AddInstance({ m_cubeInfoID, modelTransform });
 	}
 
 	MeshInstance::ID
-	MeshFactory::CreateCubeInstance(MeshRegistry& registry, glm::mat4 modelTransform) const
+	MeshFactory::CreateSphereInstance(glm::mat4 modelTransform) const
 	{
-		return registry.AddInstance({ m_cubeInfoID, modelTransform });
-	}
-
-	MeshInstance::ID
-	MeshFactory::CreateSphereInstance(MeshRegistry& registry, glm::mat4 modelTransform) const
-	{
-		return registry.AddInstance({ m_sphereInfoID, modelTransform });
+		auto m_sphereInfoID = CreateSphereInfo(m_registry);
+		return m_registry.AddInstance({ m_sphereInfoID, modelTransform });
 	}
 }
