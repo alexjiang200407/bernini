@@ -1,8 +1,8 @@
-#include "buffer/CPUAppendBuffer.h"
+#include "buffer/AppendBuffer.h"
 #include "graphics/Graphics.h"
 #include <catch2/catch_test_macros.hpp>
 
-TEST_CASE("CPUAppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
+TEST_CASE("AppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
 {
 	auto gfxDesc     = GfxOptions{};
 	gfxDesc.headless = true;
@@ -14,17 +14,17 @@ TEST_CASE("CPUAppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
 
 	auto device = gfx->GetDevice();
 
-	auto desc = gfx::CPUAppendBufferDesc{}.SetIsIndexBuffer().SetName("CPU Append Buffer Test");
+	auto desc = gfx::AppendBufferDesc{}.SetIsIndexBuffer().SetName("CPU Append Buffer Test");
 
-	SECTION("Create CPUAppendBuffer")
+	SECTION("Create AppendBuffer")
 	{
-		auto buf = gfx::CPUAppendBuffer<int>{ device, desc };
+		auto buf = gfx::AppendBuffer<int>{ device, desc };
 		CHECK(buf.Size() == 1);  // index 0 reserved
 	}
 
-	SECTION("Append CPUAppendBuffer")
+	SECTION("Append AppendBuffer")
 	{
-		auto buf  = gfx::CPUAppendBuffer<int>{ device, desc };
+		auto buf  = gfx::AppendBuffer<int>{ device, desc };
 		auto vIdx = buf.EmplaceBack(10);
 		REQUIRE_NOTHROW(buf.At(vIdx));
 		CHECK(buf.At(vIdx) == 10);
@@ -32,7 +32,7 @@ TEST_CASE("CPUAppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
 
 	SECTION("Handle Stability after SwapAndPop")
 	{
-		auto buf = gfx::CPUAppendBuffer<int>{ device, desc };
+		auto buf = gfx::AppendBuffer<int>{ device, desc };
 
 		// 1. Add three elements
 		uint32_t vIdx1 = buf.EmplaceBack(100);  // Physical 1
@@ -56,7 +56,7 @@ TEST_CASE("CPUAppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
 
 	SECTION("Virtual ID Reuse")
 	{
-		auto buf = gfx::CPUAppendBuffer<int>{ device, desc };
+		auto buf = gfx::AppendBuffer<int>{ device, desc };
 
 		uint32_t vIdx1 = buf.EmplaceBack(10);
 		buf.Erase(vIdx1);
@@ -69,7 +69,7 @@ TEST_CASE("CPUAppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
 
 	SECTION("Null Index Safety")
 	{
-		auto buf = gfx::CPUAppendBuffer<int>{ device, desc };
+		auto buf = gfx::AppendBuffer<int>{ device, desc };
 
 		REQUIRE_NOTHROW(buf.At(0));
 

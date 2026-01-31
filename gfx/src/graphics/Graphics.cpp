@@ -42,7 +42,21 @@ createCube(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out)
 	});
 }
 
-GFX_API GfxResult
+GfxResult
+createSphere(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out)
+{
+	return gfx::ffi::apiInvoke([=]() -> GfxResult {
+		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
+		gfx::ffi::validatePtr(out, "out");
+
+		auto& factory = gfx_.GetMeshFactory();
+		*out          = factory.CreateSphereInstance(glm::make_mat4(modelTransform));
+
+		return GFX_RESULT_OK;
+	});
+}
+
+GfxResult
 destroyMesh(Gfx graphics, GfxMesh mesh)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {

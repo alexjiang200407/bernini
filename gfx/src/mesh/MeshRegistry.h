@@ -1,6 +1,6 @@
 #pragma once
-#include "buffer/CPUAppendBuffer.h"
-#include "buffer/CPUUploadBuffer.h"
+#include "buffer/AppendBuffer.h"
+#include "buffer/SegmentBuffer.h"
 #include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
 
@@ -81,12 +81,12 @@ namespace gfx
 		}
 
 	private:
-		CPUAppendBuffer<MeshInstance>                 m_meshInstances;
-		CPUAppendBuffer<MeshInfo>                     m_meshInfos;
-		CPUUploadBuffer<Meshlet>                      m_meshlets;
-		CPUUploadBuffer<Vertex>                       m_vertices;
-		CPUUploadBuffer<uint32_t>                     m_indices;
-		CPUUploadBuffer<uint32_t>                     m_vertexMap;
+		AppendBuffer<MeshInstance>                    m_meshInstances;
+		AppendBuffer<MeshInfo>                        m_meshInfos;
+		SegmentBuffer<Meshlet>                        m_meshlets;
+		SegmentBuffer<Vertex>                         m_vertices;
+		SegmentBuffer<uint32_t>                       m_indices;
+		SegmentBuffer<uint32_t>                       m_vertexMap;
 		std::unordered_map<std::string, MeshInfo::ID> m_infoNameMap;
 		std::vector<MeshInfoMetadata>                 m_meshInfoMeta;
 

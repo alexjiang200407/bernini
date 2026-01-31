@@ -6,21 +6,21 @@
 
 namespace gfx
 {
-	struct CPUUploadBufferDesc
+	struct SegmentBufferDesc final
 	{
 		uint32_t          startingCapacity      = 128;
 		bool              useRedirectTableOnGPU = true;
 		nvrhi::BufferDesc bufferDesc;
 		nvrhi::BufferDesc redirectTableDesc;
 
-		CPUUploadBufferDesc&
+		SegmentBufferDesc&
 		SetStartingCapacity(uint32_t value)
 		{
 			startingCapacity = value;
 			return *this;
 		}
 
-		CPUUploadBufferDesc&
+		SegmentBufferDesc&
 		SetName(const std::string& value)
 		{
 			bufferDesc.setDebugName(value);
@@ -28,21 +28,21 @@ namespace gfx
 			return *this;
 		}
 
-		CPUUploadBufferDesc&
+		SegmentBufferDesc&
 		SetIsVertexBuffer(bool value = true)
 		{
 			bufferDesc.setIsVertexBuffer(value);
 			return *this;
 		}
 
-		CPUUploadBufferDesc&
+		SegmentBufferDesc&
 		SetIsIndexBuffer(bool value = true)
 		{
 			bufferDesc.setIsIndexBuffer(value);
 			return *this;
 		}
 
-		CPUUploadBufferDesc&
+		SegmentBufferDesc&
 		SetUseRedirectTableOnGPU(bool value = true)
 		{
 			useRedirectTableOnGPU = value;
@@ -51,20 +51,24 @@ namespace gfx
 	};
 
 	template <typename T>
-	concept CPUUploadBufferTConcept =
+	concept SegmentBufferTConcept =
 		core::type_traits::default_constructible<T> && core::type_traits::trivially_copyable<T>;
 
-	template <CPUUploadBufferTConcept T>
-	class CPUUploadBuffer final
+	/// <summary>
+	/// Manages a GPU buffer with segmented storage and optional redirection table for indirect access. Provides efficient allocation, deallocation, and access to segments of structured data on the GPU.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	template <SegmentBufferTConcept T>
+	class SegmentBuffer final
 	{
 	public:
-		using View                                       = FrameGraphView<CPUUploadBuffer<T>>;
+		using View                                       = FrameGraphView<SegmentBuffer<T>>;
 		static constexpr uint32_t INVALID_PHYSICAL_INDEX = UINT32_MAX;
 
 	private:
 		struct Segment
 		{
-			SegmentID segmentId;  // This is the virtualOffset
+			SegmentID segmentId;
 			uint32_t  count;
 			uint32_t  physicalOffset;
 
@@ -75,15 +79,19 @@ namespace gfx
 		};
 
 	public:
-		CPUUploadBuffer() noexcept = default;
+		SegmentBuffer() noexcept = default;
+
+		SegmentBuffer(nvrhi::DeviceHandle device, const SegmentBufferDesc& desc)
+		{
+			Init(device, desc);
+		}
 
 		void
-		Init(nvrhi::DeviceHandle device, const CPUUploadBufferDesc& desc)
+		Init(nvrhi::DeviceHandle device, const SegmentBufferDesc& desc)
 		{
 			m_data.clear();
 			m_segments.clear();
 
-			// Slot 0 reserved for null/invalid
 			m_segmentId2Idx.clear();
 			m_segmentId2Idx.push_back(INVALID_PHYSICAL_INDEX);
 
@@ -99,7 +107,8 @@ namespace gfx
 				.setByteSize(desc.startingCapacity * sizeof(uint32_t));
 			m_redirectTable = device->createBuffer(redirectDesc);
 
-			m_dirty = true;
+			m_dirty                 = true;
+			m_useRedirectTableOnGPU = desc.useRedirectTableOnGPU;
 		}
 
 		[[nodiscard]] SegmentID
@@ -111,14 +120,11 @@ namespace gfx
 
 			m_dirty = true;
 
-			// 1. Physical allocation: Always append to maintain order
 			uint32_t physicalOffset = static_cast<uint32_t>(m_data.size());
 			m_data.insert(m_data.end(), elements.begin(), elements.end());
 
-			// 2. Virtual allocation: Find a contiguous block of IDs (slots)
 			uint32_t segmentId = AllocateVirtualSpace(count);
 
-			// 3. Update Redirect Table: Map virtual slots to physical indices
 			if (segmentId + count > m_segmentId2Idx.size())
 				m_segmentId2Idx.resize(segmentId + count, INVALID_PHYSICAL_INDEX);
 
@@ -141,8 +147,6 @@ namespace gfx
 			m_dirty             = true;
 			const auto& segment = it->second;
 
-			// Mark slots as invalid in the redirect table
-			// We do NOT move physical data here to preserve order
 			for (uint32_t i = 0; i < segment.count; ++i)
 			{
 				m_segmentId2Idx[segment.segmentId + i] = INVALID_PHYSICAL_INDEX;
@@ -154,7 +158,6 @@ namespace gfx
 		[[nodiscard]] T&
 		At(SegmentID segmentId, uint32_t offset)
 		{
-			// Direct lookup: segmentId is the base in our redirect table
 			uint32_t physicalIndex = m_segmentId2Idx[segmentId + offset];
 			m_dirty                = true;
 			return m_data[physicalIndex];
@@ -169,15 +172,24 @@ namespace gfx
 			const size_t dataBytes  = m_data.size() * sizeof(T);
 			const size_t tableBytes = m_segmentId2Idx.size() * sizeof(uint32_t);
 
-			// Resize GPU buffers if CPU vectors grew
 			if (dataBytes > m_bufferDesc.byteSize)
 			{
-				m_bufferDesc.setByteSize(dataBytes * 1.5);
+				m_bufferDesc.setByteSize(dataBytes * 2);
 				m_buffer = device->createBuffer(m_bufferDesc);
 			}
 
 			cmdList->writeBuffer(m_buffer, m_data.data(), dataBytes);
-			cmdList->writeBuffer(m_redirectTable, m_segmentId2Idx.data(), tableBytes);
+
+			if (m_useRedirectTableOnGPU)
+			{
+				if (tableBytes > m_redirectTable->getDesc().byteSize)
+				{
+					nvrhi::BufferDesc redirectDesc = m_redirectTable->getDesc();
+					redirectDesc.setByteSize(tableBytes * 2);
+					m_redirectTable = device->createBuffer(redirectDesc);
+				}
+				cmdList->writeBuffer(m_redirectTable, m_segmentId2Idx.data(), tableBytes);
+			}
 
 			m_dirty = false;
 			return true;
@@ -232,8 +244,9 @@ namespace gfx
 		std::vector<uint32_t>                  m_segmentId2Idx;
 		std::unordered_map<SegmentID, Segment> m_segments;
 		bool                                   m_dirty = false;
+		bool                                   m_useRedirectTableOnGPU;
 	};
 
 	template <typename T>
-	using CPUUploadBufferView = CPUUploadBuffer<T>::View;
+	using SegmentBufferView = SegmentBuffer<T>::View;
 }

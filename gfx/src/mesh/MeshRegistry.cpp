@@ -6,22 +6,27 @@ namespace gfx
 	void
 	MeshRegistry::Init(nvrhi::DeviceHandle device)
 	{
-		m_meshInfos.Init(device, CPUAppendBufferDesc{}.SetName("Mesh Info Structured Buffer"));
+		m_meshInfos.Init(device, AppendBufferDesc{}.SetName("Mesh Info Structured Buffer"));
 		m_meshInstances.Init(
 			device,
-			CPUAppendBufferDesc{}
+			AppendBufferDesc{}
 				.SetName("Mesh Instance Structured Buffer")
 				.SetUseRedirectTableOnGPU(false));
 
 		m_vertices.Init(
 			device,
-			CPUUploadBufferDesc{}.SetName("Vertex Structured Buffer").SetIsVertexBuffer());
+			SegmentBufferDesc{}.SetName("Vertex Structured Buffer").SetIsVertexBuffer());
 		m_indices.Init(
 			device,
-			CPUUploadBufferDesc{}.SetName("Index Structured Buffer").SetIsIndexBuffer());
+			SegmentBufferDesc{}.SetName("Index Structured Buffer").SetIsIndexBuffer());
 
-		m_meshlets.Init(device, CPUUploadBufferDesc{}.SetName("Meshlet Structured Buffer"));
-		m_vertexMap.Init(device, CPUUploadBufferDesc{}.SetName("Vertex Map Structured Buffer"));
+		m_meshlets.Init(
+			device,
+			SegmentBufferDesc{}.SetStartingCapacity(4096).SetName("Meshlet Structured Buffer"));
+		m_vertexMap.Init(
+			device,
+			SegmentBufferDesc{}.SetStartingCapacity(10'000).SetName(
+				"Vertex Map Structured Buffer"));
 
 		// For the null mesh info
 		m_meshInfoMeta.push_back({});

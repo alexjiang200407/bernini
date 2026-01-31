@@ -12,6 +12,9 @@ extern "C"
 	createCube(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out);
 
 	GFX_API GfxResult
+	createSphere(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out);
+
+	GFX_API GfxResult
 	destroyMesh(Gfx graphics, GfxMesh mesh);
 
 #ifdef __cplusplus

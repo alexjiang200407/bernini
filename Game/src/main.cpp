@@ -89,7 +89,14 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 
 						auto* data = glm::value_ptr(mat);
 
-						createCube(gfx, data, &meshes[idx]) >> berniniErrChecker;
+						if (idx == 1)
+						{
+							createSphere(gfx, data, &meshes[idx]) >> berniniErrChecker;
+						}
+						else
+						{
+							createCube(gfx, data, &meshes[idx]) >> berniniErrChecker;
+						}
 					}
 				}
 
@@ -227,7 +234,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		mat[3][0] = -5.0f;
 
-		createCube(graphics, data, &cubes[1]) >> berniniErrChecker;
+		createSphere(graphics, data, &cubes[1]) >> berniniErrChecker;
 
 		mat[3][0] = -10.0f;
 
