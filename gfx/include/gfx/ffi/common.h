@@ -7,7 +7,11 @@ typedef uint64_t GfxID;
 struct GfxObj
 {
 	void (*destroy)(GfxObj self);
-	void* data;
+	union
+	{
+		void*    ptr;
+		uint64_t u64;
+	};
 };
 
 #pragma warning(push)
@@ -26,6 +30,8 @@ typedef union
 	};
 } GfxVec3;
 
+typedef float GfxMat4[16];
+
 #pragma warning(pop)
 
 enum GfxResult
@@ -41,6 +47,9 @@ enum GfxResult
 	GFX_RESULT_ERROR_NOT_INITIALIZED,
 	GFX_RESULT_ERROR_SHADER_REFLECT,
 	GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+	GFX_RESULT_ERROR_CPU_UPLOAD_BUFFER,
+	GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+	GFX_RESULT_ERROR_MESH_DOES_NOT_EXIST,
 };
 
 struct GfxErrorInfo
@@ -56,7 +65,8 @@ struct GfxErrorInfo
 #	define GFX_API __declspec(dllimport)
 #endif
 
-typedef GfxObj Gfx;
-typedef GfxObj GfxCamera;
+typedef GfxObj   Gfx;
+typedef GfxObj   GfxCamera;
+typedef uint32_t GfxMesh;
 
 #endif

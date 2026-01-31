@@ -7,12 +7,12 @@ namespace game
 	GfxHandle::GfxHandle() noexcept
 	{
 		handle_.destroy = nullptr;
-		handle_.data    = nullptr;
+		handle_.u64     = 0;
 	}
 
 	GfxHandle::GfxHandle(GfxHandle&& other) noexcept : handle_(other.handle_)
 	{
-		other.handle_ = { nullptr, 0u };
+		other.handle_ = { 0u, 0u };
 	}
 
 	GfxHandle&
@@ -22,18 +22,22 @@ namespace game
 		{
 			Reset();
 			handle_       = other.handle_;
-			other.handle_ = { nullptr, 0u };
+			other.handle_ = { 0u, 0u };
 		}
 		return *this;
 	}
 
-	GfxHandle::operator GfxObj() const noexcept { return handle_; }
+	GfxHandle::
+	operator GfxObj() const noexcept
+	{
+		return handle_;
+	}
 
 	GfxObj
 	GfxHandle::Release() noexcept
 	{
 		GfxObj tmp = handle_;
-		handle_    = { nullptr, 0u };
+		handle_    = { 0u, 0u };
 		return tmp;
 	}
 
@@ -45,7 +49,7 @@ namespace game
 			handle_.destroy(handle_);
 		}
 		handle_.destroy = nullptr;
-		handle_.data    = nullptr;
+		handle_.u64     = 0;
 	}
 
 }

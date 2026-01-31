@@ -39,7 +39,7 @@ namespace game
 		bool
 		IsValid() const noexcept
 		{
-			return handle_.destroy != nullptr && handle_.data != nullptr;
+			return handle_.destroy != nullptr && handle_.ptr != nullptr;
 		}
 
 		GfxObj

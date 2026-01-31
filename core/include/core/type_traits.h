@@ -7,4 +7,7 @@ namespace core::type_traits
 
 	template <typename T>
 	concept trivially_copyable = std::is_trivially_copyable_v<T>;
+
+	template <typename T>
+	concept default_constructible = std::is_default_constructible_v<T>;
 }

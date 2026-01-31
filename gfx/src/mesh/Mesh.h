@@ -18,12 +18,12 @@ namespace gfx
 			uint32_t materialID,
 			float    boundingCenter,
 			float    boundingRadius) :
-			meshletBaseIndex(baseIndex), meshletCount(count), materialID(materialID)
+			meshletSegment(baseIndex), meshletCount(count), materialID(materialID)
 		{}
 
-		uint32_t meshletBaseIndex = 0u;
-		uint32_t meshletCount     = 0u;
-		uint32_t materialID       = 0u;  // TODO: Material::ID
+		uint32_t meshletSegment = 0u;
+		uint32_t meshletCount   = 0u;
+		uint32_t materialID     = 0u;  // TODO: Material::ID
 	};
 
 	struct MeshInstance final
@@ -46,21 +46,21 @@ namespace gfx
 
 		Meshlet() = default;
 		Meshlet(
-			uint32_t  vertexOffset,
+			uint32_t  vertexSegment,
 			uint32_t  vertexCount,
-			uint32_t  indexOffset,
+			uint32_t  indexSegment,
 			uint32_t  indexCount,
 			glm::vec3 boundingCenter,
 			float     boundingRadius) :
-			vertexMapOffset(vertexOffset), vertexCount(vertexCount), indexOffset(indexOffset),
+			vertexMapSegment(vertexSegment), vertexCount(vertexCount), indexSegment(indexSegment),
 			indexCount(indexCount), boundingCenter(boundingCenter), boundingRadius(boundingRadius)
 		{}
 
-		uint32_t  vertexMapOffset = 0u;
-		uint32_t  vertexCount     = 0u;
-		uint32_t  indexOffset     = 0u;
-		uint32_t  indexCount      = 0u;
-		uint32_t  triangleCount   = 0u;
+		uint32_t  vertexMapSegment = 0u;
+		uint32_t  vertexCount      = 0u;
+		uint32_t  indexSegment     = 0u;
+		uint32_t  indexCount       = 0u;
+		uint32_t  triangleCount    = 0u;
 		glm::vec3 boundingCenter{};
 		float     boundingRadius = 0.0f;
 	};

@@ -11,17 +11,16 @@
 
 namespace gfx
 {
-	static auto renderState = nvrhi::RenderState{}
-	                              .setRasterState(
-									  nvrhi::RasterState{}
-										  .setCullMode(nvrhi::RasterCullMode::None)
-										  .setFillMode(nvrhi::RasterFillMode::Solid))
-	                              .setDepthStencilState(
-									  nvrhi::DepthStencilState{}
-										  .setDepthTestEnable(true)
-										  .setDepthWriteEnable(true)
-										  .setDepthFunc(nvrhi::ComparisonFunc::Less)
-										  .setStencilEnable(false));
+	static auto renderState =
+		nvrhi::RenderState{}
+			.setRasterState(nvrhi::RasterState{}
+	                            .setCullMode(nvrhi::RasterCullMode::None)
+	                            .setFillMode(nvrhi::RasterFillMode::Solid))
+			.setDepthStencilState(nvrhi::DepthStencilState{}
+	                                  .setDepthTestEnable(true)
+	                                  .setDepthWriteEnable(true)
+	                                  .setDepthFunc(nvrhi::ComparisonFunc::Less)
+	                                  .setStencilEnable(false));
 	void
 	GBufferPass::Init(nvrhi::DeviceHandle device, MeshRegistry& registry)
 	{
@@ -61,7 +60,7 @@ namespace gfx
 			auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
 			bindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace)
 				.addItem(m_frameConstants.GetBindingLayoutItem(BindingSlots::CB::FrameConstants))
-				.setVisibility(nvrhi::ShaderType::Compute);
+				.setVisibility(nvrhi::ShaderType::All);
 
 			registry.AttachBindingLayoutItems(bindingLayoutDesc);
 
@@ -150,9 +149,8 @@ namespace gfx
 				state.setPipeline(m_pipeline)
 					.addBindingSet(m_bindingSet)
 					.setFramebuffer(outputFramebuffer)
-					.setViewport(
-						nvrhi::ViewportState{}.addViewportAndScissorRect(
-							nvrhi::Viewport{ screenW, screenH }));
+					.setViewport(nvrhi::ViewportState{}.addViewportAndScissorRect(
+						nvrhi::Viewport{ screenW, screenH }));
 
 				m_mainCommandList->setMeshletState(state);
 				m_mainCommandList->dispatchMesh(instanceCount);

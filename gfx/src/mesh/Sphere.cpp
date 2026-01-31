@@ -71,22 +71,27 @@ namespace gfx
 	MeshInfo::ID
 	MeshFactory::CreateSphereInfo(MeshRegistry& registry)
 	{
-		auto sphereVerts   = std::vector<Vertex>{};
-		auto sphereIndices = std::vector<uint32_t>{};
-
-		constexpr auto X_SEGMENTS = 32u;
-		constexpr auto Y_SEGMENTS = 32u;
-		constexpr auto RADIUS     = 1.0f;
-
-		for (auto y = 0u; y <= Y_SEGMENTS; ++y)
+		if (auto existingSphereId = registry.GetMeshInfoIDByName("$Sphere"))
 		{
-			for (auto x = 0u; x <= X_SEGMENTS; ++x)
+			return existingSphereId;
+		}
+
+		std::vector<Vertex>   sphereVerts;
+		std::vector<uint32_t> sphereIndices;
+
+		constexpr uint32_t X_SEGMENTS = 32u;
+		constexpr uint32_t Y_SEGMENTS = 32u;
+		constexpr float    RADIUS     = 1.0f;
+
+		for (uint32_t y = 0u; y <= Y_SEGMENTS; ++y)
+		{
+			for (uint32_t x = 0u; x <= X_SEGMENTS; ++x)
 			{
-				auto xSegment = (float)x / (float)X_SEGMENTS;
-				auto ySegment = (float)y / (float)Y_SEGMENTS;
-				auto xPos = std::cos(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
-				auto yPos = std::cos(ySegment * math::PI);
-				auto zPos = std::sin(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
+				float xSegment = (float)x / (float)X_SEGMENTS;
+				float ySegment = (float)y / (float)Y_SEGMENTS;
+				float xPos = std::cos(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
+				float yPos = std::cos(ySegment * math::PI);
+				float zPos = std::sin(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
 
 				Vertex v;
 				v.position = glm::vec3(xPos, yPos, zPos) * RADIUS;
@@ -96,9 +101,9 @@ namespace gfx
 			}
 		}
 
-		for (auto y = 0u; y < Y_SEGMENTS; ++y)
+		for (uint32_t y = 0u; y < Y_SEGMENTS; ++y)
 		{
-			for (auto x = 0u; x < X_SEGMENTS; ++x)
+			for (uint32_t x = 0u; x < X_SEGMENTS; ++x)
 			{
 				sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x);
 				sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x);
@@ -110,66 +115,61 @@ namespace gfx
 			}
 		}
 
-		auto baseVertexGlobal  = static_cast<uint32_t>(registry.m_vertices.Size());
-		auto baseMeshletGlobal = static_cast<uint32_t>(registry.m_meshlets.Size());
+		uint32_t baseVertexGlobal = registry.AddVertices(sphereVerts);
 
-		for (auto const& v : sphereVerts)
-		{
-			registry.AddVertex(v);
-		}
+		std::vector<Meshlet> generatedMeshlets;
+		uint32_t             totalTriangles     = static_cast<uint32_t>(sphereIndices.size() / 3u);
+		uint32_t             trianglesProcessed = 0u;
 
-		auto totalTriangles     = static_cast<uint32_t>(sphereIndices.size() / 3u);
-		auto trianglesProcessed = 0u;
 		while (trianglesProcessed < totalTriangles)
 		{
-			auto m            = Meshlet{};
-			m.vertexMapOffset = static_cast<uint32_t>(registry.m_vertexMap.Size());
-			m.indexOffset     = static_cast<uint32_t>(registry.m_indices.Size());
+			Meshlet                                m{};
+			std::vector<uint32_t>                  localVertexMap;
+			std::vector<uint32_t>                  localIndices;
+			std::unordered_map<uint32_t, uint32_t> localRemap;
 
-			auto localRemap         = std::unordered_map<uint32_t, uint32_t>{};
-			auto localVertexCount   = 0u;
-			auto localTriangleCount = 0u;
+			uint32_t localVertexCount   = 0u;
+			uint32_t localTriangleCount = 0u;
 
 			while (trianglesProcessed < totalTriangles)
 			{
-				auto tIdx = trianglesProcessed * 3u;
-				auto i0   = sphereIndices[tIdx];
-				auto i1   = sphereIndices[tIdx + 1u];
-				auto i2   = sphereIndices[tIdx + 2u];
+				uint32_t tIdx   = trianglesProcessed * 3u;
+				uint32_t tri[3] = { sphereIndices[tIdx],
+					                sphereIndices[tIdx + 1u],
+					                sphereIndices[tIdx + 2u] };
 
-				auto newVertices = 0u;
-				if (localRemap.find(i0) == localRemap.end())
-					newVertices++;
-				if (localRemap.find(i1) == localRemap.end())
-					newVertices++;
-				if (localRemap.find(i2) == localRemap.end())
-					newVertices++;
-
-				if (localVertexCount + newVertices > 64u || localTriangleCount + 1u > 124u)
+				uint32_t newVertices = 0u;
+				for (uint32_t i = 0; i < 3; ++i)
 				{
-					break;
+					if (localRemap.find(tri[i]) == localRemap.end())
+						newVertices++;
 				}
 
-				auto indices = std::array<uint32_t, 3>{ i0, i1, i2 };
-				for (auto i = 0u; i < 3u; ++i)
+				if (localVertexCount + newVertices > 64u || localTriangleCount + 1u > 124u)
+					break;
+
+				for (uint32_t i = 0; i < 3u; ++i)
 				{
-					if (localRemap.find(indices[i]) == localRemap.end())
+					uint32_t globalIdx = tri[i];
+					if (localRemap.find(globalIdx) == localRemap.end())
 					{
-						localRemap[indices[i]] = localVertexCount++;
-						registry.AddVertexMapIdx(baseVertexGlobal + indices[i]);
+						localRemap[globalIdx] = localVertexCount++;
+						localVertexMap.push_back(baseVertexGlobal + globalIdx);
 					}
-					registry.AddIndex(localRemap[indices[i]]);
+					localIndices.push_back(localRemap[globalIdx]);
 				}
 
 				localTriangleCount++;
 				trianglesProcessed++;
 			}
 
-			m.vertexCount   = localVertexCount;
-			m.triangleCount = localTriangleCount;
+			m.vertexMapSegment = registry.AddVertexMapIdx(localVertexMap);
+			m.indexSegment     = registry.AddIndices(localIndices);
+			m.vertexCount      = localVertexCount;
+			m.triangleCount    = localTriangleCount;
 
-			auto minBound = glm::vec3(1e10f);
-			auto maxBound = glm::vec3(-1e10f);
+			glm::vec3 minBound(1e10f);
+			glm::vec3 maxBound(-1e10f);
 			for (auto const& [globalIdx, localIdx] : localRemap)
 			{
 				minBound = glm::min(minBound, sphereVerts[globalIdx].position);
@@ -178,14 +178,16 @@ namespace gfx
 			m.boundingCenter = (minBound + maxBound) * 0.5f;
 			m.boundingRadius = glm::distance(maxBound, m.boundingCenter);
 
-			registry.AddMeshlet(std::move(m));
+			generatedMeshlets.push_back(m);
 		}
 
-		auto info             = MeshInfo{};
-		info.meshletBaseIndex = baseMeshletGlobal;
-		info.meshletCount = static_cast<uint32_t>(registry.m_meshlets.Size()) - baseMeshletGlobal;
-		info.materialID   = 0;
+		uint32_t baseMeshletGlobal = registry.AddMeshlets(generatedMeshlets);
 
-		return registry.AddInfo(std::move(info));
+		auto info           = MeshInfo{};
+		info.meshletSegment = baseMeshletGlobal;
+		info.meshletCount   = static_cast<uint32_t>(generatedMeshlets.size());
+		info.materialID     = 0;
+
+		return registry.AddInfo("$Sphere", info, baseVertexGlobal, sphereVerts.size());
 	}
 }
