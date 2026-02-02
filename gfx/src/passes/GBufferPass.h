@@ -1,4 +1,5 @@
 #pragma once
+#include "buffer/ComputeBuffer.h"
 #include "buffer/DynamicConstantBuffer.h"
 
 class FrameGraph;
@@ -28,6 +29,9 @@ namespace gfx
 		void
 		CreateBindingSet(MeshRegistry& registry, nvrhi::DeviceHandle device);
 
+		bool
+		Update(uint32_t meshletInstances);
+
 		void
 		AttachToFrameGraph(
 			FrameGraph&           frameGraph,
@@ -37,14 +41,18 @@ namespace gfx
 			RenderArgs            renderArgs);
 
 	private:
-		DynamicConstantBuffer        m_frameConstants;
-		nvrhi::BindingSetItem        m_frameConstantsBindingSetItem;
 		nvrhi::CommandListHandle     m_mainCommandList;
+		DynamicConstantBuffer        m_frameConstants;
+		DynamicConstantBuffer        m_indirectDrawPushConstants;
+		ComputeBuffer                m_indirectDrawArguments;
+		ComputeBuffer                m_visibleMeshletIndices;
 		nvrhi::MeshletPipelineHandle m_pipeline;
 		nvrhi::ShaderHandle          m_meshShader;
 		nvrhi::ShaderHandle          m_ampShader;
 		nvrhi::ShaderHandle          m_pixelShader;
-		nvrhi::BindingLayoutHandle   m_bindingLayout;
-		nvrhi::BindingSetHandle      m_bindingSet;
+		nvrhi::BindingLayoutHandle   m_perFrameBindingLayout;
+		nvrhi::BindingLayoutHandle   m_indirectDrawDataBindingLayout;
+		nvrhi::BindingSetHandle      m_perFrameBindingSet;
+		nvrhi::BindingSetHandle      m_indirectDrawDataBindingSet;
 	};
 }

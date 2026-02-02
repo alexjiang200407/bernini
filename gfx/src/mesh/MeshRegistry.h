@@ -11,9 +11,7 @@ namespace gfx
 	private:
 		struct MeshInfoMetadata
 		{
-			uint32_t vertexSegment = 0u;
-			uint32_t vertexCount   = 0u;
-			uint32_t refCount      = 0u;
+			uint32_t refCount = 0u;
 		};
 
 	public:
@@ -51,10 +49,10 @@ namespace gfx
 		RemoveMeshInfo(MeshInfo::ID id);
 
 		MeshInstance::ID
-		AddInstance(const MeshInstance& instance);
+		AddInstance(MeshInstance&& instance);
 
 		MeshInfo::ID
-		AddInfo(std::string_view nameId, const MeshInfo& info, uint32_t vOffset, uint32_t vCount);
+		AddInfo(std::string_view nameId, MeshInfo&& info);
 
 		Meshlet::ID
 		AddMeshlets(std::span<const Meshlet> meshlets)

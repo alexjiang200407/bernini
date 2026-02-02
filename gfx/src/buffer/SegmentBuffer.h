@@ -196,25 +196,25 @@ namespace gfx
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetBindingLayoutItemSRV(uint32_t slot) const
+		GetBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetBindingSetItemSRV(uint32_t slot) const
+		GetBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_buffer);
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetRedirectTableBindingLayoutItemSRV(uint32_t slot) const
+		GetRedirectTableBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetRedirectTableBindingSetItemSRV(uint32_t slot) const
+		GetRedirectTableBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_redirectTable);
 		}

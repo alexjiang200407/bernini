@@ -11,13 +11,15 @@ namespace gfx
 	MeshFactory::CreateCubeInstance(glm::mat4 modelTransform) const
 	{
 		auto m_cubeInfoID = CreateCubeInfo(m_registry);
-		return m_registry.AddInstance({ m_cubeInfoID, modelTransform });
+		return m_registry.AddInstance(
+			MeshInstance{ .infoID = m_cubeInfoID, .modelTransform = modelTransform });
 	}
 
 	MeshInstance::ID
 	MeshFactory::CreateSphereInstance(glm::mat4 modelTransform) const
 	{
 		auto m_sphereInfoID = CreateSphereInfo(m_registry);
-		return m_registry.AddInstance({ m_sphereInfoID, modelTransform });
+		return m_registry.AddInstance(
+			MeshInstance{ .infoID = m_sphereInfoID, .modelTransform = modelTransform });
 	}
 }

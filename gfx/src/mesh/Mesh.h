@@ -10,30 +10,15 @@ namespace gfx
 	{
 		using ID = uint32_t;
 
-		MeshInfo() = default;
-		MeshInfo(
-			uint32_t baseIndex,
-			uint32_t count,
-			uint32_t vertexStart,
-			uint32_t materialID,
-			float    boundingCenter,
-			float    boundingRadius) :
-			meshletSegment(baseIndex), meshletCount(count), materialID(materialID)
-		{}
-
+		uint32_t vertexSegment  = 0u;
+		uint32_t indexSegment   = 0u;
 		uint32_t meshletSegment = 0u;
 		uint32_t meshletCount   = 0u;
-		uint32_t materialID     = 0u;  // TODO: Material::ID
 	};
 
 	struct MeshInstance final
 	{
 		using ID = uint32_t;
-
-		MeshInstance() = default;
-		MeshInstance(MeshInfo::ID id, glm::mat4 modelTransform) :
-			infoID(id), modelTransform(modelTransform)
-		{}
 
 		MeshInfo::ID infoID = 0u;
 		uint32_t     pad[3]{};
@@ -44,24 +29,25 @@ namespace gfx
 	{
 		using ID = uint32_t;
 
-		Meshlet() = default;
-		Meshlet(
-			uint32_t  vertexSegment,
-			uint32_t  vertexCount,
-			uint32_t  indexSegment,
-			uint32_t  indexCount,
-			glm::vec3 boundingCenter,
-			float     boundingRadius) :
-			vertexMapSegment(vertexSegment), vertexCount(vertexCount), indexSegment(indexSegment),
-			indexCount(indexCount), boundingCenter(boundingCenter), boundingRadius(boundingRadius)
-		{}
+		uint32_t localVertexOffset = 0u;
+		uint32_t vertexCount       = 0u;
 
-		uint32_t  vertexMapSegment = 0u;
-		uint32_t  vertexCount      = 0u;
-		uint32_t  indexSegment     = 0u;
-		uint32_t  indexCount       = 0u;
-		uint32_t  triangleCount    = 0u;
+		uint32_t localIndexOffset = 0u;
+		uint32_t triangleCount    = 0u;
+
+		uint32_t materialID = 0u;
+		uint32_t instanceID = 0u;
+
 		glm::vec3 boundingCenter{};
 		float     boundingRadius = 0.0f;
 	};
+
+	struct MeshletIndirectDrawArg final
+	{
+		uint32_t threadGroupCountX;
+		uint32_t threadGroupCountY;
+		uint32_t threadGroupCountZ;
+		uint32_t visibleBufferOffset;
+	};
+
 }

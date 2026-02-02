@@ -5,17 +5,15 @@ namespace gfx
 	namespace BindingSpaces
 	{
 		constexpr uint32_t PerFrameSpace    = 0;
-		constexpr uint32_t PerObjectSpace   = 1;
-		constexpr uint32_t PerMaterialSpace = 2;
+		constexpr uint32_t IndirectDrawData = 1;
 	}
 
 	namespace BindingSlots
 	{
 		namespace CB
 		{
-			constexpr uint32_t FrameConstants = 0;
-			constexpr uint32_t Lighting       = 0;
-
+			constexpr uint32_t FrameConstants        = 0;
+			constexpr uint32_t IndirectPushConstants = 0;
 		}
 
 		namespace SRV
@@ -32,14 +30,15 @@ namespace gfx
 			constexpr uint32_t IndexRedirectBuffer     = 8;
 			constexpr uint32_t VertexRedirectBuffer    = 9;
 			constexpr uint32_t MeshletRedirectBuffer   = 10;
+
+			constexpr uint32_t VisibleMeshletIndices = 0;
+			constexpr uint32_t DrawArgsBuffer        = 1;
 		}
 
 		namespace UAV
 		{
-			// Phong Material Textures
-			constexpr uint32_t DiffuseTex  = 0;
-			constexpr uint32_t NormalTex   = 1;
-			constexpr uint32_t SpecularTex = 2;
+			constexpr uint32_t VisibleMeshletIndices = 0;
+			constexpr uint32_t DrawArgsBuffer        = 1;
 		}
 	}
 

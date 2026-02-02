@@ -220,25 +220,25 @@ namespace gfx
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetBindingLayoutItemSRV(uint32_t slot) const
+		GetBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetBindingSetItemSRV(uint32_t slot) const
+		GetBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_buffer);
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetRedirectTableBindingLayoutItemSRV(uint32_t slot) const
+		GetRedirectTableBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetRedirectTableBindingSetItemSRV(uint32_t slot) const
+		GetRedirectTableBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_redirectTable);
 		}
@@ -307,6 +307,18 @@ namespace gfx
 		GetRedirectTable() const
 		{
 			return m_redirectTable;
+		}
+
+		void
+		Clear()
+		{
+			m_data.clear();
+			m_data.emplace_back(T{});
+			m_id2Idx.clear();
+			m_id2Idx.emplace_back(0);
+			m_idx2Id.clear();
+			m_idx2Id.emplace_back(0);
+			m_dirty = true;
 		}
 
 	private:

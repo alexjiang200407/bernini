@@ -12,7 +12,8 @@ namespace gfx
 
 	DynamicConstantBuffer::DynamicConstantBuffer(DynamicConstantBuffer&& other) noexcept :
 		m_layoutMap(std::move(other.m_layoutMap)), m_bufferDesc(std::move(other.m_bufferDesc)),
-		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data))
+		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data)),
+		m_bufferType(other.m_bufferType)
 	{}
 
 	DynamicConstantBuffer&
@@ -41,14 +42,16 @@ namespace gfx
 		elementDesc.root->BuildLayoutMap(&m_layoutMap, ctx);
 		auto totalSize = align(ctx.offset, 16u);
 
-		auto desc = nvrhi::BufferDesc{};
-		desc.setByteSize(totalSize)
-			.setIsConstantBuffer(true)
-			.setDebugName(elementDesc.name)
-			.setKeepInitialState(true)
-			.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
+		m_bufferType = elementDesc.bufferType;
 
-		if (elementDesc.isVolatile)
+		auto desc = nvrhi::BufferDesc{};
+		desc.setByteSize(totalSize).setDebugName(elementDesc.name);
+
+		if (m_bufferType != BufferType::kPushConstant)
+			desc.setKeepInitialState(true).setIsConstantBuffer(true).setInitialState(
+				nvrhi::ResourceStates::ConstantBuffer);
+
+		if (m_bufferType == BufferType::kVolatileConstantBuffer)
 		{
 			desc.setIsVolatile(true).setMaxVersions(16);
 		}
@@ -177,24 +180,44 @@ namespace gfx
 	nvrhi::BindingLayoutItem
 	DynamicConstantBuffer::GetBindingLayoutItem(uint32_t slot) const noexcept
 	{
-		if (IsVolatile())
+		switch (m_bufferType)
 		{
+		case BufferType::kConstantBuffer:
+			return nvrhi::BindingLayoutItem::ConstantBuffer(slot);
+		case BufferType::kPushConstant:
+			return nvrhi::BindingLayoutItem::PushConstants(slot, m_bufferDesc.byteSize);
+		case BufferType::kVolatileConstantBuffer:
 			return nvrhi::BindingLayoutItem::VolatileConstantBuffer(slot);
 		}
-		return nvrhi::BindingLayoutItem::ConstantBuffer(slot);
 	}
 
 	nvrhi::BindingSetItem
 	DynamicConstantBuffer::GetBindingSetItem(uint32_t slot) const noexcept
 	{
-		return nvrhi::BindingSetItem::ConstantBuffer(slot, GetBufferHandle());
+		switch (m_bufferType)
+		{
+		case BufferType::kConstantBuffer:
+		case BufferType::kVolatileConstantBuffer:
+			return nvrhi::BindingSetItem::ConstantBuffer(slot, m_buf);
+		case BufferType::kPushConstant:
+			return nvrhi::BindingSetItem::PushConstants(slot, m_bufferDesc.byteSize);
+		}
 	}
 
 	void
 	DynamicConstantBuffer::Update(nvrhi::CommandListHandle cmdList) noexcept
 	{
 		assert(m_buf.Get());
-		cmdList->writeBuffer(m_buf, m_data.get(), m_bufferDesc.byteSize);
+		switch (m_bufferType)
+		{
+		case BufferType::kConstantBuffer:
+		case BufferType::kVolatileConstantBuffer:
+			cmdList->writeBuffer(m_buf, m_data.get(), m_bufferDesc.byteSize);
+			break;
+		case BufferType::kPushConstant:
+			cmdList->setPushConstants(m_data.get(), m_bufferDesc.byteSize);
+			break;
+		}
 	}
 
 	bool

@@ -30,8 +30,7 @@ bool IsSphereInFrustum(float4 planes[6], float3 center, float radius)
 bool IsPointInFrustum(float4 planes[6], float3 pt)
 {
     [unroll]
-    for (
-int i = 0; i < 6; ++i)
+    for (int i = 0; i < 6; ++i)
     {
         if (dot(planes[i].xyz, pt) + planes[i].w < 0)
             return false;

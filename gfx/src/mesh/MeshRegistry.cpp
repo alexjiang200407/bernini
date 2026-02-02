@@ -65,11 +65,7 @@ namespace gfx
 	}
 
 	MeshInfo::ID
-	MeshRegistry::AddInfo(
-		std::string_view nameId,
-		const MeshInfo&  info,
-		uint32_t         vOffset,
-		uint32_t         vCount)
+	MeshRegistry::AddInfo(std::string_view nameId, MeshInfo&& info)
 	{
 		if (auto it = m_infoNameMap.find(nameId.data()); it != m_infoNameMap.end())
 		{
@@ -83,19 +79,19 @@ namespace gfx
 			m_meshInfoMeta.resize(id + 1);
 		}
 
-		m_meshInfoMeta[id]                 = { vOffset, vCount, 0 };
+		m_meshInfoMeta[id]                 = { 0 };
 		m_infoNameMap[std::string(nameId)] = id;
 
 		return id;
 	}
 
 	MeshInstance::ID
-	MeshRegistry::AddInstance(const MeshInstance& instance)
+	MeshRegistry::AddInstance(MeshInstance&& instance)
 	{
 		assert(instance.infoID < m_meshInfoMeta.size());
-		auto id = m_meshInstances.EmplaceBack(instance);
 
 		++m_meshInfoMeta[instance.infoID].refCount;
+		auto id = m_meshInstances.EmplaceBack(std::move(instance));
 
 		return id;
 	}
@@ -106,19 +102,12 @@ namespace gfx
 		const MeshInfo& info = m_meshInfos.At(id);
 		const auto&     meta = m_meshInfoMeta[id];
 
-		for (uint32_t i = 0; i < info.meshletCount; ++i)
-		{
-			const Meshlet& m = m_meshlets.At(info.meshletSegment, i);
-
-			m_indices.Erase(m.indexSegment);
-			m_vertexMap.Erase(m.vertexMapSegment);
-		}
-
+		m_indices.Erase(info.indexSegment);
+		m_vertexMap.Erase(info.vertexSegment);
 		m_meshlets.Erase(info.meshletSegment);
-		m_vertices.Erase(meta.vertexSegment);
-
 		m_meshInfos.Erase(id);
 
+		// TODO: optimize this
 		for (auto it = m_infoNameMap.begin(); it != m_infoNameMap.end(); ++it)
 		{
 			if (it->second == id)
@@ -128,7 +117,6 @@ namespace gfx
 			}
 		}
 
-		// Clear metadata but keep size (to keep indices stable)
 		m_meshInfoMeta[id] = {};
 	}
 
@@ -138,17 +126,17 @@ namespace gfx
 		namespace SRV = BindingSlots::SRV;
 		namespace UAV = BindingSlots::UAV;
 
-		bindingSet.addItem(m_meshInstances.GetBindingSetItemSRV(SRV::InstanceBuffer))
-			.addItem(m_meshInfos.GetBindingSetItemSRV(SRV::MeshInfo))
-			.addItem(m_indices.GetBindingSetItemSRV(SRV::IndexBuffer))
-			.addItem(m_vertices.GetBindingSetItemSRV(SRV::VertexBuffer))
-			.addItem(m_vertexMap.GetBindingSetItemSRV(SRV::VertexMap))
-			.addItem(m_meshlets.GetBindingSetItemSRV(SRV::MeshletBuffer))
-			.addItem(m_meshInfos.GetRedirectTableBindingSetItemSRV(SRV::MeshInfoRedirectBuffer))
-			.addItem(m_vertexMap.GetRedirectTableBindingSetItemSRV(SRV::VertexMapRedirectBuffer))
-			.addItem(m_indices.GetRedirectTableBindingSetItemSRV(SRV::IndexRedirectBuffer))
-			.addItem(m_vertices.GetRedirectTableBindingSetItemSRV(SRV::VertexRedirectBuffer))
-			.addItem(m_meshlets.GetRedirectTableBindingSetItemSRV(SRV::MeshletRedirectBuffer));
+		bindingSet.addItem(m_meshInstances.GetBindingSetItem(SRV::InstanceBuffer))
+			.addItem(m_meshInfos.GetBindingSetItem(SRV::MeshInfo))
+			.addItem(m_indices.GetBindingSetItem(SRV::IndexBuffer))
+			.addItem(m_vertices.GetBindingSetItem(SRV::VertexBuffer))
+			.addItem(m_vertexMap.GetBindingSetItem(SRV::VertexMap))
+			.addItem(m_meshlets.GetBindingSetItem(SRV::MeshletBuffer))
+			.addItem(m_meshInfos.GetRedirectTableBindingSetItem(SRV::MeshInfoRedirectBuffer))
+			.addItem(m_vertexMap.GetRedirectTableBindingSetItem(SRV::VertexMapRedirectBuffer))
+			.addItem(m_indices.GetRedirectTableBindingSetItem(SRV::IndexRedirectBuffer))
+			.addItem(m_vertices.GetRedirectTableBindingSetItem(SRV::VertexRedirectBuffer))
+			.addItem(m_meshlets.GetRedirectTableBindingSetItem(SRV::MeshletRedirectBuffer));
 	}
 
 	void
@@ -157,17 +145,17 @@ namespace gfx
 		namespace SRV = BindingSlots::SRV;
 		namespace UAV = BindingSlots::UAV;
 
-		bindingLayout.addItem(m_meshInstances.GetBindingLayoutItemSRV(SRV::InstanceBuffer))
-			.addItem(m_meshInfos.GetBindingLayoutItemSRV(SRV::MeshInfo))
-			.addItem(m_indices.GetBindingLayoutItemSRV(SRV::IndexBuffer))
-			.addItem(m_vertices.GetBindingLayoutItemSRV(SRV::VertexBuffer))
-			.addItem(m_vertexMap.GetBindingLayoutItemSRV(SRV::VertexMap))
-			.addItem(m_meshlets.GetBindingLayoutItemSRV(SRV::MeshletBuffer))
-			.addItem(m_meshInfos.GetRedirectTableBindingLayoutItemSRV(SRV::MeshInfoRedirectBuffer))
-			.addItem(m_vertexMap.GetRedirectTableBindingLayoutItemSRV(SRV::VertexMapRedirectBuffer))
-			.addItem(m_indices.GetRedirectTableBindingLayoutItemSRV(SRV::IndexRedirectBuffer))
-			.addItem(m_vertices.GetRedirectTableBindingLayoutItemSRV(SRV::VertexRedirectBuffer))
-			.addItem(m_meshlets.GetRedirectTableBindingLayoutItemSRV(SRV::MeshletRedirectBuffer));
+		bindingLayout.addItem(m_meshInstances.GetBindingLayoutItem(SRV::InstanceBuffer))
+			.addItem(m_meshInfos.GetBindingLayoutItem(SRV::MeshInfo))
+			.addItem(m_indices.GetBindingLayoutItem(SRV::IndexBuffer))
+			.addItem(m_vertices.GetBindingLayoutItem(SRV::VertexBuffer))
+			.addItem(m_vertexMap.GetBindingLayoutItem(SRV::VertexMap))
+			.addItem(m_meshlets.GetBindingLayoutItem(SRV::MeshletBuffer))
+			.addItem(m_meshInfos.GetRedirectTableBindingLayoutItem(SRV::MeshInfoRedirectBuffer))
+			.addItem(m_vertexMap.GetRedirectTableBindingLayoutItem(SRV::VertexMapRedirectBuffer))
+			.addItem(m_indices.GetRedirectTableBindingLayoutItem(SRV::IndexRedirectBuffer))
+			.addItem(m_vertices.GetRedirectTableBindingLayoutItem(SRV::VertexRedirectBuffer))
+			.addItem(m_meshlets.GetRedirectTableBindingLayoutItem(SRV::MeshletRedirectBuffer));
 	}
 
 	bool

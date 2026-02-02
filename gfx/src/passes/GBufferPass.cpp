@@ -11,23 +11,25 @@
 
 namespace gfx
 {
-	static auto renderState =
-		nvrhi::RenderState{}
-			.setRasterState(nvrhi::RasterState{}
-	                            .setCullMode(nvrhi::RasterCullMode::None)
-	                            .setFillMode(nvrhi::RasterFillMode::Solid))
-			.setDepthStencilState(nvrhi::DepthStencilState{}
-	                                  .setDepthTestEnable(true)
-	                                  .setDepthWriteEnable(true)
-	                                  .setDepthFunc(nvrhi::ComparisonFunc::Less)
-	                                  .setStencilEnable(false));
+	static auto renderState = nvrhi::RenderState{}
+	                              .setRasterState(
+									  nvrhi::RasterState{}
+										  .setCullMode(nvrhi::RasterCullMode::None)
+										  .setFillMode(nvrhi::RasterFillMode::Solid))
+	                              .setDepthStencilState(
+									  nvrhi::DepthStencilState{}
+										  .setDepthTestEnable(true)
+										  .setDepthWriteEnable(true)
+										  .setDepthFunc(nvrhi::ComparisonFunc::Less)
+										  .setStencilEnable(false));
+
 	void
 	GBufferPass::Init(nvrhi::DeviceHandle device, MeshRegistry& registry)
 	{
 		m_mainCommandList = device->createCommandList();
 
 		{
-			auto meshShaderBytecode = core::file::readFileBytes("shaders/MS_GBuffer.cso"sv);
+			auto meshShaderBytecode = core::file::readFileBytes("shaders/MS_GBuffer_v2.cso"sv);
 			m_meshShader            = device->createShader(
                 nvrhi::ShaderDesc{}
                     .setShaderType(nvrhi::ShaderType::Mesh)
@@ -47,16 +49,6 @@ namespace gfx
 		}
 
 		{
-			auto ampShaderBytecode = core::file::readFileBytes("shaders/AS_GBuffer.cso"sv);
-			m_ampShader            = device->createShader(
-                nvrhi::ShaderDesc{}
-                    .setShaderType(nvrhi::ShaderType::Amplification)
-                    .setDebugName("GBuffer Amplification Shader"),
-                ampShaderBytecode.data(),
-                ampShaderBytecode.size());
-		}
-
-		{
 			auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
 			bindingLayoutDesc.setRegisterSpace(BindingSpaces::PerFrameSpace)
 				.addItem(m_frameConstants.GetBindingLayoutItem(BindingSlots::CB::FrameConstants))
@@ -64,17 +56,53 @@ namespace gfx
 
 			registry.AttachBindingLayoutItems(bindingLayoutDesc);
 
-			m_bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+			m_perFrameBindingLayout = device->createBindingLayout(bindingLayoutDesc);
 		}
 
-		auto frameConstantsDesc = DynamicConstantBufferDesc{};
-		frameConstantsDesc.AddElement("viewMatrix", ElementType::kFloat4x4)
-			.AddElement("projMatrix", ElementType::kFloat4x4)
-			.AddElement("instanceCount", ElementType::kUInt)
-			.AddElement("meshCount", ElementType::kUInt)
-			.SetName("FrameConstantBuffer");
+		{
+			auto desc = ComputeBufferDesc{};
+			desc.SetElement<MeshletIndirectDrawArg>().SetElementCount(1).SetName(
+				"IndirectDrawArgument");
+			m_indirectDrawArguments.Init(device, desc);
+		}
 
-		m_frameConstants = std::move(DynamicConstantBuffer{ device, frameConstantsDesc });
+		{
+			auto desc = ComputeBufferDesc{};
+			desc.SetElement<uint32_t>().SetElementCount(1).SetName("VisibleMeshletIndices");
+			m_visibleMeshletIndices.Init(device, desc);
+		}
+
+		{
+			auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+			bindingLayoutDesc.setRegisterSpace(BindingSpaces::IndirectDrawData)
+				.addItem(m_indirectDrawPushConstants.GetBindingLayoutItem(
+					BindingSlots::CB::IndirectPushConstants))
+				.addItem(
+					m_indirectDrawArguments.GetBindingLayoutItem(BindingSlots::UAV::DrawArgsBuffer))
+				.addItem(m_visibleMeshletIndices.GetBindingLayoutItem(
+					BindingSlots::UAV::VisibleMeshletIndices))
+				.setVisibility(nvrhi::ShaderType::All);
+
+			m_indirectDrawDataBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		}
+
+		{
+			auto frameConstantsDesc = DynamicConstantBufferDesc{};
+			frameConstantsDesc.AddElement("viewMatrix", ElementType::kFloat4x4)
+				.AddElement("projMatrix", ElementType::kFloat4x4)
+				.SetName("FrameConstantBuffer");
+
+			m_frameConstants.Init(device, frameConstantsDesc);
+		}
+
+		{
+			auto indirectDrawConstantsDesc = DynamicConstantBufferDesc{};
+			indirectDrawConstantsDesc.AddElement("drawIndex", ElementType::kUInt)
+				.SetName("IndirectDrawConstats")
+				.SetIsPushConstant();
+
+			m_indirectDrawPushConstants.Init(device, indirectDrawConstantsDesc);
+		}
 	}
 
 	void
@@ -89,8 +117,35 @@ namespace gfx
 				m_frameConstants.GetBindingSetItem(BindingSlots::CB::FrameConstants));
 			registry.AttachBindingSetItems(bindingSetDesc);
 
-			m_bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout);
+			m_perFrameBindingSet =
+				device->createBindingSet(bindingSetDesc, m_perFrameBindingLayout);
 		}
+
+		{
+			auto bindingSetDesc = nvrhi::BindingSetDesc{};
+			bindingSetDesc
+				.addItem(m_indirectDrawPushConstants.GetBindingSetItem(
+					BindingSlots::CB::IndirectPushConstants))
+				.addItem(
+					m_indirectDrawArguments.GetBindingSetItem(BindingSlots::UAV::DrawArgsBuffer))
+				.addItem(m_visibleMeshletIndices.GetBindingSetItem(
+					BindingSlots::UAV::VisibleMeshletIndices));
+
+			m_indirectDrawDataBindingSet =
+				device->createBindingSet(bindingSetDesc, m_indirectDrawDataBindingLayout);
+		}
+	}
+
+	bool
+	GBufferPass::Update(uint32_t meshletInstances)
+	{
+		if (meshletInstances > m_visibleMeshletIndices.Size())
+		{
+			m_visibleMeshletIndices.Resize(meshletInstances * 2);
+			return true;
+		}
+
+		return false;
 	}
 
 	void
@@ -121,12 +176,12 @@ namespace gfx
 				{
 					auto psoDesc = nvrhi::MeshletPipelineDesc{};
 
-					psoDesc.setAmplificationShader(m_ampShader)
-						.setMeshShader(m_meshShader)
+					psoDesc.setMeshShader(m_meshShader)
 						.setPixelShader(m_pixelShader)
 						.setPrimType(nvrhi::PrimitiveType::TriangleList)
 						.setRenderState(renderState)
-						.addBindingLayout(m_bindingLayout);
+						.addBindingLayout(m_perFrameBindingLayout)
+						.addBindingLayout(m_indirectDrawDataBindingLayout);
 
 					m_pipeline = device->createMeshletPipeline(psoDesc, frameBufferInfo);
 				}
@@ -139,21 +194,32 @@ namespace gfx
 
 				m_frameConstants["instanceCount"] = instanceCount;
 
-				if (registry.Update(m_mainCommandList, device))
+				if (registry.Update(m_mainCommandList, device) ||
+			        Update(registry.GetInstancesCount()))
 				{
 					CreateBindingSet(registry, device);
 				}
 
 				m_frameConstants.Update(m_mainCommandList);
 
-				state.setPipeline(m_pipeline)
-					.addBindingSet(m_bindingSet)
+				state.setIndirectParams(m_indirectDrawArguments.GetBuffer())
+					.addBindingSet(m_perFrameBindingSet)
+					.addBindingSet(m_indirectDrawDataBindingSet)
 					.setFramebuffer(outputFramebuffer)
-					.setViewport(nvrhi::ViewportState{}.addViewportAndScissorRect(
-						nvrhi::Viewport{ screenW, screenH }));
+					.setViewport(
+						nvrhi::ViewportState{}.addViewportAndScissorRect(
+							nvrhi::Viewport{ screenW, screenH }));
 
-				m_mainCommandList->setMeshletState(state);
-				m_mainCommandList->dispatchMesh(instanceCount);
+				for (uint32_t i = 0; i < 1; ++i)
+				{
+					m_indirectDrawPushConstants["drawIndex"] = i;
+					m_indirectDrawPushConstants.Update(m_mainCommandList);
+
+					state.setPipeline(m_pipeline);
+
+					m_mainCommandList->setMeshletState(state);
+					m_mainCommandList->dispatchIndirect(sizeof(MeshletIndirectDrawArg) * i);
+				}
 
 				m_mainCommandList->close();
 				device->executeCommandList(m_mainCommandList);

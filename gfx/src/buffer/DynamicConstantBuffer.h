@@ -122,6 +122,9 @@ namespace gfx
 		DynamicConstantBuffer(const DynamicConstantBuffer&) = delete;
 		DynamicConstantBuffer(DynamicConstantBuffer&&) noexcept;
 
+		void
+		Init(nvrhi::DeviceHandle device, const DynamicConstantBufferDesc& elementDesc);
+
 		DynamicConstantBuffer(
 			nvrhi::DeviceHandle              device,
 			const DynamicConstantBufferDesc& elementDesc);
@@ -200,9 +203,6 @@ namespace gfx
 		}
 
 	private:
-		void
-		Init(nvrhi::DeviceHandle device, const DynamicConstantBufferDesc& elementDesc);
-
 		[[nodiscard]]
 		bool
 		IsVolatile() const noexcept
@@ -210,10 +210,13 @@ namespace gfx
 			return m_bufferDesc.isVolatile;
 		}
 
+		using BufferType = DynamicConstantBufferDesc::BufferType;
+
 		LayoutMap                    m_layoutMap;
 		nvrhi::BufferDesc            m_bufferDesc;
 		nvrhi::BufferHandle          m_buf;
 		std::unique_ptr<std::byte[]> m_data;
+		BufferType                   m_bufferType = BufferType::kConstantBuffer;
 
 		friend class View;
 	};
