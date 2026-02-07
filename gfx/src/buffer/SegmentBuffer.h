@@ -98,12 +98,15 @@ namespace gfx
 			m_bufferDesc = desc.bufferDesc;
 			m_bufferDesc.setStructStride(sizeof(T))
 				.setInitialState(nvrhi::ResourceStates::ShaderResource)
+				.setKeepInitialState(true)
 				.setByteSize(desc.startingCapacity * sizeof(T));
 
 			m_buffer = device->createBuffer(m_bufferDesc);
 
 			auto redirectDesc = desc.redirectTableDesc;
 			redirectDesc.setStructStride(sizeof(uint32_t))
+				.setKeepInitialState(true)
+				.setInitialState(nvrhi::ResourceStates::ShaderResource)
 				.setByteSize(desc.startingCapacity * sizeof(uint32_t));
 			m_redirectTable = device->createBuffer(redirectDesc);
 

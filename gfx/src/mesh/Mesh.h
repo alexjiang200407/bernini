@@ -6,7 +6,7 @@ namespace gfx
 	static constexpr auto MAX_PRIMS_PER_MESHLET    = 124u;
 	static constexpr auto MAX_VERTICES_PER_MESHLET = 64u;
 
-	struct MeshInfo final
+	struct StaticMeshInfo final
 	{
 		using ID = uint32_t;
 
@@ -16,13 +16,13 @@ namespace gfx
 		uint32_t meshletCount   = 0u;
 	};
 
-	struct MeshInstance final
+	struct StaticMeshInstance final
 	{
 		using ID = uint32_t;
 
-		MeshInfo::ID infoID = 0u;
-		uint32_t     pad[3]{};
-		glm::mat4    modelTransform{};
+		StaticMeshInfo::ID infoID = 0u;
+		uint32_t           pad[3]{};
+		glm::mat4          modelTransform{};
 	};
 
 	struct Meshlet final
@@ -34,9 +34,6 @@ namespace gfx
 
 		uint32_t localIndexOffset = 0u;
 		uint32_t triangleCount    = 0u;
-
-		uint32_t materialID = 0u;
-		uint32_t instanceID = 0u;
 
 		glm::vec3 boundingCenter{};
 		float     boundingRadius = 0.0f;

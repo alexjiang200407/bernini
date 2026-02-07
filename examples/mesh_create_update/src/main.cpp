@@ -91,7 +91,7 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 
 						if (idx == 1)
 						{
-							createSphere(gfx, data, &meshes[idx]) >> berniniErrChecker;
+							createCube(gfx, data, &meshes[idx]) >> berniniErrChecker;
 						}
 						else
 						{
@@ -209,8 +209,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto opts = core::win::WindowOptions{};
 
-		opts.width  = 800;
-		opts.height = 600;
+		opts.width     = 800;
+		opts.height    = 600;
+		opts.resizable = false;
+		opts.decorated = false;
+		opts.mode      = core::win::WindowOptions::Mode::BorderlessWindowed;
 
 		auto wnd = core::win::IWindow::Create(opts);
 
@@ -234,7 +237,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		mat[3][0] = -5.0f;
 
-		createSphere(graphics, data, &cubes[1]) >> berniniErrChecker;
+		createCube(graphics, data, &cubes[1]) >> berniniErrChecker;
 
 		mat[3][0] = -10.0f;
 

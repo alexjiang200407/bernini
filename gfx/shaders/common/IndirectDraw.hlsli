@@ -9,4 +9,10 @@ struct MeshletIndirectDrawArg
     uint visibleBufferOffset;
 };
 
+struct DrawInstance
+{
+    uint64_t sortKey;
+    uint dataIdx;
+};
+
 #endif

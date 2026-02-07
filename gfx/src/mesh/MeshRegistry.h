@@ -1,6 +1,7 @@
 #pragma once
 #include "buffer/AppendBuffer.h"
 #include "buffer/SegmentBuffer.h"
+#include "draw_instance/DrawInstance.h"
 #include "mesh/Mesh.h"
 #include "mesh/Vertex.h"
 
@@ -9,7 +10,7 @@ namespace gfx
 	class MeshRegistry final
 	{
 	private:
-		struct MeshInfoMetadata
+		struct StaticMeshInfoMetadata
 		{
 			uint32_t refCount = 0u;
 		};
@@ -35,24 +36,24 @@ namespace gfx
 		GetInstancesCount() const noexcept
 		{
 			// First is null instance
-			return m_meshInstances.Size() - 1;
+			return m_drawInstances.Size() - 1;
 		}
 
-		MeshInfo::ID
-		GetMeshInfoIDByName(std::string_view nameId) const;
-
 		void
-		RemoveMeshInstance(MeshInstance::ID id);
+		RemoveDrawInstance(DrawInstance::ID id);
 
 	private:
 		void
-		RemoveMeshInfo(MeshInfo::ID id);
+		RemoveStaticMeshInstance(StaticMeshInstance::ID id);
 
-		MeshInstance::ID
-		AddInstance(MeshInstance&& instance);
+		void
+		RemoveStaticMeshInfo(StaticMeshInfo::ID id);
 
-		MeshInfo::ID
-		AddInfo(std::string_view nameId, MeshInfo&& info);
+		StaticMeshInstance::ID
+		AddStaticMeshInstance(StaticMeshInstance&& instance);
+
+		StaticMeshInfo::ID
+		AddStaticMeshInfo(StaticMeshInfo&& info);
 
 		Meshlet::ID
 		AddMeshlets(std::span<const Meshlet> meshlets)
@@ -79,14 +80,14 @@ namespace gfx
 		}
 
 	private:
-		AppendBuffer<MeshInstance>                    m_meshInstances;
-		AppendBuffer<MeshInfo>                        m_meshInfos;
-		SegmentBuffer<Meshlet>                        m_meshlets;
-		SegmentBuffer<Vertex>                         m_vertices;
-		SegmentBuffer<uint32_t>                       m_indices;
-		SegmentBuffer<uint32_t>                       m_vertexMap;
-		std::unordered_map<std::string, MeshInfo::ID> m_infoNameMap;
-		std::vector<MeshInfoMetadata>                 m_meshInfoMeta;
+		AppendBuffer<DrawInstance>          m_drawInstances;
+		AppendBuffer<StaticMeshInstance>    m_staticMeshInstances;
+		AppendBuffer<StaticMeshInfo>        m_staticMeshInfos;
+		SegmentBuffer<Meshlet>              m_meshlets;
+		SegmentBuffer<Vertex>               m_vertices;
+		SegmentBuffer<uint32_t>             m_indices;
+		SegmentBuffer<uint32_t>             m_vertexMap;
+		std::vector<StaticMeshInfoMetadata> m_staticMeshInfoMeta;
 
 		friend class MeshFactory;
 	};

@@ -1,18 +1,19 @@
-#ifndef MESH_HLSLI
-#define MESH_HLSLI
+#ifndef MESH_V2_HLSLI
+#define MESH_V2_HLSLI
 
-struct MeshInstance
+struct StaticMeshInstance
 {
-    uint infoID;
+    uint meshInfoID;
     uint pad0[3];
     float4x4 modelTransform;
 };
 
-struct MeshInfo
+struct StaticMeshInfo
 {
+    uint vertexSegment;
+    uint indexSegment;
     uint meshletSegment;
     uint meshletCount;
-    uint materialID;
 };
 
 struct Vertex
@@ -22,21 +23,14 @@ struct Vertex
     float2 uv;
 };
 
-struct MeshVertexOut
-{
-    float4 position : SV_Position;
-    float3 normal : NORMAL;
-    float2 uv : TEXCOORD;
-};
-
-
 struct Meshlet
 {
-    uint vertexMapSegment;
+    uint localVertexOffset;
     uint vertexCount;
-    uint indexSegment;
-    uint indexCount;
+    
+    uint localIndexOffset;
     uint triangleCount;
+    
     float3 boundingCenter;
     float boundingRadius;
 };
@@ -52,6 +46,13 @@ struct MeshletPayload
     uint meshletSegment;
     uint visibleCount;
     uint visibleIndices[MAX_AS_MESHLETS];
+};
+
+struct MeshVertexOut
+{
+    float4 position : SV_Position;
+    float3 normal : NORMAL;
+    float2 uv : TEXCOORD;
 };
 
 #endif

@@ -19,14 +19,9 @@ namespace gfx
 	static const uint32_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2, 0, 4, 7, 0, 7, 3,
 		                                    5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
 
-	MeshInfo::ID
+	StaticMeshInfo::ID
 	MeshFactory::CreateCubeInfo(MeshRegistry& registry)
 	{
-		if (auto existingCubeId = registry.GetMeshInfoIDByName("$Cube"))
-		{
-			return existingCubeId;
-		}
-
 		const auto baseVertexGlobal = registry.AddVertices(cubeVertices);
 
 		auto mapIndices = std::vector<uint32_t>(std::size(cubeVertices));
@@ -46,21 +41,18 @@ namespace gfx
 		m.localIndexOffset = 0;
 		m.triangleCount    = static_cast<uint32_t>(std::size(cubeIndices)) / 3;
 
-		m.materialID = 0;
-		m.instanceID = 0;
-
 		m.boundingCenter = glm::vec3{ 0.0f };
 		m.boundingRadius = glm::sqrt(3.0f);
 
 		const auto meshletSpan       = std::span<const Meshlet>{ &m, 1 };
 		const auto baseMeshletGlobal = registry.AddMeshlets(meshletSpan);
 
-		auto info           = MeshInfo{};
+		auto info           = StaticMeshInfo{};
 		info.vertexSegment  = baseMapGlobal;
 		info.indexSegment   = baseIndexGlobal;
 		info.meshletSegment = baseMeshletGlobal;
 		info.meshletCount   = 1;
 
-		return registry.AddInfo("$Cube", std::move(info));
+		return registry.AddStaticMeshInfo(std::move(info));
 	}
 }

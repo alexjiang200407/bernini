@@ -106,7 +106,7 @@ namespace gfx
 		{
 			if (virtualIndex == 0 || virtualIndex >= m_id2Idx.size())
 				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+					GFX_RESULT_ERROR_APPEND_BUFFER,
 					"AppendBuffer::Erase",
 					"Invalid Virtual Index");
 
@@ -114,7 +114,7 @@ namespace gfx
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex == 0 ||
 			    physicalIndex >= m_data.size())
 				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+					GFX_RESULT_ERROR_APPEND_BUFFER,
 					"AppendBuffer::Erase",
 					"Invalid Virtual Index");
 
@@ -174,7 +174,7 @@ namespace gfx
 			if (virtualIndex >= m_id2Idx.size())
 			{
 				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+					GFX_RESULT_ERROR_APPEND_BUFFER,
 					"AppendBuffer::At",
 					"Invalid Virtual Index");
 			}
@@ -182,7 +182,7 @@ namespace gfx
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
 				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+					GFX_RESULT_ERROR_APPEND_BUFFER,
 					"AppendBuffer::At",
 					"Invalid Virtual Index");
 			}
@@ -195,7 +195,7 @@ namespace gfx
 			if (virtualIndex >= m_id2Idx.size())
 			{
 				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+					GFX_RESULT_ERROR_APPEND_BUFFER,
 					"AppendBuffer::At",
 					"Invalid Virtual Index");
 			}
@@ -203,7 +203,7 @@ namespace gfx
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
 				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
+					GFX_RESULT_ERROR_APPEND_BUFFER,
 					"AppendBuffer::At",
 					"Invalid Virtual Index");
 			}

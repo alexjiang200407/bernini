@@ -7,34 +7,74 @@ namespace gfx
 	{
 		struct Desc
 		{
-			T const* val;
+			std::shared_ptr<T> data;
+
 			Desc() noexcept = default;
-			Desc(const T& data) : val(std::addressof(data)) {}
+
+			Desc(std::shared_ptr<T> ptr) : data(std::move(ptr)) {}
+
+			template <typename... Args>
+			static Desc
+			Create(Args&&... args)
+			{
+				return Desc(std::make_shared<T>(std::forward<Args>(args)...));
+			}
 		};
 
 		void
-		create(const Desc& desc, void* ctx)
+		create(Desc desc, void* ctx)
 		{
-			val = desc.val;
+			stableStorage = std::move(desc.data);
+
+			if (!stableStorage)
+			{
+				stableStorage = std::make_shared<T>();
+			}
 		}
 
 		void
-		destroy(const Desc& desc, void*)
+		reinit(const T& newValue)
 		{
-			val = desc.val;
+			if (stableStorage)
+			{
+				*stableStorage = newValue;
+			}
 		}
 
-		FrameGraphView()                 = default;
-		FrameGraphView(FrameGraphView&&) = default;
+		void
+		destroy(const Desc&, void*)
+		{
+			stableStorage.reset();
+		}
 
-		operator const T&() { return *val; }
+		FrameGraphView()                          = default;
+		FrameGraphView(FrameGraphView&&) noexcept = default;
+		FrameGraphView&
+		operator=(FrameGraphView&&) noexcept = default;
 
+		operator const T&() const { return *stableStorage; }
 		const T&
 		Get() const noexcept
 		{
-			return *val;
+			return *stableStorage;
 		}
 
-		T const* val;
+		template <typename... Args>
+		void
+		SetValue(Args&&... args) noexcept
+		{
+			stableStorage = std::make_shared<T>(std::forward<Args>(args)...);
+		}
+
+		void
+		SetValue(std::shared_ptr<T> ptr) noexcept
+		{
+			stableStorage = std::move(ptr);
+		}
+
+		std::shared_ptr<T> stableStorage;
 	};
+
+	using FGBindingSet = FrameGraphView<nvrhi::BindingSetHandle>;
+	using FGCount      = FrameGraphView<uint32_t>;
 }

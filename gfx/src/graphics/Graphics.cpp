@@ -62,7 +62,7 @@ destroyMesh(Gfx graphics, GfxMesh mesh)
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
 		auto& gfx_     = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
 		auto& registry = gfx_.GetMeshRegistry();
-		registry.RemoveMeshInstance(mesh);
+		registry.RemoveDrawInstance(mesh);
 		return GFX_RESULT_OK;
 	});
 }

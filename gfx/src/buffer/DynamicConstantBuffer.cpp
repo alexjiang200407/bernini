@@ -26,6 +26,7 @@ namespace gfx
 			m_bufferDesc = std::move(other.m_bufferDesc);
 			m_buf        = std::move(other.m_buf);
 			m_data       = std::move(other.m_data);
+			m_bufferType = other.m_bufferType;
 		}
 		return *this;
 	}
@@ -45,11 +46,12 @@ namespace gfx
 		m_bufferType = elementDesc.bufferType;
 
 		auto desc = nvrhi::BufferDesc{};
-		desc.setByteSize(totalSize).setDebugName(elementDesc.name);
+		desc.setByteSize(totalSize).setDebugName(elementDesc.name).setKeepInitialState(true);
 
-		if (m_bufferType != BufferType::kPushConstant)
-			desc.setKeepInitialState(true).setIsConstantBuffer(true).setInitialState(
-				nvrhi::ResourceStates::ConstantBuffer);
+		if (m_bufferType == BufferType::kPushConstant)
+			desc.setIsConstantBuffer(true).setInitialState(nvrhi::ResourceStates::Common);
+		else
+			desc.setIsConstantBuffer(true).setInitialState(nvrhi::ResourceStates::ConstantBuffer);
 
 		if (m_bufferType == BufferType::kVolatileConstantBuffer)
 		{
@@ -66,13 +68,13 @@ namespace gfx
 	DynamicConstantBuffer::View::At(std::string_view key) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Cannot at using a null view" };
 
 		if (key.find('.') != std::string_view::npos)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Nested keys are not supported in At(): " + std::string{ key } };
 		}
@@ -86,7 +88,7 @@ namespace gfx
 	DynamicConstantBuffer::View::At(uint32_t index) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Cannot at using a null view" };
 
@@ -94,14 +96,14 @@ namespace gfx
 
 		if (index >= entry.count)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Index out of range for entry: " + m_key };
 		}
 
 		if (!entry.IsArray())
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBuffer::View::At",
 				                "Cannot index a non-array entry: " + m_key };
 		}
@@ -143,7 +145,7 @@ namespace gfx
 			return it->second;
 		}
 
-		throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+		throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 			                "DynamicConstantBuffer::GetLayoutEntry",
 			                "Could not find entry" };
 	}
@@ -166,7 +168,7 @@ namespace gfx
 	{
 		if (name.find('.') != std::string_view::npos)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBuffer::At",
 				                "Nested keys are not supported in At(): " + std::string{ name } };
 		}

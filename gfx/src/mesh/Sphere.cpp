@@ -68,7 +68,7 @@ namespace
 
 namespace gfx
 {
-	MeshInfo::ID
+	StaticMeshInfo::ID
 	MeshFactory::CreateSphereInfo(MeshRegistry& registry)
 	{
 		//if (auto existingSphereId = registry.GetMeshInfoIDByName("$Sphere"))

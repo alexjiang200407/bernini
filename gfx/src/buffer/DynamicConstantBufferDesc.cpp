@@ -34,7 +34,7 @@ namespace gfx
 			{
 				if (m_children.Contains(head))
 				{
-					throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+					throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 						                "DynamicConstantBufferDesc::StructNode::AddNode",
 						                "Node already exists: " + std::string{ head } };
 				}
@@ -45,7 +45,7 @@ namespace gfx
 				auto* child = m_children.Find(head);
 				if (!child)
 				{
-					throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+					throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 						                "DynamicConstantBufferDesc::StructNode::AddNode",
 						                "Node not found: " + std::string{ head } };
 				}
@@ -100,7 +100,7 @@ namespace gfx
 		void
 		AddNode(std::string_view, std::unique_ptr<Node>&&) override
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::ElementNode::AddNode",
 				                "Cannot add node from ElementNode" };
 		}
@@ -158,7 +158,7 @@ namespace gfx
 		void
 		AddNode(std::string_view, std::unique_ptr<Node>&&) override
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::ElementNode::AddNode",
 				                "Cannot add node from ElementNode" };
 		}
@@ -240,7 +240,7 @@ namespace gfx
 	{
 		if (name.empty())
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::AddStruct",
 				                "Struct name cannot be empty" };
 		}
@@ -253,7 +253,7 @@ namespace gfx
 	{
 		if (name.empty())
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::AddStructArray",
 				                "Struct name cannot be empty" };
 		}
@@ -269,14 +269,14 @@ namespace gfx
 	{
 		if (type == ElementType::kInvalid)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::AddElementArray",
 				                "Invalid ElementType specified" };
 		}
 
 		if (name.empty())
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::AddElementArray",
 				                "Element array name cannot be empty" };
 		}
@@ -290,7 +290,7 @@ namespace gfx
 	{
 		if (name.empty())
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_CONSTANT_BUFFER,
 				                "DynamicConstantBufferDesc::AddElement",
 				                "Element name cannot be empty" };
 		}
