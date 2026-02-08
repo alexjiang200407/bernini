@@ -1,13 +1,14 @@
 #include "passes/SortInstancesPass.h"
 #include "BindingSlots.h"
 #include "passes/output/FrameData.h"
+#include "passes/output/SortedInstancesData.h"
 #include "shader_util/util.h"
 #include <fg/Blackboard.hpp>
 #include <fg/FrameGraph.hpp>
 
 namespace gfx
 {
-	void
+	nvrhi::BindingLayoutHandle
 	SortInstancesPass::Init(nvrhi::BindingLayoutHandle blFrameData, nvrhi::DeviceHandle device)
 	{
 		m_mainCommandList = device->createCommandList();
@@ -32,9 +33,7 @@ namespace gfx
 				auto name             = std::format("GroupedInstances{}", i);
 				m_groupedInstances[i] = ComputeBufferDesc{}
 				                            .SetElement<InstanceAndSortKey>()
-				                            .SetInitialState(
-												i == 0 ? nvrhi::ResourceStates::UnorderedAccess :
-														 nvrhi::ResourceStates::ShaderResource)
+				                            .SetInitialState(nvrhi::ResourceStates::ShaderResource)
 				                            .SetElementCount(1)
 				                            .SetName(name)
 				                            .Create(device);
@@ -107,6 +106,15 @@ namespace gfx
 				.addBindingLayout(m_blScatterInOut);
 			m_scatterPipeline = device->createComputePipeline(computePipelineDesc);
 		}
+
+		auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
+		bindingLayoutDesc.setRegisterSpace(BindingSpaces::SortInstancesSpace)
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0))
+			.setVisibility(nvrhi::ShaderType::All);
+
+		m_blOut = device->createBindingLayout(bindingLayoutDesc);
+
+		return m_blOut;
 	}
 
 	void
@@ -139,6 +147,11 @@ namespace gfx
 
 			m_bsScatterInOut[i] = device->createBindingSet(bindingSetDesc, m_blScatterInOut);
 		}
+
+		auto bindingSetDesc = nvrhi::BindingSetDesc{};
+		bindingSetDesc.addItem(m_groupedInstances[0].GetBindingSetItemSRV(0));
+
+		m_bsOut = device->createBindingSet(bindingSetDesc, m_blOut);
 	}
 
 	bool
@@ -166,16 +179,17 @@ namespace gfx
 
 	void
 	SortInstancesPass::Histogram(
-		nvrhi::BindingSetHandle bsPerFrame,
-		uint32_t                numGroups,
-		uint32_t                bitshift,
-		uint32_t                pingPong)
+		BindingSetView bsPerFrame,
+		uint32_t       numGroups,
+		uint32_t       bitshift,
+		uint32_t       pingPong)
 	{
 		constexpr auto histogramGroups = 256;
 		auto           computeState    = nvrhi::ComputeState{};
-		computeState.setPipeline(m_histogramPipeline)
-			.addBindingSet(bsPerFrame)
-			.addBindingSet(m_bsGroupOffsets[pingPong]);
+		computeState.setPipeline(m_histogramPipeline);
+
+		bsPerFrame.AttachBindingSetTo(computeState);
+		computeState.addBindingSet(m_bsGroupOffsets[pingPong]);
 
 		m_mainCommandList->setComputeState(computeState);
 
@@ -202,17 +216,17 @@ namespace gfx
 
 	void
 	SortInstancesPass::Scatter(
-		nvrhi::BindingSetHandle bsPerFrame,
-		uint32_t                numGroups,
-		uint32_t                bitShift,
-		uint32_t                pingPong)
+		BindingSetView bsPerFrame,
+		uint32_t       numGroups,
+		uint32_t       bitShift,
+		uint32_t       pingPong)
 	{
 		auto  computeState = nvrhi::ComputeState{};
 		auto& bindingSet   = m_bsScatterInOut[pingPong];
 
-		computeState.setPipeline(m_scatterPipeline)
-			.addBindingSet(bsPerFrame)
-			.addBindingSet(bindingSet);
+		computeState.setPipeline(m_scatterPipeline);
+		bsPerFrame.AttachBindingSetTo(computeState);
+		computeState.addBindingSet(bindingSet);
 
 		m_mainCommandList->setComputeState(computeState);
 
@@ -226,23 +240,26 @@ namespace gfx
 	SortInstancesPass::AttachToFrameGraph(
 		FrameGraph&           frameGraph,
 		FrameGraphBlackboard& blackBoard,
-		nvrhi::DeviceHandle   device,
-		bool                  isFinalPass)
+		nvrhi::DeviceHandle   device)
 	{
 		auto frameData = blackBoard.get<FrameData>();
 
-		frameGraph.addCallbackPass(
+		blackBoard.add<SortedInstancesData>() = frameGraph.addCallbackPass<SortedInstancesData>(
 			"SortInstancesPass",
-			[=](FrameGraph::Builder& builder, auto&) {
-				if (isFinalPass)
-					builder.setSideEffect();
-
+			[=](FrameGraph::Builder& builder, SortedInstancesData& sortInstancesData) {
 				builder.read(frameData.bsFrameData);
 				builder.read(frameData.instanceCount);
+
+				sortInstancesData.bsSortedInstances =
+					builder.create<FGBindingSet>("bsSortedInstances"sv, {});
+
+				builder.setSideEffect();
 			},
-			[this, frameData, device](const auto&, FrameGraphPassResources& res, void*) {
-				auto bsFrameData   = res.get<FGBindingSet>(frameData.bsFrameData).Get();
-				auto instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
+			[this,
+		     frameData,
+		     device](const SortedInstancesData& data, FrameGraphPassResources& res, void*) {
+				auto& bsFrameData   = res.get<FGBindingSet>(frameData.bsFrameData).Get();
+				auto  instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
 
 				m_mainCommandList->open();
 
@@ -257,7 +274,7 @@ namespace gfx
 
 				m_groupedInstances[0].TrackResourceState(
 					m_mainCommandList,
-					nvrhi::ResourceStates::UnorderedAccess);
+					nvrhi::ResourceStates::ShaderResource);
 
 				m_groupedInstances[1].TrackResourceState(
 					m_mainCommandList,
@@ -272,9 +289,13 @@ namespace gfx
 						m_mainCommandList,
 						nvrhi::ResourceStates::UnorderedAccess);
 
-					m_groupedInstances[pingPong].TransitionState(
-						m_mainCommandList,
-						nvrhi::ResourceStates::ShaderResource);
+					// For the first iteration, the input is already in the correct state
+					if (bitShift != 0)
+					{
+						m_groupedInstances[pingPong].TransitionState(
+							m_mainCommandList,
+							nvrhi::ResourceStates::ShaderResource);
+					}
 
 					m_groupedInstances[pingPong ^ 1].TransitionState(
 						m_mainCommandList,
@@ -292,6 +313,12 @@ namespace gfx
 
 					pingPong = 1 - pingPong;
 				}
+
+				m_groupedInstances[0].TransitionState(
+					m_mainCommandList,
+					nvrhi::ResourceStates::ShaderResource);
+
+				res.get<FGBindingSet>(data.bsSortedInstances).SetValue(m_mainCommandList, m_bsOut);
 
 				m_mainCommandList->commitBarriers();
 

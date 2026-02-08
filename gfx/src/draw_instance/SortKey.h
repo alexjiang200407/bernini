@@ -1,6 +1,7 @@
 #pragma once
 #include "draw_instance/GeometryType.h"
 #include "draw_instance/MaterialType.h"
+#include "draw_instance/PSO.h"
 
 namespace gfx
 {
@@ -15,11 +16,7 @@ namespace gfx
 		};
 
 		SortKey() = default;
-		SortKey(
-			Layer        layerID,
-			GeometryType geomType,
-			MaterialType matType,
-			float        depthViewSpace) noexcept;
+		SortKey(Layer layerID, PSO pso, float depthViewSpace) noexcept;
 
 		SortKey&
 		operator=(uint64_t val) noexcept
@@ -31,13 +28,19 @@ namespace gfx
 		[[nodiscard]] GeometryType
 		GetGeomType() const noexcept
 		{
-			return static_cast<GeometryType>((m_value >> 56) & 0x3F);
+			return pso2GeomType(GetPSO());
+		}
+
+		[[nodiscard]] PSO
+		GetPSO() const noexcept
+		{
+			return static_cast<PSO>((m_value >> 46) & 0x3FF);
 		}
 
 		[[nodiscard]] MaterialType
 		GetMaterialType() const noexcept
 		{
-			return static_cast<MaterialType>((m_value >> 46) & 0x3FF);
+			return pso2MaterialType(GetPSO());
 		}
 
 	private:

@@ -6,6 +6,7 @@ namespace gfx
 	{
 		constexpr uint32_t PerFrameSpace      = 0;
 		constexpr uint32_t SortInstancesSpace = 1;
+		constexpr uint32_t GBufferSpace       = 2;
 	}
 
 	namespace BindingSlots

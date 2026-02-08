@@ -93,6 +93,7 @@ namespace gfx
 		std::unique_ptr<MeshFactory> m_meshFactory;
 		SetupFrameDataPass           m_setupFrameData;
 		SortInstancesPass            m_sortInstances;
+		GBufferPass                  m_gbuffer;
 
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
@@ -183,10 +184,11 @@ namespace gfx
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
 		m_meshRegistry.Init(m_nvrhiDevice);
-		m_setupFrameData.Init(m_nvrhiDevice, m_meshRegistry);
-		auto blPerFrame = m_setupFrameData.GetBindingLayout();
 
-		m_sortInstances.Init(blPerFrame, m_nvrhiDevice);
+		auto blPerFrame        = m_setupFrameData.Init(m_nvrhiDevice, m_meshRegistry);
+		auto blSortedInstances = m_sortInstances.Init(blPerFrame, m_nvrhiDevice);
+
+		m_gbuffer.Init(m_nvrhiDevice, blPerFrame, blSortedInstances);
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
 	}
@@ -405,7 +407,8 @@ namespace gfx
 		FrameGraphBlackboard blackboard;
 
 		m_setupFrameData.AttachToFrameGraph(fg, blackboard, m_meshRegistry, camera, m_nvrhiDevice);
-		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice, true);
+		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice);
+		m_gbuffer.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice);
 
 		fg.compile();
 		fg.execute(this, this);

@@ -1,6 +1,0 @@
-
-
-void CS_GenerateIndirectCommands()
-{
-    
-}

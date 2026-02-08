@@ -17,7 +17,7 @@ cbuffer SortConstants : register(b0, space1)
 };
 
 RWStructuredBuffer<uint> groupOffsets : register(u0, space1);
-StructuredBuffer<InstanceAndSortKey> g_srcKeys : register(t0, space1);
+StructuredBuffer<DrawInstanceAndSortKey> g_srcKeys : register(t0, space1);
 
 groupshared uint localBuckets[256];
 

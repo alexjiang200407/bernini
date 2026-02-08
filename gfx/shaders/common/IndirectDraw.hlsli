@@ -1,12 +1,11 @@
 #ifndef INDIRECT_DRAW_H
 #define INDIRECT_DRAW_H
 
-struct MeshletIndirectDrawArg
+struct MeshletDispatchArg
 {
     uint threadGroupCountX;
     uint threadGroupCountY;
     uint threadGroupCountZ;
-    uint visibleBufferOffset;
 };
 
 struct DrawInstance

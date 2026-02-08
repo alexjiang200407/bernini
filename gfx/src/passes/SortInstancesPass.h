@@ -9,15 +9,14 @@ namespace gfx
 	class SortInstancesPass final
 	{
 	public:
-		void
+		nvrhi::BindingLayoutHandle
 		Init(nvrhi::BindingLayoutHandle blFrameData, nvrhi::DeviceHandle device);
 
 		void
 		AttachToFrameGraph(
 			FrameGraph&           frameGraph,
 			FrameGraphBlackboard& blackBoard,
-			nvrhi::DeviceHandle   device,
-			bool                  isFinalPass = false);
+			nvrhi::DeviceHandle   device);
 
 	private:
 		void
@@ -28,20 +27,20 @@ namespace gfx
 
 		void
 		Histogram(
-			nvrhi::BindingSetHandle bsPerFrame,
-			uint32_t                numGroups,
-			uint32_t                bitshift,
-			uint32_t                pingPong);
+			BindingSetView bsPerFrame,
+			uint32_t       numGroups,
+			uint32_t       bitshift,
+			uint32_t       pingPong);
 
 		void
 		PrefixSum(uint32_t meshInstances, uint32_t pingPong);
 
 		void
 		Scatter(
-			nvrhi::BindingSetHandle bsPerFrame,
-			uint32_t                numGroups,
-			uint32_t                bitShift,
-			uint32_t                pingPong);
+			BindingSetView bsPerFrame,
+			uint32_t       numGroups,
+			uint32_t       bitShift,
+			uint32_t       pingPong);
 
 	private:
 		nvrhi::CommandListHandle     m_mainCommandList;
@@ -52,8 +51,10 @@ namespace gfx
 		nvrhi::ComputePipelineHandle m_prefixSumPipeline;
 		nvrhi::ComputePipelineHandle m_scatterPipeline;
 		nvrhi::BindingLayoutHandle   m_blGroupOffsets;
+		nvrhi::BindingLayoutHandle   m_blOut;
 		nvrhi::BindingLayoutHandle   m_blScatterInOut;
 		nvrhi::BindingSetHandle      m_bsGroupOffsets[2];
 		nvrhi::BindingSetHandle      m_bsScatterInOut[2];
+		nvrhi::BindingSetHandle      m_bsOut;
 	};
 }

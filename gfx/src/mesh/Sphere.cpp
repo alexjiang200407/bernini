@@ -71,124 +71,129 @@ namespace gfx
 	StaticMeshInfo::ID
 	MeshFactory::CreateSphereInfo(MeshRegistry& registry)
 	{
-		//if (auto existingSphereId = registry.GetMeshInfoIDByName("$Sphere"))
-		//{
-		//	return existingSphereId;
-		//}
+		std::vector<Vertex>   sphereVerts;
+		std::vector<uint32_t> sphereIndices;
 
-		//std::vector<Vertex>   sphereVerts;
-		//std::vector<uint32_t> sphereIndices;
+		constexpr uint32_t X_SEGMENTS = 32u;
+		constexpr uint32_t Y_SEGMENTS = 32u;
+		constexpr float    RADIUS     = 1.0f;
 
-		//constexpr uint32_t X_SEGMENTS = 32u;
-		//constexpr uint32_t Y_SEGMENTS = 32u;
-		//constexpr float    RADIUS     = 1.0f;
+		for (uint32_t y = 0u; y <= Y_SEGMENTS; ++y)
+		{
+			for (uint32_t x = 0u; x <= X_SEGMENTS; ++x)
+			{
+				float xSegment = (float)x / (float)X_SEGMENTS;
+				float ySegment = (float)y / (float)Y_SEGMENTS;
+				float xPos = std::cos(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
+				float yPos = std::cos(ySegment * math::PI);
+				float zPos = std::sin(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
 
-		//for (uint32_t y = 0u; y <= Y_SEGMENTS; ++y)
-		//{
-		//	for (uint32_t x = 0u; x <= X_SEGMENTS; ++x)
-		//	{
-		//		float xSegment = (float)x / (float)X_SEGMENTS;
-		//		float ySegment = (float)y / (float)Y_SEGMENTS;
-		//		float xPos = std::cos(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
-		//		float yPos = std::cos(ySegment * math::PI);
-		//		float zPos = std::sin(xSegment * 2.0f * math::PI) * std::sin(ySegment * math::PI);
+				Vertex v;
+				v.position = glm::vec3(xPos, yPos, zPos) * RADIUS;
+				v.normal   = glm::normalize(v.position);
+				v.uv       = glm::vec2(xSegment, ySegment);
+				sphereVerts.push_back(v);
+			}
+		}
 
-		//		Vertex v;
-		//		v.position = glm::vec3(xPos, yPos, zPos) * RADIUS;
-		//		v.normal   = glm::normalize(v.position);
-		//		v.uv       = glm::vec2(xSegment, ySegment);
-		//		sphereVerts.push_back(v);
-		//	}
-		//}
+		for (uint32_t y = 0u; y < Y_SEGMENTS; ++y)
+		{
+			for (uint32_t x = 0u; x < X_SEGMENTS; ++x)
+			{
+				sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x);
+				sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x);
+				sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x + 1u);
+				sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x);
+				sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x + 1u);
+				sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x + 1u);
+			}
+		}
 
-		//for (uint32_t y = 0u; y < Y_SEGMENTS; ++y)
-		//{
-		//	for (uint32_t x = 0u; x < X_SEGMENTS; ++x)
-		//	{
-		//		sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x);
-		//		sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x);
-		//		sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x + 1u);
+		uint32_t baseVertexGlobal = registry.AddVertices(sphereVerts);
 
-		//		sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x);
-		//		sphereIndices.push_back(y * (X_SEGMENTS + 1u) + x + 1u);
-		//		sphereIndices.push_back((y + 1u) * (X_SEGMENTS + 1u) + x + 1u);
-		//	}
-		//}
+		std::vector<Meshlet>  generatedMeshlets;
+		std::vector<uint32_t> allVertexMapIndices;
+		std::vector<uint32_t> allIndices;
 
-		//uint32_t baseVertexGlobal = registry.AddVertices(sphereVerts);
+		uint32_t totalTriangles     = static_cast<uint32_t>(sphereIndices.size() / 3u);
+		uint32_t trianglesProcessed = 0u;
 
-		//std::vector<Meshlet> generatedMeshlets;
-		//uint32_t             totalTriangles     = static_cast<uint32_t>(sphereIndices.size() / 3u);
-		//uint32_t             trianglesProcessed = 0u;
+		while (trianglesProcessed < totalTriangles)
+		{
+			Meshlet                                m{};
+			std::vector<uint32_t>                  localVertexMap;
+			std::vector<uint32_t>                  localIndices;
+			std::unordered_map<uint32_t, uint32_t> localRemap;
 
-		//while (trianglesProcessed < totalTriangles)
-		//{
-		//	Meshlet                                m{};
-		//	std::vector<uint32_t>                  localVertexMap;
-		//	std::vector<uint32_t>                  localIndices;
-		//	std::unordered_map<uint32_t, uint32_t> localRemap;
+			uint32_t localVertexCount   = 0u;
+			uint32_t localTriangleCount = 0u;
 
-		//	uint32_t localVertexCount   = 0u;
-		//	uint32_t localTriangleCount = 0u;
+			while (trianglesProcessed < totalTriangles)
+			{
+				uint32_t tIdx   = trianglesProcessed * 3u;
+				uint32_t tri[3] = { sphereIndices[tIdx],
+					                sphereIndices[tIdx + 1u],
+					                sphereIndices[tIdx + 2u] };
 
-		//	while (trianglesProcessed < totalTriangles)
-		//	{
-		//		uint32_t tIdx   = trianglesProcessed * 3u;
-		//		uint32_t tri[3] = { sphereIndices[tIdx],
-		//			                sphereIndices[tIdx + 1u],
-		//			                sphereIndices[tIdx + 2u] };
+				uint32_t newVertices = 0u;
+				for (uint32_t i = 0; i < 3; ++i)
+				{
+					if (localRemap.find(tri[i]) == localRemap.end())
+						newVertices++;
+				}
 
-		//		uint32_t newVertices = 0u;
-		//		for (uint32_t i = 0; i < 3; ++i)
-		//		{
-		//			if (localRemap.find(tri[i]) == localRemap.end())
-		//				newVertices++;
-		//		}
+				if (localVertexCount + newVertices > 64u || localTriangleCount + 1u > 124u)
+					break;
 
-		//		if (localVertexCount + newVertices > 64u || localTriangleCount + 1u > 124u)
-		//			break;
+				for (uint32_t i = 0; i < 3u; ++i)
+				{
+					uint32_t globalIdx = tri[i];
+					if (localRemap.find(globalIdx) == localRemap.end())
+					{
+						localRemap[globalIdx] = localVertexCount++;
+						localVertexMap.push_back(baseVertexGlobal + globalIdx);
+					}
+					localIndices.push_back(localRemap[globalIdx]);
+				}
 
-		//		for (uint32_t i = 0; i < 3u; ++i)
-		//		{
-		//			uint32_t globalIdx = tri[i];
-		//			if (localRemap.find(globalIdx) == localRemap.end())
-		//			{
-		//				localRemap[globalIdx] = localVertexCount++;
-		//				localVertexMap.push_back(baseVertexGlobal + globalIdx);
-		//			}
-		//			localIndices.push_back(localRemap[globalIdx]);
-		//		}
+				localTriangleCount++;
+				trianglesProcessed++;
+			}
 
-		//		localTriangleCount++;
-		//		trianglesProcessed++;
-		//	}
+			m.localVertexOffset = static_cast<uint32_t>(allVertexMapIndices.size());
+			m.vertexCount       = localVertexCount;
+			m.localIndexOffset  = static_cast<uint32_t>(allIndices.size());
+			m.triangleCount     = localTriangleCount;
 
-		//	m.vertexMapSegment = registry.AddVertexMapIdx(localVertexMap);
-		//	m.indexSegment     = registry.AddIndices(localIndices);
-		//	m.vertexCount      = localVertexCount;
-		//	m.triangleCount    = localTriangleCount;
+			glm::vec3 minBound(1e10f);
+			glm::vec3 maxBound(-1e10f);
+			for (auto const& [globalIdx, localIdx] : localRemap)
+			{
+				minBound = glm::min(minBound, sphereVerts[globalIdx].position);
+				maxBound = glm::max(maxBound, sphereVerts[globalIdx].position);
+			}
+			m.boundingCenter = (minBound + maxBound) * 0.5f;
+			m.boundingRadius = glm::distance(maxBound, m.boundingCenter);
 
-		//	glm::vec3 minBound(1e10f);
-		//	glm::vec3 maxBound(-1e10f);
-		//	for (auto const& [globalIdx, localIdx] : localRemap)
-		//	{
-		//		minBound = glm::min(minBound, sphereVerts[globalIdx].position);
-		//		maxBound = glm::max(maxBound, sphereVerts[globalIdx].position);
-		//	}
-		//	m.boundingCenter = (minBound + maxBound) * 0.5f;
-		//	m.boundingRadius = glm::distance(maxBound, m.boundingCenter);
+			allVertexMapIndices.insert(
+				allVertexMapIndices.end(),
+				localVertexMap.begin(),
+				localVertexMap.end());
+			allIndices.insert(allIndices.end(), localIndices.begin(), localIndices.end());
 
-		//	generatedMeshlets.push_back(m);
-		//}
+			generatedMeshlets.push_back(m);
+		}
 
-		//uint32_t baseMeshletGlobal = registry.AddMeshlets(generatedMeshlets);
+		uint32_t baseMapGlobal     = registry.AddVertexMapIdx(allVertexMapIndices);
+		uint32_t baseIndexGlobal   = registry.AddIndices(allIndices);
+		uint32_t baseMeshletGlobal = registry.AddMeshlets(generatedMeshlets);
 
-		//auto info           = MeshInfo{};
-		//info.meshletSegment = baseMeshletGlobal;
-		//info.meshletCount   = static_cast<uint32_t>(generatedMeshlets.size());
-		//info.materialID     = 0;
+		auto info           = StaticMeshInfo{};
+		info.vertexSegment  = baseMapGlobal;
+		info.indexSegment   = baseIndexGlobal;
+		info.meshletSegment = baseMeshletGlobal;
+		info.meshletCount   = static_cast<uint32_t>(generatedMeshlets.size());
 
-		//return registry.AddInfo("$Sphere", info, baseVertexGlobal, sphereVerts.size());
-		return 0;
+		return registry.AddStaticMeshInfo(std::move(info));
 	}
 }

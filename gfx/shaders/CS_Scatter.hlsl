@@ -16,10 +16,9 @@ cbuffer SortConstants : register(b0, space1)
     uint bitShift;
 };
 
-StructuredBuffer<InstanceAndSortKey> g_srcKeys : register(t0, space1);
-StructuredBuffer<uint> g_groupOffsets : register(t1, space1);
-
-RWStructuredBuffer<InstanceAndSortKey> g_dstKeys : register(u0, space1);
+StructuredBuffer<DrawInstanceAndSortKey> g_SrcKeys : register(t0, space1);
+StructuredBuffer<uint> g_GroupOffsets : register(t1, space1);
+RWStructuredBuffer<DrawInstanceAndSortKey> g_DstKeys : register(u0, space1);
 
 groupshared uint l_LocalBuckets[256];
 
@@ -36,7 +35,7 @@ void CS_Scatter(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID, uint3 DTi
     uint elementIdx = DTid.x;
     
     bool isActive = elementIdx < instanceCount;
-    InstanceAndSortKey myKey;
+    DrawInstanceAndSortKey myKey;
 
     if (isActive)
     {
@@ -44,11 +43,11 @@ void CS_Scatter(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID, uint3 DTi
         {
             DrawInstance inst = instanceBuffer[elementIdx + 1];
             myKey.sortKey = inst.sortKey;
-            myKey.instance = elementIdx;
+            myKey.instance = elementIdx + 1;
         }
         else
         {
-            myKey = g_srcKeys[elementIdx];
+            myKey = g_SrcKeys[elementIdx];
         }
 
         uint radix = (uint) ((myKey.sortKey >> bitShift) & 0xFF);
@@ -57,10 +56,10 @@ void CS_Scatter(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID, uint3 DTi
         InterlockedAdd(l_LocalBuckets[radix], 1, localRank);
 
         uint groupOffsetIdx = (Gid.x * 256) + radix;
-        uint globalBaseOffset = g_groupOffsets[groupOffsetIdx];
+        uint globalBaseOffset = g_GroupOffsets[groupOffsetIdx];
 
         uint finalDestinationIndex = globalBaseOffset + localRank;
 
-        g_dstKeys[finalDestinationIndex] = myKey;
+        g_DstKeys[finalDestinationIndex] = myKey;
     }
 }

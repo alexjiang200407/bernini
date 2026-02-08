@@ -14,7 +14,7 @@
 
 namespace gfx
 {
-	void
+	nvrhi::BindingLayoutHandle
 	SetupFrameDataPass::Init(nvrhi::DeviceHandle device, MeshRegistry& registry)
 	{
 		m_mainCommandList = device->createCommandList();
@@ -35,6 +35,8 @@ namespace gfx
 		registry.AttachBindingLayoutItems(bindingLayoutDesc);
 
 		m_blPerFrame = device->createBindingLayout(bindingLayoutDesc);
+
+		return m_blPerFrame;
 	}
 
 	void
@@ -50,12 +52,10 @@ namespace gfx
 			[this, &registry, device](FrameGraph::Builder& builder, FrameData& data) {
 				using BindingLayoutAView = FrameGraphView<nvrhi::IBindingLayout>;
 
-				data.bsFrameData = builder.create<FGBindingSet>(
-					"bsFrameData"s,
-					FGBindingSet::Desc::Create(m_bsPerFrame));
+				data.bsFrameData = builder.create<FGBindingSet>("bsFrameData"sv, {});
 
 				data.instanceCount =
-					builder.create<FGCount>("instanceCount"s, FGCount::Desc::Create(0));
+					builder.create<FGCount>("instanceCount"sv, FGCount::Desc::Create(0));
 
 				data.bsFrameData   = builder.write(data.bsFrameData);
 				data.instanceCount = builder.write(data.instanceCount);
@@ -85,7 +85,7 @@ namespace gfx
 					m_bsPerFrame = device->createBindingSet(bindingSetDesc, m_blPerFrame);
 				}
 
-				fgr.get<FGBindingSet>(data.bsFrameData).SetValue(m_bsPerFrame);
+				fgr.get<FGBindingSet>(data.bsFrameData).SetValue(m_mainCommandList, m_bsPerFrame);
 
 				m_frameConstants["instanceCount"] = instanceCount;
 

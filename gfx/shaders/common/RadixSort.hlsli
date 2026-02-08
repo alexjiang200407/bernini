@@ -1,7 +1,7 @@
-#ifndef RADIX_SORT_HLSI
-#define RADIX_SORT_HLSI
+#ifndef RADIX_SORT_HLSLI
+#define RADIX_SORT_HLSLI
 
-struct InstanceAndSortKey
+struct DrawInstanceAndSortKey
 {
     uint64_t sortKey;
     uint instance;

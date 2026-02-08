@@ -55,4 +55,6 @@ struct MeshVertexOut
     float2 uv : TEXCOORD;
 };
 
+static uint GeomType_StaticMesh = 0;
+
 #endif

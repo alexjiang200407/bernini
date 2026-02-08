@@ -12,7 +12,7 @@ namespace gfx
 	class SetupFrameDataPass final
 	{
 	public:
-		void
+		nvrhi::BindingLayoutHandle
 		Init(nvrhi::DeviceHandle device, MeshRegistry& registry);
 
 		void
