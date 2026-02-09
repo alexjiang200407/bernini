@@ -1,20 +1,8 @@
 #include "common/Mesh.hlsli"
+#include "common/FrameDataBindings.hlsli"
+#include "common/RadixSort.hlsli"
 
 groupshared MeshletPayload s_payload;
-
-cbuffer FrameConstants : register(b0, space0)
-{
-    float4x4 viewMatrix;
-    float4x4 projMatrix;
-    uint instanceCount;
-};
-
-StructuredBuffer<MeshInfo> meshInfoBuffer : register(t1, space0);
-StructuredBuffer<MeshInstance> instanceBuffer : register(t4, space0);
-StructuredBuffer<Meshlet> meshletBuffer : register(t5, space0);
-
-StructuredBuffer<uint> meshInfoRedirectBuffer : register(t6, space0);
-StructuredBuffer<uint> meshletRedirectBuffer : register(t10, space0);
 
 bool IsSphereInFrustum(float4 planes[6], float3 center, float radius)
 {
@@ -38,18 +26,29 @@ bool IsPointInFrustum(float4 planes[6], float3 pt)
     return true;
 }
 
-[numthreads(64, 1, 1)]
-void AS_GBuffer(uint gtid : SV_GroupThreadID, uint gid : SV_GroupID)
+StructuredBuffer<DrawInstanceAndSortKey> g_SortedKeys : register(t0, space1);
+StructuredBuffer<uint> g_BinInstanceOffsets : register(t1, space1);
+
+cbuffer RootConstants : register(b0, space2)
 {
-    uint physicalInstanceID = gid + 1;
-    MeshInstance instance = instanceBuffer[physicalInstanceID];
+    uint binIndex;
+};
+
+[numthreads(64, 1, 1)]
+void AS_GBuffer_StaticMesh(uint gtid : SV_GroupThreadID, uint gid : SV_GroupID)
+{
+    uint sortedKeysIdx = g_BinInstanceOffsets[binIndex] + gid;
+    uint drawInstanceIdx = g_SortedKeys[sortedKeysIdx].instance;
+    DrawInstance drawInst = g_DrawInstances[drawInstanceIdx];
+    uint physicalInstanceIdx = g_StaticMeshInstanceRedirect[drawInst.specId];
+    StaticMeshInstance instance = g_StaticInstances[physicalInstanceIdx];
     
-    uint physicalMeshInfoID = meshInfoRedirectBuffer[instance.infoID];
-    MeshInfo info = meshInfoBuffer[physicalMeshInfoID];
+    uint physicalMeshInfoID = g_MeshInfoRedirect[instance.meshInfoID];
+    StaticMeshInfo info = g_MeshInfoBuffer[physicalMeshInfoID];
 
     if (gtid == 0)
     {
-        s_payload.instanceID = physicalInstanceID;
+        s_payload.instanceIdx = physicalInstanceIdx;
         s_payload.visibleCount = 0;
         // optional: zero out entries if you want deterministic memory (not required)
         // for (uint k = 0; k < MAX_AS_MESHLETS; ++k) s_payload.visibleIndices[k] = 0;
@@ -80,14 +79,13 @@ void AS_GBuffer(uint gtid : SV_GroupThreadID, uint gid : SV_GroupID)
 
     for (uint i = gtid; i < info.meshletCount; i += 64)
     {
-        uint physicalMeshletBase = meshletRedirectBuffer[info.meshletSegment];
+        uint physicalMeshletBase = g_MeshletRedirect[info.meshletSegment];
         uint meshletIndex = physicalMeshletBase + i;
-        Meshlet m = meshletBuffer[meshletIndex];
+        Meshlet m = g_MeshletBuffer[meshletIndex];
 
         float4 centerWorld = mul(instance.modelTransform, float4(m.boundingCenter, 1.0f));
         float scaledRadius = m.boundingRadius * maxScale;
 
-        //bool isVisible = IsPointInFrustum(planes, centerWorld.xyz);
         bool isVisible = IsSphereInFrustum(planes, centerWorld.xyz, scaledRadius);
 
         if (isVisible)

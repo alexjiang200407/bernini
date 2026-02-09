@@ -1,7 +1,7 @@
 #ifndef INDIRECT_DRAW_H
 #define INDIRECT_DRAW_H
 
-struct MeshletDispatchArg
+struct DispatchArg
 {
     uint threadGroupCountX;
     uint threadGroupCountY;
@@ -11,7 +11,7 @@ struct MeshletDispatchArg
 struct DrawInstance
 {
     uint64_t sortKey;
-    uint dataIdx;
+    uint specId;
 };
 
 #endif

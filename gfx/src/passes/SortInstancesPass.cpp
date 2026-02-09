@@ -13,7 +13,7 @@ namespace gfx
 	{
 		m_mainCommandList = device->createCommandList();
 
-		m_groupOffsets = ComputeBufferDesc{}
+		g_binInstanceOffsets = ComputeBufferDesc{}
 		                     .SetElement<uint32_t>()
 		                     .SetInitialState(nvrhi::ResourceStates::ShaderResource)
 		                     .SetKeepInitialState()
@@ -31,7 +31,7 @@ namespace gfx
 			for (auto i : { 0, 1 })
 			{
 				auto name             = std::format("GroupedInstances{}", i);
-				m_groupedInstances[i] = ComputeBufferDesc{}
+				m_sortedInstances[i] = ComputeBufferDesc{}
 				                            .SetElement<InstanceAndSortKey>()
 				                            .SetInitialState(nvrhi::ResourceStates::ShaderResource)
 				                            .SetElementCount(1)
@@ -110,6 +110,7 @@ namespace gfx
 		auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
 		bindingLayoutDesc.setRegisterSpace(BindingSpaces::SortInstancesSpace)
 			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1))
 			.setVisibility(nvrhi::ShaderType::All);
 
 		m_blOut = device->createBindingLayout(bindingLayoutDesc);
@@ -129,8 +130,8 @@ namespace gfx
 			bindingSetDesc
 				.addItem(
 					m_sortInstancesConstants.GetBindingSetItem(BindingSlots::CB::SortConstants))
-				.addItem(m_groupOffsets.GetBindingSetItemUAV(BindingSlots::UAV::GroupOffsets))
-				.addItem(m_groupedInstances[i].GetBindingSetItemSRV(0));
+				.addItem(g_binInstanceOffsets.GetBindingSetItemUAV(BindingSlots::UAV::GroupOffsets))
+				.addItem(m_sortedInstances[i].GetBindingSetItemSRV(0));
 
 			m_bsGroupOffsets[i] = device->createBindingSet(bindingSetDesc, m_blGroupOffsets);
 		}
@@ -141,15 +142,16 @@ namespace gfx
 			bindingSetDesc
 				.addItem(
 					m_sortInstancesConstants.GetBindingSetItem(BindingSlots::CB::SortConstants))
-				.addItem(m_groupedInstances[i].GetBindingSetItemSRV(0))
-				.addItem(m_groupedInstances[i ^ 1].GetBindingSetItemUAV(0))
-				.addItem(m_groupOffsets.GetBindingSetItemSRV(1));
+				.addItem(m_sortedInstances[i].GetBindingSetItemSRV(0))
+				.addItem(m_sortedInstances[i ^ 1].GetBindingSetItemUAV(0))
+				.addItem(g_binInstanceOffsets.GetBindingSetItemSRV(1));
 
 			m_bsScatterInOut[i] = device->createBindingSet(bindingSetDesc, m_blScatterInOut);
 		}
 
 		auto bindingSetDesc = nvrhi::BindingSetDesc{};
-		bindingSetDesc.addItem(m_groupedInstances[0].GetBindingSetItemSRV(0));
+		bindingSetDesc.addItem(m_sortedInstances[0].GetBindingSetItemSRV(0))
+			.addItem(g_binInstanceOffsets.GetBindingSetItemSRV(1));
 
 		m_bsOut = device->createBindingSet(bindingSetDesc, m_blOut);
 	}
@@ -160,15 +162,15 @@ namespace gfx
 		auto instancesAligned = alignNext(instances, 256u);
 		bool updated          = false;
 
-		if (instancesAligned > m_groupOffsets.Size())
+		if (instancesAligned > g_binInstanceOffsets.Size())
 		{
-			m_groupOffsets.Resize(instancesAligned * 2);
-			m_groupOffsets.Update(m_mainCommandList, m_mainCommandList->getDevice());
+			g_binInstanceOffsets.Resize(instancesAligned * 2);
+			g_binInstanceOffsets.Update(m_mainCommandList, m_mainCommandList->getDevice());
 
 			for (auto i : { 0, 1 })
 			{
-				m_groupedInstances[i].Resize(instancesAligned * 2);
-				m_groupedInstances[i].Update(m_mainCommandList, m_mainCommandList->getDevice());
+				m_sortedInstances[i].Resize(instancesAligned * 2);
+				m_sortedInstances[i].Update(m_mainCommandList, m_mainCommandList->getDevice());
 			}
 
 			updated = true;
@@ -268,15 +270,15 @@ namespace gfx
 					CreateBindingSet(device);
 				}
 
-				m_groupOffsets.TrackResourceState(
+				g_binInstanceOffsets.TrackResourceState(
 					m_mainCommandList,
 					nvrhi::ResourceStates::ShaderResource);
 
-				m_groupedInstances[0].TrackResourceState(
+				m_sortedInstances[0].TrackResourceState(
 					m_mainCommandList,
 					nvrhi::ResourceStates::ShaderResource);
 
-				m_groupedInstances[1].TrackResourceState(
+				m_sortedInstances[1].TrackResourceState(
 					m_mainCommandList,
 					nvrhi::ResourceStates::ShaderResource);
 
@@ -285,19 +287,19 @@ namespace gfx
 
 				for (auto bitShift = 0u, pingPong = 0u; bitShift < 64; bitShift += 8)
 				{
-					m_groupOffsets.TransitionState(
+					g_binInstanceOffsets.TransitionState(
 						m_mainCommandList,
 						nvrhi::ResourceStates::UnorderedAccess);
 
 					// For the first iteration, the input is already in the correct state
 					if (bitShift != 0)
 					{
-						m_groupedInstances[pingPong].TransitionState(
+						m_sortedInstances[pingPong].TransitionState(
 							m_mainCommandList,
 							nvrhi::ResourceStates::ShaderResource);
 					}
 
-					m_groupedInstances[pingPong ^ 1].TransitionState(
+					m_sortedInstances[pingPong ^ 1].TransitionState(
 						m_mainCommandList,
 						nvrhi::ResourceStates::UnorderedAccess);
 
@@ -305,7 +307,7 @@ namespace gfx
 
 					PrefixSum(numGroups, pingPong);
 
-					m_groupOffsets.TransitionState(
+					g_binInstanceOffsets.TransitionState(
 						m_mainCommandList,
 						nvrhi::ResourceStates::ShaderResource);
 
@@ -314,7 +316,7 @@ namespace gfx
 					pingPong = 1 - pingPong;
 				}
 
-				m_groupedInstances[0].TransitionState(
+				m_sortedInstances[0].TransitionState(
 					m_mainCommandList,
 					nvrhi::ResourceStates::ShaderResource);
 

@@ -45,8 +45,8 @@ namespace gfx
 	private:
 		nvrhi::CommandListHandle     m_mainCommandList;
 		DynamicConstantBuffer        m_sortInstancesConstants;
-		ComputeBuffer                m_groupedInstances[2];
-		ComputeBuffer                m_groupOffsets;
+		ComputeBuffer                m_sortedInstances[2];
+		ComputeBuffer                g_binInstanceOffsets;
 		nvrhi::ComputePipelineHandle m_histogramPipeline;
 		nvrhi::ComputePipelineHandle m_prefixSumPipeline;
 		nvrhi::ComputePipelineHandle m_scatterPipeline;

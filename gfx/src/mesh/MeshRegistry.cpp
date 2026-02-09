@@ -48,8 +48,8 @@ namespace gfx
 		auto instanceId = m_staticMeshInstances.EmplaceBack(std::move(instance));
 
 		DrawInstance drawInstance{};
-		drawInstance.dataIndex = instanceId;
-		drawInstance.sortKey   = 0;
+		drawInstance.specId  = instanceId;
+		drawInstance.sortKey = 0;
 
 		return m_drawInstances.EmplaceBack(std::move(drawInstance));
 	}
@@ -78,7 +78,7 @@ namespace gfx
 		{
 		case GeometryType::kStatic:
 		{
-			RemoveStaticMeshInstance(drawInstance.dataIndex);
+			RemoveStaticMeshInstance(drawInstance.specId);
 			break;
 		}
 		default:
@@ -117,7 +117,8 @@ namespace gfx
 		const StaticMeshInfo& info = m_staticMeshInfos.At(id);
 
 		m_indices.Erase(info.indexSegment);
-		m_vertexMap.Erase(info.vertexSegment);
+		m_vertexMap.Erase(info.vertexMapSegment);
+		m_vertices.Erase(info.vertexSegment);
 		m_meshlets.Erase(info.meshletSegment);
 		m_staticMeshInfos.Erase(id);
 

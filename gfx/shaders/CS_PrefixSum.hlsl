@@ -2,7 +2,7 @@ cbuffer ScanConstants : register(b0, space1)
 {
     uint numGroups;
 };
-RWStructuredBuffer<uint> groupOffsets : register(u0, space1);
+RWStructuredBuffer<uint> g_BinInstanceOffsets : register(u0, space1);
 
 groupshared uint l_ScanData[256];
 
@@ -17,7 +17,7 @@ void CS_PrefixSum(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadI
     for (uint i = 0; i < numGroups; ++i)
     {
         uint idx = (i * 256) + bucketIdx;
-        myTotalCount += groupOffsets[idx];
+        myTotalCount += g_BinInstanceOffsets[idx];
     }
 
     l_ScanData[tid] = myTotalCount;
@@ -65,9 +65,9 @@ void CS_PrefixSum(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadI
     for (uint k = 0; k < numGroups; ++k)
     {
         uint idx = (k * 256) + bucketIdx;
-        uint count = groupOffsets[idx];
+        uint count = g_BinInstanceOffsets[idx];
         
-        groupOffsets[idx] = currentRunningOffset;
+        g_BinInstanceOffsets[idx] = currentRunningOffset;
         currentRunningOffset += count;
     }
 }

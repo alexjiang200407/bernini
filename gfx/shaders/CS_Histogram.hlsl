@@ -1,23 +1,15 @@
 #include "common/Mesh.hlsli"
 #include "common/IndirectDraw.hlsli"
 #include "common/RadixSort.hlsli"
-
-cbuffer FrameConstants : register(b0, space0)
-{
-    float4x4 viewMatrix;
-    float4x4 projMatrix;
-    uint instanceCount;
-};
-
-StructuredBuffer<DrawInstance> instanceBuffer : register(t5, space0);
+#include "common/FrameDataBindings.hlsli"
 
 cbuffer SortConstants : register(b0, space1)
 {
     uint bitShift;
 };
 
-RWStructuredBuffer<uint> groupOffsets : register(u0, space1);
-StructuredBuffer<DrawInstanceAndSortKey> g_srcKeys : register(t0, space1);
+RWStructuredBuffer<uint> g_BinInstanceOffsets : register(u0, space1);
+StructuredBuffer<DrawInstanceAndSortKey> g_SrcKeys : register(t0, space1);
 
 groupshared uint localBuckets[256];
 
@@ -36,11 +28,11 @@ void CS_Histogram(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID, uint3 D
         uint64_t sortKey = 0;
         if (bitShift == 0)
         {
-            sortKey = instanceBuffer[globalKeyIdx + 1].sortKey;
+            sortKey = g_DrawInstances[globalKeyIdx + 1].sortKey;
         }
         else
         {
-            sortKey = g_srcKeys[globalKeyIdx].sortKey;
+            sortKey = g_SrcKeys[globalKeyIdx].sortKey;
         }
         uint radix = (uint) ((sortKey >> bitShift) & 0xFF);
         InterlockedAdd(localBuckets[radix], 1);
@@ -51,6 +43,6 @@ void CS_Histogram(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID, uint3 D
     if (GTid.x < 256)
     {
         uint outputIdx = (Gid.x * 256) + GTid.x;
-        groupOffsets[outputIdx] = localBuckets[GTid.x];
+        g_BinInstanceOffsets[outputIdx] = localBuckets[GTid.x];
     }
 }

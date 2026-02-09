@@ -10,6 +10,7 @@ struct StaticMeshInstance
 
 struct StaticMeshInfo
 {
+    uint vertexMapSegment;
     uint vertexSegment;
     uint indexSegment;
     uint meshletSegment;
@@ -38,10 +39,11 @@ struct Meshlet
 #define MAX_PRIMS_PER_MESHLET 124
 #define MAX_VERTICES_PER_MESHLET 64
 #define MAX_AS_MESHLETS 64
+#define INSTANCES_PER_AS_GROUP 32
 
 struct MeshletPayload
 {
-    uint instanceID;
+    uint instanceIdx;
     uint meshletBaseIndex;
     uint meshletSegment;
     uint visibleCount;

@@ -9,7 +9,7 @@ namespace gfx
 	// Geom type:     bits [32-39] (8 bits)  - metadata for secondary sorting
 	// Depth:         bits [00-31] (32 bits)
 
-	SortKey::SortKey(Layer layerID, PSO pso, float depthViewSpace) noexcept
+	SortKey::SortKey(LayerType layerID, PSO pso, float depthViewSpace) noexcept
 	{
 		union
 		{
@@ -19,8 +19,8 @@ namespace gfx
 		depthCast.f       = depthViewSpace;
 		uint32_t depthInt = depthCast.u;
 
-		auto geomType = pso2GeomType(pso);
-		auto matType  = pso2MaterialType(pso);
+		auto geomType = psoGeomType(pso);
+		auto matType  = psoMaterialType(pso);
 		depthInt ^= (-(int32_t)(depthInt >> 31) | 0x80000000);
 
 		uint64_t layerVal = static_cast<uint64_t>(layerID) & 0x3;    // 2 bits

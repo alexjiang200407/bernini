@@ -47,11 +47,12 @@ namespace gfx
 		const auto meshletSpan       = std::span<const Meshlet>{ &m, 1 };
 		const auto baseMeshletGlobal = registry.AddMeshlets(meshletSpan);
 
-		auto info           = StaticMeshInfo{};
-		info.vertexSegment  = baseMapGlobal;
-		info.indexSegment   = baseIndexGlobal;
-		info.meshletSegment = baseMeshletGlobal;
-		info.meshletCount   = 1;
+		auto info             = StaticMeshInfo{};
+		info.vertexSegment    = baseVertexGlobal;
+		info.indexSegment     = baseIndexGlobal;
+		info.meshletSegment   = baseMeshletGlobal;
+		info.meshletCount     = 1;
+		info.vertexMapSegment = baseMapGlobal;
 
 		return registry.AddStaticMeshInfo(std::move(info));
 	}

@@ -10,10 +10,11 @@ namespace gfx
 	{
 		using ID = uint32_t;
 
-		uint32_t vertexSegment  = 0u;
-		uint32_t indexSegment   = 0u;
-		uint32_t meshletSegment = 0u;
-		uint32_t meshletCount   = 0u;
+		uint32_t vertexMapSegment = 0u;
+		uint32_t vertexSegment    = 0u;
+		uint32_t indexSegment     = 0u;
+		uint32_t meshletSegment   = 0u;
+		uint32_t meshletCount     = 0u;
 	};
 
 	struct StaticMeshInstance final

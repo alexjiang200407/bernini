@@ -188,7 +188,7 @@ namespace gfx
 		auto blPerFrame        = m_setupFrameData.Init(m_nvrhiDevice, m_meshRegistry);
 		auto blSortedInstances = m_sortInstances.Init(blPerFrame, m_nvrhiDevice);
 
-		m_gbuffer.Init(m_nvrhiDevice, blPerFrame, blSortedInstances);
+		m_gbuffer.Init(m_nvrhiDevice, blPerFrame, blSortedInstances, m_framebufferInfo);
 
 		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
 	}
@@ -408,7 +408,13 @@ namespace gfx
 
 		m_setupFrameData.AttachToFrameGraph(fg, blackboard, m_meshRegistry, camera, m_nvrhiDevice);
 		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice);
-		m_gbuffer.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice);
+		m_gbuffer.AttachToFrameGraph(
+			fg,
+			blackboard,
+			m_nvrhiDevice,
+			nvrhiFramebuffer,
+			m_windowWidth,
+			m_windowHeight);
 
 		fg.compile();
 		fg.execute(this, this);

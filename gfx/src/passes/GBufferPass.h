@@ -34,8 +34,12 @@ namespace gfx
 		Init(
 			nvrhi::DeviceHandle        device,
 			nvrhi::BindingLayoutHandle blPerFrame,
-			nvrhi::BindingLayoutHandle blSortedInstances)
+			nvrhi::BindingLayoutHandle blSortedInstances,
+			nvrhi::FramebufferInfo     outBufferInfo)
 		{
+			m_blPerFrame        = blPerFrame;
+			m_blSortedInstances = blSortedInstances;
+
 			m_drawArgs = ComputeBufferDesc{}
 			                 .SetElement<MeshletDispatchArg>()
 			                 .SetElementCount(PSO_COUNT)
@@ -43,56 +47,43 @@ namespace gfx
 			                 .SetName("GBufferPass Draw Args")
 			                 .Create(device);
 
-			m_binMeshletCounts = ComputeBufferDesc{}
-			                         .SetElement<uint32_t>()
-			                         .SetElementCount(PSO_COUNT)
-			                         .SetInitialState(nvrhi::ResourceStates::ShaderResource)
-			                         .SetName("Meshlet Counts Per Bin")
-			                         .Create(device);
-
 			m_cmdList = device->createCommandList();
 
 			{
-				auto blDesc = nvrhi::BindingLayoutDesc{};
-				blDesc.setRegisterSpace(BindingSpaces::GBufferSpace)
-					.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0))
-					.setVisibility(nvrhi::ShaderType::All);
+				auto rootConstDesc = DynamicConstantBufferDesc{};
+				rootConstDesc.AddElement("binIndex", ElementType::kUInt)
+					.SetIsPushConstant()
+					.SetName("Bin Index");
 
-				auto blCountMeshlets = device->createBindingLayout(blDesc);
+				m_gBufferRootConstants.Init(device, rootConstDesc);
 
 				auto bsDesc = nvrhi::BindingSetDesc{};
-				bsDesc.addItem(m_binMeshletCounts.GetBindingSetItemUAV(0));
-				m_bsCountMeshlets = device->createBindingSet(bsDesc, blCountMeshlets);
+				auto blDesc = nvrhi::BindingLayoutDesc{};
 
-				auto computePipelineDesc = nvrhi::ComputePipelineDesc{};
-				computePipelineDesc.addBindingLayout(blPerFrame)
-					.addBindingLayout(blSortedInstances)
-					.addBindingLayout(blCountMeshlets)
-					.setComputeShader(createShaderFromFile(
-						device,
-						"shaders/CS_GBuffer_CountMeshletsPerBin.cso",
-						nvrhi::ShaderType::Compute,
-						"CS_GBuffer_CountMeshletsPerBin"));
+				blDesc.addItem(nvrhi::BindingLayoutItem::PushConstants(0, 16))
+					.setVisibility(nvrhi::ShaderType::Amplification)
+					.setRegisterSpace(BindingSpaces::GBufferSpace);
+				bsDesc.addItem(m_gBufferRootConstants.GetBindingSetItem(0));
 
-				m_countMeshletsPipeline = device->createComputePipeline(computePipelineDesc);
+				m_blDrawArgs = device->createBindingLayout(blDesc);
+				m_bsDrawArgs = device->createBindingSet(bsDesc, m_blDrawArgs);
 			}
 
 			{
 				auto blDesc = nvrhi::BindingLayoutDesc{};
 				blDesc.setRegisterSpace(BindingSpaces::GBufferSpace)
 					.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0))
-					.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0))
 					.setVisibility(nvrhi::ShaderType::All);
 
 				auto blGenDispatchArgs = device->createBindingLayout(blDesc);
 
 				auto bsDesc = nvrhi::BindingSetDesc{};
-				bsDesc.addItem(m_drawArgs.GetBindingSetItemUAV(0))
-					.addItem(m_binMeshletCounts.GetBindingSetItemSRV(0));
+				bsDesc.addItem(m_drawArgs.GetBindingSetItemUAV(0));
 				m_bsGenDispatchArgs = device->createBindingSet(bsDesc, blGenDispatchArgs);
 
 				auto computePipelineDesc = nvrhi::ComputePipelineDesc{};
 				computePipelineDesc.addBindingLayout(blGenDispatchArgs)
+					.addBindingLayout(blSortedInstances)
 					.setComputeShader(createShaderFromFile(
 						device,
 						"shaders/CS_GBuffer_GenDispatchArgs.cso",
@@ -101,40 +92,103 @@ namespace gfx
 
 				m_genDispatchArgsPipeline = device->createComputePipeline(computePipelineDesc);
 			}
+
+			static auto renderState = nvrhi::RenderState{}
+			                              .setRasterState(
+											  nvrhi::RasterState{}
+												  .setCullMode(nvrhi::RasterCullMode::None)
+												  .setFillMode(nvrhi::RasterFillMode::Solid))
+			                              .setDepthStencilState(
+											  nvrhi::DepthStencilState{}
+												  .setDepthTestEnable(true)
+												  .setDepthWriteEnable(true)
+												  .setDepthFunc(nvrhi::ComparisonFunc::Less)
+												  .setStencilEnable(false));
+
+			AddDrawStrategy(
+				device,
+				PSO::kOpaque_StaticMesh_PBR,
+				outBufferInfo,
+				"shaders/AS_GBuffer_StaticMesh.cso",
+				"shaders/MS_GBuffer_StaticMesh.cso",
+				"shaders/PS_GBuffer_Green.cso",
+				renderState,
+				m_blDrawArgs);
+
+			AddDrawStrategy(
+				device,
+				PSO::kAlphaTest_StaticMesh_PBR,
+				outBufferInfo,
+				"shaders/AS_GBuffer_StaticMesh.cso",
+				"shaders/MS_GBuffer_StaticMesh.cso",
+				"shaders/PS_GBuffer_Green.cso",
+				renderState,
+				m_blDrawArgs);
+
+			AddDrawStrategy(
+				device,
+				PSO::kTransparent_StaticMesh_PBR,
+				outBufferInfo,
+				"shaders/AS_GBuffer_StaticMesh.cso",
+				"shaders/MS_GBuffer_StaticMesh.cso",
+				"shaders/PS_GBuffer_Green.cso",
+				renderState,
+				m_blDrawArgs);
 		}
 
 		void
-		CountMeshletsPerPSO(
-			const BindingSetView& bsFrameData,
-			const BindingSetView& bsSortedInstances,
-			uint32_t              instanceCount)
-		{
-			auto state = nvrhi::ComputeState{};
-			state.setPipeline(m_countMeshletsPipeline);
-
-			bsFrameData.AttachBindingSetTo(state);
-			bsSortedInstances.AttachBindingSetTo(state);
-			state.addBindingSet(m_bsCountMeshlets);
-
-			m_cmdList->setComputeState(state);
-			m_cmdList->dispatch(instanceCount);
-		}
-
-		void
-		BuildDrawArgs()
+		BuildDrawArgs(BindingSetView bsSortData)
 		{
 			auto state = nvrhi::ComputeState{};
 			state.setPipeline(m_genDispatchArgsPipeline).addBindingSet(m_bsGenDispatchArgs);
+			bsSortData.AttachBindingSetTo(state);
 
 			m_cmdList->setComputeState(state);
 			m_cmdList->dispatch(PSO_COUNT);
 		}
 
 		void
+		DispatchMeshlets(
+			BindingSetView           bsFrameData,
+			BindingSetView           bsSortedData,
+			nvrhi::FramebufferHandle frameBuffer,
+			nvrhi::ViewportState     vpState)
+		{
+			for (auto x = 0; x < PSO_COUNT; ++x)
+			{
+				auto state = nvrhi::MeshletState{};
+				state.setIndirectParams(m_drawArgs.GetBuffer())
+					.setPipeline(m_meshletPipeline[x])
+					.setFramebuffer(frameBuffer)
+					.setViewport(vpState);
+
+				bsFrameData.AttachBindingSetTo(state);
+				bsSortedData.AttachBindingSetTo(state);
+				state.addBindingSet(m_bsDrawArgs);
+
+				m_cmdList->setMeshletState(state);
+
+				m_gBufferRootConstants["binIndex"] = x;
+				m_gBufferRootConstants.Update(m_cmdList);
+
+				m_cmdList->dispatchMeshIndirect(x * sizeof(MeshletDispatchArg));
+			}
+		}
+
+		void
+		SetPipeline(PSO pso, nvrhi::MeshletPipelineHandle pipeline)
+		{
+			m_meshletPipeline[static_cast<uint32_t>(pso)] = pipeline;
+		}
+
+		void
 		AttachToFrameGraph(
-			FrameGraph&           frameGraph,
-			FrameGraphBlackboard& blackBoard,
-			nvrhi::DeviceHandle   device)
+			FrameGraph&              frameGraph,
+			FrameGraphBlackboard&    blackBoard,
+			nvrhi::DeviceHandle      device,
+			nvrhi::FramebufferHandle frameBuffer,
+			uint32_t                 screenWidth,
+			uint32_t                 screenHeight)
 		{
 			auto frameData        = blackBoard.get<FrameData>();
 			auto sortInstanceData = blackBoard.get<SortedInstancesData>();
@@ -150,10 +204,7 @@ namespace gfx
 
 					builder.setSideEffect();
 				},
-				[this, device, &blackBoard, sortInstanceData, frameData](
-					const auto&,
-					FrameGraphPassResources& res,
-					void*) {
+				[=, &blackBoard](const auto&, FrameGraphPassResources& res, void*) {
 					m_cmdList->open();
 
 					auto  instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
@@ -164,29 +215,23 @@ namespace gfx
 					bsFrameData.TrackResources(m_cmdList);
 					bsSortedInstances.TrackResources(m_cmdList);
 
-					m_binMeshletCounts.TrackResourceState(
-						m_cmdList,
-						nvrhi::ResourceStates::ShaderResource);
 					m_drawArgs.TrackResourceState(
 						m_cmdList,
 						nvrhi::ResourceStates::IndirectArgument);
 
-					m_binMeshletCounts.TransitionState(
-						m_cmdList,
-						nvrhi::ResourceStates::UnorderedAccess);
-
-					m_binMeshletCounts.Clear(m_cmdList);
-
-					CountMeshletsPerPSO(bsFrameData, bsSortedInstances, instanceCount);
-
 					m_drawArgs.TransitionState(m_cmdList, nvrhi::ResourceStates::UnorderedAccess);
-					m_binMeshletCounts.TransitionState(
-						m_cmdList,
-						nvrhi::ResourceStates::ShaderResource);
 
-					BuildDrawArgs();
+					BuildDrawArgs(bsSortedInstances);
 
 					m_drawArgs.TransitionState(m_cmdList, nvrhi::ResourceStates::IndirectArgument);
+
+					DispatchMeshlets(
+						bsFrameData,
+						bsSortedInstances,
+						frameBuffer,
+						nvrhi::ViewportState{}.addViewportAndScissorRect(
+							nvrhi::Viewport{ static_cast<float>(screenWidth),
+				                             static_cast<float>(screenHeight) }));
 
 					m_cmdList->close();
 
@@ -194,13 +239,50 @@ namespace gfx
 				});
 		}
 
+		void
+		AddDrawStrategy(
+			nvrhi::DeviceHandle        device,
+			PSO                        pso,
+			nvrhi::FramebufferInfo     outBufferInfo,
+			const std::string&         ampShader,
+			const std::string&         meshShader,
+			const std::string&         pixShader,
+			nvrhi::RenderState         renderState,
+			nvrhi::BindingLayoutHandle blDrawArgs)
+		{
+			auto desc = nvrhi::MeshletPipelineDesc{};
+			desc.addBindingLayout(m_blPerFrame)
+				.addBindingLayout(m_blSortedInstances)
+				.addBindingLayout(blDrawArgs)
+				.setPrimType(nvrhi::PrimitiveType::TriangleList)
+				.setRenderState(renderState)
+				.setAmplificationShader(createShaderFromFile(
+					device,
+					ampShader,
+					nvrhi::ShaderType::Amplification,
+					"AS_GBuffer"))
+				.setMeshShader(
+					createShaderFromFile(device, meshShader, nvrhi::ShaderType::Mesh, "MS_GBuffer"))
+				.setPixelShader(createShaderFromFile(
+					device,
+					pixShader,
+					nvrhi::ShaderType::Pixel,
+					"PS_GBuffer"));
+
+			auto idx               = static_cast<uint32_t>(pso);
+			m_meshletPipeline[idx] = device->createMeshletPipeline(desc, outBufferInfo);
+		}
+
 	private:
 		nvrhi::CommandListHandle     m_cmdList;
+		DynamicConstantBuffer        m_gBufferRootConstants;
 		ComputeBuffer                m_drawArgs;
-		ComputeBuffer                m_binMeshletCounts;
-		nvrhi::ComputePipelineHandle m_countMeshletsPipeline;
+		nvrhi::BindingLayoutHandle   m_blPerFrame;
+		nvrhi::BindingLayoutHandle   m_blSortedInstances;
+		nvrhi::BindingLayoutHandle   m_blDrawArgs;
 		nvrhi::ComputePipelineHandle m_genDispatchArgsPipeline;
-		nvrhi::BindingSetHandle      m_bsCountMeshlets;
 		nvrhi::BindingSetHandle      m_bsGenDispatchArgs;
+		nvrhi::BindingSetHandle      m_bsDrawArgs;
+		nvrhi::MeshletPipelineHandle m_meshletPipeline[PSO_COUNT];
 	};
 }

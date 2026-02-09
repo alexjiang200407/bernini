@@ -237,7 +237,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		mat[3][0] = -5.0f;
 
-		createCube(graphics, data, &cubes[1]) >> berniniErrChecker;
+		createSphere(graphics, data, &cubes[1]) >> berniniErrChecker;
 
 		mat[3][0] = -10.0f;
 

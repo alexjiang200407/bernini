@@ -1,5 +1,6 @@
 #pragma once
 #include "draw_instance/GeometryType.h"
+#include "draw_instance/LayerType.h"
 #include "draw_instance/MaterialType.h"
 #include "draw_instance/PSO.h"
 
@@ -7,16 +8,8 @@ namespace gfx
 {
 	struct SortKey
 	{
-		enum class Layer : uint8_t
-		{
-			kBackground  = 0,
-			kOpaque      = 1,
-			kAlphaTest   = 2,
-			kTransparent = 3
-		};
-
 		SortKey() = default;
-		SortKey(Layer layerID, PSO pso, float depthViewSpace) noexcept;
+		SortKey(LayerType layerID, PSO pso, float depthViewSpace) noexcept;
 
 		SortKey&
 		operator=(uint64_t val) noexcept
@@ -28,7 +21,7 @@ namespace gfx
 		[[nodiscard]] GeometryType
 		GetGeomType() const noexcept
 		{
-			return pso2GeomType(GetPSO());
+			return psoGeomType(GetPSO());
 		}
 
 		[[nodiscard]] PSO
@@ -40,7 +33,7 @@ namespace gfx
 		[[nodiscard]] MaterialType
 		GetMaterialType() const noexcept
 		{
-			return pso2MaterialType(GetPSO());
+			return psoMaterialType(GetPSO());
 		}
 
 	private:

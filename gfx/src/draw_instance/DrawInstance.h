@@ -7,6 +7,6 @@ namespace gfx
 	{
 		using ID = uint32_t;
 		SortKey  sortKey;
-		uint32_t dataIndex;
+		uint32_t specId;
 	};
 }
