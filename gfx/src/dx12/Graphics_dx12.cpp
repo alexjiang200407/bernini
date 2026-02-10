@@ -1,11 +1,10 @@
 #include "camera/Camera.h"
 #include "ffi/util.h"
 #include "graphics/Graphics.h"
-#include "mesh/MeshFactory.h"
-#include "mesh/MeshRegistry.h"
 #include "passes/GBufferPass.h"
 #include "passes/SetupFrameDataPass.h"
 #include "passes/SortInstancesPass.h"
+#include "scene/SceneData.h"
 #include <dxgidebug.h>
 #include <fg/Blackboard.hpp>
 #include <nvrhi/validation.h>
@@ -44,21 +43,12 @@ namespace gfx
 		~Graphics();
 
 		void
-		DrawFrame(Camera& camera) override;
+		DrawFrame(Camera& camera, SceneData& sceneData) override;
 
 		nvrhi::DeviceHandle
 		GetDevice() noexcept override
 		{
 			return m_nvrhiDevice;
-		}
-
-		MeshFactory&
-		GetMeshFactory() noexcept override;
-
-		MeshRegistry&
-		GetMeshRegistry() noexcept override
-		{
-			return m_meshRegistry;
 		}
 
 	private:
@@ -90,10 +80,9 @@ namespace gfx
 		nvrhi::RefCountPtr<ID3D12Resource>              m_depthBuffer;
 		std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_backBuffers;
 
-		std::unique_ptr<MeshFactory> m_meshFactory;
-		SetupFrameDataPass           m_setupFrameData;
-		SortInstancesPass            m_sortInstances;
-		GBufferPass                  m_gbuffer;
+		SetupFrameDataPass m_setupFrameData;
+		SortInstancesPass  m_sortInstances;
+		GBufferPass        m_gbuffer;
 
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
@@ -112,7 +101,6 @@ namespace gfx
 		bool   m_enableDebugLayer         = false;
 
 		nvrhi::CommandListHandle m_mainCommandList;
-		MeshRegistry             m_meshRegistry;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
@@ -183,14 +171,10 @@ namespace gfx
 
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
-		m_meshRegistry.Init(m_nvrhiDevice);
-
-		auto blPerFrame        = m_setupFrameData.Init(m_nvrhiDevice, m_meshRegistry);
+		auto blPerFrame        = m_setupFrameData.Init(m_nvrhiDevice);
 		auto blSortedInstances = m_sortInstances.Init(blPerFrame, m_nvrhiDevice);
 
 		m_gbuffer.Init(m_nvrhiDevice, blPerFrame, blSortedInstances, m_framebufferInfo);
-
-		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
 	}
 
 	Graphics::~Graphics()
@@ -379,7 +363,7 @@ namespace gfx
 	}
 
 	void
-	Graphics::DrawFrame(Camera& camera)
+	Graphics::DrawFrame(Camera& camera, SceneData& sceneData)
 	{
 		auto backBufferIndex  = m_swapChain->GetCurrentBackBufferIndex();
 		auto nvrhiFramebuffer = m_nvrhiDevice->createFramebuffer(
@@ -406,8 +390,9 @@ namespace gfx
 		FrameGraph           fg;
 		FrameGraphBlackboard blackboard;
 
-		m_setupFrameData.AttachToFrameGraph(fg, blackboard, m_meshRegistry, camera, m_nvrhiDevice);
-		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice);
+		m_setupFrameData
+			.AttachToFrameGraph(fg, blackboard, sceneData, camera, m_nvrhiDevice, m_frameCount);
+		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice, m_frameCount);
 		m_gbuffer.AttachToFrameGraph(
 			fg,
 			blackboard,
@@ -429,12 +414,6 @@ namespace gfx
 		m_nvrhiDevice->runGarbageCollection();
 
 		++m_frameCount;
-	}
-
-	MeshFactory&
-	Graphics::GetMeshFactory() noexcept
-	{
-		return *m_meshFactory;
 	}
 
 	IGraphics*

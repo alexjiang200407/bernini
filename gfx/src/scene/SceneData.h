@@ -1,13 +1,13 @@
 #pragma once
 #include "buffer/AppendBuffer.h"
 #include "buffer/SegmentBuffer.h"
-#include "draw_instance/DrawInstance.h"
-#include "mesh/Mesh.h"
-#include "mesh/Vertex.h"
+#include "types/DrawInstance.h"
+#include "types/Mesh.h"
+#include "types/Vertex.h"
 
 namespace gfx
 {
-	class MeshRegistry final
+	class SceneData final
 	{
 	private:
 		struct StaticMeshInfoMetadata
@@ -16,21 +16,21 @@ namespace gfx
 		};
 
 	public:
-		MeshRegistry()  = default;
-		~MeshRegistry() = default;
+		SceneData()  = default;
+		~SceneData() = default;
 
 	public:
 		void
 		Init(nvrhi::DeviceHandle device);
 
 		void
-		AttachBindingSetItems(nvrhi::BindingSetDesc& bindingSet);
+		AttachBindingSetItems(nvrhi::BindingSetDesc& bindingSet) const;
 
-		void
+		static void
 		AttachBindingLayoutItems(nvrhi::BindingLayoutDesc& bindingLayout);
 
 		[[nodiscard]] bool
-		Update(nvrhi::CommandListHandle cmdList, nvrhi::DeviceHandle device);
+		Upload(nvrhi::CommandListHandle cmdList, nvrhi::DeviceHandle device);
 
 		uint32_t
 		GetInstancesCount() const noexcept
@@ -89,6 +89,6 @@ namespace gfx
 		SegmentBuffer<uint32_t>             m_vertexMap;
 		std::vector<StaticMeshInfoMetadata> m_staticMeshInfoMeta;
 
-		friend class MeshFactory;
+		friend class Scene;
 	};
 }

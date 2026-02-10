@@ -39,6 +39,23 @@ extern "C"
 		};
 	} GfxVec3;
 
+	typedef union
+	{
+		float xyzw[3];
+		struct
+		{
+			float x, y, z, w;
+		};
+		struct
+		{
+			float r, g, b, a;
+		};
+		struct
+		{
+			float qx, qy, qz, qw;
+		};
+	} GfxVec4;
+
 	typedef float GfxMat4[16];
 
 #pragma warning(pop)
@@ -60,7 +77,6 @@ extern "C"
 		GFX_RESULT_ERROR_APPEND_BUFFER,
 		GFX_RESULT_ERROR_COMPUTE_BUFFER,
 		GFX_RESULT_ERROR_MESH_DOES_NOT_EXIST,
-		GFX_RESULT_ERROR_SHADER_SIGNATURE,
 		GFX_RESULT_ERROR_UNSUPPORTED_FEATURE,
 	};
 
@@ -79,6 +95,7 @@ extern "C"
 
 	typedef GfxObj   Gfx;
 	typedef GfxObj   GfxCamera;
+	typedef GfxObj   GfxScene;
 	typedef uint32_t GfxMesh;
 
 #ifdef __cplusplus

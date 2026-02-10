@@ -1,11 +1,11 @@
 #include "math/constants.h"
-#include "mesh/MeshFactory.h"
-#include "mesh/MeshRegistry.h"
+#include "scene/Scene.h"
+#include "scene/SceneData.h"
 
 namespace gfx
 {
 	StaticMeshInfo::ID
-	MeshFactory::CreateSphereInfo(MeshRegistry& registry)
+	Scene::CreateSphereInfo(SceneData& sceneData)
 	{
 		std::vector<Vertex>   sphereVerts;
 		std::vector<uint32_t> sphereIndices;
@@ -46,7 +46,7 @@ namespace gfx
 			}
 		}
 
-		uint32_t baseVertexGlobal = registry.AddVertices(sphereVerts);
+		uint32_t baseVertexGlobal = sceneData.AddVertices(sphereVerts);
 
 		std::vector<Meshlet>  generatedMeshlets;
 		std::vector<uint32_t> allVertexMapIndices;
@@ -124,9 +124,9 @@ namespace gfx
 			generatedMeshlets.push_back(m);
 		}
 
-		uint32_t baseMapGlobal     = registry.AddVertexMapIdx(allVertexMapIndices);
-		uint32_t baseIndexGlobal   = registry.AddIndices(allLocalIndices);
-		uint32_t baseMeshletGlobal = registry.AddMeshlets(generatedMeshlets);
+		uint32_t baseMapGlobal     = sceneData.AddVertexMapIdx(allVertexMapIndices);
+		uint32_t baseIndexGlobal   = sceneData.AddIndices(allLocalIndices);
+		uint32_t baseMeshletGlobal = sceneData.AddMeshlets(generatedMeshlets);
 
 		auto info             = StaticMeshInfo{};
 		info.vertexMapSegment = baseMapGlobal;
@@ -135,6 +135,6 @@ namespace gfx
 		info.meshletSegment   = baseMeshletGlobal;
 		info.meshletCount     = static_cast<uint32_t>(generatedMeshlets.size());
 
-		return registry.AddStaticMeshInfo(std::move(info));
+		return sceneData.AddStaticMeshInfo(std::move(info));
 	}
 }

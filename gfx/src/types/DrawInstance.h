@@ -1,5 +1,5 @@
 #pragma once
-#include "draw_instance/SortKey.h"
+#include "types/SortKey.h"
 
 namespace gfx
 {

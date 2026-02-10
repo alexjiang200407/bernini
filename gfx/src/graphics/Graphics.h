@@ -5,14 +5,14 @@
 namespace gfx
 {
 	class Camera;
-	class MeshRegistry;
+	class SceneData;
 	class MeshFactory;
 
 	class IGraphics : public GfxBase
 	{
 	public:
 		virtual void
-		DrawFrame(Camera& camera) = 0;
+		DrawFrame(Camera& camera, SceneData& sceneData) = 0;
 
 		[[nodiscard]]
 		virtual nvrhi::DeviceHandle
@@ -20,12 +20,6 @@ namespace gfx
 
 		static IGraphics*
 		Create(const GfxOptions& options = {});
-
-		virtual MeshFactory&
-		GetMeshFactory() noexcept = 0;
-
-		virtual MeshRegistry&
-		GetMeshRegistry() = 0;
 
 	protected:
 		int m_windowWidth = 0, m_windowHeight = 0;

@@ -69,7 +69,16 @@ extern "C"
 	/// <param name="gfx">The graphics object</param>
 	/// <returns>Error code</returns>
 	GFX_API GfxResult
-	drawFrame(Gfx gfx, GfxCamera cam);
+	drawFrame(Gfx gfx, GfxScene scene, GfxCamera cam);
+
+	/// <summary>
+	///	Creates scene
+	/// </summary>
+	/// <param name="gfx"></param>
+	/// <param name="cam"></param>
+	/// <returns></returns>
+	GFX_API GfxResult
+	createScene(Gfx gfx, GfxScene* outScene);
 
 #ifdef __cplusplus
 }

@@ -217,7 +217,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto wnd = core::win::IWindow::Create(opts);
 
-		game::GfxHandle graphics, camera;
+		game::GfxHandle graphics, camera, scene;
 
 		auto gfxOpts                     = GfxOptions{};
 		gfxOpts.wnd.hwnd                 = nullptr;
@@ -233,15 +233,17 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto* data  = glm::value_ptr(mat);
 		auto  cubes = std::vector<GfxMesh>(3);
 
-		createCube(graphics, data, &cubes[0]) >> berniniErrChecker;
+		createScene(graphics, &scene) >> berniniErrChecker;
+
+		createCube(scene, data, &cubes[0]) >> berniniErrChecker;
 
 		mat[3][0] = -5.0f;
 
-		createSphere(graphics, data, &cubes[1]) >> berniniErrChecker;
+		createSphere(scene, data, &cubes[1]) >> berniniErrChecker;
 
 		mat[3][0] = -10.0f;
 
-		createCube(graphics, data, &cubes[2]) >> berniniErrChecker;
+		createCube(scene, data, &cubes[2]) >> berniniErrChecker;
 
 		auto cameraDesc = GfxCameraDesc{ .transform  = { .position = { 0.0f, 0.0f, -20.0f },
 			                                             .forward  = { 0.0f, 0.0f, -1.0f } },
@@ -273,7 +275,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				visitor.Reset();
 			}
 
-			drawFrame(graphics, camera) >> berniniErrChecker;
+			drawFrame(graphics, scene, camera) >> berniniErrChecker;
 		}
 	}
 	catch (const std::runtime_error& e)

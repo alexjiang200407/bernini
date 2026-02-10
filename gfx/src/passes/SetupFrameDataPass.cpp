@@ -3,19 +3,19 @@
 #include "camera/Camera.h"
 #include "frame_graph/FrameGraphView.h"
 #include "math/util.h"
-#include "mesh/Mesh.h"
-#include "mesh/MeshRegistry.h"
-#include "mesh/Vertex.h"
 #include "passes/GBufferPass.h"
 #include "passes/output/FrameData.h"
+#include "scene/SceneData.h"
 #include "shader_util/util.h"
+#include "types/Mesh.h"
+#include "types/Vertex.h"
 #include <fg/Blackboard.hpp>
 #include <fg/FrameGraph.hpp>
 
 namespace gfx
 {
 	nvrhi::BindingLayoutHandle
-	SetupFrameDataPass::Init(nvrhi::DeviceHandle device, MeshRegistry& registry)
+	SetupFrameDataPass::Init(nvrhi::DeviceHandle device)
 	{
 		m_mainCommandList = device->createCommandList();
 
@@ -32,7 +32,7 @@ namespace gfx
 			.addItem(m_frameConstants.GetBindingLayoutItem(BindingSlots::CB::FrameConstants))
 			.setVisibility(nvrhi::ShaderType::All);
 
-		registry.AttachBindingLayoutItems(bindingLayoutDesc);
+		SceneData::AttachBindingLayoutItems(bindingLayoutDesc);
 
 		m_blPerFrame = device->createBindingLayout(bindingLayoutDesc);
 
@@ -43,13 +43,14 @@ namespace gfx
 	SetupFrameDataPass::AttachToFrameGraph(
 		FrameGraph&           frameGraph,
 		FrameGraphBlackboard& blackBoard,
-		MeshRegistry&         registry,
+		SceneData&            sceneData,
 		Camera&               camera,
-		nvrhi::DeviceHandle   device)
+		nvrhi::DeviceHandle   device,
+		uint64_t              frameIdx)
 	{
 		blackBoard.add<FrameData>() = frameGraph.addCallbackPass<FrameData>(
 			"SetupFrameGraphPass",
-			[this, &registry, device](FrameGraph::Builder& builder, FrameData& data) {
+			[=, &sceneData](FrameGraph::Builder& builder, FrameData& data) {
 				using BindingLayoutAView = FrameGraphView<nvrhi::IBindingLayout>;
 
 				data.bsFrameData = builder.create<FGBindingSet>("bsFrameData"sv, {});
@@ -60,12 +61,12 @@ namespace gfx
 				data.bsFrameData   = builder.write(data.bsFrameData);
 				data.instanceCount = builder.write(data.instanceCount);
 			},
-			[this, device, &registry, &camera, &blackBoard](
-				const FrameData&         data,
-				FrameGraphPassResources& fgr,
-				void*) {
+			[=,
+		     &sceneData,
+		     &camera,
+		     &blackBoard](const FrameData& data, FrameGraphPassResources& fgr, void*) {
 				m_mainCommandList->open();
-				auto instanceCount = registry.GetInstancesCount();
+				auto instanceCount = sceneData.GetInstancesCount();
 
 				fgr.get<FGCount>(data.instanceCount).SetValue(instanceCount);
 
@@ -75,12 +76,12 @@ namespace gfx
 					m_frameConstants["projMatrix"] = camera.GetProjMatrix();
 				}
 
-				if (registry.Update(m_mainCommandList, device))
+				if (sceneData.Upload(m_mainCommandList, device) || frameIdx == 0)
 				{
 					auto bindingSetDesc = nvrhi::BindingSetDesc{};
 					bindingSetDesc.addItem(
 						m_frameConstants.GetBindingSetItem(BindingSlots::CB::FrameConstants));
-					registry.AttachBindingSetItems(bindingSetDesc);
+					sceneData.AttachBindingSetItems(bindingSetDesc);
 
 					m_bsPerFrame = device->createBindingSet(bindingSetDesc, m_blPerFrame);
 				}

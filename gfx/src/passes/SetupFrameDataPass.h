@@ -6,22 +6,23 @@ class FrameGraphBlackboard;
 
 namespace gfx
 {
-	class MeshRegistry;
+	class SceneData;
 	class Camera;
 
 	class SetupFrameDataPass final
 	{
 	public:
 		nvrhi::BindingLayoutHandle
-		Init(nvrhi::DeviceHandle device, MeshRegistry& registry);
+		Init(nvrhi::DeviceHandle device);
 
 		void
 		AttachToFrameGraph(
 			FrameGraph&           frameGraph,
 			FrameGraphBlackboard& blackBoard,
-			MeshRegistry&         registry,
+			SceneData&            sceneData,
 			Camera&               camera,
-			nvrhi::DeviceHandle   device);
+			nvrhi::DeviceHandle   device,
+			uint64_t              frameIdx);
 
 		nvrhi::BindingLayoutHandle
 		GetBindingLayout() noexcept

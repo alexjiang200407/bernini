@@ -9,13 +9,13 @@ extern "C"
 #endif
 
 	GFX_API GfxResult
-	createCube(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out);
+	createCube(GfxScene scene, GfxMat4 modelTransform, GfxMesh* out);
 
 	GFX_API GfxResult
-	createSphere(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out);
+	createSphere(GfxScene scene, GfxMat4 modelTransform, GfxMesh* out);
 
 	GFX_API GfxResult
-	destroyMesh(Gfx graphics, GfxMesh mesh);
+	destroyMesh(GfxScene scene, GfxMesh mesh);
 
 #ifdef __cplusplus
 }

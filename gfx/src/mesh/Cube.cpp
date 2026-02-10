@@ -1,6 +1,6 @@
-#include "mesh/MeshFactory.h"
-#include "mesh/MeshRegistry.h"
-#include "mesh/Vertex.h"
+#include "scene/Scene.h"
+#include "scene/SceneData.h"
+#include "types/Vertex.h"
 
 namespace gfx
 {
@@ -20,9 +20,9 @@ namespace gfx
 		                                    5, 1, 2, 5, 2, 6, 7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
 
 	StaticMeshInfo::ID
-	MeshFactory::CreateCubeInfo(MeshRegistry& registry)
+	Scene::CreateCubeInfo(SceneData& sceneData)
 	{
-		const auto baseVertexGlobal = registry.AddVertices(cubeVertices);
+		const auto baseVertexGlobal = sceneData.AddVertices(cubeVertices);
 
 		auto mapIndices = std::vector<uint32_t>(std::size(cubeVertices));
 		for (uint32_t i = 0; i < mapIndices.size(); ++i)
@@ -30,8 +30,8 @@ namespace gfx
 			mapIndices[i] = baseVertexGlobal + i;
 		}
 
-		const uint32_t baseMapGlobal   = registry.AddVertexMapIdx(mapIndices);
-		const uint32_t baseIndexGlobal = registry.AddIndices(cubeIndices);
+		const uint32_t baseMapGlobal   = sceneData.AddVertexMapIdx(mapIndices);
+		const uint32_t baseIndexGlobal = sceneData.AddIndices(cubeIndices);
 
 		auto m = Meshlet{};
 
@@ -45,7 +45,7 @@ namespace gfx
 		m.boundingRadius = glm::sqrt(3.0f);
 
 		const auto meshletSpan       = std::span<const Meshlet>{ &m, 1 };
-		const auto baseMeshletGlobal = registry.AddMeshlets(meshletSpan);
+		const auto baseMeshletGlobal = sceneData.AddMeshlets(meshletSpan);
 
 		auto info             = StaticMeshInfo{};
 		info.vertexSegment    = baseVertexGlobal;
@@ -54,6 +54,6 @@ namespace gfx
 		info.meshletCount     = 1;
 		info.vertexMapSegment = baseMapGlobal;
 
-		return registry.AddStaticMeshInfo(std::move(info));
+		return sceneData.AddStaticMeshInfo(std::move(info));
 	}
 }

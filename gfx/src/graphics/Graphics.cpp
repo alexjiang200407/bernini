@@ -1,17 +1,17 @@
 #include "graphics/Graphics.h"
 #include "camera/Camera.h"
 #include "ffi/util.h"
-#include "mesh/MeshFactory.h"
-#include "mesh/MeshRegistry.h"
+#include "scene/Scene.h"
 #include <gfx/ffi/gfx.h>
 
 GfxResult
-drawFrame(Gfx graphics, GfxCamera camera)
+drawFrame(Gfx graphics, GfxScene scene, GfxCamera camera)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		auto& cam  = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
-		gfx_.DrawFrame(cam);
+		auto& gfx_    = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
+		auto& camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
+		auto& scene_  = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
+		gfx_.DrawFrame(camera_, scene_.GetData());
 		return GFX_RESULT_OK;
 	});
 }
@@ -24,45 +24,6 @@ createGraphics(GfxOptions options, Gfx* out)
 		out->destroy = gfx::ffi::deleteThunk;
 
 		out->ptr = gfx::IGraphics::Create(options);
-		return GFX_RESULT_OK;
-	});
-}
-
-GfxResult
-createCube(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		gfx::ffi::validatePtr(out, "out");
-
-		auto& factory = gfx_.GetMeshFactory();
-		*out          = factory.CreateCubeInstance(glm::make_mat4(modelTransform));
-
-		return GFX_RESULT_OK;
-	});
-}
-
-GfxResult
-createSphere(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		gfx::ffi::validatePtr(out, "out");
-
-		auto& factory = gfx_.GetMeshFactory();
-		*out          = factory.CreateSphereInstance(glm::make_mat4(modelTransform));
-
-		return GFX_RESULT_OK;
-	});
-}
-
-GfxResult
-destroyMesh(Gfx graphics, GfxMesh mesh)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_     = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		auto& registry = gfx_.GetMeshRegistry();
-		registry.RemoveDrawInstance(mesh);
 		return GFX_RESULT_OK;
 	});
 }

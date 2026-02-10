@@ -16,7 +16,8 @@ namespace gfx
 		AttachToFrameGraph(
 			FrameGraph&           frameGraph,
 			FrameGraphBlackboard& blackBoard,
-			nvrhi::DeviceHandle   device);
+			nvrhi::DeviceHandle   device,
+			uint64_t              frameIdx);
 
 	private:
 		void

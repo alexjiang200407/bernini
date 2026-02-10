@@ -1,11 +1,11 @@
 #pragma once
-#include "draw_instance/GeometryType.h"
-#include "draw_instance/LayerType.h"
-#include "draw_instance/MaterialType.h"
+#include "types/GeometryType.h"
+#include "types/LayerType.h"
+#include "types/MaterialType.h"
 
 namespace gfx
 {
-	// Needs to reflect the order PSOs are run
+	// Needs to be the order PSOs are run. e.g. Transparent first
 	enum class PSO : uint16_t
 	{
 		kInvalid                    = 0xFFFF,

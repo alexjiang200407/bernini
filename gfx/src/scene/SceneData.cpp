@@ -1,10 +1,10 @@
-#include "mesh/MeshRegistry.h"
+#include "scene/SceneData.h"
 #include "BindingSlots.h"
 
 namespace gfx
 {
 	void
-	MeshRegistry::Init(nvrhi::DeviceHandle device)
+	SceneData::Init(nvrhi::DeviceHandle device)
 	{
 		m_drawInstances.Init(
 			device,
@@ -40,7 +40,7 @@ namespace gfx
 	}
 
 	DrawInstance::ID
-	MeshRegistry::AddStaticMeshInstance(StaticMeshInstance&& instance)
+	SceneData::AddStaticMeshInstance(StaticMeshInstance&& instance)
 	{
 		assert(instance.infoID < m_staticMeshInfoMeta.size());
 
@@ -55,7 +55,7 @@ namespace gfx
 	}
 
 	StaticMeshInfo::ID
-	MeshRegistry::AddStaticMeshInfo(StaticMeshInfo&& info)
+	SceneData::AddStaticMeshInfo(StaticMeshInfo&& info)
 	{
 		StaticMeshInfo::ID id = m_staticMeshInfos.EmplaceBack(std::move(info));
 
@@ -70,7 +70,7 @@ namespace gfx
 	}
 
 	void
-	MeshRegistry::RemoveDrawInstance(DrawInstance::ID id)
+	SceneData::RemoveDrawInstance(DrawInstance::ID id)
 	{
 		auto drawInstance = m_drawInstances.At(id);
 
@@ -90,7 +90,7 @@ namespace gfx
 	}
 
 	void
-	MeshRegistry::RemoveStaticMeshInstance(StaticMeshInstance::ID id)
+	SceneData::RemoveStaticMeshInstance(StaticMeshInstance::ID id)
 	{
 		const StaticMeshInstance& instance = m_staticMeshInstances.At(id);
 		StaticMeshInfo::ID        infoID   = instance.infoID;
@@ -112,7 +112,7 @@ namespace gfx
 	}
 
 	void
-	MeshRegistry::RemoveStaticMeshInfo(StaticMeshInfo::ID id)
+	SceneData::RemoveStaticMeshInfo(StaticMeshInfo::ID id)
 	{
 		const StaticMeshInfo& info = m_staticMeshInfos.At(id);
 
@@ -126,7 +126,7 @@ namespace gfx
 	}
 
 	void
-	MeshRegistry::AttachBindingSetItems(nvrhi::BindingSetDesc& bindingSet)
+	SceneData::AttachBindingSetItems(nvrhi::BindingSetDesc& bindingSet) const
 	{
 		namespace SRV = BindingSlots::SRV;
 
@@ -147,29 +147,29 @@ namespace gfx
 	}
 
 	void
-	MeshRegistry::AttachBindingLayoutItems(nvrhi::BindingLayoutDesc& bindingLayout)
+	SceneData::AttachBindingLayoutItems(nvrhi::BindingLayoutDesc& bindingLayout)
 	{
 		namespace SRV = BindingSlots::SRV;
 
-		bindingLayout.addItem(m_drawInstances.GetBindingLayoutItem(SRV::InstanceBuffer))
-			.addItem(m_staticMeshInstances.GetBindingLayoutItem(SRV::StaticMeshInstance))
-			.addItem(m_staticMeshInfos.GetBindingLayoutItem(SRV::StaticMeshInfo))
-			.addItem(m_indices.GetBindingLayoutItem(SRV::IndexBuffer))
-			.addItem(m_vertices.GetBindingLayoutItem(SRV::VertexBuffer))
-			.addItem(m_vertexMap.GetBindingLayoutItem(SRV::VertexMap))
-			.addItem(m_meshlets.GetBindingLayoutItem(SRV::MeshletBuffer))
+		bindingLayout.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::InstanceBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::StaticMeshInstance))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::StaticMeshInfo))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::IndexBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::VertexBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::VertexMap))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::MeshletBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::MeshInfoRedirectBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::VertexMapRedirectBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::IndexRedirectBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::VertexRedirectBuffer))
+			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(SRV::MeshletRedirectBuffer))
 			.addItem(
-				m_staticMeshInfos.GetRedirectTableBindingLayoutItem(SRV::MeshInfoRedirectBuffer))
-			.addItem(m_vertexMap.GetRedirectTableBindingLayoutItem(SRV::VertexMapRedirectBuffer))
-			.addItem(m_indices.GetRedirectTableBindingLayoutItem(SRV::IndexRedirectBuffer))
-			.addItem(m_vertices.GetRedirectTableBindingLayoutItem(SRV::VertexRedirectBuffer))
-			.addItem(m_meshlets.GetRedirectTableBindingLayoutItem(SRV::MeshletRedirectBuffer))
-			.addItem(m_staticMeshInstances.GetRedirectTableBindingLayoutItem(
-				SRV::StaticMeshInstanceRedirectBuffer));
+				nvrhi::BindingLayoutItem::StructuredBuffer_SRV(
+					SRV::StaticMeshInstanceRedirectBuffer));
 	}
 
 	bool
-	MeshRegistry::Update(nvrhi::CommandListHandle cmdList, nvrhi::DeviceHandle device)
+	SceneData::Upload(nvrhi::CommandListHandle cmdList, nvrhi::DeviceHandle device)
 	{
 		auto ret = m_drawInstances.Update(cmdList, device);
 		ret |= m_staticMeshInstances.Update(cmdList, device);

@@ -14,12 +14,12 @@ namespace gfx
 		m_mainCommandList = device->createCommandList();
 
 		g_binInstanceOffsets = ComputeBufferDesc{}
-		                     .SetElement<uint32_t>()
-		                     .SetInitialState(nvrhi::ResourceStates::ShaderResource)
-		                     .SetKeepInitialState()
-		                     .SetElementCount(1)
-		                     .SetName("GroupOffsets")
-		                     .Create(device);
+		                           .SetElement<uint32_t>()
+		                           .SetInitialState(nvrhi::ResourceStates::ShaderResource)
+		                           .SetKeepInitialState()
+		                           .SetElementCount(1)
+		                           .SetName("GroupOffsets")
+		                           .Create(device);
 
 		{
 			struct InstanceAndSortKey
@@ -30,13 +30,13 @@ namespace gfx
 
 			for (auto i : { 0, 1 })
 			{
-				auto name             = std::format("GroupedInstances{}", i);
+				auto name            = std::format("GroupedInstances{}", i);
 				m_sortedInstances[i] = ComputeBufferDesc{}
-				                            .SetElement<InstanceAndSortKey>()
-				                            .SetInitialState(nvrhi::ResourceStates::ShaderResource)
-				                            .SetElementCount(1)
-				                            .SetName(name)
-				                            .Create(device);
+				                           .SetElement<InstanceAndSortKey>()
+				                           .SetInitialState(nvrhi::ResourceStates::ShaderResource)
+				                           .SetElementCount(1)
+				                           .SetName(name)
+				                           .Create(device);
 			}
 		}
 		auto desc = DynamicConstantBufferDesc{};
@@ -242,7 +242,8 @@ namespace gfx
 	SortInstancesPass::AttachToFrameGraph(
 		FrameGraph&           frameGraph,
 		FrameGraphBlackboard& blackBoard,
-		nvrhi::DeviceHandle   device)
+		nvrhi::DeviceHandle   device,
+		uint64_t              frameIdx)
 	{
 		auto frameData = blackBoard.get<FrameData>();
 
@@ -257,15 +258,13 @@ namespace gfx
 
 				builder.setSideEffect();
 			},
-			[this,
-		     frameData,
-		     device](const SortedInstancesData& data, FrameGraphPassResources& res, void*) {
+			[=](const SortedInstancesData& data, FrameGraphPassResources& res, void*) {
 				auto& bsFrameData   = res.get<FGBindingSet>(frameData.bsFrameData).Get();
 				auto  instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
 
 				m_mainCommandList->open();
 
-				if (Update(instanceCount))
+				if (Update(instanceCount) || frameIdx == 0)
 				{
 					CreateBindingSet(device);
 				}

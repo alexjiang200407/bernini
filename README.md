@@ -18,3 +18,8 @@ To support PIX debug add the directory where Pix is installed to PATH environmen
 - vcpkg
 - python3
 
+
+## Features
+- GPU Driven Instance Rendering
+- Virtual Geometry
+- Cross Platform (Windows, Linux, Xbox)

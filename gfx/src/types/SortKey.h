@@ -1,8 +1,8 @@
 #pragma once
-#include "draw_instance/GeometryType.h"
-#include "draw_instance/LayerType.h"
-#include "draw_instance/MaterialType.h"
-#include "draw_instance/PSO.h"
+#include "types/GeometryType.h"
+#include "types/LayerType.h"
+#include "types/MaterialType.h"
+#include "types/PSO.h"
 
 namespace gfx
 {
