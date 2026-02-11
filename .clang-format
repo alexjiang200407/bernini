@@ -59,7 +59,7 @@ DerivePointerAlignment: false
 DisableFormat: false
 FixNamespaceComments: false
 IncludeBlocks: Preserve
-IndentCaseBlocks: true
+IndentCaseBlocks: false
 IndentCaseLabels: false
 IndentExternBlock: Indent
 IndentGotoLabels: false

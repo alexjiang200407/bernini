@@ -1,10 +1,10 @@
 #include "camera/Camera.h"
 #include "ffi/util.h"
 #include "graphics/Graphics.h"
-#include "material/Material.h"
-#include "mesh/MeshFactory.h"
-#include "mesh/MeshRegistry.h"
 #include "passes/GBufferPass.h"
+#include "passes/SetupFrameDataPass.h"
+#include "passes/SortInstancesPass.h"
+#include "scene/SceneData.h"
 #include <dxgidebug.h>
 #include <fg/Blackboard.hpp>
 #include <nvrhi/validation.h>
@@ -43,21 +43,12 @@ namespace gfx
 		~Graphics();
 
 		void
-		DrawFrame(Camera& camera) override;
+		DrawFrame(Camera& camera, SceneData& sceneData) override;
 
 		nvrhi::DeviceHandle
 		GetDevice() noexcept override
 		{
 			return m_nvrhiDevice;
-		}
-
-		MeshFactory&
-		GetMeshFactory() noexcept override;
-
-		MeshRegistry&
-		GetMeshRegistry() noexcept override
-		{
-			return m_meshRegistry;
 		}
 
 	private:
@@ -89,8 +80,9 @@ namespace gfx
 		nvrhi::RefCountPtr<ID3D12Resource>              m_depthBuffer;
 		std::vector<nvrhi::RefCountPtr<ID3D12Resource>> m_backBuffers;
 
-		std::unique_ptr<MeshFactory> m_meshFactory;
-		GBufferPass                  m_gBufferPass;
+		SetupFrameDataPass m_setupFrameData;
+		SortInstancesPass  m_sortInstances;
+		GBufferPass        m_gbuffer;
 
 		std::vector<HANDLE>             m_frameFenceEvents;
 		nvrhi::RefCountPtr<ID3D12Fence> m_frameFence;
@@ -104,12 +96,11 @@ namespace gfx
 		bool   m_isHeadless               = false;
 		UINT   m_windowWidth              = 0;
 		UINT   m_windowHeight             = 0;
-		UINT64 m_frameCount               = 1;
+		UINT64 m_frameIdx                 = 1;
 		bool   m_enableGPUValidationLayer = false;
 		bool   m_enableDebugLayer         = false;
 
 		nvrhi::CommandListHandle m_mainCommandList;
-		MeshRegistry             m_meshRegistry;
 	};
 
 	Graphics::Graphics(const GfxOptions& opts)
@@ -180,10 +171,10 @@ namespace gfx
 
 		m_mainCommandList = m_nvrhiDevice->createCommandList();
 
-		m_meshRegistry.Init(m_nvrhiDevice);
-		m_gBufferPass.Init(m_nvrhiDevice, m_meshRegistry);
+		auto blPerFrame        = m_setupFrameData.Init(m_nvrhiDevice);
+		auto blSortedInstances = m_sortInstances.Init(blPerFrame, m_nvrhiDevice);
 
-		m_meshFactory = std::make_unique<MeshFactory>(m_nvrhiDevice, m_meshRegistry);
+		m_gbuffer.Init(m_nvrhiDevice, blPerFrame, blSortedInstances, m_framebufferInfo);
 	}
 
 	Graphics::~Graphics()
@@ -194,8 +185,6 @@ namespace gfx
 		{
 			WaitForSingleObject(fenceEvent, INFINITE);
 		}
-
-		m_nvrhiDevice.Reset();
 
 		for (auto fenceEvent : m_frameFenceEvents)
 		{
@@ -372,7 +361,7 @@ namespace gfx
 	}
 
 	void
-	Graphics::DrawFrame(Camera& camera)
+	Graphics::DrawFrame(Camera& camera, SceneData& sceneData)
 	{
 		auto backBufferIndex  = m_swapChain->GetCurrentBackBufferIndex();
 		auto nvrhiFramebuffer = m_nvrhiDevice->createFramebuffer(
@@ -399,15 +388,16 @@ namespace gfx
 		FrameGraph           fg;
 		FrameGraphBlackboard blackboard;
 
-		{
-			auto args = RenderArgs{ .screenWidth   = static_cast<float>(m_windowWidth),
-				                    .screenHeight  = static_cast<float>(m_windowHeight),
-				                    .device        = m_nvrhiDevice,
-				                    .outBuffer     = nvrhiFramebuffer,
-				                    .outBufferInfo = m_framebufferInfo };
-
-			m_gBufferPass.AttachToFrameGraph(fg, blackboard, m_meshRegistry, camera, args);
-		}
+		m_setupFrameData
+			.AttachToFrameGraph(fg, blackboard, sceneData, camera, m_nvrhiDevice, m_frameIdx);
+		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice, m_frameIdx);
+		m_gbuffer.AttachToFrameGraph(
+			fg,
+			blackboard,
+			m_nvrhiDevice,
+			nvrhiFramebuffer,
+			m_windowWidth,
+			m_windowHeight);
 
 		fg.compile();
 		fg.execute(this, this);
@@ -415,19 +405,13 @@ namespace gfx
 		if (!m_isHeadless)
 			m_swapChain->Present(1, 0);
 
-		m_commandQueue->Signal(m_frameFence.Get(), m_frameCount);
-		m_frameFence->SetEventOnCompletion(m_frameCount, m_frameFenceEvents[backBufferIndex]);
+		m_commandQueue->Signal(m_frameFence.Get(), m_frameIdx);
+		m_frameFence->SetEventOnCompletion(m_frameIdx, m_frameFenceEvents[backBufferIndex]);
 
 		std::this_thread::yield();
 		m_nvrhiDevice->runGarbageCollection();
 
-		++m_frameCount;
-	}
-
-	MeshFactory&
-	Graphics::GetMeshFactory() noexcept
-	{
-		return *m_meshFactory;
+		++m_frameIdx;
 	}
 
 	IGraphics*

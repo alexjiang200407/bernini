@@ -15,4 +15,5 @@
 #include "logger.h"
 #include "math/util.h"
 
-#include "GfxException.h"
+#include "error/GfxException.h"
+#include "error/gassert.h"

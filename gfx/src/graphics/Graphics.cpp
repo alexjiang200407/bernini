@@ -1,17 +1,29 @@
 #include "graphics/Graphics.h"
 #include "camera/Camera.h"
 #include "ffi/util.h"
-#include "mesh/MeshFactory.h"
-#include "mesh/MeshRegistry.h"
+#include "scene/Scene.h"
 #include <gfx/ffi/gfx.h>
 
 GfxResult
-drawFrame(Gfx graphics, GfxCamera camera)
+drawFrame(Gfx graphics, GfxScene scene, GfxCamera camera)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		auto& cam  = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
-		gfx_.DrawFrame(cam);
+		auto* gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
+
+		if (!gfx_)
+			return gfx::getLastResult();
+
+		auto* camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
+
+		if (!camera_)
+			return gfx::getLastResult();
+
+		auto* scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
+
+		if (!scene_)
+			return gfx::getLastResult();
+
+		gfx_->DrawFrame(*camera_, scene_->GetData());
 		return GFX_RESULT_OK;
 	});
 }
@@ -20,49 +32,12 @@ GfxResult
 createGraphics(GfxOptions options, Gfx* out)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		gfx::ffi::validatePtr(out, "out");
+		if (!gfx::ffi::validatePtr(out, "out"))
+			return gfx::getLastResult();
+
 		out->destroy = gfx::ffi::deleteThunk;
 
 		out->ptr = gfx::IGraphics::Create(options);
-		return GFX_RESULT_OK;
-	});
-}
-
-GfxResult
-createCube(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		gfx::ffi::validatePtr(out, "out");
-
-		auto& factory = gfx_.GetMeshFactory();
-		*out          = factory.CreateCubeInstance(glm::make_mat4(modelTransform));
-
-		return GFX_RESULT_OK;
-	});
-}
-
-GfxResult
-createSphere(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_ = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		gfx::ffi::validatePtr(out, "out");
-
-		auto& factory = gfx_.GetMeshFactory();
-		*out          = factory.CreateSphereInstance(glm::make_mat4(modelTransform));
-
-		return GFX_RESULT_OK;
-	});
-}
-
-GfxResult
-destroyMesh(Gfx graphics, GfxMesh mesh)
-{
-	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& gfx_     = gfx::ffi::gfxObjCast<gfx::IGraphics>(graphics);
-		auto& registry = gfx_.GetMeshRegistry();
-		registry.RemoveMeshInstance(mesh);
 		return GFX_RESULT_OK;
 	});
 }

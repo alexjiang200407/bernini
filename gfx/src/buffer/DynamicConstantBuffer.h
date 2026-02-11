@@ -1,7 +1,7 @@
 #pragma once
-#include "GfxException.h"
 #include "buffer/DynamicConstantBufferDesc.h"
 #include "buffer/types/ElementType.h"
+#include "error/GfxException.h"
 #include <core/str/str.h>
 #include <core/type_traits.h>
 
@@ -42,18 +42,16 @@ namespace gfx
 			Assign(T val)
 			{
 				if (IsNull())
-					throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-						                "DynamicConstantBuffer::View::Assign",
-						                "Cannot assign using a null view" };
+					THROW_GFX_ERROR(
+						"DynamicConstantBuffer::View::Assign",
+						"Cannot assign using a null view");
 
 				auto& entry = m_parent->GetLayoutEntry(m_key);
 				if (sizeof(T) != entry.elemSize)
 				{
-					throw GfxException{
-						GFX_RESULT_ERROR_DYNAMIC_BUFFER,
+					THROW_GFX_ERROR(
 						"DynamicConstantBuffer::View::Assign",
-						"Size of assigned value does not match element size for entry: " + m_key
-					};
+						"Size of assigned value does not match element size for entry: " + m_key);
 				}
 				std::memcpy(m_parent->GetRawData() + m_totalOffset, &val, sizeof(T));
 
@@ -121,6 +119,9 @@ namespace gfx
 		DynamicConstantBuffer() noexcept                    = default;
 		DynamicConstantBuffer(const DynamicConstantBuffer&) = delete;
 		DynamicConstantBuffer(DynamicConstantBuffer&&) noexcept;
+
+		void
+		Init(nvrhi::DeviceHandle device, const DynamicConstantBufferDesc& elementDesc);
 
 		DynamicConstantBuffer(
 			nvrhi::DeviceHandle              device,
@@ -200,9 +201,6 @@ namespace gfx
 		}
 
 	private:
-		void
-		Init(nvrhi::DeviceHandle device, const DynamicConstantBufferDesc& elementDesc);
-
 		[[nodiscard]]
 		bool
 		IsVolatile() const noexcept
@@ -210,10 +208,13 @@ namespace gfx
 			return m_bufferDesc.isVolatile;
 		}
 
+		using BufferType = DynamicConstantBufferDesc::BufferType;
+
 		LayoutMap                    m_layoutMap;
 		nvrhi::BufferDesc            m_bufferDesc;
 		nvrhi::BufferHandle          m_buf;
 		std::unique_ptr<std::byte[]> m_data;
+		BufferType                   m_bufferType = BufferType::kConstantBuffer;
 
 		friend class View;
 	};

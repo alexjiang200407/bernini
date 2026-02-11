@@ -1,6 +1,6 @@
 #pragma once
-#include "GfxException.h"
 #include "buffer/types/SegmentID.h"
+#include "error/GfxException.h"
 #include "frame_graph/FrameGraphView.h"
 #include <core/type_traits.h>
 
@@ -98,12 +98,15 @@ namespace gfx
 			m_bufferDesc = desc.bufferDesc;
 			m_bufferDesc.setStructStride(sizeof(T))
 				.setInitialState(nvrhi::ResourceStates::ShaderResource)
+				.setKeepInitialState(true)
 				.setByteSize(desc.startingCapacity * sizeof(T));
 
 			m_buffer = device->createBuffer(m_bufferDesc);
 
 			auto redirectDesc = desc.redirectTableDesc;
 			redirectDesc.setStructStride(sizeof(uint32_t))
+				.setKeepInitialState(true)
+				.setInitialState(nvrhi::ResourceStates::ShaderResource)
 				.setByteSize(desc.startingCapacity * sizeof(uint32_t));
 			m_redirectTable = device->createBuffer(redirectDesc);
 
@@ -137,12 +140,12 @@ namespace gfx
 			return segmentId;
 		}
 
-		void
-		Erase(SegmentID segmentId)
+		bool
+		Erase(SegmentID segmentId) noexcept
 		{
 			auto it = m_segments.find(segmentId);
 			if (it == m_segments.end())
-				return;
+				return false;
 
 			m_dirty             = true;
 			const auto& segment = it->second;
@@ -153,6 +156,7 @@ namespace gfx
 			}
 
 			m_segments.erase(it);
+			return true;
 		}
 
 		[[nodiscard]] T&
@@ -196,25 +200,25 @@ namespace gfx
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetBindingLayoutItemSRV(uint32_t slot) const
+		GetBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetBindingSetItemSRV(uint32_t slot) const
+		GetBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_buffer);
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetRedirectTableBindingLayoutItemSRV(uint32_t slot) const
+		GetRedirectTableBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetRedirectTableBindingSetItemSRV(uint32_t slot) const
+		GetRedirectTableBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_redirectTable);
 		}
@@ -237,14 +241,14 @@ namespace gfx
 			return static_cast<uint32_t>(m_segmentId2Idx.size());
 		}
 
-		nvrhi::BufferDesc                      m_bufferDesc;
-		nvrhi::BufferHandle                    m_buffer;
-		nvrhi::BufferHandle                    m_redirectTable;
-		std::vector<T>                         m_data;
-		std::vector<uint32_t>                  m_segmentId2Idx;
-		std::unordered_map<SegmentID, Segment> m_segments;
-		bool                                   m_dirty = false;
-		bool                                   m_useRedirectTableOnGPU;
+		nvrhi::BufferDesc                      m_bufferDesc{};
+		nvrhi::BufferHandle                    m_buffer{};
+		nvrhi::BufferHandle                    m_redirectTable{};
+		std::vector<T>                         m_data{};
+		std::vector<uint32_t>                  m_segmentId2Idx{};
+		std::unordered_map<SegmentID, Segment> m_segments{};
+		bool                                   m_dirty                 = false;
+		bool                                   m_useRedirectTableOnGPU = true;
 	};
 
 	template <typename T>

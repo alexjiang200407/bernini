@@ -1,0 +1,18 @@
+#ifndef INDIRECT_DRAW_H
+#define INDIRECT_DRAW_H
+
+struct DispatchArg
+{
+    uint threadGroupCountX;
+    uint threadGroupCountY;
+    uint threadGroupCountZ;
+};
+
+struct DrawInstance
+{
+    uint64_t sortKey;
+    uint geomSpecId;
+    uint materialSpecId;
+};
+
+#endif
