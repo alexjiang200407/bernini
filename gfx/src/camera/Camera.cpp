@@ -10,7 +10,8 @@ GfxResult
 createCamera(GfxCameraDesc desc, GfxCamera* out)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		gfx::ffi::validatePtr(out, "out");
+		if (!gfx::ffi::validatePtr(out, "out"))
+			return gfx::getLastResult();
 
 		out->ptr     = new gfx::Camera{ desc };
 		out->destroy = gfx::ffi::deleteThunk;
@@ -23,8 +24,10 @@ GfxResult
 cameraMoveAlongView(GfxCamera camera, float delta)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
-		camera_.MoveAlongView(delta);
+		auto* camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
+		if (!camera_)
+			return gfx::getLastResult();
+		camera_->MoveAlongView(delta);
 		return GFX_RESULT_OK;
 	});
 }
@@ -33,8 +36,10 @@ GfxResult
 cameraMoveAlongRight(GfxCamera camera, float delta)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
-		camera_.MoveAlongRight(delta);
+		auto* camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
+		if (!camera_)
+			return gfx::getLastResult();
+		camera_->MoveAlongRight(delta);
 		return GFX_RESULT_OK;
 	});
 }
@@ -43,8 +48,10 @@ GfxResult
 cameraRotateYawPitch(GfxCamera camera, float deltaYaw, float deltaPitch)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
-		camera_.RotateYawPitch(deltaYaw, deltaPitch);
+		auto* camera_ = gfx::ffi::gfxObjCast<gfx::Camera>(camera);
+		if (!camera_)
+			return gfx::getLastResult();
+		camera_->RotateYawPitch(deltaYaw, deltaPitch);
 		return GFX_RESULT_OK;
 	});
 }
@@ -106,12 +113,9 @@ namespace gfx
 	{
 		glm::vec3 forward = toGlm(tr.forward);
 
-		if (glm::length(forward) < math_constants::EPSILON)
-		{
-			throw GfxException{ GFX_RESULT_ERROR_INVALID_ARGUMENT,
-				                "Invalid Argument",
-				                "Camera forward vector cannot be zero." };
-		}
+		gassert(
+			glm::length(forward) > math_constants::EPSILON,
+			"Camera forward vector cannot be zero.");
 
 		m_position = toGlm(tr.position);
 

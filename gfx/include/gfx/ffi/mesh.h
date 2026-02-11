@@ -7,15 +7,27 @@
 extern "C"
 {
 #endif
+	GFX_API GfxResult
+	createCubeBase(GfxScene scene, GfxStaticMesh* out);
 
 	GFX_API GfxResult
-	createCube(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out);
+	createSphereBase(GfxScene scene, GfxStaticMesh* out);
+
+	struct GfxStaticMeshOpts
+	{
+		GfxStaticMesh baseMesh;
+		GfxMaterial   material;
+		GfxMat4       modelTransform;
+	};
 
 	GFX_API GfxResult
-	createSphere(Gfx graphics, GfxMat4 modelTransform, GfxMesh* out);
+	createStaticMeshInstance(GfxScene scene, GfxStaticMeshOpts data, GfxMeshInstance* out);
 
 	GFX_API GfxResult
-	destroyMesh(Gfx graphics, GfxMesh mesh);
+	destroyMeshInstance(GfxScene scene, GfxMeshInstance meshInstance);
+
+	GFX_API GfxResult
+	destroyStaticMesh(GfxScene scene, GfxStaticMesh mesh);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,4 @@
 #pragma once
-#include "GfxException.h"
 
 namespace gfx::dx
 {
@@ -12,21 +11,6 @@ namespace gfx::dx
 
 		unsigned int         m_hr;
 		std::source_location m_loc;
-	};
-
-	class DXException : public GfxException
-	{
-	public:
-		DXException(DXResult&& result) noexcept;
-
-		unsigned int
-		GetHR() const noexcept
-		{
-			return m_code;
-		}
-
-	private:
-		unsigned int m_code;
 	};
 
 	struct DXErrorChecker

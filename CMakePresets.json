@@ -49,21 +49,23 @@
       "cacheVariables": {
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
         "CMAKE_CXX_FLAGS": "/EHsc /MP /external:W0",
-        "CMAKE_CXX_FLAGS_RELEASE": "/O2 /DNDEBUG /EHsc /external:W0"
+        "CMAKE_CXX_FLAGS_RELEASE": "/O2 /DNDEBUG /external:W0"
       }
     },
     {
       "name": "debug",
       "hidden": true,
       "cacheVariables": {
-        "BUILD_TESTS": "ON"
+        "BUILD_TESTS": "ON",
+        "BUILD_EXAMPLES": "ON"
       }
     },
     {
       "name": "release",
       "hidden": true,
       "cacheVariables": {
-        "BUILD_TESTS": "OFF"
+        "BUILD_TESTS": "OFF",
+        "BUILD_EXAMPLES": "OFF"
       }
     },
     {

@@ -23,6 +23,14 @@ namespace gfx
 
 	class DynamicConstantBufferDesc
 	{
+	public:
+		enum class BufferType
+		{
+			kConstantBuffer,
+			kVolatileConstantBuffer,
+			kPushConstant,
+		};
+
 	private:
 		struct BuildLayoutMapContext
 		{
@@ -76,16 +84,23 @@ namespace gfx
 		}
 
 		DynamicConstantBufferDesc&
-		SetIsVolatile(bool isVolatile)
+		SetIsVolatile()
 		{
-			this->isVolatile = isVolatile;
+			this->bufferType = BufferType::kVolatileConstantBuffer;
+			return *this;
+		}
+
+		DynamicConstantBufferDesc&
+		SetIsPushConstant()
+		{
+			this->bufferType = BufferType::kPushConstant;
 			return *this;
 		}
 
 	private:
 		std::unique_ptr<Node> root;
 		std::string           name;
-		bool                  isVolatile = false;
+		BufferType            bufferType = BufferType::kConstantBuffer;
 
 		friend class DynamicConstantBuffer;
 	};

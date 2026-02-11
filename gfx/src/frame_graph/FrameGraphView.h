@@ -1,4 +1,5 @@
 #pragma once
+#include "frame_graph/BindingSetView.h"
 
 namespace gfx
 {
@@ -7,34 +8,112 @@ namespace gfx
 	{
 		struct Desc
 		{
-			T const* val;
+			T* data = nullptr;
+
 			Desc() noexcept = default;
-			Desc(const T& data) : val(std::addressof(data)) {}
+
+			explicit Desc(T* ptr) : data(ptr) {}
+
+			template <typename... Args>
+			static Desc
+			Create(Args&&... args)
+			{
+				return Desc(new T(std::forward<Args>(args)...));
+			}
 		};
 
-		void
-		create(const Desc& desc, void* ctx)
+		T* stableStorage = nullptr;
+
+		FrameGraphView() = default;
+
+		~FrameGraphView()
 		{
-			val = desc.val;
+			if (stableStorage)
+			{
+				delete stableStorage;
+				stableStorage = nullptr;
+			}
+		}
+
+		FrameGraphView(FrameGraphView&& other) noexcept : stableStorage(other.stableStorage)
+		{
+			other.stableStorage = nullptr;
+		}
+
+		FrameGraphView&
+		operator=(FrameGraphView&& other) noexcept
+		{
+			if (this != &other)
+			{
+				if (stableStorage)
+				{
+					delete stableStorage;
+				}
+				stableStorage       = other.stableStorage;
+				other.stableStorage = nullptr;
+			}
+			return *this;
+		}
+
+		FrameGraphView(const FrameGraphView&) = delete;
+		FrameGraphView&
+		operator=(const FrameGraphView&) = delete;
+
+		void
+		create(Desc desc, void* ctx)
+		{
+			if (stableStorage)
+			{
+				delete stableStorage;
+			}
+
+			stableStorage = desc.data;
+
+			if (!stableStorage)
+			{
+				stableStorage = new T();
+			}
 		}
 
 		void
-		destroy(const Desc& desc, void*)
+		reinit(const T& newValue)
 		{
-			val = desc.val;
+			if (stableStorage)
+			{
+				*stableStorage = newValue;
+			}
 		}
 
-		FrameGraphView()                 = default;
-		FrameGraphView(FrameGraphView&&) = default;
+		void
+		destroy(const Desc&, void*)
+		{
+			if (stableStorage)
+			{
+				delete stableStorage;
+				stableStorage = nullptr;
+			}
+		}
 
-		operator const T&() { return *val; }
+		operator const T&() const { return *stableStorage; }
 
 		const T&
 		Get() const noexcept
 		{
-			return *val;
+			return *stableStorage;
 		}
 
-		T const* val;
+		template <typename... Args>
+		void
+		SetValue(Args&&... args)
+		{
+			if (stableStorage)
+			{
+				delete stableStorage;
+			}
+			stableStorage = new T(std::forward<Args>(args)...);
+		}
 	};
+
+	using FGBindingSet = FrameGraphView<BindingSetView>;
+	using FGCount      = FrameGraphView<uint32_t>;
 }

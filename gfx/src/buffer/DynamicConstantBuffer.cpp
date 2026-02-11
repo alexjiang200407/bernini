@@ -12,7 +12,8 @@ namespace gfx
 
 	DynamicConstantBuffer::DynamicConstantBuffer(DynamicConstantBuffer&& other) noexcept :
 		m_layoutMap(std::move(other.m_layoutMap)), m_bufferDesc(std::move(other.m_bufferDesc)),
-		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data))
+		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data)),
+		m_bufferType(other.m_bufferType)
 	{}
 
 	DynamicConstantBuffer&
@@ -25,6 +26,7 @@ namespace gfx
 			m_bufferDesc = std::move(other.m_bufferDesc);
 			m_buf        = std::move(other.m_buf);
 			m_data       = std::move(other.m_data);
+			m_bufferType = other.m_bufferType;
 		}
 		return *this;
 	}
@@ -41,14 +43,17 @@ namespace gfx
 		elementDesc.root->BuildLayoutMap(&m_layoutMap, ctx);
 		auto totalSize = align(ctx.offset, 16u);
 
-		auto desc = nvrhi::BufferDesc{};
-		desc.setByteSize(totalSize)
-			.setIsConstantBuffer(true)
-			.setDebugName(elementDesc.name)
-			.setKeepInitialState(true)
-			.setInitialState(nvrhi::ResourceStates::ConstantBuffer);
+		m_bufferType = elementDesc.bufferType;
 
-		if (elementDesc.isVolatile)
+		auto desc = nvrhi::BufferDesc{};
+		desc.setByteSize(totalSize).setDebugName(elementDesc.name).setKeepInitialState(true);
+
+		if (m_bufferType == BufferType::kPushConstant)
+			desc.setIsConstantBuffer(true).setInitialState(nvrhi::ResourceStates::Common);
+		else
+			desc.setIsConstantBuffer(true).setInitialState(nvrhi::ResourceStates::ConstantBuffer);
+
+		if (m_bufferType == BufferType::kVolatileConstantBuffer)
 		{
 			desc.setIsVolatile(true).setMaxVersions(16);
 		}
@@ -63,15 +68,13 @@ namespace gfx
 	DynamicConstantBuffer::View::At(std::string_view key) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Cannot at using a null view" };
+			THROW_GFX_ERROR("DynamicConstantBuffer::View::At", "Cannot at using a null view");
 
 		if (key.find('.') != std::string_view::npos)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Nested keys are not supported in At(): " + std::string{ key } };
+			THROW_GFX_ERROR(
+				"DynamicConstantBuffer::View::At",
+				"Nested keys are not supported in At(): " + std::string{ key });
 		}
 
 		auto  joined = std::format("{}.{}", m_key, key);
@@ -83,24 +86,22 @@ namespace gfx
 	DynamicConstantBuffer::View::At(uint32_t index) const
 	{
 		if (IsNull())
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Cannot at using a null view" };
+			THROW_GFX_ERROR("DynamicConstantBuffer::View::At", "Cannot at using a null view");
 
 		auto& entry = m_parent->GetLayoutEntry(m_key);
 
 		if (index >= entry.count)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Index out of range for entry: " + m_key };
+			THROW_GFX_ERROR(
+				"DynamicConstantBuffer::View::At",
+				"Index out of range for entry: " + m_key);
 		}
 
 		if (!entry.IsArray())
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::View::At",
-				                "Cannot index a non-array entry: " + m_key };
+			THROW_GFX_ERROR(
+				"DynamicConstantBuffer::View::At",
+				"Cannot index a non-array entry: " + m_key);
 		}
 
 		return View{ m_totalOffset + index * entry.stride, m_parent, m_key };
@@ -140,9 +141,7 @@ namespace gfx
 			return it->second;
 		}
 
-		throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-			                "DynamicConstantBuffer::GetLayoutEntry",
-			                "Could not find entry" };
+		THROW_GFX_ERROR("DynamicConstantBuffer::GetLayoutEntry", "Could not find entry");
 	}
 
 	DynamicConstantBuffer::View
@@ -163,9 +162,9 @@ namespace gfx
 	{
 		if (name.find('.') != std::string_view::npos)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_DYNAMIC_BUFFER,
-				                "DynamicConstantBuffer::At",
-				                "Nested keys are not supported in At(): " + std::string{ name } };
+			THROW_GFX_ERROR(
+				"DynamicConstantBuffer::At",
+				"Nested keys are not supported in At(): " + std::string{ name });
 		}
 
 		auto& entry = GetLayoutEntry(name);
@@ -177,24 +176,50 @@ namespace gfx
 	nvrhi::BindingLayoutItem
 	DynamicConstantBuffer::GetBindingLayoutItem(uint32_t slot) const noexcept
 	{
-		if (IsVolatile())
+		switch (m_bufferType)
 		{
+		case BufferType::kConstantBuffer:
+			return nvrhi::BindingLayoutItem::ConstantBuffer(slot);
+		case BufferType::kPushConstant:
+			return nvrhi::BindingLayoutItem::PushConstants(slot, m_bufferDesc.byteSize);
+		case BufferType::kVolatileConstantBuffer:
 			return nvrhi::BindingLayoutItem::VolatileConstantBuffer(slot);
+		default:
+			gfatal("DynamicConstantBuffer::GetBindingLayoutItem", "Unsupported buffer type");
+			return nvrhi::BindingLayoutItem{};
 		}
-		return nvrhi::BindingLayoutItem::ConstantBuffer(slot);
 	}
 
 	nvrhi::BindingSetItem
 	DynamicConstantBuffer::GetBindingSetItem(uint32_t slot) const noexcept
 	{
-		return nvrhi::BindingSetItem::ConstantBuffer(slot, GetBufferHandle());
+		switch (m_bufferType)
+		{
+		case BufferType::kConstantBuffer:
+		case BufferType::kVolatileConstantBuffer:
+			return nvrhi::BindingSetItem::ConstantBuffer(slot, m_buf);
+		case BufferType::kPushConstant:
+			return nvrhi::BindingSetItem::PushConstants(slot, m_bufferDesc.byteSize);
+		default:
+			gfatal("DynamicConstantBuffer::GetBindingLayoutItem", "Unsupported buffer type");
+			return nvrhi::BindingSetItem{};
+		}
 	}
 
 	void
 	DynamicConstantBuffer::Update(nvrhi::CommandListHandle cmdList) noexcept
 	{
 		assert(m_buf.Get());
-		cmdList->writeBuffer(m_buf, m_data.get(), m_bufferDesc.byteSize);
+		switch (m_bufferType)
+		{
+		case BufferType::kConstantBuffer:
+		case BufferType::kVolatileConstantBuffer:
+			cmdList->writeBuffer(m_buf, m_data.get(), m_bufferDesc.byteSize);
+			break;
+		case BufferType::kPushConstant:
+			cmdList->setPushConstants(m_data.get(), m_bufferDesc.byteSize);
+			break;
+		}
 	}
 
 	bool

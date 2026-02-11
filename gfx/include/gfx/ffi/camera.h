@@ -64,6 +64,13 @@ extern "C"
 	GFX_API GfxResult
 	cameraMoveAlongRight(GfxCamera camera, float delta);
 
+	/// <summary>
+	/// Rotate the camera by deltaYaw and deltaPitch in degrees. Yaw is applied first, then pitch.
+	/// </summary>
+	/// <param name="camera"></param>
+	/// <param name="deltaYaw"></param>
+	/// <param name="deltaPitch"></param>
+	/// <returns></returns>
 	GFX_API GfxResult
 	cameraRotateYawPitch(GfxCamera camera, float deltaYaw, float deltaPitch);
 

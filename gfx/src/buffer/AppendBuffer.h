@@ -1,5 +1,5 @@
 #pragma once
-#include "GfxException.h"
+#include "error/GfxException.h"
 #include "frame_graph/FrameGraphView.h"
 #include <core/type_traits.h>
 
@@ -49,15 +49,24 @@ namespace gfx
 	concept AppendBufferTConcept =
 		core::type_traits::default_constructible<T> && core::type_traits::trivially_copyable<T>;
 
+	struct NoExtraData
+	{};
+
+	template <typename T>
+	concept ExtraDataConcept = core::type_traits::is_nothrow_copy_assignable<T> &&
+	                           core::type_traits::is_nothrow_destructible<T> &&
+	                           core::type_traits::default_constructible<T>;
+
 	/// <summary>
 	/// A GPU-backed buffer that maintains stable virtual indices while allowing efficient element removal through physical index compaction. The items must be atomic, no order
 	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	template <AppendBufferTConcept T>
+	/// <typeparam name="T">GPU data type (uploaded to GPU)</typeparam>
+	/// <typeparam name="ExtraData">CPU-local data type (not uploaded to GPU)</typeparam>
+	template <AppendBufferTConcept T, ExtraDataConcept ExtraData = NoExtraData>
 	class AppendBuffer final
 	{
 	public:
-		using View = FrameGraphView<AppendBuffer<T>>;
+		using View = FrameGraphView<AppendBuffer<T, ExtraData>>;
 
 		static constexpr uint32_t INVALID_PHYSICAL_INDEX = UINT32_MAX;
 
@@ -69,12 +78,45 @@ namespace gfx
 			Init(device, desc);
 		}
 
+		AppendBuffer(AppendBuffer&& other) noexcept :
+			m_data(std::move(other.m_data)), m_extraData(std::move(other.m_extraData)),
+			m_id2Idx(std::move(other.m_id2Idx)), m_idx2Id(std::move(other.m_idx2Id)),
+			m_buffer(std::exchange(other.m_buffer, {})),
+			m_redirectTable(std::exchange(other.m_redirectTable, {})),
+			m_dirty(std::exchange(other.m_dirty, false)),
+			m_useRedirectTableOnGPU(std::exchange(other.m_useRedirectTableOnGPU, true))
+		{}
+
+		AppendBuffer&
+		operator=(AppendBuffer&& other) noexcept
+		{
+			if (this != &other)
+			{
+				m_data                  = std::move(other.m_data);
+				m_extraData             = std::move(other.m_extraData);
+				m_id2Idx                = std::move(other.m_id2Idx);
+				m_idx2Id                = std::move(other.m_idx2Id);
+				m_buffer                = std::exchange(other.m_buffer, {});
+				m_redirectTable         = std::exchange(other.m_redirectTable, {});
+				m_dirty                 = std::exchange(other.m_dirty, false);
+				m_useRedirectTableOnGPU = std::exchange(other.m_useRedirectTableOnGPU, true);
+			}
+			return *this;
+		}
+
 		void
 		Init(nvrhi::DeviceHandle device, const AppendBufferDesc& desc)
 		{
 			m_data.clear();
 			m_data.reserve(desc.startingCapacity);
 			m_data.emplace_back(T{});
+
+			if constexpr (!std::is_same_v<ExtraData, NoExtraData>)
+			{
+				m_extraData.clear();
+				m_extraData.reserve(desc.startingCapacity);
+				m_extraData.emplace_back(ExtraData{});
+			}
 
 			m_id2Idx.clear();
 			m_id2Idx.reserve(desc.startingCapacity);
@@ -101,22 +143,16 @@ namespace gfx
 			m_dirty = true;
 		}
 
-		void
-		Erase(uint32_t virtualIndex)
+		bool
+		Erase(uint32_t virtualIndex) noexcept
 		{
 			if (virtualIndex == 0 || virtualIndex >= m_id2Idx.size())
-				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
-					"AppendBuffer::Erase",
-					"Invalid Virtual Index");
+				return false;
 
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex == 0 ||
 			    physicalIndex >= m_data.size())
-				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
-					"AppendBuffer::Erase",
-					"Invalid Virtual Index");
+				return false;
 
 			m_dirty = true;
 
@@ -126,15 +162,26 @@ namespace gfx
 			{
 				m_data[physicalIndex] = m_data[lastPhysicalIndex];
 
+				if constexpr (!std::is_same_v<ExtraData, NoExtraData>)
+				{
+					m_extraData[physicalIndex] = m_extraData[lastPhysicalIndex];
+				}
+
 				uint32_t lastVirtualIndex  = m_idx2Id[lastPhysicalIndex];
 				m_id2Idx[lastVirtualIndex] = physicalIndex;
 				m_idx2Id[physicalIndex]    = lastVirtualIndex;
 			}
 
 			m_data.pop_back();
+			if constexpr (!std::is_same_v<ExtraData, NoExtraData>)
+			{
+				m_extraData.pop_back();
+			}
 			m_idx2Id.pop_back();
 
 			m_id2Idx[virtualIndex] = INVALID_PHYSICAL_INDEX;
+
+			return true;
 		}
 
 		template <typename... Args>
@@ -145,6 +192,40 @@ namespace gfx
 
 			uint32_t physicalIndex = static_cast<uint32_t>(m_data.size());
 			m_data.emplace_back(std::forward<Args>(args)...);
+
+			if constexpr (!std::is_same_v<ExtraData, NoExtraData>)
+			{
+				m_extraData.emplace_back(ExtraData{});
+			}
+
+			uint32_t virtualIndex = AllocateVirtualIndex();
+
+			if (virtualIndex < m_id2Idx.size())
+			{
+				m_id2Idx[virtualIndex] = physicalIndex;
+			}
+			else
+			{
+				m_id2Idx.push_back(physicalIndex);
+			}
+
+			m_idx2Id.push_back(virtualIndex);
+
+			return virtualIndex;
+		}
+
+		// Emplace with both GPU data and CPU-local extra data
+		template <typename... TArgs, typename... ExtraArgs>
+		uint32_t
+		EmplaceBackWithExtra(std::tuple<TArgs...>&& tArgs, std::tuple<ExtraArgs...>&& extraArgs)
+			requires(!std::is_same_v<ExtraData, NoExtraData>)
+		{
+			m_dirty = true;
+
+			uint32_t physicalIndex = static_cast<uint32_t>(m_data.size());
+
+			m_data.emplace_back(std::make_from_tuple<T>(std::move(tArgs)));
+			m_extraData.emplace_back(std::make_from_tuple<ExtraData>(std::move(extraArgs)));
 
 			uint32_t virtualIndex = AllocateVirtualIndex();
 
@@ -173,18 +254,12 @@ namespace gfx
 		{
 			if (virtualIndex >= m_id2Idx.size())
 			{
-				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
-				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			return m_data[physicalIndex];
 		}
@@ -194,21 +269,48 @@ namespace gfx
 		{
 			if (virtualIndex >= m_id2Idx.size())
 			{
-				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
-				throw GfxException(
-					GFX_RESULT_ERROR_CPU_APPEND_BUFFER,
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			m_dirty = true;  // Assume mutation
 			return m_data[physicalIndex];
+		}
+
+		// Access CPU-local extra data
+		[[nodiscard]] const ExtraData&
+		GetExtraData(uint32_t virtualIndex) const
+			requires(!std::is_same_v<ExtraData, NoExtraData>)
+		{
+			if (virtualIndex >= m_id2Idx.size())
+			{
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
+			}
+			uint32_t physicalIndex = m_id2Idx[virtualIndex];
+			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_extraData.size())
+			{
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
+			}
+			return m_extraData[physicalIndex];
+		}
+
+		[[nodiscard]] ExtraData&
+		GetExtraData(uint32_t virtualIndex)
+			requires(!std::is_same_v<ExtraData, NoExtraData>)
+		{
+			if (virtualIndex >= m_id2Idx.size())
+			{
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
+			}
+			uint32_t physicalIndex = m_id2Idx[virtualIndex];
+			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_extraData.size())
+			{
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
+			}
+			return m_extraData[physicalIndex];
 		}
 
 		[[nodiscard]] bool
@@ -220,25 +322,25 @@ namespace gfx
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetBindingLayoutItemSRV(uint32_t slot) const
+		GetBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetBindingSetItemSRV(uint32_t slot) const
+		GetBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_buffer);
 		}
 
 		[[nodiscard]] nvrhi::BindingLayoutItem
-		GetRedirectTableBindingLayoutItemSRV(uint32_t slot) const
+		GetRedirectTableBindingLayoutItem(uint32_t slot) const
 		{
 			return nvrhi::BindingLayoutItem::StructuredBuffer_SRV(slot);
 		}
 
 		[[nodiscard]] nvrhi::BindingSetItem
-		GetRedirectTableBindingSetItemSRV(uint32_t slot) const
+		GetRedirectTableBindingSetItem(uint32_t slot) const
 		{
 			return nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_redirectTable);
 		}
@@ -267,6 +369,7 @@ namespace gfx
 				m_buffer  = device->createBuffer(desc);
 				recreated = true;
 			}
+			// Only upload GPU data (T), not ExtraData
 			cmdList->writeBuffer(m_buffer, m_data.data(), requiredDataSize);
 
 			if (m_useRedirectTableOnGPU)
@@ -309,6 +412,25 @@ namespace gfx
 			return m_redirectTable;
 		}
 
+		void
+		Clear()
+		{
+			m_data.clear();
+			m_data.emplace_back(T{});
+
+			if constexpr (!std::is_same_v<ExtraData, NoExtraData>)
+			{
+				m_extraData.clear();
+				m_extraData.emplace_back(ExtraData{});
+			}
+
+			m_id2Idx.clear();
+			m_id2Idx.emplace_back(0);
+			m_idx2Id.clear();
+			m_idx2Id.emplace_back(0);
+			m_dirty = true;
+		}
+
 	private:
 		// TODO: Use a more optimized system using bit flag vector with each flag representing 512 indices
 		// OS-style first-fit allocation
@@ -325,15 +447,16 @@ namespace gfx
 			return static_cast<uint32_t>(m_id2Idx.size());
 		}
 
-		std::vector<T>        m_data;
-		std::vector<uint32_t> m_id2Idx;
-		std::vector<uint32_t> m_idx2Id;
-		nvrhi::BufferHandle   m_buffer;
-		nvrhi::BufferHandle   m_redirectTable;
-		bool                  m_dirty = false;
-		bool                  m_useRedirectTableOnGPU;
+		std::vector<T>         m_data{};
+		std::vector<ExtraData> m_extraData{};
+		std::vector<uint32_t>  m_id2Idx{};
+		std::vector<uint32_t>  m_idx2Id{};
+		nvrhi::BufferHandle    m_buffer{};
+		nvrhi::BufferHandle    m_redirectTable{};
+		bool                   m_dirty                 = false;
+		bool                   m_useRedirectTableOnGPU = true;
 	};
 
-	template <typename T>
-	using AppendBufferView = AppendBuffer<T>::View;
+	template <typename T, typename ExtraData = NoExtraData>
+	using AppendBufferView = AppendBuffer<T, ExtraData>::View;
 }
