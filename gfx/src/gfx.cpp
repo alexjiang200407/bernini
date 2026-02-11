@@ -1,4 +1,4 @@
-#include "GfxException.h"
+#include "error/GfxException.h"
 #include "ffi/util.h"
 #include <core/file/file.h>
 #include <gfx/ffi/gfx.h>
@@ -47,7 +47,7 @@ isGfxInitialized()
 GfxErrorInfo
 getLastError()
 {
-	return gfx::GfxException::GetLastErrorInfo();
+	return gfx::getLastErrorInfo();
 }
 
 namespace gfx

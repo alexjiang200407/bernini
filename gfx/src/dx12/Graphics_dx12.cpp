@@ -96,7 +96,7 @@ namespace gfx
 		bool   m_isHeadless               = false;
 		UINT   m_windowWidth              = 0;
 		UINT   m_windowHeight             = 0;
-		UINT64 m_frameIdx               = 1;
+		UINT64 m_frameIdx                 = 1;
 		bool   m_enableGPUValidationLayer = false;
 		bool   m_enableDebugLayer         = false;
 
@@ -185,8 +185,6 @@ namespace gfx
 		{
 			WaitForSingleObject(fenceEvent, INFINITE);
 		}
-
-		m_nvrhiDevice.Reset();
 
 		for (auto fenceEvent : m_frameFenceEvents)
 		{

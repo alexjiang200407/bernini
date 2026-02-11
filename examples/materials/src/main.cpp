@@ -177,14 +177,15 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		matOpts.alphaMode     = MaterialAlphaMode::AlphaMode_Opaque;
 		createPBRMaterial(scene, matOpts, &material1) >> berniniErrChecker;
 
-		auto meshOpts           = GfxStaticMeshOpts{};
-		meshOpts.baseMesh       = cubeMesh;
-		meshOpts.modelTransform = data;
-		meshOpts.material       = material1;
+		auto meshOpts     = GfxStaticMeshOpts{};
+		meshOpts.baseMesh = cubeMesh;
+		std::copy(data, data + 16, meshOpts.modelTransform);
+		meshOpts.material = material1;
 
 		createStaticMeshInstance(scene, meshOpts, &cubeInstance) >> berniniErrChecker;
 
-		mat[3][0]         = -5.0f;
+		mat[3][0] = -5.0f;
+		std::copy(data, data + 16, meshOpts.modelTransform);
 		meshOpts.baseMesh = sphereMesh;
 
 		createStaticMeshInstance(scene, meshOpts, &sphereInstance) >> berniniErrChecker;

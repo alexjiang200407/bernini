@@ -1,5 +1,6 @@
 #include "scene/SceneData.h"
 #include "BindingSlots.h"
+#include <core/ScopeGuard.h>
 
 namespace gfx
 {
@@ -75,10 +76,7 @@ namespace gfx
 				"Failed to update PSO for DrawInstance {} with MaterialType::kPBR",
 				instanceId);
 
-			throw GfxException(
-				GFX_RESULT_ERROR_INVALID_PSO,
-				"Invalid PSO",
-				"User created a material that has no registered PSO");
+			THROW_GFX_ERROR("Invalid PSO", "User created a material that has no registered PSO");
 		}
 		instance.materialSpecId = matId;
 	}
@@ -96,6 +94,7 @@ namespace gfx
 	SceneData::RemoveDrawInstance(DrawInstance::ID id)
 	{
 		auto drawInstance = m_drawInstances.At(id);
+		gassert(m_drawInstances.IsValid(id), "Invalid Draw Instance");
 
 		switch (drawInstance.sortKey.GetGeomType())
 		{
@@ -105,31 +104,17 @@ namespace gfx
 			break;
 		}
 		default:
-			throw GfxException(
-				GFX_RESULT_ERROR_UNSUPPORTED_FEATURE,
-				"Unsupported Draw Type",
-				"Unsupported Draw Type");
+			gfatal("Unsupported Draw Type", "Unsupported Draw Type");
+			break;
 		}
 
 		m_drawInstances.Erase(id);
 	}
 
 	void
-	SceneData::RemoveStaticMeshInstance(StaticMeshInstance::ID id)
+	SceneData::RemoveStaticMeshInstance(StaticMeshInstance::ID id) noexcept
 	{
-		const StaticMeshInstance& instance = m_staticMeshInstances.At(id);
-		StaticMeshInfo::ID        infoID   = instance.infoID;
-
-		if (m_staticMeshInfos.IsValid(infoID))
-		{
-			m_staticMeshInstances.Erase(id);
-		}
-		else
-		{
-			logger::warn(
-				"SceneData::RemoveStaticMeshInstance: StaticMeshInfo with ID {} doesn't exist.",
-				infoID);
-		}
+		m_staticMeshInstances.Erase(id);
 	}
 
 	void

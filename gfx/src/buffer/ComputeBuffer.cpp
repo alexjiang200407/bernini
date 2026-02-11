@@ -7,9 +7,9 @@ namespace gfx
 	{
 		if (desc.elemCount == 0 || desc.elemSize == 0)
 		{
-			throw GfxException{ GFX_RESULT_ERROR_COMPUTE_BUFFER,
-				                "Compute Buffer error",
-				                "ComputeBuffer: element count and size must be greater than zero" };
+			THROW_GFX_ERROR(
+				"Compute Buffer error",
+				"ComputeBuffer: element count and size must be greater than zero");
 		}
 
 		m_elementCount = desc.elemCount;

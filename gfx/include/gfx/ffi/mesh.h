@@ -17,7 +17,7 @@ extern "C"
 	{
 		GfxStaticMesh baseMesh;
 		GfxMaterial   material;
-		float*        modelTransform;
+		GfxMat4       modelTransform;
 	};
 
 	GFX_API GfxResult

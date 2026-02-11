@@ -1,9 +1,9 @@
 #pragma once
 #include "buffer/ComputeBuffer.h"
 #include "buffer/DynamicConstantBuffer.h"
+#include "frame_graph/FrameGraphView.h"
 #include "types/MeshletDispatchArg.h"
 #include "types/PSO.h"
-#include "frame_graph/FrameGraphView.h"
 
 class FrameGraph;
 class FrameGraphBlackboard;
@@ -72,6 +72,6 @@ namespace gfx
 		nvrhi::ComputePipelineHandle m_genDispatchArgsPipeline;
 		nvrhi::BindingSetHandle      m_bsGenDispatchArgs;
 		nvrhi::BindingSetHandle      m_bsDrawArgs;
-		nvrhi::MeshletPipelineHandle m_meshletPipeline[PSO_COUNT];
+		nvrhi::MeshletPipelineHandle m_meshletPipeline[PSO_COUNT]{};
 	};
 }

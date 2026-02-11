@@ -78,9 +78,11 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 					{
 						auto mat  = glm::mat4{ 1.0f };
 						mat[3][0] = static_cast<float>(idx) * -5.0f;
+						auto data = glm::value_ptr(mat);
 
 						auto meshOpts     = GfxStaticMeshOpts{};
 						meshOpts.material = material;
+						std::copy(data, data + 16, meshOpts.modelTransform);
 						meshOpts.baseMesh = (idx == 1) ? sphereMesh : cubeMesh;
 
 						createStaticMeshInstance(scene, meshOpts, &meshes[idx]) >>
@@ -213,19 +215,21 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		GfxMaterial material;
 		createPBRMaterial(scene, matOpts, &material) >> berniniErrChecker;
-		auto meshOpts           = GfxStaticMeshOpts{};
-		meshOpts.material       = material;
-		meshOpts.baseMesh       = cubeMesh;
-		meshOpts.modelTransform = data;
+		auto meshOpts     = GfxStaticMeshOpts{};
+		meshOpts.material = material;
+		meshOpts.baseMesh = cubeMesh;
+		std::copy(data, data + 16, meshOpts.modelTransform);
 
 		createStaticMeshInstance(scene, meshOpts, &meshes[0]) >> berniniErrChecker;
 
 		meshOpts.baseMesh = sphereMesh;
 
 		mat[3][0] = -5.0f;
+		std::copy(data, data + 16, meshOpts.modelTransform);
 		createStaticMeshInstance(scene, meshOpts, &meshes[1]) >> berniniErrChecker;
 
-		mat[3][0]         = -10.0f;
+		mat[3][0] = -10.0f;
+		std::copy(data, data + 16, meshOpts.modelTransform);
 		meshOpts.baseMesh = cubeMesh;
 
 		createStaticMeshInstance(scene, meshOpts, &meshes[2]) >> berniniErrChecker;

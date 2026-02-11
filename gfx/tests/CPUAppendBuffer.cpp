@@ -73,6 +73,6 @@ TEST_CASE("AppendBuffer", "[cpu_append_buffer][dynamic_buffer]")
 
 		REQUIRE_NOTHROW(buf.At(0));
 
-		REQUIRE_THROWS(buf.Erase(0));
+		REQUIRE_FALSE(buf.Erase(0));
 	}
 }

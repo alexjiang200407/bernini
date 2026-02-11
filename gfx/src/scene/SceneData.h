@@ -42,7 +42,7 @@ namespace gfx
 
 	private:
 		void
-		RemoveStaticMeshInstance(StaticMeshInstance::ID id);
+		RemoveStaticMeshInstance(StaticMeshInstance::ID id) noexcept;
 
 		void
 		RemoveStaticMeshInfo(StaticMeshInfo::ID id);

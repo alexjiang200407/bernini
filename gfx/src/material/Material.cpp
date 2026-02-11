@@ -6,8 +6,12 @@ GfxResult
 createPBRMaterial(GfxScene scene, GfxPBRMaterialOpts options, GfxMaterial* out)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
-		gfx::ffi::validatePtr(out, "out");
+		auto* scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
+		if (!gfx::ffi::validatePtr(out, "out"))
+			return gfx::getLastResult();
+
+		if (!scene_)
+			return gfx::getLastResult();
 
 		auto pbrMaterial            = gfx::PBRMaterial{};
 		pbrMaterial.albedoColor     = gfx::ffi::toGlmVec4(options.albedoColor);
@@ -18,7 +22,7 @@ createPBRMaterial(GfxScene scene, GfxPBRMaterialOpts options, GfxMaterial* out)
 
 		// TODO: Load textures from paths and set texture IDs in pbrMaterial
 
-		out->id = scene_.CreatePBRMaterial(
+		out->id = scene_->CreatePBRMaterial(
 			std::move(pbrMaterial),
 			gfx::ffi::alphaMode2LayerType(options.alphaMode));
 
@@ -32,8 +36,10 @@ GfxResult
 attachPBRMaterial(GfxScene scene, GfxMeshInstance meshInstance, GfxMaterial pbrMaterial)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
-		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
-		scene_.AttachPBRMaterial(meshInstance, pbrMaterial.id);
+		auto* scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
+		if (!scene_)
+			return gfx::getLastResult();
+		scene_->AttachPBRMaterial(meshInstance, pbrMaterial.id);
 		return GFX_RESULT_OK;
 	});
 }

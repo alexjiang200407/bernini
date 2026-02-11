@@ -45,16 +45,16 @@ namespace gfx::dx
 	{
 		if (!FAILED(dxErr.m_hr))
 			return;
-
-		throw DXException(std::move(dxErr));
+#ifdef _DEBUG
+		throw core::except::BerniniException(
+			"DirectX 12 Error",
+			core::str::wide_to_string(GetErrorDescription(dxErr.m_hr)),
+			dxErr.m_loc);
+#else
+		logger::error(
+			"DirectX 12 Error: {}",
+			core::str::wide_to_string(GetErrorDescription(dxErr.m_hr)));
+		std::abort();
+#endif
 	}
-
-	DXException::DXException(DXResult&& result) noexcept :
-		GfxException{ GFX_RESULT_ERROR_DIRECTX11_ERROR,
-		              "DirectX 12 Error",
-		              core::str::wide_to_string(GetErrorDescription(result.m_hr)),
-		              result.m_loc },
-		m_code{ result.m_hr }
-	{}
-
 }

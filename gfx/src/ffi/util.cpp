@@ -17,14 +17,17 @@ namespace gfx::ffi
 		}
 	}
 
-	void
+	bool
 	validatePtr(void* ptr, std::string_view name)
 	{
 		if (ptr == nullptr)
 		{
-			throw gfx::GfxException{ GFX_RESULT_ERROR_INVALID_ARGUMENT,
-				                     "Invalid Argument",
-				                     std::format("<{}> cannot be nullptr", name) };
+			setLastErrorInfo(
+				GFX_RESULT_ERROR_INVALID_ARGUMENT,
+				"Invalid Argument",
+				std::format("<{}> cannot be nullptr", name));
+			return false;
 		}
+		return true;
 	}
 }

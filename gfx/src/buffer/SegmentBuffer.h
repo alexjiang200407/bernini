@@ -1,6 +1,6 @@
 #pragma once
-#include "GfxException.h"
 #include "buffer/types/SegmentID.h"
+#include "error/GfxException.h"
 #include "frame_graph/FrameGraphView.h"
 #include <core/type_traits.h>
 
@@ -140,12 +140,12 @@ namespace gfx
 			return segmentId;
 		}
 
-		void
-		Erase(SegmentID segmentId)
+		bool
+		Erase(SegmentID segmentId) noexcept
 		{
 			auto it = m_segments.find(segmentId);
 			if (it == m_segments.end())
-				return;
+				return false;
 
 			m_dirty             = true;
 			const auto& segment = it->second;
@@ -156,6 +156,7 @@ namespace gfx
 			}
 
 			m_segments.erase(it);
+			return true;
 		}
 
 		[[nodiscard]] T&
@@ -240,14 +241,14 @@ namespace gfx
 			return static_cast<uint32_t>(m_segmentId2Idx.size());
 		}
 
-		nvrhi::BufferDesc                      m_bufferDesc;
-		nvrhi::BufferHandle                    m_buffer;
-		nvrhi::BufferHandle                    m_redirectTable;
-		std::vector<T>                         m_data;
-		std::vector<uint32_t>                  m_segmentId2Idx;
-		std::unordered_map<SegmentID, Segment> m_segments;
-		bool                                   m_dirty = false;
-		bool                                   m_useRedirectTableOnGPU;
+		nvrhi::BufferDesc                      m_bufferDesc{};
+		nvrhi::BufferHandle                    m_buffer{};
+		nvrhi::BufferHandle                    m_redirectTable{};
+		std::vector<T>                         m_data{};
+		std::vector<uint32_t>                  m_segmentId2Idx{};
+		std::unordered_map<SegmentID, Segment> m_segments{};
+		bool                                   m_dirty                 = false;
+		bool                                   m_useRedirectTableOnGPU = true;
 	};
 
 	template <typename T>

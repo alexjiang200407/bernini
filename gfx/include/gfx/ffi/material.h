@@ -16,23 +16,21 @@ extern "C"
 
 	struct GfxPBRMaterialOpts
 	{
-		const char* pName;
+		GfxTexture albedoTex;
+		GfxVec4    albedoColor;
 
-		const char* pAlbedoPath;
-		GfxVec4     albedoColor;
+		GfxTexture metallicRoughnessTex;
+		float      metallicFactor;
+		float      roughnessFactor;
 
-		const char* pMetallicRoughnessPath;
-		float       metallicFactor;
-		float       roughnessFactor;
+		GfxTexture normalTex;
+		float      normalScale;
 
-		const char* pNormalPath;
-		float       normalScale;
+		GfxTexture occlussionTex;
+		float      occlusionStrength;
 
-		const char* pOcclusionPath;
-		float       occlusionStrength;
-
-		const char* pEmissivePath;
-		GfxVec3     emissiveFactor;
+		GfxTexture emissiveTex;
+		GfxVec3    emissiveFactor;
 
 		MaterialAlphaMode alphaMode;
 		float             alphaCutoff;
@@ -56,6 +54,9 @@ extern "C"
 
 	GFX_API GfxResult
 	attachPBRMaterial(GfxScene scene, GfxMeshInstance meshInstance, GfxMaterial pbrMaterial);
+
+	GFX_API GfxResult
+	createTexture(GfxScene scene, GfxTexture* out);
 
 #ifdef __cplusplus
 }

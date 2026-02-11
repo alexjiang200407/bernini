@@ -1,5 +1,4 @@
 #pragma once
-#include "GfxException.h"
 
 namespace gfx
 {

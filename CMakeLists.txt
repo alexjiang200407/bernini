@@ -17,7 +17,10 @@ add_subdirectory(extern/FrameGraph)
 add_subdirectory(extern/NVRHI)
 add_subdirectory(gfx)
 add_subdirectory(gfxsdk_cxx)
-add_subdirectory(examples)
+
+if (BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 get_property(EXAMPLE_TARGETS GLOBAL PROPERTY GLOBAL_EXAMPLE_TARGETS)
 
@@ -25,8 +28,7 @@ if (MSVC)
     foreach(target Core gfx ${EXAMPLE_TARGETS} gfxsdk_cxx)
         target_compile_options(${target} PRIVATE
             /W4          
-            /WX          
-            /EHsc        
+            /WX               
             /MP          
             /we4265      
             /wd4996      
@@ -34,6 +36,8 @@ if (MSVC)
             /we4267      
             /we4800      
             /we4305     
+            $<$<CONFIG:Release>:/EHs-c-> 
+            $<$<NOT:$<CONFIG:Release>>:/EHsc>
         )
     endforeach()
 endif()
