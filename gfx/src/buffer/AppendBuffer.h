@@ -78,6 +78,32 @@ namespace gfx
 			Init(device, desc);
 		}
 
+		AppendBuffer(AppendBuffer&& other) noexcept :
+			m_data(std::move(other.m_data)), m_extraData(std::move(other.m_extraData)),
+			m_id2Idx(std::move(other.m_id2Idx)), m_idx2Id(std::move(other.m_idx2Id)),
+			m_buffer(std::exchange(other.m_buffer, {})),
+			m_redirectTable(std::exchange(other.m_redirectTable, {})),
+			m_dirty(std::exchange(other.m_dirty, false)),
+			m_useRedirectTableOnGPU(std::exchange(other.m_useRedirectTableOnGPU, true))
+		{}
+
+		AppendBuffer&
+		operator=(AppendBuffer&& other) noexcept
+		{
+			if (this != &other)
+			{
+				m_data                  = std::move(other.m_data);
+				m_extraData             = std::move(other.m_extraData);
+				m_id2Idx                = std::move(other.m_id2Idx);
+				m_idx2Id                = std::move(other.m_idx2Id);
+				m_buffer                = std::exchange(other.m_buffer, {});
+				m_redirectTable         = std::exchange(other.m_redirectTable, {});
+				m_dirty                 = std::exchange(other.m_dirty, false);
+				m_useRedirectTableOnGPU = std::exchange(other.m_useRedirectTableOnGPU, true);
+			}
+			return *this;
+		}
+
 		void
 		Init(nvrhi::DeviceHandle device, const AppendBufferDesc& desc)
 		{
@@ -228,16 +254,12 @@ namespace gfx
 		{
 			if (virtualIndex >= m_id2Idx.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			return m_data[physicalIndex];
 		}
@@ -247,16 +269,12 @@ namespace gfx
 		{
 			if (virtualIndex >= m_id2Idx.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_data.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::At",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::At", "Invalid Virtual Index");
 			}
 			m_dirty = true;  // Assume mutation
 			return m_data[physicalIndex];
@@ -269,16 +287,12 @@ namespace gfx
 		{
 			if (virtualIndex >= m_id2Idx.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::GetExtraData",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
 			}
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_extraData.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::GetExtraData",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
 			}
 			return m_extraData[physicalIndex];
 		}
@@ -289,16 +303,12 @@ namespace gfx
 		{
 			if (virtualIndex >= m_id2Idx.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::GetExtraData",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
 			}
 			uint32_t physicalIndex = m_id2Idx[virtualIndex];
 			if (physicalIndex == INVALID_PHYSICAL_INDEX || physicalIndex >= m_extraData.size())
 			{
-				THROW_GFX_ERROR(
-					"AppendBuffer::GetExtraData",
-					"Invalid Virtual Index");
+				THROW_GFX_ERROR("AppendBuffer::GetExtraData", "Invalid Virtual Index");
 			}
 			return m_extraData[physicalIndex];
 		}
