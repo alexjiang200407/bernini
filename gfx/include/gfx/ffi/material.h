@@ -14,7 +14,7 @@ extern "C"
 		AlphaMode_Blend  = 2
 	};
 
-	struct CreatePBRMaterialOptions
+	struct GfxPBRMaterialOpts
 	{
 		const char* pName;
 
@@ -40,8 +40,22 @@ extern "C"
 		int32_t doubleSided;
 	};
 
-	GfxResult
-	createPBRMaterial(Gfx gfx, CreatePBRMaterialOptions color);
+	enum GfxMaterialType
+	{
+		GfxMaterialType_PBR = 0,
+	};
+
+	typedef struct
+	{
+		uint32_t        id;
+		GfxMaterialType type;
+	} GfxMaterial;
+
+	GFX_API GfxResult
+	createPBRMaterial(GfxScene scene, GfxPBRMaterialOpts options, GfxMaterial* out);
+
+	GFX_API GfxResult
+	attachPBRMaterial(GfxScene scene, GfxMeshInstance meshInstance, GfxMaterial pbrMaterial);
 
 #ifdef __cplusplus
 }

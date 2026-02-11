@@ -21,7 +21,22 @@ namespace gfx
 		[[nodiscard]] GeometryType
 		GetGeomType() const noexcept
 		{
-			return psoGeomType(GetPSO());
+			uint64_t geomVal = (m_value >> 32) & 0xFF;
+			return static_cast<GeometryType>(geomVal);
+		}
+
+		[[nodiscard]] LayerType
+		GetLayerType() const noexcept
+		{
+			uint64_t layerVal = (m_value >> 62) & 0x3;
+			return static_cast<LayerType>(layerVal);
+		}
+
+		[[nodiscard]] MaterialType
+		GetMaterialType() const noexcept
+		{
+			uint64_t matVal = (m_value >> 40) & 0xFF;
+			return static_cast<MaterialType>(matVal);
 		}
 
 		[[nodiscard]] PSO
@@ -30,11 +45,17 @@ namespace gfx
 			return static_cast<PSO>((m_value >> 46) & 0x3FF);
 		}
 
-		[[nodiscard]] MaterialType
-		GetMaterialType() const noexcept
-		{
-			return psoMaterialType(GetPSO());
-		}
+		PSO
+		UpdatePSO(MaterialType matType) noexcept;
+
+		void
+		SetPSO(PSO pso) noexcept;
+
+		void
+		SetMaterialType(MaterialType matType) noexcept;
+
+		void
+		SetLayerType(LayerType matType) noexcept;
 
 	private:
 		uint64_t m_value = 0;

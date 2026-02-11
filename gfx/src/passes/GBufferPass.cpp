@@ -85,7 +85,17 @@ namespace gfx
 
 		AddDrawStrategy(
 			device,
-			PSO::kOpaque_StaticMesh_PBR,
+			PSO::kOpaque_Static_PBR,
+			outBufferInfo,
+			"shaders/AS_GBuffer_StaticMesh.cso",
+			"shaders/MS_GBuffer_StaticMesh.cso",
+			"shaders/PS_GBuffer_Red.cso",
+			renderState,
+			m_blDrawArgs);
+
+		AddDrawStrategy(
+			device,
+			PSO::kAlphaTest_Static_PBR,
 			outBufferInfo,
 			"shaders/AS_GBuffer_StaticMesh.cso",
 			"shaders/MS_GBuffer_StaticMesh.cso",
@@ -95,17 +105,7 @@ namespace gfx
 
 		AddDrawStrategy(
 			device,
-			PSO::kAlphaTest_StaticMesh_PBR,
-			outBufferInfo,
-			"shaders/AS_GBuffer_StaticMesh.cso",
-			"shaders/MS_GBuffer_StaticMesh.cso",
-			"shaders/PS_GBuffer_Green.cso",
-			renderState,
-			m_blDrawArgs);
-
-		AddDrawStrategy(
-			device,
-			PSO::kTransparent_StaticMesh_PBR,
+			PSO::kTransparent_Static_PBR,
 			outBufferInfo,
 			"shaders/AS_GBuffer_StaticMesh.cso",
 			"shaders/MS_GBuffer_StaticMesh.cso",
@@ -181,9 +181,12 @@ namespace gfx
 				builder.setSideEffect();
 			},
 			[=, &blackBoard](const auto&, FrameGraphPassResources& res, void*) {
+				auto instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
+				if (instanceCount == 0)
+					return;
+
 				m_cmdList->open();
 
-				auto  instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
 				auto& bsSortedInstances =
 					res.get<FGBindingSet>(sortInstanceData.bsSortedInstances).Get();
 				auto& bsFrameData = res.get<FGBindingSet>(frameData.bsFrameData).Get();

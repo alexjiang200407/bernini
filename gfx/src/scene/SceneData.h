@@ -3,6 +3,7 @@
 #include "buffer/SegmentBuffer.h"
 #include "types/DrawInstance.h"
 #include "types/Mesh.h"
+#include "types/PBRMaterial.h"
 #include "types/Vertex.h"
 
 namespace gfx
@@ -10,9 +11,9 @@ namespace gfx
 	class SceneData final
 	{
 	private:
-		struct StaticMeshInfoMetadata
+		struct MaterialExtraData
 		{
-			uint32_t refCount = 0u;
+			LayerType layerType = LayerType::kInvalid;
 		};
 
 	public:
@@ -39,9 +40,6 @@ namespace gfx
 			return m_drawInstances.Size() - 1;
 		}
 
-		void
-		RemoveDrawInstance(DrawInstance::ID id);
-
 	private:
 		void
 		RemoveStaticMeshInstance(StaticMeshInstance::ID id);
@@ -54,6 +52,15 @@ namespace gfx
 
 		StaticMeshInfo::ID
 		AddStaticMeshInfo(StaticMeshInfo&& info);
+
+		PBRMaterial::ID
+		AddPBRMaterial(PBRMaterial&& material, LayerType layerType);
+
+		void
+		AttachPBRMaterial(DrawInstance::ID instanceId, PBRMaterial::ID matId);
+
+		void
+		RemoveDrawInstance(DrawInstance::ID id);
 
 		Meshlet::ID
 		AddMeshlets(std::span<const Meshlet> meshlets)
@@ -80,14 +87,16 @@ namespace gfx
 		}
 
 	private:
-		AppendBuffer<DrawInstance>          m_drawInstances;
-		AppendBuffer<StaticMeshInstance>    m_staticMeshInstances;
-		AppendBuffer<StaticMeshInfo>        m_staticMeshInfos;
-		SegmentBuffer<Meshlet>              m_meshlets;
-		SegmentBuffer<Vertex>               m_vertices;
-		SegmentBuffer<uint32_t>             m_indices;
-		SegmentBuffer<uint32_t>             m_vertexMap;
-		std::vector<StaticMeshInfoMetadata> m_staticMeshInfoMeta;
+		using PBRMaterialBuffer = AppendBuffer<PBRMaterial, MaterialExtraData>;
+
+		AppendBuffer<DrawInstance>       m_drawInstances;
+		AppendBuffer<StaticMeshInstance> m_staticMeshInstances;
+		AppendBuffer<StaticMeshInfo>     m_staticMeshInfos;
+		PBRMaterialBuffer                m_pbrMaterials;
+		SegmentBuffer<Meshlet>           m_meshlets;
+		SegmentBuffer<Vertex>            m_vertices;
+		SegmentBuffer<uint32_t>          m_indices;
+		SegmentBuffer<uint32_t>          m_vertexMap;
 
 		friend class Scene;
 	};

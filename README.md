@@ -22,4 +22,5 @@ To support PIX debug add the directory where Pix is installed to PATH environmen
 ## Features
 - GPU Driven Instance Rendering
 - Virtual Geometry
+- Clustered Geometry (Meshlets)
 - Cross Platform (Windows, Linux, Xbox)

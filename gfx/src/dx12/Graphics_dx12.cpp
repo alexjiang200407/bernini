@@ -96,7 +96,7 @@ namespace gfx
 		bool   m_isHeadless               = false;
 		UINT   m_windowWidth              = 0;
 		UINT   m_windowHeight             = 0;
-		UINT64 m_frameCount               = 1;
+		UINT64 m_frameIdx               = 1;
 		bool   m_enableGPUValidationLayer = false;
 		bool   m_enableDebugLayer         = false;
 
@@ -391,8 +391,8 @@ namespace gfx
 		FrameGraphBlackboard blackboard;
 
 		m_setupFrameData
-			.AttachToFrameGraph(fg, blackboard, sceneData, camera, m_nvrhiDevice, m_frameCount);
-		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice, m_frameCount);
+			.AttachToFrameGraph(fg, blackboard, sceneData, camera, m_nvrhiDevice, m_frameIdx);
+		m_sortInstances.AttachToFrameGraph(fg, blackboard, m_nvrhiDevice, m_frameIdx);
 		m_gbuffer.AttachToFrameGraph(
 			fg,
 			blackboard,
@@ -407,13 +407,13 @@ namespace gfx
 		if (!m_isHeadless)
 			m_swapChain->Present(1, 0);
 
-		m_commandQueue->Signal(m_frameFence.Get(), m_frameCount);
-		m_frameFence->SetEventOnCompletion(m_frameCount, m_frameFenceEvents[backBufferIndex]);
+		m_commandQueue->Signal(m_frameFence.Get(), m_frameIdx);
+		m_frameFence->SetEventOnCompletion(m_frameIdx, m_frameFenceEvents[backBufferIndex]);
 
 		std::this_thread::yield();
 		m_nvrhiDevice->runGarbageCollection();
 
-		++m_frameCount;
+		++m_frameIdx;
 	}
 
 	IGraphics*

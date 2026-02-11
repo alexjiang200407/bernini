@@ -8,14 +8,14 @@ file(GLOB_RECURSE MESH_CREATE_UPDATE_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
-add_executable(mesh_create_update WIN32
+add_executable(static_mesh_crud WIN32
     ${MESH_CREATE_UPDATE_SOURCES}
     ${MESH_CREATE_UPDATE_HEADERS}
 )
 
-target_link_libraries(mesh_create_update PRIVATE Core gfx gfxsdk_cxx)
+target_link_libraries(static_mesh_crud PRIVATE Core gfx gfxsdk_cxx)
 
-target_precompile_headers(mesh_create_update
+target_precompile_headers(static_mesh_crud
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h
 )

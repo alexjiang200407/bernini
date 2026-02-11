@@ -7,6 +7,7 @@ namespace gfx
 	{
 		using ID = uint32_t;
 		SortKey  sortKey;
-		uint32_t specId;
+		uint32_t geomSpecId     = 0;
+		uint32_t materialSpecId = 0;
 	};
 }

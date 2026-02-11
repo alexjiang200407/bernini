@@ -46,13 +46,13 @@ StaticMeshData GetStaticMeshData(DrawInstance drawInstance)
 {
     StaticMeshData data;
 
-    uint instanceIdx = g_StaticMeshInstanceRedirect[drawInstance.specId];
+    uint instanceIdx = g_StaticMeshInstanceRedirect[drawInstance.geomSpecId];
     StaticMeshInstance instance = g_StaticInstances[instanceIdx];
 
     uint infoIdx = g_MeshInfoRedirect[instance.meshInfoID];
     StaticMeshInfo info = g_MeshInfoBuffer[infoIdx];
 
-    data.instanceId = drawInstance.specId;
+    data.instanceId = drawInstance.geomSpecId;
     data.infoId = instance.meshInfoID;
     data.instanceIdx = instanceIdx;
     data.infoIdx = infoIdx;

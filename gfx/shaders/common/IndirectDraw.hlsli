@@ -11,7 +11,8 @@ struct DispatchArg
 struct DrawInstance
 {
     uint64_t sortKey;
-    uint specId;
+    uint geomSpecId;
+    uint materialSpecId;
 };
 
 #endif

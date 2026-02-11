@@ -67,7 +67,6 @@ namespace gfx
 		     &blackBoard](const FrameData& data, FrameGraphPassResources& fgr, void*) {
 				m_mainCommandList->open();
 				auto instanceCount = sceneData.GetInstancesCount();
-
 				fgr.get<FGCount>(data.instanceCount).SetValue(instanceCount);
 
 				if (camera.ShouldUpdate())
@@ -84,6 +83,13 @@ namespace gfx
 					sceneData.AttachBindingSetItems(bindingSetDesc);
 
 					m_bsPerFrame = device->createBindingSet(bindingSetDesc, m_blPerFrame);
+				}
+
+				if (instanceCount == 0)
+				{
+					m_mainCommandList->close();
+					device->executeCommandList(m_mainCommandList);
+					return;
 				}
 
 				fgr.get<FGBindingSet>(data.bsFrameData).SetValue(m_mainCommandList, m_bsPerFrame);

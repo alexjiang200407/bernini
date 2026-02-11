@@ -2,7 +2,7 @@
 
 namespace gfx
 {
-	struct Vertex
+	struct Vertex final
 	{
 		glm::vec3 position;
 		glm::vec3 normal;

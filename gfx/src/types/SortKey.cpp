@@ -31,4 +31,42 @@ namespace gfx
 
 		m_value = (layerVal << 62) | (psoVal << 48) | (matVal << 40) | (geomVal << 32) | depthVal;
 	}
+
+	[[nodiscard]]
+	PSO
+	SortKey::UpdatePSO(MaterialType matType) noexcept
+	{
+		auto geomType  = GetGeomType();
+		auto layerType = GetLayerType();
+		auto newPSO    = computePSO(layerType, geomType, matType);
+
+		if (newPSO != PSO::kInvalid)
+			SetPSO(newPSO);
+
+		return newPSO;
+	}
+
+	void
+	SortKey::SetPSO(PSO pso) noexcept
+	{
+		auto psoVal = static_cast<uint64_t>(pso) & 0x3FFF;
+		m_value &= ~(0x3FFFULL << 48);
+		m_value |= (psoVal << 48);
+	}
+
+	void
+	SortKey::SetMaterialType(MaterialType matType) noexcept
+	{
+		auto matVal = static_cast<uint64_t>(matType) & 0xFF;
+		m_value &= ~(0xFFULL << 40);
+		m_value |= (matVal << 40);
+	}
+
+	void
+	SortKey::SetLayerType(LayerType layerID) noexcept
+	{
+		auto layerVal = static_cast<uint64_t>(layerID) & 0x3;
+		m_value &= ~(0x3ULL << 62);
+		m_value |= (layerVal << 62);
+	}
 }

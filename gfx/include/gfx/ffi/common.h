@@ -41,7 +41,7 @@ extern "C"
 
 	typedef union
 	{
-		float xyzw[3];
+		float xyzw[4];
 		struct
 		{
 			float x, y, z, w;
@@ -78,6 +78,7 @@ extern "C"
 		GFX_RESULT_ERROR_COMPUTE_BUFFER,
 		GFX_RESULT_ERROR_MESH_DOES_NOT_EXIST,
 		GFX_RESULT_ERROR_UNSUPPORTED_FEATURE,
+		GFX_RESULT_ERROR_INVALID_PSO,
 	};
 
 	struct GfxErrorInfo
@@ -93,10 +94,12 @@ extern "C"
 #	define GFX_API __declspec(dllimport)
 #endif
 
-	typedef GfxObj   Gfx;
-	typedef GfxObj   GfxCamera;
-	typedef GfxObj   GfxScene;
-	typedef uint32_t GfxMesh;
+	typedef GfxObj          Gfx;
+	typedef GfxObj          GfxCamera;
+	typedef GfxObj          GfxScene;
+	typedef uint32_t        GfxMeshInstance;
+	typedef uint32_t        GfxStaticMesh;
+	typedef GfxMeshInstance GfxMesh;
 
 #ifdef __cplusplus
 }

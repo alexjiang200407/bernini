@@ -43,6 +43,12 @@ namespace gfx
 			uint32_t       bitShift,
 			uint32_t       pingPong);
 
+		void
+		FindPSOBoundaries(uint32_t instanceCount);
+
+		void
+		FixPSOBinOffsets(uint32_t instanceCount);
+
 	private:
 		nvrhi::CommandListHandle     m_mainCommandList;
 		DynamicConstantBuffer        m_sortInstancesConstants;
@@ -51,6 +57,8 @@ namespace gfx
 		nvrhi::ComputePipelineHandle m_histogramPipeline;
 		nvrhi::ComputePipelineHandle m_prefixSumPipeline;
 		nvrhi::ComputePipelineHandle m_scatterPipeline;
+		nvrhi::ComputePipelineHandle m_findPSOBoundariesPipeline;
+		nvrhi::ComputePipelineHandle m_fixPSOBinOffsetsPipeline;
 		nvrhi::BindingLayoutHandle   m_blGroupOffsets;
 		nvrhi::BindingLayoutHandle   m_blOut;
 		nvrhi::BindingLayoutHandle   m_blScatterInOut;

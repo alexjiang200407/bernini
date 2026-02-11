@@ -11,8 +11,6 @@
 #include <Windows.h>
 
 #include <core/file/file.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/spdlog.h>
 
 struct BerniniGraphicseErrorChecker
 {};
@@ -52,12 +50,6 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 	}
 
 	void
-	Visit(const core::win::CharEvent& e) override
-	{
-		spdlog::info("Char Event: U+{:04X}", static_cast<uint32_t>(e.GetChar()));
-	}
-
-	void
 	Visit(const core::win::KeyEvent& e, float dt) override
 	{
 		float moveSpeed = dt * 2.0f;
@@ -79,7 +71,7 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 					auto idx = e.GetKeyCode() - 49;
 					if (meshes[idx])
 					{
-						destroyMesh(gfx, meshes[idx]) >> berniniErrChecker;
+						destroyMeshInstance(scene, meshes[idx]) >> berniniErrChecker;
 						meshes[idx] = 0;
 					}
 					else
@@ -87,16 +79,12 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 						auto mat  = glm::mat4{ 1.0f };
 						mat[3][0] = static_cast<float>(idx) * -5.0f;
 
-						auto* data = glm::value_ptr(mat);
+						auto meshOpts     = GfxStaticMeshOpts{};
+						meshOpts.material = material;
+						meshOpts.baseMesh = (idx == 1) ? sphereMesh : cubeMesh;
 
-						if (idx == 1)
-						{
-							createCube(gfx, data, &meshes[idx]) >> berniniErrChecker;
-						}
-						else
-						{
-							createCube(gfx, data, &meshes[idx]) >> berniniErrChecker;
-						}
+						createStaticMeshInstance(scene, meshOpts, &meshes[idx]) >>
+							berniniErrChecker;
 					}
 				}
 
@@ -108,7 +96,6 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 		{
 			return;
 		}
-		spdlog::info("Key Event: KeyCode={}", static_cast<int>(e.GetKeyCode()));
 
 		switch (e.GetKeyCode())
 		{
@@ -162,25 +149,20 @@ struct EventVisitor : public core::win::IWindowEventVisitor
 			mouseDeltaY += (static_cast<float>(delta.dy) * 0.05f * dt);
 			changedRotation = true;
 		}
-
-		for (const auto& info : allActions)
-		{
-			if (actions.All(info.flag))
-			{
-				spdlog::info("Mouse Action: {}", info.name);
-			}
-		}
 	}
 
-	bool                 changedPosition = false;
-	bool                 changedRotation = false;
-	float                forwardDelta    = 0.0f;
-	float                rightDelta      = 0.0f;
-	float                mouseDeltaX     = 0.0f;
-	float                mouseDeltaY     = 0.0f;
-	bool                 shiftDown       = false;
-	std::vector<GfxMesh> meshes;
-	Gfx                  gfx;
+	bool                         changedPosition = false;
+	bool                         changedRotation = false;
+	float                        forwardDelta    = 0.0f;
+	float                        rightDelta      = 0.0f;
+	float                        mouseDeltaX     = 0.0f;
+	float                        mouseDeltaY     = 0.0f;
+	bool                         shiftDown       = false;
+	std::vector<GfxMeshInstance> meshes;
+	GfxStaticMesh                cubeMesh   = 0;
+	GfxStaticMesh                sphereMesh = 0;
+	GfxScene                     scene;
+	GfxMaterial                  material;
 };
 
 namespace fs = std::filesystem;
@@ -190,21 +172,6 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
 	try
 	{
-		{
-			auto     libraryPath = core::file::getLibraryPath();
-			fs::path logPath     = libraryPath.parent_path() / "game.log";
-
-			auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), true);
-
-			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
-
-			log->set_level(spdlog::level::info);
-			log->flush_on(spdlog::level::info);
-
-			spdlog::set_default_logger(std::move(log));
-			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v"s);
-		}
-
 		initializeGfx(LOG_LEVEL_INFO) >> berniniErrChecker;
 
 		auto opts = core::win::WindowOptions{};
@@ -229,21 +196,39 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enablePixDebug           = true;
 
 		createGraphics(gfxOpts, &graphics) >> berniniErrChecker;
-		auto  mat   = glm::mat4{ 1.0f };
-		auto* data  = glm::value_ptr(mat);
-		auto  cubes = std::vector<GfxMesh>(3);
+		auto  mat    = glm::mat4{ 1.0f };
+		auto* data   = glm::value_ptr(mat);
+		auto  meshes = std::vector<GfxMeshInstance>(3);
 
 		createScene(graphics, &scene) >> berniniErrChecker;
 
-		createCube(scene, data, &cubes[0]) >> berniniErrChecker;
+		GfxStaticMesh cubeMesh   = 0;
+		GfxStaticMesh sphereMesh = 0;
+
+		createCubeBase(scene, &cubeMesh) >> berniniErrChecker;
+		createSphereBase(scene, &sphereMesh) >> berniniErrChecker;
+
+		auto matOpts          = GfxPBRMaterialOpts{};
+		matOpts.albedoColor.r = 1.0f;
+
+		GfxMaterial material;
+		createPBRMaterial(scene, matOpts, &material) >> berniniErrChecker;
+		auto meshOpts           = GfxStaticMeshOpts{};
+		meshOpts.material       = material;
+		meshOpts.baseMesh       = cubeMesh;
+		meshOpts.modelTransform = data;
+
+		createStaticMeshInstance(scene, meshOpts, &meshes[0]) >> berniniErrChecker;
+
+		meshOpts.baseMesh = sphereMesh;
 
 		mat[3][0] = -5.0f;
+		createStaticMeshInstance(scene, meshOpts, &meshes[1]) >> berniniErrChecker;
 
-		createSphere(scene, data, &cubes[1]) >> berniniErrChecker;
+		mat[3][0]         = -10.0f;
+		meshOpts.baseMesh = cubeMesh;
 
-		mat[3][0] = -10.0f;
-
-		createCube(scene, data, &cubes[2]) >> berniniErrChecker;
+		createStaticMeshInstance(scene, meshOpts, &meshes[2]) >> berniniErrChecker;
 
 		auto cameraDesc = GfxCameraDesc{ .transform  = { .position = { 0.0f, 0.0f, -20.0f },
 			                                             .forward  = { 0.0f, 0.0f, -1.0f } },
@@ -253,9 +238,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			                                             .farZ        = 500.0f } };
 		createCamera(cameraDesc, &camera) >> berniniErrChecker;
 
-		auto visitor   = EventVisitor{};
-		visitor.meshes = std::move(cubes);
-		visitor.gfx    = graphics;
+		auto visitor       = EventVisitor{};
+		visitor.meshes     = std::move(meshes);
+		visitor.scene      = scene;
+		visitor.cubeMesh   = cubeMesh;
+		visitor.sphereMesh = sphereMesh;
 
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))

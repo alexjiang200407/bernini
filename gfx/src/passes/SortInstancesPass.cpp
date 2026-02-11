@@ -107,6 +107,30 @@ namespace gfx
 			m_scatterPipeline = device->createComputePipeline(computePipelineDesc);
 		}
 
+		{
+			auto shader = createShaderFromFile(
+				device,
+				"shaders/CS_FindPSOBoundaries.cso",
+				nvrhi::ShaderType::Compute,
+				"FindPSOBoundaries");
+
+			m_findPSOBoundariesPipeline = device->createComputePipeline(
+				nvrhi::ComputePipelineDesc{}.setComputeShader(shader).addBindingLayout(
+					m_blGroupOffsets));
+		}
+
+		{
+			auto shader = createShaderFromFile(
+				device,
+				"shaders/CS_FixPSOBinOffsets.cso",
+				nvrhi::ShaderType::Compute,
+				"FixPSOBinOffsets");
+
+			m_fixPSOBinOffsetsPipeline = device->createComputePipeline(
+				nvrhi::ComputePipelineDesc{}.setComputeShader(shader).addBindingLayout(
+					m_blGroupOffsets));
+		}
+
 		auto bindingLayoutDesc = nvrhi::BindingLayoutDesc{};
 		bindingLayoutDesc.setRegisterSpace(BindingSpaces::SortInstancesSpace)
 			.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0))
@@ -239,6 +263,36 @@ namespace gfx
 	}
 
 	void
+	SortInstancesPass::FindPSOBoundaries(uint32_t instanceCount)
+	{
+		auto computeState = nvrhi::ComputeState{};
+		computeState.setPipeline(m_findPSOBoundariesPipeline).addBindingSet(m_bsGroupOffsets[0]);
+
+		m_mainCommandList->setComputeState(computeState);
+
+		m_sortInstancesConstants["arg0"] = instanceCount;
+		m_sortInstancesConstants.Update(m_mainCommandList);
+
+		constexpr auto threadsPerGroup = 256;
+		auto           numGroups       = (instanceCount + threadsPerGroup - 1) / threadsPerGroup;
+		m_mainCommandList->dispatch(numGroups);
+	}
+
+	void
+	SortInstancesPass::FixPSOBinOffsets(uint32_t instanceCount)
+	{
+		auto computeState = nvrhi::ComputeState{};
+		computeState.setPipeline(m_fixPSOBinOffsetsPipeline).addBindingSet(m_bsGroupOffsets[0]);
+
+		m_mainCommandList->setComputeState(computeState);
+
+		m_sortInstancesConstants["arg0"] = instanceCount;
+		m_sortInstancesConstants.Update(m_mainCommandList);
+
+		m_mainCommandList->dispatch(1);
+	}
+
+	void
 	SortInstancesPass::AttachToFrameGraph(
 		FrameGraph&           frameGraph,
 		FrameGraphBlackboard& blackBoard,
@@ -261,6 +315,8 @@ namespace gfx
 			[=](const SortedInstancesData& data, FrameGraphPassResources& res, void*) {
 				auto& bsFrameData   = res.get<FGBindingSet>(frameData.bsFrameData).Get();
 				auto  instanceCount = res.get<FGCount>(frameData.instanceCount).Get();
+				if (instanceCount == 0)
+					return;
 
 				m_mainCommandList->open();
 
@@ -316,6 +372,18 @@ namespace gfx
 				}
 
 				m_sortedInstances[0].TransitionState(
+					m_mainCommandList,
+					nvrhi::ResourceStates::ShaderResource);
+
+				g_binInstanceOffsets.TransitionState(
+					m_mainCommandList,
+					nvrhi::ResourceStates::UnorderedAccess);
+
+				g_binInstanceOffsets.Clear(m_mainCommandList);
+				FindPSOBoundaries(instanceCount);
+				FixPSOBinOffsets(instanceCount);
+
+				g_binInstanceOffsets.TransitionState(
 					m_mainCommandList,
 					nvrhi::ResourceStates::ShaderResource);
 

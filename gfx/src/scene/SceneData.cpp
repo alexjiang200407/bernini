@@ -36,20 +36,19 @@ namespace gfx
 			SegmentBufferDesc{}.SetStartingCapacity(10'000).SetName(
 				"Vertex Map Structured Buffer"));
 
-		m_staticMeshInfoMeta.push_back({});
+		m_pbrMaterials.Init(device, AppendBufferDesc{}.SetName("PBR Material Structured Buffer"));
 	}
 
 	DrawInstance::ID
 	SceneData::AddStaticMeshInstance(StaticMeshInstance&& instance)
 	{
-		assert(instance.infoID < m_staticMeshInfoMeta.size());
+		assert(m_staticMeshInfos.IsValid(instance.infoID));
 
-		++m_staticMeshInfoMeta[instance.infoID].refCount;
 		auto instanceId = m_staticMeshInstances.EmplaceBack(std::move(instance));
 
 		DrawInstance drawInstance{};
-		drawInstance.specId  = instanceId;
-		drawInstance.sortKey = 0;
+		drawInstance.geomSpecId = instanceId;
+		drawInstance.sortKey    = 0;
 
 		return m_drawInstances.EmplaceBack(std::move(drawInstance));
 	}
@@ -57,15 +56,39 @@ namespace gfx
 	StaticMeshInfo::ID
 	SceneData::AddStaticMeshInfo(StaticMeshInfo&& info)
 	{
-		StaticMeshInfo::ID id = m_staticMeshInfos.EmplaceBack(std::move(info));
+		auto id = m_staticMeshInfos.EmplaceBack(std::move(info));
+		return id;
+	}
 
-		if (id >= m_staticMeshInfoMeta.size())
+	void
+	SceneData::AttachPBRMaterial(DrawInstance::ID instanceId, PBRMaterial::ID matId)
+	{
+		auto& instance     = m_drawInstances.At(instanceId);
+		auto& material     = m_pbrMaterials.At(matId);
+		auto& matExtraData = m_pbrMaterials.GetExtraData(matId);
+
+		instance.sortKey.SetMaterialType(MaterialType::kPBR);
+		instance.sortKey.SetLayerType(matExtraData.layerType);
+		if (instance.sortKey.UpdatePSO(MaterialType::kPBR) == PSO::kInvalid)
 		{
-			m_staticMeshInfoMeta.resize(id + 1);
+			logger::error(
+				"Failed to update PSO for DrawInstance {} with MaterialType::kPBR",
+				instanceId);
+
+			throw GfxException(
+				GFX_RESULT_ERROR_INVALID_PSO,
+				"Invalid PSO",
+				"User created a material that has no registered PSO");
 		}
+		instance.materialSpecId = matId;
+	}
 
-		m_staticMeshInfoMeta[id] = { 0 };
-
+	PBRMaterial::ID
+	SceneData::AddPBRMaterial(PBRMaterial&& material, LayerType layerType)
+	{
+		auto  id            = m_pbrMaterials.EmplaceBack(std::move(material));
+		auto& extraData     = m_pbrMaterials.GetExtraData(id);
+		extraData.layerType = layerType;
 		return id;
 	}
 
@@ -78,7 +101,7 @@ namespace gfx
 		{
 		case GeometryType::kStatic:
 		{
-			RemoveStaticMeshInstance(drawInstance.specId);
+			RemoveStaticMeshInstance(drawInstance.geomSpecId);
 			break;
 		}
 		default:
@@ -87,6 +110,8 @@ namespace gfx
 				"Unsupported Draw Type",
 				"Unsupported Draw Type");
 		}
+
+		m_drawInstances.Erase(id);
 	}
 
 	void
@@ -95,19 +120,15 @@ namespace gfx
 		const StaticMeshInstance& instance = m_staticMeshInstances.At(id);
 		StaticMeshInfo::ID        infoID   = instance.infoID;
 
-		m_staticMeshInstances.Erase(id);
-
-		if (infoID < m_staticMeshInfoMeta.size())
+		if (m_staticMeshInfos.IsValid(infoID))
 		{
-			auto& meta = m_staticMeshInfoMeta[infoID];
-			if (meta.refCount > 0)
-			{
-				meta.refCount--;
-				if (meta.refCount == 0)
-				{
-					RemoveStaticMeshInfo(infoID);
-				}
-			}
+			m_staticMeshInstances.Erase(id);
+		}
+		else
+		{
+			logger::warn(
+				"SceneData::RemoveStaticMeshInstance: StaticMeshInfo with ID {} doesn't exist.",
+				infoID);
 		}
 	}
 
@@ -121,8 +142,6 @@ namespace gfx
 		m_vertices.Erase(info.vertexSegment);
 		m_meshlets.Erase(info.meshletSegment);
 		m_staticMeshInfos.Erase(id);
-
-		m_staticMeshInfoMeta[id] = {};
 	}
 
 	void

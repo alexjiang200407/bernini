@@ -40,7 +40,7 @@ void AS_GBuffer_StaticMesh(uint gtid : SV_GroupThreadID, uint gid : SV_GroupID)
     uint sortedKeysIdx = g_BinInstanceOffsets[binIndex] + gid;
     uint drawInstanceIdx = g_SortedKeys[sortedKeysIdx].instance;
     DrawInstance drawInst = g_DrawInstances[drawInstanceIdx];
-    uint physicalInstanceIdx = g_StaticMeshInstanceRedirect[drawInst.specId];
+    uint physicalInstanceIdx = g_StaticMeshInstanceRedirect[drawInst.geomSpecId];
     StaticMeshInstance instance = g_StaticInstances[physicalInstanceIdx];
     
     uint physicalMeshInfoID = g_MeshInfoRedirect[instance.meshInfoID];

@@ -1,4 +1,5 @@
 #include "scene/Scene.h"
+#include "GfxException.h"
 #include "ffi/util.h"
 #include "graphics/Graphics.h"
 
@@ -20,58 +21,123 @@ createScene(Gfx gfx, GfxScene* outScene)
 }
 
 GfxResult
-createCube(GfxScene scene, GfxMat4 modelTransform, GfxMesh* out)
+createCubeBase(GfxScene scene, GfxStaticMesh* out)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
 		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
 		gfx::ffi::validatePtr(out, "out");
 
-		*out = scene_.CreateCube(glm::make_mat4(modelTransform));
+		*out = scene_.CreateCubeMesh();
 
 		return GFX_RESULT_OK;
 	});
 }
 
 GfxResult
-createSphere(GfxScene scene, GfxMat4 modelTransform, GfxMesh* out)
+createSphereBase(GfxScene scene, GfxStaticMesh* out)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
 		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
 		gfx::ffi::validatePtr(out, "out");
 
-		*out = scene_.CreateSphere(glm::make_mat4(modelTransform));
+		*out = scene_.CreateSphereMesh();
 
 		return GFX_RESULT_OK;
 	});
 }
 
 GfxResult
-destroyMesh(GfxScene scene, GfxMesh mesh)
+createStaticMeshInstance(GfxScene scene, GfxStaticMeshOpts opts, GfxMeshInstance* out)
 {
 	return gfx::ffi::apiInvoke([=]() -> GfxResult {
 		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
-		scene_.RemoveInstance(mesh);
+		gfx::ffi::validatePtr(out, "out");
+
+		GfxMeshInstance instanceId =
+			scene_.CreateStaticMeshInstance(opts.baseMesh, glm::make_mat4(opts.modelTransform));
+
+		bool committed = false;
+		auto cleanup   = gfx::ffi::make_scope_guard([&]() noexcept {
+            if (!committed && instanceId != 0)
+            {
+                scene_.RemoveMeshInstanceNoExcept(instanceId);
+            }
+        });
+
+		if (opts.material.type == GfxMaterialType_PBR)
+		{
+			scene_.AttachPBRMaterial(instanceId, opts.material.id);
+		}
+		else
+		{
+			return GFX_RESULT_ERROR_INVALID_ARGUMENT;
+		}
+
+		committed = true;
+		*out      = instanceId;
+		return GFX_RESULT_OK;
+	});
+}
+
+GfxResult
+destroyMeshInstance(GfxScene scene, GfxMeshInstance meshInstance)
+{
+	return gfx::ffi::apiInvoke([=]() -> GfxResult {
+		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
+		scene_.RemoveMeshInstance(meshInstance);
+		return GFX_RESULT_OK;
+	});
+}
+
+GfxResult
+destroyStaticMesh(GfxScene scene, GfxStaticMesh mesh)
+{
+	return gfx::ffi::apiInvoke([=]() -> GfxResult {
+		auto& scene_ = gfx::ffi::gfxObjCast<gfx::Scene>(scene);
+		scene_.RemoveStaticMesh(mesh);
 		return GFX_RESULT_OK;
 	});
 }
 
 namespace gfx
 {
+	StaticMeshInfo::ID
+	Scene::CreateCubeMesh()
+	{
+		return CreateCubeInfo(m_data);
+	}
+
+	StaticMeshInfo::ID
+	Scene::CreateSphereMesh()
+	{
+		return CreateSphereInfo(m_data);
+	}
+
 	DrawInstance::ID
-	Scene::CreateCube(glm::mat4 modelTransform)
+	Scene::CreateStaticMeshInstance(StaticMeshInfo::ID infoId, glm::mat4 modelTransform)
 	{
 		auto instance           = StaticMeshInstance{};
-		instance.infoID         = m_cubeInfoID;
+		instance.infoID         = infoId;
 		instance.modelTransform = modelTransform;
 		return m_data.AddStaticMeshInstance(std::move(instance));
 	}
 
-	DrawInstance::ID
-	Scene::CreateSphere(glm::mat4 modelTransform)
+	bool
+	Scene::RemoveMeshInstanceNoExcept(DrawInstance::ID id) noexcept
 	{
-		auto instance           = StaticMeshInstance{};
-		instance.infoID         = m_sphereInfoID;
-		instance.modelTransform = modelTransform;
-		return m_data.AddStaticMeshInstance(std::move(instance));
+		try
+		{
+			m_data.RemoveDrawInstance(id);
+			return true;
+		}
+		catch (const std::exception& e)
+		{
+			logger::error("Failed to remove mesh instance with ID {}: {}", id, e.what());
+			return false;
+		}
+		catch (...)
+		{
+			return false;
+		}
 	}
 }

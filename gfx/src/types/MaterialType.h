@@ -6,7 +6,18 @@ namespace gfx
 	{
 		kInvalid = 0xFFFF,
 		kPBR     = 0,
-		kSolidColor,
 		kCount,
 	};
+
+	constexpr std::string_view
+	getMatTypeName(MaterialType mat)
+	{
+		switch (mat)
+		{
+		case MaterialType::kPBR:
+			return "PBR"sv;
+		default:
+			return "Invalid"sv;
+		}
+	}
 }
