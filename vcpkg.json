@@ -4,7 +4,9 @@
   "dependencies": [
     "spdlog",
     "glm",
-    "catch2"
+    "catch2",
+    "shader-slang",
+    "directx-headers"
   ],
-  "builtin-baseline": "4d22d579c2299aaf1e0bd6b7aa64832658330c88"
+  "builtin-baseline": "05925b52317eb9a900a8583782e630aafd7a8929"
 }

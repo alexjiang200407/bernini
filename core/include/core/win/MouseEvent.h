@@ -1,5 +1,5 @@
 #pragma once
-#include <core/EnumSet.h>
+#include <core/containers/enum_set.h>
 #include <core/win/IWindowEvent.h>
 
 class GLFWwindow;
@@ -14,7 +14,7 @@ namespace core::win
 		kButtonDown = kLeftDown | kRightDown | kMiddleDown,
 	};
 
-	using MouseStateFlags = core::EnumSet<MouseStateFlagsEnum>;
+	using MouseStateFlags = core::enum_set<MouseStateFlagsEnum>;
 
 	struct MouseState
 	{
@@ -53,7 +53,7 @@ namespace core::win
 			kMove     = 1 << 10,
 		};
 
-		using Actions = core::EnumSet<Action>;
+		using Actions = core::enum_set<Action>;
 
 	private:
 		MouseEvent() noexcept = default;

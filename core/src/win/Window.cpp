@@ -49,15 +49,15 @@ namespace core::win
 			{
 				m_lastTime = currentTime;
 
-				if (m_mouseState.flags.All(MouseStateFlagsEnum::kLeftDown))
+				if (m_mouseState.flags.all(MouseStateFlagsEnum::kLeftDown))
 				{
 					CreateMouseEvent(MouseAction::kLHeld, m_mouseState, {});
 				}
-				if (m_mouseState.flags.All(MouseStateFlagsEnum::kRightDown))
+				if (m_mouseState.flags.all(MouseStateFlagsEnum::kRightDown))
 				{
 					CreateMouseEvent(MouseAction::kRHeld, m_mouseState, {});
 				}
-				if (m_mouseState.flags.All(MouseStateFlagsEnum::kMiddleDown))
+				if (m_mouseState.flags.all(MouseStateFlagsEnum::kMiddleDown))
 				{
 					CreateMouseEvent(MouseAction::kMHeld, m_mouseState, {});
 				}
