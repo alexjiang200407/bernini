@@ -1,7 +1,9 @@
 #pragma once
 #include "cmd/CommandList.h"
 #include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
 #include "resource/Texture.h"
+#include "resource/UploadManager.h"
 #include "types/GraphicsState.h"
 #include "types/QueueType.h"
 #include <core/ref/RefCounter.h>
@@ -9,21 +11,21 @@
 
 namespace bgl
 {
+	class ICommandQueue;
+
 	class CommandList : public core::RefCounter<ICommandList>
 	{
 	public:
 		CommandList(
-			QueueType             type,
-			ICommandAllocator*    commandAllocator,
-			ResourceManagerHandle resourceManager);
-
-		~CommandList() noexcept;
+			const CommandListDesc& desc,
+			ICommandAllocator*     commandAllocator,
+			ResourceManagerHandle  resourceManager);
 
 		void
 		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) override;
 
 		void
-		Open(ICommandAllocator* allocator) override;
+		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) override;
 
 		void
 		Close() override;
@@ -58,15 +60,24 @@ namespace bgl
 		QueueType
 		GetType() const override
 		{
-			return m_Type;
+			return m_Desc.type;
 		}
 
+		void
+		SubmitChunks(ICommandQueue* cmdQueue);
+
 	private:
-		QueueType                               m_Type;
-		ResourceManagerHandle                   m_ResourceManager;
+		CommandListDesc       m_Desc;
+		ResourceManagerHandle m_ResourceManager;
+
+		// Must be deleted after UploadManager
+		wrl::ComPtr<ID3D12Resource> m_CurrentUploadBuffer = nullptr;
+		UploadManager               m_UploadManager;
+
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
-		wrl::ComPtr<ID3D12Resource>             m_StagingBuffer;
 		std::optional<GraphicsState>            m_CurrentGraphicsState;
-		bool                                    m_Open = false;
+		uint64_t                                m_LastCompletedFence = 0;
+		uint64_t                                m_RecordingVersion   = 0;
+		bool                                    m_Open               = false;
 	};
 }

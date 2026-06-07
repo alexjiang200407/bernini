@@ -1,6 +1,8 @@
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandAllocator_d3d12.h"
 #include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
+#include "cmd/Version.h"
 #include "constants/constants.h"
 #include "pipeline/GraphicsPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
@@ -9,10 +11,15 @@
 namespace bgl
 {
 	CommandList::CommandList(
-		QueueType             type,
-		ICommandAllocator*    commandAllocator,
-		ResourceManagerHandle resourceManager) :
-		m_Type(type), m_ResourceManager(std::move(resourceManager))
+		const CommandListDesc& desc,
+		ICommandAllocator*     commandAllocator,
+		ResourceManagerHandle  resourceManager) :
+		m_Desc(desc), m_ResourceManager(std::move(resourceManager)),
+		m_UploadManager(
+			std::move(m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy()),
+			desc.uploadChunkSize,
+			0,
+			false)
 	{
 		auto d3d12CommandAllocator =
 			commandAllocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
@@ -24,7 +31,7 @@ namespace bgl
 		wrl::ComPtr<ID3D12Device4> device4;
 		device->QueryInterface(IID_PPV_ARGS(&device4)) >> d3d12ErrChecker;
 
-		auto d3d12CmdListType = ConvertQueueType(type);
+		auto d3d12CmdListType = ConvertQueueType(desc.type);
 
 		wrl::ComPtr<ID3D12CommandList> commandList;
 		device4->CreateCommandList1(
@@ -36,8 +43,6 @@ namespace bgl
 
 		commandList->QueryInterface(IID_PPV_ARGS(&m_CommandList)) >> d3d12ErrChecker;
 	}
-
-	CommandList::~CommandList() noexcept { logger::info("Destroying CommandList"); }
 
 	void
 	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize)
@@ -56,41 +61,24 @@ namespace bgl
 			return;
 		}
 
-		wrl::ComPtr<ID3D12Device10> device10;
-		m_CommandList->GetDevice(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
+		size_t                    offsetInUploadBuffer = 0;
+		void*                     cpuVA;
+		D3D12_GPU_VIRTUAL_ADDRESS gpuVA;
 
-		D3D12_HEAP_PROPERTIES heapProps = {};
-		heapProps.Type                  = D3D12_HEAP_TYPE_UPLOAD;
-
-		D3D12_RESOURCE_DESC1 resDesc = {};
-		resDesc.Dimension            = D3D12_RESOURCE_DIMENSION_BUFFER;
-		resDesc.Width                = byteSize;
-		resDesc.Height               = 1;
-		resDesc.DepthOrArraySize     = 1;
-		resDesc.MipLevels            = 1;
-		resDesc.Format               = DXGI_FORMAT_UNKNOWN;
-		resDesc.SampleDesc.Count     = 1;
-		resDesc.Layout               = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-		device10->CreateCommittedResource3(
-			&heapProps,
-			D3D12_HEAP_FLAG_NONE,
-			&resDesc,
-			D3D12_BARRIER_LAYOUT_UNDEFINED,  // Correct layout state rule for buffers
+		auto success = m_UploadManager.SuballocateBuffer(
+			m_LastCompletedFence,
+			byteSize,
 			nullptr,
-			nullptr,
-			0,
-			nullptr,
-			IID_PPV_ARGS(&m_StagingBuffer)) >>
-			d3d12ErrChecker;
+			&m_CurrentUploadBuffer,
+			&offsetInUploadBuffer,
+			&cpuVA,
+			&gpuVA,
+			m_RecordingVersion,
+			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
-		void*       mappedPtr = nullptr;
-		D3D12_RANGE readRange = { 0, 0 };
-		m_StagingBuffer->Map(0, &readRange, &mappedPtr);
+		gassert(success, "Failed to suballocate buffer");
 
-		memcpy(static_cast<std::byte*>(mappedPtr) + offset, data, byteSize);
-
-		m_StagingBuffer->Unmap(0, nullptr);
+		memcpy(cpuVA, data, byteSize);
 
 		BufferBarrierDesc barrier = {};
 		barrier.accessBefore      = BarrierAccessFlag::kNone;
@@ -103,13 +91,13 @@ namespace bgl
 		m_CommandList->CopyBufferRegion(
 			buffer.GetD3D12Resource(),
 			offset,
-			m_StagingBuffer.Get(),
-			0,
+			m_CurrentUploadBuffer.Get(),
+			offsetInUploadBuffer,
 			byteSize);
 	}
 
 	void
-	CommandList::Open(ICommandAllocator* allocator)
+	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator)
 	{
 		gassert(!m_Open, "Command list is already open");
 
@@ -117,6 +105,8 @@ namespace bgl
 		gassert(d3d12Allocator != nullptr, "Command Allocator cannot be null");
 
 		m_CommandList->Reset(d3d12Allocator, nullptr) >> d3d12ErrChecker;
+		m_LastCompletedFence = cmdQueue->GetLastCompletedFence();
+		m_RecordingVersion   = MakeVersion(cmdQueue->GetNextFenceValue(), m_Desc.type, false);
 
 		auto                  d3d12ResourceManager = m_ResourceManager->As<ResourceManager>();
 		ID3D12DescriptorHeap* heaps[]              = { d3d12ResourceManager->GetCbvSrvUavHeap() };
@@ -307,6 +297,14 @@ namespace bgl
 		}
 
 		m_CommandList->DrawInstanced(vertexCount, instanceCount, 0, 0);
+	}
+
+	void
+	CommandList::SubmitChunks(ICommandQueue* cmdQueue)
+	{
+		auto submittedVersion = MakeVersion(cmdQueue->GetNextFenceValue(), m_Desc.type, true);
+		m_UploadManager.SubmitChunks(m_RecordingVersion, submittedVersion);
+		m_RecordingVersion = 0;
 	}
 
 }

@@ -1,12 +1,18 @@
 #pragma once
 #include "device/Device_d3d12.h"
+#include "cmd/CommandAllocator.h"
 #include "cmd/CommandAllocator_d3d12.h"
+#include "cmd/CommandList.h"
 #include "cmd/CommandList_d3d12.h"
+#include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
-#include "device/Device.h"
+#include "pipeline/GraphicsPipeline.h"
 #include "pipeline/GraphicsPipeline_d3d12.h"
+#include "resource/ResourceManager.h"
 #include "resource/ResourceManager_d3d12.h"
+#include "resource/Shader.h"
 #include "resource/Shader_d3d12.h"
+#include "types/QueueType.h"
 #include <core/ref/SharedRef.h>
 
 namespace bgl
@@ -15,12 +21,12 @@ namespace bgl
 
 	CommandListHandle
 	Device::CreateCommandList(
-		QueueType              type,
+		const CommandListDesc& desc,
 		CommandAllocatorHandle commandAllocator,
 		ResourceManagerHandle  resourceManager) const
 	{
 		return core::SharedRef<CommandList>::Make(
-			type,
+			desc,
 			std::move(commandAllocator),
 			std::move(resourceManager));
 	}

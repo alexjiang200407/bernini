@@ -1,77 +1,59 @@
 #pragma once
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "pipeline/GraphicsPipeline.h"
-#include "resource/ResourceManager.h"
-#include "resource/Shader.h"
 #include "types/QueueType.h"
-
 #include <core/file/file.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 
 namespace bgl
 {
+	class IResourceManager;
+	class IShader;
+	class IGraphicsPipeline;
+	class ICommandList;
+	class ICommandAllocator;
+	class ICommandQueue;
+	struct ShaderDesc;
+	struct GraphicsPipelineDesc;
+	struct CommandListDesc;
+
 	class IDevice : public core::Ref
 	{
 	public:
 		[[nodiscard]]
-		virtual ShaderHandle
+		virtual core::SharedRef<IShader>
 		CreateShader(const ShaderDesc& desc) const = 0;
 
 		[[nodiscard]]
-		virtual ShaderHandle
+		virtual core::SharedRef<IShader>
 		CreateShader(ShaderDesc&& desc) const = 0;
 
-		[[nodiscard]] ShaderHandle
-		CreateShader(std::string_view sv) const
-		{
-			auto desc      = ShaderDesc();
-			desc.bytecode  = core::file::readFileBytes(sv);
-			desc.debugName = sv;
-			return CreateShader(std::move(desc));
-		}
+		[[nodiscard]] core::SharedRef<IShader>
+		CreateShader(std::string_view sv) const;
 
 		[[nodiscard]]
-		virtual GraphicsPipelineHandle
+		virtual core::SharedRef<IGraphicsPipeline>
 		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const = 0;
 
-		[[nodiscard]]
-		CommandListHandle
-		CreateGraphicsCommandList(
-			CommandAllocatorHandle commandAllocator,
-			ResourceManagerHandle  resourceManager) const
-		{
-			return CreateCommandList(
-				QueueType::kGraphics,
-				std::move(commandAllocator),
-				std::move(resourceManager));
-		}
-
-		virtual CommandListHandle
+		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
-			QueueType              type,
-			CommandAllocatorHandle commandAllocator,
-			ResourceManagerHandle  resourceManager) const = 0;
+			const CommandListDesc&             desc,
+			core::SharedRef<ICommandAllocator> commandAllocator,
+			core::SharedRef<IResourceManager>  resourceManager) const = 0;
 
 		[[nodiscard]]
-		CommandQueueHandle
-		CreateGraphicsCommandQueue() const
-		{
-			return CreateCommandQueue(QueueType::kGraphics);
-		}
+		core::SharedRef<ICommandQueue>
+		CreateGraphicsCommandQueue() const;
 
 		[[nodiscard]]
-		virtual CommandAllocatorHandle
+		virtual core::SharedRef<ICommandAllocator>
 		CreateCommandAllocator() const = 0;
 
 		[[nodiscard]]
-		virtual CommandQueueHandle
+		virtual core::SharedRef<ICommandQueue>
 		CreateCommandQueue(QueueType type) const = 0;
 
 		[[nodiscard]]
-		virtual ResourceManagerHandle
+		virtual core::SharedRef<IResourceManager>
 		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const = 0;
 	};
 

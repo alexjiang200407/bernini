@@ -1,6 +1,5 @@
 #pragma once
-#include "cmd/CommandAllocator.h"
-#include "resource/ResourceManager.h"
+#include "resource/Buffer.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include "types/GraphicsState.h"
@@ -11,7 +10,14 @@
 
 namespace bgl
 {
+	struct CommandListDesc
+	{
+		QueueType type;
+		size_t    uploadChunkSize = 64 * 1024;
+	};
+
 	class ICommandAllocator;
+	class ICommandQueue;
 
 	class ICommandList : public core::Ref
 	{
@@ -39,7 +45,7 @@ namespace bgl
 		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) = 0;
 
 		virtual void
-		Open(ICommandAllocator* allocator) = 0;
+		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) = 0;
 
 		virtual void
 		Close() = 0;

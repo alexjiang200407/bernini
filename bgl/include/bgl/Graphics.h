@@ -19,8 +19,6 @@ namespace bgl
 	class BGL_API IGraphics : public core::Ref
 	{
 	public:
-		virtual ~IGraphics() noexcept;
-
 		virtual void
 		DrawFrame() = 0;
 	};

@@ -1,4 +1,5 @@
 #pragma once
+#include "device/Device.h"
 #include "resource/Buffer.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"

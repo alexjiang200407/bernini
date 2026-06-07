@@ -137,9 +137,10 @@ namespace bgl
 
 	Graphics::~Graphics() noexcept
 	{
+		auto     cmdQueue           = m_CommandQueue->As<CommandQueue>();
 		uint64_t shutdownFenceValue = m_CommandQueue->GetNextFenceValue();
-		auto     rawQueue           = m_CommandQueue->As<CommandQueue>()->GetD3D12CommandQueue();
-		auto     rawFence           = m_CommandQueue->As<CommandQueue>()->GetD3D12Fence();
+		auto     rawQueue           = cmdQueue->GetD3D12CommandQueue();
+		auto     rawFence           = cmdQueue->GetD3D12Fence();
 
 		if (rawQueue && rawFence)
 		{

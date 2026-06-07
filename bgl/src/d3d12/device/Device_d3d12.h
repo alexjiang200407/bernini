@@ -1,12 +1,5 @@
 #pragma once
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "device/Device.h"
-#include "pipeline/GraphicsPipeline.h"
-#include "resource/ResourceManager.h"
-#include "resource/Shader.h"
-#include "types/QueueType.h"
 
 namespace bgl
 {
@@ -17,28 +10,28 @@ namespace bgl
 	public:
 		Device(wrl::ComPtr<ID3D12Device> device);
 
-		CommandListHandle
+		core::SharedRef<ICommandList>
 		CreateCommandList(
-			QueueType              type,
-			CommandAllocatorHandle commandAllocator,
-			ResourceManagerHandle  resourceManager) const override;
+			const CommandListDesc&             desc,
+			core::SharedRef<ICommandAllocator> commandAllocator,
+			core::SharedRef<IResourceManager>  resourceManager) const override;
 
-		ResourceManagerHandle
+		core::SharedRef<IResourceManager>
 		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const override;
 
-		ShaderHandle
+		core::SharedRef<IShader>
 		CreateShader(const ShaderDesc& desc) const override;
 
-		ShaderHandle
+		core::SharedRef<IShader>
 		CreateShader(ShaderDesc&& desc) const override;
 
-		CommandAllocatorHandle
+		core::SharedRef<ICommandAllocator>
 		CreateCommandAllocator() const override;
 
-		CommandQueueHandle
+		core::SharedRef<ICommandQueue>
 		CreateCommandQueue(QueueType type) const override;
 
-		GraphicsPipelineHandle
+		core::SharedRef<IGraphicsPipeline>
 		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const override;
 
 	private:

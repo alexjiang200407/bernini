@@ -2,7 +2,7 @@
 
 namespace bgl
 {
-	enum class QueueType
+	enum class QueueType : uint8_t
 	{
 		kGraphics,
 		kCompute,

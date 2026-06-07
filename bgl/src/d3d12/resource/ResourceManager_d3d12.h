@@ -104,6 +104,12 @@ namespace bgl
 			return m_RtvHeap.Get();
 		}
 
+		wrl::ComPtr<ID3D12Device>
+		GetD3D12DeviceCpy() const
+		{
+			return m_Device;
+		}
+
 	private:
 		wrl::ComPtr<ID3D12Device>         m_Device;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;

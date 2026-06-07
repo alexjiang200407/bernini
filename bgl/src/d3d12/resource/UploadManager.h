@@ -24,13 +24,13 @@ namespace bgl
 	public:
 		UploadManager(
 			wrl::ComPtr<ID3D12Device> device,
-			class Queue*              pQueue,
 			size_t                    defaultChunkSize,
 			uint64_t                  memoryLimit,
 			bool                      isScratchBuffer);
 
 		bool
 		SuballocateBuffer(
+			uint64_t                   lastCompletedValue,
 			uint64_t                   size,
 			ID3D12GraphicsCommandList* pCommandList,
 			ID3D12Resource**           pBuffer,
@@ -44,8 +44,11 @@ namespace bgl
 		SubmitChunks(uint64_t currentVersion, uint64_t submittedVersion);
 
 	private:
+		[[nodiscard]] std::shared_ptr<BufferChunk>
+		CreateChunk(size_t size) const;
+
+	private:
 		wrl::ComPtr<ID3D12Device> m_Device;
-		Queue*                    m_Queue;
 		size_t                    m_DefaultChunkSize = 0;
 		uint64_t                  m_MemoryLimit      = 0;
 		uint64_t                  m_AllocatedMemory  = 0;
@@ -53,8 +56,5 @@ namespace bgl
 
 		std::list<std::shared_ptr<BufferChunk>> m_ChunkPool;
 		std::shared_ptr<BufferChunk>            m_CurrentChunk;
-
-		[[nodiscard]] std::shared_ptr<BufferChunk>
-		CreateChunk(size_t size) const;
 	};
 }

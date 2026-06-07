@@ -5,6 +5,7 @@
 #include "device/Device.h"
 #include "pipeline/GraphicsPipeline.h"
 #include "resource/FrameBuffer.h"
+#include "resource/ResourceManager.h"
 #include "resource/Shader.h"
 #include "types/RenderState.h"
 
@@ -43,7 +44,9 @@ namespace bgl
 			gassert(cmdAllocator.IsInitialized(), "Command Allocator must be initialized");
 			gassert(resourceManager.IsInitialized(), "Resource Manager must be initialized");
 
-			m_CommandList = device->CreateGraphicsCommandList(cmdAllocator, resourceManager);
+			CommandListDesc cmdListDesc;
+			cmdListDesc.type = QueueType::kGraphics;
+			m_CommandList = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 
 			struct Vertex
 			{
@@ -61,7 +64,7 @@ namespace bgl
 			bufferDesc.isUav     = false;
 			bufferDesc.debugName = "TestPass Vertex Buffer";
 
-			m_CommandList->Open(cmdAllocator);
+			m_CommandList->Open(cmdQueue, cmdAllocator);
 			m_VertexBuffer                = resourceManager->CreateRawBuffer(bufferDesc);
 			constexpr uint32_t bufferSize = sizeof(verts);
 
@@ -111,7 +114,7 @@ namespace bgl
 			gassert(m_CommandList.IsInitialized(), "Pass commandlist must be initialized");
 			gassert(m_Pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
-			m_CommandList->Open(cmdAllocator);
+			m_CommandList->Open(cmdQueue, cmdAllocator);
 
 			struct RootConstantsData
 			{

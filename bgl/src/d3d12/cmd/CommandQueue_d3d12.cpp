@@ -42,6 +42,8 @@ namespace bgl
 			1,
 			reinterpret_cast<ID3D12CommandList* const*>(&cmdList));
 
+		commandList->As<CommandList>()->SubmitChunks(this);
+
 		std::lock_guard<std::mutex> lockGuard(m_FenceMutex);
 		m_CommandQueue->Signal(m_Fence.Get(), m_NextFenceValue) >> d3d12ErrChecker;
 
