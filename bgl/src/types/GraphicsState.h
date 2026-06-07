@@ -7,10 +7,10 @@ namespace bgl
 {
 	struct GraphicsState
 	{
-		GraphicsPipeline pipeline;
-		ViewportState    viewportState;
-		FrameBuffer      frameBuffer;
-		void*            rootConstantData;
-		size_t           rootConstantSize;
+		GraphicsPipelineHandle pipeline;
+		ViewportState          viewportState;
+		FrameBuffer            frameBuffer;
+		void*                  rootConstantData;
+		size_t                 rootConstantSize;
 	};
 }

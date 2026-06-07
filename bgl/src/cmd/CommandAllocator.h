@@ -1,19 +1,16 @@
 #pragma once
-#include <core/pimpl/RefCountPImpl.h>
+
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
-	class CommandAllocatorImpl;
-	class CommandAllocator : public core::RefCountPImpl<CommandAllocatorImpl>
+	class ICommandAllocator : public core::Ref
 	{
 	public:
-		CommandAllocator() = default;
-
-		[[noreturn]]
-		void
-		Reset();
-
-		friend class CommandListImpl;
-		friend class DeviceImpl;
+		virtual void
+		ResetAllocator() = 0;
 	};
+
+	using CommandAllocatorHandle = core::SharedRef<ICommandAllocator>;
 }

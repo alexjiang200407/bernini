@@ -3,11 +3,11 @@
 
 namespace bgl
 {
-	class GraphicsPipelineImpl
+	class GraphicsPipeline : public core::RefCounter<IGraphicsPipeline>
 	{
 	public:
-		GraphicsPipelineImpl() = default;
-		GraphicsPipelineImpl(ID3D12Device* device, const GraphicsPipelineDesc& desc);
+		GraphicsPipeline(ID3D12Device* device, const GraphicsPipelineDesc& desc);
+		~GraphicsPipeline() noexcept;
 
 		[[nodiscard]]
 		ID3D12RootSignature*
@@ -34,7 +34,5 @@ namespace bgl
 		GraphicsPipelineDesc             m_Desc;
 		wrl::ComPtr<ID3D12PipelineState> m_PipelineState;
 		wrl::ComPtr<ID3D12RootSignature> m_RootSignature;
-
-		friend class DeviceImpl;
 	};
 }

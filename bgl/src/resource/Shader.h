@@ -1,5 +1,7 @@
 #pragma once
-#include <core/pimpl/RefCountPImpl.h>
+
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
@@ -9,21 +11,15 @@ namespace bgl
 		std::string            debugName;
 	};
 
-	class ShaderImpl;
-	class Shader : private core::RefCountPImpl<ShaderImpl>
+	class IShader : public core::Ref
 	{
 	public:
-		Shader() = default;
+		virtual const std::byte*
+		GetBytecode() const = 0;
 
-		const std::byte*
-		GetBytecode() const;
-
-		size_t
-		GetBytecodeSize() const;
-
-		using core::RefCountPImpl<ShaderImpl>::IsInitialized;
-
-	private:
-		friend class DeviceImpl;
+		virtual size_t
+		GetBytecodeSize() const = 0;
 	};
+
+	using ShaderHandle = core::SharedRef<IShader>;
 }

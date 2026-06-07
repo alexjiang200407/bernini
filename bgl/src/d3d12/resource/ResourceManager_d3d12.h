@@ -4,7 +4,6 @@
 #include "resource/Rtv_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <core/containers/slot_vector.h>
-#include <variant>
 
 namespace bgl
 {
@@ -23,29 +22,27 @@ namespace bgl
 		uint64_t fenceValue = 0;
 	};
 
-	class ResourceManagerImpl final
+	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
-		ResourceManagerImpl(
+		ResourceManager(
 			wrl::ComPtr<ID3D12Device> device,
 			uint32_t                  maxDescriptors,
 			uint32_t                  maxRtvs);
-
-		~ResourceManagerImpl() noexcept;
 
 		/**
 		 * Automatically creates SRV/UAV for the buffer.
 		 */
 		[[nodiscard]]
 		BufferHandle
-		CreateRawBuffer(const BufferDesc& desc);
+		CreateRawBuffer(const BufferDesc& desc) override;
 
 		/**
 		 * Automatically creates SRV/UAV for the texture.
 		 */
 		[[nodiscard]]
 		TextureHandle
-		CreateTexture(const TextureDesc& desc);
+		CreateTexture(const TextureDesc& desc) override;
 
 		/**
 		 * Assume that desc is a correct descriptor for d3d12 resource.
@@ -57,39 +54,43 @@ namespace bgl
 
 		[[nodiscard]]
 		RtvHandle
-		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc);
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) override;
 
 		void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue);
+		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) override;
 
 		void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue);
+		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred) override;
 
 		void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue);
+		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) override;
 
 		void
-		CleanupExpiredResources(uint64_t completedFenceValue);
+		CleanupExpiredResources(uint64_t completedFenceValue) override;
 
 		[[nodiscard]]
 		bool
-		ValidBufferHandle(const BufferHandle& handle) const;
+		ValidBufferHandle(const BufferHandle& handle) const override;
 
 		[[nodiscard]]
 		bool
-		ValidTextureHandle(const TextureHandle& handle) const;
+		ValidTextureHandle(const TextureHandle& handle) const override;
+
+		[[nodiscard]]
+		bool
+		ValidRtvHandle(const RtvHandle& handle) const override;
 
 		void
-		SetDescriptorHeap(ID3D12CommandList* cmdList);
+		SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList);
 
 		const Texture&
-		GetTexture(TextureHandle handle) const;
+		GetTexture(TextureHandle handle) const override;
 
 		const Buffer&
-		GetBuffer(BufferHandle handle) const;
+		GetBuffer(BufferHandle handle) const override;
 
 		const Rtv&
-		GetRtv(RtvHandle handle) const;
+		GetRtv(RtvHandle handle) const override;
 
 		ID3D12DescriptorHeap*
 		GetCbvSrvUavHeap() const
@@ -103,20 +104,15 @@ namespace bgl
 			return m_RtvHeap.Get();
 		}
 
-		[[nodiscard]]
-		bool
-		ValidRtvHandle(const RtvHandle& handle) const;
-
 	private:
-		wrl::ComPtr<ID3D12Device>              m_Device;
-		wrl::ComPtr<ID3D12DescriptorHeap>      m_CbvSrvUavHeap;
-		wrl::ComPtr<ID3D12DescriptorHeap>      m_RtvHeap;
-		wrl::ComPtr<ID3D12GraphicsCommandList> m_CommandList;
-		uint32_t                               m_CbvSrvUavDescriptorSize = 0;
-		uint32_t                               m_RtvDescriptorSize       = 0;
-		core::slot_vector<CbvSrvUavSlot>       m_CbvSrvUavSlots;
-		core::slot_vector<Rtv>                 m_Rtvs;
-		std::vector<PendingDeletion>           m_PendingDeletions;
+		wrl::ComPtr<ID3D12Device>         m_Device;
+		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
+		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
+		uint32_t                          m_CbvSrvUavDescriptorSize = 0;
+		uint32_t                          m_RtvDescriptorSize       = 0;
+		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
+		core::slot_vector<Rtv>            m_Rtvs;
+		std::vector<PendingDeletion>      m_PendingDeletions;
 
 		friend class DeviceImpl;
 	};

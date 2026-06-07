@@ -18,10 +18,7 @@ namespace core
 			}
 		};
 
-		explicit slot_vector(uint32_t slotCount = 0)
-		{
-			reset(slotCount);
-		}
+		explicit slot_vector(uint32_t slotCount = 0) { reset(slotCount); }
 
 		void
 		reset(uint32_t slotCount = 0)
@@ -115,6 +112,14 @@ namespace core
 		size() const noexcept
 		{
 			return m_Slots.size();
+		}
+
+		[[noreturn]] void
+		clear() noexcept
+		{
+			m_Slots.clear();
+			m_FreeIndices.clear();
+			m_MaxSlots = 0;
 		}
 
 	private:

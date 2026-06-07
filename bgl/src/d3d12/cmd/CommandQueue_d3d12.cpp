@@ -6,7 +6,7 @@
 
 namespace bgl
 {
-	CommandQueueImpl::CommandQueueImpl(QueueType type, ID3D12Device* device) : m_Type(type)
+	CommandQueue::CommandQueue(QueueType type, ID3D12Device* device) : m_Type(type)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 
@@ -23,19 +23,21 @@ namespace bgl
 		gassert(m_FenceEvent != nullptr, "Failed to create fence event");
 	}
 
-	CommandQueueImpl::~CommandQueueImpl() noexcept
+	CommandQueue::~CommandQueue() noexcept
 	{
 		if (m_FenceEvent)
 			CloseHandle(m_FenceEvent);
 	}
 
 	uint64_t
-	CommandQueueImpl::ExecuteCommandList(const CommandList& commandList)
+	CommandQueue::ExecuteCommandList(ICommandList* commandList)
 	{
-		gassert(commandList.IsInitialized(), "Command list is not initialized.");
-		gassert(commandList.GetType() == m_Type, "Command list type must match command queue type");
+		gassert(commandList != nullptr, "Command list is not initialized.");
+		gassert(
+			commandList->GetType() == m_Type,
+			"Command list type must match command queue type");
 
-		auto cmdList = commandList->GetCommandList();
+		auto cmdList = commandList->As<CommandList>()->GetD3D12CommandList();
 		m_CommandQueue->ExecuteCommandLists(
 			1,
 			reinterpret_cast<ID3D12CommandList* const*>(&cmdList));
@@ -47,7 +49,7 @@ namespace bgl
 	}
 
 	uint64_t
-	CommandQueueImpl::PollCurrentFenceValue()
+	CommandQueue::PollCurrentFenceValue()
 	{
 		m_LastCompletedFenceValue =
 			std::max(m_LastCompletedFenceValue, m_Fence->GetCompletedValue());
@@ -55,25 +57,27 @@ namespace bgl
 	}
 
 	void
-	CommandQueueImpl::InsertWait(uint64_t fenceValue)
+	CommandQueue::InsertWait(uint64_t fenceValue)
 	{
 		m_CommandQueue->Wait(m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 	}
 
 	void
-	CommandQueueImpl::InsertWaitForQueueFence(CommandQueue cq, uint64_t fenceValue)
+	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const
 	{
-		m_CommandQueue->Wait(cq->m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
+		m_CommandQueue->Wait(cq->As<CommandQueue>()->m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 	}
 
 	void
-	CommandQueueImpl::InsertWaitForQueue(CommandQueue otherQueue)
+	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const
 	{
-		m_CommandQueue->Wait(otherQueue->m_Fence.Get(), otherQueue->GetNextFenceValue() - 1);
+		m_CommandQueue->Wait(
+			otherQueue->As<CommandQueue>()->m_Fence.Get(),
+			otherQueue->GetNextFenceValue() - 1);
 	}
 
 	void
-	CommandQueueImpl::WaitForFenceCPUBlocking(uint64_t fenceValue)
+	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue)
 	{
 		if (IsFenceComplete(fenceValue))
 		{
@@ -90,7 +94,7 @@ namespace bgl
 	}
 
 	bool
-	CommandQueueImpl::IsFenceComplete(uint64_t fenceValue)
+	CommandQueue::IsFenceComplete(uint64_t fenceValue)
 	{
 		if (fenceValue > m_LastCompletedFenceValue)
 		{
@@ -100,66 +104,4 @@ namespace bgl
 		return fenceValue <= m_LastCompletedFenceValue;
 	}
 
-	bool
-	CommandQueue::IsFenceComplete(uint64_t fenceValue) const
-	{
-		gassert(IsInitialized(), "Command queue implementation is not initialized.");
-		return GetImpl()->IsFenceComplete(fenceValue);
-	}
-
-	uint64_t
-	CommandQueue::PollCurrentFenceValue() const
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		return GetImpl()->PollCurrentFenceValue();
-	}
-
-	uint64_t
-	CommandQueue::GetLastCompletedFence() const
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		return GetImpl()->GetLastCompletedFence();
-	}
-
-	uint64_t
-	CommandQueue::GetNextFenceValue() const
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		return GetImpl()->GetNextFenceValue();
-	}
-
-	void
-	CommandQueue::InsertWait(uint64_t fenceValue)
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		GetImpl()->InsertWait(fenceValue);
-	}
-
-	void
-	CommandQueue::InsertWaitForQueueFence(CommandQueue cq, uint64_t fenceValue)
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		GetImpl()->InsertWaitForQueueFence(cq, fenceValue);
-	}
-
-	void
-	CommandQueue::InsertWaitForQueue(CommandQueue otherQueue)
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		GetImpl()->InsertWaitForQueue(otherQueue);
-	}
-
-	void
-	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue)
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		GetImpl()->WaitForFenceCPUBlocking(fenceValue);
-	}
-
-	uint64_t
-	CommandQueue::ExecuteCommandList(const CommandList& commandList) const
-	{
-		gassert(IsInitialized(), "Command queue is not initialized.");
-		return GetImpl()->ExecuteCommandList(commandList);
-	}
 }

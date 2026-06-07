@@ -46,14 +46,14 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enableGPUValidationLayer = true;
 		gfxOpts.enablePixDebug           = true;
 
-		auto graphics = bgl::Graphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(gfxOpts);
 
 		auto visitor = EventVisitor{};
 
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))
 		{
-			graphics.DrawFrame();
+			graphics->DrawFrame();
 		}
 	}
 	catch (const std::runtime_error& e)

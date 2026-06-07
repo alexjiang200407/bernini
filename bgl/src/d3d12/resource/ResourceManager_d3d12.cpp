@@ -4,49 +4,7 @@
 
 namespace bgl
 {
-	BufferHandle
-	ResourceManager::CreateRawBuffer(const BufferDesc& desc)
-	{
-		gassert(IsInitialized(), "ResourceManager must be initialized");
-		return GetImpl()->CreateRawBuffer(desc);
-	}
-
-	TextureHandle
-	ResourceManager::CreateTexture(const TextureDesc& desc)
-	{
-		gassert(IsInitialized(), "ResourceManager must be initialized");
-		return GetImpl()->CreateTexture(desc);
-	}
-
-	void
-	ResourceManager::DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue)
-	{
-		gassert(IsInitialized(), "ResourceManager must be initialized");
-		GetImpl()->DestroyBuffer(handle, currentFenceValue);
-	}
-
-	void
-	ResourceManager::DestroyTexture(TextureHandle handle, uint64_t currentFenceValue)
-	{
-		gassert(IsInitialized(), "ResourceManager must be initialized");
-		GetImpl()->DestroyTexture(handle, currentFenceValue);
-	}
-
-	void
-	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue)
-	{
-		gassert(IsInitialized(), "ResourceManager must be initialized");
-		GetImpl()->CleanupExpiredResources(completedFenceValue);
-	}
-
-	RtvHandle
-	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc)
-	{
-		gassert(IsInitialized(), "ResourceManager must be initialized");
-		return GetImpl()->CreateRtv(textureHandle, desc);
-	}
-
-	ResourceManagerImpl::ResourceManagerImpl(
+	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device> device,
 		uint32_t                  maxDescriptors,
 		uint32_t                  maxRtvs) :
@@ -81,10 +39,8 @@ namespace bgl
 		}
 	}
 
-	ResourceManagerImpl::~ResourceManagerImpl() noexcept {}
-
 	BufferHandle
-	ResourceManagerImpl::CreateRawBuffer(const BufferDesc& desc)
+	ResourceManager::CreateRawBuffer(const BufferDesc& desc)
 	{
 		auto bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
 
@@ -134,14 +90,14 @@ namespace bgl
 	}
 
 	TextureHandle
-	ResourceManagerImpl::CreateTexture(const TextureDesc& desc)
+	ResourceManager::CreateTexture(const TextureDesc& desc)
 	{
-		gfatal("ResourceManagerImpl::CreateTexture not implemented yet");
+		gfatal("ResourceManager::CreateTexture not implemented yet");
 		return TextureHandle();
 	}
 
 	TextureHandle
-	ResourceManagerImpl::CreateTexture(
+	ResourceManager::CreateTexture(
 		wrl::ComPtr<ID3D12Resource> d3d12Texture,
 		const TextureDesc&          desc)
 	{
@@ -156,7 +112,7 @@ namespace bgl
 	}
 
 	RtvHandle
-	ResourceManagerImpl::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc)
+	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc)
 	{
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
@@ -218,31 +174,55 @@ namespace bgl
 	}
 
 	void
-	ResourceManagerImpl::DestroyRtv(RtvHandle handle, uint64_t currentFenceValue)
+	ResourceManager::DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred)
 	{
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
-		m_PendingDeletions.push_back(
-			{ PendingDeletion::Type::kRtv, handle.idx, currentFenceValue });
+
+		if (deferred)
+		{
+			m_PendingDeletions.push_back(
+				{ PendingDeletion::Type::kRtv, handle.idx, currentFenceValue });
+		}
+		else
+		{
+			m_Rtvs.release_slot(handle.idx);
+		}
 	}
 
 	void
-	ResourceManagerImpl::DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue)
+	ResourceManager::DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred)
 	{
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
-		m_PendingDeletions.push_back(
-			{ PendingDeletion::Type::kCbvSrvUav, handle.idx, currentFenceValue });
+
+		if (deferred)
+		{
+			m_PendingDeletions.push_back(
+				{ PendingDeletion::Type::kCbvSrvUav, handle.idx, currentFenceValue });
+		}
+		else
+		{
+			m_CbvSrvUavSlots.release_slot(handle.idx);
+		}
 	}
 
 	void
-	ResourceManagerImpl::DestroyTexture(TextureHandle handle, uint64_t currentFenceValue)
+	ResourceManager::DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred)
 	{
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
-		m_PendingDeletions.push_back(
-			{ PendingDeletion::Type::kCbvSrvUav, handle.idx, currentFenceValue });
+
+		if (deferred)
+		{
+			m_PendingDeletions.push_back(
+				{ PendingDeletion::Type::kCbvSrvUav, handle.idx, currentFenceValue });
+		}
+		else
+		{
+			m_CbvSrvUavSlots.release_slot(handle.idx);
+		}
 	}
 
 	void
-	ResourceManagerImpl::CleanupExpiredResources(uint64_t completedFenceValue)
+	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue)
 	{
 		for (int i = static_cast<int>(m_PendingDeletions.size()) - 1; i >= 0; --i)
 		{
@@ -267,7 +247,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManagerImpl::ValidBufferHandle(const BufferHandle& handle) const
+	ResourceManager::ValidBufferHandle(const BufferHandle& handle) const
 	{
 		if (!m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
 		{
@@ -279,7 +259,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManagerImpl::ValidTextureHandle(const TextureHandle& handle) const
+	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const
 	{
 		if (!m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
 		{
@@ -291,7 +271,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManagerImpl::ValidRtvHandle(const RtvHandle& handle) const
+	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const
 	{
 		if (!m_Rtvs.valid(handle.idx, handle.generation))
 		{
@@ -302,49 +282,31 @@ namespace bgl
 	}
 
 	void
-	ResourceManagerImpl::SetDescriptorHeap(ID3D12CommandList* cmdList)
+	ResourceManager::SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList)
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
 		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavHeap.Get() };
-		m_CommandList->SetDescriptorHeaps(_countof(heaps), heaps);
+		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 	}
 
 	const Texture&
-	ResourceManagerImpl::GetTexture(TextureHandle handle) const
+	ResourceManager::GetTexture(TextureHandle handle) const
 	{
 		gassert(ValidTextureHandle(handle), "Invalid texture handle");
 		return std::get<Texture>(m_CbvSrvUavSlots[handle.idx]);
 	}
 
 	const Buffer&
-	ResourceManagerImpl::GetBuffer(BufferHandle handle) const
+	ResourceManager::GetBuffer(BufferHandle handle) const
 	{
 		gassert(ValidBufferHandle(handle), "Invalid buffer handle");
 		return std::get<Buffer>(m_CbvSrvUavSlots[handle.idx]);
 	}
 
 	const Rtv&
-	ResourceManagerImpl::GetRtv(RtvHandle handle) const
+	ResourceManager::GetRtv(RtvHandle handle) const
 	{
 		gassert(ValidRtvHandle(handle), "Invalid RTV handle");
 		return m_Rtvs[handle.idx];
-	}
-
-	const Rtv&
-	ResourceManager::GetRtv(const RtvHandle& handle) const
-	{
-		return GetImpl()->GetRtv(handle);
-	}
-
-	const Buffer&
-	ResourceManager::GetBuffer(const BufferHandle& handle) const
-	{
-		return GetImpl()->GetBuffer(handle);
-	}
-
-	const Texture&
-	ResourceManager::GetTexture(const TextureHandle& handle) const
-	{
-		return GetImpl()->GetTexture(handle);
 	}
 }

@@ -8,12 +8,14 @@
 
 namespace bgl
 {
-	CommandListImpl::CommandListImpl(
-		QueueType        type,
-		CommandAllocator commandAllocator,
-		ResourceManager  resourceManager) : m_Type(type), m_ResourceManager(resourceManager)
+	CommandList::CommandList(
+		QueueType             type,
+		ICommandAllocator*    commandAllocator,
+		ResourceManagerHandle resourceManager) :
+		m_Type(type), m_ResourceManager(std::move(resourceManager))
 	{
-		auto d3d12CommandAllocator = commandAllocator->Get();
+		auto d3d12CommandAllocator =
+			commandAllocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
 		gassert(d3d12CommandAllocator != nullptr, "D3D12 Command allocator cannot be null");
 
 		wrl::ComPtr<ID3D12Device> device;
@@ -35,12 +37,10 @@ namespace bgl
 		commandList->QueryInterface(IID_PPV_ARGS(&m_CommandList)) >> d3d12ErrChecker;
 	}
 
+	CommandList::~CommandList() noexcept { logger::info("Destroying CommandList"); }
+
 	void
-	CommandListImpl::WriteBuffer(
-		BufferHandle handle,
-		const void*  data,
-		size_t       offset,
-		size_t       byteSize)
+	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize)
 	{
 		auto& buffer = m_ResourceManager->GetBuffer(handle);
 		auto& desc   = buffer.GetDesc();
@@ -72,9 +72,6 @@ namespace bgl
 		resDesc.SampleDesc.Count     = 1;
 		resDesc.Layout               = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-		// Do not create it and delete it
-		static wrl::ComPtr<ID3D12Resource> stagingBuffer;
-
 		device10->CreateCommittedResource3(
 			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
@@ -84,16 +81,16 @@ namespace bgl
 			nullptr,
 			0,
 			nullptr,
-			IID_PPV_ARGS(&stagingBuffer)) >>
+			IID_PPV_ARGS(&m_StagingBuffer)) >>
 			d3d12ErrChecker;
 
 		void*       mappedPtr = nullptr;
 		D3D12_RANGE readRange = { 0, 0 };
-		stagingBuffer->Map(0, &readRange, &mappedPtr);
+		m_StagingBuffer->Map(0, &readRange, &mappedPtr);
 
 		memcpy(static_cast<std::byte*>(mappedPtr) + offset, data, byteSize);
 
-		stagingBuffer->Unmap(0, nullptr);
+		m_StagingBuffer->Unmap(0, nullptr);
 
 		BufferBarrierDesc barrier = {};
 		barrier.accessBefore      = BarrierAccessFlag::kNone;
@@ -103,33 +100,41 @@ namespace bgl
 
 		Barrier(handle, barrier);
 
-		m_CommandList
-			->CopyBufferRegion(buffer.GetD3D12Resource(), offset, stagingBuffer.Get(), 0, byteSize);
+		m_CommandList->CopyBufferRegion(
+			buffer.GetD3D12Resource(),
+			offset,
+			m_StagingBuffer.Get(),
+			0,
+			byteSize);
 	}
 
 	void
-	CommandListImpl::Open(CommandAllocator allocator)
+	CommandList::Open(ICommandAllocator* allocator)
 	{
-		gassert(allocator->Get() != nullptr, "Command Allocator cannot be null");
-		gassert(m_ResourceManager.IsInitialized(), "Resource manager must be initialized");
 		gassert(!m_Open, "Command list is already open");
 
-		m_CommandList->Reset(allocator->Get(), nullptr) >> d3d12ErrChecker;
-		ID3D12DescriptorHeap* heaps[] = { m_ResourceManager->GetCbvSrvUavHeap() };
+		auto* d3d12Allocator = allocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
+		gassert(d3d12Allocator != nullptr, "Command Allocator cannot be null");
+
+		m_CommandList->Reset(d3d12Allocator, nullptr) >> d3d12ErrChecker;
+
+		auto                  d3d12ResourceManager = m_ResourceManager->As<ResourceManager>();
+		ID3D12DescriptorHeap* heaps[]              = { d3d12ResourceManager->GetCbvSrvUavHeap() };
 		m_CommandList->SetDescriptorHeaps(std::size(heaps), heaps);
 		m_Open = true;
 	}
 
 	void
-	CommandListImpl::Close()
+	CommandList::Close()
 	{
 		gassert(m_Open, "Command list must be open before closing");
 		m_CommandList->Close() >> d3d12ErrChecker;
+		m_CurrentGraphicsState.reset();
 		m_Open = false;
 	}
 
 	void
-	CommandListImpl::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier)
+	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier)
 	{
 		auto&                                   buffer = m_ResourceManager->GetBuffer(handle);
 		wrl::ComPtr<ID3D12GraphicsCommandList7> cmdList7;
@@ -158,7 +163,7 @@ namespace bgl
 	}
 
 	void
-	CommandListImpl::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier)
 	{
 		auto& texture = m_ResourceManager->GetTexture(handle);
 		auto& desc    = texture.GetDesc();
@@ -202,7 +207,7 @@ namespace bgl
 	}
 
 	void
-	CommandListImpl::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier)
 	{
 		auto& rtv           = m_ResourceManager->GetRtv(handle);
 		auto  textureHandle = rtv.GetTextureHandle();
@@ -212,13 +217,13 @@ namespace bgl
 	}
 
 	void
-	CommandListImpl::SetGraphicsState(const GraphicsState& gfxState)
+	CommandList::SetGraphicsState(const GraphicsState& gfxState)
 	{
 		m_CurrentGraphicsState = gfxState;
 	}
 
 	void
-	CommandListImpl::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const
+	CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const
 	{
 		gassert(m_CurrentGraphicsState.has_value(), "Graphics state must be set before drawing");
 		gassert(
@@ -287,7 +292,7 @@ namespace bgl
 
 		// Pipeline state
 		{
-			auto& pipeline = m_CurrentGraphicsState->pipeline;
+			auto* pipeline = m_CurrentGraphicsState->pipeline->As<GraphicsPipeline>();
 			m_CommandList->IASetPrimitiveTopology(pipeline->GetPrimitiveTopology());
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
@@ -304,79 +309,4 @@ namespace bgl
 		m_CommandList->DrawInstanced(vertexCount, instanceCount, 0, 0);
 	}
 
-	void
-	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize)
-	{
-		GetImpl()->WriteBuffer(handle, data, offset, byteSize);
-	}
-
-	void
-	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t byteSize)
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->WriteBuffer(handle, data, 0, byteSize);
-	}
-
-	void
-	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier)
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->Barrier(handle, barrier);
-	}
-
-	void
-	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier)
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->Barrier(handle, barrier);
-	}
-
-	void
-	CommandList::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier)
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->Barrier(handle, barrier);
-	}
-
-	void
-	CommandList::Open(CommandAllocator allocator)
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->Open(allocator);
-	}
-
-	void
-	CommandList::Close()
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->Close();
-	}
-
-	void
-	bgl::CommandList::SetGraphicsState(const GraphicsState& gfxState)
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->SetGraphicsState(gfxState);
-	}
-
-	void
-	bgl::CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		GetImpl()->DrawInstanced(vertexCount, instanceCount);
-	}
-
-	bool
-	bgl::CommandList::IsOpen() const
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		return GetImpl()->m_Open;
-	}
-
-	QueueType
-	bgl::CommandList::GetType() const
-	{
-		gassert(IsInitialized(), "Command List not initialized");
-		return GetImpl()->m_Type;
-	}
 }

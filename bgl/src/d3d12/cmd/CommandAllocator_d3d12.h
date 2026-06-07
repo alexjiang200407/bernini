@@ -4,24 +4,23 @@
 
 namespace bgl
 {
-	class CommandAllocatorImpl
+	class CommandAllocator : public core::RefCounter<ICommandAllocator>
 	{
 	public:
-		CommandAllocatorImpl(wrl::ComPtr<ID3D12CommandAllocator> commandAllocator) :
+		CommandAllocator(wrl::ComPtr<ID3D12CommandAllocator> commandAllocator) :
 			m_CommandAllocator(std::move(commandAllocator))
 		{}
 
 		ID3D12CommandAllocator*
-		Get() const
+		GetD3D12CommandAllocator() const
 		{
 			return m_CommandAllocator.Get();
 		}
 
 		void
-		Reset();
+		ResetAllocator() override;
 
 	private:
 		wrl::ComPtr<ID3D12CommandAllocator> m_CommandAllocator;
-		friend class DeviceImpl;
 	};
 }

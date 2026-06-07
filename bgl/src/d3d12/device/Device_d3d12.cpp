@@ -7,61 +7,51 @@
 #include "pipeline/GraphicsPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "resource/Shader_d3d12.h"
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
-	DeviceImpl::DeviceImpl(wrl::ComPtr<ID3D12Device> device) : m_Device(std::move(device)) {}
+	Device::Device(wrl::ComPtr<ID3D12Device> device) : m_Device(std::move(device)) {}
 
-	CommandList
-	DeviceImpl::CreateCommandList(
-		QueueType        type,
-		CommandAllocator commandAllocator,
-		ResourceManager  resourceManager) const
+	CommandListHandle
+	Device::CreateCommandList(
+		QueueType              type,
+		CommandAllocatorHandle commandAllocator,
+		ResourceManagerHandle  resourceManager) const
 	{
-		gassert(commandAllocator.IsInitialized(), "Command List not initialized");
-		gassert(resourceManager.IsInitialized(), "Resource Manager not initialized");
-
-		auto commandList = CommandList();
-		commandList.EmplaceImpl(type, commandAllocator, resourceManager);
-		return commandList;
+		return core::SharedRef<CommandList>::Make(
+			type,
+			std::move(commandAllocator),
+			std::move(resourceManager));
 	}
 
-	ResourceManager
-	DeviceImpl::CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const
+	ResourceManagerHandle
+	Device::CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const
 	{
-		auto resourceManager = ResourceManager();
-		resourceManager.EmplaceImpl(m_Device, maxCbvSrvUav, maxRtvs);
-		return resourceManager;
+		return core::SharedRef<ResourceManager>::Make(m_Device, maxCbvSrvUav, maxRtvs);
 	}
 
-	Shader
-	DeviceImpl::CreateShader(const ShaderDesc& desc) const
+	ShaderHandle
+	Device::CreateShader(const ShaderDesc& desc) const
 	{
-		auto shader = Shader();
-		shader.EmplaceImpl(desc);
-		return shader;
+		return core::SharedRef<Shader>::Make(desc);
 	}
 
-	Shader
-	DeviceImpl::CreateShader(ShaderDesc&& desc) const
+	ShaderHandle
+	Device::CreateShader(ShaderDesc&& desc) const
 	{
-		auto shader = Shader();
-		shader.EmplaceImpl(std::move(desc));
-		return shader;
+		return core::SharedRef<Shader>::Make(std::move(desc));
 	}
 
-	GraphicsPipeline
-	DeviceImpl::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const
+	GraphicsPipelineHandle
+	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const
 	{
-		auto pipeline = GraphicsPipeline();
-		pipeline.EmplaceImpl(m_Device.Get(), desc);
-		return pipeline;
+		return core::SharedRef<GraphicsPipeline>::Make(m_Device.Get(), desc);
 	}
 
-	CommandAllocator
-	DeviceImpl::CreateCommandAllocator() const
+	CommandAllocatorHandle
+	Device::CreateCommandAllocator() const
 	{
-		auto cmdAllocator      = CommandAllocator();
 		auto d3d12CmdAllocator = wrl::ComPtr<ID3D12CommandAllocator>();
 
 		m_Device->CreateCommandAllocator(
@@ -69,77 +59,12 @@ namespace bgl
 			IID_PPV_ARGS(&d3d12CmdAllocator)) >>
 			d3d12ErrChecker;
 
-		cmdAllocator.EmplaceImpl(std::move(d3d12CmdAllocator));
-		return cmdAllocator;
+		return core::SharedRef<CommandAllocator>::Make(std::move(d3d12CmdAllocator));
 	}
 
-	CommandQueue
-	DeviceImpl::CreateCommandQueue(QueueType type) const
-	{
-		auto cmdQueue = CommandQueue();
-		cmdQueue.EmplaceImpl(type, m_Device.Get());
-		return cmdQueue;
-	}
-
-	CommandList
-	Device::CreateGraphicsCommandList(
-		CommandAllocator commandAllocator,
-		ResourceManager  resourceManager) const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-
-		return GetImpl()->CreateCommandList(
-			QueueType::kGraphics,
-			commandAllocator,
-			resourceManager);
-	}
-
-	CommandQueue
-	Device::CreateGraphicsCommandQueue(QueueType type) const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateCommandQueue(QueueType::kGraphics);
-	}
-
-	CommandAllocator
-	Device::CreateCommandAllocator() const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateCommandAllocator();
-	}
-
-	CommandQueue
+	CommandQueueHandle
 	Device::CreateCommandQueue(QueueType type) const
 	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateCommandQueue(type);
-	}
-
-	ResourceManager
-	Device::CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateResourceManager(maxCbvSrvUav, maxRtvs);
-	}
-
-	Shader
-	Device::CreateShader(const ShaderDesc& desc) const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateShader(desc);
-	}
-
-	Shader
-	bgl::Device::CreateShader(ShaderDesc&& desc) const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateShader(std::move(desc));
-	}
-
-	GraphicsPipeline
-	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const
-	{
-		gassert(IsInitialized(), "Device not initialized");
-		return GetImpl()->CreateGraphicsPipeline(desc);
+		return core::SharedRef<CommandQueue>::Make(type, m_Device.Get());
 	}
 }

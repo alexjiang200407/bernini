@@ -15,22 +15,35 @@ namespace bgl
 	public:
 		TestPass() = default;
 		TestPass(
-			const Device&           device,
-			CommandQueue            cmdQueue,
-			const CommandAllocator& cmdAllocator,
-			ResourceManager&        resourceManager)
+			IDevice*               device,
+			CommandQueueHandle     cmdQueue,
+			CommandAllocatorHandle cmdAllocator,
+			ResourceManagerHandle  resourceManager)
 		{
 			Init(device, cmdQueue, cmdAllocator, resourceManager);
 		}
 
 		void
-		Init(
-			const Device&           device,
-			CommandQueue            cmdQueue,
-			const CommandAllocator& cmdAllocator,
-			ResourceManager&        resourceManager)
+		Release(ResourceManagerHandle resourceManager)
 		{
-			m_CommandList = device.CreateGraphicsCommandList(cmdAllocator, resourceManager);
+			resourceManager->DestroyBuffer(m_VertexBuffer, 0, false);
+			m_CommandList.Reset();
+			m_Pipeline.Reset();
+		}
+
+		void
+		Init(
+			IDevice*               device,
+			CommandQueueHandle     cmdQueue,
+			CommandAllocatorHandle cmdAllocator,
+			ResourceManagerHandle  resourceManager)
+		{
+			gassert(device != nullptr, "Device must be initialized");
+			gassert(cmdQueue.IsInitialized(), "Command queue must be initialized");
+			gassert(cmdAllocator.IsInitialized(), "Command Allocator must be initialized");
+			gassert(resourceManager.IsInitialized(), "Resource Manager must be initialized");
+
+			m_CommandList = device->CreateGraphicsCommandList(cmdAllocator, resourceManager);
 
 			struct Vertex
 			{
@@ -48,13 +61,13 @@ namespace bgl
 			bufferDesc.isUav     = false;
 			bufferDesc.debugName = "TestPass Vertex Buffer";
 
-			m_CommandList.Open(cmdAllocator);
-			m_VertexBuffer                = resourceManager.CreateRawBuffer(bufferDesc);
+			m_CommandList->Open(cmdAllocator);
+			m_VertexBuffer                = resourceManager->CreateRawBuffer(bufferDesc);
 			constexpr uint32_t bufferSize = sizeof(verts);
 
-			m_CommandList.WriteBuffer(m_VertexBuffer, verts, bufferSize);
+			m_CommandList->WriteBuffer(m_VertexBuffer, verts, bufferSize);
 
-			m_CommandList.Barrier(
+			m_CommandList->Barrier(
 				m_VertexBuffer,
 				BufferBarrierDesc()
 					.AddSyncBefore(BarrierSyncFlag::kCopy)
@@ -62,13 +75,13 @@ namespace bgl
 					.AddSyncAfter(BarrierSyncFlag::kVertexShader)
 					.AddAccessAfter(BarrierAccessFlag::kShaderResource));
 
-			m_CommandList.Close();
+			m_CommandList->Close();
 
-			cmdQueue.ExecuteCommandList(m_CommandList);
+			cmdQueue->ExecuteCommandList(m_CommandList);
 
 			auto pipelineDesc              = GraphicsPipelineDesc();
-			pipelineDesc.vertexShader      = device.CreateShader("./shaders/Test.vs.dxil"sv);
-			pipelineDesc.pixelShader       = device.CreateShader("./shaders/Test.ps.dxil"sv);
+			pipelineDesc.vertexShader      = device->CreateShader("./shaders/Test.vs.dxil"sv);
+			pipelineDesc.pixelShader       = device->CreateShader("./shaders/Test.ps.dxil"sv);
 			pipelineDesc.rootConstantsSize = 4;
 			pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
 			pipelineDesc.renderState = RenderState{}
@@ -83,20 +96,22 @@ namespace bgl
 												   .SetDepthFunc(ComparisonFunc::Less)
 												   .SetStencilEnable(false));
 
-			m_Pipeline = device.CreateGraphicsPipeline(pipelineDesc);
+			m_Pipeline = device->CreateGraphicsPipeline(pipelineDesc);
 		}
 
 		uint64_t
 		Execute(
-			CommandQueue     cmdQueue,
-			CommandAllocator cmdAllocator,
-			FrameBuffer      frameBuffer,
-			Viewport         vp)
+			ICommandQueue*     cmdQueue,
+			ICommandAllocator* cmdAllocator,
+			FrameBuffer        frameBuffer,
+			Viewport           vp)
 		{
+			gassert(cmdQueue != nullptr, "Pass command queue must be initialized");
+			gassert(cmdAllocator != nullptr, "Pass command allocator must be initialized");
 			gassert(m_CommandList.IsInitialized(), "Pass commandlist must be initialized");
-			gassert(m_Pipeline.IsInitialized(), "Pass commandlist must be initialized");
+			gassert(m_Pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
-			m_CommandList.Open(cmdAllocator);
+			m_CommandList->Open(cmdAllocator);
 
 			struct RootConstantsData
 			{
@@ -110,7 +125,7 @@ namespace bgl
 			gfxState.rootConstantData = &rootConstantsData;
 			gfxState.rootConstantSize = sizeof(rootConstantsData);
 
-			m_CommandList.SetGraphicsState(gfxState);
+			m_CommandList->SetGraphicsState(gfxState);
 
 			{
 				auto barrierDesc = TextureBarrierDesc();
@@ -121,10 +136,10 @@ namespace bgl
 					.AddSyncAfter(BarrierSyncFlag::kRenderTarget)
 					.SetLayoutAfter(BarrierLayout::kRenderTarget);
 
-				m_CommandList.Barrier(frameBuffer.colorAttachments[0], barrierDesc);
+				m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
 			}
 
-			m_CommandList.DrawInstanced(3, 1);
+			m_CommandList->DrawInstanced(3, 1);
 
 			{
 				auto barrierDesc = TextureBarrierDesc();
@@ -135,17 +150,17 @@ namespace bgl
 					.AddSyncAfter(BarrierSyncFlag::kNone)
 					.SetLayoutAfter(BarrierLayout::kPresent);
 
-				m_CommandList.Barrier(frameBuffer.colorAttachments[0], barrierDesc);
+				m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
 			}
 
-			m_CommandList.Close();
+			m_CommandList->Close();
 
-			return cmdQueue.ExecuteCommandList(m_CommandList);
+			return cmdQueue->ExecuteCommandList(m_CommandList);
 		}
 
 	private:
-		CommandList      m_CommandList;
-		GraphicsPipeline m_Pipeline;
-		BufferHandle     m_VertexBuffer;
+		BufferHandle           m_VertexBuffer;
+		CommandListHandle      m_CommandList;
+		GraphicsPipelineHandle m_Pipeline;
 	};
 }

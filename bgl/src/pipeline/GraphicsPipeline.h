@@ -4,15 +4,17 @@
 #include "resource/Shader.h"
 #include "types/Format.h"
 #include "types/RenderState.h"
+
 #include <core/containers/static_vector.h>
-#include <core/pimpl/RefCountPImpl.h>
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
 	struct GraphicsPipelineDesc
 	{
-		Shader                                          vertexShader;
-		Shader                                          pixelShader;
+		ShaderHandle                                    vertexShader;
+		ShaderHandle                                    pixelShader;
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;
@@ -36,12 +38,8 @@ namespace bgl
 		}
 	};
 
-	class GraphicsPipelineImpl;
-	class GraphicsPipeline : public core::RefCountPImpl<GraphicsPipelineImpl>
-	{
-	public:
-		GraphicsPipeline() = default;
+	class IGraphicsPipeline : public core::Ref
+	{};
 
-		friend class DeviceImpl;
-	};
+	using GraphicsPipelineHandle = core::SharedRef<IGraphicsPipeline>;
 }

@@ -2,47 +2,58 @@
 #include "resource/Buffer.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
-#include <core/pimpl/RefCountPImpl.h>
+
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
-	class ResourceManagerImpl;
-	class ResourceManager : public core::RefCountPImpl<ResourceManagerImpl>
+	class IResourceManager : public core::Ref
 	{
 	public:
-		ResourceManager() = default;
+		virtual BufferHandle
+		CreateRawBuffer(const BufferDesc& desc) = 0;
 
-		BufferHandle
-		CreateRawBuffer(const BufferDesc& desc);
+		virtual TextureHandle
+		CreateTexture(const TextureDesc& desc) = 0;
 
-		TextureHandle
-		CreateTexture(const TextureDesc& desc);
+		virtual void
+		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
 
-		void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue);
+		virtual void
+		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
 
-		void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue);
+		virtual void
+		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
 
-		void
-		CleanupExpiredResources(uint64_t completedFenceValue);
-
-		[[nodiscard]]
-		RtvHandle
-		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc);
+		virtual void
+		CleanupExpiredResources(uint64_t completedFenceValue) = 0;
 
 		[[nodiscard]]
-		const Rtv&
-		GetRtv(const RtvHandle& handle) const;
+		virtual RtvHandle
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) = 0;
 
 		[[nodiscard]]
-		const Buffer&
-		GetBuffer(const BufferHandle& handle) const;
+		virtual const Rtv&
+		GetRtv(RtvHandle handle) const = 0;
 
 		[[nodiscard]]
-		const Texture&
-		GetTexture(const TextureHandle& handle) const;
+		virtual const Buffer&
+		GetBuffer(BufferHandle handle) const = 0;
 
-		friend class DeviceImpl;
+		[[nodiscard]]
+		virtual const Texture&
+		GetTexture(TextureHandle handle) const = 0;
+
+		[[nodiscard]] virtual bool
+		ValidBufferHandle(const BufferHandle& handle) const = 0;
+
+		[[nodiscard]] virtual bool
+		ValidTextureHandle(const TextureHandle& handle) const = 0;
+
+		[[nodiscard]] virtual bool
+		ValidRtvHandle(const RtvHandle& handle) const = 0;
 	};
+
+	using ResourceManagerHandle = core::SharedRef<IResourceManager>;
 }

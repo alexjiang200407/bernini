@@ -3,10 +3,8 @@
 
 namespace bgl
 {
-
-	GraphicsPipelineImpl::GraphicsPipelineImpl(
-		ID3D12Device*               device,
-		const GraphicsPipelineDesc& desc) : m_Desc(desc)
+	GraphicsPipeline::GraphicsPipeline(ID3D12Device* device, const GraphicsPipelineDesc& desc) :
+		m_Desc(desc)
 	{
 		gassert(device != nullptr, "Device pointer must not be null.");
 
@@ -42,11 +40,11 @@ namespace bgl
 
 		psoDesc.pRootSignature = m_RootSignature.Get();
 
-		psoDesc.VS = D3D12_SHADER_BYTECODE{ desc.vertexShader.GetBytecode(),
-			                                desc.vertexShader.GetBytecodeSize() };
+		psoDesc.VS = D3D12_SHADER_BYTECODE{ desc.vertexShader->GetBytecode(),
+			                                desc.vertexShader->GetBytecodeSize() };
 
-		psoDesc.PS = D3D12_SHADER_BYTECODE{ desc.pixelShader.GetBytecode(),
-			                                desc.pixelShader.GetBytecodeSize() };
+		psoDesc.PS = D3D12_SHADER_BYTECODE{ desc.pixelShader->GetBytecode(),
+			                                desc.pixelShader->GetBytecodeSize() };
 
 		// Bind converted states
 		psoDesc.BlendState        = ConvertBlendState(desc.renderState.blendState);
@@ -83,6 +81,12 @@ namespace bgl
 
 		device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_PipelineState)) >>
 			d3d12ErrChecker;
+	}
+
+	GraphicsPipeline::~GraphicsPipeline() noexcept
+	{
+		m_PipelineState.Reset();
+		m_RootSignature.Reset();
 	}
 
 	GraphicsPipelineDesc&

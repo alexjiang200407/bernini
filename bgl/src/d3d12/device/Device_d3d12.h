@@ -2,6 +2,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "pipeline/GraphicsPipeline.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
@@ -10,38 +11,37 @@
 namespace bgl
 {
 	class ShaderDesc;
-	class DeviceImpl
+
+	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		DeviceImpl(wrl::ComPtr<ID3D12Device> device);
+		Device(wrl::ComPtr<ID3D12Device> device);
 
-		CommandList
+		CommandListHandle
 		CreateCommandList(
-			QueueType        type,
-			CommandAllocator commandAllocator,
-			ResourceManager  resourceManager) const;
+			QueueType              type,
+			CommandAllocatorHandle commandAllocator,
+			ResourceManagerHandle  resourceManager) const override;
 
-		ResourceManager
-		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const;
+		ResourceManagerHandle
+		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const override;
 
-		Shader
-		CreateShader(const ShaderDesc& desc) const;
+		ShaderHandle
+		CreateShader(const ShaderDesc& desc) const override;
 
-		Shader
-		CreateShader(ShaderDesc&& desc) const;
+		ShaderHandle
+		CreateShader(ShaderDesc&& desc) const override;
 
-		GraphicsPipeline
-		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const;
+		CommandAllocatorHandle
+		CreateCommandAllocator() const override;
 
-		CommandAllocator
-		CreateCommandAllocator() const;
+		CommandQueueHandle
+		CreateCommandQueue(QueueType type) const override;
 
-		CommandQueue
-		CreateCommandQueue(QueueType type) const;
+		GraphicsPipelineHandle
+		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const override;
 
 	private:
 		wrl::ComPtr<ID3D12Device> m_Device;
-
-		friend class Device;
 	};
 }

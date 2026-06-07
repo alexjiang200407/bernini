@@ -18,3 +18,7 @@ namespace bgl
 
 #include <slang-com-ptr.h>
 #include <slang.h>
+
+#include <core/ref/Ref.h>
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>

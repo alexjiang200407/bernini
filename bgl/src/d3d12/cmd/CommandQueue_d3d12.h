@@ -4,43 +4,41 @@
 
 namespace bgl
 {
-	class CommandList;
-
-	class CommandQueueImpl
+	class CommandQueue : public core::RefCounter<ICommandQueue>
 	{
 	public:
-		CommandQueueImpl(QueueType type, ID3D12Device* device);
-		~CommandQueueImpl() noexcept;
+		CommandQueue(QueueType type, ID3D12Device* device);
+		~CommandQueue() noexcept;
 
 		uint64_t
-		ExecuteCommandList(const CommandList& commandList);
+		ExecuteCommandList(ICommandList* commandList) override;
 
 		bool
-		IsFenceComplete(uint64_t fenceValue);
+		IsFenceComplete(uint64_t fenceValue) override;
 
 		uint64_t
-		PollCurrentFenceValue();
+		PollCurrentFenceValue() override;
 
 		uint64_t
-		GetLastCompletedFence() const
+		GetLastCompletedFence() const override
 		{
 			return m_LastCompletedFenceValue;
 		}
 
 		uint64_t
-		GetNextFenceValue() const
+		GetNextFenceValue() const override
 		{
 			return m_NextFenceValue;
 		}
 
 		void
-		InsertWait(uint64_t fenceValue);
+		InsertWait(uint64_t fenceValue) override;
 
 		void
-		InsertWaitForQueueFence(CommandQueue cq, uint64_t fenceValue);
+		InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const override;
 
 		void
-		InsertWaitForQueue(CommandQueue otherQueue);
+		InsertWaitForQueue(ICommandQueue* otherQueue) const override;
 
 		ID3D12Fence*
 		GetD3D12Fence() const
@@ -54,8 +52,11 @@ namespace bgl
 			return m_CommandQueue.Get();
 		}
 
+		HANDLE
+		GetD3D12FenceEvent() const { return m_FenceEvent; }
+
 		void
-		WaitForFenceCPUBlocking(uint64_t fenceValue);
+		WaitForFenceCPUBlocking(uint64_t fenceValue) override;
 
 	private:
 		QueueType                       m_Type;
@@ -68,8 +69,5 @@ namespace bgl
 		uint64_t                 m_NextFenceValue          = 1;
 		uint64_t                 m_LastCompletedFenceValue = 0;
 		HANDLE                   m_FenceEvent              = nullptr;
-
-		friend class DeviceImpl;
-		friend class CommandQueue;
 	};
 }

@@ -6,24 +6,25 @@
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
 #include "types/QueueType.h"
+
 #include <core/file/file.h>
-#include <core/pimpl/PImpl.h>
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
-	class DeviceImpl;
-	class Device : public core::PImpl<DeviceImpl>
+	class IDevice : public core::Ref
 	{
 	public:
 		[[nodiscard]]
-		Shader
-		CreateShader(const ShaderDesc& desc) const;
+		virtual ShaderHandle
+		CreateShader(const ShaderDesc& desc) const = 0;
 
 		[[nodiscard]]
-		Shader
-		CreateShader(ShaderDesc&& desc) const;
+		virtual ShaderHandle
+		CreateShader(ShaderDesc&& desc) const = 0;
 
-		[[nodiscard]] Shader
+		[[nodiscard]] ShaderHandle
 		CreateShader(std::string_view sv) const
 		{
 			auto desc      = ShaderDesc();
@@ -33,31 +34,46 @@ namespace bgl
 		}
 
 		[[nodiscard]]
-		GraphicsPipeline
-		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const;
+		virtual GraphicsPipelineHandle
+		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const = 0;
 
 		[[nodiscard]]
-		CommandList
+		CommandListHandle
 		CreateGraphicsCommandList(
-			CommandAllocator commandAllocator,
-			ResourceManager  resourceManager) const;
+			CommandAllocatorHandle commandAllocator,
+			ResourceManagerHandle  resourceManager) const
+		{
+			return CreateCommandList(
+				QueueType::kGraphics,
+				std::move(commandAllocator),
+				std::move(resourceManager));
+		}
+
+		virtual CommandListHandle
+		CreateCommandList(
+			QueueType              type,
+			CommandAllocatorHandle commandAllocator,
+			ResourceManagerHandle  resourceManager) const = 0;
 
 		[[nodiscard]]
-		CommandQueue
-		CreateGraphicsCommandQueue(QueueType type) const;
+		CommandQueueHandle
+		CreateGraphicsCommandQueue() const
+		{
+			return CreateCommandQueue(QueueType::kGraphics);
+		}
 
 		[[nodiscard]]
-		CommandAllocator
-		CreateCommandAllocator() const;
+		virtual CommandAllocatorHandle
+		CreateCommandAllocator() const = 0;
 
 		[[nodiscard]]
-		CommandQueue
-		CreateCommandQueue(QueueType type = QueueType::kGraphics) const;
+		virtual CommandQueueHandle
+		CreateCommandQueue(QueueType type) const = 0;
 
 		[[nodiscard]]
-		ResourceManager
-		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const;
-
-		friend class GraphicsImpl;
+		virtual ResourceManagerHandle
+		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const = 0;
 	};
+
+	using DeviceHandle = core::SharedRef<IDevice>;
 }

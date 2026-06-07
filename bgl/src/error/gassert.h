@@ -4,7 +4,7 @@
 namespace bgl
 {
 	template <typename... Args>
-	[[noreturn]] void
+	void
 	gassert(bool condition, fmt::format_string<Args...> msg, Args&&... args)
 	{
 		if (!condition)
