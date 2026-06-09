@@ -26,6 +26,12 @@ namespace core::win
 		float            processDeltaTimeSeconds = 0.005f;
 	};
 
+	union WindowNativeHandle
+	{
+		uint64_t id;
+		void*    ptr;
+	};
+
 	// Not thread safe
 	class IWindow
 	{
@@ -47,6 +53,9 @@ namespace core::win
 		}
 
 		virtual ~IWindow() noexcept = default;
+
+		virtual void*
+		GetNativeHandle() const noexcept = 0;
 
 		void
 		Flush() noexcept;
