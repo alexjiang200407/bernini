@@ -11,3 +11,8 @@ namespace wrl = Microsoft::WRL;
 #include <Windows.h>
 
 #include "ErrorChecker.h"
+
+#include <slang-com-ptr.h>
+#include <slang.h>
+
+#include "slang/ErrorChecker.h"

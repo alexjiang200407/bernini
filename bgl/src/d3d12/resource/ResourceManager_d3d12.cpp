@@ -11,10 +11,12 @@ namespace bgl
 		m_Device(std::move(device)), m_CbvSrvUavSlots(maxDescriptors), m_Rtvs(maxRtvs)
 	{
 		gassert(maxDescriptors > 0, "maxDescriptors must be greater than zero");
+		gassert(maxRtvs > 0, "maxRtvs must be greater than zero");
 
 		// Get descriptor size for this device
 		m_CbvSrvUavDescriptorSize =
 			m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 		m_RtvDescriptorSize =
 			m_Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
@@ -40,11 +42,13 @@ namespace bgl
 	}
 
 	BufferHandle
-	ResourceManager::CreateRawBuffer(const BufferDesc& desc)
+	ResourceManager::CreateStructBuffer(const BufferDesc& desc)
 	{
-		auto bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
+		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
+		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
-		uint32_t slotIndex = bufferSlotHandle.index;
+		auto     bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
+		uint32_t slotIndex        = bufferSlotHandle.index;
 
 		Buffer buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, desc);
 
@@ -52,11 +56,11 @@ namespace bgl
 		{
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 			uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
-			uavDesc.Format              = DXGI_FORMAT_R32_TYPELESS;  // Match raw buffer
-			uavDesc.Buffer.FirstElement = 0;
-			uavDesc.Buffer.NumElements  = static_cast<uint32_t>(desc.byteSize / sizeof(uint32_t));
-			uavDesc.Buffer.StructureByteStride = 0;
-			uavDesc.Buffer.Flags               = D3D12_BUFFER_UAV_FLAG_RAW;
+			uavDesc.Format                           = DXGI_FORMAT_UNKNOWN;
+			uavDesc.Buffer.FirstElement              = 0;
+			uavDesc.Buffer.NumElements               = desc.elementCount;
+			uavDesc.Buffer.StructureByteStride       = desc.stride;
+			uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_NONE;
 
 			m_Device->CreateUnorderedAccessView(
 				buffer.GetD3D12Resource(),
@@ -69,14 +73,11 @@ namespace bgl
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 			srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
 			srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-
-			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements  = static_cast<uint32_t>(desc.byteSize / sizeof(uint32_t));
-			srvDesc.Buffer.StructureByteStride = 0;
-
-			srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+			srvDesc.Format                          = DXGI_FORMAT_UNKNOWN;
+			srvDesc.Buffer.FirstElement             = 0;
+			srvDesc.Buffer.NumElements              = desc.elementCount;
+			srvDesc.Buffer.StructureByteStride      = desc.stride;
+			srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_NONE;
 
 			m_Device->CreateShaderResourceView(
 				buffer.GetD3D12Resource(),

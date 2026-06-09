@@ -1,5 +1,12 @@
 #pragma once
 #include "device/Device.h"
+#include <slang-com-ptr.h>
+
+namespace slang
+{
+	class ISession;
+	class IGlobalSession;
+}
 
 namespace bgl
 {
@@ -8,7 +15,7 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(wrl::ComPtr<ID3D12Device> device);
+		Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession);
 
 		core::SharedRef<ICommandList>
 		CreateCommandList(
@@ -20,10 +27,7 @@ namespace bgl
 		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const override;
 
 		core::SharedRef<IShader>
-		CreateShader(const ShaderDesc& desc) const override;
-
-		core::SharedRef<IShader>
-		CreateShader(ShaderDesc&& desc) const override;
+		CreateShader(ShaderDesc desc) const override;
 
 		core::SharedRef<ICommandAllocator>
 		CreateCommandAllocator() const override;
@@ -34,7 +38,11 @@ namespace bgl
 		core::SharedRef<IGraphicsPipeline>
 		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const override;
 
+		Uniforms
+		CreateUniforms(IGraphicsPipeline const* pipeline) const override;
+
 	private:
-		wrl::ComPtr<ID3D12Device> m_Device;
+		wrl::ComPtr<ID3D12Device>      m_Device;
+		Slang::ComPtr<slang::ISession> m_SlangSession;
 	};
 }

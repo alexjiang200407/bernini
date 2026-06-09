@@ -1,3 +1,5 @@
+import constants.TestConstants;
+
 struct VertexStageOutput
 {
     float4 sv_position : SV_Position;
@@ -6,6 +8,5 @@ struct VertexStageOutput
 [shader("pixel")]
 float4 main(VertexStageOutput input) : SV_Target
 {
-    // Just returning a solid white color
-    return float4(1.0, 1.0, 1.0, 1.0);
+    return float4(pushConstants.color, 1.0);
 }

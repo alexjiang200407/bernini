@@ -1,12 +1,17 @@
 #pragma once
 #include "pipeline/GraphicsPipeline.h"
+#include "uniforms/Uniforms.h"
 
 namespace bgl
 {
 	class GraphicsPipeline : public core::RefCounter<IGraphicsPipeline>
 	{
 	public:
-		GraphicsPipeline(ID3D12Device* device, const GraphicsPipelineDesc& desc);
+		GraphicsPipeline(
+			ID3D12Device*               device,
+			slang::ISession*            session,
+			const GraphicsPipelineDesc& desc);
+
 		~GraphicsPipeline() noexcept;
 
 		[[nodiscard]]
@@ -30,9 +35,30 @@ namespace bgl
 			return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 		}
 
+		const GraphicsPipelineDesc&
+		GetDesc() const override
+		{
+			return m_Desc;
+		}
+
+		slang::TypeLayoutReflection*
+		GetUniformLayout() const override
+		{
+			return m_UniformLayout;
+		}
+
+		virtual uint32_t
+		GetUniformSize() const override
+		{
+			return m_UniformSize;
+		}
+
 	private:
-		GraphicsPipelineDesc             m_Desc;
-		wrl::ComPtr<ID3D12PipelineState> m_PipelineState;
-		wrl::ComPtr<ID3D12RootSignature> m_RootSignature;
+		GraphicsPipelineDesc                 m_Desc;
+		wrl::ComPtr<ID3D12PipelineState>     m_PipelineState;
+		wrl::ComPtr<ID3D12RootSignature>     m_RootSignature;
+		Slang::ComPtr<slang::IComponentType> m_LinkedProgram;
+		slang::TypeLayoutReflection*         m_UniformLayout = nullptr;
+		uint32_t                             m_UniformSize   = 0;
 	};
 }

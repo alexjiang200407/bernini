@@ -56,6 +56,8 @@ namespace bgl
 		wrl::ComPtr<ID3D12Debug1>   m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue> m_DxgiInfoQueue;
 
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+
 		DeviceHandle          m_Device;
 		ResourceManagerHandle m_ResourceManager;
 		TestPass              m_TestPass;
@@ -115,7 +117,9 @@ namespace bgl
 		D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_D3D12Device)) >>
 			d3d12ErrChecker;
 
-		m_Device = core::SharedRef<Device>::Make(m_D3D12Device);
+		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
+
+		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession.get());
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -180,6 +184,8 @@ namespace bgl
 
 		m_DxgiInfoQueue.Reset();
 		m_DebugController.Reset();
+
+		m_SlangGlobalSession.setNull();
 
 		if (m_Opts.enableDebugLayer)
 		{

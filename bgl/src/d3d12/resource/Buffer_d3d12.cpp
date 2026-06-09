@@ -11,10 +11,13 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
+
 		wrl::ComPtr<ID3D12Device10> device10;
 		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
 
-		gassert(desc.byteSize > 0, "Buffer byte size must be greater than zero");
+		gassert(
+			desc.elementCount > 0 && desc.stride > 0,
+			"Buffer byte size must be greater than zero");
 
 		const uint32_t descriptorSize =
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
@@ -33,7 +36,7 @@ namespace bgl
 
 		// Setup structural resource description
 		resDesc.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
-		resDesc.Width            = desc.byteSize;
+		resDesc.Width            = static_cast<uint64_t>(desc.stride) * desc.elementCount;
 		resDesc.Height           = 1;
 		resDesc.DepthOrArraySize = 1;
 		resDesc.MipLevels        = 1;

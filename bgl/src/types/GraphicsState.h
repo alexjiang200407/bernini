@@ -10,7 +10,6 @@ namespace bgl
 		GraphicsPipelineHandle pipeline;
 		ViewportState          viewportState;
 		FrameBuffer            frameBuffer;
-		void*                  rootConstantData;
-		size_t                 rootConstantSize;
+		Uniforms*              uniforms = nullptr;
 	};
 }

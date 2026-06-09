@@ -1,5 +1,6 @@
 #pragma once
 #include "types/QueueType.h"
+#include "uniforms/Uniforms.h"
 #include <core/file/file.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -21,14 +22,10 @@ namespace bgl
 	public:
 		[[nodiscard]]
 		virtual core::SharedRef<IShader>
-		CreateShader(const ShaderDesc& desc) const = 0;
-
-		[[nodiscard]]
-		virtual core::SharedRef<IShader>
-		CreateShader(ShaderDesc&& desc) const = 0;
+		CreateShader(ShaderDesc desc) const = 0;
 
 		[[nodiscard]] core::SharedRef<IShader>
-		CreateShader(std::string_view sv) const;
+		CreateShader(std::string path, std::string moduleName) const;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IGraphicsPipeline>
@@ -55,6 +52,10 @@ namespace bgl
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>
 		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const = 0;
+
+		[[nodiscard]]
+		virtual Uniforms
+		CreateUniforms(IGraphicsPipeline const* pipeline) const = 0;
 	};
 
 	using DeviceHandle = core::SharedRef<IDevice>;

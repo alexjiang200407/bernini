@@ -59,13 +59,14 @@ namespace bgl
 				{ -0.5f, -0.5f, 0.0f },  // bottom left
 			};
 
-			auto bufferDesc      = BufferDesc();
-			bufferDesc.byteSize  = sizeof(verts);
-			bufferDesc.isUav     = false;
-			bufferDesc.debugName = "TestPass Vertex Buffer";
+			auto bufferDesc         = BufferDesc();
+			bufferDesc.elementCount = std::size(verts);
+			bufferDesc.stride       = sizeof(Vertex);
+			bufferDesc.isUav        = false;
+			bufferDesc.debugName    = "TestPass Vertex Buffer";
 
 			m_CommandList->Open(cmdQueue, cmdAllocator);
-			m_VertexBuffer                = resourceManager->CreateRawBuffer(bufferDesc);
+			m_VertexBuffer                = resourceManager->CreateStructBuffer(bufferDesc);
 			constexpr uint32_t bufferSize = sizeof(verts);
 
 			m_CommandList->WriteBuffer(m_VertexBuffer, verts, bufferSize);
@@ -82,10 +83,9 @@ namespace bgl
 
 			cmdQueue->ExecuteCommandList(m_CommandList);
 
-			auto pipelineDesc              = GraphicsPipelineDesc();
-			pipelineDesc.vertexShader      = device->CreateShader("./shaders/Test.vs.dxil"sv);
-			pipelineDesc.pixelShader       = device->CreateShader("./shaders/Test.ps.dxil"sv);
-			pipelineDesc.rootConstantsSize = 4;
+			auto pipelineDesc         = GraphicsPipelineDesc();
+			pipelineDesc.vertexShader = device->CreateShader("./shaders/VSTest.dxil", "VSTest");
+			pipelineDesc.pixelShader  = device->CreateShader("./shaders/PSTest.dxil", "PSTest");
 			pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
 			pipelineDesc.renderState = RenderState{}
 			                               .SetRasterState(
@@ -100,6 +100,7 @@ namespace bgl
 												   .SetStencilEnable(false));
 
 			m_Pipeline = device->CreateGraphicsPipeline(pipelineDesc);
+			m_Uniforms = device->CreateUniforms(m_Pipeline.Get());
 		}
 
 		uint64_t
@@ -116,17 +117,14 @@ namespace bgl
 
 			m_CommandList->Open(cmdQueue, cmdAllocator);
 
-			struct RootConstantsData
-			{
-				uint32_t vertexBufferHeapIndex;
-			} rootConstantsData(m_VertexBuffer.idx);
+			m_Uniforms["vertexBuffer"] = DescriptorHandle(m_VertexBuffer.idx);
+			m_Uniforms["color"]        = glm::vec3(1.0, 0.0, 0.0);
 
 			auto gfxState     = GraphicsState();
 			gfxState.pipeline = m_Pipeline;
 			gfxState.viewportState.AddViewportAndScissorRect(vp);
-			gfxState.frameBuffer      = frameBuffer;
-			gfxState.rootConstantData = &rootConstantsData;
-			gfxState.rootConstantSize = sizeof(rootConstantsData);
+			gfxState.frameBuffer = frameBuffer;
+			gfxState.uniforms    = &m_Uniforms;
 
 			m_CommandList->SetGraphicsState(gfxState);
 
@@ -165,5 +163,6 @@ namespace bgl
 		BufferHandle           m_VertexBuffer;
 		CommandListHandle      m_CommandList;
 		GraphicsPipelineHandle m_Pipeline;
+		Uniforms               m_Uniforms;
 	};
 }

@@ -6,8 +6,7 @@ namespace bgl
 	class Shader final : public core::RefCounter<IShader>
 	{
 	public:
-		Shader(const ShaderDesc& desc) : m_Desc(desc) {}
-		Shader(ShaderDesc&& desc) : m_Desc(std::move(desc)) {}
+		Shader(ShaderDesc desc, slang::ISession* session);
 
 		const std::byte*
 		GetBytecode() const override
@@ -21,7 +20,14 @@ namespace bgl
 			return m_Desc.bytecode.size();
 		}
 
+		slang::IModule*
+		GetSlangModule() const override
+		{
+			return m_SlangModule.get();
+		}
+
 	private:
-		ShaderDesc m_Desc;
+		ShaderDesc                    m_Desc;
+		Slang::ComPtr<slang::IModule> m_SlangModule = nullptr;
 	};
 }

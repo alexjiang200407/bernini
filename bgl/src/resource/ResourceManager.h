@@ -13,7 +13,7 @@ namespace bgl
 	{
 	public:
 		virtual BufferHandle
-		CreateRawBuffer(const BufferDesc& desc) = 0;
+		CreateStructBuffer(const BufferDesc& desc) = 0;
 
 		virtual TextureHandle
 		CreateTexture(const TextureDesc& desc) = 0;

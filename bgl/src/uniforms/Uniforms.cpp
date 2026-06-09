@@ -1,0 +1,314 @@
+#include "uniforms/Uniforms.h"
+#include "pipeline/GraphicsPipeline.h"
+#include "slang/ErrorChecker.h"
+#include "uniforms/DescriptorHandle.h"
+#include <slang.h>
+
+namespace bgl
+{
+	namespace detail
+	{
+		class UniformValueNode final : public UniformsNode
+		{
+		public:
+			explicit UniformValueNode(UniformValueType valueType) : m_ValueType(valueType) {}
+
+			TraversalResult
+			Traverse(size_t, const std::string&) override
+			{
+				throw std::runtime_error("UniformValueNode: cannot index by member name");
+			}
+
+			TraversalResult
+			Traverse(size_t, uint32_t) override
+			{
+				throw std::runtime_error("UniformValueNode: cannot index by integer");
+			}
+
+			UniformType
+			GetType() const override
+			{
+				return UniformType::kValue;
+			}
+
+			UniformValueType
+			GetValueType() const override
+			{
+				return m_ValueType;
+			}
+
+			size_t
+			GetSize() const override
+			{
+				return ValueTypeSize(m_ValueType);
+			}
+
+		private:
+			UniformValueType m_ValueType;
+		};
+
+		class UniformStructNode final : public UniformsNode
+		{
+		public:
+			using MemberMap =
+				std::unordered_map<std::string, std::pair<std::unique_ptr<UniformsNode>, size_t>>;
+
+			explicit UniformStructNode(MemberMap members, size_t totalSize) :
+				m_Members(std::move(members)), m_TotalSize(totalSize)
+			{}
+
+			TraversalResult
+			Traverse(size_t currentOffset, const std::string& member) override
+			{
+				auto it = m_Members.find(member);
+				if (it == m_Members.end())
+					throw std::out_of_range("UniformStructNode: unknown member '" + member + "'");
+				return { it->second.first.get(), currentOffset + it->second.second };
+			}
+
+			TraversalResult
+			Traverse(size_t, uint32_t) override
+			{
+				throw std::runtime_error("UniformStructNode: cannot index struct by integer");
+			}
+
+			UniformType
+			GetType() const override
+			{
+				return UniformType::kStruct;
+			}
+
+			UniformValueType
+			GetValueType() const override
+			{
+				return UniformValueType::kNone;
+			}
+			size_t
+			GetSize() const override
+			{
+				return m_TotalSize;
+			}
+
+		private:
+			MemberMap m_Members;
+			size_t    m_TotalSize;
+		};
+
+		class UniformArrayNode final : public UniformsNode
+		{
+		public:
+			explicit UniformArrayNode(
+				std::unique_ptr<UniformsNode> elementNode,
+				size_t                        count,
+				size_t                        stride) :
+				m_ElementNode(std::move(elementNode)), m_Count(count), m_Stride(stride)
+			{}
+
+			TraversalResult
+			Traverse(size_t, const std::string&) override
+			{
+				throw std::runtime_error("UniformArrayNode: cannot index array by member name");
+			}
+
+			TraversalResult
+			Traverse(size_t currentOffset, uint32_t idx) override
+			{
+				if (idx >= m_Count)
+					throw std::out_of_range("UniformArrayNode: index out of range");
+				return { m_ElementNode.get(), currentOffset + idx * m_Stride };
+			}
+
+			UniformType
+			GetType() const override
+			{
+				return UniformType::kArray;
+			}
+			UniformValueType
+			GetValueType() const override
+			{
+				return UniformValueType::kNone;
+			}
+
+			size_t
+			GetSize() const override
+			{
+				return m_Count * m_Stride;
+			}
+
+			size_t
+			GetCount() const
+			{
+				return m_Count;
+			}
+
+		private:
+			std::unique_ptr<UniformsNode> m_ElementNode;
+			size_t                        m_Count;
+			size_t                        m_Stride;
+		};
+
+	}
+
+	Uniforms::Accessor
+	Uniforms::operator[](const std::string& name)
+	{
+		return Accessor(m_Buffer.data(), 0, m_Root.get())[name];
+	}
+
+	Uniforms::Accessor
+	Uniforms::operator[](uint32_t idx)
+	{
+		return Accessor(m_Buffer.data(), 0, m_Root.get())[idx];
+	}
+
+	Uniforms::ConstAccessor
+	Uniforms::operator[](const std::string& name) const
+	{
+		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[name];
+	}
+
+	Uniforms::ConstAccessor
+	Uniforms::operator[](uint32_t idx) const
+	{
+		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
+	}
+
+	Uniforms::Uniforms(IGraphicsPipeline const* pipeline)
+	{
+		size_t totalBufferSize = pipeline->GetUniformSize();
+		auto*  structLayout    = pipeline->GetUniformLayout();
+
+		m_Size = totalBufferSize;
+
+		m_Root = BuildNode(structLayout);
+		m_Buffer.resize(totalBufferSize, std::byte{ 0 });
+	}
+
+	detail::UniformValueType
+	Uniforms::ResolveScalarType(slang::TypeReflection* type)
+	{
+		auto kind = type->getKind();
+
+		if (kind == slang::TypeReflection::Kind::Matrix)
+		{
+			gassert(
+				type->getRowCount() == 4 && type->getColumnCount() == 4,
+				"Only float mat4x4 supported for now");
+			return detail::UniformValueType::kMat4x4;
+		}
+
+		uint32_t               componentCount = 1;
+		slang::TypeReflection* scalarType     = type;
+
+		if (kind == slang::TypeReflection::Kind::Vector)
+		{
+			componentCount = type->getElementCount();
+			scalarType     = type->getElementType();
+		}
+
+		auto scalarKind = scalarType->getScalarType();
+		bool isFloat    = scalarKind == slang::TypeReflection::ScalarType::Float32;
+		bool isInt      = scalarKind == slang::TypeReflection::ScalarType::Int32;
+		bool isUInt     = scalarKind == slang::TypeReflection::ScalarType::UInt32;
+		bool isBool     = scalarKind == slang::TypeReflection::ScalarType::Bool;
+
+		if (isBool)
+			return detail::UniformValueType::kBool;
+
+		if (isFloat)
+		{
+			switch (componentCount)
+			{
+			case 1:
+				return detail::UniformValueType::kFloat;
+			case 2:
+				return detail::UniformValueType::kFloat2;
+			case 3:
+				return detail::UniformValueType::kFloat3;
+			case 4:
+				return detail::UniformValueType::kFloat4;
+			}
+		}
+
+		if (isInt)
+		{
+			switch (componentCount)
+			{
+			case 1:
+				return detail::UniformValueType::kInt;
+			case 2:
+				return detail::UniformValueType::kInt2;
+			case 3:
+				return detail::UniformValueType::kInt3;
+			case 4:
+				return detail::UniformValueType::kInt4;
+			}
+		}
+
+		if (isUInt)
+		{
+			switch (componentCount)
+			{
+			case 1:
+				return detail::UniformValueType::kUInt;
+			case 2:
+				return detail::UniformValueType::kUInt2;
+			case 3:
+				return detail::UniformValueType::kUInt3;
+			case 4:
+				return detail::UniformValueType::kUInt4;
+			}
+		}
+
+		gfatal("Unsupported scalar/vector type in push constants");
+		return detail::UniformValueType::kNone;
+	}
+
+	std::unique_ptr<detail::UniformsNode>
+	Uniforms::BuildNode(slang::TypeLayoutReflection* typeLayout)
+	{
+		using Kind = slang::TypeReflection::Kind;
+
+		switch (typeLayout->getKind())
+		{
+		case Kind::Struct:
+		{
+			detail::UniformStructNode::MemberMap members;
+			uint32_t                             fieldCount = typeLayout->getFieldCount();
+
+			for (uint32_t i = 0; i < fieldCount; ++i)
+			{
+				slang::VariableLayoutReflection* field          = typeLayout->getFieldByIndex(i);
+				size_t                           relativeOffset = field->getOffset();
+				std::string                      fieldName      = field->getName();
+
+				members[fieldName] = { BuildNode(field->getTypeLayout()), relativeOffset };
+			}
+
+			return std::make_unique<detail::UniformStructNode>(
+				std::move(members),
+				typeLayout->getSize());
+		}
+
+		case Kind::Array:
+		{
+			return std::make_unique<detail::UniformArrayNode>(
+				BuildNode(typeLayout->getElementTypeLayout()),
+				typeLayout->getElementCount(),
+				typeLayout->getStride());
+		}
+
+		case Kind::Scalar:
+		case Kind::Vector:
+		case Kind::Matrix:
+		{
+			return std::make_unique<detail::UniformValueNode>(
+				ResolveScalarType(typeLayout->getType()));
+		}
+
+		default:
+			gfatal("Unsupported type kind in push constants");
+			return nullptr;
+		}
+	}
+}

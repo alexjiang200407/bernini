@@ -11,6 +11,8 @@
 
 namespace bgl
 {
+	class Uniforms;
+
 	struct GraphicsPipelineDesc
 	{
 		ShaderHandle                                    vertexShader;
@@ -18,7 +20,6 @@ namespace bgl
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;
-		size_t                                          rootConstantsSize;
 
 		GraphicsPipelineDesc&
 		AddRtvFormat(const Rtv& rtv);
@@ -39,7 +40,17 @@ namespace bgl
 	};
 
 	class IGraphicsPipeline : public core::Ref
-	{};
+	{
+	public:
+		virtual const GraphicsPipelineDesc&
+		GetDesc() const = 0;
+
+		virtual slang::TypeLayoutReflection*
+		GetUniformLayout() const = 0;
+
+		virtual uint32_t
+		GetUniformSize() const = 0;
+	};
 
 	using GraphicsPipelineHandle = core::SharedRef<IGraphicsPipeline>;
 }

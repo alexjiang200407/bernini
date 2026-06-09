@@ -7,6 +7,7 @@
 #include "pipeline/GraphicsPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "util.h"
+#include <core/math.h>
 
 namespace bgl
 {
@@ -21,8 +22,12 @@ namespace bgl
 			0,
 			false)
 	{
+		gassert(commandAllocator != nullptr, "Command allocator cannot be null");
+		gassert(m_ResourceManager != nullptr, "Resource manager cannot be null");
+
 		auto d3d12CommandAllocator =
 			commandAllocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
+
 		gassert(d3d12CommandAllocator != nullptr, "D3D12 Command allocator cannot be null");
 
 		wrl::ComPtr<ID3D12Device> device;
@@ -100,8 +105,11 @@ namespace bgl
 	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator)
 	{
 		gassert(!m_Open, "Command list is already open");
+		gassert(cmdQueue != nullptr, "Command queue cannot be null");
+		gassert(allocator != nullptr, "Command allocator cannot be null");
 
 		auto* d3d12Allocator = allocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
+
 		gassert(d3d12Allocator != nullptr, "Command Allocator cannot be null");
 
 		m_CommandList->Reset(d3d12Allocator, nullptr) >> d3d12ErrChecker;
@@ -118,6 +126,7 @@ namespace bgl
 	CommandList::Close()
 	{
 		gassert(m_Open, "Command list must be open before closing");
+
 		m_CommandList->Close() >> d3d12ErrChecker;
 		m_CurrentGraphicsState.reset();
 		m_Open = false;
@@ -142,7 +151,7 @@ namespace bgl
 
 		bufferBarrier.pResource = buffer.GetD3D12Resource();
 		bufferBarrier.Offset    = 0;
-		bufferBarrier.Size      = desc.byteSize;
+		bufferBarrier.Size      = static_cast<uint64_t>(desc.elementCount) * desc.stride;
 
 		D3D12_BARRIER_GROUP group = {};
 		group.Type                = D3D12_BARRIER_TYPE_BUFFER;
@@ -287,12 +296,20 @@ namespace bgl
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
 
-			if (auto rootConstantsData = m_CurrentGraphicsState->rootConstantData;
-			    rootConstantsData != nullptr && m_CurrentGraphicsState->rootConstantSize != 0)
+			auto rootConstantsData = m_CurrentGraphicsState->uniforms->Data();
+
+			if (pipeline->GetUniformSize() != 0)
 			{
-				auto num32BitValues = (m_CurrentGraphicsState->rootConstantSize + 3) / 4;
+				gassert(rootConstantsData != nullptr, "Pipeline expects uniforms but none are set");
+				auto num32BitValues = core::align(pipeline->GetUniformSize(), 4) / 4;
 				m_CommandList
 					->SetGraphicsRoot32BitConstants(0, num32BitValues, rootConstantsData, 0);
+			}
+			else
+			{
+				gassert(
+					rootConstantsData == nullptr,
+					"Root constants data set but pipeline has no expected uniforms");
 			}
 		}
 
@@ -302,6 +319,8 @@ namespace bgl
 	void
 	CommandList::SubmitChunks(ICommandQueue* cmdQueue)
 	{
+		gassert(cmdQueue != nullptr, "Command queue cannot be null");
+
 		auto submittedVersion = MakeVersion(cmdQueue->GetNextFenceValue(), m_Desc.type, true);
 		m_UploadManager.SubmitChunks(m_RecordingVersion, submittedVersion);
 		m_RecordingVersion = 0;

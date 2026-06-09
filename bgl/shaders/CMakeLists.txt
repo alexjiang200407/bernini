@@ -24,11 +24,12 @@ foreach(SHADER ${SLANG_SOURCES})
     string(REPLACE ".slang" ".dxil" SHADER_DXIL_NAME "${SHADER_FILENAME}")
     set(OUT_FILE "${SHADER_OUT_DIR}/${SHADER_DXIL_NAME}")
 
-    set(PROFILE "sm_6_6") # Fallback profile
-    if("${SHADER_FILENAME}" MATCHES "\\.vs\\.slang$")
+    if(${SHADER_FILENAME} MATCHES "VS.*\\.slang$")
         set(PROFILE "vs_6_6")
-    elseif("${SHADER_FILENAME}" MATCHES "\\.ps\\.slang$")
+    elseif(${SHADER_FILENAME} MATCHES "PS.*\\.slang$")
         set(PROFILE "ps_6_6")
+    else()
+        set(PROFILE "sm_6_6")
     endif()
 
     add_custom_command(
@@ -62,19 +63,26 @@ add_custom_target(CompileShaders ALL
     DEPENDS ${SLANG_COMPILE_OUTS}
 )
 
+if(GENERATOR_IS_MULTI_CONFIG)
+    set(CONFIG_SUBDIR "/$<CONFIG>")
+else()
+    set(CONFIG_SUBDIR "")
+endif()
+
+
 add_custom_target(CopyBGLShaders ALL
     DEPENDS ${SLANG_COMPILE_OUTS}
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${SHADER_OUT_DIR}"
-            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders"
-    COMMENT "Copying compiled Slang shaders to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders"
+    COMMENT "Copying compiled Slang shaders to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders"
 )
 
 add_custom_target(CopyBGLShaderSources ALL
     DEPENDS ${SLANG_SOURCES}
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders/src"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
-            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders/src"
-    COMMENT "Copying Slang source files to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders/src"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
+    COMMENT "Copying Slang source files to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
 )

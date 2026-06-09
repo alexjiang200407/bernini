@@ -61,11 +61,12 @@ namespace bgl
 			kDefault,
 			kUpload,
 			kReadBack,
-		} cpuAccess;
+		} cpuAccess = CpuAccessMode::kDefault;
 
-		size_t      byteSize  = 0;
-		std::string debugName = "Unnamed Buffer";
-		bool        isUav     = false;
+		uint32_t    stride       = 0;
+		uint32_t    elementCount = 0;
+		std::string debugName    = "Unnamed Buffer";
+		bool        isUav        = false;
 	};
 
 }

@@ -12,12 +12,36 @@
 #include "resource/ResourceManager_d3d12.h"
 #include "resource/Shader.h"
 #include "resource/Shader_d3d12.h"
+#include "slang/ErrorChecker.h"
 #include "types/QueueType.h"
 #include <core/ref/SharedRef.h>
 
 namespace bgl
 {
-	Device::Device(wrl::ComPtr<ID3D12Device> device) : m_Device(std::move(device)) {}
+	Device::Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession) :
+		m_Device(std::move(device))
+	{
+		gassert(m_Device != nullptr, "D3D12 device cannot be null");
+		gassert(globalSession != nullptr, "Slang global session cannot be null");
+
+		slang::SessionDesc sessionDesc = {};
+		slang::TargetDesc  targetDesc  = {};
+
+		targetDesc.format  = SLANG_DXIL;
+		targetDesc.profile = globalSession->findProfile("sm_6_6");
+
+		const char* searchPaths[] = { "shaders/src" };
+
+		sessionDesc.targetCount     = 1;
+		sessionDesc.targets         = &targetDesc;
+		sessionDesc.searchPaths     = searchPaths;
+		sessionDesc.searchPathCount = std::size(searchPaths);
+
+		SlangErrorChecker errChecker;
+		globalSession->createSession(sessionDesc, m_SlangSession.writeRef()) >> errChecker;
+
+		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
+	}
 
 	CommandListHandle
 	Device::CreateCommandList(
@@ -38,21 +62,15 @@ namespace bgl
 	}
 
 	ShaderHandle
-	Device::CreateShader(const ShaderDesc& desc) const
+	Device::CreateShader(ShaderDesc desc) const
 	{
-		return core::SharedRef<Shader>::Make(desc);
-	}
-
-	ShaderHandle
-	Device::CreateShader(ShaderDesc&& desc) const
-	{
-		return core::SharedRef<Shader>::Make(std::move(desc));
+		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession);
 	}
 
 	GraphicsPipelineHandle
 	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const
 	{
-		return core::SharedRef<GraphicsPipeline>::Make(m_Device.Get(), desc);
+		return core::SharedRef<GraphicsPipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
 	}
 
 	CommandAllocatorHandle
@@ -72,5 +90,12 @@ namespace bgl
 	Device::CreateCommandQueue(QueueType type) const
 	{
 		return core::SharedRef<CommandQueue>::Make(type, m_Device.Get());
+	}
+
+	Uniforms
+	Device::CreateUniforms(IGraphicsPipeline const* pipeline) const
+	{
+		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+		return Uniforms(pipeline);
 	}
 }

@@ -5,11 +5,13 @@
 namespace bgl
 {
 	ShaderHandle
-	IDevice::CreateShader(std::string_view sv) const
+	IDevice::CreateShader(std::string path, std::string moduleName) const
 	{
-		auto desc      = ShaderDesc();
-		desc.bytecode  = core::file::readFileBytes(sv);
-		desc.debugName = sv;
+		auto desc            = ShaderDesc();
+		desc.bytecode        = core::file::readFileBytes(path);
+		desc.debugName       = std::move(path);
+		desc.slangModuleName = std::move(moduleName);
+
 		return CreateShader(std::move(desc));
 	}
 

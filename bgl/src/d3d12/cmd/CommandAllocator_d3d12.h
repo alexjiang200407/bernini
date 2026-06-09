@@ -9,7 +9,9 @@ namespace bgl
 	public:
 		CommandAllocator(wrl::ComPtr<ID3D12CommandAllocator> commandAllocator) :
 			m_CommandAllocator(std::move(commandAllocator))
-		{}
+		{
+			gassert(m_CommandAllocator != nullptr, "Command allocator cannot be null");
+		}
 
 		ID3D12CommandAllocator*
 		GetD3D12CommandAllocator() const

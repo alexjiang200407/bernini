@@ -35,7 +35,7 @@ namespace bgl
 		 */
 		[[nodiscard]]
 		BufferHandle
-		CreateRawBuffer(const BufferDesc& desc) override;
+		CreateStructBuffer(const BufferDesc& desc) override;
 
 		/**
 		 * Automatically creates SRV/UAV for the texture.
