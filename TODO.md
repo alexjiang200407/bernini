@@ -1,2 +1,0 @@
-- Synchronize buffer heap uploads.
-- Push Constant Reflection. We reserve names for specific push constants for example "instanceCount" 
