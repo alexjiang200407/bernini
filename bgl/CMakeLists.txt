@@ -67,6 +67,8 @@ target_include_directories(bgl
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources)
+
 target_link_libraries(bgl PUBLIC bgl_objects)
 
 target_compile_definitions(bgl PRIVATE

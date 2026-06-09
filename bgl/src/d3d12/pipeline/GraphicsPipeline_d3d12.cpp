@@ -34,6 +34,8 @@ namespace bgl
 
 		slang::ProgramLayout*            layout         = m_LinkedProgram->getLayout();
 		slang::VariableLayoutReflection* constantBuffer = nullptr;
+		UINT                             shaderRegister = 0;
+		UINT                             registerSpace  = 0;
 
 		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
 		{
@@ -43,6 +45,8 @@ namespace bgl
 				if (!constantBuffer)
 				{
 					constantBuffer = param;
+					shaderRegister = static_cast<UINT>(param->getBindingIndex());
+					registerSpace  = static_cast<UINT>(param->getBindingSpace());
 				}
 				else
 				{
@@ -67,9 +71,6 @@ namespace bgl
 
 		if (dwordCount > 0)
 		{
-			const UINT shaderRegister = 0;
-			const UINT registerSpace  = 0;
-
 			rootParams[0].InitAsConstants(dwordCount, shaderRegister, registerSpace);
 			rootParamCount = 1;
 		}
