@@ -27,6 +27,12 @@ namespace core::win
 			}
 		}
 
+		void*
+		GetNativeHandle() const noexcept
+		{
+			return m_hWnd;
+		}
+
 		void
 		RegisterWin32(const WindowOptions& options)
 		{
@@ -62,19 +68,19 @@ namespace core::win
 				break;
 
 			case WindowOptions::Mode::Fullscreen:
-				{
-					DEVMODE dm = {};
-					ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
+			{
+				DEVMODE dm = {};
+				ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
 
-					style   = WS_POPUP;
-					exStyle = WS_EX_APPWINDOW;
+				style   = WS_POPUP;
+				exStyle = WS_EX_APPWINDOW;
 
-					rect.left   = 0;
-					rect.top    = 0;
-					rect.right  = GetSystemMetrics(SM_CXSCREEN) >> win32::errorChecker;
-					rect.bottom = GetSystemMetrics(SM_CYSCREEN) >> win32::errorChecker;
-				}
-				break;
+				rect.left   = 0;
+				rect.top    = 0;
+				rect.right  = GetSystemMetrics(SM_CXSCREEN) >> win32::errorChecker;
+				rect.bottom = GetSystemMetrics(SM_CYSCREEN) >> win32::errorChecker;
+			}
+			break;
 			}
 
 			AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
@@ -181,54 +187,54 @@ namespace core::win
 				break;
 
 			case WM_KILLFOCUS:
-				{
-					Reset();
-					break;
-				}
+			{
+				Reset();
+				break;
+			}
 
 			case WM_DESTROY:
 				return 0;
 
 			case WM_INPUT:
+			{
+				UINT dwSize = 0;
+				GetRawInputData(
+					reinterpret_cast<HRAWINPUT>(lParam),
+					RID_INPUT,
+					nullptr,
+					&dwSize,
+					sizeof(RAWINPUTHEADER));
+				if (dwSize == 0 || dwSize == static_cast<UINT>(-1))
 				{
-					UINT dwSize = 0;
-					GetRawInputData(
+					throw core::except::BerniniException{ "Raw Input Error",
+						                                  "Failed to get Raw input data" };
+				}
+
+				std::vector<BYTE> lpb(dwSize);
+				if (const auto copied = GetRawInputData(
 						reinterpret_cast<HRAWINPUT>(lParam),
 						RID_INPUT,
-						nullptr,
+						lpb.data(),
 						&dwSize,
 						sizeof(RAWINPUTHEADER));
-					if (dwSize == 0 || dwSize == static_cast<UINT>(-1))
-					{
-						throw core::except::BerniniException{ "Raw Input Error",
-							                                  "Failed to get Raw input data" };
-					}
-
-					std::vector<BYTE> lpb(dwSize);
-					if (const auto copied = GetRawInputData(
-							reinterpret_cast<HRAWINPUT>(lParam),
-							RID_INPUT,
-							lpb.data(),
-							&dwSize,
-							sizeof(RAWINPUTHEADER));
-					    copied != dwSize || copied == static_cast<UINT>(-1))
-					{
-						throw core::except::BerniniException{ "Raw Input Error",
-							                                  "Failed to get Raw input data" };
-					}
-
-					RAWINPUT* raw = reinterpret_cast<RAWINPUT*>(lpb.data());
-
-					if (raw->header.dwType == RIM_TYPEMOUSE)
-					{
-						HandleMouse(raw->data.mouse);
-					}
-					else if (raw->header.dwType == RIM_TYPEKEYBOARD)
-					{
-						HandleKeyboard(raw->data.keyboard);
-					}
+				    copied != dwSize || copied == static_cast<UINT>(-1))
+				{
+					throw core::except::BerniniException{ "Raw Input Error",
+						                                  "Failed to get Raw input data" };
 				}
-				break;
+
+				RAWINPUT* raw = reinterpret_cast<RAWINPUT*>(lpb.data());
+
+				if (raw->header.dwType == RIM_TYPEMOUSE)
+				{
+					HandleMouse(raw->data.mouse);
+				}
+				else if (raw->header.dwType == RIM_TYPEKEYBOARD)
+				{
+					HandleKeyboard(raw->data.keyboard);
+				}
+			}
+			break;
 			default:
 				return DefWindowProc(hWnd, uMsg, wParam, lParam);
 			}
@@ -249,11 +255,11 @@ namespace core::win
 				m_mouseState.x += delta.dx;
 				m_mouseState.y += delta.dy;
 
-				actions.Set(MouseAction::kMove);
+				actions.set(MouseAction::kMove);
 			}
 			else
 			{
-				actions.Reset(MouseAction::kMove);
+				actions.reset(MouseAction::kMove);
 			}
 
 			if (rawMouse.usButtonFlags & RI_MOUSE_WHEEL)
@@ -262,23 +268,23 @@ namespace core::win
 				m_mouseState.wheelPos += zDelta;
 				delta.wheelDelta = zDelta;
 
-				actions.Set(MouseAction::kWheel);
+				actions.set(MouseAction::kWheel);
 			}
 			else
 			{
-				actions.Reset(MouseAction::kWheel);
+				actions.reset(MouseAction::kWheel);
 			}
 			auto updateButton = [&](auto buttonFlag, auto actionPress, auto rawDown, auto rawUp) {
 				if (rawDown)
 				{
-					m_mouseState.flags.Set(buttonFlag);
-					actions.Set(actionPress);
+					m_mouseState.flags.set(buttonFlag);
+					actions.set(actionPress);
 				}
 
 				if (rawUp)
 				{
-					m_mouseState.flags.Reset(buttonFlag);
-					actions.Reset(actionPress);
+					m_mouseState.flags.reset(buttonFlag);
+					actions.reset(actionPress);
 				}
 			};
 

@@ -11,7 +11,7 @@ namespace gfx
 	}
 
 	DynamicConstantBuffer::DynamicConstantBuffer(DynamicConstantBuffer&& other) noexcept :
-		m_layoutMap(std::move(other.m_layoutMap)), m_bufferDesc(std::move(other.m_bufferDesc)),
+		m_LayoutMap(std::move(other.m_LayoutMap)), m_bufferDesc(std::move(other.m_bufferDesc)),
 		m_buf(std::move(other.m_buf)), m_data(std::move(other.m_data)),
 		m_bufferType(other.m_bufferType)
 	{}
@@ -22,7 +22,7 @@ namespace gfx
 		if (this != std::addressof(other))
 		{
 			Release();
-			m_layoutMap  = std::move(other.m_layoutMap);
+			m_LayoutMap  = std::move(other.m_LayoutMap);
 			m_bufferDesc = std::move(other.m_bufferDesc);
 			m_buf        = std::move(other.m_buf);
 			m_data       = std::move(other.m_data);
@@ -40,7 +40,7 @@ namespace gfx
 		assert(!Initialized() && "DynamicConstantBuffer::Init called twice");
 
 		auto ctx = DynamicConstantBufferDesc::BuildLayoutMapContext{};
-		elementDesc.root->BuildLayoutMap(&m_layoutMap, ctx);
+		elementDesc.root->BuildLayoutMap(&m_LayoutMap, ctx);
 		auto totalSize = align(ctx.offset, 16u);
 
 		m_bufferType = elementDesc.bufferType;
@@ -136,7 +136,7 @@ namespace gfx
 	const LayoutEntry&
 	DynamicConstantBuffer::GetLayoutEntry(std::string_view name) const
 	{
-		if (auto it = m_layoutMap.find(name); it != m_layoutMap.end())
+		if (auto it = m_LayoutMap.find(name); it != m_LayoutMap.end())
 		{
 			return it->second;
 		}
@@ -234,6 +234,6 @@ namespace gfx
 		m_data.reset();
 		m_bufferDesc = {};
 		m_buf.Reset();
-		m_layoutMap.clear();
+		m_LayoutMap.clear();
 	}
 }

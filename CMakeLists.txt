@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.22)
 project(BerniniEngine)
 
 include(${CMAKE_SOURCE_DIR}/cmake/target_force_include.cmake)
@@ -13,10 +13,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(core)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
-add_subdirectory(extern/FrameGraph)
-add_subdirectory(extern/NVRHI)
-add_subdirectory(gfx)
-add_subdirectory(gfxsdk_cxx)
+add_subdirectory(bgl)
 
 if (BUILD_EXAMPLES)
     add_subdirectory(examples)
@@ -25,7 +22,7 @@ endif()
 get_property(EXAMPLE_TARGETS GLOBAL PROPERTY GLOBAL_EXAMPLE_TARGETS)
 
 if (MSVC)
-    foreach(target Core gfx ${EXAMPLE_TARGETS} gfxsdk_cxx)
+    foreach(target Core bgl ${EXAMPLE_TARGETS})
         target_compile_options(${target} PRIVATE
             /W4          
             /WX               
