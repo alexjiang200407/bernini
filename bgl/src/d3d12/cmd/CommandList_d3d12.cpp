@@ -6,7 +6,7 @@
 #include "constants/constants.h"
 #include "pipeline/GraphicsPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
-#include "util.h"
+#include "util_d3d12.h"
 #include <core/math.h>
 
 namespace bgl
@@ -74,7 +74,7 @@ namespace bgl
 			m_LastCompletedFence,
 			byteSize,
 			nullptr,
-			&m_CurrentUploadBuffer,
+			m_CurrentUploadBuffer,
 			&offsetInUploadBuffer,
 			&cpuVA,
 			&gpuVA,

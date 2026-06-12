@@ -11,35 +11,35 @@ namespace bgl
 {
 	class IGraphicsPipeline;
 
+	enum class UniformType
+	{
+		kArray,
+		kStruct,
+		kValue
+	};
+
+	enum class UniformValueType
+	{
+		kInt,
+		kInt2,
+		kInt3,
+		kInt4,
+		kUInt,
+		kUInt2,
+		kUInt3,
+		kUInt4,
+		kFloat,
+		kFloat2,
+		kFloat3,
+		kFloat4,
+		kBool,
+		kMat4x4,
+		kNone,
+	};
+
 	namespace detail
 	{
 		class UniformsNode;
-
-		enum class UniformType
-		{
-			kArray,
-			kStruct,
-			kValue
-		};
-
-		enum class UniformValueType
-		{
-			kInt,
-			kInt2,
-			kInt3,
-			kInt4,
-			kUInt,
-			kUInt2,
-			kUInt3,
-			kUInt4,
-			kFloat,
-			kFloat2,
-			kFloat3,
-			kFloat4,
-			kBool,
-			kMat4x4,
-			kNone,
-		};
 
 		struct TraversalResult
 		{
@@ -109,37 +109,37 @@ namespace bgl
 		};
 
 		template <typename T>
-		detail::UniformValueType
+		UniformValueType
 		ValueMap()
 		{
 			if constexpr (std::is_same_v<T, float>)
-				return detail::UniformValueType::kFloat;
+				return UniformValueType::kFloat;
 			else if constexpr (std::is_same_v<T, glm::vec2>)
-				return detail::UniformValueType::kFloat2;
+				return UniformValueType::kFloat2;
 			else if constexpr (std::is_same_v<T, glm::vec3>)
-				return detail::UniformValueType::kFloat3;
+				return UniformValueType::kFloat3;
 			else if constexpr (std::is_same_v<T, glm::vec4>)
-				return detail::UniformValueType::kFloat4;
+				return UniformValueType::kFloat4;
 			else if constexpr (std::is_same_v<T, int32_t>)
-				return detail::UniformValueType::kInt;
+				return UniformValueType::kInt;
 			else if constexpr (std::is_same_v<T, glm::ivec2>)
-				return detail::UniformValueType::kInt2;
+				return UniformValueType::kInt2;
 			else if constexpr (std::is_same_v<T, glm::ivec3>)
-				return detail::UniformValueType::kInt3;
+				return UniformValueType::kInt3;
 			else if constexpr (std::is_same_v<T, glm::ivec4>)
-				return detail::UniformValueType::kInt4;
+				return UniformValueType::kInt4;
 			else if constexpr (std::is_same_v<T, uint32_t>)
-				return detail::UniformValueType::kUInt;
+				return UniformValueType::kUInt;
 			else if constexpr (std::is_same_v<T, glm::uvec2> || std::is_same_v<T, DescriptorHandle>)
-				return detail::UniformValueType::kUInt2;
+				return UniformValueType::kUInt2;
 			else if constexpr (std::is_same_v<T, glm::uvec3>)
-				return detail::UniformValueType::kUInt3;
+				return UniformValueType::kUInt3;
 			else if constexpr (std::is_same_v<T, glm::uvec4>)
-				return detail::UniformValueType::kUInt4;
+				return UniformValueType::kUInt4;
 			else if constexpr (std::is_same_v<T, bool>)
-				return detail::UniformValueType::kBool;
+				return UniformValueType::kBool;
 			else if constexpr (std::is_same_v<T, glm::mat4>)
-				return detail::UniformValueType::kMat4x4;
+				return UniformValueType::kMat4x4;
 			else
 				static_assert(false, "Unsupported uniform type T");
 		}
@@ -147,7 +147,7 @@ namespace bgl
 
 	class Uniforms final
 	{
-	private:
+	public:
 		template <typename DataPtr>
 		class AccessorBase
 		{
@@ -178,6 +178,32 @@ namespace bgl
 			}
 
 			template <typename T>
+			bool
+			operator==(const T& val) const
+			{
+				return val == static_cast<T>(*this);
+			}
+
+			UniformType
+			GetType() const
+			{
+				return m_Node->GetType();
+			}
+
+			UniformValueType
+			GetValueType() const
+			{
+				AssertIsValue();
+				return m_Node->GetValueType();
+			}
+
+			size_t
+			GetOffset() const
+			{
+				return m_Offset;
+			}
+
+			template <typename T>
 			void
 			operator=(T value) const
 			{
@@ -195,7 +221,7 @@ namespace bgl
 			void
 			AssertIsValue() const
 			{
-				if (!m_Node || m_Node->GetType() != detail::UniformType::kValue)
+				if (!m_Node || m_Node->GetType() != UniformType::kValue)
 					throw std::runtime_error("Uniforms::Accessor: node is not a value type");
 			}
 
@@ -262,7 +288,7 @@ namespace bgl
 		}
 
 	private:
-		static detail::UniformValueType
+		static UniformValueType
 		ResolveScalarType(slang::TypeReflection* type);
 
 		static std::unique_ptr<detail::UniformsNode>

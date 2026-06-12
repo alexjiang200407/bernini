@@ -30,7 +30,7 @@ namespace bgl
 		targetDesc.format  = SLANG_DXIL;
 		targetDesc.profile = globalSession->findProfile("sm_6_6");
 
-		const char* searchPaths[] = { "shaders/src" };
+		const char* searchPaths[] = { "./shaders/src" };
 
 		sessionDesc.targetCount     = 1;
 		sessionDesc.targets         = &targetDesc;

@@ -1,6 +1,6 @@
 #pragma once
 #include "d3d12/resource/ResourceManager_d3d12.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {
@@ -93,8 +93,14 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc)
 	{
-		gfatal("ResourceManager::CreateTexture not implemented yet");
-		return TextureHandle();
+		auto     textureSlotHandle = m_CbvSrvUavSlots.allocate_slot();
+		uint32_t slotIndex         = textureSlotHandle.index;
+
+		Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, desc);
+
+		m_CbvSrvUavSlots[slotIndex] = std::move(texture);
+
+		return TextureHandle(slotIndex, textureSlotHandle.generation);
 	}
 
 	TextureHandle
@@ -124,7 +130,7 @@ namespace bgl
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
 		rtvDesc.Format        = ConvertFormat(desc.format);
-		rtvDesc.ViewDimension = ConvertDimension(desc.dimension);
+		rtvDesc.ViewDimension = ConvertRTVDimension(desc.dimension);
 
 		switch (rtvDesc.ViewDimension)
 		{

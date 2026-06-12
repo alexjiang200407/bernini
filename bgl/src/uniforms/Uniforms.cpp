@@ -184,7 +184,7 @@ namespace bgl
 		m_Buffer.resize(totalBufferSize, std::byte{ 0 });
 	}
 
-	detail::UniformValueType
+	UniformValueType
 	Uniforms::ResolveScalarType(slang::TypeReflection* type)
 	{
 		auto kind = type->getKind();
@@ -194,7 +194,7 @@ namespace bgl
 			gassert(
 				type->getRowCount() == 4 && type->getColumnCount() == 4,
 				"Only float mat4x4 supported for now");
-			return detail::UniformValueType::kMat4x4;
+			return UniformValueType::kMat4x4;
 		}
 
 		uint32_t               componentCount = 1;
@@ -213,20 +213,20 @@ namespace bgl
 		bool isBool     = scalarKind == slang::TypeReflection::ScalarType::Bool;
 
 		if (isBool)
-			return detail::UniformValueType::kBool;
+			return UniformValueType::kBool;
 
 		if (isFloat)
 		{
 			switch (componentCount)
 			{
 			case 1:
-				return detail::UniformValueType::kFloat;
+				return UniformValueType::kFloat;
 			case 2:
-				return detail::UniformValueType::kFloat2;
+				return UniformValueType::kFloat2;
 			case 3:
-				return detail::UniformValueType::kFloat3;
+				return UniformValueType::kFloat3;
 			case 4:
-				return detail::UniformValueType::kFloat4;
+				return UniformValueType::kFloat4;
 			}
 		}
 
@@ -235,13 +235,13 @@ namespace bgl
 			switch (componentCount)
 			{
 			case 1:
-				return detail::UniformValueType::kInt;
+				return UniformValueType::kInt;
 			case 2:
-				return detail::UniformValueType::kInt2;
+				return UniformValueType::kInt2;
 			case 3:
-				return detail::UniformValueType::kInt3;
+				return UniformValueType::kInt3;
 			case 4:
-				return detail::UniformValueType::kInt4;
+				return UniformValueType::kInt4;
 			}
 		}
 
@@ -250,18 +250,18 @@ namespace bgl
 			switch (componentCount)
 			{
 			case 1:
-				return detail::UniformValueType::kUInt;
+				return UniformValueType::kUInt;
 			case 2:
-				return detail::UniformValueType::kUInt2;
+				return UniformValueType::kUInt2;
 			case 3:
-				return detail::UniformValueType::kUInt3;
+				return UniformValueType::kUInt3;
 			case 4:
-				return detail::UniformValueType::kUInt4;
+				return UniformValueType::kUInt4;
 			}
 		}
 
 		gfatal("Unsupported scalar/vector type in push constants");
-		return detail::UniformValueType::kNone;
+		return UniformValueType::kNone;
 	}
 
 	std::unique_ptr<detail::UniformsNode>

@@ -16,7 +16,7 @@ namespace bgl
 	struct GraphicsPipelineDesc
 	{
 		ShaderHandle                                    vertexShader;
-		ShaderHandle                                    pixelShader;
+		ShaderHandle                                    pixelShader = nullptr;
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;

@@ -2,7 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {

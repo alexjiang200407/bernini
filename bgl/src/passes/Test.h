@@ -86,6 +86,7 @@ namespace bgl
 			auto pipelineDesc         = GraphicsPipelineDesc();
 			pipelineDesc.vertexShader = device->CreateShader("./shaders/VSTest.dxil", "VSTest");
 			pipelineDesc.pixelShader  = device->CreateShader("./shaders/PSTest.dxil", "PSTest");
+
 			pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
 			pipelineDesc.renderState = RenderState{}
 			                               .SetRasterState(

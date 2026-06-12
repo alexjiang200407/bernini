@@ -1,8 +1,10 @@
 #pragma once
 #include "types/Barrier.h"
 #include "types/BlendState.h"
+#include "types/ClearValue.h"
 #include "types/DepthStencilState.h"
 #include "types/Format.h"
+#include "types/FormatInfo.h"
 #include "types/QueueType.h"
 #include "types/RasterState.h"
 #include "types/TextureDimension.h"
@@ -15,8 +17,11 @@ namespace bgl
 	DXGI_FORMAT
 	ConvertFormat(Format bglFormat);
 
+	D3D12_RESOURCE_DIMENSION
+	ConvertResourceDimension(TextureDimension dimension);
+
 	D3D12_RTV_DIMENSION
-	ConvertDimension(TextureDimension dimension);
+	ConvertRTVDimension(TextureDimension dimension);
 
 	D3D12_BARRIER_SYNC
 	ConvertBarrierSync(BarrierSync sync);
@@ -50,4 +55,7 @@ namespace bgl
 
 	D3D12_COMPARISON_FUNC
 	ConvertComparisonFunc(ComparisonFunc value);
+
+	D3D12_CLEAR_VALUE
+	ConvertClearValue(ClearValue clearValue);
 }

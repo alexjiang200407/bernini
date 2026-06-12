@@ -1,5 +1,6 @@
 #pragma once
 #include "types/Barrier.h"
+#include "types/ClearValue.h"
 #include "types/Format.h"
 #include "types/TextureDimension.h"
 #include <core/containers/enum_set.h>
@@ -80,6 +81,7 @@ namespace bgl
 		uint32_t         sampleQuality = 0;
 		Format           format        = Format::UNKNOWN;
 		TextureDimension dimension     = TextureDimension::kTexture2D;
+		ClearValue       clearValue;
 		std::string      debugName;
 	};
 

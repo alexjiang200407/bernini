@@ -4,9 +4,9 @@
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
+#include "gfx/GraphicsBase.h"
 #include "passes/Test.h"
 #include "resource/ResourceManager_d3d12.h"
-#include <bgl/Graphics.h>
 #include <core/file/file.h>
 
 namespace fs = std::filesystem;
@@ -19,7 +19,7 @@ namespace bgl
 		RtvHandle     rtvHandle;
 	};
 
-	class Graphics : public core::RefCounter<IGraphics>
+	class Graphics : public core::RefCounter<GraphicsBase>
 	{
 	public:
 		Graphics(const GraphicsOptions&);
@@ -34,12 +34,21 @@ namespace bgl
 			return m_Opts;
 		}
 
+		IDevice*
+		GetDevice() const override
+		{
+			return m_Device.Get();
+		}
+
 	private:
 		void
 		CreateSwapchain(HWND hWnd);
 
 		void
 		CreateRenderTargets();
+
+		void
+		CreateOffscreenRenderTargets();
 
 	private:
 		UINT m_FrameIndex = 0;
@@ -135,6 +144,10 @@ namespace bgl
 			CreateSwapchain(hwnd);
 			CreateRenderTargets();
 		}
+		else
+		{
+			CreateOffscreenRenderTargets();
+		}
 
 		m_TestPass.Init(m_Device, m_CommandQueue, m_CommandAllocator[0], m_ResourceManager);
 	}
@@ -198,8 +211,6 @@ namespace bgl
 	void
 	Graphics::DrawFrame()
 	{
-		gassert(m_Opts.headless == false, "Cannot Draw Frame when in headless mode");
-
 		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
 		if (fenceToWaitOn != 0)
 		{
@@ -258,6 +269,10 @@ namespace bgl
 	Graphics::CreateRenderTargets()
 	{
 		TextureDesc textureDesc{};
+		textureDesc.format    = Format::BGRA8_UNORM;
+		textureDesc.width     = static_cast<uint32_t>(m_Opts.width);
+		textureDesc.height    = static_cast<uint32_t>(m_Opts.height);
+		textureDesc.dimension = TextureDimension::kTexture2D;
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -272,6 +287,30 @@ namespace bgl
 			RtvDesc rtvDesc;
 			rtvDesc.format    = Format::BGRA8_UNORM;
 			rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
+
+			m_BackBuffers[i].rtvHandle =
+				m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+		}
+	}
+
+	void
+	Graphics::CreateOffscreenRenderTargets()
+	{
+		for (auto i = 0u; i < c_BufferCount; i++)
+		{
+			auto texDesc      = TextureDesc();
+			texDesc.width     = static_cast<uint32_t>(m_Opts.width);
+			texDesc.height    = static_cast<uint32_t>(m_Opts.height);
+			texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
+			texDesc.dimension = TextureDimension::kTexture2D;
+			texDesc.format    = Format::BGRA8_UNORM;
+			texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+			m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = Format::BGRA8_UNORM;
+			rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
 
 			m_BackBuffers[i].rtvHandle =
 				m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);

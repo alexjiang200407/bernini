@@ -1,4 +1,7 @@
-#include "util.h"
+#include "util_d3d12.h"
+#include "resource/Texture.h"
+#include "types/Color.h"
+#include "util/util.h"
 
 namespace bgl
 {
@@ -363,8 +366,31 @@ namespace bgl
 			gfatal("ConvertFormat Invalid format: {}", static_cast<int>(bglFormat));
 		}
 	}
+
+	D3D12_RESOURCE_DIMENSION
+	ConvertResourceDimension(TextureDimension dimension)
+	{
+		switch (dimension)
+		{
+		case TextureDimension::kTexture1D:
+			return D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+
+		case TextureDimension::kTexture2D:
+			return D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+		case TextureDimension::kTexture3D:
+			return D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+
+		case TextureDimension::kUnknown:
+		default:
+			gfatal(
+				"ConvertTextureDimension Invalid texture dimension: {}",
+				static_cast<int>(dimension));
+		}
+	}
+
 	D3D12_RTV_DIMENSION
-	ConvertDimension(TextureDimension dimension)
+	ConvertRTVDimension(TextureDimension dimension)
 	{
 		switch (dimension)
 		{
@@ -397,7 +423,9 @@ namespace bgl
 
 		case TextureDimension::kUnknown:
 		default:
-			gfatal("ConvertDimension Invalid texture dimension: {}", static_cast<int>(dimension));
+			gfatal(
+				"ConvertRTVDimension Invalid texture dimension: {}",
+				static_cast<int>(dimension));
 		}
 	}
 	D3D12_BARRIER_SYNC
@@ -745,5 +773,33 @@ namespace bgl
 			gfatal("Unknown ComparisonFunc value");
 			return D3D12_COMPARISON_FUNC_NEVER;
 		}
+	}
+
+	D3D12_CLEAR_VALUE
+	ConvertClearValue(ClearValue clearValue)
+	{
+		auto d3d12ClearValue = D3D12_CLEAR_VALUE();
+		auto formatInfo      = GetFormatInfo(clearValue.format);
+
+		if (formatInfo.hasDepth || formatInfo.hasStencil)
+		{
+			gassert(clearValue.IsDepthStencil(), "Clear Value depth stencil expected");
+
+			auto& depthStencil                   = clearValue.GetDepthStencil();
+			d3d12ClearValue.DepthStencil.Depth   = depthStencil.depth;
+			d3d12ClearValue.DepthStencil.Stencil = depthStencil.stencil;
+		}
+		else
+		{
+			gassert(clearValue.IsColor(), "Clear Value color expected");
+
+			auto& color              = clearValue.GetColor();
+			d3d12ClearValue.Color[0] = color.r;
+			d3d12ClearValue.Color[1] = color.g;
+			d3d12ClearValue.Color[2] = color.b;
+			d3d12ClearValue.Color[3] = color.a;
+		}
+
+		return d3d12ClearValue;
 	}
 }

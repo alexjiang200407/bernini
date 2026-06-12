@@ -15,6 +15,12 @@ file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
 )
 list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/d3d12/.*")
 
+
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Internal Header Files" FILES ${BGL_COMMON_HEADERS})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
+
+
 add_library(bgl_objects OBJECT
 	${BGL_COMMON_SOURCES}
 	${BGL_COMMON_HEADERS}
@@ -93,4 +99,47 @@ if(RENDERER_BACKEND STREQUAL "DX12")
     )
 
 	copy_to_target(bgl ITEMS ${D3D_DLLS})
+endif()
+
+
+if (BUILD_TESTS)
+    find_package(Catch2 CONFIG REQUIRED)
+
+    file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
+    )
+    
+    add_executable(bgl_tests
+        ${BGL_TESTS_SOURCE}
+        $<TARGET_OBJECTS:bgl_objects>
+    )
+    
+    target_include_directories(bgl_tests
+        PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_force_include(bgl_tests
+        PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+    )
+    
+    target_link_libraries(bgl_tests PRIVATE bgl_objects Catch2::Catch2 Catch2::Catch2WithMain)
+
+	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${BGL_TESTS_SOURCE})
+
+    if(RENDERER_BACKEND STREQUAL "DX12")
+        target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_DX12)
+		target_link_libraries(bgl_tests PRIVATE bgl_d3d12)
+		target_sources(bgl_tests PRIVATE $<TARGET_OBJECTS:bgl_d3d12>)
+    endif()
+
+	target_compile_definitions(bgl_tests PRIVATE
+		BGL_EXPORTS
+	)
+
+	set_target_properties(bgl_tests PROPERTIES
+		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+	)
 endif()

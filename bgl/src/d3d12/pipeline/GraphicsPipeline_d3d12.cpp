@@ -15,8 +15,13 @@ namespace bgl
 		SlangErrorChecker                   errChecker;
 		std::vector<slang::IComponentType*> slangModules;
 
+		gassert(desc.vertexShader != nullptr, "Vertex shader cannot be null");
 		slangModules.emplace_back(desc.vertexShader->GetSlangModule());
-		slangModules.emplace_back(desc.pixelShader->GetSlangModule());
+
+		if (desc.pixelShader != nullptr)
+		{
+			slangModules.emplace_back(desc.pixelShader->GetSlangModule());
+		}
 
 		Slang::ComPtr<slang::IComponentType> program;
 		{
@@ -101,8 +106,10 @@ namespace bgl
 		psoDesc.VS = D3D12_SHADER_BYTECODE{ desc.vertexShader->GetBytecode(),
 			                                desc.vertexShader->GetBytecodeSize() };
 
-		psoDesc.PS = D3D12_SHADER_BYTECODE{ desc.pixelShader->GetBytecode(),
-			                                desc.pixelShader->GetBytecodeSize() };
+		psoDesc.PS = desc.pixelShader ?
+		                 D3D12_SHADER_BYTECODE{ desc.pixelShader->GetBytecode(),
+			                                    desc.pixelShader->GetBytecodeSize() } :
+		                 D3D12_SHADER_BYTECODE{ nullptr, 0 };
 
 		// Bind converted states
 		psoDesc.BlendState        = ConvertBlendState(desc.renderState.blendState);
@@ -111,9 +118,9 @@ namespace bgl
 
 		// Topology & Input Configuration
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.InputLayout           = { nullptr,
-			                              0 };  // Null because you use bindless / GPU-driven rendering
-		psoDesc.IBStripCutValue       = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+		psoDesc.InputLayout     = { nullptr,
+			                        0 };  // Null because you use bindless / GPU-driven rendering
+		psoDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
 		// Framebuffer Attachment Formats
 		{

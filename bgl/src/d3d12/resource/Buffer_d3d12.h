@@ -1,6 +1,6 @@
 #pragma once
 #include "resource/Buffer.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {
