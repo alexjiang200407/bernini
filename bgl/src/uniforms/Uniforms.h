@@ -9,7 +9,7 @@ namespace slang
 
 namespace bgl
 {
-	class IGraphicsPipeline;
+	class IMeshletPipeline;
 
 	enum class UniformType
 	{
@@ -247,7 +247,7 @@ namespace bgl
 
 	public:
 		Uniforms() = default;
-		Uniforms(IGraphicsPipeline const* pipeline);
+		Uniforms(IMeshletPipeline const* pipeline);
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
 

@@ -4,7 +4,7 @@
 #include "cmd/CommandQueue.h"
 #include "cmd/Version.h"
 #include "constants/constants.h"
-#include "pipeline/GraphicsPipeline_d3d12.h"
+#include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "util_d3d12.h"
 #include <core/math.h>
@@ -128,7 +128,7 @@ namespace bgl
 		gassert(m_Open, "Command list must be open before closing");
 
 		m_CommandList->Close() >> d3d12ErrChecker;
-		m_CurrentGraphicsState.reset();
+		m_CurrentMeshletState.reset();
 		m_Open = false;
 	}
 
@@ -216,22 +216,25 @@ namespace bgl
 	}
 
 	void
-	CommandList::SetGraphicsState(const GraphicsState& gfxState)
+	CommandList::SetMeshletState(const MeshletState& gfxState)
 	{
-		m_CurrentGraphicsState = gfxState;
+		m_CurrentMeshletState = gfxState;
 	}
 
 	void
-	CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const
+	CommandList::DispatchMesh(
+		uint32_t threadGroupCountX,
+		uint32_t threadGroupCountY,
+		uint32_t threadGroupCountZ) const
 	{
-		gassert(m_CurrentGraphicsState.has_value(), "Graphics state must be set before drawing");
+		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
 		gassert(
-			m_CurrentGraphicsState->pipeline.IsInitialized(),
+			m_CurrentMeshletState->pipeline.IsInitialized(),
 			"Pipeline state must be set in graphics state");
 
 		// Viewport
 		{
-			const auto& viewports = m_CurrentGraphicsState->viewportState.viewports;
+			const auto& viewports = m_CurrentMeshletState->viewportState.viewports;
 			std::array<D3D12_VIEWPORT, ViewportState::MaxViewports> d3d12Viewports = {};
 
 			for (size_t i = 0; i < viewports.size(); ++i)
@@ -253,7 +256,7 @@ namespace bgl
 
 		// Scissor rect
 		{
-			const auto& scissorRects = m_CurrentGraphicsState->viewportState.scissorRects;
+			const auto& scissorRects = m_CurrentMeshletState->viewportState.scissorRects;
 			std::array<D3D12_RECT, ViewportState::MaxViewports> d3d12Rects = {};
 
 			for (size_t i = 0; i < scissorRects.size(); ++i)
@@ -273,7 +276,7 @@ namespace bgl
 
 		// Render targets
 		{
-			const auto& rtvs = m_CurrentGraphicsState->frameBuffer.colorAttachments;
+			const auto& rtvs = m_CurrentMeshletState->frameBuffer.colorAttachments;
 			std::array<D3D12_CPU_DESCRIPTOR_HANDLE, c_MaxRenderTargets> d3d12RenderTargets = {};
 
 			for (size_t i = 0; i < rtvs.size(); ++i)
@@ -291,12 +294,12 @@ namespace bgl
 
 		// Pipeline state
 		{
-			auto* pipeline = m_CurrentGraphicsState->pipeline->As<GraphicsPipeline>();
-			m_CommandList->IASetPrimitiveTopology(pipeline->GetPrimitiveTopology());
+			auto* pipeline = m_CurrentMeshletState->pipeline->As<MeshletPipeline>();
+
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
 
-			auto rootConstantsData = m_CurrentGraphicsState->uniforms->Data();
+			auto rootConstantsData = m_CurrentMeshletState->uniforms->Data();
 
 			if (pipeline->GetUniformSize() != 0)
 			{
@@ -313,7 +316,18 @@ namespace bgl
 			}
 		}
 
-		m_CommandList->DrawInstanced(vertexCount, instanceCount, 0, 0);
+		wrl::ComPtr<ID3D12GraphicsCommandList6> cmdList6;
+		if (SUCCEEDED(m_CommandList->QueryInterface(IID_PPV_ARGS(&cmdList6))))
+		{
+			cmdList6->DispatchMesh(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+		}
+		else
+		{
+			gassert(
+				false,
+				"Device/Driver does not support Mesh Shading (DirectX 12 Agility SDK / Feature "
+				"Level 12_2 required)");
+		}
 	}
 
 	void

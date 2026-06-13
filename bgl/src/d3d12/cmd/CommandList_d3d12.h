@@ -4,7 +4,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "resource/UploadManager.h"
-#include "types/GraphicsState.h"
+#include "types/MeshletState.h"
 #include "types/QueueType.h"
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -40,10 +40,13 @@ namespace bgl
 		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) override;
 
 		void
-		SetGraphicsState(const GraphicsState& gfxState) override;
+		SetMeshletState(const MeshletState& gfxState) override;
 
 		void
-		DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const override;
+		DispatchMesh(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) const override;
 
 		ID3D12CommandList*
 		GetD3D12CommandList() const
@@ -75,7 +78,7 @@ namespace bgl
 		UploadManager               m_UploadManager;
 
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
-		std::optional<GraphicsState>            m_CurrentGraphicsState;
+		std::optional<MeshletState>             m_CurrentMeshletState;
 		uint64_t                                m_LastCompletedFence = 0;
 		uint64_t                                m_RecordingVersion   = 0;
 		bool                                    m_Open               = false;

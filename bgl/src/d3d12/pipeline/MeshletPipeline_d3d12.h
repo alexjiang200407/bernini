@@ -1,18 +1,18 @@
 #pragma once
-#include "pipeline/GraphicsPipeline.h"
+#include "pipeline/MeshletPipeline.h"
 #include "uniforms/Uniforms.h"
 
 namespace bgl
 {
-	class GraphicsPipeline : public core::RefCounter<IGraphicsPipeline>
+	class MeshletPipeline : public core::RefCounter<IMeshletPipeline>
 	{
 	public:
-		GraphicsPipeline(
-			ID3D12Device*               device,
-			slang::ISession*            session,
-			const GraphicsPipelineDesc& desc);
+		MeshletPipeline(
+			ID3D12Device*              device,
+			slang::ISession*           session,
+			const MeshletPipelineDesc& desc);
 
-		~GraphicsPipeline() noexcept;
+		~MeshletPipeline() noexcept;
 
 		[[nodiscard]]
 		ID3D12RootSignature*
@@ -28,14 +28,7 @@ namespace bgl
 			return m_PipelineState.Get();
 		}
 
-		[[nodiscard]]
-		D3D12_PRIMITIVE_TOPOLOGY
-		GetPrimitiveTopology() const
-		{
-			return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		}
-
-		const GraphicsPipelineDesc&
+		const MeshletPipelineDesc&
 		GetDesc() const override
 		{
 			return m_Desc;
@@ -54,7 +47,7 @@ namespace bgl
 		}
 
 	private:
-		GraphicsPipelineDesc                 m_Desc;
+		MeshletPipelineDesc                  m_Desc;
 		wrl::ComPtr<ID3D12PipelineState>     m_PipelineState;
 		wrl::ComPtr<ID3D12RootSignature>     m_RootSignature;
 		Slang::ComPtr<slang::IComponentType> m_LinkedProgram;

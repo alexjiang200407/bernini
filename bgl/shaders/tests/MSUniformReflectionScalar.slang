@@ -15,5 +15,11 @@ public struct AllScalarUniforms
     public float4x4 mat;
 };
 
+[[vk::push_constant]]
+AllScalarUniforms gUniforms;
+
+[shader("mesh")]
+[numthreads(1, 1, 1)]
+[outputtopology("triangle")]
 void main()
 {}

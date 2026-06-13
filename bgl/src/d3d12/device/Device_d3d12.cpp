@@ -6,8 +6,8 @@
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
-#include "pipeline/GraphicsPipeline.h"
-#include "pipeline/GraphicsPipeline_d3d12.h"
+#include "pipeline/MeshletPipeline.h"
+#include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "resource/Shader.h"
@@ -30,7 +30,7 @@ namespace bgl
 		targetDesc.format  = SLANG_DXIL;
 		targetDesc.profile = globalSession->findProfile("sm_6_6");
 
-		const char* searchPaths[] = { "./shaders/src" };
+		const char* searchPaths[] = { "./shaders/src", "./shaders/tests" };
 
 		sessionDesc.targetCount     = 1;
 		sessionDesc.targets         = &targetDesc;
@@ -67,10 +67,10 @@ namespace bgl
 		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession);
 	}
 
-	GraphicsPipelineHandle
-	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const
+	MeshletPipelineHandle
+	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const
 	{
-		return core::SharedRef<GraphicsPipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
+		return core::SharedRef<MeshletPipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
 	}
 
 	CommandAllocatorHandle
@@ -93,7 +93,7 @@ namespace bgl
 	}
 
 	Uniforms
-	Device::CreateUniforms(IGraphicsPipeline const* pipeline) const
+	Device::CreateUniforms(IMeshletPipeline const* pipeline) const
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline);

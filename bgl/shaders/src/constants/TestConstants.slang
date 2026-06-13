@@ -7,4 +7,4 @@ public struct PushConstants
 };
 
 [[vk::push_constant]]
-public PushConstants pushConstants;
+public PushConstants gPushConstants;

@@ -35,11 +35,11 @@ namespace bgl
 		core::SharedRef<ICommandQueue>
 		CreateCommandQueue(QueueType type) const override;
 
-		core::SharedRef<IGraphicsPipeline>
-		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const override;
+		core::SharedRef<IMeshletPipeline>
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const override;
 
 		Uniforms
-		CreateUniforms(IGraphicsPipeline const* pipeline) const override;
+		CreateUniforms(IMeshletPipeline const* pipeline) const override;
 
 	private:
 		wrl::ComPtr<ID3D12Device>      m_Device;

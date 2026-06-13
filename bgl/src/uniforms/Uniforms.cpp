@@ -1,5 +1,5 @@
 #include "uniforms/Uniforms.h"
-#include "pipeline/GraphicsPipeline.h"
+#include "pipeline/MeshletPipeline.h"
 #include "slang/ErrorChecker.h"
 #include "uniforms/DescriptorHandle.h"
 #include <slang.h>
@@ -173,12 +173,14 @@ namespace bgl
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	Uniforms::Uniforms(IGraphicsPipeline const* pipeline)
+	Uniforms::Uniforms(IMeshletPipeline const* pipeline)
 	{
 		size_t totalBufferSize = pipeline->GetUniformSize();
 		auto*  structLayout    = pipeline->GetUniformLayout();
 
 		m_Size = totalBufferSize;
+
+		gassert(structLayout != nullptr, "Pipeline must have a valid uniform layout");
 
 		m_Root = BuildNode(structLayout);
 		m_Buffer.resize(totalBufferSize, std::byte{ 0 });

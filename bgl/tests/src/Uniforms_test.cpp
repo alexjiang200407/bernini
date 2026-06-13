@@ -1,5 +1,5 @@
 #include "gfx/GraphicsBase.h"
-#include "pipeline/GraphicsPipeline.h"
+#include "pipeline/MeshletPipeline.h"
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Uniforms", "[uniforms]")
@@ -27,13 +27,13 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 	SECTION("Scalar")
 	{
-		auto pipelineDesc = bgl::GraphicsPipelineDesc();
+		auto pipelineDesc = bgl::MeshletPipelineDesc();
 
-		pipelineDesc.vertexShader = device->CreateShader(
-			"shaders/VSUniformReflectionScalar.dxil",
-			"VSUniformReflectionScalar");
+		pipelineDesc.SetMeshShader(device->CreateShader(
+			"shaders/MSUniformReflectionScalar.dxil",
+			"MSUniformReflectionScalar"));
 
-		auto pipeline = device->CreateGraphicsPipeline(pipelineDesc);
+		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
 		auto uniforms = device->CreateUniforms(pipeline);
 
 		CHECK(uniforms.GetSize() == 208u);

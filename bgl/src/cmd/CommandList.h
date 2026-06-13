@@ -2,7 +2,7 @@
 #include "resource/Buffer.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
-#include "types/GraphicsState.h"
+#include "types/MeshletState.h"
 #include "types/QueueType.h"
 
 #include <core/ref/RefCounter.h>
@@ -51,10 +51,13 @@ namespace bgl
 		Close() = 0;
 
 		virtual void
-		SetGraphicsState(const GraphicsState& gfxState) = 0;
+		SetMeshletState(const MeshletState& gfxState) = 0;
 
 		virtual void
-		DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const = 0;
+		DispatchMesh(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) const = 0;
 
 		[[nodiscard]] virtual bool
 		IsOpen() const = 0;

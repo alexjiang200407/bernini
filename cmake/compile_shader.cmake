@@ -41,6 +41,12 @@ function(compile_shader)
         set(PROFILE "vs_6_6")
     elseif(${SHADER_FILENAME} MATCHES "^PS.*\\.slang$")
         set(PROFILE "ps_6_6")
+    elseif(${SHADER_FILENAME} MATCHES "^GS.*\\.slang$")
+        set(PROFILE "gs_6_6")
+    elseif(${SHADER_FILENAME} MATCHES "^MS.*\\.slang$")
+        set(PROFILE "ms_6_6")
+    elseif(${SHADER_FILENAME} MATCHES "^AS.*\\.slang$")
+        set(PROFILE "as_6_6")
     else()
         set(PROFILE "sm_6_6")
     endif()
@@ -49,7 +55,13 @@ function(compile_shader)
     add_custom_command(
         OUTPUT "${OUT_FILE}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUT_DIR}"
-        COMMAND ${SLANG_EXECUTABLE} -profile ${PROFILE} -target ${SHADER_TARGET} ${SLANG_INCLUDE_ARGS} -depfile "${DEP_FILE}" -o "${OUT_FILE}" "${SHADER_FILE}"
+        COMMAND ${SLANG_EXECUTABLE}
+            -profile ${PROFILE}
+            -target ${SHADER_TARGET} ${SLANG_INCLUDE_ARGS}
+            -entry main
+            -line-directive-mode none
+            -depfile "${DEP_FILE}"
+            -o "${OUT_FILE}" "${SHADER_FILE}"
         DEPENDS "${SHADER_FILE}"
         DEPFILE "${DEP_FILE}"
         COMMENT "Compiling Slang shader ${SHADER_FILENAME} -> ${SHADER_TARGET} [${PROFILE}]"

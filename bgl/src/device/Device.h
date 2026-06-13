@@ -9,12 +9,12 @@ namespace bgl
 {
 	class IResourceManager;
 	class IShader;
-	class IGraphicsPipeline;
+	class IMeshletPipeline;
 	class ICommandList;
 	class ICommandAllocator;
 	class ICommandQueue;
 	struct ShaderDesc;
-	struct GraphicsPipelineDesc;
+	struct MeshletPipelineDesc;
 	struct CommandListDesc;
 
 	class IDevice : public core::Ref
@@ -28,8 +28,8 @@ namespace bgl
 		CreateShader(std::string path, std::string moduleName) const;
 
 		[[nodiscard]]
-		virtual core::SharedRef<IGraphicsPipeline>
-		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const = 0;
+		virtual core::SharedRef<IMeshletPipeline>
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const = 0;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
@@ -55,7 +55,7 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual Uniforms
-		CreateUniforms(IGraphicsPipeline const* pipeline) const = 0;
+		CreateUniforms(IMeshletPipeline const* pipeline) const = 0;
 	};
 
 	using DeviceHandle = core::SharedRef<IDevice>;

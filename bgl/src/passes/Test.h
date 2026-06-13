@@ -3,7 +3,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "device/Device.h"
-#include "pipeline/GraphicsPipeline.h"
+#include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
@@ -83,9 +83,9 @@ namespace bgl
 
 			cmdQueue->ExecuteCommandList(m_CommandList);
 
-			auto pipelineDesc         = GraphicsPipelineDesc();
-			pipelineDesc.vertexShader = device->CreateShader("./shaders/VSTest.dxil", "VSTest");
-			pipelineDesc.pixelShader  = device->CreateShader("./shaders/PSTest.dxil", "PSTest");
+			auto pipelineDesc        = MeshletPipelineDesc();
+			pipelineDesc.meshShader  = device->CreateShader("./shaders/MSTest.dxil", "MSTest");
+			pipelineDesc.pixelShader = device->CreateShader("./shaders/PSTest.dxil", "PSTest");
 
 			pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
 			pipelineDesc.renderState = RenderState{}
@@ -100,7 +100,7 @@ namespace bgl
 												   .SetDepthFunc(ComparisonFunc::Less)
 												   .SetStencilEnable(false));
 
-			m_Pipeline = device->CreateGraphicsPipeline(pipelineDesc);
+			m_Pipeline = device->CreateMeshletPipeline(pipelineDesc);
 			m_Uniforms = device->CreateUniforms(m_Pipeline.Get());
 		}
 
@@ -121,13 +121,13 @@ namespace bgl
 			m_Uniforms["vertexBuffer"] = DescriptorHandle(m_VertexBuffer.idx);
 			m_Uniforms["color"]        = glm::vec3(1.0, 0.0, 0.0);
 
-			auto gfxState     = GraphicsState();
+			auto gfxState     = MeshletState();
 			gfxState.pipeline = m_Pipeline;
 			gfxState.viewportState.AddViewportAndScissorRect(vp);
 			gfxState.frameBuffer = frameBuffer;
 			gfxState.uniforms    = &m_Uniforms;
 
-			m_CommandList->SetGraphicsState(gfxState);
+			m_CommandList->SetMeshletState(gfxState);
 
 			{
 				auto barrierDesc = TextureBarrierDesc();
@@ -141,7 +141,7 @@ namespace bgl
 				m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
 			}
 
-			m_CommandList->DrawInstanced(3, 1);
+			m_CommandList->DispatchMesh(3, 1, 1);
 
 			{
 				auto barrierDesc = TextureBarrierDesc();
@@ -161,9 +161,9 @@ namespace bgl
 		}
 
 	private:
-		BufferHandle           m_VertexBuffer;
-		CommandListHandle      m_CommandList;
-		GraphicsPipelineHandle m_Pipeline;
-		Uniforms               m_Uniforms;
+		BufferHandle          m_VertexBuffer;
+		CommandListHandle     m_CommandList;
+		MeshletPipelineHandle m_Pipeline;
+		Uniforms              m_Uniforms;
 	};
 }

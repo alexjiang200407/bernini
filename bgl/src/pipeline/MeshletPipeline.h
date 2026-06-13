@@ -11,27 +11,47 @@
 
 namespace bgl
 {
-	class Uniforms;
-
-	struct GraphicsPipelineDesc
+	struct MeshletPipelineDesc
 	{
-		ShaderHandle                                    vertexShader;
+		ShaderHandle                                    ampShader   = nullptr;
+		ShaderHandle                                    meshShader  = nullptr;
 		ShaderHandle                                    pixelShader = nullptr;
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;
 
-		GraphicsPipelineDesc&
+		MeshletPipelineDesc&
+		SetAmplificationShader(ShaderHandle shader)
+		{
+			ampShader = std::move(shader);
+			return *this;
+		}
+
+		MeshletPipelineDesc&
+		SetMeshShader(ShaderHandle shader)
+		{
+			meshShader = std::move(shader);
+			return *this;
+		}
+
+		MeshletPipelineDesc&
+		SetPixelShader(ShaderHandle shader)
+		{
+			pixelShader = std::move(shader);
+			return *this;
+		}
+
+		MeshletPipelineDesc&
 		AddRtvFormat(const Rtv& rtv);
 
-		GraphicsPipelineDesc&
+		MeshletPipelineDesc&
 		AddRtvFormat(const Format& fmt)
 		{
 			rtvFormats.push_back(fmt);
 			return *this;
 		}
 
-		GraphicsPipelineDesc&
+		MeshletPipelineDesc&
 		SetDsvFormat(const Format& fmt)
 		{
 			dsvFormat = fmt;
@@ -39,10 +59,10 @@ namespace bgl
 		}
 	};
 
-	class IGraphicsPipeline : public core::Ref
+	class IMeshletPipeline : public core::Ref
 	{
 	public:
-		virtual const GraphicsPipelineDesc&
+		virtual const MeshletPipelineDesc&
 		GetDesc() const = 0;
 
 		virtual slang::TypeLayoutReflection*
@@ -52,5 +72,5 @@ namespace bgl
 		GetUniformSize() const = 0;
 	};
 
-	using GraphicsPipelineHandle = core::SharedRef<IGraphicsPipeline>;
+	using MeshletPipelineHandle = core::SharedRef<IMeshletPipeline>;
 }
