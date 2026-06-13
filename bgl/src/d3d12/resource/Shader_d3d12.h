@@ -8,6 +8,15 @@ namespace bgl
 	public:
 		Shader(ShaderDesc desc, slang::ISession* session);
 
+		Shader(const Shader&)     = delete;
+		Shader(Shader&&) noexcept = delete;
+
+		Shader&
+		operator=(const Shader&) = delete;
+
+		Shader&
+		operator=(Shader&&) noexcept = delete;
+
 		const std::byte*
 		GetBytecode() const override
 		{

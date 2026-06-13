@@ -104,6 +104,15 @@ namespace bgl
 				m_ElementNode(std::move(elementNode)), m_Count(count), m_Stride(stride)
 			{}
 
+			UniformArrayNode(const UniformArrayNode&) noexcept = delete;
+			UniformArrayNode(UniformArrayNode&&) noexcept      = delete;
+
+			UniformArrayNode&
+			operator=(const UniformArrayNode&) noexcept = delete;
+
+			UniformArrayNode&
+			operator=(UniformArrayNode&&) noexcept = delete;
+
 			TraversalResult
 			Traverse(size_t, const std::string&) override
 			{
@@ -204,7 +213,7 @@ namespace bgl
 
 		if (kind == slang::TypeReflection::Kind::Vector)
 		{
-			componentCount = type->getElementCount();
+			componentCount = static_cast<uint32_t>(type->getElementCount());
 			scalarType     = type->getElementType();
 		}
 
@@ -263,8 +272,11 @@ namespace bgl
 		}
 
 		gfatal("Unsupported scalar/vector type in push constants");
-		return UniformValueType::kNone;
 	}
+
+#define HANDLE_UNSUPPORTED_TYPE_KIND(kind) \
+	case kind:                             \
+		gfatal("Unsupported type kind in push constants: " #kind)
 
 	std::unique_ptr<detail::UniformsNode>
 	Uniforms::BuildNode(slang::TypeLayoutReflection* typeLayout)
@@ -307,10 +319,25 @@ namespace bgl
 			return std::make_unique<detail::UniformValueNode>(
 				ResolveScalarType(typeLayout->getType()));
 		}
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ConstantBuffer);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::DynamicResource);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Enum);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Feedback);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::GenericTypeParameter);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Interface);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::MeshOutput);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::None);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::OutputStream);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ParameterBlock);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Pointer);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Resource);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::SamplerState);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ShaderStorageBuffer);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Specialized);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::TextureBuffer);
 
 		default:
 			gfatal("Unsupported type kind in push constants");
-			return nullptr;
 		}
 	}
 }

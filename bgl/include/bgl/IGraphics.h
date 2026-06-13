@@ -1,4 +1,5 @@
 #pragma once
+#include <bgl/IScene.h>
 #include <bgl/util.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -19,8 +20,23 @@ namespace bgl
 	class BGL_API IGraphics : public core::Ref
 	{
 	public:
+		IGraphics(IGraphics&&) noexcept      = delete;
+		IGraphics(const IGraphics&) noexcept = delete;
+
+		IGraphics&
+		operator=(IGraphics&&) noexcept = delete;
+
+		IGraphics&
+		operator=(const IGraphics&) noexcept = delete;
+
 		virtual void
-		DrawFrame() = 0;
+		DrawFrame(IScene* scene) = 0;
+
+		virtual SceneHandle
+		CreateScene(SceneDesc desc) = 0;
+
+	protected:
+		IGraphics() noexcept = default;
 	};
 
 	using GraphicsHandle = core::SharedRef<IGraphics>;

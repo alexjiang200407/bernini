@@ -5,6 +5,7 @@
 // clang-format off
 #pragma warning(push)
 #pragma warning(disable: 4324) // structure was padded due to alignment specifier
+#pragma warning(disable: 5029) // Allow __declspec(align) on non-class types
         struct PSO_STREAM
         {
             typedef __declspec(align(sizeof(void*))) D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ALIGNED_TYPE;
@@ -21,7 +22,7 @@
             ALIGNED_TYPE SampleMask_Type;           UINT SampleMask;
             ALIGNED_TYPE RenderTargets_Type;        D3D12_RT_FORMAT_ARRAY RenderTargets;
             ALIGNED_TYPE DSVFormat_Type;            DXGI_FORMAT DSVFormat;
-        } psoDesc = { };
+        };
 #pragma warning(pop)
 // clang-format on
 
@@ -57,7 +58,7 @@ namespace bgl
 		{
 			session->createCompositeComponentType(
 				slangModules.data(),
-				slangModules.size(),
+				static_cast<SlangInt>(slangModules.size()),
 				program.writeRef(),
 				errChecker.WriteDiagnosticBlob()) >>
 				errChecker;
@@ -129,18 +130,14 @@ namespace bgl
 			IID_PPV_ARGS(&m_RootSignature)) >>
 			d3d12ErrChecker;
 
-		// --- POPULATING THE CUSTOM PSO_STREAM ---
 		PSO_STREAM psoDesc = {};
 
-		// 1. Root Signature
 		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
 		psoDesc.RootSignature      = m_RootSignature.Get();
 
-		// 2. Topology
 		psoDesc.PrimitiveTopology_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY;
 		psoDesc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-		// 3. Shaders (Amplification, Mesh, and Pixel)
 		psoDesc.AmplificationShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
 		if (desc.ampShader)
 		{
@@ -160,7 +157,6 @@ namespace bgl
 				                                         desc.pixelShader->GetBytecodeSize() };
 		}
 
-		// 4. Fixed Function States
 		psoDesc.RasterizerState_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER;
 		psoDesc.RasterizerState      = ConvertRasterState(desc.renderState.rasterState);
 
@@ -170,7 +166,6 @@ namespace bgl
 		psoDesc.BlendState_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND;
 		psoDesc.BlendState      = ConvertBlendState(desc.renderState.blendState);
 
-		// 5. MSAA Configurations
 		psoDesc.SampleDesc_Type    = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC;
 		psoDesc.SampleDesc.Count   = 1;
 		psoDesc.SampleDesc.Quality = 0;
@@ -178,7 +173,6 @@ namespace bgl
 		psoDesc.SampleMask_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK;
 		psoDesc.SampleMask      = UINT_MAX;
 
-		// 6. Output Target Formats
 		psoDesc.RenderTargets_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS;
 		psoDesc.RenderTargets.NumRenderTargets = static_cast<UINT>(desc.rtvFormats.size());
 		for (size_t i = 0; i < 8; ++i)
@@ -196,7 +190,6 @@ namespace bgl
 		psoDesc.DSVFormat_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT;
 		psoDesc.DSVFormat      = ConvertFormat(desc.dsvFormat);
 
-		// --- COMPILE PIPELINE ---
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
 		streamDesc.SizeInBytes                   = sizeof(PSO_STREAM);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;

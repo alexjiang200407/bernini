@@ -12,6 +12,16 @@ namespace bgl
 	class IResourceManager : public core::Ref
 	{
 	public:
+		IResourceManager()                                 = default;
+		IResourceManager(const IResourceManager&) noexcept = delete;
+		IResourceManager(IResourceManager&&) noexcept      = delete;
+
+		IResourceManager&
+		operator=(const IResourceManager&) noexcept = delete;
+
+		IResourceManager&
+		operator=(IResourceManager&&) noexcept = delete;
+
 		virtual BufferHandle
 		CreateStructBuffer(const BufferDesc& desc) = 0;
 

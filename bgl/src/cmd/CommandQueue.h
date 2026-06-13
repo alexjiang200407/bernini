@@ -10,6 +10,16 @@ namespace bgl
 	class ICommandQueue : public core::Ref
 	{
 	public:
+		ICommandQueue() noexcept                     = default;
+		ICommandQueue(const ICommandQueue&) noexcept = delete;
+		ICommandQueue(ICommandQueue&&) noexcept      = delete;
+
+		ICommandQueue&
+		operator=(const ICommandQueue&) noexcept = delete;
+
+		ICommandQueue&
+		operator=(ICommandQueue&&) noexcept = delete;
+
 		virtual uint64_t
 		ExecuteCommandList(ICommandList* commandList) = 0;
 

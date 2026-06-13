@@ -164,6 +164,8 @@ namespace bgl
 			rtvDesc.Texture3D.FirstWSlice = desc.firstWSlice;
 			rtvDesc.Texture3D.WSize       = desc.wSize;
 			break;
+		case D3D12_RTV_DIMENSION_UNKNOWN:
+		case D3D12_RTV_DIMENSION_BUFFER:
 		default:
 			gfatal("Unsupported RTV dimension");
 		}
@@ -231,10 +233,7 @@ namespace bgl
 	void
 	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue)
 	{
-		for (int i = static_cast<int>(m_PendingDeletions.size()) - 1; i >= 0; --i)
-		{
-			const auto& pending = m_PendingDeletions[i];
-
+		std::erase_if(m_PendingDeletions, [&](const auto& pending) {
 			if (pending.fenceValue <= completedFenceValue)
 			{
 				switch (pending.type)
@@ -246,11 +245,10 @@ namespace bgl
 					m_Rtvs.release_slot(pending.slotIndex);
 					break;
 				}
-
-				m_PendingDeletions[i] = m_PendingDeletions.back();
-				m_PendingDeletions.pop_back();
+				return true;
 			}
-		}
+			return false;
+		});
 	}
 
 	bool

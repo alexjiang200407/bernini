@@ -30,6 +30,15 @@ namespace bgl
 			uint32_t                  maxDescriptors,
 			uint32_t                  maxRtvs);
 
+		ResourceManager(const ResourceManager&)     = delete;
+		ResourceManager(ResourceManager&&) noexcept = delete;
+
+		ResourceManager&
+		operator=(const ResourceManager&) = delete;
+
+		ResourceManager&
+		operator=(ResourceManager&&) noexcept = delete;
+
 		/**
 		 * Automatically creates SRV/UAV for the buffer.
 		 */

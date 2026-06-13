@@ -1,20 +1,29 @@
 #pragma once
 #include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
+#include <bgl/IScene.h>
 
 namespace bgl
 {
-	class IResourceManager;
-
-	struct SceneDesc
+	class Scene : public core::RefCounter<IScene>
 	{
-		uint32_t maxInstances = 0;
-		uint32_t maxMeshlets  = 0;
-		uint32_t maxVertices  = 0;
-		uint32_t maxIndices   = 0;
-	};
+	public:
+		Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager);
+		Scene(const Scene&) noexcept = delete;
+		Scene(Scene&&) noexcept      = delete;
 
-	class Scene
-	{
+		Scene&
+		operator=(const Scene&) noexcept = delete;
+
+		Scene&
+		operator=(Scene&&) noexcept = delete;
+
+		const SceneDesc&
+		GetDesc() const override
+		{
+			return m_Desc;
+		}
+
 	private:
 		SceneDesc                         m_Desc;
 		BufferHandle                      m_Instances;

@@ -21,6 +21,15 @@ namespace bgl
 			ICommandAllocator*     commandAllocator,
 			ResourceManagerHandle  resourceManager);
 
+		CommandList(const CommandList&) noexcept = delete;
+		CommandList(CommandList&&) noexcept      = delete;
+
+		CommandList&
+		operator=(const CommandList&) noexcept = delete;
+
+		CommandList&
+		operator=(CommandList&&) noexcept = delete;
+
 		void
 		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) override;
 

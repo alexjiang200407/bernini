@@ -11,6 +11,8 @@ namespace core
 	class RefCounter : public T
 	{
 	public:
+		RefCounter() = default;
+
 		unsigned long
 		AddRef()
 		{

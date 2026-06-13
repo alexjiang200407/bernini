@@ -5,4 +5,5 @@
 
 class BGL_API core::Ref;
 
-#include <bgl/Graphics.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IScene.h>

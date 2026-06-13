@@ -108,16 +108,16 @@ namespace core::win
 		Accept(class IWindowEventVisitor& visitor, float dt);
 
 	protected:
+		int                                        m_width;
+		int                                        m_height;
+		WindowOptions::Mode                        m_windowMode;
+		float                                      m_processDeltaTimeSeconds = 0.005f;
 		std::vector<std::unique_ptr<IWindowEvent>> m_queue;
 		MouseState                                 m_mouseState{};
 		std::unordered_set<unsigned int>           m_keysHeld;
-		WindowOptions::Mode                        m_windowMode;
-		int                                        m_width;
-		int                                        m_height;
 		std::chrono::steady_clock::time_point      m_lastTime;
 
 		// Since we don't want to process events each time we poll,
 		// we check that this amount of time has passed before
-		float m_processDeltaTimeSeconds = 0.005f;
 	};
 }

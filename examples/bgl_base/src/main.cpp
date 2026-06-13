@@ -50,10 +50,16 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto visitor = EventVisitor{};
 
+		auto scene = graphics->CreateScene(
+			bgl::SceneDesc{ .maxInstances = 1,
+		                    .maxMeshlets  = 1,
+		                    .maxVertices  = 3,
+		                    .maxIndices   = 3 });
+
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))
 		{
-			graphics->DrawFrame();
+			graphics->DrawFrame(scene);
 		}
 	}
 	catch (const std::runtime_error& e)

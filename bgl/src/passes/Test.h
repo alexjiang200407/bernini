@@ -24,6 +24,15 @@ namespace bgl
 			Init(device, cmdQueue, cmdAllocator, resourceManager);
 		}
 
+		TestPass(const TestPass&) noexcept = delete;
+		TestPass(TestPass&&) noexcept      = delete;
+
+		TestPass&
+		operator=(const TestPass&) noexcept = delete;
+
+		TestPass&
+		operator=(TestPass&&) noexcept = delete;
+
 		void
 		Release(ResourceManagerHandle resourceManager)
 		{

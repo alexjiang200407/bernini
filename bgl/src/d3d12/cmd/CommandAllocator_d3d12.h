@@ -7,6 +7,15 @@ namespace bgl
 	class CommandAllocator : public core::RefCounter<ICommandAllocator>
 	{
 	public:
+		CommandAllocator(const CommandAllocator&) noexcept = delete;
+		CommandAllocator(CommandAllocator&&) noexcept      = delete;
+
+		CommandAllocator&
+		operator=(const CommandAllocator&) noexcept = delete;
+
+		CommandAllocator&
+		operator=(CommandAllocator&&) noexcept = delete;
+
 		CommandAllocator(wrl::ComPtr<ID3D12CommandAllocator> commandAllocator) :
 			m_CommandAllocator(std::move(commandAllocator))
 		{

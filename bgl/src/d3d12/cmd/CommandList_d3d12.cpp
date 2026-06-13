@@ -17,7 +17,7 @@ namespace bgl
 		ResourceManagerHandle  resourceManager) :
 		m_Desc(desc), m_ResourceManager(std::move(resourceManager)),
 		m_UploadManager(
-			std::move(m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy()),
+			m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy(),
 			desc.uploadChunkSize,
 			0,
 			false)
@@ -165,7 +165,6 @@ namespace bgl
 	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier)
 	{
 		auto& texture = m_ResourceManager->GetTexture(handle);
-		auto& desc    = texture.GetDesc();
 
 		D3D12_TEXTURE_BARRIER textureBarrier = {};
 

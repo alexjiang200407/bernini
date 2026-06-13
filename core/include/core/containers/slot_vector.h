@@ -127,6 +127,18 @@ namespace core
 		{
 			std::optional<T> value;
 			uint32_t         generation = 0;
+
+			slot_entry() = default;
+
+			slot_entry(slot_entry&&) noexcept = default;
+
+			slot_entry&
+			operator=(slot_entry&&) noexcept = default;
+
+			slot_entry(const slot_entry&) = delete;
+
+			slot_entry&
+			operator=(const slot_entry&) = delete;
 		};
 
 		static constexpr uint32_t invalid_index = 0xFFFFFFFFu;

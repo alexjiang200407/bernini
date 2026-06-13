@@ -20,6 +20,16 @@ namespace bgl
 	class IDevice : public core::Ref
 	{
 	public:
+		IDevice()                        = default;
+		IDevice(const IDevice&) noexcept = delete;
+		IDevice(IDevice&&) noexcept      = delete;
+
+		IDevice&
+		operator=(const IDevice&) noexcept = delete;
+
+		IDevice&
+		operator=(IDevice&&) noexcept = delete;
+
 		[[nodiscard]]
 		virtual core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const = 0;

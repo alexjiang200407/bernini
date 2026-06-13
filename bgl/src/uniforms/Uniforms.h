@@ -2,11 +2,6 @@
 #include "resource/Shader.h"
 #include "uniforms/DescriptorHandle.h"
 
-namespace slang
-{
-	class ISession;
-}
-
 namespace bgl
 {
 	class IMeshletPipeline;
@@ -82,6 +77,7 @@ namespace bgl
 				return sizeof(bool);
 			case UniformValueType::kMat4x4:
 				return sizeof(float) * 16;
+			case UniformValueType::kNone:
 			default:
 				return 0;
 			}

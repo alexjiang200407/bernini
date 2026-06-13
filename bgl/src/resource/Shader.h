@@ -12,23 +12,23 @@ namespace bgl
 		std::string            debugName;
 
 		ShaderDesc&
-		SetBytecode(std::vector<std::byte> bytecode)
+		SetBytecode(std::vector<std::byte> _bytecode)
 		{
-			this->bytecode = std::move(bytecode);
+			this->bytecode = std::move(_bytecode);
 			return *this;
 		}
 
 		ShaderDesc&
-		SetSlangModuleName(std::string slangModuleName)
+		SetSlangModuleName(std::string _slangModuleName)
 		{
-			this->slangModuleName = std::move(slangModuleName);
+			this->slangModuleName = std::move(_slangModuleName);
 			return *this;
 		}
 
 		ShaderDesc&
-		SetDebugName(std::string debugName)
+		SetDebugName(std::string _debugName)
 		{
-			this->debugName = std::move(debugName);
+			this->debugName = std::move(_debugName);
 			return *this;
 		}
 	};
@@ -36,6 +36,17 @@ namespace bgl
 	class IShader : public core::Ref
 	{
 	public:
+		IShader() noexcept = default;
+
+		IShader(const IShader&) = delete;
+		IShader(IShader&&)      = delete;
+
+		IShader&
+		operator=(const IShader&) = delete;
+
+		IShader&
+		operator=(IShader&&) = delete;
+
 		virtual const std::byte*
 		GetBytecode() const = 0;
 

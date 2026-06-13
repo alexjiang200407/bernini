@@ -1,21 +1,23 @@
 #pragma once
 #include "device/Device.h"
-#include <slang-com-ptr.h>
-
-namespace slang
-{
-	class ISession;
-	class IGlobalSession;
-}
 
 namespace bgl
 {
-	class ShaderDesc;
+	struct ShaderDesc;
 
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
 		Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession);
+
+		Device(const Device&) noexcept = delete;
+		Device(Device&&) noexcept      = delete;
+
+		Device&
+		operator=(const Device&) noexcept = delete;
+
+		Device&
+		operator=(Device&&) noexcept = delete;
 
 		core::SharedRef<ICommandList>
 		CreateCommandList(

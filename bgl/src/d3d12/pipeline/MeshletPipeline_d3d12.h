@@ -14,6 +14,15 @@ namespace bgl
 
 		~MeshletPipeline() noexcept;
 
+		MeshletPipeline(const MeshletPipeline&) = delete;
+		MeshletPipeline(MeshletPipeline&&)      = delete;
+
+		MeshletPipeline&
+		operator=(const MeshletPipeline&) = delete;
+
+		MeshletPipeline&
+		operator=(MeshletPipeline&&) = delete;
+
 		[[nodiscard]]
 		ID3D12RootSignature*
 		GetRootSignature() const

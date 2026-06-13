@@ -62,6 +62,16 @@ namespace bgl
 	class IMeshletPipeline : public core::Ref
 	{
 	public:
+		IMeshletPipeline() noexcept                        = default;
+		IMeshletPipeline(const IMeshletPipeline&) noexcept = delete;
+		IMeshletPipeline(IMeshletPipeline&&) noexcept      = delete;
+
+		IMeshletPipeline&
+		operator=(const IMeshletPipeline&) noexcept = delete;
+
+		IMeshletPipeline&
+		operator=(IMeshletPipeline&&) noexcept = delete;
+
 		virtual const MeshletPipelineDesc&
 		GetDesc() const = 0;
 

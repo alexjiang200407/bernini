@@ -7,12 +7,15 @@
 #include "gfx/GraphicsBase.h"
 #include "passes/Test.h"
 #include "resource/ResourceManager_d3d12.h"
+#include "scene/Scene.h"
 #include <core/file/file.h>
 
 namespace fs = std::filesystem;
 
 namespace bgl
 {
+	class IScene;
+
 	struct TextureRtvHandle
 	{
 		TextureHandle textureHandle;
@@ -25,8 +28,17 @@ namespace bgl
 		Graphics(const GraphicsOptions&);
 		~Graphics() noexcept;
 
+		Graphics(const Graphics&) noexcept = delete;
+		Graphics(Graphics&&) noexcept      = delete;
+
+		Graphics&
+		operator=(const Graphics&) noexcept = delete;
+
+		Graphics&
+		operator=(Graphics&&) noexcept = delete;
+
 		void
-		DrawFrame() override;
+		DrawFrame(IScene* scene) override;
 
 		const GraphicsOptions&
 		GetOptions() const
@@ -38,6 +50,12 @@ namespace bgl
 		GetDevice() const override
 		{
 			return m_Device.Get();
+		}
+
+		SceneHandle
+		CreateScene(SceneDesc desc) override
+		{
+			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
 		}
 
 	private:
@@ -209,7 +227,7 @@ namespace bgl
 	}
 
 	void
-	Graphics::DrawFrame()
+	Graphics::DrawFrame(IScene* /*scene*/)
 	{
 		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
 		if (fenceToWaitOn != 0)
@@ -222,7 +240,7 @@ namespace bgl
 		auto frameBuffer = FrameBuffer();
 		frameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
 
-		auto vp = Viewport(m_Opts.width, m_Opts.height);
+		auto vp = Viewport(static_cast<float>(m_Opts.width), static_cast<float>(m_Opts.height));
 
 		m_FenceValues[m_FrameIndex] =
 			m_TestPass.Execute(m_CommandQueue, m_CommandAllocator[m_FrameIndex], frameBuffer, vp);

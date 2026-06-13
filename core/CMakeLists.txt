@@ -26,6 +26,8 @@ target_link_libraries(
         spdlog::spdlog_header_only
 )
 
+enable_strict_compiler(Core)
+
 target_precompile_headers(Core
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/Core/pch.h

@@ -5,7 +5,7 @@
 
 int myVariable; // camelCase for variable names
 
-int s_globalVariable; // s_ prefix for static/global variables
+int g_GlobalVariable; // s_ prefix for static/global variables
 
 ```
 

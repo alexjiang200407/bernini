@@ -22,6 +22,16 @@ namespace bgl
 	class ICommandList : public core::Ref
 	{
 	public:
+		ICommandList()                             = default;
+		ICommandList(const ICommandList&) noexcept = delete;
+		ICommandList(ICommandList&&) noexcept      = delete;
+
+		ICommandList&
+		operator=(const ICommandList&) noexcept = delete;
+
+		ICommandList&
+		operator=(ICommandList&&) noexcept = delete;
+
 		/**
 		 * Writes data to a buffer resource.
 		 * The buffer will transition to kCopyDest access and kCopy sync

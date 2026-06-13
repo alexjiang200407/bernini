@@ -77,6 +77,8 @@ add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources)
 
 target_link_libraries(bgl PUBLIC bgl_objects)
 
+enable_strict_compiler(bgl bgl_objects)
+
 target_compile_definitions(bgl PRIVATE
 	BGL_EXPORTS
 )
@@ -99,6 +101,7 @@ if(RENDERER_BACKEND STREQUAL "DX12")
     )
 
 	copy_to_target(bgl ITEMS ${D3D_DLLS})
+	enable_strict_compiler(bgl_d3d12)
 endif()
 
 
@@ -142,4 +145,6 @@ if (BUILD_TESTS)
 	set_target_properties(bgl_tests PROPERTIES
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
+
+	enable_strict_compiler(bgl_tests)
 endif()

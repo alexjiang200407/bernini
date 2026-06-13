@@ -18,7 +18,7 @@ namespace bgl
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
 
 		D3D12_RESOURCE_DESC textureDesc = {};
-		textureDesc.MipLevels           = desc.mipLevels;
+		textureDesc.MipLevels           = static_cast<uint16_t>(desc.mipLevels);
 		textureDesc.Format              = ConvertFormat(desc.format);
 		textureDesc.Width               = desc.width;
 		textureDesc.Height              = desc.height;
@@ -31,12 +31,12 @@ namespace bgl
 		if (desc.dimension == TextureDimension::kTexture3D)
 		{
 			gassert(desc.arraySize == 1, "3D Textures cannot have an array size!");
-			textureDesc.DepthOrArraySize = desc.depth;
+			textureDesc.DepthOrArraySize = static_cast<UINT16>(desc.depth);
 		}
 		else
 		{
 			gassert(desc.depth == 1, "2D/1D Textures cannot have a depth greater than 1!");
-			textureDesc.DepthOrArraySize = desc.arraySize;
+			textureDesc.DepthOrArraySize = static_cast<UINT16>(desc.arraySize);
 		}
 
 		D3D12_CLEAR_VALUE  clearValue;
