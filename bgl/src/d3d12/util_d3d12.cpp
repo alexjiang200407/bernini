@@ -492,6 +492,45 @@ namespace bgl
 				static_cast<int>(dimension));
 		}
 	}
+
+	D3D12_DSV_DIMENSION
+	ConvertDSVDimension(TextureDimension dimension)
+	{
+		switch (dimension)
+		{
+		case TextureDimension::kTexture1D:
+			return D3D12_DSV_DIMENSION_TEXTURE1D;
+
+		case TextureDimension::kTexture1DArray:
+			return D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+
+		case TextureDimension::kTexture2D:
+			return D3D12_DSV_DIMENSION_TEXTURE2D;
+
+		case TextureDimension::kTexture2DArray:
+			return D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+
+		case TextureDimension::kTextureCube:
+			return D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+
+		case TextureDimension::kTextureCubeArray:
+			return D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+
+		case TextureDimension::kTexture2DMS:
+			return D3D12_DSV_DIMENSION_TEXTURE2DMS;
+
+		case TextureDimension::kTexture2DMSArray:
+			return D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+
+		case TextureDimension::kTexture3D:
+		case TextureDimension::kUnknown:
+		default:
+			gfatal(
+				"ConvertDSVDimension Invalid or unsupported depth texture dimension: {}",
+				static_cast<int>(dimension));
+		}
+	}
+
 	D3D12_BARRIER_SYNC
 	ConvertBarrierSync(BarrierSync sync)
 	{
@@ -835,10 +874,10 @@ namespace bgl
 	}
 
 	D3D12_CLEAR_VALUE
-	ConvertClearValue(ClearValue clearValue)
+	ConvertClearValue(Format format, ClearValue clearValue)
 	{
 		auto d3d12ClearValue = D3D12_CLEAR_VALUE();
-		auto formatInfo      = GetFormatInfo(clearValue.format);
+		auto formatInfo      = GetFormatInfo(format);
 
 		if (formatInfo.hasDepth || formatInfo.hasStencil)
 		{
@@ -858,6 +897,8 @@ namespace bgl
 			d3d12ClearValue.Color[2] = color.b;
 			d3d12ClearValue.Color[3] = color.a;
 		}
+
+		d3d12ClearValue.Format = ConvertFormat(format);
 
 		return d3d12ClearValue;
 	}

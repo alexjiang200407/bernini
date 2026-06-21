@@ -17,6 +17,6 @@ namespace bgl
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
 
 		m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		m_CpuHandle.ptr += descriptorIndex * descriptorSize;
+		m_CpuHandle.ptr += static_cast<size_t>(descriptorIndex) * descriptorSize;
 	}
 }

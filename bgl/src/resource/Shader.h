@@ -9,6 +9,7 @@ namespace bgl
 	{
 		std::vector<std::byte> bytecode;
 		std::string            slangModuleName;
+		std::string            entryPointName;
 		std::string            debugName;
 
 		ShaderDesc&
@@ -55,6 +56,9 @@ namespace bgl
 
 		virtual slang::IModule*
 		GetSlangModule() const = 0;
+
+		virtual const ShaderDesc&
+		GetDesc() const = 0;
 	};
 
 	using ShaderHandle = core::SharedRef<IShader>;

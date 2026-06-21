@@ -1,7 +1,3 @@
-file(GLOB SLANG_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.slang"
-)
-
 set(SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/bin/shaders")
 file(MAKE_DIRECTORY "${SHADER_OUT_DIR}")
 
@@ -17,18 +13,53 @@ endif()
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-foreach(SHADER ${SLANG_SOURCES})
-    get_filename_component(SHADER_BARE_NAME "${SHADER}" NAME_WE)
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "as_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "ASMain"
+)
 
-    compile_shader(
-        FILE     "${SHADER}"
-        OUT_DIR  "${SHADER_OUT_DIR}"
-        TARGET   "dxil"
-        INCLUDES ${SLANG_SOURCE_ROOT}
-    )
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
 
-    list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")
-endforeach()
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_PBR.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+message(STATUS "Discovered Compiled Shaders: ${SLANG_COMPILE_OUTS}")
+
 
 if (BUILD_TESTS)
     file(GLOB SLANG_TEST_SOURCES CONFIGURE_DEPENDS

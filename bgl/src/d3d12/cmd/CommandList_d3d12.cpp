@@ -55,12 +55,12 @@ namespace bgl
 		auto& buffer = m_ResourceManager->GetBuffer(handle);
 		auto& desc   = buffer.GetDesc();
 
-		if (desc.cpuAccess == BufferDesc::CpuAccessMode::kUpload)
+		if (desc.cpuAccess == CpuAccessMode::kUpload)
 		{
 			memcpy(static_cast<std::byte*>(buffer.GetMappedPtr()) + offset, data, byteSize);
 			return;
 		}
-		else if (desc.cpuAccess == BufferDesc::CpuAccessMode::kReadBack)
+		else if (desc.cpuAccess == CpuAccessMode::kReadBack)
 		{
 			gfatal("Cannot write to a readback buffer");
 			return;
@@ -84,14 +84,6 @@ namespace bgl
 		gassert(success, "Failed to suballocate buffer");
 
 		memcpy(cpuVA, data, byteSize);
-
-		BufferBarrierDesc barrier = {};
-		barrier.accessBefore      = BarrierAccessFlag::kNone;
-		barrier.syncBefore        = BarrierSyncFlag::kNone;
-		barrier.accessAfter       = BarrierAccessFlag::kCopyDest;
-		barrier.syncAfter         = BarrierSyncFlag::kCopy;
-
-		Barrier(handle, barrier);
 
 		m_CommandList->CopyBufferRegion(
 			buffer.GetD3D12Resource(),
@@ -215,6 +207,16 @@ namespace bgl
 	}
 
 	void
+	CommandList::Barrier(DsvHandle handle, const TextureBarrierDesc& barrier)
+	{
+		auto& rtv           = m_ResourceManager->GetDsv(handle);
+		auto  textureHandle = rtv.GetTextureHandle();
+
+		gassert(m_ResourceManager->ValidDsvHandle(handle), "DSV has invalid texture handle");
+		Barrier(textureHandle, barrier);
+	}
+
+	void
 	CommandList::SetMeshletState(const MeshletState& gfxState)
 	{
 		m_CurrentMeshletState = gfxState;
@@ -284,12 +286,25 @@ namespace bgl
 				d3d12RenderTargets[i] = rtv.GetCpuHandle();
 			}
 
+			D3D12_CPU_DESCRIPTOR_HANDLE  dsvCpuHandle  = {};
+			D3D12_CPU_DESCRIPTOR_HANDLE* pDsvCpuHandle = nullptr;
+
+			auto depthAttachment = m_CurrentMeshletState->frameBuffer.depthAttachment;
+			if (!depthAttachment.IsNull())
+			{
+				auto& dsv     = m_ResourceManager->GetDsv(depthAttachment);
+				dsvCpuHandle  = dsv.GetCpuHandle();
+				pDsvCpuHandle = &dsvCpuHandle;
+			}
+
 			m_CommandList->OMSetRenderTargets(
 				static_cast<UINT>(rtvs.size()),
 				d3d12RenderTargets.data(),
 				FALSE,
-				nullptr);
+				pDsvCpuHandle);
 		}
+
+		// Depth Stencil
 
 		// Pipeline state
 		{

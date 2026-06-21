@@ -12,8 +12,6 @@ namespace bgl
 
 	struct ClearValue
 	{
-		Format format = Format::UNKNOWN;
-
 		std::variant<Color, DepthStencilClearValue> value = Color(0.0f, 0.0f, 0.0f, 1.0f);
 
 		bool

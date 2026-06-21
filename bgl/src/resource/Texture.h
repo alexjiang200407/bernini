@@ -70,25 +70,40 @@ namespace bgl
 		}
 	};
 
+	enum class TextureUsageFlag : uint32_t
+	{
+		kSRV          = 0x00000001,
+		kDepthStencil = 0x00000010,
+		kRenderTarget = 0x00000100,
+	};
+
+	using TextureUsage = core::enum_set<TextureUsageFlag>;
+
 	struct TextureDesc
 	{
-		uint32_t         width         = 1;
-		uint32_t         height        = 1;
-		uint32_t         depth         = 1;
-		uint32_t         arraySize     = 1;
-		uint32_t         mipLevels     = 1;
-		uint32_t         sampleCount   = 1;
-		uint32_t         sampleQuality = 0;
-		Format           format        = Format::UNKNOWN;
-		TextureDimension dimension     = TextureDimension::kTexture2D;
+		uint32_t width         = 1;
+		uint32_t height        = 1;
+		uint32_t depth         = 1;
+		uint32_t arraySize     = 1;
+		uint32_t mipLevels     = 1;
+		uint32_t sampleCount   = 1;
+		uint32_t sampleQuality = 0;
+
+		TextureUsage usage = TextureUsageFlag::kSRV;
+
+		Format           format    = Format::UNKNOWN;
+		TextureDimension dimension = TextureDimension::kTexture2D;
 		ClearValue       clearValue;
 		std::string      debugName;
+
+		BarrierLayout initalLayout = BarrierLayout::kCommon;
 	};
 
 	struct TextureHandle
 	{
-		uint32_t idx        = 0xFFFFFFFF;
-		uint32_t generation = 0;
+		uint32_t     idx        = 0xFFFFFFFF;
+		uint32_t     generation = 0;
+		TextureUsage usage      = TextureUsageFlag::kSRV;
 
 		[[nodiscard]] bool
 		IsNull() const

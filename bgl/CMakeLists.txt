@@ -75,7 +75,7 @@ target_include_directories(bgl
 
 add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources)
 
-target_link_libraries(bgl PUBLIC bgl_objects)
+target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
 enable_strict_compiler(bgl bgl_objects)
 
@@ -129,6 +129,9 @@ if (BUILD_TESTS)
     )
     
     target_link_libraries(bgl_tests PRIVATE bgl_objects Catch2::Catch2 Catch2::Catch2WithMain)
+	target_precompile_headers(bgl_tests
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
+	)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${BGL_TESTS_SOURCE})
 

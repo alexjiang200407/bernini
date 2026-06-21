@@ -1,6 +1,6 @@
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/MeshletPipeline.h"
-#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Uniforms", "[uniforms]")
 {
@@ -45,8 +45,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 			CHECK(uniforms["f1"].GetOffset() == 0u);
 
 			// Is scalar, so no indexing or member access allowed
-			CHECK_THROWS(uniforms["f1"][0]);
-			CHECK_THROWS(uniforms["f1"]["a"s]);
+			CHECK(uniforms["f1"][0].IsNull());
+			CHECK(uniforms["f1"]["a"s].IsNull());
 
 			// Type mismatch
 			// CHECK_THROWS(static_cast<float>(uniforms["f1"]));
@@ -88,8 +88,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 			CHECK(uniforms["f2"].GetValueType() == bgl::UniformValueType::kFloat2);
 			CHECK(uniforms["f2"].GetOffset() == 4u);  // Offset: f1 (0) + 4 bytes
 
-			CHECK_THROWS(uniforms["f2"][0]);
-			CHECK_THROWS(uniforms["f2"]["a"s]);
+			CHECK(uniforms["f2"][0].IsNull());
+			CHECK(uniforms["f2"]["a"s].IsNull());
 
 			CHECK_THROWS(static_cast<float>(uniforms["f2"]));
 			CHECK_THROWS(static_cast<glm::vec3>(uniforms["f2"]));
@@ -108,7 +108,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 			CHECK(uniforms["f3"].GetValueType() == bgl::UniformValueType::kFloat3);
 			CHECK(uniforms["f3"].GetOffset() == 16u);  // Aligns to next 16-byte boundary
 
-			CHECK_THROWS(uniforms["f3"][0]);
+			CHECK(uniforms["f3"][0].IsNull());
 			CHECK_THROWS(static_cast<glm::vec4>(uniforms["f3"]));
 			CHECK_THROWS(uniforms["f3"] = glm::vec4(1.0f));
 
@@ -240,7 +240,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 			CHECK(uniforms["mat"].GetValueType() == bgl::UniformValueType::kMat4x4);
 			CHECK(uniforms["mat"].GetOffset() == 144u);  // Row 10 start
 
-			CHECK_THROWS(uniforms["mat"][0]);
+			CHECK(uniforms["mat"][0].IsNull());
 			CHECK_THROWS(static_cast<glm::vec4>(uniforms["mat"]));
 			CHECK_THROWS(uniforms["mat"] = glm::vec4(1.0f));
 
@@ -267,4 +267,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 			CHECK(uniforms["mat"].operator glm::mat4() == testMatrix);
 		}
 	}
+
+	SECTION("Array") {}
+
+	SECTION("Struct") {}
 }

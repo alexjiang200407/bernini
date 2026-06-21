@@ -9,7 +9,7 @@ namespace bgl
 	{
 	public:
 		Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession);
-
+		~Device() noexcept override { logger::trace("~Device"); }
 		Device(const Device&) noexcept = delete;
 		Device(Device&&) noexcept      = delete;
 
@@ -26,7 +26,7 @@ namespace bgl
 			core::SharedRef<IResourceManager>  resourceManager) const override;
 
 		core::SharedRef<IResourceManager>
-		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const override;
+		CreateResourceManager(const ResourceManagerDesc& desc) const override;
 
 		core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const override;

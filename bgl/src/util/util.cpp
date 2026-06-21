@@ -93,4 +93,25 @@ namespace bgl
 
 		return info;
 	}
+
+	PsoType
+	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material)
+	{
+		switch (geom)
+		{
+		case GeomType::kStaticMesh:
+			switch (material)
+			{
+			case MaterialType::kPBR:
+				return PsoType::kOpaque_StaticMesh_PBR;
+			case MaterialType::kInvalid:
+			case MaterialType::kCount:
+				gfatal("Invalid MaterialType");
+			}
+		case GeomType::kInvalid:
+		case GeomType::kCount:
+		default:
+			gfatal("Invalid GeomType");
+		}
+	}
 }

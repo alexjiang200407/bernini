@@ -10,7 +10,8 @@ namespace bgl
 	{
 		kArray,
 		kStruct,
-		kValue
+		kValue,
+		kNull,
 	};
 
 	enum class UniformValueType
@@ -21,6 +22,7 @@ namespace bgl
 		kInt4,
 		kUInt,
 		kUInt2,
+		kDescriptorHandle = kUInt2,
 		kUInt3,
 		kUInt4,
 		kFloat,
@@ -162,7 +164,20 @@ namespace bgl
 				return AccessorBase(m_Data, offset, node);
 			}
 
+			[[nodiscard]] bool
+			IsNull() const
+			{
+				return m_Node->GetType() == UniformType::kNull;
+			}
+
+			[[nodiscard]] bool
+			IsValid() const
+			{
+				return m_Node != nullptr && m_Node->GetType() != UniformType::kNull;
+			}
+
 			template <typename T>
+			explicit
 			operator T() const
 			{
 				AssertIsValue();
@@ -189,7 +204,6 @@ namespace bgl
 			UniformValueType
 			GetValueType() const
 			{
-				AssertIsValue();
 				return m_Node->GetValueType();
 			}
 
@@ -281,6 +295,14 @@ namespace bgl
 		Data() const
 		{
 			return m_Buffer.data();
+		}
+
+		void
+		Reset()
+		{
+			m_Buffer.clear();
+			m_Root.reset();
+			m_Size = 0;
 		}
 
 	private:

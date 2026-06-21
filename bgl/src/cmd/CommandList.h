@@ -34,7 +34,7 @@ namespace bgl
 
 		/**
 		 * Writes data to a buffer resource.
-		 * The buffer will transition to kCopyDest access and kCopy sync
+		 * The buffer must have correct state
 		 */
 		void
 		WriteBuffer(BufferHandle handle, const void* data, size_t byteSize)
@@ -53,6 +53,9 @@ namespace bgl
 
 		virtual void
 		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) = 0;
+
+		virtual void
+		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) = 0;
 
 		virtual void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) = 0;

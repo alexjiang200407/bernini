@@ -12,7 +12,7 @@ namespace bgl
 			slang::ISession*           session,
 			const MeshletPipelineDesc& desc);
 
-		~MeshletPipeline() noexcept;
+		~MeshletPipeline() noexcept override;
 
 		MeshletPipeline(const MeshletPipeline&) = delete;
 		MeshletPipeline(MeshletPipeline&&)      = delete;

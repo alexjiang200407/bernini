@@ -1,11 +1,12 @@
 #include "cmd/CommandAllocator_d3d12.h"
+#include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
 #include "gfx/GraphicsBase.h"
-#include "passes/Test.h"
+#include "passes/GBuffer.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include <core/file/file.h>
@@ -20,6 +21,12 @@ namespace bgl
 	{
 		TextureHandle textureHandle;
 		RtvHandle     rtvHandle;
+	};
+
+	struct TextureDsvHandle
+	{
+		TextureHandle textureHandle;
+		DsvHandle     dsvHandle;
 	};
 
 	class Graphics : public core::RefCounter<GraphicsBase>
@@ -52,6 +59,12 @@ namespace bgl
 			return m_Device.Get();
 		}
 
+		core::SharedRef<IResourceManager>
+		GetResourceManagerCpy() const override
+		{
+			return m_ResourceManager.Get();
+		}
+
 		SceneHandle
 		CreateScene(SceneDesc desc) override
 		{
@@ -69,25 +82,27 @@ namespace bgl
 		CreateOffscreenRenderTargets();
 
 	private:
-		UINT m_FrameIndex = 0;
+		UINT                                 m_FrameIndex = 0;
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
 
 		GraphicsOptions m_Opts;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
-		CommandAllocatorHandle       m_CommandAllocator[c_BufferCount];
-		CommandQueueHandle           m_CommandQueue;
+
+		DeviceHandle           m_Device;
+		CommandAllocatorHandle m_CommandAllocator[c_BufferCount];
+		CommandQueueHandle     m_CommandQueue;
+		CommandListHandle      m_CommandList;
 
 		TextureRtvHandle m_BackBuffers[c_BufferCount];
+		TextureDsvHandle m_DepthBuffer;
 		UINT64           m_FenceValues[c_BufferCount] = { 0, 0 };
 
 		wrl::ComPtr<ID3D12Debug1>   m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue> m_DxgiInfoQueue;
 
-		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
-
-		DeviceHandle          m_Device;
 		ResourceManagerHandle m_ResourceManager;
-		TestPass              m_TestPass;
+		GBufferPass           m_GBuffer;
 	};
 }
 
@@ -103,8 +118,8 @@ namespace bgl
 
 			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
 
-			log->set_level(logger::level::info);
-			log->flush_on(logger::level::info);
+			log->set_level(static_cast<logger::level::level_enum>(opts.logLevel));
+			log->flush_on(static_cast<logger::level::level_enum>(opts.logLevel));
 
 			spdlog::set_default_logger(std::move(log));
 			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v"s);
@@ -153,8 +168,23 @@ namespace bgl
 			m_CommandAllocator[i] = m_Device->CreateCommandAllocator();
 		}
 
-		m_CommandQueue    = m_Device->CreateGraphicsCommandQueue();
-		m_ResourceManager = m_Device->CreateResourceManager(1000, 1000);
+		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
+
+		{
+			auto resourceManagerDesc          = ResourceManagerDesc();
+			resourceManagerDesc.maxCbvSrvUavs = 1000;
+			resourceManagerDesc.maxDsvs       = 5;
+			resourceManagerDesc.maxRtvs       = 5;
+			resourceManagerDesc.maxTextures   = 1000;
+
+			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
+		}
+
+		CommandListDesc cmdListDesc;
+		cmdListDesc.type = QueueType::kGraphics;
+
+		m_CommandList =
+			m_Device->CreateCommandList(cmdListDesc, m_CommandAllocator[0], m_ResourceManager);
 
 		if (!m_Opts.headless)
 		{
@@ -167,11 +197,13 @@ namespace bgl
 			CreateOffscreenRenderTargets();
 		}
 
-		m_TestPass.Init(m_Device, m_CommandQueue, m_CommandAllocator[0], m_ResourceManager);
+		m_GBuffer.Init(m_Device);
 	}
 
 	Graphics::~Graphics() noexcept
 	{
+		logger::trace("~Graphics");
+
 		auto     cmdQueue           = m_CommandQueue->As<CommandQueue>();
 		uint64_t shutdownFenceValue = m_CommandQueue->GetNextFenceValue();
 		auto     rawQueue           = cmdQueue->GetD3D12CommandQueue();
@@ -186,7 +218,7 @@ namespace bgl
 		if (m_SwapChain)
 			m_SwapChain->SetFullscreenState(FALSE, nullptr) >> d3d12ErrChecker;
 
-		m_TestPass.Release(m_ResourceManager);
+		m_GBuffer.Release();
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -197,6 +229,10 @@ namespace bgl
 				false);
 		}
 
+		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, shutdownFenceValue, false);
+		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, shutdownFenceValue, false);
+
+		m_CommandList.Reset();
 		m_ResourceManager.Reset();
 
 		for (UINT i = 0; i < c_BufferCount; i++)
@@ -227,7 +263,7 @@ namespace bgl
 	}
 
 	void
-	Graphics::DrawFrame(IScene* /*scene*/)
+	Graphics::DrawFrame(IScene* scene)
 	{
 		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
 		if (fenceToWaitOn != 0)
@@ -235,17 +271,89 @@ namespace bgl
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
 		}
 
+		auto scene_ = scene->As<Scene>();
+
 		m_CommandAllocator[m_FrameIndex]->ResetAllocator();
+
+		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
 
 		auto frameBuffer = FrameBuffer();
 		frameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
+		frameBuffer.SetDepthAttachment(m_DepthBuffer.dsvHandle);
+
+		// Clear Framebuffers
+		{
+			m_ResourceManager->ClearDsv(m_CommandList, m_DepthBuffer.dsvHandle, 1.0f, 0);
+
+			{
+				auto barrierDesc = TextureBarrierDesc();
+				barrierDesc.AddAccessBefore(BarrierAccessFlag::kNone)
+					.AddSyncBefore(BarrierSyncFlag::kNone)
+					.SetLayoutBefore(BarrierLayout::kPresent)
+
+					.AddAccessAfter(BarrierAccessFlag::kRenderTarget)
+					.AddSyncAfter(BarrierSyncFlag::kRenderTarget)
+					.SetLayoutAfter(BarrierLayout::kRenderTarget);
+
+				m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
+			}
+
+			{
+				float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+				m_ResourceManager->ClearRtv(
+					m_CommandList,
+					m_BackBuffers[m_FrameIndex].rtvHandle,
+					clearColor);
+			}
+		}
+
+		if (scene_->IsFirstFrame())
+		{
+			scene_->TransitionAll(
+				m_CommandList,
+				EntryBufferState::kNone,
+				EntryBufferState::kUpdate);
+
+			scene_->TransitionAll(
+				m_CommandList,
+				RangeBufferState::kNone,
+				RangeBufferState::kUpdate);
+		}
+
+		scene_->Update(m_CommandList);
+
+		scene_->TransitionAll(m_CommandList, EntryBufferState::kUpdate, EntryBufferState::kShader);
+		scene_->TransitionAll(m_CommandList, RangeBufferState::kUpdate, RangeBufferState::kShader);
 
 		auto vp = Viewport(static_cast<float>(m_Opts.width), static_cast<float>(m_Opts.height));
 
-		m_FenceValues[m_FrameIndex] =
-			m_TestPass.Execute(m_CommandQueue, m_CommandAllocator[m_FrameIndex], frameBuffer, vp);
+		m_GBuffer.Execute(scene_, m_CommandQueue, m_CommandList, frameBuffer, vp);
 
-		m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+		{
+			auto barrierDesc = TextureBarrierDesc();
+			barrierDesc.AddAccessBefore(BarrierAccessFlag::kRenderTarget)
+				.AddSyncBefore(BarrierSyncFlag::kRenderTarget)
+				.SetLayoutBefore(BarrierLayout::kRenderTarget)
+
+				.AddAccessAfter(BarrierAccessFlag::kNone)
+				.AddSyncAfter(BarrierSyncFlag::kNone)
+				.SetLayoutAfter(BarrierLayout::kPresent);
+
+			m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
+		}
+
+		// For next frame
+		scene_->TransitionAll(m_CommandList, EntryBufferState::kShader, EntryBufferState::kUpdate);
+		scene_->TransitionAll(m_CommandList, RangeBufferState::kShader, RangeBufferState::kUpdate);
+
+		m_CommandList->Close();
+
+		m_FenceValues[m_FrameIndex] = m_CommandQueue->ExecuteCommandList(m_CommandList);
+
+		if (!m_Opts.headless)
+		{
+			m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+		}
 
 		uint64_t currentGPUProgress = m_CommandQueue->PollCurrentFenceValue();
 		m_ResourceManager->CleanupExpiredResources(currentGPUProgress);
@@ -286,52 +394,103 @@ namespace bgl
 	void
 	Graphics::CreateRenderTargets()
 	{
-		TextureDesc textureDesc{};
-		textureDesc.format    = Format::BGRA8_UNORM;
-		textureDesc.width     = static_cast<uint32_t>(m_Opts.width);
-		textureDesc.height    = static_cast<uint32_t>(m_Opts.height);
-		textureDesc.dimension = TextureDimension::kTexture2D;
-
-		for (UINT i = 0; i < c_BufferCount; i++)
 		{
-			wrl::ComPtr<ID3D12Resource> backBuffer;
-			m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
+			TextureDesc textureDesc{};
+			textureDesc.format       = Format::BGRA8_UNORM;
+			textureDesc.width        = static_cast<uint32_t>(m_Opts.width);
+			textureDesc.height       = static_cast<uint32_t>(m_Opts.height);
+			textureDesc.dimension    = TextureDimension::kTexture2D;
+			textureDesc.usage        = TextureUsageFlag::kRenderTarget;
+			textureDesc.initalLayout = BarrierLayout::kPresent;
 
-			m_BackBuffers[i].textureHandle =
-				m_ResourceManager->As<ResourceManager>()->CreateTexture(
-					std::move(backBuffer),
-					textureDesc);
+			for (UINT i = 0; i < c_BufferCount; i++)
+			{
+				wrl::ComPtr<ID3D12Resource> backBuffer;
+				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
 
-			RtvDesc rtvDesc;
-			rtvDesc.format    = Format::BGRA8_UNORM;
-			rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
+				m_BackBuffers[i].textureHandle =
+					m_ResourceManager->As<ResourceManager>()->CreateTexture(
+						std::move(backBuffer),
+						textureDesc);
 
-			m_BackBuffers[i].rtvHandle =
-				m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+				RtvDesc rtvDesc;
+				rtvDesc.format    = Format::BGRA8_UNORM;
+				rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
+
+				m_BackBuffers[i].rtvHandle =
+					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+			}
+		}
+
+		{
+			auto depthTextureDesc         = TextureDesc();
+			depthTextureDesc.format       = Format::D24S8;
+			depthTextureDesc.width        = static_cast<uint32_t>(m_Opts.width);
+			depthTextureDesc.height       = static_cast<uint32_t>(m_Opts.height);
+			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName    = "Depth Buffer";
+			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
+			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
+
+			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
+
+			auto dsvDesc      = DsvDesc();
+			dsvDesc.format    = Format::D24S8;
+			dsvDesc.debugName = "Depth Buffer RTV";
+
+			m_DepthBuffer.dsvHandle =
+				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
 		}
 	}
 
 	void
 	Graphics::CreateOffscreenRenderTargets()
 	{
-		for (auto i = 0u; i < c_BufferCount; i++)
 		{
-			auto texDesc      = TextureDesc();
-			texDesc.width     = static_cast<uint32_t>(m_Opts.width);
-			texDesc.height    = static_cast<uint32_t>(m_Opts.height);
-			texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
-			texDesc.dimension = TextureDimension::kTexture2D;
-			texDesc.format    = Format::BGRA8_UNORM;
-			texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+			for (auto i = 0u; i < c_BufferCount; i++)
+			{
+				auto texDesc      = TextureDesc();
+				texDesc.width     = static_cast<uint32_t>(m_Opts.width);
+				texDesc.height    = static_cast<uint32_t>(m_Opts.height);
+				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
+				texDesc.dimension = TextureDimension::kTexture2D;
+				texDesc.format    = Format::BGRA8_UNORM;
+				texDesc.usage     = TextureUsageFlag::kRenderTarget;
+				texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
 
-			m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
+				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
 
-			auto rtvDesc      = RtvDesc();
-			rtvDesc.format    = Format::BGRA8_UNORM;
-			rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
+				auto rtvDesc      = RtvDesc();
+				rtvDesc.format    = Format::BGRA8_UNORM;
+				rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
 
-			m_BackBuffers[i].rtvHandle =
-				m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+				m_BackBuffers[i].rtvHandle =
+					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+			}
+		}
+
+		{
+			auto depthTextureDesc         = TextureDesc();
+			depthTextureDesc.format       = Format::D24S8;
+			depthTextureDesc.width        = static_cast<uint32_t>(m_Opts.width);
+			depthTextureDesc.height       = static_cast<uint32_t>(m_Opts.height);
+			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName    = "Depth Buffer";
+			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
+			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
+
+			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
+
+			auto dsvDesc      = DsvDesc();
+			dsvDesc.format    = Format::D24S8;
+			dsvDesc.debugName = "Depth Buffer RTV";
+
+			m_DepthBuffer.dsvHandle =
+				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
 		}
 	}
 

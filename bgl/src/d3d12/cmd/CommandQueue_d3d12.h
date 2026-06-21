@@ -8,7 +8,7 @@ namespace bgl
 	{
 	public:
 		CommandQueue(QueueType type, ID3D12Device* device);
-		~CommandQueue() noexcept;
+		~CommandQueue() noexcept override;
 
 		CommandQueue(const CommandQueue&) noexcept = delete;
 		CommandQueue(CommandQueue&&) noexcept      = delete;

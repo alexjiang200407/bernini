@@ -1,5 +1,6 @@
 #pragma once
 #include "resource/Buffer_d3d12.h"
+#include "resource/Dsv_d3d12.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_d3d12.h"
 #include "resource/Texture_d3d12.h"
@@ -7,7 +8,7 @@
 
 namespace bgl
 {
-	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
+	using CbvSrvUavSlot = std::variant<Buffer>;
 
 	struct PendingDeletion
 	{
@@ -15,6 +16,8 @@ namespace bgl
 		{
 			kCbvSrvUav,
 			kRtv,
+			kDsv,
+			kTexture,
 		};
 
 		Type     type       = Type::kCbvSrvUav;
@@ -25,10 +28,7 @@ namespace bgl
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
-		ResourceManager(
-			wrl::ComPtr<ID3D12Device> device,
-			uint32_t                  maxDescriptors,
-			uint32_t                  maxRtvs);
+		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);
 
 		ResourceManager(const ResourceManager&)     = delete;
 		ResourceManager(ResourceManager&&) noexcept = delete;
@@ -119,15 +119,38 @@ namespace bgl
 			return m_Device;
 		}
 
+		void
+		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) override;
+
+		DsvHandle
+		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) override;
+
+		const Dsv&
+		GetDsv(DsvHandle handle) const override;
+
+		bool
+		ValidDsvHandle(const DsvHandle& handle) const override;
+
+		void
+		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) override;
+
+		void
+		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred) override;
+
 	private:
+		ResourceManagerDesc               m_Desc;
 		wrl::ComPtr<ID3D12Device>         m_Device;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
-		uint32_t                          m_CbvSrvUavDescriptorSize = 0;
-		uint32_t                          m_RtvDescriptorSize       = 0;
+		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
-		core::slot_vector<Rtv>            m_Rtvs;
-		std::vector<PendingDeletion>      m_PendingDeletions;
+
+		// CPU side only
+		core::slot_vector<Texture> m_Textures;
+
+		core::slot_vector<Rtv>       m_Rtvs;
+		core::slot_vector<Dsv>       m_Dsvs;
+		std::vector<PendingDeletion> m_PendingDeletions;
 
 		friend class DeviceImpl;
 	};

@@ -56,9 +56,9 @@ namespace bgl
 	}
 
 	ResourceManagerHandle
-	Device::CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const
+	Device::CreateResourceManager(const ResourceManagerDesc& desc) const
 	{
-		return core::SharedRef<ResourceManager>::Make(m_Device, maxCbvSrvUav, maxRtvs);
+		return core::SharedRef<ResourceManager>::Make(m_Device, desc);
 	}
 
 	ShaderHandle

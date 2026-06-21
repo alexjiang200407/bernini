@@ -1,9 +1,14 @@
 #pragma once
 
 #include <bgl/util.h>
+#include <core/containers/multi_slot_handle.h>
+#include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 
 class BGL_API core::Ref;
+class BGL_API core::slot_handle;
+class BGL_API core::multi_slot_handle;
 
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <bgl/glm.h>

@@ -45,16 +45,25 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enableDebugLayer         = true;
 		gfxOpts.enableGPUValidationLayer = true;
 		gfxOpts.enablePixDebug           = true;
+		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
 
-		auto visitor = EventVisitor{};
+		auto visitor = EventVisitor();
 
-		auto scene = graphics->CreateScene(
-			bgl::SceneDesc{ .maxInstances = 1,
-		                    .maxMeshlets  = 1,
-		                    .maxVertices  = 3,
-		                    .maxIndices   = 3 });
+		auto sceneDesc         = bgl::SceneDesc();
+		sceneDesc.maxIndices   = 1000;
+		sceneDesc.maxVertices  = 1000;
+		sceneDesc.maxGeom      = 100;
+		sceneDesc.maxInstances = 100;
+		sceneDesc.maxMeshlets  = 100;
+
+		auto scene = graphics->CreateScene(std::move(sceneDesc));
+		auto cube  = scene->AddCubeGeom();
+		auto mat   = bgl::MaterialHandle{};
+
+		auto transform = glm::mat4(1.0f);
+		auto inst      = scene->CreateStaticMeshInstance(cube, mat, transform);
 
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))

@@ -15,10 +15,20 @@ namespace bgl
 		{
 			return r == _b.r && g == _b.g && b == _b.b && a == _b.a;
 		}
+
 		bool
 		operator!=(const Color& _b) const
 		{
 			return !(*this == _b);
+		}
+
+		void
+		GetAsFloats(float* out) const
+		{
+			out[0] = r;
+			out[1] = g;
+			out[2] = b;
+			out[3] = a;
 		}
 	};
 }

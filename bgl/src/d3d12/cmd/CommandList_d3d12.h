@@ -20,6 +20,7 @@ namespace bgl
 			const CommandListDesc& desc,
 			ICommandAllocator*     commandAllocator,
 			ResourceManagerHandle  resourceManager);
+		~CommandList() noexcept override { logger::trace("~CommandList"); }
 
 		CommandList(const CommandList&) noexcept = delete;
 		CommandList(CommandList&&) noexcept      = delete;
@@ -47,6 +48,9 @@ namespace bgl
 
 		void
 		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) override;
+
+		void
+		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) override;
 
 		void
 		SetMeshletState(const MeshletState& gfxState) override;

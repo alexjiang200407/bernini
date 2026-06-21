@@ -8,6 +8,62 @@ namespace bgl
 {
 	namespace detail
 	{
+		namespace
+		{
+			TraversalResult
+			ReturnNullResult();
+		}
+
+		class UniformNullNode final : public UniformsNode
+		{
+		public:
+			UniformNullNode() = default;
+
+			TraversalResult
+			Traverse(size_t, const std::string&) override
+			{
+				return ReturnNullResult();
+			}
+
+			TraversalResult
+			Traverse(size_t, uint32_t) override
+			{
+				return ReturnNullResult();
+			}
+
+			UniformType
+			GetType() const override
+			{
+				return UniformType::kNull;
+			}
+
+			UniformValueType
+			GetValueType() const override
+			{
+				return UniformValueType::kNone;
+			}
+
+			size_t
+			GetSize() const override
+			{
+				return 0;
+			}
+		};
+
+		static UniformNullNode g_UniformNullNode;
+
+		namespace
+		{
+			TraversalResult
+			ReturnNullResult()
+			{
+				TraversalResult result{};
+				result.node           = &g_UniformNullNode;
+				result.relativeOffset = 0;
+				return result;
+			}
+		}
+
 		class UniformValueNode final : public UniformsNode
 		{
 		public:
@@ -16,13 +72,13 @@ namespace bgl
 			TraversalResult
 			Traverse(size_t, const std::string&) override
 			{
-				throw std::runtime_error("UniformValueNode: cannot index by member name");
+				return ReturnNullResult();
 			}
 
 			TraversalResult
 			Traverse(size_t, uint32_t) override
 			{
-				throw std::runtime_error("UniformValueNode: cannot index by integer");
+				return ReturnNullResult();
 			}
 
 			UniformType
@@ -62,14 +118,16 @@ namespace bgl
 			{
 				auto it = m_Members.find(member);
 				if (it == m_Members.end())
-					throw std::out_of_range("UniformStructNode: unknown member '" + member + "'");
+				{
+					return ReturnNullResult();
+				}
 				return { it->second.first.get(), currentOffset + it->second.second };
 			}
 
 			TraversalResult
 			Traverse(size_t, uint32_t) override
 			{
-				throw std::runtime_error("UniformStructNode: cannot index struct by integer");
+				return ReturnNullResult();
 			}
 
 			UniformType
@@ -116,14 +174,14 @@ namespace bgl
 			TraversalResult
 			Traverse(size_t, const std::string&) override
 			{
-				throw std::runtime_error("UniformArrayNode: cannot index array by member name");
+				return ReturnNullResult();
 			}
 
 			TraversalResult
 			Traverse(size_t currentOffset, uint32_t idx) override
 			{
 				if (idx >= m_Count)
-					throw std::out_of_range("UniformArrayNode: index out of range");
+					return ReturnNullResult();
 				return { m_ElementNode.get(), currentOffset + idx * m_Stride };
 			}
 
@@ -132,6 +190,7 @@ namespace bgl
 			{
 				return UniformType::kArray;
 			}
+
 			UniformValueType
 			GetValueType() const override
 			{

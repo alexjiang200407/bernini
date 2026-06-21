@@ -7,7 +7,7 @@ namespace bgl
 	{
 	public:
 		Shader(ShaderDesc desc, slang::ISession* session);
-
+		~Shader() noexcept override { logger::trace("~Shader"); }
 		Shader(const Shader&)     = delete;
 		Shader(Shader&&) noexcept = delete;
 
@@ -32,7 +32,13 @@ namespace bgl
 		slang::IModule*
 		GetSlangModule() const override
 		{
-			return m_SlangModule.get();
+			return m_SlangModule;
+		}
+
+		const ShaderDesc&
+		GetDesc() const override
+		{
+			return m_Desc;
 		}
 
 	private:

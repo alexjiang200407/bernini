@@ -8,13 +8,25 @@ namespace bgl
 {
 	struct GraphicsOptions
 	{
-		int   width;
-		int   height;
-		bool  headless;
-		bool  enableDebugLayer;
-		bool  enableGPUValidationLayer;
-		bool  enablePixDebug;
-		void* wnd;
+		enum class LogLevel
+		{
+			kTrace = 0,
+			kDebug,
+			kInfo,
+			kWarn,
+			kError,
+			kCritical,
+			kOff,
+		};
+
+		int      width;
+		int      height;
+		bool     headless;
+		bool     enableDebugLayer;
+		bool     enableGPUValidationLayer;
+		bool     enablePixDebug;
+		void*    wnd;
+		LogLevel logLevel = LogLevel::kError;
 	};
 
 	class BGL_API IGraphics : public core::Ref

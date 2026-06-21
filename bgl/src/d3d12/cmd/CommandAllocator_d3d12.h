@@ -9,6 +9,7 @@ namespace bgl
 	public:
 		CommandAllocator(const CommandAllocator&) noexcept = delete;
 		CommandAllocator(CommandAllocator&&) noexcept      = delete;
+		~CommandAllocator() noexcept override { logger::trace("~CommandAllocator"); }
 
 		CommandAllocator&
 		operator=(const CommandAllocator&) noexcept = delete;

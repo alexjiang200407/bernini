@@ -29,8 +29,6 @@ namespace bgl
 		D3D12_RESOURCE_DESC1  resDesc   = {};
 		D3D12_HEAP_FLAGS      heapFlags = D3D12_HEAP_FLAG_NONE;
 
-		D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED;
-
 		if (desc.isUav)
 			resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
@@ -46,16 +44,17 @@ namespace bgl
 
 		switch (desc.cpuAccess)
 		{
-		case BufferDesc::CpuAccessMode::kDefault:
+		case CpuAccessMode::kDefault:
 			heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 			break;
-		case BufferDesc::CpuAccessMode::kUpload:
-			heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-			initialLayout  = D3D12_BARRIER_LAYOUT_GENERIC_READ;
-			break;
-		case BufferDesc::CpuAccessMode::kReadBack:
-			heapProps.Type = D3D12_HEAP_TYPE_READBACK;
-			break;
+		case CpuAccessMode::kUpload:
+			gfatal("kUpload not implemented");
+			//heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+			//break;
+		case CpuAccessMode::kReadBack:
+			gfatal("kReadBack not implemented");
+			//heapProps.Type = D3D12_HEAP_TYPE_READBACK;
+			//break;
 		}
 
 		// Create the resource via CreateCommittedResource3
@@ -63,7 +62,7 @@ namespace bgl
 			&heapProps,
 			heapFlags,
 			&resDesc,
-			initialLayout,
+			D3D12_BARRIER_LAYOUT_UNDEFINED,
 			nullptr,
 			nullptr,
 			0,
@@ -71,7 +70,7 @@ namespace bgl
 			IID_PPV_ARGS(&m_Buffer)) >>
 			d3d12ErrChecker;
 
-		if (desc.cpuAccess == BufferDesc::CpuAccessMode::kUpload)
+		if (desc.cpuAccess == CpuAccessMode::kUpload)
 		{
 			m_Buffer->Map(0, nullptr, &m_MappedPtr) >> d3d12ErrChecker;
 		}

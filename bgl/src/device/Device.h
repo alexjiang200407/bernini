@@ -16,6 +16,7 @@ namespace bgl
 	struct ShaderDesc;
 	struct MeshletPipelineDesc;
 	struct CommandListDesc;
+	struct ResourceManagerDesc;
 
 	class IDevice : public core::Ref
 	{
@@ -35,7 +36,8 @@ namespace bgl
 		CreateShader(ShaderDesc desc) const = 0;
 
 		[[nodiscard]] core::SharedRef<IShader>
-		CreateShader(std::string path, std::string moduleName) const;
+		CreateShader(std::string path, std::string moduleName, std::string entryPointName = "main")
+			const;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IMeshletPipeline>
@@ -61,7 +63,7 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>
-		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const = 0;
+		CreateResourceManager(const ResourceManagerDesc& desc) const = 0;
 
 		[[nodiscard]]
 		virtual Uniforms

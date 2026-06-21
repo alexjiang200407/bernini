@@ -1,5 +1,6 @@
 #pragma once
 #include "types/Barrier.h"
+#include "types/CpuAccessMode.h"
 
 namespace bgl
 {
@@ -56,12 +57,7 @@ namespace bgl
 
 	struct BufferDesc
 	{
-		enum class CpuAccessMode
-		{
-			kDefault,
-			kUpload,
-			kReadBack,
-		} cpuAccess = CpuAccessMode::kDefault;
+		CpuAccessMode cpuAccess = CpuAccessMode::kDefault;
 
 		uint32_t    stride       = 0;
 		uint32_t    elementCount = 0;

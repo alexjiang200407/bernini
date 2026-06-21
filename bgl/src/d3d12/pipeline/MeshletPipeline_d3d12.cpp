@@ -41,18 +41,36 @@ namespace bgl
 
 		SlangErrorChecker                   errChecker;
 		std::vector<slang::IComponentType*> slangModules;
+		std::unordered_set<slang::IModule*> uniqueModules;
 
 		gassert(desc.meshShader != nullptr, "Mesh shader cannot be null");
-		slangModules.emplace_back(desc.meshShader->GetSlangModule());
 
-		if (desc.pixelShader != nullptr)
-		{
-			slangModules.emplace_back(desc.pixelShader->GetSlangModule());
-		}
-		if (desc.ampShader != nullptr)
-		{
-			slangModules.emplace_back(desc.ampShader->GetSlangModule());
-		}
+		auto addShaderToComposition = [&](IShader* shader) {
+			if (!shader)
+				return;
+
+			slang::IModule* module = shader->GetSlangModule();
+			gassert(module != nullptr, "Shader module cannot be null");
+
+			// ONLY add the module if it hasn't been added yet
+			if (uniqueModules.insert(module).second)
+			{
+				slangModules.emplace_back(module);
+			}
+
+			const auto&         shaderDesc = shader->GetDesc();
+			slang::IEntryPoint* entryPoint = nullptr;
+
+			// Find the entry point by name from the module
+			module->findEntryPointByName(shaderDesc.entryPointName.c_str(), &entryPoint);
+			gassert(entryPoint != nullptr, "Failed to find entry point in module");
+
+			slangModules.emplace_back(entryPoint);
+		};
+
+		addShaderToComposition(desc.meshShader);
+		addShaderToComposition(desc.pixelShader);
+		addShaderToComposition(desc.ampShader);
 
 		Slang::ComPtr<slang::IComponentType> program;
 		{
@@ -73,6 +91,7 @@ namespace bgl
 		UINT                             shaderRegister = 0;
 		UINT                             registerSpace  = 0;
 
+		// Reflect global parameters
 		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
 		{
 			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
@@ -200,6 +219,7 @@ namespace bgl
 
 	MeshletPipeline::~MeshletPipeline() noexcept
 	{
+		logger::trace("~MeshletPipeline");
 		m_PipelineState.Reset();
 		m_RootSignature.Reset();
 	}

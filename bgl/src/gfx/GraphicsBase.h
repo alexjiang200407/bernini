@@ -1,9 +1,11 @@
 #pragma once
-#include "device/Device.h"
 #include <bgl/IGraphics.h>
 
 namespace bgl
 {
+	class IDevice;
+	class IResourceManager;
+
 	class GraphicsBase : public IGraphics
 	{
 	public:
@@ -19,5 +21,8 @@ namespace bgl
 
 		virtual IDevice*
 		GetDevice() const = 0;
+
+		virtual core::SharedRef<IResourceManager>
+		GetResourceManagerCpy() const = 0;
 	};
 }

@@ -23,6 +23,9 @@ namespace bgl
 	D3D12_RTV_DIMENSION
 	ConvertRTVDimension(TextureDimension dimension);
 
+	D3D12_DSV_DIMENSION
+	ConvertDSVDimension(TextureDimension dimension);
+
 	D3D12_BARRIER_SYNC
 	ConvertBarrierSync(BarrierSync sync);
 
@@ -57,5 +60,5 @@ namespace bgl
 	ConvertComparisonFunc(ComparisonFunc value);
 
 	D3D12_CLEAR_VALUE
-	ConvertClearValue(ClearValue clearValue);
+	ConvertClearValue(Format format, ClearValue clearValue);
 }

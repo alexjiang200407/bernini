@@ -25,6 +25,7 @@ namespace bgl
 
 	CommandQueue::~CommandQueue() noexcept
 	{
+		logger::trace("~CommandQueue");
 		if (m_FenceEvent)
 			CloseHandle(m_FenceEvent);
 	}
