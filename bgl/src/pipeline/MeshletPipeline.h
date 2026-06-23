@@ -59,6 +59,13 @@ namespace bgl
 		}
 	};
 
+	struct UniformLayoutEntry
+	{
+		uint32_t                     size;
+		slang::TypeLayoutReflection* layout;
+		uint32_t                     rootParamIndex = 0xFFFFFFFF;
+	};
+
 	class IMeshletPipeline : public core::Ref
 	{
 	public:
@@ -75,11 +82,8 @@ namespace bgl
 		virtual const MeshletPipelineDesc&
 		GetDesc() const = 0;
 
-		virtual slang::TypeLayoutReflection*
-		GetUniformLayout() const = 0;
-
-		virtual uint32_t
-		GetUniformSize() const = 0;
+		virtual UniformLayoutEntry
+		GetUniformLayoutEntry(const std::string& name) const = 0;
 	};
 
 	using MeshletPipelineHandle = core::SharedRef<IMeshletPipeline>;

@@ -7,7 +7,7 @@ namespace bgl
 		ID3D12Device*         device,
 		ID3D12DescriptorHeap* descriptorHeap,
 		uint32_t              descriptorIndex,
-		const BufferDesc&     desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
+		const StructBufferDesc&     desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");

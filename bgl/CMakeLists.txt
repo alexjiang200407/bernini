@@ -46,7 +46,7 @@ find_package(glm CONFIG REQUIRED)
 
 target_link_libraries(bgl_objects
 	PUBLIC
-		Core
+		core
 		slang::slang
 		glm::glm
 )
@@ -128,7 +128,7 @@ if (BUILD_TESTS)
         PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
     )
     
-    target_link_libraries(bgl_tests PRIVATE bgl_objects Catch2::Catch2 Catch2::Catch2WithMain)
+    target_link_libraries(bgl_tests PRIVATE bgl_objects Catch2::Catch2 Catch2::Catch2WithMain core)
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)
@@ -137,7 +137,7 @@ if (BUILD_TESTS)
 
     if(RENDERER_BACKEND STREQUAL "DX12")
         target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_DX12)
-		target_link_libraries(bgl_tests PRIVATE bgl_d3d12)
+		target_link_libraries(bgl_tests PRIVATE bgl_d3d12 bgl_d3d12_agility)
 		target_sources(bgl_tests PRIVATE $<TARGET_OBJECTS:bgl_d3d12>)
     endif()
 

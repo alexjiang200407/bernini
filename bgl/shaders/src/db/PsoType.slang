@@ -1,6 +1,7 @@
 
 
-public enum PsoType : uint16_t {
+public enum PsoType : uint16_t
+{
     kOpaque_StaticMesh_PBR = 0,
     kOpaque_StaticMesh_SolidColor,
     kAlphaTest_StaticMesh_PBR,

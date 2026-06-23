@@ -18,17 +18,19 @@
 
 namespace bgl
 {
-	Device::Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession) :
-		m_Device(std::move(device))
+	Device::Device(
+		wrl::ComPtr<ID3D12Device>            device,
+		Slang::ComPtr<slang::IGlobalSession> globalSession) :
+		m_Device(std::move(device)), m_SlangGlobalSession(std::move(globalSession))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
-		gassert(globalSession != nullptr, "Slang global session cannot be null");
+		gassert(m_SlangGlobalSession != nullptr, "Slang global session cannot be null");
 
 		slang::SessionDesc sessionDesc = {};
 		slang::TargetDesc  targetDesc  = {};
 
 		targetDesc.format  = SLANG_DXIL;
-		targetDesc.profile = globalSession->findProfile("sm_6_6");
+		targetDesc.profile = m_SlangGlobalSession->findProfile("sm_6_6");
 
 		const char* searchPaths[] = { "./shaders/src", "./shaders/tests" };
 
@@ -38,7 +40,7 @@ namespace bgl
 		sessionDesc.searchPathCount = std::size(searchPaths);
 
 		SlangErrorChecker errChecker;
-		globalSession->createSession(sessionDesc, m_SlangSession.writeRef()) >> errChecker;
+		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef()) >> errChecker;
 
 		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
 	}
@@ -93,9 +95,9 @@ namespace bgl
 	}
 
 	Uniforms
-	Device::CreateUniforms(IMeshletPipeline const* pipeline) const
+	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName) const
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
-		return Uniforms(pipeline);
+		return Uniforms(pipeline, cbufferName);
 	}
 }

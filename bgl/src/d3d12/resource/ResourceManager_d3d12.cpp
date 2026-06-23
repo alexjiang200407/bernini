@@ -48,7 +48,7 @@ namespace bgl
 	}
 
 	BufferHandle
-	ResourceManager::CreateStructBuffer(const BufferDesc& desc)
+	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc)
 	{
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");

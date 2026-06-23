@@ -241,17 +241,18 @@ namespace bgl
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	Uniforms::Uniforms(IMeshletPipeline const* pipeline)
+	Uniforms::Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 	{
-		size_t totalBufferSize = pipeline->GetUniformSize();
-		auto*  structLayout    = pipeline->GetUniformLayout();
+		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 
-		m_Size = totalBufferSize;
+		UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(cbufferName);
 
-		gassert(structLayout != nullptr, "Pipeline must have a valid uniform layout");
+		gassert(entry.layout != nullptr, "Pipeline must have a valid uniform layout");
 
-		m_Root = BuildNode(structLayout);
-		m_Buffer.resize(totalBufferSize, std::byte{ 0 });
+		m_Size           = entry.size;
+		m_RootParamIndex = entry.rootParamIndex;
+		m_Root           = BuildNode(entry.layout);
+		m_Buffer.resize(entry.size, std::byte{ 0 });
 	}
 
 	UniformValueType

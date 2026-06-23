@@ -70,7 +70,7 @@ namespace bgl
 		DispatchMesh(
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
-			uint32_t threadGroupCountZ) const = 0;
+			uint32_t threadGroupCountZ) = 0;
 
 		[[nodiscard]] virtual bool
 		IsOpen() const = 0;

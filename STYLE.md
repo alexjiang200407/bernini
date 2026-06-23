@@ -2,10 +2,13 @@
 # Variables
 
 ```cpp
+static constexpr auto c_Variable = 1; // c_ prefix for constants
 
-int myVariable; // camelCase for variable names
+int main() {
+	int myVariable; // camelCase for variable names
+}
 
-int g_GlobalVariable; // s_ prefix for static/global variables
+int g_GlobalVariable; // g_ prefix for static/global variables
 
 ```
 
@@ -44,7 +47,7 @@ public:
 	GetMemberVariable() const; // member functions in PascalCase
 
 private:
-	int m_memberVariable; // member variables prefixed with 'm_' and camelCase
+	int m_MemberVariable; // member variables prefixed with 'm_' and camelCase
 };
 
 
@@ -70,7 +73,7 @@ Avoid using macros except for build-specific purposes. Prefer constexpr, inline 
 
 # File Naming
 
-For cpp and header files use pascal case if it exports a class. Use snake case for files that only export functions or variables e.g. util.h. Use snake case for directories.
+For cpp and header files use pascal case if it exports a class/struct. Use snake case for files that only export functions or variables e.g. util.h. Use snake case for directories.
 
 
 # Enums

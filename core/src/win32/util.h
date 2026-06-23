@@ -1,3 +1,4 @@
+#pragma once
 #include "WinAPI.h"
 #include <concepts>
 #include <core/str/str.h>

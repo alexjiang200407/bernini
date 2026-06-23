@@ -97,12 +97,12 @@ namespace core
 		erase(multi_slot_handle handle)
 		{
 			uint32_t index = handle.index;
-			gassert(index < m_Meta.size(), "Index out of bounds");
-			gassert(
-				m_Meta[index].is_allocated_root,
+			assert(index < m_Meta.size() && "Index out of bounds");
+			assert(
+				m_Meta[index].is_allocated_root &&
 				"Can only erase an allocation using its original starting handle index!");
-			gassert(
-				m_Meta[index].generation == handle.generation,
+			assert(
+				m_Meta[index].generation == handle.generation &&
 				"Attempting to erase using an expired stale handle");
 
 			uint32_t count = m_Meta[index].allocated_count;

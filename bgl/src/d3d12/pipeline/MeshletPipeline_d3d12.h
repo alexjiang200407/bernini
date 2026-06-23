@@ -43,24 +43,17 @@ namespace bgl
 			return m_Desc;
 		}
 
-		slang::TypeLayoutReflection*
-		GetUniformLayout() const override
+		UniformLayoutEntry
+		GetUniformLayoutEntry(const std::string& name) const override
 		{
-			return m_UniformLayout;
-		}
-
-		virtual uint32_t
-		GetUniformSize() const override
-		{
-			return m_UniformSize;
+			return m_UniformLayoutEntries.at(name);
 		}
 
 	private:
-		MeshletPipelineDesc                  m_Desc;
-		wrl::ComPtr<ID3D12PipelineState>     m_PipelineState;
-		wrl::ComPtr<ID3D12RootSignature>     m_RootSignature;
-		Slang::ComPtr<slang::IComponentType> m_LinkedProgram;
-		slang::TypeLayoutReflection*         m_UniformLayout = nullptr;
-		uint32_t                             m_UniformSize   = 0;
+		MeshletPipelineDesc                                 m_Desc;
+		wrl::ComPtr<ID3D12PipelineState>                    m_PipelineState;
+		wrl::ComPtr<ID3D12RootSignature>                    m_RootSignature;
+		Slang::ComPtr<slang::IComponentType>                m_LinkedProgram;
+		std::unordered_map<std::string, UniformLayoutEntry> m_UniformLayoutEntries;
 	};
 }

@@ -257,7 +257,8 @@ namespace bgl
 
 	public:
 		Uniforms() = default;
-		Uniforms(IMeshletPipeline const* pipeline);
+		Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName);
+
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
 
@@ -291,6 +292,12 @@ namespace bgl
 			return m_Size;
 		}
 
+		[[nodiscard]] uint32_t
+		GetRootParamIndex() const
+		{
+			return m_RootParamIndex;
+		}
+
 		[[nodiscard]] const void*
 		Data() const
 		{
@@ -313,8 +320,9 @@ namespace bgl
 		BuildNode(slang::TypeLayoutReflection* typeLayout);
 
 	private:
-		std::unique_ptr<detail::UniformsNode> m_Root = nullptr;
-		size_t                                m_Size = 0;
+		std::unique_ptr<detail::UniformsNode> m_Root           = nullptr;
+		size_t                                m_Size           = 0;
+		uint32_t                              m_RootParamIndex = 0xFFFFFFFF;
 
 		// flat CPU-side mirror
 		std::vector<std::byte> m_Buffer;

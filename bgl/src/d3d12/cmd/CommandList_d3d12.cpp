@@ -6,6 +6,7 @@
 #include "constants/constants.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
+#include "uniforms/Uniforms.h"
 #include "util_d3d12.h"
 #include <core/math.h>
 
@@ -226,7 +227,7 @@ namespace bgl
 	CommandList::DispatchMesh(
 		uint32_t threadGroupCountX,
 		uint32_t threadGroupCountY,
-		uint32_t threadGroupCountZ) const
+		uint32_t threadGroupCountZ)
 	{
 		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
 		gassert(
@@ -313,20 +314,9 @@ namespace bgl
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
 
-			auto rootConstantsData = m_CurrentMeshletState->uniforms->Data();
-
-			if (pipeline->GetUniformSize() != 0)
+			if (const Uniforms* uniforms = m_CurrentMeshletState->uniforms)
 			{
-				gassert(rootConstantsData != nullptr, "Pipeline expects uniforms but none are set");
-				auto num32BitValues = core::align(pipeline->GetUniformSize(), 4) / 4;
-				m_CommandList
-					->SetGraphicsRoot32BitConstants(0, num32BitValues, rootConstantsData, 0);
-			}
-			else
-			{
-				gassert(
-					rootConstantsData == nullptr,
-					"Root constants data set but pipeline has no expected uniforms");
+				BindUniforms(*uniforms);
 			}
 		}
 
@@ -342,6 +332,34 @@ namespace bgl
 				"Device/Driver does not support Mesh Shading (DirectX 12 Agility SDK / Feature "
 				"Level 12_2 required)");
 		}
+	}
+
+	void
+	CommandList::BindUniforms(const Uniforms& uniforms)
+	{
+		if (uniforms.GetSize() == 0)
+			return;
+
+		size_t                    offsetInUploadBuffer = 0;
+		void*                     cpuVA                = nullptr;
+		D3D12_GPU_VIRTUAL_ADDRESS gpuVA                = 0;
+
+		auto success = m_UploadManager.SuballocateBuffer(
+			m_LastCompletedFence,
+			uniforms.GetSize(),
+			nullptr,
+			m_CurrentUploadBuffer,
+			&offsetInUploadBuffer,
+			&cpuVA,
+			&gpuVA,
+			m_RecordingVersion,
+			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+		gassert(success, "Failed to suballocate constant buffer");
+
+		memcpy(cpuVA, uniforms.Data(), uniforms.GetSize());
+
+		m_CommandList->SetGraphicsRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
 	}
 
 	void

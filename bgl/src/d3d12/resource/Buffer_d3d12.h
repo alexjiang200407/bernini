@@ -13,7 +13,7 @@ namespace bgl
 			ID3D12Device*         device,
 			ID3D12DescriptorHeap* descriptorHeap,
 			uint32_t              descriptorIndex,
-			const BufferDesc&     desc);
+			const StructBufferDesc&     desc);
 
 		~Buffer() noexcept;
 
@@ -34,7 +34,7 @@ namespace bgl
 		}
 
 		[[nodiscard]]
-		const BufferDesc&
+		const StructBufferDesc&
 		GetDesc() const
 		{
 			return m_Desc;
@@ -62,7 +62,7 @@ namespace bgl
 		}
 
 	private:
-		BufferDesc                  m_Desc;
+		StructBufferDesc                  m_Desc;
 		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
 		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
 		void*                       m_MappedPtr = nullptr;  // TODO: Synchronization is required

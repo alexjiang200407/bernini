@@ -16,6 +16,7 @@ namespace bgl
 	{
 	public:
 		GBufferPass() = default;
+		~GBufferPass() noexcept { logger::trace("~GBufferPass"); }
 		GBufferPass(IDevice* device) { Init(device); }
 
 		GBufferPass(const GBufferPass&) noexcept = delete;
@@ -72,7 +73,7 @@ namespace bgl
 												   .SetStencilEnable(false));
 
 			m_Pipeline = device->CreateMeshletPipeline(pipelineDesc);
-			m_Uniforms = device->CreateUniforms(m_Pipeline.Get());
+			m_Uniforms = device->CreateUniforms(m_Pipeline.Get(), "sceneData");
 		}
 
 		void

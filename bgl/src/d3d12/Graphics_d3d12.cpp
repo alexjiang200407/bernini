@@ -161,7 +161,7 @@ namespace bgl
 
 		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
 
-		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession.get());
+		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession);
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -256,7 +256,7 @@ namespace bgl
 
 		if (m_Opts.enableDebugLayer)
 		{
-			Microsoft::WRL::ComPtr<IDXGIDebug1> dxgiDebug;
+			wrl::ComPtr<IDXGIDebug1> dxgiDebug;
 			DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug)) >> d3d12ErrChecker;
 			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
 		}

@@ -12,6 +12,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 	opts.width                    = 1;
 	opts.wnd                      = nullptr;
 	opts.enablePixDebug           = true;
+	opts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
 	auto gfx = bgl::CreateGraphics(opts);
 
@@ -34,7 +35,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 			"MSUniformReflectionScalar"));
 
 		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
-		auto uniforms = device->CreateUniforms(pipeline);
+		auto uniforms = device->CreateUniforms(pipeline, "gUniforms");
 
 		CHECK(uniforms.GetSize() == 208u);
 

@@ -1,4 +1,5 @@
 #include "win32/util.h"
+#include "util.h"
 #include <core/str/str.h>
 
 namespace core::win::win32
@@ -40,5 +41,16 @@ namespace core::win::win32
 				core::str::wide_to_string(getErrorDescription(static_cast<DWORD>(hr))));
 		}
 	}
+}
 
+namespace core
+{
+	std::string
+	get_executable_name() noexcept
+	{
+		char buffer[MAX_PATH];
+		GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+
+		return std::filesystem::path(buffer).stem().string();
+	}
 }

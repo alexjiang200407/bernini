@@ -1,0 +1,9 @@
+{
+    // The Slang extension looks for clang-format on PATH, then the VSCode C++
+    // extension's bundled copy. Point it directly at the Visual Studio LLVM
+    // component so it works regardless of how VSCode was launched.
+    "slang.format.clangFormatLocation": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\Llvm\\x64\\bin\\clang-format.exe",
+    // Use the repo's root .clang-format for .slang files too.
+    "slang.format.clangFormatStyle": ".clang-format",
+    "slang.format.clangFormatFallbackStyle": "LLVM"
+}

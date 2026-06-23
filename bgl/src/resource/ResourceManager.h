@@ -33,7 +33,7 @@ namespace bgl
 		operator=(IResourceManager&&) noexcept = delete;
 
 		virtual BufferHandle
-		CreateStructBuffer(const BufferDesc& desc) = 0;
+		CreateStructBuffer(const StructBufferDesc& desc) = 0;
 
 		virtual TextureHandle
 		CreateTexture(const TextureDesc& desc) = 0;

@@ -86,57 +86,43 @@ namespace bgl
 
 		program->link(m_LinkedProgram.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
 
-		slang::ProgramLayout*            layout         = m_LinkedProgram->getLayout();
-		slang::VariableLayoutReflection* constantBuffer = nullptr;
-		UINT                             shaderRegister = 0;
-		UINT                             registerSpace  = 0;
+		slang::ProgramLayout* layout = m_LinkedProgram->getLayout();
 
-		// Reflect global parameters
+		std::vector<CD3DX12_ROOT_PARAMETER> rootParams;
+
 		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
 		{
 			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
+
 			if (param->getCategory() == slang::ParameterCategory::ConstantBuffer)
 			{
-				if (!constantBuffer)
-				{
-					constantBuffer = param;
-					shaderRegister = static_cast<UINT>(param->getBindingIndex());
-					registerSpace  = static_cast<UINT>(param->getBindingSpace());
-				}
-				else
-				{
-					gfatal("Multiple root constant buffers not supported");
-				}
+				slang::TypeLayoutReflection* typeLayout    = param->getTypeLayout();
+				slang::TypeLayoutReflection* elementLayout = typeLayout->getElementTypeLayout();
+
+				uint32_t    bufferSize = static_cast<uint32_t>(elementLayout->getSize());
+				std::string bufferName = param->getName();
+
+				UINT shaderRegister = static_cast<UINT>(param->getBindingIndex());
+				UINT registerSpace  = static_cast<UINT>(param->getBindingSpace());
+
+				UniformLayoutEntry entry{};
+				entry.size                         = bufferSize;
+				entry.layout                       = elementLayout;
+				entry.rootParamIndex               = static_cast<uint32_t>(rootParams.size());
+				m_UniformLayoutEntries[bufferName] = entry;
+
+				auto cbvParam = CD3DX12_ROOT_PARAMETER();
+				cbvParam.InitAsConstantBufferView(shaderRegister, registerSpace);
+				rootParams.push_back(cbvParam);
 			}
 		}
 
-		if (constantBuffer != nullptr)
-		{
-			slang::TypeLayoutReflection* bufferLayout = constantBuffer->getTypeLayout();
-			m_UniformLayout                           = bufferLayout->getElementTypeLayout();
-			m_UniformSize = static_cast<uint32_t>(m_UniformLayout->getSize());
-
-			gassert(m_UniformSize != 0, "Uniform buffer size cannot be zero");
-		}
-
-		CD3DX12_ROOT_PARAMETER rootParams[1]  = {};
-		UINT                   rootParamCount = 0;
-
-		const UINT dwordCount = core::align(m_UniformSize, 4) / 4;
-
-		if (dwordCount > 0)
-		{
-			rootParams[0].InitAsConstants(dwordCount, shaderRegister, registerSpace);
-			rootParamCount = 1;
-		}
-
 		D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-		rsDesc.NumParameters             = rootParamCount;
-		rsDesc.pParameters               = rootParamCount > 0 ? rootParams : nullptr;
+		rsDesc.NumParameters             = static_cast<UINT>(rootParams.size());
+		rsDesc.pParameters               = rootParams.empty() ? nullptr : rootParams.data();
 		rsDesc.NumStaticSamplers         = 0;
 		rsDesc.pStaticSamplers           = nullptr;
-		rsDesc.Flags =
-			D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;  // Bypasses Input Assembler flags
+		rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
 		wrl::ComPtr<ID3DBlob> sigBlob, errBlob;
 		D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sigBlob, &errBlob) >>

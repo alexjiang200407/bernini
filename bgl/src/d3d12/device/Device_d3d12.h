@@ -8,7 +8,10 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession);
+		Device(
+			wrl::ComPtr<ID3D12Device>            device,
+			Slang::ComPtr<slang::IGlobalSession> globalSession);
+
 		~Device() noexcept override { logger::trace("~Device"); }
 		Device(const Device&) noexcept = delete;
 		Device(Device&&) noexcept      = delete;
@@ -41,10 +44,15 @@ namespace bgl
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const override;
 
 		Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline) const override;
+		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const override;
 
 	private:
-		wrl::ComPtr<ID3D12Device>      m_Device;
-		Slang::ComPtr<slang::ISession> m_SlangSession;
+		wrl::ComPtr<ID3D12Device> m_Device;
+
+		// m_SlangGlobalSession must be declared before m_SlangSession so it is destroyed
+		// after it
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+		Slang::ComPtr<slang::ISession>       m_SlangSession;
 	};
 }

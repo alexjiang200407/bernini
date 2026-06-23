@@ -67,7 +67,7 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline) const = 0;
+		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName) const = 0;
 	};
 
 	using DeviceHandle = core::SharedRef<IDevice>;

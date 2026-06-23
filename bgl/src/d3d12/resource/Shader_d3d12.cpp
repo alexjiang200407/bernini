@@ -11,8 +11,9 @@ namespace bgl
 		gassert(session != nullptr, "Slang session cannot be null");
 
 		SlangErrorChecker errChecker;
-		m_SlangModule.attach(
-			session->loadModule(m_Desc.slangModuleName.c_str(), errChecker.WriteDiagnosticBlob()));
+
+		m_SlangModule =
+			session->loadModule(m_Desc.slangModuleName.c_str(), errChecker.WriteDiagnosticBlob());
 
 		errChecker.ReportError();
 	}

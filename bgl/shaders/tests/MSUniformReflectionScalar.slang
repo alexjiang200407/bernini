@@ -15,8 +15,7 @@ public struct AllScalarUniforms
     public float4x4 mat;
 };
 
-[[vk::push_constant]]
-AllScalarUniforms gUniforms;
+ConstantBuffer<AllScalarUniforms> gUniforms;
 
 [shader("mesh")]
 [numthreads(1, 1, 1)]

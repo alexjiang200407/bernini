@@ -55,7 +55,7 @@ namespace bgl
 		}
 	};
 
-	struct BufferDesc
+	struct StructBufferDesc
 	{
 		CpuAccessMode cpuAccess = CpuAccessMode::kDefault;
 
@@ -63,6 +63,12 @@ namespace bgl
 		uint32_t    elementCount = 0;
 		std::string debugName    = "Unnamed Buffer";
 		bool        isUav        = false;
+	};
+
+	struct ConstantBufferDesc
+	{
+		uint32_t    size      = 0;
+		std::string debugName = "Unnamed Constant Buffer";
 	};
 
 }

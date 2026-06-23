@@ -64,7 +64,7 @@ namespace bgl
 			m_HasAnyDirtyBlocks = false;
 
 			{
-				BufferDesc bufDesc;
+				StructBufferDesc bufDesc;
 				bufDesc.debugName    = m_Desc.debugName;
 				bufDesc.cpuAccess    = m_Desc.cpuAccess;
 				bufDesc.elementCount = m_Desc.maxCount;

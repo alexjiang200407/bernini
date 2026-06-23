@@ -59,7 +59,7 @@ namespace bgl
 		DispatchMesh(
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
-			uint32_t threadGroupCountZ) const override;
+			uint32_t threadGroupCountZ) override;
 
 		ID3D12CommandList*
 		GetD3D12CommandList() const
@@ -83,6 +83,9 @@ namespace bgl
 		SubmitChunks(ICommandQueue* cmdQueue);
 
 	private:
+		void
+		BindUniforms(const Uniforms& uniforms);
+
 		CommandListDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;
 
