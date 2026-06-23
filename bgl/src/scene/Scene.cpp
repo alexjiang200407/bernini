@@ -10,7 +10,7 @@ namespace bgl
 		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager))
 	{
 		{
-			EntryBufferDesc instanceBufferDesc;
+			PackedBufferDesc instanceBufferDesc;
 			instanceBufferDesc.maxCount  = m_Desc.maxInstances;
 			instanceBufferDesc.debugName = "Instance Buffer";
 			instanceBufferDesc.blockSize = sizeof(db::BaseInstance) * 256;
@@ -129,6 +129,27 @@ namespace bgl
 	}
 
 	void
+	Scene::TransitionAll(
+		ICommandList*     cmdList,
+		PackedBufferState prevState,
+		PackedBufferState newState)
+	{
+		auto buffers = GetAllBuffers();
+		std::apply(
+			[cmdList, prevState, newState](auto&... buffer) {
+				(
+					[cmdList, prevState, newState](auto& b) {
+						if constexpr (is_packed_buffer_v<decltype(b)>)
+						{
+							b.Transition(cmdList, prevState, newState);
+						}
+					}(buffer),
+					...);
+			},
+			buffers);
+	}
+
+	void
 	Scene::AttachUniforms(Uniforms& uniforms)
 	{
 		m_FirstFrame = false;
@@ -159,7 +180,20 @@ namespace bgl
 			return valid;
 		};
 
-		if (!SetEntryBuffer("instanceBuffer", m_InstanceBuffer.GetDescriptorHandle()))
+		auto SetPackedBuffer = [&uniforms](const std::string& key, DescriptorHandle handle) {
+			auto valid =
+				uniforms[key]["packedBuffer"].IsValid() &&
+				uniforms[key]["packedBuffer"].GetValueType() == UniformValueType::kDescriptorHandle;
+
+			if (valid)
+			{
+				uniforms[key]["packedBuffer"] = handle;
+			}
+
+			return valid;
+		};
+
+		if (!SetPackedBuffer("instanceBuffer", m_InstanceBuffer.GetDescriptorHandle()))
 		{
 			gfatal("instanceBuffer key doesn't exist in uniforms. Most likely an error");
 		}

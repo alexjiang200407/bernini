@@ -318,12 +318,21 @@ namespace bgl
 				m_CommandList,
 				RangeBufferState::kNone,
 				RangeBufferState::kUpdate);
+
+			scene_->TransitionAll(
+				m_CommandList,
+				PackedBufferState::kNone,
+				PackedBufferState::kUpdate);
 		}
 
 		scene_->Update(m_CommandList);
 
 		scene_->TransitionAll(m_CommandList, EntryBufferState::kUpdate, EntryBufferState::kShader);
 		scene_->TransitionAll(m_CommandList, RangeBufferState::kUpdate, RangeBufferState::kShader);
+		scene_->TransitionAll(
+			m_CommandList,
+			PackedBufferState::kUpdate,
+			PackedBufferState::kShader);
 
 		auto vp = Viewport(static_cast<float>(m_Opts.width), static_cast<float>(m_Opts.height));
 
@@ -345,6 +354,10 @@ namespace bgl
 		// For next frame
 		scene_->TransitionAll(m_CommandList, EntryBufferState::kShader, EntryBufferState::kUpdate);
 		scene_->TransitionAll(m_CommandList, RangeBufferState::kShader, RangeBufferState::kUpdate);
+		scene_->TransitionAll(
+			m_CommandList,
+			PackedBufferState::kShader,
+			PackedBufferState::kUpdate);
 
 		m_CommandList->Close();
 

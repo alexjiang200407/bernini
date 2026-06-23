@@ -2,6 +2,7 @@
 #include "db/db.h"
 #include "resource/ResourceManager.h"
 #include "scene/EntryBuffer.h"
+#include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
 #include <bgl/IScene.h>
 
@@ -50,6 +51,12 @@ namespace bgl
 		TransitionAll(ICommandList* cmdList, RangeBufferState prevState, RangeBufferState newState);
 
 		void
+		TransitionAll(
+			ICommandList*     cmdList,
+			PackedBufferState prevState,
+			PackedBufferState newState);
+
+		void
 		Update(ICommandList* cmdList);
 
 		[[nodiscard]]
@@ -79,7 +86,7 @@ namespace bgl
 	private:
 		SceneDesc m_Desc;
 
-		EntryBuffer<db::BaseInstance>       m_InstanceBuffer;
+		PackedBuffer<db::BaseInstance>      m_InstanceBuffer;
 		EntryBuffer<db::StaticMeshInstance> m_StaticMeshInstanceBuffer;
 		EntryBuffer<db::StaticGeom>         m_StaticGeom;
 		RangeBuffer<db::Meshlet>            m_MeshletBuffer;

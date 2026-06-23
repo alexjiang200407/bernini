@@ -89,3 +89,28 @@ enum class Color {
 };
 
 ```
+
+# Templates
+
+- Maximize the use of concepts over requires
+
+
+# Comments
+
+- Only comment under these circumstances
+	- There are Pre-Conditions and Post-Conditions
+	- Code itself is not very descriptive
+	- Important Clarifications
+- Use javadoc comments e.g.
+
+```cpp
+/**
+ * The first sentence is the summary description.
+ * Subsequent paragraphs provide deeper technical context.
+ *
+ * @param parameterName Description of the method parameter.
+ * @return Description of the returned value.
+ */
+```
+
+- You can write more comments in test files.
