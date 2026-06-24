@@ -1,5 +1,6 @@
 #pragma once
 #include "resource/Buffer.h"
+#include "resource/Readback.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include "types/MeshletState.h"
@@ -44,6 +45,21 @@ namespace bgl
 
 		virtual void
 		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) = 0;
+
+		/**
+		 * Copies an entire buffer into a readback buffer for CPU access.
+		 * The source buffer must already be in a copy-source state.
+		 */
+		virtual void
+		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) = 0;
+
+		/**
+		 * Copies texture subresource 0 into a readback buffer using its linear
+		 * footprint (see TextureReadbackLayout). The source texture must already be
+		 * in a copy-source layout.
+		 */
+		virtual void
+		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) = 0;
 
 		virtual void
 		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) = 0;

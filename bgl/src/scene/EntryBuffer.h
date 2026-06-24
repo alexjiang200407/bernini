@@ -2,7 +2,6 @@
 #include "cmd/CommandList.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
-#include "types/CpuAccessMode.h"
 #include "uniforms/DescriptorHandle.h"
 #include <core/containers/slot_vector.h>
 #include <core/type_traits.h>
@@ -11,10 +10,9 @@ namespace bgl
 {
 	struct EntryBufferDesc
 	{
-		uint32_t      maxCount  = 0;
-		CpuAccessMode cpuAccess = CpuAccessMode::kDefault;
-		uint32_t      blockSize = 65536;
-		std::string   debugName;
+		uint32_t    maxCount  = 0;
+		uint32_t    blockSize = 65536;
+		std::string debugName;
 	};
 
 	enum class EntryBufferState
@@ -66,7 +64,6 @@ namespace bgl
 			{
 				StructBufferDesc bufDesc;
 				bufDesc.debugName    = m_Desc.debugName;
-				bufDesc.cpuAccess    = m_Desc.cpuAccess;
 				bufDesc.elementCount = m_Desc.maxCount;
 				bufDesc.stride       = sizeof(T);
 				bufDesc.isUav        = false;

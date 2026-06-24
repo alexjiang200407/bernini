@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/IScene.h>
+#include <bgl/RenderContext.h>
 #include <bgl/util.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -42,7 +43,24 @@ namespace bgl
 		operator=(const IGraphics&) noexcept = delete;
 
 		virtual void
-		DrawFrame(IScene* scene) = 0;
+		BeginFrame() = 0;
+
+		virtual void
+		Draw(const RenderContext& context) = 0;
+
+		virtual void
+		EndFrame() = 0;
+
+		void
+		DrawFrame(const RenderContext& context)
+		{
+			BeginFrame();
+			Draw(context);
+			EndFrame();
+		}
+
+		virtual void
+		ScreenshotRaw(const std::string& filepath) = 0;
 
 		virtual SceneHandle
 		CreateScene(SceneDesc desc) = 0;

@@ -1,6 +1,7 @@
 #pragma once
 #include "resource/Buffer_d3d12.h"
 #include "resource/Dsv_d3d12.h"
+#include "resource/ReadbackBuffer_d3d12.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_d3d12.h"
 #include "resource/Texture_d3d12.h"
@@ -18,6 +19,7 @@ namespace bgl
 			kRtv,
 			kDsv,
 			kTexture,
+			kReadback,
 		};
 
 		Type     type       = Type::kCbvSrvUav;
@@ -53,6 +55,10 @@ namespace bgl
 		TextureHandle
 		CreateTexture(const TextureDesc& desc) override;
 
+		[[nodiscard]]
+		ReadbackBufferHandle
+		CreateReadbackBuffer(const ReadbackBufferDesc& desc) override;
+
 		/**
 		 * Assume that desc is a correct descriptor for d3d12 resource.
 		 * Does not create SRV/UAV for the texture.
@@ -75,6 +81,12 @@ namespace bgl
 		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) override;
 
 		void
+		DestroyReadbackBuffer(
+			ReadbackBufferHandle handle,
+			uint64_t             currentFenceValue,
+			bool                 deferred) override;
+
+		void
 		CleanupExpiredResources(uint64_t completedFenceValue) override;
 
 		[[nodiscard]]
@@ -84,6 +96,10 @@ namespace bgl
 		[[nodiscard]]
 		bool
 		ValidTextureHandle(const TextureHandle& handle) const override;
+
+		[[nodiscard]]
+		bool
+		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const override;
 
 		[[nodiscard]]
 		bool
@@ -97,6 +113,18 @@ namespace bgl
 
 		const Buffer&
 		GetBuffer(BufferHandle handle) const override;
+
+		const ReadbackBuffer&
+		GetReadbackBuffer(ReadbackBufferHandle handle) const override;
+
+		TextureReadbackLayout
+		GetTextureReadbackLayout(TextureHandle handle) const override;
+
+		const void*
+		MapReadback(ReadbackBufferHandle handle) override;
+
+		void
+		UnmapReadback(ReadbackBufferHandle handle) override;
 
 		const Rtv&
 		GetRtv(RtvHandle handle) const override;
@@ -147,6 +175,8 @@ namespace bgl
 
 		// CPU side only
 		core::slot_vector<Texture> m_Textures;
+
+		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 
 		core::slot_vector<Rtv>       m_Rtvs;
 		core::slot_vector<Dsv>       m_Dsvs;

@@ -1,6 +1,5 @@
 #pragma once
 #include "types/Barrier.h"
-#include "types/CpuAccessMode.h"
 
 namespace bgl
 {
@@ -57,8 +56,6 @@ namespace bgl
 
 	struct StructBufferDesc
 	{
-		CpuAccessMode cpuAccess = CpuAccessMode::kDefault;
-
 		uint32_t    stride       = 0;
 		uint32_t    elementCount = 0;
 		std::string debugName    = "Unnamed Buffer";

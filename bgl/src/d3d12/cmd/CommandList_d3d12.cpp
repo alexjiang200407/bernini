@@ -54,18 +54,6 @@ namespace bgl
 	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize)
 	{
 		auto& buffer = m_ResourceManager->GetBuffer(handle);
-		auto& desc   = buffer.GetDesc();
-
-		if (desc.cpuAccess == CpuAccessMode::kUpload)
-		{
-			memcpy(static_cast<std::byte*>(buffer.GetMappedPtr()) + offset, data, byteSize);
-			return;
-		}
-		else if (desc.cpuAccess == CpuAccessMode::kReadBack)
-		{
-			gfatal("Cannot write to a readback buffer");
-			return;
-		}
 
 		size_t                    offsetInUploadBuffer = 0;
 		void*                     cpuVA;
@@ -92,6 +80,53 @@ namespace bgl
 			m_CurrentUploadBuffer.Get(),
 			offsetInUploadBuffer,
 			byteSize);
+	}
+
+	void
+	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src)
+	{
+		auto&       srcBuffer = m_ResourceManager->GetBuffer(src);
+		const auto& readback  = m_ResourceManager->GetReadbackBuffer(dst);
+		const auto& desc      = srcBuffer.GetDesc();
+
+		const uint64_t byteSize = static_cast<uint64_t>(desc.elementCount) * desc.stride;
+
+		gassert(
+			readback.GetByteSize() >= byteSize,
+			"Readback buffer is too small for the source buffer");
+
+		m_CommandList->CopyBufferRegion(
+			readback.GetD3D12Resource(),
+			0,
+			srcBuffer.GetD3D12Resource(),
+			0,
+			byteSize);
+	}
+
+	void
+	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src)
+	{
+		auto&       srcTexture = m_ResourceManager->GetTexture(src);
+		const auto& readback   = m_ResourceManager->GetReadbackBuffer(dst);
+
+		auto device  = m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy();
+		auto texDesc = srcTexture.GetD3D12Resource()->GetDesc();
+
+		// The readback buffer holds the texture in a linear, row-padded layout.
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
+		device->GetCopyableFootprints(&texDesc, 0, 1, 0, &footprint, nullptr, nullptr, nullptr);
+
+		D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
+		dstLocation.pResource                   = readback.GetD3D12Resource();
+		dstLocation.Type                        = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		dstLocation.PlacedFootprint             = footprint;
+
+		D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
+		srcLocation.pResource                   = srcTexture.GetD3D12Resource();
+		srcLocation.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		srcLocation.SubresourceIndex            = 0;
+
+		m_CommandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
 	}
 
 	void

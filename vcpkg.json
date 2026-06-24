@@ -7,7 +7,8 @@
     "catch2",
     "shader-slang",
     "directx-headers",
-    "cpptrace"
+    "cpptrace",
+    "directxtex"
   ],
   "builtin-baseline": "05925b52317eb9a900a8583782e630aafd7a8929"
 }

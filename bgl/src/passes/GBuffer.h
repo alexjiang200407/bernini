@@ -78,11 +78,12 @@ namespace bgl
 
 		void
 		Execute(
-			Scene*         scene,
-			ICommandQueue* cmdQueue,
-			ICommandList*  cmdList,
-			FrameBuffer    frameBuffer,
-			Viewport       vp)
+			Scene*           scene,
+			ICommandQueue*   cmdQueue,
+			ICommandList*    cmdList,
+			FrameBuffer      frameBuffer,
+			Viewport         vp,
+			const glm::mat4& viewProj)
 		{
 			gassert(cmdQueue != nullptr, "Pass command queue must be initialized");
 			gassert(cmdList != nullptr, "Pass commandlist must be initialized");
@@ -93,24 +94,7 @@ namespace bgl
 
 			scene->AttachUniforms(m_Uniforms);
 
-			// TODO: Change this
-			glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f, 20.0f);
-			glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-			glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f, 0.0f);
-
-			// Target point the camera is looking at
-			glm::vec3 target = cameraPos + cameraFront;
-
-			glm::mat4 view = glm::lookAt(cameraPos, target, cameraUp);
-
-			glm::mat4 proj = glm::perspective(
-				glm::radians(60.0f),  // fovYDeg
-				800.0f / 600.0f,      // aspectRatio
-				0.5f,                 // nearZ
-				500.0f                // farZ
-			);
-
-			m_Uniforms["viewProj"] = proj * view;
+			m_Uniforms["viewProj"] = viewProj;
 
 			auto gfxState     = MeshletState();
 			gfxState.pipeline = m_Pipeline;

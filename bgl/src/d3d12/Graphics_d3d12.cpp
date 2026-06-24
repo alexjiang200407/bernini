@@ -9,6 +9,8 @@
 #include "passes/GBuffer.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
+#include <DirectXTex.h>
+#include <bgl/RenderContext.h>
 #include <core/file/file.h>
 
 namespace fs = std::filesystem;
@@ -45,7 +47,16 @@ namespace bgl
 		operator=(Graphics&&) noexcept = delete;
 
 		void
-		DrawFrame(IScene* scene) override;
+		BeginFrame() override;
+
+		void
+		Draw(const RenderContext& context) override;
+
+		void
+		EndFrame() override;
+
+		void
+		ScreenshotRaw(const std::string& filepath) override;
 
 		const GraphicsOptions&
 		GetOptions() const
@@ -97,6 +108,13 @@ namespace bgl
 		TextureRtvHandle m_BackBuffers[c_BufferCount];
 		TextureDsvHandle m_DepthBuffer;
 		UINT64           m_FenceValues[c_BufferCount] = { 0, 0 };
+
+		// Per-frame state, valid between BeginFrame and EndFrame.
+		FrameBuffer m_FrameBuffer;
+		bool        m_FrameActive = false;
+
+		// Backbuffer index that holds the most recently rendered frame (for ScreenshotRaw).
+		UINT m_LastPresentedIndex = 0;
 
 		wrl::ComPtr<ID3D12Debug1>   m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue> m_DxgiInfoQueue;
@@ -263,25 +281,25 @@ namespace bgl
 	}
 
 	void
-	Graphics::DrawFrame(IScene* scene)
+	Graphics::BeginFrame()
 	{
+		gassert(!m_FrameActive, "BeginFrame called while a frame is already active");
+
 		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
 		if (fenceToWaitOn != 0)
 		{
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
 		}
 
-		auto scene_ = scene->As<Scene>();
-
 		m_CommandAllocator[m_FrameIndex]->ResetAllocator();
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
 
-		auto frameBuffer = FrameBuffer();
-		frameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
-		frameBuffer.SetDepthAttachment(m_DepthBuffer.dsvHandle);
+		m_FrameBuffer = FrameBuffer();
+		m_FrameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
+		m_FrameBuffer.SetDepthAttachment(m_DepthBuffer.dsvHandle);
 
-		// Clear Framebuffers
+		// Clear the frame's target once; subsequent Draws composite over it.
 		{
 			m_ResourceManager->ClearDsv(m_CommandList, m_DepthBuffer.dsvHandle, 1.0f, 0);
 
@@ -295,7 +313,7 @@ namespace bgl
 					.AddSyncAfter(BarrierSyncFlag::kRenderTarget)
 					.SetLayoutAfter(BarrierLayout::kRenderTarget);
 
-				m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
+				m_CommandList->Barrier(m_FrameBuffer.colorAttachments[0], barrierDesc);
 			}
 
 			{
@@ -306,6 +324,17 @@ namespace bgl
 					clearColor);
 			}
 		}
+
+		m_FrameActive = true;
+	}
+
+	void
+	Graphics::Draw(const RenderContext& context)
+	{
+		gassert(m_FrameActive, "Draw must be called between BeginFrame and EndFrame");
+		gassert(context.scene != nullptr, "RenderContext requires a scene");
+
+		auto scene_ = context.scene->As<Scene>();
 
 		if (scene_->IsFirstFrame())
 		{
@@ -334,9 +363,27 @@ namespace bgl
 			PackedBufferState::kUpdate,
 			PackedBufferState::kShader);
 
-		auto vp = Viewport(static_cast<float>(m_Opts.width), static_cast<float>(m_Opts.height));
+		m_GBuffer.Execute(
+			scene_,
+			m_CommandQueue,
+			m_CommandList,
+			m_FrameBuffer,
+			context.viewport,
+			context.camera.GetViewProjection());
 
-		m_GBuffer.Execute(scene_, m_CommandQueue, m_CommandList, frameBuffer, vp);
+		// Restore for the next frame's update.
+		scene_->TransitionAll(m_CommandList, EntryBufferState::kShader, EntryBufferState::kUpdate);
+		scene_->TransitionAll(m_CommandList, RangeBufferState::kShader, RangeBufferState::kUpdate);
+		scene_->TransitionAll(
+			m_CommandList,
+			PackedBufferState::kShader,
+			PackedBufferState::kUpdate);
+	}
+
+	void
+	Graphics::EndFrame()
+	{
+		gassert(m_FrameActive, "EndFrame called without a matching BeginFrame");
 
 		{
 			auto barrierDesc = TextureBarrierDesc();
@@ -348,16 +395,8 @@ namespace bgl
 				.AddSyncAfter(BarrierSyncFlag::kNone)
 				.SetLayoutAfter(BarrierLayout::kPresent);
 
-			m_CommandList->Barrier(frameBuffer.colorAttachments[0], barrierDesc);
+			m_CommandList->Barrier(m_FrameBuffer.colorAttachments[0], barrierDesc);
 		}
-
-		// For next frame
-		scene_->TransitionAll(m_CommandList, EntryBufferState::kShader, EntryBufferState::kUpdate);
-		scene_->TransitionAll(m_CommandList, RangeBufferState::kShader, RangeBufferState::kUpdate);
-		scene_->TransitionAll(
-			m_CommandList,
-			PackedBufferState::kShader,
-			PackedBufferState::kUpdate);
 
 		m_CommandList->Close();
 
@@ -371,7 +410,110 @@ namespace bgl
 		uint64_t currentGPUProgress = m_CommandQueue->PollCurrentFenceValue();
 		m_ResourceManager->CleanupExpiredResources(currentGPUProgress);
 
-		m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+		// Remember which backbuffer just received the frame before advancing.
+		m_LastPresentedIndex = m_FrameIndex;
+
+		if (m_Opts.headless)
+		{
+			m_FrameIndex = (m_FrameIndex + 1) % c_BufferCount;
+		}
+		else
+		{
+			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+		}
+
+		m_FrameActive = false;
+	}
+
+	void
+	Graphics::ScreenshotRaw(const std::string& filepath)
+	{
+		gassert(!m_FrameActive, "ScreenshotRaw cannot be called between BeginFrame and EndFrame");
+
+		const UINT    index         = m_LastPresentedIndex;
+		TextureHandle textureHandle = m_BackBuffers[index].textureHandle;
+
+		// Make sure the frame that produced this backbuffer has finished.
+		if (m_FenceValues[index] != 0)
+		{
+			m_CommandQueue->WaitForFenceCPUBlocking(m_FenceValues[index]);
+		}
+
+		// Copy the backbuffer into a CPU-readable buffer.
+		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
+
+		auto readbackDesc      = ReadbackBufferDesc();
+		readbackDesc.byteSize  = layout.totalBytes;
+		readbackDesc.debugName = "ScreenshotRaw Readback";
+
+		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
+
+		m_CommandAllocator[index]->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[index].Get());
+
+		{
+			auto barrier = TextureBarrierDesc();
+			barrier.AddSyncBefore(BarrierSyncFlag::kNone)
+				.AddAccessBefore(BarrierAccessFlag::kNone)
+				.SetLayoutBefore(BarrierLayout::kPresent)
+				.AddSyncAfter(BarrierSyncFlag::kCopy)
+				.AddAccessAfter(BarrierAccessFlag::kCopySource)
+				.SetLayoutAfter(BarrierLayout::kCopySource);
+			m_CommandList->Barrier(textureHandle, barrier);
+		}
+
+		m_CommandList->CopyTextureToReadback(readback, textureHandle);
+
+		{
+			auto barrier = TextureBarrierDesc();
+			barrier.AddSyncBefore(BarrierSyncFlag::kCopy)
+				.AddAccessBefore(BarrierAccessFlag::kCopySource)
+				.SetLayoutBefore(BarrierLayout::kCopySource)
+				.AddSyncAfter(BarrierSyncFlag::kNone)
+				.AddAccessAfter(BarrierAccessFlag::kNone)
+				.SetLayoutAfter(BarrierLayout::kPresent);
+			m_CommandList->Barrier(textureHandle, barrier);
+		}
+
+		m_CommandList->Close();
+
+		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
+		m_CommandQueue->WaitForFenceCPUBlocking(fence);
+
+		// Wrap the mapped readback as a DirectX::Image (the padded rowPitch is fine,
+		// DirectX::Image stores it explicitly) and encode to file.
+		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
+
+		gassert(resource != nullptr, "ScreenshotRaw failed to get D3D12Resource from texture handle");
+
+		auto resourceDesc = resource->GetDesc();
+
+		const void* mapped = m_ResourceManager->MapReadback(readback);
+
+		DirectX::Image image = {};
+		image.width          = static_cast<size_t>(resourceDesc.Width);
+		image.height         = static_cast<size_t>(resourceDesc.Height);
+		image.format         = resourceDesc.Format;
+		image.rowPitch       = static_cast<size_t>(layout.rowPitch);
+		image.slicePitch     = static_cast<size_t>(layout.rowPitch) * resourceDesc.Height;
+		image.pixels = const_cast<uint8_t*>(static_cast<const uint8_t*>(mapped) + layout.offset);
+
+		std::wstring widePath(filepath.begin(), filepath.end());
+
+		// DDS only for now: it needs no COM/WIC init and stores the exact texture
+		// format, which is what the golden-image comparison wants.
+		HRESULT hr = DirectX::SaveToDDSFile(image, DirectX::DDS_FLAGS_NONE, widePath.c_str());
+
+		m_ResourceManager->UnmapReadback(readback);
+		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+
+		if (FAILED(hr))
+		{
+			gerror(
+				"Screenshot failed to save '{}' (hr=0x{:08X})",
+				filepath,
+				static_cast<uint32_t>(hr));
+		}
 	}
 
 	void

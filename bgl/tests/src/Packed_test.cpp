@@ -5,7 +5,6 @@
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "scene/PackedBuffer.h"
-#include "types/CpuAccessMode.h"
 #include <bgl/IGraphics.h>
 
 TEST_CASE("PackedBuffer", "[packed][scene]")

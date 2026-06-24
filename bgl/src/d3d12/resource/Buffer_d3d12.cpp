@@ -4,10 +4,10 @@
 namespace bgl
 {
 	Buffer::Buffer(
-		ID3D12Device*         device,
-		ID3D12DescriptorHeap* descriptorHeap,
-		uint32_t              descriptorIndex,
-		const StructBufferDesc&     desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
+		ID3D12Device*           device,
+		ID3D12DescriptorHeap*   descriptorHeap,
+		uint32_t                descriptorIndex,
+		const StructBufferDesc& desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
@@ -42,20 +42,7 @@ namespace bgl
 		resDesc.SampleDesc.Count = 1;
 		resDesc.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-		switch (desc.cpuAccess)
-		{
-		case CpuAccessMode::kDefault:
-			heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-			break;
-		case CpuAccessMode::kUpload:
-			gfatal("kUpload not implemented");
-			//heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-			//break;
-		case CpuAccessMode::kReadBack:
-			gfatal("kReadBack not implemented");
-			//heapProps.Type = D3D12_HEAP_TYPE_READBACK;
-			//break;
-		}
+		heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
 		// Create the resource via CreateCommittedResource3
 		device10->CreateCommittedResource3(
@@ -70,22 +57,8 @@ namespace bgl
 			IID_PPV_ARGS(&m_Buffer)) >>
 			d3d12ErrChecker;
 
-		if (desc.cpuAccess == CpuAccessMode::kUpload)
-		{
-			m_Buffer->Map(0, nullptr, &m_MappedPtr) >> d3d12ErrChecker;
-		}
-
 		std::wstring wName(desc.debugName.begin(), desc.debugName.end());
 		m_Buffer->SetName(wName.c_str());
-	}
-
-	Buffer::~Buffer() noexcept
-	{
-		if (m_MappedPtr)
-		{
-			m_Buffer->Unmap(0, nullptr);
-			m_MappedPtr = nullptr;
-		}
 	}
 
 }

@@ -2,6 +2,7 @@
 #include "device/Device.h"
 #include "resource/Buffer.h"
 #include "resource/Dsv.h"
+#include "resource/Readback.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include "types/ClearValue.h"
@@ -38,11 +39,22 @@ namespace bgl
 		virtual TextureHandle
 		CreateTexture(const TextureDesc& desc) = 0;
 
+		// Creates a CPU-readable buffer in the readback heap, used as the
+		// destination of GPU->CPU copies.
+		virtual ReadbackBufferHandle
+		CreateReadbackBuffer(const ReadbackBufferDesc& desc) = 0;
+
 		virtual void
 		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
 
 		virtual void
 		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
+
+		virtual void
+		DestroyReadbackBuffer(
+			ReadbackBufferHandle handle,
+			uint64_t             currentFenceValue,
+			bool                 deferred = true) = 0;
 
 		virtual void
 		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
@@ -77,11 +89,31 @@ namespace bgl
 		virtual const Texture&
 		GetTexture(TextureHandle handle) const = 0;
 
+		[[nodiscard]]
+		virtual const ReadbackBuffer&
+		GetReadbackBuffer(ReadbackBufferHandle handle) const = 0;
+
+		// Row-pitch layout of texture subresource 0 within a readback buffer.
+		[[nodiscard]]
+		virtual TextureReadbackLayout
+		GetTextureReadbackLayout(TextureHandle handle) const = 0;
+
+		// Maps a readback buffer for CPU reading; valid until UnmapReadback.
+		[[nodiscard]]
+		virtual const void*
+		MapReadback(ReadbackBufferHandle handle) = 0;
+
+		virtual void
+		UnmapReadback(ReadbackBufferHandle handle) = 0;
+
 		[[nodiscard]] virtual bool
 		ValidBufferHandle(const BufferHandle& handle) const = 0;
 
 		[[nodiscard]] virtual bool
 		ValidTextureHandle(const TextureHandle& handle) const = 0;
+
+		[[nodiscard]] virtual bool
+		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const = 0;
 
 		[[nodiscard]] virtual bool
 		ValidRtvHandle(const RtvHandle& handle) const = 0;

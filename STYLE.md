@@ -95,13 +95,13 @@ enum class Color {
 - Maximize the use of concepts over requires
 
 
-# Comments
+# Comments (CRITICAL)
 
 - Only comment under these circumstances
 	- There are Pre-Conditions and Post-Conditions
 	- Code itself is not very descriptive
 	- Important Clarifications
-- Use javadoc comments e.g.
+- Use javadoc comments for comments above functions structs e.g.
 
 ```cpp
 /**

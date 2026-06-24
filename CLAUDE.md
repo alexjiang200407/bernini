@@ -10,10 +10,11 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 - The CMakelists will specify the src and include directory in each subsystem as a include directory for the target, so always `#include` to the relative to that. e.g. If the current source file is `$SUBSYSTEM/src/xx/Y.h` do `#include "X.h"` instead of `#include "../X.h"`
 - When we `#include` a file in `include` we use <> if we `#include` a file in a src we use ""
 - The source files are globbed. Just place source files where other sources are located.
+- Uses vcpkg with manifest mode
 
 # C++ Style
 
-- clang-format each file modified via `python ./scripts/clang_format.py <files...>` (use `--check` to verify without editing). It finds clang-format on PATH or the Visual Studio LLVM component; if neither exists it tells the user to install it.
+- clang-format each .cpp and .slang file modified via `python ./scripts/clang_format.py <files...>` (use `--check` to verify without editing). It finds clang-format on PATH or the Visual Studio LLVM component; if neither exists it tells the user to install it.
 
 [Style Guide](./STYLE.md)
 

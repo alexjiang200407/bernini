@@ -6,10 +6,9 @@ namespace bgl
 {
 	struct RangeBufferDesc
 	{
-		uint32_t      maxCount  = 0;
-		CpuAccessMode cpuAccess = CpuAccessMode::kDefault;
-		uint32_t      blockSize = 65536;  // Default to the sweet spot 64KB
-		std::string   debugName;
+		uint32_t    maxCount  = 0;
+		uint32_t    blockSize = 65536;  // Default to the sweet spot 64KB
+		std::string debugName;
 	};
 
 	enum class RangeBufferState
@@ -56,7 +55,6 @@ namespace bgl
 			{
 				StructBufferDesc bufDesc;
 				bufDesc.debugName    = m_Desc.debugName;
-				bufDesc.cpuAccess    = m_Desc.cpuAccess;
 				bufDesc.elementCount = m_Desc.maxCount;
 				bufDesc.stride       = sizeof(T);
 				bufDesc.isUav        = false;

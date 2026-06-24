@@ -65,10 +65,25 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto transform = glm::mat4(1.0f);
 		auto inst      = scene->CreateStaticMeshInstance(cube, mat, transform);
 
+		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
+
+		auto camera = bgl::Camera()
+		                  .LookAt(
+							  glm::vec3(0.0f, 0.0f, 20.0f),
+							  glm::vec3(0.0f, 0.0f, 19.0f),
+							  glm::vec3(0.0f, 1.0f, 0.0f))
+		                  .Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+		auto context   = bgl::RenderContext{};
+		context.scene  = scene.Get();
+		context.camera = camera;
+		context.viewport =
+			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
+
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))
 		{
-			graphics->DrawFrame(scene);
+			graphics->DrawFrame(context);
 		}
 	}
 	catch (const std::runtime_error& e)

@@ -109,6 +109,19 @@ namespace bgl
 		return TextureHandle(slotIndex, textureSlotHandle.generation);
 	}
 
+	ReadbackBufferHandle
+	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc)
+	{
+		gassert(desc.byteSize > 0, "Readback buffer requires a positive byte size");
+
+		auto     slot      = m_ReadbackBuffers.allocate_slot();
+		uint32_t slotIndex = slot.index;
+
+		m_ReadbackBuffers[slotIndex] = ReadbackBuffer(m_Device.Get(), desc);
+
+		return ReadbackBufferHandle{ slotIndex, slot.generation };
+	}
+
 	TextureHandle
 	ResourceManager::CreateTexture(
 		wrl::ComPtr<ID3D12Resource> d3d12Texture,
@@ -243,6 +256,27 @@ namespace bgl
 	}
 
 	void
+	ResourceManager::DestroyReadbackBuffer(
+		ReadbackBufferHandle handle,
+		uint64_t             currentFenceValue,
+		bool                 deferred)
+	{
+		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback buffer handle");
+
+		if (deferred)
+		{
+			m_PendingDeletions.emplace_back(
+				PendingDeletion::Type::kReadback,
+				handle.idx,
+				currentFenceValue);
+		}
+		else
+		{
+			m_ReadbackBuffers.release_slot(handle.idx);
+		}
+	}
+
+	void
 	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue)
 	{
 		std::erase_if(m_PendingDeletions, [&](const auto& pending) {
@@ -261,6 +295,9 @@ namespace bgl
 					break;
 				case PendingDeletion::Type::kTexture:
 					m_Textures.release_slot(pending.slotIndex);
+					break;
+				case PendingDeletion::Type::kReadback:
+					m_ReadbackBuffers.release_slot(pending.slotIndex);
 					break;
 				}
 				return true;
@@ -290,6 +327,17 @@ namespace bgl
 		}
 
 		return !m_Textures[handle.idx].IsNull();
+	}
+
+	bool
+	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const
+	{
+		if (!m_ReadbackBuffers.valid(handle.idx, handle.generation))
+		{
+			return false;
+		}
+
+		return !m_ReadbackBuffers[handle.idx].IsNull();
 	}
 
 	bool
@@ -323,6 +371,57 @@ namespace bgl
 	{
 		gassert(ValidBufferHandle(handle), "Invalid buffer handle");
 		return std::get<Buffer>(m_CbvSrvUavSlots[handle.idx]);
+	}
+
+	const ReadbackBuffer&
+	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const
+	{
+		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
+		return m_ReadbackBuffers[handle.idx];
+	}
+
+	TextureReadbackLayout
+	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const
+	{
+		const auto&         texture     = GetTexture(handle);
+		D3D12_RESOURCE_DESC textureDesc = texture.GetD3D12Resource()->GetDesc();
+
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint    = {};
+		UINT                               rowCount     = 0;
+		UINT64                             rowSizeBytes = 0;
+		UINT64                             totalBytes   = 0;
+
+		m_Device->GetCopyableFootprints(
+			&textureDesc,
+			0,
+			1,
+			0,
+			&footprint,
+			&rowCount,
+			&rowSizeBytes,
+			&totalBytes);
+
+		TextureReadbackLayout layout;
+		layout.offset       = footprint.Offset;
+		layout.rowPitch     = footprint.Footprint.RowPitch;
+		layout.rowSizeBytes = rowSizeBytes;
+		layout.rowCount     = rowCount;
+		layout.totalBytes   = totalBytes;
+		return layout;
+	}
+
+	const void*
+	ResourceManager::MapReadback(ReadbackBufferHandle handle)
+	{
+		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
+		return m_ReadbackBuffers[handle.idx].Map();
+	}
+
+	void
+	ResourceManager::UnmapReadback(ReadbackBufferHandle handle)
+	{
+		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
+		m_ReadbackBuffers[handle.idx].Unmap();
 	}
 
 	const Rtv&

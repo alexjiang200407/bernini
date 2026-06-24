@@ -107,6 +107,7 @@ endif()
 
 if (BUILD_TESTS)
     find_package(Catch2 CONFIG REQUIRED)
+	find_package(directxtex CONFIG REQUIRED)
 
     file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
@@ -122,13 +123,22 @@ if (BUILD_TESTS)
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
     )
 
     target_force_include(bgl_tests
         PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
     )
     
-    target_link_libraries(bgl_tests PRIVATE bgl_objects Catch2::Catch2 Catch2::Catch2WithMain core)
+    target_link_libraries(
+			bgl_tests
+		PRIVATE
+			bgl_objects
+			Catch2::Catch2
+			Catch2::Catch2WithMain
+			core
+			Microsoft::DirectXTex
+	)
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)
@@ -148,6 +158,10 @@ if (BUILD_TESTS)
 	set_target_properties(bgl_tests PROPERTIES
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
+
+	# Deploy golden-image references next to the test exe (cwd at run time), so
+	# tests resolve them as "golden/<name>.dds".
+	copy_to_target(bgl_tests ITEMS ${CMAKE_CURRENT_SOURCE_DIR}/tests/golden)
 
 	enable_strict_compiler(bgl_tests)
 endif()

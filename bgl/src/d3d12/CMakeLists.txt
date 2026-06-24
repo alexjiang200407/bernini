@@ -22,6 +22,9 @@ add_library(bgl_d3d12 OBJECT
 
 find_package(directx-headers CONFIG REQUIRED)
 
+# DirectXTex is used (d3d12 only) to encode screenshots/readbacks to image files.
+find_package(directxtex CONFIG REQUIRED)
+
 target_include_directories(bgl_d3d12
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -37,7 +40,7 @@ target_compile_definitions(bgl_d3d12 PRIVATE RENDERER_BACKEND_DX12)
 
 target_link_libraries(bgl_d3d12
     PUBLIC core glm::glm
-    PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers
+    PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers Microsoft::DirectXTex
 )
 
 # D3D12 Agility SDK exports. Built as a standalone OBJECT library so the

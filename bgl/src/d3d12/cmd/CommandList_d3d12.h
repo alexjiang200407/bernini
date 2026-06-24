@@ -35,6 +35,12 @@ namespace bgl
 		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) override;
 
 		void
+		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) override;
+
+		void
+		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) override;
+
+		void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) override;
 
 		void
