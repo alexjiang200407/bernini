@@ -3,7 +3,7 @@
 namespace bgl
 {
 	void
-	CommandAllocator::ResetAllocator()
+	CommandAllocator::ResetAllocator() noexcept
 	{
 		m_CommandAllocator->Reset() >> d3d12ErrChecker;
 	}

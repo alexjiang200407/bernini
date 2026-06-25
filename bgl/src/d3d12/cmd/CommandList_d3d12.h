@@ -4,7 +4,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "resource/UploadManager.h"
-#include "types/GraphicsState.h"
+#include "types/MeshletState.h"
 #include "types/QueueType.h"
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -20,53 +20,79 @@ namespace bgl
 			const CommandListDesc& desc,
 			ICommandAllocator*     commandAllocator,
 			ResourceManagerHandle  resourceManager);
+		~CommandList() noexcept override { logger::trace("~CommandList"); }
+
+		CommandList(const CommandList&) noexcept = delete;
+		CommandList(CommandList&&) noexcept      = delete;
+
+		CommandList&
+		operator=(const CommandList&) noexcept = delete;
+
+		CommandList&
+		operator=(CommandList&&) noexcept = delete;
 
 		void
-		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) override;
+		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) noexcept
+			override;
 
 		void
-		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) override;
+		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept override;
 
 		void
-		Close() override;
+		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept override;
 
 		void
-		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) override;
+		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept override;
 
 		void
-		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) override;
+		Close() noexcept override;
 
 		void
-		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) override;
+		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept override;
 
 		void
-		SetGraphicsState(const GraphicsState& gfxState) override;
+		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept override;
 
 		void
-		DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const override;
+		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) noexcept override;
+
+		void
+		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept override;
+
+		void
+		SetMeshletState(const MeshletState& gfxState) noexcept override;
+
+		void
+		DispatchMesh(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) noexcept override;
 
 		ID3D12CommandList*
-		GetD3D12CommandList() const
+		GetD3D12CommandList() const noexcept
 		{
 			return m_CommandList.Get();
 		}
 
 		bool
-		IsOpen() const override
+		IsOpen() const noexcept override
 		{
 			return m_Open;
 		}
 
 		QueueType
-		GetType() const override
+		GetType() const noexcept override
 		{
 			return m_Desc.type;
 		}
 
 		void
-		SubmitChunks(ICommandQueue* cmdQueue);
+		SubmitChunks(ICommandQueue* cmdQueue) noexcept;
 
 	private:
+		void
+		BindUniforms(const Uniforms& uniforms) noexcept;
+
 		CommandListDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;
 
@@ -75,7 +101,7 @@ namespace bgl
 		UploadManager               m_UploadManager;
 
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
-		std::optional<GraphicsState>            m_CurrentGraphicsState;
+		std::optional<MeshletState>             m_CurrentMeshletState;
 		uint64_t                                m_LastCompletedFence = 0;
 		uint64_t                                m_RecordingVersion   = 0;
 		bool                                    m_Open               = false;

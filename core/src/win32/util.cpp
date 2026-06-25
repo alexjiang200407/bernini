@@ -1,4 +1,5 @@
 #include "win32/util.h"
+#include "util.h"
 #include <core/str/str.h>
 
 namespace core::win::win32
@@ -8,14 +9,14 @@ namespace core::win::win32
 	{
 		wchar_t*   descriptionWinalloc = nullptr;
 		const auto result              = FormatMessageW(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                FORMAT_MESSAGE_IGNORE_INSERTS,
-            nullptr,
-            dw,
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            reinterpret_cast<LPWSTR>(&descriptionWinalloc),
-            0,
-            nullptr);
+			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_IGNORE_INSERTS,
+			nullptr,
+			dw,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			reinterpret_cast<LPWSTR>(&descriptionWinalloc),
+			0,
+			nullptr);
 
 		std::wstring description;
 		if (result)
@@ -35,10 +36,21 @@ namespace core::win::win32
 	{
 		if (FAILED(hr))
 		{
-			throw core::except::BerniniException(
-				"Win32 API Error",
-				core::str::wide_to_string(getErrorDescription(hr)));
+			throw std::runtime_error(
+				"Win32 API Error: " +
+				core::str::wide_to_string(getErrorDescription(static_cast<DWORD>(hr))));
 		}
 	}
+}
 
+namespace core
+{
+	std::string
+	get_executable_name() noexcept
+	{
+		char buffer[MAX_PATH];
+		GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+
+		return std::filesystem::path(buffer).stem().string();
+	}
 }

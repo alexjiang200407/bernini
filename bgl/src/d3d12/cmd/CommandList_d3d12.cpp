@@ -4,9 +4,10 @@
 #include "cmd/CommandQueue.h"
 #include "cmd/Version.h"
 #include "constants/constants.h"
-#include "pipeline/GraphicsPipeline_d3d12.h"
+#include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
-#include "util.h"
+#include "uniforms/Uniforms.h"
+#include "util_d3d12.h"
 #include <core/math.h>
 
 namespace bgl
@@ -17,7 +18,7 @@ namespace bgl
 		ResourceManagerHandle  resourceManager) :
 		m_Desc(desc), m_ResourceManager(std::move(resourceManager)),
 		m_UploadManager(
-			std::move(m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy()),
+			m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy(),
 			desc.uploadChunkSize,
 			0,
 			false)
@@ -50,21 +51,13 @@ namespace bgl
 	}
 
 	void
-	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize)
+	CommandList::WriteBuffer(
+		BufferHandle handle,
+		const void*  data,
+		size_t       offset,
+		size_t       byteSize) noexcept
 	{
 		auto& buffer = m_ResourceManager->GetBuffer(handle);
-		auto& desc   = buffer.GetDesc();
-
-		if (desc.cpuAccess == BufferDesc::CpuAccessMode::kUpload)
-		{
-			memcpy(static_cast<std::byte*>(buffer.GetMappedPtr()) + offset, data, byteSize);
-			return;
-		}
-		else if (desc.cpuAccess == BufferDesc::CpuAccessMode::kReadBack)
-		{
-			gfatal("Cannot write to a readback buffer");
-			return;
-		}
 
 		size_t                    offsetInUploadBuffer = 0;
 		void*                     cpuVA;
@@ -74,7 +67,7 @@ namespace bgl
 			m_LastCompletedFence,
 			byteSize,
 			nullptr,
-			&m_CurrentUploadBuffer,
+			m_CurrentUploadBuffer,
 			&offsetInUploadBuffer,
 			&cpuVA,
 			&gpuVA,
@@ -85,14 +78,6 @@ namespace bgl
 
 		memcpy(cpuVA, data, byteSize);
 
-		BufferBarrierDesc barrier = {};
-		barrier.accessBefore      = BarrierAccessFlag::kNone;
-		barrier.syncBefore        = BarrierSyncFlag::kNone;
-		barrier.accessAfter       = BarrierAccessFlag::kCopyDest;
-		barrier.syncAfter         = BarrierSyncFlag::kCopy;
-
-		Barrier(handle, barrier);
-
 		m_CommandList->CopyBufferRegion(
 			buffer.GetD3D12Resource(),
 			offset,
@@ -102,7 +87,54 @@ namespace bgl
 	}
 
 	void
-	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator)
+	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
+	{
+		auto&       srcBuffer = m_ResourceManager->GetBuffer(src);
+		const auto& readback  = m_ResourceManager->GetReadbackBuffer(dst);
+		const auto& desc      = srcBuffer.GetDesc();
+
+		const uint64_t byteSize = static_cast<uint64_t>(desc.elementCount) * desc.stride;
+
+		gassert(
+			readback.GetByteSize() >= byteSize,
+			"Readback buffer is too small for the source buffer");
+
+		m_CommandList->CopyBufferRegion(
+			readback.GetD3D12Resource(),
+			0,
+			srcBuffer.GetD3D12Resource(),
+			0,
+			byteSize);
+	}
+
+	void
+	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept
+	{
+		auto&       srcTexture = m_ResourceManager->GetTexture(src);
+		const auto& readback   = m_ResourceManager->GetReadbackBuffer(dst);
+
+		auto device  = m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy();
+		auto texDesc = srcTexture.GetD3D12Resource()->GetDesc();
+
+		// The readback buffer holds the texture in a linear, row-padded layout.
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
+		device->GetCopyableFootprints(&texDesc, 0, 1, 0, &footprint, nullptr, nullptr, nullptr);
+
+		D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
+		dstLocation.pResource                   = readback.GetD3D12Resource();
+		dstLocation.Type                        = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		dstLocation.PlacedFootprint             = footprint;
+
+		D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
+		srcLocation.pResource                   = srcTexture.GetD3D12Resource();
+		srcLocation.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		srcLocation.SubresourceIndex            = 0;
+
+		m_CommandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+	}
+
+	void
+	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept
 	{
 		gassert(!m_Open, "Command list is already open");
 		gassert(cmdQueue != nullptr, "Command queue cannot be null");
@@ -123,17 +155,17 @@ namespace bgl
 	}
 
 	void
-	CommandList::Close()
+	CommandList::Close() noexcept
 	{
 		gassert(m_Open, "Command list must be open before closing");
 
 		m_CommandList->Close() >> d3d12ErrChecker;
-		m_CurrentGraphicsState.reset();
+		m_CurrentMeshletState.reset();
 		m_Open = false;
 	}
 
 	void
-	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier)
+	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept
 	{
 		auto&                                   buffer = m_ResourceManager->GetBuffer(handle);
 		wrl::ComPtr<ID3D12GraphicsCommandList7> cmdList7;
@@ -162,10 +194,9 @@ namespace bgl
 	}
 
 	void
-	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
 		auto& texture = m_ResourceManager->GetTexture(handle);
-		auto& desc    = texture.GetDesc();
 
 		D3D12_TEXTURE_BARRIER textureBarrier = {};
 
@@ -206,7 +237,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
 		auto& rtv           = m_ResourceManager->GetRtv(handle);
 		auto  textureHandle = rtv.GetTextureHandle();
@@ -216,22 +247,35 @@ namespace bgl
 	}
 
 	void
-	CommandList::SetGraphicsState(const GraphicsState& gfxState)
+	CommandList::Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
-		m_CurrentGraphicsState = gfxState;
+		auto& rtv           = m_ResourceManager->GetDsv(handle);
+		auto  textureHandle = rtv.GetTextureHandle();
+
+		gassert(m_ResourceManager->ValidDsvHandle(handle), "DSV has invalid texture handle");
+		Barrier(textureHandle, barrier);
 	}
 
 	void
-	CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount) const
+	CommandList::SetMeshletState(const MeshletState& gfxState) noexcept
 	{
-		gassert(m_CurrentGraphicsState.has_value(), "Graphics state must be set before drawing");
+		m_CurrentMeshletState = gfxState;
+	}
+
+	void
+	CommandList::DispatchMesh(
+		uint32_t threadGroupCountX,
+		uint32_t threadGroupCountY,
+		uint32_t threadGroupCountZ) noexcept
+	{
+		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
 		gassert(
-			m_CurrentGraphicsState->pipeline.IsInitialized(),
+			m_CurrentMeshletState->pipeline.IsInitialized(),
 			"Pipeline state must be set in graphics state");
 
 		// Viewport
 		{
-			const auto& viewports = m_CurrentGraphicsState->viewportState.viewports;
+			const auto& viewports = m_CurrentMeshletState->viewportState.viewports;
 			std::array<D3D12_VIEWPORT, ViewportState::MaxViewports> d3d12Viewports = {};
 
 			for (size_t i = 0; i < viewports.size(); ++i)
@@ -253,7 +297,7 @@ namespace bgl
 
 		// Scissor rect
 		{
-			const auto& scissorRects = m_CurrentGraphicsState->viewportState.scissorRects;
+			const auto& scissorRects = m_CurrentMeshletState->viewportState.scissorRects;
 			std::array<D3D12_RECT, ViewportState::MaxViewports> d3d12Rects = {};
 
 			for (size_t i = 0; i < scissorRects.size(); ++i)
@@ -273,7 +317,7 @@ namespace bgl
 
 		// Render targets
 		{
-			const auto& rtvs = m_CurrentGraphicsState->frameBuffer.colorAttachments;
+			const auto& rtvs = m_CurrentMeshletState->frameBuffer.colorAttachments;
 			std::array<D3D12_CPU_DESCRIPTOR_HANDLE, c_MaxRenderTargets> d3d12RenderTargets = {};
 
 			for (size_t i = 0; i < rtvs.size(); ++i)
@@ -282,42 +326,83 @@ namespace bgl
 				d3d12RenderTargets[i] = rtv.GetCpuHandle();
 			}
 
+			D3D12_CPU_DESCRIPTOR_HANDLE  dsvCpuHandle  = {};
+			D3D12_CPU_DESCRIPTOR_HANDLE* pDsvCpuHandle = nullptr;
+
+			auto depthAttachment = m_CurrentMeshletState->frameBuffer.depthAttachment;
+			if (!depthAttachment.IsNull())
+			{
+				auto& dsv     = m_ResourceManager->GetDsv(depthAttachment);
+				dsvCpuHandle  = dsv.GetCpuHandle();
+				pDsvCpuHandle = &dsvCpuHandle;
+			}
+
 			m_CommandList->OMSetRenderTargets(
 				static_cast<UINT>(rtvs.size()),
 				d3d12RenderTargets.data(),
 				FALSE,
-				nullptr);
+				pDsvCpuHandle);
 		}
+
+		// Depth Stencil
 
 		// Pipeline state
 		{
-			auto* pipeline = m_CurrentGraphicsState->pipeline->As<GraphicsPipeline>();
-			m_CommandList->IASetPrimitiveTopology(pipeline->GetPrimitiveTopology());
+			auto* pipeline = m_CurrentMeshletState->pipeline->As<MeshletPipeline>();
+
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
 
-			auto rootConstantsData = m_CurrentGraphicsState->uniforms->Data();
-
-			if (pipeline->GetUniformSize() != 0)
+			if (const Uniforms* uniforms = m_CurrentMeshletState->uniforms)
 			{
-				gassert(rootConstantsData != nullptr, "Pipeline expects uniforms but none are set");
-				auto num32BitValues = core::align(pipeline->GetUniformSize(), 4) / 4;
-				m_CommandList
-					->SetGraphicsRoot32BitConstants(0, num32BitValues, rootConstantsData, 0);
-			}
-			else
-			{
-				gassert(
-					rootConstantsData == nullptr,
-					"Root constants data set but pipeline has no expected uniforms");
+				BindUniforms(*uniforms);
 			}
 		}
 
-		m_CommandList->DrawInstanced(vertexCount, instanceCount, 0, 0);
+		wrl::ComPtr<ID3D12GraphicsCommandList6> cmdList6;
+		if (SUCCEEDED(m_CommandList->QueryInterface(IID_PPV_ARGS(&cmdList6))))
+		{
+			cmdList6->DispatchMesh(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+		}
+		else
+		{
+			gassert(
+				false,
+				"Device/Driver does not support Mesh Shading (DirectX 12 Agility SDK / Feature "
+				"Level 12_2 required)");
+		}
 	}
 
 	void
-	CommandList::SubmitChunks(ICommandQueue* cmdQueue)
+	CommandList::BindUniforms(const Uniforms& uniforms) noexcept
+	{
+		if (uniforms.GetSize() == 0)
+			return;
+
+		size_t                    offsetInUploadBuffer = 0;
+		void*                     cpuVA                = nullptr;
+		D3D12_GPU_VIRTUAL_ADDRESS gpuVA                = 0;
+
+		auto success = m_UploadManager.SuballocateBuffer(
+			m_LastCompletedFence,
+			uniforms.GetSize(),
+			nullptr,
+			m_CurrentUploadBuffer,
+			&offsetInUploadBuffer,
+			&cpuVA,
+			&gpuVA,
+			m_RecordingVersion,
+			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+		gassert(success, "Failed to suballocate constant buffer");
+
+		memcpy(cpuVA, uniforms.Data(), uniforms.GetSize());
+
+		m_CommandList->SetGraphicsRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
+	}
+
+	void
+	CommandList::SubmitChunks(ICommandQueue* cmdQueue) noexcept
 	{
 		gassert(cmdQueue != nullptr, "Command queue cannot be null");
 

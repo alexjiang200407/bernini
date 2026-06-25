@@ -1,7 +1,6 @@
 #include <cassert>
 #include <core/win/Window.h>
 
-#include <core/except/BerniniException.h>
 #include <core/win/KeyEvent.h>
 #include <core/win/MouseEvent.h>
 

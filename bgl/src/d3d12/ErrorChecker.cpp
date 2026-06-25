@@ -7,14 +7,14 @@ namespace bgl
 	{
 		wchar_t*   descriptionWinalloc = nullptr;
 		const auto result              = FormatMessageW(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                FORMAT_MESSAGE_IGNORE_INSERTS,
-            nullptr,
-            hr,
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            reinterpret_cast<LPWSTR>(&descriptionWinalloc),
-            0,
-            nullptr);
+			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_IGNORE_INSERTS,
+			nullptr,
+			static_cast<DWORD>(hr),
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			reinterpret_cast<LPWSTR>(&descriptionWinalloc),
+			0,
+			nullptr);
 
 		std::wstring description;
 		if (result)

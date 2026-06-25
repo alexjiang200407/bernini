@@ -2,7 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {
@@ -25,12 +25,13 @@ namespace bgl
 
 	CommandQueue::~CommandQueue() noexcept
 	{
+		logger::trace("~CommandQueue");
 		if (m_FenceEvent)
 			CloseHandle(m_FenceEvent);
 	}
 
 	uint64_t
-	CommandQueue::ExecuteCommandList(ICommandList* commandList)
+	CommandQueue::ExecuteCommandList(ICommandList* commandList) noexcept
 	{
 		gassert(commandList != nullptr, "Command list is not initialized.");
 		gassert(
@@ -51,7 +52,7 @@ namespace bgl
 	}
 
 	uint64_t
-	CommandQueue::PollCurrentFenceValue()
+	CommandQueue::PollCurrentFenceValue() noexcept
 	{
 		m_LastCompletedFenceValue =
 			std::max(m_LastCompletedFenceValue, m_Fence->GetCompletedValue());
@@ -59,19 +60,19 @@ namespace bgl
 	}
 
 	void
-	CommandQueue::InsertWait(uint64_t fenceValue)
+	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
 		m_CommandQueue->Wait(m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 	}
 
 	void
-	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const
+	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
 		m_CommandQueue->Wait(cq->As<CommandQueue>()->m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 	}
 
 	void
-	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const
+	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept
 	{
 		m_CommandQueue->Wait(
 			otherQueue->As<CommandQueue>()->m_Fence.Get(),
@@ -79,7 +80,7 @@ namespace bgl
 	}
 
 	void
-	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue)
+	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept
 	{
 		if (IsFenceComplete(fenceValue))
 		{
@@ -96,7 +97,7 @@ namespace bgl
 	}
 
 	bool
-	CommandQueue::IsFenceComplete(uint64_t fenceValue)
+	CommandQueue::IsFenceComplete(uint64_t fenceValue) noexcept
 	{
 		if (fenceValue > m_LastCompletedFenceValue)
 		{

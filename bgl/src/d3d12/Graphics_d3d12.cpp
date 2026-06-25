@@ -1,37 +1,85 @@
 #include "cmd/CommandAllocator_d3d12.h"
+#include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
-#include "passes/Test.h"
+#include "gfx/GraphicsBase.h"
+#include "passes/GBuffer.h"
 #include "resource/ResourceManager_d3d12.h"
-#include <bgl/Graphics.h>
+#include "scene/Scene.h"
+#include <DirectXTex.h>
+#include <bgl/RenderContext.h>
 #include <core/file/file.h>
 
 namespace fs = std::filesystem;
 
 namespace bgl
 {
+	class IScene;
+
 	struct TextureRtvHandle
 	{
 		TextureHandle textureHandle;
 		RtvHandle     rtvHandle;
 	};
 
-	class Graphics : public core::RefCounter<IGraphics>
+	struct TextureDsvHandle
+	{
+		TextureHandle textureHandle;
+		DsvHandle     dsvHandle;
+	};
+
+	class Graphics : public core::RefCounter<GraphicsBase>
 	{
 	public:
 		Graphics(const GraphicsOptions&);
 		~Graphics() noexcept;
 
+		Graphics(const Graphics&) noexcept = delete;
+		Graphics(Graphics&&) noexcept      = delete;
+
+		Graphics&
+		operator=(const Graphics&) noexcept = delete;
+
+		Graphics&
+		operator=(Graphics&&) noexcept = delete;
+
 		void
-		DrawFrame() override;
+		BeginFrame() override;
+
+		void
+		Draw(const RenderContext& context) override;
+
+		void
+		EndFrame() override;
+
+		void
+		ScreenshotRaw(const std::string& filepath) override;
 
 		const GraphicsOptions&
 		GetOptions() const
 		{
 			return m_Opts;
+		}
+
+		IDevice*
+		GetDevice() const noexcept override
+		{
+			return m_Device.Get();
+		}
+
+		core::SharedRef<IResourceManager>
+		GetResourceManagerCpy() const noexcept override
+		{
+			return m_ResourceManager.Get();
+		}
+
+		SceneHandle
+		CreateScene(SceneDesc desc) override
+		{
+			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
 		}
 
 	private:
@@ -41,26 +89,38 @@ namespace bgl
 		void
 		CreateRenderTargets();
 
+		void
+		CreateOffscreenRenderTargets();
+
 	private:
-		UINT m_FrameIndex = 0;
+		UINT                                 m_FrameIndex = 0;
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
 
 		GraphicsOptions m_Opts;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
-		CommandAllocatorHandle       m_CommandAllocator[c_BufferCount];
-		CommandQueueHandle           m_CommandQueue;
+
+		DeviceHandle           m_Device;
+		CommandAllocatorHandle m_CommandAllocator[c_BufferCount];
+		CommandQueueHandle     m_CommandQueue;
+		CommandListHandle      m_CommandList;
 
 		TextureRtvHandle m_BackBuffers[c_BufferCount];
+		TextureDsvHandle m_DepthBuffer;
 		UINT64           m_FenceValues[c_BufferCount] = { 0, 0 };
+
+		// Per-frame state, valid between BeginFrame and EndFrame.
+		FrameBuffer m_FrameBuffer;
+		bool        m_FrameActive = false;
+
+		// Backbuffer index that holds the most recently rendered frame (for ScreenshotRaw).
+		UINT m_LastPresentedIndex = 0;
 
 		wrl::ComPtr<ID3D12Debug1>   m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue> m_DxgiInfoQueue;
 
-		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
-
-		DeviceHandle          m_Device;
 		ResourceManagerHandle m_ResourceManager;
-		TestPass              m_TestPass;
+		GBufferPass           m_GBuffer;
 	};
 }
 
@@ -76,8 +136,8 @@ namespace bgl
 
 			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
 
-			log->set_level(logger::level::info);
-			log->flush_on(logger::level::info);
+			log->set_level(static_cast<logger::level::level_enum>(opts.logLevel));
+			log->flush_on(static_cast<logger::level::level_enum>(opts.logLevel));
 
 			spdlog::set_default_logger(std::move(log));
 			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v"s);
@@ -119,15 +179,30 @@ namespace bgl
 
 		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
 
-		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession.get());
+		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession);
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
 			m_CommandAllocator[i] = m_Device->CreateCommandAllocator();
 		}
 
-		m_CommandQueue    = m_Device->CreateGraphicsCommandQueue();
-		m_ResourceManager = m_Device->CreateResourceManager(1000, 1000);
+		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
+
+		{
+			auto resourceManagerDesc          = ResourceManagerDesc();
+			resourceManagerDesc.maxCbvSrvUavs = m_Opts.maxCbvSrvUavs;
+			resourceManagerDesc.maxDsvs       = m_Opts.maxDsvs;
+			resourceManagerDesc.maxRtvs       = m_Opts.maxRtvs;
+			resourceManagerDesc.maxTextures   = m_Opts.maxTextures;
+
+			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
+		}
+
+		CommandListDesc cmdListDesc;
+		cmdListDesc.type = QueueType::kGraphics;
+
+		m_CommandList =
+			m_Device->CreateCommandList(cmdListDesc, m_CommandAllocator[0], m_ResourceManager);
 
 		if (!m_Opts.headless)
 		{
@@ -135,12 +210,18 @@ namespace bgl
 			CreateSwapchain(hwnd);
 			CreateRenderTargets();
 		}
+		else
+		{
+			CreateOffscreenRenderTargets();
+		}
 
-		m_TestPass.Init(m_Device, m_CommandQueue, m_CommandAllocator[0], m_ResourceManager);
+		m_GBuffer.Init(m_Device);
 	}
 
 	Graphics::~Graphics() noexcept
 	{
+		logger::trace("~Graphics");
+
 		auto     cmdQueue           = m_CommandQueue->As<CommandQueue>();
 		uint64_t shutdownFenceValue = m_CommandQueue->GetNextFenceValue();
 		auto     rawQueue           = cmdQueue->GetD3D12CommandQueue();
@@ -155,7 +236,7 @@ namespace bgl
 		if (m_SwapChain)
 			m_SwapChain->SetFullscreenState(FALSE, nullptr) >> d3d12ErrChecker;
 
-		m_TestPass.Release(m_ResourceManager);
+		m_GBuffer.Release();
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -166,6 +247,10 @@ namespace bgl
 				false);
 		}
 
+		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, shutdownFenceValue, false);
+		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, shutdownFenceValue, false);
+
+		m_CommandList.Reset();
 		m_ResourceManager.Reset();
 
 		for (UINT i = 0; i < c_BufferCount; i++)
@@ -189,16 +274,19 @@ namespace bgl
 
 		if (m_Opts.enableDebugLayer)
 		{
-			Microsoft::WRL::ComPtr<IDXGIDebug1> dxgiDebug;
+			wrl::ComPtr<IDXGIDebug1> dxgiDebug;
 			DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug)) >> d3d12ErrChecker;
 			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
 		}
 	}
 
 	void
-	Graphics::DrawFrame()
+	Graphics::BeginFrame()
 	{
-		gassert(m_Opts.headless == false, "Cannot Draw Frame when in headless mode");
+		if (m_FrameActive)
+		{
+			throw GraphicsError("BeginFrame called while a frame is already active");
+		}
 
 		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
 		if (fenceToWaitOn != 0)
@@ -208,20 +296,243 @@ namespace bgl
 
 		m_CommandAllocator[m_FrameIndex]->ResetAllocator();
 
-		auto frameBuffer = FrameBuffer();
-		frameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
+		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
 
-		auto vp = Viewport(m_Opts.width, m_Opts.height);
+		m_FrameBuffer = FrameBuffer();
+		m_FrameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
+		m_FrameBuffer.SetDepthAttachment(m_DepthBuffer.dsvHandle);
 
-		m_FenceValues[m_FrameIndex] =
-			m_TestPass.Execute(m_CommandQueue, m_CommandAllocator[m_FrameIndex], frameBuffer, vp);
+		// Clear the frame's target once; subsequent Draws composite over it.
+		{
+			m_ResourceManager->ClearDsv(m_CommandList, m_DepthBuffer.dsvHandle, 1.0f, 0);
 
-		m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+			{
+				auto barrierDesc = TextureBarrierDesc();
+				barrierDesc.AddAccessBefore(BarrierAccessFlag::kNone)
+					.AddSyncBefore(BarrierSyncFlag::kNone)
+					.SetLayoutBefore(BarrierLayout::kPresent)
+
+					.AddAccessAfter(BarrierAccessFlag::kRenderTarget)
+					.AddSyncAfter(BarrierSyncFlag::kRenderTarget)
+					.SetLayoutAfter(BarrierLayout::kRenderTarget);
+
+				m_CommandList->Barrier(m_FrameBuffer.colorAttachments[0], barrierDesc);
+			}
+
+			{
+				float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+				m_ResourceManager->ClearRtv(
+					m_CommandList,
+					m_BackBuffers[m_FrameIndex].rtvHandle,
+					clearColor);
+			}
+		}
+
+		m_FrameActive = true;
+	}
+
+	void
+	Graphics::Draw(const RenderContext& context)
+	{
+		if (!m_FrameActive)
+		{
+			throw GraphicsError("Draw must be called between BeginFrame and EndFrame");
+		}
+
+		if (context.scene == nullptr)
+		{
+			throw GraphicsError("RenderContext passed to Draw requires a scene");
+		}
+
+		auto scene_ = context.scene->As<Scene>();
+
+		if (scene_->IsFirstFrame())
+		{
+			scene_->TransitionAll(
+				m_CommandList,
+				EntryBufferState::kNone,
+				EntryBufferState::kUpdate);
+
+			scene_->TransitionAll(
+				m_CommandList,
+				RangeBufferState::kNone,
+				RangeBufferState::kUpdate);
+
+			scene_->TransitionAll(
+				m_CommandList,
+				PackedBufferState::kNone,
+				PackedBufferState::kUpdate);
+		}
+
+		scene_->Update(m_CommandList);
+
+		scene_->TransitionAll(m_CommandList, EntryBufferState::kUpdate, EntryBufferState::kShader);
+		scene_->TransitionAll(m_CommandList, RangeBufferState::kUpdate, RangeBufferState::kShader);
+		scene_->TransitionAll(
+			m_CommandList,
+			PackedBufferState::kUpdate,
+			PackedBufferState::kShader);
+
+		m_GBuffer.Execute(
+			scene_,
+			m_CommandQueue,
+			m_CommandList,
+			m_FrameBuffer,
+			context.viewport,
+			context.camera.GetViewProjection());
+
+		// Restore for the next frame's update.
+		scene_->TransitionAll(m_CommandList, EntryBufferState::kShader, EntryBufferState::kUpdate);
+		scene_->TransitionAll(m_CommandList, RangeBufferState::kShader, RangeBufferState::kUpdate);
+		scene_->TransitionAll(
+			m_CommandList,
+			PackedBufferState::kShader,
+			PackedBufferState::kUpdate);
+	}
+
+	void
+	Graphics::EndFrame()
+	{
+		if (!m_FrameActive)
+		{
+			throw GraphicsError("EndFrame called without a matching BeginFrame");
+		}
+
+		{
+			auto barrierDesc = TextureBarrierDesc();
+			barrierDesc.AddAccessBefore(BarrierAccessFlag::kRenderTarget)
+				.AddSyncBefore(BarrierSyncFlag::kRenderTarget)
+				.SetLayoutBefore(BarrierLayout::kRenderTarget)
+
+				.AddAccessAfter(BarrierAccessFlag::kNone)
+				.AddSyncAfter(BarrierSyncFlag::kNone)
+				.SetLayoutAfter(BarrierLayout::kPresent);
+
+			m_CommandList->Barrier(m_FrameBuffer.colorAttachments[0], barrierDesc);
+		}
+
+		m_CommandList->Close();
+
+		m_FenceValues[m_FrameIndex] = m_CommandQueue->ExecuteCommandList(m_CommandList);
+
+		if (!m_Opts.headless)
+		{
+			m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+		}
 
 		uint64_t currentGPUProgress = m_CommandQueue->PollCurrentFenceValue();
 		m_ResourceManager->CleanupExpiredResources(currentGPUProgress);
 
-		m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+		// Remember which backbuffer just received the frame before advancing.
+		m_LastPresentedIndex = m_FrameIndex;
+
+		if (m_Opts.headless)
+		{
+			m_FrameIndex = (m_FrameIndex + 1) % c_BufferCount;
+		}
+		else
+		{
+			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+		}
+
+		m_FrameActive = false;
+	}
+
+	void
+	Graphics::ScreenshotRaw(const std::string& filepath)
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError("ScreenshotRaw cannot be called between BeginFrame and EndFrame");
+		}
+
+		const UINT    index         = m_LastPresentedIndex;
+		TextureHandle textureHandle = m_BackBuffers[index].textureHandle;
+
+		// Make sure the frame that produced this backbuffer has finished.
+		if (m_FenceValues[index] != 0)
+		{
+			m_CommandQueue->WaitForFenceCPUBlocking(m_FenceValues[index]);
+		}
+
+		// Copy the backbuffer into a CPU-readable buffer.
+		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
+
+		auto readbackDesc      = ReadbackBufferDesc();
+		readbackDesc.byteSize  = layout.totalBytes;
+		readbackDesc.debugName = "ScreenshotRaw Readback";
+
+		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
+
+		m_CommandAllocator[index]->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[index].Get());
+
+		{
+			auto barrier = TextureBarrierDesc();
+			barrier.AddSyncBefore(BarrierSyncFlag::kNone)
+				.AddAccessBefore(BarrierAccessFlag::kNone)
+				.SetLayoutBefore(BarrierLayout::kPresent)
+				.AddSyncAfter(BarrierSyncFlag::kCopy)
+				.AddAccessAfter(BarrierAccessFlag::kCopySource)
+				.SetLayoutAfter(BarrierLayout::kCopySource);
+			m_CommandList->Barrier(textureHandle, barrier);
+		}
+
+		m_CommandList->CopyTextureToReadback(readback, textureHandle);
+
+		{
+			auto barrier = TextureBarrierDesc();
+			barrier.AddSyncBefore(BarrierSyncFlag::kCopy)
+				.AddAccessBefore(BarrierAccessFlag::kCopySource)
+				.SetLayoutBefore(BarrierLayout::kCopySource)
+				.AddSyncAfter(BarrierSyncFlag::kNone)
+				.AddAccessAfter(BarrierAccessFlag::kNone)
+				.SetLayoutAfter(BarrierLayout::kPresent);
+			m_CommandList->Barrier(textureHandle, barrier);
+		}
+
+		m_CommandList->Close();
+
+		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
+		m_CommandQueue->WaitForFenceCPUBlocking(fence);
+
+		// Wrap the mapped readback as a DirectX::Image (the padded rowPitch is fine,
+		// DirectX::Image stores it explicitly) and encode to file.
+		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
+
+		gassert(
+			resource != nullptr,
+			"ScreenshotRaw failed to get D3D12Resource from texture handle");
+
+		auto resourceDesc = resource->GetDesc();
+
+		const void* mapped = m_ResourceManager->MapReadback(readback);
+
+		DirectX::Image image = {};
+		image.width          = static_cast<size_t>(resourceDesc.Width);
+		image.height         = static_cast<size_t>(resourceDesc.Height);
+		image.format         = resourceDesc.Format;
+		image.rowPitch       = static_cast<size_t>(layout.rowPitch);
+		image.slicePitch     = static_cast<size_t>(layout.rowPitch) * resourceDesc.Height;
+		image.pixels = const_cast<uint8_t*>(static_cast<const uint8_t*>(mapped) + layout.offset);
+
+		std::wstring widePath(filepath.begin(), filepath.end());
+
+		// DDS only for now: it needs no COM/WIC init and stores the exact texture
+		// format, which is what the golden-image comparison wants.
+		HRESULT hr = DirectX::SaveToDDSFile(image, DirectX::DDS_FLAGS_NONE, widePath.c_str());
+
+		m_ResourceManager->UnmapReadback(readback);
+		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+
+		if (FAILED(hr))
+		{
+			throw GraphicsError(
+				std::format(
+					"ScreenshotRaw failed to save '{}' (hr=0x{:08X})",
+					filepath,
+					static_cast<uint32_t>(hr)));
+		}
 	}
 
 	void
@@ -257,24 +568,103 @@ namespace bgl
 	void
 	Graphics::CreateRenderTargets()
 	{
-		TextureDesc textureDesc{};
-
-		for (UINT i = 0; i < c_BufferCount; i++)
 		{
-			wrl::ComPtr<ID3D12Resource> backBuffer;
-			m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
+			TextureDesc textureDesc{};
+			textureDesc.format       = Format::BGRA8_UNORM;
+			textureDesc.width        = static_cast<uint32_t>(m_Opts.width);
+			textureDesc.height       = static_cast<uint32_t>(m_Opts.height);
+			textureDesc.dimension    = TextureDimension::kTexture2D;
+			textureDesc.usage        = TextureUsageFlag::kRenderTarget;
+			textureDesc.initalLayout = BarrierLayout::kPresent;
 
-			m_BackBuffers[i].textureHandle =
-				m_ResourceManager->As<ResourceManager>()->CreateTexture(
-					std::move(backBuffer),
-					textureDesc);
+			for (UINT i = 0; i < c_BufferCount; i++)
+			{
+				wrl::ComPtr<ID3D12Resource> backBuffer;
+				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
 
-			RtvDesc rtvDesc;
-			rtvDesc.format    = Format::BGRA8_UNORM;
-			rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
+				m_BackBuffers[i].textureHandle =
+					m_ResourceManager->As<ResourceManager>()->CreateTexture(
+						std::move(backBuffer),
+						textureDesc);
 
-			m_BackBuffers[i].rtvHandle =
-				m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+				RtvDesc rtvDesc;
+				rtvDesc.format    = Format::BGRA8_UNORM;
+				rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
+
+				m_BackBuffers[i].rtvHandle =
+					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+			}
+		}
+
+		{
+			auto depthTextureDesc         = TextureDesc();
+			depthTextureDesc.format       = Format::D24S8;
+			depthTextureDesc.width        = static_cast<uint32_t>(m_Opts.width);
+			depthTextureDesc.height       = static_cast<uint32_t>(m_Opts.height);
+			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName    = "Depth Buffer";
+			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
+			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
+
+			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
+
+			auto dsvDesc      = DsvDesc();
+			dsvDesc.format    = Format::D24S8;
+			dsvDesc.debugName = "Depth Buffer RTV";
+
+			m_DepthBuffer.dsvHandle =
+				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
+		}
+	}
+
+	void
+	Graphics::CreateOffscreenRenderTargets()
+	{
+		{
+			for (auto i = 0u; i < c_BufferCount; i++)
+			{
+				auto texDesc      = TextureDesc();
+				texDesc.width     = static_cast<uint32_t>(m_Opts.width);
+				texDesc.height    = static_cast<uint32_t>(m_Opts.height);
+				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
+				texDesc.dimension = TextureDimension::kTexture2D;
+				texDesc.format    = Format::BGRA8_UNORM;
+				texDesc.usage     = TextureUsageFlag::kRenderTarget;
+				texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
+
+				auto rtvDesc      = RtvDesc();
+				rtvDesc.format    = Format::BGRA8_UNORM;
+				rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
+
+				m_BackBuffers[i].rtvHandle =
+					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+			}
+		}
+
+		{
+			auto depthTextureDesc         = TextureDesc();
+			depthTextureDesc.format       = Format::D24S8;
+			depthTextureDesc.width        = static_cast<uint32_t>(m_Opts.width);
+			depthTextureDesc.height       = static_cast<uint32_t>(m_Opts.height);
+			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName    = "Depth Buffer";
+			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
+			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
+
+			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
+
+			auto dsvDesc      = DsvDesc();
+			dsvDesc.format    = Format::D24S8;
+			dsvDesc.debugName = "Depth Buffer RTV";
+
+			m_DepthBuffer.dsvHandle =
+				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
 		}
 	}
 

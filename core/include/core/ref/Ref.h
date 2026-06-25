@@ -5,8 +5,8 @@ namespace core
 	class Ref
 	{
 	protected:
-		Ref()          = default;
-		virtual ~Ref() = default;
+		Ref()                   = default;
+		virtual ~Ref() noexcept = default;
 
 	public:
 		virtual unsigned long

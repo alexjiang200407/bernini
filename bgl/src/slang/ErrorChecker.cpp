@@ -22,7 +22,6 @@ namespace bgl
 		{
 			const char* errorMessage = (const char*)m_DiagnosticBlob->getBufferPointer();
 			gfatal("Slang operation failed with error: {}", errorMessage);
-			return true;
 		}
 
 		return false;

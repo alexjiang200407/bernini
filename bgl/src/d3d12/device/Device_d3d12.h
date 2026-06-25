@@ -1,48 +1,58 @@
 #pragma once
 #include "device/Device.h"
-#include <slang-com-ptr.h>
-
-namespace slang
-{
-	class ISession;
-	class IGlobalSession;
-}
 
 namespace bgl
 {
-	class ShaderDesc;
+	struct ShaderDesc;
 
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(wrl::ComPtr<ID3D12Device> device, slang::IGlobalSession* globalSession);
+		Device(
+			wrl::ComPtr<ID3D12Device>            device,
+			Slang::ComPtr<slang::IGlobalSession> globalSession);
+
+		~Device() noexcept override { logger::trace("~Device"); }
+		Device(const Device&) noexcept = delete;
+		Device(Device&&) noexcept      = delete;
+
+		Device&
+		operator=(const Device&) noexcept = delete;
+
+		Device&
+		operator=(Device&&) noexcept = delete;
 
 		core::SharedRef<ICommandList>
 		CreateCommandList(
 			const CommandListDesc&             desc,
 			core::SharedRef<ICommandAllocator> commandAllocator,
-			core::SharedRef<IResourceManager>  resourceManager) const override;
+			core::SharedRef<IResourceManager>  resourceManager) const noexcept override;
 
 		core::SharedRef<IResourceManager>
-		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const override;
+		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept override;
 
 		core::SharedRef<IShader>
-		CreateShader(ShaderDesc desc) const override;
+		CreateShader(ShaderDesc desc) const noexcept override;
 
 		core::SharedRef<ICommandAllocator>
-		CreateCommandAllocator() const override;
+		CreateCommandAllocator() const noexcept override;
 
 		core::SharedRef<ICommandQueue>
-		CreateCommandQueue(QueueType type) const override;
+		CreateCommandQueue(QueueType type) const noexcept override;
 
-		core::SharedRef<IGraphicsPipeline>
-		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const override;
+		core::SharedRef<IMeshletPipeline>
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;
 
 		Uniforms
-		CreateUniforms(IGraphicsPipeline const* pipeline) const override;
+		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept override;
 
 	private:
-		wrl::ComPtr<ID3D12Device>      m_Device;
-		Slang::ComPtr<slang::ISession> m_SlangSession;
+		wrl::ComPtr<ID3D12Device> m_Device;
+
+		// m_SlangGlobalSession must be declared before m_SlangSession so it is destroyed
+		// after it
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+		Slang::ComPtr<slang::ISession>       m_SlangSession;
 	};
 }

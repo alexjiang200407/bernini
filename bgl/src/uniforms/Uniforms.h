@@ -2,44 +2,41 @@
 #include "resource/Shader.h"
 #include "uniforms/DescriptorHandle.h"
 
-namespace slang
-{
-	class ISession;
-}
-
 namespace bgl
 {
-	class IGraphicsPipeline;
+	class IMeshletPipeline;
+
+	enum class UniformType
+	{
+		kArray,
+		kStruct,
+		kValue,
+		kNull,
+	};
+
+	enum class UniformValueType
+	{
+		kInt,
+		kInt2,
+		kInt3,
+		kInt4,
+		kUInt,
+		kUInt2,
+		kDescriptorHandle = kUInt2,
+		kUInt3,
+		kUInt4,
+		kFloat,
+		kFloat2,
+		kFloat3,
+		kFloat4,
+		kBool,
+		kMat4x4,
+		kNone,
+	};
 
 	namespace detail
 	{
 		class UniformsNode;
-
-		enum class UniformType
-		{
-			kArray,
-			kStruct,
-			kValue
-		};
-
-		enum class UniformValueType
-		{
-			kInt,
-			kInt2,
-			kInt3,
-			kInt4,
-			kUInt,
-			kUInt2,
-			kUInt3,
-			kUInt4,
-			kFloat,
-			kFloat2,
-			kFloat3,
-			kFloat4,
-			kBool,
-			kMat4x4,
-			kNone,
-		};
 
 		struct TraversalResult
 		{
@@ -82,6 +79,7 @@ namespace bgl
 				return sizeof(bool);
 			case UniformValueType::kMat4x4:
 				return sizeof(float) * 16;
+			case UniformValueType::kNone:
 			default:
 				return 0;
 			}
@@ -109,37 +107,37 @@ namespace bgl
 		};
 
 		template <typename T>
-		detail::UniformValueType
+		UniformValueType
 		ValueMap()
 		{
 			if constexpr (std::is_same_v<T, float>)
-				return detail::UniformValueType::kFloat;
+				return UniformValueType::kFloat;
 			else if constexpr (std::is_same_v<T, glm::vec2>)
-				return detail::UniformValueType::kFloat2;
+				return UniformValueType::kFloat2;
 			else if constexpr (std::is_same_v<T, glm::vec3>)
-				return detail::UniformValueType::kFloat3;
+				return UniformValueType::kFloat3;
 			else if constexpr (std::is_same_v<T, glm::vec4>)
-				return detail::UniformValueType::kFloat4;
+				return UniformValueType::kFloat4;
 			else if constexpr (std::is_same_v<T, int32_t>)
-				return detail::UniformValueType::kInt;
+				return UniformValueType::kInt;
 			else if constexpr (std::is_same_v<T, glm::ivec2>)
-				return detail::UniformValueType::kInt2;
+				return UniformValueType::kInt2;
 			else if constexpr (std::is_same_v<T, glm::ivec3>)
-				return detail::UniformValueType::kInt3;
+				return UniformValueType::kInt3;
 			else if constexpr (std::is_same_v<T, glm::ivec4>)
-				return detail::UniformValueType::kInt4;
+				return UniformValueType::kInt4;
 			else if constexpr (std::is_same_v<T, uint32_t>)
-				return detail::UniformValueType::kUInt;
+				return UniformValueType::kUInt;
 			else if constexpr (std::is_same_v<T, glm::uvec2> || std::is_same_v<T, DescriptorHandle>)
-				return detail::UniformValueType::kUInt2;
+				return UniformValueType::kUInt2;
 			else if constexpr (std::is_same_v<T, glm::uvec3>)
-				return detail::UniformValueType::kUInt3;
+				return UniformValueType::kUInt3;
 			else if constexpr (std::is_same_v<T, glm::uvec4>)
-				return detail::UniformValueType::kUInt4;
+				return UniformValueType::kUInt4;
 			else if constexpr (std::is_same_v<T, bool>)
-				return detail::UniformValueType::kBool;
+				return UniformValueType::kBool;
 			else if constexpr (std::is_same_v<T, glm::mat4>)
-				return detail::UniformValueType::kMat4x4;
+				return UniformValueType::kMat4x4;
 			else
 				static_assert(false, "Unsupported uniform type T");
 		}
@@ -147,7 +145,7 @@ namespace bgl
 
 	class Uniforms final
 	{
-	private:
+	public:
 		template <typename DataPtr>
 		class AccessorBase
 		{
@@ -166,7 +164,20 @@ namespace bgl
 				return AccessorBase(m_Data, offset, node);
 			}
 
+			[[nodiscard]] bool
+			IsNull() const
+			{
+				return m_Node->GetType() == UniformType::kNull;
+			}
+
+			[[nodiscard]] bool
+			IsValid() const
+			{
+				return m_Node != nullptr && m_Node->GetType() != UniformType::kNull;
+			}
+
 			template <typename T>
+			explicit
 			operator T() const
 			{
 				AssertIsValue();
@@ -175,6 +186,31 @@ namespace bgl
 				T value{};
 				std::memcpy(&value, static_cast<const uint8_t*>(m_Data) + m_Offset, sizeof(T));
 				return value;
+			}
+
+			template <typename T>
+			bool
+			operator==(const T& val) const
+			{
+				return val == static_cast<T>(*this);
+			}
+
+			UniformType
+			GetType() const
+			{
+				return m_Node->GetType();
+			}
+
+			UniformValueType
+			GetValueType() const
+			{
+				return m_Node->GetValueType();
+			}
+
+			size_t
+			GetOffset() const
+			{
+				return m_Offset;
 			}
 
 			template <typename T>
@@ -195,7 +231,7 @@ namespace bgl
 			void
 			AssertIsValue() const
 			{
-				if (!m_Node || m_Node->GetType() != detail::UniformType::kValue)
+				if (!m_Node || m_Node->GetType() != UniformType::kValue)
 					throw std::runtime_error("Uniforms::Accessor: node is not a value type");
 			}
 
@@ -221,7 +257,8 @@ namespace bgl
 
 	public:
 		Uniforms() = default;
-		Uniforms(IGraphicsPipeline const* pipeline);
+		Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName);
+
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
 
@@ -255,22 +292,37 @@ namespace bgl
 			return m_Size;
 		}
 
+		[[nodiscard]] uint32_t
+		GetRootParamIndex() const
+		{
+			return m_RootParamIndex;
+		}
+
 		[[nodiscard]] const void*
 		Data() const
 		{
 			return m_Buffer.data();
 		}
 
+		void
+		Reset()
+		{
+			m_Buffer.clear();
+			m_Root.reset();
+			m_Size = 0;
+		}
+
 	private:
-		static detail::UniformValueType
+		static UniformValueType
 		ResolveScalarType(slang::TypeReflection* type);
 
 		static std::unique_ptr<detail::UniformsNode>
 		BuildNode(slang::TypeLayoutReflection* typeLayout);
 
 	private:
-		std::unique_ptr<detail::UniformsNode> m_Root = nullptr;
-		size_t                                m_Size = 0;
+		std::unique_ptr<detail::UniformsNode> m_Root           = nullptr;
+		size_t                                m_Size           = 0;
+		uint32_t                              m_RootParamIndex = 0xFFFFFFFF;
 
 		// flat CPU-side mirror
 		std::vector<std::byte> m_Buffer;

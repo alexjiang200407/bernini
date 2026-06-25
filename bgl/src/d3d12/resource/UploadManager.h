@@ -30,15 +30,15 @@ namespace bgl
 
 		bool
 		SuballocateBuffer(
-			uint64_t                   lastCompletedValue,
-			uint64_t                   size,
-			ID3D12GraphicsCommandList* pCommandList,
-			ID3D12Resource**           pBuffer,
-			size_t*                    pOffset,
-			void**                     pCpuVA,
-			D3D12_GPU_VIRTUAL_ADDRESS* pGpuVA,
-			uint64_t                   currentVersion,
-			uint32_t                   alignment = 256);
+			uint64_t                     lastCompletedValue,
+			uint64_t                     size,
+			ID3D12GraphicsCommandList*   pCommandList,
+			wrl::ComPtr<ID3D12Resource>& pBuffer,
+			size_t*                      pOffset,
+			void**                       pCpuVA,
+			D3D12_GPU_VIRTUAL_ADDRESS*   pGpuVA,
+			uint64_t                     currentVersion,
+			uint32_t                     alignment = 256);
 
 		void
 		SubmitChunks(uint64_t currentVersion, uint64_t submittedVersion);

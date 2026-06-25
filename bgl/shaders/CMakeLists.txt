@@ -1,8 +1,3 @@
-file(GLOB SLANG_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.slang"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/tests/*.slang"
-)
-
 set(SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/bin/shaders")
 file(MAKE_DIRECTORY "${SHADER_OUT_DIR}")
 
@@ -18,49 +13,92 @@ endif()
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-foreach(SHADER ${SLANG_SOURCES})
-    get_filename_component(SHADER_FILENAME "${SHADER}" NAME)
-    string(REPLACE ".slang" ".dxil" SHADER_DXIL_NAME "${SHADER_FILENAME}")
-    
-    set(OUT_FILE "${SHADER_OUT_DIR}/${SHADER_DXIL_NAME}")
-    set(DEP_FILE "${OUT_FILE}.d")
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "as_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "ASMain"
+)
 
-    if(${SHADER_FILENAME} MATCHES "^VS.*\\.slang$")
-        set(PROFILE "vs_6_6")
-    elseif(${SHADER_FILENAME} MATCHES "^PS.*\\.slang$")
-        set(PROFILE "ps_6_6")
-    else()
-        set(PROFILE "sm_6_6")
-    endif()
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
 
-    add_custom_command(
-        OUTPUT "${OUT_FILE}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADER_OUT_DIR}"
-        COMMAND ${SLANG_EXECUTABLE} -profile ${PROFILE} -target dxil -I "${SLANG_SOURCE_ROOT}" -depfile "${DEP_FILE}" -o "${OUT_FILE}" "${SHADER}"
-        DEPENDS "${SHADER}"
-        DEPFILE "${DEP_FILE}"
-        COMMENT "Compiling Slang shader ${SHADER_FILENAME} [${PROFILE}]"
-        VERBATIM
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_PBR.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+message(STATUS "Discovered Compiled Shaders: ${SLANG_COMPILE_OUTS}")
+
+
+if (BUILD_TESTS)
+    file(GLOB SLANG_TEST_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.slang"
     )
 
-    list(APPEND SLANG_COMPILE_OUTS "${OUT_FILE}")
-endforeach()
+    foreach(SHADER ${SLANG_TEST_SOURCES})
+        get_filename_component(SHADER_BARE_NAME "${SHADER}" NAME_WE)
+
+        compile_shader(
+            FILE     "${SHADER}"
+            OUT_DIR  "${SHADER_OUT_DIR}"
+            TARGET   "dxil"
+            INCLUDES ${SLANG_SOURCE_ROOT}
+        )
+
+        list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")
+    endforeach()
+
+    add_custom_target(CopyBGLShaderTests ALL
+        DEPENDS CompileShaders
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/tests"
+        COMMENT "Copying raw Slang source assets to runtime output layout"
+        VERBATIM
+    )
+endif()
 
 add_custom_target(CompileShaders ALL
     DEPENDS ${SLANG_COMPILE_OUTS}
 )
 
-if(CMAKE_MAKE_PROGRAM MATCHES "msbuild|MSBUILD")
-    set(CONFIG_SUBDIR "/$<CONFIG>")
-else()
-    set(CONFIG_SUBDIR "")
-endif()
-
 add_custom_target(CopyBGLShaders ALL
     DEPENDS CompileShaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${SHADER_OUT_DIR}"
-            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders"
     COMMENT "Copying compiled DXIL binaries to runtime output layout"
     VERBATIM
 )
@@ -68,10 +106,10 @@ add_custom_target(CopyBGLShaders ALL
 # Copies pure source files directly into application directory for runtime reflection parsing
 add_custom_target(CopyBGLShaderSources ALL
     DEPENDS CompileShaders
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
-            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
     COMMENT "Copying raw Slang source assets to runtime output layout"
     VERBATIM
 )

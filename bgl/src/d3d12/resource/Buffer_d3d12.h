@@ -1,6 +1,6 @@
 #pragma once
 #include "resource/Buffer.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {
@@ -10,12 +10,12 @@ namespace bgl
 		Buffer() = default;
 
 		Buffer(
-			ID3D12Device*         device,
-			ID3D12DescriptorHeap* descriptorHeap,
-			uint32_t              descriptorIndex,
-			const BufferDesc&     desc);
+			ID3D12Device*           device,
+			ID3D12DescriptorHeap*   descriptorHeap,
+			uint32_t                descriptorIndex,
+			const StructBufferDesc& desc);
 
-		~Buffer() noexcept;
+		~Buffer() noexcept = default;
 
 		Buffer(const Buffer&)     = delete;
 		Buffer(Buffer&&) noexcept = default;
@@ -28,44 +28,36 @@ namespace bgl
 
 		[[nodiscard]]
 		ID3D12Resource*
-		GetD3D12Resource() const
+		GetD3D12Resource() const noexcept
 		{
 			return m_Buffer.Get();
 		}
 
 		[[nodiscard]]
-		const BufferDesc&
-		GetDesc() const
+		const StructBufferDesc&
+		GetDesc() const noexcept
 		{
 			return m_Desc;
 		}
 
 		[[nodiscard]]
 		D3D12_CPU_DESCRIPTOR_HANDLE
-		GetCpuHandle() const
+		GetCpuHandle() const noexcept
 		{
 			return m_CpuHandle;
 		}
 
 		[[nodiscard]]
 		bool
-		IsNull() const
+		IsNull() const noexcept
 		{
 			return m_Buffer == nullptr;
 		}
 
-		[[nodiscard]]
-		void*
-		GetMappedPtr() const
-		{
-			return m_MappedPtr;
-		}
-
 	private:
-		BufferDesc                  m_Desc;
+		StructBufferDesc            m_Desc;
 		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
 		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
-		void*                       m_MappedPtr = nullptr;  // TODO: Synchronization is required
 		wrl::ComPtr<ID3D12Resource> m_Buffer;
 	};
 }

@@ -8,8 +8,19 @@ namespace bgl
 	class ICommandAllocator : public core::Ref
 	{
 	public:
+		ICommandAllocator() noexcept = default;
+
+		ICommandAllocator(ICommandAllocator&&)      = delete;
+		ICommandAllocator(const ICommandAllocator&) = delete;
+
+		ICommandAllocator&
+		operator=(ICommandAllocator&&) = delete;
+
+		ICommandAllocator&
+		operator=(const ICommandAllocator&) = delete;
+
 		virtual void
-		ResetAllocator() = 0;
+		ResetAllocator() noexcept = 0;
 	};
 
 	using CommandAllocatorHandle = core::SharedRef<ICommandAllocator>;

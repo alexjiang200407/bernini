@@ -13,3 +13,5 @@ CMakeUserPresets.json
 /.vs
 /out/build/x64-debug
 build*/
+__pycache__
+*.pyc
