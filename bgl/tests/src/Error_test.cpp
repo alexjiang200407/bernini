@@ -70,10 +70,114 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 
 	SECTION("Valid arguments do not throw")
 	{
-		auto material         = bgl::MaterialHandle();
-		material.materialType = bgl::MaterialType::kPBR;
+		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+	}
+}
 
-		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, material, glm::mat4(1.0f)));
+TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(CubeSceneDesc());
+	REQUIRE(scene != nullptr);
+
+	auto geom = scene->AddCubeGeom();
+	REQUIRE(geom.IsValid());
+
+	SECTION("DeleteMeshInstance keeps the geom usable")
+	{
+		auto inst = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		REQUIRE(inst.IsValid());
+
+		REQUIRE_NOTHROW(scene->DeleteMeshInstance(inst));
+
+		// The geom itself was not removed, so it can still be instanced.
+		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+	}
+
+	SECTION("DeleteMeshInstance on an invalid handle throws")
+	{
+		REQUIRE_THROWS_AS(scene->DeleteMeshInstance(bgl::MeshInstanceHandle{}), bgl::SceneError);
+	}
+
+	SECTION("Deleting the same instance twice throws")
+	{
+		auto inst = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		REQUIRE_NOTHROW(scene->DeleteMeshInstance(inst));
+		REQUIRE_THROWS_AS(scene->DeleteMeshInstance(inst), bgl::SceneError);
+	}
+
+	SECTION("DeleteGeom fails while a mesh instance references it")
+	{
+		auto inst = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);
+
+		// Removing the last reference allows the geom to be deleted.
+		REQUIRE_NOTHROW(scene->DeleteMeshInstance(inst));
+		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
+	}
+
+	SECTION("DeleteGeom requires every reference to be gone")
+	{
+		auto a = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto b = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+
+		scene->DeleteMeshInstance(a);
+		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);  // b still references it
+
+		scene->DeleteMeshInstance(b);
+		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
+	}
+
+	SECTION("Using a deleted geom is caught as use-after-free")
+	{
+		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
+
+		// The handle is now stale; both reuse and a second delete are rejected.
+		REQUIRE_THROWS_AS(
+			scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)),
+			bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);
+	}
+}
+
+TEST_CASE("SceneError on capacity exhaustion", "[error][scene][capacity]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	SECTION("Exceeding maxInstances throws SceneError")
+	{
+		auto desc         = bgl::SceneDesc();
+		desc.maxInstances = 1;
+		desc.maxGeom      = 1;
+		desc.maxMeshlets  = 8;
+		desc.maxVertices  = 64;
+		desc.maxIndices   = 64;
+
+		auto scene = gfx->CreateScene(desc);
+		auto geom  = scene->AddCubeGeom();
+
+		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		REQUIRE_THROWS_AS(
+			scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)),
+			bgl::SceneError);
+	}
+
+	SECTION("Exceeding maxGeom throws SceneError")
+	{
+		auto desc         = bgl::SceneDesc();
+		desc.maxInstances = 4;
+		desc.maxGeom      = 1;
+		desc.maxMeshlets  = 100;
+		desc.maxVertices  = 1000;
+		desc.maxIndices   = 1000;
+
+		auto scene = gfx->CreateScene(desc);
+
+		REQUIRE_NOTHROW(scene->AddCubeGeom());
+		REQUIRE_THROWS_AS(scene->AddCubeGeom(), bgl::SceneError);
 	}
 }
 

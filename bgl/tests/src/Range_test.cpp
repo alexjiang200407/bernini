@@ -188,5 +188,35 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 			rb.Transition(cmdList, bgl::RangeBufferState::kShader, bgl::RangeBufferState::kUpdate));
 	}
 
+	SECTION("IsValid detects use-after-free and EraseByIndex frees ranges")
+	{
+		auto desc      = bgl::RangeBufferDesc();
+		desc.maxCount  = 8;
+		desc.blockSize = sizeof(int);
+		desc.debugName = "RangeBuffer IsValid";
+
+		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+
+		auto handle = rb.AllocateRange(3);
+		CHECK(rb.IsValid(handle));
+
+		rb.Erase(handle);
+		CHECK_FALSE(rb.IsValid(handle));
+
+		// Reallocating reuses index 0 with a bumped generation; the old handle
+		// stays invalid while the new one is valid.
+		auto reused = rb.AllocateRange(3);
+		CHECK(reused.index == 0);
+		CHECK(reused.generation == handle.generation + 1);
+		CHECK(rb.IsValid(reused));
+		CHECK_FALSE(rb.IsValid(handle));
+
+		// EraseByIndex frees a range by its starting index (as DeleteGeom does).
+		rb.EraseByIndex(reused.index);
+		CHECK_FALSE(rb.IsValid(reused));
+
+		CHECK_FALSE(rb.IsValid(core::multi_slot_handle{}));
+	}
+
 	cmdList->Close();
 }

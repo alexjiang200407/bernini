@@ -36,6 +36,12 @@ namespace bgl
 		bool     enablePixDebug;
 		void*    wnd;
 		LogLevel logLevel = LogLevel::kError;
+
+		// Capacities for the graphics-owned descriptor heaps / resource pools.
+		uint32_t maxCbvSrvUavs = 1000;
+		uint32_t maxRtvs       = 5;
+		uint32_t maxDsvs       = 5;
+		uint32_t maxTextures   = 1000;
 	};
 
 	class BGL_API IGraphics : public core::Ref

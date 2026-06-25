@@ -190,10 +190,10 @@ namespace bgl
 
 		{
 			auto resourceManagerDesc          = ResourceManagerDesc();
-			resourceManagerDesc.maxCbvSrvUavs = 1000;
-			resourceManagerDesc.maxDsvs       = 5;
-			resourceManagerDesc.maxRtvs       = 5;
-			resourceManagerDesc.maxTextures   = 1000;
+			resourceManagerDesc.maxCbvSrvUavs = m_Opts.maxCbvSrvUavs;
+			resourceManagerDesc.maxDsvs       = m_Opts.maxDsvs;
+			resourceManagerDesc.maxRtvs       = m_Opts.maxRtvs;
+			resourceManagerDesc.maxTextures   = m_Opts.maxTextures;
 
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}

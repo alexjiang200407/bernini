@@ -52,18 +52,22 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto visitor = EventVisitor();
 
 		auto sceneDesc         = bgl::SceneDesc();
-		sceneDesc.maxIndices   = 1000;
+		sceneDesc.maxIndices   = 10000;
 		sceneDesc.maxVertices  = 1000;
 		sceneDesc.maxGeom      = 100;
 		sceneDesc.maxInstances = 100;
-		sceneDesc.maxMeshlets  = 100;
+		sceneDesc.maxMeshlets  = 1000;
 
-		auto scene = graphics->CreateScene(std::move(sceneDesc));
-		auto cube  = scene->AddCubeGeom();
-		auto mat   = bgl::MaterialHandle{};
+		auto scene  = graphics->CreateScene(std::move(sceneDesc));
+		auto cube   = scene->AddCubeGeom();
+		auto sphere = scene->AddSphereGeom(32, 32, 1.0f);
 
 		auto transform = glm::mat4(1.0f);
-		auto inst      = scene->CreateStaticMeshInstance(cube, mat, transform);
+		auto inst1     = scene->CreateStaticMeshInstance(cube, transform);
+
+		transform[3][0] = -5.0f;
+
+		auto inst2 = scene->CreateStaticMeshInstance(sphere, transform);
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 
@@ -80,10 +84,18 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 
+		bool firstFrame = true;
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))
 		{
 			graphics->DrawFrame(context);
+
+			if (firstFrame)
+			{
+				graphics->ScreenshotRaw("bgl_base.dds");
+			}
+
+			firstFrame = false;
 		}
 	}
 	catch (const std::runtime_error& e)

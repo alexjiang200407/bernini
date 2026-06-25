@@ -16,8 +16,11 @@ Try to maximize use of `auto`.
 
 ```cpp
 auto myVariable = 42;
-auto abcd = Type{};
+auto abcd = Type(); // auto for initialization
+int i;              // Dont use auto for primitive types
 ```
+
+
 
 
 # Const correctness

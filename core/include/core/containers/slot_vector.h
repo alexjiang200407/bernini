@@ -66,9 +66,9 @@ namespace core
 				return { index, generation };
 			}
 
-			if (m_MaxSlots != 0)
+			if (m_MaxSlots != 0 && m_Data.size() >= m_MaxSlots)
 			{
-				assert(m_Data.size() < m_MaxSlots);
+				throw std::runtime_error("slot_vector: no free slots remaining");
 			}
 
 			index = static_cast<uint32_t>(m_Data.size());
@@ -107,6 +107,12 @@ namespace core
 				return false;
 
 			return m_Meta[index].generation == generation && m_Meta[index].is_allocated;
+		}
+
+		[[nodiscard]] bool
+		allocated(uint32_t index) const noexcept
+		{
+			return index < m_Meta.size() && m_Meta[index].is_allocated;
 		}
 
 		[[nodiscard]] T&

@@ -39,9 +39,9 @@ namespace core
 		uint32_t
 		emplace_back(Args&&... args)
 		{
-			if (m_Capacity != 0)
+			if (m_Capacity != 0 && m_Count >= m_Capacity)
 			{
-				assert(m_Count < m_Capacity && "packed_vector capacity exceeded");
+				throw std::runtime_error("packed_vector: no free slots remaining");
 			}
 
 			uint32_t index = m_Count;

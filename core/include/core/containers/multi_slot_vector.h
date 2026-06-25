@@ -68,10 +68,9 @@ namespace core
 			if (targetIndex == multi_slot_handle::invalid_index)
 			{
 				uint32_t currentSize = static_cast<uint32_t>(m_Data.size());
-				if (m_MaxSlots != 0 && currentSize + count <= m_MaxSlots)
+				if (m_MaxSlots != 0 && currentSize + count > m_MaxSlots)
 				{
-					throw std::runtime_error(
-						"Allocation exceeds multi_slot_vector capacity limits");
+					throw std::runtime_error("multi_slot_vector: no free slots remaining");
 				}
 
 				targetIndex = currentSize;
@@ -176,6 +175,35 @@ namespace core
 			if (physicalIndex >= m_Meta.size())
 				return false;
 			return m_Meta[physicalIndex].is_active;
+		}
+
+		[[nodiscard]] bool
+		valid(uint32_t index, uint32_t generation) const
+		{
+			if (index >= m_Meta.size())
+				return false;
+			return m_Meta[index].is_allocated_root && m_Meta[index].generation == generation;
+		}
+
+		[[nodiscard]] uint32_t
+		generation(uint32_t index) const
+		{
+			assert(index < m_Meta.size());
+			return m_Meta[index].generation;
+		}
+
+		[[nodiscard]] bool
+		is_allocated_root(uint32_t index) const noexcept
+		{
+			return index < m_Meta.size() && m_Meta[index].is_allocated_root;
+		}
+
+		[[nodiscard]] multi_slot_handle
+		handle_at(uint32_t index) const
+		{
+			assert(index < m_Meta.size());
+			assert(m_Meta[index].is_allocated_root && "No live allocation at this index");
+			return { index, m_Meta[index].allocated_count, m_Meta[index].generation };
 		}
 
 		[[nodiscard]] size_t

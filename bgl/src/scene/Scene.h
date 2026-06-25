@@ -11,6 +11,11 @@ namespace bgl
 	class ICommandList;
 	class Uniforms;
 
+	struct GeomMeta
+	{
+		uint32_t refCount = 0;
+	};
+
 	class Scene : public core::RefCounter<IScene>
 	{
 	public:
@@ -70,7 +75,7 @@ namespace bgl
 		uint32_t
 		GetInstanceCount() const
 		{
-			return 1;
+			return m_InstanceBuffer.Size();
 		}
 
 		void
@@ -79,21 +84,30 @@ namespace bgl
 		GeomHandle
 		AddCubeGeom() override;
 
+		GeomHandle
+		AddSphereGeom(uint32_t xSegments, uint32_t ySegments, float radius) override;
+
 		MeshInstanceHandle
 		CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform)
 			override;
 
+		void
+		DeleteMeshInstance(MeshInstanceHandle instance) override;
+
+		void
+		DeleteGeom(GeomHandle geom) override;
+
 	private:
 		SceneDesc m_Desc;
 
-		PackedBuffer<db::BaseInstance>      m_InstanceBuffer;
-		EntryBuffer<db::StaticMeshInstance> m_StaticMeshInstanceBuffer;
-		EntryBuffer<db::StaticGeom>         m_StaticGeom;
-		RangeBuffer<db::Meshlet>            m_MeshletBuffer;
-		RangeBuffer<uint32_t>               m_VertexMapBuffer;
-		RangeBuffer<db::Vertex>             m_VertexBuffer;
-		RangeBuffer<uint32_t>               m_IndexBuffer;
-		bool                                m_FirstFrame = true;
+		PackedBuffer<db::BaseInstance>        m_InstanceBuffer;
+		EntryBuffer<db::StaticMeshInstance>   m_StaticMeshInstanceBuffer;
+		EntryBuffer<db::StaticGeom, GeomMeta> m_StaticGeom;
+		RangeBuffer<db::Meshlet>              m_MeshletBuffer;
+		RangeBuffer<uint32_t>                 m_VertexMapBuffer;
+		RangeBuffer<db::Vertex>               m_VertexBuffer;
+		RangeBuffer<uint32_t>                 m_IndexBuffer;
+		bool                                  m_FirstFrame = true;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

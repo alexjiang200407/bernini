@@ -85,6 +85,12 @@ namespace bgl
 			return EmplaceBack(std::move(value));
 		}
 
+		uint32_t
+		Size() const noexcept
+		{
+			return m_Entries.size();
+		}
+
 		void
 		Set(Handle handle, T value)
 		{
@@ -102,10 +108,6 @@ namespace bgl
 			return m_Entries[m_HandleToIndex[handle.index]];
 		}
 
-		// Removes the element referenced by `handle`. The last live element is
-		// swapped into the freed slot so the dense range stays packed; that moved
-		// element keeps the same handle (its sparse entry is repointed), so all
-		// other outstanding handles remain valid. `handle` itself becomes stale.
 		void
 		Erase(Handle handle)
 		{
@@ -116,8 +118,6 @@ namespace bgl
 
 			if (moved != core::packed_vector<T>::invalid_index)
 			{
-				// The element previously at the dense tail now lives at denseIndex;
-				// repoint its handle and re-upload its (changed) block.
 				uint32_t movedHandle         = m_IndexToHandle[moved];
 				m_HandleToIndex[movedHandle] = denseIndex;
 				m_IndexToHandle[denseIndex]  = movedHandle;

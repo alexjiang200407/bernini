@@ -13,6 +13,15 @@ namespace core
 	public:
 		RefCounter() = default;
 
+		RefCounter(const RefCounter&) = delete;
+		RefCounter(RefCounter&&)      = delete;
+
+		RefCounter&
+		operator=(const RefCounter&) = delete;
+
+		RefCounter&
+		operator=(RefCounter&&) = delete;
+
 		unsigned long
 		AddRef()
 		{

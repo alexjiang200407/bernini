@@ -1,8 +1,10 @@
 #include "scene/Scene.h"
+#include "constants/constants.h"
 #include "db/Meshlet.h"
 #include "db/Vertex.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <numbers>
 
 namespace bgl
 {
@@ -44,14 +46,6 @@ namespace bgl
 			meshletBufferDesc.debugName = "Meshlet Buffer";
 
 			m_MeshletBuffer.Init(std::move(meshletBufferDesc), m_ResourceManager);
-		}
-
-		{
-			RangeBufferDesc vertexMapBufferDesc;
-			vertexMapBufferDesc.maxCount  = m_Desc.maxVertices;
-			vertexMapBufferDesc.debugName = "Vertex Map Buffer";
-
-			m_VertexMapBuffer.Init(std::move(vertexMapBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -228,56 +222,198 @@ namespace bgl
 	GeomHandle
 	Scene::AddCubeGeom()
 	{
-		static const db::Vertex cubeVertices[] = {
-			{ { -1, -1, -1 } },  // 0: left-bottom-back
-			{ { 1, -1, -1 } },   // 1: right-bottom-back
-			{ { 1, 1, -1 } },    // 2: right-top-back
-			{ { -1, 1, -1 } },   // 3: left-top-back
-			{ { -1, -1, 1 } },   // 4: left-bottom-front
-			{ { 1, -1, 1 } },    // 5: right-bottom-front
-			{ { 1, 1, 1 } },     // 6: right-top-front
-			{ { -1, 1, 1 } }     // 7: left-top-front
-		};
-
-		static const uint32_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2,
-			                                    0, 4, 7, 0, 7, 3, 5, 1, 2, 5, 2, 6,
-			                                    7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
-
-		const auto baseVertexGlobal = m_VertexBuffer.Add(std::span(cubeVertices));
-		auto       mapIndices       = std::vector<uint32_t>(std::size(cubeVertices));
-		for (uint32_t i = 0; i < mapIndices.size(); ++i)
+		try
 		{
-			mapIndices[i] = i;
+			static const db::Vertex cubeVertices[] = {
+				{ { -1, -1, -1 } },  // 0: left-bottom-back
+				{ { 1, -1, -1 } },   // 1: right-bottom-back
+				{ { 1, 1, -1 } },    // 2: right-top-back
+				{ { -1, 1, -1 } },   // 3: left-top-back
+				{ { -1, -1, 1 } },   // 4: left-bottom-front
+				{ { 1, -1, 1 } },    // 5: right-bottom-front
+				{ { 1, 1, 1 } },     // 6: right-top-front
+				{ { -1, 1, 1 } }     // 7: left-top-front
+			};
+
+			static const uint32_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2,
+				                                    0, 4, 7, 0, 7, 3, 5, 1, 2, 5, 2, 6,
+				                                    7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
+
+			const auto baseVertexGlobal = m_VertexBuffer.Add(cubeVertices);
+			auto       mapIndices       = std::vector<uint32_t>(std::size(cubeVertices));
+			for (uint32_t i = 0; i < mapIndices.size(); ++i)
+			{
+				mapIndices[i] = i;
+			}
+
+			const auto baseMapGlobal   = m_VertexMapBuffer.Add(mapIndices);
+			const auto baseIndexGlobal = m_IndexBuffer.Add(cubeIndices);
+
+			auto m = db::Meshlet();
+
+			m.relativeVertexOffset = 0;
+			m.vertexCount          = static_cast<uint8_t>(std::size(cubeVertices));
+
+			m.relativeIndexOffset = 0;
+			m.triangleCount       = static_cast<uint8_t>(std::size(cubeIndices)) / 3;
+
+			m.boundingCenter = glm::vec3{ 0.0f };
+			m.boundingRadius = glm::sqrt(3.0f);
+
+			const auto meshletSpan       = std::span<const db::Meshlet>(&m, 1);
+			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshletSpan);
+
+			auto staticGeom      = db::StaticGeom();
+			staticGeom.vertices  = baseVertexGlobal;
+			staticGeom.indices   = baseIndexGlobal;
+			staticGeom.meshlets  = baseMeshletGlobal;
+			staticGeom.vertexMap = baseMapGlobal;
+
+			auto retVal     = GeomHandle();
+			retVal.handle   = m_StaticGeom.Add(std::move(staticGeom));
+			retVal.geomType = GeomType::kStaticMesh;
+
+			return retVal;
 		}
+		catch (const std::runtime_error& e)
+		{
+			throw SceneError(e.what());
+		}
+	}
 
-		const auto baseMapGlobal   = m_VertexMapBuffer.Add(mapIndices);
-		const auto baseIndexGlobal = m_IndexBuffer.Add(cubeIndices);
+	GeomHandle
+	Scene::AddSphereGeom(uint32_t xSegments, uint32_t ySegments, float radius)
+	{
+		try
+		{
+			std::vector<db::Vertex> sphereVerts;
+			std::vector<uint32_t>   sphereIndices;
 
-		auto m = db::Meshlet();
+			for (uint32_t y = 0u; y <= ySegments; ++y)
+			{
+				for (uint32_t x = 0u; x <= xSegments; ++x)
+				{
+					constexpr auto pi       = std::numbers::pi_v<float>;
+					float          xSegment = static_cast<float>(x) / static_cast<float>(xSegments);
+					float          ySegment = static_cast<float>(y) / static_cast<float>(ySegments);
+					float          xPos = std::cos(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
+					float          yPos = std::cos(ySegment * pi);
+					float          zPos = std::sin(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
 
-		m.relativeVertexOffset = 0;
-		m.vertexCount          = static_cast<uint8_t>(std::size(cubeVertices));
+					auto v   = db::Vertex();
+					v.pos    = glm::vec3(xPos, yPos, zPos) * radius;
+					v.normal = glm::normalize(v.pos);
+					v.uv     = glm::vec2(xSegment, ySegment);
+					sphereVerts.push_back(v);
+				}
+			}
 
-		m.relativeIndexOffset = 0;
-		m.triangleCount       = static_cast<uint8_t>(std::size(cubeIndices)) / 3;
+			for (uint32_t y = 0u; y < ySegments; ++y)
+			{
+				for (uint32_t x = 0u; x < xSegments; ++x)
+				{
+					sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x);
+					sphereIndices.push_back(y * (xSegments + 1u) + x);
+					sphereIndices.push_back(y * (xSegments + 1u) + x + 1u);
 
-		m.boundingCenter = glm::vec3{ 0.0f };
-		m.boundingRadius = glm::sqrt(3.0f);
+					sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x);
+					sphereIndices.push_back(y * (xSegments + 1u) + x + 1u);
+					sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x + 1u);
+				}
+			}
 
-		const auto meshletSpan       = std::span<const db::Meshlet>(&m, 1);
-		const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshletSpan);
+			const auto baseVertexGlobal = m_VertexBuffer.Add(sphereVerts);
 
-		auto staticMesh      = db::StaticGeom();
-		staticMesh.vertices  = baseVertexGlobal;
-		staticMesh.indices   = baseIndexGlobal;
-		staticMesh.meshlets  = baseMeshletGlobal;
-		staticMesh.vertexMap = baseMapGlobal;
+			auto                  meshlets = std::vector<db::Meshlet>();
+			std::vector<uint32_t> vertexMap;
+			std::vector<uint32_t> localIndices;
 
-		auto retVal     = GeomHandle();
-		retVal.handle   = m_StaticGeom.Add(std::move(staticMesh));
-		retVal.geomType = GeomType::kStaticMesh;
+			const uint32_t totalTriangles = static_cast<uint32_t>(sphereIndices.size() / 3u);
+			uint32_t       trianglesDone  = 0u;
 
-		return retVal;
+			while (trianglesDone < totalTriangles)
+			{
+				auto meshlet                 = db::Meshlet();
+				meshlet.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
+				meshlet.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
+
+				std::unordered_map<uint32_t, uint32_t> localRemap;
+				uint32_t                               localVertexCount   = 0u;
+				uint32_t                               localTriangleCount = 0u;
+
+				while (trianglesDone < totalTriangles)
+				{
+					const uint32_t triBase = trianglesDone * 3u;
+					const uint32_t tri[3]  = { sphereIndices[triBase],
+						                       sphereIndices[triBase + 1u],
+						                       sphereIndices[triBase + 2u] };
+
+					uint32_t newVertices = 0u;
+					for (uint32_t i = 0u; i < 3u; ++i)
+					{
+						if (!localRemap.contains(tri[i]))
+						{
+							++newVertices;
+						}
+					}
+
+					if (localVertexCount + newVertices > c_MaxVerticesPerMeshlet ||
+					    localTriangleCount + 1u > c_MaxPrimsPerMeshlet)
+					{
+						break;
+					}
+
+					for (uint32_t i = 0u; i < 3u; ++i)
+					{
+						const uint32_t geomVertexIdx = tri[i];
+						if (!localRemap.contains(geomVertexIdx))
+						{
+							localRemap[geomVertexIdx] = localVertexCount++;
+							vertexMap.push_back(geomVertexIdx);
+						}
+						localIndices.push_back(localRemap[geomVertexIdx]);
+					}
+
+					++localTriangleCount;
+					++trianglesDone;
+				}
+
+				meshlet.vertexCount   = static_cast<uint16_t>(localVertexCount);
+				meshlet.triangleCount = static_cast<uint16_t>(localTriangleCount);
+
+				auto minBound = glm::vec3(std::numeric_limits<float>::max());
+				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
+				for (const auto& [geomVertexIdx, localIdx] : localRemap)
+				{
+					minBound = glm::min(minBound, sphereVerts[geomVertexIdx].pos);
+					maxBound = glm::max(maxBound, sphereVerts[geomVertexIdx].pos);
+				}
+				meshlet.boundingCenter = (minBound + maxBound) * 0.5f;
+				meshlet.boundingRadius = glm::distance(maxBound, meshlet.boundingCenter);
+
+				meshlets.push_back(meshlet);
+			}
+
+			const auto baseMapGlobal     = m_VertexMapBuffer.Add(vertexMap);
+			const auto baseIndexGlobal   = m_IndexBuffer.Add(localIndices);
+			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshlets);
+
+			auto staticGeom      = db::StaticGeom();
+			staticGeom.vertices  = baseVertexGlobal;
+			staticGeom.vertexMap = baseMapGlobal;
+			staticGeom.indices   = baseIndexGlobal;
+			staticGeom.meshlets  = baseMeshletGlobal;
+
+			auto retVal     = GeomHandle();
+			retVal.handle   = m_StaticGeom.Add(std::move(staticGeom));
+			retVal.geomType = GeomType::kStaticMesh;
+
+			return retVal;
+		}
+		catch (const std::runtime_error& e)
+		{
+			throw SceneError(e.what());
+		}
 	}
 
 	MeshInstanceHandle
@@ -294,20 +430,101 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance must be of type kStaticMesh");
 		}
 
-		auto staticMeshInstance      = db::StaticMeshInstance();
-		staticMeshInstance.base      = geom.handle;
-		staticMeshInstance.transform = transform;
+		if (!m_StaticGeom.IsValid(geom.handle))
+		{
+			throw SceneError(
+				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
+		}
 
-		auto staticMeshInstanceHandle = m_StaticMeshInstanceBuffer.Add(staticMeshInstance);
+		try
+		{
+			auto staticMeshInstance      = db::StaticMeshInstance();
+			staticMeshInstance.base      = geom.handle;
+			staticMeshInstance.transform = transform;
 
-		auto instance             = db::BaseInstance();
-		instance.meshInstance     = staticMeshInstanceHandle;
-		instance.materialInstance = material.handle;
+			auto staticMeshInstanceHandle = m_StaticMeshInstanceBuffer.Add(staticMeshInstance);
 
-		auto instanceHandle    = MeshInstanceHandle();
-		instanceHandle.handle  = m_InstanceBuffer.Add(std::move(instance));
-		instanceHandle.psoType = GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
+			auto instance             = db::BaseInstance();
+			instance.meshInstance     = staticMeshInstanceHandle;
+			instance.materialInstance = material.handle;
 
-		return instanceHandle;
+			auto instanceHandle   = MeshInstanceHandle();
+			instanceHandle.handle = m_InstanceBuffer.Add(std::move(instance));
+			instanceHandle.psoType =
+				GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
+
+			++m_StaticGeom.MetaAt(geom.handle.index).refCount;
+
+			return instanceHandle;
+		}
+		catch (const std::runtime_error& e)
+		{
+			throw SceneError(e.what());
+		}
+	}
+
+	void
+	Scene::DeleteMeshInstance(MeshInstanceHandle instance)
+	{
+		if (!instance.IsValid() || !m_InstanceBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to DeleteMeshInstance is invalid or already removed");
+		}
+
+		const auto& baseInstance = m_InstanceBuffer[instance.handle];
+
+		// Walk instance -> static-mesh-instance -> geom to drop the geom's
+		// reference. These links are internal invariants, so a broken one is a
+		// bgl logic error rather than caller misuse.
+		const uint32_t staticMeshInstanceIndex = baseInstance.meshInstance.offset;
+		gassert(
+			m_StaticMeshInstanceBuffer.IsIndexValid(staticMeshInstanceIndex),
+			"Mesh instance references a missing static mesh instance");
+
+		const uint32_t geomIndex =
+			m_StaticMeshInstanceBuffer.AtIndex(staticMeshInstanceIndex).base.offset;
+		gassert(
+			m_StaticGeom.IsIndexValid(geomIndex),
+			"Static mesh instance references a missing geom");
+
+		auto& geomMeta = m_StaticGeom.MetaAt(geomIndex);
+		gassert(geomMeta.refCount > 0, "Geom reference count underflow in DeleteMeshInstance");
+		--geomMeta.refCount;
+
+		m_StaticMeshInstanceBuffer.EraseByIndex(staticMeshInstanceIndex);
+		m_InstanceBuffer.Erase(instance.handle);
+	}
+
+	void
+	Scene::DeleteGeom(GeomHandle geom)
+	{
+		if (geom.geomType != GeomType::kStaticMesh)
+		{
+			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh");
+		}
+
+		if (!m_StaticGeom.IsValid(geom.handle))
+		{
+			throw SceneError("GeomHandle passed to DeleteGeom refers to a deleted or unknown geom");
+		}
+
+		const uint32_t refCount = m_StaticGeom.MetaAt(geom.handle.index).refCount;
+		if (refCount != 0)
+		{
+			throw SceneError(
+				std::format(
+					"Cannot delete geom still referenced by {} live mesh instance(s)",
+					refCount));
+		}
+
+		const auto& staticGeom = m_StaticGeom[geom.handle];
+
+		m_VertexBuffer.EraseByIndex(staticGeom.vertices.offsetStart);
+		m_VertexMapBuffer.EraseByIndex(staticGeom.vertexMap.offsetStart);
+		m_IndexBuffer.EraseByIndex(staticGeom.indices.offsetStart);
+		m_MeshletBuffer.EraseByIndex(staticGeom.meshlets.range.offsetStart);
+
+		m_StaticGeom.Erase(geom.handle);
 	}
 }

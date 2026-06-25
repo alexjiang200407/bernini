@@ -26,7 +26,10 @@ namespace bgl
 	concept EntryBufferConcept =
 		core::SlotElementConcept<T> && core::type_traits::trivially_copyable<T>;
 
-	template <EntryBufferConcept T>
+	/**
+	 * A GPU-mirrored slot buffer of trivially-copyable elements.
+	 */
+	template <EntryBufferConcept T, typename Meta = void>
 	class EntryBuffer
 	{
 	public:
@@ -35,6 +38,11 @@ namespace bgl
 			uint32_t offsetBytes = 0;
 			uint32_t sizeBytes   = 0;
 		};
+
+	private:
+		static constexpr bool c_HasMeta = !std::is_void_v<Meta>;
+		using MetaElem                  = std::conditional_t<c_HasMeta, Meta, int>;
+		using MetaStorage = std::conditional_t<c_HasMeta, std::vector<MetaElem>, std::monostate>;
 
 	public:
 		EntryBuffer() noexcept = default;
@@ -55,6 +63,11 @@ namespace bgl
 
 			m_Entries.reset(m_Desc.maxCount);
 
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata.assign(m_Desc.maxCount, Meta{});
+			}
+
 			const uint32_t totalBytes = m_Desc.maxCount * sizeof(T);
 			const uint32_t numBlocks  = (totalBytes + m_Desc.blockSize - 1) / m_Desc.blockSize;
 
@@ -72,11 +85,24 @@ namespace bgl
 			}
 		}
 
+		[[nodiscard]] bool
+		IsValid(core::slot_handle handle) const noexcept
+		{
+			return m_Entries.valid(handle.index, handle.generation);
+		}
+
+		[[nodiscard]] bool
+		IsIndexValid(uint32_t index) const noexcept
+		{
+			return m_Entries.allocated(index);
+		}
+
 		template <typename... Args>
 		core::slot_handle
 		EmplaceBack(Args&&... args)
 		{
 			auto slot = m_Entries.allocate_and_emplace(std::forward<Args>(args)...);
+			ResetMeta(slot.index);
 			MarkDirty(slot.index);
 			return slot;
 		}
@@ -85,12 +111,13 @@ namespace bgl
 		Add(T value)
 		{
 			auto slot = m_Entries.allocate_slot();
+			ResetMeta(slot.index);
 			Set(slot, std::move(value));
 			return slot;
 		}
 
 		void
-		Set(core::slot_handle slot, T value)
+		Set(core::slot_handle slot, T value) noexcept
 		{
 			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			MarkDirty(slot.index);
@@ -98,21 +125,56 @@ namespace bgl
 		}
 
 		const T&
-		operator[](core::slot_handle slot) const
+		operator[](core::slot_handle slot) const noexcept
 		{
 			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			return m_Entries[slot.index];
 		}
 
+		const T&
+		AtIndex(uint32_t index) const noexcept
+		{
+			gassert(m_Entries.allocated(index), "AtIndex on an unallocated slot");
+			return m_Entries[index];
+		}
+
 		void
-		Erase(core::slot_handle slot)
+		Erase(core::slot_handle slot) noexcept
 		{
 			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			m_Entries.release_slot(slot.index);
 		}
 
 		void
-		Transition(ICommandList* cmdList, EntryBufferState prevState, EntryBufferState newState)
+		EraseByIndex(uint32_t index) noexcept
+		{
+			gassert(m_Entries.allocated(index), "EraseByIndex on an unallocated slot");
+			m_Entries.release_slot(index);
+		}
+
+		template <typename M = Meta>
+		[[nodiscard]] M&
+		MetaAt(uint32_t index) noexcept
+			requires(!std::is_void_v<M>)
+		{
+			gassert(m_Entries.allocated(index), "MetaAt on an unallocated slot");
+			return m_Metadata[index];
+		}
+
+		template <typename M = Meta>
+		[[nodiscard]] const M&
+		MetaAt(uint32_t index) const noexcept
+			requires(!std::is_void_v<M>)
+		{
+			gassert(m_Entries.allocated(index), "MetaAt on an unallocated slot");
+			return m_Metadata[index];
+		}
+
+		void
+		Transition(
+			ICommandList*    cmdList,
+			EntryBufferState prevState,
+			EntryBufferState newState) noexcept
 		{
 			BufferBarrierDesc barrier = {};
 
@@ -128,7 +190,7 @@ namespace bgl
 		}
 
 		void
-		Update(ICommandList* cmdList)
+		Update(ICommandList* cmdList) noexcept
 		{
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
 			gassert(cmdList->IsOpen(), "ICommandList must be open to update EntryBuffer");
@@ -195,6 +257,15 @@ namespace bgl
 
 	private:
 		void
+		ResetMeta(uint32_t index) noexcept
+		{
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata[index] = Meta{};
+			}
+		}
+
+		void
 		MarkDirty(uint32_t index)
 		{
 			const uint32_t elementOffsetBytes = index * sizeof(T);
@@ -212,7 +283,11 @@ namespace bgl
 		}
 
 		void
-		IssueCopy(ICommandList* cmdList, uint32_t startBlk, uint32_t endBlk, uint32_t totalBytes)
+		IssueCopy(
+			ICommandList* cmdList,
+			uint32_t      startBlk,
+			uint32_t      endBlk,
+			uint32_t      totalBytes) noexcept
 		{
 			const uint32_t offset = startBlk * m_Desc.blockSize;
 			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
@@ -229,7 +304,7 @@ namespace bgl
 		}
 
 		std::pair<BarrierAccess, BarrierSync>
-		GetBarrierAccessSync(EntryBufferState state)
+		GetBarrierAccessSync(EntryBufferState state) noexcept
 		{
 			switch (state)
 			{
@@ -249,6 +324,8 @@ namespace bgl
 		ResourceManagerHandle m_ResourceManager;
 		BufferHandle          m_BufferHandle;
 		core::slot_vector<T>  m_Entries;
+
+		MetaStorage m_Metadata;
 
 		std::vector<bool> m_DirtyBlocks;
 		bool              m_HasAnyDirtyBlocks = false;

@@ -180,5 +180,60 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		CHECK(entryBuffer.CountDirtyBlocks() == 0);
 	}
 
+	SECTION("IsValid detects use-after-free")
+	{
+		auto desc      = bgl::EntryBufferDesc();
+		desc.maxCount  = 4;
+		desc.blockSize = sizeof(int);
+		desc.debugName = "EntryBuffer IsValid";
+
+		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+
+		auto a = entryBuffer.EmplaceBack(10);
+		CHECK(entryBuffer.IsValid(a));
+		CHECK(entryBuffer.IsIndexValid(a.index));
+
+		entryBuffer.Erase(a);
+		CHECK_FALSE(entryBuffer.IsValid(a));
+		CHECK_FALSE(entryBuffer.IsIndexValid(a.index));
+
+		// Reusing the slot makes a fresh handle valid while the stale one (same
+		// index, older generation) stays invalid.
+		auto reused = entryBuffer.EmplaceBack(20);
+		CHECK(reused.index == a.index);
+		CHECK(entryBuffer.IsValid(reused));
+		CHECK_FALSE(entryBuffer.IsValid(a));
+
+		// A never-allocated handle is invalid rather than a crash.
+		CHECK_FALSE(entryBuffer.IsValid(core::slot_handle{}));
+	}
+
+	SECTION("Metadata is per-slot and reset on reuse")
+	{
+		struct RefMeta
+		{
+			uint32_t refCount = 0;
+		};
+
+		auto desc      = bgl::EntryBufferDesc();
+		desc.maxCount  = 4;
+		desc.blockSize = sizeof(int);
+		desc.debugName = "EntryBuffer Meta";
+
+		auto entryBuffer = bgl::EntryBuffer<int, RefMeta>(desc, resourceManager);
+
+		auto a = entryBuffer.Add(1);
+		CHECK(entryBuffer.MetaAt(a.index).refCount == 0);
+
+		entryBuffer.MetaAt(a.index).refCount = 3;
+		CHECK(entryBuffer.MetaAt(a.index).refCount == 3);
+
+		// A reused slot starts its metadata fresh.
+		entryBuffer.Erase(a);
+		auto reused = entryBuffer.Add(2);
+		CHECK(reused.index == a.index);
+		CHECK(entryBuffer.MetaAt(reused.index).refCount == 0);
+	}
+
 	cmdList->Close();
 }

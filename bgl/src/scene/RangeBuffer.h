@@ -22,9 +22,19 @@ namespace bgl
 	concept RangeBufferConcept =
 		core::MultiSlotElementConcept<T> && core::type_traits::trivially_copyable<T>;
 
-	template <RangeBufferConcept T>
+	/**
+	 * A GPU-mirrored buffer of variable-length ranges of trivially-copyable
+	 * elements.
+	 */
+	template <RangeBufferConcept T, typename Meta = void>
 	class RangeBuffer
 	{
+	public:
+	private:
+		static constexpr bool c_HasMeta = !std::is_void_v<Meta>;
+		using MetaElem                  = std::conditional_t<c_HasMeta, Meta, int>;
+		using MetaStorage = std::conditional_t<c_HasMeta, std::vector<MetaElem>, std::monostate>;
+
 	public:
 		RangeBuffer() noexcept = default;
 		RangeBuffer(RangeBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
@@ -44,6 +54,11 @@ namespace bgl
 
 			// Initialize the multi-slot tracking container
 			m_Data.reset(m_Desc.maxCount);
+
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata.assign(m_Desc.maxCount, Meta{});
+			}
 
 			// Calculate tracking blocks based on total byte layout
 			const uint32_t totalBytes = m_Desc.maxCount * sizeof(T);
@@ -92,9 +107,31 @@ namespace bgl
 		{
 			auto handle = m_Data.allocate_slots(count);
 
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata[handle.index] = Meta{};
+			}
+
 			MarkRangeDirty(handle.index, handle.count);
 
 			return handle;
+		}
+
+		// A handle is valid only while its range is live and its generation
+		// matches; once Erase'd the stale handle reports invalid, catching
+		// use-after-free on the CPU side.
+		[[nodiscard]] bool
+		IsValid(core::multi_slot_handle handle) const noexcept
+		{
+			return m_Data.valid(handle.index, handle.generation);
+		}
+
+		// Reports whether a live range starts at `rootIndex`, used when only the
+		// GPU-side index is known (db structs store indices, not generations).
+		[[nodiscard]] bool
+		IsIndexValid(uint32_t rootIndex) const noexcept
+		{
+			return m_Data.is_allocated_root(rootIndex);
 		}
 
 		void
@@ -119,6 +156,40 @@ namespace bgl
 		{
 			MarkRangeDirty(handle.index, handle.count);
 			m_Data.erase(handle);
+		}
+
+		// Erases the range starting at `rootIndex`, used when only the GPU-side
+		// index is known (db structs store indices, not generations). A live
+		// allocation must start at that index.
+		void
+		EraseByIndex(uint32_t rootIndex)
+		{
+			gassert(
+				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
+				"EraseByIndex on an index with no live range");
+			Erase(m_Data.handle_at(rootIndex));
+		}
+
+		template <typename M = Meta>
+		[[nodiscard]] M&
+		MetaAt(uint32_t rootIndex) noexcept
+			requires(!std::is_void_v<M>)
+		{
+			gassert(
+				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
+				"MetaAt on an index with no live range");
+			return m_Metadata[rootIndex];
+		}
+
+		template <typename M = Meta>
+		[[nodiscard]] const M&
+		MetaAt(uint32_t rootIndex) const noexcept
+			requires(!std::is_void_v<M>)
+		{
+			gassert(
+				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
+				"MetaAt on an index with no live range");
+			return m_Metadata[rootIndex];
 		}
 
 		[[nodiscard]] const T&
@@ -261,6 +332,8 @@ namespace bgl
 		RangeBufferDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;
 		BufferHandle          m_BufferHandle;
+
+		MetaStorage m_Metadata;
 
 		std::vector<bool>          m_DirtyBlocks;
 		core::multi_slot_vector<T> m_Data;

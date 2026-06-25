@@ -84,8 +84,40 @@ namespace bgl
 		virtual GeomHandle
 		AddCubeGeom() = 0;
 
+		virtual GeomHandle
+		AddSphereGeom(uint32_t xSegments, uint32_t ySegments, float radius) = 0;
+
 		virtual MeshInstanceHandle
 		CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform) = 0;
+
+		MeshInstanceHandle
+		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform)
+		{
+			return CreateStaticMeshInstance(
+				geom,
+				MaterialHandle(MaterialType::kNull, core::slot_handle()),
+				transform);
+		}
+
+		/**
+		 * Removes a mesh instance. The geometry it referenced is left intact; its
+		 * reference count is decremented so it can later be removed by DeleteGeom.
+		 *
+		 * @param instance A handle returned by CreateStaticMeshInstance.
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
+
+		/**
+		 * Removes geometry and frees its underlying vertex/index/meshlet data.
+		 *
+		 * @param geom A handle returned by a geometry-creating method.
+		 * @throws SceneError if the handle is invalid, already removed, or still
+		 *         referenced by one or more live mesh instances.
+		 */
+		virtual void
+		DeleteGeom(GeomHandle geom) = 0;
 
 	protected:
 		IScene() noexcept = default;
