@@ -45,15 +45,57 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enableDebugLayer         = true;
 		gfxOpts.enableGPUValidationLayer = true;
 		gfxOpts.enablePixDebug           = true;
+		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
 
-		auto visitor = EventVisitor{};
+		auto visitor = EventVisitor();
 
+		auto sceneDesc         = bgl::SceneDesc();
+		sceneDesc.maxIndices   = 10000;
+		sceneDesc.maxVertices  = 1000;
+		sceneDesc.maxGeom      = 100;
+		sceneDesc.maxInstances = 100;
+		sceneDesc.maxMeshlets  = 1000;
+
+		auto scene  = graphics->CreateScene(std::move(sceneDesc));
+		auto cube   = scene->AddCubeGeom();
+		auto sphere = scene->AddSphereGeom(32, 32, 1.0f);
+
+		auto transform = glm::mat4(1.0f);
+		auto inst1     = scene->CreateStaticMeshInstance(cube, transform);
+
+		transform[3][0] = -5.0f;
+
+		auto inst2 = scene->CreateStaticMeshInstance(sphere, transform);
+
+		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
+
+		auto camera = bgl::Camera()
+		                  .LookAt(
+							  glm::vec3(0.0f, 0.0f, 20.0f),
+							  glm::vec3(0.0f, 0.0f, 19.0f),
+							  glm::vec3(0.0f, 1.0f, 0.0f))
+		                  .Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+		auto context   = bgl::RenderContext{};
+		context.scene  = scene.Get();
+		context.camera = camera;
+		context.viewport =
+			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
+
+		bool firstFrame = true;
 		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
 		     res      = wnd->Process(&visitor))
 		{
-			graphics->DrawFrame();
+			graphics->DrawFrame(context);
+
+			if (firstFrame)
+			{
+				graphics->ScreenshotRaw("bgl_base.dds");
+			}
+
+			firstFrame = false;
 		}
 	}
 	catch (const std::runtime_error& e)

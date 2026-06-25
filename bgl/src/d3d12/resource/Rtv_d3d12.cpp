@@ -8,7 +8,7 @@ namespace bgl
 		ID3D12DescriptorHeap* descriptorHeap,
 		uint32_t              descriptorIndex,
 		const RtvDesc&        desc) :
-		m_Desc(desc), m_TextureHandle(textureHandle), m_DescriptorIndex(descriptorIndex)
+		m_Desc(desc), m_DescriptorIndex(descriptorIndex), m_TextureHandle(textureHandle)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
@@ -17,6 +17,6 @@ namespace bgl
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
 
 		m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		m_CpuHandle.ptr += descriptorIndex * descriptorSize;
+		m_CpuHandle.ptr += static_cast<size_t>(descriptorIndex) * descriptorSize;
 	}
 }

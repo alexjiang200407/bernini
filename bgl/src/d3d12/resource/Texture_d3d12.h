@@ -1,6 +1,6 @@
 #pragma once
 #include "resource/Texture.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {
@@ -9,18 +9,13 @@ namespace bgl
 	public:
 		Texture() = default;
 
-		Texture(
-			ID3D12Device*         device,
-			ID3D12DescriptorHeap* descriptorHeap,
-			uint32_t              descriptorIndex,
-			const TextureDesc&    desc);
+		Texture(ID3D12Device* device, uint32_t descriptorIndex, const TextureDesc& desc);
 
 		/**
 		 * Assumes that desc is correct.
 		 */
 		Texture(
 			ID3D12Device*               device,
-			ID3D12DescriptorHeap*       descriptorHeap,
 			uint32_t                    descriptorIndex,
 			wrl::ComPtr<ID3D12Resource> texture,
 			const TextureDesc&          desc);
@@ -37,35 +32,28 @@ namespace bgl
 
 		[[nodiscard]]
 		const TextureDesc&
-		GetDesc() const
+		GetDesc() const noexcept
 		{
 			return m_Desc;
 		}
 
 		[[nodiscard]]
-		D3D12_CPU_DESCRIPTOR_HANDLE
-		GetCpuHandle() const
-		{
-			return m_CpuHandle;
-		}
-
-		[[nodiscard]]
 		ID3D12Resource*
-		GetD3D12Resource() const
+		GetD3D12Resource() const noexcept
 		{
 			return m_Texture.Get();
 		}
 
 		[[nodiscard]]
 		wrl::ComPtr<ID3D12Resource>
-		GetD3D12ResourceCopy() const
+		GetD3D12ResourceCopy() const noexcept
 		{
 			return m_Texture;
 		}
 
 		[[nodiscard]]
 		bool
-		IsNull() const
+		IsNull() const noexcept
 		{
 			return m_Texture == nullptr;
 		}
@@ -73,7 +61,6 @@ namespace bgl
 	private:
 		TextureDesc                 m_Desc;
 		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
 		wrl::ComPtr<ID3D12Resource> m_Texture;
 	};
 }

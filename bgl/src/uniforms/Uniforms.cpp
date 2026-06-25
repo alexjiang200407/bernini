@@ -1,5 +1,5 @@
 #include "uniforms/Uniforms.h"
-#include "pipeline/GraphicsPipeline.h"
+#include "pipeline/MeshletPipeline.h"
 #include "slang/ErrorChecker.h"
 #include "uniforms/DescriptorHandle.h"
 #include <slang.h>
@@ -8,6 +8,62 @@ namespace bgl
 {
 	namespace detail
 	{
+		namespace
+		{
+			TraversalResult
+			ReturnNullResult();
+		}
+
+		class UniformNullNode final : public UniformsNode
+		{
+		public:
+			UniformNullNode() = default;
+
+			TraversalResult
+			Traverse(size_t, const std::string&) override
+			{
+				return ReturnNullResult();
+			}
+
+			TraversalResult
+			Traverse(size_t, uint32_t) override
+			{
+				return ReturnNullResult();
+			}
+
+			UniformType
+			GetType() const override
+			{
+				return UniformType::kNull;
+			}
+
+			UniformValueType
+			GetValueType() const override
+			{
+				return UniformValueType::kNone;
+			}
+
+			size_t
+			GetSize() const override
+			{
+				return 0;
+			}
+		};
+
+		static UniformNullNode g_UniformNullNode;
+
+		namespace
+		{
+			TraversalResult
+			ReturnNullResult()
+			{
+				TraversalResult result{};
+				result.node           = &g_UniformNullNode;
+				result.relativeOffset = 0;
+				return result;
+			}
+		}
+
 		class UniformValueNode final : public UniformsNode
 		{
 		public:
@@ -16,13 +72,13 @@ namespace bgl
 			TraversalResult
 			Traverse(size_t, const std::string&) override
 			{
-				throw std::runtime_error("UniformValueNode: cannot index by member name");
+				return ReturnNullResult();
 			}
 
 			TraversalResult
 			Traverse(size_t, uint32_t) override
 			{
-				throw std::runtime_error("UniformValueNode: cannot index by integer");
+				return ReturnNullResult();
 			}
 
 			UniformType
@@ -62,14 +118,16 @@ namespace bgl
 			{
 				auto it = m_Members.find(member);
 				if (it == m_Members.end())
-					throw std::out_of_range("UniformStructNode: unknown member '" + member + "'");
+				{
+					return ReturnNullResult();
+				}
 				return { it->second.first.get(), currentOffset + it->second.second };
 			}
 
 			TraversalResult
 			Traverse(size_t, uint32_t) override
 			{
-				throw std::runtime_error("UniformStructNode: cannot index struct by integer");
+				return ReturnNullResult();
 			}
 
 			UniformType
@@ -104,17 +162,26 @@ namespace bgl
 				m_ElementNode(std::move(elementNode)), m_Count(count), m_Stride(stride)
 			{}
 
+			UniformArrayNode(const UniformArrayNode&) noexcept = delete;
+			UniformArrayNode(UniformArrayNode&&) noexcept      = delete;
+
+			UniformArrayNode&
+			operator=(const UniformArrayNode&) noexcept = delete;
+
+			UniformArrayNode&
+			operator=(UniformArrayNode&&) noexcept = delete;
+
 			TraversalResult
 			Traverse(size_t, const std::string&) override
 			{
-				throw std::runtime_error("UniformArrayNode: cannot index array by member name");
+				return ReturnNullResult();
 			}
 
 			TraversalResult
 			Traverse(size_t currentOffset, uint32_t idx) override
 			{
 				if (idx >= m_Count)
-					throw std::out_of_range("UniformArrayNode: index out of range");
+					return ReturnNullResult();
 				return { m_ElementNode.get(), currentOffset + idx * m_Stride };
 			}
 
@@ -123,6 +190,7 @@ namespace bgl
 			{
 				return UniformType::kArray;
 			}
+
 			UniformValueType
 			GetValueType() const override
 			{
@@ -173,18 +241,21 @@ namespace bgl
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	Uniforms::Uniforms(IGraphicsPipeline const* pipeline)
+	Uniforms::Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 	{
-		size_t totalBufferSize = pipeline->GetUniformSize();
-		auto*  structLayout    = pipeline->GetUniformLayout();
+		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 
-		m_Size = totalBufferSize;
+		UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(cbufferName);
 
-		m_Root = BuildNode(structLayout);
-		m_Buffer.resize(totalBufferSize, std::byte{ 0 });
+		gassert(entry.layout != nullptr, "Pipeline must have a valid uniform layout");
+
+		m_Size           = entry.size;
+		m_RootParamIndex = entry.rootParamIndex;
+		m_Root           = BuildNode(entry.layout);
+		m_Buffer.resize(entry.size, std::byte{ 0 });
 	}
 
-	detail::UniformValueType
+	UniformValueType
 	Uniforms::ResolveScalarType(slang::TypeReflection* type)
 	{
 		auto kind = type->getKind();
@@ -194,7 +265,7 @@ namespace bgl
 			gassert(
 				type->getRowCount() == 4 && type->getColumnCount() == 4,
 				"Only float mat4x4 supported for now");
-			return detail::UniformValueType::kMat4x4;
+			return UniformValueType::kMat4x4;
 		}
 
 		uint32_t               componentCount = 1;
@@ -202,7 +273,7 @@ namespace bgl
 
 		if (kind == slang::TypeReflection::Kind::Vector)
 		{
-			componentCount = type->getElementCount();
+			componentCount = static_cast<uint32_t>(type->getElementCount());
 			scalarType     = type->getElementType();
 		}
 
@@ -213,20 +284,20 @@ namespace bgl
 		bool isBool     = scalarKind == slang::TypeReflection::ScalarType::Bool;
 
 		if (isBool)
-			return detail::UniformValueType::kBool;
+			return UniformValueType::kBool;
 
 		if (isFloat)
 		{
 			switch (componentCount)
 			{
 			case 1:
-				return detail::UniformValueType::kFloat;
+				return UniformValueType::kFloat;
 			case 2:
-				return detail::UniformValueType::kFloat2;
+				return UniformValueType::kFloat2;
 			case 3:
-				return detail::UniformValueType::kFloat3;
+				return UniformValueType::kFloat3;
 			case 4:
-				return detail::UniformValueType::kFloat4;
+				return UniformValueType::kFloat4;
 			}
 		}
 
@@ -235,13 +306,13 @@ namespace bgl
 			switch (componentCount)
 			{
 			case 1:
-				return detail::UniformValueType::kInt;
+				return UniformValueType::kInt;
 			case 2:
-				return detail::UniformValueType::kInt2;
+				return UniformValueType::kInt2;
 			case 3:
-				return detail::UniformValueType::kInt3;
+				return UniformValueType::kInt3;
 			case 4:
-				return detail::UniformValueType::kInt4;
+				return UniformValueType::kInt4;
 			}
 		}
 
@@ -250,19 +321,22 @@ namespace bgl
 			switch (componentCount)
 			{
 			case 1:
-				return detail::UniformValueType::kUInt;
+				return UniformValueType::kUInt;
 			case 2:
-				return detail::UniformValueType::kUInt2;
+				return UniformValueType::kUInt2;
 			case 3:
-				return detail::UniformValueType::kUInt3;
+				return UniformValueType::kUInt3;
 			case 4:
-				return detail::UniformValueType::kUInt4;
+				return UniformValueType::kUInt4;
 			}
 		}
 
 		gfatal("Unsupported scalar/vector type in push constants");
-		return detail::UniformValueType::kNone;
 	}
+
+#define HANDLE_UNSUPPORTED_TYPE_KIND(kind) \
+	case kind:                             \
+		gfatal("Unsupported type kind in push constants: " #kind)
 
 	std::unique_ptr<detail::UniformsNode>
 	Uniforms::BuildNode(slang::TypeLayoutReflection* typeLayout)
@@ -305,10 +379,25 @@ namespace bgl
 			return std::make_unique<detail::UniformValueNode>(
 				ResolveScalarType(typeLayout->getType()));
 		}
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ConstantBuffer);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::DynamicResource);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Enum);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Feedback);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::GenericTypeParameter);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Interface);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::MeshOutput);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::None);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::OutputStream);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ParameterBlock);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Pointer);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Resource);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::SamplerState);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ShaderStorageBuffer);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Specialized);
+			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::TextureBuffer);
 
 		default:
 			gfatal("Unsupported type kind in push constants");
-			return nullptr;
 		}
 	}
 }

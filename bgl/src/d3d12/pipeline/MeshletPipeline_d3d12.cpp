@@ -1,0 +1,220 @@
+#include "pipeline/MeshletPipeline_d3d12.h"
+#include "resource/Rtv_d3d12.h"
+#include <core/math.h>
+
+// clang-format off
+#pragma warning(push)
+#pragma warning(disable: 4324) // structure was padded due to alignment specifier
+#pragma warning(disable: 5029) // Allow __declspec(align) on non-class types
+        struct PSO_STREAM
+        {
+            typedef __declspec(align(sizeof(void*))) D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ALIGNED_TYPE;
+
+            ALIGNED_TYPE RootSignature_Type;        ID3D12RootSignature* RootSignature;
+            ALIGNED_TYPE PrimitiveTopology_Type;    D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
+            ALIGNED_TYPE AmplificationShader_Type;  D3D12_SHADER_BYTECODE AmplificationShader;
+            ALIGNED_TYPE MeshShader_Type;           D3D12_SHADER_BYTECODE MeshShader;
+            ALIGNED_TYPE PixelShader_Type;          D3D12_SHADER_BYTECODE PixelShader;
+            ALIGNED_TYPE RasterizerState_Type;      D3D12_RASTERIZER_DESC RasterizerState;
+            ALIGNED_TYPE DepthStencilState_Type;    D3D12_DEPTH_STENCIL_DESC DepthStencilState;
+            ALIGNED_TYPE BlendState_Type;           D3D12_BLEND_DESC BlendState;
+            ALIGNED_TYPE SampleDesc_Type;           DXGI_SAMPLE_DESC SampleDesc;
+            ALIGNED_TYPE SampleMask_Type;           UINT SampleMask;
+            ALIGNED_TYPE RenderTargets_Type;        D3D12_RT_FORMAT_ARRAY RenderTargets;
+            ALIGNED_TYPE DSVFormat_Type;            DXGI_FORMAT DSVFormat;
+        };
+#pragma warning(pop)
+// clang-format on
+
+namespace bgl
+{
+	MeshletPipeline::MeshletPipeline(
+		ID3D12Device*              device,
+		slang::ISession*           session,
+		const MeshletPipelineDesc& desc) : m_Desc(desc)
+	{
+		gassert(session != nullptr, "Session cannot be null");
+		gassert(device != nullptr, "Device pointer must not be null.");
+
+		wrl::ComPtr<ID3D12Device2> device2;
+		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
+
+		SlangErrorChecker                   errChecker;
+		std::vector<slang::IComponentType*> slangModules;
+		std::unordered_set<slang::IModule*> uniqueModules;
+
+		gassert(desc.meshShader != nullptr, "Mesh shader cannot be null");
+
+		auto addShaderToComposition = [&](IShader* shader) {
+			if (!shader)
+				return;
+
+			slang::IModule* module = shader->GetSlangModule();
+			gassert(module != nullptr, "Shader module cannot be null");
+
+			// ONLY add the module if it hasn't been added yet
+			if (uniqueModules.insert(module).second)
+			{
+				slangModules.emplace_back(module);
+			}
+
+			const auto&         shaderDesc = shader->GetDesc();
+			slang::IEntryPoint* entryPoint = nullptr;
+
+			// Find the entry point by name from the module
+			module->findEntryPointByName(shaderDesc.entryPointName.c_str(), &entryPoint);
+			gassert(entryPoint != nullptr, "Failed to find entry point in module");
+
+			slangModules.emplace_back(entryPoint);
+		};
+
+		addShaderToComposition(desc.meshShader);
+		addShaderToComposition(desc.pixelShader);
+		addShaderToComposition(desc.ampShader);
+
+		Slang::ComPtr<slang::IComponentType> program;
+		{
+			session->createCompositeComponentType(
+				slangModules.data(),
+				static_cast<SlangInt>(slangModules.size()),
+				program.writeRef(),
+				errChecker.WriteDiagnosticBlob()) >>
+				errChecker;
+
+			gassert(program != nullptr, "Failed to compose shader modules");
+		}
+
+		program->link(m_LinkedProgram.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
+
+		slang::ProgramLayout* layout = m_LinkedProgram->getLayout();
+
+		std::vector<CD3DX12_ROOT_PARAMETER> rootParams;
+
+		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
+		{
+			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
+
+			if (param->getCategory() == slang::ParameterCategory::ConstantBuffer)
+			{
+				slang::TypeLayoutReflection* typeLayout    = param->getTypeLayout();
+				slang::TypeLayoutReflection* elementLayout = typeLayout->getElementTypeLayout();
+
+				uint32_t    bufferSize = static_cast<uint32_t>(elementLayout->getSize());
+				std::string bufferName = param->getName();
+
+				UINT shaderRegister = static_cast<UINT>(param->getBindingIndex());
+				UINT registerSpace  = static_cast<UINT>(param->getBindingSpace());
+
+				UniformLayoutEntry entry{};
+				entry.size                         = bufferSize;
+				entry.layout                       = elementLayout;
+				entry.rootParamIndex               = static_cast<uint32_t>(rootParams.size());
+				m_UniformLayoutEntries[bufferName] = entry;
+
+				auto cbvParam = CD3DX12_ROOT_PARAMETER();
+				cbvParam.InitAsConstantBufferView(shaderRegister, registerSpace);
+				rootParams.push_back(cbvParam);
+			}
+		}
+
+		D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
+		rsDesc.NumParameters             = static_cast<UINT>(rootParams.size());
+		rsDesc.pParameters               = rootParams.empty() ? nullptr : rootParams.data();
+		rsDesc.NumStaticSamplers         = 0;
+		rsDesc.pStaticSamplers           = nullptr;
+		rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+
+		wrl::ComPtr<ID3DBlob> sigBlob, errBlob;
+		D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sigBlob, &errBlob) >>
+			d3d12ErrChecker;
+
+		device->CreateRootSignature(
+			0,
+			sigBlob->GetBufferPointer(),
+			sigBlob->GetBufferSize(),
+			IID_PPV_ARGS(&m_RootSignature)) >>
+			d3d12ErrChecker;
+
+		PSO_STREAM psoDesc = {};
+
+		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
+		psoDesc.RootSignature      = m_RootSignature.Get();
+
+		psoDesc.PrimitiveTopology_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY;
+		psoDesc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+		psoDesc.AmplificationShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
+		if (desc.ampShader)
+		{
+			psoDesc.AmplificationShader =
+				D3D12_SHADER_BYTECODE{ desc.ampShader->GetBytecode(),
+				                       desc.ampShader->GetBytecodeSize() };
+		}
+
+		psoDesc.MeshShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
+		psoDesc.MeshShader      = D3D12_SHADER_BYTECODE{ desc.meshShader->GetBytecode(),
+			                                             desc.meshShader->GetBytecodeSize() };
+
+		psoDesc.PixelShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
+		if (desc.pixelShader)
+		{
+			psoDesc.PixelShader = D3D12_SHADER_BYTECODE{ desc.pixelShader->GetBytecode(),
+				                                         desc.pixelShader->GetBytecodeSize() };
+		}
+
+		psoDesc.RasterizerState_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER;
+		psoDesc.RasterizerState      = ConvertRasterState(desc.renderState.rasterState);
+
+		psoDesc.DepthStencilState_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL;
+		psoDesc.DepthStencilState = ConvertDepthStencilState(desc.renderState.depthStencilState);
+
+		psoDesc.BlendState_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND;
+		psoDesc.BlendState      = ConvertBlendState(desc.renderState.blendState);
+
+		psoDesc.SampleDesc_Type    = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC;
+		psoDesc.SampleDesc.Count   = 1;
+		psoDesc.SampleDesc.Quality = 0;
+
+		psoDesc.SampleMask_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK;
+		psoDesc.SampleMask      = UINT_MAX;
+
+		psoDesc.RenderTargets_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS;
+		psoDesc.RenderTargets.NumRenderTargets = static_cast<UINT>(desc.rtvFormats.size());
+		for (size_t i = 0; i < 8; ++i)
+		{
+			if (i < desc.rtvFormats.size())
+			{
+				psoDesc.RenderTargets.RTFormats[i] = ConvertFormat(desc.rtvFormats[i]);
+			}
+			else
+			{
+				psoDesc.RenderTargets.RTFormats[i] = DXGI_FORMAT_UNKNOWN;
+			}
+		}
+
+		psoDesc.DSVFormat_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT;
+		psoDesc.DSVFormat      = ConvertFormat(desc.dsvFormat);
+
+		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
+		streamDesc.SizeInBytes                   = sizeof(PSO_STREAM);
+		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
+
+		device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
+			d3d12ErrChecker;
+	}
+
+	MeshletPipeline::~MeshletPipeline() noexcept
+	{
+		logger::trace("~MeshletPipeline");
+		m_PipelineState.Reset();
+		m_RootSignature.Reset();
+	}
+
+	MeshletPipelineDesc&
+	bgl::MeshletPipelineDesc::AddRtvFormat(const Rtv& rtv)
+	{
+		auto& desc = rtv.GetDesc();
+		rtvFormats.push_back(desc.format);
+		return *this;
+	}
+}

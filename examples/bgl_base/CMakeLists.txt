@@ -13,7 +13,11 @@ add_executable(bgl_base WIN32
     ${BGL_BASE_HEADERS}
 )
 
-target_link_libraries(bgl_base PRIVATE Core bgl)
+target_link_libraries(bgl_base PRIVATE core bgl)
+
+if(RENDERER_BACKEND STREQUAL "DX12")
+    target_link_libraries(bgl_base PRIVATE bgl_d3d12_agility)
+endif()
 
 target_include_directories(bgl_base PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../util

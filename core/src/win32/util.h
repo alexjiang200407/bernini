@@ -1,6 +1,6 @@
+#pragma once
 #include "WinAPI.h"
 #include <concepts>
-#include <core/except/BerniniException.h>
 #include <core/str/str.h>
 
 namespace core::win::win32
@@ -14,11 +14,6 @@ namespace core::win::win32
 		{
 			SetLastError(NO_ERROR);
 			return std::invoke(std::forward<Fn>(fn));
-		}
-		catch (const core::except::BerniniException& e)
-		{
-			MessageBoxA(NULL, e.Body().data(), e.Title().data(), MB_ICONERROR | MB_OK);
-			PostQuitMessage(-1);
 		}
 		catch (const std::exception& e)
 		{
@@ -59,9 +54,8 @@ namespace core::win::win32
 			if (result == 0)
 			{
 				DWORD err = GetLastError();
-				throw core::except::BerniniException(
-					"Win32 API Error",
-					core::str::wide_to_string(getErrorDescription(err)));
+				throw std::runtime_error(
+					"Win32 API Error" + core::str::wide_to_string(getErrorDescription(err)));
 			}
 		}
 		else if constexpr (std::is_pointer_v<T>)
@@ -69,9 +63,8 @@ namespace core::win::win32
 			if (result == nullptr)
 			{
 				DWORD err = GetLastError();
-				throw core::except::BerniniException(
-					"Win32 API Error",
-					core::str::wide_to_string(getErrorDescription(err)));
+				throw std::runtime_error(
+					"Win32 API Error" + core::str::wide_to_string(getErrorDescription(err)));
 			}
 		}
 		else

@@ -9,53 +9,66 @@ namespace bgl
 {
 	class IResourceManager;
 	class IShader;
-	class IGraphicsPipeline;
+	class IMeshletPipeline;
 	class ICommandList;
 	class ICommandAllocator;
 	class ICommandQueue;
 	struct ShaderDesc;
-	struct GraphicsPipelineDesc;
+	struct MeshletPipelineDesc;
 	struct CommandListDesc;
+	struct ResourceManagerDesc;
 
 	class IDevice : public core::Ref
 	{
 	public:
+		IDevice()                        = default;
+		IDevice(const IDevice&) noexcept = delete;
+		IDevice(IDevice&&) noexcept      = delete;
+
+		IDevice&
+		operator=(const IDevice&) noexcept = delete;
+
+		IDevice&
+		operator=(IDevice&&) noexcept = delete;
+
 		[[nodiscard]]
 		virtual core::SharedRef<IShader>
-		CreateShader(ShaderDesc desc) const = 0;
+		CreateShader(ShaderDesc desc) const noexcept = 0;
 
 		[[nodiscard]] core::SharedRef<IShader>
-		CreateShader(std::string path, std::string moduleName) const;
+		CreateShader(std::string path, std::string moduleName, std::string entryPointName = "main")
+			const noexcept;
 
 		[[nodiscard]]
-		virtual core::SharedRef<IGraphicsPipeline>
-		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const = 0;
+		virtual core::SharedRef<IMeshletPipeline>
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
 			const CommandListDesc&             desc,
 			core::SharedRef<ICommandAllocator> commandAllocator,
-			core::SharedRef<IResourceManager>  resourceManager) const = 0;
+			core::SharedRef<IResourceManager>  resourceManager) const noexcept = 0;
 
 		[[nodiscard]]
 		core::SharedRef<ICommandQueue>
-		CreateGraphicsCommandQueue() const;
+		CreateGraphicsCommandQueue() const noexcept;
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandAllocator>
-		CreateCommandAllocator() const = 0;
+		CreateCommandAllocator() const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandQueue>
-		CreateCommandQueue(QueueType type) const = 0;
+		CreateCommandQueue(QueueType type) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>
-		CreateResourceManager(uint32_t maxCbvSrvUav, uint32_t maxRtvs) const = 0;
+		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual Uniforms
-		CreateUniforms(IGraphicsPipeline const* pipeline) const = 0;
+		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept = 0;
 	};
 
 	using DeviceHandle = core::SharedRef<IDevice>;

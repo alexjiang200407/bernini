@@ -4,10 +4,10 @@
 namespace bgl
 {
 	Buffer::Buffer(
-		ID3D12Device*         device,
-		ID3D12DescriptorHeap* descriptorHeap,
-		uint32_t              descriptorIndex,
-		const BufferDesc&     desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
+		ID3D12Device*           device,
+		ID3D12DescriptorHeap*   descriptorHeap,
+		uint32_t                descriptorIndex,
+		const StructBufferDesc& desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
@@ -29,8 +29,6 @@ namespace bgl
 		D3D12_RESOURCE_DESC1  resDesc   = {};
 		D3D12_HEAP_FLAGS      heapFlags = D3D12_HEAP_FLAG_NONE;
 
-		D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED;
-
 		if (desc.isUav)
 			resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
@@ -44,26 +42,14 @@ namespace bgl
 		resDesc.SampleDesc.Count = 1;
 		resDesc.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-		switch (desc.cpuAccess)
-		{
-		case BufferDesc::CpuAccessMode::kDefault:
-			heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-			break;
-		case BufferDesc::CpuAccessMode::kUpload:
-			heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-			initialLayout  = D3D12_BARRIER_LAYOUT_GENERIC_READ;
-			break;
-		case BufferDesc::CpuAccessMode::kReadBack:
-			heapProps.Type = D3D12_HEAP_TYPE_READBACK;
-			break;
-		}
+		heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
 		// Create the resource via CreateCommittedResource3
 		device10->CreateCommittedResource3(
 			&heapProps,
 			heapFlags,
 			&resDesc,
-			initialLayout,
+			D3D12_BARRIER_LAYOUT_UNDEFINED,
 			nullptr,
 			nullptr,
 			0,
@@ -71,22 +57,8 @@ namespace bgl
 			IID_PPV_ARGS(&m_Buffer)) >>
 			d3d12ErrChecker;
 
-		if (desc.cpuAccess == BufferDesc::CpuAccessMode::kUpload)
-		{
-			m_Buffer->Map(0, nullptr, &m_MappedPtr) >> d3d12ErrChecker;
-		}
-
 		std::wstring wName(desc.debugName.begin(), desc.debugName.end());
 		m_Buffer->SetName(wName.c_str());
-	}
-
-	Buffer::~Buffer() noexcept
-	{
-		if (m_MappedPtr)
-		{
-			m_Buffer->Unmap(0, nullptr);
-			m_MappedPtr = nullptr;
-		}
 	}
 
 }

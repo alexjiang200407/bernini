@@ -5,10 +5,12 @@
 namespace bgl
 {
 	ShaderHandle
-	IDevice::CreateShader(std::string path, std::string moduleName) const
+	IDevice::CreateShader(std::string path, std::string moduleName, std::string entryPointName)
+		const noexcept
 	{
 		auto desc            = ShaderDesc();
 		desc.bytecode        = core::file::readFileBytes(path);
+		desc.entryPointName  = std::move(entryPointName);
 		desc.debugName       = std::move(path);
 		desc.slangModuleName = std::move(moduleName);
 
@@ -16,7 +18,7 @@ namespace bgl
 	}
 
 	CommandQueueHandle
-	IDevice::CreateGraphicsCommandQueue() const
+	IDevice::CreateGraphicsCommandQueue() const noexcept
 	{
 		return CreateCommandQueue(QueueType::kGraphics);
 	}

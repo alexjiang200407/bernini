@@ -7,6 +7,16 @@ namespace bgl
 	class CommandAllocator : public core::RefCounter<ICommandAllocator>
 	{
 	public:
+		CommandAllocator(const CommandAllocator&) noexcept = delete;
+		CommandAllocator(CommandAllocator&&) noexcept      = delete;
+		~CommandAllocator() noexcept override { logger::trace("~CommandAllocator"); }
+
+		CommandAllocator&
+		operator=(const CommandAllocator&) noexcept = delete;
+
+		CommandAllocator&
+		operator=(CommandAllocator&&) noexcept = delete;
+
 		CommandAllocator(wrl::ComPtr<ID3D12CommandAllocator> commandAllocator) :
 			m_CommandAllocator(std::move(commandAllocator))
 		{
@@ -14,13 +24,13 @@ namespace bgl
 		}
 
 		ID3D12CommandAllocator*
-		GetD3D12CommandAllocator() const
+		GetD3D12CommandAllocator() const noexcept
 		{
 			return m_CommandAllocator.Get();
 		}
 
 		void
-		ResetAllocator() override;
+		ResetAllocator() noexcept override;
 
 	private:
 		wrl::ComPtr<ID3D12CommandAllocator> m_CommandAllocator;

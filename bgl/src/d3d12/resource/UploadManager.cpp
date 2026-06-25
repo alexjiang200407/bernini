@@ -27,15 +27,15 @@ namespace bgl
 
 	bool
 	UploadManager::SuballocateBuffer(
-		uint64_t                   lastCompletedInstance,
-		uint64_t                   size,
-		ID3D12GraphicsCommandList* pCommandList,
-		ID3D12Resource**           pBuffer,
-		size_t*                    pOffset,
-		void**                     pCpuVA,
-		D3D12_GPU_VIRTUAL_ADDRESS* pGpuVA,
-		uint64_t                   currentVersion,
-		uint32_t                   alignment)
+		uint64_t                     lastCompletedInstance,
+		uint64_t                     size,
+		ID3D12GraphicsCommandList*   pCommandList,
+		wrl::ComPtr<ID3D12Resource>& pBuffer,
+		size_t*                      pOffset,
+		void**                       pCpuVA,
+		D3D12_GPU_VIRTUAL_ADDRESS*   pGpuVA,
+		uint64_t                     currentVersion,
+		uint32_t                     alignment)
 	{
 		gassert(
 			!m_IsScratchBuffer || pCommandList,
@@ -54,8 +54,7 @@ namespace bgl
 				// The buffer can fit into the current chunk - great, we're done
 				m_CurrentChunk->writePointer = endOfDataInChunk;
 
-				if (pBuffer)
-					*pBuffer = m_CurrentChunk->buffer.Get();
+				pBuffer = m_CurrentChunk->buffer;
 				if (pOffset)
 					*pOffset = alignedOffset;
 				if (pCpuVA && m_CurrentChunk->cpuVA)
@@ -170,8 +169,7 @@ namespace bgl
 		m_CurrentChunk->version      = currentVersion;
 		m_CurrentChunk->writePointer = size;
 
-		if (pBuffer)
-			*pBuffer = m_CurrentChunk->buffer.Get();
+		pBuffer = m_CurrentChunk->buffer;
 		if (pOffset)
 			*pOffset = 0;
 		if (pCpuVA)

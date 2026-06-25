@@ -1,6 +1,5 @@
 #include "win32/util.h"
 #include "win32/winapi.h"
-#include <core/except/BerniniException.h>
 #include <core/str/str.h>
 #include <core/win/Window.h>
 
@@ -206,8 +205,7 @@ namespace core::win
 					sizeof(RAWINPUTHEADER));
 				if (dwSize == 0 || dwSize == static_cast<UINT>(-1))
 				{
-					throw core::except::BerniniException{ "Raw Input Error",
-						                                  "Failed to get Raw input data" };
+					throw std::runtime_error("Failed to get Raw input data");
 				}
 
 				std::vector<BYTE> lpb(dwSize);
@@ -219,8 +217,7 @@ namespace core::win
 						sizeof(RAWINPUTHEADER));
 				    copied != dwSize || copied == static_cast<UINT>(-1))
 				{
-					throw core::except::BerniniException{ "Raw Input Error",
-						                                  "Failed to get Raw input data" };
+					throw std::runtime_error("Failed to get Raw input data");
 				}
 
 				RAWINPUT* raw = reinterpret_cast<RAWINPUT*>(lpb.data());
@@ -324,12 +321,12 @@ namespace core::win
 
 				char16_t buffer[5] = {};
 				int      count     = ToUnicode(
-                    vkey,
-                    kb.MakeCode,
-                    keyboardState,
-                    reinterpret_cast<wchar_t*>(buffer),
-                    4,
-                    0);
+					vkey,
+					kb.MakeCode,
+					keyboardState,
+					reinterpret_cast<wchar_t*>(buffer),
+					4,
+					0);
 
 				if (count)
 				{

@@ -2,10 +2,13 @@
 # Variables
 
 ```cpp
+static constexpr auto c_Variable = 1; // c_ prefix for constants
 
-int myVariable; // camelCase for variable names
+int main() {
+	int myVariable; // camelCase for variable names
+}
 
-int s_globalVariable; // s_ prefix for static/global variables
+int g_GlobalVariable; // g_ prefix for static/global variables
 
 ```
 
@@ -13,8 +16,11 @@ Try to maximize use of `auto`.
 
 ```cpp
 auto myVariable = 42;
-auto abcd = Type{};
+auto abcd = Type(); // auto for initialization
+int i;              // Dont use auto for primitive types
 ```
+
+
 
 
 # Const correctness
@@ -25,6 +31,14 @@ Const correctness is enforced for
 3.  Method qualifiers
 
 Local variables is less strict. West const.
+
+# Error handling
+
+For problems caused by poor internal logic inside shared or static library, use asserts
+
+For problems caused by the caller (invalid args), throw runtime error
+
+Always mark functions as noexcept or not
 
 ```cpp
 
@@ -44,7 +58,7 @@ public:
 	GetMemberVariable() const; // member functions in PascalCase
 
 private:
-	int m_memberVariable; // member variables prefixed with 'm_' and camelCase
+	int m_MemberVariable; // member variables prefixed with 'm_' and camelCase
 };
 
 
@@ -70,7 +84,7 @@ Avoid using macros except for build-specific purposes. Prefer constexpr, inline 
 
 # File Naming
 
-For cpp and header files use pascal case if it exports a class. Use snake case for files that only export functions or variables e.g. util.h. Use snake case for directories.
+For cpp and header files use pascal case if it exports a class/struct. Use snake case for files that only export functions or variables e.g. util.h. Use snake case for directories.
 
 
 # Enums
@@ -86,3 +100,28 @@ enum class Color {
 };
 
 ```
+
+# Templates
+
+- Maximize the use of concepts over requires
+
+
+# Comments (CRITICAL)
+
+- Only comment under these circumstances
+	- There are Pre-Conditions and Post-Conditions
+	- Code itself is not very descriptive
+	- Important Clarifications
+- Use javadoc comments for comments above functions structs e.g.
+
+```cpp
+/**
+ * The first sentence is the summary description.
+ * Subsequent paragraphs provide deeper technical context.
+ *
+ * @param parameterName Description of the method parameter.
+ * @return Description of the returned value.
+ */
+```
+
+- You can write more comments in test files.

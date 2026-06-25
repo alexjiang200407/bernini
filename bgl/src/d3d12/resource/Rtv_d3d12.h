@@ -1,7 +1,7 @@
 #pragma once
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
-#include "util.h"
+#include "util_d3d12.h"
 
 namespace bgl
 {
@@ -26,7 +26,7 @@ namespace bgl
 
 		[[nodiscard]]
 		const RtvDesc&
-		GetDesc() const
+		GetDesc() const noexcept
 		{
 			return m_Desc;
 		}

@@ -54,19 +54,18 @@ namespace bgl
 		}
 	};
 
-	struct BufferDesc
+	struct StructBufferDesc
 	{
-		enum class CpuAccessMode
-		{
-			kDefault,
-			kUpload,
-			kReadBack,
-		} cpuAccess = CpuAccessMode::kDefault;
-
 		uint32_t    stride       = 0;
 		uint32_t    elementCount = 0;
 		std::string debugName    = "Unnamed Buffer";
 		bool        isUav        = false;
+	};
+
+	struct ConstantBufferDesc
+	{
+		uint32_t    size      = 0;
+		std::string debugName = "Unnamed Constant Buffer";
 	};
 
 }
