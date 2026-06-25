@@ -49,7 +49,7 @@ namespace bgl
 	Device::CreateCommandList(
 		const CommandListDesc& desc,
 		CommandAllocatorHandle commandAllocator,
-		ResourceManagerHandle  resourceManager) const
+		ResourceManagerHandle  resourceManager) const noexcept
 	{
 		return core::SharedRef<CommandList>::Make(
 			desc,
@@ -58,25 +58,25 @@ namespace bgl
 	}
 
 	ResourceManagerHandle
-	Device::CreateResourceManager(const ResourceManagerDesc& desc) const
+	Device::CreateResourceManager(const ResourceManagerDesc& desc) const noexcept
 	{
 		return core::SharedRef<ResourceManager>::Make(m_Device, desc);
 	}
 
 	ShaderHandle
-	Device::CreateShader(ShaderDesc desc) const
+	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
 		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession);
 	}
 
 	MeshletPipelineHandle
-	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const
+	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
 		return core::SharedRef<MeshletPipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
 	}
 
 	CommandAllocatorHandle
-	Device::CreateCommandAllocator() const
+	Device::CreateCommandAllocator() const noexcept
 	{
 		auto d3d12CmdAllocator = wrl::ComPtr<ID3D12CommandAllocator>();
 
@@ -89,13 +89,14 @@ namespace bgl
 	}
 
 	CommandQueueHandle
-	Device::CreateCommandQueue(QueueType type) const
+	Device::CreateCommandQueue(QueueType type) const noexcept
 	{
 		return core::SharedRef<CommandQueue>::Make(type, m_Device.Get());
 	}
 
 	Uniforms
-	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName) const
+	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline, cbufferName);

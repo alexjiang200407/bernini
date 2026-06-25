@@ -65,13 +65,13 @@ namespace bgl
 		}
 
 		IDevice*
-		GetDevice() const override
+		GetDevice() const noexcept override
 		{
 			return m_Device.Get();
 		}
 
 		core::SharedRef<IResourceManager>
-		GetResourceManagerCpy() const override
+		GetResourceManagerCpy() const noexcept override
 		{
 			return m_ResourceManager.Get();
 		}
@@ -283,7 +283,10 @@ namespace bgl
 	void
 	Graphics::BeginFrame()
 	{
-		gassert(!m_FrameActive, "BeginFrame called while a frame is already active");
+		if (m_FrameActive)
+		{
+			throw GraphicsError("BeginFrame called while a frame is already active");
+		}
 
 		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
 		if (fenceToWaitOn != 0)
@@ -331,8 +334,15 @@ namespace bgl
 	void
 	Graphics::Draw(const RenderContext& context)
 	{
-		gassert(m_FrameActive, "Draw must be called between BeginFrame and EndFrame");
-		gassert(context.scene != nullptr, "RenderContext requires a scene");
+		if (!m_FrameActive)
+		{
+			throw GraphicsError("Draw must be called between BeginFrame and EndFrame");
+		}
+
+		if (context.scene == nullptr)
+		{
+			throw GraphicsError("RenderContext passed to Draw requires a scene");
+		}
 
 		auto scene_ = context.scene->As<Scene>();
 
@@ -383,7 +393,10 @@ namespace bgl
 	void
 	Graphics::EndFrame()
 	{
-		gassert(m_FrameActive, "EndFrame called without a matching BeginFrame");
+		if (!m_FrameActive)
+		{
+			throw GraphicsError("EndFrame called without a matching BeginFrame");
+		}
 
 		{
 			auto barrierDesc = TextureBarrierDesc();
@@ -428,7 +441,10 @@ namespace bgl
 	void
 	Graphics::ScreenshotRaw(const std::string& filepath)
 	{
-		gassert(!m_FrameActive, "ScreenshotRaw cannot be called between BeginFrame and EndFrame");
+		if (m_FrameActive)
+		{
+			throw GraphicsError("ScreenshotRaw cannot be called between BeginFrame and EndFrame");
+		}
 
 		const UINT    index         = m_LastPresentedIndex;
 		TextureHandle textureHandle = m_BackBuffers[index].textureHandle;
@@ -484,7 +500,9 @@ namespace bgl
 		// DirectX::Image stores it explicitly) and encode to file.
 		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
 
-		gassert(resource != nullptr, "ScreenshotRaw failed to get D3D12Resource from texture handle");
+		gassert(
+			resource != nullptr,
+			"ScreenshotRaw failed to get D3D12Resource from texture handle");
 
 		auto resourceDesc = resource->GetDesc();
 
@@ -509,10 +527,11 @@ namespace bgl
 
 		if (FAILED(hr))
 		{
-			gerror(
-				"Screenshot failed to save '{}' (hr=0x{:08X})",
-				filepath,
-				static_cast<uint32_t>(hr));
+			throw GraphicsError(
+				std::format(
+					"ScreenshotRaw failed to save '{}' (hr=0x{:08X})",
+					filepath,
+					static_cast<uint32_t>(hr)));
 		}
 	}
 

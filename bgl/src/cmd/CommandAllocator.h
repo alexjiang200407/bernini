@@ -20,7 +20,7 @@ namespace bgl
 		operator=(const ICommandAllocator&) = delete;
 
 		virtual void
-		ResetAllocator() = 0;
+		ResetAllocator() noexcept = 0;
 	};
 
 	using CommandAllocatorHandle = core::SharedRef<ICommandAllocator>;

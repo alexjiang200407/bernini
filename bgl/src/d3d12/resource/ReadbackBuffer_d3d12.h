@@ -23,31 +23,31 @@ namespace bgl
 
 		[[nodiscard]]
 		ID3D12Resource*
-		GetD3D12Resource() const
+		GetD3D12Resource() const noexcept
 		{
 			return m_Buffer.Get();
 		}
 
 		[[nodiscard]]
 		uint64_t
-		GetByteSize() const
+		GetByteSize() const noexcept
 		{
 			return m_ByteSize;
 		}
 
 		[[nodiscard]]
 		bool
-		IsNull() const
+		IsNull() const noexcept
 		{
 			return m_Buffer == nullptr;
 		}
 
 		// Maps the whole buffer for reading and returns the pointer (idempotent).
 		const void*
-		Map();
+		Map() noexcept;
 
 		void
-		Unmap();
+		Unmap() noexcept;
 
 	private:
 		void

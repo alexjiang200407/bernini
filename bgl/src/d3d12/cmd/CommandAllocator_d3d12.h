@@ -24,13 +24,13 @@ namespace bgl
 		}
 
 		ID3D12CommandAllocator*
-		GetD3D12CommandAllocator() const
+		GetD3D12CommandAllocator() const noexcept
 		{
 			return m_CommandAllocator.Get();
 		}
 
 		void
-		ResetAllocator() override;
+		ResetAllocator() noexcept override;
 
 	private:
 		wrl::ComPtr<ID3D12CommandAllocator> m_CommandAllocator;

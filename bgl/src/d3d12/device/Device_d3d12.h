@@ -26,26 +26,26 @@ namespace bgl
 		CreateCommandList(
 			const CommandListDesc&             desc,
 			core::SharedRef<ICommandAllocator> commandAllocator,
-			core::SharedRef<IResourceManager>  resourceManager) const override;
+			core::SharedRef<IResourceManager>  resourceManager) const noexcept override;
 
 		core::SharedRef<IResourceManager>
-		CreateResourceManager(const ResourceManagerDesc& desc) const override;
+		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept override;
 
 		core::SharedRef<IShader>
-		CreateShader(ShaderDesc desc) const override;
+		CreateShader(ShaderDesc desc) const noexcept override;
 
 		core::SharedRef<ICommandAllocator>
-		CreateCommandAllocator() const override;
+		CreateCommandAllocator() const noexcept override;
 
 		core::SharedRef<ICommandQueue>
-		CreateCommandQueue(QueueType type) const override;
+		CreateCommandQueue(QueueType type) const noexcept override;
 
 		core::SharedRef<IMeshletPipeline>
-		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const override;
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;
 
 		Uniforms
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
-			const override;
+			const noexcept override;
 
 	private:
 		wrl::ComPtr<ID3D12Device> m_Device;

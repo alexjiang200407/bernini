@@ -285,14 +285,13 @@ namespace bgl
 	{
 		if (!material.IsValid())
 		{
-			gerror("Invalid MaterialHandle passed to CreateStaticMeshInstance");
-			return {};
+			throw SceneError("Invalid MaterialHandle passed to CreateStaticMeshInstance");
 		}
 
 		if (geom.geomType != GeomType::kStaticMesh)
 		{
-			gerror("GeomHandle must be of type kStaticMesh");
-			return {};
+			throw SceneError(
+				"GeomHandle passed to CreateStaticMeshInstance must be of type kStaticMesh");
 		}
 
 		auto staticMeshInstance      = db::StaticMeshInstance();

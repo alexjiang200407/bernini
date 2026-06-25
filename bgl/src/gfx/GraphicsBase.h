@@ -20,9 +20,9 @@ namespace bgl
 		operator=(GraphicsBase&&) noexcept = delete;
 
 		virtual IDevice*
-		GetDevice() const = 0;
+		GetDevice() const noexcept = 0;
 
 		virtual core::SharedRef<IResourceManager>
-		GetResourceManagerCpy() const = 0;
+		GetResourceManagerCpy() const noexcept = 0;
 	};
 }

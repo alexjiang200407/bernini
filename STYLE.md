@@ -29,6 +29,14 @@ Const correctness is enforced for
 
 Local variables is less strict. West const.
 
+# Error handling
+
+For problems caused by poor internal logic inside shared or static library, use asserts
+
+For problems caused by the caller (invalid args), throw runtime error
+
+Always mark functions as noexcept or not
+
 ```cpp
 
 void ProcessData(const std::vector<int>& data) const; // west const reference for parameters

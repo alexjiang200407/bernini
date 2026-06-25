@@ -32,65 +32,66 @@ namespace bgl
 		operator=(CommandList&&) noexcept = delete;
 
 		void
-		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) override;
+		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) noexcept
+			override;
 
 		void
-		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) override;
+		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept override;
 
 		void
-		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) override;
+		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept override;
 
 		void
-		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) override;
+		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept override;
 
 		void
-		Close() override;
+		Close() noexcept override;
 
 		void
-		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) override;
+		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept override;
 
 		void
-		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) override;
+		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept override;
 
 		void
-		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) override;
+		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) noexcept override;
 
 		void
-		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) override;
+		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept override;
 
 		void
-		SetMeshletState(const MeshletState& gfxState) override;
+		SetMeshletState(const MeshletState& gfxState) noexcept override;
 
 		void
 		DispatchMesh(
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
-			uint32_t threadGroupCountZ) override;
+			uint32_t threadGroupCountZ) noexcept override;
 
 		ID3D12CommandList*
-		GetD3D12CommandList() const
+		GetD3D12CommandList() const noexcept
 		{
 			return m_CommandList.Get();
 		}
 
 		bool
-		IsOpen() const override
+		IsOpen() const noexcept override
 		{
 			return m_Open;
 		}
 
 		QueueType
-		GetType() const override
+		GetType() const noexcept override
 		{
 			return m_Desc.type;
 		}
 
 		void
-		SubmitChunks(ICommandQueue* cmdQueue);
+		SubmitChunks(ICommandQueue* cmdQueue) noexcept;
 
 	private:
 		void
-		BindUniforms(const Uniforms& uniforms);
+		BindUniforms(const Uniforms& uniforms) noexcept;
 
 		CommandListDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;

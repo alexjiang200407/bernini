@@ -1,12 +1,20 @@
 #pragma once
 #include <bgl/IScene.h>
 #include <bgl/RenderContext.h>
+#include <bgl/error.h>
 #include <bgl/util.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 
 namespace bgl
 {
+	class GraphicsError : public ApiError
+	{
+	public:
+		GraphicsError() = delete;
+		using ApiError::ApiError;
+	};
+
 	struct GraphicsOptions
 	{
 		enum class LogLevel

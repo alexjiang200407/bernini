@@ -10,6 +10,7 @@ namespace bgl
 #include "error/gassert.h"
 
 #include <bgl/glm.h>
+#include <bgl/error.h>
 
 #include <slang-com-ptr.h>
 #include <slang.h>

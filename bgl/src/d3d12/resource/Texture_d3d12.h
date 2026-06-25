@@ -32,28 +32,28 @@ namespace bgl
 
 		[[nodiscard]]
 		const TextureDesc&
-		GetDesc() const
+		GetDesc() const noexcept
 		{
 			return m_Desc;
 		}
 
 		[[nodiscard]]
 		ID3D12Resource*
-		GetD3D12Resource() const
+		GetD3D12Resource() const noexcept
 		{
 			return m_Texture.Get();
 		}
 
 		[[nodiscard]]
 		wrl::ComPtr<ID3D12Resource>
-		GetD3D12ResourceCopy() const
+		GetD3D12ResourceCopy() const noexcept
 		{
 			return m_Texture;
 		}
 
 		[[nodiscard]]
 		bool
-		IsNull() const
+		IsNull() const noexcept
 		{
 			return m_Texture == nullptr;
 		}

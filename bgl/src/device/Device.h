@@ -33,41 +33,42 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual core::SharedRef<IShader>
-		CreateShader(ShaderDesc desc) const = 0;
+		CreateShader(ShaderDesc desc) const noexcept = 0;
 
 		[[nodiscard]] core::SharedRef<IShader>
 		CreateShader(std::string path, std::string moduleName, std::string entryPointName = "main")
-			const;
+			const noexcept;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IMeshletPipeline>
-		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const = 0;
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
 			const CommandListDesc&             desc,
 			core::SharedRef<ICommandAllocator> commandAllocator,
-			core::SharedRef<IResourceManager>  resourceManager) const = 0;
+			core::SharedRef<IResourceManager>  resourceManager) const noexcept = 0;
 
 		[[nodiscard]]
 		core::SharedRef<ICommandQueue>
-		CreateGraphicsCommandQueue() const;
+		CreateGraphicsCommandQueue() const noexcept;
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandAllocator>
-		CreateCommandAllocator() const = 0;
+		CreateCommandAllocator() const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandQueue>
-		CreateCommandQueue(QueueType type) const = 0;
+		CreateCommandQueue(QueueType type) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>
-		CreateResourceManager(const ResourceManagerDesc& desc) const = 0;
+		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName) const = 0;
+		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept = 0;
 	};
 
 	using DeviceHandle = core::SharedRef<IDevice>;

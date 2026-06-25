@@ -20,52 +20,52 @@ namespace bgl
 		operator=(CommandQueue&&) noexcept = delete;
 
 		uint64_t
-		ExecuteCommandList(ICommandList* commandList) override;
+		ExecuteCommandList(ICommandList* commandList) noexcept override;
 
 		bool
-		IsFenceComplete(uint64_t fenceValue) override;
+		IsFenceComplete(uint64_t fenceValue) noexcept override;
 
 		uint64_t
-		PollCurrentFenceValue() override;
+		PollCurrentFenceValue() noexcept override;
 
 		uint64_t
-		GetLastCompletedFence() const override
+		GetLastCompletedFence() const noexcept override
 		{
 			return m_LastCompletedFenceValue;
 		}
 
 		uint64_t
-		GetNextFenceValue() const override
+		GetNextFenceValue() const noexcept override
 		{
 			return m_NextFenceValue;
 		}
 
 		void
-		InsertWait(uint64_t fenceValue) override;
+		InsertWait(uint64_t fenceValue) noexcept override;
 
 		void
-		InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const override;
+		InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept override;
 
 		void
-		InsertWaitForQueue(ICommandQueue* otherQueue) const override;
+		InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept override;
 
 		ID3D12Fence*
-		GetD3D12Fence() const
+		GetD3D12Fence() const noexcept
 		{
 			return m_Fence.Get();
 		}
 
 		ID3D12CommandQueue*
-		GetD3D12CommandQueue() const
+		GetD3D12CommandQueue() const noexcept
 		{
 			return m_CommandQueue.Get();
 		}
 
 		HANDLE
-		GetD3D12FenceEvent() const { return m_FenceEvent; }
+		GetD3D12FenceEvent() const noexcept { return m_FenceEvent; }
 
 		void
-		WaitForFenceCPUBlocking(uint64_t fenceValue) override;
+		WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept override;
 
 	private:
 		QueueType                       m_Type;

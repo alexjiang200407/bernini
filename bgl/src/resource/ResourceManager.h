@@ -34,98 +34,108 @@ namespace bgl
 		operator=(IResourceManager&&) noexcept = delete;
 
 		virtual BufferHandle
-		CreateStructBuffer(const StructBufferDesc& desc) = 0;
+		CreateStructBuffer(const StructBufferDesc& desc) noexcept = 0;
 
 		virtual TextureHandle
-		CreateTexture(const TextureDesc& desc) = 0;
+		CreateTexture(const TextureDesc& desc) noexcept = 0;
 
 		// Creates a CPU-readable buffer in the readback heap, used as the
 		// destination of GPU->CPU copies.
 		virtual ReadbackBufferHandle
-		CreateReadbackBuffer(const ReadbackBufferDesc& desc) = 0;
+		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept = 0;
 
 		virtual void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
+		DestroyBuffer(
+			BufferHandle handle,
+			uint64_t     currentFenceValue,
+			bool         deferred = true) noexcept = 0;
 
 		virtual void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
+		DestroyTexture(
+			TextureHandle handle,
+			uint64_t      currentFenceValue,
+			bool          deferred = true) noexcept = 0;
 
 		virtual void
 		DestroyReadbackBuffer(
 			ReadbackBufferHandle handle,
 			uint64_t             currentFenceValue,
-			bool                 deferred = true) = 0;
+			bool                 deferred = true) noexcept = 0;
 
 		virtual void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
+		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred = true) noexcept = 0;
 
 		virtual void
-		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred = true) = 0;
+		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred = true) noexcept = 0;
 
 		virtual void
-		CleanupExpiredResources(uint64_t completedFenceValue) = 0;
+		CleanupExpiredResources(uint64_t completedFenceValue) noexcept = 0;
 
 		[[nodiscard]]
 		virtual RtvHandle
-		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) = 0;
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept = 0;
 
 		[[nodiscard]]
 		virtual DsvHandle
-		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) = 0;
+		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept = 0;
 
 		[[nodiscard]]
 		virtual const Rtv&
-		GetRtv(RtvHandle handle) const = 0;
+		GetRtv(RtvHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual const Dsv&
-		GetDsv(DsvHandle handle) const = 0;
+		GetDsv(DsvHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual const Buffer&
-		GetBuffer(BufferHandle handle) const = 0;
+		GetBuffer(BufferHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual const Texture&
-		GetTexture(TextureHandle handle) const = 0;
+		GetTexture(TextureHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual const ReadbackBuffer&
-		GetReadbackBuffer(ReadbackBufferHandle handle) const = 0;
+		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept = 0;
 
 		// Row-pitch layout of texture subresource 0 within a readback buffer.
 		[[nodiscard]]
 		virtual TextureReadbackLayout
-		GetTextureReadbackLayout(TextureHandle handle) const = 0;
+		GetTextureReadbackLayout(TextureHandle handle) const noexcept = 0;
 
 		// Maps a readback buffer for CPU reading; valid until UnmapReadback.
 		[[nodiscard]]
 		virtual const void*
-		MapReadback(ReadbackBufferHandle handle) = 0;
+		MapReadback(ReadbackBufferHandle handle) noexcept = 0;
 
 		virtual void
-		UnmapReadback(ReadbackBufferHandle handle) = 0;
+		UnmapReadback(ReadbackBufferHandle handle) noexcept = 0;
 
 		[[nodiscard]] virtual bool
-		ValidBufferHandle(const BufferHandle& handle) const = 0;
+		ValidBufferHandle(const BufferHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
-		ValidTextureHandle(const TextureHandle& handle) const = 0;
+		ValidTextureHandle(const TextureHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
-		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const = 0;
+		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
-		ValidRtvHandle(const RtvHandle& handle) const = 0;
+		ValidRtvHandle(const RtvHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
-		ValidDsvHandle(const DsvHandle& handle) const = 0;
+		ValidDsvHandle(const DsvHandle& handle) const noexcept = 0;
 
 		virtual void
-		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) = 0;
+		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept = 0;
 
 		virtual void
-		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) = 0;
+		ClearDsv(
+			ICommandList* cmdList,
+			DsvHandle     handle,
+			float         depth,
+			uint8_t       stencil) noexcept = 0;
 	};
 
 	using ResourceManagerHandle = core::SharedRef<IResourceManager>;

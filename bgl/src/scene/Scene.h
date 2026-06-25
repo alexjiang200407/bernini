@@ -26,7 +26,7 @@ namespace bgl
 		operator=(Scene&&) noexcept = delete;
 
 		const SceneDesc&
-		GetDesc() const override
+		GetDesc() const noexcept override
 		{
 			return m_Desc;
 		}

@@ -46,18 +46,18 @@ namespace bgl
 		 */
 		[[nodiscard]]
 		BufferHandle
-		CreateStructBuffer(const StructBufferDesc& desc) override;
+		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
 
 		/**
 		 * Automatically creates SRV/UAV for the texture.
 		 */
 		[[nodiscard]]
 		TextureHandle
-		CreateTexture(const TextureDesc& desc) override;
+		CreateTexture(const TextureDesc& desc) noexcept override;
 
 		[[nodiscard]]
 		ReadbackBufferHandle
-		CreateReadbackBuffer(const ReadbackBufferDesc& desc) override;
+		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
 
 		/**
 		 * Assume that desc is a correct descriptor for d3d12 resource.
@@ -65,105 +65,108 @@ namespace bgl
 		 */
 		[[nodiscard]]
 		TextureHandle
-		CreateTexture(wrl::ComPtr<ID3D12Resource> d3d12Texture, const TextureDesc& desc);
+		CreateTexture(wrl::ComPtr<ID3D12Resource> d3d12Texture, const TextureDesc& desc) noexcept;
 
 		[[nodiscard]]
 		RtvHandle
-		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) override;
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
 
 		void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) override;
+		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
 
 		void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred) override;
+		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
+			override;
 
 		void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) override;
+		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
+			override;
 
 		void
 		DestroyReadbackBuffer(
 			ReadbackBufferHandle handle,
 			uint64_t             currentFenceValue,
-			bool                 deferred) override;
+			bool                 deferred) noexcept override;
 
 		void
-		CleanupExpiredResources(uint64_t completedFenceValue) override;
+		CleanupExpiredResources(uint64_t completedFenceValue) noexcept override;
 
 		[[nodiscard]]
 		bool
-		ValidBufferHandle(const BufferHandle& handle) const override;
+		ValidBufferHandle(const BufferHandle& handle) const noexcept override;
 
 		[[nodiscard]]
 		bool
-		ValidTextureHandle(const TextureHandle& handle) const override;
+		ValidTextureHandle(const TextureHandle& handle) const noexcept override;
 
 		[[nodiscard]]
 		bool
-		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const override;
+		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
 
 		[[nodiscard]]
 		bool
-		ValidRtvHandle(const RtvHandle& handle) const override;
+		ValidRtvHandle(const RtvHandle& handle) const noexcept override;
 
 		void
-		SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList);
+		SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList) noexcept;
 
 		const Texture&
-		GetTexture(TextureHandle handle) const override;
+		GetTexture(TextureHandle handle) const noexcept override;
 
 		const Buffer&
-		GetBuffer(BufferHandle handle) const override;
+		GetBuffer(BufferHandle handle) const noexcept override;
 
 		const ReadbackBuffer&
-		GetReadbackBuffer(ReadbackBufferHandle handle) const override;
+		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept override;
 
 		TextureReadbackLayout
-		GetTextureReadbackLayout(TextureHandle handle) const override;
+		GetTextureReadbackLayout(TextureHandle handle) const noexcept override;
 
 		const void*
-		MapReadback(ReadbackBufferHandle handle) override;
+		MapReadback(ReadbackBufferHandle handle) noexcept override;
 
 		void
-		UnmapReadback(ReadbackBufferHandle handle) override;
+		UnmapReadback(ReadbackBufferHandle handle) noexcept override;
 
 		const Rtv&
-		GetRtv(RtvHandle handle) const override;
+		GetRtv(RtvHandle handle) const noexcept override;
 
 		ID3D12DescriptorHeap*
-		GetCbvSrvUavHeap() const
+		GetCbvSrvUavHeap() const noexcept
 		{
 			return m_CbvSrvUavHeap.Get();
 		}
 
 		ID3D12DescriptorHeap*
-		GetRtvHeap() const
+		GetRtvHeap() const noexcept
 		{
 			return m_RtvHeap.Get();
 		}
 
 		wrl::ComPtr<ID3D12Device>
-		GetD3D12DeviceCpy() const
+		GetD3D12DeviceCpy() const noexcept
 		{
 			return m_Device;
 		}
 
 		void
-		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) override;
+		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept override;
 
 		DsvHandle
-		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) override;
+		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept override;
 
 		const Dsv&
-		GetDsv(DsvHandle handle) const override;
+		GetDsv(DsvHandle handle) const noexcept override;
 
 		bool
-		ValidDsvHandle(const DsvHandle& handle) const override;
+		ValidDsvHandle(const DsvHandle& handle) const noexcept override;
 
 		void
-		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) override;
+		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
+			override;
 
 		void
-		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred) override;
+		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
 
 	private:
 		ResourceManagerDesc               m_Desc;

@@ -49,16 +49,16 @@ namespace bgl
 		operator=(IShader&&) = delete;
 
 		virtual const std::byte*
-		GetBytecode() const = 0;
+		GetBytecode() const noexcept = 0;
 
 		virtual size_t
-		GetBytecodeSize() const = 0;
+		GetBytecodeSize() const noexcept = 0;
 
 		virtual slang::IModule*
-		GetSlangModule() const = 0;
+		GetSlangModule() const noexcept = 0;
 
 		virtual const ShaderDesc&
-		GetDesc() const = 0;
+		GetDesc() const noexcept = 0;
 	};
 
 	using ShaderHandle = core::SharedRef<IShader>;

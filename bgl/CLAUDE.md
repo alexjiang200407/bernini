@@ -7,7 +7,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - bgl has its custom Render Hardware Interface (RHI). The interfaces are located `./bgl/src` but we define the polymorphic implementation elsewhere. Do not #include d3d12 headers for any of the sources here.
 - Put all plain old data inside `./bgl/src/types`
 - PCH is `./bgl/src/pch.h`. Don't `#include` the headers in here.
-- In bgl prioritize using gassert(condition, format_str, format_args) and gfatal(format_str, format_args) over exceptions.
+- Error Handling: For internal problems, use gassert. For caller (code that links to bgl) problems, throw an exception so the caller can handle them
 - CMake: `./CMakeLists.txt`
 
 

@@ -38,20 +38,24 @@ namespace bgl
 		 * The buffer must have correct state
 		 */
 		void
-		WriteBuffer(BufferHandle handle, const void* data, size_t byteSize)
+		WriteBuffer(BufferHandle handle, const void* data, size_t byteSize) noexcept
 		{
 			WriteBuffer(handle, data, 0, byteSize);
 		}
 
 		virtual void
-		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) = 0;
+		WriteBuffer(
+			BufferHandle handle,
+			const void*  data,
+			size_t       offset,
+			size_t       byteSize) noexcept = 0;
 
 		/**
 		 * Copies an entire buffer into a readback buffer for CPU access.
 		 * The source buffer must already be in a copy-source state.
 		 */
 		virtual void
-		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) = 0;
+		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept = 0;
 
 		/**
 		 * Copies texture subresource 0 into a readback buffer using its linear
@@ -59,41 +63,41 @@ namespace bgl
 		 * in a copy-source layout.
 		 */
 		virtual void
-		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) = 0;
+		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept = 0;
 
 		virtual void
-		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) = 0;
+		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept = 0;
 
 		virtual void
-		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) = 0;
+		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
 		virtual void
-		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) = 0;
+		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
 		virtual void
-		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) = 0;
+		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
 		virtual void
-		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) = 0;
+		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept = 0;
 
 		virtual void
-		Close() = 0;
+		Close() noexcept = 0;
 
 		virtual void
-		SetMeshletState(const MeshletState& gfxState) = 0;
+		SetMeshletState(const MeshletState& gfxState) noexcept = 0;
 
 		virtual void
 		DispatchMesh(
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
-			uint32_t threadGroupCountZ) = 0;
+			uint32_t threadGroupCountZ) noexcept = 0;
 
 		[[nodiscard]] virtual bool
-		IsOpen() const = 0;
+		IsOpen() const noexcept = 0;
 
 		[[nodiscard]]
 		virtual QueueType
-		GetType() const = 0;
+		GetType() const noexcept = 0;
 	};
 
 	using CommandListHandle = core::SharedRef<ICommandList>;

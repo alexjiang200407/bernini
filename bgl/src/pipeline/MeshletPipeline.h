@@ -80,10 +80,10 @@ namespace bgl
 		operator=(IMeshletPipeline&&) noexcept = delete;
 
 		virtual const MeshletPipelineDesc&
-		GetDesc() const = 0;
+		GetDesc() const noexcept = 0;
 
 		virtual UniformLayoutEntry
-		GetUniformLayoutEntry(const std::string& name) const = 0;
+		GetUniformLayoutEntry(const std::string& name) const noexcept = 0;
 	};
 
 	using MeshletPipelineHandle = core::SharedRef<IMeshletPipeline>;

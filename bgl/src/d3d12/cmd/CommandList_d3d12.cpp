@@ -51,7 +51,11 @@ namespace bgl
 	}
 
 	void
-	CommandList::WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize)
+	CommandList::WriteBuffer(
+		BufferHandle handle,
+		const void*  data,
+		size_t       offset,
+		size_t       byteSize) noexcept
 	{
 		auto& buffer = m_ResourceManager->GetBuffer(handle);
 
@@ -83,7 +87,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src)
+	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
 	{
 		auto&       srcBuffer = m_ResourceManager->GetBuffer(src);
 		const auto& readback  = m_ResourceManager->GetReadbackBuffer(dst);
@@ -104,7 +108,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src)
+	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept
 	{
 		auto&       srcTexture = m_ResourceManager->GetTexture(src);
 		const auto& readback   = m_ResourceManager->GetReadbackBuffer(dst);
@@ -130,7 +134,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator)
+	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept
 	{
 		gassert(!m_Open, "Command list is already open");
 		gassert(cmdQueue != nullptr, "Command queue cannot be null");
@@ -151,7 +155,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Close()
+	CommandList::Close() noexcept
 	{
 		gassert(m_Open, "Command list must be open before closing");
 
@@ -161,7 +165,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier)
+	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept
 	{
 		auto&                                   buffer = m_ResourceManager->GetBuffer(handle);
 		wrl::ComPtr<ID3D12GraphicsCommandList7> cmdList7;
@@ -190,7 +194,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
 		auto& texture = m_ResourceManager->GetTexture(handle);
 
@@ -233,7 +237,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
 		auto& rtv           = m_ResourceManager->GetRtv(handle);
 		auto  textureHandle = rtv.GetTextureHandle();
@@ -243,7 +247,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::Barrier(DsvHandle handle, const TextureBarrierDesc& barrier)
+	CommandList::Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
 		auto& rtv           = m_ResourceManager->GetDsv(handle);
 		auto  textureHandle = rtv.GetTextureHandle();
@@ -253,7 +257,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::SetMeshletState(const MeshletState& gfxState)
+	CommandList::SetMeshletState(const MeshletState& gfxState) noexcept
 	{
 		m_CurrentMeshletState = gfxState;
 	}
@@ -262,7 +266,7 @@ namespace bgl
 	CommandList::DispatchMesh(
 		uint32_t threadGroupCountX,
 		uint32_t threadGroupCountY,
-		uint32_t threadGroupCountZ)
+		uint32_t threadGroupCountZ) noexcept
 	{
 		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
 		gassert(
@@ -370,7 +374,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::BindUniforms(const Uniforms& uniforms)
+	CommandList::BindUniforms(const Uniforms& uniforms) noexcept
 	{
 		if (uniforms.GetSize() == 0)
 			return;
@@ -398,7 +402,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::SubmitChunks(ICommandQueue* cmdQueue)
+	CommandList::SubmitChunks(ICommandQueue* cmdQueue) noexcept
 	{
 		gassert(cmdQueue != nullptr, "Command queue cannot be null");
 

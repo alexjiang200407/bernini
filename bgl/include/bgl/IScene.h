@@ -2,14 +2,22 @@
 #include <bgl/GeomType.h>
 #include <bgl/MaterialType.h>
 #include <bgl/PsoType.h>
+#include <bgl/error.h>
+#include <bgl/glm.h>
 #include <bgl/util.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
-#include <bgl/glm.h>
 
 namespace bgl
 {
+	class SceneError : public ApiError
+	{
+	public:
+		SceneError() = delete;
+		using ApiError::ApiError;
+	};
+
 	struct MeshInstanceHandle
 	{
 		PsoType           psoType = PsoType::kInvalid;
@@ -17,7 +25,7 @@ namespace bgl
 
 		[[nodiscard]]
 		bool
-		IsValid() const
+		IsValid() const noexcept
 		{
 			return psoType != PsoType::kInvalid;
 		}
@@ -30,7 +38,7 @@ namespace bgl
 
 		[[nodiscard]]
 		bool
-		IsValid() const
+		IsValid() const noexcept
 		{
 			return geomType != GeomType::kInvalid;
 		}
@@ -43,7 +51,7 @@ namespace bgl
 
 		[[nodiscard]]
 		bool
-		IsValid() const
+		IsValid() const noexcept
 		{
 			return materialType != MaterialType::kInvalid;
 		}
@@ -71,7 +79,7 @@ namespace bgl
 		operator=(const IScene&) noexcept = delete;
 
 		virtual const SceneDesc&
-		GetDesc() const = 0;
+		GetDesc() const noexcept = 0;
 
 		virtual GeomHandle
 		AddCubeGeom() = 0;
@@ -80,7 +88,7 @@ namespace bgl
 		CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform) = 0;
 
 	protected:
-		IScene() = default;
+		IScene() noexcept = default;
 	};
 
 	using SceneHandle = core::SharedRef<IScene>;

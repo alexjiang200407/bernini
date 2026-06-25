@@ -73,7 +73,7 @@ namespace bgl
 	ReadbackBuffer::~ReadbackBuffer() noexcept { ReleaseMapping(); }
 
 	const void*
-	ReadbackBuffer::Map()
+	ReadbackBuffer::Map() noexcept
 	{
 		gassert(m_Buffer != nullptr, "Cannot map a null readback buffer");
 
@@ -87,7 +87,7 @@ namespace bgl
 	}
 
 	void
-	ReadbackBuffer::Unmap()
+	ReadbackBuffer::Unmap() noexcept
 	{
 		ReleaseMapping();
 	}

@@ -28,28 +28,28 @@ namespace bgl
 
 		[[nodiscard]]
 		ID3D12Resource*
-		GetD3D12Resource() const
+		GetD3D12Resource() const noexcept
 		{
 			return m_Buffer.Get();
 		}
 
 		[[nodiscard]]
 		const StructBufferDesc&
-		GetDesc() const
+		GetDesc() const noexcept
 		{
 			return m_Desc;
 		}
 
 		[[nodiscard]]
 		D3D12_CPU_DESCRIPTOR_HANDLE
-		GetCpuHandle() const
+		GetCpuHandle() const noexcept
 		{
 			return m_CpuHandle;
 		}
 
 		[[nodiscard]]
 		bool
-		IsNull() const
+		IsNull() const noexcept
 		{
 			return m_Buffer == nullptr;
 		}

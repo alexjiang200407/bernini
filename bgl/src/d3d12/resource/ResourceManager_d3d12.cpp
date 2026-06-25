@@ -48,7 +48,7 @@ namespace bgl
 	}
 
 	BufferHandle
-	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc)
+	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
 	{
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
@@ -97,7 +97,7 @@ namespace bgl
 	}
 
 	TextureHandle
-	ResourceManager::CreateTexture(const TextureDesc& desc)
+	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
 		auto     textureSlotHandle = m_Textures.allocate_slot();
 		uint32_t slotIndex         = textureSlotHandle.index;
@@ -110,7 +110,7 @@ namespace bgl
 	}
 
 	ReadbackBufferHandle
-	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc)
+	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept
 	{
 		gassert(desc.byteSize > 0, "Readback buffer requires a positive byte size");
 
@@ -125,7 +125,7 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(
 		wrl::ComPtr<ID3D12Resource> d3d12Texture,
-		const TextureDesc&          desc)
+		const TextureDesc&          desc) noexcept
 	{
 		auto     textureSlotHandle = m_Textures.allocate_slot();
 		uint32_t slotIndex         = textureSlotHandle.index;
@@ -138,7 +138,7 @@ namespace bgl
 	}
 
 	RtvHandle
-	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc)
+	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
@@ -202,7 +202,10 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred)
+	ResourceManager::DestroyRtv(
+		RtvHandle handle,
+		uint64_t  currentFenceValue,
+		bool      deferred) noexcept
 	{
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 
@@ -220,7 +223,10 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred)
+	ResourceManager::DestroyBuffer(
+		BufferHandle handle,
+		uint64_t     currentFenceValue,
+		bool         deferred) noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
@@ -238,7 +244,10 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred)
+	ResourceManager::DestroyTexture(
+		TextureHandle handle,
+		uint64_t      currentFenceValue,
+		bool          deferred) noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
@@ -259,7 +268,7 @@ namespace bgl
 	ResourceManager::DestroyReadbackBuffer(
 		ReadbackBufferHandle handle,
 		uint64_t             currentFenceValue,
-		bool                 deferred)
+		bool                 deferred) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback buffer handle");
 
@@ -277,7 +286,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue)
+	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue) noexcept
 	{
 		std::erase_if(m_PendingDeletions, [&](const auto& pending) {
 			if (pending.fenceValue <= completedFenceValue)
@@ -307,7 +316,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidBufferHandle(const BufferHandle& handle) const
+	ResourceManager::ValidBufferHandle(const BufferHandle& handle) const noexcept
 	{
 		if (!m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
 		{
@@ -319,7 +328,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const
+	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
 	{
 		if (!m_Textures.valid(handle.idx, handle.generation))
 		{
@@ -330,7 +339,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const
+	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept
 	{
 		if (!m_ReadbackBuffers.valid(handle.idx, handle.generation))
 		{
@@ -341,7 +350,7 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const
+	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const noexcept
 	{
 		if (!m_Rtvs.valid(handle.idx, handle.generation))
 		{
@@ -352,7 +361,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList)
+	ResourceManager::SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList) noexcept
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
 		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavHeap.Get() };
@@ -360,28 +369,28 @@ namespace bgl
 	}
 
 	const Texture&
-	ResourceManager::GetTexture(TextureHandle handle) const
+	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Invalid texture handle");
 		return m_Textures[handle.idx];
 	}
 
 	const Buffer&
-	ResourceManager::GetBuffer(BufferHandle handle) const
+	ResourceManager::GetBuffer(BufferHandle handle) const noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Invalid buffer handle");
 		return std::get<Buffer>(m_CbvSrvUavSlots[handle.idx]);
 	}
 
 	const ReadbackBuffer&
-	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const
+	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
 		return m_ReadbackBuffers[handle.idx];
 	}
 
 	TextureReadbackLayout
-	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const
+	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const noexcept
 	{
 		const auto&         texture     = GetTexture(handle);
 		D3D12_RESOURCE_DESC textureDesc = texture.GetD3D12Resource()->GetDesc();
@@ -411,28 +420,28 @@ namespace bgl
 	}
 
 	const void*
-	ResourceManager::MapReadback(ReadbackBufferHandle handle)
+	ResourceManager::MapReadback(ReadbackBufferHandle handle) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
 		return m_ReadbackBuffers[handle.idx].Map();
 	}
 
 	void
-	ResourceManager::UnmapReadback(ReadbackBufferHandle handle)
+	ResourceManager::UnmapReadback(ReadbackBufferHandle handle) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
 		m_ReadbackBuffers[handle.idx].Unmap();
 	}
 
 	const Rtv&
-	ResourceManager::GetRtv(RtvHandle handle) const
+	ResourceManager::GetRtv(RtvHandle handle) const noexcept
 	{
 		gassert(ValidRtvHandle(handle), "Invalid RTV handle");
 		return m_Rtvs[handle.idx];
 	}
 
 	void
-	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4])
+	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
 		gassert(ValidRtvHandle(handle), "Handle is Null");
@@ -451,7 +460,7 @@ namespace bgl
 	}
 
 	DsvHandle
-	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc)
+	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
 	{
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
@@ -515,14 +524,14 @@ namespace bgl
 	}
 
 	const Dsv&
-	ResourceManager::GetDsv(DsvHandle handle) const
+	ResourceManager::GetDsv(DsvHandle handle) const noexcept
 	{
 		gassert(ValidDsvHandle(handle), "Invalid RTV handle");
 		return m_Dsvs[handle.idx];
 	}
 
 	bool
-	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const
+	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const noexcept
 	{
 		if (!m_Dsvs.valid(handle.idx, handle.generation))
 		{
@@ -533,7 +542,11 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil)
+	ResourceManager::ClearDsv(
+		ICommandList* cmdList,
+		DsvHandle     handle,
+		float         depth,
+		uint8_t       stencil) noexcept
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
 		gassert(ValidDsvHandle(handle), "Handle is Null");
@@ -555,7 +568,10 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred)
+	ResourceManager::DestroyDsv(
+		DsvHandle handle,
+		uint64_t  currentFenceValue,
+		bool      deferred) noexcept
 	{
 		gassert(ValidDsvHandle(handle), "Cannot destroy invalid RTV handle");
 

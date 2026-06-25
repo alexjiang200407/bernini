@@ -25,7 +25,7 @@ namespace bgl
 
 		[[nodiscard]]
 		const DsvDesc&
-		GetDesc() const
+		GetDesc() const noexcept
 		{
 			return m_Desc;
 		}

@@ -25,26 +25,26 @@ namespace bgl
 
 		[[nodiscard]]
 		ID3D12RootSignature*
-		GetRootSignature() const
+		GetRootSignature() const noexcept
 		{
 			return m_RootSignature.Get();
 		}
 
 		[[nodiscard]]
 		ID3D12PipelineState*
-		GetPipelineState() const
+		GetPipelineState() const noexcept
 		{
 			return m_PipelineState.Get();
 		}
 
 		const MeshletPipelineDesc&
-		GetDesc() const override
+		GetDesc() const noexcept override
 		{
 			return m_Desc;
 		}
 
 		UniformLayoutEntry
-		GetUniformLayoutEntry(const std::string& name) const override
+		GetUniformLayoutEntry(const std::string& name) const noexcept override
 		{
 			return m_UniformLayoutEntries.at(name);
 		}
