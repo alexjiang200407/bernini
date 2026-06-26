@@ -53,7 +53,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto sceneDesc         = bgl::SceneDesc();
 		sceneDesc.maxIndices   = 10000;
-		sceneDesc.maxVertices  = 1000;
+		sceneDesc.maxVertices  = 10000;
 		sceneDesc.maxGeom      = 100;
 		sceneDesc.maxInstances = 100;
 		sceneDesc.maxMeshlets  = 1000;

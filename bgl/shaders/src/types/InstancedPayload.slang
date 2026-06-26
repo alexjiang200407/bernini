@@ -1,6 +1,6 @@
-import db.BaseInstance;
-import intfc.IMeshInstance;
-import intfc.IMaterial;
+import types.BaseInstance;
+import idl.IMeshInstance;
+import idl.IMaterial;
 
 public struct InstancedPayload<T>
     where T : IMeshInstance

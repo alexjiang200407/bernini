@@ -1,7 +1,7 @@
-import db.PsoType;
-import db.Entry;
-import intfc.IMeshInstance;
-import intfc.IMaterial;
+import types.PsoType;
+import idl.Entry;
+import idl.IMeshInstance;
+import idl.IMaterial;
 
 public struct BaseInstance<G = IMeshInstance, M = IMaterial>
     where G : IMeshInstance

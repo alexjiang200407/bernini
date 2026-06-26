@@ -1,13 +1,6 @@
-#include "db/db.h"
+#include "idl/idl.h"
 #include "scene/Scene.h"
 #include <bgl/IGraphics.h>
-
-// Views the contents of the Scene's underlying GPU-mirrored buffers (the
-// PackedBuffer of instances, the EntryBuffers of static-mesh-instances and
-// geometry, and the RangeBuffers of vertex/index/meshlet data) before and
-// after a mesh instance is deleted. Deleting a mesh frees its instance and
-// static-mesh-instance slots while leaving the geometry intact; only
-// DeleteGeom frees the geometry ranges.
 
 namespace
 {
