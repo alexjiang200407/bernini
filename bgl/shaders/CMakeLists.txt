@@ -79,8 +79,8 @@ if (BUILD_TESTS)
         list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")
     endforeach()
 
-    add_custom_target(CopyBGLShaderTests ALL
-        DEPENDS CompileShaders
+    add_custom_target(bgl_copy_shader_tests ALL
+        DEPENDS bgl_compile_shaders
         COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests"
@@ -90,12 +90,12 @@ if (BUILD_TESTS)
     )
 endif()
 
-add_custom_target(CompileShaders ALL
+add_custom_target(bgl_compile_shaders ALL
     DEPENDS ${SLANG_COMPILE_OUTS}
 )
 
-add_custom_target(CopyBGLShaders ALL
-    DEPENDS CompileShaders
+add_custom_target(bgl_copy_shaders ALL
+    DEPENDS bgl_compile_shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${SHADER_OUT_DIR}"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders"
@@ -104,8 +104,8 @@ add_custom_target(CopyBGLShaders ALL
 )
 
 # Copies pure source files directly into application directory for runtime reflection parsing
-add_custom_target(CopyBGLShaderSources ALL
-    DEPENDS CompileShaders
+add_custom_target(bgl_copy_shader_src ALL
+    DEPENDS bgl_compile_shaders
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/src"

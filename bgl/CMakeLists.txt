@@ -75,7 +75,7 @@ target_include_directories(bgl
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources bgl_idl_generate)
+add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src bgl_idl_generate)
 
 target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
