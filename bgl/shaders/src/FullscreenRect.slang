@@ -1,5 +1,5 @@
 import uniforms.SceneData;
-import db.StaticMesh;
+import idl.StaticMesh;
 
 struct VSOut
 {

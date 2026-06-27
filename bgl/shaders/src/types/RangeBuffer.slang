@@ -1,4 +1,4 @@
-import db.Range;
+import idl.Range;
 
 public struct RangeBuffer<T>
 {

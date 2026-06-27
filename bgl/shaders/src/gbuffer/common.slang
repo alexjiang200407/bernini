@@ -1,6 +1,6 @@
-import intfc.IMeshInstance;
-import intfc.IMaterial;
-import db.BaseInstance;
+import idl.IMeshInstance;
+import idl.IMaterial;
+import types.BaseInstance;
 import uniforms.SceneData;
 
 public struct InstancedPayload<T>

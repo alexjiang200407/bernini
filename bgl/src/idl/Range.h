@@ -1,7 +1,7 @@
 #pragma once
 #include <core/containers/multi_slot_handle.h>
 
-namespace bgl::db
+namespace bgl::idl
 {
 	struct Range
 	{

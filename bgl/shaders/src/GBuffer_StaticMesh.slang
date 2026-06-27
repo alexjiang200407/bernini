@@ -1,12 +1,13 @@
-import intfc.IMeshInstance;
-import intfc.IMaterial;
-import db.BaseInstance;
+import idl.IMeshInstance;
+import idl.IMaterial;
+import types.BaseInstance;
 import uniforms.SceneData;
 import util.constants;
-import db.StaticMesh;
-import db.Meshlet;
-import db.Vertex;
+import idl.StaticMesh;
+import idl.Meshlet;
+import idl.Vertex;
 import gbuffer.common;
+import types.PsoType;
 
 ConstantBuffer<SceneData<StaticMeshInstance>> sceneData;
 

@@ -1,7 +1,7 @@
 #pragma once
 #include <core/containers/slot_handle.h>
 
-namespace bgl::db
+namespace bgl::idl
 {
 	struct Entry
 	{

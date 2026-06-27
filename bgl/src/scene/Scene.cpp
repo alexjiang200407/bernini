@@ -1,7 +1,8 @@
 #include "scene/Scene.h"
 #include "constants/constants.h"
-#include "db/Meshlet.h"
-#include "db/Vertex.h"
+#include "idl/Meshlet.h"
+#include "idl/Vertex.h"
+#include "types/BaseInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <numbers>
@@ -15,7 +16,7 @@ namespace bgl
 			PackedBufferDesc instanceBufferDesc;
 			instanceBufferDesc.maxCount  = m_Desc.maxInstances;
 			instanceBufferDesc.debugName = "Instance Buffer";
-			instanceBufferDesc.blockSize = sizeof(db::BaseInstance) * 256;
+			instanceBufferDesc.blockSize = sizeof(BaseInstance) * 256;
 
 			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
 		}
@@ -24,7 +25,7 @@ namespace bgl
 			EntryBufferDesc staticMeshInstanceBufferDesc;
 			staticMeshInstanceBufferDesc.maxCount  = m_Desc.maxInstances;
 			staticMeshInstanceBufferDesc.debugName = "Static Mesh Instance Buffer";
-			staticMeshInstanceBufferDesc.blockSize = sizeof(db::StaticMeshInstance) * 256;
+			staticMeshInstanceBufferDesc.blockSize = sizeof(idl::StaticMeshInstance) * 256;
 
 			m_StaticMeshInstanceBuffer.Init(
 				std::move(staticMeshInstanceBufferDesc),
@@ -35,7 +36,7 @@ namespace bgl
 			EntryBufferDesc staticGeomBufferDesc;
 			staticGeomBufferDesc.maxCount  = m_Desc.maxGeom;
 			staticGeomBufferDesc.debugName = "Static Mesh Buffer";
-			staticGeomBufferDesc.blockSize = sizeof(db::StaticGeom) * 128;
+			staticGeomBufferDesc.blockSize = sizeof(idl::StaticGeom) * 128;
 
 			m_StaticGeom.Init(std::move(staticGeomBufferDesc), m_ResourceManager);
 		}
@@ -224,7 +225,7 @@ namespace bgl
 	{
 		try
 		{
-			static const db::Vertex cubeVertices[] = {
+			static const idl::Vertex cubeVertices[] = {
 				{ { -1, -1, -1 } },  // 0: left-bottom-back
 				{ { 1, -1, -1 } },   // 1: right-bottom-back
 				{ { 1, 1, -1 } },    // 2: right-top-back
@@ -249,7 +250,7 @@ namespace bgl
 			const auto baseMapGlobal   = m_VertexMapBuffer.Add(mapIndices);
 			const auto baseIndexGlobal = m_IndexBuffer.Add(cubeIndices);
 
-			auto m = db::Meshlet();
+			auto m = idl::Meshlet();
 
 			m.relativeVertexOffset = 0;
 			m.vertexCount          = static_cast<uint8_t>(std::size(cubeVertices));
@@ -260,10 +261,10 @@ namespace bgl
 			m.boundingCenter = glm::vec3{ 0.0f };
 			m.boundingRadius = glm::sqrt(3.0f);
 
-			const auto meshletSpan       = std::span<const db::Meshlet>(&m, 1);
+			const auto meshletSpan       = std::span<const idl::Meshlet>(&m, 1);
 			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshletSpan);
 
-			auto staticGeom      = db::StaticGeom();
+			auto staticGeom      = idl::StaticGeom();
 			staticGeom.vertices  = baseVertexGlobal;
 			staticGeom.indices   = baseIndexGlobal;
 			staticGeom.meshlets  = baseMeshletGlobal;
@@ -286,8 +287,8 @@ namespace bgl
 	{
 		try
 		{
-			std::vector<db::Vertex> sphereVerts;
-			std::vector<uint32_t>   sphereIndices;
+			std::vector<idl::Vertex> sphereVerts;
+			std::vector<uint32_t>    sphereIndices;
 
 			for (uint32_t y = 0u; y <= ySegments; ++y)
 			{
@@ -300,7 +301,7 @@ namespace bgl
 					float          yPos = std::cos(ySegment * pi);
 					float          zPos = std::sin(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
 
-					auto v   = db::Vertex();
+					auto v   = idl::Vertex();
 					v.pos    = glm::vec3(xPos, yPos, zPos) * radius;
 					v.normal = glm::normalize(v.pos);
 					v.uv     = glm::vec2(xSegment, ySegment);
@@ -324,7 +325,7 @@ namespace bgl
 
 			const auto baseVertexGlobal = m_VertexBuffer.Add(sphereVerts);
 
-			auto                  meshlets = std::vector<db::Meshlet>();
+			auto                  meshlets = std::vector<idl::Meshlet>();
 			std::vector<uint32_t> vertexMap;
 			std::vector<uint32_t> localIndices;
 
@@ -333,7 +334,7 @@ namespace bgl
 
 			while (trianglesDone < totalTriangles)
 			{
-				auto meshlet                 = db::Meshlet();
+				auto meshlet                 = idl::Meshlet();
 				meshlet.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
 				meshlet.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
 
@@ -398,7 +399,7 @@ namespace bgl
 			const auto baseIndexGlobal   = m_IndexBuffer.Add(localIndices);
 			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshlets);
 
-			auto staticGeom      = db::StaticGeom();
+			auto staticGeom      = idl::StaticGeom();
 			staticGeom.vertices  = baseVertexGlobal;
 			staticGeom.vertexMap = baseMapGlobal;
 			staticGeom.indices   = baseIndexGlobal;
@@ -438,13 +439,13 @@ namespace bgl
 
 		try
 		{
-			auto staticMeshInstance      = db::StaticMeshInstance();
+			auto staticMeshInstance      = idl::StaticMeshInstance();
 			staticMeshInstance.base      = geom.handle;
 			staticMeshInstance.transform = transform;
 
 			auto staticMeshInstanceHandle = m_StaticMeshInstanceBuffer.Add(staticMeshInstance);
 
-			auto instance             = db::BaseInstance();
+			auto instance             = BaseInstance();
 			instance.meshInstance     = staticMeshInstanceHandle;
 			instance.materialInstance = material.handle;
 

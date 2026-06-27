@@ -4,6 +4,7 @@
 #include <array>
 #include <bitset>
 #include <cassert>
+#include <cstddef>
 #include <chrono>
 #include <concepts>
 #include <execution>

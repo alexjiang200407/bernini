@@ -1,4 +1,4 @@
-import intfc.IGeom;
+import IGeom;
 
 public interface IMeshInstance
 {
