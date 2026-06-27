@@ -23,9 +23,11 @@ namespace bgl
 		uint32_t generation = 0;
 
 		[[nodiscard]] bool
-		IsNull() const
+		IsNull() const noexcept
 		{
 			return idx == 0xFFFFFFFF;
 		}
+
+		operator bool() const noexcept { return !IsNull(); }
 	};
 }

@@ -102,6 +102,12 @@ namespace bgl
 			return DescriptorHandle(m_BufferHandle.idx);
 		}
 
+		[[nodiscard]] BufferHandle
+		GetBufferHandle() const noexcept
+		{
+			return m_BufferHandle;
+		}
+
 		[[nodiscard]] core::multi_slot_handle
 		AllocateRange(uint32_t count)
 		{

@@ -57,7 +57,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto cubeInst = scene->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
 
 		auto context   = bgl::RenderContext();
-		context.scene  = scene.Get();
+		context.scene  = scene;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
@@ -94,7 +94,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		scene->CreateStaticMeshInstance(sphereGeom, {}, sphereTransform);
 
 		auto context   = bgl::RenderContext();
-		context.scene  = scene.Get();
+		context.scene  = scene;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
@@ -106,6 +106,52 @@ TEST_CASE("Geometry", "[geometry][render]")
 			bgl::test::MatchesGoldenDDS(
 				"golden/sphere_cube.exp.dds",
 				"golden/sphere_cube.got.dds"));
+	}
+
+	SECTION("Two scenes in one frame (cube + sphere) - sphere_cube.dds")
+	{
+		auto cubeScene   = gfxBase->CreateScene(sceneDesc);
+		auto sphereScene = gfxBase->CreateScene(sceneDesc);
+
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 0.0f, 20.0f),
+				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+		auto cubeGeom = cubeScene->AddCubeGeom();
+		cubeScene->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
+
+		auto sphereGeom       = sphereScene->AddSphereGeom(32, 32, 1.0f);
+		auto sphereTransform  = glm::mat4(1.0f);
+		sphereTransform[3][0] = -5.0f;
+		sphereScene->CreateStaticMeshInstance(sphereGeom, sphereTransform);
+
+		const auto viewport =
+			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
+
+		auto cubeContext     = bgl::RenderContext();
+		cubeContext.scene    = cubeScene;
+		cubeContext.camera   = camera;
+		cubeContext.viewport = viewport;
+
+		auto sphereContext     = bgl::RenderContext();
+		sphereContext.scene    = sphereScene;
+		sphereContext.camera   = camera;
+		sphereContext.viewport = viewport;
+
+		gfxBase->BeginFrame();
+		gfxBase->Draw(cubeContext);
+		gfxBase->Draw(sphereContext);
+		gfxBase->EndFrame();
+
+		gfxBase->ScreenshotRaw("golden/two_scenes_sphere_cube.got.dds");
+
+		CHECK(
+			bgl::test::MatchesGoldenDDS(
+				"golden/sphere_cube.exp.dds",
+				"golden/two_scenes_sphere_cube.got.dds"));
 	}
 
 	SECTION("Draw Two Cubes - two_cubes.dds")
@@ -131,7 +177,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		scene->CreateStaticMeshInstance(cubeGeom, secondTransform);
 
 		auto context   = bgl::RenderContext();
-		context.scene  = scene.Get();
+		context.scene  = scene;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
@@ -167,7 +213,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		scene->DeleteMeshInstance(sphereInst);
 
 		auto context   = bgl::RenderContext();
-		context.scene  = scene.Get();
+		context.scene  = scene;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
@@ -204,7 +250,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		scene->DeleteMeshInstance(secondInst);
 
 		auto context   = bgl::RenderContext();
-		context.scene  = scene.Get();
+		context.scene  = scene;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));

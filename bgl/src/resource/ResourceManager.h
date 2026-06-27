@@ -88,6 +88,14 @@ namespace bgl
 		GetDsv(DsvHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
+		virtual TextureHandle
+		GetRtvTexture(RtvHandle handle) const noexcept = 0;
+
+		[[nodiscard]]
+		virtual TextureHandle
+		GetDsvTexture(DsvHandle handle) const noexcept = 0;
+
+		[[nodiscard]]
 		virtual const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept = 0;
 

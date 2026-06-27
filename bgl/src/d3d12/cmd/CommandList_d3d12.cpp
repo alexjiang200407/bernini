@@ -164,74 +164,133 @@ namespace bgl
 		m_Open = false;
 	}
 
+	namespace
+	{
+		D3D12_BUFFER_BARRIER
+		MakeBufferBarrier(const Buffer& buffer, const BufferBarrierDesc& desc) noexcept
+		{
+			const auto& bufferDesc = buffer.GetDesc();
+
+			D3D12_BUFFER_BARRIER bufferBarrier = {};
+
+			bufferBarrier.SyncBefore   = ConvertBarrierSync(desc.syncBefore);
+			bufferBarrier.AccessBefore = ConvertBarrierAccess(desc.accessBefore);
+
+			bufferBarrier.SyncAfter   = ConvertBarrierSync(desc.syncAfter);
+			bufferBarrier.AccessAfter = ConvertBarrierAccess(desc.accessAfter);
+
+			bufferBarrier.pResource = buffer.GetD3D12Resource();
+			bufferBarrier.Offset    = 0;
+			bufferBarrier.Size = static_cast<uint64_t>(bufferDesc.elementCount) * bufferDesc.stride;
+
+			return bufferBarrier;
+		}
+
+		D3D12_TEXTURE_BARRIER
+		MakeTextureBarrier(const Texture& texture, const TextureBarrierDesc& desc) noexcept
+		{
+			D3D12_TEXTURE_BARRIER textureBarrier = {};
+
+			textureBarrier.SyncBefore   = ConvertBarrierSync(desc.syncBefore);
+			textureBarrier.AccessBefore = ConvertBarrierAccess(desc.accessBefore);
+
+			textureBarrier.SyncAfter   = ConvertBarrierSync(desc.syncAfter);
+			textureBarrier.AccessAfter = ConvertBarrierAccess(desc.accessAfter);
+
+			textureBarrier.LayoutBefore = ConvertBarrierLayout(desc.layoutBefore);
+			textureBarrier.LayoutAfter  = ConvertBarrierLayout(desc.layoutAfter);
+
+			textureBarrier.Flags = D3D12_TEXTURE_BARRIER_FLAG_NONE;
+
+			textureBarrier.pResource = texture.GetD3D12Resource();
+
+			if (desc.mipCount == uint32_t(-1) && desc.layerCount == uint32_t(-1))
+			{
+				textureBarrier.Subresources.IndexOrFirstMipLevel =
+					D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			}
+			else
+			{
+				textureBarrier.Subresources.IndexOrFirstMipLevel = desc.baseMipLevel;
+				textureBarrier.Subresources.NumMipLevels         = desc.mipCount;
+				textureBarrier.Subresources.FirstArraySlice      = desc.baseArrayLayer;
+				textureBarrier.Subresources.NumArraySlices       = desc.layerCount;
+				textureBarrier.Subresources.FirstPlane           = desc.firstPlane;
+				textureBarrier.Subresources.NumPlanes            = desc.planeCount;
+			}
+
+			return textureBarrier;
+		}
+	}
+
 	void
 	CommandList::Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept
 	{
-		auto&                                   buffer = m_ResourceManager->GetBuffer(handle);
-		wrl::ComPtr<ID3D12GraphicsCommandList7> cmdList7;
-		auto&                                   desc = buffer.GetDesc();
-
-		m_CommandList->QueryInterface<ID3D12GraphicsCommandList7>(&cmdList7);
-
-		D3D12_BUFFER_BARRIER bufferBarrier = {};
-
-		bufferBarrier.SyncBefore   = ConvertBarrierSync(barrier.syncBefore);
-		bufferBarrier.AccessBefore = ConvertBarrierAccess(barrier.accessBefore);
-
-		bufferBarrier.SyncAfter   = ConvertBarrierSync(barrier.syncAfter);
-		bufferBarrier.AccessAfter = ConvertBarrierAccess(barrier.accessAfter);
-
-		bufferBarrier.pResource = buffer.GetD3D12Resource();
-		bufferBarrier.Offset    = 0;
-		bufferBarrier.Size      = static_cast<uint64_t>(desc.elementCount) * desc.stride;
-
-		D3D12_BARRIER_GROUP group = {};
-		group.Type                = D3D12_BARRIER_TYPE_BUFFER;
-		group.NumBarriers         = 1;
-		group.pBufferBarriers     = &bufferBarrier;
-
-		cmdList7->Barrier(1, &group);
+		Barrier(
+			std::span<const BufferHandle>(&handle, 1),
+			std::span<const BufferBarrierDesc>(&barrier, 1));
 	}
 
 	void
 	CommandList::Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
-		auto& texture = m_ResourceManager->GetTexture(handle);
+		Barrier(
+			std::span<const TextureHandle>(&handle, 1),
+			std::span<const TextureBarrierDesc>(&barrier, 1));
+	}
 
-		D3D12_TEXTURE_BARRIER textureBarrier = {};
-
-		textureBarrier.SyncBefore   = ConvertBarrierSync(barrier.syncBefore);
-		textureBarrier.AccessBefore = ConvertBarrierAccess(barrier.accessBefore);
-
-		textureBarrier.SyncAfter   = ConvertBarrierSync(barrier.syncAfter);
-		textureBarrier.AccessAfter = ConvertBarrierAccess(barrier.accessAfter);
-
-		textureBarrier.LayoutBefore = ConvertBarrierLayout(barrier.layoutBefore);
-		textureBarrier.LayoutAfter  = ConvertBarrierLayout(barrier.layoutAfter);
-
-		textureBarrier.Flags = D3D12_TEXTURE_BARRIER_FLAG_NONE;
-
-		textureBarrier.pResource = texture.GetD3D12Resource();
-
-		if (barrier.mipCount == uint32_t(-1) && barrier.layerCount == uint32_t(-1))
+	void
+	CommandList::Barrier(
+		std::span<const BufferHandle>      handles,
+		std::span<const BufferBarrierDesc> barriers) noexcept
+	{
+		gassert(handles.size() == barriers.size(), "Barrier handle/desc spans must match in size");
+		if (handles.empty())
 		{
-			textureBarrier.Subresources.IndexOrFirstMipLevel =
-				D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			return;
 		}
-		else
+
+		std::vector<D3D12_BUFFER_BARRIER> bufferBarriers;
+		bufferBarriers.reserve(handles.size());
+
+		for (size_t i = 0; i < handles.size(); ++i)
 		{
-			textureBarrier.Subresources.IndexOrFirstMipLevel = barrier.baseMipLevel;
-			textureBarrier.Subresources.NumMipLevels         = barrier.mipCount;
-			textureBarrier.Subresources.FirstArraySlice      = barrier.baseArrayLayer;
-			textureBarrier.Subresources.NumArraySlices       = barrier.layerCount;
-			textureBarrier.Subresources.FirstPlane           = barrier.firstPlane;
-			textureBarrier.Subresources.NumPlanes            = barrier.planeCount;
+			bufferBarriers.push_back(
+				MakeBufferBarrier(m_ResourceManager->GetBuffer(handles[i]), barriers[i]));
+		}
+
+		D3D12_BARRIER_GROUP group = {};
+		group.Type                = D3D12_BARRIER_TYPE_BUFFER;
+		group.NumBarriers         = static_cast<uint32_t>(bufferBarriers.size());
+		group.pBufferBarriers     = bufferBarriers.data();
+
+		m_CommandList->Barrier(1, &group);
+	}
+
+	void
+	CommandList::Barrier(
+		std::span<const TextureHandle>      handles,
+		std::span<const TextureBarrierDesc> barriers) noexcept
+	{
+		gassert(handles.size() == barriers.size(), "Barrier handle/desc spans must match in size");
+		if (handles.empty())
+		{
+			return;
+		}
+
+		std::vector<D3D12_TEXTURE_BARRIER> textureBarriers;
+		textureBarriers.reserve(handles.size());
+
+		for (size_t i = 0; i < handles.size(); ++i)
+		{
+			textureBarriers.push_back(
+				MakeTextureBarrier(m_ResourceManager->GetTexture(handles[i]), barriers[i]));
 		}
 
 		D3D12_BARRIER_GROUP group = {};
 		group.Type                = D3D12_BARRIER_TYPE_TEXTURE;
-		group.NumBarriers         = 1;
-		group.pTextureBarriers    = &textureBarrier;
+		group.NumBarriers         = static_cast<uint32_t>(textureBarriers.size());
+		group.pTextureBarriers    = textureBarriers.data();
 
 		m_CommandList->Barrier(1, &group);
 	}
