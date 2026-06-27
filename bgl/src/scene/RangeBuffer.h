@@ -11,13 +11,6 @@ namespace bgl
 		std::string debugName;
 	};
 
-	enum class RangeBufferState
-	{
-		kUpdate,
-		kShader,
-		kNone,
-	};
-
 	template <typename T>
 	concept RangeBufferConcept =
 		core::MultiSlotElementConcept<T> && core::type_traits::trivially_copyable<T>;
@@ -261,22 +254,6 @@ namespace bgl
 			return m_DirtyBlocks;
 		}
 
-		void
-		Transition(ICommandList* cmdList, RangeBufferState prevState, RangeBufferState newState)
-		{
-			BufferBarrierDesc barrier = {};
-
-			auto prevAccessSync = GetBarrierAccessSync(prevState);
-			auto newAccessSync  = GetBarrierAccessSync(newState);
-
-			barrier.accessBefore = prevAccessSync.first;
-			barrier.syncBefore   = prevAccessSync.second;
-			barrier.accessAfter  = newAccessSync.first;
-			barrier.syncAfter    = newAccessSync.second;
-
-			cmdList->Barrier(m_BufferHandle, barrier);
-		}
-
 	private:
 		void
 		MarkRangeDirty(uint32_t startIdx, uint32_t count)
@@ -315,22 +292,6 @@ namespace bgl
 			if (size > 0)
 			{
 				cmdList->WriteBuffer(m_BufferHandle, m_Data.data(), offset, size);
-			}
-		}
-
-		std::pair<BarrierAccess, BarrierSync>
-		GetBarrierAccessSync(RangeBufferState state)
-		{
-			switch (state)
-			{
-			case RangeBufferState::kUpdate:
-				return { BarrierAccessFlag::kCopyDest, BarrierSyncFlag::kCopy };
-			case RangeBufferState::kShader:
-				return { BarrierAccessFlag::kShaderResource, BarrierSyncFlag::kVertexShader };
-			case RangeBufferState::kNone:
-				return { BarrierAccessFlag::kNone, BarrierSyncFlag::kNone };
-			default:
-				gfatal("Invalid RangeBufferState");
 			}
 		}
 

@@ -16,13 +16,6 @@ namespace bgl
 		std::string debugName;
 	};
 
-	enum class PackedBufferState
-	{
-		kUpdate,
-		kShader,
-		kNone,
-	};
-
 	template <typename T>
 	concept PackedBufferConcept =
 		core::PackedElementConcept<T> && core::type_traits::trivially_copyable<T>;
@@ -146,22 +139,6 @@ namespace bgl
 		}
 
 		void
-		Transition(ICommandList* cmdList, PackedBufferState prevState, PackedBufferState newState)
-		{
-			BufferBarrierDesc barrier = {};
-
-			auto prevAccessSync = GetBarrierAccessSync(prevState);
-			auto newAccessSync  = GetBarrierAccessSync(newState);
-
-			barrier.accessBefore = prevAccessSync.first;
-			barrier.syncBefore   = prevAccessSync.second;
-			barrier.accessAfter  = newAccessSync.first;
-			barrier.syncAfter    = newAccessSync.second;
-
-			cmdList->Barrier(m_BufferHandle, barrier);
-		}
-
-		void
 		Update(ICommandList* cmdList)
 		{
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
@@ -274,22 +251,6 @@ namespace bgl
 			if (size > 0)
 			{
 				cmdList->WriteBuffer(m_BufferHandle, m_Entries.data(), offset, size);
-			}
-		}
-
-		std::pair<BarrierAccess, BarrierSync>
-		GetBarrierAccessSync(PackedBufferState state)
-		{
-			switch (state)
-			{
-			case PackedBufferState::kUpdate:
-				return { BarrierAccessFlag::kCopyDest, BarrierSyncFlag::kCopy };
-			case PackedBufferState::kShader:
-				return { BarrierAccessFlag::kShaderResource, BarrierSyncFlag::kVertexShader };
-			case PackedBufferState::kNone:
-				return { BarrierAccessFlag::kNone, BarrierSyncFlag::kNone };
-			default:
-				gfatal("Invalid PackedBufferState");
 			}
 		}
 

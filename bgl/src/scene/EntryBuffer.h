@@ -15,13 +15,6 @@ namespace bgl
 		std::string debugName;
 	};
 
-	enum class EntryBufferState
-	{
-		kUpdate,
-		kShader,
-		kNone,
-	};
-
 	template <typename T>
 	concept EntryBufferConcept =
 		core::SlotElementConcept<T> && core::type_traits::trivially_copyable<T>;
@@ -171,25 +164,6 @@ namespace bgl
 		}
 
 		void
-		Transition(
-			ICommandList*    cmdList,
-			EntryBufferState prevState,
-			EntryBufferState newState) noexcept
-		{
-			BufferBarrierDesc barrier = {};
-
-			auto prevAccessSync = GetBarrierAccessSync(prevState);
-			auto newAccessSync  = GetBarrierAccessSync(newState);
-
-			barrier.accessBefore = prevAccessSync.first;
-			barrier.syncBefore   = prevAccessSync.second;
-			barrier.accessAfter  = newAccessSync.first;
-			barrier.syncAfter    = newAccessSync.second;
-
-			cmdList->Barrier(m_BufferHandle, barrier);
-		}
-
-		void
 		Update(ICommandList* cmdList) noexcept
 		{
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
@@ -306,22 +280,6 @@ namespace bgl
 			if (size > 0)
 			{
 				cmdList->WriteBuffer(m_BufferHandle, m_Entries.data(), offset, size);
-			}
-		}
-
-		std::pair<BarrierAccess, BarrierSync>
-		GetBarrierAccessSync(EntryBufferState state) noexcept
-		{
-			switch (state)
-			{
-			case EntryBufferState::kUpdate:
-				return { BarrierAccessFlag::kCopyDest, BarrierSyncFlag::kCopy };
-			case EntryBufferState::kShader:
-				return { BarrierAccessFlag::kShaderResource, BarrierSyncFlag::kVertexShader };
-			case EntryBufferState::kNone:
-				return { BarrierAccessFlag::kNone, BarrierSyncFlag::kNone };
-			default:
-				gfatal("Invalid EntryBufferState");
 			}
 		}
 
