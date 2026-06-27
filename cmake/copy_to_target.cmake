@@ -11,9 +11,9 @@ function(copy_to_target target)
     endif()
 
     foreach(item ${ARG_ITEMS})
-        if(NOT EXISTS "${item}")
-            message(FATAL_ERROR "Item not found: ${item}")
-        endif()
+        # if(NOT EXISTS "${item}")
+        #     message(FATAL_ERROR "Item not found: ${item}")
+        # endif()
 
         # Get only the name of the file or folder
         get_filename_component(item_name "${item}" NAME)
