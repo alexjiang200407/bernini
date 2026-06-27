@@ -60,6 +60,16 @@ namespace bgl
 		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept override;
 
 		void
+		Barrier(
+			std::span<const BufferHandle>      handles,
+			std::span<const BufferBarrierDesc> barriers) noexcept override;
+
+		void
+		Barrier(
+			std::span<const TextureHandle>      handles,
+			std::span<const TextureBarrierDesc> barriers) noexcept override;
+
+		void
 		SetMeshletState(const MeshletState& gfxState) noexcept override;
 
 		void

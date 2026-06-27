@@ -16,7 +16,7 @@ Try to maximize use of `auto`.
 
 ```cpp
 auto myVariable = 42;
-auto abcd = Type(); // auto for initialization
+auto abcd = Type(); // auto for initialization, prioritize () over {}
 int i;              // Dont use auto for primitive types
 ```
 
@@ -109,8 +109,7 @@ enum class Color {
 # Comments (CRITICAL)
 
 - Only comment under these circumstances
-	- There are Pre-Conditions and Post-Conditions
-	- Code itself is not very descriptive
+	- There are non-obvious Pre-Conditions and Post-Conditions e.g. will throw error if xxx
 	- Important Clarifications
 - Use javadoc comments for comments above functions structs e.g.
 

@@ -79,7 +79,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		                  .Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		auto context   = bgl::RenderContext{};
-		context.scene  = scene.Get();
+		context.scene  = scene;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));

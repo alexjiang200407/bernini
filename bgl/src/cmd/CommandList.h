@@ -78,6 +78,16 @@ namespace bgl
 		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
 		virtual void
+		Barrier(
+			std::span<const BufferHandle>      handles,
+			std::span<const BufferBarrierDesc> barriers) noexcept = 0;
+
+		virtual void
+		Barrier(
+			std::span<const TextureHandle>      handles,
+			std::span<const TextureBarrierDesc> barriers) noexcept = 0;
+
+		virtual void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept = 0;
 
 		virtual void

@@ -131,6 +131,12 @@ namespace bgl
 		const Rtv&
 		GetRtv(RtvHandle handle) const noexcept override;
 
+		TextureHandle
+		GetRtvTexture(RtvHandle handle) const noexcept override;
+
+		TextureHandle
+		GetDsvTexture(DsvHandle handle) const noexcept override;
+
 		ID3D12DescriptorHeap*
 		GetCbvSrvUavHeap() const noexcept
 		{

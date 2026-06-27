@@ -5,8 +5,13 @@
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
+#include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
+#include "passes/ClearPass.h"
+#include "passes/CopyPass.h"
+#include "passes/DrawData.h"
 #include "passes/GBuffer.h"
+#include "passes/PreparePresentPass.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include <DirectXTex.h>
@@ -30,6 +35,9 @@ namespace bgl
 		TextureHandle textureHandle;
 		DsvHandle     dsvHandle;
 	};
+
+	// Graph resource name of the swap chain's backbuffer.
+	constexpr std::string_view c_BackbufferName = "backbuffer";
 
 	class Graphics : public core::RefCounter<GraphicsBase>
 	{
@@ -109,9 +117,10 @@ namespace bgl
 		TextureDsvHandle m_DepthBuffer;
 		UINT64           m_FenceValues[c_BufferCount] = { 0, 0 };
 
-		// Per-frame state, valid between BeginFrame and EndFrame.
-		FrameBuffer m_FrameBuffer;
-		bool        m_FrameActive = false;
+		bool m_FrameActive = false;
+
+		FrameGraph m_FrameGraph;
+		uint32_t   m_DrawCount = 0;
 
 		// Backbuffer index that holds the most recently rendered frame (for ScreenshotRaw).
 		UINT m_LastPresentedIndex = 0;
@@ -298,35 +307,28 @@ namespace bgl
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
 
-		m_FrameBuffer = FrameBuffer();
-		m_FrameBuffer.AddColorAttachment(m_BackBuffers[m_FrameIndex].rtvHandle);
-		m_FrameBuffer.SetDepthAttachment(m_DepthBuffer.dsvHandle);
+		m_FrameGraph = FrameGraph();
+		m_DrawCount  = 0;
+		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
+		m_FrameGraph.ImportTexture(
+			std::string(c_BackbufferName),
+			m_BackBuffers[m_FrameIndex].textureHandle,
+			AccessState{ BarrierSyncFlag::kNone,
+		                 BarrierAccessFlag::kNone,
+		                 BarrierLayout::kPresent });
 
-		// Clear the frame's target once; subsequent Draws composite over it.
-		{
-			m_ResourceManager->ClearDsv(m_CommandList, m_DepthBuffer.dsvHandle, 1.0f, 0);
-
-			{
-				auto barrierDesc = TextureBarrierDesc();
-				barrierDesc.AddAccessBefore(BarrierAccessFlag::kNone)
-					.AddSyncBefore(BarrierSyncFlag::kNone)
-					.SetLayoutBefore(BarrierLayout::kPresent)
-
-					.AddAccessAfter(BarrierAccessFlag::kRenderTarget)
-					.AddSyncAfter(BarrierSyncFlag::kRenderTarget)
-					.SetLayoutAfter(BarrierLayout::kRenderTarget);
-
-				m_CommandList->Barrier(m_FrameBuffer.colorAttachments[0], barrierDesc);
-			}
-
-			{
-				float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-				m_ResourceManager->ClearRtv(
-					m_CommandList,
-					m_BackBuffers[m_FrameIndex].rtvHandle,
-					clearColor);
-			}
-		}
+		// Clear pass: declares the backbuffer as a render target (the graph derives
+		// the Present->RenderTarget transition) and clears the frame's targets.
+		const std::array<ClearPass::ColorTarget, 1> colorTargets{
+			{ { std::string(c_BackbufferName),
+			    m_BackBuffers[m_FrameIndex].rtvHandle,
+			    { 0.0f, 0.0f, 0.0f, 1.0f } } }
+		};
+		ClearPass().AttachToFrameGraph(
+			m_FrameGraph,
+			m_ResourceManager.Get(),
+			colorTargets,
+			m_DepthBuffer.dsvHandle);
 
 		m_FrameActive = true;
 	}
@@ -344,50 +346,32 @@ namespace bgl
 			throw GraphicsError("RenderContext passed to Draw requires a scene");
 		}
 
-		auto scene_ = context.scene->As<Scene>();
+		auto       scene_   = context.scene->As<Scene>();
+		const auto viewport = context.viewport;
+		const auto viewProj = context.camera.GetViewProjection();
 
-		if (scene_->IsFirstFrame())
-		{
-			scene_->TransitionAll(
-				m_CommandList,
-				EntryBufferState::kNone,
-				EntryBufferState::kUpdate);
+		const uint32_t drawIdx = m_DrawCount++;
 
-			scene_->TransitionAll(
-				m_CommandList,
-				RangeBufferState::kNone,
-				RangeBufferState::kUpdate);
+		m_FrameGraph.SetResourceNamespace(scene_->ResourceNamespace());
 
-			scene_->TransitionAll(
-				m_CommandList,
-				PackedBufferState::kNone,
-				PackedBufferState::kUpdate);
-		}
+		const std::vector<std::string> sceneBuffers = scene_->ImportResources(m_FrameGraph);
 
-		scene_->Update(m_CommandList);
+		CopyPass().AttachToFrameGraph(
+			m_FrameGraph,
+			std::format("Update_{}", drawIdx),
+			sceneBuffers,
+			[scene_](PassContext& resources) { scene_->Update(resources.GetCommandList()); });
 
-		scene_->TransitionAll(m_CommandList, EntryBufferState::kUpdate, EntryBufferState::kShader);
-		scene_->TransitionAll(m_CommandList, RangeBufferState::kUpdate, RangeBufferState::kShader);
-		scene_->TransitionAll(
-			m_CommandList,
-			PackedBufferState::kUpdate,
-			PackedBufferState::kShader);
+		auto draw              = DrawData();
+		draw.drawIdx           = drawIdx;
+		draw.scene             = context.scene;
+		draw.viewport          = viewport;
+		draw.viewProj          = viewProj;
+		draw.backBufferHandle  = m_BackBuffers[m_FrameIndex].rtvHandle;
+		draw.depthBufferHandle = m_DepthBuffer.dsvHandle;
+		draw.backBufferName    = std::string(c_BackbufferName);
 
-		m_GBuffer.Execute(
-			scene_,
-			m_CommandQueue,
-			m_CommandList,
-			m_FrameBuffer,
-			context.viewport,
-			context.camera.GetViewProjection());
-
-		// Restore for the next frame's update.
-		scene_->TransitionAll(m_CommandList, EntryBufferState::kShader, EntryBufferState::kUpdate);
-		scene_->TransitionAll(m_CommandList, RangeBufferState::kShader, RangeBufferState::kUpdate);
-		scene_->TransitionAll(
-			m_CommandList,
-			PackedBufferState::kShader,
-			PackedBufferState::kUpdate);
+		m_GBuffer.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 
 	void
@@ -398,18 +382,11 @@ namespace bgl
 			throw GraphicsError("EndFrame called without a matching BeginFrame");
 		}
 
-		{
-			auto barrierDesc = TextureBarrierDesc();
-			barrierDesc.AddAccessBefore(BarrierAccessFlag::kRenderTarget)
-				.AddSyncBefore(BarrierSyncFlag::kRenderTarget)
-				.SetLayoutBefore(BarrierLayout::kRenderTarget)
+		m_FrameGraph.SetResourceNamespace("");
+		PreparePresentPass().AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 
-				.AddAccessAfter(BarrierAccessFlag::kNone)
-				.AddSyncAfter(BarrierSyncFlag::kNone)
-				.SetLayoutAfter(BarrierLayout::kPresent);
-
-			m_CommandList->Barrier(m_FrameBuffer.colorAttachments[0], barrierDesc);
-		}
+		m_FrameGraph.Compile(m_ResourceManager.Get());
+		m_FrameGraph.Execute();
 
 		m_CommandList->Close();
 
@@ -455,7 +432,6 @@ namespace bgl
 			m_CommandQueue->WaitForFenceCPUBlocking(m_FenceValues[index]);
 		}
 
-		// Copy the backbuffer into a CPU-readable buffer.
 		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
 
 		auto readbackDesc      = ReadbackBufferDesc();

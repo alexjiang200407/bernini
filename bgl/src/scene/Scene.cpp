@@ -1,5 +1,6 @@
 #include "scene/Scene.h"
 #include "constants/constants.h"
+#include "fg/FrameGraph.h"
 #include "idl/Meshlet.h"
 #include "idl/Vertex.h"
 #include "types/BaseInstance.h"
@@ -9,9 +10,18 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// Hands each Scene a process-unique namespace so two scenes drawn in the same
+		// frame import their buffers under distinct graph names.
+		std::atomic<uint32_t> g_NextSceneId{ 0 };
+	}
+
 	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
 		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager))
 	{
+		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
+
 		{
 			PackedBufferDesc instanceBufferDesc;
 			instanceBufferDesc.maxCount  = m_Desc.maxInstances;
@@ -79,145 +89,38 @@ namespace bgl
 	{
 		auto buffers = GetAllBuffers();
 		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
-	}
 
-	void
-	Scene::TransitionAll(
-		ICommandList*    cmdList,
-		EntryBufferState prevState,
-		EntryBufferState newState)
-	{
-		auto buffers = GetAllBuffers();
-		std::apply(
-			[cmdList, prevState, newState](auto&... buffer) {
-				(
-					[cmdList, prevState, newState](auto& b) {
-						if constexpr (is_entry_buffer_v<decltype(b)>)
-						{
-							b.Transition(cmdList, prevState, newState);
-						}
-					}(buffer),
-					...);
-			},
-			buffers);
-	}
-
-	void
-	Scene::TransitionAll(
-		ICommandList*    cmdList,
-		RangeBufferState prevState,
-		RangeBufferState newState)
-	{
-		auto buffers = GetAllBuffers();
-		std::apply(
-			[cmdList, prevState, newState](auto&... buffer) {
-				(
-					[cmdList, prevState, newState](auto& b) {
-						if constexpr (is_range_buffer_v<decltype(b)>)
-						{
-							b.Transition(cmdList, prevState, newState);
-						}
-					}(buffer),
-					...);
-			},
-			buffers);
-	}
-
-	void
-	Scene::TransitionAll(
-		ICommandList*     cmdList,
-		PackedBufferState prevState,
-		PackedBufferState newState)
-	{
-		auto buffers = GetAllBuffers();
-		std::apply(
-			[cmdList, prevState, newState](auto&... buffer) {
-				(
-					[cmdList, prevState, newState](auto& b) {
-						if constexpr (is_packed_buffer_v<decltype(b)>)
-						{
-							b.Transition(cmdList, prevState, newState);
-						}
-					}(buffer),
-					...);
-			},
-			buffers);
-	}
-
-	void
-	Scene::AttachUniforms(Uniforms& uniforms)
-	{
+		// Update runs (deferred) during the graph's execute, after all imports for
+		// this frame; flipping here keeps the first-frame initial state correct.
 		m_FirstFrame = false;
+	}
 
-		auto SetEntryBuffer = [&uniforms](const std::string& key, DescriptorHandle handle) {
-			auto valid =
-				uniforms[key]["entryBuffer"].IsValid() &&
-				uniforms[key]["entryBuffer"].GetValueType() == UniformValueType::kDescriptorHandle;
+	std::vector<std::string>
+	Scene::ImportResources(FrameGraph& fg)
+	{
+		// All scene buffers end a frame in the shader-resource state (the render
+		// pass reads them) and start the very first frame freshly created (kNone).
+		const AccessState initial =
+			m_FirstFrame ?
+				AccessState{} :
+				AccessState{ BarrierSyncFlag::kVertexShader, BarrierAccessFlag::kShaderResource };
 
-			if (valid)
-			{
-				uniforms[key]["entryBuffer"] = handle;
-			}
+		std::vector<std::string> names;
+		names.reserve(c_BufferNames.size());
 
-			return valid;
-		};
+		auto   buffers = GetAllBuffers();
+		size_t i       = 0;
+		std::apply(
+			[&](auto&... buffer) {
+				(..., [&] {
+					std::string name(c_BufferNames[i++]);
+					fg.ImportBuffer(name, buffer.GetBufferHandle(), initial);
+					names.push_back(std::move(name));
+				}());
+			},
+			buffers);
 
-		auto SetRangeBuffer = [&uniforms](const std::string& key, DescriptorHandle handle) {
-			auto valid =
-				uniforms[key]["rangeBuffer"].IsValid() &&
-				uniforms[key]["rangeBuffer"].GetValueType() == UniformValueType::kDescriptorHandle;
-
-			if (valid)
-			{
-				uniforms[key]["rangeBuffer"] = handle;
-			}
-
-			return valid;
-		};
-
-		auto SetPackedBuffer = [&uniforms](const std::string& key, DescriptorHandle handle) {
-			auto valid =
-				uniforms[key]["packedBuffer"].IsValid() &&
-				uniforms[key]["packedBuffer"].GetValueType() == UniformValueType::kDescriptorHandle;
-
-			if (valid)
-			{
-				uniforms[key]["packedBuffer"] = handle;
-			}
-
-			return valid;
-		};
-
-		if (!SetPackedBuffer("instanceBuffer", m_InstanceBuffer.GetDescriptorHandle()))
-		{
-			gfatal("instanceBuffer key doesn't exist in uniforms. Most likely an error");
-		}
-
-		// Bind static mesh buffers only if pipeline expects them
-		{
-			SetEntryBuffer("meshBuffer", m_StaticMeshInstanceBuffer.GetDescriptorHandle());
-			SetEntryBuffer("geomBuffer", m_StaticGeom.GetDescriptorHandle());
-		}
-
-		if (!SetRangeBuffer("meshletBuffer", m_MeshletBuffer.GetDescriptorHandle()))
-		{
-			gfatal("meshletBuffer key doesn't exist in uniforms. Most likely an error");
-		}
-
-		if (!SetRangeBuffer("vertexMapBuffer", m_VertexMapBuffer.GetDescriptorHandle()))
-		{
-			gfatal("vertexMapBuffer key doesn't exist in uniforms. Most likely an error");
-		}
-
-		if (!SetRangeBuffer("vertexBuffer", m_VertexBuffer.GetDescriptorHandle()))
-		{
-			gfatal("vertexBuffer key doesn't exist in uniforms. Most likely an error");
-		}
-
-		if (!SetRangeBuffer("indexBuffer", m_IndexBuffer.GetDescriptorHandle()))
-		{
-			gfatal("indexBuffer key doesn't exist in uniforms. Most likely an error");
-		}
+		return names;
 	}
 
 	GeomHandle

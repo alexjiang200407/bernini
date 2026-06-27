@@ -214,6 +214,12 @@ namespace bgl
 			return DescriptorHandle(m_BufferHandle.idx);
 		}
 
+		[[nodiscard]] BufferHandle
+		GetBufferHandle() const noexcept
+		{
+			return m_BufferHandle;
+		}
+
 		[[nodiscard]] bool
 		IsBlockDirty(uint32_t blockIdx) const
 		{
