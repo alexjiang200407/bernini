@@ -10,7 +10,7 @@
 namespace bgl
 {
 	class ICommandList;
-	class Uniforms;
+	class FrameGraph;
 
 	struct GeomMeta
 	{
@@ -49,18 +49,14 @@ namespace bgl
 				m_VertexBuffer,
 				m_IndexBuffer);
 		}
+		[[nodiscard]] const std::string&
+		ResourceNamespace() const noexcept
+		{
+			return m_NamePrefix;
+		}
 
-		void
-		TransitionAll(ICommandList* cmdList, EntryBufferState prevState, EntryBufferState newState);
-
-		void
-		TransitionAll(ICommandList* cmdList, RangeBufferState prevState, RangeBufferState newState);
-
-		void
-		TransitionAll(
-			ICommandList*     cmdList,
-			PackedBufferState prevState,
-			PackedBufferState newState);
+		std::vector<std::string>
+		ImportResources(FrameGraph& fg);
 
 		void
 		Update(ICommandList* cmdList);
@@ -74,13 +70,10 @@ namespace bgl
 
 		[[nodiscard]]
 		uint32_t
-		GetInstanceCount() const
+		GetInstanceCount() const noexcept override
 		{
 			return m_InstanceBuffer.Size();
 		}
-
-		void
-		AttachUniforms(Uniforms& uniforms);
 
 		GeomHandle
 		AddCubeGeom() override;
@@ -99,7 +92,18 @@ namespace bgl
 		DeleteGeom(GeomHandle geom) override;
 
 	private:
-		SceneDesc m_Desc;
+		static constexpr std::array<std::string_view, 7> c_BufferNames = { {
+			"scene.instanceBuffer",
+			"scene.meshInstanceBuffer",
+			"scene.geomBuffer",
+			"scene.meshletBuffer",
+			"scene.vertexMapBuffer",
+			"scene.vertexBuffer",
+			"scene.indexBuffer",
+		} };
+
+		SceneDesc   m_Desc;
+		std::string m_NamePrefix;
 
 		PackedBuffer<BaseInstance>             m_InstanceBuffer;
 		EntryBuffer<idl::StaticMeshInstance>   m_StaticMeshInstanceBuffer;

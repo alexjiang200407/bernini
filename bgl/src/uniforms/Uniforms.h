@@ -1,4 +1,6 @@
 #pragma once
+#include "constants/constants.h"
+#include "resource/Buffer.h"
 #include "resource/Shader.h"
 #include "uniforms/DescriptorHandle.h"
 
@@ -193,6 +195,31 @@ namespace bgl
 			operator==(const T& val) const
 			{
 				return val == static_cast<T>(*this);
+			}
+
+			AccessorBase&
+			operator=(BufferHandle handle)
+			{
+				if (GetType() == UniformType::kStruct &&
+				    m_Node->GetSize() == detail::ValueTypeSize(UniformValueType::kDescriptorHandle))
+				{
+					for (const auto key : c_SmartBufferUniformIndices)
+					{
+						if ((*this)[std::string(key)].IsValid())
+						{
+							(*this)[std::string(key)] = DescriptorHandle(handle.idx);
+							return *this;
+						}
+					}
+
+					throw std::runtime_error(
+						std::format("Accessor at offset {} is not a valid buffer", m_Offset));
+				}
+
+				throw std::runtime_error(
+					std::format(
+						"Accessor at offset {} cannot be assigned with buffer handle",
+						m_Offset));
 			}
 
 			UniformType

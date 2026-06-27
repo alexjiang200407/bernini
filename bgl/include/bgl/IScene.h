@@ -119,6 +119,9 @@ namespace bgl
 		virtual void
 		DeleteGeom(GeomHandle geom) = 0;
 
+		virtual uint32_t
+		GetInstanceCount() const noexcept = 0;
+
 	protected:
 		IScene() noexcept = default;
 	};

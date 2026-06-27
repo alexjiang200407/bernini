@@ -3,12 +3,16 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "device/Device.h"
+#include "fg/FrameGraph.h"
+#include "fg/PassDesc.h"
+#include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
 #include "scene/Scene.h"
 #include "types/RenderState.h"
+#include "uniforms/Uniforms.h"
 
 namespace bgl
 {
@@ -59,7 +63,7 @@ namespace bgl
 
 			pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
 			pipelineDesc.SetDsvFormat(Format::D24S8);
-			pipelineDesc.renderState = RenderState{}
+			pipelineDesc.renderState = RenderState()
 			                               .SetRasterState(
 											   RasterState{}
 												   .SetCullMode(RasterCullMode::kNone)
@@ -77,37 +81,91 @@ namespace bgl
 		}
 
 		void
-		Execute(
-			Scene*           scene,
-			ICommandQueue*   cmdQueue,
-			ICommandList*    cmdList,
-			FrameBuffer      frameBuffer,
-			Viewport         vp,
-			const glm::mat4& viewProj)
+		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 		{
-			gassert(cmdQueue != nullptr, "Pass command queue must be initialized");
-			gassert(cmdList != nullptr, "Pass commandlist must be initialized");
+			auto desc = PassDesc();
+
+			desc.SetName(std::format("GBuffer_{}", draw.drawIdx))
+				.AddTexture(
+					TextureArg{ draw.backBufferName,
+			                    BarrierSyncFlag::kRenderTarget,
+			                    BarrierAccessFlag::kRenderTarget,
+			                    BarrierLayout::kRenderTarget });
+
+			for (const SceneBuffer& binding : c_SceneBuffers)
+			{
+				desc.AddBuffer(
+					BufferArg{ std::string(binding.graphName),
+				               BarrierSyncFlag::kVertexShader,
+				               BarrierAccessFlag::kShaderResource });
+			}
+
+			desc.SetExec([this, draw](PassContext& resources) { Execute(draw, resources); });
+
+			fg.AddPass(std::move(desc));
+		}
+
+		void
+		Execute(const DrawData& draw, PassContext& resources)
+		{
+			ICommandList* cmd = resources.GetCommandList();
+
+			gassert(cmd != nullptr, "Pass commandlist must be initialized");
 			gassert(m_Pipeline.IsInitialized(), "Pass pipeline must be initialized");
 			gassert(
-				scene->GetInstanceCount() > 0,
+				draw.scene->GetInstanceCount() > 0,
 				"Scene must have at least one instance to render");
 
-			scene->AttachUniforms(m_Uniforms);
+			for (const SceneBuffer& binding : c_SceneBuffers)
+			{
+				const BufferHandle handle = resources.GetBuffer(std::string(binding.graphName));
 
-			m_Uniforms["viewProj"] = viewProj;
+				auto uniform = m_Uniforms[std::string(binding.uniformKey)];
+				if (uniform.IsValid())
+				{
+					uniform = handle;
+				}
+				else if (binding.required)
+				{
+					gfatal(
+						"{} key doesn't exist in uniforms. Most likely an error",
+						binding.uniformKey);
+				}
+			}
+
+			m_Uniforms["viewProj"] = draw.viewProj;
 
 			auto gfxState     = MeshletState();
 			gfxState.pipeline = m_Pipeline;
-			gfxState.viewportState.AddViewportAndScissorRect(vp);
-			gfxState.frameBuffer = frameBuffer;
+			gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
+			gfxState.frameBuffer = FrameBuffer()
+			                           .AddColorAttachment(draw.backBufferHandle)
+			                           .SetDepthAttachment(draw.depthBufferHandle);
 			gfxState.uniforms    = &m_Uniforms;
 
-			cmdList->SetMeshletState(gfxState);
+			cmd->SetMeshletState(gfxState);
 
-			cmdList->DispatchMesh(scene->GetInstanceCount(), 1, 1);
+			cmd->DispatchMesh(draw.scene->GetInstanceCount(), 1, 1);
 		}
 
 	private:
+		struct SceneBuffer
+		{
+			std::string_view graphName;
+			std::string_view uniformKey;
+			bool             required;
+		};
+
+		static constexpr std::array<SceneBuffer, 7> c_SceneBuffers = { {
+			{ "scene.instanceBuffer", "instanceBuffer", true },
+			{ "scene.meshInstanceBuffer", "meshBuffer", false },
+			{ "scene.geomBuffer", "geomBuffer", false },
+			{ "scene.meshletBuffer", "meshletBuffer", true },
+			{ "scene.vertexMapBuffer", "vertexMapBuffer", true },
+			{ "scene.vertexBuffer", "vertexBuffer", true },
+			{ "scene.indexBuffer", "indexBuffer", true },
+		} };
+
 		MeshletPipelineHandle m_Pipeline;
 		Uniforms              m_Uniforms;
 	};

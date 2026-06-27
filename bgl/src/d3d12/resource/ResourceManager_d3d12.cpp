@@ -440,6 +440,18 @@ namespace bgl
 		return m_Rtvs[handle.idx];
 	}
 
+	TextureHandle
+	ResourceManager::GetRtvTexture(RtvHandle handle) const noexcept
+	{
+		return GetRtv(handle).GetTextureHandle();
+	}
+
+	TextureHandle
+	ResourceManager::GetDsvTexture(DsvHandle handle) const noexcept
+	{
+		return GetDsv(handle).GetTextureHandle();
+	}
+
 	void
 	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{

@@ -16,7 +16,7 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 - clang-format each .cpp .h and .slang file modified via `python ./scripts/clang_format.py <files...>` (use `--check` to verify without editing). It finds clang-format on PATH or the Visual Studio LLVM component; if neither exists it tells the user to install it.
 
-[Style Guide](./STYLE.md)
+Always read the [Style Guide](./STYLE.md)
 
 
 # Directory Structure

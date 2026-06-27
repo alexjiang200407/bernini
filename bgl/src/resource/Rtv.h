@@ -29,5 +29,7 @@ namespace bgl
 		{
 			return idx == 0xFFFFFFFF;
 		}
+
+		operator bool() const noexcept { return !IsNull(); }
 	};
 }
