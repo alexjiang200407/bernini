@@ -1,9 +1,10 @@
 #pragma once
-#include "db/db.h"
+#include "idl/idl.h"
 #include "resource/ResourceManager.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "types/BaseInstance.h"
 #include <bgl/IScene.h>
 
 namespace bgl
@@ -100,14 +101,14 @@ namespace bgl
 	private:
 		SceneDesc m_Desc;
 
-		PackedBuffer<db::BaseInstance>        m_InstanceBuffer;
-		EntryBuffer<db::StaticMeshInstance>   m_StaticMeshInstanceBuffer;
-		EntryBuffer<db::StaticGeom, GeomMeta> m_StaticGeom;
-		RangeBuffer<db::Meshlet>              m_MeshletBuffer;
-		RangeBuffer<uint32_t>                 m_VertexMapBuffer;
-		RangeBuffer<db::Vertex>               m_VertexBuffer;
-		RangeBuffer<uint32_t>                 m_IndexBuffer;
-		bool                                  m_FirstFrame = true;
+		PackedBuffer<BaseInstance>             m_InstanceBuffer;
+		EntryBuffer<idl::StaticMeshInstance>   m_StaticMeshInstanceBuffer;
+		EntryBuffer<idl::StaticGeom, GeomMeta> m_StaticGeom;
+		RangeBuffer<idl::Meshlet>              m_MeshletBuffer;
+		RangeBuffer<uint32_t>                  m_VertexMapBuffer;
+		RangeBuffer<idl::Vertex>               m_VertexBuffer;
+		RangeBuffer<uint32_t>                  m_IndexBuffer;
+		bool                                   m_FirstFrame = true;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

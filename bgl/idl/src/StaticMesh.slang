@@ -1,9 +1,9 @@
-import db.Range;
-import db.Vertex;
-import db.Meshlet;
-import db.Entry;
-import intfc.IGeom;
-import intfc.IMeshInstance;
+import IGeom;
+import Range;
+import Meshlet;
+import Vertex;
+import IMeshInstance;
+import Entry;
 
 public struct StaticGeom : IGeom
 {

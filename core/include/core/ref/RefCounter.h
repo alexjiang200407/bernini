@@ -45,17 +45,6 @@ namespace core
 			return m_RefCount.load();
 		}
 
-		template <typename U>
-		[[nodiscard]] U*
-		As()
-		{
-#ifdef _DEBUG
-			return dynamic_cast<U*>(this);
-#else
-			return static_cast<U*>(this);
-#endif
-		}
-
 	private:
 		std::atomic<unsigned long> m_RefCount = 1;
 	};

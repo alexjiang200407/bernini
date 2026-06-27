@@ -1,5 +1,5 @@
-import db.Range;
-import db.Meshlet;
+import Range;
+import Meshlet;
 
 public interface IGeom
 {

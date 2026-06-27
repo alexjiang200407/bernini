@@ -1,4 +1,4 @@
-import db.Entry;
+import idl.Entry;
 
 public struct EntryBuffer<T>
 {

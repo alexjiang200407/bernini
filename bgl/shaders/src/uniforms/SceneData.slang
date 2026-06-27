@@ -1,10 +1,10 @@
-import db.BaseInstance;
-import db.Meshlet;
-import db.Vertex;
+import types.BaseInstance;
+import idl.Meshlet;
+import idl.Vertex;
 import types.EntryBuffer;
 import types.PackedBuffer;
-import intfc.IGeom;
-import intfc.IMeshInstance;
+import idl.IGeom;
+import idl.IMeshInstance;
 import types.RangeBuffer;
 
 public struct SceneData<T>

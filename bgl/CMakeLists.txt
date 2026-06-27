@@ -1,3 +1,5 @@
+add_subdirectory(./idl)
+
 file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -73,7 +75,7 @@ target_include_directories(bgl
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources)
+add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources bgl_idl_generate)
 
 target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
