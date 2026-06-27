@@ -102,6 +102,12 @@ namespace bgl
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept = 0;
 
+		virtual void
+		Dispatch(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) noexcept = 0;
+
 		[[nodiscard]] virtual bool
 		IsOpen() const noexcept = 0;
 

@@ -71,9 +71,17 @@ namespace bgl
 			}
 		}
 
+		// True once Init() has created the GPU buffer and before Release().
+		[[nodiscard]] bool
+		IsInitialized() const noexcept
+		{
+			return !m_BufferHandle.IsNull();
+		}
+
 		core::multi_slot_handle
 		Add(std::span<const T> elem)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(
 				elem.size() < std::numeric_limits<uint32_t>::max(),
 				"Element count exceeds uint32_t limits");
@@ -92,18 +100,21 @@ namespace bgl
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_BufferHandle.idx);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			return m_BufferHandle;
 		}
 
 		[[nodiscard]] core::multi_slot_handle
 		AllocateRange(uint32_t count)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			auto handle = m_Data.allocate_slots(count);
 
 			if constexpr (c_HasMeta)
@@ -136,6 +147,7 @@ namespace bgl
 		void
 		Set(core::multi_slot_handle handle, uint32_t relativeIndex, T value)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(
 				relativeIndex < handle.count,
 				"Relative index exceeds allocated range count bounds");
@@ -153,6 +165,7 @@ namespace bgl
 		void
 		Erase(core::multi_slot_handle handle)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			MarkRangeDirty(handle.index, handle.count);
 			m_Data.erase(handle);
 		}
@@ -163,6 +176,7 @@ namespace bgl
 		void
 		EraseByIndex(uint32_t rootIndex)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"EraseByIndex on an index with no live range");
@@ -174,6 +188,7 @@ namespace bgl
 		MetaAt(uint32_t rootIndex) noexcept
 			requires(!std::is_void_v<M>)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"MetaAt on an index with no live range");
@@ -185,6 +200,7 @@ namespace bgl
 		MetaAt(uint32_t rootIndex) const noexcept
 			requires(!std::is_void_v<M>)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"MetaAt on an index with no live range");
@@ -194,6 +210,7 @@ namespace bgl
 		[[nodiscard]] const T&
 		Get(core::multi_slot_handle handle, uint32_t relativeIndex) const
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(
 				relativeIndex < handle.count,
 				"Relative index exceeds allocated range count bounds");
@@ -204,6 +221,7 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList)
 		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
 			gassert(cmdList->IsOpen(), "ICommandList must be open to update RangeBuffer");
 
@@ -252,6 +270,23 @@ namespace bgl
 		GetDirtyBlocks() const noexcept
 		{
 			return m_DirtyBlocks;
+		}
+
+		void
+		Release(uint64_t fenceValue, bool deferred = true) noexcept
+		{
+			if (!m_BufferHandle.IsNull())
+			{
+				m_ResourceManager->DestroyBuffer(m_BufferHandle, fenceValue, deferred);
+				m_BufferHandle = {};
+				m_Data.clear();
+				m_DirtyBlocks.clear();
+				if constexpr (c_HasMeta)
+				{
+					m_Metadata.clear();
+				}
+				m_HasAnyDirtyBlocks = false;
+			}
 		}
 
 	private:

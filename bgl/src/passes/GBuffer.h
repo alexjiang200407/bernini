@@ -7,6 +7,7 @@
 #include "fg/PassDesc.h"
 #include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
+#include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"

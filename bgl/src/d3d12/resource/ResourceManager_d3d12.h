@@ -48,6 +48,10 @@ namespace bgl
 		BufferHandle
 		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
 
+		[[nodiscard]]
+		BufferHandle
+		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept override;
+
 		/**
 		 * Automatically creates SRV/UAV for the texture.
 		 */

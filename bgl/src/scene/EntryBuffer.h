@@ -78,6 +78,13 @@ namespace bgl
 			}
 		}
 
+		// True once Init() has created the GPU buffer and before Release().
+		[[nodiscard]] bool
+		IsInitialized() const noexcept
+		{
+			return !m_BufferHandle.IsNull();
+		}
+
 		[[nodiscard]] bool
 		IsValid(core::slot_handle handle) const noexcept
 		{
@@ -94,6 +101,7 @@ namespace bgl
 		core::slot_handle
 		EmplaceBack(Args&&... args)
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			auto slot = m_Entries.allocate_and_emplace(std::forward<Args>(args)...);
 			ResetMeta(slot.index);
 			MarkDirty(slot.index);
@@ -103,6 +111,7 @@ namespace bgl
 		core::slot_handle
 		Add(T value)
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			auto slot = m_Entries.allocate_slot();
 			ResetMeta(slot.index);
 			Set(slot, std::move(value));
@@ -112,6 +121,7 @@ namespace bgl
 		void
 		Set(core::slot_handle slot, T value) noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			MarkDirty(slot.index);
 			m_Entries[slot.index] = std::move(value);
@@ -120,6 +130,7 @@ namespace bgl
 		const T&
 		operator[](core::slot_handle slot) const noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			return m_Entries[slot.index];
 		}
@@ -127,6 +138,7 @@ namespace bgl
 		const T&
 		AtIndex(uint32_t index) const noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.allocated(index), "AtIndex on an unallocated slot");
 			return m_Entries[index];
 		}
@@ -134,6 +146,7 @@ namespace bgl
 		void
 		Erase(core::slot_handle slot) noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			m_Entries.release_slot(slot.index);
 		}
@@ -141,6 +154,7 @@ namespace bgl
 		void
 		EraseByIndex(uint32_t index) noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.allocated(index), "EraseByIndex on an unallocated slot");
 			m_Entries.release_slot(index);
 		}
@@ -150,6 +164,7 @@ namespace bgl
 		MetaAt(uint32_t index) noexcept
 			requires(!std::is_void_v<M>)
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.allocated(index), "MetaAt on an unallocated slot");
 			return m_Metadata[index];
 		}
@@ -159,6 +174,7 @@ namespace bgl
 		MetaAt(uint32_t index) const noexcept
 			requires(!std::is_void_v<M>)
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(m_Entries.allocated(index), "MetaAt on an unallocated slot");
 			return m_Metadata[index];
 		}
@@ -166,6 +182,7 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList) noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
 			gassert(cmdList->IsOpen(), "ICommandList must be open to update EntryBuffer");
 
@@ -213,12 +230,14 @@ namespace bgl
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_BufferHandle.idx);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
+			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			return m_BufferHandle;
 		}
 
@@ -233,6 +252,23 @@ namespace bgl
 		{
 			return static_cast<uint32_t>(
 				std::count(m_DirtyBlocks.begin(), m_DirtyBlocks.end(), true));
+		}
+
+		void
+		Release(uint64_t fenceValue, bool deferred = true) noexcept
+		{
+			if (!m_BufferHandle.IsNull())
+			{
+				m_ResourceManager->DestroyBuffer(m_BufferHandle, fenceValue, deferred);
+				m_BufferHandle = {};
+				m_Entries.clear();
+				m_DirtyBlocks.clear();
+				if constexpr (c_HasMeta)
+				{
+					m_Metadata.clear();
+				}
+				m_HasAnyDirtyBlocks = false;
+			}
 		}
 
 	private:
@@ -269,6 +305,8 @@ namespace bgl
 			uint32_t      endBlk,
 			uint32_t      totalBytes) noexcept
 		{
+			gassert(!m_BufferHandle.IsNull(), "m_BufferHandle cannot be null");
+
 			const uint32_t offset = startBlk * m_Desc.blockSize;
 			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
 

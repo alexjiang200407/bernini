@@ -9,6 +9,7 @@
 #include "gfx/GraphicsBase.h"
 #include "passes/ClearPass.h"
 #include "passes/CopyPass.h"
+#include "passes/CountingSortPass.h"
 #include "passes/DrawData.h"
 #include "passes/GBuffer.h"
 #include "passes/PreparePresentPass.h"

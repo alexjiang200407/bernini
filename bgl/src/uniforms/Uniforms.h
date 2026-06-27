@@ -7,6 +7,7 @@
 namespace bgl
 {
 	class IMeshletPipeline;
+	class IComputePipeline;
 
 	enum class UniformType
 	{
@@ -285,6 +286,7 @@ namespace bgl
 	public:
 		Uniforms() = default;
 		Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName);
+		Uniforms(IComputePipeline const* pipeline, const std::string& cbufferName);
 
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;

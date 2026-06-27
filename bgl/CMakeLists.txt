@@ -100,14 +100,6 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	target_link_libraries(bgl PRIVATE bgl_d3d12)
 
 	find_package(directx12-agility CONFIG REQUIRED)
-	# add_custom_command(TARGET bgl POST_BUILD
-	# 	COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:bgl>/D3D12"
-	# 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	# 		"$<TARGET_FILE:Microsoft::DirectX12-Core>"
-	# 		"$<TARGET_FILE:Microsoft::DirectX12-Layers>"
-	# 		"$<TARGET_FILE_DIR:bgl>/D3D12"
-	# 	COMMENT "Copying D3D12 Agility SDK runtime DLLs to bgl output D3D12/ folder"
-	# )
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
 endif()

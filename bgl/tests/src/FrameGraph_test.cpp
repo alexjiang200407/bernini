@@ -93,6 +93,9 @@ namespace
 		void
 		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
 		{}
+		void
+		Dispatch(uint32_t, uint32_t, uint32_t) noexcept override
+		{}
 		bool
 		IsOpen() const noexcept override
 		{
@@ -191,6 +194,11 @@ namespace
 
 		BufferHandle
 		CreateStructBuffer(const StructBufferDesc&) noexcept override
+		{
+			return {};
+		}
+		BufferHandle
+		CreateComputeBuffer(const ComputeBufferDesc&) noexcept override
 		{
 			return {};
 		}

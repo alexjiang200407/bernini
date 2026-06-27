@@ -93,7 +93,7 @@ namespace bgl
 		const auto& readback  = m_ResourceManager->GetReadbackBuffer(dst);
 		const auto& desc      = srcBuffer.GetDesc();
 
-		const uint64_t byteSize = static_cast<uint64_t>(desc.elementCount) * desc.stride;
+		const uint64_t byteSize = desc.byteSize;
 
 		gassert(
 			readback.GetByteSize() >= byteSize,
@@ -181,7 +181,7 @@ namespace bgl
 
 			bufferBarrier.pResource = buffer.GetD3D12Resource();
 			bufferBarrier.Offset    = 0;
-			bufferBarrier.Size = static_cast<uint64_t>(bufferDesc.elementCount) * bufferDesc.stride;
+			bufferBarrier.Size      = bufferDesc.byteSize;
 
 			return bufferBarrier;
 		}
@@ -430,6 +430,15 @@ namespace bgl
 				"Device/Driver does not support Mesh Shading (DirectX 12 Agility SDK / Feature "
 				"Level 12_2 required)");
 		}
+	}
+
+	void
+	CommandList::Dispatch(
+		uint32_t threadGroupCountX,
+		uint32_t threadGroupCountY,
+		uint32_t threadGroupCountZ) noexcept
+	{
+		m_CommandList->Dispatch(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 
 	void

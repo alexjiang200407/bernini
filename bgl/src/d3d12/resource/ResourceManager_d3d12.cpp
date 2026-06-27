@@ -56,7 +56,12 @@ namespace bgl
 		auto     bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
 		uint32_t slotIndex        = bufferSlotHandle.index;
 
-		Buffer buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, desc);
+		BufferDesc bufferDesc;
+		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
+		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.debugName = desc.debugName;
+
+		Buffer buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, bufferDesc);
 
 		if (desc.isUav)
 		{
@@ -94,6 +99,23 @@ namespace bgl
 		m_CbvSrvUavSlots[slotIndex] = std::move(buffer);
 
 		return BufferHandle{ slotIndex, bufferSlotHandle.generation };
+	}
+
+	BufferHandle
+	ResourceManager::CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept
+	{
+		gassert(desc.maxCount > 0, "ComputeBuffer requires a positive element count");
+		gassert(desc.elementSize > 0, "ComputeBuffer requires a positive element size");
+
+		// A compute buffer is a GPU-only structured buffer with UAV access; reuse the
+		// structured-buffer path (default heap + UAV) to create it.
+		StructBufferDesc structDesc;
+		structDesc.stride       = desc.elementSize;
+		structDesc.elementCount = desc.maxCount;
+		structDesc.isUav        = true;
+		structDesc.debugName    = desc.debugName;
+
+		return CreateStructBuffer(structDesc);
 	}
 
 	TextureHandle

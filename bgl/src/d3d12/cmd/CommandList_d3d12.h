@@ -1,9 +1,12 @@
 #pragma once
 #include "cmd/CommandList.h"
+#include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "resource/UploadManager.h"
+#include "types/ComputeState.h"
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 #include <core/ref/RefCounter.h>
@@ -78,6 +81,12 @@ namespace bgl
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept override;
 
+		void
+		Dispatch(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) noexcept override;
+
 		ID3D12CommandList*
 		GetD3D12CommandList() const noexcept
 		{
@@ -112,6 +121,7 @@ namespace bgl
 
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
 		std::optional<MeshletState>             m_CurrentMeshletState;
+		std::optional<ComputeState>             m_CurrentComputeState;
 		uint64_t                                m_LastCompletedFence = 0;
 		uint64_t                                m_RecordingVersion   = 0;
 		bool                                    m_Open               = false;

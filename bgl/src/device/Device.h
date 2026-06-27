@@ -11,10 +11,12 @@ namespace bgl
 	class IShader;
 	class IMeshletPipeline;
 	class ICommandList;
+	class IComputePipeline;
 	class ICommandAllocator;
 	class ICommandQueue;
 	struct ShaderDesc;
 	struct MeshletPipelineDesc;
+	struct ComputePipelineDesc;
 	struct CommandListDesc;
 	struct ResourceManagerDesc;
 
@@ -38,6 +40,10 @@ namespace bgl
 		[[nodiscard]] core::SharedRef<IShader>
 		CreateShader(std::string path, std::string moduleName, std::string entryPointName = "main")
 			const noexcept;
+
+		[[nodiscard]]
+		virtual core::SharedRef<IComputePipeline>
+		CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IMeshletPipeline>
@@ -68,6 +74,11 @@ namespace bgl
 		[[nodiscard]]
 		virtual Uniforms
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept = 0;
+
+		[[nodiscard]]
+		virtual Uniforms
+		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept = 0;
 	};
 
