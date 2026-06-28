@@ -1,10 +1,8 @@
 import IGeom;
 
-public
-interface IMeshInstance
+public interface IMeshInstance
 {
-	associatedtype GeomType : IGeom;
+    associatedtype GeomType : IGeom;
 
-public
-	uint GetBaseMeshID();
+    public uint GetBaseMeshID();
 };

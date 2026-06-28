@@ -1,3 +1,3 @@
 
-public
-interface IMaterial{};
+public interface IMaterial
+{};
