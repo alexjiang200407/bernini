@@ -8,9 +8,9 @@
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
 #include "passes/ClearPass.h"
-#include "passes/CopyPass.h"
+#include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
-#include "passes/GBuffer.h"
+#include "passes/ForwardPass.h"
 #include "passes/PreparePresentPass.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
@@ -129,7 +129,9 @@ namespace bgl
 		wrl::ComPtr<IDXGIInfoQueue> m_DxgiInfoQueue;
 
 		ResourceManagerHandle m_ResourceManager;
-		GBufferPass           m_GBuffer;
+		PreparePresentPass    m_PreparePresentPass;
+		ForwardPass           m_Forward;
+		CompactInstancesPass  m_CompactInstances;
 	};
 }
 
@@ -224,7 +226,8 @@ namespace bgl
 			CreateOffscreenRenderTargets();
 		}
 
-		m_GBuffer.Init(m_Device);
+		m_CompactInstances.Init(m_Device, m_ResourceManager);
+		m_Forward.Init(m_Device);
 	}
 
 	Graphics::~Graphics() noexcept
@@ -245,7 +248,8 @@ namespace bgl
 		if (m_SwapChain)
 			m_SwapChain->SetFullscreenState(FALSE, nullptr) >> d3d12ErrChecker;
 
-		m_GBuffer.Release();
+		m_Forward.Release();
+		m_CompactInstances.Release(shutdownFenceValue, false);
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -307,8 +311,10 @@ namespace bgl
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
 
-		m_FrameGraph = FrameGraph();
-		m_DrawCount  = 0;
+		// Reset per-frame state but keep the FrameGraph instance so it retains the
+		// last access state of each resource from the previous frame.
+		m_FrameGraph.Reset();
+		m_DrawCount = 0;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
@@ -354,13 +360,7 @@ namespace bgl
 
 		m_FrameGraph.SetResourceNamespace(scene_->ResourceNamespace());
 
-		const std::vector<std::string> sceneBuffers = scene_->ImportResources(m_FrameGraph);
-
-		CopyPass().AttachToFrameGraph(
-			m_FrameGraph,
-			std::format("Update_{}", drawIdx),
-			sceneBuffers,
-			[scene_](PassContext& resources) { scene_->Update(resources.GetCommandList()); });
+		scene_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
 		auto draw              = DrawData();
 		draw.drawIdx           = drawIdx;
@@ -371,7 +371,8 @@ namespace bgl
 		draw.depthBufferHandle = m_DepthBuffer.dsvHandle;
 		draw.backBufferName    = std::string(c_BackbufferName);
 
-		m_GBuffer.AttachToFrameGraph(m_FrameGraph, draw);
+		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 
 	void
@@ -383,7 +384,7 @@ namespace bgl
 		}
 
 		m_FrameGraph.SetResourceNamespace("");
-		PreparePresentPass().AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
+		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 
 		m_FrameGraph.Compile(m_ResourceManager.Get());
 		m_FrameGraph.Execute();

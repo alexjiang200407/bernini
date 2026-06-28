@@ -212,6 +212,15 @@ namespace core
 			return m_Data.size();
 		}
 
+		void
+		clear() noexcept
+		{
+			m_Data.clear();
+			m_Meta.clear();
+			m_FreeSegments.clear();
+			m_MaxSlots = 0;
+		}
+
 	private:
 		struct slot_meta
 		{

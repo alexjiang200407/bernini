@@ -1,4 +1,5 @@
 #include "uniforms/Uniforms.h"
+#include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
 #include "slang/ErrorChecker.h"
 #include "uniforms/DescriptorHandle.h"
@@ -242,6 +243,20 @@ namespace bgl
 	}
 
 	Uniforms::Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+	{
+		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+
+		UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(cbufferName);
+
+		gassert(entry.layout != nullptr, "Pipeline must have a valid uniform layout");
+
+		m_Size           = entry.size;
+		m_RootParamIndex = entry.rootParamIndex;
+		m_Root           = BuildNode(entry.layout);
+		m_Buffer.resize(entry.size, std::byte{ 0 });
+	}
+
+	Uniforms::Uniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 

@@ -49,11 +49,36 @@ namespace bgl
 		FrameGraph&
 		operator=(FrameGraph&&) noexcept = default;
 
+		/**
+		 * Imports an external resource under `name`. The optional `initial` is its
+		 * access state on entry to the graph; when omitted the FrameGraph reuses the
+		 * state the resource was left in by the previous frame/draw (defaulting to an
+		 * undefined state the first time it is seen). See m_LastState.
+		 */
 		FrameGraph&
-		ImportBuffer(std::string name, BufferHandle handle, AccessState initial = {});
+		ImportBuffer(
+			std::string                name,
+			BufferHandle               handle,
+			std::optional<AccessState> initial = {});
+
+		/**
+		 * Like ImportBuffer but ignores the current resource namespace, registering the
+		 * resource under `name` verbatim. Use for pass-owned resources that are shared
+		 * across namespaces (e.g. scene-independent scratch buffers) so every scope sees
+		 * one tracked resource rather than a per-namespace copy. Passes in a namespace
+		 * still reach it via ResolveName's fall back to the bare name.
+		 */
+		FrameGraph&
+		ImportGlobalBuffer(
+			std::string                name,
+			BufferHandle               handle,
+			std::optional<AccessState> initial = {});
 
 		FrameGraph&
-		ImportTexture(std::string name, TextureHandle handle, AccessState initial = {});
+		ImportTexture(
+			std::string                name,
+			TextureHandle              handle,
+			std::optional<AccessState> initial = {});
 
 		FrameGraph&
 		AddPass(PassDesc desc);
@@ -69,6 +94,11 @@ namespace bgl
 
 		void
 		Execute();
+
+		// Clears the per-frame state (passes, imports, queues) so the graph can be
+		// rebuilt for the next frame, while preserving the tracked resource states.
+		void
+		Reset();
 
 		[[nodiscard]] std::vector<std::string>
 		ExecutionOrder() const;
@@ -114,6 +144,15 @@ namespace bgl
 		void
 		DeriveBarriers(IResourceManager* resourceManager);
 
+		FrameGraph&
+		ImportBufferKey(std::string key, BufferHandle handle, std::optional<AccessState> initial);
+
+		[[nodiscard]] AccessState
+		ResolveInitialState(const std::string& key, std::optional<AccessState> initial) const;
+
+		void
+		ClearFrame();
+
 		[[nodiscard]] std::string
 		ResolveName(std::string_view ns, std::string_view name) const;
 
@@ -135,5 +174,6 @@ namespace bgl
 		std::vector<size_t>                           m_Order;
 		std::string                                   m_CurrentNamespace;
 		bool                                          m_Compiled = false;
+		std::unordered_map<std::string, AccessState>  m_LastState;
 	};
 }

@@ -14,7 +14,7 @@ set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "as_6_6"
@@ -23,7 +23,7 @@ compile_shader(
 )
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "ms_6_6"
@@ -32,7 +32,16 @@ compile_shader(
 )
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_PBR.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_PBR.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Null.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "ps_6_6"
@@ -55,6 +64,30 @@ compile_shader(
     TARGET       "dxil"
     STAGE        "ps_6_6"
     ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/HistogramInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PrefixSumInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/CompactInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
     INCLUDES     ${SLANG_SOURCE_ROOT}
 )
 
@@ -79,23 +112,23 @@ if (BUILD_TESTS)
         list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")
     endforeach()
 
-    add_custom_target(CopyBGLShaderTests ALL
-        DEPENDS CompileShaders
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
+    add_custom_target(bgl_copy_shader_tests ALL
+        DEPENDS bgl_compile_shaders
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/tests"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests"
                 "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/tests"
-        COMMENT "Copying raw Slang source assets to runtime output layout"
+        COMMENT "Copying raw Slang test shader sources to runtime output layout"
         VERBATIM
     )
 endif()
 
-add_custom_target(CompileShaders ALL
+add_custom_target(bgl_compile_shaders ALL
     DEPENDS ${SLANG_COMPILE_OUTS}
 )
 
-add_custom_target(CopyBGLShaders ALL
-    DEPENDS CompileShaders
+add_custom_target(bgl_copy_shaders ALL
+    DEPENDS bgl_compile_shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${SHADER_OUT_DIR}"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders"
@@ -104,8 +137,8 @@ add_custom_target(CopyBGLShaders ALL
 )
 
 # Copies pure source files directly into application directory for runtime reflection parsing
-add_custom_target(CopyBGLShaderSources ALL
-    DEPENDS CompileShaders
+add_custom_target(bgl_copy_shader_src ALL
+    DEPENDS bgl_compile_shaders
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/src"

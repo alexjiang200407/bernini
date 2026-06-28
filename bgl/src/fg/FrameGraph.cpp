@@ -91,25 +91,66 @@ namespace bgl
 		}
 	}
 
+	AccessState
+	FrameGraph::ResolveInitialState(const std::string& key, std::optional<AccessState> initial)
+		const
+	{
+		if (initial.has_value())
+		{
+			return *initial;
+		}
+		if (const auto it = m_LastState.find(key); it != m_LastState.end())
+		{
+			return it->second;
+		}
+		return AccessState{};
+	}
+
 	FrameGraph&
-	FrameGraph::ImportBuffer(std::string name, BufferHandle handle, AccessState initial)
+	FrameGraph::ImportBuffer(
+		std::string                name,
+		BufferHandle               handle,
+		std::optional<AccessState> initial)
+	{
+		return ImportBufferKey(m_CurrentNamespace + name, handle, initial);
+	}
+
+	FrameGraph&
+	FrameGraph::ImportGlobalBuffer(
+		std::string                name,
+		BufferHandle               handle,
+		std::optional<AccessState> initial)
+	{
+		return ImportBufferKey(std::move(name), handle, initial);
+	}
+
+	FrameGraph&
+	FrameGraph::ImportBufferKey(
+		std::string                key,
+		BufferHandle               handle,
+		std::optional<AccessState> initial)
 	{
 		ImportedRes res;
 		res.handle  = handle;
-		res.initial = initial;
-		res.current = initial;
-		m_Imported.insert_or_assign(m_CurrentNamespace + name, res);
+		res.initial = ResolveInitialState(key, initial);
+		res.current = res.initial;
+		m_Imported.insert_or_assign(std::move(key), res);
 		return *this;
 	}
 
 	FrameGraph&
-	FrameGraph::ImportTexture(std::string name, TextureHandle handle, AccessState initial)
+	FrameGraph::ImportTexture(
+		std::string                name,
+		TextureHandle              handle,
+		std::optional<AccessState> initial)
 	{
+		const std::string key = m_CurrentNamespace + name;
+
 		ImportedRes res;
 		res.handle  = handle;
-		res.initial = initial;
-		res.current = initial;
-		m_Imported.insert_or_assign(m_CurrentNamespace + name, res);
+		res.initial = ResolveInitialState(key, initial);
+		res.current = res.initial;
+		m_Imported.insert_or_assign(key, res);
 		return *this;
 	}
 
@@ -453,6 +494,8 @@ namespace bgl
 			ICommandList*  cmd   = qit->second.list.Get();
 			ICommandQueue* queue = qit->second.queue.Get();
 
+			cmd->BeginEvent(pass.desc.name);
+
 			const PassBarriers& b = pass.barriers;
 			if (!b.bufferHandles.empty())
 			{
@@ -496,16 +539,40 @@ namespace bgl
 				}
 				pass.desc.exec(ctx);
 			}
+
+			cmd->EndEvent();
+		}
+
+		// Remember the state each imported resource was left in so the next frame's
+		// import resumes from it (DeriveBarriers leaves res.current at the final
+		// state). This is what lets callers omit the initial state on re-import,
+		// including when the same scene is drawn more than once.
+		for (const auto& [name, res] : m_Imported)
+		{
+			m_LastState[name] = res.current;
 		}
 
 		// Executing consumes the frame: drop the passes (releasing their exec
 		// lambdas and anything those captured, e.g. scene references), the imports,
 		// and the queue bindings, and require a recompile before the next Execute.
+		// The tracked resource states (m_LastState) are kept for the next frame.
+		ClearFrame();
+	}
+
+	void
+	FrameGraph::ClearFrame()
+	{
 		m_Passes.clear();
 		m_Order.clear();
 		m_Imported.clear();
 		m_Queues.clear();
 		m_Compiled = false;
+	}
+
+	void
+	FrameGraph::Reset()
+	{
+		ClearFrame();
 	}
 
 	const FrameGraph::PassNode*

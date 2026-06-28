@@ -36,6 +36,9 @@ namespace bgl
 		virtual BufferHandle
 		CreateStructBuffer(const StructBufferDesc& desc) noexcept = 0;
 
+		virtual BufferHandle
+		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept = 0;
+
 		virtual TextureHandle
 		CreateTexture(const TextureDesc& desc) noexcept = 0;
 

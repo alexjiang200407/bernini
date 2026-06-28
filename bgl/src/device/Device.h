@@ -1,4 +1,6 @@
 #pragma once
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/MeshletKernel.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include <core/file/file.h>
@@ -11,10 +13,12 @@ namespace bgl
 	class IShader;
 	class IMeshletPipeline;
 	class ICommandList;
+	class IComputePipeline;
 	class ICommandAllocator;
 	class ICommandQueue;
 	struct ShaderDesc;
 	struct MeshletPipelineDesc;
+	struct ComputePipelineDesc;
 	struct CommandListDesc;
 	struct ResourceManagerDesc;
 
@@ -40,8 +44,18 @@ namespace bgl
 			const noexcept;
 
 		[[nodiscard]]
+		virtual core::SharedRef<IComputePipeline>
+		CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept = 0;
+
+		[[nodiscard]]
 		virtual core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
+
+		[[nodiscard]] ComputeKernel
+		CreateComputeKernel(const ComputePipelineDesc& desc) const noexcept;
+
+		[[nodiscard]] MeshletKernel
+		CreateMeshletKernel(const MeshletPipelineDesc& desc) const noexcept;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
@@ -68,6 +82,11 @@ namespace bgl
 		[[nodiscard]]
 		virtual Uniforms
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept = 0;
+
+		[[nodiscard]]
+		virtual Uniforms
+		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept = 0;
 	};
 

@@ -11,4 +11,6 @@ namespace bgl
 		kTransparent_StaticMesh_PBR,
 		kCount,
 	};
+
+	static constexpr auto c_PsoCount = static_cast<uint16_t>(PsoType::kCount);
 }

@@ -1,17 +1,17 @@
 #pragma once
-#include "pipeline/MeshletPipeline.h"
+#include "resource/Buffer.h"
 #include "resource/FrameBuffer.h"
 #include "types/ViewportState.h"
 
 namespace bgl
 {
-	class Uniforms;
+	struct MeshletKernel;
 
 	struct MeshletState
 	{
-		MeshletPipelineHandle pipeline;
-		ViewportState         viewportState;
-		FrameBuffer           frameBuffer;
-		Uniforms*             uniforms = nullptr;
+		const MeshletKernel* kernel = nullptr;
+		ViewportState        viewportState;
+		FrameBuffer          frameBuffer;
+		BufferHandle         indirectArgs;
 	};
 }

@@ -22,8 +22,9 @@ add_library(bgl_d3d12 OBJECT
 
 find_package(directx-headers CONFIG REQUIRED)
 
-# DirectXTex is used (d3d12 only) to encode screenshots/readbacks to image files.
 find_package(directxtex CONFIG REQUIRED)
+
+find_package(winpixevent CONFIG REQUIRED)
 
 target_include_directories(bgl_d3d12
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include
@@ -36,17 +37,14 @@ target_precompile_headers(bgl_d3d12
             ${CMAKE_CURRENT_SOURCE_DIR}/pch.h
 )
 
-target_compile_definitions(bgl_d3d12 PRIVATE RENDERER_BACKEND_DX12)
+target_compile_definitions(bgl_d3d12 PRIVATE RENDERER_BACKEND_DX12 $<$<CONFIG:Debug>:USE_PIX>)
 
 target_link_libraries(bgl_d3d12
     PUBLIC core glm::glm
     PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers Microsoft::DirectXTex
+            Microsoft::WinPixEventRuntime
 )
 
-# D3D12 Agility SDK exports. Built as a standalone OBJECT library so the
-# __declspec(dllexport) symbols can be linked directly into each d3d12
-# executable (object files are linked wholesale, so the unreferenced exports are
-# not dropped). Executables link this via target_link_libraries(... bgl_d3d12_agility).
 add_library(bgl_d3d12_agility OBJECT
     ${CMAKE_CURRENT_SOURCE_DIR}/agility/D3D12Agility.cpp
 )

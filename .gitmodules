@@ -1,6 +1,0 @@
-[submodule "extern/FrameGraph"]
-	path = extern/FrameGraph
-	url = git@github.com:alexjiang200407/FrameGraph.git
-[submodule "extern/NVRHI"]
-	path = extern/NVRHI
-	url = git@github.com:alexjiang200407/NVRHI.git

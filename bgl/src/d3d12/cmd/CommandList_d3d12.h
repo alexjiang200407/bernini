@@ -1,9 +1,12 @@
 #pragma once
 #include "cmd/CommandList.h"
+#include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "resource/UploadManager.h"
+#include "types/ComputeState.h"
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 #include <core/ref/RefCounter.h>
@@ -48,6 +51,12 @@ namespace bgl
 		Close() noexcept override;
 
 		void
+		BeginEvent(std::string_view name) noexcept override;
+
+		void
+		EndEvent() noexcept override;
+
+		void
 		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept override;
 
 		void
@@ -78,6 +87,18 @@ namespace bgl
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept override;
 
+		void
+		DispatchMeshIndirect(uint32_t argIdx) noexcept override;
+
+		void
+		SetComputeState(const ComputeState& computeState) noexcept override;
+
+		void
+		Dispatch(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) noexcept override;
+
 		ID3D12CommandList*
 		GetD3D12CommandList() const noexcept
 		{
@@ -100,8 +121,13 @@ namespace bgl
 		SubmitChunks(ICommandQueue* cmdQueue) noexcept;
 
 	private:
+		// Uploads the uniform bytes to a transient CBV and binds it.
 		void
-		BindUniforms(const Uniforms& uniforms) noexcept;
+		BindUniforms(const Uniforms& uniforms, bool compute) noexcept;
+
+		// Applies the bound MeshletState (viewport/scissor/targets/PSO/root sig/uniforms)
+		void
+		ApplyMeshletState() noexcept;
 
 		CommandListDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;
@@ -111,7 +137,9 @@ namespace bgl
 		UploadManager               m_UploadManager;
 
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
+		wrl::ComPtr<ID3D12CommandSignature>     m_MeshDispatchSig;
 		std::optional<MeshletState>             m_CurrentMeshletState;
+		std::optional<ComputeState>             m_CurrentComputeState;
 		uint64_t                                m_LastCompletedFence = 0;
 		uint64_t                                m_RecordingVersion   = 0;
 		bool                                    m_Open               = false;

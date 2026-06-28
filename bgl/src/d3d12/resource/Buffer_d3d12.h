@@ -4,16 +4,23 @@
 
 namespace bgl
 {
+	struct BufferDesc
+	{
+		uint64_t    byteSize  = 0;
+		bool        isUav     = false;
+		std::string debugName = "Unnamed Buffer";
+	};
+
 	class Buffer final
 	{
 	public:
 		Buffer() = default;
 
 		Buffer(
-			ID3D12Device*           device,
-			ID3D12DescriptorHeap*   descriptorHeap,
-			uint32_t                descriptorIndex,
-			const StructBufferDesc& desc);
+			ID3D12Device*         device,
+			ID3D12DescriptorHeap* descriptorHeap,
+			uint32_t              descriptorIndex,
+			const BufferDesc&     desc);
 
 		~Buffer() noexcept = default;
 
@@ -34,7 +41,7 @@ namespace bgl
 		}
 
 		[[nodiscard]]
-		const StructBufferDesc&
+		const BufferDesc&
 		GetDesc() const noexcept
 		{
 			return m_Desc;
@@ -55,7 +62,7 @@ namespace bgl
 		}
 
 	private:
-		StructBufferDesc            m_Desc;
+		BufferDesc                  m_Desc;
 		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
 		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
 		wrl::ComPtr<ID3D12Resource> m_Buffer;

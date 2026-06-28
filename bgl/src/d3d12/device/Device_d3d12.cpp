@@ -6,6 +6,8 @@
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
+#include "pipeline/ComputePipeline.h"
+#include "pipeline/ComputePipeline_d3d12.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager.h"
@@ -75,6 +77,12 @@ namespace bgl
 		return core::SharedRef<MeshletPipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
 	}
 
+	ComputePipelineHandle
+	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
+	{
+		return core::SharedRef<ComputePipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
+	}
+
 	CommandAllocatorHandle
 	Device::CreateCommandAllocator() const noexcept
 	{
@@ -96,6 +104,14 @@ namespace bgl
 
 	Uniforms
 	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
+	{
+		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+		return Uniforms(pipeline, cbufferName);
+	}
+
+	Uniforms
+	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");

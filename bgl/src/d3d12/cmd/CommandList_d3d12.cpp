@@ -4,11 +4,18 @@
 #include "cmd/CommandQueue.h"
 #include "cmd/Version.h"
 #include "constants/constants.h"
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "uniforms/Uniforms.h"
 #include "util_d3d12.h"
 #include <core/math.h>
+
+#if defined(USE_PIX) && defined(_WIN32)
+#	include <pix3.h>
+#endif
 
 namespace bgl
 {
@@ -48,6 +55,17 @@ namespace bgl
 			d3d12ErrChecker;
 
 		commandList->QueryInterface(IID_PPV_ARGS(&m_CommandList)) >> d3d12ErrChecker;
+
+		D3D12_INDIRECT_ARGUMENT_DESC argDesc = {};
+		argDesc.Type                         = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+
+		D3D12_COMMAND_SIGNATURE_DESC sigDesc = {};
+		sigDesc.ByteStride                   = sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
+		sigDesc.NumArgumentDescs             = 1;
+		sigDesc.pArgumentDescs               = &argDesc;
+
+		device->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(&m_MeshDispatchSig)) >>
+			d3d12ErrChecker;
 	}
 
 	void
@@ -93,7 +111,7 @@ namespace bgl
 		const auto& readback  = m_ResourceManager->GetReadbackBuffer(dst);
 		const auto& desc      = srcBuffer.GetDesc();
 
-		const uint64_t byteSize = static_cast<uint64_t>(desc.elementCount) * desc.stride;
+		const uint64_t byteSize = desc.byteSize;
 
 		gassert(
 			readback.GetByteSize() >= byteSize,
@@ -164,6 +182,27 @@ namespace bgl
 		m_Open = false;
 	}
 
+	void
+	CommandList::BeginEvent([[maybe_unused]] std::string_view name) noexcept
+	{
+#if defined(USE_PIX) && defined(_WIN32)
+		PIXBeginEvent(
+			m_CommandList.Get(),
+			PIX_COLOR_DEFAULT,
+			"%.*s",
+			static_cast<int>(name.size()),
+			name.data());
+#endif
+	}
+
+	void
+	CommandList::EndEvent() noexcept
+	{
+#if defined(USE_PIX) && defined(_WIN32)
+		PIXEndEvent(m_CommandList.Get());
+#endif
+	}
+
 	namespace
 	{
 		D3D12_BUFFER_BARRIER
@@ -181,7 +220,7 @@ namespace bgl
 
 			bufferBarrier.pResource = buffer.GetD3D12Resource();
 			bufferBarrier.Offset    = 0;
-			bufferBarrier.Size = static_cast<uint64_t>(bufferDesc.elementCount) * bufferDesc.stride;
+			bufferBarrier.Size      = bufferDesc.byteSize;
 
 			return bufferBarrier;
 		}
@@ -322,15 +361,13 @@ namespace bgl
 	}
 
 	void
-	CommandList::DispatchMesh(
-		uint32_t threadGroupCountX,
-		uint32_t threadGroupCountY,
-		uint32_t threadGroupCountZ) noexcept
+	CommandList::ApplyMeshletState() noexcept
 	{
 		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
 		gassert(
-			m_CurrentMeshletState->pipeline.IsInitialized(),
-			"Pipeline state must be set in graphics state");
+			m_CurrentMeshletState->kernel != nullptr &&
+				m_CurrentMeshletState->kernel->pipeline.IsInitialized(),
+			"Meshlet kernel must be set in graphics state");
 
 		// Viewport
 		{
@@ -407,16 +444,25 @@ namespace bgl
 
 		// Pipeline state
 		{
-			auto* pipeline = m_CurrentMeshletState->pipeline->As<MeshletPipeline>();
+			auto* pipeline = m_CurrentMeshletState->kernel->pipeline->As<MeshletPipeline>();
 
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
 
-			if (const Uniforms* uniforms = m_CurrentMeshletState->uniforms)
+			for (const auto& [name, uniforms] : m_CurrentMeshletState->kernel->uniforms)
 			{
-				BindUniforms(*uniforms);
+				BindUniforms(uniforms, /*compute*/ false);
 			}
 		}
+	}
+
+	void
+	CommandList::DispatchMesh(
+		uint32_t threadGroupCountX,
+		uint32_t threadGroupCountY,
+		uint32_t threadGroupCountZ) noexcept
+	{
+		ApplyMeshletState();
 
 		wrl::ComPtr<ID3D12GraphicsCommandList6> cmdList6;
 		if (SUCCEEDED(m_CommandList->QueryInterface(IID_PPV_ARGS(&cmdList6))))
@@ -433,7 +479,58 @@ namespace bgl
 	}
 
 	void
-	CommandList::BindUniforms(const Uniforms& uniforms) noexcept
+	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
+	{
+		ApplyMeshletState();
+
+		gassert(
+			!m_CurrentMeshletState->indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
+
+		const auto& argsBuffer = m_ResourceManager->GetBuffer(m_CurrentMeshletState->indirectArgs);
+
+		m_CommandList->ExecuteIndirect(
+			m_MeshDispatchSig.Get(),
+			1,
+			argsBuffer.GetD3D12Resource(),
+			static_cast<UINT64>(argIdx) * sizeof(D3D12_DISPATCH_MESH_ARGUMENTS),
+			nullptr,
+			0);
+	}
+
+	void
+	CommandList::SetComputeState(const ComputeState& computeState) noexcept
+	{
+		m_CurrentComputeState = computeState;
+	}
+
+	void
+	CommandList::Dispatch(
+		uint32_t threadGroupCountX,
+		uint32_t threadGroupCountY,
+		uint32_t threadGroupCountZ) noexcept
+	{
+		gassert(m_CurrentComputeState.has_value(), "Compute state must be set before dispatch");
+		gassert(
+			m_CurrentComputeState->kernel != nullptr &&
+				m_CurrentComputeState->kernel->pipeline.IsInitialized(),
+			"Compute kernel must be set in compute state");
+
+		auto* pipeline = m_CurrentComputeState->kernel->pipeline->As<ComputePipeline>();
+
+		m_CommandList->SetPipelineState(pipeline->GetPipelineState());
+		m_CommandList->SetComputeRootSignature(pipeline->GetRootSignature());
+
+		for (const auto& [name, uniforms] : m_CurrentComputeState->kernel->uniforms)
+		{
+			BindUniforms(uniforms, /*compute*/ true);
+		}
+
+		m_CommandList->Dispatch(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+	}
+
+	void
+	CommandList::BindUniforms(const Uniforms& uniforms, bool compute) noexcept
 	{
 		if (uniforms.GetSize() == 0)
 			return;
@@ -457,7 +554,14 @@ namespace bgl
 
 		memcpy(cpuVA, uniforms.Data(), uniforms.GetSize());
 
-		m_CommandList->SetGraphicsRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
+		if (compute)
+		{
+			m_CommandList->SetComputeRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
+		}
+		else
+		{
+			m_CommandList->SetGraphicsRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
+		}
 	}
 
 	void

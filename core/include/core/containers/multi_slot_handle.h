@@ -2,7 +2,7 @@
 
 namespace core
 {
-    struct multi_slot_handle
+	struct multi_slot_handle
 	{
 		static constexpr uint32_t invalid_index = 0xFFFFFFFFu;
 		uint32_t                  index         = invalid_index;
