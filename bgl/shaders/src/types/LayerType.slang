@@ -6,4 +6,5 @@ public enum LayerType : uint8_t
     kAlphaTest,
     kTransparent,
     kCount,
-};
+}
+;

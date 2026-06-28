@@ -415,14 +415,16 @@ namespace bgl
 
 			auto staticMeshInstanceHandle = m_StaticMeshInstanceBuffer.Add(staticMeshInstance);
 
+			const PsoType psoType = GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
+
 			auto instance             = BaseInstance();
 			instance.meshInstance     = staticMeshInstanceHandle;
 			instance.materialInstance = material.handle;
+			instance.psoType          = psoType;
 
-			auto instanceHandle   = MeshInstanceHandle();
-			instanceHandle.handle = m_InstanceBuffer.Add(std::move(instance));
-			instanceHandle.psoType =
-				GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
+			auto instanceHandle    = MeshInstanceHandle();
+			instanceHandle.psoType = psoType;
+			instanceHandle.handle  = m_InstanceBuffer.Add(std::move(instance));
 
 			++m_StaticGeom.MetaAt(geom.handle.index).refCount;
 

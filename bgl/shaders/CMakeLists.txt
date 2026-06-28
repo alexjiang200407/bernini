@@ -14,7 +14,7 @@ set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "as_6_6"
@@ -23,7 +23,7 @@ compile_shader(
 )
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_StaticMesh.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "ms_6_6"
@@ -32,7 +32,16 @@ compile_shader(
 )
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/GBuffer_PBR.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_PBR.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Null.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "ps_6_6"

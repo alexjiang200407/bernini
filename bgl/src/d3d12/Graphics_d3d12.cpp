@@ -10,7 +10,7 @@
 #include "passes/ClearPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
-#include "passes/GBufferPass.h"
+#include "passes/ForwardPass.h"
 #include "passes/PreparePresentPass.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
@@ -130,7 +130,7 @@ namespace bgl
 
 		ResourceManagerHandle m_ResourceManager;
 		PreparePresentPass    m_PreparePresentPass;
-		GBufferPass           m_GBuffer;
+		ForwardPass           m_Forward;
 		CompactInstancesPass  m_CompactInstances;
 	};
 }
@@ -227,7 +227,7 @@ namespace bgl
 		}
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
-		m_GBuffer.Init(m_Device);
+		m_Forward.Init(m_Device);
 	}
 
 	Graphics::~Graphics() noexcept
@@ -248,7 +248,7 @@ namespace bgl
 		if (m_SwapChain)
 			m_SwapChain->SetFullscreenState(FALSE, nullptr) >> d3d12ErrChecker;
 
-		m_GBuffer.Release();
+		m_Forward.Release();
 		m_CompactInstances.Release(shutdownFenceValue, false);
 
 		for (UINT i = 0; i < c_BufferCount; i++)
@@ -372,7 +372,7 @@ namespace bgl
 		draw.backBufferName    = std::string(c_BackbufferName);
 
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
-		m_GBuffer.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 
 	void

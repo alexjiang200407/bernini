@@ -18,7 +18,7 @@ namespace core::str
 				char16_t high = current;
 				char16_t low  = utf16[i + 1];
 				codepoint     = static_cast<char32_t>((high - 0xD800) << 10) +
-				            static_cast<char32_t>(low - 0xDC00) + 0x10000;
+				                static_cast<char32_t>(low - 0xDC00) + 0x10000;
 				i += 2;
 			}
 			else

@@ -55,6 +55,17 @@ namespace bgl
 			d3d12ErrChecker;
 
 		commandList->QueryInterface(IID_PPV_ARGS(&m_CommandList)) >> d3d12ErrChecker;
+
+		D3D12_INDIRECT_ARGUMENT_DESC argDesc = {};
+		argDesc.Type                         = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+
+		D3D12_COMMAND_SIGNATURE_DESC sigDesc = {};
+		sigDesc.ByteStride                   = sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
+		sigDesc.NumArgumentDescs             = 1;
+		sigDesc.pArgumentDescs               = &argDesc;
+
+		device->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(&m_MeshDispatchSig)) >>
+			d3d12ErrChecker;
 	}
 
 	void
@@ -350,10 +361,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::DispatchMesh(
-		uint32_t threadGroupCountX,
-		uint32_t threadGroupCountY,
-		uint32_t threadGroupCountZ) noexcept
+	CommandList::ApplyMeshletState() noexcept
 	{
 		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
 		gassert(
@@ -446,6 +454,15 @@ namespace bgl
 				BindUniforms(uniforms, /*compute*/ false);
 			}
 		}
+	}
+
+	void
+	CommandList::DispatchMesh(
+		uint32_t threadGroupCountX,
+		uint32_t threadGroupCountY,
+		uint32_t threadGroupCountZ) noexcept
+	{
+		ApplyMeshletState();
 
 		wrl::ComPtr<ID3D12GraphicsCommandList6> cmdList6;
 		if (SUCCEEDED(m_CommandList->QueryInterface(IID_PPV_ARGS(&cmdList6))))
@@ -459,6 +476,26 @@ namespace bgl
 				"Device/Driver does not support Mesh Shading (DirectX 12 Agility SDK / Feature "
 				"Level 12_2 required)");
 		}
+	}
+
+	void
+	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
+	{
+		ApplyMeshletState();
+
+		gassert(
+			!m_CurrentMeshletState->indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
+
+		const auto& argsBuffer = m_ResourceManager->GetBuffer(m_CurrentMeshletState->indirectArgs);
+
+		m_CommandList->ExecuteIndirect(
+			m_MeshDispatchSig.Get(),
+			1,
+			argsBuffer.GetD3D12Resource(),
+			static_cast<UINT64>(argIdx) * sizeof(D3D12_DISPATCH_MESH_ARGUMENTS),
+			nullptr,
+			0);
 	}
 
 	void

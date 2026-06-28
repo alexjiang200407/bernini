@@ -103,6 +103,9 @@ namespace
 		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
 		{}
 		void
+		DispatchMeshIndirect(uint32_t) noexcept override
+		{}
+		void
 		Dispatch(uint32_t, uint32_t, uint32_t) noexcept override
 		{}
 		bool
@@ -337,7 +340,8 @@ TEST_CASE("FrameGraph: culls a pass whose outputs are never used", "[fg]")
 
 	fg.AddPass(
 		PassDesc{}.SetName("Main").AddBufferArg(UavBuf("backbuffer")));  // writes imported -> root
-	fg.AddPass(PassDesc{}.SetName("Unused").AddBufferArg(UavBuf("scratch")));  // transient, never read
+	fg.AddPass(
+		PassDesc{}.SetName("Unused").AddBufferArg(UavBuf("scratch")));  // transient, never read
 
 	fg.Compile(&NullRm());
 
@@ -436,9 +440,10 @@ TEST_CASE("FrameGraph: GetBuffer on an undeclared buffer throws", "[fg]")
 {
 	FrameGraph fg;
 	fg.ImportBuffer("buf", MakeBuffer(3));
-	fg.AddPass(PassDesc{}.SetName("P").AddBufferArg(UavBuf("buf")).SetExec([](const PassContext& ctx) {
-		(void)ctx.GetBuffer("missing");
-	}));
+	fg.AddPass(
+		PassDesc{}.SetName("P").AddBufferArg(UavBuf("buf")).SetExec([](const PassContext& ctx) {
+			(void)ctx.GetBuffer("missing");
+		}));
 
 	fg.Compile(&NullRm());
 

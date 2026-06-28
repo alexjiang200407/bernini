@@ -8,4 +8,5 @@ public enum PsoType : uint16_t
     kAlphaTest_StaticMesh_PBR,
     kTransparent_StaticMesh_PBR,
     kCount,
-};
+}
+;

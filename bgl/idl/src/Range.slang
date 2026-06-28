@@ -1,24 +1,51 @@
-public interface IRange
+public
+interface IRange
 {
-    public uint GetStart();
-    public bool Null();
+public
+	uint GetStart();
+public
+	bool Null();
 };
 
-public struct Range<T> : IRange
+public
+struct Range<T> : IRange
 {
-    public uint offsetStart = 0xFFFFFFFF;
+public
+	uint offsetStart = 0xFFFFFFFF;
 
-    public uint GetStart() { return offsetStart; }
+public
+	uint
+	GetStart()
+	{
+		return offsetStart;
+	}
 
-    public bool Null() { return offsetStart == 0xFFFFFFFF; }
+public
+	bool
+	Null()
+	{
+		return offsetStart == 0xFFFFFFFF;
+	}
 };
 
-public struct RangeWithCount<T> : IRange
+public
+struct RangeWithCount<T> : IRange
 {
-    Range<T> range;
-    public uint count;
+	Range<T> range;
+public
+	uint count;
 
-    public uint GetStart() { return range.GetStart(); }
+public
+	uint
+	GetStart()
+	{
+		return range.GetStart();
+	}
 
-    public bool Null() { return range.Null(); }
+public
+	bool
+	Null()
+	{
+		return range.Null();
+	}
 };

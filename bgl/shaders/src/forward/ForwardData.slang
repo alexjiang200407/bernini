@@ -8,10 +8,11 @@ import idl.IGeom;
 import idl.IMeshInstance;
 import types.RangeBuffer;
 
-public struct GBufferData<T>
+public struct ForwardData<T>
     where T : IMeshInstance
 {
     public float4x4 viewProj;
+    public uint psoIndex;
     public PackedBuffer<BaseInstance<T>> instanceBuffer;
     public EntryBuffer<T> meshBuffer;
     public EntryBuffer<T::GeomType> geomBuffer;
@@ -20,4 +21,5 @@ public struct GBufferData<T>
     public RangeBuffer<Vertex> vertexBuffer;
     public RangeBuffer<uint> indexBuffer;
     public ComputeBufferReadOnly<uint> compactedInstances;
+    public ComputeBufferReadOnly<uint> psoPrefixSum;
 };

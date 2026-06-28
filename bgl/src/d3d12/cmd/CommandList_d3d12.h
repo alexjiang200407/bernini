@@ -88,6 +88,9 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 		void
+		DispatchMeshIndirect(uint32_t argIdx) noexcept override;
+
+		void
 		SetComputeState(const ComputeState& computeState) noexcept override;
 
 		void
@@ -118,10 +121,13 @@ namespace bgl
 		SubmitChunks(ICommandQueue* cmdQueue) noexcept;
 
 	private:
-		// Uploads the uniform bytes to a transient CBV and binds it. `compute` selects
-		// the compute vs graphics root signature for the bind.
+		// Uploads the uniform bytes to a transient CBV and binds it.
 		void
 		BindUniforms(const Uniforms& uniforms, bool compute) noexcept;
+
+		// Applies the bound MeshletState (viewport/scissor/targets/PSO/root sig/uniforms)
+		void
+		ApplyMeshletState() noexcept;
 
 		CommandListDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;
@@ -131,6 +137,7 @@ namespace bgl
 		UploadManager               m_UploadManager;
 
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
+		wrl::ComPtr<ID3D12CommandSignature>     m_MeshDispatchSig;
 		std::optional<MeshletState>             m_CurrentMeshletState;
 		std::optional<ComputeState>             m_CurrentComputeState;
 		uint64_t                                m_LastCompletedFence = 0;

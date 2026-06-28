@@ -40,6 +40,7 @@ namespace bgl
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
 
+	private:
 		void
 		ExecuteClear(const PassContext& ctx);
 

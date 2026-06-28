@@ -1,7 +1,7 @@
 import idl.IMeshInstance;
 import idl.IMaterial;
 import types.BaseInstance;
-import gbuffer.GBufferData;
+import forward.ForwardData;
 
 public struct InstancedPayload<T>
     where T : IMeshInstance
@@ -9,7 +9,7 @@ public struct InstancedPayload<T>
     public BaseInstance<T> instance;
 }
 
-public struct GBufferVSOut
+public struct ForwardVSOut
 {
     public float4 position : SV_Position;
     public float3 normal : NORMAL;
@@ -17,13 +17,16 @@ public struct GBufferVSOut
 };
 
 public void ASBase<T>(
-    ConstantBuffer<GBufferData<T>> sceneData,
+    ConstantBuffer<ForwardData<T>> sceneData,
     uint gid: SV_GroupID,       // Instance number
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
     where T : IMeshInstance
 {
-    uint drawInstanceIdx = sceneData.compactedInstances[gid];
+    // compactedInstances is bucketed by PSO; this indirect dispatch only covers our bucket,
+    // so offset SV_GroupID by the bucket's start (exclusive prefix sum of prior PSO counts).
+    uint base = (sceneData.psoIndex == 0u) ? 0u : sceneData.psoPrefixSum[sceneData.psoIndex - 1u];
+    uint drawInstanceIdx = sceneData.compactedInstances[base + gid];
     let instance = sceneData.instanceBuffer.Get(drawInstanceIdx);
     let meshInstance = sceneData.meshBuffer.Get(instance.meshInstance);
     let mesh = sceneData.geomBuffer.Get(meshInstance.GetBaseMeshID());

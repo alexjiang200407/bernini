@@ -151,7 +151,6 @@ namespace
 		}
 	}
 
-
 	struct FieldInfo
 	{
 		std::string type;  // includes any trailing array suffix, e.g. "float[4]"

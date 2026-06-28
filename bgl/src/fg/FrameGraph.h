@@ -49,21 +49,25 @@ namespace bgl
 		FrameGraph&
 		operator=(FrameGraph&&) noexcept = default;
 
-		// Imports an external resource under `name`. The optional `initial` is its
-		// access state on entry to the graph; when omitted the FrameGraph reuses the
-		// state the resource was left in by the previous frame/draw (defaulting to an
-		// undefined state the first time it is seen). See m_LastState.
+		/**
+		 * Imports an external resource under `name`. The optional `initial` is its
+		 * access state on entry to the graph; when omitted the FrameGraph reuses the
+		 * state the resource was left in by the previous frame/draw (defaulting to an
+		 * undefined state the first time it is seen). See m_LastState.
+		 */
 		FrameGraph&
 		ImportBuffer(
 			std::string                name,
 			BufferHandle               handle,
 			std::optional<AccessState> initial = {});
 
-		// Like ImportBuffer but ignores the current resource namespace, registering the
-		// resource under `name` verbatim. Use for pass-owned resources that are shared
-		// across namespaces (e.g. scene-independent scratch buffers) so every scope sees
-		// one tracked resource rather than a per-namespace copy. Passes in a namespace
-		// still reach it via ResolveName's fall back to the bare name.
+		/**
+		 * Like ImportBuffer but ignores the current resource namespace, registering the
+		 * resource under `name` verbatim. Use for pass-owned resources that are shared
+		 * across namespaces (e.g. scene-independent scratch buffers) so every scope sees
+		 * one tracked resource rather than a per-namespace copy. Passes in a namespace
+		 * still reach it via ResolveName's fall back to the bare name.
+		 */
 		FrameGraph&
 		ImportGlobalBuffer(
 			std::string                name,
@@ -140,18 +144,12 @@ namespace bgl
 		void
 		DeriveBarriers(IResourceManager* resourceManager);
 
-		// Registers an imported buffer under the already-resolved `key`. Shared by
-		// ImportBuffer (namespaced key) and ImportGlobalBuffer (bare key).
 		FrameGraph&
 		ImportBufferKey(std::string key, BufferHandle handle, std::optional<AccessState> initial);
 
-		// Resolves the entry access state for an import: the explicit `initial` if
-		// given, otherwise the state tracked from the previous frame/draw, otherwise
-		// an undefined state.
 		[[nodiscard]] AccessState
 		ResolveInitialState(const std::string& key, std::optional<AccessState> initial) const;
 
-		// Clears the per-frame state (keeps m_LastState). Shared by Reset()/Execute().
 		void
 		ClearFrame();
 
@@ -176,10 +174,6 @@ namespace bgl
 		std::vector<size_t>                           m_Order;
 		std::string                                   m_CurrentNamespace;
 		bool                                          m_Compiled = false;
-
-		// Last access state each imported resource was left in, keyed by its resolved
-		// (namespaced) name. Persists across frames so an import without an explicit
-		// initial state resumes from where the resource was last left.
-		std::unordered_map<std::string, AccessState> m_LastState;
+		std::unordered_map<std::string, AccessState>  m_LastState;
 	};
 }

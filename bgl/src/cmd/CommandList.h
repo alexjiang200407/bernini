@@ -66,23 +66,41 @@ namespace bgl
 		virtual void
 		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept = 0;
 
+		/**
+		 * Barriers are handled by the FrameGraph. Shouldn't barrier directly
+		 */
 		virtual void
 		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept = 0;
 
+		/**
+		 * Barriers are handled by the FrameGraph. Shouldn't barrier directly
+		 */
 		virtual void
 		Barrier(TextureHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
+		/**
+		 * Barriers are handled by the FrameGraph. Shouldn't barrier directly
+		 */
 		virtual void
 		Barrier(RtvHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
+		/**
+		 * Barriers are handled by the FrameGraph. Shouldn't barrier directly
+		 */
 		virtual void
 		Barrier(DsvHandle handle, const TextureBarrierDesc& barrier) noexcept = 0;
 
+		/**
+		 * Barriers are handled by the FrameGraph. Shouldn't barrier directly
+		 */
 		virtual void
 		Barrier(
 			std::span<const BufferHandle>      handles,
 			std::span<const BufferBarrierDesc> barriers) noexcept = 0;
 
+		/**
+		 * Barriers are handled by the FrameGraph. Shouldn't barrier directly
+		 */
 		virtual void
 		Barrier(
 			std::span<const TextureHandle>      handles,
@@ -94,7 +112,9 @@ namespace bgl
 		virtual void
 		Close() noexcept = 0;
 
-		// Debug-only GPU work markers
+		/**
+		 * Debug-only GPU work markers
+		 */
 		virtual void
 		BeginEvent(std::string_view name) noexcept = 0;
 
@@ -109,6 +129,9 @@ namespace bgl
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept = 0;
+
+		virtual void
+		DispatchMeshIndirect(uint32_t argIdx) noexcept = 0;
 
 		virtual void
 		SetComputeState(const ComputeState& computeState) noexcept = 0;

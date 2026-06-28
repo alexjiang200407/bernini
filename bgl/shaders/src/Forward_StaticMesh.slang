@@ -1,22 +1,22 @@
 import idl.IMeshInstance;
 import idl.IMaterial;
 import types.BaseInstance;
-import gbuffer.GBufferData;
+import forward.ForwardData;
 import util.constants;
 import idl.StaticMesh;
 import idl.Meshlet;
 import idl.Vertex;
-import gbuffer.common;
+import forward.common;
 import types.PsoType;
 
-ConstantBuffer<GBufferData<StaticMeshInstance>> sceneData;
+ConstantBuffer<ForwardData<StaticMeshInstance>> sceneData;
 
 void EvaluateVertices(
     StaticMeshInstance instance,
     StaticGeom mesh,
     Meshlet meshlet,
     uint gtid,
-    inout OutputVertices<GBufferVSOut, cMaxVerticesPerMeshlet> verts
+    inout OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts
 )
 {
     if (gtid < meshlet.vertexCount)
@@ -26,7 +26,7 @@ void EvaluateVertices(
 
         float4 worldPos = mul(instance.transform, float4(v.pos, 1.0));
 
-        GBufferVSOut vertexOut;
+        ForwardVSOut vertexOut;
         vertexOut.position = mul(sceneData.viewProj, worldPos);
         vertexOut.normal = mul((float3x3)instance.transform, v.normal);
         vertexOut.uv = v.uv;
@@ -60,7 +60,7 @@ void MSMain(
     uint gid: SV_GroupID,
     uint gtid: SV_GroupThreadID,
     payload InstancedPayload<StaticMeshInstance> payload,
-    OutputVertices<GBufferVSOut, cMaxVerticesPerMeshlet> verts,
+    OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts,
     OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
 )
 {
