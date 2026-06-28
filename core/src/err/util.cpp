@@ -1,5 +1,5 @@
 #include <core/err/util.h>
-#include <core/win/util.h>
+#include <core/platform/util.h>
 #include <cpptrace/cpptrace.hpp>
 
 namespace core

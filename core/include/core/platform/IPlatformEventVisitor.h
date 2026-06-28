@@ -1,15 +1,15 @@
 #pragma once
 
-namespace core::win
+namespace core
 {
 	class KeyEvent;
 	class MouseEvent;
 	class CharEvent;
 
-	class IWindowEventVisitor
+	class IPlatformEventVisitor
 	{
 	public:
-		virtual ~IWindowEventVisitor() noexcept = default;
+		virtual ~IPlatformEventVisitor() noexcept = default;
 
 		virtual void
 		Visit(const KeyEvent& evt, float dt)

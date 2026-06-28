@@ -1,10 +1,10 @@
 #pragma once
 #include <core/containers/enum_set.h>
-#include <core/win/IWindowEvent.h>
+#include <core/platform/IPlatformEvent.h>
 
 class GLFWwindow;
 
-namespace core::win
+namespace core
 {
 	enum class MouseStateFlagsEnum : uint8_t
 	{
@@ -31,10 +31,10 @@ namespace core::win
 		int wheelDelta = 0;
 	};
 
-	class MouseEvent : public IWindowEvent
+	class MouseEvent : public IPlatformEvent
 	{
 	private:
-		friend class IWindow;
+		friend class IPlatform;
 
 	public:
 		enum class Action
@@ -66,7 +66,7 @@ namespace core::win
 		AsMouseEvent() noexcept override;
 
 		void
-		Accept(IWindowEventVisitor& visitor, float dt) const override;
+		Accept(IPlatformEventVisitor& visitor, float dt) const override;
 
 		Actions
 		GetActions() const noexcept

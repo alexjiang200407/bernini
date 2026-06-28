@@ -1,23 +1,23 @@
 #include "win32/util.h"
 #include "win32/winapi.h"
+#include <core/platform/Platform.h>
 #include <core/str/str.h>
-#include <core/win/Window.h>
 
-namespace core::win
+namespace core
 {
-	using MouseActions = core::win::MouseEvent::Actions;
-	using MouseAction  = core::win::MouseEvent::Action;
+	using MouseActions = core::MouseEvent::Actions;
+	using MouseAction  = core::MouseEvent::Action;
 
-	class WindowWin32 : public IWindow
+	class PlatformWin32 : public IPlatform
 	{
 	public:
-		WindowWin32(const WindowOptions& options) : IWindow{ options }
+		PlatformWin32(const PlatformOptions& options) : IPlatform{ options }
 		{
 			RegisterWin32(options);
 			RegisterRawInput();
 		}
 
-		~WindowWin32()
+		~PlatformWin32()
 		{
 			if (m_hWnd)
 			{
@@ -33,7 +33,7 @@ namespace core::win
 		}
 
 		void
-		RegisterWin32(const WindowOptions& options)
+		RegisterWin32(const PlatformOptions& options)
 		{
 			static constexpr const char* CLASS_NAME = "Win32WindowClass";
 
@@ -56,17 +56,17 @@ namespace core::win
 
 			switch (options.mode)
 			{
-			case WindowOptions::Mode::Windowed:
+			case PlatformOptions::Mode::Windowed:
 				style   = WS_OVERLAPPEDWINDOW;
 				exStyle = 0;
 				break;
 
-			case WindowOptions::Mode::BorderlessWindowed:
+			case PlatformOptions::Mode::BorderlessWindowed:
 				style   = WS_POPUP | WS_VISIBLE;
 				exStyle = WS_EX_APPWINDOW;
 				break;
 
-			case WindowOptions::Mode::Fullscreen:
+			case PlatformOptions::Mode::Fullscreen:
 			{
 				DEVMODE dm = {};
 				ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
@@ -105,7 +105,7 @@ namespace core::win
 			UpdateWindow(m_hWnd) >> win32::errorChecker;
 
 			// Has to be after window CreateWindowEx
-			if (options.mode != WindowOptions::Mode::BorderlessWindowed)
+			if (options.mode != PlatformOptions::Mode::BorderlessWindowed)
 			{
 				ClipCursor(&rect) >> win32::errorChecker;
 			}
@@ -135,7 +135,7 @@ namespace core::win
 		HandleMessageStatic(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) noexcept
 		{
 			return win32::win32Invoke([=]() -> LRESULT {
-				auto* const pWnd = reinterpret_cast<WindowWin32*>(
+				auto* const pWnd = reinterpret_cast<PlatformWin32*>(
 					GetWindowLongPtr(hWnd, GWLP_USERDATA) >> win32::errorChecker);
 				return pWnd->HandleMessage(hWnd, uMsg, wParam, lParam);
 			});
@@ -148,7 +148,7 @@ namespace core::win
 				if (uMsg == WM_NCCREATE)
 				{
 					const CREATESTRUCTW* const pCreate = reinterpret_cast<CREATESTRUCTW*>(lParam);
-					auto* const pWnd = static_cast<WindowWin32*>(pCreate->lpCreateParams);
+					auto* const pWnd = static_cast<PlatformWin32*>(pCreate->lpCreateParams);
 
 					if (!pWnd->m_hWnd)
 					{
@@ -160,7 +160,7 @@ namespace core::win
 					SetWindowLongPtr(
 						hWnd,
 						GWLP_WNDPROC,
-						reinterpret_cast<LONG_PTR>(&WindowWin32::HandleMessageStatic)) >>
+						reinterpret_cast<LONG_PTR>(&PlatformWin32::HandleMessageStatic)) >>
 						win32::errorChecker;
 					return pWnd->HandleMessage(hWnd, uMsg, wParam, lParam);
 				}
@@ -178,7 +178,7 @@ namespace core::win
 				return 0;
 
 			case WM_SETFOCUS:
-				if (m_windowMode == WindowOptions::Mode::BorderlessWindowed)
+				if (m_platformMode == PlatformOptions::Mode::BorderlessWindowed)
 				{
 					RECT rect = { 0, 0, static_cast<LONG>(m_width), static_cast<LONG>(m_height) };
 					ClipCursor(&rect) >> win32::errorChecker;
@@ -365,10 +365,10 @@ namespace core::win
 		HWND m_hWnd = nullptr;
 	};
 
-	std::unique_ptr<IWindow>
-	IWindow::Create(const WindowOptions& options)
+	std::unique_ptr<IPlatform>
+	IPlatform::Create(const PlatformOptions& options)
 	{
-		return std::make_unique<WindowWin32>(options);
+		return std::make_unique<PlatformWin32>(options);
 	}
 
 }

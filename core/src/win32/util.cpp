@@ -2,7 +2,7 @@
 #include "util.h"
 #include <core/str/str.h>
 
-namespace core::win::win32
+namespace core::win32
 {
 	std::wstring
 	getErrorDescription(DWORD dw)

@@ -1,13 +1,13 @@
 #include <cassert>
-#include <core/win/Window.h>
+#include <core/platform/Platform.h>
 
-#include <core/win/KeyEvent.h>
-#include <core/win/MouseEvent.h>
+#include <core/platform/KeyEvent.h>
+#include <core/platform/MouseEvent.h>
 
-namespace core::win
+namespace core
 {
 	void
-	IWindow::Accept(IWindowEventVisitor& visitor, float dt)
+	IPlatform::Accept(IPlatformEventVisitor& visitor, float dt)
 	{
 		using clock = std::chrono::steady_clock;
 		auto now    = clock::now();
@@ -19,21 +19,21 @@ namespace core::win
 	}
 
 	void
-	IWindow::Flush() noexcept
+	IPlatform::Flush() noexcept
 	{
 		m_queue.clear();
 	}
 
 	void
-	IWindow::Reset() noexcept
+	IPlatform::Reset() noexcept
 	{
 		m_mouseState = MouseState{};
 		m_keysHeld.clear();
 		m_queue.clear();
 	}
 
-	IWindow::WindowProcessResult
-	IWindow::Process(IWindowEventVisitor* visitor)
+	IPlatform::PlatformProcessResult
+	IPlatform::Process(IPlatformEventVisitor* visitor)
 	{
 		using clock       = std::chrono::steady_clock;
 		using MouseAction = MouseEvent::Action;

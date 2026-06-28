@@ -1,22 +1,22 @@
 #include <bgl/bgl.h>
-#include <core/win/Window.h>
+#include <core/platform/Platform.h>
 #include <format>
 #include <stdexcept>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-struct EventVisitor : public core::win::IWindowEventVisitor
+struct EventVisitor : public core::IPlatformEventVisitor
 {
 	void
-	Visit(const core::win::KeyEvent& e, float dt) override
+	Visit(const core::KeyEvent& e, float dt) override
 	{
 		(void)e;
 		(void)dt;
 	}
 
 	void
-	Visit(const core::win::MouseEvent& e, float dt) override
+	Visit(const core::MouseEvent& e, float dt) override
 	{
 		(void)e;
 		(void)dt;
@@ -28,15 +28,15 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
 	try
 	{
-		auto opts = core::win::WindowOptions{};
+		auto opts = core::PlatformOptions{};
 
 		opts.width     = 800;
 		opts.height    = 600;
 		opts.resizable = false;
 		opts.decorated = false;
-		opts.mode      = core::win::WindowOptions::Mode::BorderlessWindowed;
+		opts.mode      = core::PlatformOptions::Mode::BorderlessWindowed;
 
-		auto wnd = core::win::IWindow::Create(opts);
+		auto wnd = core::IPlatform::Create(opts);
 
 		auto gfxOpts                     = bgl::GraphicsOptions{};
 		gfxOpts.width                    = opts.width;
@@ -88,7 +88,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 
 		bool firstFrame = true;
-		for (auto res = wnd->Process(&visitor); res != core::win::IWindow::kClose;
+		for (auto res = wnd->Process(&visitor); res != core::IPlatform::kClose;
 		     res      = wnd->Process(&visitor))
 		{
 			graphics->DrawFrame(context);

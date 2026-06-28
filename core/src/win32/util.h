@@ -3,7 +3,7 @@
 #include <concepts>
 #include <core/str/str.h>
 
-namespace core::win::win32
+namespace core::win32
 {
 	template <typename Fn>
 		requires std::invocable<Fn> && std::same_as<std::invoke_result_t<Fn>, LRESULT>

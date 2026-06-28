@@ -1,13 +1,13 @@
 #pragma once
-#include <core/win/CharEvent.h>
-#include <core/win/IWindowEvent.h>
-#include <core/win/IWindowEventVisitor.h>
-#include <core/win/KeyEvent.h>
-#include <core/win/MouseEvent.h>
+#include <core/platform/CharEvent.h>
+#include <core/platform/IPlatformEvent.h>
+#include <core/platform/IPlatformEventVisitor.h>
+#include <core/platform/KeyEvent.h>
+#include <core/platform/MouseEvent.h>
 
-namespace core::win
+namespace core
 {
-	struct WindowOptions
+	struct PlatformOptions
 	{
 		enum class Mode
 		{
@@ -26,17 +26,17 @@ namespace core::win
 		float            processDeltaTimeSeconds = 0.005f;
 	};
 
-	union WindowNativeHandle
+	union PlatformNativeHandle
 	{
 		uint64_t id;
 		void*    ptr;
 	};
 
 	// Not thread safe
-	class IWindow
+	class IPlatform
 	{
 	public:
-		enum WindowProcessResult
+		enum PlatformProcessResult
 		{
 			kProcess,
 			kSkip,
@@ -44,15 +44,15 @@ namespace core::win
 		};
 
 	public:
-		IWindow(const WindowOptions& options) noexcept :
-			m_width{ options.width }, m_height{ options.height }, m_windowMode{ options.mode },
+		IPlatform(const PlatformOptions& options) noexcept :
+			m_width{ options.width }, m_height{ options.height }, m_platformMode{ options.mode },
 			m_processDeltaTimeSeconds{ options.processDeltaTimeSeconds }
 		{
 			using clock = std::chrono::steady_clock;
 			m_lastTime  = clock::now();
 		}
 
-		virtual ~IWindow() noexcept = default;
+		virtual ~IPlatform() noexcept = default;
 
 		virtual void*
 		GetNativeHandle() const noexcept = 0;
@@ -64,11 +64,11 @@ namespace core::win
 		Reset() noexcept;
 
 		[[nodiscard]]
-		static std::unique_ptr<IWindow>
-		Create(const WindowOptions& options);
+		static std::unique_ptr<IPlatform>
+		Create(const PlatformOptions& options);
 
-		WindowProcessResult
-		Process(IWindowEventVisitor* visitor = nullptr);
+		PlatformProcessResult
+		Process(IPlatformEventVisitor* visitor = nullptr);
 
 	protected:
 		void
@@ -105,17 +105,17 @@ namespace core::win
 		PollEvents() noexcept = 0;
 
 		void
-		Accept(class IWindowEventVisitor& visitor, float dt);
+		Accept(class IPlatformEventVisitor& visitor, float dt);
 
 	protected:
-		int                                        m_width;
-		int                                        m_height;
-		WindowOptions::Mode                        m_windowMode;
-		float                                      m_processDeltaTimeSeconds = 0.005f;
-		std::vector<std::unique_ptr<IWindowEvent>> m_queue;
-		MouseState                                 m_mouseState{};
-		std::unordered_set<unsigned int>           m_keysHeld;
-		std::chrono::steady_clock::time_point      m_lastTime;
+		int                                          m_width;
+		int                                          m_height;
+		PlatformOptions::Mode                        m_platformMode;
+		float                                        m_processDeltaTimeSeconds = 0.005f;
+		std::vector<std::unique_ptr<IPlatformEvent>> m_queue;
+		MouseState                                   m_mouseState{};
+		std::unordered_set<unsigned int>             m_keysHeld;
+		std::chrono::steady_clock::time_point        m_lastTime;
 
 		// Since we don't want to process events each time we poll,
 		// we check that this amount of time has passed before

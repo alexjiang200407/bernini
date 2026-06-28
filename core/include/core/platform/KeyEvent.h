@@ -1,9 +1,9 @@
 #pragma once
-#include <core/win/IWindowEvent.h>
+#include <core/platform/IPlatformEvent.h>
 
-namespace core::win
+namespace core
 {
-	class KeyEvent : public IWindowEvent
+	class KeyEvent : public IPlatformEvent
 	{
 	public:
 		enum Type
@@ -15,7 +15,7 @@ namespace core::win
 		};
 
 	private:
-		friend class IWindow;
+		friend class IPlatform;
 
 	private:
 		KeyEvent() noexcept = default;
@@ -26,7 +26,7 @@ namespace core::win
 		AsKeyEvent() noexcept override;
 
 		void
-		Accept(class IWindowEventVisitor& visitor, float dt) const override;
+		Accept(class IPlatformEventVisitor& visitor, float dt) const override;
 
 		bool
 		IsReleased() const noexcept

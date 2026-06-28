@@ -1,8 +1,8 @@
 #pragma once
 
-namespace core::win
+namespace core
 {
-	class IWindowEvent
+	class IPlatformEvent
 	{
 	public:
 		enum Type
@@ -15,7 +15,7 @@ namespace core::win
 		};
 
 	public:
-		virtual ~IWindowEvent() noexcept = default;
+		virtual ~IPlatformEvent() noexcept = default;
 
 		virtual class KeyEvent*
 		AsKeyEvent() noexcept;
@@ -27,6 +27,6 @@ namespace core::win
 		AsCharEvent() noexcept;
 
 		virtual void
-		Accept(class IWindowEventVisitor& visitor, float dt) const = 0;
+		Accept(class IPlatformEventVisitor& visitor, float dt) const = 0;
 	};
 }

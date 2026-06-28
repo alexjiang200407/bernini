@@ -1,12 +1,12 @@
 #pragma once
-#include <core/win/IWindowEvent.h>
+#include <core/platform/IPlatformEvent.h>
 
-namespace core::win
+namespace core
 {
-	class CharEvent : public IWindowEvent
+	class CharEvent : public IPlatformEvent
 	{
 	private:
-		friend class IWindow;
+		friend class IPlatform;
 
 	private:
 		CharEvent() noexcept = default;
@@ -23,7 +23,7 @@ namespace core::win
 		AsCharEvent() noexcept override;
 
 		void
-		Accept(IWindowEventVisitor& visitor, float dt) const override;
+		Accept(IPlatformEventVisitor& visitor, float dt) const override;
 
 	private:
 		char32_t m_character;
