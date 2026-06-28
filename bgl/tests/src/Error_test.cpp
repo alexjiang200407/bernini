@@ -135,9 +135,7 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 
 		// The handle is now stale; both reuse and a second delete are rejected.
-		REQUIRE_THROWS_AS(
-			scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)),
-			bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
 		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);
 	}
 }
@@ -160,9 +158,7 @@ TEST_CASE("SceneError on capacity exhaustion", "[error][scene][capacity]")
 		auto geom  = scene->AddCubeGeom();
 
 		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
-		REQUIRE_THROWS_AS(
-			scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)),
-			bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
 	}
 
 	SECTION("Exceeding maxGeom throws SceneError")

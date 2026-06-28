@@ -22,4 +22,28 @@ namespace bgl
 	{
 		return CreateCommandQueue(QueueType::kGraphics);
 	}
+
+	ComputeKernel
+	IDevice::CreateComputeKernel(const ComputePipelineDesc& desc) const noexcept
+	{
+		ComputeKernel kernel;
+		kernel.pipeline = CreateComputePipeline(desc);
+		for (const std::string& name : kernel.pipeline->GetUniformBufferNames())
+		{
+			kernel.uniforms.try_emplace(name, CreateUniforms(kernel.pipeline.Get(), name));
+		}
+		return kernel;
+	}
+
+	MeshletKernel
+	IDevice::CreateMeshletKernel(const MeshletPipelineDesc& desc) const noexcept
+	{
+		MeshletKernel kernel;
+		kernel.pipeline = CreateMeshletPipeline(desc);
+		for (const std::string& name : kernel.pipeline->GetUniformBufferNames())
+		{
+			kernel.uniforms.try_emplace(name, CreateUniforms(kernel.pipeline.Get(), name));
+		}
+		return kernel;
+	}
 }

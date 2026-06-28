@@ -16,13 +16,6 @@ namespace bgl
 		std::string debugName;
 	};
 
-	enum class PackedBufferState
-	{
-		kUpdate,
-		kShader,
-		kNone,
-	};
-
 	template <typename T>
 	concept PackedBufferConcept =
 		core::PackedElementConcept<T> && core::type_traits::trivially_copyable<T>;
@@ -71,10 +64,18 @@ namespace bgl
 			}
 		}
 
+		// True once Init() has created the GPU buffer and before Release().
+		[[nodiscard]] bool
+		IsInitialized() const noexcept
+		{
+			return !m_BufferHandle.IsNull();
+		}
+
 		template <typename... Args>
 		Handle
 		EmplaceBack(Args&&... args)
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			uint32_t denseIndex = m_Entries.emplace_back(std::forward<Args>(args)...);
 			return Register(denseIndex);
 		}
@@ -94,6 +95,7 @@ namespace bgl
 		void
 		Set(Handle handle, T value)
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			gassert(IsValid(handle), "Invalid PackedBuffer handle");
 
 			uint32_t denseIndex   = m_HandleToIndex[handle.index];
@@ -104,6 +106,7 @@ namespace bgl
 		const T&
 		operator[](Handle handle) const
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			gassert(IsValid(handle), "Invalid PackedBuffer handle");
 			return m_Entries[m_HandleToIndex[handle.index]];
 		}
@@ -111,6 +114,7 @@ namespace bgl
 		void
 		Erase(Handle handle)
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			gassert(IsValid(handle), "Invalid PackedBuffer handle");
 
 			uint32_t denseIndex = m_HandleToIndex[handle.index];
@@ -146,24 +150,9 @@ namespace bgl
 		}
 
 		void
-		Transition(ICommandList* cmdList, PackedBufferState prevState, PackedBufferState newState)
-		{
-			BufferBarrierDesc barrier = {};
-
-			auto prevAccessSync = GetBarrierAccessSync(prevState);
-			auto newAccessSync  = GetBarrierAccessSync(newState);
-
-			barrier.accessBefore = prevAccessSync.first;
-			barrier.syncBefore   = prevAccessSync.second;
-			barrier.accessAfter  = newAccessSync.first;
-			barrier.syncAfter    = newAccessSync.second;
-
-			cmdList->Barrier(m_BufferHandle, barrier);
-		}
-
-		void
 		Update(ICommandList* cmdList)
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
 			gassert(cmdList->IsOpen(), "ICommandList must be open to update PackedBuffer");
 
@@ -211,12 +200,14 @@ namespace bgl
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_BufferHandle.idx);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			return m_BufferHandle;
 		}
 
@@ -231,6 +222,21 @@ namespace bgl
 		{
 			return static_cast<uint32_t>(
 				std::count(m_DirtyBlocks.begin(), m_DirtyBlocks.end(), true));
+		}
+
+		void
+		Release(uint64_t fenceValue, bool deferred = true) noexcept
+		{
+			if (!m_BufferHandle.IsNull())
+			{
+				m_ResourceManager->DestroyBuffer(m_BufferHandle, fenceValue, deferred);
+				m_BufferHandle = {};
+				m_Entries.clear();
+				m_HandleToIndex.clear();
+				m_IndexToHandle.clear();
+				m_DirtyBlocks.clear();
+				m_HasAnyDirtyBlocks = false;
+			}
 		}
 
 	private:
@@ -274,22 +280,6 @@ namespace bgl
 			if (size > 0)
 			{
 				cmdList->WriteBuffer(m_BufferHandle, m_Entries.data(), offset, size);
-			}
-		}
-
-		std::pair<BarrierAccess, BarrierSync>
-		GetBarrierAccessSync(PackedBufferState state)
-		{
-			switch (state)
-			{
-			case PackedBufferState::kUpdate:
-				return { BarrierAccessFlag::kCopyDest, BarrierSyncFlag::kCopy };
-			case PackedBufferState::kShader:
-				return { BarrierAccessFlag::kShaderResource, BarrierSyncFlag::kVertexShader };
-			case PackedBufferState::kNone:
-				return { BarrierAccessFlag::kNone, BarrierSyncFlag::kNone };
-			default:
-				gfatal("Invalid PackedBufferState");
 			}
 		}
 

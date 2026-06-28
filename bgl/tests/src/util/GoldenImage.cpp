@@ -62,7 +62,7 @@ namespace bgl::test
 		{
 			logger::warn(
 				"Golden image mismatch '{}': dimensions/format differ; captured output left at "
-			    "'{}'",
+				"'{}'",
 				expectedPath,
 				gotPath);
 			return false;

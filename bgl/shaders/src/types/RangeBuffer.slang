@@ -20,4 +20,11 @@ public struct RangeBuffer<T>
 
         return result;
     }
+
+    public __subscript(IRange entry, uint index)->T
+    {
+        get {
+            return Get(entry, index);
+        }
+    }
 }

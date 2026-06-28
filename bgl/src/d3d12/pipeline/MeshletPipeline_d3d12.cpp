@@ -1,5 +1,7 @@
 #include "pipeline/MeshletPipeline_d3d12.h"
+#include "pipeline/util.h"
 #include "resource/Rtv_d3d12.h"
+#include "resource/Shader.h"
 #include <core/math.h>
 
 // clang-format off
@@ -39,101 +41,16 @@ namespace bgl
 		wrl::ComPtr<ID3D12Device2> device2;
 		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
 
-		SlangErrorChecker                   errChecker;
-		std::vector<slang::IComponentType*> slangModules;
-		std::unordered_set<slang::IModule*> uniqueModules;
-
 		gassert(desc.meshShader != nullptr, "Mesh shader cannot be null");
 
-		auto addShaderToComposition = [&](IShader* shader) {
-			if (!shader)
-				return;
+		pipeline_util::PipelineLayout pipelineLayout = pipeline_util::BuildPipelineLayout(
+			device,
+			session,
+			{ desc.meshShader, desc.pixelShader, desc.ampShader });
 
-			slang::IModule* module = shader->GetSlangModule();
-			gassert(module != nullptr, "Shader module cannot be null");
-
-			// ONLY add the module if it hasn't been added yet
-			if (uniqueModules.insert(module).second)
-			{
-				slangModules.emplace_back(module);
-			}
-
-			const auto&         shaderDesc = shader->GetDesc();
-			slang::IEntryPoint* entryPoint = nullptr;
-
-			// Find the entry point by name from the module
-			module->findEntryPointByName(shaderDesc.entryPointName.c_str(), &entryPoint);
-			gassert(entryPoint != nullptr, "Failed to find entry point in module");
-
-			slangModules.emplace_back(entryPoint);
-		};
-
-		addShaderToComposition(desc.meshShader);
-		addShaderToComposition(desc.pixelShader);
-		addShaderToComposition(desc.ampShader);
-
-		Slang::ComPtr<slang::IComponentType> program;
-		{
-			session->createCompositeComponentType(
-				slangModules.data(),
-				static_cast<SlangInt>(slangModules.size()),
-				program.writeRef(),
-				errChecker.WriteDiagnosticBlob()) >>
-				errChecker;
-
-			gassert(program != nullptr, "Failed to compose shader modules");
-		}
-
-		program->link(m_LinkedProgram.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
-
-		slang::ProgramLayout* layout = m_LinkedProgram->getLayout();
-
-		std::vector<CD3DX12_ROOT_PARAMETER> rootParams;
-
-		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
-		{
-			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
-
-			if (param->getCategory() == slang::ParameterCategory::ConstantBuffer)
-			{
-				slang::TypeLayoutReflection* typeLayout    = param->getTypeLayout();
-				slang::TypeLayoutReflection* elementLayout = typeLayout->getElementTypeLayout();
-
-				uint32_t    bufferSize = static_cast<uint32_t>(elementLayout->getSize());
-				std::string bufferName = param->getName();
-
-				UINT shaderRegister = static_cast<UINT>(param->getBindingIndex());
-				UINT registerSpace  = static_cast<UINT>(param->getBindingSpace());
-
-				UniformLayoutEntry entry{};
-				entry.size                         = bufferSize;
-				entry.layout                       = elementLayout;
-				entry.rootParamIndex               = static_cast<uint32_t>(rootParams.size());
-				m_UniformLayoutEntries[bufferName] = entry;
-
-				auto cbvParam = CD3DX12_ROOT_PARAMETER();
-				cbvParam.InitAsConstantBufferView(shaderRegister, registerSpace);
-				rootParams.push_back(cbvParam);
-			}
-		}
-
-		D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
-		rsDesc.NumParameters             = static_cast<UINT>(rootParams.size());
-		rsDesc.pParameters               = rootParams.empty() ? nullptr : rootParams.data();
-		rsDesc.NumStaticSamplers         = 0;
-		rsDesc.pStaticSamplers           = nullptr;
-		rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-
-		wrl::ComPtr<ID3DBlob> sigBlob, errBlob;
-		D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sigBlob, &errBlob) >>
-			d3d12ErrChecker;
-
-		device->CreateRootSignature(
-			0,
-			sigBlob->GetBufferPointer(),
-			sigBlob->GetBufferSize(),
-			IID_PPV_ARGS(&m_RootSignature)) >>
-			d3d12ErrChecker;
+		m_LinkedProgram        = std::move(pipelineLayout.linkedProgram);
+		m_RootSignature        = std::move(pipelineLayout.rootSignature);
+		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
 		PSO_STREAM psoDesc = {};
 

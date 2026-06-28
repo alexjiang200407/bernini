@@ -255,22 +255,5 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		CHECK_FALSE(pb.IsBlockDirty(9999));
 	}
 
-	SECTION("Transition issues buffer barriers")
-	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer Transition";
-
-		auto pb = PackedInt(desc, resourceManager);
-
-		CHECK_NOTHROW(
-			pb.Transition(cmdList, bgl::PackedBufferState::kNone, bgl::PackedBufferState::kShader));
-		CHECK_NOTHROW(pb.Transition(
-			cmdList,
-			bgl::PackedBufferState::kShader,
-			bgl::PackedBufferState::kUpdate));
-	}
-
 	cmdList->Close();
 }

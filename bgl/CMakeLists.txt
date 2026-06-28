@@ -75,7 +75,7 @@ target_include_directories(bgl
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-add_dependencies(bgl CopyBGLShaders CopyBGLShaderSources bgl_idl_generate)
+add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src bgl_idl_generate)
 
 target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
@@ -97,12 +97,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 
 if(RENDERER_BACKEND STREQUAL "DX12")	
 	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_DX12)	
-	target_link_libraries(bgl PRIVATE bgl_d3d12) 	
-	set(D3D_DLLS
-        "${CMAKE_SOURCE_DIR}/extern/d3d12_dlls/D3D12"
-    )
+	target_link_libraries(bgl PRIVATE bgl_d3d12)
 
-	copy_to_target(bgl ITEMS ${D3D_DLLS})
+	find_package(directx12-agility CONFIG REQUIRED)
+	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
 endif()
 
@@ -141,6 +139,9 @@ if (BUILD_TESTS)
 			core
 			Microsoft::DirectXTex
 	)
+
+	add_dependencies(bgl_tests bgl_copy_shaders bgl_copy_shader_src bgl_copy_shader_tests bgl_idl_generate)
+
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)

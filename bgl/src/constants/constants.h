@@ -10,6 +10,10 @@ namespace bgl
 	constexpr uint32_t c_MaxVerticesPerMeshlet = 64;
 	constexpr uint32_t c_MaxPrimsPerMeshlet    = 124;
 
+	// Thread group sizes of the instance counting-sort shaders.
+	constexpr uint32_t c_HistogramGroupSize = 256;
+	constexpr uint32_t c_CompactGroupSize   = 128;
+
 	/**
 	 * The struct member name for the key for the smart buffers
 	 */

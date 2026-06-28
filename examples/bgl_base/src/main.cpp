@@ -63,7 +63,9 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto sphere = scene->AddSphereGeom(32, 32, 1.0f);
 
 		auto transform = glm::mat4(1.0f);
-		auto inst1     = scene->CreateStaticMeshInstance(cube, transform);
+
+		auto pbrMaterial = bgl::MaterialHandle(bgl::MaterialType::kPBR, core::slot_handle());
+		auto inst1       = scene->CreateStaticMeshInstance(cube, pbrMaterial, transform);
 
 		transform[3][0] = -5.0f;
 
@@ -71,12 +73,13 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 
-		auto camera = bgl::Camera()
-		                  .LookAt(
-							  glm::vec3(0.0f, 0.0f, 20.0f),
-							  glm::vec3(0.0f, 0.0f, 19.0f),
-							  glm::vec3(0.0f, 1.0f, 0.0f))
-		                  .Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 0.0f, 20.0f),
+				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		auto context   = bgl::RenderContext{};
 		context.scene  = scene;

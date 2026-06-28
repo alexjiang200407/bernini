@@ -49,13 +49,10 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto inst = scene->CreateStaticMeshInstance(geom, material, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
 
-	// std::tie-of-references: each binding is a reference to the live member.
 	auto buffers = scene->GetAllBuffers();
-	auto& [instanceBuffer, smiBuffer, geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer] =
+	[[maybe_unused]] auto& [instanceBuffer, smiBuffer, geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer, drawArgs] =
 		buffers;
 
-	// Resolve the indices the instance chains through: instance -> static mesh
-	// instance -> geom, and the geom's owned ranges.
 	const auto&    baseInstance = instanceBuffer[inst.handle];
 	const uint32_t smiIndex     = baseInstance.meshInstance.offset;
 	const uint32_t geomIndex    = geom.handle.index;

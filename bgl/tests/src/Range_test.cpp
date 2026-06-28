@@ -173,21 +173,6 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		CHECK(blockDirty(rb.GetDirtyBlocks(), 1));
 	}
 
-	SECTION("Transition issues buffer barriers")
-	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "RangeBuffer Transition";
-
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
-
-		CHECK_NOTHROW(
-			rb.Transition(cmdList, bgl::RangeBufferState::kNone, bgl::RangeBufferState::kShader));
-		CHECK_NOTHROW(
-			rb.Transition(cmdList, bgl::RangeBufferState::kShader, bgl::RangeBufferState::kUpdate));
-	}
-
 	SECTION("IsValid detects use-after-free and EraseByIndex frees ranges")
 	{
 		auto desc      = bgl::RangeBufferDesc();

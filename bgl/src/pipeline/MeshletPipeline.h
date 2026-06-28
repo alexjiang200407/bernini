@@ -4,6 +4,7 @@
 #include "resource/Shader.h"
 #include "types/Format.h"
 #include "types/RenderState.h"
+#include "uniforms/UniformLayoutEntry.h"
 
 #include <core/containers/static_vector.h>
 #include <core/ref/RefCounter.h>
@@ -11,31 +12,33 @@
 
 namespace bgl
 {
+	class IShader;
+
 	struct MeshletPipelineDesc
 	{
-		ShaderHandle                                    ampShader   = nullptr;
-		ShaderHandle                                    meshShader  = nullptr;
-		ShaderHandle                                    pixelShader = nullptr;
+		core::SharedRef<IShader>                        ampShader   = nullptr;
+		core::SharedRef<IShader>                        meshShader  = nullptr;
+		core::SharedRef<IShader>                        pixelShader = nullptr;
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;
 
 		MeshletPipelineDesc&
-		SetAmplificationShader(ShaderHandle shader)
+		SetAmplificationShader(core::SharedRef<IShader> shader)
 		{
 			ampShader = std::move(shader);
 			return *this;
 		}
 
 		MeshletPipelineDesc&
-		SetMeshShader(ShaderHandle shader)
+		SetMeshShader(core::SharedRef<IShader> shader)
 		{
 			meshShader = std::move(shader);
 			return *this;
 		}
 
 		MeshletPipelineDesc&
-		SetPixelShader(ShaderHandle shader)
+		SetPixelShader(core::SharedRef<IShader> shader)
 		{
 			pixelShader = std::move(shader);
 			return *this;
@@ -59,13 +62,6 @@ namespace bgl
 		}
 	};
 
-	struct UniformLayoutEntry
-	{
-		uint32_t                     size;
-		slang::TypeLayoutReflection* layout;
-		uint32_t                     rootParamIndex = 0xFFFFFFFF;
-	};
-
 	class IMeshletPipeline : public core::Ref
 	{
 	public:
@@ -84,6 +80,10 @@ namespace bgl
 
 		virtual UniformLayoutEntry
 		GetUniformLayoutEntry(const std::string& name) const noexcept = 0;
+
+		// Names of every constant buffer the shader declares (empty if it has none).
+		virtual std::vector<std::string>
+		GetUniformBufferNames() const noexcept = 0;
 	};
 
 	using MeshletPipelineHandle = core::SharedRef<IMeshletPipeline>;

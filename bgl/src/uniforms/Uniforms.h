@@ -7,6 +7,7 @@
 namespace bgl
 {
 	class IMeshletPipeline;
+	class IComputePipeline;
 
 	enum class UniformType
 	{
@@ -215,6 +216,13 @@ namespace bgl
 					throw std::runtime_error(
 						std::format("Accessor at offset {} is not a valid buffer", m_Offset));
 				}
+				else if (
+					GetType() == UniformType::kValue &&
+					m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
+				{
+					*this = DescriptorHandle(handle.idx);
+					return *this;
+				}
 
 				throw std::runtime_error(
 					std::format(
@@ -285,6 +293,7 @@ namespace bgl
 	public:
 		Uniforms() = default;
 		Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName);
+		Uniforms(IComputePipeline const* pipeline, const std::string& cbufferName);
 
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
