@@ -47,6 +47,9 @@ namespace bgl
 
 		virtual UniformLayoutEntry
 		GetUniformLayoutEntry(const std::string& name) const noexcept = 0;
+
+		virtual std::vector<std::string>
+		GetUniformBufferNames() const noexcept = 0;
 	};
 
 	using ComputePipelineHandle = core::SharedRef<IComputePipeline>;

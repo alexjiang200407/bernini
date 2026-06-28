@@ -4,14 +4,12 @@
 
 namespace bgl
 {
-	class IMeshletPipeline;
-	class Uniforms;
+	struct MeshletKernel;
 
 	struct MeshletState
 	{
-		core::SharedRef<IMeshletPipeline> pipeline;
-		ViewportState                     viewportState;
-		FrameBuffer                       frameBuffer;
-		Uniforms*                         uniforms = nullptr;
+		const MeshletKernel* kernel = nullptr;
+		ViewportState        viewportState;
+		FrameBuffer          frameBuffer;
 	};
 }

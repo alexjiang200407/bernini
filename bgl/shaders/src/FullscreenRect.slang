@@ -1,4 +1,3 @@
-import uniforms.SceneData;
 import idl.StaticMesh;
 
 struct VSOut
@@ -6,8 +5,6 @@ struct VSOut
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
 };
-
-ConstantBuffer<SceneData<StaticMeshInstance>> sceneData;
 
 [shader("mesh")]
 [numthreads(3, 1, 1)]

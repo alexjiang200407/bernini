@@ -1,4 +1,6 @@
 #pragma once
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/MeshletKernel.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include <core/file/file.h>
@@ -48,6 +50,12 @@ namespace bgl
 		[[nodiscard]]
 		virtual core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
+
+		[[nodiscard]] ComputeKernel
+		CreateComputeKernel(const ComputePipelineDesc& desc) const noexcept;
+
+		[[nodiscard]] MeshletKernel
+		CreateMeshletKernel(const MeshletPipelineDesc& desc) const noexcept;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(

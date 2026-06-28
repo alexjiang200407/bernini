@@ -1,6 +1,7 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
+#include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
@@ -47,26 +48,24 @@ namespace bgl
 				m_MeshletBuffer,
 				m_VertexMapBuffer,
 				m_VertexBuffer,
-				m_IndexBuffer);
+				m_IndexBuffer,
+				m_CompactedInstances);
 		}
+
 		[[nodiscard]] const std::string&
 		ResourceNamespace() const noexcept
 		{
 			return m_NamePrefix;
 		}
 
-		std::vector<std::string>
-		ImportResources(FrameGraph& fg);
+		void
+		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
+
+		void
+		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames);
 
 		void
 		Update(ICommandList* cmdList);
-
-		[[nodiscard]]
-		bool
-		IsFirstFrame() const
-		{
-			return m_FirstFrame;
-		}
 
 		[[nodiscard]]
 		uint32_t
@@ -92,16 +91,6 @@ namespace bgl
 		DeleteGeom(GeomHandle geom) override;
 
 	private:
-		static constexpr std::array<std::string_view, 7> c_BufferNames = { {
-			"scene.instanceBuffer",
-			"scene.meshInstanceBuffer",
-			"scene.geomBuffer",
-			"scene.meshletBuffer",
-			"scene.vertexMapBuffer",
-			"scene.vertexBuffer",
-			"scene.indexBuffer",
-		} };
-
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
@@ -112,7 +101,7 @@ namespace bgl
 		RangeBuffer<uint32_t>                  m_VertexMapBuffer;
 		RangeBuffer<idl::Vertex>               m_VertexBuffer;
 		RangeBuffer<uint32_t>                  m_IndexBuffer;
-		bool                                   m_FirstFrame = true;
+		ComputeBuffer                          m_CompactedInstances;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

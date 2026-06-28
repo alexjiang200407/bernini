@@ -10,7 +10,8 @@
     "directx12-agility",
     "cpptrace",
     "directxtex",
-    "cli11"
+    "cli11",
+    "winpixevent"
   ],
   "builtin-baseline": "05925b52317eb9a900a8583782e630aafd7a8929"
 }

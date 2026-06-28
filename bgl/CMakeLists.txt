@@ -139,6 +139,9 @@ if (BUILD_TESTS)
 			core
 			Microsoft::DirectXTex
 	)
+
+	add_dependencies(bgl_tests bgl_copy_shaders bgl_copy_shader_src bgl_copy_shader_tests bgl_idl_generate)
+
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)

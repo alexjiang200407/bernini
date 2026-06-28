@@ -58,6 +58,30 @@ compile_shader(
     INCLUDES     ${SLANG_SOURCE_ROOT}
 )
 
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/HistogramInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PrefixSumInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/CompactInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
 message(STATUS "Discovered Compiled Shaders: ${SLANG_COMPILE_OUTS}")
 
 
@@ -81,11 +105,11 @@ if (BUILD_TESTS)
 
     add_custom_target(bgl_copy_shader_tests ALL
         DEPENDS bgl_compile_shaders
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/src"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/tests"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests"
                 "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}${CONFIG_SUBDIR}/shaders/tests"
-        COMMENT "Copying raw Slang source assets to runtime output layout"
+        COMMENT "Copying raw Slang test shader sources to runtime output layout"
         VERBATIM
     )
 endif()

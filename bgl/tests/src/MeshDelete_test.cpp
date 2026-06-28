@@ -51,7 +51,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 	// std::tie-of-references: each binding is a reference to the live member.
 	auto buffers = scene->GetAllBuffers();
-	auto& [instanceBuffer, smiBuffer, geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer] =
+	[[maybe_unused]] auto& [instanceBuffer, smiBuffer, geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer, gbufferDrawArgs] =
 		buffers;
 
 	// Resolve the indices the instance chains through: instance -> static mesh

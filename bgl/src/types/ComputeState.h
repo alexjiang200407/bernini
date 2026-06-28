@@ -1,14 +1,11 @@
 #pragma once
-#include "types/ComputeState.h"
 
 namespace bgl
 {
-	class ComputePipeline;
-	class Uniforms;
+	struct ComputeKernel;
 
 	struct ComputeState
 	{
-		core::SharedRef<ComputePipeline> pipeline;
-		Uniforms*                        uniforms = nullptr;
+		const ComputeKernel* kernel = nullptr;
 	};
 }

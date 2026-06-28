@@ -49,6 +49,18 @@ namespace bgl
 			return m_UniformLayoutEntries.at(name);
 		}
 
+		std::vector<std::string>
+		GetUniformBufferNames() const noexcept override
+		{
+			std::vector<std::string> names;
+			names.reserve(m_UniformLayoutEntries.size());
+			for (const auto& [name, entry] : m_UniformLayoutEntries)
+			{
+				names.push_back(name);
+			}
+			return names;
+		}
+
 	private:
 		ComputePipelineDesc                                 m_Desc;
 		wrl::ComPtr<ID3D12PipelineState>                    m_PipelineState;

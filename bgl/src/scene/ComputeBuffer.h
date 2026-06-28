@@ -1,4 +1,5 @@
 #pragma once
+#include "cmd/CommandList.h"
 #include "resource/ResourceManager.h"
 
 namespace bgl
@@ -48,6 +49,16 @@ namespace bgl
 		}
 
 		void
+		Clear(ICommandList* cmd) noexcept
+		{
+			gassert(cmd != nullptr, "Command list cannot be null");
+			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
+
+			const auto zeros = std::vector<std::byte>(ByteSize(), std::byte{ 0 });
+			cmd->WriteBuffer(m_Handle, zeros.data(), zeros.size());
+		}
+
+		void
 		Release(uint64_t fenceValue, bool deferred = true) noexcept
 		{
 			if (!m_Handle.IsNull())
@@ -62,4 +73,15 @@ namespace bgl
 		ResourceManagerHandle m_ResourceManager;
 		BufferHandle          m_Handle;
 	};
+
+	template <typename T>
+	struct is_compute_buffer : std::false_type
+	{};
+
+	template <>
+	struct is_compute_buffer<ComputeBuffer> : std::true_type
+	{};
+
+	template <typename T>
+	inline constexpr bool is_compute_buffer_v = is_compute_buffer<std::decay_t<T>>::value;
 }

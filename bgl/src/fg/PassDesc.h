@@ -105,7 +105,7 @@ namespace bgl
 		// Name of the queue this pass records on (registered via RegisterQueue).
 		std::string queue = "main";
 
-		std::function<void(PassContext&)> exec = nullptr;
+		std::function<void(const PassContext&)> exec = nullptr;
 
 		PassDesc&
 		SetQueue(std::string queueName)
@@ -129,16 +129,34 @@ namespace bgl
 		}
 
 		PassDesc&
-		AddBuffer(BufferArg buffer)
+		AddBufferArg(BufferArg buffer)
 		{
 			buffers.push_back(std::move(buffer));
 			return *this;
 		}
 
 		PassDesc&
-		AddTexture(TextureArg tex)
+		AddBufferArg(std::string_view name_, BarrierSync sync_, BarrierAccess access_)
+		{
+			buffers.push_back(BufferArg(std::string(name_), sync_, access_));
+			return *this;
+		}
+
+		PassDesc&
+		AddTextureArg(TextureArg tex)
 		{
 			textures.push_back(std::move(tex));
+			return *this;
+		}
+
+		PassDesc&
+		AddTextureArg(
+			std::string_view name_,
+			BarrierSync      sync_,
+			BarrierAccess    access_,
+			BarrierLayout    layout_)
+		{
+			textures.push_back(TextureArg(std::string(name_), sync_, access_, layout_));
 			return *this;
 		}
 
@@ -162,7 +180,7 @@ namespace bgl
 		}
 
 		PassDesc&
-		SetExec(std::function<void(PassContext&)> execFunc) noexcept
+		SetExec(std::function<void(const PassContext&)> execFunc) noexcept
 		{
 			exec = std::move(execFunc);
 			return *this;

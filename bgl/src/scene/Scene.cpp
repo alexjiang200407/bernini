@@ -6,14 +6,31 @@
 #include "types/BaseInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <bgl/PsoType.h>
+#include <core/math.h>
 #include <numbers>
 
 namespace bgl
 {
 	namespace
 	{
-		// Hands each Scene a process-unique namespace so two scenes drawn in the same
-		// frame import their buffers under distinct graph names.
+		struct BufferInfo
+		{
+			std::string_view name;
+		};
+
+		static constexpr std::array<BufferInfo, 8> c_BufferInfo = { {
+			{ "scene.instanceBuffer" },
+			{ "scene.meshInstanceBuffer" },
+			{ "scene.geomBuffer" },
+			{ "scene.meshletBuffer" },
+			{ "scene.vertexMapBuffer" },
+			{ "scene.vertexBuffer" },
+			{ "scene.indexBuffer" },
+			{ "scene.compactedInstances" },
+		} };
+
+		// Each Scene a process-unique namespace
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
 	}
 
@@ -23,8 +40,11 @@ namespace bgl
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
 		{
-			PackedBufferDesc instanceBufferDesc;
-			instanceBufferDesc.maxCount  = m_Desc.maxInstances;
+			auto instanceBufferDesc = PackedBufferDesc();
+			// Round up so the kInvalid tail padding (see Update) always fits: the counting
+			// sort dispatches whole groups, so it may read up to a group past the last
+			// instance.
+			instanceBufferDesc.maxCount = core::round_up(m_Desc.maxInstances, c_HistogramGroupSize);
 			instanceBufferDesc.debugName = "Instance Buffer";
 			instanceBufferDesc.blockSize = sizeof(BaseInstance) * 256;
 
@@ -32,7 +52,7 @@ namespace bgl
 		}
 
 		{
-			EntryBufferDesc staticMeshInstanceBufferDesc;
+			auto staticMeshInstanceBufferDesc      = EntryBufferDesc();
 			staticMeshInstanceBufferDesc.maxCount  = m_Desc.maxInstances;
 			staticMeshInstanceBufferDesc.debugName = "Static Mesh Instance Buffer";
 			staticMeshInstanceBufferDesc.blockSize = sizeof(idl::StaticMeshInstance) * 256;
@@ -43,7 +63,7 @@ namespace bgl
 		}
 
 		{
-			EntryBufferDesc staticGeomBufferDesc;
+			auto staticGeomBufferDesc      = EntryBufferDesc();
 			staticGeomBufferDesc.maxCount  = m_Desc.maxGeom;
 			staticGeomBufferDesc.debugName = "Static Mesh Buffer";
 			staticGeomBufferDesc.blockSize = sizeof(idl::StaticGeom) * 128;
@@ -52,7 +72,7 @@ namespace bgl
 		}
 
 		{
-			RangeBufferDesc meshletBufferDesc;
+			auto meshletBufferDesc      = RangeBufferDesc();
 			meshletBufferDesc.maxCount  = m_Desc.maxMeshlets;
 			meshletBufferDesc.debugName = "Meshlet Buffer";
 
@@ -60,7 +80,7 @@ namespace bgl
 		}
 
 		{
-			RangeBufferDesc vertexMapBufferDesc;
+			auto vertexMapBufferDesc      = RangeBufferDesc();
 			vertexMapBufferDesc.maxCount  = m_Desc.maxVertices;
 			vertexMapBufferDesc.debugName = "Vertex Map Buffer";
 
@@ -68,7 +88,7 @@ namespace bgl
 		}
 
 		{
-			RangeBufferDesc vertexBufferDesc;
+			auto vertexBufferDesc      = RangeBufferDesc();
 			vertexBufferDesc.maxCount  = m_Desc.maxVertices;
 			vertexBufferDesc.debugName = "Vertex Buffer";
 
@@ -76,11 +96,20 @@ namespace bgl
 		}
 
 		{
-			RangeBufferDesc indexBufferDesc;
+			auto indexBufferDesc      = RangeBufferDesc();
 			indexBufferDesc.maxCount  = m_Desc.maxIndices;
 			indexBufferDesc.debugName = "Index Buffer";
 
 			m_IndexBuffer.Init(std::move(indexBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto compactedInstancesDesc = ComputeBufferDesc();
+			compactedInstancesDesc.SetElement<uint32_t>();
+			compactedInstancesDesc.maxCount  = m_Desc.maxInstances;
+			compactedInstancesDesc.debugName = "Compacted Instances";
+
+			m_CompactedInstances.Init(std::move(compactedInstancesDesc), m_ResourceManager);
 		}
 	}
 
@@ -88,39 +117,77 @@ namespace bgl
 	Scene::Update(ICommandList* cmdList)
 	{
 		auto buffers = GetAllBuffers();
-		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
+		std::apply(
+			[cmdList](auto&... buffer) {
+				(..., [&]() {
+					if constexpr (is_compute_buffer_v<decltype(buffer)>)
+					{
+						buffer.Clear(cmdList);
+					}
+					else
+					{
+						buffer.Update(cmdList);
+					}
+				}());
+			},
+			buffers);
 
-		// Update runs (deferred) during the graph's execute, after all imports for
-		// this frame; flipping here keeps the first-frame initial state correct.
-		m_FirstFrame = false;
+		const uint32_t count  = m_InstanceBuffer.Size();
+		const uint32_t padded = core::round_up(count, c_HistogramGroupSize);
+		if (padded > count)
+		{
+			std::vector<BaseInstance> tail(padded - count);
+			for (BaseInstance& instance : tail)
+			{
+				instance.psoType = PsoType::kInvalid;
+			}
+			cmdList->WriteBuffer(
+				m_InstanceBuffer.GetBufferHandle(),
+				tail.data(),
+				static_cast<size_t>(count) * sizeof(BaseInstance),
+				tail.size() * sizeof(BaseInstance));
+		}
 	}
 
-	std::vector<std::string>
-	Scene::ImportResources(FrameGraph& fg)
+	void
+	Scene::AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx)
 	{
-		// All scene buffers end a frame in the shader-resource state (the render
-		// pass reads them) and start the very first frame freshly created (kNone).
-		const AccessState initial =
-			m_FirstFrame ?
-				AccessState{} :
-				AccessState{ BarrierSyncFlag::kVertexShader, BarrierAccessFlag::kShaderResource };
+		std::vector<std::string> updateBuffers;
+		ImportResources(fg, updateBuffers);
 
-		std::vector<std::string> names;
-		names.reserve(c_BufferNames.size());
+		PassDesc desc;
+		desc.SetName(std::format("Scene Update {}", drawIdx));
+
+		for (const std::string& buffer : updateBuffers)
+		{
+			desc.AddBufferArg(
+				BufferArg{ buffer, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest });
+		}
+
+		desc.SetExec([this](const PassContext& ctx) { Update(ctx.GetCommandList()); });
+
+		fg.AddPass(std::move(desc));
+	}
+
+	void
+	Scene::ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames)
+	{
+		resourceNames.reserve(resourceNames.size() + c_BufferInfo.size());
 
 		auto   buffers = GetAllBuffers();
 		size_t i       = 0;
 		std::apply(
 			[&](auto&... buffer) {
 				(..., [&] {
-					std::string name(c_BufferNames[i++]);
-					fg.ImportBuffer(name, buffer.GetBufferHandle(), initial);
-					names.push_back(std::move(name));
+					// Import every buffer (including the GPU-only compute buffer): the
+					// Update pass declares them as copy-dest so the graph transitions
+					// them, and the FrameGraph tracks the state each is left in.
+					std::string name(c_BufferInfo[i++].name);
+					fg.ImportBuffer(name, buffer.GetBufferHandle());
+					resourceNames.push_back(std::move(name));
 				}());
 			},
 			buffers);
-
-		return names;
 	}
 
 	GeomHandle
@@ -378,9 +445,6 @@ namespace bgl
 
 		const auto& baseInstance = m_InstanceBuffer[instance.handle];
 
-		// Walk instance -> static-mesh-instance -> geom to drop the geom's
-		// reference. These links are internal invariants, so a broken one is a
-		// bgl logic error rather than caller misuse.
 		const uint32_t staticMeshInstanceIndex = baseInstance.meshInstance.offset;
 		gassert(
 			m_StaticMeshInstanceBuffer.IsIndexValid(staticMeshInstanceIndex),

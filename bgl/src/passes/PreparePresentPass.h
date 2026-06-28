@@ -13,7 +13,7 @@ namespace bgl
 			fg.AddPass(
 				PassDesc{}
 					.SetName("PreparePresent")
-					.AddTexture(
+					.AddTextureArg(
 						TextureArg{ std::move(presentableName),
 			                        BarrierSyncFlag::kNone,
 			                        BarrierAccessFlag::kNone,

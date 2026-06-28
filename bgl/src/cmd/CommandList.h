@@ -3,6 +3,7 @@
 #include "resource/Readback.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
+#include "types/ComputeState.h"
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 
@@ -93,6 +94,13 @@ namespace bgl
 		virtual void
 		Close() noexcept = 0;
 
+		// Debug-only GPU work markers
+		virtual void
+		BeginEvent(std::string_view name) noexcept = 0;
+
+		virtual void
+		EndEvent() noexcept = 0;
+
 		virtual void
 		SetMeshletState(const MeshletState& gfxState) noexcept = 0;
 
@@ -101,6 +109,9 @@ namespace bgl
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept = 0;
+
+		virtual void
+		SetComputeState(const ComputeState& computeState) noexcept = 0;
 
 		virtual void
 		Dispatch(

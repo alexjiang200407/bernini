@@ -88,7 +88,16 @@ namespace
 		Close() noexcept override
 		{}
 		void
+		BeginEvent(std::string_view) noexcept override
+		{}
+		void
+		EndEvent() noexcept override
+		{}
+		void
 		SetMeshletState(const MeshletState&) noexcept override
+		{}
+		void
+		SetComputeState(const ComputeState&) noexcept override
 		{}
 		void
 		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
@@ -327,8 +336,8 @@ TEST_CASE("FrameGraph: culls a pass whose outputs are never used", "[fg]")
 	fg.ImportBuffer("backbuffer", MakeBuffer(1));
 
 	fg.AddPass(
-		PassDesc{}.SetName("Main").AddBuffer(UavBuf("backbuffer")));  // writes imported -> root
-	fg.AddPass(PassDesc{}.SetName("Unused").AddBuffer(UavBuf("scratch")));  // transient, never read
+		PassDesc{}.SetName("Main").AddBufferArg(UavBuf("backbuffer")));  // writes imported -> root
+	fg.AddPass(PassDesc{}.SetName("Unused").AddBufferArg(UavBuf("scratch")));  // transient, never read
 
 	fg.Compile(&NullRm());
 
@@ -342,12 +351,12 @@ TEST_CASE("FrameGraph: a consumed producer survives culling", "[fg]")
 	FrameGraph fg;
 	fg.ImportBuffer("backbuffer", MakeBuffer(1));
 
-	fg.AddPass(PassDesc{}.SetName("Produce").AddBuffer(UavBuf("gbuffer")));  // transient write
+	fg.AddPass(PassDesc{}.SetName("Produce").AddBufferArg(UavBuf("gbuffer")));  // transient write
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Consume")
-			.AddBuffer(SrvBuf("gbuffer"))       // reads the producer's output
-			.AddBuffer(UavBuf("backbuffer")));  // writes imported -> root
+			.AddBufferArg(SrvBuf("gbuffer"))       // reads the producer's output
+			.AddBufferArg(UavBuf("backbuffer")));  // writes imported -> root
 
 	fg.Compile(&NullRm());
 
@@ -358,8 +367,8 @@ TEST_CASE("FrameGraph: transitively culls a dead producer chain", "[fg]")
 {
 	FrameGraph fg;
 
-	fg.AddPass(PassDesc{}.SetName("A").AddBuffer(UavBuf("t1")));
-	fg.AddPass(PassDesc{}.SetName("B").AddBuffer(SrvBuf("t1")).AddBuffer(UavBuf("t2")));
+	fg.AddPass(PassDesc{}.SetName("A").AddBufferArg(UavBuf("t1")));
+	fg.AddPass(PassDesc{}.SetName("B").AddBufferArg(SrvBuf("t1")).AddBufferArg(UavBuf("t2")));
 
 	fg.Compile(&NullRm());
 
@@ -371,7 +380,7 @@ TEST_CASE("FrameGraph: transitively culls a dead producer chain", "[fg]")
 TEST_CASE("FrameGraph: SetSideEffect pins an otherwise-dead pass", "[fg]")
 {
 	FrameGraph fg;
-	fg.AddPass(PassDesc{}.SetName("Debug").AddBuffer(UavBuf("scratch")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("Debug").AddBufferArg(UavBuf("scratch")).SetSideEffect());
 
 	fg.Compile(&NullRm());
 
@@ -384,8 +393,8 @@ TEST_CASE("FrameGraph: derives producer -> consumer barriers", "[fg]")
 	FrameGraph fg;
 	fg.ImportBuffer("buf", MakeBuffer(7));  // imported in a 'none' state
 
-	fg.AddPass(PassDesc{}.SetName("Fill").AddBuffer(UavBuf("buf")));
-	fg.AddPass(PassDesc{}.SetName("Read").AddBuffer(SrvBuf("buf")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("Fill").AddBufferArg(UavBuf("buf")));
+	fg.AddPass(PassDesc{}.SetName("Read").AddBufferArg(SrvBuf("buf")).SetSideEffect());
 
 	fg.Compile(&NullRm());
 
@@ -410,8 +419,8 @@ TEST_CASE("FrameGraph: emits no barrier when the state is unchanged", "[fg]")
 		MakeBuffer(1),
 		AccessState{ BarrierSyncFlag::kPixelShader, BarrierAccessFlag::kShaderResource });
 
-	fg.AddPass(PassDesc{}.SetName("ReadA").AddBuffer(SrvBuf("buf")).SetSideEffect());
-	fg.AddPass(PassDesc{}.SetName("ReadB").AddBuffer(SrvBuf("buf")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("ReadA").AddBufferArg(SrvBuf("buf")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("ReadB").AddBufferArg(SrvBuf("buf")).SetSideEffect());
 
 	fg.Compile(&NullRm());
 
@@ -427,7 +436,7 @@ TEST_CASE("FrameGraph: GetBuffer on an undeclared buffer throws", "[fg]")
 {
 	FrameGraph fg;
 	fg.ImportBuffer("buf", MakeBuffer(3));
-	fg.AddPass(PassDesc{}.SetName("P").AddBuffer(UavBuf("buf")).SetExec([](PassContext& ctx) {
+	fg.AddPass(PassDesc{}.SetName("P").AddBufferArg(UavBuf("buf")).SetExec([](const PassContext& ctx) {
 		(void)ctx.GetBuffer("missing");
 	}));
 
@@ -445,9 +454,9 @@ TEST_CASE("FrameGraph: GetBuffer on a transient (unimported) buffer throws", "[f
 	fg.AddPass(
 		PassDesc{}
 			.SetName("P")
-			.AddBuffer(UavBuf("scratch"))
+			.AddBufferArg(UavBuf("scratch"))
 			.SetSideEffect()
-			.SetExec([](PassContext& ctx) { (void)ctx.GetBuffer("scratch"); }));
+			.SetExec([](const PassContext& ctx) { (void)ctx.GetBuffer("scratch"); }));
 
 	fg.Compile(&NullRm());
 
@@ -463,9 +472,10 @@ TEST_CASE("FrameGraph: GetBuffer resolves an imported buffer; imports clear afte
 	BufferHandle got{};
 
 	fg.ImportBuffer("buf", MakeBuffer(9));
-	fg.AddPass(PassDesc{}.SetName("P").AddBuffer(UavBuf("buf")).SetExec([&](PassContext& ctx) {
-		got = ctx.GetBuffer("buf");
-	}));
+	fg.AddPass(
+		PassDesc{}.SetName("P").AddBufferArg(UavBuf("buf")).SetExec([&](const PassContext& ctx) {
+			got = ctx.GetBuffer("buf");
+		}));
 
 	fg.Compile(&NullRm());
 	REQUIRE(fg.ImportedResourceCount() == 1);
@@ -484,7 +494,7 @@ TEST_CASE("FrameGraph: Execute before Compile throws", "[fg]")
 {
 	FrameGraph fg;
 	fg.ImportBuffer("buf", MakeBuffer(1));
-	fg.AddPass(PassDesc{}.SetName("P").AddBuffer(UavBuf("buf")));
+	fg.AddPass(PassDesc{}.SetName("P").AddBufferArg(UavBuf("buf")));
 
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
@@ -492,10 +502,10 @@ TEST_CASE("FrameGraph: Execute before Compile throws", "[fg]")
 TEST_CASE("FrameGraph: a duplicate pass name throws", "[fg]")
 {
 	FrameGraph fg;
-	fg.AddPass(PassDesc{}.SetName("Dup").AddBuffer(UavBuf("a")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("Dup").AddBufferArg(UavBuf("a")).SetSideEffect());
 
 	CHECK_THROWS_AS(
-		fg.AddPass(PassDesc{}.SetName("Dup").AddBuffer(UavBuf("b")).SetSideEffect()),
+		fg.AddPass(PassDesc{}.SetName("Dup").AddBufferArg(UavBuf("b")).SetSideEffect()),
 		std::runtime_error);
 }
 
@@ -503,7 +513,7 @@ TEST_CASE("FrameGraph: accessing an imported buffer as a texture throws at Compi
 {
 	FrameGraph fg;
 	fg.ImportBuffer("res", MakeBuffer(1));
-	fg.AddPass(PassDesc{}.SetName("P").AddTexture(SrvTex("res")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("P").AddTextureArg(SrvTex("res")).SetSideEffect());
 
 	CHECK_THROWS_AS(fg.Compile(&NullRm()), std::runtime_error);
 }

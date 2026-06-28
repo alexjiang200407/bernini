@@ -1,7 +1,7 @@
 import idl.IMeshInstance;
 import idl.IMaterial;
 import types.BaseInstance;
-import uniforms.SceneData;
+import gbuffer.GBufferData;
 import util.constants;
 import idl.StaticMesh;
 import idl.Meshlet;
@@ -9,7 +9,7 @@ import idl.Vertex;
 import gbuffer.common;
 import types.PsoType;
 
-ConstantBuffer<SceneData<StaticMeshInstance>> sceneData;
+ConstantBuffer<GBufferData<StaticMeshInstance>> sceneData;
 
 void EvaluateVertices(
     StaticMeshInstance instance,
@@ -21,8 +21,8 @@ void EvaluateVertices(
 {
     if (gtid < meshlet.vertexCount)
     {
-        uint vertexIdx = sceneData.vertexMapBuffer.Get(mesh.vertexMap, meshlet.relativeVertexOffset + gtid);
-        Vertex v = sceneData.vertexBuffer.Get(mesh.vertices, vertexIdx);
+        uint vertexIdx = sceneData.vertexMapBuffer[mesh.vertexMap, meshlet.relativeVertexOffset + gtid];
+        Vertex v = sceneData.vertexBuffer[mesh.vertices, vertexIdx];
 
         float4 worldPos = mul(instance.transform, float4(v.pos, 1.0));
 

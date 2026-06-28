@@ -1,13 +1,14 @@
 import types.BaseInstance;
 import idl.Meshlet;
 import idl.Vertex;
+import types.ComputeBuffer;
 import types.EntryBuffer;
 import types.PackedBuffer;
 import idl.IGeom;
 import idl.IMeshInstance;
 import types.RangeBuffer;
 
-public struct SceneData<T>
+public struct GBufferData<T>
     where T : IMeshInstance
 {
     public float4x4 viewProj;
@@ -18,4 +19,5 @@ public struct SceneData<T>
     public RangeBuffer<uint> vertexMapBuffer;
     public RangeBuffer<Vertex> vertexBuffer;
     public RangeBuffer<uint> indexBuffer;
+    public ComputeBufferReadOnly<uint> compactedInstances;
 };

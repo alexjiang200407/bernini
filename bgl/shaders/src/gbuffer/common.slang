@@ -1,7 +1,7 @@
 import idl.IMeshInstance;
 import idl.IMaterial;
 import types.BaseInstance;
-import uniforms.SceneData;
+import gbuffer.GBufferData;
 
 public struct InstancedPayload<T>
     where T : IMeshInstance
@@ -17,13 +17,13 @@ public struct GBufferVSOut
 };
 
 public void ASBase<T>(
-    ConstantBuffer<SceneData<T>> sceneData,
-    uint gid: SV_GroupID,       // Total Instances
+    ConstantBuffer<GBufferData<T>> sceneData,
+    uint gid: SV_GroupID,       // Instance number
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
     where T : IMeshInstance
 {
-    uint drawInstanceIdx = gid;
+    uint drawInstanceIdx = sceneData.compactedInstances[gid];
     let instance = sceneData.instanceBuffer.Get(drawInstanceIdx);
     let meshInstance = sceneData.meshBuffer.Get(instance.meshInstance);
     let mesh = sceneData.geomBuffer.Get(meshInstance.GetBaseMeshID());

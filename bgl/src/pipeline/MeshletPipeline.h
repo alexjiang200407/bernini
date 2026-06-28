@@ -80,6 +80,10 @@ namespace bgl
 
 		virtual UniformLayoutEntry
 		GetUniformLayoutEntry(const std::string& name) const noexcept = 0;
+
+		// Names of every constant buffer the shader declares (empty if it has none).
+		virtual std::vector<std::string>
+		GetUniformBufferNames() const noexcept = 0;
 	};
 
 	using MeshletPipelineHandle = core::SharedRef<IMeshletPipeline>;

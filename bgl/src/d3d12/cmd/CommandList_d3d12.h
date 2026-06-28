@@ -51,6 +51,12 @@ namespace bgl
 		Close() noexcept override;
 
 		void
+		BeginEvent(std::string_view name) noexcept override;
+
+		void
+		EndEvent() noexcept override;
+
+		void
 		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept override;
 
 		void
@@ -82,6 +88,9 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 		void
+		SetComputeState(const ComputeState& computeState) noexcept override;
+
+		void
 		Dispatch(
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,
@@ -109,8 +118,10 @@ namespace bgl
 		SubmitChunks(ICommandQueue* cmdQueue) noexcept;
 
 	private:
+		// Uploads the uniform bytes to a transient CBV and binds it. `compute` selects
+		// the compute vs graphics root signature for the bind.
 		void
-		BindUniforms(const Uniforms& uniforms) noexcept;
+		BindUniforms(const Uniforms& uniforms, bool compute) noexcept;
 
 		CommandListDesc       m_Desc;
 		ResourceManagerHandle m_ResourceManager;

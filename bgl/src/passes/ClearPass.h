@@ -31,7 +31,7 @@ namespace bgl
 
 			for (const ColorTarget& color : colors)
 			{
-				desc.AddTexture(
+				desc.AddTextureArg(
 					TextureArg{ color.name,
 				                BarrierSyncFlag::kRenderTarget,
 				                BarrierAccessFlag::kRenderTarget,
@@ -39,7 +39,7 @@ namespace bgl
 			}
 
 			std::vector<ColorTarget> targets(colors.begin(), colors.end());
-			desc.SetExec([resourceManager, targets, depth](PassContext& resources) {
+			desc.SetExec([resourceManager, targets, depth](const PassContext& resources) {
 				ICommandList* cmd = resources.GetCommandList();
 				if (!depth.IsNull())
 				{
