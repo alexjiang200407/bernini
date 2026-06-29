@@ -59,6 +59,5 @@ if (PLATFORM STREQUAL "WINDOWS")
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${WIN32_SOURCES})
 endif()
 
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${CORE_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${CORE_SOURCES} ${CORE_INTERNAL_HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/core" PREFIX "Shared Header Files" FILES ${CORE_HEADERS})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Internal Header Files" FILES ${CORE_INTERNAL_HEADERS})

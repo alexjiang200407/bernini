@@ -8,9 +8,6 @@ qt_standard_project_setup()   # enables AUTOMOC / AUTOUIC / AUTORCC
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
-)
-
-file(GLOB_RECURSE EDITOR_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
@@ -19,9 +16,16 @@ file(GLOB_RECURSE EDITOR_UI CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/qt/*.ui
 )
 
+# AUTOUIC_SEARCH_PATHS is not recursive
+set(EDITOR_UI_DIRS "")
+foreach(_ui IN LISTS EDITOR_UI)
+	get_filename_component(_ui_dir "${_ui}" DIRECTORY)
+	list(APPEND EDITOR_UI_DIRS "${_ui_dir}")
+endforeach()
+list(REMOVE_DUPLICATES EDITOR_UI_DIRS)
+
 qt_add_executable(editor
 	${EDITOR_SOURCES}
-	${EDITOR_HEADERS}
 	${EDITOR_UI}
 )
 
@@ -48,7 +52,7 @@ target_precompile_headers(editor
 set_target_properties(editor PROPERTIES
 	WIN32_EXECUTABLE ON
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-	AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/qt"
+	AUTOUIC_SEARCH_PATHS "${EDITOR_UI_DIRS}"
 )
 
 if(WIN32)
@@ -63,5 +67,4 @@ if(WIN32)
 endif()
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${EDITOR_SOURCES})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Header Files" FILES ${EDITOR_HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/qt" PREFIX "UI Files" FILES ${EDITOR_UI})

@@ -1,5 +1,11 @@
-- Phong-Blinn Deferred Shading
+- Editor Open Project
+    - Opens a project
+- Editor New Project
+    - Creates new JSON file with metadata, project name
+    - Setups Data folder where all the data (meshes, textures, materials) will exist
+- Editor Save Project (ctrl S) or just Auto Save
 - Asset loading
+- Phong-Blinn Deferred Shading
 - Frame Graph optimization
     - Wasted barriers. Add a PreTransition function to PassDesc to determine if a Barrier is necessary
     - We can merge barriers instead of completely changing the Barrier.

@@ -31,11 +31,5 @@ target_precompile_headers(bgl_base
 source_group(
     TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
     PREFIX "Source Files"
-    FILES ${BGL_BASE_SOURCES}
-)
-
-source_group(
-    TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
-    PREFIX "Header Files"
-    FILES ${BGL_BASE_HEADERS}
+    FILES ${BGL_BASE_SOURCES} ${BGL_BASE_HEADERS}
 )
