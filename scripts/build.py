@@ -6,6 +6,7 @@ Usage:
     python scripts/build.py bgl_tests             # build one target
     python scripts/build.py bgl --preset windows-ninja-msvc-dx12-debug
     python scripts/build.py --config Release      # multi-config generators
+    python scripts/build.py --configure           # configure only, don't build
     python scripts/build.py --dry-run             # print the plan, don't run
 
 The MSVC developer environment (vcvars) is set up automatically when the
@@ -29,7 +30,9 @@ def main():
     parser.add_argument("--preset", default=DEFAULT_PRESET, help=f"CMake preset (default: {DEFAULT_PRESET}).")
     parser.add_argument("--config", help="Build configuration for multi-config generators (e.g. Debug, Release).")
     parser.add_argument("--arch", default="x64", help="vcvars architecture (default: x64).")
-    parser.add_argument("--no-configure", action="store_true", help="Skip the configure step.")
+    configure_group = parser.add_mutually_exclusive_group()
+    configure_group.add_argument("--configure", action="store_true", help="Configure only; skip the build step.")
+    configure_group.add_argument("--no-configure", action="store_true", help="Skip the configure step (build only).")
     parser.add_argument("--dry-run", action="store_true", help="Print what would run without executing.")
     args = parser.parse_args()
 
@@ -69,7 +72,8 @@ def main():
         print(f"env:       {'vcvars (' + args.arch + ')' if wants_msvc else env_source}")
         if not args.no_configure:
             print("configure: " + " ".join(configure_cmd))
-        print("build:     " + " ".join(build_cmd))
+        if not args.configure:
+            print("build:     " + " ".join(build_cmd))
         return 0
 
     if not args.no_configure:
@@ -77,6 +81,9 @@ def main():
         if rc:
             print(f"configure failed (exit {rc}).", file=sys.stderr)
             return rc
+
+    if args.configure:
+        return 0
 
     return subprocess.run(build_cmd, env=env).returncode
 
