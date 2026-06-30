@@ -66,6 +66,8 @@ namespace bgl
 				m_ResourceManager->DestroyBuffer(m_Handle, fenceValue, deferred);
 				m_Handle = {};
 			}
+
+			m_ResourceManager.Reset();
 		}
 
 	private:

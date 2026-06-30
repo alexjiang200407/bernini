@@ -65,6 +65,18 @@ namespace bgl
 		virtual void
 		EndFrame() = 0;
 
+		/**
+		 * Recreates the backbuffers and depth buffer at the given size, resizing the
+		 * swap chain as well when presenting to a window.
+		 *
+		 * @param width New backbuffer width in pixels; must be non-zero.
+		 * @param height New backbuffer height in pixels; must be non-zero.
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, or if either
+		 *         dimension is zero.
+		 */
+		virtual void
+		Resize(uint32_t width, uint32_t height) = 0;
+
 		void
 		DrawFrame(const RenderContext& context)
 		{

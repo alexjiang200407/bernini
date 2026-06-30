@@ -5,6 +5,8 @@ message(STATUS "Qt6 version: ${Qt6_VERSION}")
 
 qt_standard_project_setup()   # enables AUTOMOC / AUTOUIC / AUTORCC
 
+find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
+
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -39,6 +41,7 @@ target_link_libraries(editor
 		bgl
 		assetlib
 		Qt6::Widgets
+		nlohmann_json::nlohmann_json
 )
 
 if(RENDERER_BACKEND STREQUAL "DX12")

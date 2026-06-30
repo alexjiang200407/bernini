@@ -19,6 +19,20 @@ namespace bgl
 		kIndirectArgument = 0x00000400   // ExecuteIndirect / DrawIndirect dispatch
 	};
 
+	constexpr inline BarrierSyncFlag
+	operator|(BarrierSyncFlag lhs, BarrierSyncFlag rhs)
+	{
+		return static_cast<BarrierSyncFlag>(
+			static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+	}
+
+	constexpr inline BarrierSyncFlag
+	operator&(BarrierSyncFlag lhs, BarrierSyncFlag rhs)
+	{
+		return static_cast<BarrierSyncFlag>(
+			static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+	}
+
 	enum class BarrierAccessFlag : uint32_t
 	{
 		kNone             = 0,
@@ -36,6 +50,20 @@ namespace bgl
 		kAccelStructRead  = 0x00000800,  // Read-only raytracing AS cache
 		kAccelStructWrite = 0x00001000   // Write-only raytracing AS cache
 	};
+
+	constexpr inline BarrierAccessFlag
+	operator|(BarrierAccessFlag lhs, BarrierAccessFlag rhs)
+	{
+		return static_cast<BarrierAccessFlag>(
+			static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+	}
+
+	constexpr inline BarrierAccessFlag
+	operator&(BarrierAccessFlag lhs, BarrierAccessFlag rhs)
+	{
+		return static_cast<BarrierAccessFlag>(
+			static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+	}
 
 	enum class BarrierLayout : uint32_t
 	{

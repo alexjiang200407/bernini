@@ -64,6 +64,9 @@ namespace bgl
 		EndFrame() override;
 
 		void
+		Resize(uint32_t width, uint32_t height) override;
+
+		void
 		ScreenshotRaw(const std::string& filepath) override;
 
 		const GraphicsOptions&
@@ -100,6 +103,18 @@ namespace bgl
 		void
 		CreateOffscreenRenderTargets();
 
+		void
+		DestroyRenderTargets(uint64_t fenceValue);
+
+		// Forwards debug-layer / GPU-based-validation messages to the spdlog log.
+		static void CALLBACK
+		LogD3D12Message(
+			D3D12_MESSAGE_CATEGORY category,
+			D3D12_MESSAGE_SEVERITY severity,
+			D3D12_MESSAGE_ID       id,
+			LPCSTR                 description,
+			void*                  context);
+
 	private:
 		UINT                                 m_FrameIndex = 0;
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
@@ -125,8 +140,10 @@ namespace bgl
 		// Backbuffer index that holds the most recently rendered frame (for ScreenshotRaw).
 		UINT m_LastPresentedIndex = 0;
 
-		wrl::ComPtr<ID3D12Debug1>   m_DebugController;
-		wrl::ComPtr<IDXGIInfoQueue> m_DxgiInfoQueue;
+		wrl::ComPtr<ID3D12Debug1>     m_DebugController;
+		wrl::ComPtr<IDXGIInfoQueue>   m_DxgiInfoQueue;
+		wrl::ComPtr<ID3D12InfoQueue1> m_D3D12InfoQueue;
+		DWORD                         m_MessageCallbackCookie = 0;
 
 		ResourceManagerHandle m_ResourceManager;
 		PreparePresentPass    m_PreparePresentPass;
@@ -143,7 +160,14 @@ namespace bgl
 			auto     libraryPath = core::file::getLibraryPath();
 			fs::path logPath     = libraryPath.parent_path() / "bgl.log";
 
-			auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), true);
+			// Truncate once per process so a single run accumulates every device's
+			// messages instead of each new Graphics clobbering the previous log.
+			static bool s_logTruncated = false;
+			const bool  truncate       = !s_logTruncated;
+			s_logTruncated             = true;
+
+			auto sink =
+				std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), truncate);
 
 			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
 
@@ -191,6 +215,18 @@ namespace bgl
 		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
 
 		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession);
+
+		// Route debug-layer and GPU-based-validation messages (which otherwise only
+		// reach an attached debugger) into the spdlog log.
+		if (m_Opts.enableDebugLayer && SUCCEEDED(m_D3D12Device.As(&m_D3D12InfoQueue)))
+		{
+			m_D3D12InfoQueue->RegisterMessageCallback(
+				&Graphics::LogD3D12Message,
+				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
+				nullptr,
+				&m_MessageCallbackCookie) >>
+				d3d12ErrChecker;
+		}
 
 		for (UINT i = 0; i < c_BufferCount; i++)
 		{
@@ -251,17 +287,11 @@ namespace bgl
 		m_Forward.Release();
 		m_CompactInstances.Release(shutdownFenceValue, false);
 
-		for (UINT i = 0; i < c_BufferCount; i++)
-		{
-			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, shutdownFenceValue, false);
-			m_ResourceManager->DestroyTexture(
-				m_BackBuffers[i].textureHandle,
-				shutdownFenceValue,
-				false);
-		}
+		DestroyRenderTargets(shutdownFenceValue);
 
-		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, shutdownFenceValue, false);
-		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, shutdownFenceValue, false);
+		// Clear retained passes; each pass descriptor holds a resource-manager reference
+		// that would otherwise keep the manager alive past the live-object report.
+		m_FrameGraph.Reset();
 
 		m_CommandList.Reset();
 		m_ResourceManager.Reset();
@@ -282,8 +312,13 @@ namespace bgl
 
 		m_DxgiInfoQueue.Reset();
 		m_DebugController.Reset();
-
 		m_SlangGlobalSession.setNull();
+
+		if (m_D3D12InfoQueue && m_MessageCallbackCookie != 0)
+		{
+			m_D3D12InfoQueue->UnregisterMessageCallback(m_MessageCallbackCookie);
+		}
+		m_D3D12InfoQueue.Reset();
 
 		if (m_Opts.enableDebugLayer)
 		{
@@ -414,6 +449,105 @@ namespace bgl
 		}
 
 		m_FrameActive = false;
+	}
+
+	void
+	Graphics::Resize(uint32_t width, uint32_t height)
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError("Resize cannot be called between BeginFrame and EndFrame");
+		}
+
+		if (width == 0 || height == 0)
+		{
+			throw GraphicsError("Resize dimensions must be non-zero");
+		}
+
+		if (static_cast<uint32_t>(m_Opts.width) == width &&
+		    static_cast<uint32_t>(m_Opts.height) == height)
+		{
+			return;
+		}
+
+		// Idle the GPU so no in-flight frame still references the render targets we
+		// are about to release.
+		m_CommandQueue->As<CommandQueue>()->Flush();
+
+		// Reset the command list so it drops its references to the old backbuffers;
+		// the swap chain cannot be resized while any reference to them is alive.
+		m_CommandAllocator[m_FrameIndex]->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
+		m_CommandList->Close();
+
+		DestroyRenderTargets(m_CommandQueue->GetNextFenceValue());
+
+		m_Opts.width  = static_cast<int>(width);
+		m_Opts.height = static_cast<int>(height);
+
+		if (!m_Opts.headless)
+		{
+			m_SwapChain
+					->ResizeBuffers(c_BufferCount, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0) >>
+				d3d12ErrChecker;
+
+			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+			CreateRenderTargets();
+		}
+		else
+		{
+			m_FrameIndex = 0;
+			CreateOffscreenRenderTargets();
+		}
+
+		// The GPU is idle and the backbuffers were re-indexed: drop the stale
+		// per-frame fences so the next BeginFrame does not wait on them.
+		for (auto& fenceValue : m_FenceValues)
+		{
+			fenceValue = 0;
+		}
+
+		m_LastPresentedIndex = m_FrameIndex;
+	}
+
+	void
+	Graphics::DestroyRenderTargets(uint64_t fenceValue)
+	{
+		for (UINT i = 0; i < c_BufferCount; i++)
+		{
+			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, fenceValue, false);
+			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, fenceValue, false);
+		}
+
+		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, fenceValue, false);
+		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, fenceValue, false);
+	}
+
+	void CALLBACK
+	Graphics::LogD3D12Message(
+		D3D12_MESSAGE_CATEGORY /*category*/,
+		D3D12_MESSAGE_SEVERITY severity,
+		D3D12_MESSAGE_ID /*id*/,
+		LPCSTR description,
+		void* /*context*/)
+	{
+		switch (severity)
+		{
+		case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+		case D3D12_MESSAGE_SEVERITY_ERROR:
+			logger::error("[D3D12] {}", description);
+			break;
+		case D3D12_MESSAGE_SEVERITY_WARNING:
+			logger::warn("[D3D12] {}", description);
+			break;
+		case D3D12_MESSAGE_SEVERITY_INFO:
+			logger::info("[D3D12] {}", description);
+			break;
+		case D3D12_MESSAGE_SEVERITY_MESSAGE:
+		default:
+			logger::debug("[D3D12] {}", description);
+			break;
+		}
 	}
 
 	void

@@ -25,7 +25,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 
 ## bgl_tests
 
-- For now ask for permission to write tests.
+- After running bgl_tests always check the log to see the warnings, errors and basic info.
 
 ## Shaders
 

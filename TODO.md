@@ -1,9 +1,6 @@
-- Editor Open Project
-    - Opens a project
-- Editor New Project
-    - Creates new JSON file with metadata, project name
-    - Setups Data folder where all the data (meshes, textures, materials) will exist
-- Editor Save Project (ctrl S) or just Auto Save
+- Resize Render Targets
+
+
 - Asset loading
 - Phong-Blinn Deferred Shading
 - Frame Graph optimization

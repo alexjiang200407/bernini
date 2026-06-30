@@ -183,7 +183,8 @@ namespace bgl
 			.AddBufferArg(
 				BufferArg{ std::string(c_DispatchArgsBuffer),
 		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument });
+		                   BarrierAccessFlag::kIndirectArgument |
+		                       BarrierAccessFlag::kShaderResource });
 
 		for (const SceneBuffer& binding : c_ForwardDataBuffers)
 		{

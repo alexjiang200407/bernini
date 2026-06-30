@@ -96,6 +96,19 @@ namespace bgl
 		}
 	}
 
+	void
+	CommandQueue::Flush() noexcept
+	{
+		uint64_t fenceValue;
+		{
+			std::lock_guard<std::mutex> lockGuard(m_FenceMutex);
+			fenceValue = m_NextFenceValue++;
+			m_CommandQueue->Signal(m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
+		}
+
+		WaitForFenceCPUBlocking(fenceValue);
+	}
+
 	bool
 	CommandQueue::IsFenceComplete(uint64_t fenceValue) noexcept
 	{

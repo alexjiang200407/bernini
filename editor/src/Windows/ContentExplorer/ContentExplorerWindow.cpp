@@ -1,74 +1,64 @@
 #include "ContentExplorerWindow.h"
 
+#include <QDir>
+#include <QFileSystemModel>
 #include <QHeaderView>
-#include <QStandardItemModel>
-
-namespace
-{
-	QStandardItem*
-	MakeFolder(const QString& name)
-	{
-		auto* item = new QStandardItem(name);
-		item->setEditable(false);
-		return item;
-	}
-
-	QList<QStandardItem*>
-	MakeFileRow(const QString& name, const QString& type, const QString& size)
-	{
-		QList<QStandardItem*> row = { new QStandardItem(name),
-			                          new QStandardItem(type),
-			                          new QStandardItem(size) };
-		for (auto* cell : row) cell->setEditable(false);
-		return row;
-	}
-}
+#include <QItemSelectionModel>
 
 ContentExplorerWindow::ContentExplorerWindow(QWidget* parent) : QWidget(parent)
 {
-	ui.setupUi(this);
+	m_Ui.setupUi(this);
 
-	PopulateMockData();
+	m_DirectoryModel = new QFileSystemModel(this);
+	m_DirectoryModel->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
+
+	m_FileModel = new QFileSystemModel(this);
+	m_FileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
+
+	// No project is open yet: the explorer stays disabled and empty until rooted.
+	Clear();
 }
 
 void
-ContentExplorerWindow::PopulateMockData() noexcept
+ContentExplorerWindow::SetRootPath(const QString& path)
 {
-	m_directoryModel = new QStandardItemModel(this);
+	AttachModels();
+	setEnabled(true);
 
-	auto* content = MakeFolder("Content");
+	m_Ui.FileExplorer->setRootIndex(m_DirectoryModel->setRootPath(path));
+	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
+}
 
-	auto* meshes = MakeFolder("Meshes");
-	meshes->appendRow(MakeFolder("Characters"));
-	meshes->appendRow(MakeFolder("Environment"));
-	content->appendRow(meshes);
+void
+ContentExplorerWindow::AttachModels()
+{
+	if (m_Ui.FileExplorer->model() == m_DirectoryModel)
+		return;
 
-	auto* textures = MakeFolder("Textures");
-	textures->appendRow(MakeFolder("Albedo"));
-	textures->appendRow(MakeFolder("Normal"));
-	content->appendRow(textures);
+	m_Ui.FileExplorer->setModel(m_DirectoryModel);
+	m_Ui.FileExplorer->setHeaderHidden(true);
+	for (auto column = 1; column < m_DirectoryModel->columnCount(); ++column)
+		m_Ui.FileExplorer->hideColumn(column);
 
-	content->appendRow(MakeFolder("Materials"));
-	content->appendRow(MakeFolder("Scenes"));
-	content->appendRow(MakeFolder("Audio"));
+	m_Ui.CurrentDirectoryExplorer->setModel(m_FileModel);
+	m_Ui.CurrentDirectoryExplorer->verticalHeader()->setVisible(false);
+	m_Ui.CurrentDirectoryExplorer->horizontalHeader()->setStretchLastSection(true);
 
-	m_directoryModel->appendRow(content);
+	// Selecting a folder on the left shows that folder's contents on the right.
+	connect(
+		m_Ui.FileExplorer->selectionModel(),
+		&QItemSelectionModel::currentChanged,
+		this,
+		[this](const QModelIndex& current, const QModelIndex&) {
+			const auto path = m_DirectoryModel->filePath(current);
+			m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
+		});
+}
 
-	ui.FileExplorer->setModel(m_directoryModel);
-	ui.FileExplorer->setHeaderHidden(true);
-	ui.FileExplorer->expandAll();
-
-	m_fileModel = new QStandardItemModel(this);
-	m_fileModel->setHorizontalHeaderLabels({ "Name", "Type", "Size" });
-	m_fileModel->appendRow(MakeFileRow("hero.mesh", "Mesh", "1.2 MB"));
-	m_fileModel->appendRow(MakeFileRow("crate.mesh", "Mesh", "256 KB"));
-	m_fileModel->appendRow(MakeFileRow("brick_albedo.png", "Texture", "2.1 MB"));
-	m_fileModel->appendRow(MakeFileRow("brick_normal.png", "Texture", "2.0 MB"));
-	m_fileModel->appendRow(MakeFileRow("stone.mat", "Material", "4 KB"));
-	m_fileModel->appendRow(MakeFileRow("level_01.scene", "Scene", "88 KB"));
-	m_fileModel->appendRow(MakeFileRow("footstep.wav", "Audio", "512 KB"));
-
-	ui.CurrentDirectoryExplorer->setModel(m_fileModel);
-	ui.CurrentDirectoryExplorer->resizeColumnsToContents();
-	ui.CurrentDirectoryExplorer->horizontalHeader()->setStretchLastSection(true);
+void
+ContentExplorerWindow::Clear()
+{
+	m_Ui.FileExplorer->setModel(nullptr);
+	m_Ui.CurrentDirectoryExplorer->setModel(nullptr);
+	setEnabled(false);
 }

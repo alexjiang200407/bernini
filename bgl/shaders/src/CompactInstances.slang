@@ -10,7 +10,7 @@ static const uint kThreadsPerGroup = 128;
 struct Uniforms
 {
     PackedBuffer<BaseInstance> instanceBuffer;
-    ComputeBufferReadOnly<uint> psoPrefixSum;
+    ComputeBuffer<uint> psoPrefixSum;
     ComputeBuffer<uint> compactedInstances;
     ComputeBuffer<DispatchArgs> dispatchArgs;
 };

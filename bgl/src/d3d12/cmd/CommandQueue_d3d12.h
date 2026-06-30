@@ -67,6 +67,9 @@ namespace bgl
 		void
 		WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept override;
 
+		void
+		Flush() noexcept;
+
 	private:
 		QueueType                       m_Type;
 		wrl::ComPtr<ID3D12CommandQueue> m_CommandQueue;

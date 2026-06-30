@@ -20,6 +20,9 @@ public struct ForwardData<T>
     public RangeBuffer<uint> vertexMapBuffer;
     public RangeBuffer<Vertex> vertexBuffer;
     public RangeBuffer<uint> indexBuffer;
-    public ComputeBufferReadOnly<uint> compactedInstances;
-    public ComputeBufferReadOnly<uint> psoPrefixSum;
+    // These are UAV-only ComputeBuffers (the compaction pass writes them); read them
+    // through the UAV here so the bindless handle matches the descriptor type. Reading
+    // a RWStructuredBuffer is valid, and there is no SRV descriptor to bind instead.
+    public ComputeBuffer<uint> compactedInstances;
+    public ComputeBuffer<uint> psoPrefixSum;
 };

@@ -12,5 +12,5 @@ public:
 	explicit AssetImportWindow(QWidget* parent = nullptr);
 
 private:
-	Ui::AssetImportWindow ui;
+	Ui::AssetImportWindow m_Ui;
 };
