@@ -72,7 +72,7 @@ public:
 \texplicit {cls}(QWidget* parent = nullptr);
 
 private:
-\tUi::{cls} ui;
+\tUi::{cls} m_Ui;
 }};
 """
 
@@ -81,7 +81,7 @@ SOURCE = """\
 
 {cls}::{cls}(QWidget* parent) : {base}(parent)
 {{
-\tui.setupUi(this);
+\tm_Ui.setupUi(this);
 }}
 """
 

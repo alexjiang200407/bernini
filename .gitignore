@@ -15,3 +15,6 @@ CMakeUserPresets.json
 build*/
 __pycache__
 *.pyc
+
+# Local, developer-specific editor config (like .env); seeded from config.example.json
+editor/config.json

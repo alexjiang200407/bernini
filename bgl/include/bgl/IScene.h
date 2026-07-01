@@ -59,11 +59,10 @@ namespace bgl
 
 	struct SceneDesc
 	{
-		uint32_t maxInstances = 0;
-		uint32_t maxGeom      = 0;
-		uint32_t maxMeshlets  = 0;
-		uint32_t maxVertices  = 0;
-		uint32_t maxIndices   = 0;
+		uint32_t maxGeom     = 0;
+		uint32_t maxMeshlets = 0;
+		uint32_t maxVertices = 0;
+		uint32_t maxIndices  = 0;
 	};
 
 	class BGL_API IScene : public core::Ref
@@ -87,40 +86,15 @@ namespace bgl
 		virtual GeomHandle
 		AddSphereGeom(uint32_t xSegments, uint32_t ySegments, float radius) = 0;
 
-		virtual MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform) = 0;
-
-		MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform)
-		{
-			return CreateStaticMeshInstance(
-				geom,
-				MaterialHandle(MaterialType::kNull, core::slot_handle()),
-				transform);
-		}
-
-		/**
-		 * Removes a mesh instance. The geometry it referenced is left intact; its
-		 * reference count is decremented so it can later be removed by DeleteGeom.
-		 *
-		 * @param instance A handle returned by CreateStaticMeshInstance.
-		 * @throws SceneError if the handle is invalid or already removed.
-		 */
-		virtual void
-		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
-
 		/**
 		 * Removes geometry and frees its underlying vertex/index/meshlet data.
 		 *
 		 * @param geom A handle returned by a geometry-creating method.
 		 * @throws SceneError if the handle is invalid, already removed, or still
-		 *         referenced by one or more live mesh instances.
+		 *         referenced by one or more live mesh instances (held by a SceneView).
 		 */
 		virtual void
 		DeleteGeom(GeomHandle geom) = 0;
-
-		virtual uint32_t
-		GetInstanceCount() const noexcept = 0;
 
 	protected:
 		IScene() noexcept = default;

@@ -11,23 +11,28 @@ namespace
 	HeadlessOptions()
 	{
 		auto opts             = bgl::GraphicsOptions();
-		opts.headless         = true;
-		opts.width            = 64;
-		opts.height           = 64;
-		opts.wnd              = nullptr;
 		opts.enableDebugLayer = false;
 		return opts;
+	}
+
+	bgl::RenderTargetDesc
+	HeadlessTargetDesc()
+	{
+		auto desc     = bgl::RenderTargetDesc();
+		desc.width    = 64;
+		desc.height   = 64;
+		desc.headless = true;
+		return desc;
 	}
 
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc         = bgl::SceneDesc();
-		desc.maxInstances = 5;
-		desc.maxGeom      = 5;
-		desc.maxMeshlets  = 100;
-		desc.maxVertices  = 1000;
-		desc.maxIndices   = 1000;
+		auto desc        = bgl::SceneDesc();
+		desc.maxGeom     = 5;
+		desc.maxMeshlets = 100;
+		desc.maxVertices = 1000;
+		desc.maxIndices  = 1000;
 		return desc;
 	}
 }
@@ -43,6 +48,8 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 	auto geom = scene->AddCubeGeom();
 	REQUIRE(geom.IsValid());
 
+	auto view = gfx->CreateSceneView(scene, 5);
+
 	SECTION("Invalid material handle throws")
 	{
 		auto badMaterial         = bgl::MaterialHandle();
@@ -50,7 +57,7 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 		REQUIRE_FALSE(badMaterial.IsValid());
 
 		REQUIRE_THROWS_AS(
-			scene->CreateStaticMeshInstance(geom, badMaterial, glm::mat4(1.0f)),
+			view->CreateStaticMeshInstance(geom, badMaterial, glm::mat4(1.0f)),
 			bgl::SceneError);
 	}
 
@@ -64,13 +71,13 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 		auto badGeom = bgl::GeomHandle();
 
 		REQUIRE_THROWS_AS(
-			scene->CreateStaticMeshInstance(badGeom, validMaterial, glm::mat4(1.0f)),
+			view->CreateStaticMeshInstance(badGeom, validMaterial, glm::mat4(1.0f)),
 			bgl::SceneError);
 	}
 
 	SECTION("Valid arguments do not throw")
 	{
-		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
 	}
 }
 
@@ -85,48 +92,50 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 	auto geom = scene->AddCubeGeom();
 	REQUIRE(geom.IsValid());
 
+	auto view = gfx->CreateSceneView(scene, 5);
+
 	SECTION("DeleteMeshInstance keeps the geom usable")
 	{
-		auto inst = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 		REQUIRE(inst.IsValid());
 
-		REQUIRE_NOTHROW(scene->DeleteMeshInstance(inst));
+		REQUIRE_NOTHROW(view->DeleteMeshInstance(inst));
 
 		// The geom itself was not removed, so it can still be instanced.
-		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
 	}
 
 	SECTION("DeleteMeshInstance on an invalid handle throws")
 	{
-		REQUIRE_THROWS_AS(scene->DeleteMeshInstance(bgl::MeshInstanceHandle{}), bgl::SceneError);
+		REQUIRE_THROWS_AS(view->DeleteMeshInstance(bgl::MeshInstanceHandle{}), bgl::SceneError);
 	}
 
 	SECTION("Deleting the same instance twice throws")
 	{
-		auto inst = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
-		REQUIRE_NOTHROW(scene->DeleteMeshInstance(inst));
-		REQUIRE_THROWS_AS(scene->DeleteMeshInstance(inst), bgl::SceneError);
+		auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		REQUIRE_NOTHROW(view->DeleteMeshInstance(inst));
+		REQUIRE_THROWS_AS(view->DeleteMeshInstance(inst), bgl::SceneError);
 	}
 
 	SECTION("DeleteGeom fails while a mesh instance references it")
 	{
-		auto inst = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);
 
 		// Removing the last reference allows the geom to be deleted.
-		REQUIRE_NOTHROW(scene->DeleteMeshInstance(inst));
+		REQUIRE_NOTHROW(view->DeleteMeshInstance(inst));
 		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 	}
 
 	SECTION("DeleteGeom requires every reference to be gone")
 	{
-		auto a = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
-		auto b = scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto a = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto b = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 
-		scene->DeleteMeshInstance(a);
+		view->DeleteMeshInstance(a);
 		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);  // b still references it
 
-		scene->DeleteMeshInstance(b);
+		view->DeleteMeshInstance(b);
 		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 	}
 
@@ -135,7 +144,7 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 
 		// The handle is now stale; both reuse and a second delete are rejected.
-		REQUIRE_THROWS_AS(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
+		REQUIRE_THROWS_AS(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
 		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);
 	}
 }
@@ -147,28 +156,27 @@ TEST_CASE("SceneError on capacity exhaustion", "[error][scene][capacity]")
 
 	SECTION("Exceeding maxInstances throws SceneError")
 	{
-		auto desc         = bgl::SceneDesc();
-		desc.maxInstances = 1;
-		desc.maxGeom      = 1;
-		desc.maxMeshlets  = 8;
-		desc.maxVertices  = 64;
-		desc.maxIndices   = 64;
+		auto desc        = bgl::SceneDesc();
+		desc.maxGeom     = 1;
+		desc.maxMeshlets = 8;
+		desc.maxVertices = 64;
+		desc.maxIndices  = 64;
 
 		auto scene = gfx->CreateScene(desc);
+		auto view  = gfx->CreateSceneView(scene, 1);
 		auto geom  = scene->AddCubeGeom();
 
-		REQUIRE_NOTHROW(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
-		REQUIRE_THROWS_AS(scene->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
+		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		REQUIRE_THROWS_AS(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
 	}
 
 	SECTION("Exceeding maxGeom throws SceneError")
 	{
-		auto desc         = bgl::SceneDesc();
-		desc.maxInstances = 4;
-		desc.maxGeom      = 1;
-		desc.maxMeshlets  = 100;
-		desc.maxVertices  = 1000;
-		desc.maxIndices   = 1000;
+		auto desc        = bgl::SceneDesc();
+		desc.maxGeom     = 1;
+		desc.maxMeshlets = 100;
+		desc.maxVertices = 1000;
+		desc.maxIndices  = 1000;
 
 		auto scene = gfx->CreateScene(desc);
 
@@ -182,24 +190,27 @@ TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
+	auto target = gfx->CreateRenderTarget(HeadlessTargetDesc());
+	REQUIRE(target != nullptr);
+
 	SECTION("BeginFrame while a frame is already active throws")
 	{
-		gfx->BeginFrame();
-		REQUIRE_THROWS_AS(gfx->BeginFrame(), bgl::GraphicsError);
+		gfx->BeginFrame(target);
+		REQUIRE_THROWS_AS(gfx->BeginFrame(target), bgl::GraphicsError);
 	}
 
 	SECTION("Draw outside of a frame throws")
 	{
-		auto context  = bgl::RenderContext();
-		context.scene = nullptr;
+		auto context = bgl::RenderContext();
+		context.view = nullptr;
 		REQUIRE_THROWS_AS(gfx->Draw(context), bgl::GraphicsError);
 	}
 
 	SECTION("Draw with a null scene throws")
 	{
-		gfx->BeginFrame();
-		auto context  = bgl::RenderContext();
-		context.scene = nullptr;
+		gfx->BeginFrame(target);
+		auto context = bgl::RenderContext();
+		context.view = nullptr;
 		REQUIRE_THROWS_AS(gfx->Draw(context), bgl::GraphicsError);
 	}
 
@@ -210,7 +221,9 @@ TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 
 	SECTION("ScreenshotRaw between BeginFrame and EndFrame throws")
 	{
-		gfx->BeginFrame();
-		REQUIRE_THROWS_AS(gfx->ScreenshotRaw("golden/should_not_exist.dds"), bgl::GraphicsError);
+		gfx->BeginFrame(target);
+		REQUIRE_THROWS_AS(
+			gfx->ScreenshotRaw(target, "golden/should_not_exist.dds"),
+			bgl::GraphicsError);
 	}
 }

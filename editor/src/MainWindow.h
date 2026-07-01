@@ -2,10 +2,19 @@
 
 #include <QMainWindow>
 
+#include <core/ref/SharedRef.h>
+
 #include "ui_MainWindow.h"
 
 class Project;
 class ContentExplorerWindow;
+class LevelEditorWindow;
+
+namespace bgl
+{
+	class IScene;
+	class IGraphics;
+}
 
 class MainWindow : public QMainWindow
 {
@@ -25,7 +34,10 @@ private:
 	void
 	SetActiveProject(Project project);
 
-	Ui::MainWindow           m_Ui;
-	std::unique_ptr<Project> m_Project;
-	ContentExplorerWindow*   m_ContentExplorer = nullptr;
+	Ui::MainWindow                  m_Ui;
+	std::unique_ptr<Project>        m_Project;
+	ContentExplorerWindow*          m_ContentExplorer = nullptr;
+	LevelEditorWindow*              m_LevelEditor     = nullptr;
+	core::SharedRef<bgl::IGraphics> m_Graphics;
+	core::SharedRef<bgl::IScene>    m_Scene;
 };

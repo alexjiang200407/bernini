@@ -1,5 +1,6 @@
 #include "idl/idl.h"
 #include "scene/Scene.h"
+#include "scene/SceneView.h"
 #include <bgl/IGraphics.h>
 
 namespace
@@ -8,10 +9,6 @@ namespace
 	HeadlessOptions()
 	{
 		auto opts             = bgl::GraphicsOptions();
-		opts.headless         = true;
-		opts.width            = 64;
-		opts.height           = 64;
-		opts.wnd              = nullptr;
 		opts.enableDebugLayer = false;
 		return opts;
 	}
@@ -19,12 +16,11 @@ namespace
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc         = bgl::SceneDesc();
-		desc.maxInstances = 5;
-		desc.maxGeom      = 5;
-		desc.maxMeshlets  = 100;
-		desc.maxVertices  = 1000;
-		desc.maxIndices   = 1000;
+		auto desc        = bgl::SceneDesc();
+		desc.maxGeom     = 5;
+		desc.maxMeshlets = 100;
+		desc.maxVertices = 1000;
+		desc.maxIndices  = 1000;
 		return desc;
 	}
 }
@@ -40,18 +36,28 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto* scene = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
+	auto viewHandle = gfx->CreateSceneView(sceneHandle, 5);
+	REQUIRE(viewHandle != nullptr);
+
+	auto* view = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
 	auto material         = bgl::MaterialHandle();
 	material.materialType = bgl::MaterialType::kPBR;
 
 	auto geom = scene->AddCubeGeom();
 	REQUIRE(geom.IsValid());
 
-	auto inst = scene->CreateStaticMeshInstance(geom, material, glm::mat4(1.0f));
+	auto inst = view->CreateStaticMeshInstance(geom, material, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
 
-	auto buffers = scene->GetAllBuffers();
-	[[maybe_unused]] auto& [instanceBuffer, smiBuffer, geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer, drawArgs] =
-		buffers;
+	// Geometry buffers live on the Scene; instance buffers on the SceneView.
+	auto geomBuffers = scene->GetGeometryBuffers();
+	[[maybe_unused]] auto& [geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer] =
+		geomBuffers;
+
+	auto instBuffers                                             = view->GetInstanceBuffers();
+	[[maybe_unused]] auto& [instanceBuffer, smiBuffer, drawArgs] = instBuffers;
 
 	const auto&    baseInstance = instanceBuffer[inst.handle];
 	const uint32_t smiIndex     = baseInstance.meshInstance.offset;
@@ -88,7 +94,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 	SECTION("After DeleteMeshInstance the geom and its ranges survive")
 	{
-		scene->DeleteMeshInstance(inst);
+		view->DeleteMeshInstance(inst);
 
 		// PackedBuffer: the instance entry is gone and its handle is now stale.
 		CHECK(instanceBuffer.Count() == 0);
@@ -111,7 +117,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 	SECTION("After DeleteGeom the geometry ranges are freed")
 	{
-		scene->DeleteMeshInstance(inst);
+		view->DeleteMeshInstance(inst);
 		scene->DeleteGeom(geom);
 
 		// EntryBuffer (geom): slot freed, handle stale.

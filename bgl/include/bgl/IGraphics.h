@@ -1,5 +1,7 @@
 #pragma once
+#include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
 #include <bgl/RenderContext.h>
 #include <bgl/error.h>
 #include <bgl/util.h>
@@ -28,13 +30,11 @@ namespace bgl
 			kOff,
 		};
 
-		int      width;
-		int      height;
-		bool     headless;
-		bool     enableDebugLayer;
-		bool     enableGPUValidationLayer;
-		bool     enablePixDebug;
-		void*    wnd;
+		bool enableDebugLayer;
+		bool enableGPUValidationLayer;
+		bool enablePixDebug;
+		bool strictError = false;
+
 		LogLevel logLevel = LogLevel::kError;
 
 		// Capacities for the graphics-owned descriptor heaps / resource pools.
@@ -56,8 +56,21 @@ namespace bgl
 		IGraphics&
 		operator=(const IGraphics&) noexcept = delete;
 
+		/**
+		 * Creates a render output (windowed swapchain or headless offscreen). One
+		 * Graphics can own many targets and render to each independently.
+		 */
+		virtual RenderTargetHandle
+		CreateRenderTarget(const RenderTargetDesc& desc) = 0;
+
+		/**
+		 * Begins a frame bound to `target`; Draw() and EndFrame() act on this target
+		 * until EndFrame() returns. Only one frame may be active at a time.
+		 *
+		 * @throws GraphicsError if a frame is already active.
+		 */
 		virtual void
-		BeginFrame() = 0;
+		BeginFrame(const RenderTargetHandle& target) = 0;
 
 		virtual void
 		Draw(const RenderContext& context) = 0;
@@ -65,31 +78,32 @@ namespace bgl
 		virtual void
 		EndFrame() = 0;
 
-		/**
-		 * Recreates the backbuffers and depth buffer at the given size, resizing the
-		 * swap chain as well when presenting to a window.
-		 *
-		 * @param width New backbuffer width in pixels; must be non-zero.
-		 * @param height New backbuffer height in pixels; must be non-zero.
-		 * @throws GraphicsError if called between BeginFrame and EndFrame, or if either
-		 *         dimension is zero.
-		 */
-		virtual void
-		Resize(uint32_t width, uint32_t height) = 0;
-
 		void
-		DrawFrame(const RenderContext& context)
+		DrawFrame(const RenderTargetHandle& target, const RenderContext& context)
 		{
-			BeginFrame();
+			BeginFrame(target);
 			Draw(context);
 			EndFrame();
 		}
 
+		/**
+		 * Recreates a target's backbuffers and depth at the given size, resizing the
+		 * swapchain too for a windowed target.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, or if either
+		 *         dimension is zero.
+		 */
 		virtual void
-		ScreenshotRaw(const std::string& filepath) = 0;
+		Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height) = 0;
+
+		virtual void
+		ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath) = 0;
 
 		virtual SceneHandle
 		CreateScene(SceneDesc desc) = 0;
+
+		virtual SceneViewHandle
+		CreateSceneView(const SceneHandle& scene, uint32_t maxInstances) = 0;
 
 	protected:
 		IGraphics() noexcept = default;

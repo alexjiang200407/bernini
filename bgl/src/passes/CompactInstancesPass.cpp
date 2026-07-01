@@ -6,6 +6,7 @@
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/Scene.h"
+#include <bgl/ISceneView.h>
 #include <bgl/PsoType.h>
 #include <core/math.h>
 
@@ -144,6 +145,11 @@ namespace bgl
 	void
 	CompactInstancesPass::ExecuteHistogramAndPrefixSum(const PassContext& ctx, const DrawData& draw)
 	{
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
+
 		auto instanceBuffer     = ctx.GetBuffer("scene.instanceBuffer");
 		auto psoPrefixSumBuffer = ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer");
 
@@ -159,7 +165,7 @@ namespace bgl
 
 		cmdList->SetComputeState(computeState);
 
-		const auto instanceCount = draw.scene->GetInstanceCount();
+		const auto instanceCount = draw.view->GetInstanceCount();
 		cmdList->Dispatch(core::div_ceil(instanceCount, c_HistogramGroupSize), 1, 1);
 
 		m_PrefixSum["gUniforms"]["inOutBuffer"] = psoPrefixSumBuffer;
@@ -176,6 +182,11 @@ namespace bgl
 		const PassContext& ctx,
 		const DrawData&    draw)
 	{
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
+
 		auto instanceBuffer              = ctx.GetBuffer("scene.instanceBuffer");
 		auto compactedInstancesBuffer    = ctx.GetBuffer("scene.compactedInstances");
 		auto psoPrefixSumBuffer          = ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer");
@@ -193,7 +204,7 @@ namespace bgl
 
 		cmdList->SetComputeState(computeState);
 
-		const auto instanceCount = draw.scene->GetInstanceCount();
+		const auto instanceCount = draw.view->GetInstanceCount();
 		cmdList->Dispatch(core::div_ceil(instanceCount, c_CompactGroupSize), 1, 1);
 	}
 }

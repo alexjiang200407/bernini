@@ -20,6 +20,7 @@ add_library(core STATIC ${CORE_SOURCES} ${CORE_HEADERS} ${CORE_INTERNAL_HEADERS}
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(cpptrace CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)   # Settings (JSON config) parsing
 
 target_link_libraries(
     core
@@ -27,6 +28,7 @@ target_link_libraries(
         spdlog::spdlog_header_only
     PRIVATE
         cpptrace::cpptrace
+        nlohmann_json::nlohmann_json
 )
 
 enable_strict_compiler(core)
@@ -61,3 +63,37 @@ endif()
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${CORE_SOURCES} ${CORE_INTERNAL_HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/core" PREFIX "Shared Header Files" FILES ${CORE_HEADERS})
+
+if (BUILD_TESTS)
+    find_package(Catch2 CONFIG REQUIRED)
+
+    file(GLOB_RECURSE CORE_TESTS_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
+    )
+
+    add_executable(core_tests ${CORE_TESTS_SOURCES})
+
+    target_include_directories(core_tests
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+    )
+
+    target_link_libraries(core_tests
+        PRIVATE
+            core
+            Catch2::Catch2
+            Catch2::Catch2WithMain
+    )
+
+    target_precompile_headers(core_tests
+        PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
+    )
+
+    set_target_properties(core_tests PROPERTIES
+        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    )
+
+    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${CORE_TESTS_SOURCES})
+
+    enable_strict_compiler(core_tests)
+endif()

@@ -1,0 +1,22 @@
+{
+    "graphics": {
+        "enableDebugLayer": true,
+        "enableGPUBasedValidation": false,
+        "logLevel": 0,
+        "enablePixDebug": true,
+        "maxCbvSrvUavs": 2048,
+        "maxRtvs": 32,
+        "maxDsvs": 16,
+        "maxTextures": 2048,
+        "strictError": false
+    },
+    "scene": {
+        "maxGeom": 100,
+        "maxMeshlets": 1000,
+        "maxVertices": 100000,
+        "maxIndices": 100000
+    },
+    "levelEditor": {
+        "maxInstances": 1000
+    }
+}

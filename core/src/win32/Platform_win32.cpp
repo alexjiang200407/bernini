@@ -39,13 +39,16 @@ namespace core
 
 			auto hinstance = GetModuleHandle(nullptr) >> win32::errorChecker;
 
-			WNDCLASSEX wc    = {};
-			wc.cbSize        = sizeof(wc);
-			wc.lpfnWndProc   = WindowProc;
-			wc.hInstance     = hinstance;
-			wc.lpszClassName = CLASS_NAME;
+			static auto s_classRegistered = std::once_flag();
+			std::call_once(s_classRegistered, [hinstance]() {
+				WNDCLASSEX wc    = {};
+				wc.cbSize        = sizeof(wc);
+				wc.lpfnWndProc   = WindowProc;
+				wc.hInstance     = hinstance;
+				wc.lpszClassName = CLASS_NAME;
 
-			RegisterClassEx(&wc) >> win32::errorChecker;
+				RegisterClassEx(&wc) >> win32::errorChecker;
+			});
 
 			DWORD style   = 0;
 			DWORD exStyle = 0;

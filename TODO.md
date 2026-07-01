@@ -1,5 +1,3 @@
-- Resize Render Targets
-
 
 - Asset loading
 - Phong-Blinn Deferred Shading

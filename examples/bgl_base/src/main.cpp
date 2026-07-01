@@ -39,9 +39,6 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto wnd = core::IPlatform::Create(opts);
 
 		auto gfxOpts                     = bgl::GraphicsOptions{};
-		gfxOpts.width                    = opts.width;
-		gfxOpts.height                   = opts.height;
-		gfxOpts.headless                 = false;
 		gfxOpts.enableDebugLayer         = true;
 		gfxOpts.enableGPUValidationLayer = true;
 		gfxOpts.enablePixDebug           = true;
@@ -49,27 +46,35 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
 
+		// The renderer is window-agnostic; the swapchain lives in a per-window target.
+		auto targetDesc     = bgl::RenderTargetDesc{};
+		targetDesc.width    = opts.width;
+		targetDesc.height   = opts.height;
+		targetDesc.headless = false;
+		targetDesc.wnd      = wnd->GetNativeHandle();
+		auto target         = graphics->CreateRenderTarget(targetDesc);
+
 		auto visitor = EventVisitor();
 
-		auto sceneDesc         = bgl::SceneDesc();
-		sceneDesc.maxIndices   = 10000;
-		sceneDesc.maxVertices  = 10000;
-		sceneDesc.maxGeom      = 100;
-		sceneDesc.maxInstances = 100;
-		sceneDesc.maxMeshlets  = 1000;
+		auto sceneDesc        = bgl::SceneDesc();
+		sceneDesc.maxIndices  = 10000;
+		sceneDesc.maxVertices = 10000;
+		sceneDesc.maxGeom     = 100;
+		sceneDesc.maxMeshlets = 1000;
 
 		auto scene  = graphics->CreateScene(std::move(sceneDesc));
+		auto view   = graphics->CreateSceneView(scene, 100);
 		auto cube   = scene->AddCubeGeom();
 		auto sphere = scene->AddSphereGeom(32, 32, 1.0f);
 
 		auto transform = glm::mat4(1.0f);
 
 		auto pbrMaterial = bgl::MaterialHandle(bgl::MaterialType::kPBR, core::slot_handle());
-		auto inst1       = scene->CreateStaticMeshInstance(cube, pbrMaterial, transform);
+		auto inst1       = view->CreateStaticMeshInstance(cube, pbrMaterial, transform);
 
 		transform[3][0] = -5.0f;
 
-		auto inst2 = scene->CreateStaticMeshInstance(sphere, transform);
+		auto inst2 = view->CreateStaticMeshInstance(sphere, transform);
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 
@@ -82,7 +87,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		auto context   = bgl::RenderContext{};
-		context.scene  = scene;
+		context.view   = view;
 		context.camera = camera;
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
@@ -91,11 +96,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		for (auto res = wnd->Process(&visitor); res != core::IPlatform::kClose;
 		     res      = wnd->Process(&visitor))
 		{
-			graphics->DrawFrame(context);
+			graphics->DrawFrame(target, context);
 
 			if (firstFrame)
 			{
-				graphics->ScreenshotRaw("bgl_base.dds");
+				graphics->ScreenshotRaw(target, "bgl_base.dds");
 			}
 
 			firstFrame = false;

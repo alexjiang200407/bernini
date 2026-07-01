@@ -8,6 +8,10 @@
 
 #include "Project/Project.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Windows/LevelEditor/LevelEditorWindow.h"
+#include <bgl/IGraphics.h>
+#include <core/file/file.h>
+#include <core/settings/Settings.h>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
@@ -17,13 +21,58 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	connect(m_Ui.actionOpenProject, &QAction::triggered, this, &MainWindow::OpenProject);
 	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
 
-	auto* contentExplorerDock = new QDockWidget("Content Explorer", this);
-	contentExplorerDock->setObjectName("ContentExplorerDock");
-	m_ContentExplorer = new ContentExplorerWindow(contentExplorerDock);
-	contentExplorerDock->setWidget(m_ContentExplorer);
-	addDockWidget(Qt::BottomDockWidgetArea, contentExplorerDock);
+	{
+		const auto     configPath = core::file::getLibraryPath().parent_path() / "config.json";
+		core::Settings settings(configPath);
+		const auto     gfxSettings = settings["graphics"];
 
-	m_Ui.menuWindow->addAction(contentExplorerDock->toggleViewAction());
+		auto gfxOpts             = bgl::GraphicsOptions();
+		gfxOpts.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
+		gfxOpts.enableGPUValidationLayer =
+			gfxSettings["enableGPUBasedValidation"].GetOrDefault(false);
+		gfxOpts.enablePixDebug = gfxSettings["enablePixDebug"].GetOrDefault(false);
+		gfxOpts.strictError    = gfxSettings["strictError"].GetOrDefault(false);
+		gfxOpts.logLevel       = static_cast<bgl::GraphicsOptions::LogLevel>(
+			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(gfxOpts.logLevel)));
+		gfxOpts.maxCbvSrvUavs = gfxSettings["maxCbvSrvUavs"].GetOrDefault(gfxOpts.maxCbvSrvUavs);
+		gfxOpts.maxRtvs       = gfxSettings["maxRtvs"].GetOrDefault(gfxOpts.maxRtvs);
+		gfxOpts.maxDsvs       = gfxSettings["maxDsvs"].GetOrDefault(gfxOpts.maxDsvs);
+		gfxOpts.maxTextures   = gfxSettings["maxTextures"].GetOrDefault(gfxOpts.maxTextures);
+
+		m_Graphics = bgl::CreateGraphics(gfxOpts);
+
+		// The scene rendered in the default Level Editor viewport.
+		auto sceneDesc        = bgl::SceneDesc();
+		auto sceneSettings    = settings["scene"];
+		sceneDesc.maxGeom     = sceneSettings["maxGeom"].GetOrDefault(100);
+		sceneDesc.maxMeshlets = sceneSettings["maxMeshlets"].GetOrDefault(1000);
+		sceneDesc.maxVertices = sceneSettings["maxVertices"].GetOrDefault(100000);
+		sceneDesc.maxIndices  = sceneSettings["maxIndices"].GetOrDefault(100000);
+
+		m_Scene = m_Graphics->CreateScene(sceneDesc);
+
+		auto levelDesc         = RenderTargetWindowDesc();
+		levelDesc.gfx          = m_Graphics;
+		levelDesc.scene        = m_Scene;
+		levelDesc.maxInstances = settings["levelEditor"]["maxInstances"].GetOrDefault(1000);
+
+		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
+
+		setCentralWidget(m_LevelEditor);
+	}
+
+	{
+		auto* contentExplorerDock = new QDockWidget("Content Explorer", this);
+		contentExplorerDock->setObjectName("ContentExplorerDock");
+		m_ContentExplorer = new ContentExplorerWindow(contentExplorerDock);
+		contentExplorerDock->setWidget(m_ContentExplorer);
+		addDockWidget(Qt::BottomDockWidgetArea, contentExplorerDock);
+		contentExplorerDock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+
+		m_Ui.menuWindow->addAction(contentExplorerDock->toggleViewAction());
+
+		resizeDocks({ contentExplorerDock }, { 200 }, Qt::Vertical);
+	}
 }
 
 MainWindow::~MainWindow() = default;

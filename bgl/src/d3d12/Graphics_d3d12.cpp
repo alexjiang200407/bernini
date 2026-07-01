@@ -1,3 +1,4 @@
+#include "RenderTarget_d3d12.h"
 #include "cmd/CommandAllocator_d3d12.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
@@ -14,6 +15,7 @@
 #include "passes/PreparePresentPass.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
+#include "scene/SceneView.h"
 #include <DirectXTex.h>
 #include <bgl/RenderContext.h>
 #include <core/file/file.h>
@@ -24,19 +26,7 @@ namespace bgl
 {
 	class IScene;
 
-	struct TextureRtvHandle
-	{
-		TextureHandle textureHandle;
-		RtvHandle     rtvHandle;
-	};
-
-	struct TextureDsvHandle
-	{
-		TextureHandle textureHandle;
-		DsvHandle     dsvHandle;
-	};
-
-	// Graph resource name of the swap chain's backbuffer.
+	// Graph resource name of the active target's backbuffer.
 	constexpr std::string_view c_BackbufferName = "backbuffer";
 
 	class Graphics : public core::RefCounter<GraphicsBase>
@@ -55,7 +45,7 @@ namespace bgl
 		operator=(Graphics&&) noexcept = delete;
 
 		void
-		BeginFrame() override;
+		BeginFrame(const RenderTargetHandle& target) override;
 
 		void
 		Draw(const RenderContext& context) override;
@@ -64,10 +54,10 @@ namespace bgl
 		EndFrame() override;
 
 		void
-		Resize(uint32_t width, uint32_t height) override;
+		Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height) override;
 
 		void
-		ScreenshotRaw(const std::string& filepath) override;
+		ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath) override;
 
 		const GraphicsOptions&
 		GetOptions() const
@@ -93,19 +83,24 @@ namespace bgl
 			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
 		}
 
+		SceneViewHandle
+		CreateSceneView(const SceneHandle& scene, uint32_t maxInstances) override
+		{
+			return core::SharedRef<SceneView>::Make(scene, maxInstances, m_ResourceManager);
+		}
+
+		RenderTargetHandle
+		CreateRenderTarget(const RenderTargetDesc& desc) override
+		{
+			return core::SharedRef<RenderTarget>::Make(
+				desc,
+				m_Device,
+				m_CommandQueue,
+				m_ResourceManager,
+				m_Opts.enableDebugLayer);
+		}
+
 	private:
-		void
-		CreateSwapchain(HWND hWnd);
-
-		void
-		CreateRenderTargets();
-
-		void
-		CreateOffscreenRenderTargets();
-
-		void
-		DestroyRenderTargets(uint64_t fenceValue);
-
 		// Forwards debug-layer / GPU-based-validation messages to the spdlog log.
 		static void CALLBACK
 		LogD3D12Message(
@@ -116,29 +111,25 @@ namespace bgl
 			void*                  context);
 
 	private:
-		UINT                                 m_FrameIndex = 0;
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
 
 		GraphicsOptions m_Opts;
 
-		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
+		DeviceHandle       m_Device;
+		CommandQueueHandle m_CommandQueue;
+		CommandListHandle  m_CommandList;
 
-		DeviceHandle           m_Device;
-		CommandAllocatorHandle m_CommandAllocator[c_BufferCount];
-		CommandQueueHandle     m_CommandQueue;
-		CommandListHandle      m_CommandList;
-
-		TextureRtvHandle m_BackBuffers[c_BufferCount];
-		TextureDsvHandle m_DepthBuffer;
-		UINT64           m_FenceValues[c_BufferCount] = { 0, 0 };
+		// Allocator used only to construct m_CommandList; per-frame recording uses the
+		// active target's own allocator ring.
+		CommandAllocatorHandle m_BootstrapAllocator;
 
 		bool m_FrameActive = false;
 
+		// The render target bound by the current BeginFrame (null outside a frame).
+		RenderTarget* m_ActiveTarget = nullptr;
+
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
-
-		// Backbuffer index that holds the most recently rendered frame (for ScreenshotRaw).
-		UINT m_LastPresentedIndex = 0;
 
 		wrl::ComPtr<ID3D12Debug1>     m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue>   m_DxgiInfoQueue;
@@ -223,15 +214,12 @@ namespace bgl
 			m_D3D12InfoQueue->RegisterMessageCallback(
 				&Graphics::LogD3D12Message,
 				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
-				nullptr,
+				this,
 				&m_MessageCallbackCookie) >>
 				d3d12ErrChecker;
 		}
 
-		for (UINT i = 0; i < c_BufferCount; i++)
-		{
-			m_CommandAllocator[i] = m_Device->CreateCommandAllocator();
-		}
+		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
 
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 
@@ -249,18 +237,7 @@ namespace bgl
 		cmdListDesc.type = QueueType::kGraphics;
 
 		m_CommandList =
-			m_Device->CreateCommandList(cmdListDesc, m_CommandAllocator[0], m_ResourceManager);
-
-		if (!m_Opts.headless)
-		{
-			HWND hwnd = m_Opts.wnd ? static_cast<HWND>(m_Opts.wnd) : GetActiveWindow();
-			CreateSwapchain(hwnd);
-			CreateRenderTargets();
-		}
-		else
-		{
-			CreateOffscreenRenderTargets();
-		}
+			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
@@ -281,13 +258,8 @@ namespace bgl
 			m_CommandQueue->WaitForFenceCPUBlocking(shutdownFenceValue);
 		}
 
-		if (m_SwapChain)
-			m_SwapChain->SetFullscreenState(FALSE, nullptr) >> d3d12ErrChecker;
-
 		m_Forward.Release();
 		m_CompactInstances.Release(shutdownFenceValue, false);
-
-		DestroyRenderTargets(shutdownFenceValue);
 
 		// Clear retained passes; each pass descriptor holds a resource-manager reference
 		// that would otherwise keep the manager alive past the live-object report.
@@ -296,16 +268,7 @@ namespace bgl
 		m_CommandList.Reset();
 		m_ResourceManager.Reset();
 
-		for (UINT i = 0; i < c_BufferCount; i++)
-		{
-			m_CommandAllocator[i].Reset();
-		}
-
-		if (m_SwapChain)
-		{
-			m_SwapChain->SetFullscreenState(FALSE, nullptr);
-			m_SwapChain.Reset();
-		}
+		m_BootstrapAllocator.Reset();
 
 		m_CommandQueue.Reset();
 		m_Device.Reset();
@@ -329,47 +292,49 @@ namespace bgl
 	}
 
 	void
-	Graphics::BeginFrame()
+	Graphics::BeginFrame(const RenderTargetHandle& target)
 	{
 		if (m_FrameActive)
 		{
 			throw GraphicsError("BeginFrame called while a frame is already active");
 		}
 
-		uint64_t fenceToWaitOn = m_FenceValues[m_FrameIndex];
+		m_ActiveTarget = target->As<RenderTarget>();
+		gassert(m_ActiveTarget != nullptr, "BeginFrame requires a valid RenderTarget");
+
+		RenderTarget& rt    = *m_ActiveTarget;
+		const UINT    index = rt.m_FrameIndex;
+
+		uint64_t fenceToWaitOn = rt.m_FenceValues[index];
 		if (fenceToWaitOn != 0)
 		{
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
 		}
 
-		m_CommandAllocator[m_FrameIndex]->ResetAllocator();
+		rt.m_CommandAllocator[index]->ResetAllocator();
 
-		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
+		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
 
-		// Reset per-frame state but keep the FrameGraph instance so it retains the
-		// last access state of each resource from the previous frame.
 		m_FrameGraph.Reset();
 		m_DrawCount = 0;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
-			m_BackBuffers[m_FrameIndex].textureHandle,
+			rt.m_BackBuffers[index].textureHandle,
 			AccessState{ BarrierSyncFlag::kNone,
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
-		// Clear pass: declares the backbuffer as a render target (the graph derives
-		// the Present->RenderTarget transition) and clears the frame's targets.
 		const std::array<ClearPass::ColorTarget, 1> colorTargets{
 			{ { std::string(c_BackbufferName),
-			    m_BackBuffers[m_FrameIndex].rtvHandle,
+			    rt.m_BackBuffers[index].rtvHandle,
 			    { 0.0f, 0.0f, 0.0f, 1.0f } } }
 		};
 		ClearPass().AttachToFrameGraph(
 			m_FrameGraph,
 			m_ResourceManager.Get(),
 			colorTargets,
-			m_DepthBuffer.dsvHandle);
+			rt.m_DepthBuffer.dsvHandle);
 
 		m_FrameActive = true;
 	}
@@ -382,28 +347,31 @@ namespace bgl
 			throw GraphicsError("Draw must be called between BeginFrame and EndFrame");
 		}
 
-		if (context.scene == nullptr)
+		if (context.view == nullptr)
 		{
-			throw GraphicsError("RenderContext passed to Draw requires a scene");
+			throw GraphicsError("RenderContext passed to Draw requires a SceneView");
 		}
 
-		auto       scene_   = context.scene->As<Scene>();
+		auto       view_    = context.view->As<SceneView>();
+		auto       scene_   = view_->GetScene()->As<Scene>();
 		const auto viewport = context.viewport;
 		const auto viewProj = context.camera.GetViewProjection();
 
 		const uint32_t drawIdx = m_DrawCount++;
 
-		m_FrameGraph.SetResourceNamespace(scene_->ResourceNamespace());
+		m_FrameGraph.SetResourceNamespace(view_->ResourceNamespace());
 
 		scene_->AttachToFrameGraph(m_FrameGraph, drawIdx);
+		view_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw              = DrawData();
-		draw.drawIdx           = drawIdx;
-		draw.scene             = context.scene;
-		draw.viewport          = viewport;
-		draw.viewProj          = viewProj;
-		draw.backBufferHandle  = m_BackBuffers[m_FrameIndex].rtvHandle;
-		draw.depthBufferHandle = m_DepthBuffer.dsvHandle;
+		auto draw     = DrawData();
+		draw.drawIdx  = drawIdx;
+		draw.view     = context.view;
+		draw.viewport = viewport;
+		draw.viewProj = viewProj;
+		draw.backBufferHandle =
+			m_ActiveTarget->m_BackBuffers[m_ActiveTarget->m_FrameIndex].rtvHandle;
+		draw.depthBufferHandle = m_ActiveTarget->m_DepthBuffer.dsvHandle;
 		draw.backBufferName    = std::string(c_BackbufferName);
 
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
@@ -418,6 +386,9 @@ namespace bgl
 			throw GraphicsError("EndFrame called without a matching BeginFrame");
 		}
 
+		RenderTarget& rt    = *m_ActiveTarget;
+		const UINT    index = rt.m_FrameIndex;
+
 		m_FrameGraph.SetResourceNamespace("");
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 
@@ -426,33 +397,34 @@ namespace bgl
 
 		m_CommandList->Close();
 
-		m_FenceValues[m_FrameIndex] = m_CommandQueue->ExecuteCommandList(m_CommandList);
+		rt.m_FenceValues[index] = m_CommandQueue->ExecuteCommandList(m_CommandList);
 
-		if (!m_Opts.headless)
+		if (!rt.m_Headless)
 		{
-			m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+			rt.m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
 		}
 
 		uint64_t currentGPUProgress = m_CommandQueue->PollCurrentFenceValue();
 		m_ResourceManager->CleanupExpiredResources(currentGPUProgress);
 
 		// Remember which backbuffer just received the frame before advancing.
-		m_LastPresentedIndex = m_FrameIndex;
+		rt.m_LastPresentedIndex = index;
 
-		if (m_Opts.headless)
+		if (rt.m_Headless)
 		{
-			m_FrameIndex = (m_FrameIndex + 1) % c_BufferCount;
+			rt.m_FrameIndex = (index + 1) % c_BufferCount;
 		}
 		else
 		{
-			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+			rt.m_FrameIndex = rt.m_SwapChain->GetCurrentBackBufferIndex();
 		}
 
-		m_FrameActive = false;
+		m_ActiveTarget = nullptr;
+		m_FrameActive  = false;
 	}
 
 	void
-	Graphics::Resize(uint32_t width, uint32_t height)
+	Graphics::Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height)
 	{
 		if (m_FrameActive)
 		{
@@ -464,8 +436,10 @@ namespace bgl
 			throw GraphicsError("Resize dimensions must be non-zero");
 		}
 
-		if (static_cast<uint32_t>(m_Opts.width) == width &&
-		    static_cast<uint32_t>(m_Opts.height) == height)
+		RenderTarget& rt = *target->As<RenderTarget>();
+
+		if (static_cast<uint32_t>(rt.m_Width) == width &&
+		    static_cast<uint32_t>(rt.m_Height) == height)
 		{
 			return;
 		}
@@ -476,51 +450,38 @@ namespace bgl
 
 		// Reset the command list so it drops its references to the old backbuffers;
 		// the swap chain cannot be resized while any reference to them is alive.
-		m_CommandAllocator[m_FrameIndex]->ResetAllocator();
-		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[m_FrameIndex].Get());
+		m_BootstrapAllocator->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_CommandList->Close();
 
-		DestroyRenderTargets(m_CommandQueue->GetNextFenceValue());
+		rt.DestroyRenderTargets(m_CommandQueue->GetNextFenceValue());
 
-		m_Opts.width  = static_cast<int>(width);
-		m_Opts.height = static_cast<int>(height);
+		rt.m_Width  = static_cast<int>(width);
+		rt.m_Height = static_cast<int>(height);
 
-		if (!m_Opts.headless)
+		if (!rt.m_Headless)
 		{
-			m_SwapChain
+			rt.m_SwapChain
 					->ResizeBuffers(c_BufferCount, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0) >>
 				d3d12ErrChecker;
 
-			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
-			CreateRenderTargets();
+			rt.m_FrameIndex = rt.m_SwapChain->GetCurrentBackBufferIndex();
+			rt.CreateRenderTargets();
 		}
 		else
 		{
-			m_FrameIndex = 0;
-			CreateOffscreenRenderTargets();
+			rt.m_FrameIndex = 0;
+			rt.CreateOffscreenRenderTargets();
 		}
 
 		// The GPU is idle and the backbuffers were re-indexed: drop the stale
 		// per-frame fences so the next BeginFrame does not wait on them.
-		for (auto& fenceValue : m_FenceValues)
+		for (auto& fenceValue : rt.m_FenceValues)
 		{
 			fenceValue = 0;
 		}
 
-		m_LastPresentedIndex = m_FrameIndex;
-	}
-
-	void
-	Graphics::DestroyRenderTargets(uint64_t fenceValue)
-	{
-		for (UINT i = 0; i < c_BufferCount; i++)
-		{
-			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, fenceValue, false);
-			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, fenceValue, false);
-		}
-
-		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, fenceValue, false);
-		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, fenceValue, false);
+		rt.m_LastPresentedIndex = rt.m_FrameIndex;
 	}
 
 	void CALLBACK
@@ -529,16 +490,19 @@ namespace bgl
 		D3D12_MESSAGE_SEVERITY severity,
 		D3D12_MESSAGE_ID /*id*/,
 		LPCSTR description,
-		void* /*context*/)
+		void*  context)
 	{
+		bool severe = false;
 		switch (severity)
 		{
 		case D3D12_MESSAGE_SEVERITY_CORRUPTION:
 		case D3D12_MESSAGE_SEVERITY_ERROR:
 			logger::error("[D3D12] {}", description);
+			severe = true;
 			break;
 		case D3D12_MESSAGE_SEVERITY_WARNING:
 			logger::warn("[D3D12] {}", description);
+			severe = true;
 			break;
 		case D3D12_MESSAGE_SEVERITY_INFO:
 			logger::info("[D3D12] {}", description);
@@ -548,23 +512,31 @@ namespace bgl
 			logger::debug("[D3D12] {}", description);
 			break;
 		}
+
+		const auto* self = static_cast<const Graphics*>(context);
+		if (severe && self != nullptr && self->m_Opts.strictError)
+		{
+			gfatal("[D3D12] strict error: {}", description);
+		}
 	}
 
 	void
-	Graphics::ScreenshotRaw(const std::string& filepath)
+	Graphics::ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath)
 	{
 		if (m_FrameActive)
 		{
 			throw GraphicsError("ScreenshotRaw cannot be called between BeginFrame and EndFrame");
 		}
 
-		const UINT    index         = m_LastPresentedIndex;
-		TextureHandle textureHandle = m_BackBuffers[index].textureHandle;
+		RenderTarget& rt = *target->As<RenderTarget>();
+
+		const UINT    index         = rt.m_LastPresentedIndex;
+		TextureHandle textureHandle = rt.m_BackBuffers[index].textureHandle;
 
 		// Make sure the frame that produced this backbuffer has finished.
-		if (m_FenceValues[index] != 0)
+		if (rt.m_FenceValues[index] != 0)
 		{
-			m_CommandQueue->WaitForFenceCPUBlocking(m_FenceValues[index]);
+			m_CommandQueue->WaitForFenceCPUBlocking(rt.m_FenceValues[index]);
 		}
 
 		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
@@ -575,8 +547,8 @@ namespace bgl
 
 		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
 
-		m_CommandAllocator[index]->ResetAllocator();
-		m_CommandList->Open(m_CommandQueue.Get(), m_CommandAllocator[index].Get());
+		rt.m_CommandAllocator[index]->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
 
 		{
 			auto barrier = TextureBarrierDesc();
@@ -643,139 +615,6 @@ namespace bgl
 					"ScreenshotRaw failed to save '{}' (hr=0x{:08X})",
 					filepath,
 					static_cast<uint32_t>(hr)));
-		}
-	}
-
-	void
-	Graphics::CreateSwapchain(HWND hWnd)
-	{
-		DXGI_SWAP_CHAIN_DESC1 sd = {};
-		sd.Width                 = static_cast<UINT>(m_Opts.width);
-		sd.Height                = static_cast<UINT>(m_Opts.height);
-		sd.Format                = DXGI_FORMAT_B8G8R8A8_UNORM;
-		sd.BufferCount           = c_BufferCount;
-		sd.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-		sd.SwapEffect            = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-		sd.Scaling               = DXGI_SCALING_STRETCH;
-		sd.AlphaMode             = DXGI_ALPHA_MODE_IGNORE;
-		sd.SampleDesc.Count      = 1;
-
-		wrl::ComPtr<IDXGIFactory4> factory;
-		UINT                       factoryFlags = m_DebugController ? DXGI_CREATE_FACTORY_DEBUG : 0;
-		CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&factory)) >> d3d12ErrChecker;
-
-		wrl::ComPtr<IDXGISwapChain1> swap;
-
-		auto d3d12CommandQueue = m_CommandQueue->As<CommandQueue>()->GetD3D12CommandQueue();
-		factory->CreateSwapChainForHwnd(d3d12CommandQueue, hWnd, &sd, nullptr, nullptr, &swap) >>
-			d3d12ErrChecker;
-
-		swap->QueryInterface(IID_PPV_ARGS(&m_SwapChain)) >> d3d12ErrChecker;
-		factory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER) >> d3d12ErrChecker;
-
-		m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
-	}
-
-	void
-	Graphics::CreateRenderTargets()
-	{
-		{
-			TextureDesc textureDesc{};
-			textureDesc.format       = Format::BGRA8_UNORM;
-			textureDesc.width        = static_cast<uint32_t>(m_Opts.width);
-			textureDesc.height       = static_cast<uint32_t>(m_Opts.height);
-			textureDesc.dimension    = TextureDimension::kTexture2D;
-			textureDesc.usage        = TextureUsageFlag::kRenderTarget;
-			textureDesc.initalLayout = BarrierLayout::kPresent;
-
-			for (UINT i = 0; i < c_BufferCount; i++)
-			{
-				wrl::ComPtr<ID3D12Resource> backBuffer;
-				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
-
-				m_BackBuffers[i].textureHandle =
-					m_ResourceManager->As<ResourceManager>()->CreateTexture(
-						std::move(backBuffer),
-						textureDesc);
-
-				RtvDesc rtvDesc;
-				rtvDesc.format    = Format::BGRA8_UNORM;
-				rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
-
-				m_BackBuffers[i].rtvHandle =
-					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
-			}
-		}
-
-		{
-			auto depthTextureDesc         = TextureDesc();
-			depthTextureDesc.format       = Format::D24S8;
-			depthTextureDesc.width        = static_cast<uint32_t>(m_Opts.width);
-			depthTextureDesc.height       = static_cast<uint32_t>(m_Opts.height);
-			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
-			depthTextureDesc.debugName    = "Depth Buffer";
-			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
-			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
-
-			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
-
-			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
-
-			auto dsvDesc      = DsvDesc();
-			dsvDesc.format    = Format::D24S8;
-			dsvDesc.debugName = "Depth Buffer RTV";
-
-			m_DepthBuffer.dsvHandle =
-				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
-		}
-	}
-
-	void
-	Graphics::CreateOffscreenRenderTargets()
-	{
-		{
-			for (auto i = 0u; i < c_BufferCount; i++)
-			{
-				auto texDesc      = TextureDesc();
-				texDesc.width     = static_cast<uint32_t>(m_Opts.width);
-				texDesc.height    = static_cast<uint32_t>(m_Opts.height);
-				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
-				texDesc.dimension = TextureDimension::kTexture2D;
-				texDesc.format    = Format::BGRA8_UNORM;
-				texDesc.usage     = TextureUsageFlag::kRenderTarget;
-				texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
-
-				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
-
-				auto rtvDesc      = RtvDesc();
-				rtvDesc.format    = Format::BGRA8_UNORM;
-				rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
-
-				m_BackBuffers[i].rtvHandle =
-					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
-			}
-		}
-
-		{
-			auto depthTextureDesc         = TextureDesc();
-			depthTextureDesc.format       = Format::D24S8;
-			depthTextureDesc.width        = static_cast<uint32_t>(m_Opts.width);
-			depthTextureDesc.height       = static_cast<uint32_t>(m_Opts.height);
-			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
-			depthTextureDesc.debugName    = "Depth Buffer";
-			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
-			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
-
-			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
-
-			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
-
-			auto dsvDesc      = DsvDesc();
-			dsvDesc.format    = Format::D24S8;
-			dsvDesc.debugName = "Depth Buffer RTV";
-
-			m_DepthBuffer.dsvHandle =
-				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
 		}
 	}
 

@@ -9,10 +9,6 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = true;
-	opts.headless                 = true;
-	opts.height                   = 1;
-	opts.width                    = 1;
-	opts.wnd                      = nullptr;
 	opts.enablePixDebug           = true;
 
 	auto gfx = bgl::CreateGraphics(opts);

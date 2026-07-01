@@ -27,10 +27,6 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = true;
-	opts.headless                 = true;
-	opts.height                   = 1;
-	opts.width                    = 1;
-	opts.wnd                      = nullptr;
 
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

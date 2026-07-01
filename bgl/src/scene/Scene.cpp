@@ -19,15 +19,12 @@ namespace bgl
 			std::string_view name;
 		};
 
-		static constexpr std::array<BufferInfo, 8> c_BufferInfo = { {
-			{ "scene.instanceBuffer" },
-			{ "scene.meshInstanceBuffer" },
+		static constexpr std::array<BufferInfo, 5> c_BufferInfo = { {
 			{ "scene.geomBuffer" },
 			{ "scene.meshletBuffer" },
 			{ "scene.vertexMapBuffer" },
 			{ "scene.vertexBuffer" },
 			{ "scene.indexBuffer" },
-			{ "scene.compactedInstances" },
 		} };
 
 		// Each Scene a process-unique namespace
@@ -38,29 +35,6 @@ namespace bgl
 		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager))
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
-
-		{
-			auto instanceBufferDesc = PackedBufferDesc();
-			// Round up so the kInvalid tail padding (see Update) always fits: the counting
-			// sort dispatches whole groups, so it may read up to a group past the last
-			// instance.
-			instanceBufferDesc.maxCount = core::round_up(m_Desc.maxInstances, c_HistogramGroupSize);
-			instanceBufferDesc.debugName = "Instance Buffer";
-			instanceBufferDesc.blockSize = sizeof(BaseInstance) * 256;
-
-			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto staticMeshInstanceBufferDesc      = EntryBufferDesc();
-			staticMeshInstanceBufferDesc.maxCount  = m_Desc.maxInstances;
-			staticMeshInstanceBufferDesc.debugName = "Static Mesh Instance Buffer";
-			staticMeshInstanceBufferDesc.blockSize = sizeof(idl::StaticMeshInstance) * 256;
-
-			m_StaticMeshInstanceBuffer.Init(
-				std::move(staticMeshInstanceBufferDesc),
-				m_ResourceManager);
-		}
 
 		{
 			auto staticGeomBufferDesc      = EntryBufferDesc();
@@ -102,51 +76,13 @@ namespace bgl
 
 			m_IndexBuffer.Init(std::move(indexBufferDesc), m_ResourceManager);
 		}
-
-		{
-			auto compactedInstancesDesc = ComputeBufferDesc();
-			compactedInstancesDesc.SetElement<uint32_t>();
-			compactedInstancesDesc.maxCount  = m_Desc.maxInstances;
-			compactedInstancesDesc.debugName = "Compacted Instances";
-
-			m_CompactedInstances.Init(std::move(compactedInstancesDesc), m_ResourceManager);
-		}
 	}
 
 	void
 	Scene::Update(ICommandList* cmdList)
 	{
-		auto buffers = GetAllBuffers();
-		std::apply(
-			[cmdList](auto&... buffer) {
-				(..., [&]() {
-					if constexpr (is_compute_buffer_v<decltype(buffer)>)
-					{
-						buffer.Clear(cmdList);
-					}
-					else
-					{
-						buffer.Update(cmdList);
-					}
-				}());
-			},
-			buffers);
-
-		const uint32_t count  = m_InstanceBuffer.Size();
-		const uint32_t padded = core::round_up(count, c_HistogramGroupSize);
-		if (padded > count)
-		{
-			std::vector<BaseInstance> tail(padded - count);
-			for (BaseInstance& instance : tail)
-			{
-				instance.psoType = PsoType::kInvalid;
-			}
-			cmdList->WriteBuffer(
-				m_InstanceBuffer.GetBufferHandle(),
-				tail.data(),
-				static_cast<size_t>(count) * sizeof(BaseInstance),
-				tail.size() * sizeof(BaseInstance));
-		}
+		auto buffers = GetGeometryBuffers();
+		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
 	}
 
 	void
@@ -174,7 +110,7 @@ namespace bgl
 	{
 		resourceNames.reserve(resourceNames.size() + c_BufferInfo.size());
 
-		auto   buffers = GetAllBuffers();
+		auto   buffers = GetGeometryBuffers();
 		size_t i       = 0;
 		std::apply(
 			[&](auto&... buffer) {
@@ -385,85 +321,6 @@ namespace bgl
 		{
 			throw SceneError(e.what());
 		}
-	}
-
-	MeshInstanceHandle
-	Scene::CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform)
-	{
-		if (!material.IsValid())
-		{
-			throw SceneError("Invalid MaterialHandle passed to CreateStaticMeshInstance");
-		}
-
-		if (geom.geomType != GeomType::kStaticMesh)
-		{
-			throw SceneError(
-				"GeomHandle passed to CreateStaticMeshInstance must be of type kStaticMesh");
-		}
-
-		if (!m_StaticGeom.IsValid(geom.handle))
-		{
-			throw SceneError(
-				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
-		}
-
-		try
-		{
-			auto staticMeshInstance      = idl::StaticMeshInstance();
-			staticMeshInstance.base      = geom.handle;
-			staticMeshInstance.transform = transform;
-
-			auto staticMeshInstanceHandle = m_StaticMeshInstanceBuffer.Add(staticMeshInstance);
-
-			const PsoType psoType = GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
-
-			auto instance             = BaseInstance();
-			instance.meshInstance     = staticMeshInstanceHandle;
-			instance.materialInstance = material.handle;
-			instance.psoType          = psoType;
-
-			auto instanceHandle    = MeshInstanceHandle();
-			instanceHandle.psoType = psoType;
-			instanceHandle.handle  = m_InstanceBuffer.Add(std::move(instance));
-
-			++m_StaticGeom.MetaAt(geom.handle.index).refCount;
-
-			return instanceHandle;
-		}
-		catch (const std::runtime_error& e)
-		{
-			throw SceneError(e.what());
-		}
-	}
-
-	void
-	Scene::DeleteMeshInstance(MeshInstanceHandle instance)
-	{
-		if (!instance.IsValid() || !m_InstanceBuffer.IsValid(instance.handle))
-		{
-			throw SceneError(
-				"MeshInstanceHandle passed to DeleteMeshInstance is invalid or already removed");
-		}
-
-		const auto& baseInstance = m_InstanceBuffer[instance.handle];
-
-		const uint32_t staticMeshInstanceIndex = baseInstance.meshInstance.offset;
-		gassert(
-			m_StaticMeshInstanceBuffer.IsIndexValid(staticMeshInstanceIndex),
-			"Mesh instance references a missing static mesh instance");
-
-		const uint32_t geomIndex =
-			m_StaticMeshInstanceBuffer.AtIndex(staticMeshInstanceIndex).base.offset;
-		gassert(
-			m_StaticGeom.IsIndexValid(geomIndex),
-			"Static mesh instance references a missing geom");
-
-		auto& geomMeta = m_StaticGeom.MetaAt(geomIndex);
-		gassert(geomMeta.refCount > 0, "Geom reference count underflow in DeleteMeshInstance");
-		--geomMeta.refCount;
-
-		m_StaticMeshInstanceBuffer.EraseByIndex(staticMeshInstanceIndex);
-		m_InstanceBuffer.Erase(instance.handle);
 	}
 
 	void

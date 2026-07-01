@@ -13,6 +13,7 @@
 #include "scene/Scene.h"
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
+#include <bgl/ISceneView.h>
 #include <bgl/PsoType.h>
 
 namespace bgl
@@ -203,9 +204,11 @@ namespace bgl
 		ICommandList* cmd = resources.GetCommandList();
 
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(
-			draw.scene->GetInstanceCount() > 0,
-			"Scene must have at least one instance to render");
+
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
 
 		const BufferHandle dispatchArgs = resources.GetBuffer(std::string(c_DispatchArgsBuffer));
 

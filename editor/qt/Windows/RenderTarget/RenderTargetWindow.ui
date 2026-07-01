@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RenderTargetWindow</class>
+ <widget class="QMainWindow" name="RenderTargetWindow">
+  <property name="windowTitle">
+   <string>RenderTargetWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
