@@ -5,10 +5,12 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QTabWidget>
 
 #include "Project/Project.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
+#include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
 #include <core/settings/Settings.h>
@@ -57,22 +59,45 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		levelDesc.maxInstances = settings["levelEditor"]["maxInstances"].GetOrDefault(1000);
 
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
-
-		setCentralWidget(m_LevelEditor);
 	}
 
-	{
-		auto* contentExplorerDock = new QDockWidget("Content Explorer", this);
-		contentExplorerDock->setObjectName("ContentExplorerDock");
-		m_ContentExplorer = new ContentExplorerWindow(contentExplorerDock);
-		contentExplorerDock->setWidget(m_ContentExplorer);
-		addDockWidget(Qt::BottomDockWidgetArea, contentExplorerDock);
-		contentExplorerDock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+	m_MaterialEditor = new MaterialEditorWindow(this);
 
-		m_Ui.menuWindow->addAction(contentExplorerDock->toggleViewAction());
+	setCentralWidget(nullptr);
+	setDockNestingEnabled(true);
+	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
 
-		resizeDocks({ contentExplorerDock }, { 200 }, Qt::Vertical);
-	}
+	m_LevelEditor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	m_LevelEditor->setMinimumSize(256, 256);
+
+	auto* levelEditorDock = new QDockWidget("Level Editor", this);
+	levelEditorDock->setObjectName("LevelEditorDock");
+	levelEditorDock->setWidget(m_LevelEditor);
+	levelEditorDock->setTitleBarWidget(new QWidget(levelEditorDock));
+	addDockWidget(Qt::TopDockWidgetArea, levelEditorDock);
+
+	auto* materialEditorDock = new QDockWidget("Material Editor", this);
+	materialEditorDock->setObjectName("MaterialEditorDock");
+	materialEditorDock->setWidget(m_MaterialEditor);
+	materialEditorDock->setTitleBarWidget(new QWidget(materialEditorDock));
+	addDockWidget(Qt::TopDockWidgetArea, materialEditorDock);
+
+	tabifyDockWidget(levelEditorDock, materialEditorDock);
+	levelEditorDock->raise();
+
+	auto* contentExplorerDock = new QDockWidget("Content Explorer", this);
+	contentExplorerDock->setObjectName("ContentExplorerDock");
+	m_ContentExplorer = new ContentExplorerWindow(contentExplorerDock);
+
+	m_ContentExplorer->setMinimumSize(0, 0);
+	contentExplorerDock->setWidget(m_ContentExplorer);
+	addDockWidget(Qt::BottomDockWidgetArea, contentExplorerDock);
+
+	m_Ui.menuWindow->addAction(levelEditorDock->toggleViewAction());
+	m_Ui.menuWindow->addAction(materialEditorDock->toggleViewAction());
+	m_Ui.menuWindow->addAction(contentExplorerDock->toggleViewAction());
+
+	resizeDocks({ levelEditorDock, contentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }
 
 MainWindow::~MainWindow() = default;

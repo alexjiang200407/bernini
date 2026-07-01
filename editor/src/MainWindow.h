@@ -9,6 +9,7 @@
 class Project;
 class ContentExplorerWindow;
 class LevelEditorWindow;
+class MaterialEditorWindow;
 
 namespace bgl
 {
@@ -38,6 +39,7 @@ private:
 	std::unique_ptr<Project>        m_Project;
 	ContentExplorerWindow*          m_ContentExplorer = nullptr;
 	LevelEditorWindow*              m_LevelEditor     = nullptr;
+	MaterialEditorWindow*           m_MaterialEditor  = nullptr;
 	core::SharedRef<bgl::IGraphics> m_Graphics;
 	core::SharedRef<bgl::IScene>    m_Scene;
 };

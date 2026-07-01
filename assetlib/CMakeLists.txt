@@ -37,6 +37,10 @@ find_package(Stb REQUIRED)                      # image decoding used by tinyglt
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")  # header-only glTF 2.0 loader
 find_package(meshoptimizer CONFIG REQUIRED)     # vertex optimization + meshlet generation
 
+if (WIN32)
+	find_package(directxtex CONFIG REQUIRED)    # glTF textures -> in-memory DDS
+endif()
+
 target_link_libraries(assetlib
 	PUBLIC
 		core
@@ -44,6 +48,7 @@ target_link_libraries(assetlib
 	PRIVATE
 		nlohmann_json::nlohmann_json
 		meshoptimizer::meshoptimizer
+		$<$<PLATFORM_ID:Windows>:Microsoft::DirectXTex>
 )
 
 target_include_directories(assetlib PRIVATE ${Stb_INCLUDE_DIR} ${TINYGLTF_INCLUDE_DIRS})
@@ -120,6 +125,8 @@ if (BUILD_TESTS)
 	set_target_properties(assetlib_tests PROPERTIES
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
+
+	copy_to_target(assetlib_tests ITEMS ${CMAKE_CURRENT_SOURCE_DIR}/tests/testdata)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${ASSETLIB_TESTS_SOURCES})
 

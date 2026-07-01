@@ -1,4 +1,5 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include <QHideEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
@@ -28,7 +29,6 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		SyncSize(width(), height());
 		DrawFrame(m_Desc.gfx.Get());
 	});
-	m_FrameTimer->start(16);
 }
 
 void
@@ -43,6 +43,14 @@ RenderTargetWindow::showEvent(QShowEvent* event)
 {
 	QWidget::showEvent(event);
 	SyncSize(width(), height());
+	m_FrameTimer->start(16);
+}
+
+void
+RenderTargetWindow::hideEvent(QHideEvent* event)
+{
+	m_FrameTimer->stop();
+	QWidget::hideEvent(event);
 }
 
 void

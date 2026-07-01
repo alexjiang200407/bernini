@@ -38,10 +38,10 @@ protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
 
-	// The parent layout only assigns the real size by the time the widget is shown, so
-	// sync here too — resizeEvent alone can leave the target at its constructed default.
 	void
 	showEvent(QShowEvent* event) override;
+	void
+	hideEvent(QHideEvent* event) override;
 
 	// This widget hosts an external DX12 swapchain and presents itself every frame, so
 	// Qt must not paint the surface; returning nullptr disables Qt's own painting.
