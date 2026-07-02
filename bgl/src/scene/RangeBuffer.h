@@ -218,6 +218,14 @@ namespace bgl
 			return m_Data[physicalIndex];
 		}
 
+		[[nodiscard]] const T&
+		AtIndex(uint32_t index) const
+		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			gassert(m_Data.valid(index), "AtIndex on an inactive element slot");
+			return m_Data[index];
+		}
+
 		void
 		Update(ICommandList* cmdList)
 		{

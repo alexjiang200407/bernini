@@ -14,13 +14,3 @@ public struct Range<T> : IRange
 
     public bool Null() { return offsetStart == 0xFFFFFFFF; }
 };
-
-public struct RangeWithCount<T> : IRange
-{
-    Range<T> range;
-    public uint count;
-
-    public uint GetStart() { return range.GetStart(); }
-
-    public bool Null() { return range.Null(); }
-};

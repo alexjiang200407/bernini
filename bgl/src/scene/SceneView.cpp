@@ -2,7 +2,7 @@
 #include "constants/constants.h"
 #include "fg/FrameGraph.h"
 #include "scene/Scene.h"
-#include "types/BaseInstance.h"
+#include "types/SubmeshInstance.h"
 #include "util/util.h"
 #include <bgl/PsoType.h>
 #include <core/math.h>
@@ -45,20 +45,18 @@ namespace bgl
 			// the last instance.
 			instanceBufferDesc.maxCount  = core::round_up(m_MaxInstances, c_HistogramGroupSize);
 			instanceBufferDesc.debugName = "Instance Buffer";
-			instanceBufferDesc.blockSize = sizeof(BaseInstance) * 256;
+			instanceBufferDesc.blockSize = sizeof(SubmeshInstance) * 256;
 
 			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
 		}
 
 		{
-			auto staticMeshInstanceBufferDesc      = EntryBufferDesc();
-			staticMeshInstanceBufferDesc.maxCount  = m_MaxInstances;
-			staticMeshInstanceBufferDesc.debugName = "Static Mesh Instance Buffer";
-			staticMeshInstanceBufferDesc.blockSize = sizeof(idl::StaticMeshInstance) * 256;
+			auto meshBufferDesc      = EntryBufferDesc();
+			meshBufferDesc.maxCount  = m_MaxInstances;
+			meshBufferDesc.debugName = "Mesh Buffer";
+			meshBufferDesc.blockSize = sizeof(idl::Mesh) * 256;
 
-			m_StaticMeshInstanceBuffer.Init(
-				std::move(staticMeshInstanceBufferDesc),
-				m_ResourceManager);
+			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -78,10 +76,10 @@ namespace bgl
 		// Scene outlives the view (m_Scene keeps it alive), so the slots stay valid.
 		for (uint32_t i = 0; i < m_MaxInstances; ++i)
 		{
-			if (!m_StaticMeshInstanceBuffer.IsIndexValid(i))
+			if (!m_MeshBuffer.IsIndexValid(i))
 				continue;
 
-			const uint32_t geomIndex = m_StaticMeshInstanceBuffer.AtIndex(i).base.offset;
+			const uint32_t geomIndex = m_MeshBuffer.MetaAt(i).geomIndex;
 			if (m_SceneRaw != nullptr && m_SceneRaw->IsGeomIndexValid(geomIndex))
 				m_SceneRaw->DecGeomRef(geomIndex);
 		}
@@ -114,24 +112,39 @@ namespace bgl
 
 		try
 		{
-			auto staticMeshInstance      = idl::StaticMeshInstance();
-			staticMeshInstance.base      = geom.handle;
-			staticMeshInstance.transform = transform;
+			// The per-placement Mesh copies the (tiny) submeshes descriptor from the
+			// shared geometry asset; the heavy data stays in the Scene's buffers.
+			const GeomAsset& asset = m_SceneRaw->GetGeomAsset(geom.handle.index);
 
-			auto staticMeshInstanceHandle = m_StaticMeshInstanceBuffer.Add(staticMeshInstance);
+			auto mesh              = idl::Mesh();
+			mesh.transform         = transform;
+			mesh.submeshes         = asset.submeshes;
+			mesh.totalMeshletCount = asset.totalMeshletCount;
+
+			auto meshHandle = m_MeshBuffer.Add(mesh);
+
+			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
+			meta.geomIndex = geom.handle.index;
+			meta.geomType  = geom.geomType;
 
 			const PsoType psoType = GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
 
-			auto instance             = BaseInstance();
-			instance.meshInstance     = staticMeshInstanceHandle;
-			instance.materialInstance = material.handle;
-			instance.psoType          = psoType;
+			const uint32_t submeshCount = asset.submeshes.count;
+			meta.submeshInstances.reserve(submeshCount);
+			for (uint32_t s = 0; s < submeshCount; ++s)
+			{
+				auto instance         = SubmeshInstance();
+				instance.meshInstance = meshHandle;
+				instance.submeshIndex = s;
+				instance.psoType      = psoType;
 
-			auto instanceHandle    = MeshInstanceHandle();
-			instanceHandle.psoType = psoType;
-			instanceHandle.handle  = m_InstanceBuffer.Add(std::move(instance));
+				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
+			}
 
 			m_SceneRaw->IncGeomRef(geom.handle.index);
+
+			auto instanceHandle   = MeshInstanceHandle();
+			instanceHandle.handle = meshHandle;
 
 			return instanceHandle;
 		}
@@ -144,29 +157,70 @@ namespace bgl
 	void
 	SceneView::DeleteMeshInstance(MeshInstanceHandle instance)
 	{
-		if (!instance.IsValid() || !m_InstanceBuffer.IsValid(instance.handle))
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
 		{
 			throw SceneError(
 				"MeshInstanceHandle passed to DeleteMeshInstance is invalid or already removed");
 		}
 
-		const auto& baseInstance = m_InstanceBuffer[instance.handle];
+		const uint32_t meshIndex = instance.handle.index;
+		auto&          meta      = m_MeshBuffer.MetaAt(meshIndex);
 
-		const uint32_t staticMeshInstanceIndex = baseInstance.meshInstance.offset;
-		gassert(
-			m_StaticMeshInstanceBuffer.IsIndexValid(staticMeshInstanceIndex),
-			"Mesh instance references a missing static mesh instance");
+		// Erase every submesh-instance this mesh contributed to the sort buffer.
+		for (const core::slot_handle submeshInstance : meta.submeshInstances)
+		{
+			if (m_InstanceBuffer.IsValid(submeshInstance))
+			{
+				m_InstanceBuffer.Erase(submeshInstance);
+			}
+		}
 
-		const uint32_t geomIndex =
-			m_StaticMeshInstanceBuffer.AtIndex(staticMeshInstanceIndex).base.offset;
+		const uint32_t geomIndex = meta.geomIndex;
 		gassert(
 			m_SceneRaw->IsGeomIndexValid(geomIndex),
-			"Static mesh instance references a missing geom");
+			"Mesh record references a missing geom asset");
 
 		m_SceneRaw->DecGeomRef(geomIndex);
 
-		m_StaticMeshInstanceBuffer.EraseByIndex(staticMeshInstanceIndex);
-		m_InstanceBuffer.Erase(instance.handle);
+		m_MeshBuffer.EraseByIndex(meshIndex);
+	}
+
+	void
+	SceneView::SetSubmeshMaterial(
+		MeshInstanceHandle instance,
+		uint32_t           submeshIndex,
+		MaterialHandle     material)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to SetSubmeshMaterial is invalid or already removed");
+		}
+
+		if (!material.IsValid())
+		{
+			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
+		}
+
+		auto& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+
+		if (submeshIndex >= meta.submeshInstances.size())
+		{
+			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
+		}
+
+		const core::slot_handle submeshInstance = meta.submeshInstances[submeshIndex];
+		gassert(
+			m_InstanceBuffer.IsValid(submeshInstance),
+			"Submesh-instance handle referenced by a live mesh record is stale");
+
+		// Recompute this submesh's PSO; Set marks the instance buffer dirty so Update
+		// re-uploads it and the next frame's counting sort re-buckets it.
+		const PsoType psoType = GetPsoFromGeomAndMaterial(meta.geomType, material.materialType);
+
+		auto updated    = m_InstanceBuffer[submeshInstance];
+		updated.psoType = psoType;
+		m_InstanceBuffer.Set(submeshInstance, updated);
 	}
 
 	void
@@ -192,16 +246,16 @@ namespace bgl
 		const uint32_t padded = core::round_up(count, c_HistogramGroupSize);
 		if (padded > count)
 		{
-			std::vector<BaseInstance> tail(padded - count);
-			for (BaseInstance& instance : tail)
+			std::vector<SubmeshInstance> tail(padded - count);
+			for (SubmeshInstance& instance : tail)
 			{
 				instance.psoType = PsoType::kInvalid;
 			}
 			cmdList->WriteBuffer(
 				m_InstanceBuffer.GetBufferHandle(),
 				tail.data(),
-				static_cast<size_t>(count) * sizeof(BaseInstance),
-				tail.size() * sizeof(BaseInstance));
+				static_cast<size_t>(count) * sizeof(SubmeshInstance),
+				tail.size() * sizeof(SubmeshInstance));
 		}
 	}
 

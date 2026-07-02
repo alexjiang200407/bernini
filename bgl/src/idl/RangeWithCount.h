@@ -1,24 +1,25 @@
 #pragma once
-#include <core/containers/multi_slot_handle.h>
+#include "Range.h"
 
 namespace bgl::idl
 {
-	struct Range
+	struct RangeWithCount
 	{
-	public:
-		uint32_t offsetStart;
+		Range    range;
+		uint32_t count;
 
 		[[nodiscard]]
 		bool
 		Null() const noexcept
 		{
-			return offsetStart == 0xFFFFFFFF;
+			return range.Null();
 		}
 
-		Range&
+		RangeWithCount&
 		operator=(core::multi_slot_handle handle) noexcept
 		{
-			offsetStart = handle.index;
+			range = handle;
+			count = handle.count;
 			return *this;
 		}
 	};

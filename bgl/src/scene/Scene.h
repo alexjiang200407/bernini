@@ -5,17 +5,25 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
-#include "types/BaseInstance.h"
+#include "types/SubmeshInstance.h"
 #include <bgl/IScene.h>
+#include <core/containers/slot_vector.h>
 
 namespace bgl
 {
 	class ICommandList;
 	class FrameGraph;
 
-	struct GeomMeta
+	// A geometry asset lives on the CPU only: its heavy data (submesh / vertex /
+	// index / meshlet ranges) is shared in the Scene's GPU buffers, and each
+	// per-placement Mesh (owned by a SceneView) copies the tiny submeshes
+	// descriptor. refCount tracks live placements so DeleteGeom can refuse a
+	// still-referenced asset.
+	struct GeomAsset
 	{
-		uint32_t refCount = 0;
+		idl::RangeWithCount submeshes;
+		uint32_t            totalMeshletCount = 0;
+		uint32_t            refCount          = 0;
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -42,10 +50,10 @@ namespace bgl
 		GetGeometryBuffers()
 		{
 			return std::tie(
-				m_StaticGeom,
+				m_SubmeshBuffer,
 				m_MeshletBuffer,
 				m_VertexMapBuffer,
-				m_VertexBuffer,
+				m_VertexDataBuffer,
 				m_IndexBuffer);
 		}
 
@@ -56,27 +64,35 @@ namespace bgl
 		[[nodiscard]] bool
 		IsGeomSlotValid(core::slot_handle handle) const noexcept
 		{
-			return m_StaticGeom.IsValid(handle);
+			return m_GeomAssets.valid(handle.index, handle.generation);
 		}
 
 		[[nodiscard]] bool
 		IsGeomIndexValid(uint32_t index) const noexcept
 		{
-			return m_StaticGeom.IsIndexValid(index);
+			return m_GeomAssets.allocated(index);
 		}
 
 		void
 		IncGeomRef(uint32_t index) noexcept
 		{
-			++m_StaticGeom.MetaAt(index).refCount;
+			++m_GeomAssets[index].refCount;
 		}
 
 		void
 		DecGeomRef(uint32_t index) noexcept
 		{
-			auto& meta = m_StaticGeom.MetaAt(index);
-			gassert(meta.refCount > 0, "Geom reference count underflow");
-			--meta.refCount;
+			auto& asset = m_GeomAssets[index];
+			gassert(asset.refCount > 0, "Geom reference count underflow");
+			--asset.refCount;
+		}
+
+		// The geometry asset (submeshes range + total meshlet count) a SceneView
+		// copies into a per-placement Mesh at instance-creation time.
+		[[nodiscard]] const GeomAsset&
+		GetGeomAsset(uint32_t index) const noexcept
+		{
+			return m_GeomAssets[index];
 		}
 
 		[[nodiscard]] const std::string&
@@ -107,11 +123,12 @@ namespace bgl
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
-		EntryBuffer<idl::StaticGeom, GeomMeta> m_StaticGeom;
-		RangeBuffer<idl::Meshlet>              m_MeshletBuffer;
-		RangeBuffer<uint32_t>                  m_VertexMapBuffer;
-		RangeBuffer<idl::Vertex>               m_VertexBuffer;
-		RangeBuffer<uint32_t>                  m_IndexBuffer;
+		core::slot_vector<GeomAsset> m_GeomAssets;
+		RangeBuffer<idl::Submesh>    m_SubmeshBuffer;
+		RangeBuffer<idl::Meshlet>    m_MeshletBuffer;
+		RangeBuffer<uint32_t>        m_VertexMapBuffer;
+		RangeBuffer<uint32_t>        m_VertexDataBuffer;
+		RangeBuffer<uint32_t>        m_IndexBuffer;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

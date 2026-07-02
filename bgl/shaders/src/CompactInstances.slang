@@ -1,5 +1,5 @@
 import types.ComputeBuffer;
-import types.BaseInstance;
+import types.SubmeshInstance;
 import types.PackedBuffer;
 import types.PsoType;
 import idl.DispatchArgs;
@@ -9,7 +9,7 @@ static const uint kThreadsPerGroup = 128;
 
 struct Uniforms
 {
-    PackedBuffer<BaseInstance> instanceBuffer;
+    PackedBuffer<SubmeshInstance> instanceBuffer;
     ComputeBuffer<uint> psoPrefixSum;
     ComputeBuffer<uint> compactedInstances;
     ComputeBuffer<DispatchArgs> dispatchArgs;

@@ -1,19 +1,19 @@
-import idl.IMeshInstance;
-import idl.IMaterial;
-import types.BaseInstance;
+import types.SubmeshInstance;
 import forward.ForwardData;
 import util.constants;
-import idl.StaticMesh;
+import idl.Mesh;
 import idl.Meshlet;
-import idl.Vertex;
+import idl.Submesh;
+import idl.VertexLayout;
+import types.ByteBuffer;
 import forward.common;
-import types.PsoType;
+import forward.vertexdecode;
 
-ConstantBuffer<ForwardData<StaticMeshInstance>> sceneData;
+ConstantBuffer<ForwardData> sceneData;
 
 void EvaluateVertices(
-    StaticMeshInstance instance,
-    StaticGeom mesh,
+    Mesh mesh,
+    Submesh submesh,
     Meshlet meshlet,
     uint gtid,
     inout OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts
@@ -21,25 +21,26 @@ void EvaluateVertices(
 {
     if (gtid < meshlet.vertexCount)
     {
-        uint vertexIdx = sceneData.vertexMapBuffer[mesh.vertexMap, meshlet.relativeVertexOffset + gtid];
-        Vertex v = sceneData.vertexBuffer[mesh.vertices, vertexIdx];
+        uint vertexIdx = sceneData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid];
+        uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
+        DecodedVertex v = DecodeVertex(sceneData.vertexDataBuffer, submesh.layout, vertexByteBase);
 
-        float4 worldPos = mul(instance.transform, float4(v.pos, 1.0));
+        float4 worldPos = mul(mesh.transform, float4(v.position, 1.0));
 
         ForwardVSOut vertexOut;
         vertexOut.position = mul(sceneData.viewProj, worldPos);
-        vertexOut.normal = mul((float3x3)instance.transform, v.normal);
+        vertexOut.normal = mul((float3x3)mesh.transform, v.normal);
         vertexOut.uv = v.uv;
 
         verts[gtid] = vertexOut;
     }
 }
 
-void EvaluatePrimitives(StaticGeom mesh, Meshlet meshlet, uint gtid, inout OutputIndices<uint3, cMaxPrimsPerMeshlet> tris)
+void EvaluatePrimitives(Submesh submesh, Meshlet meshlet, uint gtid, inout OutputIndices<uint3, cMaxPrimsPerMeshlet> tris)
 {
     if (gtid < meshlet.triangleCount)
     {
-        tris[gtid] = sceneData.indexBuffer.Get<3>(mesh.indices, meshlet.relativeIndexOffset + gtid * 3);
+        tris[gtid] = sceneData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + gtid * 3);
     }
 }
 
@@ -59,17 +60,20 @@ void ASMain(
 void MSMain(
     uint gid: SV_GroupID,
     uint gtid: SV_GroupThreadID,
-    payload InstancedPayload<StaticMeshInstance> payload,
+    payload InstancedPayload payload,
     OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts,
     OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
 )
 {
-    let meshInst = sceneData.meshBuffer.Get(payload.instance.meshInstance);
-    let mesh = sceneData.geomBuffer.Get(meshInst.GetBaseMeshID());
-    let meshlet = sceneData.meshletBuffer.Get(mesh.meshlets, gid);
+    let mesh = sceneData.meshBuffer.Get(payload.instance.meshInstance);
+
+    // The amplification shader dispatched this submesh's meshlets, so gid is the
+    // local meshlet index within it.
+    let submesh = sceneData.submeshBuffer.Get(mesh.submeshes, payload.instance.submeshIndex);
+    let meshlet = sceneData.meshletBuffer.Get(submesh.meshlets, gid);
 
     SetMeshOutputCounts(meshlet.vertexCount, meshlet.triangleCount);
 
-    EvaluateVertices(meshInst, mesh, meshlet, gtid, verts);
-    EvaluatePrimitives(mesh, meshlet, gtid, tris);
+    EvaluateVertices(mesh, submesh, meshlet, gtid, verts);
+    EvaluatePrimitives(submesh, meshlet, gtid, tris);
 }

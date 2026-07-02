@@ -4,10 +4,10 @@
 
 namespace bgl
 {
-	struct BaseInstance
+	struct SubmeshInstance
 	{
 		PsoType    psoType;
 		idl::Entry meshInstance;
-		idl::Entry materialInstance;
+		uint32_t   submeshIndex;
 	};
 }

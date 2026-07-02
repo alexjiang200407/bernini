@@ -4,7 +4,7 @@
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
-#include "types/BaseInstance.h"
+#include "types/SubmeshInstance.h"
 #include <bgl/ISceneView.h>
 #include <core/ref/RefCounter.h>
 
@@ -13,6 +13,17 @@ namespace bgl
 	class ICommandList;
 	class FrameGraph;
 	class Scene;
+
+	// index (so DeleteMeshInstance / ~SceneView can decrement the right refcount; the
+	// per-placement Mesh embeds the submeshes descriptor, not a geom back-ref), the
+	// geom type (so SetSubmeshMaterial can recompute a submesh's PSO), and the handles
+	// of this instance's submesh-instances in m_InstanceBuffer (one per submesh).
+	struct MeshMeta
+	{
+		uint32_t                       geomIndex = 0;
+		GeomType                       geomType  = GeomType::kInvalid;
+		std::vector<core::slot_handle> submeshInstances;
+	};
 
 	/**
 	 * Owns a per-view instance buffer and references a shared Scene for geometry.
@@ -51,6 +62,12 @@ namespace bgl
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
 
+		void
+		SetSubmeshMaterial(
+			MeshInstanceHandle instance,
+			uint32_t           submeshIndex,
+			MaterialHandle     material) override;
+
 		[[nodiscard]] uint32_t
 		GetInstanceCount() const noexcept override
 		{
@@ -66,7 +83,7 @@ namespace bgl
 		auto
 		GetInstanceBuffers()
 		{
-			return std::tie(m_InstanceBuffer, m_StaticMeshInstanceBuffer, m_CompactedInstances);
+			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_CompactedInstances);
 		}
 
 		void
@@ -85,8 +102,8 @@ namespace bgl
 		std::string                       m_NamePrefix;
 		uint32_t                          m_MaxInstances = 0;
 
-		PackedBuffer<BaseInstance>           m_InstanceBuffer;
-		EntryBuffer<idl::StaticMeshInstance> m_StaticMeshInstanceBuffer;
-		ComputeBuffer                        m_CompactedInstances;
+		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
+		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
+		ComputeBuffer                    m_CompactedInstances;
 	};
 }

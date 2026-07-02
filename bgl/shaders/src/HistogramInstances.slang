@@ -1,4 +1,4 @@
-import types.BaseInstance;
+import types.SubmeshInstance;
 import types.ComputeBuffer;
 import types.PackedBuffer;
 import types.PsoType;
@@ -8,7 +8,7 @@ static const uint kThreadsPerGroup = 256;
 
 struct Uniforms
 {
-    PackedBuffer<BaseInstance> instanceBuffer;
+    PackedBuffer<SubmeshInstance> instanceBuffer;
     ComputeBuffer<uint> outBuffer;
 };
 

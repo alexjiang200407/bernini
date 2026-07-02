@@ -2,6 +2,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/IGraphics.h>
+#include <bgl/PsoType.h>
 
 namespace
 {
@@ -16,11 +17,13 @@ namespace
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc        = bgl::SceneDesc();
-		desc.maxGeom     = 5;
-		desc.maxMeshlets = 100;
-		desc.maxVertices = 1000;
-		desc.maxIndices  = 1000;
+		auto desc           = bgl::SceneDesc();
+		desc.maxGeom        = 5;
+		desc.maxSubmeshes   = 5;
+		desc.maxMeshlets    = 100;
+		desc.maxVertices    = 1000;
+		desc.maxVertexWords = 8000;
+		desc.maxIndices     = 1000;
 		return desc;
 	}
 }
@@ -51,42 +54,50 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto inst = view->CreateStaticMeshInstance(geom, material, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
 
-	// Geometry buffers live on the Scene; instance buffers on the SceneView.
+	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
 	auto geomBuffers = scene->GetGeometryBuffers();
-	[[maybe_unused]] auto& [geomBuffer, meshletBuffer, vertexMapBuffer, vertexBuffer, indexBuffer] =
+	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer] =
 		geomBuffers;
 
-	auto instBuffers                                             = view->GetInstanceBuffers();
-	[[maybe_unused]] auto& [instanceBuffer, smiBuffer, drawArgs] = instBuffers;
+	auto instBuffers                                              = view->GetInstanceBuffers();
+	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, drawArgs] = instBuffers;
 
-	const auto&    baseInstance = instanceBuffer[inst.handle];
-	const uint32_t smiIndex     = baseInstance.meshInstance.offset;
-	const uint32_t geomIndex    = geom.handle.index;
+	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
+	// one submesh-instance per submesh (the cube has exactly one).
+	const uint32_t meshIndex = inst.handle.index;
+	const uint32_t geomIndex = geom.handle.index;
 
-	const auto&    staticGeom    = geomBuffer[geom.handle];
-	const uint32_t vertexRoot    = staticGeom.vertices.offsetStart;
-	const uint32_t indexRoot     = staticGeom.indices.offsetStart;
-	const uint32_t meshletRoot   = staticGeom.meshlets.range.offsetStart;
-	const uint32_t vertexMapRoot = staticGeom.vertexMap.offsetStart;
+	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
+	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
+
+	// The per-placement Mesh (owned by the view) carries the submeshes descriptor.
+	const uint32_t submeshRoot = meshBuffer.AtIndex(meshIndex).submeshes.range.offsetStart;
+
+	const auto&    submesh       = submeshBuffer.AtIndex(submeshRoot);
+	const uint32_t vertexRoot    = submesh.vertexData.offsetStart;
+	const uint32_t indexRoot     = submesh.indices.offsetStart;
+	const uint32_t meshletRoot   = submesh.meshlets.range.offsetStart;
+	const uint32_t vertexMapRoot = submesh.vertexMap.offsetStart;
 
 	SECTION("Contents before deletion")
 	{
-		// PackedBuffer: one live instance, reachable through its handle.
+		// PackedBuffer: one live submesh-instance, reachable through its handle.
 		CHECK(instanceBuffer.Count() == 1);
-		CHECK(instanceBuffer.IsValid(inst.handle));
+		CHECK(instanceBuffer.IsValid(submeshInstance));
 
-		// EntryBuffer (static mesh instance): live, and it points back at the geom.
-		CHECK(smiBuffer.IsIndexValid(smiIndex));
-		CHECK(smiBuffer.AtIndex(smiIndex).base.offset == geomIndex);
-		CHECK(smiBuffer.AtIndex(smiIndex).transform[0][0] == 1.0f);
-		CHECK(smiBuffer.AtIndex(smiIndex).transform[3][3] == 1.0f);
+		// EntryBuffer (mesh record): live, and it tracks its source geom asset.
+		CHECK(meshBuffer.IsIndexValid(meshIndex));
+		CHECK(meshBuffer.MetaAt(meshIndex).geomIndex == geomIndex);
+		CHECK(meshBuffer.AtIndex(meshIndex).transform[0][0] == 1.0f);
+		CHECK(meshBuffer.AtIndex(meshIndex).transform[3][3] == 1.0f);
 
-		// EntryBuffer (geom): live with a single reference from the instance.
-		CHECK(geomBuffer.IsValid(geom.handle));
-		CHECK(geomBuffer.MetaAt(geomIndex).refCount == 1);
+		// Geometry asset (CPU-side): live with a single reference from the instance.
+		CHECK(scene->IsGeomSlotValid(geom.handle));
+		CHECK(scene->GetGeomAsset(geomIndex).refCount == 1);
 
 		// RangeBuffers: the cube's geometry data is live.
-		CHECK(vertexBuffer.IsIndexValid(vertexRoot));
+		CHECK(submeshBuffer.IsIndexValid(submeshRoot));
+		CHECK(vertexDataBuffer.IsIndexValid(vertexRoot));
 		CHECK(indexBuffer.IsIndexValid(indexRoot));
 		CHECK(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK(vertexMapBuffer.IsIndexValid(vertexMapRoot));
@@ -96,20 +107,21 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	{
 		view->DeleteMeshInstance(inst);
 
-		// PackedBuffer: the instance entry is gone and its handle is now stale.
+		// PackedBuffer: the submesh-instance entry is gone and its handle is now stale.
 		CHECK(instanceBuffer.Count() == 0);
 		CHECK(instanceBuffer.IsEmpty());
-		CHECK_FALSE(instanceBuffer.IsValid(inst.handle));
+		CHECK_FALSE(instanceBuffer.IsValid(submeshInstance));
 
-		// EntryBuffer (static mesh instance): its slot was freed.
-		CHECK_FALSE(smiBuffer.IsIndexValid(smiIndex));
+		// EntryBuffer (mesh record): its slot was freed.
+		CHECK_FALSE(meshBuffer.IsIndexValid(meshIndex));
 
-		// EntryBuffer (geom): retained, with the reference count dropped to zero.
-		CHECK(geomBuffer.IsValid(geom.handle));
-		CHECK(geomBuffer.MetaAt(geomIndex).refCount == 0);
+		// Geometry asset: retained, with the reference count dropped to zero.
+		CHECK(scene->IsGeomSlotValid(geom.handle));
+		CHECK(scene->GetGeomAsset(geomIndex).refCount == 0);
 
 		// RangeBuffers: untouched - deleting a mesh does not free geometry.
-		CHECK(vertexBuffer.IsIndexValid(vertexRoot));
+		CHECK(submeshBuffer.IsIndexValid(submeshRoot));
+		CHECK(vertexDataBuffer.IsIndexValid(vertexRoot));
 		CHECK(indexBuffer.IsIndexValid(indexRoot));
 		CHECK(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK(vertexMapBuffer.IsIndexValid(vertexMapRoot));
@@ -120,13 +132,83 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		view->DeleteMeshInstance(inst);
 		scene->DeleteGeom(geom);
 
-		// EntryBuffer (geom): slot freed, handle stale.
-		CHECK_FALSE(geomBuffer.IsValid(geom.handle));
+		// Geometry asset: slot freed, handle stale.
+		CHECK_FALSE(scene->IsGeomSlotValid(geom.handle));
 
 		// RangeBuffers: every owned range is now freed.
-		CHECK_FALSE(vertexBuffer.IsIndexValid(vertexRoot));
+		CHECK_FALSE(submeshBuffer.IsIndexValid(submeshRoot));
+		CHECK_FALSE(vertexDataBuffer.IsIndexValid(vertexRoot));
 		CHECK_FALSE(indexBuffer.IsIndexValid(indexRoot));
 		CHECK_FALSE(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK_FALSE(vertexMapBuffer.IsIndexValid(vertexMapRoot));
+	}
+}
+
+TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(CubeSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 5);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	auto geom = scene->AddCubeGeom();
+	REQUIRE(geom.IsValid());
+
+	// Created with the kNull material -> the submesh starts on the Null PSO.
+	auto nullMat         = bgl::MaterialHandle();
+	nullMat.materialType = bgl::MaterialType::kNull;
+
+	auto inst = view->CreateStaticMeshInstance(geom, nullMat, glm::mat4(1.0f));
+	REQUIRE(inst.IsValid());
+
+	auto instBuffers                                              = view->GetInstanceBuffers();
+	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, drawArgs] = instBuffers;
+
+	const uint32_t meshIndex = inst.handle.index;
+	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
+	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
+
+	CHECK(instanceBuffer[submeshInstance].psoType == bgl::PsoType::kOpaque_StaticMesh_Null);
+
+	SECTION("A valid material updates the submesh-instance's PSO")
+	{
+		auto pbr         = bgl::MaterialHandle();
+		pbr.materialType = bgl::MaterialType::kPBR;
+
+		REQUIRE_NOTHROW(view->SetSubmeshMaterial(inst, 0, pbr));
+
+		CHECK(instanceBuffer[submeshInstance].psoType == bgl::PsoType::kOpaque_StaticMesh_PBR);
+	}
+
+	SECTION("Out-of-range submesh index throws")
+	{
+		auto pbr         = bgl::MaterialHandle();
+		pbr.materialType = bgl::MaterialType::kPBR;
+
+		REQUIRE_THROWS_AS(view->SetSubmeshMaterial(inst, 1, pbr), bgl::SceneError);
+	}
+
+	SECTION("An invalid material throws")
+	{
+		auto bad         = bgl::MaterialHandle();
+		bad.materialType = bgl::MaterialType::kInvalid;
+
+		REQUIRE_THROWS_AS(view->SetSubmeshMaterial(inst, 0, bad), bgl::SceneError);
+	}
+
+	SECTION("An invalid mesh handle throws")
+	{
+		auto pbr         = bgl::MaterialHandle();
+		pbr.materialType = bgl::MaterialType::kPBR;
+
+		REQUIRE_THROWS_AS(
+			view->SetSubmeshMaterial(bgl::MeshInstanceHandle{}, 0, pbr),
+			bgl::SceneError);
 	}
 }

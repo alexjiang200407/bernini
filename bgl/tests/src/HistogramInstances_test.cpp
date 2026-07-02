@@ -9,11 +9,12 @@
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/PackedBuffer.h"
-#include "types/BaseInstance.h"
 #include "types/ComputeState.h"
+#include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include <bgl/IGraphics.h>
 #include <bgl/PsoType.h>
+
 
 // Exercises the counting-sort front end on the GPU: HistogramInstances counts instances
 // per PSO type, PrefixSumInstances turns that histogram into an inclusive prefix sum.
@@ -55,7 +56,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
 		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
 
-	auto instanceBuffer = bgl::PackedBuffer<bgl::BaseInstance>();
+	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
 		auto desc      = bgl::PackedBufferDesc();
 		desc.maxCount  = paddedCount;
@@ -64,7 +65,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	}
 
 	const auto addInstance = [&](bgl::PsoType pso) {
-		auto instance    = bgl::BaseInstance();
+		auto instance    = bgl::SubmeshInstance();
 		instance.psoType = pso;
 		instanceBuffer.Add(instance);
 	};

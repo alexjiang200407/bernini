@@ -52,6 +52,23 @@ namespace bgl
 		virtual void
 		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
 
+		/**
+		 * Sets the material of a single submesh of a mesh instance, updating that
+		 * submesh's pipeline state (PSO). Materials are per-submesh: an instance's
+		 * submeshes can each render with a different PSO.
+		 *
+		 * @param instance     A handle returned by CreateStaticMeshInstance.
+		 * @param submeshIndex The submesh within the instance's geometry [0, submeshCount).
+		 * @param material     The material to apply to that submesh.
+		 * @throws SceneError if the handle is invalid/removed, the submesh index is out
+		 *         of range, or the material is invalid.
+		 */
+		virtual void
+		SetSubmeshMaterial(
+			MeshInstanceHandle instance,
+			uint32_t           submeshIndex,
+			MaterialHandle     material) = 0;
+
 		virtual uint32_t
 		GetInstanceCount() const noexcept = 0;
 

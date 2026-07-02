@@ -3,7 +3,7 @@
 #include "fg/FrameGraph.h"
 #include "idl/Meshlet.h"
 #include "idl/Vertex.h"
-#include "types/BaseInstance.h"
+#include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <bgl/PsoType.h>
@@ -19,15 +19,54 @@ namespace bgl
 			std::string_view name;
 		};
 
+		// Order MUST stay in lockstep with Scene::GetGeometryBuffers() and with
+		// ForwardPass's c_ForwardDataBuffers.
 		static constexpr std::array<BufferInfo, 5> c_BufferInfo = { {
-			{ "scene.geomBuffer" },
+			{ "scene.submeshBuffer" },
 			{ "scene.meshletBuffer" },
 			{ "scene.vertexMapBuffer" },
-			{ "scene.vertexBuffer" },
+			{ "scene.vertexDataBuffer" },
 			{ "scene.indexBuffer" },
 		} };
 
-		// Each Scene a process-unique namespace
+		// The interleaved vertex layout the procedural geometry emits: position,
+		// normal, uv (no tangent), tightly packed at a 32-byte stride. This is
+		// exactly the first 32 bytes of idl::Vertex, and is decoded on the GPU via
+		// each submesh's VertexLayout descriptor.
+		constexpr uint32_t c_ProceduralStride   = 32;
+		constexpr uint32_t c_ProceduralVtxWords = c_ProceduralStride / 4;
+
+		idl::VertexLayout
+		MakeProceduralLayout()
+		{
+			auto layout           = idl::VertexLayout();
+			layout.attributeCount = 3;
+			layout.stride         = c_ProceduralStride;
+			layout.attributes[0]  = { idl::VertexSemantic::kPosition,
+				                      idl::VertexFormat::kFloat32x3,
+				                      0 };
+			layout.attributes[1]  = { idl::VertexSemantic::kNormal,
+				                      idl::VertexFormat::kFloat32x3,
+				                      12 };
+			layout.attributes[2]  = { idl::VertexSemantic::kTexCoord0,
+				                      idl::VertexFormat::kFloat32x2,
+				                      24 };
+			return layout;
+		}
+
+		// Interleave each vertex's position/normal/uv into the raw byte layout
+		// above, returned as uint words for the StructuredBuffer<uint> data buffer.
+		std::vector<uint32_t>
+		PackVertices(std::span<const idl::Vertex> verts)
+		{
+			auto words = std::vector<uint32_t>(verts.size() * c_ProceduralVtxWords);
+			for (size_t i = 0; i < verts.size(); ++i)
+			{
+				std::memcpy(&words[i * c_ProceduralVtxWords], &verts[i], c_ProceduralStride);
+			}
+			return words;
+		}
+
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
 	}
 
@@ -36,13 +75,22 @@ namespace bgl
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
-		{
-			auto staticGeomBufferDesc      = EntryBufferDesc();
-			staticGeomBufferDesc.maxCount  = m_Desc.maxGeom;
-			staticGeomBufferDesc.debugName = "Static Mesh Buffer";
-			staticGeomBufferDesc.blockSize = sizeof(idl::StaticGeom) * 128;
+		const uint32_t maxSubmeshes =
+			m_Desc.maxSubmeshes != 0 ? m_Desc.maxSubmeshes : m_Desc.maxMeshlets;
+		const uint32_t maxVertexWords = m_Desc.maxVertexWords != 0 ?
+		                                    m_Desc.maxVertexWords :
+		                                    m_Desc.maxVertices * c_ProceduralVtxWords;
 
-			m_StaticGeom.Init(std::move(staticGeomBufferDesc), m_ResourceManager);
+		// Geometry assets are CPU-only (they hold the shared submeshes descriptor +
+		// refcount); the heavy data lives in the GPU range buffers below.
+		m_GeomAssets.reset(m_Desc.maxGeom);
+
+		{
+			auto submeshBufferDesc      = RangeBufferDesc();
+			submeshBufferDesc.maxCount  = maxSubmeshes;
+			submeshBufferDesc.debugName = "Submesh Buffer";
+
+			m_SubmeshBuffer.Init(std::move(submeshBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -62,11 +110,11 @@ namespace bgl
 		}
 
 		{
-			auto vertexBufferDesc      = RangeBufferDesc();
-			vertexBufferDesc.maxCount  = m_Desc.maxVertices;
-			vertexBufferDesc.debugName = "Vertex Buffer";
+			auto vertexDataBufferDesc      = RangeBufferDesc();
+			vertexDataBufferDesc.maxCount  = maxVertexWords;
+			vertexDataBufferDesc.debugName = "Vertex Data Buffer";
 
-			m_VertexBuffer.Init(std::move(vertexBufferDesc), m_ResourceManager);
+			m_VertexDataBuffer.Init(std::move(vertexDataBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -146,8 +194,10 @@ namespace bgl
 				                                    0, 4, 7, 0, 7, 3, 5, 1, 2, 5, 2, 6,
 				                                    7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
 
-			const auto baseVertexGlobal = m_VertexBuffer.Add(cubeVertices);
-			auto       mapIndices       = std::vector<uint32_t>(std::size(cubeVertices));
+			const auto vertexWords      = PackVertices(cubeVertices);
+			const auto baseVertexGlobal = m_VertexDataBuffer.Add(vertexWords);
+
+			auto mapIndices = std::vector<uint32_t>(std::size(cubeVertices));
 			for (uint32_t i = 0; i < mapIndices.size(); ++i)
 			{
 				mapIndices[i] = i;
@@ -170,14 +220,23 @@ namespace bgl
 			const auto meshletSpan       = std::span<const idl::Meshlet>(&m, 1);
 			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshletSpan);
 
-			auto staticGeom      = idl::StaticGeom();
-			staticGeom.vertices  = baseVertexGlobal;
-			staticGeom.indices   = baseIndexGlobal;
-			staticGeom.meshlets  = baseMeshletGlobal;
-			staticGeom.vertexMap = baseMapGlobal;
+			auto submesh        = idl::Submesh();
+			submesh.layout      = MakeProceduralLayout();
+			submesh.meshlets    = baseMeshletGlobal;
+			submesh.vertexMap   = baseMapGlobal;
+			submesh.vertexData  = baseVertexGlobal;
+			submesh.indices     = baseIndexGlobal;
+			submesh.vertexCount = static_cast<uint32_t>(std::size(cubeVertices));
+
+			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
+			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
+
+			auto asset              = GeomAsset();
+			asset.submeshes         = baseSubmeshGlobal;
+			asset.totalMeshletCount = 1;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_StaticGeom.Add(std::move(staticGeom));
+			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -229,7 +288,8 @@ namespace bgl
 				}
 			}
 
-			const auto baseVertexGlobal = m_VertexBuffer.Add(sphereVerts);
+			const auto vertexWords      = PackVertices(sphereVerts);
+			const auto baseVertexGlobal = m_VertexDataBuffer.Add(vertexWords);
 
 			auto                  meshlets = std::vector<idl::Meshlet>();
 			std::vector<uint32_t> vertexMap;
@@ -305,14 +365,23 @@ namespace bgl
 			const auto baseIndexGlobal   = m_IndexBuffer.Add(localIndices);
 			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshlets);
 
-			auto staticGeom      = idl::StaticGeom();
-			staticGeom.vertices  = baseVertexGlobal;
-			staticGeom.vertexMap = baseMapGlobal;
-			staticGeom.indices   = baseIndexGlobal;
-			staticGeom.meshlets  = baseMeshletGlobal;
+			auto submesh        = idl::Submesh();
+			submesh.layout      = MakeProceduralLayout();
+			submesh.meshlets    = baseMeshletGlobal;
+			submesh.vertexMap   = baseMapGlobal;
+			submesh.vertexData  = baseVertexGlobal;
+			submesh.indices     = baseIndexGlobal;
+			submesh.vertexCount = static_cast<uint32_t>(sphereVerts.size());
+
+			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
+			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
+
+			auto asset              = GeomAsset();
+			asset.submeshes         = baseSubmeshGlobal;
+			asset.totalMeshletCount = static_cast<uint32_t>(meshlets.size());
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_StaticGeom.Add(std::move(staticGeom));
+			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -331,27 +400,35 @@ namespace bgl
 			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh");
 		}
 
-		if (!m_StaticGeom.IsValid(geom.handle))
+		if (!m_GeomAssets.valid(geom.handle.index, geom.handle.generation))
 		{
 			throw SceneError("GeomHandle passed to DeleteGeom refers to a deleted or unknown geom");
 		}
 
-		const uint32_t refCount = m_StaticGeom.MetaAt(geom.handle.index).refCount;
-		if (refCount != 0)
+		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
+		if (asset.refCount != 0)
 		{
 			throw SceneError(
 				std::format(
 					"Cannot delete geom still referenced by {} live mesh instance(s)",
-					refCount));
+					asset.refCount));
 		}
 
-		const auto& staticGeom = m_StaticGeom[geom.handle];
+		// The geometry's per-part ranges live on each Submesh, so free them per
+		// submesh before releasing the submesh range itself.
+		const uint32_t submeshRoot  = asset.submeshes.range.offsetStart;
+		const uint32_t submeshCount = asset.submeshes.count;
+		for (uint32_t i = 0; i < submeshCount; ++i)
+		{
+			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
-		m_VertexBuffer.EraseByIndex(staticGeom.vertices.offsetStart);
-		m_VertexMapBuffer.EraseByIndex(staticGeom.vertexMap.offsetStart);
-		m_IndexBuffer.EraseByIndex(staticGeom.indices.offsetStart);
-		m_MeshletBuffer.EraseByIndex(staticGeom.meshlets.range.offsetStart);
+			m_VertexDataBuffer.EraseByIndex(submesh.vertexData.offsetStart);
+			m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
+			m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
+			m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
+		}
 
-		m_StaticGeom.Erase(geom.handle);
+		m_SubmeshBuffer.EraseByIndex(submeshRoot);
+		m_GeomAssets.release_slot(geom.handle.index);
 	}
 }
