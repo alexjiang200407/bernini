@@ -18,6 +18,29 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 Always read the [Style Guide](./STYLE.md)
 
+# Documentation Index
+
+Read through these documents if you deem them necessary to your given task.
+
+**[Geometry Layout](./docs/geometry_layout.md)**
+
+Describes the collection of structures, descriptors, and resources that are bound to the GPU for Geometry Passes.
+
+**[Render Hardware Interface](./docs/rhi.md)**
+
+RHI usage.
+
+**[Graphics Debug](./docs/gfx_debug.md)**
+
+Graphics debugging practices.
+
+**[Frame Graph](./docs/framegraph.md)**
+
+FrameGraph usage.
+
+**[Passes Overview](./docs/passes.md)**
+
+Overview of all the Frame Graph Passes
 
 # Directory Structure
 

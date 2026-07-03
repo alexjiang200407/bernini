@@ -10,6 +10,7 @@ set(IDL_CPP_SOURCES
     VertexLayout.slang
     Submesh.slang
     Mesh.slang
+    DebugRecord.slang
 )
 
 set(IDL_GENERATED_OUTPUTS "")

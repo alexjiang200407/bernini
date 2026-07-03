@@ -449,10 +449,25 @@ namespace bgl
 			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
 
-			for (const auto& [name, uniforms] : m_CurrentMeshletState->kernel->uniforms)
+			const MeshletKernel& kernel = *m_CurrentMeshletState->kernel;
+
+			for (const auto& [name, uniforms] : kernel.uniforms)
 			{
 				BindUniforms(uniforms, /*compute*/ false);
 			}
+
+#if defined(BERNINI_GPU_DEBUG)
+			if (auto it = kernel.uniforms.find("gDebug");
+			    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
+			{
+				const DescriptorHandle handle(m_ActiveDebugBuffer.idx);
+				BindConstantData(
+					&handle,
+					sizeof(handle),
+					it->second.GetRootParamIndex(),
+					/*compute*/ false);
+			}
+#endif
 		}
 	}
 
@@ -504,6 +519,14 @@ namespace bgl
 		m_CurrentComputeState = computeState;
 	}
 
+#if defined(BERNINI_GPU_DEBUG)
+	void
+	CommandList::SetActiveDebugBuffer(BufferHandle handle) noexcept
+	{
+		m_ActiveDebugBuffer = handle;
+	}
+#endif
+
 	void
 	CommandList::Dispatch(
 		uint32_t threadGroupCountX,
@@ -521,18 +544,42 @@ namespace bgl
 		m_CommandList->SetPipelineState(pipeline->GetPipelineState());
 		m_CommandList->SetComputeRootSignature(pipeline->GetRootSignature());
 
-		for (const auto& [name, uniforms] : m_CurrentComputeState->kernel->uniforms)
+		const ComputeKernel& kernel = *m_CurrentComputeState->kernel;
+
+		for (const auto& [name, uniforms] : kernel.uniforms)
 		{
 			BindUniforms(uniforms, /*compute*/ true);
 		}
+
+#if defined(BERNINI_GPU_DEBUG)
+		// Auto-bind the active GPU-assertion buffer into the shader's implicit gDebug
+		// cbuffer, overriding the (zeroed) reflected binding. No-op when the kernel
+		// reflected no gDebug (the shader never calls dbg_raise) or none is active.
+		// The kernel is const during dispatch, so we bind the CBV from the handle
+		// directly rather than mutating the kernel's uniform mirror.
+		if (auto it = kernel.uniforms.find("gDebug");
+		    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
+		{
+			const DescriptorHandle handle(m_ActiveDebugBuffer.idx);
+			BindConstantData(
+				&handle,
+				sizeof(handle),
+				it->second.GetRootParamIndex(),
+				/*compute*/ true);
+		}
+#endif
 
 		m_CommandList->Dispatch(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 
 	void
-	CommandList::BindUniforms(const Uniforms& uniforms, bool compute) noexcept
+	CommandList::BindConstantData(
+		const void* data,
+		size_t      size,
+		uint32_t    rootParamIndex,
+		bool        compute) noexcept
 	{
-		if (uniforms.GetSize() == 0)
+		if (size == 0)
 			return;
 
 		size_t                    offsetInUploadBuffer = 0;
@@ -541,7 +588,7 @@ namespace bgl
 
 		auto success = m_UploadManager.SuballocateBuffer(
 			m_LastCompletedFence,
-			uniforms.GetSize(),
+			size,
 			nullptr,
 			m_CurrentUploadBuffer,
 			&offsetInUploadBuffer,
@@ -552,16 +599,26 @@ namespace bgl
 
 		gassert(success, "Failed to suballocate constant buffer");
 
-		memcpy(cpuVA, uniforms.Data(), uniforms.GetSize());
+		memcpy(cpuVA, data, size);
 
 		if (compute)
 		{
-			m_CommandList->SetComputeRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
+			m_CommandList->SetComputeRootConstantBufferView(rootParamIndex, gpuVA);
 		}
 		else
 		{
-			m_CommandList->SetGraphicsRootConstantBufferView(uniforms.GetRootParamIndex(), gpuVA);
+			m_CommandList->SetGraphicsRootConstantBufferView(rootParamIndex, gpuVA);
 		}
+	}
+
+	void
+	CommandList::BindUniforms(const Uniforms& uniforms, bool compute) noexcept
+	{
+		BindConstantData(
+			uniforms.Data(),
+			uniforms.GetSize(),
+			uniforms.GetRootParamIndex(),
+			compute);
 	}
 
 	void

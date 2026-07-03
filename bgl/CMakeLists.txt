@@ -52,8 +52,13 @@ target_link_libraries(bgl_objects
 		glm::glm
 )
 
-if(RENDERER_BACKEND STREQUAL "DX12")	
+if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(src/d3d12)
+endif()
+
+add_dependencies(bgl_objects bgl_idl_generate)
+if(RENDERER_BACKEND STREQUAL "DX12")
+	add_dependencies(bgl_d3d12 bgl_idl_generate)
 endif()
 
 if(RENDERER_BACKEND STREQUAL "DX12")	

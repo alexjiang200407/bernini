@@ -26,55 +26,49 @@ namespace bgl
 			std::string_view uniformKey;
 			BarrierAccess    access;
 			BarrierSync      sync;
-			bool             required;
 		};
 
 		static constexpr std::array<SceneBuffer, 9> c_ForwardDataBuffers = { {
 			{ "scene.instanceBuffer",
 			  "instanceBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
 			{ "scene.meshInstanceBuffer",
 			  "meshBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
 			{ "scene.submeshBuffer",
 			  "submeshBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
 			{ "scene.meshletBuffer",
 			  "meshletBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
 			{ "scene.vertexMapBuffer",
 			  "vertexMapBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
 			{ "scene.vertexDataBuffer",
 			  "vertexDataBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
 			{ "scene.indexBuffer",
 			  "indexBuffer",
 			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierSyncFlag::kVertexShader },
+			// compactedInstances and psoPrefixSum are compute buffers read here through
+			// their UAV descriptor (ComputeBuffer<T> = RWStructuredBuffer<T>.Handle), so
+			// the barrier must target kUnorderedAccess to match the descriptor, not
+			// kShaderResource.
 			{ "scene.compactedInstances",
 			  "compactedInstances",
-			  BarrierAccessFlag::kIndirectArgument,
-			  BarrierSyncFlag::kIndirectArgument,
-			  true },
+			  BarrierAccessFlag::kUnorderedAccess,
+			  BarrierSyncFlag::kVertexShader },
 			{ "compactedInstances.psoPrefixSumBuffer",
 			  "psoPrefixSum",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader,
-			  true },
+			  BarrierAccessFlag::kUnorderedAccess,
+			  BarrierSyncFlag::kVertexShader },
 		} };
 
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
@@ -86,6 +80,9 @@ namespace bgl
 		constexpr auto c_PbrPixelSrc   = "Forward_PBR"sv;
 		constexpr auto c_NullPixelDxil = "./shaders/Forward_Null_PSMain.dxil"sv;
 		constexpr auto c_NullPixelSrc  = "Forward_Null"sv;
+		// Debug: pixel shader that raises a GPU assertion (see MaterialType::kAssert).
+		constexpr auto c_AssertPixelDxil = "./shaders/Forward_Assert_PSMain.dxil"sv;
+		constexpr auto c_AssertPixelSrc  = "Forward_Assert"sv;
 
 		struct PsoConfig
 		{
@@ -100,11 +97,13 @@ namespace bgl
 			// kOpaque_StaticMesh_Null
 			{ c_NullPixelDxil, c_NullPixelSrc, RasterCullMode::kNone, true, false },
 			// kOpaque_StaticMesh_PBR
-			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kBack, true, false },
+			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
 			// kAlphaTest_StaticMesh_PBR
 			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
-			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kBack, false, true },
+			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
+			// kAssert_StaticMesh
+			{ c_AssertPixelDxil, c_AssertPixelSrc, RasterCullMode::kNone, true, false },
 		} };
 
 		MeshletKernel
@@ -184,8 +183,7 @@ namespace bgl
 			.AddBufferArg(
 				BufferArg{ std::string(c_DispatchArgsBuffer),
 		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument |
-		                       BarrierAccessFlag::kShaderResource });
+		                   BarrierAccessFlag::kIndirectArgument });
 
 		for (const SceneBuffer& binding : c_ForwardDataBuffers)
 		{
@@ -228,7 +226,7 @@ namespace bgl
 				{
 					uniform = handle;
 				}
-				else if (binding.required)
+				else
 				{
 					gfatal(
 						"{} key doesn't exist in uniforms. Most likely an error",

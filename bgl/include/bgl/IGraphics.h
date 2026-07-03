@@ -1,4 +1,5 @@
 #pragma once
+#include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -104,6 +105,28 @@ namespace bgl
 
 		virtual SceneViewHandle
 		CreateSceneView(const SceneHandle& scene, uint32_t maxInstances) = 0;
+
+		/**
+		 * Registers a sink for GPU assertions (dbg_raise) the engine detects during
+		 * BeginFrame. While a handler is set it replaces the default behavior of
+		 * crashing when an assertion fires; nullptr (the default) restores the crash.
+		 * GPU assertions are a Debug-build facility (BERNINI_GPU_DEBUG); in Release the
+		 * handler is never invoked.
+		 *
+		 * This setter performs NO GPU/frame synchronization: it only swaps a non-owning
+		 * CPU pointer (no fence wait, no command recording) and takes effect at the next
+		 * BeginFrame's inspection. It is not thread-safe -- call it on the render thread,
+		 * like BeginFrame/Draw/EndFrame (calling it mid-frame is fine; it only affects
+		 * the next frame's inspection).
+		 *
+		 * Lifetime note tied to frame latency: assertions are read back and reported a
+		 * few frames AFTER they fire (the readback ring is c_BufferCount deep), so the
+		 * handler object must stay valid across that window -- simplest rule: it must
+		 * outlive this IGraphics. Clearing to nullptr does not cancel an already
+		 * in-flight assertion; that pending report then falls back to the crash path.
+		 */
+		virtual void
+		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept = 0;
 
 	protected:
 		IGraphics() noexcept = default;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "idl/DebugRecord.h"
 #include "idl/Entry.h"
 #include "idl/Mesh.h"
 #include "idl/Meshlet.h"

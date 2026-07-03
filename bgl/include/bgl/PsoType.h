@@ -9,6 +9,7 @@ namespace bgl
 		kOpaque_StaticMesh_PBR,
 		kAlphaTest_StaticMesh_PBR,
 		kTransparent_StaticMesh_PBR,
+		kAssert_StaticMesh,
 		kCount,
 	};
 

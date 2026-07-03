@@ -41,6 +41,15 @@ namespace bgl
 		sessionDesc.searchPaths     = searchPaths;
 		sessionDesc.searchPathCount = std::size(searchPaths);
 
+#if defined(BERNINI_GPU_DEBUG)
+		// Enables dbg_raise() bodies in runtime-compiled shaders. Kept in lockstep
+		// with the offline slangc -D in cmake/compile_shader.cmake. Fully absent in
+		// Release, so gDebug drops out of reflection and dbg_raise becomes a no-op.
+		const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
+		sessionDesc.preprocessorMacros                = &debugMacro;
+		sessionDesc.preprocessorMacroCount            = 1;
+#endif
+
 		SlangErrorChecker errChecker;
 		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef()) >> errChecker;
 

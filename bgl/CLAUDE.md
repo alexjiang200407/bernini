@@ -9,6 +9,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - PCH is `./bgl/src/pch.h`. Don't `#include` the headers in here.
 - Error Handling: For internal problems, use gassert. For caller (code that links to bgl) problems, throw an exception so the caller can handle them
 - CMake: `./CMakeLists.txt`
+- Verification: Check logs, bgl_tests
 
 
 # Subsystems
@@ -22,6 +23,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - Implementation files (.h and .cpp) should have a _d3d12 suffix.
     e.g. We have IDevice class for API agnostic device, the Device_d3d12.cpp will be the class representing the d3d12 device class.
 - CMake: `./src/d3d12/CMakeLists.txt`
+- Verification: Check logs, bgl_tests
 
 ## bgl_tests
 

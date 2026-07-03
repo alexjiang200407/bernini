@@ -7,6 +7,7 @@ namespace bgl
 		kInvalid = static_cast<uint8_t>(-1),
 		kNull    = 0,  // unlit white color, no textures, no lighting.
 		kPBR,
+		kAssert,  // debug: pixel shader raises a GPU assertion (dbg_raise). No-op in Release.
 		kCount,
 	};
 }

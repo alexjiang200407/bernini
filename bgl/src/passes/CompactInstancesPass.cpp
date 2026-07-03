@@ -111,10 +111,13 @@ namespace bgl
 						"scene.compactedInstances",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
+					// psoPrefixSum is read through its UAV descriptor
+					// (ComputeBuffer<uint>), so declare kUnorderedAccess to match the
+					// descriptor rather than kShaderResource.
 					.AddBufferArg(
 						"compactedInstances.psoPrefixSumBuffer",
 						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
+						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
 						"compactedInstances.compactDispatchArgs",
 						BarrierSyncFlag::kComputeShader,
@@ -167,6 +170,21 @@ namespace bgl
 
 		const auto instanceCount = draw.view->GetInstanceCount();
 		cmdList->Dispatch(core::div_ceil(instanceCount, c_HistogramGroupSize), 1, 1);
+
+		// The histogram writes psoPrefixSum (UAV); the prefix-sum scan below reads and
+		// rewrites the same buffer. Both dispatches run back-to-back inside this single
+		// frame-graph pass, so no pass-boundary barrier separates them -- insert an
+		// explicit UAV barrier or the scan races the histogram. The race only corrupts
+		// results with multiple PSO buckets (a lone bucket's base is the prefix sum of
+		// prior, empty buckets, which is always 0), which is why it shows up as
+		// flickering only in scenes mixing PSO types.
+		cmdList->Barrier(
+			psoPrefixSumBuffer,
+			BufferBarrierDesc()
+				.AddSyncBefore(BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(BarrierSyncFlag::kComputeShader)
+				.AddAccessAfter(BarrierAccessFlag::kUnorderedAccess));
 
 		m_PrefixSum["gUniforms"]["inOutBuffer"] = psoPrefixSumBuffer;
 

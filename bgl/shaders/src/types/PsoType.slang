@@ -7,6 +7,7 @@ public enum PsoType : uint16_t
     kOpaque_StaticMesh_PBR,
     kAlphaTest_StaticMesh_PBR,
     kTransparent_StaticMesh_PBR,
+    kAssert_StaticMesh, // keep in sync with bgl/include/bgl/PsoType.h
     kCount,
 }
 ;

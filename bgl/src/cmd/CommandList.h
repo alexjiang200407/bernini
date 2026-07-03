@@ -142,6 +142,20 @@ namespace bgl
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept = 0;
 
+#if defined(BERNINI_GPU_DEBUG)
+		/**
+		 * Sets the GPU-assertion debug buffer that subsequent compute Dispatches
+		 * auto-bind into a shader's implicit `gDebug` cbuffer (see dbg.slang). A null
+		 * handle disables auto-binding. Debug builds only; defaults to a no-op so
+		 * lightweight ICommandList mocks need not implement it.
+		 */
+		virtual void
+		SetActiveDebugBuffer(BufferHandle handle) noexcept
+		{
+			(void)handle;
+		}
+#endif
+
 		[[nodiscard]] virtual bool
 		IsOpen() const noexcept = 0;
 

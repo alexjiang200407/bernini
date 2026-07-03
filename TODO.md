@@ -1,6 +1,8 @@
 
 - Asset loading
 
+- idlgen support constants
+
 - Add Submesh structure
     - Per-part vertex layout.
     - Per-part bounds. Remove bounding box from meshlet

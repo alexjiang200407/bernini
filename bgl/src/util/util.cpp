@@ -106,6 +106,8 @@ namespace bgl
 				return PsoType::kOpaque_StaticMesh_PBR;
 			case MaterialType::kNull:
 				return PsoType::kOpaque_StaticMesh_Null;
+			case MaterialType::kAssert:
+				return PsoType::kAssert_StaticMesh;
 			case MaterialType::kInvalid:
 			case MaterialType::kCount:
 				gfatal("Invalid MaterialType");

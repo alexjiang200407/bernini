@@ -13,6 +13,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/assign_folder.cmake)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+add_compile_definitions($<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>)
+
 
 if(CMAKE_MAKE_PROGRAM MATCHES "msbuild|MSBUILD")
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
@@ -44,7 +46,10 @@ get_property(EXAMPLE_TARGETS GLOBAL PROPERTY GLOBAL_EXAMPLE_TARGETS)
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/core"     "misc")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/bgl"      "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/assetlib" "editor")
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")
+
+if (BUILD_EXAMPLES)
+    assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")
+endif()
 if (Qt6_FOUND)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/editor" "editor")
 endif()

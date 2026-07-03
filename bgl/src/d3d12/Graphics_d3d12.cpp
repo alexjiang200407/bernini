@@ -4,6 +4,8 @@
 #include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
 #include "constants/constants.h"
+#include "debug/DebugBuffer.h"
+#include "debug/DebugReadback.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
 #include "fg/FrameGraph.h"
@@ -100,6 +102,12 @@ namespace bgl
 				m_Opts.enableDebugLayer);
 		}
 
+		void
+		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept override
+		{
+			m_GpuAssertionHandler = handler;
+		}
+
 	private:
 		// Forwards debug-layer / GPU-based-validation messages to the spdlog log.
 		static void CALLBACK
@@ -109,6 +117,13 @@ namespace bgl
 			D3D12_MESSAGE_ID       id,
 			LPCSTR                 description,
 			void*                  context);
+
+#if defined(BERNINI_GPU_DEBUG)
+		// Maps the GPU-assertion readback for a completed frame slot and crashes via
+		// gfatal if any dbg_raise() fired. No-op if the slot has no pending snapshot.
+		void
+		InspectDebugSlot(uint32_t index);
+#endif
 
 	private:
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
@@ -140,6 +155,24 @@ namespace bgl
 		PreparePresentPass    m_PreparePresentPass;
 		ForwardPass           m_Forward;
 		CompactInstancesPass  m_CompactInstances;
+
+		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
+
+#if defined(BERNINI_GPU_DEBUG)
+		// GPU-based assertions (dbg_raise). One shared UAV bound frame-wide into every
+		// pipeline's implicit gDebug cbuffer; copied to a per-frame-in-flight readback
+		// ring at EndFrame and inspected two frames later at BeginFrame. Fully compiled
+		// out of Release. NOTE: only the "main" queue is bound today -- async-compute
+		// passes would each need their own debug buffer bound on their command list.
+		// Capacity is small on purpose: the whole buffer is copied to readback every
+		// frame, and a handful of records is enough since we crash on the first frame
+		// that fires. 256 records -> ~4 KB (header + 256*16 B).
+		static constexpr uint32_t c_DebugBufferCapacity = 256;
+
+		DebugBuffer          m_DebugBuffer;
+		ReadbackBufferHandle m_DebugReadbacks[c_BufferCount];
+		bool                 m_DebugReadbackPending[c_BufferCount] = {};
+#endif
 	};
 }
 
@@ -241,6 +274,17 @@ namespace bgl
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
+
+#if defined(BERNINI_GPU_DEBUG)
+		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
+		for (auto& readback : m_DebugReadbacks)
+		{
+			auto rbDesc      = ReadbackBufferDesc();
+			rbDesc.byteSize  = m_DebugBuffer.ByteSize();
+			rbDesc.debugName = "GPU Debug Readback";
+			readback         = m_ResourceManager->CreateReadbackBuffer(rbDesc);
+		}
+#endif
 	}
 
 	Graphics::~Graphics() noexcept
@@ -260,6 +304,21 @@ namespace bgl
 
 		m_Forward.Release();
 		m_CompactInstances.Release(shutdownFenceValue, false);
+
+#if defined(BERNINI_GPU_DEBUG)
+		// The GPU is idle (flushed above), so assertions from the final frames whose slot
+		// was never reused by a later BeginFrame are now safe to inspect -- drain them so
+		// tail-frame (and few-frame) assertions are not silently missed.
+		for (uint32_t i = 0; i < c_BufferCount; ++i)
+		{
+			InspectDebugSlot(i);
+		}
+		for (auto& readback : m_DebugReadbacks)
+		{
+			m_ResourceManager->DestroyReadbackBuffer(readback, shutdownFenceValue, false);
+		}
+		m_DebugBuffer.Release(shutdownFenceValue, false);
+#endif
 
 		// Clear retained passes; each pass descriptor holds a resource-manager reference
 		// that would otherwise keep the manager alive past the live-object report.
@@ -291,6 +350,61 @@ namespace bgl
 		}
 	}
 
+#if defined(BERNINI_GPU_DEBUG)
+	void
+	Graphics::InspectDebugSlot(uint32_t index)
+	{
+		if (!m_DebugReadbackPending[index])
+		{
+			return;
+		}
+		m_DebugReadbackPending[index] = false;
+
+		const void* mapped = m_ResourceManager->MapReadback(m_DebugReadbacks[index]);
+		gassert(mapped != nullptr, "Failed to map GPU debug readback");
+
+		const auto report = InspectDebugReadback(mapped, c_DebugBufferCapacity);
+		m_ResourceManager->UnmapReadback(m_DebugReadbacks[index]);
+
+		if (!report.has_value())
+		{
+			return;
+		}
+
+		std::string msg = std::format(
+			"GPU assertion(s) fired: {} raised{}",
+			report->count,
+			report->overflow ? " (debug buffer overflowed; some records dropped)" : "");
+		for (const idl::DebugRecord& rec : report->records)
+		{
+			msg += std::format("\n  errcode={}", rec.errcode);
+		}
+
+		if (m_GpuAssertionHandler != nullptr)
+		{
+			logger::error("{}", msg);
+
+			std::vector<uint32_t> errcodes;
+			errcodes.reserve(report->records.size());
+			for (const idl::DebugRecord& rec : report->records)
+			{
+				errcodes.push_back(rec.errcode);
+			}
+
+			GpuAssertionReport pub;
+			pub.raisedCount  = report->count;
+			pub.overflow     = report->overflow;
+			pub.errcodes     = errcodes.data();
+			pub.errcodeCount = static_cast<uint32_t>(errcodes.size());
+
+			m_GpuAssertionHandler->OnGpuAssertion(pub);
+			return;
+		}
+
+		gfatal("{}", msg);
+	}
+#endif
+
 	void
 	Graphics::BeginFrame(const RenderTargetHandle& target)
 	{
@@ -311,9 +425,31 @@ namespace bgl
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
 		}
 
+#if defined(BERNINI_GPU_DEBUG)
+		// This slot's fence has completed, so the GPU-assertion snapshot it copied out
+		// (two frames ago) is now safe to read. Crashes if any assertion fired.
+		InspectDebugSlot(index);
+#endif
+
 		rt.m_CommandAllocator[index]->ResetAllocator();
 
 		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
+
+#if defined(BERNINI_GPU_DEBUG)
+		// Zero the debug buffer's header for this frame, hand it to the shaders as a UAV,
+		// and bind it frame-wide so every dbg_raise() lands in it. The buffer is left in
+		// copy-dest by the previous EndFrame (and by creation on the first frame), so the
+		// reset WriteBuffer needs no pre-barrier.
+		m_DebugBuffer.Reset(m_CommandList.Get());
+		m_CommandList->Barrier(
+			m_DebugBuffer.GetBufferHandle(),
+			BufferBarrierDesc()
+				.AddSyncBefore(BarrierSyncFlag::kCopy)
+				.AddAccessBefore(BarrierAccessFlag::kCopyDest)
+				.AddSyncAfter(BarrierSyncFlag::kAllCommands)
+				.AddAccessAfter(BarrierAccessFlag::kUnorderedAccess));
+		m_CommandList->SetActiveDebugBuffer(m_DebugBuffer.GetBufferHandle());
+#endif
 
 		m_FrameGraph.Reset();
 		m_DrawCount = 0;
@@ -394,6 +530,31 @@ namespace bgl
 
 		m_FrameGraph.Compile(m_ResourceManager.Get());
 		m_FrameGraph.Execute();
+
+#if defined(BERNINI_GPU_DEBUG)
+		// Snapshot this frame's GPU assertions into the slot's readback buffer, then
+		// leave the debug buffer in copy-dest ready for next frame's reset. The copy
+		// rides this command list, gated by rt.m_FenceValues[index] set below; it is
+		// inspected at the BeginFrame that reuses this slot (~c_BufferCount frames on).
+		m_CommandList->Barrier(
+			m_DebugBuffer.GetBufferHandle(),
+			BufferBarrierDesc()
+				.AddSyncBefore(BarrierSyncFlag::kAllCommands)
+				.AddAccessBefore(BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(BarrierSyncFlag::kCopy)
+				.AddAccessAfter(BarrierAccessFlag::kCopySource));
+		m_CommandList->CopyBufferToReadback(
+			m_DebugReadbacks[index],
+			m_DebugBuffer.GetBufferHandle());
+		m_CommandList->Barrier(
+			m_DebugBuffer.GetBufferHandle(),
+			BufferBarrierDesc()
+				.AddSyncBefore(BarrierSyncFlag::kCopy)
+				.AddAccessBefore(BarrierAccessFlag::kCopySource)
+				.AddSyncAfter(BarrierSyncFlag::kCopy)
+				.AddAccessAfter(BarrierAccessFlag::kCopyDest));
+		m_DebugReadbackPending[index] = true;
+#endif
 
 		m_CommandList->Close();
 

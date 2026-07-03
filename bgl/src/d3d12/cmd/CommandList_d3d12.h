@@ -99,6 +99,11 @@ namespace bgl
 			uint32_t threadGroupCountY,
 			uint32_t threadGroupCountZ) noexcept override;
 
+#if defined(BERNINI_GPU_DEBUG)
+		void
+		SetActiveDebugBuffer(BufferHandle handle) noexcept override;
+#endif
+
 		ID3D12CommandList*
 		GetD3D12CommandList() const noexcept
 		{
@@ -121,6 +126,14 @@ namespace bgl
 		SubmitChunks(ICommandQueue* cmdQueue) noexcept;
 
 	private:
+		// Uploads arbitrary constant data to a transient CBV and binds it as a root CBV.
+		void
+		BindConstantData(
+			const void* data,
+			size_t      size,
+			uint32_t    rootParamIndex,
+			bool        compute) noexcept;
+
 		// Uploads the uniform bytes to a transient CBV and binds it.
 		void
 		BindUniforms(const Uniforms& uniforms, bool compute) noexcept;
@@ -140,8 +153,12 @@ namespace bgl
 		wrl::ComPtr<ID3D12CommandSignature>     m_MeshDispatchSig;
 		std::optional<MeshletState>             m_CurrentMeshletState;
 		std::optional<ComputeState>             m_CurrentComputeState;
-		uint64_t                                m_LastCompletedFence = 0;
-		uint64_t                                m_RecordingVersion   = 0;
-		bool                                    m_Open               = false;
+#if defined(BERNINI_GPU_DEBUG)
+		// GPU-assertion buffer auto-bound into a kernel's implicit gDebug cbuffer.
+		BufferHandle m_ActiveDebugBuffer;
+#endif
+		uint64_t m_LastCompletedFence = 0;
+		uint64_t m_RecordingVersion   = 0;
+		bool     m_Open               = false;
 	};
 }

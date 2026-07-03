@@ -20,6 +20,20 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   needed before each one; `Execute` records those barriers ahead of the pass's `exec`. This is the
   load-bearing decision — it is why the [RHI](docs/rhi.md) says pass code must not barrier.
 
+  **Caveat — barriers are derived at pass boundaries only.** The graph inserts one set of
+  transitions *before* each pass, from the resource's prior state to the state that pass declares.
+  It does **not** synchronize hazards *within* a pass. If a single pass's `exec` issues multiple
+  dispatches/draws where a later one reads or overwrites what an earlier one wrote to the **same**
+  resource (a UAV read-after-write / write-after-write), the graph cannot see it and inserts
+  nothing — the two commands race. Prefer **splitting the work into separate passes** so the graph
+  derives the barrier from the declared access change (e.g. producer declares
+  `kUnorderedAccess`, consumer declares `kShaderResource`). Only when the dispatches must stay in
+  one pass (e.g. they share a UAV as both in and out) issue the intra-pass barrier yourself — this
+  is the one sanctioned exception to "pass code must not barrier." *Bug precedent:* the
+  histogram and prefix-sum dispatches in `CompactInstancesPass` shared one buffer in a single pass
+  with no barrier between them; the scan raced the histogram and produced wrong prefix sums —
+  visible only with multiple PSO buckets, as nondeterministic flicker.
+
 * **Ordering is submission order; the graph adds dependencies and culling, not reordering.** Passes
   execute in `AddPass` order. `Compile` builds a *last-writer* dependency edge (a pass depends on
   the most recent prior pass that wrote each resource it accesses) purely to drive culling — it
@@ -143,8 +157,13 @@ flowchart TD
 * **`GetBuffer(name)` / `GetTexture(name)`** — @pre `name` was declared by this pass **and**
   resolves to an imported resource. Throws for an undeclared name or a transient (declared but
   never imported) — declaring an arg does not guarantee a handle.
-* **Do not call `ICommandList::Barrier`** from `exec`; the graph already inserted the transitions
-  this pass needs.
+* **Do not call `ICommandList::Barrier`** from `exec` for *inter-pass* transitions; the graph
+  already inserted the state changes this pass needs on entry. The **only** exception is an
+  *intra-pass* hazard: if this `exec` issues multiple dispatches/draws that read-after-write or
+  write-after-write the **same** resource, the graph inserts nothing between them (it derives
+  barriers at pass boundaries only). Split into separate passes so the graph handles it, or, if the
+  dispatches must share one pass, emit that one UAV barrier yourself. See the "barriers are derived
+  at pass boundaries only" caveat under Design Choices.
 
 ### PassDesc
 
