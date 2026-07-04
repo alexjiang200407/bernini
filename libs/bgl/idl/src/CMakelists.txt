@@ -13,6 +13,7 @@ set(IDL_CPP_SOURCES
     Constants.slang
     PbrMaterial.slang
     TextureHandle.slang
+    SamplerHandle.slang
     ErrorCode.slang
 )
 

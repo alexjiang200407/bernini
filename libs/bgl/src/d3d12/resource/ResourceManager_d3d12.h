@@ -4,6 +4,7 @@
 #include "resource/ReadbackBuffer_d3d12.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_d3d12.h"
+#include "resource/Sampler_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <core/containers/slot_vector.h>
 
@@ -20,6 +21,7 @@ namespace bgl
 			kDsv,
 			kTexture,
 			kReadback,
+			kSampler,
 		};
 
 		Type     type       = Type::kCbvSrvUav;
@@ -60,6 +62,10 @@ namespace bgl
 		CreateTexture(const TextureDesc& desc) noexcept override;
 
 		[[nodiscard]]
+		SamplerHandle
+		CreateSampler(const SamplerDesc& desc) noexcept override;
+
+		[[nodiscard]]
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
 
@@ -87,6 +93,10 @@ namespace bgl
 			override;
 
 		void
+		DestroySampler(SamplerHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
+			override;
+
+		void
 		DestroyReadbackBuffer(
 			ReadbackBufferHandle handle,
 			uint64_t             currentFenceValue,
@@ -105,6 +115,10 @@ namespace bgl
 
 		[[nodiscard]]
 		bool
+		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
 		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
 
 		[[nodiscard]]
@@ -116,6 +130,9 @@ namespace bgl
 
 		const Texture&
 		GetTexture(TextureHandle handle) const noexcept override;
+
+		const Sampler&
+		GetSampler(SamplerHandle handle) const noexcept override;
 
 		const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept override;
@@ -153,6 +170,12 @@ namespace bgl
 			return m_RtvHeap.Get();
 		}
 
+		ID3D12DescriptorHeap*
+		GetSamplerHeap() const noexcept
+		{
+			return m_SamplerHeap.Get();
+		}
+
 		wrl::ComPtr<ID3D12Device>
 		GetD3D12DeviceCpy() const noexcept
 		{
@@ -184,7 +207,9 @@ namespace bgl
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
+		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
 		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
+		core::slot_vector<Sampler>        m_Samplers;
 
 		// CPU side only
 		core::slot_vector<Texture> m_Textures;

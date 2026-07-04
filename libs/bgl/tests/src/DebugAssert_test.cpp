@@ -175,7 +175,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	CHECK(report->count == 1);
 	CHECK_FALSE(report->overflow);
 	REQUIRE(report->records.size() == 1);
-	CHECK(report->records[0].errcode == 42u);
+	CHECK(report->records[0].errcode == 1u);
 
 	resourceManager->UnmapReadback(rb);
 

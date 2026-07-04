@@ -43,6 +43,7 @@ namespace bgl
 		uint32_t maxRtvs       = 5;
 		uint32_t maxDsvs       = 5;
 		uint32_t maxTextures   = 1000;
+		uint32_t maxSamplers   = 128;
 	};
 
 	class BGL_API IGraphics : public core::Ref

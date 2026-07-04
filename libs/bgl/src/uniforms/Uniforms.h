@@ -1,6 +1,7 @@
 #pragma once
 #include "constants/constants.h"
 #include "resource/Buffer.h"
+#include "resource/Sampler.h"
 #include "resource/Shader.h"
 #include "uniforms/DescriptorHandle.h"
 #include <core/err/util.h>
@@ -228,6 +229,20 @@ namespace bgl
 
 				core::throw_runtime_error(
 					"Accessor at offset {} cannot be assigned with buffer handle",
+					m_Offset);
+			}
+
+			AccessorBase&
+			operator=(SamplerHandle handle)
+			{
+				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformIndex].IsValid())
+				{
+					(*this)[c_HandleUniformIndex] = static_cast<uint32_t>(handle.idx);
+					return *this;
+				}
+
+				core::throw_runtime_error(
+					"Accessor at offset {} cannot be assigned with sampler handle",
 					m_Offset);
 			}
 

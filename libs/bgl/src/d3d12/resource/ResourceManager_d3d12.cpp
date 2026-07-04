@@ -10,12 +10,17 @@ namespace bgl
 		wrl::ComPtr<ID3D12Device>  device,
 		const ResourceManagerDesc& desc) :
 		m_Desc(desc), m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
-		m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
+		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs),
+		m_Dsvs(desc.maxDsvs)
 	{
 		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
 		gassert(desc.maxTextures > 0, "maxTextures must be greater than zero");
+
+		gassert(
+			desc.maxSamplers > 0 && desc.maxSamplers <= 2048,
+			"maxSamplers must be in (0, 2048]");
 
 		// Create descriptor heap
 		{
@@ -43,6 +48,15 @@ namespace bgl
 			dsvHeapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 			dsvHeapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 			m_Device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DsvHeap)) >>
+				d3d12ErrChecker;
+		}
+
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
+			samplerHeapDesc.NumDescriptors             = desc.maxSamplers;
+			samplerHeapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+			samplerHeapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			m_Device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&m_SamplerHeap)) >>
 				d3d12ErrChecker;
 		}
 	}
@@ -129,6 +143,22 @@ namespace bgl
 		m_Textures[slotIndex] = std::move(texture);
 
 		return TextureHandle(slotIndex, textureSlotHandle.generation);
+	}
+
+	SamplerHandle
+	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
+	{
+		auto     samplerSlotHandle = m_Samplers.allocate_slot();
+		uint32_t slotIndex         = samplerSlotHandle.index;
+
+		Sampler sampler(m_Device.Get(), m_SamplerHeap.Get(), slotIndex, desc);
+
+		D3D12_SAMPLER_DESC d3d12Desc = ConvertSamplerDesc(desc);
+		m_Device->CreateSampler(&d3d12Desc, sampler.GetCpuHandle());
+
+		m_Samplers[slotIndex] = std::move(sampler);
+
+		return SamplerHandle{ slotIndex, samplerSlotHandle.generation };
 	}
 
 	ReadbackBufferHandle
@@ -287,6 +317,27 @@ namespace bgl
 	}
 
 	void
+	ResourceManager::DestroySampler(
+		SamplerHandle handle,
+		uint64_t      currentFenceValue,
+		bool          deferred) noexcept
+	{
+		gassert(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
+
+		if (deferred)
+		{
+			m_PendingDeletions.emplace_back(
+				PendingDeletion::Type::kSampler,
+				handle.idx,
+				currentFenceValue);
+		}
+		else
+		{
+			m_Samplers.release_slot(handle.idx);
+		}
+	}
+
+	void
 	ResourceManager::DestroyReadbackBuffer(
 		ReadbackBufferHandle handle,
 		uint64_t             currentFenceValue,
@@ -330,6 +381,9 @@ namespace bgl
 				case PendingDeletion::Type::kReadback:
 					m_ReadbackBuffers.release_slot(pending.slotIndex);
 					break;
+				case PendingDeletion::Type::kSampler:
+					m_Samplers.release_slot(pending.slotIndex);
+					break;
 				}
 				return true;
 			}
@@ -361,6 +415,17 @@ namespace bgl
 	}
 
 	bool
+	ResourceManager::ValidSamplerHandle(const SamplerHandle& handle) const noexcept
+	{
+		if (!m_Samplers.valid(handle.idx, handle.generation))
+		{
+			return false;
+		}
+
+		return !m_Samplers[handle.idx].IsNull();
+	}
+
+	bool
 	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept
 	{
 		if (!m_ReadbackBuffers.valid(handle.idx, handle.generation))
@@ -386,7 +451,7 @@ namespace bgl
 	ResourceManager::SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList) noexcept
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
-		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavHeap.Get() };
+		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavHeap.Get(), m_SamplerHeap.Get() };
 		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 	}
 
@@ -395,6 +460,13 @@ namespace bgl
 	{
 		gassert(ValidTextureHandle(handle), "Invalid texture handle");
 		return m_Textures[handle.idx];
+	}
+
+	const Sampler&
+	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
+	{
+		gassert(ValidSamplerHandle(handle), "Invalid sampler handle");
+		return m_Samplers[handle.idx];
 	}
 
 	const Buffer&

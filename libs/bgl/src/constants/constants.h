@@ -15,4 +15,10 @@ namespace bgl
 	constexpr std::array<std::string_view, 3> c_SmartBufferUniformIndices = { "entryBuffer"sv,
 		                                                                      "packedBuffer"sv,
 		                                                                      "rangeBuffer"sv };
+
+	/**
+	 * The struct member name holding the descriptor index inside an idl resource
+	 * handle (e.g. SamplerHandle { uint index; }).
+	 */
+	constexpr auto c_HandleUniformIndex = "index"sv;
 }

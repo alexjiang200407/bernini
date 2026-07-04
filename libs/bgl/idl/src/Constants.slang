@@ -14,3 +14,5 @@ public static const uint cThreadsPerInstance = 64;
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;
 public static const uint cCompactGroupSize = 128;
+
+public static const float PI = 3.14159265359;

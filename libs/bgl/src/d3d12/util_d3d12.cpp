@@ -902,4 +902,83 @@ namespace bgl
 
 		return d3d12ClearValue;
 	}
+
+	D3D12_TEXTURE_ADDRESS_MODE
+	ConvertSamplerAddressMode(SamplerAddressMode mode)
+	{
+		switch (mode)
+		{
+		case SamplerAddressMode::Clamp:
+			return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		case SamplerAddressMode::Wrap:
+			return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		case SamplerAddressMode::Border:
+			return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		case SamplerAddressMode::Mirror:
+			return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+		case SamplerAddressMode::MirrorOnce:
+			return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+		}
+		gfatal("Unsupported sampler address mode: {}", static_cast<uint32_t>(mode));
+	}
+
+	D3D12_SAMPLER_DESC
+	ConvertSamplerDesc(const SamplerDesc& desc)
+	{
+		D3D12_FILTER_REDUCTION_TYPE reduction;
+		switch (desc.reductionType)
+		{
+		case SamplerReductionType::Standard:
+			reduction = D3D12_FILTER_REDUCTION_TYPE_STANDARD;
+			break;
+		case SamplerReductionType::Comparison:
+			reduction = D3D12_FILTER_REDUCTION_TYPE_COMPARISON;
+			break;
+		case SamplerReductionType::Minimum:
+			reduction = D3D12_FILTER_REDUCTION_TYPE_MINIMUM;
+			break;
+		case SamplerReductionType::Maximum:
+			reduction = D3D12_FILTER_REDUCTION_TYPE_MAXIMUM;
+			break;
+		default:
+			gfatal(
+				"Unsupported sampler reduction type: {}",
+				static_cast<uint32_t>(desc.reductionType));
+		}
+
+		D3D12_SAMPLER_DESC d3d12Desc = {};
+
+		if (desc.maxAnisotropy > 1.f)
+		{
+			d3d12Desc.Filter = D3D12_ENCODE_ANISOTROPIC_FILTER(reduction);
+		}
+		else
+		{
+			const D3D12_FILTER_TYPE minType =
+				desc.minFilter ? D3D12_FILTER_TYPE_LINEAR : D3D12_FILTER_TYPE_POINT;
+			const D3D12_FILTER_TYPE magType =
+				desc.magFilter ? D3D12_FILTER_TYPE_LINEAR : D3D12_FILTER_TYPE_POINT;
+			const D3D12_FILTER_TYPE mipType =
+				desc.mipFilter ? D3D12_FILTER_TYPE_LINEAR : D3D12_FILTER_TYPE_POINT;
+
+			d3d12Desc.Filter = D3D12_ENCODE_BASIC_FILTER(minType, magType, mipType, reduction);
+		}
+
+		d3d12Desc.AddressU = ConvertSamplerAddressMode(desc.addressU);
+		d3d12Desc.AddressV = ConvertSamplerAddressMode(desc.addressV);
+		d3d12Desc.AddressW = ConvertSamplerAddressMode(desc.addressW);
+
+		d3d12Desc.MipLODBias     = desc.mipBias;
+		d3d12Desc.MaxAnisotropy  = static_cast<UINT>(desc.maxAnisotropy);
+		d3d12Desc.ComparisonFunc = desc.reductionType == SamplerReductionType::Comparison ?
+		                               D3D12_COMPARISON_FUNC_LESS :
+		                               D3D12_COMPARISON_FUNC_NEVER;
+
+		desc.borderColor.GetAsFloats(d3d12Desc.BorderColor);
+
+		d3d12Desc.MinLOD = 0.f;
+		d3d12Desc.MaxLOD = D3D12_FLOAT32_MAX;
+
+		return d3d12Desc;
+	}
 }

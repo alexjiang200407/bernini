@@ -219,6 +219,11 @@ namespace
 		{
 			return {};
 		}
+		SamplerHandle
+		CreateSampler(const SamplerDesc&) noexcept override
+		{
+			return {};
+		}
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc&) noexcept override
 		{
@@ -229,6 +234,9 @@ namespace
 		{}
 		void
 		DestroyTexture(TextureHandle, uint64_t, bool) noexcept override
+		{}
+		void
+		DestroySampler(SamplerHandle, uint64_t, bool) noexcept override
 		{}
 		void
 		DestroyReadbackBuffer(ReadbackBufferHandle, uint64_t, bool) noexcept override
@@ -272,6 +280,13 @@ namespace
 		{
 			std::abort();
 		}
+
+		const Sampler&
+		GetSampler(SamplerHandle) const noexcept override
+		{
+			std::abort();
+		}
+
 		const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle) const noexcept override
 		{
@@ -297,6 +312,11 @@ namespace
 		}
 		bool
 		ValidTextureHandle(const TextureHandle&) const noexcept override
+		{
+			return false;
+		}
+		bool
+		ValidSamplerHandle(const SamplerHandle&) const noexcept override
 		{
 			return false;
 		}

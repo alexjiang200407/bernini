@@ -276,6 +276,7 @@ namespace bgl
 			resourceManagerDesc.maxDsvs       = m_Opts.maxDsvs;
 			resourceManagerDesc.maxRtvs       = m_Opts.maxRtvs;
 			resourceManagerDesc.maxTextures   = m_Opts.maxTextures;
+			resourceManagerDesc.maxSamplers   = m_Opts.maxSamplers;
 
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
@@ -523,6 +524,9 @@ namespace bgl
 			m_ActiveTarget->m_BackBuffers[m_ActiveTarget->m_FrameIndex].rtvHandle;
 		draw.depthBufferHandle = m_ActiveTarget->m_DepthBuffer.dsvHandle;
 		draw.backBufferName    = std::string(c_BackbufferName);
+
+		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
+		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);
 
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);

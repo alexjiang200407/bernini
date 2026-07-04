@@ -269,6 +269,15 @@ namespace bgl
 						uniform = handle;
 					}
 				}
+
+				if (auto anisoUniform = matData["anisioLinearWrapSampler"]; anisoUniform.IsValid())
+				{
+					anisoUniform = draw.anisoLinearWrapSampler;
+				}
+				if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
+				{
+					clampUniform = draw.linearClampSampler;
+				}
 			}
 
 			auto gfxState   = MeshletState();

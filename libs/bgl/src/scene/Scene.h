@@ -28,6 +28,13 @@ namespace bgl
 	class Scene : public core::RefCounter<IScene>
 	{
 	public:
+		enum class StandardSampler : uint32_t
+		{
+			kAnisoLinearWrap,
+			kLinearClamp,
+			kCount
+		};
+
 		Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager);
 		~Scene() noexcept override { logger::trace("~Scene"); }
 		Scene(const Scene&) noexcept = delete;
@@ -101,6 +108,12 @@ namespace bgl
 			return m_NamePrefix;
 		}
 
+		[[nodiscard]] SamplerHandle
+		GetSampler(StandardSampler kind) const noexcept
+		{
+			return m_Samplers[static_cast<size_t>(kind)];
+		}
+
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
@@ -131,6 +144,8 @@ namespace bgl
 		RangeBuffer<uint32_t>        m_IndexBuffer;
 
 		EntryBuffer<idl::PbrMaterial> m_Pbr;
+
+		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

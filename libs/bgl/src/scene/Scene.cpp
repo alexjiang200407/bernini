@@ -146,6 +146,15 @@ namespace bgl
 
 			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
 		}
+
+		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
+			m_ResourceManager->CreateSampler(
+				SamplerDesc().SetAllFilters(true).SetMaxAnisotropy(16.f).SetAllAddressModes(
+					SamplerAddressMode::Wrap));
+
+		m_Samplers[static_cast<size_t>(StandardSampler::kLinearClamp)] =
+			m_ResourceManager->CreateSampler(
+				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::Clamp));
 	}
 
 	void

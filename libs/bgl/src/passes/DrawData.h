@@ -1,5 +1,6 @@
 #pragma once
 #include "resource/FrameBuffer.h"
+#include "resource/Sampler.h"
 #include "types/ViewportState.h"
 
 namespace bgl
@@ -16,5 +17,7 @@ namespace bgl
 		DsvHandle                   depthBufferHandle;
 		std::string                 backBufferName;
 		std::string                 depthBufferName;
+		SamplerHandle               anisoLinearWrapSampler;
+		SamplerHandle               linearClampSampler;
 	};
 }

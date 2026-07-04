@@ -4,6 +4,7 @@
 #include "resource/Dsv.h"
 #include "resource/Readback.h"
 #include "resource/Rtv.h"
+#include "resource/Sampler.h"
 #include "resource/Texture.h"
 #include "types/ClearValue.h"
 
@@ -18,6 +19,7 @@ namespace bgl
 		uint32_t maxRtvs       = 128;
 		uint32_t maxDsvs       = 128;
 		uint32_t maxTextures   = 1024;
+		uint32_t maxSamplers   = 128;
 	};
 
 	class IResourceManager : public core::Ref
@@ -42,6 +44,10 @@ namespace bgl
 		virtual TextureHandle
 		CreateTexture(const TextureDesc& desc) noexcept = 0;
 
+		[[nodiscard]]
+		virtual SamplerHandle
+		CreateSampler(const SamplerDesc& desc) noexcept = 0;
+
 		// Creates a CPU-readable buffer in the readback heap, used as the
 		// destination of GPU->CPU copies.
 		virtual ReadbackBufferHandle
@@ -56,6 +62,12 @@ namespace bgl
 		virtual void
 		DestroyTexture(
 			TextureHandle handle,
+			uint64_t      currentFenceValue,
+			bool          deferred = true) noexcept = 0;
+
+		virtual void
+		DestroySampler(
+			SamplerHandle handle,
 			uint64_t      currentFenceValue,
 			bool          deferred = true) noexcept = 0;
 
@@ -107,6 +119,10 @@ namespace bgl
 		GetTexture(TextureHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
+		virtual const Sampler&
+		GetSampler(SamplerHandle handle) const noexcept = 0;
+
+		[[nodiscard]]
 		virtual const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept = 0;
 
@@ -128,6 +144,9 @@ namespace bgl
 
 		[[nodiscard]] virtual bool
 		ValidTextureHandle(const TextureHandle& handle) const noexcept = 0;
+
+		[[nodiscard]] virtual bool
+		ValidSamplerHandle(const SamplerHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
 		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept = 0;

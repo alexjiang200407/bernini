@@ -95,7 +95,8 @@ namespace bgl::pipeline_util
 		rsDesc.pParameters               = rootParams.empty() ? nullptr : rootParams.data();
 		rsDesc.NumStaticSamplers         = 0;
 		rsDesc.pStaticSamplers           = nullptr;
-		rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+		rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |
+		               D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
 
 		wrl::ComPtr<ID3DBlob> sigBlob, errBlob;
 		D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sigBlob, &errBlob) >>

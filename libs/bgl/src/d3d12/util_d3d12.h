@@ -1,4 +1,5 @@
 #pragma once
+#include "resource/Sampler.h"
 #include "types/Barrier.h"
 #include "types/BlendState.h"
 #include "types/ClearValue.h"
@@ -61,4 +62,10 @@ namespace bgl
 
 	D3D12_CLEAR_VALUE
 	ConvertClearValue(Format format, ClearValue clearValue);
+
+	D3D12_TEXTURE_ADDRESS_MODE
+	ConvertSamplerAddressMode(SamplerAddressMode mode);
+
+	D3D12_SAMPLER_DESC
+	ConvertSamplerDesc(const SamplerDesc& desc);
 }
