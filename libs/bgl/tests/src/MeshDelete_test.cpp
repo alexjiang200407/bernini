@@ -17,13 +17,13 @@ namespace
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc           = bgl::SceneDesc();
-		desc.maxGeom        = 5;
-		desc.maxSubmeshes   = 5;
-		desc.maxMeshlets    = 100;
-		desc.maxVertices    = 1000;
-		desc.maxVertexWords = 8000;
-		desc.maxIndices     = 1000;
+		auto desc                    = bgl::SceneDesc();
+		desc.maxGeom                 = 5;
+		desc.maxSubmeshes            = 5;
+		desc.maxMeshlets             = 100;
+		desc.maxVertexBufferByteSize = 40000;
+		desc.maxVertexBufferByteSize = 32000;
+		desc.maxIndices              = 1000;
 		return desc;
 	}
 }
@@ -55,8 +55,8 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	REQUIRE(inst.IsValid());
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
-	auto geomBuffers = scene->GetGeometryBuffers();
-	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer] =
+	auto geomBuffers = scene->GetBuffers();
+	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, _] =
 		geomBuffers;
 
 	auto instBuffers                                              = view->GetInstanceBuffers();

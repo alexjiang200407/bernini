@@ -79,7 +79,7 @@ namespace bgl
 		GetDesc() const noexcept = 0;
 
 		virtual UniformLayoutEntry
-		GetUniformLayoutEntry(const std::string& name) const noexcept = 0;
+		GetUniformLayoutEntry(std::string_view name) const noexcept = 0;
 
 		// Names of every constant buffer the shader declares (empty if it has none).
 		virtual std::vector<std::string>

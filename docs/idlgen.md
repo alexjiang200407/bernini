@@ -118,6 +118,8 @@ flowchart TD
 * **Path is the import name.** @pre importers reference a module by its `--src-root`-relative path.
   Relocating the file to a path that disagrees with its import name breaks every importer and the
   CPU/`.h` lockstep. Rename (re-path) instead.
+* The generated slang and C++ idl will use local relative imports contrary to the project's standard
+  of absolute imports.
 
 ### Constants
 * **Must be `public static const <type|let> <name> = <expr>;`.** @pre `public` — otherwise the

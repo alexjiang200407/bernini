@@ -44,12 +44,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		m_Graphics = bgl::CreateGraphics(gfxOpts);
 
 		// The scene rendered in the default Level Editor viewport.
-		auto sceneDesc        = bgl::SceneDesc();
-		auto sceneSettings    = settings["scene"];
-		sceneDesc.maxGeom     = sceneSettings["maxGeom"].GetOrDefault(100);
-		sceneDesc.maxMeshlets = sceneSettings["maxMeshlets"].GetOrDefault(1000);
-		sceneDesc.maxVertices = sceneSettings["maxVertices"].GetOrDefault(100000);
-		sceneDesc.maxIndices  = sceneSettings["maxIndices"].GetOrDefault(100000);
+		auto sceneDesc         = bgl::SceneDesc();
+		auto sceneSettings     = settings["scene"];
+		sceneDesc.maxGeom      = sceneSettings["maxGeom"].GetOrDefault(100);
+		sceneDesc.maxMeshlets  = sceneSettings["maxMeshlets"].GetOrDefault(1000);
+		sceneDesc.maxSubmeshes = sceneSettings["maxSubmeshes"].GetOrDefault(100);
+		sceneDesc.maxVertexBufferByteSize =
+			sceneSettings["maxVertexBufferByteSize"].GetOrDefault(400000);
+		sceneDesc.maxIndices      = sceneSettings["maxIndices"].GetOrDefault(100000);
+		sceneDesc.maxPbrMaterials = sceneSettings["maxPbrMaterials"].GetOrDefault(200);
 
 		m_Scene = m_Graphics->CreateScene(sceneDesc);
 

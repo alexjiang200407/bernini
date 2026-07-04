@@ -7,8 +7,6 @@ namespace core
 	 * and freely chainable: indexing or converting an absent / null value never
 	 * throws.
 	 *
-	 *     settings["graphics"]["msaa"]              // always well-formed
-	 *     bool vsync = settings["graphics"]["vsync"];   // missing => false
 	 *
 	 * Converting a null (or type-mismatched) accessor yields the target type's
 	 * default (0, 0.0, false, ""); GetOrDefault supplies an explicit fallback.
@@ -95,7 +93,6 @@ namespace core
 		Settings&
 		operator=(Settings&&) noexcept;
 
-		/// Top-level lookup. Yields a null accessor for an unknown key.
 		[[nodiscard]] SettingsAccessor
 		operator[](std::string_view key) const noexcept;
 

@@ -49,8 +49,8 @@ and portability.
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema
   - [x] Static Mesh Asset Import
-- [ ] Materials (Unlit)
-  - [ ] Implement PBR
+- [ ] Materials (PBR)
+  - [ ] Implement PBR IBL
   - [ ] Implement Alpha Test alpha mode
   - [ ] Texture Asset Import
   - [ ] Editor Material Graph
@@ -119,6 +119,7 @@ and portability.
 - [ ] Forward++ Shading
 - [ ] Ink Shading
 - [ ] Screen space reflections
+- [ ] Gpu Virtual Memory
 
 ## Module 2: Game Logic
 

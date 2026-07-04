@@ -112,14 +112,11 @@ namespace bgl
 
 		try
 		{
-			// The per-placement Mesh copies the (tiny) submeshes descriptor from the
-			// shared geometry asset; the heavy data stays in the Scene's buffers.
 			const GeomAsset& asset = m_SceneRaw->GetGeomAsset(geom.handle.index);
 
-			auto mesh              = idl::Mesh();
-			mesh.transform         = transform;
-			mesh.submeshes         = asset.submeshes;
-			mesh.totalMeshletCount = asset.totalMeshletCount;
+			auto mesh      = idl::Mesh();
+			mesh.transform = transform;
+			mesh.submeshes = asset.submeshes;
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 

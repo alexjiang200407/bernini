@@ -1,6 +1,7 @@
 #pragma once
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/str/str.h>
 
 namespace bgl
 {
@@ -44,9 +45,15 @@ namespace bgl
 		}
 
 		UniformLayoutEntry
-		GetUniformLayoutEntry(const std::string& name) const noexcept override
+		GetUniformLayoutEntry(std::string_view name) const noexcept override
 		{
-			return m_UniformLayoutEntries.at(name);
+			auto it = m_UniformLayoutEntries.find(name);
+			if (it != m_UniformLayoutEntries.end())
+			{
+				return it->second;
+			}
+
+			gfatal("Uniform layout entry not found: {}", name);
 		}
 
 		std::vector<std::string>
@@ -62,10 +69,10 @@ namespace bgl
 		}
 
 	private:
-		ComputePipelineDesc                                 m_Desc;
-		wrl::ComPtr<ID3D12PipelineState>                    m_PipelineState;
-		wrl::ComPtr<ID3D12RootSignature>                    m_RootSignature;
-		Slang::ComPtr<slang::IComponentType>                m_LinkedProgram;
-		std::unordered_map<std::string, UniformLayoutEntry> m_UniformLayoutEntries;
+		ComputePipelineDesc                  m_Desc;
+		wrl::ComPtr<ID3D12PipelineState>     m_PipelineState;
+		wrl::ComPtr<ID3D12RootSignature>     m_RootSignature;
+		Slang::ComPtr<slang::IComponentType> m_LinkedProgram;
+		UniformLayoutMap                     m_UniformLayoutEntries;
 	};
 }

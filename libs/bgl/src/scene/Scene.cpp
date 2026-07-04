@@ -2,7 +2,6 @@
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "idl/Meshlet.h"
-#include "idl/Vertex.h"
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
@@ -14,33 +13,42 @@ namespace bgl
 {
 	namespace
 	{
+		struct VertexGen
+		{
+			glm::vec3 pos;
+			glm::vec3 normal;
+			glm::vec2 uv;
+			glm::vec4 tangent;
+		};
+
 		struct BufferInfo
 		{
 			std::string_view name;
 		};
 
-		// Order MUST stay in lockstep with Scene::GetGeometryBuffers() and with
+		// Order MUST stay in lockstep with Scene::GetBuffers() and with
 		// ForwardPass's c_ForwardDataBuffers.
-		static constexpr std::array<BufferInfo, 5> c_BufferInfo = { {
-			{ "scene.submeshBuffer" },
-			{ "scene.meshletBuffer" },
-			{ "scene.vertexMapBuffer" },
-			{ "scene.vertexDataBuffer" },
-			{ "scene.indexBuffer" },
-		} };
+		static constexpr std::array<BufferInfo, 6> c_BufferInfo = {
+			{ { "scene.submeshBuffer" },
+			  { "scene.meshletBuffer" },
+			  { "scene.vertexMapBuffer" },
+			  { "scene.vertexDataBuffer" },
+			  { "scene.indexBuffer" },
+			  { "scene.pbrMaterialBuffer" } }
+		};
 
 		// The interleaved vertex layout the procedural geometry emits: position,
-		// normal, uv (no tangent), tightly packed at a 32-byte stride. This is
-		// exactly the first 32 bytes of idl::Vertex, and is decoded on the GPU via
-		// each submesh's VertexLayout descriptor.
-		constexpr uint32_t c_ProceduralStride   = 32;
+		// normal, uv, tangent, tightly packed at a 48-byte stride. This is exactly
+		// the full VertexGen, and is decoded on the GPU via each submesh's
+		// VertexLayout descriptor.
+		constexpr uint32_t c_ProceduralStride   = 48;
 		constexpr uint32_t c_ProceduralVtxWords = c_ProceduralStride / 4;
 
 		idl::VertexLayout
 		MakeProceduralLayout()
 		{
 			auto layout           = idl::VertexLayout();
-			layout.attributeCount = 3;
+			layout.attributeCount = 4;
 			layout.stride         = c_ProceduralStride;
 			layout.attributes[0]  = { idl::VertexSemantic::kPosition,
 				                      idl::VertexFormat::kFloat32x3,
@@ -51,13 +59,16 @@ namespace bgl
 			layout.attributes[2]  = { idl::VertexSemantic::kTexCoord0,
 				                      idl::VertexFormat::kFloat32x2,
 				                      24 };
+			layout.attributes[3]  = { idl::VertexSemantic::kTangent,
+				                      idl::VertexFormat::kFloat32x4,
+				                      32 };
 			return layout;
 		}
 
 		// Interleave each vertex's position/normal/uv into the raw byte layout
 		// above, returned as uint words for the StructuredBuffer<uint> data buffer.
 		std::vector<uint32_t>
-		PackVertices(std::span<const idl::Vertex> verts)
+		PackVertices(std::span<const VertexGen> verts)
 		{
 			auto words = std::vector<uint32_t>(verts.size() * c_ProceduralVtxWords);
 			for (size_t i = 0; i < verts.size(); ++i)
@@ -75,11 +86,14 @@ namespace bgl
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
+		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
+
 		const uint32_t maxSubmeshes =
 			m_Desc.maxSubmeshes != 0 ? m_Desc.maxSubmeshes : m_Desc.maxMeshlets;
-		const uint32_t maxVertexWords = m_Desc.maxVertexWords != 0 ?
-		                                    m_Desc.maxVertexWords :
-		                                    m_Desc.maxVertices * c_ProceduralVtxWords;
+
+		// The vertex data buffer is a StructuredBuffer<uint>, so the byte budget is
+		// rounded up to whole 4-byte words.
+		const uint32_t maxVertexWords = (m_Desc.maxVertexBufferByteSize + 3u) / 4u;
 
 		// Geometry assets are CPU-only (they hold the shared submeshes descriptor +
 		// refcount); the heavy data lives in the GPU range buffers below.
@@ -87,7 +101,7 @@ namespace bgl
 
 		{
 			auto submeshBufferDesc      = RangeBufferDesc();
-			submeshBufferDesc.maxCount  = maxSubmeshes;
+			submeshBufferDesc.maxCount  = atLeastOne(maxSubmeshes);
 			submeshBufferDesc.debugName = "Submesh Buffer";
 
 			m_SubmeshBuffer.Init(std::move(submeshBufferDesc), m_ResourceManager);
@@ -95,7 +109,7 @@ namespace bgl
 
 		{
 			auto meshletBufferDesc      = RangeBufferDesc();
-			meshletBufferDesc.maxCount  = m_Desc.maxMeshlets;
+			meshletBufferDesc.maxCount  = atLeastOne(m_Desc.maxMeshlets);
 			meshletBufferDesc.debugName = "Meshlet Buffer";
 
 			m_MeshletBuffer.Init(std::move(meshletBufferDesc), m_ResourceManager);
@@ -103,7 +117,7 @@ namespace bgl
 
 		{
 			auto vertexMapBufferDesc      = RangeBufferDesc();
-			vertexMapBufferDesc.maxCount  = m_Desc.maxVertices;
+			vertexMapBufferDesc.maxCount  = atLeastOne(m_Desc.maxIndices);
 			vertexMapBufferDesc.debugName = "Vertex Map Buffer";
 
 			m_VertexMapBuffer.Init(std::move(vertexMapBufferDesc), m_ResourceManager);
@@ -111,7 +125,7 @@ namespace bgl
 
 		{
 			auto vertexDataBufferDesc      = RangeBufferDesc();
-			vertexDataBufferDesc.maxCount  = maxVertexWords;
+			vertexDataBufferDesc.maxCount  = atLeastOne(maxVertexWords);
 			vertexDataBufferDesc.debugName = "Vertex Data Buffer";
 
 			m_VertexDataBuffer.Init(std::move(vertexDataBufferDesc), m_ResourceManager);
@@ -119,18 +133,30 @@ namespace bgl
 
 		{
 			auto indexBufferDesc      = RangeBufferDesc();
-			indexBufferDesc.maxCount  = m_Desc.maxIndices;
+			indexBufferDesc.maxCount  = atLeastOne(m_Desc.maxIndices);
 			indexBufferDesc.debugName = "Index Buffer";
 
 			m_IndexBuffer.Init(std::move(indexBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto pbrBufferDesc      = EntryBufferDesc();
+			pbrBufferDesc.maxCount  = atLeastOne(m_Desc.maxPbrMaterials);
+			pbrBufferDesc.debugName = "Pbr Material Buffer";
+
+			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
 		}
 	}
 
 	void
 	Scene::Update(ICommandList* cmdList)
 	{
-		auto buffers = GetGeometryBuffers();
-		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
+		auto buffers = GetBuffers();
+		std::apply(
+			[cmdList](auto&... buffer) {
+				(..., (buffer.IsInitialized() ? buffer.Update(cmdList) : void()));
+			},
+			buffers);
 	}
 
 	void
@@ -158,7 +184,7 @@ namespace bgl
 	{
 		resourceNames.reserve(resourceNames.size() + c_BufferInfo.size());
 
-		auto   buffers = GetGeometryBuffers();
+		auto   buffers = GetBuffers();
 		size_t i       = 0;
 		std::apply(
 			[&](auto&... buffer) {
@@ -179,25 +205,56 @@ namespace bgl
 	{
 		try
 		{
-			static const idl::Vertex cubeVertices[] = {
-				{ { -1, -1, -1 } },  // 0: left-bottom-back
-				{ { 1, -1, -1 } },   // 1: right-bottom-back
-				{ { 1, 1, -1 } },    // 2: right-top-back
-				{ { -1, 1, -1 } },   // 3: left-top-back
-				{ { -1, -1, 1 } },   // 4: left-bottom-front
-				{ { 1, -1, 1 } },    // 5: right-bottom-front
-				{ { 1, 1, 1 } },     // 6: right-top-front
-				{ { -1, 1, 1 } }     // 7: left-top-front
+			// 6 faces x 4 verts (24 total) so each face carries its own normal, uv
+			// and tangent -- an 8-vertex cube can't express per-face attributes.
+			struct FaceBasis
+			{
+				glm::vec3 normal;
+				glm::vec3 tangent;  // +u direction; bitangent = cross(normal, tangent)
 			};
+			static const FaceBasis faces[6] = {
+				{ { 1, 0, 0 }, { 0, 0, -1 } },   // +X
+				{ { -1, 0, 0 }, { 0, 0, 1 } },   // -X
+				{ { 0, 1, 0 }, { 1, 0, 0 } },    // +Y
+				{ { 0, -1, 0 }, { 1, 0, 0 } },   // -Y
+				{ { 0, 0, 1 }, { 1, 0, 0 } },    // +Z
+				{ { 0, 0, -1 }, { -1, 0, 0 } },  // -Z
+			};
+			// Per-face corners in (s, t) order: BL, BR, TR, TL -- CCW from outside.
+			static const glm::vec2 corners[4] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
 
-			static const uint32_t cubeIndices[] = { 4, 5, 6, 4, 6, 7, 1, 0, 3, 1, 3, 2,
-				                                    0, 4, 7, 0, 7, 3, 5, 1, 2, 5, 2, 6,
-				                                    7, 6, 2, 7, 2, 3, 0, 1, 5, 0, 5, 4 };
+			std::vector<VertexGen> cubeVertices;
+			std::vector<uint32_t>  cubeIndices;
+			cubeVertices.reserve(24);
+			cubeIndices.reserve(36);
+
+			for (const auto& face : faces)
+			{
+				const glm::vec3 up   = glm::cross(face.normal, face.tangent);
+				const uint32_t  base = static_cast<uint32_t>(cubeVertices.size());
+
+				for (const auto& c : corners)
+				{
+					auto v    = VertexGen();
+					v.pos     = face.normal + c.x * face.tangent + c.y * up;
+					v.normal  = face.normal;
+					v.uv      = glm::vec2((c.x + 1.0f) * 0.5f, (c.y + 1.0f) * 0.5f);
+					v.tangent = glm::vec4(face.tangent, 1.0f);
+					cubeVertices.push_back(v);
+				}
+
+				cubeIndices.push_back(base + 0u);
+				cubeIndices.push_back(base + 1u);
+				cubeIndices.push_back(base + 2u);
+				cubeIndices.push_back(base + 0u);
+				cubeIndices.push_back(base + 2u);
+				cubeIndices.push_back(base + 3u);
+			}
 
 			const auto vertexWords      = PackVertices(cubeVertices);
 			const auto baseVertexGlobal = m_VertexDataBuffer.Add(vertexWords);
 
-			auto mapIndices = std::vector<uint32_t>(std::size(cubeVertices));
+			auto mapIndices = std::vector<uint32_t>(cubeVertices.size());
 			for (uint32_t i = 0; i < mapIndices.size(); ++i)
 			{
 				mapIndices[i] = i;
@@ -209,10 +266,10 @@ namespace bgl
 			auto m = idl::Meshlet();
 
 			m.relativeVertexOffset = 0;
-			m.vertexCount          = static_cast<uint8_t>(std::size(cubeVertices));
+			m.vertexCount          = static_cast<uint8_t>(cubeVertices.size());
 
 			m.relativeIndexOffset = 0;
-			m.triangleCount       = static_cast<uint8_t>(std::size(cubeIndices)) / 3;
+			m.triangleCount       = static_cast<uint8_t>(cubeIndices.size() / 3);
 
 			m.boundingCenter = glm::vec3{ 0.0f };
 			m.boundingRadius = glm::sqrt(3.0f);
@@ -226,14 +283,13 @@ namespace bgl
 			submesh.vertexMap   = baseMapGlobal;
 			submesh.vertexData  = baseVertexGlobal;
 			submesh.indices     = baseIndexGlobal;
-			submesh.vertexCount = static_cast<uint32_t>(std::size(cubeVertices));
+			submesh.vertexCount = static_cast<uint32_t>(cubeVertices.size());
 
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset              = GeomAsset();
-			asset.submeshes         = baseSubmeshGlobal;
-			asset.totalMeshletCount = 1;
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -252,8 +308,8 @@ namespace bgl
 	{
 		try
 		{
-			std::vector<idl::Vertex> sphereVerts;
-			std::vector<uint32_t>    sphereIndices;
+			std::vector<VertexGen> sphereVerts;
+			std::vector<uint32_t>  sphereIndices;
 
 			for (uint32_t y = 0u; y <= ySegments; ++y)
 			{
@@ -266,10 +322,16 @@ namespace bgl
 					float          yPos = std::cos(ySegment * pi);
 					float          zPos = std::sin(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
 
-					auto v   = idl::Vertex();
+					// Tangent follows +u (increasing longitude): d(pos)/d(xSegment),
+					// normalized. bitangent = cross(normal, tangent), so w = +1.
+					const float a = xSegment * 2.0f * pi;
+
+					auto v   = VertexGen();
 					v.pos    = glm::vec3(xPos, yPos, zPos) * radius;
 					v.normal = glm::normalize(v.pos);
 					v.uv     = glm::vec2(xSegment, ySegment);
+					v.tangent =
+						glm::vec4(glm::normalize(glm::vec3(-std::sin(a), 0.0f, std::cos(a))), 1.0f);
 					sphereVerts.push_back(v);
 				}
 			}
@@ -376,9 +438,8 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset              = GeomAsset();
-			asset.submeshes         = baseSubmeshGlobal;
-			asset.totalMeshletCount = static_cast<uint32_t>(meshlets.size());
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);

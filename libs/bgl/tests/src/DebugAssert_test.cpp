@@ -224,11 +224,12 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	auto sceneDesc        = bgl::SceneDesc();
-	sceneDesc.maxGeom     = 8;
-	sceneDesc.maxMeshlets = 512;
-	sceneDesc.maxVertices = 20000;
-	sceneDesc.maxIndices  = 20000;
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 8;
+	sceneDesc.maxMeshlets             = 512;
+	sceneDesc.maxSubmeshes            = 8;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
 
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);

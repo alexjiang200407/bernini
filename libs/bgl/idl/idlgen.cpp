@@ -1,4 +1,5 @@
 #include <CLI/CLI.hpp>
+#include <core/err/util.h>
 #include <slang-com-ptr.h>
 #include <slang.h>
 
@@ -52,7 +53,7 @@ namespace
 		case ScalarType::Float64:
 			return "double";
 		default:
-			throw std::runtime_error(std::format("unsupported scalar type {}", (int)s));
+			core::throw_runtime_error("unsupported scalar type {}", (int)s);
 		}
 	}
 
@@ -72,7 +73,7 @@ namespace
 		case ScalarType::Bool:
 			return "glm::bvec";
 		default:
-			throw std::runtime_error(std::format("unsupported vector element type {}", (int)elem));
+			core::throw_runtime_error("unsupported vector element type {}", (int)elem);
 		}
 	}
 
@@ -131,8 +132,7 @@ namespace
 			return name;
 		}
 		default:
-			throw std::runtime_error(
-				std::format("unsupported field type kind {}", (int)t->getKind()));
+			core::throw_runtime_error("unsupported field type kind {}", (int)t->getKind());
 		}
 	}
 
@@ -653,7 +653,7 @@ namespace
 		std::ofstream out(path, std::ios::binary);
 		if (!out)
 		{
-			throw std::runtime_error(std::format("could not open output file {}", path.string()));
+			core::throw_runtime_error("could not open output file {}", path.string());
 		}
 		out << content;
 	}
@@ -664,7 +664,7 @@ namespace
 		std::ifstream in(path, std::ios::binary);
 		if (!in)
 		{
-			throw std::runtime_error(std::format("could not open input file {}", path.string()));
+			core::throw_runtime_error("could not open input file {}", path.string());
 		}
 		std::ostringstream ss;
 		ss << in.rdbuf();
@@ -718,8 +718,7 @@ main(int argc, char** argv)
 		const fs::path rel = fs::relative(inputPath, rootPath);
 		if (rel.empty() || *rel.begin() == "..")
 		{
-			throw std::runtime_error(
-				std::format("input {} is not under --src-root {}", input, srcRoot));
+			core::throw_runtime_error("input {} is not under --src-root {}", input, srcRoot);
 		}
 
 		fs::path relNoExt = rel;

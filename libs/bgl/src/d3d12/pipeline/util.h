@@ -9,9 +9,9 @@ namespace bgl
 	{
 		struct PipelineLayout
 		{
-			Slang::ComPtr<slang::IComponentType>                linkedProgram;
-			wrl::ComPtr<ID3D12RootSignature>                    rootSignature;
-			std::unordered_map<std::string, UniformLayoutEntry> uniformLayoutEntries;
+			Slang::ComPtr<slang::IComponentType> linkedProgram;
+			wrl::ComPtr<ID3D12RootSignature>     rootSignature;
+			UniformLayoutMap                     uniformLayoutEntries;
 		};
 
 		PipelineLayout

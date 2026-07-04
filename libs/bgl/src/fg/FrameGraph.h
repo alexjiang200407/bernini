@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "fg/PassDesc.h"
+#include <core/str/str.h>
 
 namespace bgl
 {
@@ -168,12 +169,12 @@ namespace bgl
 			CommandListHandle  list;
 		};
 
-		std::vector<PassNode>                         m_Passes;
-		std::unordered_map<std::string, ImportedRes>  m_Imported;
-		std::unordered_map<std::string, QueueBinding> m_Queues;
-		std::vector<size_t>                           m_Order;
-		std::string                                   m_CurrentNamespace;
-		bool                                          m_Compiled = false;
-		std::unordered_map<std::string, AccessState>  m_LastState;
+		std::vector<PassNode>                      m_Passes;
+		core::str::unordered_str_map<ImportedRes>  m_Imported;
+		core::str::unordered_str_map<QueueBinding> m_Queues;
+		std::vector<size_t>                        m_Order;
+		std::string                                m_CurrentNamespace;
+		bool                                       m_Compiled = false;
+		core::str::unordered_str_map<AccessState>  m_LastState;
 	};
 }

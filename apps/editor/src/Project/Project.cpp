@@ -10,7 +10,7 @@ static constexpr std::array<std::string_view, 4> c_RequiredDirectories = {
 };
 
 Project
-Project::Create(const std::filesystem::path& projectFile, const std::string& name)
+Project::Create(const std::filesystem::path& projectFile, std::string_view name)
 {
 	const auto root = projectFile.parent_path();
 
@@ -27,7 +27,7 @@ Project::Create(const std::filesystem::path& projectFile, const std::string& nam
 	}
 
 	Project project;
-	project.m_name          = name;
+	project.m_name          = std::string(name);
 	project.m_projectFile   = projectFile;
 	project.m_formatVersion = c_FormatVersion;
 	project.Save();

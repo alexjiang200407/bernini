@@ -18,7 +18,7 @@ public:
 	 * @throws std::runtime_error if any directory or the project file cannot be written.
 	 */
 	static Project
-	Create(const std::filesystem::path& projectFile, const std::string& name);
+	Create(const std::filesystem::path& projectFile, std::string_view name);
 
 	/**
 	 * Opens an existing project by reading and parsing its project file.

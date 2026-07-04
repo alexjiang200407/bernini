@@ -1,6 +1,7 @@
 #pragma once
 #include "uniforms/DescriptorHandle.h"
 #include <core/containers/multi_slot_vector.h>
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -115,16 +116,27 @@ namespace bgl
 		AllocateRange(uint32_t count)
 		{
 			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			auto handle = m_Data.allocate_slots(count);
 
-			if constexpr (c_HasMeta)
+			try
 			{
-				m_Metadata[handle.index] = Meta{};
+				auto handle = m_Data.allocate_slots(count);
+
+				if constexpr (c_HasMeta)
+				{
+					m_Metadata[handle.index] = Meta{};
+				}
+
+				MarkRangeDirty(handle.index, handle.count);
+
+				return handle;
 			}
-
-			MarkRangeDirty(handle.index, handle.count);
-
-			return handle;
+			catch (const std::runtime_error& e)
+			{
+				core::throw_runtime_error(
+					"RangeBuffer '{}' allocation failed: {}",
+					m_Desc.debugName,
+					e.what());
+			}
 		}
 
 		// A handle is valid only while its range is live and its generation

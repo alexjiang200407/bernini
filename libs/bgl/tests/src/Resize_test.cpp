@@ -47,11 +47,12 @@ namespace
 	bgl::SceneViewHandle
 	MakeCubeScene(const bgl::GraphicsHandle& gfx)
 	{
-		auto desc        = bgl::SceneDesc();
-		desc.maxGeom     = 8;
-		desc.maxMeshlets = 512;
-		desc.maxVertices = 20000;
-		desc.maxIndices  = 20000;
+		auto desc                    = bgl::SceneDesc();
+		desc.maxGeom                 = 8;
+		desc.maxMeshlets             = 512;
+		desc.maxSubmeshes            = 8;
+		desc.maxVertexBufferByteSize = 800000;
+		desc.maxIndices              = 20000;
 
 		auto scene = gfx->CreateScene(desc);
 		auto view  = gfx->CreateSceneView(scene, 8);

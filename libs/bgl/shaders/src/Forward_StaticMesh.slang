@@ -8,6 +8,8 @@ import idl.VertexLayout;
 import types.ByteBuffer;
 import forward.common;
 import forward.vertexdecode;
+import debug.dbg;
+import idl.ErrorCode;
 
 ConstantBuffer<ForwardData> sceneData;
 
@@ -22,6 +24,9 @@ void EvaluateVertices(
     if (gtid < meshlet.vertexCount)
     {
         uint vertexIdx = sceneData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid];
+
+        dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex);
+
         uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
         DecodedVertex v = DecodeVertex(sceneData.vertexDataBuffer, submesh.layout, vertexByteBase);
 
@@ -29,8 +34,11 @@ void EvaluateVertices(
 
         ForwardVSOut vertexOut;
         vertexOut.position = mul(sceneData.viewProj, worldPos);
+        vertexOut.worldPos = worldPos.xyz;
         vertexOut.normal = mul((float3x3)mesh.transform, v.normal);
         vertexOut.uv = v.uv;
+        vertexOut.tangent = v.tangent;
+        vertexOut.materialIndex = submesh.material.GetOffset();
 
         verts[gtid] = vertexOut;
     }
@@ -67,10 +75,17 @@ void MSMain(
 {
     let mesh = sceneData.meshBuffer.Get(payload.instance.meshInstance);
 
-    // The amplification shader dispatched this submesh's meshlets, so gid is the
-    // local meshlet index within it.
+    dbg_assert(payload.instance.submeshIndex < mesh.submeshes.count, ErrorCode.kInvalidSubmeshIndex);
+
     let submesh = sceneData.submeshBuffer.Get(mesh.submeshes, payload.instance.submeshIndex);
+
+    dbg_assert(gid < submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex);
+    dbg_assert(submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout);
+
     let meshlet = sceneData.meshletBuffer.Get(submesh.meshlets, gid);
+
+    dbg_assert(meshlet.vertexCount <= cMaxVerticesPerMeshlet, ErrorCode.kMeshletVertexOverflow);
+    dbg_assert(meshlet.triangleCount <= cMaxPrimsPerMeshlet, ErrorCode.kMeshletPrimitiveOverflow);
 
     SetMeshOutputCounts(meshlet.vertexCount, meshlet.triangleCount);
 

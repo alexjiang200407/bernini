@@ -28,48 +28,61 @@ namespace bgl
 			BarrierSync      sync;
 		};
 
-		static constexpr std::array<SceneBuffer, 9> c_ForwardDataBuffers = { {
-			{ "scene.instanceBuffer",
-			  "instanceBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			{ "scene.meshInstanceBuffer",
-			  "meshBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			{ "scene.submeshBuffer",
-			  "submeshBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			{ "scene.meshletBuffer",
-			  "meshletBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			{ "scene.vertexMapBuffer",
-			  "vertexMapBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			{ "scene.vertexDataBuffer",
-			  "vertexDataBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			{ "scene.indexBuffer",
-			  "indexBuffer",
-			  BarrierAccessFlag::kShaderResource,
-			  BarrierSyncFlag::kVertexShader },
-			// compactedInstances and psoPrefixSum are compute buffers read here through
-			// their UAV descriptor (ComputeBuffer<T> = RWStructuredBuffer<T>.Handle), so
-			// the barrier must target kUnorderedAccess to match the descriptor, not
-			// kShaderResource.
-			{ "scene.compactedInstances",
-			  "compactedInstances",
-			  BarrierAccessFlag::kUnorderedAccess,
-			  BarrierSyncFlag::kVertexShader },
-			{ "compactedInstances.psoPrefixSumBuffer",
-			  "psoPrefixSum",
-			  BarrierAccessFlag::kUnorderedAccess,
-			  BarrierSyncFlag::kVertexShader },
+		struct MaterialBuffer
+		{
+			std::string_view graphName;
+			std::string_view uniformKey;
+			BarrierAccess    access;
+			BarrierSync      sync;
+		};
+
+		static constexpr std::array<MaterialBuffer, 1> c_MaterialBuffers = { {
+			{
+				"scene.pbrMaterialBuffer",
+				"pbrMaterials",
+				BarrierAccessFlag::kShaderResource,
+				BarrierSyncFlag::kVertexShader,
+			},
 		} };
+
+		static constexpr std::array<SceneBuffer, 9> c_ForwardDataBuffers = {
+			{ { "scene.instanceBuffer",
+			    "instanceBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.meshInstanceBuffer",
+			    "meshBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.submeshBuffer",
+			    "submeshBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.meshletBuffer",
+			    "meshletBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vertexMapBuffer",
+			    "vertexMapBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vertexDataBuffer",
+			    "vertexDataBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.indexBuffer",
+			    "indexBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.compactedInstances",
+			    "compactedInstances",
+			    BarrierAccessFlag::kUnorderedAccess,
+			    BarrierSyncFlag::kVertexShader },
+			  { "compactedInstances.psoPrefixSumBuffer",
+			    "psoPrefixSum",
+			    BarrierAccessFlag::kUnorderedAccess,
+			    BarrierSyncFlag::kVertexShader } }
+		};
 
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
@@ -95,15 +108,15 @@ namespace bgl
 
 		static constexpr std::array<PsoConfig, c_PsoCount> c_Psos = { {
 			// kOpaque_StaticMesh_Null
-			{ c_NullPixelDxil, c_NullPixelSrc, RasterCullMode::kNone, true, false },
+			{ c_NullPixelDxil, c_NullPixelSrc, RasterCullMode::kBack, true, false },
 			// kOpaque_StaticMesh_PBR
-			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
+			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kBack, true, false },
 			// kAlphaTest_StaticMesh_PBR
 			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
-			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
+			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, true },
 			// kAssert_StaticMesh
-			{ c_AssertPixelDxil, c_AssertPixelSrc, RasterCullMode::kNone, true, false },
+			{ c_AssertPixelDxil, c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
 
 		MeshletKernel
@@ -185,10 +198,14 @@ namespace bgl
 		                   BarrierSyncFlag::kIndirectArgument,
 		                   BarrierAccessFlag::kIndirectArgument });
 
-		for (const SceneBuffer& binding : c_ForwardDataBuffers)
+		for (const auto& binding : c_ForwardDataBuffers)
 		{
-			desc.AddBufferArg(
-				BufferArg{ std::string(binding.graphName), binding.sync, binding.access });
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+
+		for (const auto& binding : c_MaterialBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
@@ -208,41 +225,59 @@ namespace bgl
 			return;
 		}
 
-		const BufferHandle dispatchArgs = resources.GetBuffer(std::string(c_DispatchArgsBuffer));
+		const auto dispatchArgs = resources.GetBuffer(c_DispatchArgsBuffer);
 
 		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
 		{
 			MeshletKernel& kernel = m_Kernels[pso];
 			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
-			auto& sceneData = kernel["sceneData"];
-
-			for (const SceneBuffer& binding : c_ForwardDataBuffers)
+			if (auto foundSceneData = kernel.FindUniforms("sceneData"))
 			{
-				const BufferHandle handle = resources.GetBuffer(std::string(binding.graphName));
+				auto& sceneData = *foundSceneData;
 
-				auto uniform = sceneData[std::string(binding.uniformKey)];
-				if (uniform.IsValid())
+				for (const SceneBuffer& binding : c_ForwardDataBuffers)
 				{
-					uniform = handle;
+					const auto handle = resources.GetBuffer(binding.graphName);
+
+					auto uniform = sceneData[binding.uniformKey];
+					if (uniform.IsValid())
+					{
+						uniform = handle;
+					}
+					else
+					{
+						gfatal(
+							"{} key doesn't exist in uniforms. Most likely an error",
+							binding.uniformKey);
+					}
 				}
-				else
-				{
-					gfatal(
-						"{} key doesn't exist in uniforms. Most likely an error",
-						binding.uniformKey);
-				}
+
+				sceneData["viewProj"] = draw.viewProj;
+				sceneData["psoIndex"] = static_cast<uint32_t>(pso);
 			}
 
-			sceneData["viewProj"] = draw.viewProj;
-			sceneData["psoIndex"] = static_cast<uint32_t>(pso);
+			if (auto foundMatData = kernel.FindUniforms("materialData"))
+			{
+				auto& matData = *foundMatData;
+				for (const auto& binding : c_MaterialBuffers)
+				{
+					const auto handle  = resources.GetBuffer(binding.graphName);
+					auto       uniform = matData[binding.uniformKey];
+					if (uniform.IsValid())
+					{
+						uniform = handle;
+					}
+				}
+			}
 
 			auto gfxState   = MeshletState();
 			gfxState.kernel = &kernel;
 			gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
-			gfxState.frameBuffer  = FrameBuffer()
-			                            .AddColorAttachment(draw.backBufferHandle)
-			                            .SetDepthAttachment(draw.depthBufferHandle);
+			gfxState.frameBuffer = FrameBuffer()
+			                           .AddColorAttachment(draw.backBufferHandle)
+			                           .SetDepthAttachment(draw.depthBufferHandle);
+
 			gfxState.indirectArgs = dispatchArgs;
 
 			cmd->SetMeshletState(gfxState);

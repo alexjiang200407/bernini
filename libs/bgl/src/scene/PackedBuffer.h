@@ -76,8 +76,19 @@ namespace bgl
 		EmplaceBack(Args&&... args)
 		{
 			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			uint32_t denseIndex = m_Entries.emplace_back(std::forward<Args>(args)...);
-			return Register(denseIndex);
+
+			try
+			{
+				uint32_t denseIndex = m_Entries.emplace_back(std::forward<Args>(args)...);
+				return Register(denseIndex);
+			}
+			catch (const std::runtime_error& e)
+			{
+				core::throw_runtime_error(
+					"PackedBuffer '{}': failed to emplace_back element: {}",
+					m_Desc.debugName,
+					e.what());
+			}
 		}
 
 		Handle

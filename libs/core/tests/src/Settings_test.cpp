@@ -74,7 +74,7 @@ TEST_CASE("Settings returns defaults for missing keys", "[settings]")
 	CHECK(settings["graphics"]["nope"].GetOrDefault(1) == 1);
 	CHECK(settings["graphics"]["nope"].GetOrDefault(2.5f) == Catch::Approx(2.5f));
 	CHECK(settings["graphics"]["nope"].GetOrDefault(true) == true);
-	CHECK(settings["graphics"]["nope"].GetOrDefault(std::string("none")) == "none");
+	CHECK(settings["graphics"]["nope"].GetOrDefault("none"s) == "none");
 
 	// A present value overrides the default.
 	CHECK(settings["graphics"]["msaa"].GetOrDefault(1) == 4);
@@ -109,7 +109,7 @@ TEST_CASE("Settings returns defaults on type mismatch", "[settings]")
 
 	// A number requested as a string => default.
 	CHECK(static_cast<std::string>(settings["graphics"]["msaa"]).empty());
-	CHECK(settings["graphics"]["msaa"].GetOrDefault(std::string("x")) == "x");
+	CHECK(settings["graphics"]["msaa"].GetOrDefault("x"s) == "x");
 
 	std::filesystem::remove(path);
 }

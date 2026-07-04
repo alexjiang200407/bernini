@@ -5,6 +5,7 @@
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include <core/containers/static_vector.h>
+#include <core/str/str.h>
 
 namespace bgl
 {
@@ -74,11 +75,11 @@ namespace bgl
 		}
 
 	private:
-		std::unordered_map<std::string, BufferEntry>  m_Buffers;
-		std::unordered_map<std::string, TextureEntry> m_Textures;
-		core::SharedRef<IResourceManager>             m_ResourceManager;
-		ICommandList*                                 m_CommandList  = nullptr;
-		ICommandQueue*                                m_CommandQueue = nullptr;
+		core::str::unordered_str_map<BufferEntry>  m_Buffers;
+		core::str::unordered_str_map<TextureEntry> m_Textures;
+		core::SharedRef<IResourceManager>          m_ResourceManager;
+		ICommandList*                              m_CommandList  = nullptr;
+		ICommandQueue*                             m_CommandQueue = nullptr;
 
 		friend class FrameGraph;
 	};

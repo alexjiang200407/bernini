@@ -45,7 +45,7 @@ namespace bgl
 
 	struct MaterialHandle
 	{
-		MaterialType      materialType;
+		MaterialType      materialType = MaterialType::kInvalid;
 		core::slot_handle handle;
 
 		[[nodiscard]]
@@ -58,12 +58,12 @@ namespace bgl
 
 	struct SceneDesc
 	{
-		uint32_t maxGeom        = 0;
-		uint32_t maxMeshlets    = 0;
-		uint32_t maxVertices    = 0;
-		uint32_t maxIndices     = 0;
-		uint32_t maxSubmeshes   = 0;
-		uint32_t maxVertexWords = 0;
+		uint32_t maxGeom                 = 1;
+		uint32_t maxMeshlets             = 1;
+		uint32_t maxIndices              = 1;
+		uint32_t maxSubmeshes            = 1;
+		uint32_t maxVertexBufferByteSize = 1;
+		uint32_t maxPbrMaterials         = 1;
 	};
 
 	class BGL_API IScene : public core::Ref

@@ -13,8 +13,10 @@
     "scene": {
         "maxGeom": 100,
         "maxMeshlets": 1000,
-        "maxVertices": 100000,
-        "maxIndices": 100000
+        "maxSubmeshes": 100,
+        "maxVertexBufferByteSize": 4000000,
+        "maxIndices": 100000,
+        "maxPbrMaterials": 200
     },
     "levelEditor": {
         "maxInstances": 1000

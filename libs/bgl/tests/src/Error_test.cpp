@@ -28,11 +28,12 @@ namespace
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc        = bgl::SceneDesc();
-		desc.maxGeom     = 5;
-		desc.maxMeshlets = 100;
-		desc.maxVertices = 1000;
-		desc.maxIndices  = 1000;
+		auto desc                    = bgl::SceneDesc();
+		desc.maxGeom                 = 5;
+		desc.maxMeshlets             = 100;
+		desc.maxSubmeshes            = 5;
+		desc.maxVertexBufferByteSize = 40000;
+		desc.maxIndices              = 1000;
 		return desc;
 	}
 }
@@ -156,11 +157,12 @@ TEST_CASE("SceneError on capacity exhaustion", "[error][scene][capacity]")
 
 	SECTION("Exceeding maxInstances throws SceneError")
 	{
-		auto desc        = bgl::SceneDesc();
-		desc.maxGeom     = 1;
-		desc.maxMeshlets = 8;
-		desc.maxVertices = 64;
-		desc.maxIndices  = 64;
+		auto desc                    = bgl::SceneDesc();
+		desc.maxGeom                 = 1;
+		desc.maxMeshlets             = 8;
+		desc.maxSubmeshes            = 1;
+		desc.maxVertexBufferByteSize = 64 * 8 * 4;
+		desc.maxIndices              = 64;
 
 		auto scene = gfx->CreateScene(desc);
 		auto view  = gfx->CreateSceneView(scene, 1);
@@ -172,11 +174,12 @@ TEST_CASE("SceneError on capacity exhaustion", "[error][scene][capacity]")
 
 	SECTION("Exceeding maxGeom throws SceneError")
 	{
-		auto desc        = bgl::SceneDesc();
-		desc.maxGeom     = 1;
-		desc.maxMeshlets = 100;
-		desc.maxVertices = 1000;
-		desc.maxIndices  = 1000;
+		auto desc                    = bgl::SceneDesc();
+		desc.maxGeom                 = 1;
+		desc.maxMeshlets             = 100;
+		desc.maxSubmeshes            = 2;
+		desc.maxVertexBufferByteSize = 40000;
+		desc.maxIndices              = 1000;
 
 		auto scene = gfx->CreateScene(desc);
 

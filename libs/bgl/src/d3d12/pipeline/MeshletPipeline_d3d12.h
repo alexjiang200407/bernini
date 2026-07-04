@@ -44,9 +44,15 @@ namespace bgl
 		}
 
 		UniformLayoutEntry
-		GetUniformLayoutEntry(const std::string& name) const noexcept override
+		GetUniformLayoutEntry(std::string_view name) const noexcept override
 		{
-			return m_UniformLayoutEntries.at(name);
+			if (auto found = m_UniformLayoutEntries.find(name);
+			    found != m_UniformLayoutEntries.end())
+			{
+				return found->second;
+			}
+
+			gfatal("Uniform buffer with name '{}' not found in pipeline.", name);
 		}
 
 		std::vector<std::string>
@@ -62,10 +68,10 @@ namespace bgl
 		}
 
 	private:
-		MeshletPipelineDesc                                 m_Desc;
-		wrl::ComPtr<ID3D12PipelineState>                    m_PipelineState;
-		wrl::ComPtr<ID3D12RootSignature>                    m_RootSignature;
-		Slang::ComPtr<slang::IComponentType>                m_LinkedProgram;
-		std::unordered_map<std::string, UniformLayoutEntry> m_UniformLayoutEntries;
+		MeshletPipelineDesc                  m_Desc;
+		wrl::ComPtr<ID3D12PipelineState>     m_PipelineState;
+		wrl::ComPtr<ID3D12RootSignature>     m_RootSignature;
+		Slang::ComPtr<slang::IComponentType> m_LinkedProgram;
+		UniformLayoutMap                     m_UniformLayoutEntries;
 	};
 }

@@ -5,13 +5,15 @@ set(IDL_SRC_ROOT      "${CMAKE_CURRENT_SOURCE_DIR}")
 file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")
 
 set(IDL_CPP_SOURCES
-    Vertex.slang
     Meshlet.slang
     VertexLayout.slang
     Submesh.slang
     Mesh.slang
     DebugRecord.slang
     Constants.slang
+    PbrMaterial.slang
+    TextureHandle.slang
+    ErrorCode.slang
 )
 
 set(IDL_GENERATED_OUTPUTS "")

@@ -1,4 +1,5 @@
 #pragma once
+#include <core/str/str.h>
 
 namespace bgl
 {
@@ -11,4 +12,6 @@ namespace bgl
 		slang::TypeLayoutReflection* layout;
 		uint32_t                     rootParamIndex = 0xFFFFFFFF;
 	};
+
+	using UniformLayoutMap = core::str::unordered_str_map<UniformLayoutEntry>;
 }

@@ -22,8 +22,7 @@ namespace bgl
 	struct GeomAsset
 	{
 		idl::RangeWithCount submeshes;
-		uint32_t            totalMeshletCount = 0;
-		uint32_t            refCount          = 0;
+		uint32_t            refCount = 0;
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -47,14 +46,15 @@ namespace bgl
 		}
 
 		auto
-		GetGeometryBuffers()
+		GetBuffers()
 		{
 			return std::tie(
 				m_SubmeshBuffer,
 				m_MeshletBuffer,
 				m_VertexMapBuffer,
 				m_VertexDataBuffer,
-				m_IndexBuffer);
+				m_IndexBuffer,
+				m_Pbr);
 		}
 
 		// --- SceneView support -------------------------------------------------
@@ -129,6 +129,8 @@ namespace bgl
 		RangeBuffer<uint32_t>        m_VertexMapBuffer;
 		RangeBuffer<uint32_t>        m_VertexDataBuffer;
 		RangeBuffer<uint32_t>        m_IndexBuffer;
+
+		EntryBuffer<idl::PbrMaterial> m_Pbr;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

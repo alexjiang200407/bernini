@@ -3,6 +3,7 @@
 #include "resource/Buffer.h"
 #include "resource/Shader.h"
 #include "uniforms/DescriptorHandle.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -94,7 +95,7 @@ namespace bgl
 			virtual ~UniformsNode() noexcept = default;
 
 			virtual TraversalResult
-			Traverse(size_t currentOffset, const std::string& member) = 0;
+			Traverse(size_t currentOffset, std::string_view member) = 0;
 
 			virtual TraversalResult
 			Traverse(size_t currentOffset, uint32_t idx) = 0;
@@ -154,7 +155,7 @@ namespace bgl
 		{
 		public:
 			AccessorBase
-			operator[](const std::string& name) const
+			operator[](std::string_view name) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, name);
 				return AccessorBase(m_Data, offset, node);
@@ -206,15 +207,16 @@ namespace bgl
 				{
 					for (const auto key : c_SmartBufferUniformIndices)
 					{
-						if ((*this)[std::string(key)].IsValid())
+						if ((*this)[key].IsValid())
 						{
-							(*this)[std::string(key)] = DescriptorHandle(handle.idx);
+							(*this)[key] = DescriptorHandle(handle.idx);
 							return *this;
 						}
 					}
 
-					throw std::runtime_error(
-						std::format("Accessor at offset {} is not a valid buffer", m_Offset));
+					core::throw_runtime_error(
+						"Accessor at offset {} is not a valid buffer",
+						m_Offset);
 				}
 				else if (
 					GetType() == UniformType::kValue &&
@@ -224,10 +226,9 @@ namespace bgl
 					return *this;
 				}
 
-				throw std::runtime_error(
-					std::format(
-						"Accessor at offset {} cannot be assigned with buffer handle",
-						m_Offset));
+				core::throw_runtime_error(
+					"Accessor at offset {} cannot be assigned with buffer handle",
+					m_Offset);
 			}
 
 			UniformType
@@ -267,7 +268,7 @@ namespace bgl
 			AssertIsValue() const
 			{
 				if (!m_Node || m_Node->GetType() != UniformType::kValue)
-					throw std::runtime_error("Uniforms::Accessor: node is not a value type");
+					core::throw_runtime_error("Uniforms::Accessor: node is not a value type");
 			}
 
 			template <typename T>
@@ -275,7 +276,7 @@ namespace bgl
 			AssertType() const
 			{
 				if (m_Node->GetValueType() != detail::ValueMap<T>())
-					throw std::runtime_error("Uniforms::Accessor: type mismatch");
+					core::throw_runtime_error("Uniforms::Accessor: type mismatch");
 			}
 
 		private:
@@ -292,8 +293,8 @@ namespace bgl
 
 	public:
 		Uniforms() = default;
-		Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName);
-		Uniforms(IComputePipeline const* pipeline, const std::string& cbufferName);
+		Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
+		Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
 
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
@@ -305,13 +306,13 @@ namespace bgl
 		operator=(const Uniforms&) = delete;
 
 		Accessor
-		operator[](const std::string& name);
+		operator[](std::string_view name);
 
 		Accessor
 		operator[](uint32_t idx);
 
 		ConstAccessor
-		operator[](const std::string& name) const;
+		operator[](std::string_view name) const;
 
 		ConstAccessor
 		operator[](uint32_t idx) const;

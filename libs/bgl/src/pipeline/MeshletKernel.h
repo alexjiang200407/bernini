@@ -1,6 +1,7 @@
 #pragma once
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/str/str.h>
 
 namespace bgl
 {
@@ -19,14 +20,35 @@ namespace bgl
 		MeshletKernel&
 		operator=(MeshletKernel&&) noexcept = default;
 
-		core::SharedRef<IMeshletPipeline>         pipeline;
-		std::unordered_map<std::string, Uniforms> uniforms;
+		core::SharedRef<IMeshletPipeline>      pipeline;
+		core::str::unordered_str_map<Uniforms> uniforms;
 
-		// Access a constant buffer's uniforms by name; throws if the shader has no such buffer.
 		Uniforms&
 		operator[](const std::string& cbuffer)
 		{
 			return uniforms.at(cbuffer);
+		}
+
+		[[nodiscard]]
+		bool
+		ContainsUniforms(std::string_view cbuffer) const
+		{
+			return uniforms.contains(cbuffer);
+		}
+
+		[[nodiscard]]
+		Uniforms*
+		FindUniforms(std::string_view cbuffer)
+		{
+			auto it = uniforms.find(cbuffer);
+			if (it != uniforms.end())
+			{
+				return &it->second;
+			}
+			else
+			{
+				return nullptr;
+			}
 		}
 
 		void

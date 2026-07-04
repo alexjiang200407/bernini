@@ -1,5 +1,6 @@
 import idl.DebugRecord;
 import types.ComputeBuffer;
+import idl.ErrorCode;
 
 static const uint kDbgHeaderWords = 4;
 static const uint kDbgRecordWords = 1;
@@ -11,7 +12,7 @@ struct DebugGlobals
 
 ConstantBuffer<DebugGlobals> gDebug : register(b0, space7);
 
-void dbg_raise(uint errcode)
+void dbg_raise(ErrorCode errcode)
 {
 #if defined(BERNINI_GPU_DEBUG)
     uint slot;
@@ -28,4 +29,12 @@ void dbg_raise(uint errcode)
         gDebug.buffer[1] = 1u;
     }
 #endif
+}
+
+void dbg_assert(bool condition, ErrorCode errcode)
+{
+    if (!condition)
+    {
+        dbg_raise(errcode);
+    }
 }

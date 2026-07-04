@@ -56,11 +56,12 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto visitor = EventVisitor();
 
-		auto sceneDesc        = bgl::SceneDesc();
-		sceneDesc.maxIndices  = 10000;
-		sceneDesc.maxVertices = 10000;
-		sceneDesc.maxGeom     = 100;
-		sceneDesc.maxMeshlets = 1000;
+		auto sceneDesc                    = bgl::SceneDesc();
+		sceneDesc.maxIndices              = 10000;
+		sceneDesc.maxVertexBufferByteSize = 100000;
+		sceneDesc.maxGeom                 = 100;
+		sceneDesc.maxMeshlets             = 1000;
+		sceneDesc.maxSubmeshes            = 100;
 
 		auto scene  = graphics->CreateScene(std::move(sceneDesc));
 		auto view   = graphics->CreateSceneView(scene, 100);

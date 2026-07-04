@@ -41,11 +41,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 	auto camera = bgl::Camera();
 	auto aspect = static_cast<float>(kWidth) / static_cast<float>(kHeight);
 
-	auto sceneDesc        = bgl::SceneDesc();
-	sceneDesc.maxGeom     = 8;
-	sceneDesc.maxMeshlets = 512;
-	sceneDesc.maxVertices = 20000;
-	sceneDesc.maxIndices  = 20000;
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 8;
+	sceneDesc.maxMeshlets             = 512;
+	sceneDesc.maxSubmeshes            = 8;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
 
 	SECTION("Draw Cube - cube.dds")
 	{
@@ -96,8 +97,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto sphereTransform  = glm::mat4(1.0f);
 		sphereTransform[3][0] = -5.0f;
 
-		view->CreateStaticMeshInstance(cubeGeom, {}, cubeTransform);
-		view->CreateStaticMeshInstance(sphereGeom, {}, sphereTransform);
+		view->CreateStaticMeshInstance(cubeGeom, cubeTransform);
+		view->CreateStaticMeshInstance(sphereGeom, sphereTransform);
 
 		auto context     = bgl::RenderContext();
 		context.view     = view;
@@ -311,11 +312,12 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 
 	const auto viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-	auto sceneDesc        = bgl::SceneDesc();
-	sceneDesc.maxGeom     = 8;
-	sceneDesc.maxMeshlets = 512;
-	sceneDesc.maxVertices = 20000;
-	sceneDesc.maxIndices  = 20000;
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 8;
+	sceneDesc.maxMeshlets             = 512;
+	sceneDesc.maxSubmeshes            = 8;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
 
 	// Target A: a single cube at the origin (matches the lone-cube golden).
 	auto cubeScene = gfxBase->CreateScene(sceneDesc);

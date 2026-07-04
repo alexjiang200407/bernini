@@ -11,8 +11,11 @@ public struct InstancedPayload
 public struct ForwardVSOut
 {
     public float4 position : SV_Position;
+    public float3 worldPos : POSITION0;
     public float3 normal : NORMAL;
     public float2 uv : TEXCOORD0;
+    public float4 tangent : TANGENT;
+    public nointerpolation uint materialIndex : MATERIAL;
 };
 
 public void ASBase(

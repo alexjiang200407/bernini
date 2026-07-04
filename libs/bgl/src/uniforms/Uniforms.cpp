@@ -3,6 +3,7 @@
 #include "pipeline/MeshletPipeline.h"
 #include "slang/ErrorChecker.h"
 #include "uniforms/DescriptorHandle.h"
+#include <core/str/str.h>
 #include <slang.h>
 
 namespace bgl
@@ -21,7 +22,7 @@ namespace bgl
 			UniformNullNode() = default;
 
 			TraversalResult
-			Traverse(size_t, const std::string&) override
+			Traverse(size_t, std::string_view) override
 			{
 				return ReturnNullResult();
 			}
@@ -71,7 +72,7 @@ namespace bgl
 			explicit UniformValueNode(UniformValueType valueType) : m_ValueType(valueType) {}
 
 			TraversalResult
-			Traverse(size_t, const std::string&) override
+			Traverse(size_t, std::string_view) override
 			{
 				return ReturnNullResult();
 			}
@@ -108,14 +109,14 @@ namespace bgl
 		{
 		public:
 			using MemberMap =
-				std::unordered_map<std::string, std::pair<std::unique_ptr<UniformsNode>, size_t>>;
+				core::str::unordered_str_map<std::pair<std::unique_ptr<UniformsNode>, size_t>>;
 
 			explicit UniformStructNode(MemberMap members, size_t totalSize) :
 				m_Members(std::move(members)), m_TotalSize(totalSize)
 			{}
 
 			TraversalResult
-			Traverse(size_t currentOffset, const std::string& member) override
+			Traverse(size_t currentOffset, std::string_view member) override
 			{
 				auto it = m_Members.find(member);
 				if (it == m_Members.end())
@@ -173,7 +174,7 @@ namespace bgl
 			operator=(UniformArrayNode&&) noexcept = delete;
 
 			TraversalResult
-			Traverse(size_t, const std::string&) override
+			Traverse(size_t, std::string_view) override
 			{
 				return ReturnNullResult();
 			}
@@ -219,7 +220,7 @@ namespace bgl
 	}
 
 	Uniforms::Accessor
-	Uniforms::operator[](const std::string& name)
+	Uniforms::operator[](std::string_view name)
 	{
 		return Accessor(m_Buffer.data(), 0, m_Root.get())[name];
 	}
@@ -231,7 +232,7 @@ namespace bgl
 	}
 
 	Uniforms::ConstAccessor
-	Uniforms::operator[](const std::string& name) const
+	Uniforms::operator[](std::string_view name) const
 	{
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[name];
 	}
@@ -242,7 +243,7 @@ namespace bgl
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	Uniforms::Uniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+	Uniforms::Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 
@@ -256,7 +257,7 @@ namespace bgl
 		m_Buffer.resize(entry.size, std::byte{ 0 });
 	}
 
-	Uniforms::Uniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
+	Uniforms::Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 

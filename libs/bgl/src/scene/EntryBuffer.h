@@ -102,10 +102,21 @@ namespace bgl
 		EmplaceBack(Args&&... args)
 		{
 			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			auto slot = m_Entries.allocate_and_emplace(std::forward<Args>(args)...);
-			ResetMeta(slot.index);
-			MarkDirty(slot.index);
-			return slot;
+
+			try
+			{
+				auto slot = m_Entries.allocate_and_emplace(std::forward<Args>(args)...);
+				ResetMeta(slot.index);
+				MarkDirty(slot.index);
+				return slot;
+			}
+			catch (const std::runtime_error& e)
+			{
+				core::throw_runtime_error(
+					"EntryBuffer '{}' allocation failed: {}",
+					m_Desc.debugName,
+					e.what());
+			}
 		}
 
 		core::slot_handle

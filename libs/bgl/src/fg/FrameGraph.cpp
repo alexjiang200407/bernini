@@ -8,20 +8,18 @@ namespace bgl
 	BufferHandle
 	PassContext::GetBuffer(std::string_view sv) const
 	{
-		const auto it = m_Buffers.find(std::string(sv));
+		const auto it = m_Buffers.find(sv);
 		if (it == m_Buffers.end())
 		{
-			throw std::runtime_error(
-				std::format(
-					"PassContext::GetBuffer: buffer '{}' was not declared by this pass",
-					sv));
+			core::throw_runtime_error(
+				"PassContext::GetBuffer: buffer '{}' was not declared by this pass",
+				sv);
 		}
 		if (it->second.handle.IsNull())
 		{
-			throw std::runtime_error(
-				std::format(
-					"PassContext::GetBuffer: buffer '{}' has no imported resource (transient?)",
-					sv));
+			core::throw_runtime_error(
+				"PassContext::GetBuffer: buffer '{}' has no imported resource (transient?)",
+				sv);
 		}
 		return it->second.handle;
 	}
@@ -29,20 +27,18 @@ namespace bgl
 	TextureHandle
 	PassContext::GetTexture(std::string_view sv) const
 	{
-		const auto it = m_Textures.find(std::string(sv));
+		const auto it = m_Textures.find(sv);
 		if (it == m_Textures.end())
 		{
-			throw std::runtime_error(
-				std::format(
-					"PassContext::GetTexture: texture '{}' was not declared by this pass",
-					sv));
+			core::throw_runtime_error(
+				"PassContext::GetTexture: texture '{}' was not declared by this pass",
+				sv);
 		}
 		if (it->second.handle.IsNull())
 		{
-			throw std::runtime_error(
-				std::format(
-					"PassContext::GetTexture: texture '{}' has no imported resource (transient?)",
-					sv));
+			core::throw_runtime_error(
+				"PassContext::GetTexture: texture '{}' has no imported resource (transient?)",
+				sv);
 		}
 		return it->second.handle;
 	}
@@ -168,7 +164,7 @@ namespace bgl
 		{
 			return scoped;
 		}
-		if (m_Imported.contains(std::string(name)))
+		if (m_Imported.contains(name))
 		{
 			return std::string(name);
 		}
@@ -180,8 +176,9 @@ namespace bgl
 	{
 		if (FindPass(desc.name) != nullptr)
 		{
-			throw std::runtime_error(
-				std::format("FrameGraph::AddPass: a pass named '{}' already exists", desc.name));
+			core::throw_runtime_error(
+				"FrameGraph::AddPass: a pass named '{}' already exists",
+				desc.name);
 		}
 
 		PassNode node;
@@ -242,14 +239,13 @@ namespace bgl
 				const bool accessIsBuffer = a.kind == ResourceKind::kBuffer;
 				if (importedIsBuffer != accessIsBuffer)
 				{
-					throw std::runtime_error(
-						std::format(
-							"FrameGraph::Compile: resource '{}' was imported as a {} but pass '{}' "
-							"accesses it as a {}",
-							a.name,
-							importedIsBuffer ? "buffer" : "texture",
-							pass.desc.name,
-							accessIsBuffer ? "buffer" : "texture"));
+					core::throw_runtime_error(
+						"FrameGraph::Compile: resource '{}' was imported as a {} but pass '{}' "
+						"accesses it as a {}",
+						a.name,
+						importedIsBuffer ? "buffer" : "texture",
+						pass.desc.name,
+						accessIsBuffer ? "buffer" : "texture");
 				}
 			}
 		}
@@ -260,11 +256,10 @@ namespace bgl
 				!pass.desc.colorAttachments.empty() || !pass.desc.depthAttachment.IsNull();
 			if (hasAttachments && resourceManager == nullptr)
 			{
-				throw std::runtime_error(
-					std::format(
-						"FrameGraph::Compile: pass '{}' has attachments but no ResourceManager was "
-						"provided to resolve them",
-						pass.desc.name));
+				core::throw_runtime_error(
+					"FrameGraph::Compile: pass '{}' has attachments but no ResourceManager was "
+					"provided to resolve them",
+					pass.desc.name);
 			}
 
 			const auto rejectIfImported = [&](TextureHandle tex) {
@@ -277,14 +272,13 @@ namespace bgl
 					const TextureHandle imported = std::get<TextureHandle>(res.handle);
 					if (imported.idx == tex.idx && imported.generation == tex.generation)
 					{
-						throw std::runtime_error(
-							std::format(
-								"FrameGraph::Compile: the texture attached to pass '{}' is also "
-								"imported as '{}'; reach a texture either as an attachment or as "
-								"an "
-								"imported resource, not both",
-								pass.desc.name,
-								name));
+						core::throw_runtime_error(
+							"FrameGraph::Compile: the texture attached to pass '{}' is also "
+							"imported as '{}'; reach a texture either as an attachment or as "
+							"an "
+							"imported resource, not both",
+							pass.desc.name,
+							name);
 					}
 				}
 			};
@@ -485,11 +479,10 @@ namespace bgl
 			const auto qit = m_Queues.find(pass.desc.queue);
 			if (qit == m_Queues.end())
 			{
-				throw std::runtime_error(
-					std::format(
-						"FrameGraph::Execute: pass '{}' records on unregistered queue '{}'",
-						pass.desc.name,
-						pass.desc.queue));
+				core::throw_runtime_error(
+					"FrameGraph::Execute: pass '{}' records on unregistered queue '{}'",
+					pass.desc.name,
+					pass.desc.queue);
 			}
 			ICommandList*  cmd   = qit->second.list.Get();
 			ICommandQueue* queue = qit->second.queue.Get();
