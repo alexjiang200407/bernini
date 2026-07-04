@@ -107,7 +107,7 @@ and portability.
 - [ ] Misc
   - [ ] Texture Atlasing
   - [ ] Editor Build Texture Atlas
-  - [ ] GPU-Side Assertions
+  - [x] GPU-Side Assertions
   - [ ] DRED & Breadcrumbs are post-mortem forensics
 
 **Optional Features**

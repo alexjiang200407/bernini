@@ -108,6 +108,20 @@ namespace bgl
 			m_GpuAssertionHandler = handler;
 		}
 
+		void
+		DiscardPendingGpuAssertions() noexcept override
+		{
+#if defined(BERNINI_GPU_DEBUG)
+			// Abandon every un-inspected readback slot so InspectDebugSlot early-returns
+			// for it. The snapshots were already copied out; we simply choose not to read
+			// them, dropping the assertions instead of reporting or crashing on them.
+			for (bool& pending : m_DebugReadbackPending)
+			{
+				pending = false;
+			}
+#endif
+		}
+
 	private:
 		// Forwards debug-layer / GPU-based-validation messages to the spdlog log.
 		static void CALLBACK

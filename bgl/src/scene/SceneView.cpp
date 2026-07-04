@@ -1,6 +1,6 @@
 #include "scene/SceneView.h"
-#include "constants/constants.h"
 #include "fg/FrameGraph.h"
+#include "idl/Constants.h"
 #include "scene/Scene.h"
 #include "types/SubmeshInstance.h"
 #include "util/util.h"
@@ -43,7 +43,7 @@ namespace bgl
 			// Round up so the kInvalid tail padding (see Update) always fits: the
 			// counting sort dispatches whole groups, so it may read up to a group past
 			// the last instance.
-			instanceBufferDesc.maxCount  = core::round_up(m_MaxInstances, c_HistogramGroupSize);
+			instanceBufferDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
 			instanceBufferDesc.debugName = "Instance Buffer";
 			instanceBufferDesc.blockSize = sizeof(SubmeshInstance) * 256;
 
@@ -243,7 +243,7 @@ namespace bgl
 			buffers);
 
 		const uint32_t count  = m_InstanceBuffer.Size();
-		const uint32_t padded = core::round_up(count, c_HistogramGroupSize);
+		const uint32_t padded = core::round_up(count, idl::cHistogramGroupSize);
 		if (padded > count)
 		{
 			std::vector<SubmeshInstance> tail(padded - count);

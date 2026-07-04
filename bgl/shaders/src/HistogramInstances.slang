@@ -2,9 +2,9 @@ import types.SubmeshInstance;
 import types.ComputeBuffer;
 import types.PackedBuffer;
 import types.PsoType;
+import idl.Constants;
 
 static const uint kPsoCount = uint(PsoType::kCount);
-static const uint kThreadsPerGroup = 256;
 
 struct Uniforms
 {
@@ -17,7 +17,7 @@ ConstantBuffer<Uniforms> gUniforms;
 groupshared uint gLocalHistogram[kPsoCount];
 
 [shader("compute")]
-[numthreads(kThreadsPerGroup, 1, 1)]
+[numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
     if (localIdx < kPsoCount)

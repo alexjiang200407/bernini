@@ -11,6 +11,7 @@ set(IDL_CPP_SOURCES
     Submesh.slang
     Mesh.slang
     DebugRecord.slang
+    Constants.slang
 )
 
 set(IDL_GENERATED_OUTPUTS "")

@@ -5,14 +5,9 @@ namespace bgl
 	constexpr uint32_t c_MaxRenderTargets = 8;
 	constexpr uint32_t c_BufferCount      = 2;
 
-	// Meshlet capacity limits. These MUST match the shader-side values in
-	// shaders/src/util/constants.slang (cMaxVerticesPerMeshlet / cMaxPrimsPerMeshlet).
-	constexpr uint32_t c_MaxVerticesPerMeshlet = 64;
-	constexpr uint32_t c_MaxPrimsPerMeshlet    = 124;
-
-	// Thread group sizes of the instance counting-sort shaders.
-	constexpr uint32_t c_HistogramGroupSize = 256;
-	constexpr uint32_t c_CompactGroupSize   = 128;
+	// Constants shared with the GPU (meshlet caps, instance counting-sort group
+	// sizes, ...) now live in the IDL module bgl/idl/src/Constants.slang and are
+	// generated into idl::c... (see idl/Constants.h). Use those directly.
 
 	/**
 	 * The struct member name for the key for the smart buffers

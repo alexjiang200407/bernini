@@ -1,6 +1,6 @@
 #include "scene/Scene.h"
-#include "constants/constants.h"
 #include "fg/FrameGraph.h"
+#include "idl/Constants.h"
 #include "idl/Meshlet.h"
 #include "idl/Vertex.h"
 #include "types/SubmeshInstance.h"
@@ -324,8 +324,8 @@ namespace bgl
 						}
 					}
 
-					if (localVertexCount + newVertices > c_MaxVerticesPerMeshlet ||
-					    localTriangleCount + 1u > c_MaxPrimsPerMeshlet)
+					if (localVertexCount + newVertices > idl::cMaxVerticesPerMeshlet ||
+					    localTriangleCount + 1u > idl::cMaxPrimsPerMeshlet)
 					{
 						break;
 					}

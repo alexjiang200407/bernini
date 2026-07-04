@@ -26,8 +26,11 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **One IDL, two generated targets, guaranteed layout parity.** The `.slang` structs
   ([Mesh.slang](bgl/shaders/src/idl/Mesh.slang) etc.) and the C++ `bgl::idl::*` structs are both
   generated from `bgl/idl/src`. The C++ side carries `static_assert(sizeof / offsetof …)` so the
-  two never drift — CPU code can `memcpy` a struct straight into a GPU buffer. Never hand-edit
-  either generated copy; edit the IDL source and regenerate.
+  two never drift — CPU code can `memcpy` a struct straight into a GPU buffer. An IDL module can
+  also declare `enum`s and `public static const` **constants** (e.g.
+  [Constants.slang](bgl/idl/src/Constants.slang)); constants are emitted as `constexpr` into the
+  C++ mirror, keeping shared limits single-sourced across CPU and GPU. Never hand-edit either
+  generated copy; edit the IDL source and regenerate.
 
 * **The geometry hierarchy is flat arrays cross-linked by offset.** Every level lives in its own
   global buffer — a submesh buffer, a meshlet buffer, a vertexMap buffer, a byte vertex buffer, an
@@ -36,9 +39,11 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `RangeWithCount<Submesh>` into the submesh buffer.
 
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
-  `Meshlet`s of at most `c_MaxVerticesPerMeshlet` (64) unique vertices and `c_MaxPrimsPerMeshlet`
-  (124) triangles (see [constants.h](bgl/src/constants/constants.h), which must match
-  `shaders/src/util/constants.slang`). A meshlet carries a bounding sphere for culling.
+  `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
+  `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
+  [Constants.slang](bgl/idl/src/Constants.slang) and consumed by both the CPU (generated
+  [Constants.h](bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
+  carries a bounding sphere for culling.
 
 * **Vertex data is type-erased bytes, decoded by a `VertexLayout` descriptor.** The vertex buffer
   is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a

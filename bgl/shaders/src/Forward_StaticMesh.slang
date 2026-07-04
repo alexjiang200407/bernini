@@ -1,6 +1,6 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
-import util.constants;
+import idl.Constants;
 import idl.Mesh;
 import idl.Meshlet;
 import idl.Submesh;

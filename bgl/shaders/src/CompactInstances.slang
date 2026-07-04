@@ -3,9 +3,9 @@ import types.SubmeshInstance;
 import types.PackedBuffer;
 import types.PsoType;
 import idl.DispatchArgs;
+import idl.Constants;
 
 static const uint kPsoCount = uint(PsoType::kCount);
-static const uint kThreadsPerGroup = 128;
 
 struct Uniforms
 {
@@ -18,7 +18,7 @@ struct Uniforms
 ConstantBuffer<Uniforms> gUniforms;
 
 [shader("compute")]
-[numthreads(kThreadsPerGroup, 1, 1)]
+[numthreads(cCompactGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID)
 {
     let psoType = uint(gUniforms.instanceBuffer[globalIdx].psoType);

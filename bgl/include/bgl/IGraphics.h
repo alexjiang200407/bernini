@@ -123,10 +123,26 @@ namespace bgl
 		 * few frames AFTER they fire (the readback ring is c_BufferCount deep), so the
 		 * handler object must stay valid across that window -- simplest rule: it must
 		 * outlive this IGraphics. Clearing to nullptr does not cancel an already
-		 * in-flight assertion; that pending report then falls back to the crash path.
+		 * in-flight assertion; that pending report then falls back to the crash path --
+		 * call DiscardPendingGpuAssertions() first to drop it.
 		 */
 		virtual void
 		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept = 0;
+
+		/**
+		 * Drops any GPU assertions that have fired but are still in flight in the
+		 * readback ring (the frame-latency window described above) WITHOUT invoking the
+		 * handler or crashing. Call it when you intentionally want to abandon pending
+		 * assertions -- e.g. before clearing the handler, or before tearing down a
+		 * handler that would otherwise outlive nothing -- so they do not fall back to
+		 * the crash path at the next inspection (BeginFrame or destruction).
+		 *
+		 * Like SetGpuAssertionHandler this performs NO GPU/frame synchronization: it
+		 * only resets CPU-side pending state and is not thread-safe (call it on the
+		 * render thread). No-op in Release / without BERNINI_GPU_DEBUG.
+		 */
+		virtual void
+		DiscardPendingGpuAssertions() noexcept = 0;
 
 	protected:
 		IGraphics() noexcept = default;

@@ -1,26 +1,11 @@
+#include <CLI/CLI.hpp>
 #include <slang-com-ptr.h>
 #include <slang.h>
 
-#include <CLI/CLI.hpp>
-
-#include <iostream>
-
 /**
- * bgl_idlgen - generate C++ POD structs (and a banner-stamped Slang copy) from
- * an `.slang` IDL file, keeping the CPU and GPU definitions of a struct in sync.
- *
- * The struct layout is taken from Slang's reflection of a *host* target, which
- * lays types out with C/C++ (scalar) rules. That is what lets the generated
- * `offsetof`/`sizeof` static_asserts hold against the emitted C++ struct, and it
- * matches the layout a scalar StructuredBuffer uses on the GPU side.
- *
- * A module's identity is its path relative to --src-root, and that one path
- * drives both output locations and every reference to the module. The input is
- * written under each output root at the SAME relative subpath, so the Slang
- * import path, the .slang location, the C++ #include, and the .h location stay
- * in lockstep and cannot drift. To move a module, rename it (change its relative
- * path) so importers follow it; never relocate it to a path that disagrees with
- * its import name.
+ * bgl_idlgen - generate C++ POD structs, enums, and constants (and a
+ * banner-stamped Slang copy) from an `.slang` IDL file, keeping the CPU and GPU
+ * definitions in sync.
  *
  * Usage:
  *   bgl_idlgen --src-root <dir> [--cpp-out-dir <dir>] [--slang-out-dir <dir>]
@@ -173,6 +158,30 @@ namespace
 		size_t                                         size       = 4;
 		std::vector<std::pair<std::string, long long>> enumerators;
 	};
+
+	struct ConstantInfo
+	{
+		std::string type;  // C++ type, or "auto" for an inferred (`let`) constant
+		std::string name;
+		std::string value;  // RHS expression, copied verbatim
+	};
+
+	// Map a Slang scalar type keyword (as written in the IDL source) to its C++
+	// spelling. `let` (an inferred type) becomes `auto`. Anything unrecognised is
+	// passed through unchanged so exact C++ type names (e.g. uint32_t) still work.
+	std::string
+	ConstTypeToCpp(const std::string& slangType)
+	{
+		static const std::map<std::string, std::string> kMap = {
+			{ "let", "auto" },    { "int", "int32_t" },   { "uint", "uint32_t" },
+			{ "float", "float" }, { "double", "double" }, { "bool", "bool" },
+		};
+		if (auto it = kMap.find(slangType); it != kMap.end())
+		{
+			return it->second;
+		}
+		return slangType;
+	}
 
 	std::string
 	UnderlyingForSize(size_t size)
@@ -455,6 +464,101 @@ namespace
 		return enums;
 	}
 
+	/**
+	 * Textually parse module-scope `static const` declarations from an IDL source.
+	 * As with enum values, a constant's initializer is not reliably reflected, and
+	 * the source is already the single source of truth we copy verbatim, so a small
+	 * deterministic parser is used. Recognises:
+	 *
+	 *     [public] static const <type|let> <name> = <expr>;
+	 *
+	 * capturing the name and the RHS expression verbatim. The RHS is emitted into
+	 * the C++ header unchanged, so it must be valid in both languages (integer and
+	 * float literals, arithmetic on them, etc.). A leading `public` (needed for the
+	 * constant to be visible to importing shaders) is skipped implicitly.
+	 */
+	std::vector<ConstantInfo>
+	ParseConstants(const std::string& rawSource)
+	{
+		const std::string         source = StripLineComments(rawSource);
+		std::vector<ConstantInfo> constants;
+
+		auto skipSpace = [&](size_t& p) {
+			while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p])))
+			{
+				++p;
+			}
+		};
+		auto readIdent = [&](size_t& p) {
+			std::string id;
+			while (p < source.size() && IsIdentChar(source[p]))
+			{
+				id += source[p++];
+			}
+			return id;
+		};
+
+		size_t search = 0;
+		while (true)
+		{
+			size_t kw = source.find("static", search);
+			if (kw == std::string::npos)
+			{
+				break;
+			}
+			search = kw + 6;
+
+			// Whole-word check so a mid-identifier match is ignored.
+			const bool leftOk  = (kw == 0) || !IsIdentChar(source[kw - 1]);
+			const bool rightOk = (search >= source.size()) || !IsIdentChar(source[search]);
+			if (!leftOk || !rightOk)
+			{
+				continue;
+			}
+
+			size_t p = search;
+			skipSpace(p);
+			if (readIdent(p) != "const")  // only `static const` module constants
+			{
+				continue;
+			}
+			skipSpace(p);
+			const std::string type = readIdent(p);
+			skipSpace(p);
+			const std::string name = readIdent(p);
+			skipSpace(p);
+			if (type.empty() || name.empty() || p >= source.size() || source[p] != '=')
+			{
+				continue;
+			}
+			++p;
+
+			const size_t semi = source.find(';', p);
+			if (semi == std::string::npos)
+			{
+				break;
+			}
+
+			std::string  value = source.substr(p, semi - p);
+			const size_t first = value.find_first_not_of(" \t\r\n");
+			const size_t last  = value.find_last_not_of(" \t\r\n");
+			search             = semi + 1;
+			if (first == std::string::npos)
+			{
+				continue;
+			}
+			value = value.substr(first, last - first + 1);
+
+			ConstantInfo info;
+			info.type  = ConstTypeToCpp(type);
+			info.name  = name;
+			info.value = value;
+			constants.push_back(std::move(info));
+		}
+
+		return constants;
+	}
+
 	std::string
 	Banner(const std::string& from)
 	{
@@ -465,6 +569,7 @@ namespace
 	EmitCpp(
 		const std::string&                        bannerFrom,
 		const std::string&                        ns,
+		const std::vector<ConstantInfo>&          constants,
 		const std::vector<EnumInfo>&              enums,
 		const std::vector<StructInfo>&            structs,
 		const std::set<std::string>&              referenced,
@@ -488,6 +593,17 @@ namespace
 		}
 
 		out += std::format("\nnamespace {}\n{{\n", ns);
+
+		// Constants first: they may be used as array bounds in enums/structs and
+		// carry no dependency on anything below.
+		for (const ConstantInfo& c : constants)
+		{
+			out += std::format("\tconstexpr {} {} = {};\n", c.type, c.name, c.value);
+		}
+		if (!constants.empty())
+		{
+			out += "\n";
+		}
 
 		// Enums first: struct fields below reference them by name, and locally
 		// defined enums are not imported so they emit no #include.
@@ -528,7 +644,7 @@ namespace
 	}
 
 	void
-	WriteFile(const fs::path& path, const std::string& content)
+	WriteFile(const fs::path& path, std::string content)
 	{
 		if (path.has_parent_path())
 		{
@@ -707,17 +823,25 @@ main(int argc, char** argv)
 			e.underlying = UnderlyingForSize(e.size);
 		}
 
-		if (structs.empty() && enums.empty())
+		std::vector<ConstantInfo> constants = ParseConstants(source);
+
+		if (structs.empty() && enums.empty() && constants.empty())
 		{
 			std::cerr << std::format(
-				"note: no structs or enums in {}, skipping C++ header\n",
+				"note: no structs, enums, or constants in {}, skipping C++ header\n",
 				input);
 			return 0;
 		}
 
-		const std::string cpp =
-			EmitCpp(rel.generic_string(), ns, enums, structs, referenced, ParseImports(source));
-		WriteFile(cppOut, cpp);
+		const std::string cpp = EmitCpp(
+			rel.generic_string(),
+			ns,
+			constants,
+			enums,
+			structs,
+			referenced,
+			ParseImports(source));
+		WriteFile(cppOut, std::move(cpp));
 
 		return 0;
 	}

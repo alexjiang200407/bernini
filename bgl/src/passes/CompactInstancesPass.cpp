@@ -1,5 +1,6 @@
 #include "passes/CompactInstancesPass.h"
 #include "fg/FrameGraph.h"
+#include "idl/Constants.h"
 #include "idl/DispatchArgs.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
@@ -169,7 +170,7 @@ namespace bgl
 		cmdList->SetComputeState(computeState);
 
 		const auto instanceCount = draw.view->GetInstanceCount();
-		cmdList->Dispatch(core::div_ceil(instanceCount, c_HistogramGroupSize), 1, 1);
+		cmdList->Dispatch(core::div_ceil(instanceCount, idl::cHistogramGroupSize), 1, 1);
 
 		// The histogram writes psoPrefixSum (UAV); the prefix-sum scan below reads and
 		// rewrites the same buffer. Both dispatches run back-to-back inside this single
@@ -223,6 +224,6 @@ namespace bgl
 		cmdList->SetComputeState(computeState);
 
 		const auto instanceCount = draw.view->GetInstanceCount();
-		cmdList->Dispatch(core::div_ceil(instanceCount, c_CompactGroupSize), 1, 1);
+		cmdList->Dispatch(core::div_ceil(instanceCount, idl::cCompactGroupSize), 1, 1);
 	}
 }

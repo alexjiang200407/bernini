@@ -20,7 +20,7 @@ Always read the [Style Guide](./STYLE.md)
 
 # Documentation Index
 
-Read through these documents if you deem them necessary to your given task.
+Read through these documents if you deem them necessary to your given task. If you modify something that is touched on in these docs, you need to modify the docs as well.
 
 **[Geometry Layout](./docs/geometry_layout.md)**
 
@@ -41,6 +41,10 @@ FrameGraph usage.
 **[Passes Overview](./docs/passes.md)**
 
 Overview of all the Frame Graph Passes
+
+**[IDL Codegen](./docs/idlgen.md)**
+
+How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
 # Directory Structure
 
