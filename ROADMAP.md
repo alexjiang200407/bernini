@@ -29,7 +29,7 @@ and portability.
   compact and GPU-resident; per-unit CPU updates are the enemy.
 - **RHI stays API-agnostic.** All D3D12 lives in `bgl_d3d12`. Every feature added to `bgl`
   must be expressible without leaking backend types, so the Vulkan/Metal backends stay viable.
-- **IDL is the single source of truth** for structs shared by C++ and Slang (`bgl/idl`). New
+- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
 
@@ -43,13 +43,13 @@ and portability.
   - [x] GPU Ring Buffer
 - [x] Static Geometry
   - [x] FrameGraph: pass ordering, auto barrier derivation, resource namespaces, multi-queue,
-    dead-pass culling (`bgl/src/fg`)
-  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`bgl/idl`)
+    dead-pass culling (`libs/bgl/src/fg`)
+  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl/idl`)
   - [x] GPU instance render
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema
   - [x] Static Mesh Asset Import
-- [ ] Materials
+- [ ] Materials (Unlit)
   - [ ] Implement PBR
   - [ ] Implement Alpha Test alpha mode
   - [ ] Texture Asset Import
@@ -62,8 +62,10 @@ and portability.
   - [ ] Geometry Cluster Culling
   - [ ] Two-pass HZB occlusion culling
   - [ ] Culling verification
+- [ ] Ink Shader Proof of Concept
 - [ ] Light and Shadow
   - [ ] Directional Lighting
+  - [ ] Point Light
   - [ ] Ambient / Sky Light
   - [ ] Cascading Shadow Mapping
   - [ ] Static vs. Dynamic Shadow
@@ -116,6 +118,7 @@ and portability.
 - [ ] Flowmap baking
 - [ ] Forward++ Shading
 - [ ] Ink Shading
+- [ ] Screen space reflections
 
 ## Module 2: Game Logic
 

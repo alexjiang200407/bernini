@@ -32,9 +32,9 @@ import sys
 import util.cmake_tools as ct
 
 TOOL = "bgl_idlgen"
-SRC_ROOT = os.path.join(ct.REPO_ROOT, "bgl", "idl", "src")
-CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "bgl", "src", "idl")
-SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "bgl", "shaders", "src", "idl")
+SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "src")
+CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "src", "idl")
+SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "shaders", "src", "idl")
 
 
 def resolve_tool(build_dir, config):

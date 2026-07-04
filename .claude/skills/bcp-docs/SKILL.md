@@ -56,7 +56,7 @@ Drop any section that genuinely doesn't apply to the subsystem.
 ## Rules
 
 - **Links are repo-root-relative** so an agent can feed them straight to its file tools:
-  `[bgl/src/device/Device.h](bgl/src/device/Device.h)`, not `../bgl/...`. Cross-doc links use
+  `[libs/bgl/src/device/Device.h](libs/bgl/src/device/Device.h)`, not `../libs/bgl/...`. Cross-doc links use
   the same form: `[Frame Graph](docs/framegraph.md)`.
 - **Method contracts use `@pre` / `@post` phrasing** in prose bullets — state preconditions
   (parameter validity, required object state), postconditions (side effects, allocations,

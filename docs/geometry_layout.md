@@ -3,8 +3,8 @@
 The structs that describe renderable geometry — `Mesh`, `Submesh`, `Meshlet`, `Vertex`,
 `VertexLayout`, and the `Range` / `RangeWithCount` / `Entry` offset primitives — plus the CPU-side
 buffers that mirror them onto the GPU. The structs are laid out once and shared between CPU and
-GPU: a single IDL source (`bgl/idl/src/*.slang`) generates a shader copy under
-[bgl/shaders/src/idl/](bgl/shaders/src/idl/) and a byte-identical C++ mirror under `bgl/src/idl/`.
+GPU: a single IDL source (`libs/bgl/idl/src/*.slang`) generates a shader copy under
+[libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) and a byte-identical C++ mirror under `libs/bgl/src/idl/`.
 This document links the **generated shader slang** — the GPU-facing view is the one that drives
 rendering, and the C++ mirror pins the same offsets with `static_assert`s.
 
@@ -24,11 +24,11 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   [RHI](docs/rhi.md).
 
 * **One IDL, two generated targets, guaranteed layout parity.** The `.slang` structs
-  ([Mesh.slang](bgl/shaders/src/idl/Mesh.slang) etc.) and the C++ `bgl::idl::*` structs are both
-  generated from `bgl/idl/src`. The C++ side carries `static_assert(sizeof / offsetof …)` so the
+  ([Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) etc.) and the C++ `bgl::idl::*` structs are both
+  generated from `libs/bgl/idl/src`. The C++ side carries `static_assert(sizeof / offsetof …)` so the
   two never drift — CPU code can `memcpy` a struct straight into a GPU buffer. An IDL module can
   also declare `enum`s and `public static const` **constants** (e.g.
-  [Constants.slang](bgl/idl/src/Constants.slang)); constants are emitted as `constexpr` into the
+  [Constants.slang](libs/bgl/idl/src/Constants.slang)); constants are emitted as `constexpr` into the
   C++ mirror, keeping shared limits single-sourced across CPU and GPU. Never hand-edit either
   generated copy; edit the IDL source and regenerate.
 
@@ -41,8 +41,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
   `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
-  [Constants.slang](bgl/idl/src/Constants.slang) and consumed by both the CPU (generated
-  [Constants.h](bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
+  [Constants.slang](libs/bgl/idl/src/Constants.slang) and consumed by both the CPU (generated
+  [Constants.h](libs/bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere for culling.
 
 * **Vertex data is type-erased bytes, decoded by a `VertexLayout` descriptor.** The vertex buffer
@@ -52,7 +52,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g.
   the 32-byte position/normal/uv the procedural cube/sphere use) and describe it with a matching
   layout. See `DecodeVertex` in
-  [Forward_StaticMesh.slang](bgl/shaders/src/Forward_StaticMesh.slang).
+  [Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
   `RangeBuffer` / `EntryBuffer` / `PackedBuffer` — GPU-mirrored containers whose `Add`/`EmplaceBack`
@@ -68,19 +68,19 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `Mesh` | [Mesh.slang](bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>` + total meshlet count. |
-| `Submesh` | [Submesh.slang](bgl/shaders/src/idl/Submesh.slang) | One drawable part: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, material entry. |
-| `Meshlet` | [Meshlet.slang](bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
-| `Vertex` | [Vertex.slang](bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
-| `VertexLayout` | [VertexLayout.slang](bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
+| `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>` + total meshlet count. |
+| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, material entry. |
+| `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
+| `Vertex` | [Vertex.slang](libs/bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
+| `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
 ### Offset primitives
 
 | Type | File | Role |
 |---|---|---|
-| `Range<T>` | [Range.slang](bgl/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0xFFFFFFFF`. |
-| `RangeWithCount<T>` | [RangeWithCount.slang](bgl/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
-| `Entry<T>` | [Entry.slang](bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a material record). |
+| `Range<T>` | [Range.slang](libs/bgl/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0xFFFFFFFF`. |
+| `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
+| `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a material record). |
 
 ### CPU-side mirror buffers
 
@@ -89,9 +89,9 @@ store. All three dirty-track writes and flush via `Update(cmdList)`.
 
 | Type | File | Role |
 |---|---|---|
-| `RangeBuffer<T,Meta>` | [RangeBuffer.h](bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the vertex/index/meshlet/submesh buffers. |
-| `EntryBuffer<T,Meta>` | [EntryBuffer.h](bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
-| `PackedBuffer<T>` | [PackedBuffer.h](bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
+| `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the vertex/index/meshlet/submesh buffers. |
+| `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
+| `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
 
 ---
 
@@ -120,7 +120,7 @@ flowchart TD
 
 ### The per-meshlet-vertex indirection chain
 
-For lane `gtid` of a meshlet (see [Forward_StaticMesh.slang](bgl/shaders/src/Forward_StaticMesh.slang)):
+For lane `gtid` of a meshlet (see [Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang)):
 
 1. **vertexMap lookup** — `vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid]`
    yields a **geometry-local vertex index**. The meshlet's vertices are a compacted window inside
@@ -134,7 +134,7 @@ For lane `gtid` of a meshlet (see [Forward_StaticMesh.slang](bgl/shaders/src/For
    vertex array — *not* geometry indices.
 
 All `relative*Offset`s are relative to the parent submesh's range start; the buffer accessors add
-the range's `GetStart()` (see [RangeBuffer.slang](bgl/shaders/src/types/RangeBuffer.slang)).
+the range's `GetStart()` (see [RangeBuffer.slang](libs/bgl/shaders/src/types/RangeBuffer.slang)).
 
 ---
 
@@ -151,7 +151,7 @@ Structs are populated bottom-up, each parent storing the offset the buffer hands
   copies only the dirty blocks.
 
 For a concrete procedural builder (cube / sphere meshletization), see
-[Scene.cpp](bgl/src/scene/Scene.cpp).
+[Scene.cpp](libs/bgl/src/scene/Scene.cpp).
 
 ---
 
@@ -197,5 +197,5 @@ meshletBuffer.Update(cmdList);
 vertexDataBuffer.Update(cmdList);
 ```
 
-See [Scene.cpp](bgl/src/scene/Scene.cpp) for a full procedural builder and
+See [Scene.cpp](libs/bgl/src/scene/Scene.cpp) for a full procedural builder and
 [docs/passes.md](docs/passes.md) for how the forward pass consumes these buffers.

@@ -62,33 +62,33 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [bgl/include/bgl/IGraphics.h](bgl/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device. `GetDevice()` returns the RHI root. |
-| `IDevice` | [bgl/src/device/Device.h](bgl/src/device/Device.h) | Root factory for every RHI object. |
-| `IResourceManager` | [bgl/src/resource/ResourceManager.h](bgl/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
-| `ICommandQueue` | [bgl/src/cmd/CommandQueue.h](bgl/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
-| `ICommandList` | [bgl/src/cmd/CommandList.h](bgl/src/cmd/CommandList.h) | Records uploads, copies, compute and mesh-shading dispatch, barriers, debug markers. |
-| `ICommandAllocator` | [bgl/src/cmd/CommandAllocator.h](bgl/src/cmd/CommandAllocator.h) | Backing memory pool for recorded commands. |
-| `IShader` | [bgl/src/resource/Shader.h](bgl/src/resource/Shader.h) | Immutable compiled DXIL + slang reflection module. |
-| `IComputePipeline` | [bgl/src/pipeline/ComputePipeline.h](bgl/src/pipeline/ComputePipeline.h) | Compute PSO + constant-buffer reflection. |
-| `IMeshletPipeline` | [bgl/src/pipeline/MeshletPipeline.h](bgl/src/pipeline/MeshletPipeline.h) | Mesh-shading PSO (amp/mesh/pixel) + render state + reflection. |
+| `IGraphics` | [libs/bgl/include/libs/bgl/IGraphics.h](libs/bgl/include/libs/bgl/IGraphics.h) | Public façade above the RHI; owns the device. `GetDevice()` returns the RHI root. |
+| `IDevice` | [libs/bgl/src/device/Device.h](libs/bgl/src/device/Device.h) | Root factory for every RHI object. |
+| `IResourceManager` | [libs/bgl/src/resource/ResourceManager.h](libs/bgl/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
+| `ICommandQueue` | [libs/bgl/src/cmd/CommandQueue.h](libs/bgl/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
+| `ICommandList` | [libs/bgl/src/cmd/CommandList.h](libs/bgl/src/cmd/CommandList.h) | Records uploads, copies, compute and mesh-shading dispatch, barriers, debug markers. |
+| `ICommandAllocator` | [libs/bgl/src/cmd/CommandAllocator.h](libs/bgl/src/cmd/CommandAllocator.h) | Backing memory pool for recorded commands. |
+| `IShader` | [libs/bgl/src/resource/Shader.h](libs/bgl/src/resource/Shader.h) | Immutable compiled DXIL + slang reflection module. |
+| `IComputePipeline` | [libs/bgl/src/pipeline/ComputePipeline.h](libs/bgl/src/pipeline/ComputePipeline.h) | Compute PSO + constant-buffer reflection. |
+| `IMeshletPipeline` | [libs/bgl/src/pipeline/MeshletPipeline.h](libs/bgl/src/pipeline/MeshletPipeline.h) | Mesh-shading PSO (amp/mesh/pixel) + render state + reflection. |
 
 ### Supporting types (POD / helpers)
 
 | Type | File | Role |
 |---|---|---|
-| `Uniforms` | [bgl/src/uniforms/Uniforms.h](bgl/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
-| `ComputeKernel` / `MeshletKernel` | [bgl/src/pipeline/ComputeKernel.h](bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](bgl/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
-| `ComputeState` / `MeshletState` | [bgl/src/types/ComputeState.h](bgl/src/types/ComputeState.h), [MeshletState.h](bgl/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
-| Buffer descriptors & `BufferHandle` | [bgl/src/resource/Buffer.h](bgl/src/resource/Buffer.h) | `StructBufferDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
-| Texture descriptors & `TextureHandle` | [bgl/src/resource/Texture.h](bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
-| Views | [bgl/src/resource/Rtv.h](bgl/src/resource/Rtv.h), [Dsv.h](bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
-| Readback | [bgl/src/resource/Readback.h](bgl/src/resource/Readback.h) | `ReadbackBufferDesc`, `ReadbackBufferHandle`, `TextureReadbackLayout`. |
-| `FrameBuffer` | [bgl/src/resource/FrameBuffer.h](bgl/src/resource/FrameBuffer.h) | Color attachments (RTV) + depth attachment (DSV). |
-| Render state | [bgl/src/types/RenderState.h](bgl/src/types/RenderState.h) | `RasterState` + `BlendState` + `DepthStencilState`; baked into `MeshletPipelineDesc`. |
-| `ViewportState` | [bgl/src/types/ViewportState.h](bgl/src/types/ViewportState.h) | Viewports + scissor rects. |
-| `ClearValue` | [bgl/src/types/ClearValue.h](bgl/src/types/ClearValue.h) | Variant of color or depth/stencil clear. |
-| Barrier vocabulary | [bgl/src/types/Barrier.h](bgl/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` (enhanced barriers). |
-| `QueueType` | [bgl/src/types/QueueType.h](bgl/src/types/QueueType.h) | `kGraphics`, `kCompute`, `kCopy`. |
+| `Uniforms` | [libs/bgl/src/uniforms/Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
+| `ComputeKernel` / `MeshletKernel` | [libs/bgl/src/pipeline/ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
+| `ComputeState` / `MeshletState` | [libs/bgl/src/types/ComputeState.h](libs/bgl/src/types/ComputeState.h), [MeshletState.h](libs/bgl/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
+| Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
+| Texture descriptors & `TextureHandle` | [libs/bgl/src/resource/Texture.h](libs/bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
+| Views | [libs/bgl/src/resource/Rtv.h](libs/bgl/src/resource/Rtv.h), [Dsv.h](libs/bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
+| Readback | [libs/bgl/src/resource/Readback.h](libs/bgl/src/resource/Readback.h) | `ReadbackBufferDesc`, `ReadbackBufferHandle`, `TextureReadbackLayout`. |
+| `FrameBuffer` | [libs/bgl/src/resource/FrameBuffer.h](libs/bgl/src/resource/FrameBuffer.h) | Color attachments (RTV) + depth attachment (DSV). |
+| Render state | [libs/bgl/src/types/RenderState.h](libs/bgl/src/types/RenderState.h) | `RasterState` + `BlendState` + `DepthStencilState`; baked into `MeshletPipelineDesc`. |
+| `ViewportState` | [libs/bgl/src/types/ViewportState.h](libs/bgl/src/types/ViewportState.h) | Viewports + scissor rects. |
+| `ClearValue` | [libs/bgl/src/types/ClearValue.h](libs/bgl/src/types/ClearValue.h) | Variant of color or depth/stencil clear. |
+| Barrier vocabulary | [libs/bgl/src/types/Barrier.h](libs/bgl/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` (enhanced barriers). |
+| `QueueType` | [libs/bgl/src/types/QueueType.h](libs/bgl/src/types/QueueType.h) | `kGraphics`, `kCompute`, `kCopy`. |
 
 ---
 

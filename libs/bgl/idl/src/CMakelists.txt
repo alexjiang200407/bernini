@@ -1,5 +1,5 @@
-set(IDL_CPP_OUT_DIR   "${CMAKE_SOURCE_DIR}/bgl/src/idl")
-set(IDL_SLANG_OUT_DIR "${CMAKE_SOURCE_DIR}/bgl/shaders/src/idl")
+set(IDL_CPP_OUT_DIR   "${CMAKE_SOURCE_DIR}/libs/bgl/src/idl")
+set(IDL_SLANG_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl/shaders/src/idl")
 set(IDL_SRC_ROOT      "${CMAKE_CURRENT_SOURCE_DIR}")
 
 file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")

@@ -11,7 +11,7 @@ We don't want to duplicate the structs shared shader and cpu side. We can forget
 # Struct Example
 
 ```
-// bgl/idl/A.slang
+// libs/bgl/idl/A.slang
 
 import a.C;
 import D;
@@ -26,10 +26,10 @@ namespace idl {
 }
 ```
 
-We copy all files in bgl/idl to bgl/shaders/idl but add a comment
+We copy all files in libs/bgl/idl to libs/bgl/shaders/idl but add a comment
 
 ```slang
-// THIS IS A FILE GENERATED FROM bgl/idl/A.idl. DO NOT EDIT MANUALLY
+// THIS IS A FILE GENERATED FROM libs/bgl/idl/A.idl. DO NOT EDIT MANUALLY
 
 import a.C;
 import D;
@@ -48,7 +48,7 @@ namespace idl {
 In src/idl/A.h
 
 ```slang
-// THIS IS A FILE GENERATED FROM bgl/idl/A.idl. DO NOT EDIT MANUALLY
+// THIS IS A FILE GENERATED FROM libs/bgl/idl/A.idl. DO NOT EDIT MANUALLY
 // Notice that we dont include C or I. C since Entry doesn't require template arg. I since it is an interface
 
 #include "D.h" // idl set as include directory for this target
