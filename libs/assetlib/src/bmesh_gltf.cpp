@@ -9,8 +9,10 @@
 
 #include <meshoptimizer.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
+	using namespace imp;
+
 	namespace
 	{
 		constexpr size_t c_MeshletMaxVertices  = 64;
@@ -146,7 +148,7 @@ namespace assetlib::bmesh
 		}
 
 		void
-		buildMeshlets(BMesh& mesh, Submesh& submesh, const std::vector<uint32_t>& indices)
+		buildMeshlets(BMeshImport& mesh, Submesh& submesh, const std::vector<uint32_t>& indices)
 		{
 			const auto* positions =
 				reinterpret_cast<const float*>(mesh.vertexData.data() + submesh.vertexByteOffset);
@@ -220,7 +222,7 @@ namespace assetlib::bmesh
 
 		void
 		buildSubmesh(
-			BMesh&                     mesh,
+			BMeshImport&               mesh,
 			const tinygltf::Model&     model,
 			const tinygltf::Primitive& primitive)
 		{
@@ -240,7 +242,8 @@ namespace assetlib::bmesh
 			submesh.layout           = defaultLayout();
 			submesh.vertexByteOffset = static_cast<uint32_t>(mesh.vertexData.size());
 			submesh.vertexCount      = static_cast<uint32_t>(vertexCount);
-			submesh.material         = c_InvalidIndex;
+			submesh.material = primitive.material >= 0 ? static_cast<uint32_t>(primitive.material) :
+			                                             c_InvalidIndex;
 
 			mesh.vertexData.reserve(mesh.vertexData.size() + vertexCount * submesh.layout.stride);
 			glm::vec3 aabbMin(std::numeric_limits<float>::max());
@@ -315,7 +318,7 @@ namespace assetlib::bmesh
 		}
 
 		uint32_t
-		addName(BMesh& mesh, const std::string& name)
+		addName(BMeshImport& mesh, const std::string& name)
 		{
 			if (name.empty())
 				return 0;
@@ -370,7 +373,7 @@ namespace assetlib::bmesh
 		}
 
 		void
-		buildNodes(BMesh& mesh, const tinygltf::Model& model)
+		buildNodes(BMeshImport& mesh, const tinygltf::Model& model)
 		{
 			mesh.nodes.resize(model.nodes.size());
 			for (auto& node : mesh.nodes)
@@ -408,9 +411,15 @@ namespace assetlib::bmesh
 					mesh.roots.push_back(static_cast<uint32_t>(i));
 		}
 
+		// Fills imageToTexture so material parsing can map a glTF texture (-> image) to a
+		// BMeshImport::textures index; skipped/unsupported images stay c_InvalidIndex.
 		void
-		buildTextures(BMesh& mesh, const tinygltf::Model& model)
+		buildTextures(
+			BMeshImport&           mesh,
+			const tinygltf::Model& model,
+			std::vector<uint32_t>& imageToTexture)
 		{
+			imageToTexture.assign(model.images.size(), c_InvalidIndex);
 #ifdef _WIN32
 			for (size_t i = 0; i < model.images.size(); ++i)
 			{
@@ -445,21 +454,72 @@ namespace assetlib::bmesh
 					rgba[px * 4 + 3] = std::byte{ a };
 				}
 
-				auto name = image.name.empty() ? "image" + std::to_string(i) : image.name;
-				mesh.textures.push_back(rgba8ToDds(
+				imageToTexture[i] = static_cast<uint32_t>(mesh.textures.size());
+				mesh.textures.push_back(rgba8ToImage(
 					rgba,
 					static_cast<uint32_t>(width),
-					static_cast<uint32_t>(height),
-					std::move(name)));
+					static_cast<uint32_t>(height)));
 			}
 #else
 			(void)mesh;
 			(void)model;
 #endif
 		}
+
+		// Maps a glTF texture index (-> its source image -> BMeshImport::textures) to a BMeshImport
+		// texture index, or c_InvalidIndex.
+		uint32_t
+		mapTexture(
+			const tinygltf::Model&       model,
+			int                          gltfTextureIndex,
+			const std::vector<uint32_t>& imageToTexture)
+		{
+			if (gltfTextureIndex < 0 ||
+			    static_cast<size_t>(gltfTextureIndex) >= model.textures.size())
+				return c_InvalidIndex;
+
+			const int source = model.textures[static_cast<size_t>(gltfTextureIndex)].source;
+			if (source < 0 || static_cast<size_t>(source) >= imageToTexture.size())
+				return c_InvalidIndex;
+
+			return imageToTexture[static_cast<size_t>(source)];
+		}
+
+		void
+		buildMaterials(
+			BMeshImport&                 mesh,
+			const tinygltf::Model&       model,
+			const std::vector<uint32_t>& imageToTexture)
+		{
+			mesh.materials.reserve(model.materials.size());
+			for (const auto& gltfMat : model.materials)
+			{
+				const auto& pbr = gltfMat.pbrMetallicRoughness;
+
+				BMaterialImport material{};
+				material.baseColorTexture =
+					mapTexture(model, pbr.baseColorTexture.index, imageToTexture);
+				material.ormTexture =
+					mapTexture(model, pbr.metallicRoughnessTexture.index, imageToTexture);
+				material.normalTexture =
+					mapTexture(model, gltfMat.normalTexture.index, imageToTexture);
+
+				if (pbr.baseColorFactor.size() == 4)
+					material.baseColorFactor = glm::vec4(
+						static_cast<float>(pbr.baseColorFactor[0]),
+						static_cast<float>(pbr.baseColorFactor[1]),
+						static_cast<float>(pbr.baseColorFactor[2]),
+						static_cast<float>(pbr.baseColorFactor[3]));
+				material.metallicFactor  = static_cast<float>(pbr.metallicFactor);
+				material.roughnessFactor = static_cast<float>(pbr.roughnessFactor);
+				material.nameOffset      = addName(mesh, gltfMat.name);
+
+				mesh.materials.push_back(material);
+			}
+		}
 	}
 
-	BMesh
+	BMeshImport
 	loadFromGltf(const std::filesystem::path& path)
 	{
 		tinygltf::TinyGLTF loader;
@@ -479,7 +539,7 @@ namespace assetlib::bmesh
 			throw std::runtime_error(
 				"bmesh: failed to load glTF '" + path.string() + "': " + error);
 
-		BMesh mesh;
+		BMeshImport mesh;
 		mesh.stringPool.push_back('\0');  // offset 0 == empty string
 
 		buildNodes(mesh, model);
@@ -499,7 +559,9 @@ namespace assetlib::bmesh
 			mesh.meshes.push_back(entry);
 		}
 
-		buildTextures(mesh, model);
+		std::vector<uint32_t> imageToTexture;
+		buildTextures(mesh, model, imageToTexture);
+		buildMaterials(mesh, model, imageToTexture);
 		return mesh;
 	}
 }

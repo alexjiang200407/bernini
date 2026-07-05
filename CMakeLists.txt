@@ -26,6 +26,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_subdirectory(libs/core)
+add_subdirectory(libs/assetlib_structs)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(libs/bgl)
 add_subdirectory(libs/assetlib)
@@ -43,9 +44,10 @@ endif()
 
 get_property(EXAMPLE_TARGETS GLOBAL PROPERTY GLOBAL_EXAMPLE_TARGETS)
 
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/core"     "misc")
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl"      "gfx")
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib" "editor")
+assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/core"             "misc")
+assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl"              "gfx")
+assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib"         "editor")
+assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib_structs" "editor")
 
 if (BUILD_EXAMPLES)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")

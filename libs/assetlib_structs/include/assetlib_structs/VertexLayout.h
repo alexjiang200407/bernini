@@ -1,6 +1,6 @@
 #pragma once
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	enum class VertexSemantic : uint8_t
 	{

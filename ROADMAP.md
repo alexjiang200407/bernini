@@ -49,8 +49,8 @@ and portability.
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema
   - [x] Static Mesh Asset Import
-- [ ] Materials (PBR)
-  - [ ] Implement PBR IBL
+- [~] Materials (PBR)
+  - [x] Implement PBR IBL
   - [ ] Implement Alpha Test alpha mode
   - [ ] Texture Asset Import
   - [ ] Editor Material Graph
@@ -123,16 +123,24 @@ and portability.
 
 ## Module 2: Game Logic
 
+- [ ] Level Editor for Battles
+  - [ ] Terrain Gen. using Noise + inputs: hilly, flat, mountainous etc
+  - [ ] Navmesh Gen.
+  - [ ] Weather Editor
+  - [ ] Drag and Drop Buildings & Meshes
 - [ ] In-game UI
   - [ ] Adopt UI runtime e.g. Noesis
   - [ ] Controller/focus
 - [ ] Input Engine
+  - [ ] Character Controls and Movement
+  - [ ] Horse Controls and Movement
+- [ ] Combat
 - [ ] Integrate Scripting Into Engine e.g. Lua
 - [ ] Campaign Map Editor
   - [ ] Economy
   - [ ] Quests
   - [ ] Timeline. Order events
-- [ ] Level Editor for Battles
+  - [ ] Weather and Day night cycle
 - [ ] Cutscene Editor
 - [ ] In-game AI
   - [ ] Battle AI

@@ -155,6 +155,13 @@ namespace bgl
 		m_Samplers[static_cast<size_t>(StandardSampler::kLinearClamp)] =
 			m_ResourceManager->CreateSampler(
 				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::Clamp));
+
+		// Default material textures: white (base color / ORM -> ao=1, factors drive
+		// roughness+metal) and a flat tangent-space normal (0.5,0.5,1).
+		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)] =
+			m_ResourceManager->CreateSolidTexture(255, 255, 255, 255);
+		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)] =
+			m_ResourceManager->CreateSolidTexture(128, 128, 255, 255);
 	}
 
 	void
@@ -166,6 +173,9 @@ namespace bgl
 				(..., (buffer.IsInitialized() ? buffer.Update(cmdList) : void()));
 			},
 			buffers);
+
+		// Flush any textures loaded since the last frame (materials, environment maps).
+		m_ResourceManager->FlushPendingTextureUploads(cmdList);
 	}
 
 	void
@@ -210,7 +220,7 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddCubeGeom()
+	Scene::AddCubeGeom(MaterialHandle material)
 	{
 		try
 		{
@@ -293,6 +303,10 @@ namespace bgl
 			submesh.vertexData  = baseVertexGlobal;
 			submesh.indices     = baseIndexGlobal;
 			submesh.vertexCount = static_cast<uint32_t>(cubeVertices.size());
+			if (material.IsValid())
+			{
+				submesh.material = material.handle;
+			}
 
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
@@ -313,7 +327,11 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddSphereGeom(uint32_t xSegments, uint32_t ySegments, float radius)
+	Scene::AddSphereGeom(
+		uint32_t       xSegments,
+		uint32_t       ySegments,
+		float          radius,
+		MaterialHandle material)
 	{
 		try
 		{
@@ -443,6 +461,10 @@ namespace bgl
 			submesh.vertexData  = baseVertexGlobal;
 			submesh.indices     = baseIndexGlobal;
 			submesh.vertexCount = static_cast<uint32_t>(sphereVerts.size());
+			if (material.IsValid())
+			{
+				submesh.material = material.handle;
+			}
 
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
@@ -460,6 +482,25 @@ namespace bgl
 		{
 			throw SceneError(e.what());
 		}
+	}
+
+	MaterialHandle
+	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
+	{
+		const uint32_t white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].idx;
+		const uint32_t flatNormal =
+			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].idx;
+
+		idl::PbrMaterial material{};
+		material.baseColorTexture = idl::TextureHandle{ white };
+		material.normalTexture    = idl::TextureHandle{ flatNormal };
+		material.ormTexture       = idl::TextureHandle{ white };
+		material.baseColorFactor  = desc.baseColorFactor;
+		material.metallicFactor   = desc.metallicFactor;
+		material.roughnessFactor  = desc.roughnessFactor;
+
+		const core::slot_handle slot = m_Pbr.Add(material);
+		return MaterialHandle{ MaterialType::kPBR, slot };
 	}
 
 	void
@@ -500,5 +541,16 @@ namespace bgl
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);
 		m_GeomAssets.release_slot(geom.handle.index);
+	}
+
+	void
+	Scene::SetEnvironmentMap(const EnvironmentMapDesc& desc)
+	{
+		// The two cubemaps + the 2D BRDF LUT, already decoded by the caller. Uploads are
+		// deferred to Scene::Update (FlushPendingTextureUploads); the handles' idx are the
+		// bindless SRV indices.
+		m_EnvironmentMap.irradiance = m_ResourceManager->CreateTexture(desc.irradiance);
+		m_EnvironmentMap.prefilter  = m_ResourceManager->CreateTexture(desc.prefilter);
+		m_EnvironmentMap.brdfLut    = m_ResourceManager->CreateTexture(desc.brdfLut);
 	}
 }

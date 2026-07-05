@@ -111,4 +111,14 @@ namespace bgl
 			return idx == 0xFFFFFFFF;
 		}
 	};
+
+	// One mip/array subresource of CPU pixel data for a texture upload. Ordered as
+	// D3D12 expects subresources: all mips of array slice 0, then slice 1, ...
+	// (for a mipped cube that is 6 * mipLevels entries).
+	struct TextureSubresourceData
+	{
+		const void* data       = nullptr;
+		uint64_t    rowPitch   = 0;  // bytes between rows of `data`
+		uint64_t    slicePitch = 0;  // bytes between 2D slices of `data`
+	};
 }

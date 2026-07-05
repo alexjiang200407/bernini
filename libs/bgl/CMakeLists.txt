@@ -48,6 +48,7 @@ find_package(glm CONFIG REQUIRED)
 target_link_libraries(bgl_objects
 	PUBLIC
 		core
+		assetlib_structs
 		slang::slang
 		glm::glm
 )
@@ -138,6 +139,7 @@ if (BUILD_TESTS)
 			bgl_tests
 		PRIVATE
 			bgl_objects
+			assetlib
 			Catch2::Catch2
 			Catch2::Catch2WithMain
 			core
@@ -166,9 +168,10 @@ if (BUILD_TESTS)
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	# Deploy golden-image references next to the test exe (cwd at run time), so
-	# tests resolve them as "golden/<name>.dds".
-	copy_to_target(bgl_tests ITEMS ${CMAKE_CURRENT_SOURCE_DIR}/tests/golden)
+	# Deploy the shared asset directory next to the test exe (cwd at run time), so
+	# tests resolve maps/meshes as "assets/<name>" and golden refs as
+	# "assets/golden/<name>.dds".
+	copy_to_target(bgl_tests ITEMS ${CMAKE_SOURCE_DIR}/assets)
 
 	enable_strict_compiler(bgl_tests)
 endif()

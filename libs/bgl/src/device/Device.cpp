@@ -40,7 +40,7 @@ namespace bgl
 	{
 		MeshletKernel kernel;
 		kernel.pipeline = CreateMeshletPipeline(desc);
-		for (const std::string& name : kernel.pipeline->GetUniformBufferNames())
+		for (const auto& name : kernel.pipeline->GetUniformBufferNames())
 		{
 			kernel.uniforms.try_emplace(name, CreateUniforms(kernel.pipeline.Get(), name));
 		}

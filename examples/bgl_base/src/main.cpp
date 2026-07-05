@@ -1,3 +1,4 @@
+#include <assetlib/image_io.h>
 #include <bgl/bgl.h>
 #include <core/platform/Platform.h>
 #include <format>
@@ -8,19 +9,82 @@
 
 struct EventVisitor : public core::IPlatformEventVisitor
 {
+	// Clear per-frame accumulated input after it has been applied to the camera.
+	void
+	Reset()
+	{
+		changedPosition = false;
+		changedRotation = false;
+		forwardDelta    = 0.0f;
+		rightDelta      = 0.0f;
+		yawDelta        = 0.0f;
+		pitchDelta      = 0.0f;
+	}
+
 	void
 	Visit(const core::KeyEvent& e, float dt) override
 	{
-		(void)e;
-		(void)dt;
+		// VK_SHIFT gates mouse-look so the cursor stays usable otherwise.
+		if (e.GetKeyCode() == 16)  // VK_SHIFT
+		{
+			shiftDown = !e.IsReleased();
+			return;
+		}
+
+		if (!e.IsHeld())
+		{
+			return;
+		}
+
+		const float moveSpeed = dt * c_MoveUnitsPerSecond;
+		switch (e.GetKeyCode())
+		{
+		case 87:  // W
+			forwardDelta += moveSpeed;
+			changedPosition = true;
+			break;
+		case 83:  // S
+			forwardDelta -= moveSpeed;
+			changedPosition = true;
+			break;
+		case 65:  // A
+			rightDelta -= moveSpeed;
+			changedPosition = true;
+			break;
+		case 68:  // D
+			rightDelta += moveSpeed;
+			changedPosition = true;
+			break;
+		default:
+			break;
+		}
 	}
 
 	void
 	Visit(const core::MouseEvent& e, float dt) override
 	{
-		(void)e;
 		(void)dt;
+		using Action = core::MouseEvent::Action;
+
+		if (e.GetActions().all(Action::kMove) && shiftDown)
+		{
+			const auto& delta = e.GetDelta();
+			yawDelta -= static_cast<float>(delta.dx) * c_MouseRadiansPerPixel;
+			pitchDelta -= static_cast<float>(delta.dy) * c_MouseRadiansPerPixel;
+			changedRotation = true;
+		}
 	}
+
+	static constexpr float c_MoveUnitsPerSecond   = 15.0f;
+	static constexpr float c_MouseRadiansPerPixel = 0.005f;
+
+	bool  changedPosition = false;
+	bool  changedRotation = false;
+	float forwardDelta    = 0.0f;
+	float rightDelta      = 0.0f;
+	float yawDelta        = 0.0f;
+	float pitchDelta      = 0.0f;
+	bool  shiftDown       = false;
 };
 
 int APIENTRY
@@ -39,14 +103,13 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto wnd = core::IPlatform::Create(opts);
 
 		auto gfxOpts                     = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer         = false;
-		gfxOpts.enableGPUValidationLayer = true;
+		gfxOpts.enableDebugLayer         = true;
+		gfxOpts.enableGPUValidationLayer = false;
 		gfxOpts.enablePixDebug           = true;
 		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
 
-		// The renderer is window-agnostic; the swapchain lives in a per-window target.
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;
 		targetDesc.height   = opts.height;
@@ -62,20 +125,25 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		sceneDesc.maxGeom                 = 100;
 		sceneDesc.maxMeshlets             = 1000;
 		sceneDesc.maxSubmeshes            = 100;
+		sceneDesc.maxPbrMaterials         = 100;
 
-		auto scene  = graphics->CreateScene(std::move(sceneDesc));
-		auto view   = graphics->CreateSceneView(scene, 100);
-		auto cube   = scene->AddCubeGeom();
-		auto sphere = scene->AddSphereGeom(32, 32, 1.0f);
+		auto scene = graphics->CreateScene(std::move(sceneDesc));
+		auto view  = graphics->CreateSceneView(scene, 100);
+
+		scene->SetEnvironmentMap(
+			{ assetlib::loadDDS("assets/iem.dds"),
+		      assetlib::loadDDS("assets/pmrem.dds"),
+		      assetlib::loadDDS("assets/brdf_lut.dds") });
+
+		auto metalMat = scene->CreatePbrMaterial(
+			{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
+
+		auto cube   = scene->AddCubeGeom(metalMat);
+		auto sphere = scene->AddSphereGeom(32, 32, 5.0f, metalMat);
 
 		auto transform = glm::mat4(1.0f);
 
-		auto pbrMaterial = bgl::MaterialHandle(bgl::MaterialType::kPBR, core::slot_handle());
-		auto inst1       = view->CreateStaticMeshInstance(cube, pbrMaterial, transform);
-
-		transform[3][0] = -5.0f;
-
-		auto inst2 = view->CreateStaticMeshInstance(sphere, transform);
+		auto inst2 = view->CreateStaticMeshInstance(sphere, metalMat, transform);
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 
@@ -97,6 +165,26 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		for (auto res = wnd->Process(&visitor); res != core::IPlatform::kClose;
 		     res      = wnd->Process(&visitor))
 		{
+			if (res == core::IPlatform::kProcess)
+			{
+				// WASD to fly, hold Shift + move the mouse to look around.
+				if (visitor.changedRotation)
+				{
+					camera.RotateYawPitch(visitor.yawDelta, visitor.pitchDelta);
+				}
+				if (visitor.changedPosition)
+				{
+					camera.MoveAlongView(visitor.forwardDelta);
+					camera.MoveAlongRight(visitor.rightDelta);
+				}
+				if (visitor.changedPosition || visitor.changedRotation)
+				{
+					// context holds a copy of the camera; refresh it after moving.
+					context.camera = camera;
+				}
+				visitor.Reset();
+			}
+
 			graphics->DrawFrame(target, context);
 
 			if (firstFrame)

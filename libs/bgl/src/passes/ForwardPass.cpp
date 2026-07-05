@@ -114,7 +114,7 @@ namespace bgl
 			// kAlphaTest_StaticMesh_PBR
 			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
-			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, true },
+			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, false, true },
 			// kAssert_StaticMesh
 			{ c_AssertPixelDxil, c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
@@ -140,6 +140,7 @@ namespace bgl
 			auto raster = RasterState();
 			raster.SetFillMode(RasterFillMode::kSolid)
 				.SetCullMode(cfg.cull)
+				.SetFrontCounterClockwise(true)
 				.SetDepthClipEnable(true);
 
 			auto depth = DepthStencilState{};
@@ -232,15 +233,15 @@ namespace bgl
 			MeshletKernel& kernel = m_Kernels[pso];
 			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
-			if (auto foundSceneData = kernel.FindUniforms("sceneData"))
+			if (auto foundForwardData = kernel.FindUniforms("forwardData"))
 			{
-				auto& sceneData = *foundSceneData;
+				auto& forwardData = *foundForwardData;
 
 				for (const SceneBuffer& binding : c_ForwardDataBuffers)
 				{
 					const auto handle = resources.GetBuffer(binding.graphName);
 
-					auto uniform = sceneData[binding.uniformKey];
+					auto uniform = forwardData[binding.uniformKey];
 					if (uniform.IsValid())
 					{
 						uniform = handle;
@@ -253,8 +254,8 @@ namespace bgl
 					}
 				}
 
-				sceneData["viewProj"] = draw.viewProj;
-				sceneData["psoIndex"] = static_cast<uint32_t>(pso);
+				forwardData["viewProj"] = draw.viewProj;
+				forwardData["psoIndex"] = static_cast<uint32_t>(pso);
 			}
 
 			if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -277,6 +278,25 @@ namespace bgl
 				if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
 				{
 					clampUniform = draw.linearClampSampler;
+				}
+
+				// IBL maps: assigning the RHI TextureHandle writes its bindless SRV index
+				// into the shader-side TextureHandle's `index` member.
+				if (auto u = matData["irradianceMap"]; u.IsValid())
+				{
+					u = draw.env.irradiance;
+				}
+				if (auto u = matData["prefilterMap"]; u.IsValid())
+				{
+					u = draw.env.prefilter;
+				}
+				if (auto u = matData["brdfLUT"]; u.IsValid())
+				{
+					u = draw.env.brdfLut;
+				}
+				if (auto u = matData["cameraPos"]; u.IsValid())
+				{
+					u = draw.cameraPos;
 				}
 			}
 

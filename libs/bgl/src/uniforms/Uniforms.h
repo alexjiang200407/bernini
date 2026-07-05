@@ -3,6 +3,7 @@
 #include "resource/Buffer.h"
 #include "resource/Sampler.h"
 #include "resource/Shader.h"
+#include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
 #include <core/err/util.h>
 
@@ -243,6 +244,23 @@ namespace bgl
 
 				core::throw_runtime_error(
 					"Accessor at offset {} cannot be assigned with sampler handle",
+					m_Offset);
+			}
+
+			// A shader TextureHandle is a struct wrapping a bindless SRV index, so assigning
+			// the RHI handle writes its idx into the struct's "index" member -- letting call
+			// sites use `u = handle` instead of `u["index"] = handle.idx`.
+			AccessorBase&
+			operator=(TextureHandle handle)
+			{
+				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformIndex].IsValid())
+				{
+					(*this)[c_HandleUniformIndex] = static_cast<uint32_t>(handle.idx);
+					return *this;
+				}
+
+				core::throw_runtime_error(
+					"Accessor at offset {} cannot be assigned with texture handle",
 					m_Offset);
 			}
 

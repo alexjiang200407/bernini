@@ -52,6 +52,17 @@ namespace bgl
 			size_t       byteSize) noexcept = 0;
 
 		/**
+		 * Uploads CPU pixel data into every subresource of a texture. The texture must
+		 * be in a copy-dest layout; the caller barriers it to a shader-resource layout
+		 * afterwards. Subresources are ordered as D3D12 expects (mips of slice 0, then
+		 * slice 1, ...).
+		 */
+		virtual void
+		WriteTexture(
+			TextureHandle                             handle,
+			std::span<const TextureSubresourceData> subresources) noexcept = 0;
+
+		/**
 		 * Copies an entire buffer into a readback buffer for CPU access.
 		 * The source buffer must already be in a copy-source state.
 		 */

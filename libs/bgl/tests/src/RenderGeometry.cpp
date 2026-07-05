@@ -69,12 +69,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "golden/cube.got.dds");
+		gfxBase->ScreenshotRaw(target, "assets/golden/cube.got.dds");
 
 		// Compare against the committed golden (deployed next to the exe under
-		// golden/); on mismatch (or a missing golden) "golden/cube.got.dds" is left
+		// assets/golden/); on mismatch (or a missing golden) "assets/golden/cube.got.dds" is left
 		// behind for inspection.
-		CHECK(bgl::test::MatchesGoldenDDS("golden/cube.exp.dds", "golden/cube.got.dds"));
+		CHECK(bgl::test::MatchesGoldenDDS("assets/golden/cube.exp.dds", "assets/golden/cube.got.dds"));
 	}
 
 	SECTION("Draw Sphere and Cube - sphere_cube.dds")
@@ -106,12 +106,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "golden/sphere_cube.got.dds");
+		gfxBase->ScreenshotRaw(target, "assets/golden/sphere_cube.got.dds");
 
 		CHECK(
 			bgl::test::MatchesGoldenDDS(
-				"golden/sphere_cube.exp.dds",
-				"golden/sphere_cube.got.dds"));
+				"assets/golden/sphere_cube.exp.dds",
+				"assets/golden/sphere_cube.got.dds"));
 	}
 
 	SECTION("Two scenes in one frame (cube + sphere) - sphere_cube.dds")
@@ -155,12 +155,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		gfxBase->Draw(sphereContext);
 		gfxBase->EndFrame();
 
-		gfxBase->ScreenshotRaw(target, "golden/two_scenes_sphere_cube.got.dds");
+		gfxBase->ScreenshotRaw(target, "assets/golden/two_scenes_sphere_cube.got.dds");
 
 		CHECK(
 			bgl::test::MatchesGoldenDDS(
-				"golden/sphere_cube.exp.dds",
-				"golden/two_scenes_sphere_cube.got.dds"));
+				"assets/golden/sphere_cube.exp.dds",
+				"assets/golden/two_scenes_sphere_cube.got.dds"));
 	}
 
 	SECTION("Draw Two Cubes - two_cubes.dds")
@@ -192,9 +192,9 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "golden/two_cubes.got.dds");
+		gfxBase->ScreenshotRaw(target, "assets/golden/two_cubes.got.dds");
 
-		CHECK(bgl::test::MatchesGoldenDDS("golden/two_cubes.exp.dds", "golden/two_cubes.got.dds"));
+		CHECK(bgl::test::MatchesGoldenDDS("assets/golden/two_cubes.exp.dds", "assets/golden/two_cubes.got.dds"));
 	}
 
 	SECTION("Delete with Sphere and Cube - cube.dds")
@@ -228,12 +228,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "golden/delete_sphere_cube.got.dds");
+		gfxBase->ScreenshotRaw(target, "assets/golden/delete_sphere_cube.got.dds");
 
 		CHECK(
 			bgl::test::MatchesGoldenDDS(
-				"golden/cube.exp.dds",
-				"golden/delete_sphere_cube.got.dds"));
+				"assets/golden/cube.exp.dds",
+				"assets/golden/delete_sphere_cube.got.dds"));
 	}
 
 	SECTION("Delete with 2 cubes - cube.dds")
@@ -265,10 +265,10 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "golden/delete_two_cubes.got.dds");
+		gfxBase->ScreenshotRaw(target, "assets/golden/delete_two_cubes.got.dds");
 
 		CHECK(
-			bgl::test::MatchesGoldenDDS("golden/cube.exp.dds", "golden/delete_two_cubes.got.dds"));
+			bgl::test::MatchesGoldenDDS("assets/golden/cube.exp.dds", "assets/golden/delete_two_cubes.got.dds"));
 	}
 }
 
@@ -349,9 +349,9 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	gfxBase->DrawFrame(targetA, cubeContext);
 	gfxBase->DrawFrame(targetB, twoContext);
 
-	gfxBase->ScreenshotRaw(targetA, "golden/two_targets_a.got.dds");
-	gfxBase->ScreenshotRaw(targetB, "golden/two_targets_b.got.dds");
+	gfxBase->ScreenshotRaw(targetA, "assets/golden/two_targets_a.got.dds");
+	gfxBase->ScreenshotRaw(targetB, "assets/golden/two_targets_b.got.dds");
 
-	CHECK(bgl::test::MatchesGoldenDDS("golden/cube.exp.dds", "golden/two_targets_a.got.dds"));
-	CHECK(bgl::test::MatchesGoldenDDS("golden/two_cubes.exp.dds", "golden/two_targets_b.got.dds"));
+	CHECK(bgl::test::MatchesGoldenDDS("assets/golden/cube.exp.dds", "assets/golden/two_targets_a.got.dds"));
+	CHECK(bgl::test::MatchesGoldenDDS("assets/golden/two_cubes.exp.dds", "assets/golden/two_targets_b.got.dds"));
 }

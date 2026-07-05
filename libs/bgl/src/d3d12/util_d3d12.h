@@ -1,5 +1,6 @@
 #pragma once
 #include "resource/Sampler.h"
+#include "resource/Texture.h"
 #include "types/Barrier.h"
 #include "types/BlendState.h"
 #include "types/ClearValue.h"
@@ -26,6 +27,12 @@ namespace bgl
 
 	D3D12_DSV_DIMENSION
 	ConvertDSVDimension(TextureDimension dimension);
+
+	D3D12_SRV_DIMENSION
+	ConvertSRVDimension(TextureDimension dimension);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC
+	ConvertTextureSrvDesc(const TextureDesc& desc);
 
 	D3D12_BARRIER_SYNC
 	ConvertBarrierSync(BarrierSync sync);

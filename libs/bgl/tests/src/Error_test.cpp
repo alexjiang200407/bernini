@@ -226,7 +226,7 @@ TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 	{
 		gfx->BeginFrame(target);
 		REQUIRE_THROWS_AS(
-			gfx->ScreenshotRaw(target, "golden/should_not_exist.dds"),
+			gfx->ScreenshotRaw(target, "assets/golden/should_not_exist.dds"),
 			bgl::GraphicsError);
 	}
 }

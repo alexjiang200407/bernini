@@ -10,7 +10,10 @@
 
 namespace bgl
 {
-	using CbvSrvUavSlot = std::variant<Buffer>;
+	// Buffers and textures share the one shader-visible CBV_SRV_UAV heap: a slot's
+	// index is the bindless descriptor index the shader uses. RT/DS-only textures
+	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
+	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
 
 	struct PendingDeletion
 	{
@@ -62,8 +65,25 @@ namespace bgl
 		CreateTexture(const TextureDesc& desc) noexcept override;
 
 		[[nodiscard]]
+		TextureHandle
+		CreateTexture(
+			const TextureDesc&                      desc,
+			std::span<const TextureSubresourceData> initialData) noexcept override;
+
+		[[nodiscard]]
+		TextureHandle
+		CreateTexture(const assetlib::ImageData& image) noexcept override;
+
+		[[nodiscard]]
 		SamplerHandle
 		CreateSampler(const SamplerDesc& desc) noexcept override;
+
+		[[nodiscard]]
+		TextureHandle
+		CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a) noexcept override;
+
+		void
+		FlushPendingTextureUploads(ICommandList* cmd) noexcept override;
 
 		[[nodiscard]]
 		ReadbackBufferHandle
@@ -211,8 +231,27 @@ namespace bgl
 		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
 		core::slot_vector<Sampler>        m_Samplers;
 
-		// CPU side only
+		// RTV/DSV-only textures (no SRV): kept out of the shader-visible pool so they
+		// never consume a bindless descriptor slot. SRV textures live in
+		// m_CbvSrvUavSlots instead, where their slot index is the bindless index.
 		core::slot_vector<Texture> m_Textures;
+
+		// A deferred texture upload owns a contiguous copy of its decoded pixel bytes
+		// (so it survives until the next flush) plus the per-subresource layout needed
+		// to rebuild the upload spans into that buffer.
+		struct PendingSubresource
+		{
+			size_t   offset;
+			uint64_t rowPitch;
+			uint64_t slicePitch;
+		};
+		struct PendingTextureUpload
+		{
+			TextureHandle                   handle;
+			std::vector<std::byte>          bytes;
+			std::vector<PendingSubresource> subresources;
+		};
+		std::vector<PendingTextureUpload> m_PendingTextureUploads;
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 

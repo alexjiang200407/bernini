@@ -21,11 +21,13 @@ add_library(core STATIC ${CORE_SOURCES} ${CORE_HEADERS} ${CORE_INTERNAL_HEADERS}
 find_package(spdlog CONFIG REQUIRED)
 find_package(cpptrace CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)   # Settings (JSON config) parsing
+find_package(glm CONFIG REQUIRED)             # core/glm.h: shared glm config for all libs
 
 target_link_libraries(
     core
     PUBLIC
         spdlog::spdlog_header_only
+        glm::glm
     PRIVATE
         cpptrace::cpptrace
         nlohmann_json::nlohmann_json

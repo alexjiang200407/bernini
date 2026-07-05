@@ -528,6 +528,9 @@ namespace bgl
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);
 
+		draw.cameraPos = glm::vec3(glm::inverse(context.camera.GetView())[3]);
+		draw.env       = scene_->GetEnvironmentMap();
+
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}

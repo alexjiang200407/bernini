@@ -1,6 +1,6 @@
-#include <assetlib/bmesh/Node.h>
+#include <assetlib_structs/Node.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	glm::mat4
 	toMatrix(const Transform& transform) noexcept

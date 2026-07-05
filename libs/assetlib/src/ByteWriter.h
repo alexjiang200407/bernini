@@ -2,7 +2,7 @@
 #include <core/math.h>
 #include <core/type_traits.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	/** Append-only little-endian byte buffer used to build the container stream. */
 	class ByteWriter

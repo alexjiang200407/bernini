@@ -39,6 +39,11 @@ namespace bgl
 			override;
 
 		void
+		WriteTexture(
+			TextureHandle                           handle,
+			std::span<const TextureSubresourceData> subresources) noexcept override;
+
+		void
 		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept override;
 
 		void

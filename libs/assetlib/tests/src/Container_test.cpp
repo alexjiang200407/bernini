@@ -1,6 +1,6 @@
 #include <assetlib/bmesh_io.h>
 
-using namespace assetlib::bmesh;
+using namespace assetlib;
 
 namespace
 {
@@ -41,7 +41,7 @@ namespace
 		submesh.indexType        = IndexType::kUint16;
 		submesh.firstMeshlet     = 0;
 		submesh.meshletCount     = 1;
-		submesh.material         = c_InvalidIndex;
+		submesh.material         = 0;
 		submesh.aabbMin          = glm::vec3(0.0f);
 		submesh.aabbMax          = glm::vec3(1.0f);
 		mesh.submeshes           = { submesh };
@@ -62,6 +62,8 @@ namespace
 		mesh.vertexData.resize(3 * 48, std::byte{ 0x7 });
 		mesh.indexData = { std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 },
 			               std::byte{ 0 }, std::byte{ 2 }, std::byte{ 0 } };
+
+		mesh.materials = { "mat0.bmaterial", "mat1.bmaterial" };
 		return mesh;
 	}
 }
@@ -82,6 +84,7 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 	REQUIRE(restored.indexData == original.indexData);
 	REQUIRE(restored.stringPool == original.stringPool);
 	REQUIRE(restored.roots == original.roots);
+	REQUIRE(restored.materials == original.materials);
 	REQUIRE(restored.nodes[0].firstChild == 1);
 	REQUIRE(restored.submeshes[0].vertexCount == 3);
 
@@ -114,5 +117,6 @@ TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 
 	REQUIRE(restored.nodes.size() == original.nodes.size());
 	REQUIRE(restored.vertexData == original.vertexData);
+	REQUIRE(restored.materials == original.materials);
 	REQUIRE(serialize(restored) == serialize(original));
 }

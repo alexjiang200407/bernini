@@ -1,11 +1,13 @@
 #include <assetlib/bmesh_io.h>
 
+#include <assetlib/image_io.h>
+
 #include "ByteReader.h"
 #include "ByteWriter.h"
 
 #include <core/file/file.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	namespace
 	{
@@ -25,7 +27,8 @@ namespace assetlib::bmesh
 			kMeshletTriangles,
 			kVertexData,
 			kIndexData,
-			kStringPool
+			kStringPool,
+			kMaterialPaths
 		};
 
 		struct FileHeader
@@ -86,6 +89,39 @@ namespace assetlib::bmesh
 				reinterpret_cast<std::byte*>(out.data()));
 			return out;
 		}
+
+		// Material paths are stored as one blob of NUL-terminated strings (one terminator per path).
+		std::vector<char>
+		packStrings(const std::vector<std::string>& strings)
+		{
+			std::vector<char> pool;
+			for (const auto& s : strings)
+			{
+				pool.insert(pool.end(), s.begin(), s.end());
+				pool.push_back('\0');
+			}
+			return pool;
+		}
+
+		std::vector<std::string>
+		unpackStrings(const std::vector<char>& pool)
+		{
+			std::vector<std::string> out;
+			std::string              current;
+			for (const char c : pool)
+			{
+				if (c == '\0')
+				{
+					out.push_back(current);
+					current.clear();
+				}
+				else
+				{
+					current.push_back(c);
+				}
+			}
+			return out;
+		}
 	}
 
 	std::vector<std::byte>
@@ -94,7 +130,9 @@ namespace assetlib::bmesh
 		ByteWriter writer;
 		writer.writePod(FileHeader{});  // placeholder, patched below
 
-		std::array<ChunkEntry, 10> chunks = {
+		const auto materialPool = packStrings(mesh.materials);
+
+		std::array<ChunkEntry, 11> chunks = {
 			appendChunk(writer, ChunkId::kNodes, mesh.nodes),
 			appendChunk(writer, ChunkId::kRoots, mesh.roots),
 			appendChunk(writer, ChunkId::kMeshes, mesh.meshes),
@@ -105,6 +143,7 @@ namespace assetlib::bmesh
 			appendChunk(writer, ChunkId::kVertexData, mesh.vertexData),
 			appendChunk(writer, ChunkId::kIndexData, mesh.indexData),
 			appendChunk(writer, ChunkId::kStringPool, mesh.stringPool),
+			appendChunk(writer, ChunkId::kMaterialPaths, materialPool),
 		};
 
 		writer.alignTo(c_ChunkAlign);
@@ -177,6 +216,8 @@ namespace assetlib::bmesh
 		mesh.vertexData = readChunk<std::byte>(bytes, optional(ChunkId::kVertexData, empty));
 		mesh.indexData  = readChunk<std::byte>(bytes, optional(ChunkId::kIndexData, empty));
 		mesh.stringPool = readChunk<char>(bytes, optional(ChunkId::kStringPool, empty));
+		mesh.materials =
+			unpackStrings(readChunk<char>(bytes, optional(ChunkId::kMaterialPaths, empty)));
 		return mesh;
 	}
 
@@ -201,31 +242,41 @@ namespace assetlib::bmesh
 		return deserialize(bytes);
 	}
 
+	BMesh
+	toBMesh(const imp::BMeshImport& mesh)
+	{
+		BMesh out;
+		out.nodes            = mesh.nodes;
+		out.roots            = mesh.roots;
+		out.meshes           = mesh.meshes;
+		out.submeshes        = mesh.submeshes;
+		out.meshlets         = mesh.meshlets;
+		out.meshletVertices  = mesh.meshletVertices;
+		out.meshletTriangles = mesh.meshletTriangles;
+		out.vertexData       = mesh.vertexData;
+		out.indexData        = mesh.indexData;
+		out.stringPool       = mesh.stringPool;
+
+		// TODO: write a `.bmaterial` file per material (mapping BMaterialImport texture indices to the
+		// texN.dds paths writeTextures emits). For now only the deterministic path handles are
+		// assembled so Submesh::material keeps indexing a parallel list.
+		out.materials.reserve(mesh.materials.size());
+		for (size_t i = 0; i < mesh.materials.size(); ++i)
+			out.materials.push_back("mat" + std::to_string(i) + ".bmaterial");
+		return out;
+	}
+
 	void
-	writeTextures(const BMesh& mesh, const std::filesystem::path& outDir)
+	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir)
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(outDir, ec);
 
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
-			const auto& texture  = mesh.textures[i];
-			auto        fileName = texture.name.empty() ?
-			                           std::filesystem::path("tex" + std::to_string(i)) :
-			                           std::filesystem::path(texture.name).filename();
-			fileName.replace_extension(".dds");
-
-			const auto    fullPath = outDir / fileName;
-			std::ofstream out(fullPath, std::ios::binary);
-			if (!out)
-				throw std::runtime_error(
-					"bmesh: cannot open texture file for writing: " + fullPath.string());
-			out.write(
-				reinterpret_cast<const char*>(texture.dds.data()),
-				static_cast<std::streamsize>(texture.dds.size()));
-			if (!out)
-				throw std::runtime_error(
-					"bmesh: failed to write texture file: " + fullPath.string());
+			auto path = outDir / ("tex" + std::to_string(i));
+			path.replace_extension(".dds");
+			writeDDS(mesh.textures[i], path);
 		}
 	}
 }

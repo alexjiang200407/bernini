@@ -2,13 +2,26 @@
 
 namespace bgl
 {
-	Texture::Texture(ID3D12Device* device, uint32_t descriptorIndex, const TextureDesc& desc) :
-		m_Desc(desc), m_DescriptorIndex(descriptorIndex)
+	Texture::Texture(
+		ID3D12Device*         device,
+		ID3D12DescriptorHeap* descriptorHeap,
+		uint32_t              descriptorIndex,
+		const TextureDesc&    desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(desc.width > 0, "Texture width must be greater than zero");
 		gassert(desc.height > 0, "Texture height must be greater than zero");
 		gassert(desc.format != Format::UNKNOWN, "Texture format cannot be UNKNOWN");
+
+		// RTV/DSV-only textures pass a null heap: they need no shader-visible
+		// descriptor, so no CPU handle is computed.
+		if (descriptorHeap != nullptr)
+		{
+			const uint32_t descriptorSize =
+				device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
+			m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+			m_CpuHandle.ptr += static_cast<uint64_t>(descriptorIndex) * descriptorSize;
+		}
 
 		D3D12_RESOURCE_DESC1 textureDesc = {};
 		textureDesc.MipLevels            = static_cast<uint16_t>(desc.mipLevels);
@@ -42,10 +55,15 @@ namespace bgl
 			textureDesc.DepthOrArraySize = static_cast<UINT16>(desc.arraySize);
 		}
 
+		// D3D12 only permits an optimized clear value on render-target / depth-stencil
+		// resources; passing one for a sample-only (SRV) texture is invalid.
 		D3D12_CLEAR_VALUE  clearValue;
 		D3D12_CLEAR_VALUE* pClearValue = nullptr;
 
-		if (desc.format != Format::UNKNOWN)
+		const auto isRenderable = desc.usage.any(TextureUsageFlag::kRenderTarget) ||
+		                          desc.usage.any(TextureUsageFlag::kDepthStencil);
+
+		if (isRenderable && desc.format != Format::UNKNOWN)
 		{
 			clearValue  = ConvertClearValue(desc.format, desc.clearValue);
 			pClearValue = &clearValue;
@@ -72,6 +90,7 @@ namespace bgl
 
 	Texture::Texture(
 		ID3D12Device*               device,
+		ID3D12DescriptorHeap*       descriptorHeap,
 		uint32_t                    descriptorIndex,
 		wrl::ComPtr<ID3D12Resource> texture,
 		const TextureDesc&          desc) :
@@ -81,5 +100,15 @@ namespace bgl
 		gassert(desc.width > 0, "Texture width must be greater than zero");
 		gassert(desc.height > 0, "Texture height must be greater than zero");
 		gassert(desc.format != Format::UNKNOWN, "Texture format cannot be UNKNOWN");
+
+		// RTV/DSV-only textures pass a null heap: they need no shader-visible
+		// descriptor, so no CPU handle is computed.
+		if (descriptorHeap != nullptr)
+		{
+			const uint32_t descriptorSize =
+				device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
+			m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+			m_CpuHandle.ptr += static_cast<uint64_t>(descriptorIndex) * descriptorSize;
+		}
 	}
 }

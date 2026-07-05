@@ -5,6 +5,7 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include <bgl/IScene.h>
 #include <core/containers/slot_vector.h>
@@ -124,13 +125,29 @@ namespace bgl
 		Update(ICommandList* cmdList);
 
 		GeomHandle
-		AddCubeGeom() override;
+		AddCubeGeom(MaterialHandle material = {}) override;
 
 		GeomHandle
-		AddSphereGeom(uint32_t xSegments, uint32_t ySegments, float radius) override;
+		AddSphereGeom(
+			uint32_t       xSegments,
+			uint32_t       ySegments,
+			float          radius,
+			MaterialHandle material = {}) override;
+
+		MaterialHandle
+		CreatePbrMaterial(const PbrMaterialDesc& desc) override;
 
 		void
 		DeleteGeom(GeomHandle geom) override;
+
+		void
+		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
+
+		[[nodiscard]] const EnvironmentMap&
+		GetEnvironmentMap() const noexcept
+		{
+			return m_EnvironmentMap;
+		}
 
 	private:
 		SceneDesc   m_Desc;
@@ -146,6 +163,18 @@ namespace bgl
 		EntryBuffer<idl::PbrMaterial> m_Pbr;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
+
+		// 1x1 defaults a PbrMaterial falls back to per channel: white base/ORM, flat
+		// tangent-space normal (0.5,0.5,1).
+		enum class DefaultTexture : uint32_t
+		{
+			kWhite,
+			kFlatNormal,
+			kCount
+		};
+		std::array<TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_DefaultTextures;
+
+		EnvironmentMap m_EnvironmentMap;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

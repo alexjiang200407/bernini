@@ -1,7 +1,4 @@
 #pragma once
-#define GLM_FORCE_INTRINSICS
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-
-#include <glm/ext.hpp>
-#include <glm/glm.hpp>
+// The glm configuration now lives in core so bgl and assetlib can share it without
+// depending on each other. Kept here for source/backwards compatibility.
+#include <core/glm.h>

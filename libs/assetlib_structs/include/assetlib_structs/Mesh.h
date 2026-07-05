@@ -1,8 +1,8 @@
 #pragma once
-#include <assetlib/bmesh/VertexLayout.h>
-#include <bgl/glm.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <core/glm.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	enum class IndexType : uint8_t
 	{
@@ -14,8 +14,8 @@ namespace assetlib::bmesh
 	/** A meshlet cluster. Deliberately independent of the runtime GPU `bgl::idl::Meshlet`. */
 	struct Meshlet
 	{
-		uint32_t  vertexOffset;    // into BMesh::meshletVertices
-		uint32_t  triangleOffset;  // into BMesh::meshletTriangles
+		uint32_t  vertexOffset;    // into BMeshImport::meshletVertices
+		uint32_t  triangleOffset;  // into BMeshImport::meshletTriangles
 		uint32_t  vertexCount;
 		uint32_t  triangleCount;
 		glm::vec3 boundingCenter;
@@ -28,12 +28,12 @@ namespace assetlib::bmesh
 	struct Submesh
 	{
 		VertexLayout layout;
-		uint32_t     vertexByteOffset;  // into BMesh::vertexData
+		uint32_t     vertexByteOffset;  // into BMeshImport::vertexData
 		uint32_t     vertexCount;
-		uint32_t     indexByteOffset;  // into BMesh::indexData
+		uint32_t     indexByteOffset;  // into BMeshImport::indexData
 		uint32_t     indexCount;
 		IndexType    indexType;
-		uint32_t     firstMeshlet;  // range into BMesh::meshlets
+		uint32_t     firstMeshlet;  // range into BMeshImport::meshlets
 		uint32_t     meshletCount;
 		uint32_t     material;  // reserved; always c_InvalidIndex for now (materials ignored)
 		glm::vec3    aabbMin;
@@ -44,9 +44,9 @@ namespace assetlib::bmesh
 
 	struct Mesh
 	{
-		uint32_t firstSubmesh;  // range into BMesh::submeshes
+		uint32_t firstSubmesh;  // range into BMeshImport::submeshes
 		uint32_t submeshCount;
-		uint32_t nameOffset;  // into BMesh::stringPool
+		uint32_t nameOffset;  // into BMeshImport::stringPool
 	};
 
 	static_assert(sizeof(Mesh) == 12);

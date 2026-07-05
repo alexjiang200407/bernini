@@ -364,18 +364,18 @@ ContentExplorerWindow::ImportMesh(
 
 	try
 	{
-		const auto mesh = assetlib::bmesh::loadFromGltf(source);
+		const auto mesh = assetlib::loadFromGltf(source);
 
 		fs::path bmeshPath = meshDir / source.filename();
 		bmeshPath.replace_extension(".bmesh");
-		assetlib::bmesh::save(mesh, bmeshPath);
+		assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
 
 		if (importTextures && !texturesDir.isEmpty())
 		{
 			const fs::path  outDir = fs::path(texturesDir.toStdWString());
 			std::error_code ec;
 			fs::create_directories(outDir, ec);
-			assetlib::bmesh::writeTextures(mesh, outDir);
+			assetlib::writeTextures(mesh, outDir);
 		}
 	}
 	catch (const std::exception& e)

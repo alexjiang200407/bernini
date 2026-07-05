@@ -3,7 +3,8 @@
 
 #include <catch2/catch_approx.hpp>
 
-using namespace assetlib::bmesh;
+using namespace assetlib;
+using namespace assetlib::imp;
 
 namespace
 {
@@ -71,7 +72,7 @@ TEST_CASE("an imported triangle survives a container round-trip", "[bmesh][gltf]
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
-	const auto restored = deserialize(serialize(mesh));
+	const auto restored = deserialize(serialize(toBMesh(mesh)));
 	REQUIRE(restored.vertexData == mesh.vertexData);
 	REQUIRE(restored.submeshes.size() == mesh.submeshes.size());
 	REQUIRE(restored.meshlets.size() == mesh.meshlets.size());
@@ -79,8 +80,7 @@ TEST_CASE("an imported triangle survives a container round-trip", "[bmesh][gltf]
 
 TEST_CASE("loadFromGltf imports the Suzanne test model", "[bmesh][gltf]")
 {
-	// Deployed next to the test exe by copy_to_target; cwd is the exe directory at run time.
-	const std::filesystem::path path = "testdata/suzanne.glb";
+	const std::filesystem::path path = "assets/suzanne.glb";
 	REQUIRE(std::filesystem::exists(path));
 
 	const auto mesh = loadFromGltf(path);
@@ -111,7 +111,7 @@ TEST_CASE("loadFromGltf imports the Suzanne test model", "[bmesh][gltf]")
 	REQUIRE(first.aabbMax.y > first.aabbMin.y);
 
 	// And it survives a full container round-trip.
-	const auto restored = deserialize(serialize(mesh));
+	const auto restored = deserialize(serialize(toBMesh(mesh)));
 	REQUIRE(restored.vertexData == mesh.vertexData);
 	REQUIRE(restored.meshlets.size() == mesh.meshlets.size());
 }

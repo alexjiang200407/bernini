@@ -44,7 +44,7 @@ endif()
 target_link_libraries(assetlib
 	PUBLIC
 		core
-		bgl
+		assetlib_structs
 	PRIVATE
 		nlohmann_json::nlohmann_json
 		meshoptimizer::meshoptimizer
@@ -126,7 +126,7 @@ if (BUILD_TESTS)
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	copy_to_target(assetlib_tests ITEMS ${CMAKE_CURRENT_SOURCE_DIR}/tests/testdata)
+	copy_to_target(assetlib_tests ITEMS ${CMAKE_SOURCE_DIR}/assets)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${ASSETLIB_TESTS_SOURCES})
 

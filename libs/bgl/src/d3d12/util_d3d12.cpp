@@ -431,21 +431,23 @@ namespace bgl
 		switch (dimension)
 		{
 		case TextureDimension::kTexture1D:
+		case TextureDimension::kTexture1DArray:
 			return D3D12_RESOURCE_DIMENSION_TEXTURE1D;
 
+		// Cube maps, texture arrays, and MSAA textures are all 2D resources; the
+		// array/cube-ness is expressed by DepthOrArraySize + the SRV view dimension.
 		case TextureDimension::kTexture2D:
+		case TextureDimension::kTexture2DArray:
+		case TextureDimension::kTextureCube:
+		case TextureDimension::kTextureCubeArray:
+		case TextureDimension::kTexture2DMS:
+		case TextureDimension::kTexture2DMSArray:
 			return D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
 		case TextureDimension::kTexture3D:
 			return D3D12_RESOURCE_DIMENSION_TEXTURE3D;
 
 		case TextureDimension::kUnknown:
-		case TextureDimension::kTexture1DArray:
-		case TextureDimension::kTexture2DArray:
-		case TextureDimension::kTextureCube:
-		case TextureDimension::kTextureCubeArray:
-		case TextureDimension::kTexture2DMS:
-		case TextureDimension::kTexture2DMSArray:
 		default:
 			gfatal(
 				"ConvertTextureDimension Invalid texture dimension: {}",
@@ -529,6 +531,80 @@ namespace bgl
 				"ConvertDSVDimension Invalid or unsupported depth texture dimension: {}",
 				static_cast<int>(dimension));
 		}
+	}
+
+	D3D12_SRV_DIMENSION
+	ConvertSRVDimension(TextureDimension dimension)
+	{
+		switch (dimension)
+		{
+		case TextureDimension::kTexture1D:
+			return D3D12_SRV_DIMENSION_TEXTURE1D;
+		case TextureDimension::kTexture1DArray:
+			return D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+		case TextureDimension::kTexture2D:
+			return D3D12_SRV_DIMENSION_TEXTURE2D;
+		case TextureDimension::kTexture2DArray:
+			return D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+		case TextureDimension::kTextureCube:
+			return D3D12_SRV_DIMENSION_TEXTURECUBE;
+		case TextureDimension::kTextureCubeArray:
+			return D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+		case TextureDimension::kTexture2DMS:
+			return D3D12_SRV_DIMENSION_TEXTURE2DMS;
+		case TextureDimension::kTexture2DMSArray:
+			return D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+		case TextureDimension::kTexture3D:
+			return D3D12_SRV_DIMENSION_TEXTURE3D;
+
+		case TextureDimension::kUnknown:
+		default:
+			gfatal("ConvertSRVDimension Invalid texture dimension: {}", static_cast<int>(dimension));
+		}
+	}
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC
+	ConvertTextureSrvDesc(const TextureDesc& desc)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
+		srv.Format                          = ConvertFormat(desc.format);
+		srv.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srv.ViewDimension                   = ConvertSRVDimension(desc.dimension);
+
+		switch (desc.dimension)
+		{
+		case TextureDimension::kTexture1D:
+			srv.Texture1D.MipLevels = desc.mipLevels;
+			break;
+		case TextureDimension::kTexture2D:
+			srv.Texture2D.MipLevels = desc.mipLevels;
+			break;
+		case TextureDimension::kTexture2DArray:
+			srv.Texture2DArray.MipLevels = desc.mipLevels;
+			srv.Texture2DArray.ArraySize = desc.arraySize;
+			break;
+		case TextureDimension::kTextureCube:
+			srv.TextureCube.MipLevels = desc.mipLevels;
+			break;
+		case TextureDimension::kTextureCubeArray:
+			srv.TextureCubeArray.MipLevels = desc.mipLevels;
+			srv.TextureCubeArray.NumCubes  = desc.arraySize / 6;
+			break;
+		case TextureDimension::kTexture3D:
+			srv.Texture3D.MipLevels = desc.mipLevels;
+			break;
+
+		case TextureDimension::kUnknown:
+		case TextureDimension::kTexture1DArray:
+		case TextureDimension::kTexture2DMS:
+		case TextureDimension::kTexture2DMSArray:
+		default:
+			gfatal(
+				"ConvertTextureSrvDesc unsupported texture dimension: {}",
+				static_cast<int>(desc.dimension));
+		}
+
+		return srv;
 	}
 
 	D3D12_BARRIER_SYNC

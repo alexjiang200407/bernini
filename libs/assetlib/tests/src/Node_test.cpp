@@ -1,13 +1,14 @@
-#include <assetlib/bmesh/Bmesh.h>
+#include <assetlib_structs/BMeshImport.h>
 
 #include <catch2/catch_approx.hpp>
 
-using namespace assetlib::bmesh;
+using namespace assetlib;
+using namespace assetlib::imp;
 
 TEST_CASE("first-child / next-sibling links reconstruct a node's children", "[bmesh][node]")
 {
 	// root(0) -> children a(1), b(2), c(3)
-	BMesh mesh;
+	BMeshImport mesh;
 	mesh.nodes.resize(4);
 	for (auto& node : mesh.nodes)
 	{

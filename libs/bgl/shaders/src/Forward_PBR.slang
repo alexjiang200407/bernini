@@ -7,6 +7,7 @@ import idl.TextureHandle;
 
 struct MaterialData
 {
+    float3 cameraPos;
     EntryBuffer<PbrMaterial> pbrMaterials;
 
     TextureHandle irradianceMap;
@@ -17,15 +18,22 @@ struct MaterialData
     SamplerHandle linearClampSampler;
 };
 
-// forwardData uniform
-import uniforms.ForwardData;
-
-ConstantBuffer<MaterialData> materialData;
+ConstantBuffer<MaterialData> materialData : register(b0, space1);
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+float3 ACESFilm(float3 x)
+{
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
 // Simple normal mapping helper function
@@ -70,7 +78,7 @@ float4 PSMain(ForwardVSOut input) : SV_Target
 
     // 3. Setup Geometry Vectors
     float3 N = CalculateNormal(input.normal, input.tangent, normalTex);
-    float3 V = normalize(forwardData.cameraPos - input.worldPos);
+    float3 V = normalize(materialData.cameraPos - input.worldPos);
     float3 R = reflect(-V, N);
 
     float cosTheta = max(dot(N, V), 0.0);
@@ -90,7 +98,7 @@ float4 PSMain(ForwardVSOut input) : SV_Target
     let diffuse = irradiance * albedo;
 
     // 6. Ambient Specular (Prefiltered Environment Map)
-    const float MAX_REFLECTION_LOD = 4.0; // Total mip levels minus one
+    const float MAX_REFLECTION_LOD = 1.0; // Total mip levels minus one
     let prefilteredColor = materialData.prefilterMap.SampleCubeLevel(clampSampler, R, roughness * MAX_REFLECTION_LOD).rgb;
     float2 envBRDF = materialData.brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 
@@ -99,9 +107,11 @@ float4 PSMain(ForwardVSOut input) : SV_Target
     // 7. Combine everything with Ambient Occlusion
     float3 ambient = (kD * diffuse + specular) * ao;
 
-    // 8. Tonemapping & Gamma Correction (Mimics Blender's clean viewport color output)
-    float3 color = ambient / (ambient + float3(1.0, 1.0, 1.0));  // Reinhard
-    color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)); // Gamma
+    // 8. Exposure, filmic tonemap (ACES) and gamma. Exposure is a linear pre-scale
+    //    before the curve -- promote it to a uniform when you want runtime control.
+    const float exposure = 1.0;
+    float3 color = ACESFilm(ambient * exposure);
+    color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)); // linear -> sRGB
 
     return float4(color, albedoTex.a * material.baseColorFactor.a);
 }

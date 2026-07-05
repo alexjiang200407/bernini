@@ -135,14 +135,30 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
-		auto     textureSlotHandle = m_Textures.allocate_slot();
-		uint32_t slotIndex         = textureSlotHandle.index;
+		// Sampled textures go in the shader-visible pool so the slot index is a valid
+		// bindless SRV index. RTV/DSV-only textures go in m_Textures and never take a
+		// shader-visible descriptor slot.
+		if (desc.usage.any(TextureUsageFlag::kSRV))
+		{
+			auto     slot      = m_CbvSrvUavSlots.allocate_slot();
+			uint32_t slotIndex = slot.index;
 
-		Texture texture(m_Device.Get(), slotIndex, desc);
+			Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, desc);
 
-		m_Textures[slotIndex] = std::move(texture);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
+			m_Device->CreateShaderResourceView(
+				texture.GetD3D12Resource(),
+				&srvDesc,
+				texture.GetCpuHandle());
 
-		return TextureHandle(slotIndex, textureSlotHandle.generation);
+			m_CbvSrvUavSlots[slotIndex] = std::move(texture);
+			return TextureHandle{ slotIndex, slot.generation, desc.usage };
+		}
+
+		auto     slot         = m_Textures.allocate_slot();
+		uint32_t slotIndex    = slot.index;
+		m_Textures[slotIndex] = Texture(m_Device.Get(), nullptr, slotIndex, desc);
+		return TextureHandle{ slotIndex, slot.generation, desc.usage };
 	}
 
 	SamplerHandle
@@ -159,6 +175,114 @@ namespace bgl
 		m_Samplers[slotIndex] = std::move(sampler);
 
 		return SamplerHandle{ slotIndex, samplerSlotHandle.generation };
+	}
+
+	TextureHandle
+	ResourceManager::CreateTexture(
+		const TextureDesc&                      desc,
+		std::span<const TextureSubresourceData> initialData) noexcept
+	{
+		TextureHandle handle = CreateTexture(desc);
+
+		if (initialData.empty())
+		{
+			return handle;
+		}
+
+		// Own a contiguous copy of the decoded pixels so the deferred upload survives
+		// until the next FlushPendingTextureUploads (the caller's data may be transient).
+		PendingTextureUpload pending;
+		pending.handle = handle;
+		pending.subresources.reserve(initialData.size());
+
+		for (const auto& sub : initialData)
+		{
+			const size_t sliceBytes = static_cast<size_t>(sub.slicePitch);
+			const size_t offset     = pending.bytes.size();
+			pending.bytes.resize(offset + sliceBytes);
+			std::memcpy(pending.bytes.data() + offset, sub.data, sliceBytes);
+			pending.subresources.push_back({ offset, sub.rowPitch, sub.slicePitch });
+		}
+
+		m_PendingTextureUploads.push_back(std::move(pending));
+
+		return handle;
+	}
+
+	TextureHandle
+	ResourceManager::CreateTexture(const assetlib::ImageData& image) noexcept
+	{
+		// Map the decoded image's raw dxgiFormat + layout onto an engine TextureDesc; the
+		// graphics-format translation stays here so callers never see DXGI/engine formats.
+		TextureDesc desc;
+		desc.width     = image.width;
+		desc.height    = image.height;
+		desc.mipLevels = image.mipLevels;
+		desc.arraySize = image.arraySize;
+		desc.format    = ConvertFormat(static_cast<DXGI_FORMAT>(image.dxgiFormat));
+		desc.usage     = TextureUsageFlag::kSRV;
+		desc.dimension =
+			image.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
+		desc.initalLayout = BarrierLayout::kCopyDest;
+		desc.debugName    = "ImageData Texture";
+
+		std::vector<TextureSubresourceData> subresources;
+		subresources.reserve(image.subresources.size());
+		for (const auto& s : image.subresources)
+		{
+			subresources.push_back({ image.pixels.data() + s.offset, s.rowPitch, s.slicePitch });
+		}
+
+		return CreateTexture(desc, subresources);
+	}
+
+	TextureHandle
+	ResourceManager::CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a) noexcept
+	{
+		const uint8_t pixel[4] = { r, g, b, a };
+
+		TextureDesc desc;
+		desc.width        = 1;
+		desc.height       = 1;
+		desc.format       = Format::RGBA8_UNORM;
+		desc.usage        = TextureUsageFlag::kSRV;
+		desc.initalLayout = BarrierLayout::kCopyDest;
+		desc.debugName    = "Solid Texture";
+
+		// Procedural, not a file load: build the 1x1 pixel and go through the same raw
+		// upload path as any other texture.
+		const TextureSubresourceData sub{ pixel, 4, 4 };
+		return CreateTexture(desc, std::span<const TextureSubresourceData>(&sub, 1));
+	}
+
+	void
+	ResourceManager::FlushPendingTextureUploads(ICommandList* cmd) noexcept
+	{
+		for (auto& pending : m_PendingTextureUploads)
+		{
+			// Rebuild the upload spans pointing into our owned byte buffer.
+			std::vector<TextureSubresourceData> subresources;
+			subresources.reserve(pending.subresources.size());
+			for (const auto& s : pending.subresources)
+			{
+				subresources.push_back({ pending.bytes.data() + s.offset, s.rowPitch, s.slicePitch });
+			}
+
+			cmd->WriteTexture(pending.handle, subresources);
+
+			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it. These
+			// bindless textures aren't frame-graph resources, so we barrier directly.
+			TextureBarrierDesc barrier;
+			barrier.syncBefore   = BarrierSyncFlag::kCopy;
+			barrier.accessBefore = BarrierAccessFlag::kCopyDest;
+			barrier.layoutBefore = BarrierLayout::kCopyDest;
+			barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
+			barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
+			barrier.layoutAfter  = BarrierLayout::kShaderResource;
+			cmd->Barrier(pending.handle, barrier);
+		}
+
+		m_PendingTextureUploads.clear();
 	}
 
 	ReadbackBufferHandle
@@ -179,14 +303,33 @@ namespace bgl
 		wrl::ComPtr<ID3D12Resource> d3d12Texture,
 		const TextureDesc&          desc) noexcept
 	{
-		auto     textureSlotHandle = m_Textures.allocate_slot();
-		uint32_t slotIndex         = textureSlotHandle.index;
+		if (desc.usage.any(TextureUsageFlag::kSRV))
+		{
+			auto     slot      = m_CbvSrvUavSlots.allocate_slot();
+			uint32_t slotIndex = slot.index;
 
-		Texture texture(m_Device.Get(), slotIndex, std::move(d3d12Texture), desc);
+			Texture texture(
+				m_Device.Get(),
+				m_CbvSrvUavHeap.Get(),
+				slotIndex,
+				std::move(d3d12Texture),
+				desc);
 
-		m_Textures[slotIndex] = std::move(texture);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
+			m_Device->CreateShaderResourceView(
+				texture.GetD3D12Resource(),
+				&srvDesc,
+				texture.GetCpuHandle());
 
-		return TextureHandle{ slotIndex, textureSlotHandle.generation };
+			m_CbvSrvUavSlots[slotIndex] = std::move(texture);
+			return TextureHandle{ slotIndex, slot.generation, desc.usage };
+		}
+
+		auto     slot      = m_Textures.allocate_slot();
+		uint32_t slotIndex = slot.index;
+		m_Textures[slotIndex] =
+			Texture(m_Device.Get(), nullptr, slotIndex, std::move(d3d12Texture), desc);
+		return TextureHandle{ slotIndex, slot.generation, desc.usage };
 	}
 
 	RtvHandle
@@ -303,12 +446,19 @@ namespace bgl
 	{
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
+		const bool isSrv = handle.usage.any(TextureUsageFlag::kSRV);
+
 		if (deferred)
 		{
+			// SRV textures live in the CBV_SRV_UAV pool; RTV/DSV-only in m_Textures.
 			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kTexture,
+				isSrv ? PendingDeletion::Type::kCbvSrvUav : PendingDeletion::Type::kTexture,
 				handle.idx,
 				currentFenceValue);
+		}
+		else if (isSrv)
+		{
+			m_CbvSrvUavSlots.release_slot(handle.idx);
 		}
 		else
 		{
@@ -406,6 +556,17 @@ namespace bgl
 	bool
 	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
 	{
+		if (handle.usage.any(TextureUsageFlag::kSRV))
+		{
+			if (!m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
+			{
+				return false;
+			}
+
+			const auto& slot = m_CbvSrvUavSlots[handle.idx];
+			return std::holds_alternative<Texture>(slot) && !std::get<Texture>(slot).IsNull();
+		}
+
 		if (!m_Textures.valid(handle.idx, handle.generation))
 		{
 			return false;
@@ -459,6 +620,10 @@ namespace bgl
 	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Invalid texture handle");
+		if (handle.usage.any(TextureUsageFlag::kSRV))
+		{
+			return std::get<Texture>(m_CbvSrvUavSlots[handle.idx]);
+		}
 		return m_Textures[handle.idx];
 	}
 

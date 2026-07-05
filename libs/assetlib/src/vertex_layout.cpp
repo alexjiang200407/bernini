@@ -1,6 +1,6 @@
-#include <assetlib/bmesh/VertexLayout.h>
+#include <assetlib_structs/VertexLayout.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	uint32_t
 	formatSize(VertexFormat format) noexcept

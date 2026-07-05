@@ -1,7 +1,7 @@
 #pragma once
 #include <core/type_traits.h>
 
-namespace assetlib::bmesh
+namespace assetlib
 {
 	/** Bounds-checked forward cursor over a byte stream. Throws std::runtime_error on overrun. */
 	class ByteReader

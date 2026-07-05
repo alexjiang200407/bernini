@@ -105,6 +105,86 @@ namespace bgl
 	}
 
 	void
+	CommandList::WriteTexture(
+		TextureHandle                           handle,
+		std::span<const TextureSubresourceData> subresources) noexcept
+	{
+		auto& texture = m_ResourceManager->GetTexture(handle);
+		auto  device  = m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy();
+		auto  texDesc = texture.GetD3D12Resource()->GetDesc();
+
+		const uint32_t numSubresources = static_cast<uint32_t>(subresources.size());
+
+		// Padded, copyable layout of each subresource within a linear upload buffer.
+		std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footprints(numSubresources);
+		std::vector<UINT>                               numRows(numSubresources);
+		std::vector<UINT64>                             rowSizes(numSubresources);
+		UINT64                                          totalBytes = 0;
+		device->GetCopyableFootprints(
+			&texDesc,
+			0,
+			numSubresources,
+			0,
+			footprints.data(),
+			numRows.data(),
+			rowSizes.data(),
+			&totalBytes);
+
+		size_t                    offsetInUploadBuffer = 0;
+		void*                     cpuVA                = nullptr;
+		D3D12_GPU_VIRTUAL_ADDRESS gpuVA                = 0;
+
+		auto success = m_UploadManager.SuballocateBuffer(
+			m_LastCompletedFence,
+			totalBytes,
+			nullptr,
+			m_CurrentUploadBuffer,
+			&offsetInUploadBuffer,
+			&cpuVA,
+			&gpuVA,
+			m_RecordingVersion,
+			D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
+		gassert(success, "Failed to suballocate texture upload");
+
+		// Copy each subresource into its padded footprint (RowPitch >= source pitch).
+		for (uint32_t i = 0; i < numSubresources; ++i)
+		{
+			const auto& fp  = footprints[i];
+			auto*       dst = static_cast<uint8_t*>(cpuVA) + fp.Offset;
+			const auto& src = subresources[i];
+
+			for (UINT row = 0; row < numRows[i]; ++row)
+			{
+				std::memcpy(
+					dst + static_cast<uint64_t>(row) * fp.Footprint.RowPitch,
+					static_cast<const uint8_t*>(src.data) + static_cast<uint64_t>(row) * src.rowPitch,
+					rowSizes[i]);
+			}
+		}
+
+		for (uint32_t i = 0; i < numSubresources; ++i)
+		{
+			// Footprint offsets are relative to the suballocated region; shift them to
+			// the chunk resource that CopyTextureRegion sources from.
+			D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed = footprints[i];
+			placed.Offset += offsetInUploadBuffer;
+
+			D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
+			dstLocation.pResource                   = texture.GetD3D12Resource();
+			dstLocation.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+			dstLocation.SubresourceIndex            = i;
+
+			D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
+			srcLocation.pResource                   = m_CurrentUploadBuffer.Get();
+			srcLocation.Type                        = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+			srcLocation.PlacedFootprint             = placed;
+
+			m_CommandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+		}
+	}
+
+	void
 	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
 	{
 		auto&       srcBuffer = m_ResourceManager->GetBuffer(src);

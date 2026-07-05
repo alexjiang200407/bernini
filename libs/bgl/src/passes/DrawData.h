@@ -1,6 +1,7 @@
 #pragma once
 #include "resource/FrameBuffer.h"
 #include "resource/Sampler.h"
+#include "types/EnvironmentMap.h"
 #include "types/ViewportState.h"
 
 namespace bgl
@@ -13,11 +14,13 @@ namespace bgl
 		core::SharedRef<ISceneView> view    = nullptr;
 		Viewport                    viewport;
 		glm::mat4                   viewProj{ 1.0f };
+		glm::vec3                   cameraPos{ 0.0f };
 		RtvHandle                   backBufferHandle;
 		DsvHandle                   depthBufferHandle;
 		std::string                 backBufferName;
 		std::string                 depthBufferName;
 		SamplerHandle               anisoLinearWrapSampler;
 		SamplerHandle               linearClampSampler;
+		EnvironmentMap              env;
 	};
 }

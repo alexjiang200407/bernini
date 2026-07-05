@@ -9,13 +9,18 @@ namespace bgl
 	public:
 		Texture() = default;
 
-		Texture(ID3D12Device* device, uint32_t descriptorIndex, const TextureDesc& desc);
+		Texture(
+			ID3D12Device*         device,
+			ID3D12DescriptorHeap* descriptorHeap,
+			uint32_t              descriptorIndex,
+			const TextureDesc&    desc);
 
 		/**
 		 * Assumes that desc is correct.
 		 */
 		Texture(
 			ID3D12Device*               device,
+			ID3D12DescriptorHeap*       descriptorHeap,
 			uint32_t                    descriptorIndex,
 			wrl::ComPtr<ID3D12Resource> texture,
 			const TextureDesc&          desc);
@@ -52,6 +57,13 @@ namespace bgl
 		}
 
 		[[nodiscard]]
+		D3D12_CPU_DESCRIPTOR_HANDLE
+		GetCpuHandle() const noexcept
+		{
+			return m_CpuHandle;
+		}
+
+		[[nodiscard]]
 		bool
 		IsNull() const noexcept
 		{
@@ -61,6 +73,7 @@ namespace bgl
 	private:
 		TextureDesc                 m_Desc;
 		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
+		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
 		wrl::ComPtr<ID3D12Resource> m_Texture;
 	};
 }

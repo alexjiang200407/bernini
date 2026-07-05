@@ -1,6 +1,6 @@
-#include <assetlib/bmesh/VertexLayout.h>
+#include <assetlib_structs/VertexLayout.h>
 
-using namespace assetlib::bmesh;
+using namespace assetlib;
 
 TEST_CASE("formatSize reports the byte size of each vertex format", "[bmesh][layout]")
 {
