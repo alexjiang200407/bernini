@@ -270,7 +270,7 @@ namespace bgl
 						continue;
 					}
 					const TextureHandle imported = std::get<TextureHandle>(res.handle);
-					if (imported.idx == tex.idx && imported.generation == tex.generation)
+					if (imported == tex)
 					{
 						core::throw_runtime_error(
 							"FrameGraph::Compile: the texture attached to pass '{}' is also "
@@ -434,7 +434,7 @@ namespace bgl
 			{
 				const TextureHandle tex =
 					resourceManager->GetRtvTexture(colorAttachments.data()[i]);
-				AccessState& cur = attachmentState[tex.idx];
+				AccessState& cur = attachmentState[tex.slot.index];
 				if (!StateEqual(cur, rtTarget))
 				{
 					pass.barriers.textureHandles.push_back(tex);
@@ -445,7 +445,7 @@ namespace bgl
 			if (!pass.desc.depthAttachment.IsNull())
 			{
 				const TextureHandle tex = resourceManager->GetDsvTexture(pass.desc.depthAttachment);
-				AccessState&        cur = attachmentState[tex.idx];
+				AccessState&        cur = attachmentState[tex.slot.index];
 				if (!StateEqual(cur, dsTarget))
 				{
 					pass.barriers.textureHandles.push_back(tex);

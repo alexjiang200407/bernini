@@ -14,14 +14,9 @@ namespace bgl
 	class FrameGraph;
 	class Scene;
 
-	// index (so DeleteMeshInstance / ~SceneView can decrement the right refcount; the
-	// per-placement Mesh embeds the submeshes descriptor, not a geom back-ref), the
-	// geom type (so SetSubmeshMaterial can recompute a submesh's PSO), and the handles
-	// of this instance's submesh-instances in m_InstanceBuffer (one per submesh).
 	struct MeshMeta
 	{
 		uint32_t                       geomIndex = 0;
-		GeomType                       geomType  = GeomType::kInvalid;
 		std::vector<core::slot_handle> submeshInstances;
 	};
 
@@ -56,17 +51,10 @@ namespace bgl
 		}
 
 		MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform)
-			override;
+		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) override;
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
-
-		void
-		SetSubmeshMaterial(
-			MeshInstanceHandle instance,
-			uint32_t           submeshIndex,
-			MaterialHandle     material) override;
 
 		[[nodiscard]] uint32_t
 		GetInstanceCount() const noexcept override

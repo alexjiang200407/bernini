@@ -16,6 +16,7 @@ public struct Submesh
     public Range<uint> indices;
     public uint vertexCount;
     public Entry<IMaterial> material;
+    public uint pso;
 
     public RangeWithCount<Meshlet> GetMeshletRange() { return meshlets; }
 

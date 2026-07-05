@@ -3,8 +3,6 @@
 #include "idl/Constants.h"
 #include "scene/Scene.h"
 #include "types/SubmeshInstance.h"
-#include "util/util.h"
-#include <bgl/PsoType.h>
 #include <core/math.h>
 
 namespace bgl
@@ -88,16 +86,8 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateStaticMeshInstance(
-		GeomHandle     geom,
-		MaterialHandle material,
-		glm::mat4      transform)
+	SceneView::CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform)
 	{
-		if (!material.IsValid())
-		{
-			throw SceneError("Invalid MaterialHandle passed to CreateStaticMeshInstance");
-		}
-
 		if (geom.geomType != GeomType::kStaticMesh)
 		{
 			throw SceneError(
@@ -122,10 +112,9 @@ namespace bgl
 
 			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
 			meta.geomIndex = geom.handle.index;
-			meta.geomType  = geom.geomType;
 
-			const PsoType psoType = GetPsoFromGeomAndMaterial(geom.geomType, material.materialType);
-
+			// The PSO bucket is a property of each submesh (idl::Submesh::pso), so the instance
+			// carries only its mesh + submesh index; the compaction sort resolves the PSO.
 			const uint32_t submeshCount = asset.submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
 			for (uint32_t s = 0; s < submeshCount; ++s)
@@ -133,7 +122,6 @@ namespace bgl
 				auto instance         = SubmeshInstance();
 				instance.meshInstance = meshHandle;
 				instance.submeshIndex = s;
-				instance.psoType      = psoType;
 
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
@@ -183,44 +171,6 @@ namespace bgl
 	}
 
 	void
-	SceneView::SetSubmeshMaterial(
-		MeshInstanceHandle instance,
-		uint32_t           submeshIndex,
-		MaterialHandle     material)
-	{
-		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
-		{
-			throw SceneError(
-				"MeshInstanceHandle passed to SetSubmeshMaterial is invalid or already removed");
-		}
-
-		if (!material.IsValid())
-		{
-			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
-		}
-
-		auto& meta = m_MeshBuffer.MetaAt(instance.handle.index);
-
-		if (submeshIndex >= meta.submeshInstances.size())
-		{
-			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
-		}
-
-		const core::slot_handle submeshInstance = meta.submeshInstances[submeshIndex];
-		gassert(
-			m_InstanceBuffer.IsValid(submeshInstance),
-			"Submesh-instance handle referenced by a live mesh record is stale");
-
-		// Recompute this submesh's PSO; Set marks the instance buffer dirty so Update
-		// re-uploads it and the next frame's counting sort re-buckets it.
-		const PsoType psoType = GetPsoFromGeomAndMaterial(meta.geomType, material.materialType);
-
-		auto updated    = m_InstanceBuffer[submeshInstance];
-		updated.psoType = psoType;
-		m_InstanceBuffer.Set(submeshInstance, updated);
-	}
-
-	void
 	SceneView::Update(ICommandList* cmdList)
 	{
 		auto buffers = GetInstanceBuffers();
@@ -246,7 +196,7 @@ namespace bgl
 			std::vector<SubmeshInstance> tail(padded - count);
 			for (SubmeshInstance& instance : tail)
 			{
-				instance.psoType = PsoType::kInvalid;
+				instance.meshInstance.offset = 0xFFFFFFFFu;  // Null(): skipped by the sort
 			}
 			cmdList->WriteBuffer(
 				m_InstanceBuffer.GetBufferHandle(),

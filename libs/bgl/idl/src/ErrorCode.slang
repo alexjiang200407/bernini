@@ -7,4 +7,6 @@ public enum ErrorCode : uint
     kMeshletVertexOverflow,
     kMeshletPrimitiveOverflow,
     kInvalidVertexIndex,
+    kInvalidSubmeshInstance,
+    kInvalidPsoType,
 };

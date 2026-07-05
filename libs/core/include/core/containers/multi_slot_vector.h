@@ -1,5 +1,6 @@
 #pragma once
 #include <core/containers/multi_slot_handle.h>
+#include <core/err/util.h>
 
 namespace core
 {
@@ -42,7 +43,7 @@ namespace core
 		[[nodiscard]] multi_slot_handle
 		allocate_slots(uint32_t count)
 		{
-			assert(count > 0 && "Cannot allocate 0 slots");
+			core::throw_runtime_error_if(count == 0, "Cannot allocate 0 slots");
 
 			uint32_t targetIndex = multi_slot_handle::invalid_index;
 
@@ -96,13 +97,18 @@ namespace core
 		erase(multi_slot_handle handle)
 		{
 			uint32_t index = handle.index;
-			assert(index < m_Meta.size() && "Index out of bounds");
-			assert(
-				m_Meta[index].is_allocated_root &&
-				"Can only erase an allocation using its original starting handle index!");
-			assert(
-				m_Meta[index].generation == handle.generation &&
-				"Attempting to erase using an expired stale handle");
+			core::throw_runtime_error_if(index >= m_Meta.size(), "Index '{}' out of bounds", index);
+			core::throw_runtime_error_if(
+				!m_Meta[index].is_allocated_root,
+				"Can only erase an allocation using its original starting handle index '{}'",
+				index);
+			core::throw_runtime_error_if(
+				m_Meta[index].generation != handle.generation,
+				"Attempting to erase index '{}' with an expired stale handle "
+				"(handle generation {} != slot generation {})",
+				index,
+				handle.generation,
+				m_Meta[index].generation);
 
 			uint32_t count = m_Meta[index].allocated_count;
 
@@ -156,16 +162,28 @@ namespace core
 		[[nodiscard]] T&
 		operator[](uint32_t physicalIndex)
 		{
-			assert(physicalIndex < m_Data.size());
-			assert(m_Meta[physicalIndex].is_active);
+			core::throw_runtime_error_if(
+				physicalIndex >= m_Data.size(),
+				"Index '{}' out of bounds",
+				physicalIndex);
+			core::throw_runtime_error_if(
+				!m_Meta[physicalIndex].is_active,
+				"Index '{}' is not active",
+				physicalIndex);
 			return m_Data[physicalIndex];
 		}
 
 		[[nodiscard]] const T&
 		operator[](uint32_t physicalIndex) const
 		{
-			assert(physicalIndex < m_Data.size());
-			assert(m_Meta[physicalIndex].is_active);
+			core::throw_runtime_error_if(
+				physicalIndex >= m_Data.size(),
+				"Index '{}' out of bounds",
+				physicalIndex);
+			core::throw_runtime_error_if(
+				!m_Meta[physicalIndex].is_active,
+				"Index '{}' is not active",
+				physicalIndex);
 			return m_Data[physicalIndex];
 		}
 
@@ -188,7 +206,7 @@ namespace core
 		[[nodiscard]] uint32_t
 		generation(uint32_t index) const
 		{
-			assert(index < m_Meta.size());
+			core::throw_runtime_error_if(index >= m_Meta.size(), "Index '{}' out of bounds", index);
 			return m_Meta[index].generation;
 		}
 
@@ -201,8 +219,11 @@ namespace core
 		[[nodiscard]] multi_slot_handle
 		handle_at(uint32_t index) const
 		{
-			assert(index < m_Meta.size());
-			assert(m_Meta[index].is_allocated_root && "No live allocation at this index");
+			core::throw_runtime_error_if(index >= m_Meta.size(), "Index '{}' out of bounds", index);
+			core::throw_runtime_error_if(
+				!m_Meta[index].is_allocated_root,
+				"No live allocation at index '{}'",
+				index);
 			return { index, m_Meta[index].allocated_count, m_Meta[index].generation };
 		}
 

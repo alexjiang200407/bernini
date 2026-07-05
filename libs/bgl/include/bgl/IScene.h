@@ -1,11 +1,15 @@
 #pragma once
+#include <assetlib_structs/ImageData.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
+#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/MeshInstanceHandle.h>
 #include <bgl/PsoType.h>
+#include <bgl/TextureAssetHandle.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
 #include <bgl/util.h>
-#include <assetlib_structs/ImageData.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -19,44 +23,6 @@ namespace bgl
 		using ApiError::ApiError;
 	};
 
-	struct MeshInstanceHandle
-	{
-		core::slot_handle handle;
-
-		[[nodiscard]]
-		bool
-		IsValid() const noexcept
-		{
-			return !handle.is_null();
-		}
-	};
-
-	struct GeomHandle
-	{
-		GeomType          geomType = GeomType::kInvalid;
-		core::slot_handle handle;
-
-		[[nodiscard]]
-		bool
-		IsValid() const noexcept
-		{
-			return geomType != GeomType::kInvalid;
-		}
-	};
-
-	struct MaterialHandle
-	{
-		MaterialType      materialType = MaterialType::kInvalid;
-		core::slot_handle handle;
-
-		[[nodiscard]]
-		bool
-		IsValid() const noexcept
-		{
-			return materialType != MaterialType::kInvalid;
-		}
-	};
-
 	struct SceneDesc
 	{
 		uint32_t maxGeom                 = 1;
@@ -67,33 +33,29 @@ namespace bgl
 		uint32_t maxPbrMaterials         = 1;
 	};
 
-	// Decoded IBL images (two cube maps + the 2D BRDF LUT). Callers decode the files
-	// themselves (e.g. assetlib::loadDDS) so bgl stays codec-free; the engine only
-	// consumes the pixel data.
+	// Decoded IBL images (two cube maps + the 2D BRDF LUT).
 	struct EnvironmentMapDesc
 	{
 		EnvironmentMapDesc() = default;
 
-		// Lets callers brace-init `{ loadDDS(a), loadDDS(b), loadDDS(c) }` even though the
-		// move-only ImageData members make this a non-aggregate.
 		EnvironmentMapDesc(
-			assetlib::ImageData irr,
-			assetlib::ImageData pre,
-			assetlib::ImageData brdf) :
-			irradiance(std::move(irr)), prefilter(std::move(pre)), brdfLut(std::move(brdf))
+			TextureAssetHandle irr,
+			TextureAssetHandle pre,
+			TextureAssetHandle brdf) : irradiance(irr), prefilter(pre), brdfLut(brdf)
 		{}
 
-		// Move-only, mirroring ImageData (silences C4625/C4626 under strict warnings).
 		EnvironmentMapDesc(EnvironmentMapDesc&&) noexcept = default;
 		EnvironmentMapDesc(const EnvironmentMapDesc&)     = delete;
+
 		EnvironmentMapDesc&
 		operator=(EnvironmentMapDesc&&) noexcept = default;
+
 		EnvironmentMapDesc&
 		operator=(const EnvironmentMapDesc&) = delete;
 
-		assetlib::ImageData irradiance;
-		assetlib::ImageData prefilter;
-		assetlib::ImageData brdfLut;
+		TextureAssetHandle irradiance;
+		TextureAssetHandle prefilter;
+		TextureAssetHandle brdfLut;
 	};
 
 	struct PbrMaterialDesc
@@ -128,12 +90,26 @@ namespace bgl
 			float          radius,
 			MaterialHandle material = {}) = 0;
 
+		virtual TextureAssetHandle
+		AddTextureAsset(assetlib::ImageData img) = 0;
+
 		/**
 		 * Creates a PBR material in this scene's material buffer and returns a handle
 		 * referencing it. Pass the handle to a geometry-creating method to bind it.
 		 */
 		virtual MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) = 0;
+
+		/**
+		 * Rebinds the material of one submesh of a geom. Because a geom's submeshes are shared by
+		 * every instance placed from it, this changes the material (and its PSO bucket) for all of
+		 * them. `submeshIndex` is relative to the geom's submesh range.
+		 *
+		 * @throws SceneError if the geom handle is invalid, the material is invalid, or the submesh
+		 *         index is out of range.
+		 */
+		virtual void
+		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material) = 0;
 
 		/**
 		 * Loads the three precomputed IBL .dds maps and binds them as this scene's

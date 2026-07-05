@@ -174,6 +174,18 @@ namespace bgl
 			m_Data[physicalIndex] = std::move(value);
 		}
 
+		// Overwrites a single element by its absolute slot index (the GPU-side index), used when
+		// only that index is known -- e.g. mutating one submesh of a shared geom by its global
+		// position. The slot must be live.
+		void
+		SetAtIndex(uint32_t index, T value)
+		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			gassert(m_Data.valid(index), "SetAtIndex on an inactive element slot");
+			MarkRangeDirty(index, 1);
+			m_Data[index] = std::move(value);
+		}
+
 		void
 		Erase(core::multi_slot_handle handle)
 		{

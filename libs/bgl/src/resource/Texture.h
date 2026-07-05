@@ -3,7 +3,9 @@
 #include "types/ClearValue.h"
 #include "types/Format.h"
 #include "types/TextureDimension.h"
+#include <bgl/TextureAssetHandle.h>
 #include <core/containers/enum_set.h>
+#include <core/containers/slot_handle.h>
 
 namespace bgl
 {
@@ -99,22 +101,45 @@ namespace bgl
 		BarrierLayout initalLayout = BarrierLayout::kCommon;
 	};
 
+	// Different from TextureAssetHandle, this is a handle refers to a
+	// texture resource in the GPU, which is managed by the renderer.
 	struct TextureHandle
 	{
-		uint32_t     idx        = 0xFFFFFFFF;
-		uint32_t     generation = 0;
-		TextureUsage usage      = TextureUsageFlag::kSRV;
+		core::slot_handle slot;
+		TextureUsage      usage = TextureUsageFlag::kSRV;
 
 		[[nodiscard]] bool
 		IsNull() const
 		{
-			return idx == 0xFFFFFFFF;
+			return slot.is_null();
+		}
+
+		static TextureHandle
+		From(TextureAssetHandle assetHandle)
+		{
+			// TextureAssets always kSrv
+			return { core::slot_handle(assetHandle.textureSlot), TextureUsageFlag::kSRV };
+		}
+
+		explicit
+		operator TextureAssetHandle() const noexcept
+		{
+			return { slot };
+		}
+
+		[[nodiscard]] bool
+		operator==(const TextureHandle& other) const noexcept
+		{
+			return slot == other.slot;
+		}
+
+		[[nodiscard]] bool
+		operator!=(const TextureHandle& other) const noexcept
+		{
+			return !(*this == other);
 		}
 	};
 
-	// One mip/array subresource of CPU pixel data for a texture upload. Ordered as
-	// D3D12 expects subresources: all mips of array slice 0, then slice 1, ...
-	// (for a mipped cube that is 6 * mipLevels entries).
 	struct TextureSubresourceData
 	{
 		const void* data       = nullptr;

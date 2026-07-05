@@ -134,8 +134,15 @@ namespace bgl
 			float          radius,
 			MaterialHandle material = {}) override;
 
+		TextureAssetHandle
+		AddTextureAsset(assetlib::ImageData img) override;
+
 		MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) override;
+
+		void
+		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
+			override;
 
 		void
 		DeleteGeom(GeomHandle geom) override;
@@ -154,11 +161,12 @@ namespace bgl
 		std::string m_NamePrefix;
 
 		core::slot_vector<GeomAsset> m_GeomAssets;
-		RangeBuffer<idl::Submesh>    m_SubmeshBuffer;
-		RangeBuffer<idl::Meshlet>    m_MeshletBuffer;
-		RangeBuffer<uint32_t>        m_VertexMapBuffer;
-		RangeBuffer<uint32_t>        m_VertexDataBuffer;
-		RangeBuffer<uint32_t>        m_IndexBuffer;
+
+		RangeBuffer<idl::Submesh> m_SubmeshBuffer;
+		RangeBuffer<idl::Meshlet> m_MeshletBuffer;
+		RangeBuffer<uint32_t>     m_VertexMapBuffer;
+		RangeBuffer<uint32_t>     m_VertexDataBuffer;
+		RangeBuffer<uint32_t>     m_IndexBuffer;
 
 		EntryBuffer<idl::PbrMaterial> m_Pbr;
 

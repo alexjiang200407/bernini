@@ -48,10 +48,10 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto material         = bgl::MaterialHandle();
 	material.materialType = bgl::MaterialType::kPBR;
 
-	auto geom = scene->AddCubeGeom();
+	auto geom = scene->AddCubeGeom(material);
 	REQUIRE(geom.IsValid());
 
-	auto inst = view->CreateStaticMeshInstance(geom, material, glm::mat4(1.0f));
+	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
@@ -153,37 +153,33 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 5);
-	auto* view       = viewHandle->As<bgl::SceneView>();
-	REQUIRE(view != nullptr);
-
-	auto geom = scene->AddCubeGeom();
-	REQUIRE(geom.IsValid());
-
-	// Created with the kNull material -> the submesh starts on the Null PSO.
+	// Material (and thus PSO) is now a per-geom property cached on the submesh; created with the
+	// kNull material, the cube's submesh starts on the Null PSO.
 	auto nullMat         = bgl::MaterialHandle();
 	nullMat.materialType = bgl::MaterialType::kNull;
 
-	auto inst = view->CreateStaticMeshInstance(geom, nullMat, glm::mat4(1.0f));
-	REQUIRE(inst.IsValid());
+	auto geom = scene->AddCubeGeom(nullMat);
+	REQUIRE(geom.IsValid());
 
-	auto instBuffers                                              = view->GetInstanceBuffers();
-	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, drawArgs] = instBuffers;
+	// The cube is the first geom, so its single submesh is at global index 0 in the Scene's
+	// submesh buffer; read its cached pso directly.
+	auto  geomBuffers   = scene->GetBuffers();
+	auto& submeshBuffer = std::get<0>(geomBuffers);
 
-	const uint32_t meshIndex = inst.handle.index;
-	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
-	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
+	CHECK(
+		submeshBuffer.AtIndex(0).pso ==
+		static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
 
-	CHECK(instanceBuffer[submeshInstance].psoType == bgl::PsoType::kOpaque_StaticMesh_Null);
-
-	SECTION("A valid material updates the submesh-instance's PSO")
+	SECTION("A valid material updates the submesh's PSO")
 	{
 		auto pbr         = bgl::MaterialHandle();
 		pbr.materialType = bgl::MaterialType::kPBR;
 
-		REQUIRE_NOTHROW(view->SetSubmeshMaterial(inst, 0, pbr));
+		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 0, pbr));
 
-		CHECK(instanceBuffer[submeshInstance].psoType == bgl::PsoType::kOpaque_StaticMesh_PBR);
+		CHECK(
+			submeshBuffer.AtIndex(0).pso ==
+			static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 
 	SECTION("Out-of-range submesh index throws")
@@ -191,7 +187,7 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 		auto pbr         = bgl::MaterialHandle();
 		pbr.materialType = bgl::MaterialType::kPBR;
 
-		REQUIRE_THROWS_AS(view->SetSubmeshMaterial(inst, 1, pbr), bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 1, pbr), bgl::SceneError);
 	}
 
 	SECTION("An invalid material throws")
@@ -199,16 +195,14 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 		auto bad         = bgl::MaterialHandle();
 		bad.materialType = bgl::MaterialType::kInvalid;
 
-		REQUIRE_THROWS_AS(view->SetSubmeshMaterial(inst, 0, bad), bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, bad), bgl::SceneError);
 	}
 
-	SECTION("An invalid mesh handle throws")
+	SECTION("An invalid geom handle throws")
 	{
 		auto pbr         = bgl::MaterialHandle();
 		pbr.materialType = bgl::MaterialType::kPBR;
 
-		REQUIRE_THROWS_AS(
-			view->SetSubmeshMaterial(bgl::MeshInstanceHandle{}, 0, pbr),
-			bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(bgl::GeomHandle{}, 0, pbr), bgl::SceneError);
 	}
 }

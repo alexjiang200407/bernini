@@ -2,6 +2,8 @@ import idl.DebugRecord;
 import types.ComputeBuffer;
 import idl.ErrorCode;
 
+__exported import idl.ErrorCode;
+
 static const uint kDbgHeaderWords = 4;
 static const uint kDbgRecordWords = 1;
 

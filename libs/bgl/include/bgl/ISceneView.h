@@ -29,17 +29,13 @@ namespace bgl
 		virtual const SceneHandle&
 		GetScene() const noexcept = 0;
 
+		/**
+		 * Places an instance of `geom` in this view. Material is a property of the geom's
+		 * submeshes (set at geom creation or via Scene::SetSubmeshMaterial), so it is not passed
+		 * here; every submesh's PSO is derived from its own cached material.
+		 */
 		virtual MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, MaterialHandle material, glm::mat4 transform) = 0;
-
-		MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform)
-		{
-			return CreateStaticMeshInstance(
-				geom,
-				MaterialHandle(MaterialType::kNull, core::slot_handle()),
-				transform);
-		}
+		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
 
 		/**
 		 * Removes a mesh instance from this view. The geometry it referenced is left
@@ -51,23 +47,6 @@ namespace bgl
 		 */
 		virtual void
 		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
-
-		/**
-		 * Sets the material of a single submesh of a mesh instance, updating that
-		 * submesh's pipeline state (PSO). Materials are per-submesh: an instance's
-		 * submeshes can each render with a different PSO.
-		 *
-		 * @param instance     A handle returned by CreateStaticMeshInstance.
-		 * @param submeshIndex The submesh within the instance's geometry [0, submeshCount).
-		 * @param material     The material to apply to that submesh.
-		 * @throws SceneError if the handle is invalid/removed, the submesh index is out
-		 *         of range, or the material is invalid.
-		 */
-		virtual void
-		SetSubmeshMaterial(
-			MeshInstanceHandle instance,
-			uint32_t           submeshIndex,
-			MaterialHandle     material) = 0;
 
 		virtual uint32_t
 		GetInstanceCount() const noexcept = 0;

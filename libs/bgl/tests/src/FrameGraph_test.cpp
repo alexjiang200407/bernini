@@ -11,7 +11,7 @@ namespace
 	BufferHandle
 	MakeBuffer(uint32_t idx)
 	{
-		return BufferHandle{ idx, 0 };
+		return BufferHandle({ { idx, 0 } });
 	}
 
 	BufferArg
@@ -445,7 +445,7 @@ TEST_CASE("FrameGraph: derives producer -> consumer barriers", "[fg]")
 
 	const PassBarriers& fillBarriers = fg.BarriersFor("Fill");
 	REQUIRE(fillBarriers.bufferDescs.size() == 1);
-	CHECK(fillBarriers.bufferHandles[0].idx == 7);
+	CHECK(fillBarriers.bufferHandles[0].slot.index == 7);
 	CHECK(fillBarriers.bufferDescs[0].accessBefore == BarrierAccessFlag::kNone);
 	CHECK(fillBarriers.bufferDescs[0].accessAfter == BarrierAccessFlag::kUnorderedAccess);
 
@@ -531,7 +531,7 @@ TEST_CASE("FrameGraph: GetBuffer resolves an imported buffer; imports clear afte
 	fg.RegisterQueue("main", queue, cmd);
 	fg.Execute();
 
-	CHECK(got.idx == 9);
+	CHECK(got.slot.index == 9);
 	CHECK(fg.ImportedResourceCount() == 0);             // imports dropped after Execute
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);  // must recompile before next Execute
 }
@@ -569,7 +569,7 @@ TEST_CASE("FrameGraph: a texture that is both an attachment and an import throws
 	FrameGraph fg;
 
 	TextureHandle tex{};
-	tex.idx = 5;
+	tex.slot.index = 5;
 	fg.ImportTexture("rt", tex);  // tracked by name...
 
 	RtvHandle rtv{};
@@ -588,7 +588,7 @@ TEST_CASE("FrameGraph: an attachment-only texture transitions to render target",
 	FrameGraph fg;
 
 	TextureHandle tex{};
-	tex.idx = 7;  // never imported -> reached only as an attachment
+	tex.slot.index = 7;  // never imported -> reached only as an attachment
 
 	RtvHandle rtv{};
 	rtv.idx = 1;
@@ -603,7 +603,7 @@ TEST_CASE("FrameGraph: an attachment-only texture transitions to render target",
 	// One transition, on the attachment's resolved texture, taking it to RT.
 	const PassBarriers& barriers = fg.BarriersFor("Render");
 	REQUIRE(barriers.textureDescs.size() == 1);
-	CHECK(barriers.textureHandles[0].idx == 7);
+	CHECK(barriers.textureHandles[0].slot.index == 7);
 	CHECK(barriers.textureDescs[0].accessAfter == BarrierAccessFlag::kRenderTarget);
 	CHECK(barriers.textureDescs[0].layoutAfter == BarrierLayout::kRenderTarget);
 }

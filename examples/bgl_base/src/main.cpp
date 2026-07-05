@@ -131,9 +131,9 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto view  = graphics->CreateSceneView(scene, 100);
 
 		scene->SetEnvironmentMap(
-			{ assetlib::loadDDS("assets/iem.dds"),
-		      assetlib::loadDDS("assets/pmrem.dds"),
-		      assetlib::loadDDS("assets/brdf_lut.dds") });
+			{ scene->AddTextureAsset(assetlib::loadDDS("assets/iem.dds")),
+		      scene->AddTextureAsset(assetlib::loadDDS("assets/pmrem.dds")),
+		      scene->AddTextureAsset(assetlib::loadDDS("assets/brdf_lut.dds")) });
 
 		auto metalMat = scene->CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
@@ -143,7 +143,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto transform = glm::mat4(1.0f);
 
-		auto inst2 = view->CreateStaticMeshInstance(sphere, metalMat, transform);
+		auto inst2 = view->CreateStaticMeshInstance(sphere, transform);
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 

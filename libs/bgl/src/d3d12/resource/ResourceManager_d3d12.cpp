@@ -67,15 +67,14 @@ namespace bgl
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
-		auto     bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
-		uint32_t slotIndex        = bufferSlotHandle.index;
+		auto bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
 
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
 		bufferDesc.isUav     = desc.isUav;
 		bufferDesc.debugName = desc.debugName;
 
-		Buffer buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, bufferDesc);
+		Buffer buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), bufferSlotHandle.index, bufferDesc);
 
 		if (desc.isUav)
 		{
@@ -110,9 +109,9 @@ namespace bgl
 				buffer.GetCpuHandle());
 		}
 
-		m_CbvSrvUavSlots[slotIndex] = std::move(buffer);
+		m_CbvSrvUavSlots[bufferSlotHandle] = std::move(buffer);
 
-		return BufferHandle{ slotIndex, bufferSlotHandle.generation };
+		return BufferHandle{ bufferSlotHandle };
 	}
 
 	BufferHandle
@@ -140,10 +139,9 @@ namespace bgl
 		// shader-visible descriptor slot.
 		if (desc.usage.any(TextureUsageFlag::kSRV))
 		{
-			auto     slot      = m_CbvSrvUavSlots.allocate_slot();
-			uint32_t slotIndex = slot.index;
+			auto slot = m_CbvSrvUavSlots.allocate_slot();
 
-			Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slotIndex, desc);
+			Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slot.index, desc);
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
 			m_Device->CreateShaderResourceView(
@@ -151,14 +149,13 @@ namespace bgl
 				&srvDesc,
 				texture.GetCpuHandle());
 
-			m_CbvSrvUavSlots[slotIndex] = std::move(texture);
-			return TextureHandle{ slotIndex, slot.generation, desc.usage };
+			m_CbvSrvUavSlots[slot.index] = std::move(texture);
+			return TextureHandle{ slot, desc.usage };
 		}
 
-		auto     slot         = m_Textures.allocate_slot();
-		uint32_t slotIndex    = slot.index;
-		m_Textures[slotIndex] = Texture(m_Device.Get(), nullptr, slotIndex, desc);
-		return TextureHandle{ slotIndex, slot.generation, desc.usage };
+		auto slot              = m_Textures.allocate_slot();
+		m_Textures[slot.index] = Texture(m_Device.Get(), nullptr, slot.index, desc);
+		return TextureHandle{ slot, desc.usage };
 	}
 
 	SamplerHandle
@@ -265,7 +262,8 @@ namespace bgl
 			subresources.reserve(pending.subresources.size());
 			for (const auto& s : pending.subresources)
 			{
-				subresources.push_back({ pending.bytes.data() + s.offset, s.rowPitch, s.slicePitch });
+				subresources.push_back(
+					{ pending.bytes.data() + s.offset, s.rowPitch, s.slicePitch });
 			}
 
 			cmd->WriteTexture(pending.handle, subresources);
@@ -305,13 +303,12 @@ namespace bgl
 	{
 		if (desc.usage.any(TextureUsageFlag::kSRV))
 		{
-			auto     slot      = m_CbvSrvUavSlots.allocate_slot();
-			uint32_t slotIndex = slot.index;
+			auto slot = m_CbvSrvUavSlots.allocate_slot();
 
 			Texture texture(
 				m_Device.Get(),
 				m_CbvSrvUavHeap.Get(),
-				slotIndex,
+				slot.index,
 				std::move(d3d12Texture),
 				desc);
 
@@ -321,15 +318,14 @@ namespace bgl
 				&srvDesc,
 				texture.GetCpuHandle());
 
-			m_CbvSrvUavSlots[slotIndex] = std::move(texture);
-			return TextureHandle{ slotIndex, slot.generation, desc.usage };
+			m_CbvSrvUavSlots[slot.index] = std::move(texture);
+			return TextureHandle{ slot, desc.usage };
 		}
 
-		auto     slot      = m_Textures.allocate_slot();
-		uint32_t slotIndex = slot.index;
-		m_Textures[slotIndex] =
-			Texture(m_Device.Get(), nullptr, slotIndex, std::move(d3d12Texture), desc);
-		return TextureHandle{ slotIndex, slot.generation, desc.usage };
+		auto slot = m_Textures.allocate_slot();
+		m_Textures[slot.index] =
+			Texture(m_Device.Get(), nullptr, slot.index, std::move(d3d12Texture), desc);
+		return TextureHandle{ slot, desc.usage };
 	}
 
 	RtvHandle
@@ -429,12 +425,12 @@ namespace bgl
 		{
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kCbvSrvUav,
-				handle.idx,
+				handle.slot.index,
 				currentFenceValue);
 		}
 		else
 		{
-			m_CbvSrvUavSlots.release_slot(handle.idx);
+			m_CbvSrvUavSlots.release_slot(handle.slot);
 		}
 	}
 
@@ -453,16 +449,16 @@ namespace bgl
 			// SRV textures live in the CBV_SRV_UAV pool; RTV/DSV-only in m_Textures.
 			m_PendingDeletions.emplace_back(
 				isSrv ? PendingDeletion::Type::kCbvSrvUav : PendingDeletion::Type::kTexture,
-				handle.idx,
+				handle.slot.index,
 				currentFenceValue);
 		}
 		else if (isSrv)
 		{
-			m_CbvSrvUavSlots.release_slot(handle.idx);
+			m_CbvSrvUavSlots.release_slot(handle.slot);
 		}
 		else
 		{
-			m_Textures.release_slot(handle.idx);
+			m_Textures.release_slot(handle.slot);
 		}
 	}
 
@@ -544,12 +540,12 @@ namespace bgl
 	bool
 	ResourceManager::ValidBufferHandle(const BufferHandle& handle) const noexcept
 	{
-		if (!m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
+		if (!m_CbvSrvUavSlots.valid(handle.slot))
 		{
 			return false;
 		}
 
-		const auto& slot = m_CbvSrvUavSlots[handle.idx];
+		const auto& slot = m_CbvSrvUavSlots[handle.slot];
 		return std::holds_alternative<Buffer>(slot) && !std::get<Buffer>(slot).IsNull();
 	}
 
@@ -558,21 +554,21 @@ namespace bgl
 	{
 		if (handle.usage.any(TextureUsageFlag::kSRV))
 		{
-			if (!m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
+			if (!m_CbvSrvUavSlots.valid(handle.slot))
 			{
 				return false;
 			}
 
-			const auto& slot = m_CbvSrvUavSlots[handle.idx];
+			const auto& slot = m_CbvSrvUavSlots[handle.slot];
 			return std::holds_alternative<Texture>(slot) && !std::get<Texture>(slot).IsNull();
 		}
 
-		if (!m_Textures.valid(handle.idx, handle.generation))
+		if (!m_Textures.valid(handle.slot))
 		{
 			return false;
 		}
 
-		return !m_Textures[handle.idx].IsNull();
+		return !m_Textures[handle.slot].IsNull();
 	}
 
 	bool
@@ -622,9 +618,9 @@ namespace bgl
 		gassert(ValidTextureHandle(handle), "Invalid texture handle");
 		if (handle.usage.any(TextureUsageFlag::kSRV))
 		{
-			return std::get<Texture>(m_CbvSrvUavSlots[handle.idx]);
+			return std::get<Texture>(m_CbvSrvUavSlots[handle.slot]);
 		}
-		return m_Textures[handle.idx];
+		return m_Textures[handle.slot];
 	}
 
 	const Sampler&
@@ -638,7 +634,7 @@ namespace bgl
 	ResourceManager::GetBuffer(BufferHandle handle) const noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Invalid buffer handle");
-		return std::get<Buffer>(m_CbvSrvUavSlots[handle.idx]);
+		return std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]);
 	}
 
 	const ReadbackBuffer&

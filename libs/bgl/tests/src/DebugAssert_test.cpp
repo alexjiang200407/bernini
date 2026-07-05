@@ -231,12 +231,11 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	sceneDesc.maxVertexBufferByteSize = 800000;
 	sceneDesc.maxIndices              = 20000;
 
-	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 8);
-	auto cube  = scene->AddCubeGeom();
-
+	auto scene          = gfx->CreateScene(sceneDesc);
+	auto view           = gfx->CreateSceneView(scene, 8);
 	auto assertMaterial = bgl::MaterialHandle(bgl::MaterialType::kAssert, core::slot_handle());
-	view->CreateStaticMeshInstance(cube, assertMaterial, glm::mat4(1.0f));
+	auto cube           = scene->AddCubeGeom(assertMaterial);
+	view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
 
 	auto camera = bgl::Camera();
 	camera

@@ -12,6 +12,8 @@ namespace bgl::idl
 		kMeshletVertexOverflow = 5,
 		kMeshletPrimitiveOverflow = 6,
 		kInvalidVertexIndex = 7,
+		kInvalidSubmeshInstance = 8,
+		kInvalidPsoType = 9,
 	};
 
 	static_assert(sizeof(ErrorCode) == 4);

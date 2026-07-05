@@ -57,12 +57,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		sceneDesc.maxMeshlets             = 1000;
 		sceneDesc.maxSubmeshes            = 100;
 
-		auto scene = graphics->CreateScene(std::move(sceneDesc));
-		auto view  = graphics->CreateSceneView(scene, 100);
-		auto cube  = scene->AddCubeGeom();
-
+		auto scene          = graphics->CreateScene(std::move(sceneDesc));
+		auto view           = graphics->CreateSceneView(scene, 100);
 		auto assertMaterial = bgl::MaterialHandle(bgl::MaterialType::kAssert, core::slot_handle());
-		view->CreateStaticMeshInstance(cube, assertMaterial, glm::mat4(1.0f));
+		auto cube           = scene->AddCubeGeom(assertMaterial);
+		view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 

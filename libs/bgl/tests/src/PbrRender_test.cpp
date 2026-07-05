@@ -1,4 +1,5 @@
 #include "gfx/GraphicsBase.h"
+#include "util/GoldenImage.h"
 #include <DirectXTex.h>
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -6,7 +7,6 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/RenderContext.h>
 
 namespace
 {
@@ -24,9 +24,8 @@ namespace
 	};
 }
 
-// Reproduces the bgl_base scene (two PBR instances sharing one PSO bucket) headlessly
-// under the D3D12 debug layer, so amplification/mesh-shader issues surface in the log.
-TEST_CASE("PBR instances render headlessly", "[pbr][render]")
+// PBR with Image Based Lighting
+TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
 	opts.enableDebugLayer = true;
@@ -39,8 +38,8 @@ TEST_CASE("PBR instances render headlessly", "[pbr][render]")
 	gfx->SetGpuAssertionHandler(&handler);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
-	targetDesc.width    = 64;
-	targetDesc.height   = 64;
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
 	targetDesc.headless = true;
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
@@ -57,35 +56,42 @@ TEST_CASE("PBR instances render headlessly", "[pbr][render]")
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	scene->SetEnvironmentMap(
-		{ assetlib::loadDDS("assets/iem.dds"),
-		  assetlib::loadDDS("assets/pmrem.dds"),
-		  assetlib::loadDDS("assets/brdf_lut.dds") });
+		{ scene->AddTextureAsset(assetlib::loadDDS("assets/iem.dds")),
+	      scene->AddTextureAsset(assetlib::loadDDS("assets/pmrem.dds")),
+	      scene->AddTextureAsset(assetlib::loadDDS("assets/brdf_lut.dds")) });
 
-	auto metalMat   = scene->CreatePbrMaterial({ .metallicFactor = 1.0f, .roughnessFactor = 0.2f });
-	auto plasticMat = scene->CreatePbrMaterial({ .metallicFactor = 0.0f, .roughnessFactor = 0.4f });
+	auto metalMat = scene->CreatePbrMaterial(
+		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
 
-	auto cube   = scene->AddCubeGeom(metalMat);
-	auto sphere = scene->AddSphereGeom(32, 32, 1.0f, plasticMat);
+	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, metalMat);
 
 	auto transform = glm::mat4(1.0f);
-	view->CreateStaticMeshInstance(cube, metalMat, transform);
-	transform[3][0] = -5.0f;
-	view->CreateStaticMeshInstance(sphere, plasticMat, transform);
+	view->CreateStaticMeshInstance(sphere, transform);
 
 	auto camera = bgl::Camera();
 	camera
-		.LookAt(glm::vec3(0.0f, 0.0f, 20.0f), glm::vec3(0.0f, 0.0f, 19.0f), glm::vec3(0.0f, 1.0f, 0.0f))
-		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 0.0f, 19.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.5f, 500.0f);
 
 	auto context     = bgl::RenderContext();
 	context.view     = view;
 	context.camera   = camera;
-	context.viewport = bgl::Viewport(64.0f, 64.0f);
+	context.viewport = bgl::Viewport(400.0f, 300.0f);
 
 	for (int i = 0; i < 6; ++i)
 	{
 		gfx->DrawFrame(target, context);
 	}
+
+	gfx->ScreenshotRaw(target, "assets/golden/pbr_ibl.got.dds");
+
+	CHECK(
+		bgl::test::MatchesGoldenDDS(
+			"assets/golden/pbr_ibl.exp.dds",
+			"assets/golden/pbr_ibl.got.dds"));
 
 	std::string ecStr;
 	for (auto ec : handler.errcodes)
@@ -93,35 +99,4 @@ TEST_CASE("PBR instances render headlessly", "[pbr][render]")
 		ecStr += std::to_string(ec) + " ";
 	}
 	INFO("GPU assertion calls: " << handler.calls << " errcodes: [" << ecStr << "]");
-
-	// Prove the geometry actually rasterized: read back the render target and require
-	// that some pixels differ from the top-left (background) pixel. If the amp shader
-	// mis-reads its cbuffer, the mesh shader never runs and the whole frame is uniform.
-	gfx->ScreenshotRaw(target, "pbr_headless.dds");
-
-	DirectX::TexMetadata  meta{};
-	DirectX::ScratchImage img;
-	REQUIRE(SUCCEEDED(DirectX::LoadFromDDSFile(L"pbr_headless.dds", DirectX::DDS_FLAGS_NONE, &meta, img)));
-
-	const DirectX::Image* image = img.GetImage(0, 0, 0);
-	REQUIRE(image != nullptr);
-
-	const auto*  pixels    = image->pixels;
-	const size_t rowPitch  = image->rowPitch;
-	uint32_t     firstTexel = *reinterpret_cast<const uint32_t*>(pixels);
-	bool         anyDiffer  = false;
-	for (size_t y = 0; y < image->height && !anyDiffer; ++y)
-	{
-		const auto* row = reinterpret_cast<const uint32_t*>(pixels + y * rowPitch);
-		for (size_t x = 0; x < image->width; ++x)
-		{
-			if (row[x] != firstTexel)
-			{
-				anyDiffer = true;
-				break;
-			}
-		}
-	}
-
-	CHECK(anyDiffer);  // geometry rendered -> not a uniform frame
 }

@@ -13,5 +13,19 @@ namespace core
 		{
 			return index == invalid_index;
 		}
+
+		[[nodiscard]] bool
+		operator==(const slot_handle& other) const noexcept
+		{
+			return index == other.index && generation == other.generation;
+		}
+
+		[[nodiscard]] bool
+		operator!=(const slot_handle& other) const noexcept
+		{
+			return !(*this == other);
+		}
+
+		operator bool() const noexcept { return !is_null(); }
 	};
 }

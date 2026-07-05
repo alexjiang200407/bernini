@@ -158,7 +158,8 @@ namespace bgl
 			{
 				std::memcpy(
 					dst + static_cast<uint64_t>(row) * fp.Footprint.RowPitch,
-					static_cast<const uint8_t*>(src.data) + static_cast<uint64_t>(row) * src.rowPitch,
+					static_cast<const uint8_t*>(src.data) +
+						static_cast<uint64_t>(row) * src.rowPitch,
 					rowSizes[i]);
 			}
 		}
@@ -543,7 +544,7 @@ namespace bgl
 			if (auto it = kernel.uniforms.find("gDebug");
 			    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
 			{
-				const DescriptorHandle handle(m_ActiveDebugBuffer.idx);
+				const DescriptorHandle handle(m_ActiveDebugBuffer.slot);
 				BindConstantData(
 					&handle,
 					sizeof(handle),
@@ -643,7 +644,7 @@ namespace bgl
 		if (auto it = kernel.uniforms.find("gDebug");
 		    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
 		{
-			const DescriptorHandle handle(m_ActiveDebugBuffer.idx);
+			const DescriptorHandle handle(m_ActiveDebugBuffer.slot);
 			BindConstantData(
 				&handle,
 				sizeof(handle),

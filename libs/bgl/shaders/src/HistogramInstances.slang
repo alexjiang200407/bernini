@@ -1,14 +1,21 @@
 import types.SubmeshInstance;
 import types.ComputeBuffer;
 import types.PackedBuffer;
+import types.EntryBuffer;
+import types.RangeBuffer;
 import types.PsoType;
+import idl.Mesh;
+import idl.Submesh;
 import idl.Constants;
+import debug.dbg;
 
 static const uint kPsoCount = uint(PsoType::kCount);
 
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
+    EntryBuffer<Mesh> meshBuffer;
+    RangeBuffer<Submesh> submeshBuffer;
     ComputeBuffer<uint> outBuffer;
 };
 
@@ -26,11 +33,22 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     }
     GroupMemoryBarrierWithGroupSync();
 
-    let psoType = uint(gUniforms.instanceBuffer[globalIdx].psoType);
-    if (psoType < kPsoCount)
+    let instance = gUniforms.instanceBuffer[globalIdx];
+
+    if (!instance.meshInstance.Null())
     {
-        InterlockedAdd(gLocalHistogram[psoType], 1u);
+        let mesh = gUniforms.meshBuffer.Get(instance.meshInstance);
+        let submesh = gUniforms.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
+        let psoType = submesh.pso;
+
+        dbg_assert(psoType < kPsoCount, ErrorCode.kInvalidPsoType);
+
+        if (psoType < kPsoCount)
+        {
+            InterlockedAdd(gLocalHistogram[psoType], 1u);
+        }
     }
+
     GroupMemoryBarrierWithGroupSync();
 
     if (localIdx < kPsoCount)

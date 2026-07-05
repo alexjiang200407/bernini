@@ -81,7 +81,7 @@ TEST_CASE(
 	REQUIRE(kernel.uniforms.contains("gDebug"));
 
 	// Bind the bindless indices: for an SRV texture, handle.idx IS the descriptor index.
-	kernel["gUniforms"]["texture"]["index"] = static_cast<uint32_t>(texture.idx);
+	kernel["gUniforms"]["texture"]["index"] = static_cast<uint32_t>(texture.slot.index);
 	kernel["gUniforms"]["sampler"]["index"] = static_cast<uint32_t>(sampler.idx);
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();

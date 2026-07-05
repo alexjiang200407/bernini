@@ -1,5 +1,6 @@
 #pragma once
 #include "types/Barrier.h"
+#include <core/containers/slot_handle.h>
 #include <core/type_traits.h>
 
 namespace bgl
@@ -9,13 +10,12 @@ namespace bgl
 
 	struct BufferHandle
 	{
-		uint32_t idx        = 0xFFFFFFFF;
-		uint32_t generation = 0;
+		core::slot_handle slot;
 
 		[[nodiscard]] bool
 		IsNull() const
 		{
-			return idx == 0xFFFFFFFF;
+			return slot.index == 0xFFFFFFFF;
 		}
 	};
 

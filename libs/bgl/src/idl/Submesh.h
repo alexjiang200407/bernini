@@ -16,9 +16,10 @@ namespace bgl::idl
 		Range indices;
 		uint32_t vertexCount;
 		Entry material;
+		uint32_t pso;
 	};
 
-	static_assert(sizeof(Submesh) == 128);
+	static_assert(sizeof(Submesh) == 132);
 	static_assert(offsetof(Submesh, layout) == 0);
 	static_assert(offsetof(Submesh, meshlets) == 100);
 	static_assert(offsetof(Submesh, vertexMap) == 108);
@@ -26,5 +27,6 @@ namespace bgl::idl
 	static_assert(offsetof(Submesh, indices) == 116);
 	static_assert(offsetof(Submesh, vertexCount) == 120);
 	static_assert(offsetof(Submesh, material) == 124);
+	static_assert(offsetof(Submesh, pso) == 128);
 
 }

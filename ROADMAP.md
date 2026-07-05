@@ -106,6 +106,11 @@ and portability.
   - [ ] LUT
   - [ ] Color Grading
   - [ ] Ambient Occlusion. (Maybe not)
+- [ ] Weather
+  - [ ] Sky box (for interiors and editor)
+  - [ ] Procedural Atmosphere Shader
+  - [ ] Rain & Snow
+  - [ ] Wetness (Material modificatio)
 - [ ] Misc
   - [ ] Texture Atlasing
   - [ ] Editor Build Texture Atlas

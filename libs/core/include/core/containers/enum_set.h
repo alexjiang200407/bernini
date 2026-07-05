@@ -69,6 +69,13 @@ namespace core
 			return _impl == static_cast<U>(e);
 		}
 
+		[[nodiscard]]
+		constexpr bool
+		operator==(const enum_set& rhs) const noexcept
+		{
+			return _impl == rhs._impl;
+		}
+
 		constexpr enum_set&
 		operator|=(const enum_set& rhs) noexcept
 		{

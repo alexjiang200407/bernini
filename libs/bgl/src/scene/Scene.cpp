@@ -79,6 +79,16 @@ namespace bgl
 		}
 
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
+
+		// The PSO bucket cached on a submesh, derived from its geom + material type. An absent
+		// material falls back to kNull (unlit) -- the same default the old per-instance path used.
+		uint32_t
+		SubmeshPso(GeomType geomType, MaterialHandle material)
+		{
+			const MaterialType type =
+				material.IsValid() ? material.materialType : MaterialType::kNull;
+			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type));
+		}
 	}
 
 	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
@@ -307,6 +317,7 @@ namespace bgl
 			{
 				submesh.material = material.handle;
 			}
+			submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
 
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
@@ -465,6 +476,7 @@ namespace bgl
 			{
 				submesh.material = material.handle;
 			}
+			submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
 
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
@@ -487,20 +499,50 @@ namespace bgl
 	MaterialHandle
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
-		const uint32_t white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].idx;
-		const uint32_t flatNormal =
-			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].idx;
+		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
+		const auto flatNormal =
+			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
 
 		idl::PbrMaterial material{};
-		material.baseColorTexture = idl::TextureHandle{ white };
-		material.normalTexture    = idl::TextureHandle{ flatNormal };
-		material.ormTexture       = idl::TextureHandle{ white };
+		material.baseColorTexture = idl::TextureHandle{ white.index };
+		material.normalTexture    = idl::TextureHandle{ flatNormal.index };
+		material.ormTexture       = idl::TextureHandle{ white.index };
 		material.baseColorFactor  = desc.baseColorFactor;
 		material.metallicFactor   = desc.metallicFactor;
 		material.roughnessFactor  = desc.roughnessFactor;
 
 		const core::slot_handle slot = m_Pbr.Add(material);
 		return MaterialHandle{ MaterialType::kPBR, slot };
+	}
+
+	void
+	Scene::SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
+	{
+		if (geom.geomType != GeomType::kStaticMesh)
+		{
+			throw SceneError("GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh");
+		}
+		if (!IsGeomSlotValid(geom.handle))
+		{
+			throw SceneError("GeomHandle passed to SetSubmeshMaterial has expired or is invalid");
+		}
+		if (!material.IsValid())
+		{
+			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
+		}
+
+		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
+		if (submeshIndex >= asset.submeshes.count)
+		{
+			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
+		}
+
+		const uint32_t globalIndex = asset.submeshes.range.offsetStart + submeshIndex;
+
+		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
+		submesh.material = material.handle;
+		submesh.pso      = SubmeshPso(geom.geomType, material);
+		m_SubmeshBuffer.SetAtIndex(globalIndex, submesh);
 	}
 
 	void
@@ -543,14 +585,28 @@ namespace bgl
 		m_GeomAssets.release_slot(geom.handle.index);
 	}
 
+	TextureAssetHandle
+	Scene::AddTextureAsset(assetlib::ImageData img)
+	{
+		const auto gpuTexture = m_ResourceManager->CreateTexture(img);
+		return static_cast<TextureAssetHandle>(gpuTexture);
+	}
+
 	void
 	Scene::SetEnvironmentMap(const EnvironmentMapDesc& desc)
 	{
-		// The two cubemaps + the 2D BRDF LUT, already decoded by the caller. Uploads are
-		// deferred to Scene::Update (FlushPendingTextureUploads); the handles' idx are the
-		// bindless SRV indices.
-		m_EnvironmentMap.irradiance = m_ResourceManager->CreateTexture(desc.irradiance);
-		m_EnvironmentMap.prefilter  = m_ResourceManager->CreateTexture(desc.prefilter);
-		m_EnvironmentMap.brdfLut    = m_ResourceManager->CreateTexture(desc.brdfLut);
+		const auto resolve = [this](TextureAssetHandle asset, const char* name) -> TextureHandle {
+			auto texHandle = TextureHandle::From(asset);
+			if (!m_ResourceManager->ValidTextureHandle(texHandle))
+			{
+				throw SceneError(
+					std::format("SetEnvironmentMap: invalid {} texture asset handle", name));
+			}
+			return texHandle;
+		};
+
+		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance");
+		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter");
+		m_EnvironmentMap.brdfLut    = resolve(desc.brdfLut, "brdfLut");
 	}
 }

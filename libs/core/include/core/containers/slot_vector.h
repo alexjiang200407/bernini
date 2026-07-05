@@ -1,5 +1,6 @@
 #pragma once
 #include <core/containers/slot_handle.h>
+#include <core/err/util.h>
 
 namespace core
 {
@@ -86,8 +87,16 @@ namespace core
 		void
 		release_slot(uint32_t index)
 		{
-			assert(index < m_Data.size());
-			assert(m_Meta[index].is_allocated);
+			core::throw_runtime_error_if(
+				index >= m_Data.size(),
+				"slot_vector: release_slot index {} out of bounds (size {})",
+				index,
+				m_Data.size());
+
+			core::throw_runtime_error_if(
+				!m_Meta[index].is_allocated,
+				"slot_vector: release_slot index {} is not allocated",
+				index);
 
 			if constexpr (!std::is_trivially_destructible_v<T>)
 			{
@@ -100,6 +109,24 @@ namespace core
 			m_FreeIndices.push_back(index);
 		}
 
+		void
+		release_slot(core::slot_handle slot)
+		{
+			core::throw_runtime_error_if(
+				slot.index >= m_Meta.size(),
+				"Index '{}' out of bounds",
+				slot.index);
+
+			core::throw_runtime_error_if(
+				m_Meta[slot.index].generation != slot.generation,
+				"Stale handle for index '{}' (handle generation {} != slot generation {})",
+				slot.index,
+				slot.generation,
+				m_Meta[slot.index].generation);
+
+			release_slot(slot.index);
+		}
+
 		[[nodiscard]] bool
 		valid(uint32_t index, uint32_t generation) const
 		{
@@ -107,6 +134,12 @@ namespace core
 				return false;
 
 			return m_Meta[index].generation == generation && m_Meta[index].is_allocated;
+		}
+
+		[[nodiscard]] bool
+		valid(core::slot_handle slot) const
+		{
+			return valid(slot.index, slot.generation);
 		}
 
 		[[nodiscard]] bool
@@ -118,23 +151,69 @@ namespace core
 		[[nodiscard]] T&
 		operator[](uint32_t index)
 		{
-			assert(index < m_Data.size());
-			assert(m_Meta[index].is_allocated);
+			core::throw_runtime_error_if(index >= m_Data.size(), "Index '{}' out of bounds", index);
+			core::throw_runtime_error_if(
+				!m_Meta[index].is_allocated,
+				"Index '{}' is not allocated",
+				index);
 			return m_Data[index];
 		}
 
 		[[nodiscard]] const T&
 		operator[](uint32_t index) const
 		{
-			assert(index < m_Data.size());
-			assert(m_Meta[index].is_allocated);
+			core::throw_runtime_error_if(index >= m_Data.size(), "Index '{}' out of bounds", index);
+			core::throw_runtime_error_if(
+				!m_Meta[index].is_allocated,
+				"Index '{}' is not allocated",
+				index);
 			return m_Data[index];
+		}
+
+		[[nodiscard]] T&
+		operator[](core::slot_handle slot)
+		{
+			core::throw_runtime_error_if(
+				slot.index >= m_Data.size(),
+				"Index '{}' out of bounds",
+				slot.index);
+			core::throw_runtime_error_if(
+				m_Meta[slot.index].generation != slot.generation,
+				"Stale handle for index '{}' (handle generation {} != slot generation {})",
+				slot.index,
+				slot.generation,
+				m_Meta[slot.index].generation);
+			core::throw_runtime_error_if(
+				!m_Meta[slot.index].is_allocated,
+				"Index '{}' is not allocated",
+				slot.index);
+			return m_Data[slot.index];
+		}
+
+		[[nodiscard]] const T&
+		operator[](core::slot_handle slot) const
+		{
+			core::throw_runtime_error_if(
+				slot.index >= m_Data.size(),
+				"Index '{}' out of bounds",
+				slot.index);
+			core::throw_runtime_error_if(
+				m_Meta[slot.index].generation != slot.generation,
+				"Stale handle for index '{}' (handle generation {} != slot generation {})",
+				slot.index,
+				slot.generation,
+				m_Meta[slot.index].generation);
+			core::throw_runtime_error_if(
+				!m_Meta[slot.index].is_allocated,
+				"Index '{}' is not allocated",
+				slot.index);
+			return m_Data[slot.index];
 		}
 
 		[[nodiscard]] uint32_t
 		generation(uint32_t index) const
 		{
-			assert(index < m_Meta.size());
+			core::throw_runtime_error_if(index >= m_Meta.size(), "Index '{}' out of bounds", index);
 			return m_Meta[index].generation;
 		}
 

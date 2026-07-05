@@ -57,22 +57,16 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 		badMaterial.materialType = bgl::MaterialType::kInvalid;
 		REQUIRE_FALSE(badMaterial.IsValid());
 
-		REQUIRE_THROWS_AS(
-			view->CreateStaticMeshInstance(geom, badMaterial, glm::mat4(1.0f)),
-			bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, badMaterial), bgl::SceneError);
 	}
 
 	SECTION("Non-static-mesh geometry throws")
 	{
-		auto validMaterial         = bgl::MaterialHandle();
-		validMaterial.materialType = bgl::MaterialType::kPBR;
-		REQUIRE(validMaterial.IsValid());
-
 		// A default-constructed handle is kInvalid, i.e. not kStaticMesh.
 		auto badGeom = bgl::GeomHandle();
 
 		REQUIRE_THROWS_AS(
-			view->CreateStaticMeshInstance(badGeom, validMaterial, glm::mat4(1.0f)),
+			view->CreateStaticMeshInstance(badGeom, glm::mat4(1.0f)),
 			bgl::SceneError);
 	}
 
