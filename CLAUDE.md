@@ -4,7 +4,7 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 - Use bash
 - Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h` for all the targets
-- Relative to project root folder, the subsystems currently are: `./bgl` and `./core`
+- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
 - The CMakelists will specify the src and include directory in each subsystem as a include directory for the target, so always `#include` to the relative to that. e.g. If the current source file is `$SUBSYSTEM/src/xx/Y.h` do `#include "X.h"` instead of `#include "../X.h"`
@@ -18,6 +18,33 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 Always read the [Style Guide](./STYLE.md)
 
+# Documentation Index
+
+Read through these documents if you deem them necessary to your given task. If you modify something that is touched on in these docs, you need to modify the docs as well.
+
+**[Geometry Layout](./docs/geometry_layout.md)**
+
+Describes the collection of structures, descriptors, and resources that are bound to the GPU for Geometry Passes.
+
+**[Render Hardware Interface](./docs/rhi.md)**
+
+RHI usage.
+
+**[Graphics Debug](./docs/gfx_debug.md)**
+
+Graphics debugging practices.
+
+**[Frame Graph](./docs/framegraph.md)**
+
+FrameGraph usage.
+
+**[Passes Overview](./docs/passes.md)**
+
+Overview of all the Frame Graph Passes
+
+**[IDL Codegen](./docs/idlgen.md)**
+
+How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
 # Directory Structure
 

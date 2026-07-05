@@ -6,12 +6,16 @@
     "glm",
     "catch2",
     "shader-slang",
-    "directx-headers",
-    "directx12-agility",
     "cpptrace",
-    "directxtex",
     "cli11",
-    "winpixevent"
+    "tinygltf",
+    "nlohmann-json",
+    "stb",
+    "meshoptimizer",
+    { "name": "directx-headers", "platform": "windows" },
+    { "name": "directx12-agility", "platform": "windows" },
+    { "name": "directxtex", "platform": "windows" },
+    { "name": "winpixevent", "platform": "windows" }
   ],
   "builtin-baseline": "05925b52317eb9a900a8583782e630aafd7a8929"
 }

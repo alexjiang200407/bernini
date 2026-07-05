@@ -34,6 +34,8 @@ function(compile_shader)
             set(SHADER_STAGE "ms_6_6")
         elseif(${SHADER_FILENAME} MATCHES "^AS.*\\.slang$")
             set(SHADER_STAGE "as_6_6")
+        elseif(${SHADER_FILENAME} MATCHES "^CS.*\\.slang$")
+            set(SHADER_STAGE "cs_6_6")
         else()
             message(FATAL_ERROR "compile_shader: Unable to infer shader stage from filename. Please specify")
         endif()
@@ -79,7 +81,10 @@ function(compile_shader)
         set(DEP_FILE "${OUT_FILE}.d")
 
         if (IS_DEBUG)
-            set(OTHER_FLAGS "-g2")
+            # -g2: debug info. -D BERNINI_GPU_DEBUG: enables dbg_raise() bodies in
+            # shaders; kept in lockstep with the C++/runtime-session define so the
+            # feature is fully stripped from Release shaders.
+            set(OTHER_FLAGS -g2 -DBERNINI_GPU_DEBUG=1)
         endif()
 
         # Register the compilation command target

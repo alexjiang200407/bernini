@@ -1,0 +1,11 @@
+function(assign_folder dir folder)
+    get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(t IN LISTS targets)
+        set_target_properties(${t} PROPERTIES FOLDER "${folder}")
+    endforeach()
+
+    get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(subdir IN LISTS subdirs)
+        assign_folder("${subdir}" "${folder}")
+    endforeach()
+endfunction()

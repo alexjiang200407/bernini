@@ -42,6 +42,7 @@ function(enable_strict_compiler)
                 /wd4275        # Non DLL-interface class used as base for DLL-interface class
                 /wd4251        # Non DLL-interface class used as member of DLL-interface class
                 /wd4868        # Brace initializer left-to-right evaluation warnings
+                /wd4866        # operator[] left-to-right evaluation order (chained subscripts)
                 
                 # --- EXCEPTIONS CONFIGURATION ---
                 $<$<CONFIG:Release>:/EHs-c-> 

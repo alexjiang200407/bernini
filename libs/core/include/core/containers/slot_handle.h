@@ -1,0 +1,31 @@
+#pragma once
+
+namespace core
+{
+	struct slot_handle
+	{
+		static constexpr uint32_t invalid_index = 0xFFFFFFFFu;
+		uint32_t                  index         = invalid_index;
+		uint32_t                  generation    = 0;
+
+		[[nodiscard]] bool
+		is_null() const
+		{
+			return index == invalid_index;
+		}
+
+		[[nodiscard]] bool
+		operator==(const slot_handle& other) const noexcept
+		{
+			return index == other.index && generation == other.generation;
+		}
+
+		[[nodiscard]] bool
+		operator!=(const slot_handle& other) const noexcept
+		{
+			return !(*this == other);
+		}
+
+		operator bool() const noexcept { return !is_null(); }
+	};
+}
