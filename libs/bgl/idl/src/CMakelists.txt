@@ -1,0 +1,59 @@
+set(IDL_CPP_OUT_DIR   "${CMAKE_SOURCE_DIR}/libs/bgl/src/idl")
+set(IDL_SLANG_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl/shaders/src/idl")
+set(IDL_SRC_ROOT      "${CMAKE_CURRENT_SOURCE_DIR}")
+
+file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")
+
+set(IDL_CPP_SOURCES
+    Meshlet.slang
+    VertexLayout.slang
+    Submesh.slang
+    Mesh.slang
+    DebugRecord.slang
+    Constants.slang
+    PbrMaterial.slang
+    TextureHandle.slang
+    SamplerHandle.slang
+    ErrorCode.slang
+)
+
+set(IDL_GENERATED_OUTPUTS "")
+
+foreach(src ${IDL_SOURCES})
+    file(RELATIVE_PATH rel "${IDL_SRC_ROOT}" "${src}")
+    get_filename_component(rel_dir "${rel}" DIRECTORY)
+    get_filename_component(name "${src}" NAME_WE)
+    get_filename_component(file "${src}" NAME)
+
+    if(rel_dir)
+        set(rel_stem "${rel_dir}/${name}")
+    else()
+        set(rel_stem "${name}")
+    endif()
+
+    set(slang_out "${IDL_SLANG_OUT_DIR}/${rel_stem}.slang")
+    set(outputs   "${slang_out}")
+    set(cpp_args  "")
+
+    if(file IN_LIST IDL_CPP_SOURCES)
+        set(cpp_args --cpp-out-dir "${IDL_CPP_OUT_DIR}")
+        list(APPEND outputs "${IDL_CPP_OUT_DIR}/${rel_stem}.h")
+    endif()
+
+    add_custom_command(
+        OUTPUT  ${outputs}
+        COMMAND bgl_idlgen
+                --src-root "${IDL_SRC_ROOT}"
+                --slang-out-dir "${IDL_SLANG_OUT_DIR}"
+                ${cpp_args}
+                -I "${IDL_SRC_ROOT}"
+                "${src}"
+        DEPENDS bgl_idlgen "${src}"
+        COMMENT "idlgen ${rel}"
+        VERBATIM
+    )
+
+    list(APPEND IDL_GENERATED_OUTPUTS ${outputs})
+endforeach()
+
+add_custom_target(bgl_idl_generate ALL DEPENDS ${IDL_GENERATED_OUTPUTS})

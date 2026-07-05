@@ -7,10 +7,6 @@
 
 Or use Visual Studio.
 
-## Pix
-
-To support PIX debug add the directory where Pix is installed to PATH environment variable.
-
 ## Hard Requirements
 
 ### CMake
@@ -27,6 +23,10 @@ To support PIX debug add the directory where Pix is installed to PATH environmen
 ### python3
 
 1. Download [here](https://www.python.org/downloads/). Ensure **python3** is discoverable.
+
+### Qt
+
+We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt-online-installation.html). In the Qt installer wizard, check Qt for `Development/Qt/Qt x.x.x/MSVC 2022 64-bit` (editor is windows only for now) and uncheck everything else.
 
 ## Soft Requirements
 

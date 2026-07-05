@@ -1,0 +1,149 @@
+#pragma once
+#include "types/Barrier.h"
+#include "types/ClearValue.h"
+#include "types/Format.h"
+#include "types/TextureDimension.h"
+#include <bgl/TextureAssetHandle.h>
+#include <core/containers/enum_set.h>
+#include <core/containers/slot_handle.h>
+
+namespace bgl
+{
+	class Texture;
+
+	struct TextureBarrierDesc
+	{
+		BarrierSync syncBefore = BarrierSyncFlag::kNone;
+		BarrierSync syncAfter  = BarrierSyncFlag::kNone;
+
+		BarrierAccess accessBefore = BarrierAccessFlag::kNone;
+		BarrierAccess accessAfter  = BarrierAccessFlag::kNone;
+
+		BarrierLayout layoutBefore = BarrierLayout::kUndefined;
+		BarrierLayout layoutAfter  = BarrierLayout::kUndefined;
+
+		uint32_t baseMipLevel   = 0;
+		uint32_t mipCount       = uint32_t(-1);
+		uint32_t baseArrayLayer = 0;
+		uint32_t layerCount     = uint32_t(-1);
+		uint32_t planeCount     = 1;
+		uint32_t firstPlane     = 0;
+
+		TextureBarrierDesc&
+		AddSyncBefore(BarrierSyncFlag sync)
+		{
+			syncBefore |= sync;
+			return *this;
+		}
+
+		TextureBarrierDesc&
+		AddSyncAfter(BarrierSyncFlag sync)
+		{
+			syncAfter |= sync;
+			return *this;
+		}
+
+		TextureBarrierDesc&
+		AddAccessBefore(BarrierAccessFlag access)
+		{
+			accessBefore |= access;
+			return *this;
+		}
+
+		TextureBarrierDesc&
+		AddAccessAfter(BarrierAccessFlag access)
+		{
+			accessAfter |= access;
+			return *this;
+		}
+
+		TextureBarrierDesc&
+		SetLayoutBefore(BarrierLayout layout)
+		{
+			layoutBefore = layout;
+			return *this;
+		}
+
+		TextureBarrierDesc&
+		SetLayoutAfter(BarrierLayout layout)
+		{
+			layoutAfter = layout;
+			return *this;
+		}
+	};
+
+	enum class TextureUsageFlag : uint32_t
+	{
+		kSRV          = 0x00000001,
+		kDepthStencil = 0x00000010,
+		kRenderTarget = 0x00000100,
+	};
+
+	using TextureUsage = core::enum_set<TextureUsageFlag>;
+
+	struct TextureDesc
+	{
+		uint32_t width         = 1;
+		uint32_t height        = 1;
+		uint32_t depth         = 1;
+		uint32_t arraySize     = 1;
+		uint32_t mipLevels     = 1;
+		uint32_t sampleCount   = 1;
+		uint32_t sampleQuality = 0;
+
+		TextureUsage usage = TextureUsageFlag::kSRV;
+
+		Format           format    = Format::UNKNOWN;
+		TextureDimension dimension = TextureDimension::kTexture2D;
+		ClearValue       clearValue;
+		std::string      debugName;
+
+		BarrierLayout initalLayout = BarrierLayout::kCommon;
+	};
+
+	// Different from TextureAssetHandle, this is a handle refers to a
+	// texture resource in the GPU, which is managed by the renderer.
+	struct TextureHandle
+	{
+		core::slot_handle slot;
+		TextureUsage      usage = TextureUsageFlag::kSRV;
+
+		[[nodiscard]] bool
+		IsNull() const
+		{
+			return slot.is_null();
+		}
+
+		static TextureHandle
+		From(TextureAssetHandle assetHandle)
+		{
+			// TextureAssets always kSrv
+			return { core::slot_handle(assetHandle.textureSlot), TextureUsageFlag::kSRV };
+		}
+
+		explicit
+		operator TextureAssetHandle() const noexcept
+		{
+			return { slot };
+		}
+
+		[[nodiscard]] bool
+		operator==(const TextureHandle& other) const noexcept
+		{
+			return slot == other.slot;
+		}
+
+		[[nodiscard]] bool
+		operator!=(const TextureHandle& other) const noexcept
+		{
+			return !(*this == other);
+		}
+	};
+
+	struct TextureSubresourceData
+	{
+		const void* data       = nullptr;
+		uint64_t    rowPitch   = 0;  // bytes between rows of `data`
+		uint64_t    slicePitch = 0;  // bytes between 2D slices of `data`
+	};
+}
