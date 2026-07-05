@@ -4,6 +4,7 @@ import idl.PbrMaterial;
 import idl.SamplerHandle;
 import forward.common;
 import idl.TextureHandle;
+import util.Tonemap;
 
 struct MaterialData
 {
@@ -24,16 +25,6 @@ ConstantBuffer<MaterialData> materialData : register(b0, space1);
 float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
-
-float3 ACESFilm(float3 x)
-{
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
 // Simple normal mapping helper function

@@ -55,7 +55,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	scene->SetEnvironmentMap(
+	view->SetEnvironmentMap(
 		{ scene->AddTextureAsset(assetlib::loadDDS("assets/iem.dds")),
 	      scene->AddTextureAsset(assetlib::loadDDS("assets/pmrem.dds")),
 	      scene->AddTextureAsset(assetlib::loadDDS("assets/brdf_lut.dds")) });

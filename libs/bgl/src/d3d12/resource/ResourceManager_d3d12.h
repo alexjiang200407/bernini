@@ -72,7 +72,8 @@ namespace bgl
 
 		[[nodiscard]]
 		TextureHandle
-		CreateTexture(const assetlib::ImageData& image) noexcept override;
+		CreateTexture(const assetlib::ImageData& image, std::string debugName = "") noexcept
+			override;
 
 		[[nodiscard]]
 		SamplerHandle
@@ -132,6 +133,10 @@ namespace bgl
 		[[nodiscard]]
 		bool
 		ValidTextureHandle(const TextureHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		IsTextureCube(const TextureHandle& handle) const noexcept override;
 
 		[[nodiscard]]
 		bool

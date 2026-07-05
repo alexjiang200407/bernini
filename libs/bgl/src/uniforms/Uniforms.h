@@ -112,6 +112,9 @@ namespace bgl
 			GetSize() const = 0;
 		};
 
+		template <typename...>
+		inline constexpr bool always_false = false;
+
 		template <typename T>
 		UniformValueType
 		ValueMap()
@@ -145,7 +148,7 @@ namespace bgl
 			else if constexpr (std::is_same_v<T, glm::mat4>)
 				return UniformValueType::kMat4x4;
 			else
-				static_assert(false, "Unsupported uniform type T");
+				static_assert(always_false<T>, "Unsupported uniform type T");
 		}
 	}
 
@@ -247,9 +250,6 @@ namespace bgl
 					m_Offset);
 			}
 
-			// A shader TextureHandle is a struct wrapping a bindless SRV index, so assigning
-			// the RHI handle writes its idx into the struct's "index" member -- letting call
-			// sites use `u = handle` instead of `u["index"] = handle.idx`.
 			AccessorBase&
 			operator=(TextureHandle handle)
 			{
@@ -261,6 +261,20 @@ namespace bgl
 
 				core::throw_runtime_error(
 					"Accessor at offset {} cannot be assigned with texture handle",
+					m_Offset);
+			}
+
+			AccessorBase&
+			operator=(TextureAssetHandle handle)
+			{
+				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformIndex].IsValid())
+				{
+					(*this)[c_HandleUniformIndex] = static_cast<uint32_t>(handle.textureSlot.index);
+					return *this;
+				}
+
+				core::throw_runtime_error(
+					"Accessor at offset {} cannot be assigned with texture asset handle",
 					m_Offset);
 			}
 

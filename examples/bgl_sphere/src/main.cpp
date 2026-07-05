@@ -218,11 +218,6 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 			graphics->DrawFrame(target, context);
 
-			if (firstFrame)
-			{
-				graphics->ScreenshotPng(target, "bgl_base.png");
-			}
-
 			firstFrame = false;
 		}
 	}

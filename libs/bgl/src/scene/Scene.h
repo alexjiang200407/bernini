@@ -5,7 +5,6 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
-#include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include <bgl/IScene.h>
 #include <core/containers/slot_vector.h>
@@ -135,7 +134,7 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		TextureAssetHandle
-		AddTextureAsset(assetlib::ImageData img) override;
+		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
 		MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) override;
@@ -146,15 +145,6 @@ namespace bgl
 
 		void
 		DeleteGeom(GeomHandle geom) override;
-
-		void
-		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
-
-		[[nodiscard]] const EnvironmentMap&
-		GetEnvironmentMap() const noexcept
-		{
-			return m_EnvironmentMap;
-		}
 
 	private:
 		SceneDesc   m_Desc;
@@ -181,8 +171,6 @@ namespace bgl
 			kCount
 		};
 		std::array<TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_DefaultTextures;
-
-		EnvironmentMap m_EnvironmentMap;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};

@@ -3,6 +3,8 @@
 
 namespace bgl
 {
+	struct SkyboxDesc;
+
 	/**
 	 * A per-view set of mesh instances rendered against a shared Scene's geometry.
 	 *
@@ -50,6 +52,27 @@ namespace bgl
 
 		virtual uint32_t
 		GetInstanceCount() const noexcept = 0;
+
+		/**
+		 * Binds the three precomputed IBL maps (two cubemaps + a 2D BRDF LUT) as this
+		 * view's environment for the PBR pass. Replaces any previously set environment.
+		 * Lighting is a per-view concern, so it lives here rather than on the shared Scene.
+		 *
+		 * @throws SceneError if any handle is invalid, or if the irradiance/prefilter
+		 *         maps are not cube maps.
+		 */
+		virtual void
+		SetEnvironmentMap(const EnvironmentMapDesc& desc) = 0;
+
+		/**
+		 * Binds a cubemap as this view's skybox background, drawn behind the scene.
+		 * Replaces any previously set skybox.
+		 *
+		 * @param desc Description of the skybox.
+		 * @throws SceneError if the handle is invalid or is not a cube map.
+		 */
+		virtual void
+		SetSkyBox(SkyboxDesc desc) = 0;
 
 	protected:
 		ISceneView() noexcept = default;

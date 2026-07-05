@@ -3,6 +3,7 @@
 #include "resource/Sampler.h"
 #include "types/EnvironmentMap.h"
 #include "types/ViewportState.h"
+#include <bgl/SkyboxDesc.h>
 
 namespace bgl
 {
@@ -22,5 +23,8 @@ namespace bgl
 		SamplerHandle               anisoLinearWrapSampler;
 		SamplerHandle               linearClampSampler;
 		EnvironmentMap              env;
+
+		std::optional<SkyboxDesc> skybox;
+		glm::mat4                 skyboxClipToWorld{ 1.0f };
 	};
 }

@@ -586,27 +586,9 @@ namespace bgl
 	}
 
 	TextureAssetHandle
-	Scene::AddTextureAsset(assetlib::ImageData img)
+	Scene::AddTextureAsset(assetlib::ImageData img, std::string debugName)
 	{
-		const auto gpuTexture = m_ResourceManager->CreateTexture(img);
+		const auto gpuTexture = m_ResourceManager->CreateTexture(img, std::move(debugName));
 		return static_cast<TextureAssetHandle>(gpuTexture);
-	}
-
-	void
-	Scene::SetEnvironmentMap(const EnvironmentMapDesc& desc)
-	{
-		const auto resolve = [this](TextureAssetHandle asset, const char* name) -> TextureHandle {
-			auto texHandle = TextureHandle::From(asset);
-			if (!m_ResourceManager->ValidTextureHandle(texHandle))
-			{
-				throw SceneError(
-					std::format("SetEnvironmentMap: invalid {} texture asset handle", name));
-			}
-			return texHandle;
-		};
-
-		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance");
-		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter");
-		m_EnvironmentMap.brdfLut    = resolve(desc.brdfLut, "brdfLut");
 	}
 }

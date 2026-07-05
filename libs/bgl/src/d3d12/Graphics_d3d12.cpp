@@ -15,6 +15,7 @@
 #include "passes/DrawData.h"
 #include "passes/ForwardPass.h"
 #include "passes/PreparePresentPass.h"
+#include "passes/SkyboxPass.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
@@ -60,6 +61,9 @@ namespace bgl
 
 		void
 		ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath) override;
+
+		virtual void
+		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) override;
 
 		const GraphicsOptions&
 		GetOptions() const
@@ -168,6 +172,7 @@ namespace bgl
 		ResourceManagerHandle m_ResourceManager;
 		PreparePresentPass    m_PreparePresentPass;
 		ForwardPass           m_Forward;
+		SkyboxPass            m_Skybox;
 		CompactInstancesPass  m_CompactInstances;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
@@ -289,6 +294,7 @@ namespace bgl
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
+		m_Skybox.Init(m_Device);
 
 #if defined(BERNINI_GPU_DEBUG)
 		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
@@ -318,6 +324,7 @@ namespace bgl
 		}
 
 		m_Forward.Release();
+		m_Skybox.Release();
 		m_CompactInstances.Release(shutdownFenceValue, false);
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -529,10 +536,24 @@ namespace bgl
 		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);
 
 		draw.cameraPos = glm::vec3(glm::inverse(context.camera.GetView())[3]);
-		draw.env       = scene_->GetEnvironmentMap();
+
+		draw.env    = view_->GetEnvironmentMap();
+		draw.skybox = view_->GetSkybox();
+
+		glm::mat4 viewNoTranslation = context.camera.GetView();
+		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		glm::mat4 clipToWorld = glm::inverse(context.camera.GetProjection() * viewNoTranslation);
+		if (draw.skybox->rotationY != 0.0f)
+		{
+			clipToWorld =
+				glm::rotate(glm::mat4(1.0f), draw.skybox->rotationY, glm::vec3(0.0f, 1.0f, 0.0f)) *
+				clipToWorld;
+		}
+		draw.skyboxClipToWorld = clipToWorld;
 
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 
 	void
@@ -795,6 +816,117 @@ namespace bgl
 			throw GraphicsError(
 				std::format(
 					"ScreenshotRaw failed to save '{}' (hr=0x{:08X})",
+					filepath,
+					static_cast<uint32_t>(hr)));
+		}
+	}
+
+	void
+	Graphics::ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath)
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError("ScreenshotPng cannot be called between BeginFrame and EndFrame");
+		}
+
+		RenderTarget& rt = *target->As<RenderTarget>();
+
+		const UINT    index         = rt.m_LastPresentedIndex;
+		TextureHandle textureHandle = rt.m_BackBuffers[index].textureHandle;
+
+		// Make sure the frame that produced this backbuffer has finished.
+		if (rt.m_FenceValues[index] != 0)
+		{
+			m_CommandQueue->WaitForFenceCPUBlocking(rt.m_FenceValues[index]);
+		}
+
+		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
+
+		auto readbackDesc      = ReadbackBufferDesc();
+		readbackDesc.byteSize  = layout.totalBytes;
+		readbackDesc.debugName = "ScreenshotPng Readback";
+
+		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
+
+		rt.m_CommandAllocator[index]->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
+
+		{
+			auto barrier = TextureBarrierDesc();
+			barrier.AddSyncBefore(BarrierSyncFlag::kNone)
+				.AddAccessBefore(BarrierAccessFlag::kNone)
+				.SetLayoutBefore(BarrierLayout::kPresent)
+				.AddSyncAfter(BarrierSyncFlag::kCopy)
+				.AddAccessAfter(BarrierAccessFlag::kCopySource)
+				.SetLayoutAfter(BarrierLayout::kCopySource);
+			m_CommandList->Barrier(textureHandle, barrier);
+		}
+
+		m_CommandList->CopyTextureToReadback(readback, textureHandle);
+
+		{
+			auto barrier = TextureBarrierDesc();
+			barrier.AddSyncBefore(BarrierSyncFlag::kCopy)
+				.AddAccessBefore(BarrierAccessFlag::kCopySource)
+				.SetLayoutBefore(BarrierLayout::kCopySource)
+				.AddSyncAfter(BarrierSyncFlag::kNone)
+				.AddAccessAfter(BarrierAccessFlag::kNone)
+				.SetLayoutAfter(BarrierLayout::kPresent);
+			m_CommandList->Barrier(textureHandle, barrier);
+		}
+
+		m_CommandList->Close();
+
+		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
+		m_CommandQueue->WaitForFenceCPUBlocking(fence);
+
+		// Wrap the mapped readback as a DirectX::Image (the padded rowPitch is fine,
+		// DirectX::Image stores it explicitly) and encode to file.
+		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
+
+		gassert(
+			resource != nullptr,
+			"ScreenshotPng failed to get D3D12Resource from texture handle");
+
+		auto resourceDesc = resource->GetDesc();
+
+		const void* mapped = m_ResourceManager->MapReadback(readback);
+
+		DirectX::Image image = {};
+		image.width          = static_cast<size_t>(resourceDesc.Width);
+		image.height         = static_cast<size_t>(resourceDesc.Height);
+		image.format         = resourceDesc.Format;
+		image.rowPitch       = static_cast<size_t>(layout.rowPitch);
+		image.slicePitch     = static_cast<size_t>(layout.rowPitch) * resourceDesc.Height;
+		image.pixels = const_cast<uint8_t*>(static_cast<const uint8_t*>(mapped) + layout.offset);
+
+		std::wstring widePath(filepath.begin(), filepath.end());
+
+		// SaveToWICFile builds a WIC imaging factory via CoCreateInstance, which needs
+		// COM initialized on this thread. Initialize it here (balanced below) so callers
+		// that never set up COM still get a valid PNG.
+		const HRESULT coInit         = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		const bool    comInitialized = SUCCEEDED(coInit);
+
+		HRESULT hr = DirectX::SaveToWICFile(
+			image,
+			DirectX::WIC_FLAGS_NONE,
+			DirectX::GetWICCodec(DirectX::WIC_CODEC_PNG),
+			widePath.c_str());
+
+		if (comInitialized)
+		{
+			CoUninitialize();
+		}
+
+		m_ResourceManager->UnmapReadback(readback);
+		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+
+		if (FAILED(hr))
+		{
+			throw GraphicsError(
+				std::format(
+					"ScreenshotPng failed to save '{}' (hr=0x{:08X})",
 					filepath,
 					static_cast<uint32_t>(hr)));
 		}

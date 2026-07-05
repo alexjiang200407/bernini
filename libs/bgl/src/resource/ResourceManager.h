@@ -61,7 +61,7 @@ namespace bgl
 		// internally, so callers never touch graphics-format types.
 		[[nodiscard]]
 		virtual TextureHandle
-		CreateTexture(const assetlib::ImageData& image) noexcept = 0;
+		CreateTexture(const assetlib::ImageData& image, std::string debugName = "") noexcept = 0;
 
 		[[nodiscard]]
 		virtual SamplerHandle
@@ -174,6 +174,11 @@ namespace bgl
 
 		[[nodiscard]] virtual bool
 		ValidTextureHandle(const TextureHandle& handle) const noexcept = 0;
+
+		// True if the texture is a cube map (or cube-map array). The handle must be
+		// valid (checked via ValidTextureHandle first).
+		[[nodiscard]] virtual bool
+		IsTextureCube(const TextureHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
 		ValidSamplerHandle(const SamplerHandle& handle) const noexcept = 0;

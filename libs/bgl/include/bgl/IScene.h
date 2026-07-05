@@ -91,7 +91,7 @@ namespace bgl
 			MaterialHandle material = {}) = 0;
 
 		virtual TextureAssetHandle
-		AddTextureAsset(assetlib::ImageData img) = 0;
+		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;
 
 		/**
 		 * Creates a PBR material in this scene's material buffer and returns a handle
@@ -110,15 +110,6 @@ namespace bgl
 		 */
 		virtual void
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material) = 0;
-
-		/**
-		 * Loads the three precomputed IBL .dds maps and binds them as this scene's
-		 * environment for the PBR pass. Replaces any previously set environment.
-		 *
-		 * @throws SceneError if any file cannot be loaded.
-		 */
-		virtual void
-		SetEnvironmentMap(const EnvironmentMapDesc& desc) = 0;
 
 		/**
 		 * Removes geometry and frees its underlying vertex/index/meshlet data.

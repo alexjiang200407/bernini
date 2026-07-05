@@ -228,7 +228,7 @@ namespace
 			return {};
 		}
 		TextureHandle
-		CreateTexture(const assetlib::ImageData&) noexcept override
+		CreateTexture(const assetlib::ImageData&, std::string) noexcept override
 		{
 			return {};
 		}
@@ -333,6 +333,11 @@ namespace
 		}
 		bool
 		ValidTextureHandle(const TextureHandle&) const noexcept override
+		{
+			return false;
+		}
+		bool
+		IsTextureCube(const TextureHandle&) const noexcept override
 		{
 			return false;
 		}

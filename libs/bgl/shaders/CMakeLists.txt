@@ -77,6 +77,24 @@ compile_shader(
 )
 
 compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Skybox.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Skybox.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "PSMain"
+)
+
+compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/HistogramInstances.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"

@@ -171,6 +171,47 @@ namespace bgl
 	}
 
 	void
+	SceneView::SetEnvironmentMap(const EnvironmentMapDesc& desc)
+	{
+		// Resolve an asset handle to a live RHI texture, optionally requiring a cube map.
+		const auto resolve =
+			[this](TextureAssetHandle asset, const char* name, bool requireCube) -> TextureHandle {
+			auto texHandle = TextureHandle::From(asset);
+			if (!m_ResourceManager->ValidTextureHandle(texHandle))
+			{
+				throw SceneError(
+					std::format("SetEnvironmentMap: invalid {} texture asset handle", name));
+			}
+			if (requireCube && !m_ResourceManager->IsTextureCube(texHandle))
+			{
+				throw SceneError(std::format("SetEnvironmentMap: {} map must be a cube map", name));
+			}
+			return texHandle;
+		};
+
+		// irradiance and prefilter are cubemaps; the BRDF LUT is a 2D texture.
+		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance", true);
+		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter", true);
+		m_EnvironmentMap.brdfLut    = resolve(desc.brdfLut, "brdfLut", false);
+	}
+
+	void
+	SceneView::SetSkyBox(SkyboxDesc desc)
+	{
+		auto cubeTex = TextureHandle::From(desc.skyboxCubeTex);
+		if (!m_ResourceManager->ValidTextureHandle(cubeTex))
+		{
+			throw SceneError("SetSkyBox: invalid skybox texture asset handle");
+		}
+		if (!m_ResourceManager->IsTextureCube(cubeTex))
+		{
+			throw SceneError("SetSkyBox: skybox texture must be a cube map");
+		}
+
+		m_Skybox = std::make_optional(std::move(desc));
+	}
+
+	void
 	SceneView::Update(ICommandList* cmdList)
 	{
 		auto buffers = GetInstanceBuffers();

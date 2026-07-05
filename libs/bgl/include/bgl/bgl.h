@@ -13,6 +13,7 @@ class BGL_API core::multi_slot_handle;
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/RenderContext.h>
+#include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>

@@ -101,6 +101,9 @@ namespace bgl
 		virtual void
 		ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath) = 0;
 
+		virtual void
+		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) = 0;
+
 		virtual SceneHandle
 		CreateScene(SceneDesc desc) = 0;
 

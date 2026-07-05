@@ -207,7 +207,7 @@ namespace bgl
 	}
 
 	TextureHandle
-	ResourceManager::CreateTexture(const assetlib::ImageData& image) noexcept
+	ResourceManager::CreateTexture(const assetlib::ImageData& image, std::string debugName) noexcept
 	{
 		// Map the decoded image's raw dxgiFormat + layout onto an engine TextureDesc; the
 		// graphics-format translation stays here so callers never see DXGI/engine formats.
@@ -221,7 +221,7 @@ namespace bgl
 		desc.dimension =
 			image.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
 		desc.initalLayout = BarrierLayout::kCopyDest;
-		desc.debugName    = "ImageData Texture";
+		desc.debugName    = std::move(debugName);
 
 		std::vector<TextureSubresourceData> subresources;
 		subresources.reserve(image.subresources.size());
@@ -569,6 +569,18 @@ namespace bgl
 		}
 
 		return !m_Textures[handle.slot].IsNull();
+	}
+
+	bool
+	ResourceManager::IsTextureCube(const TextureHandle& handle) const noexcept
+	{
+		if (!ValidTextureHandle(handle))
+		{
+			return false;
+		}
+
+		const TextureDimension dim = GetTexture(handle).GetDesc().dimension;
+		return dim == TextureDimension::kTextureCube || dim == TextureDimension::kTextureCubeArray;
 	}
 
 	bool

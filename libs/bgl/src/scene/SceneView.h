@@ -4,8 +4,10 @@
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include <bgl/ISceneView.h>
+#include <bgl/SkyboxDesc.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
@@ -56,6 +58,24 @@ namespace bgl
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
 
+		void
+		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
+
+		void
+		SetSkyBox(SkyboxDesc desc) override;
+
+		[[nodiscard]] const EnvironmentMap&
+		GetEnvironmentMap() const noexcept
+		{
+			return m_EnvironmentMap;
+		}
+
+		[[nodiscard]] const std::optional<SkyboxDesc>&
+		GetSkybox() const noexcept
+		{
+			return m_Skybox;
+		}
+
 		[[nodiscard]] uint32_t
 		GetInstanceCount() const noexcept override
 		{
@@ -93,5 +113,8 @@ namespace bgl
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
 		ComputeBuffer                    m_CompactedInstances;
+
+		EnvironmentMap            m_EnvironmentMap;
+		std::optional<SkyboxDesc> m_Skybox;
 	};
 }
