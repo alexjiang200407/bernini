@@ -543,17 +543,23 @@ namespace bgl
 		glm::mat4 viewNoTranslation = context.camera.GetView();
 		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 		glm::mat4 clipToWorld = glm::inverse(context.camera.GetProjection() * viewNoTranslation);
-		if (draw.skybox->rotationY != 0.0f)
+
+		if (draw.skybox.has_value())
 		{
-			clipToWorld =
-				glm::rotate(glm::mat4(1.0f), draw.skybox->rotationY, glm::vec3(0.0f, 1.0f, 0.0f)) *
-				clipToWorld;
+			if (draw.skybox->rotationY != 0.0f)
+			{
+				clipToWorld = glm::rotate(
+								  glm::mat4(1.0f),
+								  draw.skybox->rotationY,
+								  glm::vec3(0.0f, 1.0f, 0.0f)) *
+				              clipToWorld;
+			}
+			draw.skyboxClipToWorld = clipToWorld;
+			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
-		draw.skyboxClipToWorld = clipToWorld;
 
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
-		m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 
 	void
