@@ -13,15 +13,11 @@ add_executable(bgl_two_windows WIN32
     ${BGL_TWO_WINDOWS_HEADERS}
 )
 
-target_link_libraries(bgl_two_windows PRIVATE core bgl)
+target_link_libraries(bgl_two_windows PRIVATE core bgl example_util)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_two_windows PRIVATE bgl_d3d12_agility)
 endif()
-
-target_include_directories(bgl_two_windows PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../util
-)
 
 target_precompile_headers(bgl_two_windows
     PUBLIC

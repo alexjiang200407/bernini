@@ -1,43 +1,28 @@
+#include <DemoWindow.h>
 #include <bgl/bgl.h>
-#include <core/platform/Platform.h>
 #include <format>
 #include <stdexcept>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-struct EventVisitor : public core::IPlatformEventVisitor
-{
-	void
-	Visit(const core::KeyEvent& e, float dt) override
-	{
-		(void)e;
-		(void)dt;
-	}
-
-	void
-	Visit(const core::MouseEvent& e, float dt) override
-	{
-		(void)e;
-		(void)dt;
-	}
-};
-
 int APIENTRY
 wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
 	try
 	{
-		auto opts = core::PlatformOptions{};
+		auto opts       = demo::WindowOptions{};
+		opts.width      = 800;
+		opts.height     = 600;
+		opts.borderless = false;
 
-		opts.width     = 800;
-		opts.height    = 600;
-		opts.resizable = false;
-		opts.decorated = false;
-		opts.mode      = core::PlatformOptions::Mode::Windowed;
+		opts.title = "bgl_two_windows (1)";
+		auto wnd1  = demo::DemoWindow{ opts };
+		wnd1.SetPosition(100, 100);
 
-		auto wnd1 = core::IPlatform::Create(opts);
-		auto wnd2 = core::IPlatform::Create(opts);
+		opts.title = "bgl_two_windows (2)";
+		auto wnd2  = demo::DemoWindow{ opts };
+		wnd2.SetPosition(100 + opts.width + 20, 100);
 
 		auto gfxOpts                     = bgl::GraphicsOptions{};
 		gfxOpts.enableDebugLayer         = true;
@@ -57,11 +42,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		targetDesc.width    = static_cast<int>(kWidth);
 		targetDesc.height   = static_cast<int>(kHeight);
 		targetDesc.headless = false;
-		targetDesc.wnd      = wnd1->GetNativeHandle();
+		targetDesc.wnd      = wnd1.NativeHandle();
 
 		auto targetA = gfx->CreateRenderTarget(targetDesc);
 
-		targetDesc.wnd = wnd2->GetNativeHandle();
+		targetDesc.wnd = wnd2.NativeHandle();
 
 		auto targetB = gfx->CreateRenderTarget(targetDesc);
 
@@ -109,19 +94,18 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		twoContext.camera   = camera;
 		twoContext.viewport = viewport;
 
-		for (auto res1 = wnd1->Process(), res2 = wnd2->Process();
-		     res1 != core::IPlatform::kClose || res2 != core::IPlatform::kClose;)
+		while (!wnd1.ShouldClose() || !wnd2.ShouldClose())
 		{
-			if (res1 != core::IPlatform::kClose)
+			demo::PumpEvents();
+
+			if (!wnd1.ShouldClose())
 			{
 				gfx->DrawFrame(targetA, cubeContext);
-				res1 = wnd1->Process();
 			}
 
-			if (res2 != core::IPlatform::kClose)
+			if (!wnd2.ShouldClose())
 			{
 				gfx->DrawFrame(targetB, twoContext);
-				res2 = wnd2->Process();
 			}
 		}
 	}
