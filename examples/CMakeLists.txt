@@ -1,4 +1,6 @@
 
+add_subdirectory(util)
+
 add_subdirectory(bgl_base)
 add_subdirectory(bgl_sphere)
 add_subdirectory(bgl_two_windows)

@@ -12,6 +12,7 @@
     "nlohmann-json",
     "stb",
     "meshoptimizer",
+    { "name": "sdl3", "platform": "windows" },
     { "name": "directx-headers", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },
     { "name": "directxtex", "platform": "windows" },
