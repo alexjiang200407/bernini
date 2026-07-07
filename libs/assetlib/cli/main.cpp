@@ -17,7 +17,7 @@ main(int argc, char** argv)
 
 	auto* bake = app.add_subcommand(
 		"bake",
-		"Convert a glTF (.glb/.gltf) into a modular .bmesh + .bmaterial + .dds texture set");
+		"Convert a glTF (.glb/.gltf) into a modular .bmesh + .bmaterial + .ktx2 texture set");
 	bake->add_option("input", input, "Source .glb/.gltf file")
 		->required()
 		->check(CLI::ExistingFile);

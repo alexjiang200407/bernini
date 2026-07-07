@@ -36,7 +36,7 @@ and portability.
 
 ## Module 1: Graphics Pipeline
 
-- [~] RHI
+- [ ] RHI
   - [x] DirectX 12
   - [ ] Vulkan
   - [ ] Metal
@@ -49,8 +49,9 @@ and portability.
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema
   - [x] Static Mesh Asset Import
-- [~] Materials (PBR)
+- [ ] Materials (PBR)
   - [x] Implement PBR IBL
+  - [x] ktx2 textures
   - [ ] Implement Alpha Test alpha mode
   - [ ] Texture Asset Import
   - [ ] Editor Material Graph

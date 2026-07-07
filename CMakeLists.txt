@@ -55,3 +55,26 @@ endif()
 if (Qt6_FOUND)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/apps/editor" "editor")
 endif()
+
+# --- Force the optimized (Release) libktx at runtime, even in Debug builds ---
+find_package(ktx CONFIG REQUIRED)
+set_target_properties(KTX::ktx PROPERTIES
+    MAP_IMPORTED_CONFIG_DEBUG          Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+    MAP_IMPORTED_CONFIG_MINSIZEREL     Release)
+
+set(KTX_CONSUMER_TARGETS "")
+foreach(_ktx_consumer assetlib_cli assetlib_tests bgl_tests editor ${EXAMPLE_TARGETS})
+    if (TARGET ${_ktx_consumer})
+        list(APPEND KTX_CONSUMER_TARGETS ${_ktx_consumer})
+    endif()
+endforeach()
+
+if (KTX_CONSUMER_TARGETS)
+    add_custom_target(deploy_release_ktx ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:KTX::ktx>" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        COMMENT "Deploying optimized Release libktx to the runtime output directory"
+        VERBATIM)
+    add_dependencies(deploy_release_ktx ${KTX_CONSUMER_TARGETS})
+endif()

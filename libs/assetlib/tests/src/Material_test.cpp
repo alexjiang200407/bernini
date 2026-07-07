@@ -10,9 +10,9 @@ TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.name             = "brushed_metal";
-	mat.baseColorTexture = "albedo.dds";
+	mat.baseColorTexture = "albedo.ktx2";
 	mat.normalTexture    = "";  // absent
-	mat.ormTexture       = "orm.dds";
+	mat.ormTexture       = "orm.ktx2";
 	mat.baseColorFactor  = glm::vec4(0.1f, 0.2f, 0.3f, 1.0f);
 	mat.metallicFactor   = 0.75f;
 	mat.roughnessFactor  = 0.25f;
@@ -39,7 +39,7 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 {
 	BMaterial mat;
 	mat.name             = "leaf";
-	mat.baseColorTexture = "tex0.dds";
+	mat.baseColorTexture = "tex0.ktx2";
 	mat.baseColorFactor  = glm::vec4(1.0f, 0.5f, 0.25f, 1.0f);
 	mat.metallicFactor   = 0.0f;
 	mat.roughnessFactor  = 0.9f;
@@ -50,7 +50,7 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 	std::filesystem::remove(path);
 
 	REQUIRE(restored.name == "leaf");
-	REQUIRE(restored.baseColorTexture == "tex0.dds");
+	REQUIRE(restored.baseColorTexture == "tex0.ktx2");
 	REQUIRE(restored.normalTexture.empty());
 	REQUIRE(restored.roughnessFactor == Catch::Approx(0.9f));
 }

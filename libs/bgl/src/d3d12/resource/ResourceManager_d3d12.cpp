@@ -209,14 +209,14 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(const assetlib::ImageData& image, std::string debugName) noexcept
 	{
-		// Map the decoded image's raw dxgiFormat + layout onto an engine TextureDesc; the
-		// graphics-format translation stays here so callers never see DXGI/engine formats.
+		// Map the decoded image's API-neutral TexFormat + layout onto an engine TextureDesc; the
+		// Vulkan→DXGI→engine format translation stays here so callers never see graphics formats.
 		TextureDesc desc;
 		desc.width     = image.width;
 		desc.height    = image.height;
 		desc.mipLevels = image.mipLevels;
 		desc.arraySize = image.arraySize;
-		desc.format    = ConvertFormat(static_cast<DXGI_FORMAT>(image.dxgiFormat));
+		desc.format    = ConvertFormat(VkFormatToDXGI(image.vkFormat));
 		desc.usage     = TextureUsageFlag::kSRV;
 		desc.dimension =
 			image.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;

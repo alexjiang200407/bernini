@@ -82,12 +82,12 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
-		auto pmrem = scene->AddTextureAsset(assetlib::loadDDS("assets/pmrem.dds"));
+		auto pmrem = scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2"));
 
 		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadDDS("assets/iem.dds")),
+			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
 		      pmrem,
-		      scene->AddTextureAsset(assetlib::loadDDS("assets/brdf_lut.dds")) });
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
 
 		if (skyBoxEnabled)
 		{
@@ -104,7 +104,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				return {};
 			if (const auto it = textureCache.find(rel); it != textureCache.end())
 				return it->second;
-			const auto handle = scene->AddTextureAsset(assetlib::loadDDS(modelDir / rel), rel);
+			const auto handle = scene->AddTextureAsset(assetlib::loadKTX2(modelDir / rel), rel);
 			textureCache.emplace(rel, handle);
 			return handle;
 		};
@@ -206,7 +206,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			{
 				demo::PumpEvents();
 
-				if (demo::ApplyFlyCam(camera, clock.Tick()))
+				if (demo::ApplyFlyCam(camera, clock.Tick(), 1.f))
 				{
 					context.camera = camera;
 				}

@@ -244,6 +244,77 @@ namespace bgl
 	}
 
 	DXGI_FORMAT
+	VkFormatToDXGI(assetlib::VkFormat vkFormat)
+	{
+		using assetlib::VkFormat;
+		switch (vkFormat)
+		{
+		case VkFormat::R8_UNORM:
+			return DXGI_FORMAT_R8_UNORM;
+		case VkFormat::R8G8_UNORM:
+			return DXGI_FORMAT_R8G8_UNORM;
+		case VkFormat::R16G16_UNORM:
+			return DXGI_FORMAT_R16G16_UNORM;
+		case VkFormat::R8G8B8A8_UNORM:
+			return DXGI_FORMAT_R8G8B8A8_UNORM;
+		case VkFormat::R8G8B8A8_SRGB:
+			return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		case VkFormat::B8G8R8A8_UNORM:
+			return DXGI_FORMAT_B8G8R8A8_UNORM;
+		case VkFormat::B8G8R8A8_SRGB:
+			return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+		case VkFormat::R16G16_SFLOAT:
+			return DXGI_FORMAT_R16G16_FLOAT;
+		case VkFormat::R16G16B16A16_UNORM:
+			return DXGI_FORMAT_R16G16B16A16_UNORM;
+		case VkFormat::R16G16B16A16_SFLOAT:
+			return DXGI_FORMAT_R16G16B16A16_FLOAT;
+		case VkFormat::R32_SFLOAT:
+			return DXGI_FORMAT_R32_FLOAT;
+		case VkFormat::R32G32_SFLOAT:
+			return DXGI_FORMAT_R32G32_FLOAT;
+		case VkFormat::R32G32B32A32_SFLOAT:
+			return DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+		// Block-compressed. DXGI BC1 covers both Vulkan's BC1_RGB and BC1_RGBA.
+		case VkFormat::BC1_RGB_UNORM_BLOCK:
+		case VkFormat::BC1_RGBA_UNORM_BLOCK:
+			return DXGI_FORMAT_BC1_UNORM;
+		case VkFormat::BC1_RGB_SRGB_BLOCK:
+		case VkFormat::BC1_RGBA_SRGB_BLOCK:
+			return DXGI_FORMAT_BC1_UNORM_SRGB;
+		case VkFormat::BC2_UNORM_BLOCK:
+			return DXGI_FORMAT_BC2_UNORM;
+		case VkFormat::BC2_SRGB_BLOCK:
+			return DXGI_FORMAT_BC2_UNORM_SRGB;
+		case VkFormat::BC3_UNORM_BLOCK:
+			return DXGI_FORMAT_BC3_UNORM;
+		case VkFormat::BC3_SRGB_BLOCK:
+			return DXGI_FORMAT_BC3_UNORM_SRGB;
+		case VkFormat::BC4_UNORM_BLOCK:
+			return DXGI_FORMAT_BC4_UNORM;
+		case VkFormat::BC4_SNORM_BLOCK:
+			return DXGI_FORMAT_BC4_SNORM;
+		case VkFormat::BC5_UNORM_BLOCK:
+			return DXGI_FORMAT_BC5_UNORM;
+		case VkFormat::BC5_SNORM_BLOCK:
+			return DXGI_FORMAT_BC5_SNORM;
+		case VkFormat::BC6H_UFLOAT_BLOCK:
+			return DXGI_FORMAT_BC6H_UF16;
+		case VkFormat::BC6H_SFLOAT_BLOCK:
+			return DXGI_FORMAT_BC6H_SF16;
+		case VkFormat::BC7_UNORM_BLOCK:
+			return DXGI_FORMAT_BC7_UNORM;
+		case VkFormat::BC7_SRGB_BLOCK:
+			return DXGI_FORMAT_BC7_UNORM_SRGB;
+
+		case VkFormat::Undefined:
+		default:
+			gfatal("VkFormatToDXGI unsupported format: {}", static_cast<uint32_t>(vkFormat));
+		}
+	}
+
+	DXGI_FORMAT
 	ConvertFormat(Format bglFormat)
 	{
 		switch (bglFormat)
@@ -559,7 +630,9 @@ namespace bgl
 
 		case TextureDimension::kUnknown:
 		default:
-			gfatal("ConvertSRVDimension Invalid texture dimension: {}", static_cast<int>(dimension));
+			gfatal(
+				"ConvertSRVDimension Invalid texture dimension: {}",
+				static_cast<int>(dimension));
 		}
 	}
 

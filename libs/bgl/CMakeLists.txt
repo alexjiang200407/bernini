@@ -112,7 +112,7 @@ endif()
 
 if (BUILD_TESTS)
     find_package(Catch2 CONFIG REQUIRED)
-	find_package(directxtex CONFIG REQUIRED)
+	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
 
     file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
@@ -129,6 +129,7 @@ if (BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+            ${Stb_INCLUDE_DIR}
     )
 
     target_force_include(bgl_tests
@@ -143,7 +144,6 @@ if (BUILD_TESTS)
 			Catch2::Catch2
 			Catch2::Catch2WithMain
 			core
-			Microsoft::DirectXTex
 	)
 
 	add_dependencies(bgl_tests bgl_copy_shaders bgl_copy_shader_src bgl_copy_shader_tests bgl_idl_generate)
@@ -170,7 +170,7 @@ if (BUILD_TESTS)
 
 	# Deploy the shared asset directory next to the test exe (cwd at run time), so
 	# tests resolve maps/meshes as "assets/<name>" and golden refs as
-	# "assets/golden/<name>.dds".
+	# "assets/golden/<name>.png".
 	copy_to_target(bgl_tests ITEMS ${CMAKE_SOURCE_DIR}/assets)
 
 	enable_strict_compiler(bgl_tests)
