@@ -31,7 +31,7 @@ namespace bgl
 		pipelineDesc.pixelShader =
 			device->CreateShader(std::string(c_PixelDxil), std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
+		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
 
 		auto raster = RasterState();

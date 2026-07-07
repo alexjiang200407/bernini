@@ -52,8 +52,6 @@ float4 PSMain(VSOut input) : SV_Target
 
     float3 color = skyboxData.cubeTex.SampleCubeLevel(skyboxData.sampler, dir, skyboxData.mipLevel).rgb;
 
-    color = ACESFilm(color * skyboxData.exposure);
-    color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)); // linear -> sRGB
-
+    color = AgX(color * skyboxData.exposure);
     return float4(color, 1.0);
 }

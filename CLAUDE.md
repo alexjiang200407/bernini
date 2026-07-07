@@ -46,6 +46,10 @@ Overview of all the Frame Graph Passes
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
+**[Asset Standards](./docs/asset_standards.md)**
+
+PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.
+
 # Directory Structure
 
 ## Debug

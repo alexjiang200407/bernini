@@ -53,15 +53,18 @@ namespace assetlib
 	}
 
 	void
-	writeDDS(const ImageData& image, const std::filesystem::path& path)
+	writeDDS(const ImageData& image, const std::filesystem::path& path, bool srgb)
 	{
 		DirectX::TexMetadata meta{};
-		meta.width      = image.width;
-		meta.height     = image.height;
-		meta.depth      = 1;
-		meta.arraySize  = image.arraySize;
-		meta.mipLevels  = image.mipLevels;
-		meta.format     = static_cast<DXGI_FORMAT>(image.dxgiFormat);
+		meta.width     = image.width;
+		meta.height    = image.height;
+		meta.depth     = 1;
+		meta.arraySize = image.arraySize;
+		meta.mipLevels = image.mipLevels;
+		meta.format    = static_cast<DXGI_FORMAT>(image.dxgiFormat);
+
+		if (srgb)
+			meta.format = DirectX::MakeSRGB(meta.format);
 		meta.dimension  = DirectX::TEX_DIMENSION_TEXTURE2D;
 		meta.miscFlags  = image.isCubemap ? DirectX::TEX_MISC_TEXTURECUBE : 0u;
 		meta.miscFlags2 = 0;
@@ -111,7 +114,7 @@ namespace assetlib
 	}
 
 	void
-	writeDDS(const ImageData&, const std::filesystem::path&)
+	writeDDS(const ImageData&, const std::filesystem::path&, bool)
 	{
 		throw std::runtime_error(
 			"assetlib::writeDDS: DDS support requires DirectXTex (Windows only)");
