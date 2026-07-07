@@ -56,8 +56,11 @@ TEST_CASE("loadFromGltf imports geometry and hierarchy from a triangle", "[bmesh
 	REQUIRE(submesh.vertexCount == 3);
 	REQUIRE(submesh.indexCount == 3);
 	REQUIRE(submesh.indexType == IndexType::kUint16);
-	REQUIRE(submesh.layout.stride == 48);
-	REQUIRE(mesh.vertexData.size() == 3 * 48);
+
+	REQUIRE(submesh.layout.attributeCount == 1);
+	REQUIRE(submesh.layout.attributes[0].semantic == VertexSemantic::kPosition);
+	REQUIRE(submesh.layout.stride == 12);
+	REQUIRE(mesh.vertexData.size() == 3 * 12);
 	REQUIRE(submesh.meshletCount >= 1);
 	REQUIRE(!mesh.meshlets.empty());
 
@@ -96,7 +99,9 @@ TEST_CASE("loadFromGltf imports the Suzanne test model", "[bmesh][gltf]")
 	{
 		REQUIRE(submesh.vertexCount > 0);
 		REQUIRE(submesh.indexCount > 0);
-		REQUIRE(submesh.layout.stride == 48);
+		// Stride now reflects the source's actual attributes (>= position); it is no longer a fixed 48.
+		REQUIRE(submesh.layout.stride >= 12);
+		REQUIRE(submesh.layout.attributes[0].semantic == VertexSemantic::kPosition);
 		REQUIRE(submesh.meshletCount >= 1);
 		totalVertexBytes += static_cast<size_t>(submesh.vertexCount) * submesh.layout.stride;
 	}

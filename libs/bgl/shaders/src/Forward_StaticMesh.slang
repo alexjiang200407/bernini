@@ -47,9 +47,12 @@ void EvaluateVertices(
 
 void EvaluatePrimitives(Submesh submesh, Meshlet meshlet, uint gtid, inout OutputIndices<uint3, cMaxPrimsPerMeshlet> tris)
 {
-    if (gtid < meshlet.triangleCount)
+    // The group has cMaxVerticesPerMeshlet (64) threads, but a meshlet can hold up to
+    // cMaxPrimsPerMeshlet (124) triangles, so each thread strides through several triangles to cover
+    // them all.
+    for (uint t = gtid; t < meshlet.triangleCount; t += cMaxVerticesPerMeshlet)
     {
-        tris[gtid] = forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + gtid * 3);
+        tris[t] = forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + t * 3);
     }
 }
 

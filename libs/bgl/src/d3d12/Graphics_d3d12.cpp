@@ -916,7 +916,7 @@ namespace bgl
 
 		HRESULT hr = DirectX::SaveToWICFile(
 			image,
-			DirectX::WIC_FLAGS_NONE,
+			DirectX::WIC_FLAGS_FORCE_RGB,
 			DirectX::GetWICCodec(DirectX::WIC_CODEC_PNG),
 			widePath.c_str());
 

@@ -15,9 +15,13 @@ public struct DecodedVertex
 public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint vertexByteBase)
 {
     DecodedVertex v;
+    v.position = float3(0.0, 0.0, 0.0);
+    v.normal = float3(0.0, 0.0, 1.0);
+    v.uv = float2(0.0, 0.0);
+    v.tangent = float4(0.0, 0.0, 0.0, 0.0);
 
 #if defined(BERNINI_GPU_DEBUG)
-    bool4 found = { false, false, false, false };
+    bool hasPosition = false;
 #endif
 
     for (uint i = 0; i < layout.attributeCount; ++i)
@@ -31,26 +35,17 @@ public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint ver
         case VertexSemantic.kPosition:
             v.position = value.xyz;
 #if defined(BERNINI_GPU_DEBUG)
-            found[0] = true;
+            hasPosition = true;
 #endif
             break;
         case VertexSemantic.kNormal:
             v.normal = value.xyz;
-#if defined(BERNINI_GPU_DEBUG)
-            found[1] = true;
-#endif
             break;
         case VertexSemantic.kTexCoord0:
             v.uv = value.xy;
-#if defined(BERNINI_GPU_DEBUG)
-            found[2] = true;
-#endif
             break;
         case VertexSemantic.kTangent:
             v.tangent = value;
-#if defined(BERNINI_GPU_DEBUG)
-            found[3] = true;
-#endif
             break;
         default:
             break;
@@ -58,10 +53,8 @@ public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint ver
     }
 
 #if defined(BERNINI_GPU_DEBUG)
-    for (uint j = 0; j < 4; ++j)
-    {
-        dbg_assert(found[j], ErrorCode.kInvalidVertexLayout);
-    }
+    // Position is the only attribute a mesh cannot render without; the rest use the defaults above.
+    dbg_assert(hasPosition, ErrorCode.kInvalidVertexLayout);
 #endif
 
     return v;

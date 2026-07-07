@@ -12,6 +12,13 @@ namespace demo
 			static std::vector<DemoWindow*> s_windows;
 			return s_windows;
 		}
+
+		std::set<int>&
+		PressedKeys() noexcept
+		{
+			static std::set<int> s_pressed;
+			return s_pressed;
+		}
 	}
 
 	DemoWindow::DemoWindow(const WindowOptions& options)
@@ -70,6 +77,8 @@ namespace demo
 	void
 	PumpEvents()
 	{
+		PressedKeys().clear();
+
 		SDL_Event e;
 		while (SDL_PollEvent(&e))
 		{
@@ -87,9 +96,21 @@ namespace demo
 				}
 				break;
 
+			case SDL_EVENT_KEY_DOWN:
+				// Ignore auto-repeat so a held key fires KeyPressed() only once.
+				if (!e.key.repeat)
+					PressedKeys().insert(static_cast<int>(e.key.scancode));
+				break;
+
 			default:
 				break;
 			}
 		}
+	}
+
+	bool
+	KeyPressed(int scancode)
+	{
+		return PressedKeys().contains(scancode);
 	}
 }

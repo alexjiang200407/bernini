@@ -15,5 +15,5 @@ namespace demo
 	};
 
 	bool
-	ApplyFlyCam(bgl::Camera& camera, float dt) noexcept;
+	ApplyFlyCam(bgl::Camera& camera, float dt, float moveUnitsPerSecond = 3.0f) noexcept;
 }

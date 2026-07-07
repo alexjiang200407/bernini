@@ -133,6 +133,12 @@ namespace bgl
 			float          radius,
 			MaterialHandle material = {}) override;
 
+		GeomHandle
+		AddStaticMesh(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials) override;
+
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
