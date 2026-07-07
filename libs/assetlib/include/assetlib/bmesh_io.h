@@ -35,21 +35,50 @@ namespace assetlib
 
 	/**
 	 * Bakes a flattened import into its modular file form: geometry is copied verbatim and each inline
-	 * material becomes a `.bmaterial` file-path handle. Pair with writeTextures to emit the referenced
-	 * texture files.
-	 *
-	 * TODO: the referenced `.bmaterial` (and animation) files are not written yet; only their paths are
-	 * assembled here, and they do not yet carry the mapped texture paths.
+	 * material becomes a `matN.bmaterial` file-path handle (Submesh::material indexes this list). Pair
+	 * with writeMaterials + writeTextures (or just call bake) to emit the referenced files.
 	 */
 	[[nodiscard]] BMesh
 	toBMesh(const imp::BMeshImport& mesh);
 
 	/**
 	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.dds` file named `texN.dds`
-	 * by index. These are the texture files the baked `.bmaterial` files will reference.
+	 * by index. These are the texture files the baked `.bmaterial` files reference.
 	 *
 	 * @throws std::runtime_error if a file cannot be written.
 	 */
 	void
 	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir);
+
+	/**
+	 * Writes each material in `mesh` into `outDir` as a `matN.bmaterial` file (matching the path handles
+	 * toBMesh assembles), mapping each material's texture indices to the `texN.dds` names writeTextures
+	 * emits.
+	 *
+	 * @throws std::runtime_error if a file cannot be written.
+	 */
+	void
+	writeMaterials(const imp::BMeshImport& mesh, const std::filesystem::path& outDir);
+
+	/**
+	 * Bakes an import to disk under `outDir`: writes `<name>.bmesh`, one `matN.bmaterial` per material,
+	 * and one `texN.dds` per texture. This is the complete modular form the runtime loads.
+	 *
+	 * @throws std::runtime_error if a file cannot be written.
+	 */
+	void
+	bake(const imp::BMeshImport& mesh, const std::filesystem::path& outDir, std::string_view name);
+
+	/**
+	 * Writes `mesh` to `path` as a Wavefront `.obj` for inspection in an external model viewer -- a
+	 * debugging aid for isolating a bad mesh format from a bad shader.
+	 *
+	 * @param fromMeshlets When true (default) the triangles are reconstructed from the meshlet clusters,
+	 *        i.e. exactly the geometry the GPU draws, so a corrupt meshlet build is visible in the
+	 *        viewer. When false the raw per-submesh index buffer is emitted instead, letting you compare
+	 *        the source geometry against the meshletized form.
+	 * @throws std::runtime_error if the file cannot be written.
+	 */
+	void
+	writeObj(const BMesh& mesh, const std::filesystem::path& path, bool fromMeshlets = true);
 }

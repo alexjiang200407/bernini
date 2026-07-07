@@ -6,7 +6,6 @@ namespace demo
 {
 	namespace
 	{
-		constexpr float c_MoveUnitsPerSecond   = 15.0f;
 		constexpr float c_MouseRadiansPerPixel = 0.005f;
 	}
 
@@ -20,11 +19,11 @@ namespace demo
 	}
 
 	bool
-	ApplyFlyCam(bgl::Camera& camera, float dt) noexcept
+	ApplyFlyCam(bgl::Camera& camera, float dt, float moveUnitsPerSecond) noexcept
 	{
 		const bool* keys = SDL_GetKeyboardState(nullptr);
 
-		const float moveSpeed = dt * c_MoveUnitsPerSecond;
+		const float moveSpeed = dt * moveUnitsPerSecond;
 		float       forward   = 0.0f;
 		float       right     = 0.0f;
 		if (keys[SDL_SCANCODE_W])

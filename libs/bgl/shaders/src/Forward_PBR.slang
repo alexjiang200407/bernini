@@ -31,15 +31,27 @@ float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
 float3 CalculateNormal(float3 worldNormal, float4 worldTangent, float3 sampledNormal)
 {
     float3 N = normalize(worldNormal);
-    float3 T = normalize(worldTangent.xyz - dot(worldTangent.xyz, N) * N);
+
+    // Normal maps are BC5_UNORM
+    float2 xy = sampledNormal.xy * 2.0 - 1.0;
+    float z = sqrt(saturate(1.0 - dot(xy, xy)));
+    float3 tangentNormal = float3(xy, z);
+
+    // Gram-Schmidt the tangent against N. A mesh imported without tangents has a zero tangent, which
+    // normalize() would turn into NaN and poison every lit pixel, so fall back to the geometric normal
+    // when the tangent is degenerate (normal mapping is simply skipped for that surface).
+    float3 tangentDir = worldTangent.xyz - dot(worldTangent.xyz, N) * N;
+    if (dot(tangentDir, tangentDir) < 1e-8)
+    {
+        return N;
+    }
+
+    float3 T = normalize(tangentDir);
 
     // Use tangent.w to determine the correct handedness/direction of the bitangent
     float3 B = cross(N, T) * worldTangent.w;
 
     float3x3 TBN = float3x3(T, B, N);
-
-    // Transform sampled normal from [0, 1] to [-1, 1]
-    float3 tangentNormal = sampledNormal * 2.0 - 1.0;
 
     // Multiply by TBN to bring the normal into World Space
     return normalize(mul(tangentNormal, TBN));
@@ -61,8 +73,11 @@ float4 PSMain(ForwardVSOut input) : SV_Target
     float3 normalTex = material.normalTexture.Sample(wrapSampler, input.uv).rgb;
     float3 ormTex = material.ormTexture.Sample(wrapSampler, input.uv).rgb;
 
-    // Combine textures with their constant factors
-    float3 albedo = albedoTex.rgb * material.baseColorFactor.rgb;
+    // Combine textures with their constant factors. The base-color texture is authored in sRGB
+    // (glTF convention) but sampled as UNORM, so decode it to linear here before lighting -- the
+    // engine re-encodes to sRGB on output (pow 1/2.2 below). The factor is already linear, and the
+    // normal/ORM maps carry linear data, so only the albedo sample is decoded.
+    float3 albedo = pow(albedoTex.rgb, 2.2) * material.baseColorFactor.rgb;
     float ao = ormTex.r;
     float roughness = ormTex.g * material.roughnessFactor;
     float metallic = ormTex.b * material.metallicFactor;
@@ -89,7 +104,7 @@ float4 PSMain(ForwardVSOut input) : SV_Target
     let diffuse = irradiance * albedo;
 
     // 6. Ambient Specular (Prefiltered Environment Map)
-    const float MAX_REFLECTION_LOD = 1.0; // Total mip levels minus one
+    const float MAX_REFLECTION_LOD = 5.0f; // Total mip levels minus one
     let prefilteredColor = materialData.prefilterMap.SampleCubeLevel(clampSampler, R, roughness * MAX_REFLECTION_LOD).rgb;
     float2 envBRDF = materialData.brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 

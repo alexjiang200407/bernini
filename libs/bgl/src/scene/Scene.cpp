@@ -80,6 +80,22 @@ namespace bgl
 
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
 
+		idl::VertexLayout
+		ConvertLayout(const assetlib::VertexLayout& src)
+		{
+			auto dst           = idl::VertexLayout();
+			dst.attributeCount = src.attributeCount;
+			dst.stride         = src.stride;
+			for (uint32_t i = 0; i < src.attributeCount; ++i)
+			{
+				dst.attributes[i].semantic =
+					static_cast<idl::VertexSemantic>(src.attributes[i].semantic);
+				dst.attributes[i].format = static_cast<idl::VertexFormat>(src.attributes[i].format);
+				dst.attributes[i].byteOffset = src.attributes[i].offset;
+			}
+			return dst;
+		}
+
 		// The PSO bucket cached on a submesh, derived from its geom + material type. An absent
 		// material falls back to kNull (unlit) -- the same default the old per-instance path used.
 		uint32_t
@@ -496,6 +512,115 @@ namespace bgl
 		}
 	}
 
+	GeomHandle
+	Scene::AddStaticMesh(
+		const assetlib::BMesh&          mesh,
+		uint32_t                        meshIndex,
+		std::span<const MaterialHandle> materials)
+	{
+		try
+		{
+			if (meshIndex >= mesh.meshes.size())
+			{
+				throw SceneError("AddStaticMesh: meshIndex out of range");
+			}
+
+			const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
+
+			std::vector<idl::Submesh> submeshes;
+			submeshes.reserve(meshEntry.submeshCount);
+
+			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			{
+				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+
+				const uint32_t        vertexBytes = src.vertexCount * src.layout.stride;
+				std::vector<uint32_t> vertexWords((vertexBytes + 3u) / 4u, 0u);
+				std::memcpy(
+					vertexWords.data(),
+					mesh.vertexData.data() + src.vertexByteOffset,
+					vertexBytes);
+				const auto vertexData = m_VertexDataBuffer.Add(vertexWords);
+
+				const MaterialHandle material =
+					src.material < materials.size() ? materials[src.material] : MaterialHandle{};
+				const uint32_t pso    = SubmeshPso(GeomType::kStaticMesh, material);
+				const auto     layout = ConvertLayout(src.layout);
+
+				constexpr uint32_t kMaxMeshlets = idl::cMaxMeshletsPerAccelerationStructure;
+
+				for (uint32_t base = 0; base < src.meshletCount; base += kMaxMeshlets)
+				{
+					const uint32_t chunkCount = (src.meshletCount - base) < kMaxMeshlets ?
+					                                (src.meshletCount - base) :
+					                                kMaxMeshlets;
+
+					std::vector<uint32_t>     vertexMap;
+					std::vector<uint32_t>     localIndices;
+					std::vector<idl::Meshlet> meshlets;
+					meshlets.reserve(chunkCount);
+
+					for (uint32_t m = 0; m < chunkCount; ++m)
+					{
+						const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + base + m];
+
+						auto out                 = idl::Meshlet();
+						out.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
+						out.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
+						out.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
+						out.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
+						out.boundingCenter       = ml.boundingCenter;
+						out.boundingRadius       = ml.boundingRadius;
+
+						for (uint32_t i = 0; i < ml.vertexCount; ++i)
+						{
+							vertexMap.push_back(mesh.meshletVertices[ml.vertexOffset + i]);
+						}
+
+						const uint32_t indexCount = ml.triangleCount * 3u;
+						for (uint32_t i = 0; i < indexCount; ++i)
+						{
+							localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
+						}
+
+						meshlets.push_back(out);
+					}
+
+					auto submesh        = idl::Submesh();
+					submesh.layout      = layout;
+					submesh.meshlets    = m_MeshletBuffer.Add(meshlets);
+					submesh.vertexMap   = m_VertexMapBuffer.Add(vertexMap);
+					submesh.vertexData  = vertexData;
+					submesh.indices     = m_IndexBuffer.Add(localIndices);
+					submesh.vertexCount = src.vertexCount;
+					if (material.IsValid())
+					{
+						submesh.material = material.handle;
+					}
+					submesh.pso = pso;
+
+					submeshes.push_back(submesh);
+				}
+			}
+
+			const auto baseSubmeshGlobal =
+				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
+
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
+
+			auto retVal     = GeomHandle();
+			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.geomType = GeomType::kStaticMesh;
+
+			return retVal;
+		}
+		catch (const std::runtime_error& e)
+		{
+			throw SceneError(e.what());
+		}
+	}
+
 	MaterialHandle
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
@@ -503,10 +628,17 @@ namespace bgl
 		const auto flatNormal =
 			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
 
+		// A caller-supplied texture resolves to its bindless index; an invalid
+		// (default-constructed) handle falls back to the given default texture.
+		const auto resolve = [](TextureAssetHandle tex, core::slot_handle fallback) {
+			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
+			return idl::TextureHandle{ slot.index };
+		};
+
 		idl::PbrMaterial material{};
-		material.baseColorTexture = idl::TextureHandle{ white.index };
-		material.normalTexture    = idl::TextureHandle{ flatNormal.index };
-		material.ormTexture       = idl::TextureHandle{ white.index };
+		material.baseColorTexture = resolve(desc.baseColorTexture, white);
+		material.normalTexture    = resolve(desc.normalTexture, flatNormal);
+		material.ormTexture       = resolve(desc.ormTexture, white);
 		material.baseColorFactor  = desc.baseColorFactor;
 		material.metallicFactor   = desc.metallicFactor;
 		material.roughnessFactor  = desc.roughnessFactor;

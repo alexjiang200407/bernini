@@ -51,4 +51,9 @@ namespace demo
 
 	void
 	PumpEvents();
+
+	inline constexpr int kScancodeF10 = 67;  // SDL_SCANCODE_F10
+
+	bool
+	KeyPressed(int scancode);
 }

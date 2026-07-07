@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
@@ -63,6 +64,11 @@ namespace bgl
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		float     metallicFactor  = 1.0f;
 		float     roughnessFactor = 1.0f;
+
+		// Optional material maps, from AddTextureAsset.
+		TextureAssetHandle baseColorTexture;
+		TextureAssetHandle normalTexture;
+		TextureAssetHandle ormTexture;
 	};
 
 	class BGL_API IScene : public core::Ref
@@ -89,6 +95,23 @@ namespace bgl
 			uint32_t       ySegments,
 			float          radius,
 			MaterialHandle material = {}) = 0;
+
+		/**
+		 * Adds one mesh of a loaded BMesh as static-mesh geometry, uploading its submeshes'
+		 * vertex / index / meshlet data into this scene's buffers. Each submesh is bound to
+		 * `materials[submesh.material]`; a submesh whose material index is out of range (e.g. the
+		 * source had none) is left unlit.
+		 *
+		 * @param mesh       A BMesh loaded from disk (see assetlib::load).
+		 * @param meshIndex  Index into `mesh.meshes`.
+		 * @param materials  Materials parallel to `mesh.materials`, resolved by the caller.
+		 * @throws SceneError if `meshIndex` is out of range or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddStaticMesh(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;
