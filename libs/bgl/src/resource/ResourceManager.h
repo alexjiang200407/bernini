@@ -48,7 +48,7 @@ namespace bgl
 
 		// Creates a texture and defers an upload of the given decoded subresource data
 		// (one entry per mip/array subresource, D3D12 order). The RHI never loads or
-		// decodes files -- callers pass already-decoded pixels (see assetlib::loadDDS).
+		// decodes files -- callers pass already-decoded pixels (see assetlib::loadKTX2).
 		// The upload is flushed by FlushPendingTextureUploads.
 		[[nodiscard]]
 		virtual TextureHandle
@@ -56,8 +56,8 @@ namespace bgl
 			const TextureDesc&                      desc,
 			std::span<const TextureSubresourceData> initialData) noexcept = 0;
 
-		// Creates a sampled (kSRV) texture from a decoded image (see assetlib::loadDDS),
-		// deferring its upload. The image's raw dxgiFormat is mapped to the engine format
+		// Creates a sampled (kSRV) texture from a decoded image (see assetlib::loadKTX2),
+		// deferring its upload. The image's API-neutral vkFormat is mapped to the engine format
 		// internally, so callers never touch graphics-format types.
 		[[nodiscard]]
 		virtual TextureHandle

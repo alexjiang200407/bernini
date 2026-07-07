@@ -11,10 +11,11 @@ when this doc disagrees, trust the source, then fix this doc. In particular, **t
 defines the texture contract** — channel meaning and color space live there, and the asset pipeline
 must feed data that matches.
 
-> **Migration in flight:** textures currently bake to **uncompressed** DDS; the engine is moving to
-> **KTX2** for GPU-compressed, cross-platform textures. Formats marked "current" below are
-> provisional — see [The DDS → KTX2 migration](#the-dds--ktx2-migration). (sRGB itself is already
-> hardware, on DDS today — the migration is about compression, not color space.)
+> **Textures are KTX2, GPU-compressed.** Bake and load go through **KTX2** via **libktx** —
+> cross-platform, no DirectXTex. LDR material maps are **Basis UASTC** supercompressed at bake and
+> **transcoded to BC7** at load (~4:1 vs uncompressed); HDR/IBL float maps stay uncompressed (Basis
+> is LDR-only). See [GPU compression](#gpu-compression). sRGB is hardware at both ends and survives
+> the UASTC round-trip, so base color still lands as a BC7 **sRGB** format.
 
 ---
 
@@ -23,7 +24,7 @@ must feed data that matches.
 * **The shader owns the texture contract, not the file.** Channel semantics and color space are
   fixed by the PBR pixel shader
   [libs/bgl/shaders/src/Forward_PBR.slang](libs/bgl/shaders/src/Forward_PBR.slang) and the mesh /
-  vertex-decode shaders. A `.dds`/`.ktx2` is just bytes + a format tag; if its channels or color
+  vertex-decode shaders. A `.ktx2` is just bytes + a format tag; if its channels or color
   space don't match what the shader reads, it renders wrong with no error. Author to the shader.
 * **sRGB is hardware, at both ends — no gamma in the shaders.** Base-color textures use an **sRGB
   format** (`*_UNORM_SRGB`), so the sampler decodes sRGB→linear on read; the back-buffer **RTV is
@@ -32,8 +33,8 @@ must feed data that matches.
   base-color texture supplied as plain `_UNORM` renders **washed out / desaturated** — it must carry
   an sRGB format (the bake tags it; hand-authored textures must use `*_UNORM_SRGB`). Normal and ORM
   stay `_UNORM` (linear data).
-* **Color space is per-map.** Base color is sRGB (decoded in-shader). Normal, ORM, and the IBL maps
-  carry linear data and are sampled raw.
+* **Color space is per-map.** Base color is sRGB (decoded by the sampler via its sRGB format).
+  Normal, ORM, and the IBL maps carry linear data and are sampled raw.
 * **ORM packing follows glTF metallic-roughness.** One texture, `R` = occlusion (AO), `G` =
   roughness, `B` = metallic. `roughness *= roughnessFactor`, `metallic *= metallicFactor`.
 * **Honest vertex layout.** The importer packs *only* the attributes the source primitive provides
@@ -51,23 +52,25 @@ must feed data that matches.
 
 ## Texture standards
 
-| Map | Color space | Format (current → target) | Channels | Default when absent |
+| Map | Color space | On disk → on GPU | Channels | Default when absent |
 |---|---|---|---|---|
-| **Base color** | **sRGB** (hardware-decoded via `*_UNORM_SRGB`) | `R8G8B8A8_UNORM_SRGB` DDS → **BC7/BC1 sRGB** KTX2 | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
-| **Normal** | linear | (author-supplied) → **BC5_UNORM** | RG = tangent-space X/Y (**Z reconstructed** in shader) | flat `(0.5,0.5,1)` |
-| **ORM** | linear | `R8G8B8A8_UNORM` DDS → **BC1** | R = AO · G = roughness · B = metallic | 1×1 white (AO=1; factors drive) |
-| **IBL irradiance** | linear (HDR) | DDS cube map | prefiltered diffuse cube | — (required via `SetEnvironmentMap`) |
-| **IBL prefilter** | linear (HDR) | DDS cube map | prefiltered specular cube (mip = roughness) | — |
-| **IBL BRDF LUT** | linear | DDS 2D | RG (scale, bias) | — |
+| **Base color** | **sRGB** (hardware-decoded) | UASTC sRGB → **BC7 sRGB** | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
+| **Normal** | linear | UASTC → **BC7** | RG = tangent-space X/Y (**Z reconstructed** in shader) | flat `(0.5,0.5,1)` |
+| **ORM** | linear | UASTC → **BC7** | R = AO · G = roughness · B = metallic | 1×1 white (AO=1; factors drive) |
+| **IBL irradiance** | linear (HDR) | KTX2 cube map (float, uncompressed) | prefiltered diffuse cube | — (required via `SetEnvironmentMap`) |
+| **IBL prefilter** | linear (HDR) | KTX2 cube map (float, uncompressed, mipped) | prefiltered specular cube (mip = roughness) | — |
+| **IBL BRDF LUT** | linear | KTX2 2D (float, uncompressed) | RG (scale, bias) | — |
 
-* **"Current" = what the bake emits today**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
-  (`rgba8ToImage`) writes **uncompressed RGBA8 with a generated mip chain**, and `writeTextures`
-  ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) tags **base-color maps as
-  `R8G8B8A8_UNORM_SRGB`** (from the material's `baseColorTexture` usage) and everything else as
-  `_UNORM`. The **BC** targets are the standard the runtime already *loads* —
-  [libs/assetlib/include/assetlib/image_io.h](libs/assetlib/include/assetlib/image_io.h) (`loadDDS`)
-  carries whatever `DXGI_FORMAT` the file declares, so hand-/tool-authored BC1/BC5/BC7 (incl. sRGB)
-  DDS load and sample correctly today; the CLI bake just doesn't *compress* yet.
+* **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
+  (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`; `writeTextures`
+  ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) tags **base-color maps as sRGB**
+  (from the material's `baseColorTexture` usage) and everything else `_UNORM`, then `writeKTX2`
+  ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp)) **Basis-UASTC-compresses** LDR
+  maps (multi-threaded, `LEVEL_FASTER`) and writes one `texN.ktx2`. HDR/float inputs (the IBL maps)
+  skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands
+  back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
+  All maps currently transcode to **BC7** for simplicity; per-map BC5 (normal) / BC1 (ORM) is a
+  possible refinement.
 * **Factors are linear** and live in the material, not the texture:
   `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`.
   See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and the
@@ -78,9 +81,11 @@ must feed data that matches.
   [libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp). A material can omit any map.
 * **Decoded image hand-off type:** `ImageData` in
   [libs/assetlib_structs/include/assetlib_structs/ImageData.h](libs/assetlib_structs/include/assetlib_structs/ImageData.h)
-  — carries the raw `dxgiFormat`, cube flag, and D3D12-ordered (array-major, mip-minor) subresources.
-  This is the neutral type between the codec (assetlib) and the RHI (bgl); it is format-agnostic and
-  survives the KTX2 switch unchanged.
+  — carries the raw **`vkFormat`** (the KTX2 container's native Vulkan format tag), cube flag, and
+  D3D12-ordered (array-major, mip-minor) subresources. This is the API-neutral type between the codec
+  (assetlib) and the RHI (bgl): the codec stores KTX2's `vkFormat` verbatim, and each backend maps it
+  to its own format — the D3D12 RHI via `VkFormatToDXGI` in
+  [libs/bgl/src/d3d12/util_d3d12.cpp](libs/bgl/src/d3d12/util_d3d12.cpp). No DXGI leaks into assetlib.
 
 ---
 
@@ -134,11 +139,11 @@ flowchart TD
     GLTF[".glb / .gltf"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures)"]
     IMP -- "bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets)"]
     IMP -- "bake" --> BMAT["matN.bmaterial (factors + tex paths)"]
-    IMP -- "bake / writeTextures" --> TEX["texN.dds → .ktx2 (per map)"]
+    IMP -- "bake / writeTextures (writeKTX2)" --> TEX["texN.ktx2 (per map)"]
 
     BMESH -- "assetlib::load" --> SCENE
     BMAT -- "loadMaterial" --> SCENE
-    TEX -- "loadDDS → loadKTX2" --> SCENE
+    TEX -- "loadKTX2" --> SCENE
 
     subgraph SCENE["Scene (runtime)"]
         AM["AddStaticMesh (meshlet upload, ≤64/submesh)"]
@@ -151,29 +156,44 @@ flowchart TD
 
 ---
 
-## The DDS → KTX2 migration
+## GPU compression
 
-The engine will replace DDS with **KTX2** (Khronos container). Why it matters and what has to change:
+LDR material maps are **Basis Universal (UASTC)** supercompressed at bake and **transcoded to BC7**
+at load — cross-platform, DirectXTex-free, and roughly **4:1** smaller than uncompressed RGBA8 in
+both file and VRAM.
 
-* **Color space is already sorted; this is about compression.** sRGB is handled in hardware today
-  (sRGB base-color format + sRGB back-buffer RTV), so KTX2 changes nothing about the pixel shaders —
-  it just carries the sRGB/format tag natively rather than the bake calling `MakeSRGB`.
-* **Cross-platform GPU compression.** KTX2 + Basis Universal (UASTC/ETC1S) transcodes to BC / ASTC /
-  ETC at load, which drops the **Windows-only DirectXTex** dependency in the bake and shrinks
-  on-disk/VRAM footprint versus today's uncompressed RGBA8.
-* **Per-map format targets** (unchanged by the container, but this is when they land): base color →
-  BC7/BC1 **sRGB**; normal → **BC5_UNORM** (two-channel, Z already reconstructed in shader); ORM →
-  BC1 **linear**.
-* **Pipeline touch points:**
-  * `writeTextures` / `writeDDS`
-    ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp),
-    [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)) emit `.ktx2`; the
-    per-map color space / format must be chosen from the material's usage of each texture (base color
-    → sRGB, others → linear).
-  * `.bmaterial` texture path references become `.ktx2`.
-  * `loadDDS` ([libs/assetlib/include/assetlib/image_io.h](libs/assetlib/include/assetlib/image_io.h))
-    gains/gives way to a KTX2 loader; `ImageData` stays the neutral hand-off (it already carries an
-    arbitrary format + subresource layout).
+* **Encode (bake).** `writeKTX2` ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp))
+  builds the uncompressed RGBA8 mip chain into a `ktxTexture2`, then, for 8-bit LDR formats only,
+  calls `ktxTexture2_CompressBasisEx` with **UASTC** (`LEVEL_FASTER`, `threadCount =
+  hardware_concurrency` — UASTC output is deterministic regardless of thread count, and
+  single-threaded 4K encodes are prohibitively slow). sRGB base-color inputs keep an sRGB transfer
+  function through the encode.
+* **Transcode (load).** `loadKTX2` calls `ktxTexture2_NeedsTranscoding`; if set,
+  `ktxTexture2_TranscodeBasis(…, KTX_TTF_BC7_RGBA)`. The resulting `vkFormat` is `BC7_SRGB_BLOCK`
+  (base color) or `BC7_UNORM_BLOCK` (normal/ORM), which flows through `VkFormatToDXGI` →
+  `BC7_UNORM[_SRGB]` → engine format. Subresource **row pitches are block-aware** (`ceil(w/4)·16`).
+* **HDR/IBL stays uncompressed.** Basis Universal is LDR-only, so float cube/2D maps skip compression
+  and keep their `R16/R32` float formats (BC6H HDR compression is a possible follow-up).
+* **BC7 for everything, for now.** All LDR maps transcode to BC7 so `loadKTX2` needs no per-map
+  role. Optimal per-map targets (normal → BC5_RG, ORM → BC1) and on-disk zstd/ETC1S are refinements;
+  the transcode target and encoder params are the only places they'd change.
+* **Debug builds link the *Release* libktx.** The Basis encoder/transcoder is unusably slow when
+  compiled unoptimized (debug basisu is ~20–100× slower), so the root `CMakeLists.txt` maps
+  `KTX::ktx` to its Release config and deploys the Release `ktx.dll` over the debug one in every
+  build. ktx is a pure-C-API DLL, so this cross-config mix is safe. If a bake or texture load ever
+  crawls, check that the deployed `ktx.dll` is the ~1.7 MB Release build, not the ~4.6 MB debug one.
+* **Round-trip test:** [libs/assetlib/tests/src/Ktx2_test.cpp](libs/assetlib/tests/src/Ktx2_test.cpp)
+  (`[ktx2]`) exercises mip-gen → UASTC encode → BC7 transcode, asserting the sRGB tag and block pitch
+  survive.
+
+### Related cross-platform cleanups (done alongside the container swap)
+
+* **Screenshots use `stb_image_write`** (PNG), not DirectXTex/WIC — see `ScreenshotRaw`/`ScreenshotPng`
+  in [libs/bgl/src/d3d12/Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp). The BGRA
+  back-buffer readback is repacked to tight RGBA (R/B swizzle, padding dropped) before encoding.
+* **Golden-image comparison** decodes the two PNGs with `stb_image` and computes a hand-written MSE
+  ([libs/bgl/tests/src/util/GoldenImage.cpp](libs/bgl/tests/src/util/GoldenImage.cpp),
+  `MatchesGolden`), replacing `DirectX::ComputeMSE`. Golden refs are `assets/golden/<name>.exp.png`.
 
 ---
 
@@ -189,7 +209,7 @@ The engine will replace DDS with **KTX2** (Khronos container). Why it matters an
   `metallicFactor` to 0 for non-metals.
 * **Normal map with no tangents does nothing.** `CalculateNormal` falls back to the geometric normal
   when the tangent is degenerate (guards a `normalize(0)` NaN that would otherwise poison every lit
-  pixel). Generate tangents upstream, or the BC5 normal map has no effect.
+  pixel). Generate tangents upstream, or the (BC7) normal map has no effect.
 * **Re-bake after the honest-layout change.** A `.bmesh` baked before the importer stopped
   zero-filling still *claims* to have (zero) tangents in its layout. Re-bake to get a truthful layout
   (and so runtime tangent-presence validation can trust it).
@@ -203,7 +223,7 @@ The engine will replace DDS with **KTX2** (Khronos container). Why it matters an
 ## Usage
 
 ```bash
-# Bake a source model into the modular on-disk form (.bmesh + matN.bmaterial + texN.dds)
+# Bake a source model into the modular on-disk form (.bmesh + matN.bmaterial + texN.ktx2)
 assetlib_cli bake model.glb -o assets/model -n model
 
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
@@ -216,5 +236,6 @@ upload geometry, draw): [examples/bgl_base/src/main.cpp](examples/bgl_base/src/m
 ---
 
 *Maintenance: the file links above are the load-bearing part of this doc and rot silently if files
-move. Re-check them when the asset pipeline's layout changes — especially through the KTX2 migration,
-which will touch `bmesh_texture.cpp`, `image_io.h` / `writeTextures`, and the DDS loader.*
+move. Re-check them when the asset pipeline's layout changes — the compression path lives in
+`image_io.cpp` (`writeKTX2` UASTC encode + `loadKTX2` BC7 transcode), the `VkFormat` catalog in
+`assetlib_structs/VkFormat.h`, and its `VkFormatToDXGI` mapping in `libs/bgl/src/d3d12/util_d3d12.cpp`.*

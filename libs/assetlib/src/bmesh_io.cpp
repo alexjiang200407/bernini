@@ -137,7 +137,8 @@ namespace assetlib
 		std::string
 		texturePath(uint32_t index)
 		{
-			return index == c_InvalidIndex ? std::string{} : "tex" + std::to_string(index) + ".dds";
+			return index == c_InvalidIndex ? std::string{} :
+			                                 "tex" + std::to_string(index) + ".ktx2";
 		}
 
 		// The file name toBMesh assembles for material `index`.
@@ -319,8 +320,8 @@ namespace assetlib
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
 			auto path = outDir / ("tex" + std::to_string(i));
-			path.replace_extension(".dds");
-			writeDDS(mesh.textures[i], path, srgbTextures.contains(static_cast<uint32_t>(i)));
+			path.replace_extension(".ktx2");
+			writeKTX2(mesh.textures[i], path, srgbTextures.contains(static_cast<uint32_t>(i)));
 		}
 	}
 

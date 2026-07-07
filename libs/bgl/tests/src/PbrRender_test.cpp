@@ -1,6 +1,5 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
-#include <DirectXTex.h>
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGpuAssertionHandler.h>
@@ -56,9 +55,9 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	view->SetEnvironmentMap(
-		{ scene->AddTextureAsset(assetlib::loadDDS("assets/iem.dds")),
-	      scene->AddTextureAsset(assetlib::loadDDS("assets/pmrem.dds")),
-	      scene->AddTextureAsset(assetlib::loadDDS("assets/brdf_lut.dds")) });
+		{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
+	      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
+	      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
 
 	auto metalMat = scene->CreatePbrMaterial(
 		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
@@ -86,12 +85,10 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 		gfx->DrawFrame(target, context);
 	}
 
-	gfx->ScreenshotRaw(target, "assets/golden/pbr_ibl.got.dds");
+	gfx->ScreenshotRaw(target, "assets/golden/pbr_ibl.got.png");
 
 	CHECK(
-		bgl::test::MatchesGoldenDDS(
-			"assets/golden/pbr_ibl.exp.dds",
-			"assets/golden/pbr_ibl.got.dds"));
+		bgl::test::MatchesGolden("assets/golden/pbr_ibl.exp.png", "assets/golden/pbr_ibl.got.png"));
 
 	std::string ecStr;
 	for (auto ec : handler.errcodes)

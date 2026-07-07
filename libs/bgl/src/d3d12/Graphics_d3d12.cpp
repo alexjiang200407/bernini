@@ -19,14 +19,96 @@
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include <DirectXTex.h>
 #include <bgl/RenderContext.h>
 #include <core/file/file.h>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 namespace fs = std::filesystem;
 
 namespace bgl
 {
+	namespace
+	{
+		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
+		bool
+		isBgra(uint32_t dxgiFormat)
+		{
+			return dxgiFormat == 87 /* DXGI_FORMAT_B8G8R8A8_UNORM */ ||
+			       dxgiFormat == 91 /* DXGI_FORMAT_B8G8R8A8_UNORM_SRGB */;
+		}
+
+		// Repack a mapped GPU readback (256-byte-aligned padded rows, possibly BGRA) into a tight
+		// RGBA buffer and write it as a PNG via stb_image_write -- cross-platform, replacing the old
+		// DirectXTex DDS / WIC PNG encoders. `src` already points past the readback's base offset.
+		void
+		writeReadbackPng(
+			const std::string& filepath,
+			const uint8_t*     src,
+			size_t             rowPitch,
+			uint32_t           width,
+			uint32_t           height,
+			uint32_t           dxgiFormat)
+		{
+			if (src == nullptr)
+			{
+				throw GraphicsError(std::format("Screenshot '{}': null readback source", filepath));
+			}
+			if (width == 0 || height == 0)
+			{
+				throw GraphicsError(
+					std::format(
+						"Screenshot '{}': invalid dimensions {}x{}",
+						filepath,
+						width,
+						height));
+			}
+
+			if (const std::filesystem::path parent = std::filesystem::path(filepath).parent_path();
+			    !parent.empty())
+			{
+				std::error_code ec;
+				std::filesystem::create_directories(parent, ec);
+			}
+
+			const bool           bgra = isBgra(dxgiFormat);
+			std::vector<uint8_t> rgba(static_cast<size_t>(width) * height * 4);
+
+			for (uint32_t y = 0; y < height; ++y)
+			{
+				const uint8_t* row = src + static_cast<size_t>(y) * rowPitch;
+				uint8_t*       out = rgba.data() + static_cast<size_t>(y) * width * 4;
+				for (uint32_t x = 0; x < width; ++x)
+				{
+					const uint8_t* p = row + static_cast<size_t>(x) * 4;
+					uint8_t*       o = out + static_cast<size_t>(x) * 4;
+					o[0]             = bgra ? p[2] : p[0];
+					o[1]             = p[1];
+					o[2]             = bgra ? p[0] : p[2];
+					o[3]             = p[3];
+				}
+			}
+
+			if (stbi_write_png(
+					filepath.c_str(),
+					static_cast<int>(width),
+					static_cast<int>(height),
+					4,
+					rgba.data(),
+					static_cast<int>(width) * 4) == 0)
+			{
+				throw GraphicsError(
+					std::format(
+						"Screenshot failed to write PNG '{}' ({}x{}) -- path may be unwritable "
+						"or the disk is full",
+						filepath,
+						width,
+						height));
+			}
+		}
+	}
+
 	class IScene;
 
 	// Graph resource name of the active target's backbuffer.
@@ -788,8 +870,7 @@ namespace bgl
 		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 		m_CommandQueue->WaitForFenceCPUBlocking(fence);
 
-		// Wrap the mapped readback as a DirectX::Image (the padded rowPitch is fine,
-		// DirectX::Image stores it explicitly) and encode to file.
+		// Repack the mapped readback into a tight RGBA buffer and encode a PNG (cross-platform).
 		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
 
 		gassert(
@@ -800,31 +881,25 @@ namespace bgl
 
 		const void* mapped = m_ResourceManager->MapReadback(readback);
 
-		DirectX::Image image = {};
-		image.width          = static_cast<size_t>(resourceDesc.Width);
-		image.height         = static_cast<size_t>(resourceDesc.Height);
-		image.format         = resourceDesc.Format;
-		image.rowPitch       = static_cast<size_t>(layout.rowPitch);
-		image.slicePitch     = static_cast<size_t>(layout.rowPitch) * resourceDesc.Height;
-		image.pixels = const_cast<uint8_t*>(static_cast<const uint8_t*>(mapped) + layout.offset);
-
-		std::wstring widePath(filepath.begin(), filepath.end());
-
-		// DDS only for now: it needs no COM/WIC init and stores the exact texture
-		// format, which is what the golden-image comparison wants.
-		HRESULT hr = DirectX::SaveToDDSFile(image, DirectX::DDS_FLAGS_NONE, widePath.c_str());
+		try
+		{
+			writeReadbackPng(
+				filepath,
+				static_cast<const uint8_t*>(mapped) + layout.offset,
+				static_cast<size_t>(layout.rowPitch),
+				static_cast<uint32_t>(resourceDesc.Width),
+				static_cast<uint32_t>(resourceDesc.Height),
+				static_cast<uint32_t>(resourceDesc.Format));
+		}
+		catch (...)
+		{
+			m_ResourceManager->UnmapReadback(readback);
+			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+			throw;
+		}
 
 		m_ResourceManager->UnmapReadback(readback);
 		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
-
-		if (FAILED(hr))
-		{
-			throw GraphicsError(
-				std::format(
-					"ScreenshotRaw failed to save '{}' (hr=0x{:08X})",
-					filepath,
-					static_cast<uint32_t>(hr)));
-		}
 	}
 
 	void
@@ -886,8 +961,7 @@ namespace bgl
 		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 		m_CommandQueue->WaitForFenceCPUBlocking(fence);
 
-		// Wrap the mapped readback as a DirectX::Image (the padded rowPitch is fine,
-		// DirectX::Image stores it explicitly) and encode to file.
+		// Repack the mapped readback into a tight RGBA buffer and encode a PNG (cross-platform).
 		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
 
 		gassert(
@@ -898,44 +972,25 @@ namespace bgl
 
 		const void* mapped = m_ResourceManager->MapReadback(readback);
 
-		DirectX::Image image = {};
-		image.width          = static_cast<size_t>(resourceDesc.Width);
-		image.height         = static_cast<size_t>(resourceDesc.Height);
-		image.format         = resourceDesc.Format;
-		image.rowPitch       = static_cast<size_t>(layout.rowPitch);
-		image.slicePitch     = static_cast<size_t>(layout.rowPitch) * resourceDesc.Height;
-		image.pixels = const_cast<uint8_t*>(static_cast<const uint8_t*>(mapped) + layout.offset);
-
-		std::wstring widePath(filepath.begin(), filepath.end());
-
-		// SaveToWICFile builds a WIC imaging factory via CoCreateInstance, which needs
-		// COM initialized on this thread. Initialize it here (balanced below) so callers
-		// that never set up COM still get a valid PNG.
-		const HRESULT coInit         = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-		const bool    comInitialized = SUCCEEDED(coInit);
-
-		HRESULT hr = DirectX::SaveToWICFile(
-			image,
-			DirectX::WIC_FLAGS_FORCE_RGB,
-			DirectX::GetWICCodec(DirectX::WIC_CODEC_PNG),
-			widePath.c_str());
-
-		if (comInitialized)
+		try
 		{
-			CoUninitialize();
+			writeReadbackPng(
+				filepath,
+				static_cast<const uint8_t*>(mapped) + layout.offset,
+				static_cast<size_t>(layout.rowPitch),
+				static_cast<uint32_t>(resourceDesc.Width),
+				static_cast<uint32_t>(resourceDesc.Height),
+				static_cast<uint32_t>(resourceDesc.Format));
+		}
+		catch (...)
+		{
+			m_ResourceManager->UnmapReadback(readback);
+			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+			throw;
 		}
 
 		m_ResourceManager->UnmapReadback(readback);
 		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
-
-		if (FAILED(hr))
-		{
-			throw GraphicsError(
-				std::format(
-					"ScreenshotPng failed to save '{}' (hr=0x{:08X})",
-					filepath,
-					static_cast<uint32_t>(hr)));
-		}
 	}
 
 	GraphicsHandle

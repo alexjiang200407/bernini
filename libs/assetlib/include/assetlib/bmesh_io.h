@@ -42,7 +42,7 @@ namespace assetlib
 	toBMesh(const imp::BMeshImport& mesh);
 
 	/**
-	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.dds` file named `texN.dds`
+	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file named `texN.ktx2`
 	 * by index. These are the texture files the baked `.bmaterial` files reference.
 	 *
 	 * @throws std::runtime_error if a file cannot be written.
@@ -52,7 +52,7 @@ namespace assetlib
 
 	/**
 	 * Writes each material in `mesh` into `outDir` as a `matN.bmaterial` file (matching the path handles
-	 * toBMesh assembles), mapping each material's texture indices to the `texN.dds` names writeTextures
+	 * toBMesh assembles), mapping each material's texture indices to the `texN.ktx2` names writeTextures
 	 * emits.
 	 *
 	 * @throws std::runtime_error if a file cannot be written.
@@ -62,7 +62,7 @@ namespace assetlib
 
 	/**
 	 * Bakes an import to disk under `outDir`: writes `<name>.bmesh`, one `matN.bmaterial` per material,
-	 * and one `texN.dds` per texture. This is the complete modular form the runtime loads.
+	 * and one `texN.ktx2` per texture. This is the complete modular form the runtime loads.
 	 *
 	 * @throws std::runtime_error if a file cannot be written.
 	 */

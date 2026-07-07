@@ -36,10 +36,7 @@ find_package(nlohmann_json CONFIG REQUIRED)     # required by tinygltf
 find_package(Stb REQUIRED)                      # image decoding used by tinygltf
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")  # header-only glTF 2.0 loader
 find_package(meshoptimizer CONFIG REQUIRED)     # vertex optimization + meshlet generation
-
-if (WIN32)
-	find_package(directxtex CONFIG REQUIRED)    # glTF textures -> in-memory DDS
-endif()
+find_package(ktx CONFIG REQUIRED)               # KTX2 texture container (cross-platform)
 
 target_link_libraries(assetlib
 	PUBLIC
@@ -48,7 +45,7 @@ target_link_libraries(assetlib
 	PRIVATE
 		nlohmann_json::nlohmann_json
 		meshoptimizer::meshoptimizer
-		$<$<PLATFORM_ID:Windows>:Microsoft::DirectXTex>
+		KTX::ktx
 )
 
 target_include_directories(assetlib PRIVATE ${Stb_INCLUDE_DIR} ${TINYGLTF_INCLUDE_DIRS})

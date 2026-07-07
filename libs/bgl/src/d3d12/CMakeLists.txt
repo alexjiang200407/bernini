@@ -21,13 +21,13 @@ add_library(bgl_d3d12 OBJECT
 
 find_package(directx-headers CONFIG REQUIRED)
 
-find_package(directxtex CONFIG REQUIRED)
-
 find_package(winpixevent CONFIG REQUIRED)
+
+find_package(Stb REQUIRED)  # stb_image_write for screenshot capture
 
 target_include_directories(bgl_d3d12
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${Stb_INCLUDE_DIR}
 )
 
 target_precompile_headers(bgl_d3d12
@@ -40,7 +40,7 @@ target_compile_definitions(bgl_d3d12 PRIVATE RENDERER_BACKEND_DX12 $<$<CONFIG:De
 
 target_link_libraries(bgl_d3d12
     PUBLIC core assetlib_structs glm::glm
-    PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers Microsoft::DirectXTex
+    PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers
             Microsoft::WinPixEventRuntime
 )
 
