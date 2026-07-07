@@ -20,8 +20,11 @@ namespace assetlib
 	 * Encodes an ImageData (its mips and array slices) back into a `.dds` file on disk. The inverse of
 	 * loadDDS; used to bake extracted asset textures to standalone files.
 	 *
+	 * @param srgb When true, the DDS is tagged with the sRGB variant of the image's format (same bits,
+	 *        only the format field changes) so the GPU sampler decodes sRGB→linear on read. Use it for
+	 *        color (base-color) textures; leave false for linear data (normal / ORM).
 	 * @throws std::runtime_error if the file cannot be written (or, off Windows, always).
 	 */
 	void
-	writeDDS(const ImageData& image, const std::filesystem::path& path);
+	writeDDS(const ImageData& image, const std::filesystem::path& path, bool srgb = false);
 }

@@ -309,11 +309,18 @@ namespace assetlib
 		std::error_code ec;
 		std::filesystem::create_directories(outDir, ec);
 
+		// Textures used as base color are sRGB (tagged so the GPU sampler decodes them); normal and
+		// ORM maps carry linear data and are written as-is.
+		std::set<uint32_t> srgbTextures;
+		for (const imp::BMaterialImport& material : mesh.materials)
+			if (material.baseColorTexture != c_InvalidIndex)
+				srgbTextures.insert(material.baseColorTexture);
+
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
 			auto path = outDir / ("tex" + std::to_string(i));
 			path.replace_extension(".dds");
-			writeDDS(mesh.textures[i], path);
+			writeDDS(mesh.textures[i], path, srgbTextures.contains(static_cast<uint32_t>(i)));
 		}
 	}
 

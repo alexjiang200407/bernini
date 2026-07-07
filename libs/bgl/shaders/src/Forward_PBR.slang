@@ -73,11 +73,7 @@ float4 PSMain(ForwardVSOut input) : SV_Target
     float3 normalTex = material.normalTexture.Sample(wrapSampler, input.uv).rgb;
     float3 ormTex = material.ormTexture.Sample(wrapSampler, input.uv).rgb;
 
-    // Combine textures with their constant factors. The base-color texture is authored in sRGB
-    // (glTF convention) but sampled as UNORM, so decode it to linear here before lighting -- the
-    // engine re-encodes to sRGB on output (pow 1/2.2 below). The factor is already linear, and the
-    // normal/ORM maps carry linear data, so only the albedo sample is decoded.
-    float3 albedo = pow(albedoTex.rgb, 2.2) * material.baseColorFactor.rgb;
+    float3 albedo = albedoTex.rgb * material.baseColorFactor.rgb;
     float ao = ormTex.r;
     float roughness = ormTex.g * material.roughnessFactor;
     float metallic = ormTex.b * material.metallicFactor;
@@ -113,11 +109,11 @@ float4 PSMain(ForwardVSOut input) : SV_Target
     // 7. Combine everything with Ambient Occlusion
     float3 ambient = (kD * diffuse + specular) * ao;
 
-    // 8. Exposure, filmic tonemap (ACES) and gamma. Exposure is a linear pre-scale
-    //    before the curve -- promote it to a uniform when you want runtime control.
-    const float exposure = 1.0;
-    float3 color = ACESFilm(ambient * exposure);
-    color = pow(color, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2)); // linear -> sRGB
+    // 8. Exposure + AgX tone map (matches Blender's default view transform; preserves saturation
+    //    where ACES skews bright colors toward white). Exposure is a linear pre-scale before the
+    //    curve. Output stays LINEAR: the sRGB render target encodes linear→sRGB on write.
+    const float exposure = 1.0f;
+    float3 color = AgX(ambient * exposure);
 
     return float4(color, albedoTex.a * material.baseColorFactor.a);
 }

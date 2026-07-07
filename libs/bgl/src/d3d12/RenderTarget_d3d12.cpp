@@ -110,7 +110,7 @@ namespace bgl
 						textureDesc);
 
 				RtvDesc rtvDesc;
-				rtvDesc.format    = Format::BGRA8_UNORM;
+				rtvDesc.format    = Format::SBGRA8_UNORM;
 				rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
 
 				m_BackBuffers[i].rtvHandle =
@@ -152,14 +152,14 @@ namespace bgl
 				texDesc.height    = static_cast<uint32_t>(m_Height);
 				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
 				texDesc.dimension = TextureDimension::kTexture2D;
-				texDesc.format    = Format::BGRA8_UNORM;
+				texDesc.format    = Format::SBGRA8_UNORM;
 				texDesc.usage     = TextureUsageFlag::kRenderTarget;
 				texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
 
 				auto rtvDesc      = RtvDesc();
-				rtvDesc.format    = Format::BGRA8_UNORM;
+				rtvDesc.format    = Format::SBGRA8_UNORM;
 				rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
 
 				m_BackBuffers[i].rtvHandle =
