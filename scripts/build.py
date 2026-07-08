@@ -5,6 +5,7 @@ Usage:
     python scripts/build.py                       # build everything (default preset)
     python scripts/build.py bgl_tests             # build one target
     python scripts/build.py bgl --preset windows-ninja-msvc-dx12-debug
+    python scripts/build.py --preset windows-clang-dx12-debug   # clang + Ninja
     python scripts/build.py --config Release      # multi-config generators
     python scripts/build.py --configure           # configure only, don't build
     python scripts/build.py --dry-run             # print the plan, don't run
@@ -12,6 +13,11 @@ Usage:
 The MSVC developer environment (vcvars) is set up automatically when the
 preset's generator needs it (Visual Studio, Ninja, NMake on Windows); other
 generators (Xcode, Unix Makefiles) are left untouched.
+
+Ninja and clang presets get their make program and compiler pinned to absolute
+paths: ninja and the clang/clang++ pair are resolved from the Visual Studio
+install (its bundled Ninja and "C++ Clang tools for Windows" LLVM component) when
+they aren't on PATH, so a clang build works without extra shell setup.
 """
 
 import argparse
@@ -60,6 +66,31 @@ def main():
 
     configure_cmd = [cmake, "--preset", args.preset]
     build_cmd = [cmake, "--build", "--preset", args.preset]
+
+    # Resolve toolchain programs that may not be on PATH and pin them as absolute
+    # paths so the configure works regardless of how the shell is set up:
+    #   * Ninja generators need a make program (VS bundles one off-PATH).
+    #   * clang presets need clang/clang++ (VS LLVM component preferred, else PATH).
+    toolchain = []
+    if generator and "ninja" in generator.lower():
+        ninja = ct.find_ninja(env)
+        if ninja:
+            configure_cmd += [f"-DCMAKE_MAKE_PROGRAM={ninja}"]
+            toolchain.append(f"ninja: {ninja}")
+        else:
+            print("warning: Ninja generator selected but ninja was not found on PATH "
+                  "or in the Visual Studio install.", file=sys.stderr)
+    if ct.uses_clang(args.preset):
+        clang = ct.find_clang(env)
+        if clang:
+            configure_cmd += [f"-DCMAKE_C_COMPILER={clang['c']}",
+                              f"-DCMAKE_CXX_COMPILER={clang['cxx']}"]
+            toolchain.append(f"clang: {clang['cxx']}")
+        else:
+            print("warning: clang preset selected but clang/clang++ were not found. "
+                  "Install the \"C++ Clang tools for Windows\" (LLVM) component from the "
+                  "Visual Studio Installer, or add clang to your PATH.", file=sys.stderr)
+
     if args.target:
         build_cmd += ["--target", args.target]
     if args.config:
@@ -70,6 +101,8 @@ def main():
         print(f"generator: {generator}")
         print(f"cmake:     {cmake}")
         print(f"env:       {'vcvars (' + args.arch + ')' if wants_msvc else env_source}")
+        for note in toolchain:
+            print(f"toolchain: {note}")
         if not args.no_configure:
             print("configure: " + " ".join(configure_cmd))
         if not args.configure:

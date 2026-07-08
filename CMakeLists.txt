@@ -9,6 +9,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/copy_to_target.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/compile_shader.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/enable_strict_compiler.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/assign_folder.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/strip_msvc_only_flags.cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
