@@ -64,7 +64,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
 	}
 
-	m_MaterialEditor = new MaterialEditorWindow(this);
+	auto matDesc                = MaterialEditorWindowDesc();
+	matDesc.gfx                 = m_Graphics;
+	matDesc.maxPreviewInstances = 16;
+	m_MaterialEditor            = new MaterialEditorWindow(this, std::move(matDesc));
 
 	setCentralWidget(nullptr);
 	setDockNestingEnabled(true);
