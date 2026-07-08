@@ -42,6 +42,16 @@
       }
     },
     {
+      "name": "clang",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "ninja",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
       "name": "dx12",
       "hidden": true,
       "cacheVariables": {
@@ -152,6 +162,36 @@
         "dx12",
         "release"
       ]
+    },
+    {
+      "name": "windows-clang-dx12-debug",
+      "displayName": "Windows Clang Debug ninja - DirectX 12",
+      "binaryDir": "${sourceDir}/build/clang-debug",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "clang",
+        "dx12",
+        "debug"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-clang-dx12-release",
+      "displayName": "Windows Clang Release ninja - DirectX 12",
+      "binaryDir": "${sourceDir}/build/clang-release",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "clang",
+        "dx12",
+        "release"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
 
   ],
@@ -185,6 +225,14 @@
       "name": "windows-ninja-msvc-dx12-debug",
       "configurePreset": "windows-ninja-msvc-dx12-debug",
       "configuration": "Debug"
+    },
+    {
+      "name": "windows-clang-dx12-debug",
+      "configurePreset": "windows-clang-dx12-debug"
+    },
+    {
+      "name": "windows-clang-dx12-release",
+      "configurePreset": "windows-clang-dx12-release"
     }
   ]
 }

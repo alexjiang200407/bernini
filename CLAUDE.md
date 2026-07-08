@@ -81,5 +81,16 @@ Use `python ./scripts/build.py`. It configures and builds the default preset (`w
 python ./scripts/build.py                                  # default preset, all targets
 python ./scripts/build.py bgl_tests                        # one target
 python ./scripts/build.py --preset windows-ninja-msvc-dx12-debug
+python ./scripts/build.py --preset windows-clang-dx12-debug # clang (Ninja generator)
 python ./scripts/build.py --config Release                 # multi-config generators
 ```
+
+## Compilers
+
+The MSVC presets use the Visual Studio generator; the clang presets
+(`windows-clang-dx12-{debug,release}`) use the Ninja generator. `build.py`
+resolves the clang/clang++ pair and ninja to absolute paths, preferring the
+"C++ Clang tools for Windows" (LLVM) component and bundled Ninja from the Visual
+Studio install, and falling back to whatever is on PATH. Compiler-specific
+warning flags live in `cmake/enable_strict_compiler.cmake` (MSVC `/`-flags vs.
+clang `-`-flags).

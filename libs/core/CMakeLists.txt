@@ -19,6 +19,7 @@ add_library(core STATIC ${CORE_SOURCES} ${CORE_HEADERS} ${CORE_INTERNAL_HEADERS}
 
 
 find_package(spdlog CONFIG REQUIRED)
+strip_msvc_only_interface_flags(spdlog::spdlog spdlog::spdlog_header_only)
 find_package(cpptrace CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)   # Settings (JSON config) parsing
 find_package(glm CONFIG REQUIRED)             # core/glm.h: shared glm config for all libs
