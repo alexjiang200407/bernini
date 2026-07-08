@@ -1,4 +1,3 @@
-#pragma once
 #include "d3d12/resource/ResourceManager_d3d12.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandList_d3d12.h"

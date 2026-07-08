@@ -46,6 +46,6 @@ namespace bgl
 	};
 
 	using RenderTargetHandle = core::SharedRef<IRenderTarget>;
-
-	template class BGL_API core::SharedRef<IRenderTarget>;
 }
+
+template class BGL_API core::SharedRef<bgl::IRenderTarget>;
