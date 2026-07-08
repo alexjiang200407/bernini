@@ -44,19 +44,13 @@ private:
 	QString
 	ResolveDropDirectory(const QPoint& windowPos) const;
 
-	QString
-	DefaultTexturesDir(const QString& meshDir) const;
-
 	/**
 	 * Converts a dropped glTF/glb into the engine .bmesh format written to `targetDir`.
-	 * When `importTextures` is set, the mesh's textures are written to `texturesDir`.
+	 * When `importTextures` is set, the mesh's textures are written to the project's
+	 * single `textures_src` folder (under the Data root).
 	 */
 	void
-	ImportMesh(
-		const QString& sourceFile,
-		const QString& targetDir,
-		bool           importTextures,
-		const QString& texturesDir);
+	ImportMesh(const QString& sourceFile, const QString& targetDir, bool importTextures);
 
 	/** Detaches the models and disables the explorer, leaving both views empty. */
 	void
