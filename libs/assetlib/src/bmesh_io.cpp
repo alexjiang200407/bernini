@@ -13,7 +13,7 @@ namespace assetlib
 	namespace
 	{
 		constexpr uint32_t c_Magic        = 0x48534D42u;  // 'B','M','S','H' little-endian
-		constexpr uint16_t c_VersionMajor = 1;
+		constexpr uint16_t c_VersionMajor = 2;
 		constexpr uint16_t c_VersionMinor = 0;
 		constexpr size_t   c_ChunkAlign   = 16;
 
