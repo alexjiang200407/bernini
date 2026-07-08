@@ -5,7 +5,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 
-class RenderTargetWindow;
+#include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
 namespace QtNodes
 {
@@ -19,6 +19,7 @@ struct MaterialEditorWindowDesc
 {
 	bgl::GraphicsHandle gfx                 = nullptr;
 	uint32_t            maxPreviewInstances = 16;
+	MaterialPreviewEnv  previewEnv;  // skybox + IBL paths from config (materialEditor.*)
 };
 
 // The material-authoring surface: a node blackboard (QtNodes) on the left and a live model preview
@@ -35,8 +36,8 @@ public:
 private:
 	MaterialEditorWindowDesc m_Desc;
 
-	bgl::SceneHandle    m_PreviewScene;
-	RenderTargetWindow* m_Preview = nullptr;
+	bgl::SceneHandle       m_PreviewScene;
+	MaterialPreviewWindow* m_Preview = nullptr;
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 	std::unique_ptr<QtNodes::DataFlowGraphModel>        m_GraphModel;

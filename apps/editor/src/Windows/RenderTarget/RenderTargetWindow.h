@@ -51,6 +51,30 @@ protected:
 		return nullptr;
 	}
 
+	bgl::IScene*
+	PreviewScene() const noexcept
+	{
+		return m_Desc.scene.Get();
+	}
+
+	bgl::ISceneView*
+	PreviewView() const noexcept
+	{
+		return m_SceneView.Get();
+	}
+
+	bgl::IGraphics*
+	PreviewGraphics() const noexcept
+	{
+		return m_Desc.gfx.Get();
+	}
+
+	void
+	SetCamera(const bgl::Camera& cam) noexcept
+	{
+		camera = cam;
+	}
+
 private:
 	// Resizes the render target to (width, height) if they are valid and changed.
 	void
