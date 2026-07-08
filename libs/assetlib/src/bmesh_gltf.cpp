@@ -561,11 +561,21 @@ namespace assetlib
 			Mesh entry{};
 			entry.firstSubmesh = static_cast<uint32_t>(mesh.submeshes.size());
 			entry.nameOffset   = addName(mesh, gltfMesh.name);
-			for (const auto& primitive : gltfMesh.primitives)
+			for (size_t p = 0; p < gltfMesh.primitives.size(); ++p)
 			{
+				const auto& primitive = gltfMesh.primitives[p];
 				if (primitive.mode != TINYGLTF_MODE_TRIANGLES)
 					throw std::runtime_error("bmesh: only triangle primitives are supported");
+
+				const size_t before = mesh.submeshes.size();
 				buildSubmesh(mesh, model, primitive);
+				if (mesh.submeshes.size() == before)
+					continue;  // primitive was skipped (e.g. no positions)
+
+				std::string submeshName = gltfMesh.name;
+				if (gltfMesh.primitives.size() > 1)
+					submeshName += "[" + std::to_string(p) + "]";
+				mesh.submeshes.back().nameOffset = addName(mesh, submeshName);
 			}
 			entry.submeshCount = static_cast<uint32_t>(mesh.submeshes.size()) - entry.firstSubmesh;
 			mesh.meshes.push_back(entry);
