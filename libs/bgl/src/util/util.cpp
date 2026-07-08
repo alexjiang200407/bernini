@@ -104,6 +104,8 @@ namespace bgl
 			{
 			case MaterialType::kPBR:
 				return PsoType::kOpaque_StaticMesh_PBR;
+			case MaterialType::kLoosePbr:
+				return PsoType::kOpaque_StaticMesh_LoosePbr;
 			case MaterialType::kNull:
 				return PsoType::kOpaque_StaticMesh_Null;
 			case MaterialType::kAssert:

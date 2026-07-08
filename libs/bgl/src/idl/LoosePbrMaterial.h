@@ -4,8 +4,6 @@
 
 namespace bgl::idl
 {
-	constexpr uint32_t cLooseChannelCount = 9;
-
 	enum class PbrChannel : uint32_t
 	{
 		kBaseColorR = 0,
@@ -20,6 +18,8 @@ namespace bgl::idl
 	};
 
 	static_assert(sizeof(PbrChannel) == 4);
+
+	constexpr uint32_t cLooseChannelCount = 9;
 
 	struct LoosePbrMaterial
 	{

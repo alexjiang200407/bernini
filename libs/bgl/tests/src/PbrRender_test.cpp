@@ -97,3 +97,87 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	}
 	INFO("GPU assertion calls: " << handler.calls << " errcodes: [" << ecStr << "]");
 }
+
+// A loose (per-channel) material whose channels are all unrouted resolves to the same defaults as a
+// PbrMaterial (white base/ORM, flat normal). With identical factors it must render byte-for-byte the
+// same as the PBR case above -- so it validates the loose PSO / buffer / shader against the SAME
+// golden. This is the "editor material with trivial routing == triplet material" equivalence check.
+TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.enableDebugLayer = true;
+	opts.logLevel         = bgl::GraphicsOptions::LogLevel::kTrace;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	DiagAssertionHandler handler;
+	gfx->SetGpuAssertionHandler(&handler);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 8;
+	sceneDesc.maxMeshlets             = 512;
+	sceneDesc.maxSubmeshes            = 8;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
+	sceneDesc.maxLoosePbrMaterials    = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	view->SetEnvironmentMap(
+		{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
+	      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
+	      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+
+	auto looseDesc            = bgl::LoosePbrMaterialDesc();
+	looseDesc.baseColorFactor = glm::vec4(1.0f);
+	looseDesc.metallicFactor  = .6f;
+	looseDesc.roughnessFactor = .3f;
+	auto looseMat             = scene->CreateLoosePbrMaterial(looseDesc);
+
+	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, looseMat);
+
+	auto transform = glm::mat4(1.0f);
+	view->CreateStaticMeshInstance(sphere, transform);
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 0.0f, 19.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.5f, 500.0f);
+
+	auto context     = bgl::RenderContext();
+	context.view     = view;
+	context.camera   = camera;
+	context.viewport = bgl::Viewport(400.0f, 300.0f);
+
+	for (int i = 0; i < 6; ++i)
+	{
+		gfx->DrawFrame(target, context);
+	}
+
+	gfx->ScreenshotRaw(target, "assets/golden/loose_pbr_ibl.got.png");
+
+	// Compares against the SAME golden as the PBR case: loose-with-defaults must match PBR-with-defaults.
+	CHECK(
+		bgl::test::MatchesGolden(
+			"assets/golden/pbr_ibl.exp.png",
+			"assets/golden/loose_pbr_ibl.got.png"));
+
+	std::string ecStr;
+	for (auto ec : handler.errcodes)
+	{
+		ecStr += std::to_string(ec) + " ";
+	}
+	INFO("GPU assertion calls: " << handler.calls << " errcodes: [" << ecStr << "]");
+}

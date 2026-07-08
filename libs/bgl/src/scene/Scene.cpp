@@ -28,13 +28,14 @@ namespace bgl
 
 		// Order MUST stay in lockstep with Scene::GetBuffers() and with
 		// ForwardPass's c_ForwardDataBuffers.
-		static constexpr std::array<BufferInfo, 6> c_BufferInfo = {
+		static constexpr std::array<BufferInfo, 7> c_BufferInfo = {
 			{ { "scene.submeshBuffer" },
 			  { "scene.meshletBuffer" },
 			  { "scene.vertexMapBuffer" },
 			  { "scene.vertexDataBuffer" },
 			  { "scene.indexBuffer" },
-			  { "scene.pbrMaterialBuffer" } }
+			  { "scene.pbrMaterialBuffer" },
+			  { "scene.looseMaterialBuffer" } }
 		};
 
 		// The interleaved vertex layout the procedural geometry emits: position,
@@ -171,6 +172,14 @@ namespace bgl
 			pbrBufferDesc.debugName = "Pbr Material Buffer";
 
 			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto looseBufferDesc      = EntryBufferDesc();
+			looseBufferDesc.maxCount  = atLeastOne(m_Desc.maxLoosePbrMaterials);
+			looseBufferDesc.debugName = "Loose Pbr Material Buffer";
+
+			m_Loose.Init(std::move(looseBufferDesc), m_ResourceManager);
 		}
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
@@ -645,6 +654,69 @@ namespace bgl
 
 		const core::slot_handle slot = m_Pbr.Add(material);
 		return MaterialHandle{ MaterialType::kPBR, slot };
+	}
+
+	MaterialHandle
+	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
+	{
+		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
+		const auto flatNormal =
+			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
+
+		// A routed channel resolves to (its texture's bindless index, its channel). An unrouted
+		// channel falls back to a default texture + channel chosen so the sampled value matches the
+		// PbrMaterial default for that output: white (1.0) for base color / ORM, and the flat-normal
+		// texture (R,G = 0.5) for normal X / Y.
+		const auto resolve = [](const ChannelRouteDesc& route,
+		                        core::slot_handle       fallbackTex,
+		                        uint16_t                fallbackChannel) {
+			idl::ChannelSource cs{};
+			if (route.texture.textureSlot)
+			{
+				cs.texture = idl::TextureHandle{ route.texture.textureSlot.index };
+				cs.channel = route.channel;
+			}
+			else
+			{
+				cs.texture = idl::TextureHandle{ fallbackTex.index };
+				cs.channel = fallbackChannel;
+			}
+			return cs;
+		};
+
+		static_assert(
+			idl::cLooseChannelCount == 4 + 3 + 2,
+			"LoosePbrMaterialDesc channel groups must cover every idl::PbrChannel");
+
+		idl::LoosePbrMaterial material{};
+		// Base color R,G,B,A -> white (any channel samples 1.0).
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorR)] =
+			resolve(desc.baseColor[0], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorG)] =
+			resolve(desc.baseColor[1], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorB)] =
+			resolve(desc.baseColor[2], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorA)] =
+			resolve(desc.baseColor[3], white, 0);
+		// ORM ao,roughness,metallic -> white (1.0; factors drive rough/metal).
+		material.sources[static_cast<size_t>(idl::PbrChannel::kAo)] =
+			resolve(desc.orm[0], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kRoughness)] =
+			resolve(desc.orm[1], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kMetallic)] =
+			resolve(desc.orm[2], white, 0);
+		// Normal X,Y -> flat-normal texture (R = 0.5, G = 0.5) -> decoded (0,0,1).
+		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalX)] =
+			resolve(desc.normal[0], flatNormal, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalY)] =
+			resolve(desc.normal[1], flatNormal, 1);
+
+		material.baseColorFactor = desc.baseColorFactor;
+		material.metallicFactor  = desc.metallicFactor;
+		material.roughnessFactor = desc.roughnessFactor;
+
+		const core::slot_handle slot = m_Loose.Add(material);
+		return MaterialHandle{ MaterialType::kLoosePbr, slot };
 	}
 
 	void

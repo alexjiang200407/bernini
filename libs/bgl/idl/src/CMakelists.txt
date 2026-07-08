@@ -1,6 +1,7 @@
-set(IDL_CPP_OUT_DIR   "${CMAKE_SOURCE_DIR}/libs/bgl/src/idl")
-set(IDL_SLANG_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl/shaders/src/idl")
-set(IDL_SRC_ROOT      "${CMAKE_CURRENT_SOURCE_DIR}")
+set(IDL_CPP_OUT_DIR        "${CMAKE_SOURCE_DIR}/libs/bgl/src/idl")
+set(IDL_PUBLIC_CPP_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl")
+set(IDL_SLANG_OUT_DIR      "${CMAKE_SOURCE_DIR}/libs/bgl/shaders/src/idl")
+set(IDL_SRC_ROOT           "${CMAKE_CURRENT_SOURCE_DIR}")
 
 file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")
 
@@ -17,6 +18,11 @@ set(IDL_CPP_SOURCES
     TextureHandle.slang
     SamplerHandle.slang
     ErrorCode.slang
+)
+
+set(IDL_PUBLIC_CPP_SOURCES
+    MaterialType.slang
+    PsoType.slang
 )
 
 set(IDL_GENERATED_OUTPUTS "")
@@ -37,7 +43,11 @@ foreach(src ${IDL_SOURCES})
     set(outputs   "${slang_out}")
     set(cpp_args  "")
 
-    if(file IN_LIST IDL_CPP_SOURCES)
+    if(file IN_LIST IDL_PUBLIC_CPP_SOURCES)
+        # Public engine header: namespace `bgl`, emitted into include/bgl.
+        set(cpp_args --cpp-out-dir "${IDL_PUBLIC_CPP_OUT_DIR}" --namespace "bgl")
+        list(APPEND outputs "${IDL_PUBLIC_CPP_OUT_DIR}/${rel_stem}.h")
+    elseif(file IN_LIST IDL_CPP_SOURCES)
         set(cpp_args --cpp-out-dir "${IDL_CPP_OUT_DIR}")
         list(APPEND outputs "${IDL_CPP_OUT_DIR}/${rel_stem}.h")
     endif()
