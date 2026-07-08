@@ -1,7 +1,5 @@
 #include "MaterialEditorWindow.h"
 
-#include "Windows/RenderTarget/RenderTargetWindow.h"
-
 #include <QComboBox>
 #include <QLabel>
 #include <QSplitter>
@@ -60,7 +58,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		rtDesc.scene        = m_PreviewScene;
 		rtDesc.maxInstances = m_Desc.maxPreviewInstances;
 
-		m_Preview  = new RenderTargetWindow(splitter, std::move(rtDesc));
+		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
 		rightPanel = m_Preview;
 	}
 	else

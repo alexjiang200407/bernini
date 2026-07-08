@@ -62,12 +62,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		levelDesc.maxInstances = settings["levelEditor"]["maxInstances"].GetOrDefault(1000);
 
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
-	}
 
-	auto matDesc                = MaterialEditorWindowDesc();
-	matDesc.gfx                 = m_Graphics;
-	matDesc.maxPreviewInstances = 16;
-	m_MaterialEditor            = new MaterialEditorWindow(this, std::move(matDesc));
+		auto matSettings              = settings["materialEditor"];
+		auto matDesc                  = MaterialEditorWindowDesc();
+		matDesc.gfx                   = m_Graphics;
+		matDesc.maxPreviewInstances   = matSettings["maxPreviewInstances"].GetOrDefault(16u);
+		matDesc.previewEnv.skybox     = matSettings["skybox"].GetOrDefault(std::string());
+		matDesc.previewEnv.irradiance = matSettings["irradiance"].GetOrDefault(std::string());
+		matDesc.previewEnv.prefilter  = matSettings["prefilter"].GetOrDefault(std::string());
+		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
+
+		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
+	}
 
 	setCentralWidget(nullptr);
 	setDockNestingEnabled(true);
