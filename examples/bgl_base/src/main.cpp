@@ -118,7 +118,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			auto desc             = bgl::PbrMaterialDesc{};
 			desc.baseColorFactor  = bmat.baseColorFactor;
 			desc.metallicFactor   = bmat.metallicFactor;
-			desc.roughnessFactor  = 0.0f;
+			desc.roughnessFactor  = bmat.roughnessFactor;
 			desc.baseColorTexture = loadTexture(bmat.baseColorTexture);
 			desc.normalTexture    = loadTexture(bmat.normalTexture);
 			desc.ormTexture       = loadTexture(bmat.ormTexture);
