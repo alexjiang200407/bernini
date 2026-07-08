@@ -12,6 +12,8 @@ set(IDL_CPP_SOURCES
     DebugRecord.slang
     Constants.slang
     PbrMaterial.slang
+    LoosePbrMaterial.slang
+    ChannelSource.slang
     TextureHandle.slang
     SamplerHandle.slang
     ErrorCode.slang

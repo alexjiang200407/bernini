@@ -1,10 +1,10 @@
 import forward.common;
 import forward.MaterialData;
-import idl.PbrMaterial;
+import idl.LoosePbrMaterial;
 
-// baked triplet PBR material.
+// unbaked, per-channel "loose" PBR material.
 [shader("pixel")]
 float4 PSMain(ForwardVSOut input) : SV_Target
 {
-    return Shade<PbrMaterial>(input);
+    return Shade<LoosePbrMaterial>(input);
 }
