@@ -52,6 +52,21 @@ namespace bgl
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
+		auto bytecodeOf = [&](const core::SharedRef<IShader>& shader) -> D3D12_SHADER_BYTECODE {
+			if (shader == nullptr)
+			{
+				return D3D12_SHADER_BYTECODE{ nullptr, 0 };
+			}
+
+			auto found = pipelineLayout.entryPointCode.find(shader.Get());
+			gassert(
+				found != pipelineLayout.entryPointCode.end(),
+				"Missing compiled bytecode for shader");
+
+			return D3D12_SHADER_BYTECODE{ found->second->getBufferPointer(),
+				                          found->second->getBufferSize() };
+		};
+
 		PSO_STREAM psoDesc = {};
 
 		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
@@ -61,23 +76,13 @@ namespace bgl
 		psoDesc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
 		psoDesc.AmplificationShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
-		if (desc.ampShader)
-		{
-			psoDesc.AmplificationShader =
-				D3D12_SHADER_BYTECODE{ desc.ampShader->GetBytecode(),
-				                       desc.ampShader->GetBytecodeSize() };
-		}
+		psoDesc.AmplificationShader      = bytecodeOf(desc.ampShader);
 
 		psoDesc.MeshShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
-		psoDesc.MeshShader      = D3D12_SHADER_BYTECODE{ desc.meshShader->GetBytecode(),
-			                                             desc.meshShader->GetBytecodeSize() };
+		psoDesc.MeshShader      = bytecodeOf(desc.meshShader);
 
 		psoDesc.PixelShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
-		if (desc.pixelShader)
-		{
-			psoDesc.PixelShader = D3D12_SHADER_BYTECODE{ desc.pixelShader->GetBytecode(),
-				                                         desc.pixelShader->GetBytecodeSize() };
-		}
+		psoDesc.PixelShader      = bytecodeOf(desc.pixelShader);
 
 		psoDesc.RasterizerState_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER;
 		psoDesc.RasterizerState      = ConvertRasterState(desc.renderState.rasterState);

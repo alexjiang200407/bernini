@@ -22,7 +22,7 @@ struct MaterialData
     SamplerHandle linearClampSampler;
 };
 
-ConstantBuffer<MaterialData> materialData : register(b0, space1);
+ConstantBuffer<MaterialData> materialData;
 
 extension PbrMaterial : IPbrMaterial
 {

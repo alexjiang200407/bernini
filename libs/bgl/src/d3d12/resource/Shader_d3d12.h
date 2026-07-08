@@ -17,18 +17,6 @@ namespace bgl
 		Shader&
 		operator=(Shader&&) noexcept = delete;
 
-		const std::byte*
-		GetBytecode() const noexcept override
-		{
-			return m_Desc.bytecode.data();
-		}
-
-		size_t
-		GetBytecodeSize() const noexcept override
-		{
-			return m_Desc.bytecode.size();
-		}
-
 		slang::IModule*
 		GetSlangModule() const noexcept override
 		{

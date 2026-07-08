@@ -11,7 +11,7 @@ struct SkyboxData
     float mipLevel;
 };
 
-ConstantBuffer<SkyboxData> skyboxData : register(b0);
+ConstantBuffer<SkyboxData> gSkyboxData;
 
 struct VSOut
 {
@@ -33,7 +33,7 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
         VSOut vout;
         vout.position = float4(ndc, 1.0, 1.0);
 
-        float4 world = mul(skyboxData.clipToWorld, float4(ndc, 1.0, 1.0));
+        float4 world = mul(gSkyboxData.clipToWorld, float4(ndc, 1.0, 1.0));
         vout.dir = world.xyz / world.w;
 
         verts[gtid] = vout;
@@ -50,8 +50,8 @@ float4 PSMain(VSOut input) : SV_Target
 {
     float3 dir = normalize(input.dir);
 
-    float3 color = skyboxData.cubeTex.SampleCubeLevel(skyboxData.sampler, dir, skyboxData.mipLevel).rgb;
+    float3 color = gSkyboxData.cubeTex.SampleCubeLevel(gSkyboxData.sampler, dir, gSkyboxData.mipLevel).rgb;
 
-    color = AgX(color * skyboxData.exposure);
+    color = AgX(color * gSkyboxData.exposure);
     return float4(color, 1.0);
 }

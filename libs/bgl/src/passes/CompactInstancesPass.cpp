@@ -20,20 +20,17 @@ namespace bgl
 
 		m_Histogram = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(
-					device->CreateShader("shaders/HistogramInstances.dxil", "HistogramInstances"))
+				.SetShader(device->CreateShader("HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
 		m_PrefixSum = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(
-					device->CreateShader("shaders/PrefixSumInstances.dxil", "PrefixSumInstances"))
+				.SetShader(device->CreateShader("PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
 		m_CompactInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(
-					device->CreateShader("shaders/CompactInstances.dxil", "CompactInstances"))
+				.SetShader(device->CreateShader("CompactInstances"))
 				.SetDebugName("Compact Instances"));
 
 		{

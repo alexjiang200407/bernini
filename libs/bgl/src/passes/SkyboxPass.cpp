@@ -14,9 +14,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_MeshDxil  = "./shaders/Skybox_MSMain.dxil"sv;
-		constexpr auto c_PixelDxil = "./shaders/Skybox_PSMain.dxil"sv;
-		constexpr auto c_Src       = "Skybox"sv;
+		constexpr auto c_Src = "Skybox"sv;
 	}
 
 	void
@@ -26,10 +24,8 @@ namespace bgl
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader =
-			device->CreateShader(std::string(c_MeshDxil), std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader =
-			device->CreateShader(std::string(c_PixelDxil), std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
 		pipelineDesc.SetDsvFormat(Format::D24S8);

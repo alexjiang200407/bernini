@@ -37,14 +37,19 @@ namespace bgl
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
+		auto codeIt = pipelineLayout.entryPointCode.find(desc.shader.Get());
+		gassert(
+			codeIt != pipelineLayout.entryPointCode.end(),
+			"Missing compiled bytecode for compute shader");
+
 		PSO_STREAM psoDesc = {};
 
 		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
 		psoDesc.RootSignature      = m_RootSignature.Get();
 
 		psoDesc.ComputeShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
-		psoDesc.ComputeShader =
-			D3D12_SHADER_BYTECODE{ desc.shader->GetBytecode(), desc.shader->GetBytecodeSize() };
+		psoDesc.ComputeShader      = D3D12_SHADER_BYTECODE{ codeIt->second->getBufferPointer(),
+			                                                codeIt->second->getBufferSize() };
 
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
 		streamDesc.SizeInBytes                   = sizeof(PSO_STREAM);

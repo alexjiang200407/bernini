@@ -26,9 +26,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 	{
 		auto pipelineDesc = bgl::MeshletPipelineDesc();
 
-		pipelineDesc.SetMeshShader(device->CreateShader(
-			"shaders/MSUniformReflectionScalar.dxil",
-			"MSUniformReflectionScalar"));
+		pipelineDesc.SetMeshShader(device->CreateShader("MSUniformReflectionScalar"));
 
 		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
 		auto uniforms = device->CreateUniforms(pipeline, "gUniforms");
