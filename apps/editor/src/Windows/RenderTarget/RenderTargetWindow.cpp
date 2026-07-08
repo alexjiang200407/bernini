@@ -25,6 +25,12 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
 	m_FrameTimer = new QTimer(this);
+	// Present is vsync-locked (~16.67ms), and this 16ms timer sits right at that boundary. A coarse
+	// timer (the default) jitters by the OS granularity (~15.6ms after a resize resets the timer
+	// resolution), so it occasionally fires just after the vsync deadline, misses a refresh and waits
+	// for the next -- averaging to ~23ms and staying there. A precise timer forces 1ms OS resolution,
+	// so it reliably fires before vsync and the cadence stays at one refresh.
+	m_FrameTimer->setTimerType(Qt::PreciseTimer);
 	connect(m_FrameTimer, &QTimer::timeout, this, [this]() {
 		SyncSize(width(), height());
 		DrawFrame(m_Desc.gfx.Get());
