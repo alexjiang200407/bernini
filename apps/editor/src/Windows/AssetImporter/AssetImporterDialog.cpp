@@ -4,13 +4,11 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLabel>
-#include <QLineEdit>
 #include <QVBoxLayout>
 
 AssetImporterDialog::AssetImporterDialog(
 	const QString& sourceFile,
 	const QString& targetDir,
-	const QString& defaultTexturesDir,
 	QWidget*       parent) : QDialog(parent)
 {
 	setWindowTitle("Import Asset");
@@ -25,17 +23,9 @@ AssetImporterDialog::AssetImporterDialog(
 
 	m_ImportTextures = new QCheckBox("Import textures", this);
 	m_ImportTextures->setChecked(true);
-	m_ImportTextures->setToolTip("Extract the mesh's textures into the folder below.");
+	m_ImportTextures->setToolTip(
+		"Extract the mesh's textures into the project's textures_src folder.");
 	layout->addWidget(m_ImportTextures);
-
-	auto* texturesForm = new QFormLayout();
-	m_TexturesDir      = new QLineEdit(defaultTexturesDir, this);
-	texturesForm->addRow("Textures folder:", m_TexturesDir);
-	layout->addLayout(texturesForm);
-
-	// The textures folder is only editable while textures are being imported.
-	m_TexturesDir->setEnabled(m_ImportTextures->isChecked());
-	connect(m_ImportTextures, &QCheckBox::toggled, m_TexturesDir, &QWidget::setEnabled);
 
 	m_ImportAnimations = new QCheckBox("Import animations", this);
 	m_ImportAnimations->setChecked(false);
@@ -57,10 +47,4 @@ bool
 AssetImporterDialog::ImportAnimations() const
 {
 	return m_ImportAnimations->isChecked();
-}
-
-QString
-AssetImporterDialog::TexturesDirectory() const
-{
-	return m_TexturesDir->text();
 }

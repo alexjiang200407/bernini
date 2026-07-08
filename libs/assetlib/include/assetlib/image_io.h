@@ -24,8 +24,15 @@ namespace assetlib
 	 * @param srgb When true, the image's format is tagged with its sRGB Vulkan variant (same bits,
 	 *        only the format field changes) so the GPU sampler decodes sRGB→linear on read. Use it for
 	 *        color (base-color) textures; leave false for linear data (normal / ORM).
+	 * @param compress When true (the default, used by the asset bake), LDR maps are Basis-UASTC
+	 *        supercompressed (transcodes to BC7 at load). Pass false to write an uncompressed KTX2 —
+	 *        used by the in-editor texture conversion, which stores source textures verbatim.
 	 * @throws std::runtime_error if the file cannot be written or the format has no KTX2 mapping.
 	 */
 	void
-	writeKTX2(const ImageData& image, const std::filesystem::path& path, bool srgb = false);
+	writeKTX2(
+		const ImageData&             image,
+		const std::filesystem::path& path,
+		bool                         srgb     = false,
+		bool                         compress = true);
 }

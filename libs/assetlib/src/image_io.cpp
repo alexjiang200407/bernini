@@ -172,7 +172,7 @@ namespace assetlib
 	}
 
 	void
-	writeKTX2(const ImageData& image, const std::filesystem::path& path, bool srgb)
+	writeKTX2(const ImageData& image, const std::filesystem::path& path, bool srgb, bool compress)
 	{
 		const uint32_t faces  = image.isCubemap ? 6u : 1u;
 		const uint32_t layers = (std::max)(1u, image.arraySize / faces);
@@ -229,8 +229,9 @@ namespace assetlib
 		}
 
 		// Supercompress LDR maps to Basis UASTC (high quality, transcodes to BC7 at load). HDR / IBL
-		// float maps are left uncompressed -- Basis Universal is LDR-only.
-		if (isBasisCompressible(image.vkFormat))
+		// float maps are left uncompressed -- Basis Universal is LDR-only. Callers can also opt out
+		// (compress == false) to store the image verbatim, e.g. the in-editor texture conversion.
+		if (compress && isBasisCompressible(image.vkFormat))
 		{
 			// UASTC block encoding is deterministic regardless of thread count, so parallelise it --
 			// single-threaded encoding of large (e.g. 4K) mip chains is prohibitively slow.

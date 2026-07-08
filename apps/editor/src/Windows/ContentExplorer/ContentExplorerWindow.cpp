@@ -289,11 +289,11 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		if (!IsImportableMesh(file))
 			continue;
 
-		AssetImporterDialog dialog(file, targetDir, DefaultTexturesDir(targetDir), this);
+		AssetImporterDialog dialog(file, targetDir, this);
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
-		ImportMesh(file, targetDir, dialog.ImportTextures(), dialog.TexturesDirectory());
+		ImportMesh(file, targetDir, dialog.ImportTextures());
 	}
 
 	event->acceptProposedAction();
@@ -329,33 +329,11 @@ ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
 	return m_FileModel->rootPath();
 }
 
-QString
-ContentExplorerWindow::DefaultTexturesDir(const QString& meshDir) const
-{
-	namespace fs = std::filesystem;
-
-	const fs::path mesh         = fs::path(meshDir.toStdWString());
-	const fs::path dataRoot     = fs::path(m_RootPath.toStdWString());
-	const fs::path meshesRoot   = dataRoot / "Meshes";
-	const fs::path texturesRoot = dataRoot / "Textures";
-
-	// Mirror the mesh's location under Meshes/ into Textures/ (e.g. Meshes/Abcd ->
-	// Textures/Abcd). If it isn't under Meshes/, fall back to a same-named folder.
-	std::error_code ec;
-	const fs::path  relative    = fs::relative(mesh, meshesRoot, ec);
-	const bool      underMeshes = !ec && !relative.empty() && *relative.begin() != "..";
-
-	const fs::path texturesDir =
-		underMeshes ? texturesRoot / relative : texturesRoot / mesh.filename();
-	return QString::fromStdWString(texturesDir.wstring());
-}
-
 void
 ContentExplorerWindow::ImportMesh(
 	const QString& sourceFile,
 	const QString& targetDir,
-	bool           importTextures,
-	const QString& texturesDir)
+	bool           importTextures)
 {
 	namespace fs = std::filesystem;
 
@@ -370,9 +348,11 @@ ContentExplorerWindow::ImportMesh(
 		bmeshPath.replace_extension(".bmesh");
 		assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
 
-		if (importTextures && !texturesDir.isEmpty())
+		if (importTextures)
 		{
-			const fs::path  outDir = fs::path(texturesDir.toStdWString());
+			// All imported textures dump into the project's single textures_src folder
+			// (m_RootPath is the project's Data directory).
+			const fs::path  outDir = fs::path(m_RootPath.toStdWString()) / "textures_src";
 			std::error_code ec;
 			fs::create_directories(outDir, ec);
 			assetlib::writeTextures(mesh, outDir);
