@@ -73,8 +73,7 @@ TEST_CASE(
 
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(
-				device->CreateShader("shaders/CSTextureSampleTest.dxil", "CSTextureSampleTest"))
+			.SetShader(device->CreateShader("CSTextureSampleTest"))
 			.SetDebugName("Texture Sample Test"));
 	REQUIRE(kernel.pipeline != nullptr);
 	REQUIRE(kernel.uniforms.contains("gUniforms"));

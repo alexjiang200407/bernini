@@ -15,15 +15,18 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 
 * **One global switch, `BERNINI_GPU_DEBUG`, gates the entire GPU-assertion path** — the shader
   bodies, the CPU `DebugBuffer`/`DebugReadback` types, and the readback orchestration all
-  compile out of Release. It is a Debug-config define set both for C++
-  ([CMakeLists.txt](CMakeLists.txt), `$<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>`) and for shaders
-  ([cmake/compile_shader.cmake](cmake/compile_shader.cmake), `-DBERNINI_GPU_DEBUG=1` in Debug).
-  In Release, `dbg_raise` is an empty function and no handler is ever invoked.
+  compile out of Release. It is a Debug-config define for C++
+  ([CMakeLists.txt](CMakeLists.txt), `$<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>`); the runtime Slang
+  session forwards the same macro into shaders it compiles at PSO creation, gated by the C++
+  define ([Device_d3d12.cpp](libs/bgl/src/d3d12/device/Device_d3d12.cpp)). In Release, `dbg_raise`
+  is an empty function and no handler is ever invoked.
 * **GPU assertions travel through an implicit, engine-bound UAV.** Shaders never declare the
-  debug buffer; they `import debug.dbg` and call `dbg_raise(errcode)`, which writes into
-  `gDebug` at a fixed slot (`register(b0, space7)`). The engine binds the live buffer once per
-  frame so every dispatch is auto-wired. See [Geometry Layout](docs/geometry_layout.md) for how
-  other implicit globals are bound.
+  debug buffer; they `import debug.dbg` and call `dbg_raise(errcode)`, which writes into the
+  implicit `gDebug` constant buffer. `gDebug` carries no explicit `register()` — its binding is
+  assigned by Slang when the PSO's entry points are linked, and the engine reads that binding
+  back from reflection (`GetRootParamIndex`) to bind the live buffer once per frame, so every
+  dispatch is auto-wired. See [Geometry Layout](docs/geometry_layout.md) for how other implicit
+  globals are bound.
 * **GPU→CPU reporting is asynchronous and frame-latent.** `dbg_raise` only atomically appends a
   record on the GPU. The buffer is copied to a readback ring and inspected `c_BufferCount`
   frames later, so a report surfaces a few frames *after* the shader raised it. Consequences for
@@ -107,8 +110,10 @@ flowchart TD
   before the dispatch — otherwise `gDebug` is unbound. See the sketch below.
 * **Debug-only.** In Release the shader body, the C++ types, and the handler invocation are all
   compiled out. Do not depend on `dbg_raise` firing in a Release build.
-* **`gDebug` must live at `register(b0, space7)`** and shaders must `import debug.dbg` rather
-  than declaring their own buffer — the binding is fixed engine-wide.
+* **Shaders must `import debug.dbg`** and use its implicit `gDebug` rather than declaring their
+  own buffer. `gDebug` has no explicit `register()`; its binding is assigned at link time and
+  the engine wires the live buffer from reflection, so every shader that imports `debug.dbg`
+  gets it auto-bound.
 * **Layout constants must match** between [DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
   [dbg.slang](libs/bgl/shaders/src/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=1`).
   Changing a record's shape means editing both.
@@ -122,8 +127,9 @@ flowchart TD
 * **`DebugBuffer::Reset` @pre**: the buffer must be in copy-dest state, and `Init` must have run.
 * **Capacity is small on purpose** (256 records). The whole buffer is copied every frame and the
   first firing frame crashes anyway, so overflow just sets a flag.
-* **Editing a `.slang` file requires a full build** — a per-target build runs a stale DXIL, so
-  the shader change won't take effect until every target is rebuilt.
+* **Editing a `.slang` file requires a build to re-stage the source** — shaders are compiled at
+  runtime from the `.slang` source copied into each target's output dir (`shaders/src`), so a
+  change won't take effect until a build re-copies it.
 
 ---
 

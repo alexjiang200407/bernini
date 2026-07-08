@@ -40,7 +40,7 @@ namespace bgl
 		CreateShader(ShaderDesc desc) const noexcept = 0;
 
 		[[nodiscard]] core::SharedRef<IShader>
-		CreateShader(std::string path, std::string moduleName, std::string entryPointName = "main")
+		CreateShader(std::string slangModuleName, std::string entryPointName = "main")
 			const noexcept;
 
 		[[nodiscard]]

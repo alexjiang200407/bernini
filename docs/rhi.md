@@ -214,8 +214,13 @@ Everything else is self-explanatory from the header.
 
 ### IDevice
 
-* **`CreateShader(path, module, entry)`** — reads the `.dxil` relative to the executable's
-  working directory. Run binaries with cwd set to their output dir (see project scripts).
+* **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
+  defaults to `"main"`. No bytecode is loaded here. The module source is resolved through the
+  device's Slang session search paths (`./shaders/src`, `./shaders/tests`), so run binaries with
+  cwd set to their output dir (see project scripts). The DXIL is generated per-PSO at pipeline
+  creation: `BuildPipelineLayout` links all of a PSO's entry points into one program and pulls
+  both the bytecode (`getEntryPointCode`) and the reflection/root-signature from that single
+  linked program, so bindings always agree (no per-shader `register(bN, spaceM)` needed).
 
 ### Uniforms / Kernel
 
@@ -244,7 +249,7 @@ CommandListHandle      cmd    = device->CreateCommandList({QueueType::kGraphics}
 
 ComputeKernel kernel = device->CreateComputeKernel(
     ComputePipelineDesc()
-        .SetShader(device->CreateShader("shaders/Histogram.dxil", "Histogram"))
+        .SetShader(device->CreateShader("Histogram"))
         .SetDebugName("Histogram"));
 
 // Per dispatch

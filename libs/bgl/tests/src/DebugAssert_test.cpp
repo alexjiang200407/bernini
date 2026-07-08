@@ -111,7 +111,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("shaders/CSDbgRaiseTest.dxil", "CSDbgRaiseTest"))
+			.SetShader(device->CreateShader("CSDbgRaiseTest"))
 			.SetDebugName("Dbg Raise Test"));
 	REQUIRE(kernel.pipeline != nullptr);
 
