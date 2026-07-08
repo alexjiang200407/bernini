@@ -1,4 +1,3 @@
-#pragma once
 #include "device/Device_d3d12.h"
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandAllocator_d3d12.h"

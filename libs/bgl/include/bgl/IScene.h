@@ -149,6 +149,6 @@ namespace bgl
 	};
 
 	using SceneHandle = core::SharedRef<IScene>;
-
-	template class BGL_API core::SharedRef<IScene>;
 }
+
+template class BGL_API core::SharedRef<bgl::IScene>;

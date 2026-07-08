@@ -1,4 +1,4 @@
-#include "win32/winapi.h"
+#include "win32/WinAPI.h"
 #include <core/str/str.h>
 
 std::wstring

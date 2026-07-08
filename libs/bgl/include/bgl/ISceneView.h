@@ -79,6 +79,6 @@ namespace bgl
 	};
 
 	using SceneViewHandle = core::SharedRef<ISceneView>;
-
-	template class BGL_API core::SharedRef<ISceneView>;
 }
+
+template class BGL_API core::SharedRef<bgl::ISceneView>;

@@ -42,11 +42,9 @@ namespace bgl
 		virtual void
 		InsertWait(uint64_t fenceValue) noexcept = 0;
 
-		[[nodiscard]]
 		virtual void
 		InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept = 0;
 
-		[[nodiscard]]
 		virtual void
 		InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept = 0;
 
