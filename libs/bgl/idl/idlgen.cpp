@@ -153,10 +153,16 @@ namespace
 
 	struct EnumInfo
 	{
-		std::string                                    name;
-		std::string                                    underlying = "uint32_t";
-		size_t                                         size       = 4;
-		std::vector<std::pair<std::string, long long>> enumerators;
+		std::string name;
+		std::string underlying = "uint32_t";
+		// The underlying type as written in the source (`enum Foo : uint16_t`), empty when the
+		// declaration omits it. When set it overrides the reflected/defaulted size + underlying.
+		std::string declaredUnderlying;
+		size_t      size = 4;
+		// (enumerator, valueText). valueText is either a decimal (from an int literal or the running
+		// counter, preserving explicit-numeric output) or a verbatim non-integer initializer
+		// expression (e.g. "uint8_t(-1)"); empty means emit the enumerator bare (C++ auto-increments).
+		std::vector<std::pair<std::string, std::string>> enumerators;
 	};
 
 	struct ConstantInfo
@@ -198,6 +204,19 @@ namespace
 		default:
 			return "uint32_t";
 		}
+	}
+
+	// Byte size of an explicitly-declared enum underlying type (`enum Foo : uintN_t`).
+	size_t
+	SizeForUnderlying(const std::string& u)
+	{
+		if (u == "uint8_t" || u == "int8_t" || u == "bool")
+			return 1;
+		if (u == "uint16_t" || u == "int16_t")
+			return 2;
+		if (u == "uint64_t" || u == "int64_t")
+			return 8;
+		return 4;  // uint / int / uint32_t / int32_t / unknown
 	}
 
 	void
@@ -393,6 +412,29 @@ namespace
 				continue;
 			}
 
+			// Optional explicit underlying type: `enum Name : uintN_t { ... }`.
+			std::string declaredUnderlying;
+			{
+				size_t q = p;
+				while (q < source.size() && std::isspace(static_cast<unsigned char>(source[q])))
+				{
+					++q;
+				}
+				if (q < source.size() && source[q] == ':')
+				{
+					++q;
+					while (q < source.size() && std::isspace(static_cast<unsigned char>(source[q])))
+					{
+						++q;
+					}
+					while (q < source.size() && IsIdentChar(source[q]))
+					{
+						declaredUnderlying += source[q++];
+					}
+					p = q;
+				}
+			}
+
 			const size_t brace = source.find('{', p);
 			if (brace == std::string::npos)
 			{
@@ -405,11 +447,13 @@ namespace
 			}
 
 			EnumInfo info;
-			info.name = name;
+			info.name               = name;
+			info.declaredUnderlying = declaredUnderlying;
 
-			const std::string body      = source.substr(brace + 1, close - brace - 1);
-			long long         nextValue = 0;
-			size_t            itemStart = 0;
+			const std::string body         = source.substr(brace + 1, close - brace - 1);
+			long long         nextValue    = 0;
+			bool              counterValid = true;  // false after a non-integer initializer
+			size_t            itemStart    = 0;
 			while (itemStart <= body.size())
 			{
 				const size_t comma = body.find(',', itemStart);
@@ -424,7 +468,9 @@ namespace
 					item = item.substr(first, last - first + 1);
 
 					std::string enumeratorName = item;
-					long long   value          = nextValue;
+					// valueText: decimal for an int literal / running counter, verbatim for a
+					// non-integer initializer, or empty to emit the enumerator bare.
+					std::string valueText;
 					if (const size_t eq = item.find('='); eq != std::string::npos)
 					{
 						enumeratorName = item.substr(0, eq);
@@ -433,20 +479,52 @@ namespace
 						{
 							enumeratorName = enumeratorName.substr(0, ne + 1);
 						}
+
+						std::string  rhs = item.substr(eq + 1);
+						const size_t rf  = rhs.find_first_not_of(" \t\r\n");
+						const size_t rl  = rhs.find_last_not_of(" \t\r\n");
+						if (rf != std::string::npos)
+						{
+							rhs = rhs.substr(rf, rl - rf + 1);
+						}
+
+						// Treat as an integer only if the whole RHS is one integer literal;
+						// otherwise copy it verbatim (e.g. `uint8_t(-1)`).
+						long long parsed = 0;
+						size_t    idx    = 0;
+						bool      isInt  = false;
 						try
 						{
-							value = std::stoll(item.substr(eq + 1), nullptr, 0);
+							parsed = std::stoll(rhs, &idx, 0);
+							isInt  = (idx == rhs.size());
 						}
 						catch (const std::exception&)
 						{
-							value = nextValue;
+							isInt = false;
+						}
+
+						if (isInt)
+						{
+							valueText    = std::to_string(parsed);
+							nextValue    = parsed + 1;
+							counterValid = true;
+						}
+						else
+						{
+							valueText    = rhs;  // verbatim
+							counterValid = false;
 						}
 					}
+					else if (counterValid)
+					{
+						valueText = std::to_string(nextValue);
+						++nextValue;
+					}
+					// else: leave valueText empty -> emit bare, let C++ auto-increment.
 
 					if (!enumeratorName.empty())
 					{
-						info.enumerators.emplace_back(enumeratorName, value);
-						nextValue = value + 1;
+						info.enumerators.emplace_back(enumeratorName, valueText);
 					}
 				}
 
@@ -594,8 +672,28 @@ namespace
 
 		out += std::format("\nnamespace {}\n{{\n", ns);
 
-		// Constants first: they may be used as array bounds in enums/structs and
-		// carry no dependency on anything below.
+		// Enums first: constants below may cast an enumerator (e.g. `uint16_t(PsoType::kCount)`)
+		// and struct fields reference enums by name; a locally defined enum emits no #include.
+		for (const EnumInfo& e : enums)
+		{
+			out += std::format("\tenum class {} : {}\n\t{{\n", e.name, e.underlying);
+			for (const auto& [enumerator, value] : e.enumerators)
+			{
+				if (value.empty())
+				{
+					out += std::format("\t\t{},\n", enumerator);
+				}
+				else
+				{
+					out += std::format("\t\t{} = {},\n", enumerator, value);
+				}
+			}
+			out += "\t};\n\n";
+			out += std::format("\tstatic_assert(sizeof({}) == {});\n\n", e.name, e.size);
+		}
+
+		// Constants after enums (so they can reference an enumerator) but before structs (which
+		// may use a constant as an array bound).
 		for (const ConstantInfo& c : constants)
 		{
 			out += std::format("\tconstexpr {} {} = {};\n", c.type, c.name, c.value);
@@ -603,19 +701,6 @@ namespace
 		if (!constants.empty())
 		{
 			out += "\n";
-		}
-
-		// Enums first: struct fields below reference them by name, and locally
-		// defined enums are not imported so they emit no #include.
-		for (const EnumInfo& e : enums)
-		{
-			out += std::format("\tenum class {} : {}\n\t{{\n", e.name, e.underlying);
-			for (const auto& [enumerator, value] : e.enumerators)
-			{
-				out += std::format("\t\t{} = {},\n", enumerator, value);
-			}
-			out += "\t};\n\n";
-			out += std::format("\tstatic_assert(sizeof({}) == {});\n\n", e.name, e.size);
 		}
 
 		for (const StructInfo& s : structs)
@@ -815,11 +900,23 @@ main(int argc, char** argv)
 		std::vector<EnumInfo> enums = ParseEnums(source);
 		for (EnumInfo& e : enums)
 		{
-			if (auto it = enumSizes.find(e.name); it != enumSizes.end())
+			// An explicit `: uintN_t` in the source wins; otherwise take the size a struct field
+			// reflected for this enum (if any), else fall back to a 4-byte uint32_t.
+			if (!e.declaredUnderlying.empty())
 			{
-				e.size = it->second;
+				// Map the Slang scalar keyword to its C++ spelling (`uint` -> `uint32_t`); the
+				// fixed-width names (uint8_t/uint16_t/...) pass through unchanged.
+				e.underlying = ConstTypeToCpp(e.declaredUnderlying);
+				e.size       = SizeForUnderlying(e.declaredUnderlying);
 			}
-			e.underlying = UnderlyingForSize(e.size);
+			else
+			{
+				if (auto it = enumSizes.find(e.name); it != enumSizes.end())
+				{
+					e.size = it->second;
+				}
+				e.underlying = UnderlyingForSize(e.size);
+			}
 		}
 
 		std::vector<ConstantInfo> constants = ParseConstants(source);

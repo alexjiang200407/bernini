@@ -56,7 +56,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
 	auto geomBuffers = scene->GetBuffers();
-	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, _] =
+	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, pbrBuffer, looseBuffer] =
 		geomBuffers;
 
 	auto instBuffers                                              = view->GetInstanceBuffers();

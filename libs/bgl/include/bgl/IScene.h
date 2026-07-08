@@ -32,6 +32,7 @@ namespace bgl
 		uint32_t maxSubmeshes            = 1;
 		uint32_t maxVertexBufferByteSize = 1;
 		uint32_t maxPbrMaterials         = 1;
+		uint32_t maxLoosePbrMaterials    = 1;
 	};
 
 	// Decoded IBL images (two cube maps + the 2D BRDF LUT).
@@ -69,6 +70,23 @@ namespace bgl
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
 		TextureAssetHandle ormTexture;
+	};
+
+	struct ChannelRouteDesc
+	{
+		TextureAssetHandle texture;
+		uint16_t           channel = 0;  // 0 = R, 1 = G, 2 = B, 3 = A
+	};
+
+	struct LoosePbrMaterialDesc
+	{
+		glm::vec4 baseColorFactor = glm::vec4(1.0f);
+		float     metallicFactor  = 1.0f;
+		float     roughnessFactor = 1.0f;
+
+		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
+		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic
+		std::array<ChannelRouteDesc, 2> normal;     // X, Y (Z reconstructed in shader)
 	};
 
 	class BGL_API IScene : public core::Ref
@@ -122,6 +140,14 @@ namespace bgl
 		 */
 		virtual MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) = 0;
+
+		/**
+		 * Creates a loose (unbaked, per-channel) PBR material in this scene's loose-material buffer
+		 * and returns a handle referencing it. Bind it like any material; it renders through the same
+		 * lighting path as a PbrMaterial. See LoosePbrMaterialDesc.
+		 */
+		virtual MaterialHandle
+		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) = 0;
 
 		/**
 		 * Rebinds the material of one submesh of a geom. Because a geom's submeshes are shared by

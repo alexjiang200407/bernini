@@ -61,7 +61,8 @@ namespace bgl
 				m_VertexMapBuffer,
 				m_VertexDataBuffer,
 				m_IndexBuffer,
-				m_Pbr);
+				m_Pbr,
+				m_Loose);
 		}
 
 		// --- SceneView support -------------------------------------------------
@@ -145,6 +146,9 @@ namespace bgl
 		MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) override;
 
+		MaterialHandle
+		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) override;
+
 		void
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
 			override;
@@ -164,7 +168,8 @@ namespace bgl
 		RangeBuffer<uint32_t>     m_VertexDataBuffer;
 		RangeBuffer<uint32_t>     m_IndexBuffer;
 
-		EntryBuffer<idl::PbrMaterial> m_Pbr;
+		EntryBuffer<idl::PbrMaterial>      m_Pbr;
+		EntryBuffer<idl::LoosePbrMaterial> m_Loose;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 

@@ -36,10 +36,16 @@ namespace bgl
 			BarrierSync      sync;
 		};
 
-		static constexpr std::array<MaterialBuffer, 1> c_MaterialBuffers = { {
+		static constexpr std::array<MaterialBuffer, 2> c_MaterialBuffers = { {
 			{
 				"scene.pbrMaterialBuffer",
 				"pbrMaterials",
+				BarrierAccessFlag::kShaderResource,
+				BarrierSyncFlag::kVertexShader,
+			},
+			{
+				"scene.looseMaterialBuffer",
+				"looseMaterials",
 				BarrierAccessFlag::kShaderResource,
 				BarrierSyncFlag::kVertexShader,
 			},
@@ -86,13 +92,15 @@ namespace bgl
 
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
-		constexpr auto c_GeomAmpDxil   = "./shaders/Forward_StaticMesh_ASMain.dxil"sv;
-		constexpr auto c_GeomMeshDxil  = "./shaders/Forward_StaticMesh_MSMain.dxil"sv;
-		constexpr auto c_GeomSrc       = "Forward_StaticMesh"sv;
-		constexpr auto c_PbrPixelDxil  = "./shaders/Forward_PBR_PSMain.dxil"sv;
-		constexpr auto c_PbrPixelSrc   = "Forward_PBR"sv;
-		constexpr auto c_NullPixelDxil = "./shaders/Forward_Null_PSMain.dxil"sv;
-		constexpr auto c_NullPixelSrc  = "Forward_Null"sv;
+		constexpr auto c_GeomAmpDxil    = "./shaders/Forward_StaticMesh_ASMain.dxil"sv;
+		constexpr auto c_GeomMeshDxil   = "./shaders/Forward_StaticMesh_MSMain.dxil"sv;
+		constexpr auto c_GeomSrc        = "Forward_StaticMesh"sv;
+		constexpr auto c_PbrPixelDxil   = "./shaders/Forward_PBR_PSMain.dxil"sv;
+		constexpr auto c_PbrPixelSrc    = "Forward_PBR"sv;
+		constexpr auto c_LoosePixelDxil = "./shaders/Forward_PBR_Loose_PSMain.dxil"sv;
+		constexpr auto c_LoosePixelSrc  = "Forward_PBR_Loose"sv;
+		constexpr auto c_NullPixelDxil  = "./shaders/Forward_Null_PSMain.dxil"sv;
+		constexpr auto c_NullPixelSrc   = "Forward_Null"sv;
 		// Debug: pixel shader that raises a GPU assertion (see MaterialType::kAssert).
 		constexpr auto c_AssertPixelDxil = "./shaders/Forward_Assert_PSMain.dxil"sv;
 		constexpr auto c_AssertPixelSrc  = "Forward_Assert"sv;
@@ -106,11 +114,14 @@ namespace bgl
 			bool             blend;
 		};
 
+		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).
 		static constexpr std::array<PsoConfig, c_PsoCount> c_Psos = { {
 			// kOpaque_StaticMesh_Null
 			{ c_NullPixelDxil, c_NullPixelSrc, RasterCullMode::kBack, true, false },
 			// kOpaque_StaticMesh_PBR
 			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kBack, true, false },
+			// kOpaque_StaticMesh_LoosePbr
+			{ c_LoosePixelDxil, c_LoosePixelSrc, RasterCullMode::kBack, true, false },
 			// kAlphaTest_StaticMesh_PBR
 			{ c_PbrPixelDxil, c_PbrPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
