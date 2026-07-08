@@ -29,8 +29,9 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	leftLayout->setSpacing(0);
 
 	// Submesh selector: switching submesh swaps the graph. Populated when a mesh is dropped onto the
-	// preview; empty and disabled until then.
+	// preview; empty and disabled (showing its placeholder) until then.
 	auto* submeshSelector = new QComboBox(leftPanel);
+	submeshSelector->setPlaceholderText("No submesh");
 	submeshSelector->setEnabled(false);
 	leftLayout->addWidget(submeshSelector);
 
@@ -72,8 +73,12 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	splitter->addWidget(leftPanel);
 	splitter->addWidget(rightPanel);
-	splitter->setStretchFactor(0, 1);
-	splitter->setStretchFactor(1, 1);
+	// The preview should start with a good share of the width (~38%); a bare native-surface widget
+	// reports a tiny size hint, so give the splitter explicit initial sizes. Stretch factors keep the
+	// ratio roughly stable on resize.
+	splitter->setSizes({ 780, 480 });
+	splitter->setStretchFactor(0, 3);
+	splitter->setStretchFactor(1, 2);
 
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
