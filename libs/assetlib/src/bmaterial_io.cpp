@@ -9,8 +9,10 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint32_t c_Magic        = 0x54414D42u;  // 'B','M','A','T' little-endian
-		constexpr uint16_t c_VersionMajor = 1;
+		constexpr uint32_t c_Magic = 0x54414D42u;  // 'B','M','A','T' little-endian
+		// v2 adds the material mode + the per-channel `routes` table (loose materials). v1 files
+		// (triplet + factors only) still load, as Baked with empty routes.
+		constexpr uint16_t c_VersionMajor = 2;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
@@ -37,6 +39,7 @@ namespace assetlib
 		writer.writePod(c_Magic);
 		writer.writePod(c_VersionMajor);
 		writer.writePod(c_VersionMinor);
+		writer.writePod(static_cast<uint32_t>(material.mode));
 		writer.writePod(material.baseColorFactor);
 		writer.writePod(material.metallicFactor);
 		writer.writePod(material.roughnessFactor);
@@ -44,6 +47,11 @@ namespace assetlib
 		writeString(writer, material.baseColorTexture);
 		writeString(writer, material.normalTexture);
 		writeString(writer, material.ormTexture);
+		for (const ChannelRoute& route : material.routes)
+		{
+			writeString(writer, route.texture);
+			writer.writePod(route.channel);
+		}
 		return writer.take();
 	}
 
@@ -56,10 +64,14 @@ namespace assetlib
 			throw std::runtime_error("bmaterial: bad magic");
 		const auto versionMajor = reader.readPod<uint16_t>();
 		(void)reader.readPod<uint16_t>();  // minor is forward-compatible
-		if (versionMajor != c_VersionMajor)
+		if (versionMajor != c_VersionMajor && versionMajor != 1)
 			throw std::runtime_error("bmaterial: unsupported major version");
 
 		BMaterial material;
+		// The material mode is a v2 addition; a v1 file predates loose materials, so it is Baked.
+		material.mode             = (versionMajor >= 2) ?
+		                                static_cast<MaterialMode>(reader.readPod<uint32_t>()) :
+		                                MaterialMode::kBaked;
 		material.baseColorFactor  = reader.readPod<glm::vec4>();
 		material.metallicFactor   = reader.readPod<float>();
 		material.roughnessFactor  = reader.readPod<float>();
@@ -67,6 +79,15 @@ namespace assetlib
 		material.baseColorTexture = readString(reader);
 		material.normalTexture    = readString(reader);
 		material.ormTexture       = readString(reader);
+		// The routes table is a v2 addition; a v1 file leaves it default (all unrouted).
+		if (versionMajor >= 2)
+		{
+			for (ChannelRoute& route : material.routes)
+			{
+				route.texture = readString(reader);
+				route.channel = reader.readPod<uint16_t>();
+			}
+		}
 		return material;
 	}
 
