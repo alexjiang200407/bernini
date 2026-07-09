@@ -544,6 +544,7 @@ namespace bgl
 		// and bind it frame-wide so every dbg_raise() lands in it. The buffer is left in
 		// copy-dest by the previous EndFrame (and by creation on the first frame), so the
 		// reset WriteBuffer needs no pre-barrier.
+		m_CommandList->BeginEvent("GPU Debug Buffer Reset");
 		m_DebugBuffer.Reset(m_CommandList.Get());
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
@@ -552,6 +553,7 @@ namespace bgl
 				.AddAccessBefore(BarrierAccessFlag::kCopyDest)
 				.AddSyncAfter(BarrierSyncFlag::kAllCommands)
 				.AddAccessAfter(BarrierAccessFlag::kUnorderedAccess));
+		m_CommandList->EndEvent();
 		m_CommandList->SetActiveDebugBuffer(m_DebugBuffer.GetBufferHandle());
 #endif
 
@@ -666,6 +668,7 @@ namespace bgl
 		// leave the debug buffer in copy-dest ready for next frame's reset. The copy
 		// rides this command list, gated by rt.m_FenceValues[index] set below; it is
 		// inspected at the BeginFrame that reuses this slot (~c_BufferCount frames on).
+		m_CommandList->BeginEvent("GPU Debug Buffer Readback");
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
 			BufferBarrierDesc()
@@ -683,6 +686,7 @@ namespace bgl
 				.AddAccessBefore(BarrierAccessFlag::kCopySource)
 				.AddSyncAfter(BarrierSyncFlag::kCopy)
 				.AddAccessAfter(BarrierAccessFlag::kCopyDest));
+		m_CommandList->EndEvent();
 		m_DebugReadbackPending[index] = true;
 #endif
 
