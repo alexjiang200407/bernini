@@ -39,8 +39,10 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent) : QWidget(parent)
 {
 	m_Ui.setupUi(this);
 
-	m_DirectoryModel = new QFileSystemModel(this);
-	m_DirectoryModel->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
+	// The hierarchy shows files as well as directories, so an asset can be found and dragged straight
+	// out of the tree without first navigating to its folder in the right-hand view.
+	m_HierarchyModel = new QFileSystemModel(this);
+	m_HierarchyModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
 
 	m_FileModel = new QFileSystemModel(this);
 	m_FileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
@@ -83,7 +85,7 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	setEnabled(true);
 	m_RootPath = path;
 
-	m_Ui.FileExplorer->setRootIndex(m_DirectoryModel->setRootPath(path));
+	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(path));
 	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
 	UpdateEmptyPlaceholder();
 }
@@ -91,12 +93,12 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 void
 ContentExplorerWindow::AttachModels()
 {
-	if (m_Ui.FileExplorer->model() == m_DirectoryModel)
+	if (m_Ui.FileExplorer->model() == m_HierarchyModel)
 		return;
 
-	m_Ui.FileExplorer->setModel(m_DirectoryModel);
+	m_Ui.FileExplorer->setModel(m_HierarchyModel);
 	m_Ui.FileExplorer->setHeaderHidden(true);
-	for (auto column = 1; column < m_DirectoryModel->columnCount(); ++column)
+	for (auto column = 1; column < m_HierarchyModel->columnCount(); ++column)
 		m_Ui.FileExplorer->hideColumn(column);
 
 	m_Ui.CurrentDirectoryExplorer->setModel(m_FileModel);
@@ -119,13 +121,23 @@ ContentExplorerWindow::AttachModels()
 	fileHeader->setSectionResizeMode(0, QHeaderView::Stretch);           // Name
 	fileHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // Last Modified
 
-	// Selecting a folder on the left shows that folder's contents on the right.
+	// Selecting an entry on the left shows the containing folder's contents on the right. The tree
+	// lists files too, and a file is not a directory to root the right-hand view at, so selecting one
+	// shows the folder it lives in.
 	connect(
 		m_Ui.FileExplorer->selectionModel(),
 		&QItemSelectionModel::currentChanged,
 		this,
 		[this](const QModelIndex& current, const QModelIndex&) {
-			const auto path = m_DirectoryModel->filePath(current);
+			if (!current.isValid())
+				return;
+
+			const QModelIndex folder =
+				m_HierarchyModel->isDir(current) ? current : current.parent();
+			if (!folder.isValid())
+				return;
+
+			const auto path = m_HierarchyModel->filePath(folder);
 			m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
 			UpdateEmptyPlaceholder();
 		});
@@ -201,18 +213,23 @@ ContentExplorerWindow::eventFilter(QObject* watched, QEvent* event)
 void
 ContentExplorerWindow::ShowHierarchyMenu(const QPoint& pos)
 {
-	if (m_Ui.FileExplorer->model() != m_DirectoryModel)
+	if (m_Ui.FileExplorer->model() != m_HierarchyModel)
 		return;
 
-	// Add the new directory inside the clicked folder, or at the tree root when the
-	// click missed a row.
-	const auto index  = m_Ui.FileExplorer->indexAt(pos);
-	const auto parent = index.isValid() ? index : m_Ui.FileExplorer->rootIndex();
+	// Add the new directory inside the clicked folder, or at the tree root when the click missed a
+	// row. The tree lists files too, so a click on one targets the folder that contains it.
+	const auto index = m_Ui.FileExplorer->indexAt(pos);
+
+	QModelIndex parent = m_Ui.FileExplorer->rootIndex();
+	if (index.isValid())
+		parent = m_HierarchyModel->isDir(index) ? index : index.parent();
+	if (!parent.isValid())
+		parent = m_Ui.FileExplorer->rootIndex();
 
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
 	if (menu.exec(m_Ui.FileExplorer->viewport()->mapToGlobal(pos)) == addDir)
-		AddDirectory(m_DirectoryModel, parent);
+		AddDirectory(m_HierarchyModel, parent);
 }
 
 void
@@ -331,7 +348,7 @@ ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
 	{
 		const auto index = m_Ui.FileExplorer->indexAt(treeLocal);
 		if (index.isValid())
-			return m_DirectoryModel->filePath(index);
+			return m_HierarchyModel->filePath(index);
 	}
 
 	return m_FileModel->rootPath();

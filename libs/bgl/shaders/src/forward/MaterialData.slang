@@ -47,9 +47,26 @@ extension PbrMaterial : IPbrMaterial
     }
 }
 
+// Selects one component of `v`. Indexing a vector with a runtime value (`v[c]`) makes DXC spill it
+// to an indexable temp; an explicit switch lowers to a select chain instead, with no scratch memory.
+float SelectComponent(float4 v, uint c)
+{
+    switch (c)
+    {
+    case 0:
+        return v.x;
+    case 1:
+        return v.y;
+    case 2:
+        return v.z;
+    default:
+        return v.w;
+    }
+}
+
 float SampleLooseChannel(ChannelSource cs, SamplerHandle s, float2 uv)
 {
-    return cs.texture.Sample(s, uv)[cs.channel];
+    return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
 }
 
 extension LoosePbrMaterial : IPbrMaterial

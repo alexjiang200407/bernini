@@ -11,11 +11,8 @@ find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
 # the Qt already resolved by find_package(Qt6) above -- NOT vcpkg's qtbase: the vcpkg nodeeditor
 # port would build all of Qt from source and collide with the system Qt. It builds a small
 # QtNodes.dll (~1 MB) into the shared runtime output dir, so it sits next to editor.exe with no
-# extra deploy step. Tests/examples/docs are off. Exposes the target QtNodes::QtNodes.
+# extra deploy step. Exposes the target QtNodes::QtNodes.
 include(FetchContent)
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(QT_NODES_DEVELOPER_DEFAULTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
 	QtNodes

@@ -8,12 +8,21 @@
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
 class QComboBox;
+class QJsonObject;
+class QLabel;
+class QPointF;
+class QPushButton;
+class MaterialGraphView;
+
+namespace assetlib
+{
+	struct BMaterial;
+}
 
 namespace QtNodes
 {
 	class DataFlowGraphModel;
 	class DataFlowGraphicsScene;
-	class GraphicsView;
 	class NodeDelegateModelRegistry;
 }
 
@@ -44,6 +53,46 @@ private:
 	void
 	SelectSubmesh(int index);
 
+	// Compiles a submesh's graph into a loose material and binds it to that submesh, live.
+	void
+	CompileGraph(int submeshIndex);
+
+	// Creates a Texture node for a dropped `.ktx2` at `scenePos` in the current graph.
+	void
+	AddTextureNode(const QString& path, const QPointF& scenePos);
+
+	// --- Material asset I/O -------------------------------------------------------------------
+
+	// Saves the current submesh's graph to its `.bmaterial`, prompting for a path when it has none
+	// (or when `saveAs`). A submesh only has a path once it has been saved or opened.
+	void
+	SaveCurrentMaterial(bool saveAs);
+
+	// Points the previewed `.bmesh`'s submesh at `materialPath` and rewrites the mesh, so the material
+	// an artist just saved is the one the mesh loads next time. A no-op for the sphere.
+	void
+	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
+
+	// Loads a `.bmaterial` into a submesh's graph, replacing it, and previews the result. `interactive`
+	// governs whether a failure raises a dialog: an explicit Open should, the automatic load of the
+	// materials a dropped mesh already references should only log.
+	void
+	OpenMaterialInto(int submeshIndex, const QString& path, bool interactive = true);
+
+	// The current submesh's graph as a `.bmaterial`: the compiled per-channel routes and factors that
+	// the runtime consumes, plus the graph itself so reopening restores the authoring state.
+	[[nodiscard]] assetlib::BMaterial
+	BuildMaterial(int submeshIndex, const QString& materialPath) const;
+
+	// Rebuilds `submeshIndex`'s model + scene from scratch, optionally seeding it from `graph` (an
+	// empty object yields a fresh graph holding only the Output node). Returns the new Output node.
+	class MaterialOutputNode*
+	ResetGraph(int submeshIndex, const QJsonObject& graph);
+
+	// Enables/disables the toolbar for the current selection.
+	void
+	RefreshActions();
+
 	MaterialEditorWindowDesc m_Desc;
 
 	bgl::SceneHandle       m_PreviewScene;
@@ -57,10 +106,18 @@ private:
 	{
 		std::unique_ptr<QtNodes::DataFlowGraphModel>    model;
 		std::unique_ptr<QtNodes::DataFlowGraphicsScene> scene;
+
+		// The `.bmaterial` this submesh's graph is bound to. Empty until saved or opened -- notably
+		// for the default sphere, which is not backed by any asset and so can only ever "Save As".
+		QString materialPath;
 	};
 	std::vector<SubmeshGraph> m_SubmeshGraphs;
 	int                       m_CurrentSubmesh = -1;
 
-	QComboBox*             m_SubmeshSelector = nullptr;
-	QtNodes::GraphicsView* m_GraphView       = nullptr;
+	QComboBox*         m_SubmeshSelector = nullptr;
+	MaterialGraphView* m_GraphView       = nullptr;
+	QPushButton*       m_OpenButton      = nullptr;
+	QPushButton*       m_SaveButton      = nullptr;
+	QPushButton*       m_SaveAsButton    = nullptr;
+	QLabel*            m_MaterialLabel   = nullptr;  // the bound `.bmaterial`'s file name
 };

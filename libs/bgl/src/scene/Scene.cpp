@@ -347,8 +347,9 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto asset          = GeomAsset();
+			asset.submeshes     = baseSubmeshGlobal;
+			asset.submeshChunks = { { 0, 1 } };  // one source submesh, always one chunk
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -506,8 +507,9 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto asset          = GeomAsset();
+			asset.submeshes     = baseSubmeshGlobal;
+			asset.submeshChunks = { { 0, 1 } };  // one source submesh, always one chunk
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -539,9 +541,15 @@ namespace bgl
 			std::vector<idl::Submesh> submeshes;
 			submeshes.reserve(meshEntry.submeshCount);
 
+			// Records where each source submesh landed once the meshlet-cap chunking below is done.
+			auto submeshChunks = std::vector<SubmeshChunks>();
+			submeshChunks.reserve(meshEntry.submeshCount);
+
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+
+				const auto chunkStart = static_cast<uint32_t>(submeshes.size());
 
 				const uint32_t        vertexBytes = src.vertexCount * src.layout.stride;
 				std::vector<uint32_t> vertexWords((vertexBytes + 3u) / 4u, 0u);
@@ -610,13 +618,19 @@ namespace bgl
 
 					submeshes.push_back(submesh);
 				}
+
+				// A submesh with no meshlets yields no chunks; the empty span keeps source submesh
+				// indices aligned so callers still address the ones that follow it correctly.
+				submeshChunks.push_back(
+					{ chunkStart, static_cast<uint32_t>(submeshes.size()) - chunkStart });
 			}
 
 			const auto baseSubmeshGlobal =
 				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto asset          = GeomAsset();
+			asset.submeshes     = baseSubmeshGlobal;
+			asset.submeshChunks = std::move(submeshChunks);
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -735,18 +749,27 @@ namespace bgl
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
 
+		// `submeshIndex` names a *source* submesh, which AddStaticMesh may have split into several GPU
+		// submeshes. Materials are authored per source submesh, so every chunk has to be rewritten --
+		// updating only the first leaves the rest of the surface on the old material.
 		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (submeshIndex >= asset.submeshes.count)
+		if (submeshIndex >= asset.submeshChunks.size())
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}
 
-		const uint32_t globalIndex = asset.submeshes.range.offsetStart + submeshIndex;
+		const SubmeshChunks& chunks = asset.submeshChunks[submeshIndex];
+		const uint32_t       pso    = SubmeshPso(geom.geomType, material);
 
-		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
-		submesh.material = material.handle;
-		submesh.pso      = SubmeshPso(geom.geomType, material);
-		m_SubmeshBuffer.SetAtIndex(globalIndex, submesh);
+		for (uint32_t i = 0; i < chunks.count; ++i)
+		{
+			const uint32_t globalIndex = asset.submeshes.range.offsetStart + chunks.first + i;
+
+			auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
+			submesh.material = material.handle;
+			submesh.pso      = pso;
+			m_SubmeshBuffer.SetAtIndex(globalIndex, submesh);
+		}
 	}
 
 	void
@@ -774,29 +797,26 @@ namespace bgl
 		// The geometry's per-part ranges live on each Submesh, so free them per
 		// submesh before releasing the submesh range itself.
 		//
-		// AddStaticMesh chunks a source submesh that exceeds the meshlet cap into several GPU
-		// submeshes which *share* one vertexData range (only the meshlet / vertexMap / index ranges
-		// are per-chunk). Freeing it once per GPU submesh would double-erase it, so erase each
-		// distinct vertexData range exactly once.
-		const uint32_t        submeshRoot  = asset.submeshes.range.offsetStart;
-		const uint32_t        submeshCount = asset.submeshes.count;
-		std::vector<uint32_t> erasedVertexData;
-		erasedVertexData.reserve(submeshCount);
+		// The chunks of one source submesh *share* a single vertexData range (only the meshlet /
+		// vertexMap / index ranges are per-chunk), so it is owned by, and freed with, the first chunk.
+		// Freeing it once per GPU submesh would double-erase it.
+		const uint32_t submeshRoot = asset.submeshes.range.offsetStart;
 
-		for (uint32_t i = 0; i < submeshCount; ++i)
+		for (const SubmeshChunks& chunks : asset.submeshChunks)
 		{
-			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
-
-			const uint32_t vertexDataStart = submesh.vertexData.offsetStart;
-			if (std::ranges::find(erasedVertexData, vertexDataStart) == erasedVertexData.end())
+			for (uint32_t i = 0; i < chunks.count; ++i)
 			{
-				erasedVertexData.push_back(vertexDataStart);
-				m_VertexDataBuffer.EraseByIndex(vertexDataStart);
-			}
+				const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + chunks.first + i);
 
-			m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
-			m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
-			m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
+				if (i == 0)
+				{
+					m_VertexDataBuffer.EraseByIndex(submesh.vertexData.offsetStart);
+				}
+
+				m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
+				m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
+				m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
+			}
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);

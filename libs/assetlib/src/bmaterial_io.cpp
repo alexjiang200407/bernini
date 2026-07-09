@@ -10,9 +10,10 @@ namespace assetlib
 	namespace
 	{
 		constexpr uint32_t c_Magic = 0x54414D42u;  // 'B','M','A','T' little-endian
-		// v2 adds the material mode + the per-channel `routes` table (loose materials). v1 files
-		// (triplet + factors only) still load, as Baked with empty routes.
-		constexpr uint16_t c_VersionMajor = 2;
+		// v2 adds the material mode + the per-channel `routes` table (loose materials). v3 appends the
+		// editor's node graph. Older files still load: v1 (triplet + factors only) as Baked with empty
+		// routes, v2 with an empty graph.
+		constexpr uint16_t c_VersionMajor = 3;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
@@ -52,6 +53,7 @@ namespace assetlib
 			writeString(writer, route.texture);
 			writer.writePod(route.channel);
 		}
+		writeString(writer, material.editorGraph);
 		return writer.take();
 	}
 
@@ -64,7 +66,7 @@ namespace assetlib
 			throw std::runtime_error("bmaterial: bad magic");
 		const auto versionMajor = reader.readPod<uint16_t>();
 		(void)reader.readPod<uint16_t>();  // minor is forward-compatible
-		if (versionMajor != c_VersionMajor && versionMajor != 1)
+		if (versionMajor < 1 || versionMajor > c_VersionMajor)
 			throw std::runtime_error("bmaterial: unsupported major version");
 
 		BMaterial material;
@@ -87,6 +89,11 @@ namespace assetlib
 				route.texture = readString(reader);
 				route.channel = reader.readPod<uint16_t>();
 			}
+		}
+		// The editor graph is a v3 addition; older files simply have none.
+		if (versionMajor >= 3)
+		{
+			material.editorGraph = readString(reader);
 		}
 		return material;
 	}

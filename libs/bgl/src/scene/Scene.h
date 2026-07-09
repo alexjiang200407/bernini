@@ -14,6 +14,17 @@ namespace bgl
 	class ICommandList;
 	class FrameGraph;
 
+	// The span of GPU submeshes one source submesh expanded into. A source submesh whose meshlet
+	// count exceeds idl::cMaxMeshletsPerAccelerationStructure is split across several GPU submeshes,
+	// so the two are not 1:1. `first` is relative to GeomAsset::submeshes.range.offsetStart, and the
+	// chunks of a source submesh are contiguous. Only the first chunk owns the shared vertexData
+	// range; the meshlet / vertexMap / index ranges are per-chunk.
+	struct SubmeshChunks
+	{
+		uint32_t first = 0;
+		uint32_t count = 0;
+	};
+
 	// A geometry asset lives on the CPU only: its heavy data (submesh / vertex /
 	// index / meshlet ranges) is shared in the Scene's GPU buffers, and each
 	// per-placement Mesh (owned by a SceneView) copies the tiny submeshes
@@ -22,7 +33,14 @@ namespace bgl
 	struct GeomAsset
 	{
 		idl::RangeWithCount submeshes;
-		uint32_t            refCount = 0;
+
+		// One entry per *source* submesh, in order. Callers index geometry by source submesh (that is
+		// what an asset's material slots are numbered by), so anything that addresses a submesh from
+		// the outside -- SetSubmeshMaterial above all -- must go through this table rather than
+		// indexing `submeshes` directly.
+		std::vector<SubmeshChunks> submeshChunks;
+
+		uint32_t refCount = 0;
 	};
 
 	class Scene : public core::RefCounter<IScene>
