@@ -42,6 +42,22 @@ namespace assetlib
 	toBMesh(const imp::BMeshImport& mesh);
 
 	/**
+	 * Points submesh `submeshIndex` at the material file `relativePath` (relative to the mesh file),
+	 * adjusting `mesh.materials` and `Submesh::material` as needed. Used when an authoring tool saves a
+	 * material and the mesh must reference it from then on.
+	 *
+	 * Material slots are shared: an import gives every submesh cut from the same source material the
+	 * same index. So the submesh's existing slot is rewritten in place only when no other submesh uses
+	 * it; otherwise the submesh moves to its own slot, reusing an entry that already holds
+	 * `relativePath` rather than appending a duplicate. Sibling submeshes are never repointed.
+	 *
+	 * @return true if `mesh` changed, false if it already referenced that material (nothing to write).
+	 * @throws std::runtime_error if `submeshIndex` is out of range.
+	 */
+	bool
+	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
+
+	/**
 	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file named `texN.ktx2`
 	 * by index. These are the texture files the baked `.bmaterial` files reference.
 	 *

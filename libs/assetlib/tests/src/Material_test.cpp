@@ -55,6 +55,36 @@ TEST_CASE("a Loose BMaterial round-trips its mode and routes", "[bmaterial][io]"
 	REQUIRE(restored.metallicFactor == Catch::Approx(0.5f));
 }
 
+TEST_CASE("a BMaterial round-trips its editor graph", "[bmaterial][io]")
+{
+	// The graph is an opaque blob to assetlib: it must survive byte-for-byte, embedded quotes,
+	// braces, newlines and all.
+	BMaterial mat;
+	mat.mode        = MaterialMode::kLoose;
+	mat.name        = "graphed";
+	mat.editorGraph = R"({"nodes":[{"id":0,"internal-data":{"model-name":"Texture"}}],"c":[]})"
+					  "\n{\"trailing\":\"line\"}";
+
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
+
+	REQUIRE(restored.editorGraph == mat.editorGraph);
+	REQUIRE(restored.mode == MaterialMode::kLoose);
+	REQUIRE(restored.name == "graphed");
+}
+
+TEST_CASE("a BMaterial with no editor graph round-trips an empty one", "[bmaterial][io]")
+{
+	// The exported/baked form: the authoring graph has been stripped.
+	BMaterial mat;
+	mat.mode             = MaterialMode::kBaked;
+	mat.baseColorTexture = "baked_basecolor.ktx2";
+
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
+
+	REQUIRE(restored.editorGraph.empty());
+	REQUIRE(restored.baseColorTexture == "baked_basecolor.ktx2");
+}
+
 TEST_CASE("deserializeMaterial reads a v1 stream as a Baked material", "[bmaterial][io]")
 {
 	// Hand-build a v1 .bmaterial byte stream (predates the mode + routes fields).

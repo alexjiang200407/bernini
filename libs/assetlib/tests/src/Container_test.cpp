@@ -120,3 +120,90 @@ TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 	REQUIRE(restored.materials == original.materials);
 	REQUIRE(serialize(restored) == serialize(original));
 }
+
+namespace
+{
+	// A mesh with `submeshMaterials.size()` submeshes, each pointing at the given material slot.
+	BMesh
+	makeMaterialMesh(std::vector<uint32_t> submeshMaterials, std::vector<std::string> materials)
+	{
+		BMesh mesh;
+		mesh.materials = std::move(materials);
+		for (const uint32_t material : submeshMaterials)
+		{
+			auto submesh     = Submesh();
+			submesh.material = material;
+			mesh.submeshes.push_back(submesh);
+		}
+		return mesh;
+	}
+}
+
+TEST_CASE("attachMaterial rewrites an unshared slot in place", "[bmesh][material]")
+{
+	// Submesh 1 is the only user of slot 1, so it may claim it.
+	auto mesh = makeMaterialMesh({ 0, 1 }, { "mat0.bmaterial", "mat1.bmaterial" });
+
+	REQUIRE(attachMaterial(mesh, 1, "authored.bmaterial"));
+
+	REQUIRE(mesh.materials.size() == 2);  // no new slot
+	REQUIRE(mesh.materials[1] == "authored.bmaterial");
+	REQUIRE(mesh.submeshes[1].material == 1);
+	REQUIRE(mesh.materials[0] == "mat0.bmaterial");  // submesh 0 untouched
+	REQUIRE(mesh.submeshes[0].material == 0);
+}
+
+TEST_CASE("attachMaterial does not repoint siblings sharing a slot", "[bmesh][material]")
+{
+	// Both submeshes were imported with the same material. Re-materialing one must not change the
+	// other -- it gets a slot of its own instead.
+	auto mesh = makeMaterialMesh({ 0, 0 }, { "shared.bmaterial" });
+
+	REQUIRE(attachMaterial(mesh, 0, "authored.bmaterial"));
+
+	REQUIRE(mesh.materials.size() == 2);
+	REQUIRE(mesh.materials[mesh.submeshes[0].material] == "authored.bmaterial");
+	REQUIRE(mesh.submeshes[1].material == 0);
+	REQUIRE(mesh.materials[0] == "shared.bmaterial");
+}
+
+TEST_CASE("attachMaterial reuses an existing entry instead of duplicating", "[bmesh][material]")
+{
+	auto mesh = makeMaterialMesh({ 0, 0 }, { "shared.bmaterial", "other.bmaterial" });
+
+	REQUIRE(attachMaterial(mesh, 1, "other.bmaterial"));
+
+	REQUIRE(mesh.materials.size() == 2);  // "other" was already there
+	REQUIRE(mesh.submeshes[1].material == 1);
+	REQUIRE(mesh.submeshes[0].material == 0);
+}
+
+TEST_CASE("attachMaterial reports no change when already attached", "[bmesh][material]")
+{
+	auto mesh = makeMaterialMesh({ 0 }, { "mat0.bmaterial" });
+
+	// Sole user of the slot, and it already names this material.
+	REQUIRE_FALSE(attachMaterial(mesh, 0, "mat0.bmaterial"));
+
+	// Shared slot already naming the material: the submesh stays where it is.
+	auto shared = makeMaterialMesh({ 0, 0 }, { "mat0.bmaterial" });
+	REQUIRE_FALSE(attachMaterial(shared, 0, "mat0.bmaterial"));
+	REQUIRE(shared.materials.size() == 1);
+	REQUIRE(shared.submeshes[0].material == 0);
+}
+
+TEST_CASE("attachMaterial gives an unmaterialed submesh a new slot", "[bmesh][material]")
+{
+	auto mesh = makeMaterialMesh({ c_InvalidIndex }, {});
+
+	REQUIRE(attachMaterial(mesh, 0, "authored.bmaterial"));
+
+	REQUIRE(mesh.materials.size() == 1);
+	REQUIRE(mesh.submeshes[0].material == 0);
+}
+
+TEST_CASE("attachMaterial rejects an out-of-range submesh", "[bmesh][material]")
+{
+	auto mesh = makeMaterialMesh({ 0 }, { "mat0.bmaterial" });
+	REQUIRE_THROWS_AS(attachMaterial(mesh, 1, "authored.bmaterial"), std::runtime_error);
+}

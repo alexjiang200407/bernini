@@ -39,7 +39,7 @@ else()
     message(STATUS "Qt6 not found - skipping editor (set CMAKE_PREFIX_PATH to your Qt install to enable it)")
 endif()
 
-if (BUILD_EXAMPLES)
+if (BERNINI_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
@@ -50,7 +50,7 @@ assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl"              "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib"         "editor")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib_structs" "editor")
 
-if (BUILD_EXAMPLES)
+if (BERNINI_BUILD_EXAMPLES)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")
 endif()
 if (Qt6_FOUND)

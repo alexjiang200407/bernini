@@ -124,9 +124,21 @@ ordering is shared so a layout maps field-for-field between them.
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
-* **`.bmaterial`** — factors + texture path references (relative to the material file). Struct:
+* **`.bmaterial`** (v3) — factors + texture path references (relative to the material file), a `mode`,
+  a 9-entry per-channel `routes` table, and the material editor's node graph. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h).
+  * `mode = kBaked` — the baseColor / normal / orm triplet is authoritative. This is what import and
+    export produce, and what the runtime's `PbrMaterial` consumes.
+  * `mode = kLoose` — the `routes` table is authoritative: each of the nine PBR output channels
+    (base colour R,G,B,A; ORM ao, roughness, metallic; normal X,Y) names a source texture and which
+    of *its* RGBA channels to read. This is what the material editor saves, and what the runtime's
+    `LoosePbrMaterial` consumes without a bake.
+  * `editorGraph` — the node graph, as an opaque JSON blob. Authoring data: nothing outside the
+    editor reads it, it never affects rendering, and **the exporter clears it when it bakes a
+    material down to `kBaked`**. It exists so reopening a material restores the board that produced
+    the routes, including node positions and nodes wired to nothing.
+  * Older files still load: v1 (factors + triplet) as `kBaked` with empty routes, v2 with no graph.
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture, all in one directory.
 

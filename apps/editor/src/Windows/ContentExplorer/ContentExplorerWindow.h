@@ -69,7 +69,7 @@ private:
 	UpdateEmptyPlaceholder();
 
 	Ui::ContentExplorerWindow m_Ui;
-	QFileSystemModel*         m_DirectoryModel;
+	QFileSystemModel*         m_HierarchyModel;
 	QFileSystemModel*         m_FileModel;
 	QLabel*                   m_EmptyPlaceholder = nullptr;
 	QString                   m_RootPath;

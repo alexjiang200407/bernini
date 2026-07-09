@@ -11,15 +11,15 @@
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QMouseEvent;
+class QWheelEvent;
 
-// Skybox + IBL environment for the material preview, sourced from config.json (materialEditor.*).
-// Any path left empty is simply skipped.
 struct MaterialPreviewEnv
 {
-	std::string skybox;      // cube-map .ktx2 drawn as the background
-	std::string irradiance;  // IBL diffuse irradiance cube
-	std::string prefilter;   // IBL specular prefilter cube
-	std::string brdfLut;     // IBL BRDF LUT (2D)
+	std::string skybox;
+	std::string irradiance;
+	std::string prefilter;
+	std::string brdfLut;
 };
 
 // The right-hand model preview: a lit sphere by default, or a `.bmesh` dropped onto it, shown
@@ -42,6 +42,21 @@ public:
 	// Applies a material to one submesh of the preview geometry (as the node graph compiles).
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);
+
+	const QStringList&
+	SubmeshMaterialPaths() const noexcept
+	{
+		return m_SubmeshMaterialPaths;
+	}
+
+	const std::filesystem::path&
+	MeshPath() const noexcept
+	{
+		return m_MeshPath;
+	}
+
+	uint32_t
+	SourceSubmesh(uint32_t submeshIndex) const noexcept;
 
 	// Replaces the preview geometry with a baked mesh; falls back to the sphere if it cannot load.
 	void
@@ -68,23 +83,49 @@ protected:
 	void
 	dropEvent(QDropEvent* event) override;
 
+	void
+	mousePressEvent(QMouseEvent* event) override;
+	void
+	mouseMoveEvent(QMouseEvent* event) override;
+	void
+	mouseReleaseEvent(QMouseEvent* event) override;
+	void
+	wheelEvent(QWheelEvent* event) override;
+
 private:
 	void
 	UpdateCamera();
 
-	// Frames the camera on a bounding sphere so a dropped mesh of any size fills the viewport.
+	glm::vec3
+	EyePosition() const;
+
 	void
 	FocusOn(const glm::vec3& center, float radius);
 
-	// Removes the current instance + geometry (instance first, so the geom's refcount drops to 0).
 	void
 	ClearGeometry();
 
-	bgl::GeomHandle         m_Geom;
-	bgl::MeshInstanceHandle m_Instance;
-	bgl::MaterialHandle     m_DefaultMaterial;
-	QStringList             m_SubmeshNames;
+	struct SubmeshRef
+	{
+		uint32_t geomIndex     = 0;
+		uint32_t localSubmesh  = 0;
+		uint32_t sourceSubmesh = 0;  // index into the .bmesh's submeshes array
+	};
+
+	std::vector<bgl::GeomHandle>         m_Geoms;
+	std::vector<bgl::MeshInstanceHandle> m_Instances;
+	std::vector<SubmeshRef>              m_SubmeshRefs;
+	bgl::MaterialHandle                  m_DefaultMaterial;
+	QStringList                          m_SubmeshNames;
+	QStringList                          m_SubmeshMaterialPaths;
+	std::filesystem::path                m_MeshPath;  // empty for the default sphere
 
 	glm::vec3 m_FocusCenter = glm::vec3(0.0f);
 	float     m_FocusRadius = 1.0f;
+	float     m_Distance    = 3.0f;
+	float     m_Yaw         = 0.0f;
+	float     m_Pitch       = 0.0f;
+
+	QPoint          m_LastMousePos;
+	Qt::MouseButton m_DragButton = Qt::NoButton;
 };

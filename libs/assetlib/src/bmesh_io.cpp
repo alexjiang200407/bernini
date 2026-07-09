@@ -304,6 +304,46 @@ namespace assetlib
 		return out;
 	}
 
+	bool
+	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath)
+	{
+		if (submeshIndex >= mesh.submeshes.size())
+			throw std::runtime_error("attachMaterial: submeshIndex out of range");
+
+		Submesh&          submesh  = mesh.submeshes[submeshIndex];
+		const std::string material = std::string(relativePath);
+
+		// Rewriting the slot in place is only safe when this submesh is its sole user; otherwise every
+		// sibling sharing the slot would silently change material too.
+		const bool hasSlot = submesh.material < mesh.materials.size();
+		const bool shared =
+			hasSlot && std::ranges::count_if(mesh.submeshes, [&](const Submesh& other) {
+						   return other.material == submesh.material;
+					   }) > 1;
+
+		if (hasSlot && !shared)
+		{
+			if (mesh.materials[submesh.material] == material)
+				return false;
+			mesh.materials[submesh.material] = material;
+			return true;
+		}
+
+		// Move to a slot of its own, reusing one that already names this material.
+		if (const auto it = std::ranges::find(mesh.materials, material); it != mesh.materials.end())
+		{
+			const auto index = static_cast<uint32_t>(std::distance(mesh.materials.begin(), it));
+			if (submesh.material == index)
+				return false;
+			submesh.material = index;
+			return true;
+		}
+
+		mesh.materials.push_back(material);
+		submesh.material = static_cast<uint32_t>(mesh.materials.size() - 1);
+		return true;
+	}
+
 	void
 	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir)
 	{

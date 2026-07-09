@@ -31,5 +31,13 @@ namespace assetlib
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 
 		std::string name;
+
+		// The material editor's node graph, as an opaque JSON blob (empty when the material was not
+		// authored by the node editor). Nothing outside the editor interprets it: `routes` and the
+		// triplet are the authoritative description, and this exists only so reopening a material
+		// restores the graph that produced them -- node positions, unwired nodes and all.
+		//
+		// It is authoring data, so the exporter clears it when it bakes a material down to `kBaked`.
+		std::string editorGraph;
 	};
 }
