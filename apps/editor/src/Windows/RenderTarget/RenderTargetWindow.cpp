@@ -1,4 +1,5 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include <QDebug>
 #include <QHideEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -31,10 +32,45 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// for the next -- averaging to ~23ms and staying there. A precise timer forces 1ms OS resolution,
 	// so it reliably fires before vsync and the cadence stays at one refresh.
 	m_FrameTimer->setTimerType(Qt::PreciseTimer);
+
+	m_FrameClock.start();
 	connect(m_FrameTimer, &QTimer::timeout, this, [this]() {
 		SyncSize(width(), height());
+
+		const qint64 startNs = m_FrameClock.nsecsElapsed();
 		DrawFrame(m_Desc.gfx.Get());
+		const qint64 endNs = m_FrameClock.nsecsElapsed();
+
+		ReportFrameTiming(startNs, endNs);
 	});
+}
+
+void
+RenderTargetWindow::ReportFrameTiming(qint64 startNs, qint64 endNs)
+{
+	// Present is vsync-locked, so a healthy frame lands on one refresh (~16.7ms). Treat anything
+	// past ~1.2 refreshes as having missed a vblank and report what caused it.
+	constexpr double c_MissedFrameMs = 20.0;
+	constexpr double c_NsToMs        = 1.0e-6;
+
+	if (m_LastFrameStartNs >= 0)
+	{
+		const double deltaMs = static_cast<double>(startNs - m_LastFrameStartNs) * c_NsToMs;
+		const double drawMs  = static_cast<double>(endNs - startNs) * c_NsToMs;
+		const double gapMs   = static_cast<double>(startNs - m_LastFrameEndNs) * c_NsToMs;
+
+		if (deltaMs > c_MissedFrameMs)
+		{
+			qWarning(
+				"RenderTarget: missed a vblank -- frame %.1f ms (draw %.1f ms, gap %.1f ms)",
+				deltaMs,
+				drawMs,
+				gapMs);
+		}
+	}
+
+	m_LastFrameStartNs = startNs;
+	m_LastFrameEndNs   = endNs;
 }
 
 void
@@ -49,7 +85,16 @@ RenderTargetWindow::showEvent(QShowEvent* event)
 {
 	QWidget::showEvent(event);
 	SyncSize(width(), height());
-	m_FrameTimer->start(16);
+
+	// The frame rate is paced by the vsync-locked Present, not by this timer: DXGI queues frames and
+	// Present only blocks once that queue is full, at which point the loop settles onto the refresh
+	// rate. So the timer's only job is to re-drive the loop as soon as the previous frame returns.
+	//
+	// It must be a *zero-interval* timer, which fires whenever the event loop goes idle. Any non-zero
+	// interval is quantised to the Windows timer tick (~15.6ms), which made the timer -- not Present
+	// -- the pacer: it intermittently skipped a tick and stretched a frame to ~33ms (PIX smooths that
+	// mixture into the ~22ms it reports).
+	m_FrameTimer->start(0);
 }
 
 void
