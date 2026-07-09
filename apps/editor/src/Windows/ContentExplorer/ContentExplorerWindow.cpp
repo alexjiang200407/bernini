@@ -103,6 +103,14 @@ ContentExplorerWindow::AttachModels()
 	m_Ui.CurrentDirectoryExplorer->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	m_Ui.CurrentDirectoryExplorer->verticalHeader()->setVisible(false);
 
+	// Assets can be dragged out of the explorer (e.g. a .bmesh onto the Material Editor preview).
+	// QFileSystemModel supplies the file URLs; DragOnly keeps the views from accepting drops, so
+	// dropped mesh files still bubble up to this widget's dropEvent for import.
+	m_Ui.FileExplorer->setDragEnabled(true);
+	m_Ui.FileExplorer->setDragDropMode(QAbstractItemView::DragOnly);
+	m_Ui.CurrentDirectoryExplorer->setDragEnabled(true);
+	m_Ui.CurrentDirectoryExplorer->setDragDropMode(QAbstractItemView::DragOnly);
+
 	// Show only Name and Last Modified, with Name taking the remaining width.
 	m_Ui.CurrentDirectoryExplorer->hideColumn(1);  // Size
 	m_Ui.CurrentDirectoryExplorer->hideColumn(2);  // Type
