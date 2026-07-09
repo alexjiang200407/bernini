@@ -773,13 +773,27 @@ namespace bgl
 
 		// The geometry's per-part ranges live on each Submesh, so free them per
 		// submesh before releasing the submesh range itself.
-		const uint32_t submeshRoot  = asset.submeshes.range.offsetStart;
-		const uint32_t submeshCount = asset.submeshes.count;
+		//
+		// AddStaticMesh chunks a source submesh that exceeds the meshlet cap into several GPU
+		// submeshes which *share* one vertexData range (only the meshlet / vertexMap / index ranges
+		// are per-chunk). Freeing it once per GPU submesh would double-erase it, so erase each
+		// distinct vertexData range exactly once.
+		const uint32_t        submeshRoot  = asset.submeshes.range.offsetStart;
+		const uint32_t        submeshCount = asset.submeshes.count;
+		std::vector<uint32_t> erasedVertexData;
+		erasedVertexData.reserve(submeshCount);
+
 		for (uint32_t i = 0; i < submeshCount; ++i)
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
-			m_VertexDataBuffer.EraseByIndex(submesh.vertexData.offsetStart);
+			const uint32_t vertexDataStart = submesh.vertexData.offsetStart;
+			if (std::ranges::find(erasedVertexData, vertexDataStart) == erasedVertexData.end())
+			{
+				erasedVertexData.push_back(vertexDataStart);
+				m_VertexDataBuffer.EraseByIndex(vertexDataStart);
+			}
+
 			m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
 			m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
 			m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
