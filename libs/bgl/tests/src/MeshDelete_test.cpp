@@ -144,6 +144,93 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	}
 }
 
+// A source submesh with more meshlets than the per-submesh cap is chunked by AddStaticMesh into
+// several GPU submeshes that SHARE one vertexData range. DeleteGeom must free that range exactly
+// once -- freeing it per GPU submesh double-erased it and tripped an assertion.
+TEST_CASE(
+	"Deleting a mesh whose submesh split across the meshlet cap frees it once",
+	"[delete][scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto desc                    = bgl::SceneDesc();
+	desc.maxGeom                 = 4;
+	desc.maxSubmeshes            = 16;
+	desc.maxMeshlets             = 256;
+	desc.maxVertexBufferByteSize = 64000;
+	desc.maxIndices              = 4000;
+
+	auto  sceneHandle = gfx->CreateScene(desc);
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 4);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	constexpr uint32_t kMeshlets = 65;  // > cMaxMeshletsPerAccelerationStructure (64), so it splits
+	constexpr uint32_t kVerts    = kMeshlets * 3;
+	constexpr uint16_t kStride   = 12;  // one float32x3 position
+
+	assetlib::BMesh mesh;
+	mesh.stringPool.push_back('\0');
+	mesh.vertexData.resize(static_cast<size_t>(kVerts) * kStride);
+
+	for (uint32_t i = 0; i < kMeshlets; ++i)
+	{
+		auto meshlet           = assetlib::Meshlet();
+		meshlet.vertexOffset   = i * 3;
+		meshlet.triangleOffset = i * 3;
+		meshlet.vertexCount    = 3;
+		meshlet.triangleCount  = 1;
+		meshlet.boundingCenter = glm::vec3(0.0f);
+		meshlet.boundingRadius = 1.0f;
+		mesh.meshlets.push_back(meshlet);
+
+		for (uint32_t v = 0; v < 3; ++v) mesh.meshletVertices.push_back(i * 3 + v);
+		for (uint8_t t = 0; t < 3; ++t) mesh.meshletTriangles.push_back(t);
+	}
+
+	auto submesh                  = assetlib::Submesh();
+	submesh.layout.attributeCount = 1;
+	submesh.layout.stride         = kStride;
+	submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+		                              assetlib::VertexFormat::kFloat32x3,
+		                              0 };
+	submesh.vertexByteOffset      = 0;
+	submesh.vertexCount           = kVerts;
+	submesh.firstMeshlet          = 0;
+	submesh.meshletCount          = kMeshlets;
+	submesh.material              = assetlib::c_InvalidIndex;
+	submesh.aabbMin               = glm::vec3(-1.0f);
+	submesh.aabbMax               = glm::vec3(1.0f);
+	submesh.nameOffset            = 0;
+	mesh.submeshes.push_back(submesh);
+
+	auto entry         = assetlib::Mesh();
+	entry.firstSubmesh = 0;
+	entry.submeshCount = 1;
+	entry.nameOffset   = 0;
+	mesh.meshes.push_back(entry);
+
+	auto geom = scene->AddStaticMesh(mesh, 0, {});
+	REQUIRE(geom.IsValid());
+
+	// The single source submesh really did split into several GPU submeshes.
+	CHECK(scene->GetGeomAsset(geom.handle.index).submeshes.count > 1);
+
+	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	REQUIRE(inst.IsValid());
+	view->DeleteMeshInstance(inst);
+
+	REQUIRE_NOTHROW(scene->DeleteGeom(geom));
+
+	// The freed ranges are reusable: re-adding the same mesh succeeds (the drop-the-same-mesh path).
+	auto geom2 = scene->AddStaticMesh(mesh, 0, {});
+	REQUIRE(geom2.IsValid());
+}
+
 TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
