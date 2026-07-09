@@ -98,10 +98,6 @@ namespace core
 				"slot_vector: release_slot index {} is not allocated",
 				index);
 
-			if constexpr (!std::is_trivially_destructible_v<T>)
-			{
-				m_Data[index].~T();
-			}
 			m_Data[index] = T();
 
 			m_Meta[index].is_allocated = false;
