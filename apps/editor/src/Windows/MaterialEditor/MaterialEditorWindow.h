@@ -7,6 +7,8 @@
 
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
+class QComboBox;
+
 namespace QtNodes
 {
 	class DataFlowGraphModel;
@@ -34,13 +36,31 @@ public:
 	~MaterialEditorWindow() override;
 
 private:
+	// Rebuilds the submesh selector + one graph per submesh from the preview geometry.
+	void
+	SetPreviewGeometry(const QStringList& submeshNames);
+
+	// Shows the selected submesh's graph (each submesh has its own; switching clears the board).
+	void
+	SelectSubmesh(int index);
+
 	MaterialEditorWindowDesc m_Desc;
 
 	bgl::SceneHandle       m_PreviewScene;
 	MaterialPreviewWindow* m_Preview = nullptr;
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
-	std::unique_ptr<QtNodes::DataFlowGraphModel>        m_GraphModel;
-	QtNodes::DataFlowGraphicsScene*                     m_GraphScene = nullptr;
-	QtNodes::GraphicsView*                              m_GraphView  = nullptr;
+
+	// One node graph per submesh of the current preview geometry. `scene` references `model`, so it
+	// is declared after it (destroyed first).
+	struct SubmeshGraph
+	{
+		std::unique_ptr<QtNodes::DataFlowGraphModel>    model;
+		std::unique_ptr<QtNodes::DataFlowGraphicsScene> scene;
+	};
+	std::vector<SubmeshGraph> m_SubmeshGraphs;
+	int                       m_CurrentSubmesh = -1;
+
+	QComboBox*             m_SubmeshSelector = nullptr;
+	QtNodes::GraphicsView* m_GraphView       = nullptr;
 };

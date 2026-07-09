@@ -20,37 +20,41 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 {
 	auto* splitter = new QSplitter(Qt::Horizontal, this);
 
-	// --- Left: node blackboard ----------------------------------------------------------------
+	// --- Left: submesh selector + node blackboard ---------------------------------------------
 	auto* leftPanel  = new QWidget(splitter);
 	auto* leftLayout = new QVBoxLayout(leftPanel);
 	leftLayout->setContentsMargins(0, 0, 0, 0);
 	leftLayout->setSpacing(0);
 
-	// Submesh selector: switching submesh swaps the graph. Populated when a mesh is dropped onto the
-	// preview; empty and disabled (showing its placeholder) until then.
-	auto* submeshSelector = new QComboBox(leftPanel);
-	submeshSelector->setPlaceholderText("No submesh");
-	submeshSelector->setEnabled(false);
-	leftLayout->addWidget(submeshSelector);
+	m_SubmeshSelector = new QComboBox(leftPanel);
+	m_SubmeshSelector->setPlaceholderText("No submesh");
+	m_SubmeshSelector->setEnabled(false);
+	connect(
+		m_SubmeshSelector,
+		&QComboBox::currentIndexChanged,
+		this,
+		&MaterialEditorWindow::SelectSubmesh);
+	leftLayout->addWidget(m_SubmeshSelector);
 
-	m_Registry   = std::make_shared<NodeDelegateModelRegistry>();
-	m_GraphModel = std::make_unique<DataFlowGraphModel>(m_Registry);
-	m_GraphScene = new DataFlowGraphicsScene(*m_GraphModel, leftPanel);
-	m_GraphView  = new GraphicsView(m_GraphScene);
+	m_Registry = std::make_shared<NodeDelegateModelRegistry>();
+	// (node types are registered in a later increment)
+
+	m_GraphView = new GraphicsView(leftPanel);  // its scene is set per selected submesh
 	leftLayout->addWidget(m_GraphView);
 
 	// --- Right: model preview -----------------------------------------------------------------
 	QWidget* rightPanel = nullptr;
 	if (m_Desc.gfx)
 	{
+		// Budgeted for a dropped mesh, not just the default sphere.
 		auto sceneDesc                    = bgl::SceneDesc();
-		sceneDesc.maxGeom                 = 4;
-		sceneDesc.maxMeshlets             = 512;
-		sceneDesc.maxSubmeshes            = 8;
-		sceneDesc.maxVertexBufferByteSize = 400000;
-		sceneDesc.maxIndices              = 20000;
-		sceneDesc.maxPbrMaterials         = 8;
-		sceneDesc.maxLoosePbrMaterials    = 8;
+		sceneDesc.maxGeom                 = 8;
+		sceneDesc.maxMeshlets             = 8192;
+		sceneDesc.maxSubmeshes            = 128;
+		sceneDesc.maxVertexBufferByteSize = 8000000;
+		sceneDesc.maxIndices              = 400000;
+		sceneDesc.maxPbrMaterials         = 16;
+		sceneDesc.maxLoosePbrMaterials    = 16;
 		m_PreviewScene                    = m_Desc.gfx->CreateScene(sceneDesc);
 
 		auto rtDesc         = RenderTargetWindowDesc();
@@ -60,6 +64,11 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
 		rightPanel = m_Preview;
+
+		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
+		connect(m_Preview, &MaterialPreviewWindow::GeometryChanged, this, [this]() {
+			SetPreviewGeometry(m_Preview->SubmeshNames());
+		});
 	}
 	else
 	{
@@ -81,6 +90,50 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->addWidget(splitter);
+
+	// Populate the selector from the preview geometry (the default sphere for now). Each submesh has
+	// its own graph. The sphere has no backing material file, so its graph is in-memory only and
+	// cannot be saved -- a material asset opened from disk would (a later increment).
+	if (m_Preview)
+		SetPreviewGeometry(m_Preview->SubmeshNames());
 }
 
-MaterialEditorWindow::~MaterialEditorWindow() = default;
+MaterialEditorWindow::~MaterialEditorWindow()
+{
+	// Detach the view before the per-submesh scenes/models are destroyed, so the view never holds a
+	// dangling scene pointer during teardown.
+	if (m_GraphView)
+		m_GraphView->setScene(nullptr);
+}
+
+void
+MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
+{
+	m_SubmeshSelector->clear();
+	m_SubmeshGraphs.clear();
+	m_CurrentSubmesh = -1;
+
+	for (const QString& name : submeshNames)
+	{
+		SubmeshGraph graph;
+		graph.model = std::make_unique<DataFlowGraphModel>(m_Registry);
+		graph.scene = std::make_unique<DataFlowGraphicsScene>(*graph.model);
+		m_SubmeshGraphs.push_back(std::move(graph));
+		m_SubmeshSelector->addItem(name);
+	}
+
+	m_SubmeshSelector->setEnabled(!m_SubmeshGraphs.empty());
+	if (!m_SubmeshGraphs.empty())
+		m_SubmeshSelector->setCurrentIndex(0);
+}
+
+void
+MaterialEditorWindow::SelectSubmesh(int index)
+{
+	if (index < 0 || index >= static_cast<int>(m_SubmeshGraphs.size()))
+		return;
+
+	// Switching submesh swaps the blackboard to that submesh's own graph.
+	m_CurrentSubmesh = index;
+	m_GraphView->setScene(m_SubmeshGraphs[static_cast<size_t>(index)].scene.get());
+}
