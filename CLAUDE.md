@@ -4,7 +4,8 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 - Use bash
 - Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h` for all the targets
-- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- **Layering**: `bgl` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
 - The CMakelists will specify the src and include directory in each subsystem as a include directory for the target, so always `#include` to the relative to that. e.g. If the current source file is `$SUBSYSTEM/src/xx/Y.h` do `#include "X.h"` instead of `#include "../X.h"`

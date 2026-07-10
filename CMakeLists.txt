@@ -31,6 +31,8 @@ add_subdirectory(libs/assetlib_structs)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(libs/bgl)
 add_subdirectory(libs/assetlib)
+# gamelib is the seam: the only library that links both the renderer and the asset layer.
+add_subdirectory(libs/gamelib)
 
 find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
 if (Qt6_FOUND)
@@ -48,6 +50,7 @@ get_property(EXAMPLE_TARGETS GLOBAL PROPERTY GLOBAL_EXAMPLE_TARGETS)
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/core"             "misc")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl"              "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib"         "editor")
+assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/gamelib"          "misc")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib_structs" "editor")
 
 if (BERNINI_BUILD_EXAMPLES)
