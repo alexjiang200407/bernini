@@ -139,12 +139,13 @@ ordering is shared so a layout maps field-for-field between them.
 * **64 vertices / 124 triangles** per meshlet, built with meshopt at import
   ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
-* **≤ 64 meshlets per runtime submesh** (`cMaxMeshletsPerAccelerationStructure`,
-  [libs/bgl/src/idl/Constants.h](libs/bgl/src/idl/Constants.h)). `Scene::AddStaticMesh`
-  ([libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp)) splits a source submesh that
-  exceeds this into multiple GPU submeshes sharing the vertex data.
-* The mesh shader runs 64 threads and strides over the up-to-124 primitives — do not assume
-  one-thread-per-primitive ([libs/bgl/shaders/src/Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang)).
+* **A submesh's meshlet count is unbounded**, up to the 65535 thread groups one `DispatchMesh` can
+  launch. `Scene::AddStaticMesh`
+  ([libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp)) emits one GPU submesh per source
+  submesh and rejects anything past that limit; it never splits a submesh.
+* The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and
+  the up-to-124 primitives — do not assume one thread per vertex or per primitive
+  ([libs/bgl/shaders/src/Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang)).
 
 ### Containers
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
@@ -275,8 +276,10 @@ both file and VRAM.
   (and so runtime tangent-presence validation can trust it).
 * **Position must be first.** Both the meshlet builder and vertex decode assume position is attribute
   0 at byte offset 0. Reordering the layout breaks meshlet bounds and vertex fetch.
-* **Submesh meshlet cap.** A runtime submesh must hold ≤ `cMaxMeshletsPerAccelerationStructure` (64)
-  meshlets. `AddStaticMesh` chunks automatically; a hand-built submesh that exceeds it renders garbage.
+* **Meshlet capacity is the hard cap, not meshlet count.** A meshlet over `cMaxVerticesPerMeshlet`
+  (64) vertices or `cMaxPrimsPerMeshlet` (124) triangles overruns the mesh shader's output arrays and
+  renders garbage. How *many* meshlets a submesh holds is unconstrained up to 65535. The two limits
+  are unrelated, and splitting a submesh on the second one fixes nothing about the first.
 
 ---
 

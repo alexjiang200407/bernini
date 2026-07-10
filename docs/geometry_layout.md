@@ -45,12 +45,12 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   [Constants.h](libs/bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere for culling.
 
-* **A source submesh is 1:N with GPU `Submesh`es.** A submesh carrying more than
-  `idl::cMaxMeshletsPerAccelerationStructure` (64) meshlets is chunked by `Scene::AddStaticMesh` into
-  several consecutive GPU `Submesh` entries, one per group of ≤64 meshlets. The chunks of a source
-  submesh share a single `vertexData` range (owned by the first chunk); their `meshlets`, `vertexMap`
-  and `indices` ranges are per-chunk. `GeomAsset::submeshChunks` maps a source submesh index to its
-  `(first, count)` chunk span — see the contract below.
+* **A `Submesh` is the unit of pipeline state, and is 1:1 with a source submesh.** It carries one
+  material, one PSO, and one vertex layout, and `Scene::AddStaticMesh` emits exactly one per source
+  submesh, in source order. Its meshlet count is *unbounded* — up to the 65535 thread groups a
+  `DispatchMesh` can launch — and is a dispatch dimension, never a partitioning criterion. Nothing
+  may split a submesh on meshlet count: doing so duplicates the partition's identity across the
+  pieces and breaks source-index addressing (see the contract below).
 
 * **Vertex data is type-erased bytes, decoded by a `VertexLayout` descriptor.** The vertex buffer
   is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a
@@ -176,13 +176,13 @@ For a concrete procedural builder (cube / sphere meshletization), see
 * **`Range` / `RangeWithCount` / `Entry` default to `0xFFFFFFFF` (null).** Check `Null()` before
   dereferencing; a zero-initialized struct is *not* a valid range.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
-* **Never index `GeomAsset::submeshes` with a source submesh index.** Materials, and every other
-  per-part property an asset author sets, are numbered by *source* submesh; the GPU submesh array is
-  the chunked expansion of those (see the 1:N bullet above), so the two indices only coincide when no
-  submesh exceeded 64 meshlets. Resolve through `GeomAsset::submeshChunks[sourceIndex]` and apply the
-  change to every chunk in the span — `Scene::SetSubmeshMaterial` does exactly this. Writing only the
-  first chunk leaves the rest of the surface on its previous material, which shows up as a partially
-  textured mesh with a hard, triangle-aligned seam.
+* **`GeomAsset::submeshes` is indexed by source submesh, and only stays so while the mapping is
+  1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
+  submesh; `Scene::SetSubmeshMaterial` indexes the GPU array directly with that number. Any change
+  that makes `AddStaticMesh` emit a number of submeshes other than `meshEntry.submeshCount` silently
+  breaks every such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
+  triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
+  expand it at the *instance* level, not in the geometry buffers.
 * **A mirror-buffer handle is only valid while its range is live.** After `Erase`, the generation
   bumps and the stale handle reports invalid; the raw GPU-side offset carries no generation, so
   code that stored only the offset must re-validate against the buffer before reuse.

@@ -22,35 +22,37 @@ void EvaluateVertices(
     inout OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts
 )
 {
-    if (gtid < meshlet.vertexCount)
+    // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
+    // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
+    for (uint v = gtid; v < meshlet.vertexCount; v += cMeshGroupSize)
     {
-        uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid];
+        uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
         dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex);
 
         uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
-        DecodedVertex v = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);
+        DecodedVertex vertex = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);
 
-        float4 worldPos = mul(mesh.transform, float4(v.position, 1.0));
+        float4 worldPos = mul(mesh.transform, float4(vertex.position, 1.0));
 
         ForwardVSOut vertexOut;
         vertexOut.position = mul(forwardData.viewProj, worldPos);
         vertexOut.worldPos = worldPos.xyz;
-        vertexOut.normal = mul((float3x3)mesh.transform, v.normal);
-        vertexOut.uv = v.uv;
-        vertexOut.tangent = v.tangent;
+        vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
+        vertexOut.uv = vertex.uv;
+        vertexOut.tangent = vertex.tangent;
         vertexOut.materialIndex = submesh.material.GetOffset();
 
-        verts[gtid] = vertexOut;
+        verts[v] = vertexOut;
     }
 }
 
 void EvaluatePrimitives(Submesh submesh, Meshlet meshlet, uint gtid, inout OutputIndices<uint3, cMaxPrimsPerMeshlet> tris)
 {
-    // The group has cMaxVerticesPerMeshlet (64) threads, but a meshlet can hold up to
-    // cMaxPrimsPerMeshlet (124) triangles, so each thread strides through several triangles to cover
-    // them all.
-    for (uint t = gtid; t < meshlet.triangleCount; t += cMaxVerticesPerMeshlet)
+    // Same striding as the vertices: cMaxPrimsPerMeshlet (124) triangles do not fit one per thread.
+    // Every triangle SetMeshOutputCounts declared must be written, or the unwritten ones rasterize
+    // from undefined indices.
+    for (uint t = gtid; t < meshlet.triangleCount; t += cMeshGroupSize)
     {
         tris[t] = forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + t * 3);
     }
@@ -67,7 +69,7 @@ void ASMain(
 }
 
 [shader("mesh")]
-[numthreads(cMaxVerticesPerMeshlet, 1, 1)]
+[numthreads(cMeshGroupSize, 1, 1)]
 [outputtopology("triangle")]
 void MSMain(
     uint gid: SV_GroupID,
