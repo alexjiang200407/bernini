@@ -44,6 +44,11 @@ public:
 	explicit MaterialEditorWindow(QWidget* parent = nullptr, MaterialEditorWindowDesc desc = {});
 	~MaterialEditorWindow() override;
 
+	// The project's Data directory. Every texture path a `.bmaterial` stores is relative to it, and
+	// baked maps are written beneath it. Set when a project opens; until then materials cannot bake.
+	void
+	SetDataRoot(const QString& dataRoot);
+
 private:
 	// Rebuilds the submesh selector + one graph per submesh from the preview geometry.
 	void
@@ -67,6 +72,11 @@ private:
 	// (or when `saveAs`). A submesh only has a path once it has been saved or opened.
 	void
 	SaveCurrentMaterial(bool saveAs);
+
+	// Composites the current submesh's routed source textures into the optimized triplet, writes the
+	// maps beside its `.bmaterial`, and saves it. Requires the material to already have a path.
+	void
+	BakeCurrentMaterial();
 
 	// Points the previewed `.bmesh`'s submesh at `materialPath` and rewrites the mesh, so the material
 	// an artist just saved is the one the mesh loads next time. A no-op for the sphere.
@@ -95,6 +105,8 @@ private:
 
 	MaterialEditorWindowDesc m_Desc;
 
+	std::filesystem::path m_DataRoot;  // empty until a project is opened
+
 	bgl::SceneHandle       m_PreviewScene;
 	MaterialPreviewWindow* m_Preview = nullptr;
 
@@ -119,5 +131,6 @@ private:
 	QPushButton*       m_OpenButton      = nullptr;
 	QPushButton*       m_SaveButton      = nullptr;
 	QPushButton*       m_SaveAsButton    = nullptr;
+	QPushButton*       m_BakeButton      = nullptr;
 	QLabel*            m_MaterialLabel   = nullptr;  // the bound `.bmaterial`'s file name
 };
