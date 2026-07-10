@@ -136,3 +136,48 @@ TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")
 		std::filesystem::remove(path);
 	}
 }
+
+// libktx initialises its Basis codec tables on first use behind a non-atomic `static bool`
+// (lib/basis_transcode.cpp), so concurrent first transcodes race. The editor hits this: texture
+// previews decode on a worker pool while the UI thread loads the same textures for the GPU.
+// assetlib serialises until the init has completed, which this exercises.
+TEST_CASE("KTX2 decodes concurrently from several threads", "[ktx2][io][threading]")
+{
+	constexpr uint32_t w        = 128;
+	constexpr uint32_t h        = 128;
+	constexpr int      kThreads = 4;
+
+	const std::vector<std::byte> rgba(static_cast<size_t>(w) * h * 4, std::byte{ 120 });
+	const auto path = std::filesystem::temp_directory_path() / "bernini_ktx2_threads.ktx2";
+	writeKTX2(rgba8ToImage(rgba, w, h), path, /*srgb*/ true);
+
+	std::vector<std::thread> threads;
+	std::atomic<int>         decoded{ 0 };
+	std::atomic<int>         failures{ 0 };
+
+	for (int i = 0; i < kThreads; ++i)
+	{
+		// Alternate the two transcode targets so both the BC7 and RGBA8 paths run concurrently.
+		threads.emplace_back([&, i]() {
+			try
+			{
+				const ImageData image = (i % 2 == 0) ? loadKTX2(path) : loadKTX2Preview(path, 64);
+				if (image.width > 0 && image.height > 0 && !image.pixels.empty())
+					++decoded;
+				else
+					++failures;
+			}
+			catch (const std::exception&)
+			{
+				++failures;
+			}
+		});
+	}
+
+	for (std::thread& thread : threads) thread.join();
+
+	CHECK(failures.load() == 0);
+	CHECK(decoded.load() == kThreads);
+
+	std::filesystem::remove(path);
+}
