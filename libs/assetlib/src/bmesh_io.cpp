@@ -345,7 +345,10 @@ namespace assetlib
 	}
 
 	void
-	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir)
+	writeTextures(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		const TextureProgressFn&     onProgress)
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(outDir, ec);
@@ -359,6 +362,9 @@ namespace assetlib
 
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
+			if (onProgress)
+				onProgress(i, mesh.textures.size());
+
 			auto path = outDir / ("tex" + std::to_string(i));
 			path.replace_extension(".ktx2");
 			writeKTX2(mesh.textures[i], path, srgbTextures.contains(static_cast<uint32_t>(i)));

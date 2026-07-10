@@ -1,5 +1,6 @@
 #include "ContentExplorerWindow.h"
 
+#include "Async/BackgroundTask.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 
 #include <QAbstractItemView>
@@ -365,29 +366,47 @@ ContentExplorerWindow::ImportMesh(
 	const fs::path source  = fs::path(sourceFile.toStdWString());
 	const fs::path meshDir = fs::path(targetDir.toStdWString());
 
-	try
-	{
-		const auto mesh = assetlib::loadFromGltf(source);
+	// All imported textures dump into the project's single textures_src folder
+	// (m_RootPath is the project's Data directory).
+	const fs::path textureDir = fs::path(m_RootPath.toStdWString()) / "textures_src";
+	const QString  name       = QFileInfo(sourceFile).fileName();
 
-		fs::path bmeshPath = meshDir / source.filename();
-		bmeshPath.replace_extension(".bmesh");
-		assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
+	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
+	// freeze the editor for minutes on a large asset. None of it touches bgl, so the whole import
+	// runs on a worker; only the message box below is back on the UI thread.
+	QString    error;
+	const bool imported = background::RunWithLoadingScreen(
+		this,
+		QString("Importing %1").arg(name),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, QString("Parsing %1...").arg(name));
+			const auto mesh = assetlib::loadFromGltf(source);
 
-		if (importTextures)
-		{
-			// All imported textures dump into the project's single textures_src folder
-			// (m_RootPath is the project's Data directory).
-			const fs::path  outDir = fs::path(m_RootPath.toStdWString()) / "textures_src";
-			std::error_code ec;
-			fs::create_directories(outDir, ec);
-			assetlib::writeTextures(mesh, outDir);
-		}
-	}
-	catch (const std::exception& e)
+			progress.Report(0, 0, "Writing mesh...");
+			fs::path bmeshPath = meshDir / source.filename();
+			bmeshPath.replace_extension(".bmesh");
+			assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
+
+			if (importTextures)
+			{
+				std::error_code ec;
+				fs::create_directories(textureDir, ec);
+
+				assetlib::writeTextures(mesh, textureDir, [&](size_t done, size_t total) {
+					progress.Report(
+						static_cast<int>(done),
+						static_cast<int>(total),
+						QString("Compressing textures (%1 of %2)...").arg(done + 1).arg(total));
+				});
+			}
+		},
+		&error);
+
+	if (!imported)
 	{
 		QMessageBox::warning(
 			this,
 			"Import Asset",
-			QString("Failed to import '%1':\n%2").arg(QFileInfo(sourceFile).fileName(), e.what()));
+			QString("Failed to import '%1':\n%2").arg(name, error));
 	}
 }

@@ -46,8 +46,8 @@ private:
 
 	/**
 	 * Converts a dropped glTF/glb into the engine .bmesh format written to `targetDir`.
-	 * When `importTextures` is set, the mesh's textures are written to the project's
-	 * single `textures_src` folder (under the Data root).
+	 * the mesh's textures are written to the project's single `textures_src` folder
+	 * (under the Data root).
 	 */
 	void
 	ImportMesh(const QString& sourceFile, const QString& targetDir, bool importTextures);
