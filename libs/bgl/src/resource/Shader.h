@@ -7,17 +7,9 @@ namespace bgl
 {
 	struct ShaderDesc
 	{
-		std::vector<std::byte> bytecode;
-		std::string            slangModuleName;
-		std::string            entryPointName;
-		std::string            debugName;
-
-		ShaderDesc&
-		SetBytecode(std::vector<std::byte> _bytecode)
-		{
-			this->bytecode = std::move(_bytecode);
-			return *this;
-		}
+		std::string slangModuleName;
+		std::string entryPointName;
+		std::string debugName;
 
 		ShaderDesc&
 		SetSlangModuleName(std::string _slangModuleName)
@@ -47,12 +39,6 @@ namespace bgl
 
 		IShader&
 		operator=(IShader&&) = delete;
-
-		virtual const std::byte*
-		GetBytecode() const noexcept = 0;
-
-		virtual size_t
-		GetBytecodeSize() const noexcept = 0;
 
 		virtual slang::IModule*
 		GetSlangModule() const noexcept = 0;

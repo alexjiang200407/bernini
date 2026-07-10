@@ -58,13 +58,25 @@ namespace assetlib
 	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
 
 	/**
+	 * Reports that `done` of `total` textures have been written. Called before each texture, so the
+	 * first call is (0, total) and the last is (total - 1, total).
+	 */
+	using TextureProgressFn = std::function<void(size_t done, size_t total)>;
+
+	/**
 	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file named `texN.ktx2`
 	 * by index. These are the texture files the baked `.bmaterial` files reference.
+	 *
+	 * Each texture is Basis-UASTC supercompressed, which dominates the cost of an import -- pass
+	 * `onProgress` to drive a progress bar. It is called on the calling thread.
 	 *
 	 * @throws std::runtime_error if a file cannot be written.
 	 */
 	void
-	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir);
+	writeTextures(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		const TextureProgressFn&     onProgress = {});
 
 	/**
 	 * Writes each material in `mesh` into `outDir` as a `matN.bmaterial` file (matching the path handles

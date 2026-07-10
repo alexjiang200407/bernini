@@ -12,7 +12,7 @@ struct DebugGlobals
     ComputeBuffer<uint> buffer;
 };
 
-ConstantBuffer<DebugGlobals> gDebug : register(b0, space7);
+ConstantBuffer<DebugGlobals> gDebug;
 
 void dbg_raise(ErrorCode errcode)
 {

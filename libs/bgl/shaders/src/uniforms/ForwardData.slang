@@ -1,3 +1,3 @@
 import forward.ForwardData;
 
-ConstantBuffer<ForwardData> forwardData : register(b0);
+ConstantBuffer<ForwardData> forwardData;

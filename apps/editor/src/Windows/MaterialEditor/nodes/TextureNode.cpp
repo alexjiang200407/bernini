@@ -3,9 +3,69 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QJsonObject>
+#include <QLabel>
 
 #include <assetlib/image_io.h>
 #include <bgl/IScene.h>
+
+#include "Thumbnails/TexturePreviewCache.h"
+
+namespace
+{
+	constexpr int c_PreviewWidgetDim = 96;
+}
+
+TextureNode::TextureNode(bgl::IScene* scene, TexturePreviewCache* previews) :
+	m_Scene(scene), m_Previews(previews)
+{
+	if (m_Previews == nullptr)
+		return;
+
+	connect(
+		m_Previews,
+		&TexturePreviewCache::PreviewReady,
+		this,
+		[this](const QString& path, const QPixmap& preview) {
+			// One decode notifies every node; several nodes commonly share a texture.
+			if (path != m_Path)
+				return;
+
+			m_Preview = preview;
+			RefreshPreview();
+		});
+}
+
+QWidget*
+TextureNode::embeddedWidget()
+{
+	if (m_PreviewLabel != nullptr)
+		return m_PreviewLabel;
+
+	m_PreviewLabel = new QLabel();
+	m_PreviewLabel->setFixedSize(c_PreviewWidgetDim, c_PreviewWidgetDim);
+	m_PreviewLabel->setAlignment(Qt::AlignCenter);
+	m_PreviewLabel->setStyleSheet("background: #2b2b2b; border: 1px solid #555;");
+
+	// The decode may have landed before QtNodes asked for the widget.
+	RefreshPreview();
+	return m_PreviewLabel;
+}
+
+void
+TextureNode::RefreshPreview()
+{
+	if (m_PreviewLabel == nullptr)
+		return;
+
+	if (m_Preview.isNull())
+	{
+		m_PreviewLabel->clear();
+		return;
+	}
+
+	m_PreviewLabel->setPixmap(
+		m_Preview.scaled(m_PreviewLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
 
 std::shared_ptr<QtNodes::NodeData>
 TextureNode::outData(QtNodes::PortIndex port)
@@ -37,7 +97,9 @@ TextureNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 void
 TextureNode::SetTexturePath(const QString& path)
 {
-	m_Path = path;
+	m_Path    = path;
+	m_Preview = QPixmap();
+	RefreshPreview();
 
 	if (m_Scene == nullptr || path.isEmpty())
 		return;
@@ -54,6 +116,17 @@ TextureNode::SetTexturePath(const QString& path)
 		m_Texture = {};
 		m_Caption = QStringLiteral("Texture (failed)");
 		return;
+	}
+
+	if (m_Previews != nullptr)
+	{
+		// Decoding is asynchronous, so a texture already decoded for another node arrives now and
+		// the rest land later via PreviewReady.
+		m_Preview = m_Previews->Lookup(path);
+		if (m_Preview.isNull())
+			m_Previews->Request(path);
+		else
+			RefreshPreview();
 	}
 
 	for (unsigned int port = 0; port < c_PortCount; ++port)
