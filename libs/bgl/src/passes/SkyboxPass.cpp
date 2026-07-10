@@ -78,7 +78,9 @@ namespace bgl
 		gassert(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
 		gassert(draw.skybox.has_value(), "SkyboxPass executed without a valid skybox");
 
-		if (auto found = m_Kernel.FindUniforms("skyboxData"))
+		// Keyed on the Slang global's name as reflection reports it, so this string must track
+		// the ConstantBuffer declaration in Skybox.slang.
+		if (auto found = m_Kernel.FindUniforms("gSkyboxData"))
 		{
 			auto& skybox = *found;
 
@@ -103,7 +105,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Skybox shader is missing its 'skyboxData' constant buffer");
+			gfatal("Skybox shader is missing its 'gSkyboxData' constant buffer");
 		}
 
 		auto gfxState   = MeshletState();
