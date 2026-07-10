@@ -144,11 +144,17 @@ namespace bgl
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
+		void
+		DeleteTextureAsset(TextureAssetHandle texture) override;
+
 		MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) override;
 
 		MaterialHandle
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) override;
+
+		void
+		DeleteMaterial(MaterialHandle material) override;
 
 		void
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)

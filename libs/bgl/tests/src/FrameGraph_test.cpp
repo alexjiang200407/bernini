@@ -257,6 +257,9 @@ namespace
 		DestroyTexture(TextureHandle, uint64_t, bool) noexcept override
 		{}
 		void
+		DestroyTexture(TextureHandle) noexcept override
+		{}
+		void
 		DestroySampler(SamplerHandle, uint64_t, bool) noexcept override
 		{}
 		void

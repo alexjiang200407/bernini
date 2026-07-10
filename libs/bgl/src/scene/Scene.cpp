@@ -734,6 +734,41 @@ namespace bgl
 	}
 
 	void
+	Scene::DeleteMaterial(MaterialHandle material)
+	{
+		// Only the two material kinds the scene allocates storage for can be freed. kNull and
+		// kAssert name shading behaviour, not an entry in a buffer, so there is nothing to release.
+		switch (material.materialType)
+		{
+		case MaterialType::kPBR:
+			if (!m_Pbr.IsValid(material.handle))
+			{
+				throw SceneError(
+					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
+			}
+			m_Pbr.Erase(material.handle);
+			return;
+
+		case MaterialType::kLoosePbr:
+			if (!m_Loose.IsValid(material.handle))
+			{
+				throw SceneError(
+					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
+			}
+			m_Loose.Erase(material.handle);
+			return;
+
+		case MaterialType::kInvalid:
+		case MaterialType::kNull:
+		case MaterialType::kAssert:
+		case MaterialType::kCount:
+			break;
+		}
+
+		throw SceneError("MaterialHandle passed to DeleteMaterial has no material storage");
+	}
+
+	void
 	Scene::SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
 	{
 		if (geom.geomType != GeomType::kStaticMesh)
@@ -808,5 +843,23 @@ namespace bgl
 	{
 		const auto gpuTexture = m_ResourceManager->CreateTexture(img, std::move(debugName));
 		return static_cast<TextureAssetHandle>(gpuTexture);
+	}
+
+	void
+	Scene::DeleteTextureAsset(TextureAssetHandle texture)
+	{
+		// Destroying retires the slot at once, so a texture already deleted fails this check even
+		// while the GPU is still finishing with it. There is nothing to remember here.
+		const TextureHandle handle = TextureHandle::From(texture);
+		if (handle.IsNull() || !m_ResourceManager->ValidTextureHandle(handle))
+		{
+			throw SceneError(
+				"TextureAssetHandle passed to DeleteTextureAsset has expired or is invalid");
+		}
+
+		// Frames already submitted may still sample this texture, so only the *release* is deferred:
+		// the resource manager recycles the bindless slot no earlier than the last frame that could
+		// read it.
+		m_ResourceManager->DestroyTexture(handle);
 	}
 }

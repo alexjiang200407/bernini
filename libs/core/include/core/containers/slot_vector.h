@@ -84,29 +84,83 @@ namespace core
 			return { index, generation };
 		}
 
+		/**
+		 * Invalidates every handle to `index` without freeing it. The element stays constructed and
+		 * the index stays off the free list, so nothing can observe or reuse the slot until
+		 * reclaim_slot runs.
+		 *
+		 * This is the first half of a deferred release: a slot whose element the GPU may still be
+		 * reading must stop being reachable immediately (or a stale handle keeps validating) while
+		 * the element itself outlives the frames referencing it.
+		 */
 		void
-		release_slot(uint32_t index)
+		retire_slot(uint32_t index)
 		{
 			core::throw_runtime_error_if(
 				index >= m_Data.size(),
-				"slot_vector: release_slot index {} out of bounds (size {})",
+				"slot_vector: retire_slot index {} out of bounds (size {})",
 				index,
 				m_Data.size());
 
 			core::throw_runtime_error_if(
 				!m_Meta[index].is_allocated,
-				"slot_vector: release_slot index {} is not allocated",
+				"slot_vector: retire_slot index {} is not allocated",
 				index);
 
-			if constexpr (!std::is_trivially_destructible_v<T>)
-			{
-				m_Data[index].~T();
-			}
+			m_Meta[index].is_allocated = false;
+			m_Meta[index].is_retired   = true;
+			m_Meta[index].generation++;
+		}
+
+		void
+		retire_slot(core::slot_handle slot)
+		{
+			core::throw_runtime_error_if(
+				slot.index >= m_Meta.size(),
+				"Index '{}' out of bounds",
+				slot.index);
+
+			core::throw_runtime_error_if(
+				m_Meta[slot.index].generation != slot.generation,
+				"Stale handle for index '{}' (handle generation {} != slot generation {})",
+				slot.index,
+				slot.generation,
+				m_Meta[slot.index].generation);
+
+			retire_slot(slot.index);
+		}
+
+		/**
+		 * Destroys a retired slot's element and returns its index to the free list. The second half
+		 * of a deferred release; only a retired slot may be reclaimed, so a double reclaim throws
+		 * rather than handing the same index out twice.
+		 */
+		void
+		reclaim_slot(uint32_t index)
+		{
+			core::throw_runtime_error_if(
+				index >= m_Data.size(),
+				"slot_vector: reclaim_slot index {} out of bounds (size {})",
+				index,
+				m_Data.size());
+
+			core::throw_runtime_error_if(
+				!m_Meta[index].is_retired,
+				"slot_vector: reclaim_slot index {} is not retired",
+				index);
+
 			m_Data[index] = T();
 
-			m_Meta[index].is_allocated = false;
-			m_Meta[index].generation++;
+			m_Meta[index].is_retired = false;
 			m_FreeIndices.push_back(index);
+		}
+
+		// Frees a slot outright: the caller guarantees nothing is still reading its element.
+		void
+		release_slot(uint32_t index)
+		{
+			retire_slot(index);
+			reclaim_slot(index);
 		}
 
 		void
@@ -237,6 +291,10 @@ namespace core
 		{
 			uint32_t generation   = 0;
 			bool     is_allocated = false;
+
+			// Retired but not yet reclaimed: every handle to it is already stale, yet the element is
+			// still constructed and the index is not back on the free list. See retire_slot.
+			bool is_retired = false;
 		};
 
 		std::vector<T>         m_Data;

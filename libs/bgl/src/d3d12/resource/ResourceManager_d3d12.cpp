@@ -7,11 +7,13 @@ namespace bgl
 {
 	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device>  device,
-		const ResourceManagerDesc& desc) :
+		const ResourceManagerDesc& desc,
+		CommandQueueHandle         submissionQueue) :
 		m_Desc(desc), m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
 		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs),
-		m_Dsvs(desc.maxDsvs)
+		m_Dsvs(desc.maxDsvs), m_SubmissionQueue(std::move(submissionQueue))
 	{
+		gassert(m_SubmissionQueue != nullptr, "ResourceManager requires a submission queue");
 		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
@@ -401,6 +403,7 @@ namespace bgl
 
 		if (deferred)
 		{
+			m_Rtvs.retire_slot(handle.idx);
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kRtv,
 				handle.idx,
@@ -422,6 +425,7 @@ namespace bgl
 
 		if (deferred)
 		{
+			m_CbvSrvUavSlots.retire_slot(handle.slot);
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kCbvSrvUav,
 				handle.slot.index,
@@ -445,7 +449,18 @@ namespace bgl
 
 		if (deferred)
 		{
-			// SRV textures live in the CBV_SRV_UAV pool; RTV/DSV-only in m_Textures.
+			// SRV textures live in the CBV_SRV_UAV pool; RTV/DSV-only in m_Textures. Retiring now
+			// stales every handle immediately; the resource and its descriptor index survive until
+			// the sweep reclaims them.
+			if (isSrv)
+			{
+				m_CbvSrvUavSlots.retire_slot(handle.slot);
+			}
+			else
+			{
+				m_Textures.retire_slot(handle.slot);
+			}
+
 			m_PendingDeletions.emplace_back(
 				isSrv ? PendingDeletion::Type::kCbvSrvUav : PendingDeletion::Type::kTexture,
 				handle.slot.index,
@@ -471,6 +486,7 @@ namespace bgl
 
 		if (deferred)
 		{
+			m_Samplers.retire_slot(handle.idx);
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kSampler,
 				handle.idx,
@@ -492,6 +508,7 @@ namespace bgl
 
 		if (deferred)
 		{
+			m_ReadbackBuffers.retire_slot(handle.idx);
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kReadback,
 				handle.idx,
@@ -506,28 +523,30 @@ namespace bgl
 	void
 	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue) noexcept
 	{
+		// The slots were retired when the destroy was recorded, so their handles have been stale
+		// since then. This half destroys the resource and returns the index to the free list.
 		std::erase_if(m_PendingDeletions, [&](const auto& pending) {
 			if (pending.fenceValue <= completedFenceValue)
 			{
 				switch (pending.type)
 				{
 				case PendingDeletion::Type::kCbvSrvUav:
-					m_CbvSrvUavSlots.release_slot(pending.slotIndex);
+					m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
 					break;
 				case PendingDeletion::Type::kRtv:
-					m_Rtvs.release_slot(pending.slotIndex);
+					m_Rtvs.reclaim_slot(pending.slotIndex);
 					break;
 				case PendingDeletion::Type::kDsv:
-					m_Dsvs.release_slot(pending.slotIndex);
+					m_Dsvs.reclaim_slot(pending.slotIndex);
 					break;
 				case PendingDeletion::Type::kTexture:
-					m_Textures.release_slot(pending.slotIndex);
+					m_Textures.reclaim_slot(pending.slotIndex);
 					break;
 				case PendingDeletion::Type::kReadback:
-					m_ReadbackBuffers.release_slot(pending.slotIndex);
+					m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
 					break;
 				case PendingDeletion::Type::kSampler:
-					m_Samplers.release_slot(pending.slotIndex);
+					m_Samplers.reclaim_slot(pending.slotIndex);
 					break;
 				}
 				return true;
@@ -855,6 +874,7 @@ namespace bgl
 
 		if (deferred)
 		{
+			m_Dsvs.retire_slot(handle.idx);
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kDsv,
 				handle.idx,
