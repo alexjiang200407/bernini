@@ -93,6 +93,56 @@ namespace assetlib
 					std::string(what) + " '" + path.string() + "': " + ktxErrorString(code));
 		}
 
+		// libktx builds its Basis codec tables on first use, guarded by a plain non-atomic
+		// `static bool` -- `transcoderInitialized` in lib/basis_transcode.cpp and
+		// `basisuEncoderInitialized` in lib/basis_encode.cpp. Two threads reaching their first
+		// transcode (or encode) together therefore race: both may run the init, or one may observe
+		// the flag set while the other is still filling the tables it is about to read.
+		//
+		// The editor decodes texture previews on a worker pool while the UI thread loads the same
+		// textures for the GPU, so this is reachable. Serialize until a call has completed the
+		// init; afterwards both codecs are re-entrant across distinct ktxTexture2 instances and we
+		// take no lock. The two share one mutex because basisu's encoder init also touches the
+		// transcoder tables.
+		std::mutex&
+		basisInitMutex()
+		{
+			static std::mutex mutex;
+			return mutex;
+		}
+
+		ktx_error_code_e
+		transcodeBasis(ktxTexture2* texture, ktx_transcode_fmt_e format)
+		{
+			static std::atomic<bool> ready{ false };
+
+			if (ready.load(std::memory_order_acquire))
+				return ktxTexture2_TranscodeBasis(texture, format, 0);
+
+			const std::lock_guard<std::mutex> lock(basisInitMutex());
+
+			const ktx_error_code_e rc = ktxTexture2_TranscodeBasis(texture, format, 0);
+			if (rc == KTX_SUCCESS)
+				ready.store(true, std::memory_order_release);
+			return rc;
+		}
+
+		ktx_error_code_e
+		compressBasis(ktxTexture2* texture, ktxBasisParams* params)
+		{
+			static std::atomic<bool> ready{ false };
+
+			if (ready.load(std::memory_order_acquire))
+				return ktxTexture2_CompressBasisEx(texture, params);
+
+			const std::lock_guard<std::mutex> lock(basisInitMutex());
+
+			const ktx_error_code_e rc = ktxTexture2_CompressBasisEx(texture, params);
+			if (rc == KTX_SUCCESS)
+				ready.store(true, std::memory_order_release);
+			return rc;
+		}
+
 		bool
 		isRgba8(VkFormat vk)
 		{
@@ -150,7 +200,7 @@ namespace assetlib
 		// different target here.
 		if (ktxTexture2_NeedsTranscoding(texture))
 		{
-			const ktx_error_code_e tc = ktxTexture2_TranscodeBasis(texture, KTX_TTF_BC7_RGBA, 0);
+			const ktx_error_code_e tc = transcodeBasis(texture, KTX_TTF_BC7_RGBA);
 			if (tc != KTX_SUCCESS)
 			{
 				ktxTexture_Destroy(ktxTexture(texture));
@@ -232,7 +282,7 @@ namespace assetlib
 		if (ktxTexture2_NeedsTranscoding(owner.tex))
 		{
 			check(
-				ktxTexture2_TranscodeBasis(owner.tex, KTX_TTF_RGBA32, 0),
+				transcodeBasis(owner.tex, KTX_TTF_RGBA32),
 				"assetlib::loadKTX2Preview: failed to transcode",
 				path);
 		}
@@ -368,7 +418,7 @@ namespace assetlib
 			bp.uastcFlags  = KTX_PACK_UASTC_LEVEL_FASTER;
 			bp.threadCount = hc != 0 ? hc : 4;
 
-			const ktx_error_code_e cc = ktxTexture2_CompressBasisEx(texture, &bp);
+			const ktx_error_code_e cc = compressBasis(texture, &bp);
 			if (cc != KTX_SUCCESS)
 			{
 				ktxTexture_Destroy(base);
