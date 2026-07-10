@@ -40,8 +40,8 @@ namespace
 	}
 
 	// A BMesh with one source submesh per entry of `meshletCounts`, each meshlet a single triangle.
-	// Feeding a count above idl::cMaxMeshletsPerAccelerationStructure makes AddStaticMesh chunk that
-	// submesh across several GPU submeshes, which is the case these tests exist to pin down.
+	// A submesh's meshlet count is a dispatch dimension, never a partitioning criterion, so however
+	// large a count is fed in, AddStaticMesh must still produce exactly one GPU submesh for it.
 	assetlib::BMesh
 	MakeMeshletMesh(std::span<const uint32_t> meshletCounts)
 	{
@@ -103,8 +103,9 @@ namespace
 		return mesh;
 	}
 
-	// > cMaxMeshletsPerAccelerationStructure (64), so the submesh splits into two chunks.
-	constexpr uint32_t c_SplitMeshletCount = 65;
+	// Comfortably more meshlets than a mesh-shader thread group has threads (64): a submesh this
+	// size used to be chunked into several GPU submeshes.
+	constexpr uint32_t c_LargeMeshletCount = 65;
 }
 
 TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
@@ -223,12 +224,10 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	}
 }
 
-// A source submesh with more meshlets than the per-submesh cap is chunked by AddStaticMesh into
-// several GPU submeshes that SHARE one vertexData range. DeleteGeom must free that range exactly
-// once -- freeing it per GPU submesh double-erased it and tripped an assertion.
-TEST_CASE(
-	"Deleting a mesh whose submesh split across the meshlet cap frees it once",
-	"[delete][scene]")
+// A submesh is the unit of pipeline state, so its meshlet count -- however large -- must not split
+// it. AddStaticMesh once chunked a submesh past 64 meshlets into several GPU submeshes, which made
+// the source and GPU submesh indices disagree and left the chunks sharing one vertexData range.
+TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -241,14 +240,27 @@ TEST_CASE(
 	auto* view       = viewHandle->As<bgl::SceneView>();
 	REQUIRE(view != nullptr);
 
-	const std::array<uint32_t, 1> counts = { { c_SplitMeshletCount } };
+	const std::array<uint32_t, 2> counts = { { c_LargeMeshletCount, 1 } };
 	const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
 
 	auto geom = scene->AddStaticMesh(mesh, 0, {});
 	REQUIRE(geom.IsValid());
 
-	// The single source submesh really did split into several GPU submeshes.
-	CHECK(scene->GetGeomAsset(geom.handle.index).submeshes.count > 1);
+	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
+	CHECK(scene->GetGeomAsset(geom.handle.index).submeshes.count == 2u);
+
+	auto           geomBuffers   = scene->GetBuffers();
+	auto&          submeshBuffer = std::get<0>(geomBuffers);
+	const uint32_t root = scene->GetGeomAsset(geom.handle.index).submeshes.range.offsetStart;
+
+	// The whole source submesh is dispatched from one GPU submesh, so all of its meshlets are there.
+	CHECK(submeshBuffer.AtIndex(root).meshlets.count == c_LargeMeshletCount);
+	CHECK(submeshBuffer.AtIndex(root + 1).meshlets.count == 1);
+
+	// Each submesh owns its own vertexData range; nothing is shared, so nothing is double-freed.
+	CHECK(
+		submeshBuffer.AtIndex(root).vertexData.offsetStart !=
+		submeshBuffer.AtIndex(root + 1).vertexData.offsetStart);
 
 	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
@@ -261,10 +273,10 @@ TEST_CASE(
 	REQUIRE(geom2.IsValid());
 }
 
-// SetSubmeshMaterial is indexed by *source* submesh, but a source submesh over the meshlet cap is
-// several GPU submeshes. Writing only the first left the rest of the surface on the old material --
-// a mesh half-textured along a triangle-aligned seam.
-TEST_CASE("SetSubmeshMaterial covers every chunk of a split submesh", "[material][pso][scene]")
+// SetSubmeshMaterial is indexed by source submesh. Once chunking made that index disagree with the
+// GPU submesh index, materialing one submesh wrote over a neighbour's, or covered only part of its
+// own -- a mesh half-textured along a triangle-aligned seam.
+TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][pso][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -279,72 +291,37 @@ TEST_CASE("SetSubmeshMaterial covers every chunk of a split submesh", "[material
 	auto pbr         = bgl::MaterialHandle();
 	pbr.materialType = bgl::MaterialType::kPBR;
 
-	// Asserts that source submesh `sourceIndex` of `geom` is entirely on `expected`.
-	const auto checkChunksAllOn =
-		[&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::PsoType expected) {
-			const bgl::GeomAsset&    asset  = scene->GetGeomAsset(geom.handle.index);
-			const bgl::SubmeshChunks chunks = asset.submeshChunks[sourceIndex];
-			const uint32_t           root   = asset.submeshes.range.offsetStart;
+	const auto checkPso = [&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::PsoType expected) {
+		const bgl::GeomAsset& asset = scene->GetGeomAsset(geom.handle.index);
+		INFO("source submesh " << sourceIndex);
+		CHECK(
+			submeshBuffer.AtIndex(asset.submeshes.range.offsetStart + sourceIndex).pso ==
+			static_cast<uint32_t>(expected));
+	};
 
-			for (uint32_t i = 0; i < chunks.count; ++i)
-			{
-				INFO("source submesh " << sourceIndex << ", chunk " << i << " of " << chunks.count);
-				CHECK(
-					submeshBuffer.AtIndex(root + chunks.first + i).pso ==
-					static_cast<uint32_t>(expected));
-			}
-		};
+	// Source submesh 0 has 65 meshlets, which chunking would have expanded into two GPU submeshes,
+	// pushing source submesh 1 to GPU index 2.
+	const std::array<uint32_t, 2> counts = { { c_LargeMeshletCount, 1 } };
+	const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
 
-	SECTION("A split submesh gets the material on all of its chunks")
+	SECTION("Materialing a submesh covers it and leaves its neighbour alone")
 	{
-		const std::array<uint32_t, 1> counts = { { c_SplitMeshletCount } };
-		const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
-
 		auto geom = scene->AddStaticMesh(mesh, 0, {});
 		REQUIRE(geom.IsValid());
-
-		// One source submesh, but more than one GPU submesh -- otherwise this test proves nothing.
-		const bgl::GeomAsset& asset = scene->GetGeomAsset(geom.handle.index);
-		REQUIRE(asset.submeshChunks.size() == 1);
-		REQUIRE(asset.submeshChunks[0].count == 2);
-		REQUIRE(asset.submeshes.count == 2);
-
-		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 0, pbr));
-		checkChunksAllOn(geom, 0, bgl::PsoType::kOpaque_StaticMesh_PBR);
-	}
-
-	SECTION("Materialing a later submesh does not bleed into an earlier split one")
-	{
-		// Source submesh 0 splits into 2 chunks, so source submesh 1 lives at GPU index 2. Indexing
-		// the GPU array with the source index would have written chunk 1 of submesh 0 instead.
-		const std::array<uint32_t, 2> counts = { { c_SplitMeshletCount, 1 } };
-		const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
-
-		auto geom = scene->AddStaticMesh(mesh, 0, {});
-		REQUIRE(geom.IsValid());
-
-		const bgl::GeomAsset& asset = scene->GetGeomAsset(geom.handle.index);
-		REQUIRE(asset.submeshChunks.size() == 2);
-		REQUIRE(asset.submeshChunks[1].first == 2);
-		REQUIRE(asset.submeshChunks[1].count == 1);
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 1, pbr));
 
-		checkChunksAllOn(geom, 1, bgl::PsoType::kOpaque_StaticMesh_PBR);
-		// Submesh 0 was never assigned a material, so all of its chunks stay on the Null PSO.
-		checkChunksAllOn(geom, 0, bgl::PsoType::kOpaque_StaticMesh_Null);
+		checkPso(geom, 1, bgl::PsoType::kOpaque_StaticMesh_PBR);
+		// Submesh 0 was never assigned a material, so it stays on the Null PSO.
+		checkPso(geom, 0, bgl::PsoType::kOpaque_StaticMesh_Null);
 	}
 
-	SECTION("The index is a source submesh index, so one past the last source submesh throws")
+	SECTION("One past the last source submesh throws")
 	{
-		const std::array<uint32_t, 1> counts = { { c_SplitMeshletCount } };
-		const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
-
 		auto geom = scene->AddStaticMesh(mesh, 0, {});
 		REQUIRE(geom.IsValid());
 
-		// There are 2 GPU submeshes but only 1 source submesh; index 1 must be rejected.
-		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 1, pbr), bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 2, pbr), bgl::SceneError);
 	}
 }
 

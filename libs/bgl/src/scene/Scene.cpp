@@ -21,6 +21,8 @@ namespace bgl
 			glm::vec4 tangent;
 		};
 
+		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
+
 		struct BufferInfo
 		{
 			std::string_view name;
@@ -347,9 +349,8 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset          = GeomAsset();
-			asset.submeshes     = baseSubmeshGlobal;
-			asset.submeshChunks = { { 0, 1 } };  // one source submesh, always one chunk
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -507,9 +508,8 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset          = GeomAsset();
-			asset.submeshes     = baseSubmeshGlobal;
-			asset.submeshChunks = { { 0, 1 } };  // one source submesh, always one chunk
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -538,18 +538,36 @@ namespace bgl
 
 			const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
 
-			std::vector<idl::Submesh> submeshes;
-			submeshes.reserve(meshEntry.submeshCount);
-
-			// Records where each source submesh landed once the meshlet-cap chunking below is done.
-			auto submeshChunks = std::vector<SubmeshChunks>();
-			submeshChunks.reserve(meshEntry.submeshCount);
-
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
 
-				const auto chunkStart = static_cast<uint32_t>(submeshes.size());
+				if (src.meshletCount == 0 || src.vertexCount == 0)
+				{
+					throw SceneError(std::format("AddStaticMesh: submesh {} has no geometry", s));
+				}
+
+				if (src.meshletCount > c_MaxDispatchMeshGroups)
+				{
+					throw SceneError(
+						std::format(
+							"AddStaticMesh: submesh {} has {} meshlets, more than the {} thread "
+							"groups a mesh dispatch can launch",
+							s,
+							src.meshletCount,
+							c_MaxDispatchMeshGroups));
+				}
+			}
+
+			// One GPU submesh per source submesh, in order: callers address geometry by source
+			// submesh index (that is what an asset's material slots are numbered by), so the two
+			// must stay 1:1.
+			std::vector<idl::Submesh> submeshes;
+			submeshes.reserve(meshEntry.submeshCount);
+
+			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			{
+				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
 
 				const uint32_t        vertexBytes = src.vertexCount * src.layout.stride;
 				std::vector<uint32_t> vertexWords((vertexBytes + 3u) / 4u, 0u);
@@ -557,80 +575,62 @@ namespace bgl
 					vertexWords.data(),
 					mesh.vertexData.data() + src.vertexByteOffset,
 					vertexBytes);
-				const auto vertexData = m_VertexDataBuffer.Add(vertexWords);
 
 				const MaterialHandle material =
 					src.material < materials.size() ? materials[src.material] : MaterialHandle{};
-				const uint32_t pso    = SubmeshPso(GeomType::kStaticMesh, material);
-				const auto     layout = ConvertLayout(src.layout);
 
-				constexpr uint32_t kMaxMeshlets = idl::cMaxMeshletsPerAccelerationStructure;
+				std::vector<uint32_t>     vertexMap;
+				std::vector<uint32_t>     localIndices;
+				std::vector<idl::Meshlet> meshlets;
+				meshlets.reserve(src.meshletCount);
 
-				for (uint32_t base = 0; base < src.meshletCount; base += kMaxMeshlets)
+				for (uint32_t m = 0; m < src.meshletCount; ++m)
 				{
-					const uint32_t chunkCount = (src.meshletCount - base) < kMaxMeshlets ?
-					                                (src.meshletCount - base) :
-					                                kMaxMeshlets;
+					const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
 
-					std::vector<uint32_t>     vertexMap;
-					std::vector<uint32_t>     localIndices;
-					std::vector<idl::Meshlet> meshlets;
-					meshlets.reserve(chunkCount);
+					auto out                 = idl::Meshlet();
+					out.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
+					out.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
+					out.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
+					out.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
+					out.boundingCenter       = ml.boundingCenter;
+					out.boundingRadius       = ml.boundingRadius;
 
-					for (uint32_t m = 0; m < chunkCount; ++m)
+					for (uint32_t i = 0; i < ml.vertexCount; ++i)
 					{
-						const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + base + m];
-
-						auto out                 = idl::Meshlet();
-						out.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
-						out.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
-						out.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
-						out.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
-						out.boundingCenter       = ml.boundingCenter;
-						out.boundingRadius       = ml.boundingRadius;
-
-						for (uint32_t i = 0; i < ml.vertexCount; ++i)
-						{
-							vertexMap.push_back(mesh.meshletVertices[ml.vertexOffset + i]);
-						}
-
-						const uint32_t indexCount = ml.triangleCount * 3u;
-						for (uint32_t i = 0; i < indexCount; ++i)
-						{
-							localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
-						}
-
-						meshlets.push_back(out);
+						vertexMap.push_back(mesh.meshletVertices[ml.vertexOffset + i]);
 					}
 
-					auto submesh        = idl::Submesh();
-					submesh.layout      = layout;
-					submesh.meshlets    = m_MeshletBuffer.Add(meshlets);
-					submesh.vertexMap   = m_VertexMapBuffer.Add(vertexMap);
-					submesh.vertexData  = vertexData;
-					submesh.indices     = m_IndexBuffer.Add(localIndices);
-					submesh.vertexCount = src.vertexCount;
-					if (material.IsValid())
+					const uint32_t indexCount = ml.triangleCount * 3u;
+					for (uint32_t i = 0; i < indexCount; ++i)
 					{
-						submesh.material = material.handle;
+						localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
 					}
-					submesh.pso = pso;
 
-					submeshes.push_back(submesh);
+					meshlets.push_back(out);
 				}
 
-				// A submesh with no meshlets yields no chunks; the empty span keeps source submesh
-				// indices aligned so callers still address the ones that follow it correctly.
-				submeshChunks.push_back(
-					{ chunkStart, static_cast<uint32_t>(submeshes.size()) - chunkStart });
+				auto submesh        = idl::Submesh();
+				submesh.layout      = ConvertLayout(src.layout);
+				submesh.meshlets    = m_MeshletBuffer.Add(meshlets);
+				submesh.vertexMap   = m_VertexMapBuffer.Add(vertexMap);
+				submesh.vertexData  = m_VertexDataBuffer.Add(vertexWords);
+				submesh.indices     = m_IndexBuffer.Add(localIndices);
+				submesh.vertexCount = src.vertexCount;
+				if (material.IsValid())
+				{
+					submesh.material = material.handle;
+				}
+				submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
+
+				submeshes.push_back(submesh);
 			}
 
 			const auto baseSubmeshGlobal =
 				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
 
-			auto asset          = GeomAsset();
-			asset.submeshes     = baseSubmeshGlobal;
-			asset.submeshChunks = std::move(submeshChunks);
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
@@ -749,27 +749,18 @@ namespace bgl
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
 
-		// `submeshIndex` names a *source* submesh, which AddStaticMesh may have split into several GPU
-		// submeshes. Materials are authored per source submesh, so every chunk has to be rewritten --
-		// updating only the first leaves the rest of the surface on the old material.
 		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (submeshIndex >= asset.submeshChunks.size())
+		if (submeshIndex >= asset.submeshes.count)
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}
 
-		const SubmeshChunks& chunks = asset.submeshChunks[submeshIndex];
-		const uint32_t       pso    = SubmeshPso(geom.geomType, material);
+		const uint32_t globalIndex = asset.submeshes.range.offsetStart + submeshIndex;
 
-		for (uint32_t i = 0; i < chunks.count; ++i)
-		{
-			const uint32_t globalIndex = asset.submeshes.range.offsetStart + chunks.first + i;
-
-			auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
-			submesh.material = material.handle;
-			submesh.pso      = pso;
-			m_SubmeshBuffer.SetAtIndex(globalIndex, submesh);
-		}
+		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
+		submesh.material = material.handle;
+		submesh.pso      = SubmeshPso(geom.geomType, material);
+		m_SubmeshBuffer.SetAtIndex(globalIndex, submesh);
 	}
 
 	void
@@ -794,29 +785,18 @@ namespace bgl
 					asset.refCount));
 		}
 
-		// The geometry's per-part ranges live on each Submesh, so free them per
-		// submesh before releasing the submesh range itself.
-		//
-		// The chunks of one source submesh *share* a single vertexData range (only the meshlet /
-		// vertexMap / index ranges are per-chunk), so it is owned by, and freed with, the first chunk.
-		// Freeing it once per GPU submesh would double-erase it.
+		// The geometry's per-part ranges live on each Submesh, and each submesh owns its own, so
+		// free them per submesh before releasing the submesh range itself.
 		const uint32_t submeshRoot = asset.submeshes.range.offsetStart;
 
-		for (const SubmeshChunks& chunks : asset.submeshChunks)
+		for (uint32_t i = 0; i < asset.submeshes.count; ++i)
 		{
-			for (uint32_t i = 0; i < chunks.count; ++i)
-			{
-				const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + chunks.first + i);
+			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
-				if (i == 0)
-				{
-					m_VertexDataBuffer.EraseByIndex(submesh.vertexData.offsetStart);
-				}
-
-				m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
-				m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
-				m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
-			}
+			m_VertexDataBuffer.EraseByIndex(submesh.vertexData.offsetStart);
+			m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
+			m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
+			m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);

@@ -8,9 +8,11 @@
 public static const uint cMaxPrimsPerMeshlet = 124;
 public static const uint cMaxVerticesPerMeshlet = 64;
 
-// Meshlet / instance acceleration-structure grouping.
-public static const uint cMaxMeshletsPerAccelerationStructure = 64;
-public static const uint cInstancesPerAccelerationStructureGroup = 32;
+// Threads per mesh-shader group. A group cooperatively emits one meshlet, whose vertex and
+// triangle counts both exceed this, so every emission loop must stride by it.
+public static const uint cMeshGroupSize = 64;
+
+// Threads per amplification-shader group: one group amplifies one submesh instance.
 public static const uint cThreadsPerInstance = 64;
 
 // Thread group sizes of the instance counting-sort compute shaders.
