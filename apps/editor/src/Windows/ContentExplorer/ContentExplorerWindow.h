@@ -46,11 +46,16 @@ private:
 
 	/**
 	 * Converts a dropped glTF/glb into the engine .bmesh format written to `targetDir`.
-	 * the mesh's textures are written to the project's single `textures_src` folder
-	 * (under the Data root).
+	 *
+	 * `textureSubdir` names a folder beneath `AssetImporterDialog::c_TextureRoot` (under the Data
+	 * root) to extract the mesh's textures into; empty skips texture extraction. Each import needs
+	 * its own folder because the extracted files are named by index, not by source name.
+	 *
+	 * Runs on a worker thread behind a loading screen: parsing and, above all, supercompressing the
+	 * textures take long enough to freeze the editor. Nothing here touches bgl.
 	 */
 	void
-	ImportMesh(const QString& sourceFile, const QString& targetDir, bool importTextures);
+	ImportMesh(const QString& sourceFile, const QString& targetDir, const QString& textureSubdir);
 
 	/** Detaches the models and disables the explorer, leaving both views empty. */
 	void
