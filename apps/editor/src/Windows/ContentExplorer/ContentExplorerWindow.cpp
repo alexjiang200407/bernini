@@ -319,7 +319,10 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
-		ImportMesh(file, targetDir, dialog.ImportTextures());
+		ImportMesh(
+			file,
+			targetDir,
+			dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString());
 	}
 
 	event->acceptProposedAction();
@@ -359,17 +362,21 @@ void
 ContentExplorerWindow::ImportMesh(
 	const QString& sourceFile,
 	const QString& targetDir,
-	bool           importTextures)
+	const QString& textureSubdir)
 {
 	namespace fs = std::filesystem;
 
 	const fs::path source  = fs::path(sourceFile.toStdWString());
 	const fs::path meshDir = fs::path(targetDir.toStdWString());
 
-	// All imported textures dump into the project's single textures_src folder
-	// (m_RootPath is the project's Data directory).
-	const fs::path textureDir = fs::path(m_RootPath.toStdWString()) / "textures_src";
-	const QString  name       = QFileInfo(sourceFile).fileName();
+	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
+	// own folder or the next one silently overwrites it. m_RootPath is the project's Data directory.
+	const bool     importTextures = !textureSubdir.isEmpty();
+	const fs::path textureDir     = fs::path(m_RootPath.toStdWString()) /
+	                                AssetImporterDialog::c_TextureRoot /
+	                                fs::path(textureSubdir.toStdWString());
+
+	const QString name = QFileInfo(sourceFile).fileName();
 
 	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
 	// freeze the editor for minutes on a large asset. None of it touches bgl, so the whole import
