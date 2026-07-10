@@ -21,6 +21,7 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/material_bake.h>
 
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
@@ -44,14 +45,16 @@ namespace
 		return nullptr;
 	}
 
-	// A `.bmaterial`'s texture references are relative to the material file, so the asset stays
-	// relocatable. Texture nodes hold absolute paths while the graph is live, so the saved graph is
-	// rewritten on the way out and back in. Paths that cannot be expressed relative to `dir` (a
-	// different drive, say) are left absolute -- still correct, merely not relocatable.
+	// A `.bmaterial`'s texture references are relative to the project's Data root -- not to the
+	// material file -- so a material names `textures_src/tex1.ktx2` and `Textures/orm_ab12.ktx2`
+	// whatever directory it lives in. Texture nodes hold absolute paths while the graph is live, so the
+	// saved graph is rewritten on the way out and back in. An empty `dir` (no project open) leaves the
+	// path alone, as do paths that cannot be expressed relative to it -- a different drive, say. Both
+	// stay absolute: still correct, merely not relocatable.
 	QString
 	Rebase(const QString& path, const std::filesystem::path& dir, bool toRelative)
 	{
-		if (path.isEmpty())
+		if (path.isEmpty() || dir.empty())
 			return path;
 
 		std::error_code       ec;
@@ -108,6 +111,10 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_OpenButton   = new QPushButton(QStringLiteral("Open..."), leftPanel);
 	m_SaveButton   = new QPushButton(QStringLiteral("Save"), leftPanel);
 	m_SaveAsButton = new QPushButton(QStringLiteral("Save As..."), leftPanel);
+	m_BakeButton   = new QPushButton(QStringLiteral("Bake"), leftPanel);
+	m_BakeButton->setToolTip(QStringLiteral(
+		"Composite the routed source textures into the optimized "
+		"baseColor / orm / normal maps"));
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
@@ -120,6 +127,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	});
 	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
 	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
+	connect(m_BakeButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeCurrentMaterial);
 
 	// Names the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes to.
 	m_MaterialLabel = new QLabel(leftPanel);
@@ -129,6 +137,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	toolbar->addWidget(m_OpenButton);
 	toolbar->addWidget(m_SaveButton);
 	toolbar->addWidget(m_SaveAsButton);
+	toolbar->addWidget(m_BakeButton);
 	toolbar->addWidget(m_MaterialLabel, 1);
 	leftLayout->addLayout(toolbar);
 
@@ -320,14 +329,48 @@ MaterialEditorWindow::RefreshActions()
 	const QString materialPath =
 		hasGraph ? m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].materialPath : QString();
 
-	// "Save" needs somewhere to save to. The default sphere has no backing asset, so it stays
-	// disabled there until the graph has been given a path by Save As.
+	// "Save" and "Bake" both need somewhere to write. The default sphere has no backing asset, so they
+	// stay disabled there until the graph has been given a path by Save As.
 	m_SaveButton->setEnabled(!materialPath.isEmpty());
 
+	// Baking writes into <Data>/Textures and records paths relative to <Data>, so it needs a project.
+	m_BakeButton->setEnabled(!materialPath.isEmpty() && !m_DataRoot.empty());
+	m_BakeButton->setToolTip(
+		m_DataRoot.empty() ?
+			QStringLiteral("Open a project first: baked maps go under its Data root") :
+			QStringLiteral(
+				"Composite the routed source textures into the optimized "
+				"baseColor / orm / normal maps"));
+
+	if (materialPath.isEmpty())
+	{
+		m_MaterialLabel->setText(QStringLiteral("(unsaved)"));
+		m_MaterialLabel->setToolTip(QString());
+		return;
+	}
+
+	// Whether the baked maps still match the source textures the graph routes. A material saved but
+	// never baked reads as stale, which is what it is: it has no optimized textures yet.
+	bool stale = true;
+	try
+	{
+		const auto file = std::filesystem::path(materialPath.toStdWString());
+		stale           = assetlib::bakeIsStale(assetlib::loadMaterial(file), m_DataRoot);
+	}
+	catch (const std::exception& e)
+	{
+		// The file may not exist yet (Save As has set the path but not written it). Say nothing.
+		qWarning("MaterialEditor: could not check bake freshness: %s", e.what());
+	}
+
 	// Show the file name, with the full path on hover -- the toolbar is too narrow for a whole path.
-	m_MaterialLabel->setText(
-		materialPath.isEmpty() ? QStringLiteral("(unsaved)") : QFileInfo(materialPath).fileName());
-	m_MaterialLabel->setToolTip(materialPath);
+	const QString name = QFileInfo(materialPath).fileName();
+	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(name) : name);
+	m_MaterialLabel->setStyleSheet(stale ? "color: #c08040;" : "color: gray;");
+	m_MaterialLabel->setToolTip(
+		stale ? QStringLiteral("%1\nThe baked textures do not match its sources. Bake to update.")
+					.arg(materialPath) :
+				materialPath);
 }
 
 void
@@ -349,11 +392,36 @@ assetlib::BMaterial
 MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPath) const
 {
 	const SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(submeshIndex)];
-	const auto          dir   = std::filesystem::path(materialPath.toStdWString()).parent_path();
+
+	// Texture references are stored relative to the Data root, not to the material file.
+	const std::filesystem::path& dir = m_DataRoot;
 
 	auto material = assetlib::BMaterial();
 
+	// The graph authors per-channel routes, so a material that has never been baked is loose.
 	material.mode = assetlib::MaterialMode::kLoose;
+
+	// A material already on disk keeps whatever a previous bake produced: the triplet, its provenance
+	// and the mode. Rebuilding purely from the graph would throw the optimized textures away on every
+	// Save. If the routes have since changed, the stamps no longer match and the bake reports stale.
+	const auto file = std::filesystem::path(materialPath.toStdWString());
+	if (std::filesystem::exists(file))
+	{
+		try
+		{
+			const assetlib::BMaterial existing = assetlib::loadMaterial(file);
+			material.mode                      = existing.mode;
+			material.baseColorTexture          = existing.baseColorTexture;
+			material.normalTexture             = existing.normalTexture;
+			material.ormTexture                = existing.ormTexture;
+			material.routeStamps               = existing.routeStamps;
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialEditor: could not read the existing material: %s", e.what());
+		}
+	}
+
 	material.name = QFileInfo(materialPath).completeBaseName().toStdString();
 
 	MaterialOutputNode* output = FindOutputNode(*entry.model);
@@ -426,6 +494,53 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 }
 
 void
+MaterialEditorWindow::SetDataRoot(const QString& dataRoot)
+{
+	m_DataRoot = std::filesystem::path(dataRoot.toStdWString());
+
+	// The preview resolves a mesh's material references against the same root.
+	if (m_Preview)
+		m_Preview->SetDataRoot(m_DataRoot);
+
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::BakeCurrentMaterial()
+{
+	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraphs.size()))
+		return;
+
+	const QString path = m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].materialPath;
+	if (path.isEmpty() || m_DataRoot.empty())
+		return;  // nowhere to write the maps; Save As first, inside a project
+
+	try
+	{
+		// Bake from the graph as it is right now, not from whatever was last written to disk.
+		const auto materialPath = std::filesystem::path(path.toStdWString());
+
+		auto desc     = assetlib::MaterialBakeDesc();
+		desc.dataRoot = m_DataRoot;
+
+		assetlib::BMaterial material = BuildMaterial(m_CurrentSubmesh, path);
+		assetlib::bakeMaterial(material, desc);
+		assetlib::saveMaterial(material, materialPath);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: failed to bake '%s': %s", qPrintable(path), e.what());
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake Material"),
+			QStringLiteral("Could not bake the material:\n%1").arg(QString::fromLatin1(e.what())));
+		return;
+	}
+
+	RefreshActions();
+}
+
+void
 MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& materialPath)
 {
 	if (m_Preview == nullptr)
@@ -443,8 +558,8 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 	{
 		auto mesh = assetlib::load(meshPath);
 
-		const std::string relative =
-			Rebase(materialPath, meshPath.parent_path(), true).toStdString();
+		// Like every asset reference, relative to the data root -- not to the mesh file.
+		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
 
 		if (assetlib::attachMaterial(mesh, source, relative))
 			assetlib::save(mesh, meshPath);
@@ -490,7 +605,7 @@ MaterialEditorWindow::OpenMaterialInto(int submeshIndex, const QString& path, bo
 		return;
 	}
 
-	const auto dir = std::filesystem::path(path.toStdWString()).parent_path();
+	const std::filesystem::path& dir = m_DataRoot;
 
 	// The stored graph is authoritative for the editor: it reproduces the exact board that produced
 	// these routes. A material with no graph was not authored here (imported from glTF, or exported

@@ -93,16 +93,16 @@ namespace
 	ResolveMaterialPath(
 		const assetlib::BMesh&       mesh,
 		const assetlib::Submesh&     submesh,
-		const std::filesystem::path& meshPath)
+		const std::filesystem::path& dataRoot)
 	{
-		if (submesh.material >= mesh.materials.size())
+		if (dataRoot.empty() || submesh.material >= mesh.materials.size())
 			return {};
 
 		const std::string& relative = mesh.materials[submesh.material];
 		if (relative.empty())
 			return {};
 
-		const auto resolved = (meshPath.parent_path() / relative).lexically_normal();
+		const auto resolved = (dataRoot / relative).lexically_normal();
 		return QString::fromStdWString(resolved.wstring());
 	}
 
@@ -273,7 +273,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					if (name.isEmpty())
 						name = QString("Submesh %1").arg(m_SubmeshNames.size());
 					m_SubmeshNames << name;
-					m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, path);
+					m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, m_DataRoot);
 					m_SubmeshRefs.push_back({ it->second, i, entry.firstSubmesh + i });
 				}
 			}

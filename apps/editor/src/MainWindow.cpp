@@ -162,8 +162,11 @@ MainWindow::SetActiveProject(Project project)
 {
 	m_Project = std::make_unique<Project>(std::move(project));
 
-	m_ContentExplorer->SetRootPath(
-		QString::fromStdWString(m_Project->GetDataDirectory().wstring()));
+	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
+	m_ContentExplorer->SetRootPath(dataDir);
+
+	if (m_MaterialEditor)
+		m_MaterialEditor->SetDataRoot(dataDir);
 
 	setWindowTitle(
 		QString("Bernini Editor — %1").arg(QString::fromStdString(m_Project->GetName())));

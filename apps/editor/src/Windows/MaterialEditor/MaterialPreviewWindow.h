@@ -49,6 +49,14 @@ public:
 		return m_SubmeshMaterialPaths;
 	}
 
+	// The project's Data directory. A mesh names its materials relative to it, so the preview cannot
+	// resolve them until a project is open.
+	void
+	SetDataRoot(const std::filesystem::path& dataRoot)
+	{
+		m_DataRoot = dataRoot;
+	}
+
 	const std::filesystem::path&
 	MeshPath() const noexcept
 	{
@@ -119,6 +127,7 @@ private:
 	QStringList                          m_SubmeshNames;
 	QStringList                          m_SubmeshMaterialPaths;
 	std::filesystem::path                m_MeshPath;  // empty for the default sphere
+	std::filesystem::path                m_DataRoot;  // empty until a project is opened
 
 	glm::vec3 m_FocusCenter = glm::vec3(0.0f);
 	float     m_FocusRadius = 1.0f;
