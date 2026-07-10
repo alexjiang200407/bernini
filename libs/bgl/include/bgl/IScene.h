@@ -135,6 +135,20 @@ namespace bgl
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;
 
 		/**
+		 * Destroys a texture asset, releasing its GPU resource and its bindless descriptor slot.
+		 * The release is deferred until the frames that could still be sampling it have completed.
+		 *
+		 * The scene does not know which materials sample a texture. Deleting one that a live
+		 * material still routes leaves that material reading a slot that a later AddTextureAsset
+		 * may reuse; delete such materials first.
+		 *
+		 * @param texture A handle returned by AddTextureAsset.
+		 * @throws SceneError if the handle is null, or already deleted.
+		 */
+		virtual void
+		DeleteTextureAsset(TextureAssetHandle texture) = 0;
+
+		/**
 		 * Creates a PBR material in this scene's material buffer and returns a handle
 		 * referencing it. Pass the handle to a geometry-creating method to bind it.
 		 */
@@ -148,6 +162,21 @@ namespace bgl
 		 */
 		virtual MaterialHandle
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) = 0;
+
+		/**
+		 * Destroys a material created by CreatePbrMaterial or CreateLoosePbrMaterial, freeing its
+		 * slot in the corresponding material buffer.
+		 *
+		 * A submesh stores the material's slot index, not a generation-checked handle, so a submesh
+		 * still bound to a deleted material silently picks up whichever material next takes that
+		 * slot. Rebind every submesh using it (SetSubmeshMaterial) before deleting.
+		 *
+		 * @param material A handle returned by a material-creating method.
+		 * @throws SceneError if the handle is invalid, already deleted, or names a material type
+		 *         that has no storage to free (kNull, kAssert).
+		 */
+		virtual void
+		DeleteMaterial(MaterialHandle material) = 0;
 
 		/**
 		 * Rebinds the material of one submesh of a geom. Because a geom's submeshes are shared by

@@ -365,7 +365,8 @@ namespace bgl
 			resourceManagerDesc.maxTextures   = m_Opts.maxTextures;
 			resourceManagerDesc.maxSamplers   = m_Opts.maxSamplers;
 
-			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
+			m_ResourceManager =
+				m_Device->CreateResourceManager(resourceManagerDesc, m_CommandQueue);
 		}
 
 		CommandListDesc cmdListDesc;

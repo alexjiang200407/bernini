@@ -77,7 +77,9 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>
-		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept = 0;
+		CreateResourceManager(
+			const ResourceManagerDesc&     desc,
+			core::SharedRef<ICommandQueue> submissionQueue) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual Uniforms

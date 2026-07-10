@@ -1,4 +1,5 @@
 #pragma once
+#include "cmd/CommandQueue.h"
 #include "resource/Buffer_d3d12.h"
 #include "resource/Dsv_d3d12.h"
 #include "resource/ReadbackBuffer_d3d12.h"
@@ -35,7 +36,10 @@ namespace bgl
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
-		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);
+		ResourceManager(
+			wrl::ComPtr<ID3D12Device>  device,
+			const ResourceManagerDesc& desc,
+			CommandQueueHandle         submissionQueue);
 
 		ResourceManager(const ResourceManager&)     = delete;
 		ResourceManager(ResourceManager&&) noexcept = delete;
@@ -112,6 +116,12 @@ namespace bgl
 		void
 		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
 			override;
+
+		void
+		DestroyTexture(TextureHandle handle) noexcept override
+		{
+			DestroyTexture(handle, m_SubmissionQueue->GetNextFenceValue(), true);
+		}
 
 		void
 		DestroySampler(SamplerHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
@@ -263,6 +273,9 @@ namespace bgl
 		core::slot_vector<Rtv>       m_Rtvs;
 		core::slot_vector<Dsv>       m_Dsvs;
 		std::vector<PendingDeletion> m_PendingDeletions;
+
+		// The queue every command list is submitted on
+		CommandQueueHandle m_SubmissionQueue;
 
 		friend class DeviceImpl;
 	};
