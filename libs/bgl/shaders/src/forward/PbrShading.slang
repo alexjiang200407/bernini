@@ -72,7 +72,7 @@ public float4 ShadeSurface(
     let irradiance = irradianceMap.SampleCube(clampSampler, N).rgb;
     let diffuse = irradiance * albedo;
 
-    const float MAX_REFLECTION_LOD = 5.0f; // Total mip levels minus one
+    const float MAX_REFLECTION_LOD = 6.0f; // Highest mip index of the 7-level prefilter cube
     let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, R, roughness * MAX_REFLECTION_LOD).rgb;
     float2 envBRDF = brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 

@@ -40,6 +40,12 @@ namespace bgl
 		sessionDesc.searchPaths     = searchPaths;
 		sessionDesc.searchPathCount = std::size(searchPaths);
 
+		// Match the column-major convention the CPU side uploads matrices in (and that the
+		// offline slangc default used). The Slang API's SessionDesc otherwise defaults to
+		// row-major, which would transpose viewProj / transforms and project geometry off
+		// screen once shaders are compiled through this session at PSO creation.
+		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
 #if defined(BERNINI_GPU_DEBUG)
 		// Enables dbg_raise() bodies in runtime-compiled shaders. Kept in lockstep
 		// with the offline slangc -D in cmake/compile_shader.cmake. Fully absent in

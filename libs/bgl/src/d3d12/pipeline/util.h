@@ -12,6 +12,8 @@ namespace bgl
 			Slang::ComPtr<slang::IComponentType> linkedProgram;
 			wrl::ComPtr<ID3D12RootSignature>     rootSignature;
 			UniformLayoutMap                     uniformLayoutEntries;
+
+			std::unordered_map<IShader*, Slang::ComPtr<slang::IBlob>> entryPointCode;
 		};
 
 		PipelineLayout

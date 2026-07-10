@@ -1,5 +1,7 @@
 #include "MaterialPreviewWindow.h"
 
+#include "Async/BackgroundTask.h"
+
 #include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -227,12 +229,35 @@ MaterialPreviewWindow::ShowDefaultSphere()
 void
 MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 {
+	// Deserializing the .bmesh is the slow half and touches no bgl state, so it runs on
+	// a worker. Everything below mutates the Scene and the SceneView, which carry no locks, so it
+	// has to wait until the worker is done.
+	assetlib::BMesh mesh;
+	QString         readError;
+
+	const bool read = background::RunWithLoadingScreen(
+		this,
+		QString("Loading %1").arg(QString::fromStdString(path.filename().string())),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Reading mesh...");
+			mesh = assetlib::load(path);
+			if (mesh.meshes.empty())
+				throw std::runtime_error("mesh contains no meshes");
+		},
+		&readError);
+
+	if (!read)
+	{
+		qWarning(
+			"MaterialPreview: failed to load mesh '%s': %s",
+			path.string().c_str(),
+			qPrintable(readError));
+		ShowDefaultSphere();
+		return;
+	}
+
 	try
 	{
-		const auto mesh = assetlib::load(path);
-		if (mesh.meshes.empty())
-			throw std::runtime_error("mesh contains no meshes");
-
 		ClearGeometry();
 
 		bgl::IScene* scene = PreviewScene();
