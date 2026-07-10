@@ -47,3 +47,92 @@ TEST_CASE("KTX2 LDR round-trips through Basis UASTC -> BC7", "[ktx2][io]")
 		std::filesystem::remove(path);
 	}
 }
+
+// The same Basis payload loadKTX2 turns into BC7 blocks transcodes to RGBA8 instead, so a CPU
+// consumer (an editor thumbnail) needs no block decoder.
+TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")
+{
+	constexpr uint32_t w = 256;
+	constexpr uint32_t h = 256;
+
+	std::vector<std::byte> rgba(static_cast<size_t>(w) * h * 4, std::byte{ 0 });
+	for (size_t i = 0; i < rgba.size(); i += 4)
+	{
+		rgba[i + 0] = std::byte{ 200 };  // R
+		rgba[i + 1] = std::byte{ 60 };   // G
+		rgba[i + 2] = std::byte{ 30 };   // B
+		rgba[i + 3] = std::byte{ 255 };  // A
+	}
+
+	const ImageData src  = rgba8ToImage(rgba, w, h);
+	const auto      path = std::filesystem::temp_directory_path() / "bernini_ktx2_preview.ktx2";
+
+	SECTION("picks the smallest mip covering maxDim and keeps channel order")
+	{
+		writeKTX2(src, path, /*srgb*/ true);
+		const ImageData preview = loadKTX2Preview(path, 64);
+
+		REQUIRE(preview.width == 64);
+		REQUIRE(preview.height == 64);
+		REQUIRE(preview.mipLevels == 1);
+		REQUIRE(preview.arraySize == 1);
+		REQUIRE_FALSE(preview.isCubemap);
+		REQUIRE(preview.vkFormat == VkFormat::R8G8B8A8_SRGB);
+
+		// Tightly packed, exactly one subresource.
+		REQUIRE(preview.subresources.size() == 1);
+		REQUIRE(preview.subresources.front().rowPitch == 64 * 4);
+		REQUIRE(preview.pixels.size() == static_cast<size_t>(64) * 64 * 4);
+
+		// A flat colour survives UASTC round-trip closely; assert R > B so a BGRA swizzle would fail.
+		const auto* p = reinterpret_cast<const uint8_t*>(preview.pixels.data());
+		CHECK(p[0] > 150);
+		CHECK(p[2] < 80);
+		CHECK(p[0] > p[2]);
+		CHECK(p[3] == 255);
+
+		std::filesystem::remove(path);
+	}
+
+	SECTION("linear source keeps its UNORM tag")
+	{
+		writeKTX2(src, path, /*srgb*/ false);
+		REQUIRE(loadKTX2Preview(path, 32).vkFormat == VkFormat::R8G8B8A8_UNORM);
+		std::filesystem::remove(path);
+	}
+
+	SECTION("maxDim larger than the image returns the base mip")
+	{
+		writeKTX2(src, path, /*srgb*/ true);
+		const ImageData preview = loadKTX2Preview(path, 4096);
+
+		REQUIRE(preview.width == w);
+		REQUIRE(preview.height == h);
+
+		std::filesystem::remove(path);
+	}
+
+	SECTION("uncompressed (no Basis payload) decodes without transcoding")
+	{
+		writeKTX2(src, path, /*srgb*/ true, /*compress*/ false);
+		const ImageData preview = loadKTX2Preview(path, 64);
+
+		REQUIRE(preview.width == 64);
+		REQUIRE(preview.vkFormat == VkFormat::R8G8B8A8_SRGB);
+
+		// Verbatim storage: the flat colour comes back exactly.
+		const auto* p = reinterpret_cast<const uint8_t*>(preview.pixels.data());
+		CHECK(p[0] == 200);
+		CHECK(p[1] == 60);
+		CHECK(p[2] == 30);
+
+		std::filesystem::remove(path);
+	}
+
+	SECTION("maxDim of zero is rejected")
+	{
+		writeKTX2(src, path, /*srgb*/ true);
+		REQUIRE_THROWS_AS(loadKTX2Preview(path, 0), std::runtime_error);
+		std::filesystem::remove(path);
+	}
+}

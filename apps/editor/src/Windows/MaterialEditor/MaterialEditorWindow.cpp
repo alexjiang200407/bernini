@@ -22,6 +22,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 
+#include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
@@ -185,10 +186,13 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		rightPanel = placeholder;
 	}
 
-	m_Registry         = std::make_shared<NodeDelegateModelRegistry>();
-	bgl::IScene* scene = m_PreviewScene ? m_PreviewScene.Get() : nullptr;
+	m_TexturePreviews = new TexturePreviewCache(this);
+
+	m_Registry            = std::make_shared<NodeDelegateModelRegistry>();
+	bgl::IScene* scene    = m_PreviewScene ? m_PreviewScene.Get() : nullptr;
+	auto*        previews = m_TexturePreviews;
 	m_Registry->registerModel<TextureNode>(
-		[scene]() { return std::make_unique<TextureNode>(scene); },
+		[scene, previews]() { return std::make_unique<TextureNode>(scene, previews); },
 		"Input");
 	m_Registry->registerModel<MaterialOutputNode>(
 		[]() { return std::make_unique<MaterialOutputNode>(); },
