@@ -11,9 +11,10 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = 0x54414D42u;  // 'B','M','A','T' little-endian
 		// v2 adds the material mode + the per-channel `routes` table (loose materials). v3 appends the
-		// editor's node graph. Older files still load: v1 (triplet + factors only) as Baked with empty
-		// routes, v2 with an empty graph.
-		constexpr uint16_t c_VersionMajor = 3;
+		// editor's node graph. v4 appends the per-route bake provenance. Older files still load: v1
+		// (triplet + factors only) as Baked with empty routes, v2 with no graph, v3 with no stamps --
+		// a v3 loose material therefore reports its bake as stale, which is correct: it never had one.
+		constexpr uint16_t c_VersionMajor = 4;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
@@ -54,6 +55,11 @@ namespace assetlib
 			writer.writePod(route.channel);
 		}
 		writeString(writer, material.editorGraph);
+		for (const SourceStamp& stamp : material.routeStamps)
+		{
+			writer.writePod(stamp.size);
+			writer.writePod(stamp.mtime);
+		}
 		return writer.take();
 	}
 
@@ -95,6 +101,16 @@ namespace assetlib
 		{
 			material.editorGraph = readString(reader);
 		}
+		// The bake provenance is a v4 addition; older files leave it zeroed, which reads as "never
+		// baked" and so as stale.
+		if (versionMajor >= 4)
+		{
+			for (SourceStamp& stamp : material.routeStamps)
+			{
+				stamp.size  = reader.readPod<uint64_t>();
+				stamp.mtime = reader.readPod<int64_t>();
+			}
+		}
 		return material;
 	}
 
@@ -117,5 +133,53 @@ namespace assetlib
 	{
 		const auto bytes = core::file::readFileBytes(path.string());
 		return deserializeMaterial(bytes);
+	}
+
+	SourceStamp
+	stampOf(const std::filesystem::path& path)
+	{
+		std::error_code ec;
+
+		const auto size = std::filesystem::file_size(path, ec);
+		if (ec)
+			return {};
+
+		const auto written = std::filesystem::last_write_time(path, ec);
+		if (ec)
+			return {};
+
+		// Seconds, not the native tick: file_time_type's resolution and epoch are implementation
+		// defined, and a stamp has to survive being written on one machine and compared on another.
+		const auto seconds =
+			std::chrono::duration_cast<std::chrono::seconds>(written.time_since_epoch()).count();
+
+		return SourceStamp{ static_cast<uint64_t>(size), static_cast<int64_t>(seconds) };
+	}
+
+	bool
+	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot)
+	{
+		bool hasRoutes = false;
+
+		for (size_t i = 0; i < c_LooseChannelCount; ++i)
+		{
+			const ChannelRoute& route = material.routes[i];
+			if (route.texture.empty())
+				continue;
+
+			hasRoutes = true;
+
+			// A zeroed stamp means this route was never baked; stampOf zeroes a missing file. Neither
+			// can equal a live source's stamp, so both fall out of this comparison as stale.
+			if (stampOf(dataRoot / route.texture) != material.routeStamps[i])
+				return true;
+		}
+
+		// No routes: an imported, triplet-only material. It has no sources to have drifted from.
+		if (!hasRoutes)
+			return false;
+
+		// Routed and every source matches -- but a bake that produced no base colour never ran.
+		return material.baseColorTexture.empty();
 	}
 }

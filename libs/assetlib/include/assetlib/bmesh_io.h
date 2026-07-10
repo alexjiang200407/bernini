@@ -42,9 +42,9 @@ namespace assetlib
 	toBMesh(const imp::BMeshImport& mesh);
 
 	/**
-	 * Points submesh `submeshIndex` at the material file `relativePath` (relative to the mesh file),
-	 * adjusting `mesh.materials` and `Submesh::material` as needed. Used when an authoring tool saves a
-	 * material and the mesh must reference it from then on.
+	 * Points submesh `submeshIndex` at the material file `relativePath` (relative to the project's data
+	 * root, like every asset reference), adjusting `mesh.materials` and `Submesh::material` as needed.
+	 * Used when an authoring tool saves a material and the mesh must reference it from then on.
 	 *
 	 * Material slots are shared: an import gives every submesh cut from the same source material the
 	 * same index. So the submesh's existing slot is rewritten in place only when no other submesh uses

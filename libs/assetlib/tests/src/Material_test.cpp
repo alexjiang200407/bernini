@@ -85,6 +85,121 @@ TEST_CASE("a BMaterial with no editor graph round-trips an empty one", "[bmateri
 	REQUIRE(restored.baseColorTexture == "baked_basecolor.ktx2");
 }
 
+TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.routes[0]      = { "albedo.ktx2", 0 };
+	mat.routeStamps[0] = { 4096, 1752000000 };
+	mat.routeStamps[8] = { 1, -5 };  // mtime is signed: pre-epoch timestamps must survive
+
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
+
+	REQUIRE(restored.routeStamps[0].size == 4096);
+	REQUIRE(restored.routeStamps[0].mtime == 1752000000);
+	REQUIRE(restored.routeStamps[8].mtime == -5);
+	REQUIRE(restored.routeStamps[3] == SourceStamp{});  // unstamped routes stay zeroed
+}
+
+TEST_CASE("a BMaterial carries both its sources and its baked triplet", "[bmaterial][io]")
+{
+	// The coexistence the format exists for: the bake fills the triplet without discarding the
+	// routes that produced it, so the material can still be reopened and re-baked.
+	BMaterial mat;
+	mat.mode             = MaterialMode::kBaked;
+	mat.baseColorTexture = "mat_basecolor.ktx2";
+	mat.ormTexture       = "mat_orm.ktx2";
+	mat.routes[0]        = { "src/albedo.ktx2", 0 };
+	mat.routeStamps[0]   = { 64, 7 };
+
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
+
+	REQUIRE(restored.mode == MaterialMode::kBaked);
+	REQUIRE(restored.baseColorTexture == "mat_basecolor.ktx2");
+	REQUIRE(restored.routes[0].texture == "src/albedo.ktx2");
+	REQUIRE(restored.routeStamps[0].size == 64);
+}
+
+TEST_CASE("stampOf measures a file and zeroes a missing one", "[bmaterial][bake]")
+{
+	const auto dir = std::filesystem::temp_directory_path() / "bernini_stamp_test";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+
+	const auto file = dir / "src.bin";
+	{
+		std::ofstream out(file, std::ios::binary);
+		out << "hello";
+	}
+
+	const SourceStamp stamp = stampOf(file);
+	REQUIRE(stamp.size == 5);
+	REQUIRE(stamp.mtime != 0);
+	REQUIRE(stampOf(file) == stamp);  // stable across calls
+
+	REQUIRE(stampOf(dir / "absent.bin") == SourceStamp{});
+
+	std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmaterial][bake]")
+{
+	const auto dir = std::filesystem::temp_directory_path() / "bernini_stale_test";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+
+	const auto source = dir / "albedo.ktx2";
+	{
+		std::ofstream out(source, std::ios::binary);
+		out << "aaaa";
+	}
+
+	BMaterial mat;
+	mat.mode             = MaterialMode::kBaked;
+	mat.baseColorTexture = "mat_basecolor.ktx2";
+	mat.routes[0]        = { "albedo.ktx2", 0 };
+
+	SECTION("a material with no routes is never stale")
+	{
+		BMaterial imported;
+		imported.baseColorTexture = "tex0.ktx2";
+		REQUIRE_FALSE(bakeIsStale(imported, dir));
+	}
+
+	SECTION("routed but unstamped means it was never baked") { REQUIRE(bakeIsStale(mat, dir)); }
+
+	SECTION("a matching stamp is fresh")
+	{
+		mat.routeStamps[0] = stampOf(source);
+		REQUIRE_FALSE(bakeIsStale(mat, dir));
+	}
+
+	SECTION("a source that changed size is stale")
+	{
+		mat.routeStamps[0] = stampOf(source);
+		{
+			std::ofstream out(source, std::ios::binary);
+			out << "aaaaaaaa";  // different size
+		}
+		REQUIRE(bakeIsStale(mat, dir));
+	}
+
+	SECTION("a deleted source is stale, not silently unchanged")
+	{
+		mat.routeStamps[0] = stampOf(source);
+		std::filesystem::remove(source);
+		REQUIRE(bakeIsStale(mat, dir));
+	}
+
+	SECTION("fresh sources but no bake output is stale")
+	{
+		mat.routeStamps[0]   = stampOf(source);
+		mat.baseColorTexture = "";
+		REQUIRE(bakeIsStale(mat, dir));
+	}
+
+	std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("deserializeMaterial reads a v1 stream as a Baked material", "[bmaterial][io]")
 {
 	// Hand-build a v1 .bmaterial byte stream (predates the mode + routes fields).
