@@ -1,8 +1,12 @@
 #pragma once
 
+#include <QPixmap>
 #include <QtNodes/NodeDelegateModel>
 
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+
+class QLabel;
+class TexturePreviewCache;
 
 namespace bgl
 {
@@ -19,7 +23,8 @@ public:
 	static constexpr unsigned int c_ChannelCount = 4;
 	static constexpr unsigned int c_PortCount    = c_BundleCount + c_ChannelCount;
 
-	explicit TextureNode(bgl::IScene* scene) : m_Scene(scene) {}
+	// `previews` may be null when the editor runs without graphics; the node then shows no image.
+	TextureNode(bgl::IScene* scene, TexturePreviewCache* previews);
 
 	QString
 	caption() const override
@@ -60,10 +65,7 @@ public:
 	{}
 
 	QWidget*
-	embeddedWidget() override
-	{
-		return nullptr;
-	}
+	embeddedWidget() override;
 
 	QString
 	portCaption(QtNodes::PortType, QtNodes::PortIndex port) const override;
@@ -83,8 +85,16 @@ public:
 	SetTexturePath(const QString& path);
 
 private:
-	bgl::IScene*            m_Scene = nullptr;
+	// Paints m_Preview into m_PreviewLabel, scaled to fit and centred. No-op before either exists.
+	void
+	RefreshPreview();
+
+	bgl::IScene*            m_Scene    = nullptr;
+	TexturePreviewCache*    m_Previews = nullptr;
 	QString                 m_Path;
 	QString                 m_Caption = QStringLiteral("Texture");
 	bgl::TextureAssetHandle m_Texture;
+
+	QLabel* m_PreviewLabel = nullptr;
+	QPixmap m_Preview;
 };

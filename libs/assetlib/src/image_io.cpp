@@ -92,6 +92,47 @@ namespace assetlib
 				throw std::runtime_error(
 					std::string(what) + " '" + path.string() + "': " + ktxErrorString(code));
 		}
+
+		bool
+		isRgba8(VkFormat vk)
+		{
+			return vk == VkFormat::R8G8B8A8_UNORM || vk == VkFormat::R8G8B8A8_SRGB;
+		}
+
+		bool
+		isBgra8(VkFormat vk)
+		{
+			return vk == VkFormat::B8G8R8A8_UNORM || vk == VkFormat::B8G8R8A8_SRGB;
+		}
+
+		// The smallest mip whose longer edge still covers `maxDim`, so the consumer only ever
+		// scales down. Falls back to the base mip when the whole image is already smaller.
+		uint32_t
+		previewMipLevel(uint32_t width, uint32_t height, uint32_t levels, uint32_t maxDim)
+		{
+			uint32_t mip = 0;
+			while (mip + 1 < levels)
+			{
+				const uint32_t nextLonger = (std::max)(1u, (std::max)(width, height) >> (mip + 1));
+				if (nextLonger < maxDim)
+					break;
+				++mip;
+			}
+			return mip;
+		}
+
+		// loadKTX2 destroys its texture by hand, which leaks whenever a later step throws. The
+		// preview path has several such steps, so it owns the handle instead.
+		struct Ktx2Owner
+		{
+			ktxTexture2* tex = nullptr;
+
+			~Ktx2Owner()
+			{
+				if (tex != nullptr)
+					ktxTexture_Destroy(ktxTexture(tex));
+			}
+		};
 	}
 
 	ImageData
@@ -168,6 +209,90 @@ namespace assetlib
 		}
 
 		ktxTexture_Destroy(base);
+		return image;
+	}
+
+	ImageData
+	loadKTX2Preview(const std::filesystem::path& path, uint32_t maxDim)
+	{
+		if (maxDim == 0)
+			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
+
+		Ktx2Owner owner;
+		check(
+			ktxTexture2_CreateFromNamedFile(
+				path.string().c_str(),
+				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+				&owner.tex),
+			"assetlib::loadKTX2Preview: failed to load",
+			path);
+
+		// loadKTX2 asks the same Basis payload for BC7 because that is what the GPU samples. A CPU
+		// consumer cannot read a block, so ask for RGBA8 instead.
+		if (ktxTexture2_NeedsTranscoding(owner.tex))
+		{
+			check(
+				ktxTexture2_TranscodeBasis(owner.tex, KTX_TTF_RGBA32, 0),
+				"assetlib::loadKTX2Preview: failed to transcode",
+				path);
+		}
+
+		const auto stored = static_cast<VkFormat>(owner.tex->vkFormat);
+		if (!isRgba8(stored) && !isBgra8(stored))
+		{
+			// An HDR float map, or a block format written by some other tool: neither carries a
+			// Basis payload to transcode, and we have no block decoder.
+			throw std::runtime_error(
+				"assetlib::loadKTX2Preview: '" + path.string() +
+				"' has no CPU decode path for Vulkan format " +
+				std::to_string(static_cast<uint32_t>(stored)));
+		}
+
+		ktxTexture*    base = ktxTexture(owner.tex);
+		const uint32_t mip  = previewMipLevel(
+			owner.tex->baseWidth,
+			owner.tex->baseHeight,
+			owner.tex->numLevels,
+			maxDim);
+
+		ktx_size_t srcOffset = 0;
+		check(
+			ktxTexture_GetImageOffset(base, mip, 0, 0, &srcOffset),
+			"assetlib::loadKTX2Preview: bad image offset in",
+			path);
+
+		ImageData image;
+		image.width     = (std::max)(1u, owner.tex->baseWidth >> mip);
+		image.height    = (std::max)(1u, owner.tex->baseHeight >> mip);
+		image.mipLevels = 1;
+		image.arraySize = 1;
+		image.isCubemap = false;
+		image.vkFormat  = (stored == VkFormat::B8G8R8A8_SRGB || stored == VkFormat::R8G8B8A8_SRGB) ?
+		                      VkFormat::R8G8B8A8_SRGB :
+		                      VkFormat::R8G8B8A8_UNORM;
+
+		const uint64_t dstPitch   = static_cast<uint64_t>(image.width) * 4;
+		const size_t   totalBytes = static_cast<size_t>(dstPitch) * image.height;
+		image.pixels              = core::fixed_buffer<std::byte>(totalBytes);
+
+		// KTX pads rows to 4 bytes, which an RGBA8 row already satisfies -- but copy row by row
+		// against the reported pitch rather than assume it.
+		const ktx_size_t srcPitch = ktxTexture_GetRowPitch(base, mip);
+		for (uint32_t y = 0; y < image.height; ++y)
+		{
+			std::memcpy(
+				image.pixels.data() + y * dstPitch,
+				base->pData + srcOffset + y * srcPitch,
+				static_cast<size_t>(dstPitch));
+		}
+
+		if (isBgra8(stored))
+		{
+			auto* p = reinterpret_cast<uint8_t*>(image.pixels.data());
+			for (size_t i = 0; i < totalBytes; i += 4) std::swap(p[i], p[i + 2]);
+		}
+
+		image.subresources.push_back({ 0, dstPitch, totalBytes });
 		return image;
 	}
 

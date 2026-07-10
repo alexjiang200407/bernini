@@ -7,6 +7,8 @@
 
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
+class TexturePreviewCache;
+
 class QComboBox;
 class QJsonObject;
 class QLabel;
@@ -97,6 +99,9 @@ private:
 
 	bgl::SceneHandle       m_PreviewScene;
 	MaterialPreviewWindow* m_Preview = nullptr;
+
+	// Shared by every TextureNode across every submesh graph, so a texture is decoded once.
+	TexturePreviewCache* m_TexturePreviews = nullptr;
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
