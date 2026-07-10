@@ -506,6 +506,25 @@ MaterialEditorWindow::SetDataRoot(const QString& dataRoot)
 }
 
 void
+MaterialEditorWindow::Reset()
+{
+	// ShowDefaultSphere clears the preview's geometry, mesh path and material paths, then emits
+	// GeometryChanged -- which is what rebuilds the graphs, empty, one per submesh.
+	if (m_Preview)
+	{
+		m_Preview->ShowDefaultSphere();
+		return;
+	}
+
+	// No graphics device, so there is no preview to drive the rebuild.
+	m_SubmeshSelector->clear();
+	m_GraphView->setScene(nullptr);
+	m_SubmeshGraphs.clear();
+	m_CurrentSubmesh = -1;
+	RefreshActions();
+}
+
+void
 MaterialEditorWindow::BakeCurrentMaterial()
 {
 	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraphs.size()))

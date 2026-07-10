@@ -49,6 +49,12 @@ public:
 	void
 	SetDataRoot(const QString& dataRoot);
 
+	// Drops every trace of the previous project: the preview returns to the default sphere and each
+	// submesh graph is rebuilt empty. Without this a graph keeps the `.bmaterial` path it was bound
+	// to, and the next Save writes into the project the user just left.
+	void
+	Reset();
+
 private:
 	// Rebuilds the submesh selector + one graph per submesh from the preview geometry.
 	void
