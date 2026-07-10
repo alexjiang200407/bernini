@@ -31,4 +31,25 @@ namespace assetlib
 	 */
 	[[nodiscard]] BMaterial
 	loadMaterial(const std::filesystem::path& path);
+
+	/**
+	 * The size + last-write-time of `path`, as the bake records it. A file that does not exist (or
+	 * cannot be stat'd) yields a zeroed stamp, which never compares equal to a real one -- so a
+	 * deleted source reads as stale rather than as unchanged.
+	 */
+	[[nodiscard]] SourceStamp
+	stampOf(const std::filesystem::path& path);
+
+	/**
+	 * Whether `material`'s baked triplet no longer reflects the source textures its routes name.
+	 * `dataRoot` is the project's Data directory: every texture path a material stores is relative to
+	 * it, not to the material file.
+	 *
+	 * True when a routed source has changed, gone missing, or was never stamped (i.e. the material
+	 * has routes but has never been baked). False for a material with no routes at all -- an imported
+	 * triplet-only material has no sources to be stale against -- and false when every routed source
+	 * still measures exactly as it did at bake time.
+	 */
+	[[nodiscard]] bool
+	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot);
 }

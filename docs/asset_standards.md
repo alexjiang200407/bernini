@@ -52,14 +52,42 @@ must feed data that matches.
 
 ## Texture standards
 
-| Map | Color space | On disk → on GPU | Channels | Default when absent |
-|---|---|---|---|---|
-| **Base color** | **sRGB** (hardware-decoded) | UASTC sRGB → **BC7 sRGB** | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
-| **Normal** | linear | UASTC → **BC7** | RG = tangent-space X/Y (**Z reconstructed** in shader) | flat `(0.5,0.5,1)` |
-| **ORM** | linear | UASTC → **BC7** | R = AO · G = roughness · B = metallic | 1×1 white (AO=1; factors drive) |
-| **IBL irradiance** | linear (HDR) | KTX2 cube map (float, uncompressed) | prefiltered diffuse cube | — (required via `SetEnvironmentMap`) |
-| **IBL prefilter** | linear (HDR) | KTX2 cube map (float, uncompressed, mipped) | prefiltered specular cube (mip = roughness) | — |
-| **IBL BRDF LUT** | linear | KTX2 2D (float, uncompressed) | RG (scale, bias) | — |
+| Map | Color space | Mesh import → on GPU | **Material bake** → on GPU | Channels | Default when absent |
+|---|---|---|---|---|---|
+| **Base color** | **sRGB** (hardware-decoded) | UASTC sRGB → **BC7 sRGB** | **BC1 sRGB** (direct) | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
+| **Normal** | linear | UASTC → **BC7** | **BC5 UNORM** (direct) | RG = tangent-space X/Y (**Z reconstructed** in shader) | flat `(0.5,0.5,1)` |
+| **ORM** | linear | UASTC → **BC7** | **BC7 UNORM** (direct) | R = AO · G = roughness · B = metallic | 1×1 white (AO=1; factors drive) |
+| **IBL irradiance** | linear (HDR) | KTX2 cube map (float, uncompressed) | — | prefiltered diffuse cube | — (required via `SetEnvironmentMap`) |
+| **IBL prefilter** | linear (HDR) | KTX2 cube map (float, uncompressed, mipped) | — | prefiltered specular cube (mip = roughness) | — |
+| **IBL BRDF LUT** | linear | KTX2 2D (float, uncompressed) | — | RG (scale, bias) | — |
+
+There are **two producers of textures**, and they compress differently:
+
+* **Mesh import** (`bake` in [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes
+  Basis-UASTC `texN.ktx2`, which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform,
+  and no per-map role needed.
+* **Material bake** (`bakeMaterial` in
+  [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
+  editor's routed source textures into the triplet and writes each map into `<Data>/Textures/`
+  **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
+  transcode**. libktx has no direct BC encoder, so `writeKTX2` UASTC-encodes and then
+  `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA`).
+
+  **Baked maps are shared, not owned by a material.** A map is named for the content that defines it --
+  `orm_<hash>.ktx2`, where the hash covers the group, its resolution, its target format and the ordered
+  (source, channel) pairs feeding it. Two materials whose ORM channels route identically therefore name
+  the same file and write it once, instead of emitting byte-identical copies under each material's name.
+  (The Apples model is exactly this: two submeshes, two materials, one shared ORM source.) A map that
+  already exists and is newer than every source feeding it is not re-encoded.
+
+  For that to be sound, **each group is sized independently**, to the largest source routed into *that
+  group*. If the whole material shared one resolution, a material's ORM output would silently depend on
+  the size of its base-colour texture, and two otherwise-identical ORM groups would diverge.
+
+Two consequences of the baked formats worth knowing: **BC1 has no alpha**, so a base-colour alpha route
+is dropped by the bake; and the compositor copies channel *bytes*, so a channel routed into base colour
+is written into an sRGB map regardless of its own source's tag — keep one decode role per source
+texture.
 
 * **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
   (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`; `writeTextures`
@@ -69,8 +97,7 @@ must feed data that matches.
   maps (multi-threaded, `LEVEL_FASTER`) and writes one `texN.ktx2`. HDR/float inputs (the IBL maps)
   skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands
   back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
-  All maps currently transcode to **BC7** for simplicity; per-map BC5 (normal) / BC1 (ORM) is a
-  possible refinement.
+  A material bake instead writes the per-map targets above, which load without transcoding.
 * **Factors are linear** and live in the material, not the texture:
   `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`.
   See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and the
@@ -124,21 +151,37 @@ ordering is shared so a layout maps field-for-field between them.
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
-* **`.bmaterial`** (v3) — factors + texture path references (relative to the material file), a `mode`,
-  a 9-entry per-channel `routes` table, and the material editor's node graph. Struct:
+* **`.bmaterial`** (v4) — a material in **both** of its forms at once. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
-  I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h).
-  * `mode = kBaked` — the baseColor / normal / orm triplet is authoritative. This is what import and
-    export produce, and what the runtime's `PbrMaterial` consumes.
-  * `mode = kLoose` — the `routes` table is authoritative: each of the nine PBR output channels
-    (base colour R,G,B,A; ORM ao, roughness, metallic; normal X,Y) names a source texture and which
-    of *its* RGBA channels to read. This is what the material editor saves, and what the runtime's
-    `LoosePbrMaterial` consumes without a bake.
-  * `editorGraph` — the node graph, as an opaque JSON blob. Authoring data: nothing outside the
-    editor reads it, it never affects rendering, and **the exporter clears it when it bakes a
-    material down to `kBaked`**. It exists so reopening a material restores the board that produced
-    the routes, including node positions and nodes wired to nothing.
-  * Older files still load: v1 (factors + triplet) as `kBaked` with empty routes, v2 with no graph.
+  I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
+  bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
+  * **Every texture path is relative to the project's Data root**, not to the material file: a material
+    in `Data/Materials/` names `textures_src/tex1.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
+    lives. A standalone baked model directory is its own data root, which is how a `matN.bmaterial`
+    beside its `texN.ktx2` still resolves.
+  * **Sources** — a 9-entry `routes` table. Each PBR output channel (base colour R,G,B,A; ORM ao,
+    roughness, metallic; normal X,Y) names a *source* texture and which of *its* RGBA channels to read.
+    This is what the material editor authors, and what `LoosePbrMaterial` samples directly with no bake.
+  * **Optimized** — the baseColor / normal / orm triplet, plus the factors. The output of `bakeMaterial`
+    (or of a glTF import), and what `PbrMaterial` consumes. A bake writes them into
+    `<Data>/Textures/`.
+  * Both may be populated simultaneously, and normally are: a baked material keeps its routes so it can
+    be reopened, re-authored and re-baked. `mode` says which representation **the renderer should draw
+    from** — it is *not* a statement about which fields are filled.
+  * `routeStamps` — parallel to `routes`: the size + mtime each source measured when the bake read it.
+    `bakeIsStale(material, dir)` re-stats the sources and reports whether the triplet still reflects
+    them. Editing a source therefore surfaces as a stale bake rather than silently rendering the old
+    cooked textures. Size+mtime, not a content hash: verifying a hash would mean reading every source on
+    every load, and a false positive only costs a rebake.
+  * `editorGraph` — the node graph, as an opaque JSON blob. Nothing outside the editor reads it and it
+    never affects rendering; it exists so reopening a material restores the board that produced the
+    routes, node positions and unwired nodes included.
+  * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
+    `editorGraph` and forces `kBaked`, leaving the triplet + factors + name. A shipping build carries no
+    source-texture references. It refuses to strip a material that was never baked, which would leave
+    nothing to render.
+  * Older files still load: v1 (factors + triplet) as `kBaked` with empty routes, v2 with no graph, v3
+    with no stamps — so a v3 loose material reports its bake as stale, which is correct: it never had one.
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture, all in one directory.
 
@@ -184,11 +227,16 @@ both file and VRAM.
   `ktxTexture2_TranscodeBasis(…, KTX_TTF_BC7_RGBA)`. The resulting `vkFormat` is `BC7_SRGB_BLOCK`
   (base color) or `BC7_UNORM_BLOCK` (normal/ORM), which flows through `VkFormatToDXGI` →
   `BC7_UNORM[_SRGB]` → engine format. Subresource **row pitches are block-aware** (`ceil(w/4)·16`).
+  Pass `Ktx2Decode::kRgba8` to transcode to `KTX_TTF_RGBA32` instead — for code that must *read* texels
+  rather than draw them, i.e. the material bake compositing its sources. An already-block-compressed
+  file (a baked map) cannot be decoded that way and is rejected: BC blocks do not transcode back.
 * **HDR/IBL stays uncompressed.** Basis Universal is LDR-only, so float cube/2D maps skip compression
   and keep their `R16/R32` float formats (BC6H HDR compression is a possible follow-up).
-* **BC7 for everything, for now.** All LDR maps transcode to BC7 so `loadKTX2` needs no per-map
-  role. Optimal per-map targets (normal → BC5_RG, ORM → BC1) and on-disk zstd/ETC1S are refinements;
-  the transcode target and encoder params are the only places they'd change.
+* **Per-map targets are chosen at bake, not at load.** `loadKTX2` still needs no per-map role: a mesh
+  import's UASTC textures all transcode to BC7, and a material bake's textures already carry their
+  block format (`BC1_RGB_SRGB` / `BC5_UNORM` / `BC7_UNORM`), so nothing about the file has to be
+  interpreted. The bake reaches those formats by transcoding UASTC → target *before* writing, since
+  libktx exposes no direct BC encoder. On-disk zstd/ETC1S remains a possible refinement.
 * **Debug builds link the *Release* libktx.** The Basis encoder/transcoder is unusably slow when
   compiled unoptimized (debug basisu is ~20–100× slower), so the root `CMakeLists.txt` maps
   `KTX::ktx` to its Release config and deploys the Release `ktx.dll` over the debug one in every

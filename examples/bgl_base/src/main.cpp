@@ -8,6 +8,7 @@
 #include <assetlib/image_io.h>
 #include <bgl/bgl.h>
 #include <format>
+#include <gamelib/AssetFactory.h>
 #include <stdexcept>
 
 #define WIN32_LEAN_AND_MEAN
@@ -23,7 +24,8 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		bool        skyBoxEnabled = true;
 		bool        headless      = false;
 		uint32_t    frames        = 16;
-		std::string modelPath     = "assets/apples";
+		std::string dataRootPath  = "assets";
+		std::string modelPath     = "Meshes/apples.bmesh";
 
 		{
 			CLI::App app{ "Bernini bgl_base example" };
@@ -32,7 +34,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				->check(CLI::PositiveNumber);
 			app.add_option("-h,--height", height, "Window height in pixels")
 				->check(CLI::PositiveNumber);
-			app.add_option("--model", modelPath, "Directory holding <name>.bmesh + its materials");
+			app.add_option(
+				"--data-root",
+				dataRootPath,
+				"The project's Data directory: every asset reference is relative to it");
+			app.add_option("--model", modelPath, "The .bmesh to render, relative to --data-root");
 			app.add_option("-s,--skybox", skyBoxEnabled, "Enable skybox rendering");
 			app.add_flag(
 				"--headless",
@@ -79,6 +85,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		sceneDesc.maxMeshlets             = 8000;
 		sceneDesc.maxSubmeshes            = 100;
 		sceneDesc.maxPbrMaterials         = 100;
+		sceneDesc.maxLoosePbrMaterials    = 100;  // defaults to 1: an unbaked model needs more
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
@@ -94,37 +101,21 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			view->SetSkyBox({ pmrem });
 		}
 
-		const auto modelDir = std::filesystem::path(modelPath);
-		const auto meshName = modelDir.filename().string();
-		const auto model    = assetlib::load(modelDir / (meshName + ".bmesh"));
+		// Every asset reference is relative to the data root: the mesh itself, the materials the mesh
+		// names, and the textures those materials name. `operator/` leaves an absolute --model alone.
+		const auto dataRoot = std::filesystem::path(dataRootPath);
+		const auto model    = assetlib::load(dataRoot / modelPath);
 
-		auto       textureCache = std::unordered_map<std::string, bgl::TextureAssetHandle>();
-		const auto loadTexture  = [&](const std::string& rel) -> bgl::TextureAssetHandle {
-			if (rel.empty())
-				return {};
-			if (const auto it = textureCache.find(rel); it != textureCache.end())
-				return it->second;
-			const auto handle = scene->AddTextureAsset(assetlib::loadKTX2(modelDir / rel), rel);
-			textureCache.emplace(rel, handle);
-			return handle;
-		};
+		// The factory holds the data root and the path -> handle identity: a texture shared by several
+		// routes, or a material shared by several submeshes, is loaded once. It honours each material's
+		// mode -- a baked one samples its optimized triplet, a loose one samples the source routes the
+		// material editor authored.
+		auto assets = game::AssetFactory(*scene, dataRoot);
 
 		auto materials = std::vector<bgl::MaterialHandle>();
 		materials.reserve(model.materials.size());
 		for (const auto& materialFile : model.materials)
-		{
-			const auto bmat = assetlib::loadMaterial(modelDir / materialFile);
-
-			auto desc             = bgl::PbrMaterialDesc{};
-			desc.baseColorFactor  = bmat.baseColorFactor;
-			desc.metallicFactor   = bmat.metallicFactor;
-			desc.roughnessFactor  = bmat.roughnessFactor;
-			desc.baseColorTexture = loadTexture(bmat.baseColorTexture);
-			desc.normalTexture    = loadTexture(bmat.normalTexture);
-			desc.ormTexture       = loadTexture(bmat.ormTexture);
-
-			materials.push_back(scene->CreatePbrMaterial(desc));
-		}
+			materials.push_back(assets.LoadMaterial(materialFile));
 
 		auto geoms = std::vector<bgl::GeomHandle>();
 		geoms.reserve(model.meshes.size());
