@@ -26,7 +26,7 @@ init *args:
 build *args:
     @{{ python }} scripts/build.py {{ args }}
 
-# Run an executable target, with cwd set to its output directory.
+# Build an executable target and run it, with cwd set to its output directory.
 run target *args:
     @{{ python }} scripts/exec_target.py {{ target }} {{ args }}
 
