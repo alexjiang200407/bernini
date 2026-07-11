@@ -30,6 +30,10 @@ build *args:
 run target *args:
     @{{ python }} scripts/exec_target.py {{ target }} {{ args }}
 
+# Build the CLI tools and stage them (with their DLLs) into ./dist, for PATH.
+install *args:
+    @{{ python }} scripts/install.py {{ args }}
+
 # clang-format files in place (--check to verify only).
 format *args:
     @{{ python }} scripts/format.py {{ args }}
