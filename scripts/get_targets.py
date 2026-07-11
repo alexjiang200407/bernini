@@ -7,8 +7,8 @@ Usage:
     python scripts/get_targets.py --json
     python scripts/get_targets.py --build-dir build/msvc-release
 
-Requires a configured build dir; run `python scripts/build.py` (or any preset
-configure) first.
+Requires a configured build dir; run `just build` (or any preset configure) first.
+The build dir defaults to the preset recorded in scripts/config.json.
 """
 
 import argparse
@@ -16,19 +16,19 @@ import json
 import sys
 
 import util.cmake_tools as ct
+import util.config as cfg
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--build-dir", help="Build directory (default: scan build/*).")
+    parser.add_argument("--build-dir", help="Build directory (default: the configured preset's).")
     parser.add_argument("--type", help="Filter by target type (e.g. EXECUTABLE, SHARED_LIBRARY, UTILITY).")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args()
 
-    build_dirs = ct.find_build_dirs(args.build_dir)
+    build_dirs = ct.find_build_dirs(cfg.build_dir(args.build_dir))
     if not build_dirs:
-        print("No CMake File API reply found. Configure a build first "
-              "(e.g. python scripts/build.py).", file=sys.stderr)
+        print("No CMake File API reply found. Configure a build first (e.g. `just build`).", file=sys.stderr)
         return 2
 
     aggregated = {}

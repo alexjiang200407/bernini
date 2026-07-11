@@ -1,0 +1,12 @@
+# Optional tooling for the Bernini scripts.
+#
+#   pip install -r scripts/requirements.txt
+#
+# just is the task runner behind the root justfile (`just build`, `just format`,
+# ...). It is a convenience layer only -- every recipe is a one-line call into
+# scripts/, so `python scripts/build.py ...` works without it.
+#
+# rust-just ships just as a prebuilt binary wheel, so this needs no Rust
+# toolchain and installs the same version on Windows, Linux and macOS. Pinned so
+# everyone gets the same one; the OS package managers can't promise that.
+rust-just==1.56.0
