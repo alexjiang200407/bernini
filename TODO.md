@@ -1,9 +1,0 @@
-
-- Frame Graph optimization
-    - Wasted barriers. Add a PreTransition function to PassDesc to determine if a Barrier is necessary
-    - We can merge barriers instead of completely changing the Barrier.
-- Motion Vectors
-- Linked shader compilation to fix shader linker bug
-
-
-- Why does MaterialHandle used to create Static Mesh Instance?\

@@ -63,8 +63,6 @@ namespace game
 		bgl::IScene&          m_Scene;
 		std::filesystem::path m_DataRoot;
 
-		// Keyed on the data-root-relative path. Transparent hashing, so a lookup by string_view or a
-		// literal does not have to build a std::string first.
 		core::str::unordered_str_map<bgl::TextureAssetHandle> m_Textures;
 		core::str::unordered_str_map<bgl::MaterialHandle>     m_Materials;
 	};
