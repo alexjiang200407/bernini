@@ -115,6 +115,10 @@ def main():
         return 0
 
     if not args.no_configure:
+        binary_dir = ct.binary_dir_of(preset)
+        if binary_dir:
+            ct.ensure_query(binary_dir)
+
         rc = subprocess.run(configure_cmd, env=env).returncode
         if rc:
             print(f"configure failed (exit {rc}).", file=sys.stderr)

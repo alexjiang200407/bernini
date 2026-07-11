@@ -26,6 +26,14 @@ endif()
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+add_custom_target(copy_assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
+    COMMENT "Copying assets to the runtime output directory"
+    VERBATIM
+)
+
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
