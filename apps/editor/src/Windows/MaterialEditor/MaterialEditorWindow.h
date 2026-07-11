@@ -31,12 +31,15 @@ namespace QtNodes
 struct MaterialEditorWindowDesc
 {
 	bgl::GraphicsHandle gfx                 = nullptr;
+	bgl::SceneHandle    scene               = nullptr;
 	uint32_t            maxPreviewInstances = 16;
 	MaterialPreviewEnv  previewEnv;
 };
 
 // The material-authoring surface: a node blackboard (QtNodes) on the left and a live model preview
-// on the right. The preview owns its own scene so its geometry never leaks into the level view.
+// on the right. The preview shares the editor's one Scene and renders it through its own SceneView,
+// so geometry and materials are pooled once while instances, environment and exposure stay per-view
+// -- a mesh previewed here is not instanced into the level view.
 // The node model and preview content are filled in later; this is the window shell + wiring.
 class MaterialEditorWindow : public QWidget
 {
@@ -115,7 +118,6 @@ private:
 
 	std::filesystem::path m_DataRoot;  // empty until a project is opened
 
-	bgl::SceneHandle       m_PreviewScene;
 	MaterialPreviewWindow* m_Preview = nullptr;
 
 	// Shared by every TextureNode across every submesh graph, so a texture is decoded once.

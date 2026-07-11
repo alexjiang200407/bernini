@@ -159,23 +159,14 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		this,
 		&MaterialEditorWindow::AddTextureNode);
 
-	// Model Preview
+	// Model Preview. It renders the editor's shared Scene through a SceneView of its own, so the
+	// geometry pools are sized once (in config.json) rather than split across two scenes.
 	QWidget* rightPanel = nullptr;
-	if (m_Desc.gfx)
+	if (m_Desc.gfx && m_Desc.scene)
 	{
-		auto sceneDesc                    = bgl::SceneDesc();
-		sceneDesc.maxGeom                 = 16;
-		sceneDesc.maxMeshlets             = 8192;
-		sceneDesc.maxSubmeshes            = 128;
-		sceneDesc.maxVertexBufferByteSize = 8000000;
-		sceneDesc.maxIndices              = 400000;
-		sceneDesc.maxPbrMaterials         = 16;
-		sceneDesc.maxLoosePbrMaterials    = 256;
-		m_PreviewScene                    = m_Desc.gfx->CreateScene(sceneDesc);
-
 		auto rtDesc         = RenderTargetWindowDesc();
 		rtDesc.gfx          = m_Desc.gfx;
-		rtDesc.scene        = m_PreviewScene;
+		rtDesc.scene        = m_Desc.scene;
 		rtDesc.maxInstances = m_Desc.maxPreviewInstances;
 
 		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
@@ -197,7 +188,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_TexturePreviews = new TexturePreviewCache(this);
 
 	m_Registry            = std::make_shared<NodeDelegateModelRegistry>();
-	bgl::IScene* scene    = m_PreviewScene ? m_PreviewScene.Get() : nullptr;
+	bgl::IScene* scene    = m_Desc.scene ? m_Desc.scene.Get() : nullptr;
 	auto*        previews = m_TexturePreviews;
 	m_Registry->registerModel<TextureNode>(
 		[scene, previews]() { return std::make_unique<TextureNode>(scene, previews); },
@@ -675,7 +666,7 @@ MaterialEditorWindow::OpenMaterialInto(int submeshIndex, const QString& path, bo
 void
 MaterialEditorWindow::CompileGraph(int submeshIndex)
 {
-	if (m_Preview == nullptr || m_PreviewScene == nullptr)
+	if (m_Preview == nullptr || m_Desc.scene == nullptr)
 		return;
 	if (submeshIndex < 0 || submeshIndex >= static_cast<int>(m_SubmeshGraphs.size()))
 		return;
@@ -706,5 +697,5 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 
 	m_Preview->SetSubmeshMaterial(
 		static_cast<uint32_t>(submeshIndex),
-		m_PreviewScene->CreateLoosePbrMaterial(desc));
+		m_Desc.scene->CreateLoosePbrMaterial(desc));
 }

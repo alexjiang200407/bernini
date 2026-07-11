@@ -54,16 +54,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 		m_Graphics = bgl::CreateGraphics(gfxOpts);
 
-		// The scene rendered in the default Level Editor viewport.
+		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
+		// preview) renders it through a SceneView of its own, so geometry, textures and materials
+		// are pooled here once and these budgets must cover all of them together.
 		auto sceneDesc         = bgl::SceneDesc();
 		auto sceneSettings     = settings["scene"];
-		sceneDesc.maxGeom      = sceneSettings["maxGeom"].GetOrDefault(100);
-		sceneDesc.maxMeshlets  = sceneSettings["maxMeshlets"].GetOrDefault(1000);
-		sceneDesc.maxSubmeshes = sceneSettings["maxSubmeshes"].GetOrDefault(100);
+		sceneDesc.maxGeom      = sceneSettings["maxGeom"].GetOrDefault(256);
+		sceneDesc.maxMeshlets  = sceneSettings["maxMeshlets"].GetOrDefault(32768);
+		sceneDesc.maxSubmeshes = sceneSettings["maxSubmeshes"].GetOrDefault(512);
 		sceneDesc.maxVertexBufferByteSize =
-			sceneSettings["maxVertexBufferByteSize"].GetOrDefault(400000);
-		sceneDesc.maxIndices      = sceneSettings["maxIndices"].GetOrDefault(100000);
-		sceneDesc.maxPbrMaterials = sceneSettings["maxPbrMaterials"].GetOrDefault(200);
+			sceneSettings["maxVertexBufferByteSize"].GetOrDefault(33554432);
+		sceneDesc.maxIndices           = sceneSettings["maxIndices"].GetOrDefault(2000000);
+		sceneDesc.maxPbrMaterials      = sceneSettings["maxPbrMaterials"].GetOrDefault(256);
+		sceneDesc.maxLoosePbrMaterials = sceneSettings["maxLoosePbrMaterials"].GetOrDefault(256);
 
 		m_Scene = m_Graphics->CreateScene(sceneDesc);
 
@@ -77,6 +80,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		auto matSettings              = settings["materialEditor"];
 		auto matDesc                  = MaterialEditorWindowDesc();
 		matDesc.gfx                   = m_Graphics;
+		matDesc.scene                 = m_Scene;
 		matDesc.maxPreviewInstances   = matSettings["maxPreviewInstances"].GetOrDefault(16u);
 		matDesc.previewEnv.skybox     = matSettings["skybox"].GetOrDefault(std::string());
 		matDesc.previewEnv.irradiance = matSettings["irradiance"].GetOrDefault(std::string());
