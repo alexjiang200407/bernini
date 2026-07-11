@@ -176,13 +176,14 @@ For a concrete procedural builder (cube / sphere meshletization), see
 * **`Range` / `RangeWithCount` / `Entry` default to `0xFFFFFFFF` (null).** Check `Null()` before
   dereferencing; a zero-initialized struct is *not* a valid range.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
-* **`GeomAsset::submeshes` is indexed by source submesh, and only stays so while the mapping is
+* **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the GPU array directly with that number. Any change
   that makes `AddStaticMesh` emit a number of submeshes other than `meshEntry.submeshCount` silently
   breaks every such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
   triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
   expand it at the *instance* level, not in the geometry buffers.
+* **Destroy every mesh instance placed from a geom before you `DeleteGeom` it.**
 * **A mirror-buffer handle is only valid while its range is live.** After `Erase`, the generation
   bumps and the stale handle reports invalid; the raw GPU-side offset carries no generation, so
   code that stored only the offset must re-validate against the buffer before reuse.

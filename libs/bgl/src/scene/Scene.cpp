@@ -124,9 +124,7 @@ namespace bgl
 		// rounded up to whole 4-byte words.
 		const uint32_t maxVertexWords = (m_Desc.maxVertexBufferByteSize + 3u) / 4u;
 
-		// Geometry assets are CPU-only (they hold the shared submeshes descriptor +
-		// refcount); the heavy data lives in the GPU range buffers below.
-		m_GeomAssets.reset(m_Desc.maxGeom);
+		m_GeomSubmeshes.reset(m_Desc.maxGeom);
 
 		{
 			auto submeshBufferDesc      = RangeBufferDesc();
@@ -349,11 +347,11 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -508,11 +506,11 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -629,11 +627,12 @@ namespace bgl
 			const auto baseSubmeshGlobal =
 				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			// RangeWithCount is assignable from the buffer handle, but not constructible from it.
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -775,7 +774,7 @@ namespace bgl
 		{
 			throw SceneError("GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh");
 		}
-		if (!IsGeomSlotValid(geom.handle))
+		if (!IsGeomAlive(geom))
 		{
 			throw SceneError("GeomHandle passed to SetSubmeshMaterial has expired or is invalid");
 		}
@@ -784,13 +783,13 @@ namespace bgl
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
 
-		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (submeshIndex >= asset.submeshes.count)
+		const idl::RangeWithCount& submeshes = m_GeomSubmeshes[geom.handle.index];
+		if (submeshIndex >= submeshes.count)
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}
 
-		const uint32_t globalIndex = asset.submeshes.range.offsetStart + submeshIndex;
+		const uint32_t globalIndex = submeshes.range.offsetStart + submeshIndex;
 
 		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
 		submesh.material = material.handle;
@@ -806,25 +805,18 @@ namespace bgl
 			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh");
 		}
 
-		if (!m_GeomAssets.valid(geom.handle.index, geom.handle.generation))
+		if (!IsGeomAlive(geom))
 		{
 			throw SceneError("GeomHandle passed to DeleteGeom refers to a deleted or unknown geom");
 		}
 
-		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (asset.refCount != 0)
-		{
-			throw SceneError(
-				std::format(
-					"Cannot delete geom still referenced by {} live mesh instance(s)",
-					asset.refCount));
-		}
+		const auto& submeshes = m_GeomSubmeshes[geom.handle.index];
 
 		// The geometry's per-part ranges live on each Submesh, and each submesh owns its own, so
 		// free them per submesh before releasing the submesh range itself.
-		const uint32_t submeshRoot = asset.submeshes.range.offsetStart;
+		const uint32_t submeshRoot = submeshes.range.offsetStart;
 
-		for (uint32_t i = 0; i < asset.submeshes.count; ++i)
+		for (uint32_t i = 0; i < submeshes.count; ++i)
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
@@ -835,7 +827,7 @@ namespace bgl
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);
-		m_GeomAssets.release_slot(geom.handle.index);
+		m_GeomSubmeshes.release_slot(geom.handle.index);
 	}
 
 	TextureAssetHandle
