@@ -145,7 +145,6 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
 	// one submesh-instance per submesh (the cube has exactly one).
 	const uint32_t meshIndex = inst.handle.index;
-	const uint32_t geomIndex = geom.handle.index;
 
 	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
 	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
@@ -165,15 +164,14 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		CHECK(instanceBuffer.Count() == 1);
 		CHECK(instanceBuffer.IsValid(submeshInstance));
 
-		// EntryBuffer (mesh record): live, and it tracks its source geom asset.
+		// EntryBuffer (mesh record): live. It no longer records its source geom -- an instance
+		// references geometry only by the submesh range it copied.
 		CHECK(meshBuffer.IsIndexValid(meshIndex));
-		CHECK(meshBuffer.MetaAt(meshIndex).geomIndex == geomIndex);
 		CHECK(meshBuffer.AtIndex(meshIndex).transform[0][0] == 1.0f);
 		CHECK(meshBuffer.AtIndex(meshIndex).transform[3][3] == 1.0f);
 
-		// Geometry asset (CPU-side): live with a single reference from the instance.
-		CHECK(scene->IsGeomSlotValid(geom.handle));
-		CHECK(scene->GetGeomAsset(geomIndex).refCount == 1);
+		// Geometry (CPU-side): alive. Nothing counts the instances referencing it.
+		CHECK(scene->IsGeomAlive(geom));
 
 		// RangeBuffers: the cube's geometry data is live.
 		CHECK(submeshBuffer.IsIndexValid(submeshRoot));
@@ -195,9 +193,8 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		// EntryBuffer (mesh record): its slot was freed.
 		CHECK_FALSE(meshBuffer.IsIndexValid(meshIndex));
 
-		// Geometry asset: retained, with the reference count dropped to zero.
-		CHECK(scene->IsGeomSlotValid(geom.handle));
-		CHECK(scene->GetGeomAsset(geomIndex).refCount == 0);
+		// Geometry: retained. Deleting an instance never frees geometry.
+		CHECK(scene->IsGeomAlive(geom));
 
 		// RangeBuffers: untouched - deleting a mesh does not free geometry.
 		CHECK(submeshBuffer.IsIndexValid(submeshRoot));
@@ -213,7 +210,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		scene->DeleteGeom(geom);
 
 		// Geometry asset: slot freed, handle stale.
-		CHECK_FALSE(scene->IsGeomSlotValid(geom.handle));
+		CHECK_FALSE(scene->IsGeomAlive(geom));
 
 		// RangeBuffers: every owned range is now freed.
 		CHECK_FALSE(submeshBuffer.IsIndexValid(submeshRoot));
@@ -247,11 +244,11 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 	REQUIRE(geom.IsValid());
 
 	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
-	CHECK(scene->GetGeomAsset(geom.handle.index).submeshes.count == 2u);
+	CHECK(scene->GetGeomSubmeshes(geom.handle.index).count == 2u);
 
 	auto           geomBuffers   = scene->GetBuffers();
 	auto&          submeshBuffer = std::get<0>(geomBuffers);
-	const uint32_t root = scene->GetGeomAsset(geom.handle.index).submeshes.range.offsetStart;
+	const uint32_t root          = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
 
 	// The whole source submesh is dispatched from one GPU submesh, so all of its meshlets are there.
 	CHECK(submeshBuffer.AtIndex(root).meshlets.count == c_LargeMeshletCount);
@@ -292,10 +289,10 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	pbr.materialType = bgl::MaterialType::kPBR;
 
 	const auto checkPso = [&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::PsoType expected) {
-		const bgl::GeomAsset& asset = scene->GetGeomAsset(geom.handle.index);
+		const bgl::idl::RangeWithCount& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
 		INFO("source submesh " << sourceIndex);
 		CHECK(
-			submeshBuffer.AtIndex(asset.submeshes.range.offsetStart + sourceIndex).pso ==
+			submeshBuffer.AtIndex(submeshes.range.offsetStart + sourceIndex).pso ==
 			static_cast<uint32_t>(expected));
 	};
 

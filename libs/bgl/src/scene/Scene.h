@@ -14,18 +14,6 @@ namespace bgl
 	class ICommandList;
 	class FrameGraph;
 
-	// A geometry asset lives on the CPU only: its heavy data (submesh / vertex /
-	// index / meshlet ranges) is shared in the Scene's GPU buffers, and each
-	// per-placement Mesh (owned by a SceneView) copies the tiny submeshes
-	// descriptor. refCount tracks live placements so DeleteGeom can refuse a
-	// still-referenced asset.
-	struct GeomAsset
-	{
-		idl::RangeWithCount submeshes;
-
-		uint32_t refCount = 0;
-	};
-
 	class Scene : public core::RefCounter<IScene>
 	{
 	public:
@@ -67,41 +55,22 @@ namespace bgl
 		}
 
 		// --- SceneView support -------------------------------------------------
-		// Instances live in SceneViews; they reference this Scene's geometry and
-		// inc/decrement the per-geom refcount so DeleteGeom can refuse a live geom.
+		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
+		// the submesh range below into its per-placement Mesh. The Scene keeps no record of who
+		// placed what, so the caller owns the ordering -- see IScene::DeleteGeom.
 
 		[[nodiscard]] bool
-		IsGeomSlotValid(core::slot_handle handle) const noexcept
+		IsGeomAlive(GeomHandle geom) const noexcept override
 		{
-			return m_GeomAssets.valid(handle.index, handle.generation);
+			return geom.IsValid() && m_GeomSubmeshes.valid(geom.handle);
 		}
 
-		[[nodiscard]] bool
-		IsGeomIndexValid(uint32_t index) const noexcept
+		// The submesh range a SceneView copies into a per-placement Mesh at instance-creation time.
+		// Only valid while the geom is alive; check IsGeomAlive first.
+		[[nodiscard]] const idl::RangeWithCount&
+		GetGeomSubmeshes(uint32_t index) const noexcept
 		{
-			return m_GeomAssets.allocated(index);
-		}
-
-		void
-		IncGeomRef(uint32_t index) noexcept
-		{
-			++m_GeomAssets[index].refCount;
-		}
-
-		void
-		DecGeomRef(uint32_t index) noexcept
-		{
-			auto& asset = m_GeomAssets[index];
-			gassert(asset.refCount > 0, "Geom reference count underflow");
-			--asset.refCount;
-		}
-
-		// The geometry asset (submeshes range + total meshlet count) a SceneView
-		// copies into a per-placement Mesh at instance-creation time.
-		[[nodiscard]] const GeomAsset&
-		GetGeomAsset(uint32_t index) const noexcept
-		{
-			return m_GeomAssets[index];
+			return m_GeomSubmeshes[index];
 		}
 
 		[[nodiscard]] const std::string&
@@ -167,7 +136,9 @@ namespace bgl
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
-		core::slot_vector<GeomAsset> m_GeomAssets;
+		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer. The slot generation is
+		// what makes a GeomHandle expire when its geom is deleted (see IsGeomAlive).
+		core::slot_vector<idl::RangeWithCount> m_GeomSubmeshes;
 
 		RangeBuffer<idl::Submesh> m_SubmeshBuffer;
 		RangeBuffer<idl::Meshlet> m_MeshletBuffer;
