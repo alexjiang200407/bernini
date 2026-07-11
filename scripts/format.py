@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Format source files in place with clang-format.
 
-Prefers clang-format on PATH; otherwise falls back to the copy bundled with the
-Visual Studio LLVM component (located via vswhere, no hardcoded paths).
+Uses tools.clang-format from scripts/config.json (see `just init`) when it is set,
+else clang-format on PATH, else the copy bundled with the Visual Studio LLVM
+component (located via vswhere, no hardcoded paths).
 
 .slang files are formatted as C# so the dedicated bgl/shaders/.clang-format
 (Language: CSharp) applies. clang-format infers a file's language from its
@@ -21,7 +22,7 @@ import os
 import subprocess
 import sys
 
-import util.cmake_tools as ct
+import util.config as cfg
 
 
 def is_slang(path):
@@ -55,7 +56,7 @@ def format_slang(clang_format, path, check):
         return 0
 
     if check:
-        print(f"{path}: not formatted (run scripts/format.py to fix)", file=sys.stderr)
+        print(f"{path}: not formatted (run `just format {path}` to fix)", file=sys.stderr)
         return 1
 
     with open(path, "wb") as f:
@@ -73,11 +74,12 @@ def main():
         print("usage: format.py <file> [<file> ...]", file=sys.stderr)
         return 1
 
-    clang_format = ct.find_clang_format()
+    clang_format = cfg.find_clang_format()
     if not clang_format:
         print("clang-format was not found.\n"
               "Install the \"C++ Clang tools for Windows\" (LLVM) component from the Visual Studio Installer,\n"
-              "or install LLVM and add clang-format to your PATH.", file=sys.stderr)
+              "or install LLVM and add clang-format to your PATH.\n"
+              "If it lives somewhere else, run `just init` to record its path.", file=sys.stderr)
         return 1
 
     slang_files = [f for f in args.files if is_slang(f)]

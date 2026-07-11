@@ -1,0 +1,4 @@
+# Machine-local settings written by `b init`. See config.example.json.
+config.json
+
+__pycache__/

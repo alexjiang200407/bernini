@@ -17,11 +17,11 @@ to regenerate on demand without a full build. The tool path is resolved from the
 CMake File API codemodel (generator-agnostic), like find_executables.py.
 
 Usage:
-    python scripts/gen_idl.py                       # regenerate everything
-    python scripts/gen_idl.py --config Release      # pick a configuration
-    python scripts/gen_idl.py --build               # build bgl_idlgen first
-    python scripts/gen_idl.py --dry-run             # print commands, don't run
-    python scripts/gen_idl.py bgl/idl/src/Vertex.slang   # only these modules
+    just idl                                # regenerate everything
+    just idl --config Release               # pick a configuration
+    just idl --build                        # build bgl_idlgen first
+    just idl --dry-run                      # print commands, don't run
+    just idl libs/bgl/idl/src/Vertex.slang  # only these modules
 """
 
 import argparse
@@ -30,6 +30,7 @@ import subprocess
 import sys
 
 import util.cmake_tools as ct
+import util.config as cfg
 
 TOOL = "bgl_idlgen"
 SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "src")
@@ -70,28 +71,30 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("modules", nargs="*", help="Specific .slang modules (default: all).")
-    parser.add_argument("--build-dir", help="Build directory (default: scan build/*).")
-    parser.add_argument("--config", help="Configuration to use (e.g. Debug, Release).")
+    parser.add_argument("--build-dir", help="Build directory (default: the configured preset's).")
+    parser.add_argument("--config", help="Configuration to use (e.g. Debug, Release; default: config.json).")
     parser.add_argument("--build", action="store_true", help="Build bgl_idlgen first.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without running.")
     args = parser.parse_args()
 
+    config = cfg.artifact_config(args.config)
+
     if args.build and not args.dry_run:
         build = [sys.executable, os.path.join(ct.REPO_ROOT, "scripts", "build.py"), TOOL]
-        if args.config:
-            build += ["--config", args.config]
+        if config:
+            build += ["--config", config]
         rc = subprocess.run(build).returncode
         if rc:
             return rc
 
-    tool = resolve_tool(args.build_dir, args.config)
+    tool = resolve_tool(cfg.build_dir(args.build_dir), config)
     if not tool:
         print(f"error: no '{TOOL}' executable in the codemodel. Configure a build first "
-              f"(python scripts/build.py {TOOL}), or pass --build.", file=sys.stderr)
+              f"(`just build {TOOL}`), or pass --build.", file=sys.stderr)
         return 2
     if not os.path.isfile(tool) and not args.dry_run:
-        print(f"error: '{tool}' is not built yet. Build it with: "
-              f"python scripts/build.py {TOOL}  (or pass --build).", file=sys.stderr)
+        print(f"error: '{tool}' is not built yet. Build it with: `just build {TOOL}` "
+              f"(or pass --build).", file=sys.stderr)
         return 1
 
     # Run from the tool's own directory so its runtime DLLs (slang.dll) resolve,
