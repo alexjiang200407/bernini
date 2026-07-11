@@ -27,7 +27,6 @@ namespace assetlib
 		std::vector<std::byte> indexData;   // all index buffers
 		std::vector<char>      stringPool;  // NUL-terminated names; offset 0 is the empty string
 
-		// File-path handles to the `.bmaterial` files this mesh uses; Submesh::material indexes here.
 		std::vector<std::string> materials;
 	};
 }

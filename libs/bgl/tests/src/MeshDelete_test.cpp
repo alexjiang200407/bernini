@@ -26,6 +26,86 @@ namespace
 		desc.maxIndices              = 1000;
 		return desc;
 	}
+
+	bgl::SceneDesc
+	MeshletSceneDesc()
+	{
+		auto desc                    = bgl::SceneDesc();
+		desc.maxGeom                 = 4;
+		desc.maxSubmeshes            = 16;
+		desc.maxMeshlets             = 256;
+		desc.maxVertexBufferByteSize = 64000;
+		desc.maxIndices              = 4000;
+		return desc;
+	}
+
+	// A BMesh with one source submesh per entry of `meshletCounts`, each meshlet a single triangle.
+	// A submesh's meshlet count is a dispatch dimension, never a partitioning criterion, so however
+	// large a count is fed in, AddStaticMesh must still produce exactly one GPU submesh for it.
+	assetlib::BMesh
+	MakeMeshletMesh(std::span<const uint32_t> meshletCounts)
+	{
+		constexpr uint16_t kStride = 12;  // one float32x3 position
+
+		auto mesh = assetlib::BMesh();
+		mesh.stringPool.push_back('\0');
+
+		uint32_t totalVertices = 0;
+		for (const uint32_t count : meshletCounts) totalVertices += count * 3;
+		mesh.vertexData.resize(static_cast<size_t>(totalVertices) * kStride);
+
+		uint32_t vertexCursor = 0;
+		for (const uint32_t count : meshletCounts)
+		{
+			const auto firstMeshlet = static_cast<uint32_t>(mesh.meshlets.size());
+
+			for (uint32_t i = 0; i < count; ++i)
+			{
+				auto meshlet           = assetlib::Meshlet();
+				meshlet.vertexOffset   = static_cast<uint32_t>(mesh.meshletVertices.size());
+				meshlet.triangleOffset = static_cast<uint32_t>(mesh.meshletTriangles.size());
+				meshlet.vertexCount    = 3;
+				meshlet.triangleCount  = 1;
+				meshlet.boundingCenter = glm::vec3(0.0f);
+				meshlet.boundingRadius = 1.0f;
+				mesh.meshlets.push_back(meshlet);
+
+				// vertexMap entries are submesh-local vertex indices, not global ones.
+				for (uint32_t v = 0; v < 3; ++v) mesh.meshletVertices.push_back(i * 3 + v);
+				for (uint8_t t = 0; t < 3; ++t) mesh.meshletTriangles.push_back(t);
+			}
+
+			auto submesh                  = assetlib::Submesh();
+			submesh.layout.attributeCount = 1;
+			submesh.layout.stride         = kStride;
+			submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+				                              assetlib::VertexFormat::kFloat32x3,
+				                              0 };
+			submesh.vertexByteOffset      = vertexCursor * kStride;
+			submesh.vertexCount           = count * 3;
+			submesh.firstMeshlet          = firstMeshlet;
+			submesh.meshletCount          = count;
+			submesh.material              = assetlib::c_InvalidIndex;
+			submesh.aabbMin               = glm::vec3(-1.0f);
+			submesh.aabbMax               = glm::vec3(1.0f);
+			submesh.nameOffset            = 0;
+			mesh.submeshes.push_back(submesh);
+
+			vertexCursor += count * 3;
+		}
+
+		auto entry         = assetlib::Mesh();
+		entry.firstSubmesh = 0;
+		entry.submeshCount = static_cast<uint32_t>(meshletCounts.size());
+		entry.nameOffset   = 0;
+		mesh.meshes.push_back(entry);
+
+		return mesh;
+	}
+
+	// Comfortably more meshlets than a mesh-shader thread group has threads (64): a submesh this
+	// size used to be chunked into several GPU submeshes.
+	constexpr uint32_t c_LargeMeshletCount = 65;
 }
 
 TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
@@ -56,7 +136,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
 	auto geomBuffers = scene->GetBuffers();
-	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, _] =
+	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, pbrBuffer, looseBuffer] =
 		geomBuffers;
 
 	auto instBuffers                                              = view->GetInstanceBuffers();
@@ -141,6 +221,107 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		CHECK_FALSE(indexBuffer.IsIndexValid(indexRoot));
 		CHECK_FALSE(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK_FALSE(vertexMapBuffer.IsIndexValid(vertexMapRoot));
+	}
+}
+
+// A submesh is the unit of pipeline state, so its meshlet count -- however large -- must not split
+// it. AddStaticMesh once chunked a submesh past 64 meshlets into several GPU submeshes, which made
+// the source and GPU submesh indices disagree and left the chunks sharing one vertexData range.
+TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(MeshletSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 4);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	const std::array<uint32_t, 2> counts = { { c_LargeMeshletCount, 1 } };
+	const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
+
+	auto geom = scene->AddStaticMesh(mesh, 0, {});
+	REQUIRE(geom.IsValid());
+
+	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
+	CHECK(scene->GetGeomAsset(geom.handle.index).submeshes.count == 2u);
+
+	auto           geomBuffers   = scene->GetBuffers();
+	auto&          submeshBuffer = std::get<0>(geomBuffers);
+	const uint32_t root = scene->GetGeomAsset(geom.handle.index).submeshes.range.offsetStart;
+
+	// The whole source submesh is dispatched from one GPU submesh, so all of its meshlets are there.
+	CHECK(submeshBuffer.AtIndex(root).meshlets.count == c_LargeMeshletCount);
+	CHECK(submeshBuffer.AtIndex(root + 1).meshlets.count == 1);
+
+	// Each submesh owns its own vertexData range; nothing is shared, so nothing is double-freed.
+	CHECK(
+		submeshBuffer.AtIndex(root).vertexData.offsetStart !=
+		submeshBuffer.AtIndex(root + 1).vertexData.offsetStart);
+
+	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	REQUIRE(inst.IsValid());
+	view->DeleteMeshInstance(inst);
+
+	REQUIRE_NOTHROW(scene->DeleteGeom(geom));
+
+	// The freed ranges are reusable: re-adding the same mesh succeeds (the drop-the-same-mesh path).
+	auto geom2 = scene->AddStaticMesh(mesh, 0, {});
+	REQUIRE(geom2.IsValid());
+}
+
+// SetSubmeshMaterial is indexed by source submesh. Once chunking made that index disagree with the
+// GPU submesh index, materialing one submesh wrote over a neighbour's, or covered only part of its
+// own -- a mesh half-textured along a triangle-aligned seam.
+TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][pso][scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(MeshletSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  geomBuffers   = scene->GetBuffers();
+	auto& submeshBuffer = std::get<0>(geomBuffers);
+
+	auto pbr         = bgl::MaterialHandle();
+	pbr.materialType = bgl::MaterialType::kPBR;
+
+	const auto checkPso = [&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::PsoType expected) {
+		const bgl::GeomAsset& asset = scene->GetGeomAsset(geom.handle.index);
+		INFO("source submesh " << sourceIndex);
+		CHECK(
+			submeshBuffer.AtIndex(asset.submeshes.range.offsetStart + sourceIndex).pso ==
+			static_cast<uint32_t>(expected));
+	};
+
+	// Source submesh 0 has 65 meshlets, which chunking would have expanded into two GPU submeshes,
+	// pushing source submesh 1 to GPU index 2.
+	const std::array<uint32_t, 2> counts = { { c_LargeMeshletCount, 1 } };
+	const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
+
+	SECTION("Materialing a submesh covers it and leaves its neighbour alone")
+	{
+		auto geom = scene->AddStaticMesh(mesh, 0, {});
+		REQUIRE(geom.IsValid());
+
+		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 1, pbr));
+
+		checkPso(geom, 1, bgl::PsoType::kOpaque_StaticMesh_PBR);
+		// Submesh 0 was never assigned a material, so it stays on the Null PSO.
+		checkPso(geom, 0, bgl::PsoType::kOpaque_StaticMesh_Null);
+	}
+
+	SECTION("One past the last source submesh throws")
+	{
+		auto geom = scene->AddStaticMesh(mesh, 0, {});
+		REQUIRE(geom.IsValid());
+
+		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 2, pbr), bgl::SceneError);
 	}
 }
 

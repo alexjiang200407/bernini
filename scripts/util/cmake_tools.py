@@ -132,6 +132,44 @@ def generator_of(preset):
     return _resolve_field(preset, by_name, "generator")
 
 
+def _resolve_cache_var(name, by_name, key, seen=None):
+    """First value of cache variable `key`, searching the preset then its inherits.
+
+    Mirrors CMake preset precedence: the preset itself wins over what it inherits,
+    and earlier entries in `inherits` win over later ones (depth-first).
+    """
+    seen = seen or set()
+    if name in seen or name not in by_name:
+        return None
+    seen.add(name)
+    preset = by_name[name]
+    cache = preset.get("cacheVariables", {})
+    if key in cache:
+        value = cache[key]
+        # A cache var may be a bare string or {"type": ..., "value": ...}.
+        return value.get("value") if isinstance(value, dict) else value
+    inherits = preset.get("inherits", [])
+    if isinstance(inherits, str):
+        inherits = [inherits]
+    for parent in inherits:
+        value = _resolve_cache_var(parent, by_name, key, seen)
+        if value is not None:
+            return value
+    return None
+
+
+def cache_var_of(preset, key):
+    """Resolve a cache variable's value through the preset's inherit chain (or None)."""
+    _, by_name = load_presets()
+    return _resolve_cache_var(preset, by_name, key)
+
+
+def uses_clang(preset):
+    """True when the preset's CXX compiler resolves to some flavor of clang."""
+    compiler = cache_var_of(preset, "CMAKE_CXX_COMPILER") or ""
+    return "clang" in os.path.basename(str(compiler)).lower()
+
+
 def binary_dir_of(preset):
     _, by_name = load_presets()
     binary_dir = _resolve_field(preset, by_name, "binaryDir")
@@ -221,6 +259,48 @@ def find_cmake(env=None):
         candidate = os.path.join(
             install, "Common7", "IDE", "CommonExtensions", "Microsoft",
             "CMake", "CMake", "bin", "cmake.exe",
+        )
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def find_clang(env=None):
+    """Locate a clang / clang++ pair for use as the CMake compiler.
+
+    Prefers the "C++ Clang tools for Windows" (LLVM) component bundled with
+    Visual Studio -- the one installed from the VS Installer -- and falls back to
+    clang on PATH (env's PATH if given) otherwise. Returns
+    {"c": <clang>, "cxx": <clang++>} or None if a matching pair isn't found.
+    """
+    install = vs_install_path()
+    if install:
+        # Prefer the 64-bit hosted toolchain when both are present.
+        for sub in (("VC", "Tools", "Llvm", "x64", "bin"), ("VC", "Tools", "Llvm", "bin")):
+            base = os.path.join(install, *sub)
+            c = os.path.join(base, "clang.exe")
+            cxx = os.path.join(base, "clang++.exe")
+            if os.path.isfile(c) and os.path.isfile(cxx):
+                return {"c": c, "cxx": cxx}
+    search_path = env.get("PATH") if env else None
+    c = shutil.which("clang", path=search_path) or shutil.which("clang")
+    cxx = shutil.which("clang++", path=search_path) or shutil.which("clang++")
+    if c and cxx:
+        return {"c": c, "cxx": cxx}
+    return None
+
+
+def find_ninja(env=None):
+    """Locate ninja on PATH (env's PATH if given), else the copy bundled with VS's CMake."""
+    search_path = env.get("PATH") if env else None
+    exe = shutil.which("ninja", path=search_path) or shutil.which("ninja")
+    if exe:
+        return exe
+    install = vs_install_path()
+    if install:
+        candidate = os.path.join(
+            install, "Common7", "IDE", "CommonExtensions", "Microsoft",
+            "CMake", "Ninja", "ninja.exe",
         )
         if os.path.isfile(candidate):
             return candidate

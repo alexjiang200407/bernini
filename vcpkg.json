@@ -12,9 +12,10 @@
     "nlohmann-json",
     "stb",
     "meshoptimizer",
+    "ktx",
+    { "name": "sdl3", "platform": "windows" },
     { "name": "directx-headers", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },
-    { "name": "directxtex", "platform": "windows" },
     { "name": "winpixevent", "platform": "windows" }
   ],
   "builtin-baseline": "05925b52317eb9a900a8583782e630aafd7a8929"

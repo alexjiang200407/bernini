@@ -41,6 +41,15 @@ compile_shader(
 )
 
 compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_PBR_Loose.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Null.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"

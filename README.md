@@ -28,6 +28,15 @@ Or use Visual Studio.
 
 We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt-online-installation.html). In the Qt installer wizard, check Qt for `Development/Qt/Qt x.x.x/MSVC 2022 64-bit` (editor is windows only for now) and uncheck everything else.
 
+### System Requirements
+
+**On Windows**
+
+- NVIDIA: Turing or newer — GTX 1660 / RTX 2060 and up.
+- AMD: RDNA2 or newer — Radeon RX 6000 series and up (RX 5000/RDNA1 is excluded despite DX12 support).
+- Intel: Arc A-series (Alchemist) or newer. Integrated Xe/UHD generally lacks mesh shaders.
+- OS: Windows 10+
+
 ## Soft Requirements
 
 ### clang format
@@ -37,5 +46,6 @@ We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt
 ## Features
 - GPU Driven Instance Rendering
 - Forward Renderer
-- Clustered Geometry (Meshlets)
+- Clustered Geometry
 - Cross Platform (Windows, Linux, Xbox)
+- Image Based Lighting

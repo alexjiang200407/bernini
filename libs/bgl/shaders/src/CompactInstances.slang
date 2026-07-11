@@ -3,7 +3,7 @@ import types.SubmeshInstance;
 import types.PackedBuffer;
 import types.EntryBuffer;
 import types.RangeBuffer;
-import types.PsoType;
+import idl.PsoType;
 import idl.Mesh;
 import idl.Submesh;
 import idl.DispatchArgs;

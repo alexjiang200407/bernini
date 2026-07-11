@@ -14,9 +14,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_MeshDxil  = "./shaders/Skybox_MSMain.dxil"sv;
-		constexpr auto c_PixelDxil = "./shaders/Skybox_PSMain.dxil"sv;
-		constexpr auto c_Src       = "Skybox"sv;
+		constexpr auto c_Src = "Skybox"sv;
 	}
 
 	void
@@ -26,12 +24,10 @@ namespace bgl
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader =
-			device->CreateShader(std::string(c_MeshDxil), std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader =
-			device->CreateShader(std::string(c_PixelDxil), std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::BGRA8_UNORM);
+		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
 
 		auto raster = RasterState();
@@ -82,7 +78,9 @@ namespace bgl
 		gassert(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
 		gassert(draw.skybox.has_value(), "SkyboxPass executed without a valid skybox");
 
-		if (auto found = m_Kernel.FindUniforms("skyboxData"))
+		// Keyed on the Slang global's name as reflection reports it, so this string must track
+		// the ConstantBuffer declaration in Skybox.slang.
+		if (auto found = m_Kernel.FindUniforms("gSkyboxData"))
 		{
 			auto& skybox = *found;
 
@@ -107,7 +105,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Skybox shader is missing its 'skyboxData' constant buffer");
+			gfatal("Skybox shader is missing its 'gSkyboxData' constant buffer");
 		}
 
 		auto gfxState   = MeshletState();

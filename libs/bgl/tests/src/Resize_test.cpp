@@ -2,27 +2,33 @@
 
 namespace
 {
-	struct DdsSize
+	struct ImageSize
 	{
 		uint32_t width;
 		uint32_t height;
 	};
 
-	DdsSize
-	ReadDdsSize(const std::string& path)
+	ImageSize
+	ReadPngSize(const std::string& path)
 	{
 		std::ifstream file(path, std::ios::binary);
 		REQUIRE(file.is_open());
 
-		uint32_t magic = 0;
-		file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-		REQUIRE(magic == 0x20534444u);  // "DDS "
-
-		uint32_t header[4] = {};
+		// PNG signature (8 bytes) + IHDR chunk length/type (8 bytes) + width/height (big-endian).
+		unsigned char header[24] = {};
 		file.read(reinterpret_cast<char*>(header), sizeof(header));
 		REQUIRE(file.good());
+		REQUIRE(header[0] == 0x89);
+		REQUIRE(header[1] == 'P');
+		REQUIRE(header[2] == 'N');
+		REQUIRE(header[3] == 'G');
 
-		return { header[3], header[2] };
+		const auto be32 = [](const unsigned char* p) {
+			return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+			       (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+		};
+
+		return { be32(header + 16), be32(header + 20) };
 	}
 
 	bgl::GraphicsOptions
@@ -96,14 +102,14 @@ TEST_CASE("Resize recreates the backbuffers", "[resize][graphics]")
 	auto target = HeadlessTarget(gfx, 16, 8);
 	REQUIRE(target != nullptr);
 
-	const std::string before = "resize_before.dds";
-	const std::string after  = "resize_after.dds";
+	const std::string before = "resize_before.png";
+	const std::string after  = "resize_after.png";
 
 	gfx->BeginFrame(target);
 	gfx->EndFrame();
 	gfx->ScreenshotRaw(target, before);
 
-	const auto beforeSize = ReadDdsSize(before);
+	const auto beforeSize = ReadPngSize(before);
 	CHECK(beforeSize.width == 16);
 	CHECK(beforeSize.height == 8);
 
@@ -113,7 +119,7 @@ TEST_CASE("Resize recreates the backbuffers", "[resize][graphics]")
 	gfx->EndFrame();
 	gfx->ScreenshotRaw(target, after);
 
-	const auto afterSize = ReadDdsSize(after);
+	const auto afterSize = ReadPngSize(after);
 	CHECK(afterSize.width == 64);
 	CHECK(afterSize.height == 32);
 
@@ -139,11 +145,11 @@ TEST_CASE("Resize with an existing static mesh instance", "[resize][graphics]")
 
 	// Drawing the pre-existing instance into the recreated backbuffers must work
 	// and produce a frame at the new size.
-	const std::string shot = "resize_mesh.dds";
+	const std::string shot = "resize_mesh.png";
 	RenderFrame(gfx, target, scene, 128, 96);
 	gfx->ScreenshotRaw(target, shot);
 
-	const auto size = ReadDdsSize(shot);
+	const auto size = ReadPngSize(shot);
 	CHECK(size.width == 128);
 	CHECK(size.height == 96);
 
@@ -160,14 +166,14 @@ TEST_CASE("Resize after drawing a frame", "[resize][graphics]")
 
 	auto scene = MakeCubeScene(gfx);
 
-	const std::string before = "resize_draw_before.dds";
-	const std::string after  = "resize_draw_after.dds";
+	const std::string before = "resize_draw_before.png";
+	const std::string after  = "resize_draw_after.png";
 
 	// Draw once at the original size.
 	RenderFrame(gfx, target, scene, 64, 64);
 	gfx->ScreenshotRaw(target, before);
 
-	const auto beforeSize = ReadDdsSize(before);
+	const auto beforeSize = ReadPngSize(before);
 	CHECK(beforeSize.width == 64);
 	CHECK(beforeSize.height == 64);
 
@@ -177,7 +183,7 @@ TEST_CASE("Resize after drawing a frame", "[resize][graphics]")
 	RenderFrame(gfx, target, scene, 160, 120);
 	gfx->ScreenshotRaw(target, after);
 
-	const auto afterSize = ReadDdsSize(after);
+	const auto afterSize = ReadPngSize(after);
 	CHECK(afterSize.width == 160);
 	CHECK(afterSize.height == 120);
 
@@ -193,7 +199,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 	auto target = HeadlessTarget(gfx, 48, 48);
 	REQUIRE(target != nullptr);
 
-	const std::string shot = "resize_edge.dds";
+	const std::string shot = "resize_edge.png";
 
 	SECTION("Resizing to the same dimensions is a no-op")
 	{
@@ -203,7 +209,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 		gfx->EndFrame();
 		gfx->ScreenshotRaw(target, shot);
 
-		const auto size = ReadDdsSize(shot);
+		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 48);
 		CHECK(size.height == 48);
 	}
@@ -218,7 +224,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 		gfx->EndFrame();
 		gfx->ScreenshotRaw(target, shot);
 
-		const auto size = ReadDdsSize(shot);
+		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 77);
 		CHECK(size.height == 41);
 	}
@@ -236,7 +242,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 		gfx->EndFrame();
 		gfx->ScreenshotRaw(target, shot);
 
-		const auto size = ReadDdsSize(shot);
+		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 80);
 		CHECK(size.height == 70);
 	}
@@ -249,7 +255,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 		gfx->EndFrame();
 		gfx->ScreenshotRaw(target, shot);
 
-		const auto size = ReadDdsSize(shot);
+		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 1);
 		CHECK(size.height == 1);
 	}
@@ -261,13 +267,13 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 		gfx->Resize(target, 256, 256);
 		RenderFrame(gfx, target, scene, 256, 256);
 		gfx->ScreenshotRaw(target, shot);
-		CHECK(ReadDdsSize(shot).width == 256);
+		CHECK(ReadPngSize(shot).width == 256);
 
 		gfx->Resize(target, 4, 4);
 		RenderFrame(gfx, target, scene, 4, 4);
 		gfx->ScreenshotRaw(target, shot);
 
-		const auto size = ReadDdsSize(shot);
+		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 4);
 		CHECK(size.height == 4);
 	}

@@ -6,6 +6,7 @@
 
 #include "ui_MainWindow.h"
 
+class QDockWidget;
 class Project;
 class ContentExplorerWindow;
 class LevelEditorWindow;
@@ -35,11 +36,20 @@ private:
 	void
 	SetActiveProject(Project project);
 
+	void
+	ShowEmptyState();
+
+	void
+	ShowProjectState();
+
 	Ui::MainWindow                  m_Ui;
 	std::unique_ptr<Project>        m_Project;
-	ContentExplorerWindow*          m_ContentExplorer = nullptr;
-	LevelEditorWindow*              m_LevelEditor     = nullptr;
-	MaterialEditorWindow*           m_MaterialEditor  = nullptr;
+	ContentExplorerWindow*          m_ContentExplorer     = nullptr;
+	LevelEditorWindow*              m_LevelEditor         = nullptr;
+	MaterialEditorWindow*           m_MaterialEditor      = nullptr;
+	QDockWidget*                    m_LevelEditorDock     = nullptr;
+	QDockWidget*                    m_MaterialEditorDock  = nullptr;
+	QDockWidget*                    m_ContentExplorerDock = nullptr;
 	core::SharedRef<bgl::IGraphics> m_Graphics;
 	core::SharedRef<bgl::IScene>    m_Scene;
 };

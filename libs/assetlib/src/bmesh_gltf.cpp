@@ -127,19 +127,6 @@ namespace assetlib
 			return indices;
 		}
 
-		VertexLayout
-		defaultLayout() noexcept
-		{
-			VertexLayout layout{};
-			layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
-			layout.attributes[1]  = { VertexSemantic::kNormal, VertexFormat::kFloat32x3, 12 };
-			layout.attributes[2]  = { VertexSemantic::kTexCoord0, VertexFormat::kFloat32x2, 24 };
-			layout.attributes[3]  = { VertexSemantic::kTangent, VertexFormat::kFloat32x4, 32 };
-			layout.attributeCount = 4;
-			layout.stride         = 48;
-			return layout;
-		}
-
 		void
 		appendBytes(std::vector<std::byte>& dst, const void* data, size_t size)
 		{
@@ -233,54 +220,70 @@ namespace assetlib
 			const auto& posAccessor = model.accessors[static_cast<size_t>(posIt->second)];
 			const auto  vertexCount = posAccessor.count;
 
-			const auto position = makeView(model, primitive, "POSITION");
-			const auto normal   = makeView(model, primitive, "NORMAL");
-			const auto texcoord = makeView(model, primitive, "TEXCOORD_0");
-			const auto tangent  = makeView(model, primitive, "TANGENT");
+			struct SourceAttribute
+			{
+				VertexSemantic semantic;
+				VertexFormat   format;
+				AttributeView  view;
+				int            components;
+			};
 
-			Submesh submesh{};
-			submesh.layout           = defaultLayout();
+			const SourceAttribute candidates[] = {
+				{ VertexSemantic::kPosition,
+				  VertexFormat::kFloat32x3,
+				  makeView(model, primitive, "POSITION"),
+				  3 },
+				{ VertexSemantic::kNormal,
+				  VertexFormat::kFloat32x3,
+				  makeView(model, primitive, "NORMAL"),
+				  3 },
+				{ VertexSemantic::kTexCoord0,
+				  VertexFormat::kFloat32x2,
+				  makeView(model, primitive, "TEXCOORD_0"),
+				  2 },
+				{ VertexSemantic::kTangent,
+				  VertexFormat::kFloat32x4,
+				  makeView(model, primitive, "TANGENT"),
+				  4 },
+			};
+
+			// Build the interleaved layout from the present attributes only.
+			Submesh  submesh{};
+			uint16_t offset = 0;
+			for (const auto& attr : candidates)
+			{
+				if (!attr.view.present())
+					continue;
+				submesh.layout.attributes[submesh.layout.attributeCount++] = { attr.semantic,
+					                                                           attr.format,
+					                                                           offset };
+				offset += static_cast<uint16_t>(formatSize(attr.format));
+			}
+			submesh.layout.stride = offset;
+
 			submesh.vertexByteOffset = static_cast<uint32_t>(mesh.vertexData.size());
 			submesh.vertexCount      = static_cast<uint32_t>(vertexCount);
 			submesh.material = primitive.material >= 0 ? static_cast<uint32_t>(primitive.material) :
 			                                             c_InvalidIndex;
 
+			// Interleave the present attributes into the vertex blob at the layout's stride.
 			mesh.vertexData.reserve(mesh.vertexData.size() + vertexCount * submesh.layout.stride);
-			glm::vec3 aabbMin(std::numeric_limits<float>::max());
-			glm::vec3 aabbMax(std::numeric_limits<float>::lowest());
 			for (size_t i = 0; i < vertexCount; ++i)
 			{
-				float       v[12] = {};
-				const auto* p     = position.at(i);
-				v[0]              = p[0];
-				v[1]              = p[1];
-				v[2]              = p[2];
-				if (normal.present())
+				for (const auto& attr : candidates)
 				{
-					const auto* n = normal.at(i);
-					v[3]          = n[0];
-					v[4]          = n[1];
-					v[5]          = n[2];
+					if (!attr.view.present())
+						continue;
+					appendBytes(
+						mesh.vertexData,
+						attr.view.at(i),
+						static_cast<size_t>(attr.components) * sizeof(float));
 				}
-				if (texcoord.present())
-				{
-					const auto* t = texcoord.at(i);
-					v[6]          = t[0];
-					v[7]          = t[1];
-				}
-				if (tangent.present())
-				{
-					const auto* t = tangent.at(i);
-					v[8]          = t[0];
-					v[9]          = t[1];
-					v[10]         = t[2];
-					v[11]         = t[3];
-				}
-				appendBytes(mesh.vertexData, v, sizeof(v));
-				aabbMin = glm::min(aabbMin, glm::vec3(v[0], v[1], v[2]));
-				aabbMax = glm::max(aabbMax, glm::vec3(v[0], v[1], v[2]));
 			}
 
+			// Prefer the accessor's declared bounds; otherwise compute from positions.
+			glm::vec3 aabbMin(std::numeric_limits<float>::max());
+			glm::vec3 aabbMax(std::numeric_limits<float>::lowest());
 			if (posAccessor.minValues.size() == 3 && posAccessor.maxValues.size() == 3)
 			{
 				aabbMin = glm::vec3(
@@ -291,6 +294,15 @@ namespace assetlib
 					posAccessor.maxValues[0],
 					posAccessor.maxValues[1],
 					posAccessor.maxValues[2]);
+			}
+			else
+			{
+				for (size_t i = 0; i < vertexCount; ++i)
+				{
+					const float* p = candidates[0].view.at(i);
+					aabbMin        = glm::min(aabbMin, glm::vec3(p[0], p[1], p[2]));
+					aabbMax        = glm::max(aabbMax, glm::vec3(p[0], p[1], p[2]));
+				}
 			}
 			submesh.aabbMin = aabbMin;
 			submesh.aabbMax = aabbMax;
@@ -549,11 +561,21 @@ namespace assetlib
 			Mesh entry{};
 			entry.firstSubmesh = static_cast<uint32_t>(mesh.submeshes.size());
 			entry.nameOffset   = addName(mesh, gltfMesh.name);
-			for (const auto& primitive : gltfMesh.primitives)
+			for (size_t p = 0; p < gltfMesh.primitives.size(); ++p)
 			{
+				const auto& primitive = gltfMesh.primitives[p];
 				if (primitive.mode != TINYGLTF_MODE_TRIANGLES)
 					throw std::runtime_error("bmesh: only triangle primitives are supported");
+
+				const size_t before = mesh.submeshes.size();
 				buildSubmesh(mesh, model, primitive);
+				if (mesh.submeshes.size() == before)
+					continue;  // primitive was skipped (e.g. no positions)
+
+				std::string submeshName = gltfMesh.name;
+				if (gltfMesh.primitives.size() > 1)
+					submeshName += "[" + std::to_string(p) + "]";
+				mesh.submeshes.back().nameOffset = addName(mesh, submeshName);
 			}
 			entry.submeshCount = static_cast<uint32_t>(mesh.submeshes.size()) - entry.firstSubmesh;
 			mesh.meshes.push_back(entry);

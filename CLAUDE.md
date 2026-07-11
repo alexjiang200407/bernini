@@ -4,7 +4,8 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 - Use bash
 - Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h` for all the targets
-- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- **Layering**: `bgl` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
 - The CMakelists will specify the src and include directory in each subsystem as a include directory for the target, so always `#include` to the relative to that. e.g. If the current source file is `$SUBSYSTEM/src/xx/Y.h` do `#include "X.h"` instead of `#include "../X.h"`
@@ -46,6 +47,14 @@ Overview of all the Frame Graph Passes
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
+**[Asset Standards](./docs/asset_standards.md)**
+
+PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.
+
+**[Environment Maps](./docs/envmaps.md)**
+
+Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma field must be 1.0, and how to verify the maps before shipping them.
+
 # Directory Structure
 
 ## Debug
@@ -77,5 +86,16 @@ Use `python ./scripts/build.py`. It configures and builds the default preset (`w
 python ./scripts/build.py                                  # default preset, all targets
 python ./scripts/build.py bgl_tests                        # one target
 python ./scripts/build.py --preset windows-ninja-msvc-dx12-debug
+python ./scripts/build.py --preset windows-clang-dx12-debug # clang (Ninja generator)
 python ./scripts/build.py --config Release                 # multi-config generators
 ```
+
+## Compilers
+
+The MSVC presets use the Visual Studio generator; the clang presets
+(`windows-clang-dx12-{debug,release}`) use the Ninja generator. `build.py`
+resolves the clang/clang++ pair and ninja to absolute paths, preferring the
+"C++ Clang tools for Windows" (LLVM) component and bundled Ninja from the Visual
+Studio install, and falling back to whatever is on PATH. Compiler-specific
+warning flags live in `cmake/enable_strict_compiler.cmake` (MSVC `/`-flags vs.
+clang `-`-flags).

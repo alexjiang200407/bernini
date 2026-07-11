@@ -154,8 +154,8 @@ namespace bgl
 
 	using GraphicsHandle = core::SharedRef<IGraphics>;
 
-	template class BGL_API core::SharedRef<IGraphics>;
-
 	BGL_API GraphicsHandle
 	CreateGraphics(const GraphicsOptions& opts);
 }
+
+template class BGL_API core::SharedRef<bgl::IGraphics>;

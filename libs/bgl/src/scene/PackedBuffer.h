@@ -212,7 +212,7 @@ namespace bgl
 		GetDescriptorHandle() const noexcept
 		{
 			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			return DescriptorHandle(m_BufferHandle.idx);
+			return DescriptorHandle(m_BufferHandle.slot);
 		}
 
 		[[nodiscard]] BufferHandle

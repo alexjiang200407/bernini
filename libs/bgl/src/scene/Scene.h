@@ -22,7 +22,8 @@ namespace bgl
 	struct GeomAsset
 	{
 		idl::RangeWithCount submeshes;
-		uint32_t            refCount = 0;
+
+		uint32_t refCount = 0;
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -61,7 +62,8 @@ namespace bgl
 				m_VertexMapBuffer,
 				m_VertexDataBuffer,
 				m_IndexBuffer,
-				m_Pbr);
+				m_Pbr,
+				m_Loose);
 		}
 
 		// --- SceneView support -------------------------------------------------
@@ -133,11 +135,26 @@ namespace bgl
 			float          radius,
 			MaterialHandle material = {}) override;
 
+		GeomHandle
+		AddStaticMesh(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials) override;
+
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
+		void
+		DeleteTextureAsset(TextureAssetHandle texture) override;
+
 		MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) override;
+
+		MaterialHandle
+		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) override;
+
+		void
+		DeleteMaterial(MaterialHandle material) override;
 
 		void
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
@@ -158,7 +175,8 @@ namespace bgl
 		RangeBuffer<uint32_t>     m_VertexDataBuffer;
 		RangeBuffer<uint32_t>     m_IndexBuffer;
 
-		EntryBuffer<idl::PbrMaterial> m_Pbr;
+		EntryBuffer<idl::PbrMaterial>      m_Pbr;
+		EntryBuffer<idl::LoosePbrMaterial> m_Loose;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 

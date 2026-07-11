@@ -196,6 +196,22 @@ namespace bgl
 	}
 
 	void
+	SceneView::SetExposure(float exposure)
+	{
+		// reject NaN and negative exposure values, which would propagate through the
+		// tone map and blank the frame or drive log2 of a negative into AgX.
+		if (!std::isfinite(exposure) || exposure < 0.0f)
+		{
+			throw SceneError(
+				std::format(
+					"SetExposure: exposure must be finite and non-negative, got {}",
+					exposure));
+		}
+
+		m_Exposure = exposure;
+	}
+
+	void
 	SceneView::SetSkyBox(SkyboxDesc desc)
 	{
 		auto cubeTex = TextureHandle::From(desc.skyboxCubeTex);

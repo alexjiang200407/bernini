@@ -1,0 +1,42 @@
+#pragma once
+
+namespace assetlib
+{
+	enum class VkFormat : uint32_t
+	{
+		Undefined = 0,
+
+		R8_UNORM       = 9,
+		R8G8_UNORM     = 16,
+		R8G8B8A8_UNORM = 37,
+		R8G8B8A8_SRGB  = 43,
+		B8G8R8A8_UNORM = 44,
+		B8G8R8A8_SRGB  = 50,
+
+		R16G16_UNORM        = 77,
+		R16G16_SFLOAT       = 83,
+		R16G16B16A16_UNORM  = 91,
+		R16G16B16A16_SFLOAT = 97,
+
+		R32_SFLOAT          = 100,
+		R32G32_SFLOAT       = 103,
+		R32G32B32A32_SFLOAT = 109,
+
+		BC1_RGB_UNORM_BLOCK  = 131,
+		BC1_RGB_SRGB_BLOCK   = 132,
+		BC1_RGBA_UNORM_BLOCK = 133,
+		BC1_RGBA_SRGB_BLOCK  = 134,
+		BC2_UNORM_BLOCK      = 135,
+		BC2_SRGB_BLOCK       = 136,
+		BC3_UNORM_BLOCK      = 137,
+		BC3_SRGB_BLOCK       = 138,
+		BC4_UNORM_BLOCK      = 139,
+		BC4_SNORM_BLOCK      = 140,
+		BC5_UNORM_BLOCK      = 141,
+		BC5_SNORM_BLOCK      = 142,
+		BC6H_UFLOAT_BLOCK    = 143,
+		BC6H_SFLOAT_BLOCK    = 144,
+		BC7_UNORM_BLOCK      = 145,
+		BC7_SRGB_BLOCK       = 146,
+	};
+}
