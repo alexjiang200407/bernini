@@ -15,7 +15,7 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 # C++ Style
 
-- clang-format each .cpp .h and .slang file modified via `python ./scripts/clang_format.py <files...>` (use `--check` to verify without editing). It finds clang-format on PATH or the Visual Studio LLVM component; if neither exists it tells the user to install it.
+- clang-format each .cpp .h and .slang file modified via `just format <files...>` (or `python scripts/format.py <files...>`; use `--check` to verify without editing). It finds clang-format via `scripts/config.json`, then PATH, then the Visual Studio LLVM component; if none exists it tells the user to install it.
 
 Always read the [Style Guide](./STYLE.md)
 
@@ -60,42 +60,57 @@ Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma 
 ## Debug
 
 - The project is built in `./build`. Do not modify.
-- Use `get_executables.py` or `exec_target.py` in scripts.
-- When running a binary located here you need to set the cwd to the target directory otherwise the filepaths fail
-- Do not hardcode executable paths. The runtime output dir depends on the generator (`bin/<config>` for multi-config generators like VS/Xcode, `bin` for Ninja/Make) so it can't be read statically from CMakeLists. Use the scripts below to resolve and run targets instead.
+- Use `just exes` or `just run` to locate and launch binaries.
+- When running a binary located here you need to set the cwd to the target directory otherwise the filepaths fail (`just run` does this for you)
+- Do not hardcode executable paths. The runtime output dir depends on the generator (`bin/<config>` for multi-config generators like VS/Xcode, `bin` for Ninja/Make) so it can't be read statically from CMakeLists. Use the commands below to resolve and run targets instead.
 - If a program crashes, a crashlog may exist. It will be at the location of the executable named `{exe_stem}_crash.log`
 - Other logs may also exist. So scan for other `.log` files inside the failing executable directory.
 
 # Scripts
 
-All scripts are Python and generator-agnostic. Target discovery goes through the CMake File API codemodel (works for Ninja/Xcode/Make/VS) and the Visual Studio toolchain is located via vswhere. Shared helpers live in `./scripts/cmake_tools.py`. The discovery scripts need a configured build dir; build first if needed.
+Everything is driven by `just` from the repo root, via the `justfile`. Each recipe is a one-line call into the Python scripts in `./scripts`, which are generator-agnostic: target discovery goes through the CMake File API codemodel (works for Ninja/Xcode/Make/VS) and the Visual Studio toolchain is located via vswhere. Shared helpers live in `./scripts/util/`. The discovery commands need a configured build dir; build first if needed.
 
 ```bash
-python ./scripts/build.py [target]            # configure + build (default preset, all targets); sets up vcvars on Windows MSVC generators. --preset, --config, --dry-run
-python ./scripts/get_targets.py               # list all CMake targets (+ --type EXECUTABLE, --json)
-python ./scripts/exec_target.py <target>      # run an executable target with cwd set to its output dir; program args after a literal --
-python ./scripts/find_executables.py          # resolve executable paths (--target NAME prints one, --json)
-python ./scripts/clang_format.py <files...>   # format in place (--check to verify only)
+just                              # list the recipes
+just init                         # write scripts/config.json for this machine (see below)
+just build [target]               # configure + build (default: all targets). --preset, --config, --dry-run
+just run <target> [-- args...]    # run an executable target with cwd set to its output dir
+just format <files...>            # clang-format in place (--check to verify only)
+just idl                          # regenerate the IDL C++ headers and Slang copies
+just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
+just exes                         # resolve executable paths (--target NAME prints one, --json)
+just count                        # count source files and lines by language
 ```
+
+`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+
+## Configuration
+
+`just init` records this machine's settings in `scripts/config.json`, and every command reads them so they don't have to be retyped: the CMake preset, the build configuration, absolute paths to tools that aren't on PATH (`cmake`, `ninja`, `clang`, `clang-format`), and a `precommand` — a shell command run for its effect on the environment, normally `vcvarsall.bat`, whose resulting environment every build then runs in.
+
+The file is git-ignored; it describes a machine, not the project. `scripts/config.example.json` shows the shape and `scripts/util/config.py` documents the schema.
+
+Every key is optional and every lookup falls back to auto-detection, so a fresh clone still builds with no `config.json` at all. **Precedence, highest first: command-line flag > config.json > auto-detection.**
 
 # Build
 
-Use `python ./scripts/build.py`. It configures and builds the default preset (`windows-vs2026-msvc-dx12-debug`), and sets up the MSVC developer environment (vcvars, located via vswhere) automatically when the preset's generator needs it (Visual Studio / Ninja / NMake on Windows).
+Use `just build`. It configures and builds the preset from `config.json` (or `windows-vs2026-msvc-dx12-debug` if there is none), and sets up the MSVC developer environment via the configured `precommand` — falling back to locating vcvars with vswhere when no `precommand` is set and the preset's generator needs it (Visual Studio / Ninja / NMake on Windows).
 
 ```bash
-python ./scripts/build.py                                  # default preset, all targets
-python ./scripts/build.py bgl_tests                        # one target
-python ./scripts/build.py --preset windows-ninja-msvc-dx12-debug
-python ./scripts/build.py --preset windows-clang-dx12-debug # clang (Ninja generator)
-python ./scripts/build.py --config Release                 # multi-config generators
+just build                                  # configured preset, all targets
+just build bgl_tests                        # one target
+just build --preset windows-ninja-msvc-dx12-debug
+just build --preset windows-clang-dx12-debug # clang (Ninja generator)
+just build --config Release                 # multi-config generators
 ```
 
 ## Compilers
 
 The MSVC presets use the Visual Studio generator; the clang presets
 (`windows-clang-dx12-{debug,release}`) use the Ninja generator. `build.py`
-resolves the clang/clang++ pair and ninja to absolute paths, preferring the
-"C++ Clang tools for Windows" (LLVM) component and bundled Ninja from the Visual
-Studio install, and falling back to whatever is on PATH. Compiler-specific
+resolves the clang/clang++ pair and ninja to absolute paths, preferring what
+`config.json` records, then the "C++ Clang tools for Windows" (LLVM) component
+and bundled Ninja from the Visual Studio install, and falling back to whatever is
+on PATH. Compiler-specific
 warning flags live in `cmake/enable_strict_compiler.cmake` (MSVC `/`-flags vs.
 clang `-`-flags).

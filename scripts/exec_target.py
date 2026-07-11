@@ -11,7 +11,8 @@ Usage:
     python scripts/exec_target.py bgl_tests --dry-run
 
 The target path is resolved from the File API codemodel (generator-agnostic);
-build it first if it doesn't exist yet.
+build it first if it doesn't exist yet. Which build dir and configuration to look
+in default to the preset recorded in scripts/config.json (see `just init`).
 """
 
 import argparse
@@ -20,13 +21,14 @@ import subprocess
 import sys
 
 import util.cmake_tools as ct
+import util.config as cfg
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("target", help="Executable target name.")
-    parser.add_argument("--build-dir", help="Build directory (default: scan build/*).")
-    parser.add_argument("--config", help="Configuration to run (e.g. Debug, Release).")
+    parser.add_argument("--build-dir", help="Build directory (default: the configured preset's).")
+    parser.add_argument("--config", help="Configuration to run (e.g. Debug, Release; default: config.json).")
     parser.add_argument("--dry-run", action="store_true", help="Print the command and cwd without running.")
     parser.epilog = "Arguments for the executable itself go after a literal `--`."
 
@@ -40,10 +42,11 @@ def main():
         own_args, passthrough = argv, []
     args = parser.parse_args(own_args)
 
-    build_dirs = ct.find_build_dirs(args.build_dir)
+    config = cfg.artifact_config(args.config)
+
+    build_dirs = ct.find_build_dirs(cfg.build_dir(args.build_dir))
     if not build_dirs:
-        print("No CMake File API reply found. Configure/build first "
-              "(e.g. python scripts/build.py).", file=sys.stderr)
+        print("No CMake File API reply found. Configure/build first (e.g. `just build`).", file=sys.stderr)
         return 2
 
     candidates = []
@@ -51,7 +54,7 @@ def main():
         for target in ct.load_targets(build_dir):
             if target["name"] != args.target:
                 continue
-            if args.config and target["config"].lower() != args.config.lower():
+            if config and target["config"].lower() != config.lower():
                 continue
             if target["type"] != "EXECUTABLE":
                 print(f"error: target '{args.target}' is {target['type']}, not an executable.", file=sys.stderr)
@@ -60,15 +63,14 @@ def main():
 
     if not candidates:
         print(f"error: no executable target named '{args.target}'"
-              + (f" for config '{args.config}'." if args.config else "."), file=sys.stderr)
+              + (f" for config '{config}'." if config else "."), file=sys.stderr)
         return 1
 
     # Prefer an artifact that actually exists on disk.
     candidates.sort(key=lambda p: not os.path.isfile(p))
     exe = candidates[0]
     if not os.path.isfile(exe):
-        print(f"error: '{exe}' is not built yet. Build it with: python scripts/build.py {args.target}",
-              file=sys.stderr)
+        print(f"error: '{exe}' is not built yet. Build it with: b build {args.target}", file=sys.stderr)
         return 1
 
     cwd = os.path.dirname(exe)

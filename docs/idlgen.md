@@ -81,7 +81,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | [libs/bgl/idl/idlgen.cpp](libs/bgl/idl/idlgen.cpp) | The generator (target `bgl_idlgen`). |
 | [libs/bgl/idl/src/](libs/bgl/idl/src/) | IDL source modules (`--src-root`). |
 | [libs/bgl/idl/src/CMakelists.txt](libs/bgl/idl/src/CMakelists.txt) | Per-module `add_custom_command`s + the `bgl_idl_generate` target; `IDL_CPP_SOURCES` gates C++ output. |
-| [scripts/gen_idl.py](scripts/gen_idl.py) | Standalone driver to regenerate on demand (mirrors the CMake target; resolves the built tool via the CMake File API). |
+| [scripts/gen_idl.py](scripts/gen_idl.py) | Standalone driver to regenerate on demand, via `just idl` (mirrors the CMake target; resolves the built tool via the CMake File API). |
 | [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) | Generated Slang copies (`import idl.<Name>`). |
 | [libs/bgl/src/idl/](libs/bgl/src/idl/) | Generated C++ headers (`bgl::idl::<Name>`), aggregated by the hand-written [libs/bgl/src/idl/idl.h](libs/bgl/src/idl/idl.h). |
 
@@ -103,7 +103,7 @@ flowchart TD
     TOOL -- "--cpp-out-dir (iff in IDL_CPP_SOURCES)" --> CPP
     SLANG -- "import idl.&lt;Name&gt;" --> SH
     CPP -- "#include (via idl/idl.h)" --> CX
-    CMAKE["bgl_idl_generate target<br/>/ scripts/gen_idl.py"] -- "runs per module" --> TOOL
+    CMAKE["bgl_idl_generate target<br/>/ just idl"] -- "runs per module" --> TOOL
 ```
 
 ---
@@ -181,7 +181,7 @@ set(IDL_CPP_SOURCES
 Regenerate (or just let the `bgl_idl_generate` target run during a build):
 
 ```bash
-python scripts/gen_idl.py libs/bgl/idl/src/Foo.slang    # or: python scripts/gen_idl.py  (all modules)
+just idl libs/bgl/idl/src/Foo.slang    # or: just idl  (all modules)
 ```
 
 Consume it — shader side imports the copy, CPU side includes the mirror:

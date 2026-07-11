@@ -18,6 +18,7 @@ import os
 import sys
 
 import util.cmake_tools as ct
+import util.config as cfg
 
 
 def collect(build_dir):
@@ -39,16 +40,15 @@ def collect(build_dir):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--build-dir", help="Build directory (default: scan build/*).")
+    parser.add_argument("--build-dir", help="Build directory (default: the configured preset's).")
     parser.add_argument("--target", help="Print the path of a single target and exit.")
-    parser.add_argument("--config", help="Filter to one configuration (e.g. Debug, Release).")
+    parser.add_argument("--config", help="Filter to one configuration (e.g. Debug, Release; default: config.json).")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args()
 
-    build_dirs = ct.find_build_dirs(args.build_dir)
+    build_dirs = ct.find_build_dirs(cfg.build_dir(args.build_dir))
     if not build_dirs:
-        print("No CMake File API reply found. Configure a build first "
-              "(e.g. python scripts/build.py).", file=sys.stderr)
+        print("No CMake File API reply found. Configure a build first (e.g. `just build`).", file=sys.stderr)
         return 2
 
     rows = []
@@ -56,8 +56,9 @@ def main():
         ct.ensure_query(build_dir)
         rows.extend(collect(build_dir))
 
-    if args.config:
-        rows = [r for r in rows if r["config"].lower() == args.config.lower()]
+    config = cfg.artifact_config(args.config)
+    if config:
+        rows = [r for r in rows if r["config"].lower() == config.lower()]
 
     if args.target:
         matches = [r for r in rows if r["target"] == args.target]

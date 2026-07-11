@@ -1,11 +1,31 @@
 # Bernini
 
 ## Build
+
+Once per clone, record which preset you build and where your toolchain lives:
+
 ```bash
-./scripts/build.py --preset <preset> --config <config> <target>
+python scripts/init.py
 ```
 
-Or use Visual Studio.
+That writes `scripts/config.json` (git-ignored — it describes your machine, not
+the project; see `scripts/config.example.json`) and offers to install
+[just](https://just.systems), the task runner. Everything afterwards reads the
+config, so no preset, no configuration and no tool paths need retyping:
+
+```bash
+just                 # list the commands
+just build           # everything
+just build editor    # one target
+just run editor      # run it, with cwd set to its output dir
+```
+
+Any recorded setting can still be overridden per invocation
+(`just build --preset <preset> --config <config> <target>`).
+
+`just` is a convenience layer, not a requirement: every recipe is a one-line call
+into `scripts/`, so `python scripts/build.py <target>` does the same thing in a
+clone that hasn't installed it. Or use Visual Studio.
 
 ## Hard Requirements
 
@@ -39,9 +59,22 @@ We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt
 
 ## Soft Requirements
 
+### just
+
+The task runner behind the root `justfile`. `python scripts/init.py` offers to install it, or:
+
+```bash
+pip install -r scripts/requirements.txt
+```
+
+That pulls `rust-just`, which ships `just` as a prebuilt binary wheel — one command on Windows, Linux and macOS, no Rust toolchain, and the same pinned version for everyone. `winget install Casey.Just`, `brew install just` and `cargo install just` all work too.
+
+Skip it if you like; `python scripts/<script>.py` does everything the recipes do.
+
 ### clang format
 1. If not using Visual Studio download manually and add to PATH environment variable
 2. or download from Visual Studio Installer
+3. or, if it lives somewhere else, run `python scripts/init.py` and give it the path when asked
 
 ## Features
 - GPU Driven Instance Rendering
