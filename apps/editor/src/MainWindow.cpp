@@ -4,14 +4,19 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLocale>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QStatusBar>
+#include <QStringList>
 #include <QTabWidget>
 
+#include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
 #include <core/settings/Settings.h>
@@ -22,6 +27,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 	connect(m_Ui.actionNewProject, &QAction::triggered, this, &MainWindow::NewProject);
 	connect(m_Ui.actionOpenProject, &QAction::triggered, this, &MainWindow::OpenProject);
+	connect(
+		m_Ui.actionCleanUnusedTextures,
+		&QAction::triggered,
+		this,
+		&MainWindow::CleanUnusedTextures);
 	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
 
 	{
@@ -158,6 +168,102 @@ MainWindow::OpenProject()
 }
 
 void
+MainWindow::CleanUnusedTextures()
+{
+	if (!m_Project)
+		return;
+
+	auto desc     = assetlib::TexturePruneDesc();
+	desc.dataRoot = m_Project->GetDataDirectory();
+
+	auto    scan = assetlib::TexturePruneScan();
+	QString error;
+
+	// Scanning parses every .bmaterial in the project, so it runs off the UI thread. It reads assetlib
+	// only, never bgl, which is what the loading screen requires of its worker.
+	const bool scanned = background::RunWithLoadingScreen(
+		this,
+		"Clean Unused Textures",
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Scanning materials...");
+			scan = assetlib::findUnusedBakedTextures(desc);
+		},
+		&error);
+
+	if (!scanned)
+	{
+		QMessageBox::warning(
+			this,
+			"Clean Unused Textures",
+			QString("Could not scan the project:\n%1").arg(error));
+		return;
+	}
+
+	const auto formatSize = [](uint64_t bytes) {
+		return QLocale().formattedDataSize(static_cast<qint64>(bytes));
+	};
+
+	if (scan.unused.empty())
+	{
+		QMessageBox::information(
+			this,
+			"Clean Unused Textures",
+			QString(
+				"No unused baked textures.\n\n%1 of the %2 baked textures are referenced by the "
+				"project's %3 materials.")
+				.arg(scan.liveMaps)
+				.arg(scan.candidates)
+				.arg(scan.materialsScanned));
+		return;
+	}
+
+	auto details = QStringList();
+	for (const assetlib::UnusedTexture& texture : scan.unused)
+		details << QString::fromStdString(texture.path);
+
+	auto confirm = QMessageBox(this);
+	confirm.setWindowTitle("Clean Unused Textures");
+	confirm.setIcon(QMessageBox::Warning);
+	confirm.setText(QString("Delete %1 unused baked textures?")
+	                    .arg(static_cast<qulonglong>(scan.unused.size())));
+	confirm.setInformativeText(
+		QString(
+			"No material in this project references them; %1 will be reclaimed.\n\nThis cannot be "
+			"undone, but a deleted map is rebuilt by re-baking the material that needs it.")
+			.arg(formatSize(scan.bytes)));
+	confirm.setDetailedText(details.join('\n'));
+
+	auto* deleteButton = confirm.addButton("Delete", QMessageBox::DestructiveRole);
+	confirm.addButton(QMessageBox::Cancel);
+	confirm.setDefaultButton(QMessageBox::Cancel);
+	confirm.exec();
+
+	if (confirm.clickedButton() != deleteButton)
+		return;
+
+	// Unlinking is fast, so it stays on the UI thread; the scan is what was slow.
+	const auto result = assetlib::deleteUnusedBakedTextures(scan, desc);
+
+	if (!result.failed.empty())
+	{
+		QMessageBox::warning(
+			this,
+			"Clean Unused Textures",
+			QString("Deleted %1 textures, but %2 could not be removed:\n\n%3")
+				.arg(static_cast<qulonglong>(result.deleted))
+				.arg(static_cast<qulonglong>(result.failed.size()))
+				.arg(QString::fromStdString(result.failed.front())));
+		return;
+	}
+
+	statusBar()->showMessage(
+		QString("Deleted %1 unused baked textures, reclaiming %2")
+			.arg(static_cast<qulonglong>(result.deleted))
+			.arg(formatSize(result.bytes)),
+		5000);
+}
+
+void
 MainWindow::SetActiveProject(Project project)
 {
 	m_Project = std::make_unique<Project>(std::move(project));
@@ -190,6 +296,7 @@ MainWindow::ShowEmptyState()
 	m_ContentExplorerDock->hide();
 
 	m_Ui.actionSave->setEnabled(false);
+	m_Ui.actionCleanUnusedTextures->setEnabled(false);
 	m_Ui.menuEdit->setEnabled(false);
 	m_Ui.menuWindow->setEnabled(false);
 
@@ -214,6 +321,7 @@ MainWindow::ShowProjectState()
 	m_LevelEditorDock->raise();
 
 	m_Ui.actionSave->setEnabled(true);
+	m_Ui.actionCleanUnusedTextures->setEnabled(true);
 	m_Ui.menuEdit->setEnabled(true);
 	m_Ui.menuWindow->setEnabled(true);
 
