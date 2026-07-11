@@ -6,6 +6,7 @@
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
 #include "types/SubmeshInstance.h"
+#include "types/VertexGen.h"
 #include <bgl/IScene.h>
 #include <core/containers/slot_vector.h>
 
@@ -136,6 +137,14 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		GeomHandle
+		AddPlaneGeom(
+			uint32_t       xSegments,
+			uint32_t       ySegments,
+			float          width,
+			float          height,
+			MaterialHandle material = {}) override;
+
+		GeomHandle
 		AddStaticMesh(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
@@ -164,6 +173,21 @@ namespace bgl
 		DeleteGeom(GeomHandle geom) override;
 
 	private:
+		/**
+		 * The tail every procedural primitive shares: meshletize `indices`, upload the vertex, vertex-map,
+		 * index and meshlet pools, and register the result as one single-submesh geometry asset.
+		 *
+		 * `verts` is packed verbatim, so it must already be in the 48-byte procedural layout.
+		 *
+		 * @throws SceneError if the primitive needs more meshlets than one DispatchMesh can launch, or if
+		 *         a buffer allocation fails.
+		 */
+		GeomHandle
+		AddProceduralGeom(
+			std::span<const VertexGen> verts,
+			std::span<const uint32_t>  indices,
+			MaterialHandle             material);
+
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 

@@ -56,9 +56,12 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a
   `StructuredBuffer<Vertex>`. Each submesh's `VertexLayout` (attribute semantics/formats/offsets +
   `stride`) tells the shader how to decode a vertex at a byte offset. `Vertex` is the *full-fat*
-  authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g.
-  the 32-byte position/normal/uv the procedural cube/sphere use) and describe it with a matching
-  layout. See `DecodeVertex` in
+  authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g. a
+  mesh import whose source primitive carries no tangent emits a 32-byte position/normal/uv vertex)
+  and describe it with a matching layout. The procedural primitives emit the **full 48-byte**
+  pos/normal/uv/tangent — see `VertexGen` in
+  [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
+  `DecodeVertex` in
   [Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
@@ -157,8 +160,20 @@ Structs are populated bottom-up, each parent storing the offset the buffer hands
 * Nothing reaches the GPU until an open command list calls `Update(cmdList)` on each buffer, which
   copies only the dirty blocks.
 
-For a concrete procedural builder (cube / sphere meshletization), see
-[Scene.cpp](libs/bgl/src/scene/Scene.cpp).
+For a concrete procedural builder, see [Scene.cpp](libs/bgl/src/scene/Scene.cpp). The three
+primitives — `AddCubeGeom`, `AddSphereGeom`, `AddPlaneGeom` — only generate vertices and indices;
+they all hand off to `Scene::AddProceduralGeom`, which greedily meshletizes under the
+`cMaxVerticesPerMeshlet` / `cMaxPrimsPerMeshlet` caps and performs the upload sequence above. A
+primitive whose grid exceeds the 65535 meshlets one `DispatchMesh` can launch is rejected rather
+than silently truncated.
+
+`AddPlaneGeom` is an **upright quad**, not a ground plane: a flat `width` × `height` surface spanning
+XY and facing **+Z**, wound counter-clockwise seen from +Z — the same convention as the cube's +Z
+face. It carries no orientation of its own, so a floor is just the quad with a −90° rotation about X
+on the *instance transform*; baking the floor orientation into the primitive would only force every
+other caller to rotate it back. Its tangent handedness is `w = +1`: the bitangent must come out along
++v (which is +Y), and `cross(+Z, +X)` is +Y. The wrong sign there silently inverts every normal map's
+green channel.
 
 ---
 

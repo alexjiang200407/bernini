@@ -8,8 +8,7 @@ Windows-only.
 This roadmap is a living checklist. Legend:
 
 - `[x]` done / in place
-- `[~]` partially implemented (scaffold exists, not wired end-to-end)
-- `[ ]` not started
+- `[ ]` not done
 
 Ordering within a milestone is roughly dependency order. Milestones are prioritized to
 unblock the game's core loop first (units on screen, animated, lit, culled) before polish
@@ -53,11 +52,11 @@ and portability.
   - [x] Implement PBR IBL
   - [x] ktx2 textures
   - [ ] Implement Alpha Test alpha mode
-  - [ ] Texture Asset Import
+  - [x] Texture Asset Import
   - [ ] Editor Material Graph
     - [ ] Choose Material Type: PBR only for now
     - [ ] Choose Material Options: e.g. Alpha Mode
-    - [ ] Link Textures to output nodes (BRDF for PBR)
+    - [x] Link Textures to output nodes (BRDF for PBR)
 - [ ] Culling
   - [ ] Frustum Culling
   - [ ] Geometry Cluster Culling
