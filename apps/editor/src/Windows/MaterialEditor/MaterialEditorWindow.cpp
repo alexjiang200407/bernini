@@ -23,6 +23,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
 
+#include "Project/Project.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
@@ -463,7 +464,7 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 		path = QFileDialog::getSaveFileName(
 			window(),
 			QStringLiteral("Save Material"),
-			path.isEmpty() ? m_SubmeshSelector->currentText() : path,
+			path.isEmpty() ? DefaultMaterialPath() : path,
 			QStringLiteral("Bernini Material (*.bmaterial)"));
 		if (path.isEmpty())
 			return;  // cancelled
@@ -491,6 +492,23 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	entry.materialPath = path;
 	AttachMaterialToMesh(m_CurrentSubmesh, path);
 	RefreshActions();
+}
+
+QString
+MaterialEditorWindow::DefaultMaterialPath() const
+{
+	const QString name = m_SubmeshSelector->currentText();
+
+	if (m_DataRoot.empty())
+		return name;
+
+	auto dir = m_DataRoot / Project::c_MaterialsDirectoryName;
+
+	std::error_code ec;
+	if (!std::filesystem::is_directory(dir, ec))
+		dir = m_DataRoot;
+
+	return QString::fromStdWString((dir / name.toStdWString()).wstring());
 }
 
 void
