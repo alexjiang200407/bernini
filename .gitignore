@@ -18,3 +18,6 @@ __pycache__
 
 # Local, developer-specific editor config (like .env); seeded from config.example.json
 apps/editor/config.json
+
+# `just install` stages the CLI tools here; this is the dir you put on PATH.
+dist/
