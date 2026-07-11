@@ -49,7 +49,7 @@ clone that hasn't installed it. Or use Visual Studio.
 We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt-online-installation.html). In the Qt installer wizard, check Qt for `Development/Qt/Qt x.x.x/MSVC 2022 64-bit` (editor is windows only for now) and uncheck everything else.
 
 ### System Requirements
-
+  
 **On Windows**
 
 - NVIDIA: Turing or newer — GTX 1660 / RTX 2060 and up.

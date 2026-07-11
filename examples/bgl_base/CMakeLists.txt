@@ -26,14 +26,7 @@ target_precompile_headers(bgl_base
         ${CMAKE_SOURCE_DIR}/PCH/pch.h
 )
 
-# Copy the repo's assets (IBL cubemaps, etc.) next to the executable so the demo
-# can load them from "assets/..." relative to its working directory.
-add_custom_command(TARGET bgl_base POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/assets"
-            "$<TARGET_FILE_DIR:bgl_base>/assets"
-    COMMENT "Copying assets next to bgl_base"
-)
+add_dependencies(bgl_base copy_assets)
 
 source_group(
     TREE ${CMAKE_CURRENT_SOURCE_DIR}/src

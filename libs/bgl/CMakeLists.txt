@@ -170,8 +170,9 @@ if (BUILD_TESTS)
 
 	# Deploy the shared asset directory next to the test exe (cwd at run time), so
 	# tests resolve maps/meshes as "assets/<name>" and golden refs as
-	# "assets/golden/<name>.png".
-	copy_to_target(bgl_tests ITEMS ${CMAKE_SOURCE_DIR}/assets)
+	# "assets/golden/<name>.png". copy_assets (root CMakeLists.txt) stages it once
+	# for every consumer.
+	add_dependencies(bgl_tests copy_assets)
 
 	enable_strict_compiler(bgl_tests)
 endif()

@@ -10,7 +10,7 @@ Usage:
     python scripts/find_executables.py                  # list every executable
     python scripts/find_executables.py --target bgl_tests   # print one path
     python scripts/find_executables.py --json           # machine-readable
-    python scripts/find_executables.py --build-dir build/msvc-release
+    python scripts/find_executables.py --build-dir build/ninja-msvc-release
 """
 
 import argparse
@@ -48,7 +48,8 @@ def main():
 
     build_dirs = ct.find_build_dirs(cfg.build_dir(args.build_dir))
     if not build_dirs:
-        print("No CMake File API reply found. Configure a build first (e.g. `just build`).", file=sys.stderr)
+        print("No CMake File API codemodel found. Configure the build first:\n"
+              "    just build --configure", file=sys.stderr)
         return 2
 
     rows = []
