@@ -107,11 +107,31 @@ namespace bgl
 		virtual GeomHandle
 		AddCubeGeom(MaterialHandle material = {}) = 0;
 
+		/**
+		 * Adds a procedurally generated UV sphere of `radius`, centred on the origin, as static-mesh
+		 * geometry.
+		 *
+		 * @throws SceneError if either segment count is 0, or a buffer allocation fails.
+		 */
 		virtual GeomHandle
 		AddSphereGeom(
 			uint32_t       xSegments,
 			uint32_t       ySegments,
 			float          radius,
+			MaterialHandle material = {}) = 0;
+
+		/**
+		 * Adds a procedurally generated plane as static-mesh geometry: a flat `width` x `height` quad
+		 * centred on the origin, subdivided into an `xSegments` x `ySegments` grid.
+		 * @throws SceneError if either segment count is 0, if the grid needs more meshlets than one
+		 *         dispatch can launch, or if a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddPlaneGeom(
+			uint32_t       xSegments,
+			uint32_t       ySegments,
+			float          width,
+			float          height,
 			MaterialHandle material = {}) = 0;
 
 		/**
