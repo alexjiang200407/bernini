@@ -26,14 +26,10 @@ public:
 	ImportAnimations() const;
 
 	/**
-	 * Folder beneath `c_TextureRoot` to write this import's textures into, e.g. "apples" for
-	 * `textures_src/apples/tex0.ktx2`.
+	 * Folder beneath `c_TextureRoot` to write this import's textures into
 	 *
 	 * writeTextures names its output `texN.ktx2` by index, so two imports sharing a directory
 	 * overwrite each other. Each import gets its own, defaulting to the source file's base name.
-	 *
-	 * Always a relative path that stays inside `c_TextureRoot`; a field that is empty or tries to
-	 * escape falls back to the source file's base name.
 	 */
 	QString
 	TextureSubdirectory() const;

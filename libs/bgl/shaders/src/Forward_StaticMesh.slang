@@ -40,7 +40,7 @@ void EvaluateVertices(
         vertexOut.worldPos = worldPos.xyz;
         vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
         vertexOut.uv = vertex.uv;
-        vertexOut.tangent = vertex.tangent;
+        vertexOut.tangent = float4(mul((float3x3)mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
         vertexOut.materialIndex = submesh.material.GetOffset();
 
         verts[v] = vertexOut;

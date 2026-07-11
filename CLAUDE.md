@@ -51,6 +51,10 @@ How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang 
 
 PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.
 
+**[Environment Maps](./docs/envmaps.md)**
+
+Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma field must be 1.0, and how to verify the maps before shipping them.
+
 # Directory Structure
 
 ## Debug

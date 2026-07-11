@@ -20,6 +20,7 @@ struct MaterialPreviewEnv
 	std::string irradiance;
 	std::string prefilter;
 	std::string brdfLut;
+	float       exposure = 1.0f;
 };
 
 // The right-hand model preview: a lit sphere by default, or a `.bmesh` dropped onto it, shown

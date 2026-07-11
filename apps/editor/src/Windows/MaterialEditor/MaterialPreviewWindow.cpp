@@ -131,6 +131,8 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	bgl::IScene*     scene = PreviewScene();
 	bgl::ISceneView* view  = PreviewView();
 
+	view->SetExposure(env.exposure);
+
 	setAcceptDrops(true);
 
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.

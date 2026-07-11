@@ -45,7 +45,8 @@ public float4 ShadeSurface(
     TextureHandle irradianceMap,
     TextureHandle prefilterMap,
     TextureHandle brdfLUT,
-    SamplerHandle clampSampler
+    SamplerHandle clampSampler,
+    float exposure
 )
 {
     float3 albedo = baseColor.rgb;
@@ -80,7 +81,6 @@ public float4 ShadeSurface(
 
     float3 ambient = (kD * diffuse + specular) * ao;
 
-    const float exposure = 1.0f;
     float3 color = AgX(ambient * exposure);
 
     return float4(color, baseColor.a);

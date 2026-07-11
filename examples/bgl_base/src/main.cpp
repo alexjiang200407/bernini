@@ -26,6 +26,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		uint32_t    frames        = 16;
 		std::string dataRootPath  = "assets";
 		std::string modelPath     = "Meshes/apples.bmesh";
+		float       exposure      = 1.0f;
 
 		{
 			CLI::App app{ "Bernini bgl_base example" };
@@ -40,6 +41,13 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				"The project's Data directory: every asset reference is relative to it");
 			app.add_option("--model", modelPath, "The .bmesh to render, relative to --data-root");
 			app.add_option("-s,--skybox", skyBoxEnabled, "Enable skybox rendering");
+			app.add_option(
+				   "-e,--exposure",
+				   exposure,
+				   "Camera exposure: scales radiance before the AgX tone map. The right value "
+			       "depends "
+				   "on the environment's absolute radiance scale, so it changes with the IBL maps")
+				->check(CLI::NonNegativeNumber);
 			app.add_flag(
 				"--headless",
 				headless,
@@ -95,6 +103,8 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
 		      pmrem,
 		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+
+		view->SetExposure(exposure);
 
 		if (skyBoxEnabled)
 		{

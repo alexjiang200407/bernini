@@ -17,8 +17,6 @@ namespace background
 	class Progress
 	{
 	public:
-		// `total == 0` leaves the bar in its indeterminate busy state, for a step whose length is
-		// unknown (parsing a glTF, say). An empty `label` keeps the current one.
 		void
 		Report(int done, int total, const QString& label = QString());
 

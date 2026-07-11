@@ -21,31 +21,9 @@ namespace assetlib
 	/**
 	 * Composites a material's per-channel routes down to the optimized baseColor / normal / orm triplet,
 	 * writing one `.ktx2` per map into `desc.dataRoot / desc.textureDir` and updating `material` in
-	 * place: the triplet paths are filled, `routeStamps` records what each source measured, and `mode`
-	 * becomes kBaked. The routes and the editor graph are *kept* -- a baked material can still be
-	 * reopened, re-authored and re-baked. Only `stripAuthoringData` removes them.
+	 * place.
 	 *
-	 * The maps are written in their final block formats, so the runtime uploads them without
-	 * transcoding: base colour BC1 (sRGB), orm BC7 (unorm), normal BC5 (unorm, X/Y only).
-	 *
-	 * **Baked maps are shared, not owned.** A map's file name is derived from the content that defines
-	 * it -- the group, its resolution, its target format, and the ordered (source, channel) pairs feeding
-	 * it. Two materials whose ORM channels route identically therefore name the same file and write it
-	 * once, instead of each emitting a byte-identical copy under its own name. A map whose file already
-	 * exists and is newer than every source feeding it is not re-encoded.
-	 *
-	 * Each group is sized independently, to the largest source routed *into that group*. A group's output
-	 * thus depends on nothing outside it, which is what lets two materials share one file.
-	 *
-	 * A routed source may be uncompressed or Basis-supercompressed (what mesh import writes to
-	 * `textures_src`); either decodes to RGBA8 texels. It may *not* be an already-block-compressed
-	 * `.ktx2` -- a previously baked map -- since BC blocks cannot be decoded back to texels. Channels are
-	 * copied as raw bytes: a channel routed into base colour is written into an sRGB map whatever its own
-	 * tag said, so keep one decode role per source texture.
-	 *
-	 * A group with no routed channels is skipped entirely and leaves its triplet path empty; the runtime
-	 * substitutes white (base colour, orm) or a flat normal. Base-colour alpha is dropped: BC1_RGB has no
-	 * alpha channel.
+	 * **Baked maps are shared, not owned.**
 	 *
 	 * @throws std::runtime_error if nothing is routed, a source is missing or undecodable, or a map
 	 *         cannot be written.

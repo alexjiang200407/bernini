@@ -135,6 +135,44 @@ Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLa
 (CPU) mirror [libs/bgl/src/idl/VertexLayout.h](libs/bgl/src/idl/VertexLayout.h) (GPU) — the enum
 ordering is shared so a layout maps field-for-field between them.
 
+### Normal & tangent space
+
+Three different spaces are in play and they are easy to conflate. The contract, end to end:
+
+| Data | Space | Convention |
+|---|---|---|
+| vertex `normal` | **object** | unit-length; transformed to world in the mesh shader |
+| vertex `tangent` | **object** | `float32x4`; `xyz` unit-length, `w` = ±1 bitangent handedness |
+| bitangent | — | **not stored**; derived as `cross(N, T) * tangent.w` |
+| normal **map** texel | **tangent** | OpenGL / glTF orientation: **+Y (green) is up** |
+
+* **Vertex normals and tangents are authored in object space** and transformed to world space per
+  vertex by the mesh shader, both by the mesh's `transform`
+  ([libs/bgl/shaders/src/Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang),
+  `EvaluateVertices`). A tangent is a direction, so it transforms exactly like the normal; only
+  `tangent.w` is left alone, because it is a sign and not a direction.
+* **Uniform scale only.** Both are transformed by the plain upper-left `float3x3` of the model matrix,
+  not its inverse-transpose. Under a **non-uniform** scale that skews the basis and the lighting is
+  wrong. Bake non-uniform scale into the vertices at import, or the shader must switch to a normal
+  matrix.
+* **Normal maps are tangent-space, and Z is reconstructed, not sampled.** `CalculateNormal`
+  ([libs/bgl/shaders/src/forward/PbrShading.slang](libs/bgl/shaders/src/forward/PbrShading.slang))
+  takes only `xy`, unpacks `xy * 2 - 1`, and derives `z = sqrt(1 - dot(xy, xy))` — which is why the
+  map can be stored two-channel `BC5_UNORM` with no blue channel. Two consequences:
+  * An **object-space** or **world-space** normal map cannot be used. Z is forced positive, so any
+    texel whose true normal points away from the surface is silently mangled.
+  * A **DirectX-style (green-down)** map renders with its lighting inverted along Y. Nothing flips the
+    green channel; glTF specifies OpenGL orientation and the engine follows it. Flip green at
+    authoring time.
+* **Handedness follows glTF**: `bitangent = cross(normal, tangent.xyz) * tangent.w`, and the shader
+  builds `TBN = float3x3(T, B, N)` from it. A tangent whose `w` is 0 (rather than ±1) produces a
+  degenerate bitangent and kills normal mapping for that vertex.
+* **A degenerate tangent falls back to the geometric normal.** `CalculateNormal` re-orthogonalizes T
+  against N (Gram-Schmidt) and bails out to N when the result is ~0 — this guards a `normalize(0)`
+  NaN that would otherwise poison every lit pixel. So a mesh with a missing or zeroed tangent renders
+  *unlit-by-normal-map* rather than broken, which is quiet: see the tangent contract under
+  [Risky / Non-obvious contracts](#risky--non-obvious-contracts).
+
 ### Meshlets
 * **64 vertices / 124 triangles** per meshlet, built with meshopt at import
   ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
@@ -291,7 +329,23 @@ assetlib_cli bake model.glb -o assets/model -n model
 
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
 assetlib_cli obj assets/model/model.bmesh -o model.obj
+
+# Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
+assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
+assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
+assetlib_cli describe Data/Materials/skin.bmaterial      # mode, factors, triplet, routing table
+
+# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
+assetlib_cli describe Data/Materials/skin.bmaterial -d Data
 ```
+
+`describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps
+everything else as text. Both containers are opaque binary, so it is the intended answer to "what is
+in this file" — reach for it before hand-decoding a file against the serializer. The unrouted channels
+it lists are the usual cause of a material rendering wrong, since each one silently falls back to a
+default texture (see [Risky / Non-obvious contracts](#risky--non-obvious-contracts)). Rendered by
+[libs/assetlib/include/assetlib/asset_describe.h](libs/assetlib/include/assetlib/asset_describe.h),
+which the editor can also call for an asset inspector.
 
 Runtime load + render (load `.bmesh`, resolve each `.bmaterial` and its textures into PBR materials,
 upload geometry, draw): [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp).

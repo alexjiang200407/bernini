@@ -45,12 +45,6 @@ function(enable_strict_compiler)
                 /wd4868        # Brace initializer left-to-right evaluation warnings
                 /wd4866        # operator[] left-to-right evaluation order (chained subscripts)
                 
-                # --- EXCEPTIONS CONFIGURATION ---
-                # Every config, including Release: core/assetlib/bgl throw and catch on their normal
-                # error paths (asset load failures, handle validation). Disabling unwinding here would
-                # turn each `throw` into a terminate() and silently drop every `catch`, and the STL
-                # headers we pull into the PCH (<chrono>, <stop_token>) trip C4530/C4577 -- which /WX
-                # promotes to an error, so a no-exceptions Release does not even compile.
                 /EHsc
             )
             message(STATUS "Strict compiler flags (MSVC) enabled for target: ${TARGET_NAME}")

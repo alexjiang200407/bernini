@@ -64,10 +64,19 @@ namespace bgl
 		void
 		SetSkyBox(SkyboxDesc desc) override;
 
+		void
+		SetExposure(float exposure) override;
+
 		[[nodiscard]] const EnvironmentMap&
 		GetEnvironmentMap() const noexcept
 		{
 			return m_EnvironmentMap;
+		}
+
+		[[nodiscard]] float
+		GetExposure() const noexcept
+		{
+			return m_Exposure;
 		}
 
 		[[nodiscard]] const std::optional<SkyboxDesc>&
@@ -116,5 +125,6 @@ namespace bgl
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
+		float                     m_Exposure = 1.0f;
 	};
 }

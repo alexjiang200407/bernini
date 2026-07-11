@@ -23,6 +23,7 @@ namespace bgl
 		SamplerHandle               anisoLinearWrapSampler;
 		SamplerHandle               linearClampSampler;
 		EnvironmentMap              env;
+		float                       exposure = 1.0f;
 
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
