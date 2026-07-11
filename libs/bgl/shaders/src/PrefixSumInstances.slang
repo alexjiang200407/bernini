@@ -1,5 +1,5 @@
 import types.ComputeBuffer;
-import types.PsoType;
+import idl.PsoType;
 
 // Must be less than 1024
 static const uint kPsoCount = uint(PsoType::kCount);

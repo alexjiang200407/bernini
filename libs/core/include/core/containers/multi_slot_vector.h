@@ -87,7 +87,6 @@ namespace core
 			for (uint32_t i = 0; i < count; ++i)
 			{
 				m_Meta[targetIndex + i].is_active = true;
-				m_Data[targetIndex + i]           = T();
 			}
 
 			return { targetIndex, count, generation };
@@ -115,16 +114,13 @@ namespace core
 			m_Meta[index].is_allocated_root = false;
 			m_Meta[index].allocated_count   = 0;
 
+			m_Meta[index].generation++;
+
 			for (uint32_t i = 0; i < count; ++i)
 			{
 				uint32_t subIdx          = index + i;
 				m_Meta[subIdx].is_active = false;
-				m_Meta[subIdx].generation++;
 
-				if constexpr (!std::is_trivially_destructible_v<T>)
-				{
-					m_Data[subIdx].~T();
-				}
 				m_Data[subIdx] = T();
 			}
 

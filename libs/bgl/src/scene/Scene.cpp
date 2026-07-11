@@ -21,6 +21,8 @@ namespace bgl
 			glm::vec4 tangent;
 		};
 
+		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
+
 		struct BufferInfo
 		{
 			std::string_view name;
@@ -28,13 +30,14 @@ namespace bgl
 
 		// Order MUST stay in lockstep with Scene::GetBuffers() and with
 		// ForwardPass's c_ForwardDataBuffers.
-		static constexpr std::array<BufferInfo, 6> c_BufferInfo = {
+		static constexpr std::array<BufferInfo, 7> c_BufferInfo = {
 			{ { "scene.submeshBuffer" },
 			  { "scene.meshletBuffer" },
 			  { "scene.vertexMapBuffer" },
 			  { "scene.vertexDataBuffer" },
 			  { "scene.indexBuffer" },
-			  { "scene.pbrMaterialBuffer" } }
+			  { "scene.pbrMaterialBuffer" },
+			  { "scene.looseMaterialBuffer" } }
 		};
 
 		// The interleaved vertex layout the procedural geometry emits: position,
@@ -79,6 +82,22 @@ namespace bgl
 		}
 
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
+
+		idl::VertexLayout
+		ConvertLayout(const assetlib::VertexLayout& src)
+		{
+			auto dst           = idl::VertexLayout();
+			dst.attributeCount = src.attributeCount;
+			dst.stride         = src.stride;
+			for (uint32_t i = 0; i < src.attributeCount; ++i)
+			{
+				dst.attributes[i].semantic =
+					static_cast<idl::VertexSemantic>(src.attributes[i].semantic);
+				dst.attributes[i].format = static_cast<idl::VertexFormat>(src.attributes[i].format);
+				dst.attributes[i].byteOffset = src.attributes[i].offset;
+			}
+			return dst;
+		}
 
 		// The PSO bucket cached on a submesh, derived from its geom + material type. An absent
 		// material falls back to kNull (unlit) -- the same default the old per-instance path used.
@@ -155,6 +174,14 @@ namespace bgl
 			pbrBufferDesc.debugName = "Pbr Material Buffer";
 
 			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto looseBufferDesc      = EntryBufferDesc();
+			looseBufferDesc.maxCount  = atLeastOne(m_Desc.maxLoosePbrMaterials);
+			looseBufferDesc.debugName = "Loose Pbr Material Buffer";
+
+			m_Loose.Init(std::move(looseBufferDesc), m_ResourceManager);
 		}
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
@@ -496,6 +523,127 @@ namespace bgl
 		}
 	}
 
+	GeomHandle
+	Scene::AddStaticMesh(
+		const assetlib::BMesh&          mesh,
+		uint32_t                        meshIndex,
+		std::span<const MaterialHandle> materials)
+	{
+		try
+		{
+			if (meshIndex >= mesh.meshes.size())
+			{
+				throw SceneError("AddStaticMesh: meshIndex out of range");
+			}
+
+			const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
+
+			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			{
+				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+
+				if (src.meshletCount == 0 || src.vertexCount == 0)
+				{
+					throw SceneError(std::format("AddStaticMesh: submesh {} has no geometry", s));
+				}
+
+				if (src.meshletCount > c_MaxDispatchMeshGroups)
+				{
+					throw SceneError(
+						std::format(
+							"AddStaticMesh: submesh {} has {} meshlets, more than the {} thread "
+							"groups a mesh dispatch can launch",
+							s,
+							src.meshletCount,
+							c_MaxDispatchMeshGroups));
+				}
+			}
+
+			// One GPU submesh per source submesh, in order: callers address geometry by source
+			// submesh index (that is what an asset's material slots are numbered by), so the two
+			// must stay 1:1.
+			std::vector<idl::Submesh> submeshes;
+			submeshes.reserve(meshEntry.submeshCount);
+
+			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			{
+				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+
+				const uint32_t        vertexBytes = src.vertexCount * src.layout.stride;
+				std::vector<uint32_t> vertexWords((vertexBytes + 3u) / 4u, 0u);
+				std::memcpy(
+					vertexWords.data(),
+					mesh.vertexData.data() + src.vertexByteOffset,
+					vertexBytes);
+
+				const MaterialHandle material =
+					src.material < materials.size() ? materials[src.material] : MaterialHandle{};
+
+				std::vector<uint32_t>     vertexMap;
+				std::vector<uint32_t>     localIndices;
+				std::vector<idl::Meshlet> meshlets;
+				meshlets.reserve(src.meshletCount);
+
+				for (uint32_t m = 0; m < src.meshletCount; ++m)
+				{
+					const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+
+					auto out                 = idl::Meshlet();
+					out.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
+					out.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
+					out.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
+					out.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
+					out.boundingCenter       = ml.boundingCenter;
+					out.boundingRadius       = ml.boundingRadius;
+
+					for (uint32_t i = 0; i < ml.vertexCount; ++i)
+					{
+						vertexMap.push_back(mesh.meshletVertices[ml.vertexOffset + i]);
+					}
+
+					const uint32_t indexCount = ml.triangleCount * 3u;
+					for (uint32_t i = 0; i < indexCount; ++i)
+					{
+						localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
+					}
+
+					meshlets.push_back(out);
+				}
+
+				auto submesh        = idl::Submesh();
+				submesh.layout      = ConvertLayout(src.layout);
+				submesh.meshlets    = m_MeshletBuffer.Add(meshlets);
+				submesh.vertexMap   = m_VertexMapBuffer.Add(vertexMap);
+				submesh.vertexData  = m_VertexDataBuffer.Add(vertexWords);
+				submesh.indices     = m_IndexBuffer.Add(localIndices);
+				submesh.vertexCount = src.vertexCount;
+				if (material.IsValid())
+				{
+					submesh.material = material.handle;
+				}
+				submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
+
+				submeshes.push_back(submesh);
+			}
+
+			const auto baseSubmeshGlobal =
+				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
+
+			auto asset      = GeomAsset();
+			asset.submeshes = baseSubmeshGlobal;
+
+			auto retVal     = GeomHandle();
+			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.geomType = GeomType::kStaticMesh;
+
+			return retVal;
+		}
+		catch (const std::runtime_error& e)
+		{
+			throw SceneError(e.what());
+		}
+	}
+
 	MaterialHandle
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
@@ -503,16 +651,121 @@ namespace bgl
 		const auto flatNormal =
 			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
 
+		// A caller-supplied texture resolves to its bindless index; an invalid
+		// (default-constructed) handle falls back to the given default texture.
+		const auto resolve = [](TextureAssetHandle tex, core::slot_handle fallback) {
+			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
+			return idl::TextureHandle{ slot.index };
+		};
+
 		idl::PbrMaterial material{};
-		material.baseColorTexture = idl::TextureHandle{ white.index };
-		material.normalTexture    = idl::TextureHandle{ flatNormal.index };
-		material.ormTexture       = idl::TextureHandle{ white.index };
+		material.baseColorTexture = resolve(desc.baseColorTexture, white);
+		material.normalTexture    = resolve(desc.normalTexture, flatNormal);
+		material.ormTexture       = resolve(desc.ormTexture, white);
 		material.baseColorFactor  = desc.baseColorFactor;
 		material.metallicFactor   = desc.metallicFactor;
 		material.roughnessFactor  = desc.roughnessFactor;
 
 		const core::slot_handle slot = m_Pbr.Add(material);
 		return MaterialHandle{ MaterialType::kPBR, slot };
+	}
+
+	MaterialHandle
+	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
+	{
+		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
+		const auto flatNormal =
+			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
+
+		// A routed channel resolves to (its texture's bindless index, its channel). An unrouted
+		// channel falls back to a default texture + channel chosen so the sampled value matches the
+		// PbrMaterial default for that output: white (1.0) for base color / ORM, and the flat-normal
+		// texture (R,G = 0.5) for normal X / Y.
+		const auto resolve = [](const ChannelRouteDesc& route,
+		                        core::slot_handle       fallbackTex,
+		                        uint16_t                fallbackChannel) {
+			idl::ChannelSource cs{};
+			if (route.texture.textureSlot)
+			{
+				cs.texture = idl::TextureHandle{ route.texture.textureSlot.index };
+				cs.channel = route.channel;
+			}
+			else
+			{
+				cs.texture = idl::TextureHandle{ fallbackTex.index };
+				cs.channel = fallbackChannel;
+			}
+			return cs;
+		};
+
+		static_assert(
+			idl::cLooseChannelCount == 4 + 3 + 2,
+			"LoosePbrMaterialDesc channel groups must cover every idl::PbrChannel");
+
+		idl::LoosePbrMaterial material{};
+		// Base color R,G,B,A -> white (any channel samples 1.0).
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorR)] =
+			resolve(desc.baseColor[0], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorG)] =
+			resolve(desc.baseColor[1], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorB)] =
+			resolve(desc.baseColor[2], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorA)] =
+			resolve(desc.baseColor[3], white, 0);
+		// ORM ao,roughness,metallic -> white (1.0; factors drive rough/metal).
+		material.sources[static_cast<size_t>(idl::PbrChannel::kAo)] =
+			resolve(desc.orm[0], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kRoughness)] =
+			resolve(desc.orm[1], white, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kMetallic)] =
+			resolve(desc.orm[2], white, 0);
+		// Normal X,Y -> flat-normal texture (R = 0.5, G = 0.5) -> decoded (0,0,1).
+		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalX)] =
+			resolve(desc.normal[0], flatNormal, 0);
+		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalY)] =
+			resolve(desc.normal[1], flatNormal, 1);
+
+		material.baseColorFactor = desc.baseColorFactor;
+		material.metallicFactor  = desc.metallicFactor;
+		material.roughnessFactor = desc.roughnessFactor;
+
+		const core::slot_handle slot = m_Loose.Add(material);
+		return MaterialHandle{ MaterialType::kLoosePbr, slot };
+	}
+
+	void
+	Scene::DeleteMaterial(MaterialHandle material)
+	{
+		// Only the two material kinds the scene allocates storage for can be freed. kNull and
+		// kAssert name shading behaviour, not an entry in a buffer, so there is nothing to release.
+		switch (material.materialType)
+		{
+		case MaterialType::kPBR:
+			if (!m_Pbr.IsValid(material.handle))
+			{
+				throw SceneError(
+					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
+			}
+			m_Pbr.Erase(material.handle);
+			return;
+
+		case MaterialType::kLoosePbr:
+			if (!m_Loose.IsValid(material.handle))
+			{
+				throw SceneError(
+					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
+			}
+			m_Loose.Erase(material.handle);
+			return;
+
+		case MaterialType::kInvalid:
+		case MaterialType::kNull:
+		case MaterialType::kAssert:
+		case MaterialType::kCount:
+			break;
+		}
+
+		throw SceneError("MaterialHandle passed to DeleteMaterial has no material storage");
 	}
 
 	void
@@ -567,11 +820,11 @@ namespace bgl
 					asset.refCount));
 		}
 
-		// The geometry's per-part ranges live on each Submesh, so free them per
-		// submesh before releasing the submesh range itself.
-		const uint32_t submeshRoot  = asset.submeshes.range.offsetStart;
-		const uint32_t submeshCount = asset.submeshes.count;
-		for (uint32_t i = 0; i < submeshCount; ++i)
+		// The geometry's per-part ranges live on each Submesh, and each submesh owns its own, so
+		// free them per submesh before releasing the submesh range itself.
+		const uint32_t submeshRoot = asset.submeshes.range.offsetStart;
+
+		for (uint32_t i = 0; i < asset.submeshes.count; ++i)
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
@@ -590,5 +843,23 @@ namespace bgl
 	{
 		const auto gpuTexture = m_ResourceManager->CreateTexture(img, std::move(debugName));
 		return static_cast<TextureAssetHandle>(gpuTexture);
+	}
+
+	void
+	Scene::DeleteTextureAsset(TextureAssetHandle texture)
+	{
+		// Destroying retires the slot at once, so a texture already deleted fails this check even
+		// while the GPU is still finishing with it. There is nothing to remember here.
+		const TextureHandle handle = TextureHandle::From(texture);
+		if (handle.IsNull() || !m_ResourceManager->ValidTextureHandle(handle))
+		{
+			throw SceneError(
+				"TextureAssetHandle passed to DeleteTextureAsset has expired or is invalid");
+		}
+
+		// Frames already submitted may still sample this texture, so only the *release* is deferred:
+		// the resource manager recycles the bindless slot no earlier than the last frame that could
+		// read it.
+		m_ResourceManager->DestroyTexture(handle);
 	}
 }

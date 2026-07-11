@@ -31,7 +31,19 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 
 ## Shaders
 
-- To add a new shader add this to `libs/bgl/shaders/CMakeLists.txt`:
+- Shaders are compiled at runtime. `IShader`/`CreateShader(module, entry)` only names a Slang
+  module + entry point; the actual DXIL is generated per-PSO in `pipeline_util::BuildPipelineLayout`,
+  which links all of a PSO's entry points into one program and pulls both the bytecode
+  (`getEntryPointCode`) and the reflection/root-signature from that single linked program. Because
+  both come from the same link, bindings always agree — shaders do **not** need explicit
+  `register(bN, spaceM)` on their constant buffers.
+- At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`), which are
+  staged into each target's output dir by the `bgl_copy_shader_src` / `bgl_copy_shader_tests`
+  targets. A new `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its
+  module name without any CMake change.
+- The `compile_shader(...)` entries in `libs/bgl/shaders/CMakeLists.txt` are now **build-time
+  validation only** — they invoke `slangc` per entry point to fail the build on shader errors early;
+  the resulting `.dxil` files are not loaded at runtime. Add an entry when you want that validation:
 
 ```
 compile_shader(
@@ -44,5 +56,4 @@ compile_shader(
 )
 ```
 
-- shaders are output to the `${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders`
 - slang shaders can be formatted using clang-format

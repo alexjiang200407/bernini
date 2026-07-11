@@ -35,21 +35,78 @@ namespace assetlib
 
 	/**
 	 * Bakes a flattened import into its modular file form: geometry is copied verbatim and each inline
-	 * material becomes a `.bmaterial` file-path handle. Pair with writeTextures to emit the referenced
-	 * texture files.
-	 *
-	 * TODO: the referenced `.bmaterial` (and animation) files are not written yet; only their paths are
-	 * assembled here, and they do not yet carry the mapped texture paths.
+	 * material becomes a `matN.bmaterial` file-path handle (Submesh::material indexes this list). Pair
+	 * with writeMaterials + writeTextures (or just call bake) to emit the referenced files.
 	 */
 	[[nodiscard]] BMesh
 	toBMesh(const imp::BMeshImport& mesh);
 
 	/**
-	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.dds` file named `texN.dds`
-	 * by index. These are the texture files the baked `.bmaterial` files will reference.
+	 * Points submesh `submeshIndex` at the material file `relativePath` (relative to the project's data
+	 * root, like every asset reference), adjusting `mesh.materials` and `Submesh::material` as needed.
+	 * Used when an authoring tool saves a material and the mesh must reference it from then on.
+	 *
+	 * Material slots are shared: an import gives every submesh cut from the same source material the
+	 * same index. So the submesh's existing slot is rewritten in place only when no other submesh uses
+	 * it; otherwise the submesh moves to its own slot, reusing an entry that already holds
+	 * `relativePath` rather than appending a duplicate. Sibling submeshes are never repointed.
+	 *
+	 * @return true if `mesh` changed, false if it already referenced that material (nothing to write).
+	 * @throws std::runtime_error if `submeshIndex` is out of range.
+	 */
+	bool
+	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
+
+	/**
+	 * Reports that `done` of `total` textures have been written. Called before each texture, so the
+	 * first call is (0, total) and the last is (total - 1, total).
+	 */
+	using TextureProgressFn = std::function<void(size_t done, size_t total)>;
+
+	/**
+	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file named `texN.ktx2`
+	 * by index. These are the texture files the baked `.bmaterial` files reference.
+	 *
+	 * Each texture is Basis-UASTC supercompressed, which dominates the cost of an import -- pass
+	 * `onProgress` to drive a progress bar. It is called on the calling thread.
 	 *
 	 * @throws std::runtime_error if a file cannot be written.
 	 */
 	void
-	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir);
+	writeTextures(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		const TextureProgressFn&     onProgress = {});
+
+	/**
+	 * Writes each material in `mesh` into `outDir` as a `matN.bmaterial` file (matching the path handles
+	 * toBMesh assembles), mapping each material's texture indices to the `texN.ktx2` names writeTextures
+	 * emits.
+	 *
+	 * @throws std::runtime_error if a file cannot be written.
+	 */
+	void
+	writeMaterials(const imp::BMeshImport& mesh, const std::filesystem::path& outDir);
+
+	/**
+	 * Bakes an import to disk under `outDir`: writes `<name>.bmesh`, one `matN.bmaterial` per material,
+	 * and one `texN.ktx2` per texture. This is the complete modular form the runtime loads.
+	 *
+	 * @throws std::runtime_error if a file cannot be written.
+	 */
+	void
+	bake(const imp::BMeshImport& mesh, const std::filesystem::path& outDir, std::string_view name);
+
+	/**
+	 * Writes `mesh` to `path` as a Wavefront `.obj` for inspection in an external model viewer -- a
+	 * debugging aid for isolating a bad mesh format from a bad shader.
+	 *
+	 * @param fromMeshlets When true (default) the triangles are reconstructed from the meshlet clusters,
+	 *        i.e. exactly the geometry the GPU draws, so a corrupt meshlet build is visible in the
+	 *        viewer. When false the raw per-submesh index buffer is emitted instead, letting you compare
+	 *        the source geometry against the meshletized form.
+	 * @throws std::runtime_error if the file cannot be written.
+	 */
+	void
+	writeObj(const BMesh& mesh, const std::filesystem::path& path, bool fromMeshlets = true);
 }

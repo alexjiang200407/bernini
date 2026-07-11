@@ -35,12 +35,13 @@ namespace assetlib
 		IndexType    indexType;
 		uint32_t     firstMeshlet;  // range into BMeshImport::meshlets
 		uint32_t     meshletCount;
-		uint32_t     material;  // reserved; always c_InvalidIndex for now (materials ignored)
+		uint32_t     material;
 		glm::vec3    aabbMin;
 		glm::vec3    aabbMax;
+		uint32_t     nameOffset;
 	};
 
-	static_assert(sizeof(Submesh) == 92);
+	static_assert(sizeof(Submesh) == 96);
 
 	struct Mesh
 	{

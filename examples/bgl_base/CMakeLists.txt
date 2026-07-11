@@ -15,15 +15,11 @@ add_executable(bgl_base WIN32
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_base PRIVATE core bgl assetlib CLI11::CLI11 )
+target_link_libraries(bgl_base PRIVATE core bgl gamelib assetlib CLI11::CLI11 example_util )
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_base PRIVATE bgl_d3d12_agility Shell32)
 endif()
-
-target_include_directories(bgl_base PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../util
-)
 
 target_precompile_headers(bgl_base
     PUBLIC

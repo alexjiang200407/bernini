@@ -48,7 +48,7 @@ namespace bgl
 
 		// Creates a texture and defers an upload of the given decoded subresource data
 		// (one entry per mip/array subresource, D3D12 order). The RHI never loads or
-		// decodes files -- callers pass already-decoded pixels (see assetlib::loadDDS).
+		// decodes files -- callers pass already-decoded pixels (see assetlib::loadKTX2).
 		// The upload is flushed by FlushPendingTextureUploads.
 		[[nodiscard]]
 		virtual TextureHandle
@@ -56,8 +56,8 @@ namespace bgl
 			const TextureDesc&                      desc,
 			std::span<const TextureSubresourceData> initialData) noexcept = 0;
 
-		// Creates a sampled (kSRV) texture from a decoded image (see assetlib::loadDDS),
-		// deferring its upload. The image's raw dxgiFormat is mapped to the engine format
+		// Creates a sampled (kSRV) texture from a decoded image (see assetlib::loadKTX2),
+		// deferring its upload. The image's API-neutral vkFormat is mapped to the engine format
 		// internally, so callers never touch graphics-format types.
 		[[nodiscard]]
 		virtual TextureHandle
@@ -94,6 +94,17 @@ namespace bgl
 			TextureHandle handle,
 			uint64_t      currentFenceValue,
 			bool          deferred = true) noexcept = 0;
+
+		/**
+		 * Destroys a texture once every frame that could still be sampling it has retired.
+		 *
+		 * For callers that own resources but not the submission timeline: the resource manager
+		 * resolves the fence to wait on itself, so there is no value to get wrong and nothing to
+		 * keep up to date. Prefer this to the explicit-fence overload, which exists for the few
+		 * callers (render targets) that already know the fence their resources are tied to.
+		 */
+		virtual void
+		DestroyTexture(TextureHandle handle) noexcept = 0;
 
 		virtual void
 		DestroySampler(

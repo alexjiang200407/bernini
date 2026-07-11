@@ -22,6 +22,14 @@ doc and a header disagree, trust the header, then fix this doc.
   out of the refcount machinery and enables bindless-style binding (the index *is* the
   descriptor).
 
+* **Samplers are descriptor-heap-only handles.** `CreateSampler(SamplerDesc)` returns a
+  `SamplerHandle` (same `{idx, generation}` shape) but a sampler has **no backing GPU
+  resource** — it owns only a slot in the shader-visible sampler heap (its own `maxSamplers`
+  pool, separate from textures). Bind it bindlessly: the handle's `idx` *is* the heap index the
+  shader reads. On the GPU a texture+sampler pair is fetched as `uint2(textureIndex,
+  samplerIndex)` (see `TextureHandle.Sample(SamplerHandle, uv)` in the shader IDL). `Scene`
+  exposes ready-made presets via `StandardSampler` (`kAnisoLinearWrap`, `kLinearClamp`).
+
 * **Interface objects use intrusive refcounting.** Every `I*` derives from `core::Ref`
   (`AddRef`/`Release`) and is held behind `core::SharedRef<T>` (analogous to
   `Microsoft::WRL::ComPtr`). Each interface exposes a `…Handle` alias
@@ -82,6 +90,7 @@ doc and a header disagree, trust the header, then fix this doc.
 | Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
 | Texture descriptors & `TextureHandle` | [libs/bgl/src/resource/Texture.h](libs/bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
 | Views | [libs/bgl/src/resource/Rtv.h](libs/bgl/src/resource/Rtv.h), [Dsv.h](libs/bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
+| Sampler descriptors & `SamplerHandle` | [libs/bgl/src/resource/Sampler.h](libs/bgl/src/resource/Sampler.h) | `SamplerDesc` (chained builder), `SamplerAddressMode` (D3D + Vulkan aliases), `SamplerReductionType`; descriptor-heap-only. |
 | Readback | [libs/bgl/src/resource/Readback.h](libs/bgl/src/resource/Readback.h) | `ReadbackBufferDesc`, `ReadbackBufferHandle`, `TextureReadbackLayout`. |
 | `FrameBuffer` | [libs/bgl/src/resource/FrameBuffer.h](libs/bgl/src/resource/FrameBuffer.h) | Color attachments (RTV) + depth attachment (DSV). |
 | Render state | [libs/bgl/src/types/RenderState.h](libs/bgl/src/types/RenderState.h) | `RasterState` + `BlendState` + `DepthStencilState`; baked into `MeshletPipelineDesc`. |
@@ -146,6 +155,10 @@ Everything else is self-explanatory from the header.
   `ResourceManagerDesc`). Check `IsNull()` — do not assume success.
 * **`CreateRtv` / `CreateDsv`** require the source texture to have been created with the
   matching usage flag (`TextureUsageFlag::kRenderTarget` / `kDepthStencil`).
+* **`CreateSampler` / `DestroySampler` / `GetSampler`** — samplers draw from their own
+  `maxSamplers` heap (exhaustion → null handle) and follow the same deferred-destruction and
+  generation rules as other resources. A `Sampler` has no `ID3D12Resource`, so it needs **no
+  barriers and no state**; there is no readback or clear path for it.
 * **`Destroy*(handle, currentFenceValue, deferred = true)`** — pass the queue's *current*
   (submitted) fence value. With `deferred == true` the resource is freed only once
   `CleanupExpiredResources` runs with a completed value `>= currentFenceValue`. Passing
@@ -201,8 +214,13 @@ Everything else is self-explanatory from the header.
 
 ### IDevice
 
-* **`CreateShader(path, module, entry)`** — reads the `.dxil` relative to the executable's
-  working directory. Run binaries with cwd set to their output dir (see project scripts).
+* **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
+  defaults to `"main"`. No bytecode is loaded here. The module source is resolved through the
+  device's Slang session search paths (`./shaders/src`, `./shaders/tests`), so run binaries with
+  cwd set to their output dir (see project scripts). The DXIL is generated per-PSO at pipeline
+  creation: `BuildPipelineLayout` links all of a PSO's entry points into one program and pulls
+  both the bytecode (`getEntryPointCode`) and the reflection/root-signature from that single
+  linked program, so bindings always agree (no per-shader `register(bN, spaceM)` needed).
 
 ### Uniforms / Kernel
 
@@ -212,6 +230,10 @@ Everything else is self-explanatory from the header.
 * **Assigning a `BufferHandle`** writes a descriptor index, not data: for a "smart buffer"
   struct the index lands in whichever of `entryBuffer` / `packedBuffer` / `rangeBuffer` exists;
   for a `kDescriptorHandle` value it is written directly; otherwise it throws.
+* **Assigning a `SamplerHandle` / `TextureHandle`** likewise writes the handle's index into the
+  smart-handle struct's index slot (bindless). The shader-side `SamplerHandle` / `TextureHandle`
+  IDL structs are a single `uint index`; assigning throws if the target member isn't a
+  smart-handle struct.
 
 ---
 
@@ -227,7 +249,7 @@ CommandListHandle      cmd    = device->CreateCommandList({QueueType::kGraphics}
 
 ComputeKernel kernel = device->CreateComputeKernel(
     ComputePipelineDesc()
-        .SetShader(device->CreateShader("shaders/Histogram.dxil", "Histogram"))
+        .SetShader(device->CreateShader("Histogram"))
         .SetDebugName("Histogram"));
 
 // Per dispatch

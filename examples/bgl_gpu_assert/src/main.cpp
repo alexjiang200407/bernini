@@ -1,39 +1,21 @@
+#include <DemoWindow.h>
 #include <bgl/bgl.h>
-#include <core/platform/Platform.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-
-struct EventVisitor : public core::IPlatformEventVisitor
-{
-	void
-	Visit(const core::KeyEvent& e, float dt) override
-	{
-		(void)e;
-		(void)dt;
-	}
-
-	void
-	Visit(const core::MouseEvent& e, float dt) override
-	{
-		(void)e;
-		(void)dt;
-	}
-};
 
 int APIENTRY
 wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
 	try
 	{
-		auto opts      = core::PlatformOptions{};
-		opts.width     = 800;
-		opts.height    = 600;
-		opts.resizable = false;
-		opts.decorated = true;
-		opts.mode      = core::PlatformOptions::Mode::BorderlessWindowed;
+		auto opts       = demo::WindowOptions{};
+		opts.width      = 800;
+		opts.height     = 600;
+		opts.title      = "Bernini bgl_gpu_assert";
+		opts.borderless = true;
 
-		auto wnd = core::IPlatform::Create(opts);
+		auto wnd = demo::DemoWindow{ opts };
 
 		auto gfxOpts                     = bgl::GraphicsOptions{};
 		gfxOpts.enableDebugLayer         = true;
@@ -47,7 +29,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		targetDesc.width    = opts.width;
 		targetDesc.height   = opts.height;
 		targetDesc.headless = false;
-		targetDesc.wnd      = wnd->GetNativeHandle();
+		targetDesc.wnd      = wnd.NativeHandle();
 		auto target         = graphics->CreateRenderTarget(targetDesc);
 
 		auto sceneDesc                    = bgl::SceneDesc();
@@ -79,10 +61,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		context.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 
-		auto visitor = EventVisitor();
-		for (auto res = wnd->Process(&visitor); res != core::IPlatform::kClose;
-		     res      = wnd->Process(&visitor))
+		while (!wnd.ShouldClose())
 		{
+			demo::PumpEvents();
+
 			// With BGL_PIXEL_ASSERT_DEMO enabled, the assertion fired here is read back
 			// and crashes a couple of frames later inside a later DrawFrame/BeginFrame.
 			graphics->DrawFrame(target, context);

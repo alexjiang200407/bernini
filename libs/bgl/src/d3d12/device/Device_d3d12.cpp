@@ -1,4 +1,3 @@
-#pragma once
 #include "device/Device_d3d12.h"
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandAllocator_d3d12.h"
@@ -41,6 +40,12 @@ namespace bgl
 		sessionDesc.searchPaths     = searchPaths;
 		sessionDesc.searchPathCount = std::size(searchPaths);
 
+		// Match the column-major convention the CPU side uploads matrices in (and that the
+		// offline slangc default used). The Slang API's SessionDesc otherwise defaults to
+		// row-major, which would transpose viewProj / transforms and project geometry off
+		// screen once shaders are compiled through this session at PSO creation.
+		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
 #if defined(BERNINI_GPU_DEBUG)
 		// Enables dbg_raise() bodies in runtime-compiled shaders. Kept in lockstep
 		// with the offline slangc -D in cmake/compile_shader.cmake. Fully absent in
@@ -69,9 +74,11 @@ namespace bgl
 	}
 
 	ResourceManagerHandle
-	Device::CreateResourceManager(const ResourceManagerDesc& desc) const noexcept
+	Device::CreateResourceManager(
+		const ResourceManagerDesc&     desc,
+		core::SharedRef<ICommandQueue> submissionQueue) const noexcept
 	{
-		return core::SharedRef<ResourceManager>::Make(m_Device, desc);
+		return core::SharedRef<ResourceManager>::Make(m_Device, desc, std::move(submissionQueue));
 	}
 
 	ShaderHandle

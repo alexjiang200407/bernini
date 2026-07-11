@@ -2,11 +2,8 @@
 
 #include <nlohmann/json.hpp>
 
-static constexpr std::array<std::string_view, 4> c_RequiredDirectories = {
-	"Meshes",
-	"Textures",
-	"Materials",
-	"Levels",
+static constexpr std::array<std::string_view, 5> c_RequiredDirectories = {
+	"Meshes", "Textures", "textures_src", "Materials", "Levels",
 };
 
 Project

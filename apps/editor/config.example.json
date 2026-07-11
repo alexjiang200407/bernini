@@ -20,5 +20,13 @@
     },
     "levelEditor": {
         "maxInstances": 1000
+    },
+    "materialEditor": {
+        "maxPreviewInstances": 16,
+        "skybox": "assets/pmrem.ktx2",
+        "irradiance": "assets/iem.ktx2",
+        "prefilter": "assets/pmrem.ktx2",
+        "brdfLut": "assets/brdf_lut.ktx2",
+        "exposure": 0.4
     }
 }

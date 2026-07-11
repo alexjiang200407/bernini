@@ -1,5 +1,6 @@
 #include <assetlib/bmesh_io.h>
 
+#include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
 
 #include "ByteReader.h"
@@ -11,8 +12,11 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint32_t c_Magic        = 0x48534D42u;  // 'B','M','S','H' little-endian
-		constexpr uint16_t c_VersionMajor = 1;
+		constexpr uint32_t c_Magic = 0x48534D42u;  // 'B','M','S','H' little-endian
+		// v3 changed what `materials` paths are relative to: the project's data root, not the mesh
+		// file. The bytes are unchanged, so a v2 file would load and silently resolve its materials
+		// against the wrong directory. It is rejected instead; re-import or re-save the mesh.
+		constexpr uint16_t c_VersionMajor = 3;
 		constexpr uint16_t c_VersionMinor = 0;
 		constexpr size_t   c_ChunkAlign   = 16;
 
@@ -120,6 +124,45 @@ namespace assetlib
 					current.push_back(c);
 				}
 			}
+			return out;
+		}
+
+		// The NUL-terminated name at `offset` in the string pool (empty for offset 0 / out of range).
+		std::string
+		nameFromPool(const std::vector<char>& pool, uint32_t offset)
+		{
+			if (offset == 0 || offset >= pool.size())
+				return {};
+			return std::string(pool.data() + offset);
+		}
+
+		// The standalone file name writeTextures emits for texture `index` (empty when absent).
+		std::string
+		texturePath(uint32_t index)
+		{
+			return index == c_InvalidIndex ? std::string{} :
+			                                 "tex" + std::to_string(index) + ".ktx2";
+		}
+
+		// The file name toBMesh assembles for material `index`.
+		std::string
+		materialPath(size_t index)
+		{
+			return "mat" + std::to_string(index) + ".bmaterial";
+		}
+
+		// Resolves an inline import material into its modular, path-referencing form.
+		BMaterial
+		toBMaterial(const imp::BMeshImport& mesh, const imp::BMaterialImport& material)
+		{
+			BMaterial out;
+			out.baseColorTexture = texturePath(material.baseColorTexture);
+			out.normalTexture    = texturePath(material.normalTexture);
+			out.ormTexture       = texturePath(material.ormTexture);
+			out.baseColorFactor  = material.baseColorFactor;
+			out.metallicFactor   = material.metallicFactor;
+			out.roughnessFactor  = material.roughnessFactor;
+			out.name             = nameFromPool(mesh.stringPool, material.nameOffset);
 			return out;
 		}
 	}
@@ -257,26 +300,204 @@ namespace assetlib
 		out.indexData        = mesh.indexData;
 		out.stringPool       = mesh.stringPool;
 
-		// TODO: write a `.bmaterial` file per material (mapping BMaterialImport texture indices to the
-		// texN.dds paths writeTextures emits). For now only the deterministic path handles are
-		// assembled so Submesh::material keeps indexing a parallel list.
+		// Submesh::material indexes this parallel list of `.bmaterial` path handles; the files
+		// themselves are written by writeMaterials / bake.
 		out.materials.reserve(mesh.materials.size());
-		for (size_t i = 0; i < mesh.materials.size(); ++i)
-			out.materials.push_back("mat" + std::to_string(i) + ".bmaterial");
+		for (size_t i = 0; i < mesh.materials.size(); ++i) out.materials.push_back(materialPath(i));
 		return out;
 	}
 
+	bool
+	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath)
+	{
+		if (submeshIndex >= mesh.submeshes.size())
+			throw std::runtime_error("attachMaterial: submeshIndex out of range");
+
+		Submesh&          submesh  = mesh.submeshes[submeshIndex];
+		const std::string material = std::string(relativePath);
+
+		// Rewriting the slot in place is only safe when this submesh is its sole user; otherwise every
+		// sibling sharing the slot would silently change material too.
+		const bool hasSlot = submesh.material < mesh.materials.size();
+		const bool shared =
+			hasSlot && std::ranges::count_if(mesh.submeshes, [&](const Submesh& other) {
+						   return other.material == submesh.material;
+					   }) > 1;
+
+		if (hasSlot && !shared)
+		{
+			if (mesh.materials[submesh.material] == material)
+				return false;
+			mesh.materials[submesh.material] = material;
+			return true;
+		}
+
+		// Move to a slot of its own, reusing one that already names this material.
+		if (const auto it = std::ranges::find(mesh.materials, material); it != mesh.materials.end())
+		{
+			const auto index = static_cast<uint32_t>(std::distance(mesh.materials.begin(), it));
+			if (submesh.material == index)
+				return false;
+			submesh.material = index;
+			return true;
+		}
+
+		mesh.materials.push_back(material);
+		submesh.material = static_cast<uint32_t>(mesh.materials.size() - 1);
+		return true;
+	}
+
 	void
-	writeTextures(const imp::BMeshImport& mesh, const std::filesystem::path& outDir)
+	writeTextures(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		const TextureProgressFn&     onProgress)
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(outDir, ec);
 
+		// Textures used as base color are sRGB (tagged so the GPU sampler decodes them); normal and
+		// ORM maps carry linear data and are written as-is.
+		std::set<uint32_t> srgbTextures;
+		for (const imp::BMaterialImport& material : mesh.materials)
+			if (material.baseColorTexture != c_InvalidIndex)
+				srgbTextures.insert(material.baseColorTexture);
+
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
+			if (onProgress)
+				onProgress(i, mesh.textures.size());
+
 			auto path = outDir / ("tex" + std::to_string(i));
-			path.replace_extension(".dds");
-			writeDDS(mesh.textures[i], path);
+			path.replace_extension(".ktx2");
+			writeKTX2(mesh.textures[i], path, srgbTextures.contains(static_cast<uint32_t>(i)));
+		}
+	}
+
+	void
+	writeMaterials(const imp::BMeshImport& mesh, const std::filesystem::path& outDir)
+	{
+		std::error_code ec;
+		std::filesystem::create_directories(outDir, ec);
+
+		for (size_t i = 0; i < mesh.materials.size(); ++i)
+			saveMaterial(toBMaterial(mesh, mesh.materials[i]), outDir / materialPath(i));
+	}
+
+	void
+	bake(const imp::BMeshImport& mesh, const std::filesystem::path& outDir, std::string_view name)
+	{
+		std::error_code ec;
+		std::filesystem::create_directories(outDir, ec);
+
+		writeTextures(mesh, outDir);
+		writeMaterials(mesh, outDir);
+		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
+	}
+
+	namespace
+	{
+		// Byte offset of a vertex attribute within one interleaved vertex, or -1 if the submesh's
+		// layout does not carry it.
+		int
+		attributeByteOffset(const VertexLayout& layout, VertexSemantic semantic)
+		{
+			for (uint32_t i = 0; i < layout.attributeCount; ++i)
+				if (layout.attributes[i].semantic == semantic)
+					return layout.attributes[i].offset;
+			return -1;
+		}
+
+		// One index from a submesh's raw index buffer, honoring its 16- or 32-bit width.
+		uint32_t
+		rawIndexAt(const BMesh& mesh, const Submesh& submesh, uint32_t i)
+		{
+			const std::byte* base = mesh.indexData.data() + submesh.indexByteOffset;
+			if (submesh.indexType == IndexType::kUint16)
+			{
+				uint16_t value = 0;
+				std::memcpy(&value, base + static_cast<size_t>(i) * 2, sizeof(value));
+				return value;
+			}
+			uint32_t value = 0;
+			std::memcpy(&value, base + static_cast<size_t>(i) * 4, sizeof(value));
+			return value;
+		}
+	}
+
+	void
+	writeObj(const BMesh& mesh, const std::filesystem::path& path, bool fromMeshlets)
+	{
+		std::ofstream out(path);
+		if (!out)
+			throw std::runtime_error("obj: cannot open file for writing: " + path.string());
+
+		out << "# Bernini BMesh -> OBJ ("
+			<< (fromMeshlets ? "reconstructed from meshlets" : "raw index buffer") << ")\n";
+
+		// OBJ vertex indices are global and 1-based; each submesh appends its vertices after the last.
+		uint32_t vertexBase = 0;
+
+		for (size_t mi = 0; mi < mesh.meshes.size(); ++mi)
+		{
+			const Mesh& meshEntry = mesh.meshes[mi];
+			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			{
+				const Submesh& submesh = mesh.submeshes[meshEntry.firstSubmesh + s];
+				const int      posOffset =
+					attributeByteOffset(submesh.layout, VertexSemantic::kPosition);
+				const uint32_t stride = submesh.layout.stride;
+
+				out << "o mesh" << mi << "_submesh" << s << "\n";
+
+				for (uint32_t v = 0; v < submesh.vertexCount; ++v)
+				{
+					float            p[3]     = { 0.0f, 0.0f, 0.0f };
+					const std::byte* vertBase = mesh.vertexData.data() + submesh.vertexByteOffset +
+					                            static_cast<size_t>(v) * stride;
+					if (posOffset >= 0)
+						std::memcpy(p, vertBase + posOffset, sizeof(p));
+					out << "v " << p[0] << ' ' << p[1] << ' ' << p[2] << "\n";
+				}
+
+				const auto emitFace = [&](uint32_t a, uint32_t b, uint32_t c) {
+					out << "f " << (vertexBase + a + 1) << ' ' << (vertexBase + b + 1) << ' '
+						<< (vertexBase + c + 1) << "\n";
+				};
+
+				if (fromMeshlets)
+				{
+					// Same reconstruction the GPU (and Scene::AddStaticMesh) performs: meshlet-local
+					// triangle indices -> submesh-local vertex indices via the meshlet vertex map.
+					for (uint32_t m = 0; m < submesh.meshletCount; ++m)
+					{
+						const Meshlet& ml = mesh.meshlets[submesh.firstMeshlet + m];
+						for (uint32_t t = 0; t < ml.triangleCount; ++t)
+						{
+							uint32_t tri[3];
+							for (uint32_t k = 0; k < 3; ++k)
+							{
+								const uint8_t local =
+									mesh.meshletTriangles[ml.triangleOffset + t * 3 + k];
+								tri[k] = mesh.meshletVertices[ml.vertexOffset + local];
+							}
+							emitFace(tri[0], tri[1], tri[2]);
+						}
+					}
+				}
+				else
+				{
+					for (uint32_t i = 0; i + 2 < submesh.indexCount; i += 3)
+					{
+						emitFace(
+							rawIndexAt(mesh, submesh, i),
+							rawIndexAt(mesh, submesh, i + 1),
+							rawIndexAt(mesh, submesh, i + 2));
+					}
+				}
+
+				vertexBase += submesh.vertexCount;
+			}
 		}
 	}
 }

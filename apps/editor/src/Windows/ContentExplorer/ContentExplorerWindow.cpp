@@ -1,5 +1,6 @@
 #include "ContentExplorerWindow.h"
 
+#include "Async/BackgroundTask.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 
 #include <QAbstractItemView>
@@ -39,8 +40,10 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent) : QWidget(parent)
 {
 	m_Ui.setupUi(this);
 
-	m_DirectoryModel = new QFileSystemModel(this);
-	m_DirectoryModel->setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
+	// The hierarchy shows files as well as directories, so an asset can be found and dragged straight
+	// out of the tree without first navigating to its folder in the right-hand view.
+	m_HierarchyModel = new QFileSystemModel(this);
+	m_HierarchyModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
 
 	m_FileModel = new QFileSystemModel(this);
 	m_FileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
@@ -83,7 +86,7 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	setEnabled(true);
 	m_RootPath = path;
 
-	m_Ui.FileExplorer->setRootIndex(m_DirectoryModel->setRootPath(path));
+	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(path));
 	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
 	UpdateEmptyPlaceholder();
 }
@@ -91,17 +94,25 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 void
 ContentExplorerWindow::AttachModels()
 {
-	if (m_Ui.FileExplorer->model() == m_DirectoryModel)
+	if (m_Ui.FileExplorer->model() == m_HierarchyModel)
 		return;
 
-	m_Ui.FileExplorer->setModel(m_DirectoryModel);
+	m_Ui.FileExplorer->setModel(m_HierarchyModel);
 	m_Ui.FileExplorer->setHeaderHidden(true);
-	for (auto column = 1; column < m_DirectoryModel->columnCount(); ++column)
+	for (auto column = 1; column < m_HierarchyModel->columnCount(); ++column)
 		m_Ui.FileExplorer->hideColumn(column);
 
 	m_Ui.CurrentDirectoryExplorer->setModel(m_FileModel);
 	m_Ui.CurrentDirectoryExplorer->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	m_Ui.CurrentDirectoryExplorer->verticalHeader()->setVisible(false);
+
+	// Assets can be dragged out of the explorer (e.g. a .bmesh onto the Material Editor preview).
+	// QFileSystemModel supplies the file URLs; DragOnly keeps the views from accepting drops, so
+	// dropped mesh files still bubble up to this widget's dropEvent for import.
+	m_Ui.FileExplorer->setDragEnabled(true);
+	m_Ui.FileExplorer->setDragDropMode(QAbstractItemView::DragOnly);
+	m_Ui.CurrentDirectoryExplorer->setDragEnabled(true);
+	m_Ui.CurrentDirectoryExplorer->setDragDropMode(QAbstractItemView::DragOnly);
 
 	// Show only Name and Last Modified, with Name taking the remaining width.
 	m_Ui.CurrentDirectoryExplorer->hideColumn(1);  // Size
@@ -111,13 +122,23 @@ ContentExplorerWindow::AttachModels()
 	fileHeader->setSectionResizeMode(0, QHeaderView::Stretch);           // Name
 	fileHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // Last Modified
 
-	// Selecting a folder on the left shows that folder's contents on the right.
+	// Selecting an entry on the left shows the containing folder's contents on the right. The tree
+	// lists files too, and a file is not a directory to root the right-hand view at, so selecting one
+	// shows the folder it lives in.
 	connect(
 		m_Ui.FileExplorer->selectionModel(),
 		&QItemSelectionModel::currentChanged,
 		this,
 		[this](const QModelIndex& current, const QModelIndex&) {
-			const auto path = m_DirectoryModel->filePath(current);
+			if (!current.isValid())
+				return;
+
+			const QModelIndex folder =
+				m_HierarchyModel->isDir(current) ? current : current.parent();
+			if (!folder.isValid())
+				return;
+
+			const auto path = m_HierarchyModel->filePath(folder);
 			m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
 			UpdateEmptyPlaceholder();
 		});
@@ -193,18 +214,23 @@ ContentExplorerWindow::eventFilter(QObject* watched, QEvent* event)
 void
 ContentExplorerWindow::ShowHierarchyMenu(const QPoint& pos)
 {
-	if (m_Ui.FileExplorer->model() != m_DirectoryModel)
+	if (m_Ui.FileExplorer->model() != m_HierarchyModel)
 		return;
 
-	// Add the new directory inside the clicked folder, or at the tree root when the
-	// click missed a row.
-	const auto index  = m_Ui.FileExplorer->indexAt(pos);
-	const auto parent = index.isValid() ? index : m_Ui.FileExplorer->rootIndex();
+	// Add the new directory inside the clicked folder, or at the tree root when the click missed a
+	// row. The tree lists files too, so a click on one targets the folder that contains it.
+	const auto index = m_Ui.FileExplorer->indexAt(pos);
+
+	QModelIndex parent = m_Ui.FileExplorer->rootIndex();
+	if (index.isValid())
+		parent = m_HierarchyModel->isDir(index) ? index : index.parent();
+	if (!parent.isValid())
+		parent = m_Ui.FileExplorer->rootIndex();
 
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
 	if (menu.exec(m_Ui.FileExplorer->viewport()->mapToGlobal(pos)) == addDir)
-		AddDirectory(m_DirectoryModel, parent);
+		AddDirectory(m_HierarchyModel, parent);
 }
 
 void
@@ -289,11 +315,14 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		if (!IsImportableMesh(file))
 			continue;
 
-		AssetImporterDialog dialog(file, targetDir, DefaultTexturesDir(targetDir), this);
+		AssetImporterDialog dialog(file, targetDir, this);
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
-		ImportMesh(file, targetDir, dialog.ImportTextures(), dialog.TexturesDirectory());
+		ImportMesh(
+			file,
+			targetDir,
+			dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString());
 	}
 
 	event->acceptProposedAction();
@@ -323,66 +352,68 @@ ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
 	{
 		const auto index = m_Ui.FileExplorer->indexAt(treeLocal);
 		if (index.isValid())
-			return m_DirectoryModel->filePath(index);
+			return m_HierarchyModel->filePath(index);
 	}
 
 	return m_FileModel->rootPath();
-}
-
-QString
-ContentExplorerWindow::DefaultTexturesDir(const QString& meshDir) const
-{
-	namespace fs = std::filesystem;
-
-	const fs::path mesh         = fs::path(meshDir.toStdWString());
-	const fs::path dataRoot     = fs::path(m_RootPath.toStdWString());
-	const fs::path meshesRoot   = dataRoot / "Meshes";
-	const fs::path texturesRoot = dataRoot / "Textures";
-
-	// Mirror the mesh's location under Meshes/ into Textures/ (e.g. Meshes/Abcd ->
-	// Textures/Abcd). If it isn't under Meshes/, fall back to a same-named folder.
-	std::error_code ec;
-	const fs::path  relative    = fs::relative(mesh, meshesRoot, ec);
-	const bool      underMeshes = !ec && !relative.empty() && *relative.begin() != "..";
-
-	const fs::path texturesDir =
-		underMeshes ? texturesRoot / relative : texturesRoot / mesh.filename();
-	return QString::fromStdWString(texturesDir.wstring());
 }
 
 void
 ContentExplorerWindow::ImportMesh(
 	const QString& sourceFile,
 	const QString& targetDir,
-	bool           importTextures,
-	const QString& texturesDir)
+	const QString& textureSubdir)
 {
 	namespace fs = std::filesystem;
 
 	const fs::path source  = fs::path(sourceFile.toStdWString());
 	const fs::path meshDir = fs::path(targetDir.toStdWString());
 
-	try
-	{
-		const auto mesh = assetlib::loadFromGltf(source);
+	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
+	// own folder or the next one silently overwrites it. m_RootPath is the project's Data directory.
+	const bool     importTextures = !textureSubdir.isEmpty();
+	const fs::path textureDir     = fs::path(m_RootPath.toStdWString()) /
+	                                AssetImporterDialog::c_TextureRoot /
+	                                fs::path(textureSubdir.toStdWString());
 
-		fs::path bmeshPath = meshDir / source.filename();
-		bmeshPath.replace_extension(".bmesh");
-		assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
+	const QString name = QFileInfo(sourceFile).fileName();
 
-		if (importTextures && !texturesDir.isEmpty())
-		{
-			const fs::path  outDir = fs::path(texturesDir.toStdWString());
-			std::error_code ec;
-			fs::create_directories(outDir, ec);
-			assetlib::writeTextures(mesh, outDir);
-		}
-	}
-	catch (const std::exception& e)
+	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
+	// freeze the editor for minutes on a large asset. None of it touches bgl, so the whole import
+	// runs on a worker; only the message box below is back on the UI thread.
+	QString    error;
+	const bool imported = background::RunWithLoadingScreen(
+		this,
+		QString("Importing %1").arg(name),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, QString("Parsing %1...").arg(name));
+			const auto mesh = assetlib::loadFromGltf(source);
+
+			progress.Report(0, 0, "Writing mesh...");
+			fs::path bmeshPath = meshDir / source.filename();
+			bmeshPath.replace_extension(".bmesh");
+			assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
+
+			if (importTextures)
+			{
+				std::error_code ec;
+				fs::create_directories(textureDir, ec);
+
+				assetlib::writeTextures(mesh, textureDir, [&](size_t done, size_t total) {
+					progress.Report(
+						static_cast<int>(done),
+						static_cast<int>(total),
+						QString("Compressing textures (%1 of %2)...").arg(done + 1).arg(total));
+				});
+			}
+		},
+		&error);
+
+	if (!imported)
 	{
 		QMessageBox::warning(
 			this,
 			"Import Asset",
-			QString("Failed to import '%1':\n%2").arg(QFileInfo(sourceFile).fileName(), e.what()));
+			QString("Failed to import '%1':\n%2").arg(name, error));
 	}
 }

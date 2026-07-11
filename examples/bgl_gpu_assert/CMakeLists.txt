@@ -13,15 +13,11 @@ add_executable(bgl_gpu_assert WIN32
     ${BGL_GPU_ASSERT_HEADERS}
 )
 
-target_link_libraries(bgl_gpu_assert PRIVATE core bgl)
+target_link_libraries(bgl_gpu_assert PRIVATE core bgl example_util)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_gpu_assert PRIVATE bgl_d3d12_agility)
 endif()
-
-target_include_directories(bgl_gpu_assert PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../util
-)
 
 target_precompile_headers(bgl_gpu_assert
     PUBLIC

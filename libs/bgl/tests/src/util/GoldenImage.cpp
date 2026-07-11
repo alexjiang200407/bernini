@@ -1,20 +1,15 @@
 #include "util/GoldenImage.h"
 
-#include <DirectXTex.h>
+// STB_IMAGE_STATIC gives this TU its own internal-linkage copy of the decoder, avoiding a
+// duplicate-symbol clash with assetlib (which also compiles stb_image, via tinygltf).
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 namespace bgl::test
 {
-	namespace
-	{
-		std::wstring
-		Widen(const std::string& path)
-		{
-			return std::wstring(path.begin(), path.end());
-		}
-	}
-
 	bool
-	MatchesGoldenDDS(const std::string& expectedPath, const std::string& gotPath, float tolerance)
+	MatchesGolden(const std::string& expectedPath, const std::string& gotPath, float tolerance)
 	{
 		namespace fs = std::filesystem;
 
@@ -29,76 +24,71 @@ namespace bgl::test
 			return false;
 		}
 
-		DirectX::ScratchImage expectedImage;
-		DirectX::ScratchImage gotImage;
+		int expW = 0, expH = 0, expC = 0;
+		int gotW = 0, gotH = 0, gotC = 0;
 
-		if (FAILED(
-				DirectX::LoadFromDDSFile(
-					Widen(expectedPath).c_str(),
-					DirectX::DDS_FLAGS_NONE,
-					nullptr,
-					expectedImage)))
+		unsigned char* expected = stbi_load(expectedPath.c_str(), &expW, &expH, &expC, 4);
+		if (expected == nullptr)
 		{
 			logger::warn("Failed to load golden image '{}'", expectedPath);
 			return false;
 		}
 
-		if (FAILED(
-				DirectX::LoadFromDDSFile(
-					Widen(gotPath).c_str(),
-					DirectX::DDS_FLAGS_NONE,
-					nullptr,
-					gotImage)))
+		unsigned char* got = stbi_load(gotPath.c_str(), &gotW, &gotH, &gotC, 4);
+		if (got == nullptr)
 		{
+			stbi_image_free(expected);
 			logger::warn("Failed to load captured image '{}'", gotPath);
 			return false;
 		}
 
-		const auto& expectedMeta = expectedImage.GetMetadata();
-		const auto& gotMeta      = gotImage.GetMetadata();
+		bool matches = true;
 
-		if (expectedMeta.width != gotMeta.width || expectedMeta.height != gotMeta.height ||
-		    expectedMeta.format != gotMeta.format)
+		if (expW != gotW || expH != gotH)
 		{
 			logger::warn(
-				"Golden image mismatch '{}': dimensions/format differ; captured output left at "
-				"'{}'",
+				"Golden image mismatch '{}': dimensions differ; captured output left at '{}'",
 				expectedPath,
 				gotPath);
-			return false;
+			matches = false;
 		}
 
-		const DirectX::Image* expected = expectedImage.GetImage(0, 0, 0);
-		const DirectX::Image* got      = gotImage.GetImage(0, 0, 0);
-
-		if (expected == nullptr || got == nullptr)
+		if (matches)
 		{
-			return false;
+			// Mean squared error over every RGBA channel, normalized to [0,1] so the tolerance
+			// matches the scale DirectX::ComputeMSE used previously.
+			const size_t count = static_cast<size_t>(expW) * expH * 4;
+			double       sum   = 0.0;
+			for (size_t i = 0; i < count; ++i)
+			{
+				const double d = (static_cast<double>(expected[i]) - got[i]) / 255.0;
+				sum += d * d;
+			}
+
+			const float mse = static_cast<float>(sum / static_cast<double>(count));
+			if (mse > tolerance)
+			{
+				logger::warn(
+					"Golden image mismatch '{}': MSE {} exceeds tolerance {}; captured output left "
+					"at '{}'",
+					expectedPath,
+					mse,
+					tolerance,
+					gotPath);
+				matches = false;
+			}
 		}
 
-		float mse     = 0.0f;
-		float mseV[4] = {};
-		if (FAILED(DirectX::ComputeMSE(*expected, *got, mse, mseV)))
+		stbi_image_free(expected);
+		stbi_image_free(got);
+
+		if (matches)
 		{
-			logger::warn("Failed to compute MSE for golden image '{}'", expectedPath);
-			return false;
+			// Match: drop the temporary capture so a passing test leaves nothing behind.
+			std::error_code ec;
+			fs::remove(gotPath, ec);
 		}
 
-		if (mse > tolerance)
-		{
-			logger::warn(
-				"Golden image mismatch '{}': MSE {} exceeds tolerance {}; captured output left at "
-				"'{}'",
-				expectedPath,
-				mse,
-				tolerance,
-				gotPath);
-			return false;
-		}
-
-		// Match: drop the temporary capture so a passing test leaves nothing behind.
-		std::error_code ec;
-		fs::remove(gotPath, ec);
-		return true;
+		return matches;
 	}
 }

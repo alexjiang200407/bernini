@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QWidget>
 
 class QTimer;
@@ -51,10 +52,37 @@ protected:
 		return nullptr;
 	}
 
+	bgl::IScene*
+	PreviewScene() const noexcept
+	{
+		return m_Desc.scene.Get();
+	}
+
+	bgl::ISceneView*
+	PreviewView() const noexcept
+	{
+		return m_SceneView.Get();
+	}
+
+	bgl::IGraphics*
+	PreviewGraphics() const noexcept
+	{
+		return m_Desc.gfx.Get();
+	}
+
+	void
+	SetCamera(const bgl::Camera& cam) noexcept
+	{
+		camera = cam;
+	}
+
 private:
 	// Resizes the render target to (width, height) if they are valid and changed.
 	void
 	SyncSize(int width, int height);
+
+	void
+	ReportFrameTiming(qint64 startNs, qint64 endNs);
 
 	QTimer*                 m_FrameTimer = nullptr;
 	RenderTargetWindowDesc  m_Desc;
@@ -63,4 +91,8 @@ private:
 	bgl::Camera             camera;
 	uint32_t                m_Width  = 1;
 	uint32_t                m_Height = 1;
+
+	QElapsedTimer m_FrameClock;  // monotonic clock for the timings above
+	qint64        m_LastFrameStartNs = -1;
+	qint64        m_LastFrameEndNs   = -1;
 };

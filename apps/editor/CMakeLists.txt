@@ -7,6 +7,20 @@ qt_standard_project_setup()   # enables AUTOMOC / AUTOUIC / AUTORCC
 
 find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
 
+# QtNodes (node-graph UI for the Material Editor). Vendored via FetchContent so it builds against
+# the Qt already resolved by find_package(Qt6) above -- NOT vcpkg's qtbase: the vcpkg nodeeditor
+# port would build all of Qt from source and collide with the system Qt. It builds a small
+# QtNodes.dll (~1 MB) into the shared runtime output dir, so it sits next to editor.exe with no
+# extra deploy step. Exposes the target QtNodes::QtNodes.
+include(FetchContent)
+set(QT_NODES_DEVELOPER_DEFAULTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+	QtNodes
+	GIT_REPOSITORY https://github.com/paceholder/nodeeditor.git
+	GIT_TAG 3.0.16
+)
+FetchContent_MakeAvailable(QtNodes)
+
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -41,6 +55,7 @@ target_link_libraries(editor
 		bgl
 		assetlib
 		Qt6::Widgets
+		QtNodes::QtNodes
 		nlohmann_json::nlohmann_json
 )
 
