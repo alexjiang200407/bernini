@@ -11,6 +11,8 @@ import forward.PbrShading;
 struct MaterialData
 {
     float3 cameraPos;
+    float exposure;
+
     EntryBuffer<PbrMaterial> pbrMaterials;
     EntryBuffer<LoosePbrMaterial> looseMaterials;
 
@@ -119,6 +121,7 @@ public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
         materialData.irradianceMap,
         materialData.prefilterMap,
         materialData.brdfLUT,
-        materialData.linearClampSampler
+        materialData.linearClampSampler,
+        materialData.exposure
     );
 }

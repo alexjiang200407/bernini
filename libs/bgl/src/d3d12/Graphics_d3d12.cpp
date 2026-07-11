@@ -622,8 +622,9 @@ namespace bgl
 
 		draw.cameraPos = glm::vec3(glm::inverse(context.camera.GetView())[3]);
 
-		draw.env    = view_->GetEnvironmentMap();
-		draw.skybox = view_->GetSkybox();
+		draw.env      = view_->GetEnvironmentMap();
+		draw.exposure = view_->GetExposure();
+		draw.skybox   = view_->GetSkybox();
 
 		glm::mat4 viewNoTranslation = context.camera.GetView();
 		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);

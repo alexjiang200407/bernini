@@ -74,6 +74,20 @@ namespace bgl
 		virtual void
 		SetSkyBox(SkyboxDesc desc) = 0;
 
+		/**
+		 * Sets this view's photographic exposure: a linear scale applied to the shaded radiance just
+		 * before tone mapping. Like the environment, exposure is per-view, so two views of one Scene
+		 * can be exposed independently.
+		 *
+		 * It scales *total* radiance, not the environment's contribution -- it is the camera's
+		 * sensitivity, not a property of the IBL maps.
+		 *
+		 * @param exposure Linear multiplier. 1.0 (the default) passes radiance through unscaled.
+		 * @throws SceneError if `exposure` is not finite or is negative.
+		 */
+		virtual void
+		SetExposure(float exposure) = 0;
+
 	protected:
 		ISceneView() noexcept = default;
 	};

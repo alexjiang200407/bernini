@@ -99,7 +99,6 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 {
 	auto* splitter = new QSplitter(Qt::Horizontal, this);
 
-	// --- Left: submesh selector + node blackboard ---------------------------------------------
 	auto* leftPanel  = new QWidget(splitter);
 	auto* leftLayout = new QVBoxLayout(leftPanel);
 	leftLayout->setContentsMargins(0, 0, 0, 0);
@@ -160,7 +159,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		this,
 		&MaterialEditorWindow::AddTextureNode);
 
-	// --- Right: model preview -----------------------------------------------------------------
+	// Model Preview
 	QWidget* rightPanel = nullptr;
 	if (m_Desc.gfx)
 	{
@@ -209,9 +208,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	splitter->addWidget(leftPanel);
 	splitter->addWidget(rightPanel);
-	// The preview should start with a good share of the width (~38%); a bare native-surface widget
-	// reports a tiny size hint, so give the splitter explicit initial sizes. Stretch factors keep the
-	// ratio roughly stable on resize.
+
+	// The preview should start with a good share of the width (~38%)
 	splitter->setSizes({ 780, 480 });
 	splitter->setStretchFactor(0, 3);
 	splitter->setStretchFactor(1, 2);
@@ -242,8 +240,6 @@ MaterialEditorWindow::ResetGraph(int submeshIndex, const QJsonObject& graph)
 {
 	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(submeshIndex)];
 
-	// The view must not hold a scene whose model is about to die, and QtNodes requires an empty model
-	// before load() -- restored nodes keep their saved ids and would clash. So rebuild both.
 	if (m_CurrentSubmesh == submeshIndex)
 		m_GraphView->setScene(nullptr);
 

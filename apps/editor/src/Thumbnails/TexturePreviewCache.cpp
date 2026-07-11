@@ -10,8 +10,6 @@
 
 namespace
 {
-	// Draws `image` over a checkerboard so a base-color map's alpha reads as transparency rather
-	// than as a hole punched in the node.
 	QPixmap
 	ToDisplayPixmap(const QImage& image)
 	{
@@ -35,8 +33,6 @@ namespace
 		return pixmap;
 	}
 
-	// Decoding a .ktx2 means transcoding its Basis payload, which is far too slow for the UI thread
-	// when a reloaded graph asks for every node's texture at once.
 	class DecodeTask : public QRunnable
 	{
 	public:
@@ -56,8 +52,7 @@ namespace
 					std::filesystem::path(m_Path.toStdWString()),
 					static_cast<uint32_t>(TexturePreviewCache::c_PreviewDim));
 
-				// loadKTX2Preview always returns one tightly packed RGBA8 subresource. The QImage
-				// view borrows those bytes, so deep-copy before `image` leaves scope.
+				// deep-copy subresource before `image` leaves scope.
 				decoded = QImage(
 							  reinterpret_cast<const uchar*>(image.pixels.data()),
 							  static_cast<int>(image.width),
@@ -68,16 +63,12 @@ namespace
 			}
 			catch (const std::exception& e)
 			{
-				// HDR and non-Basis block formats have no CPU decode path; the node just shows no
-				// preview. A null QImage tells the cache to drop the in-flight entry.
 				qWarning(
 					"TexturePreviewCache: cannot preview '%s': %s",
 					qPrintable(m_Path),
 					e.what());
 			}
 
-			// The functor overload, not the method-name one: a wrong name there is a silent
-			// runtime warning, and nothing would ever paint.
 			QMetaObject::invokeMethod(
 				m_Cache,
 				[cache = m_Cache, path = m_Path, decoded, stamp = m_Stamp]() {
@@ -150,7 +141,6 @@ TexturePreviewCache::Deliver(const QString& path, const QImage& image, qint64 st
 
 	const QPixmap preview = ToDisplayPixmap(image);
 
-	// QCache costs are unitless; keeping everything in KB lets c_BudgetKb read as a byte budget.
 	const int costKb = std::max(
 		1,
 		static_cast<int>(

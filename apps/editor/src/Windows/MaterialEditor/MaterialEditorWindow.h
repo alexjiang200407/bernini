@@ -32,7 +32,7 @@ struct MaterialEditorWindowDesc
 {
 	bgl::GraphicsHandle gfx                 = nullptr;
 	uint32_t            maxPreviewInstances = 16;
-	MaterialPreviewEnv  previewEnv;  // skybox + IBL paths from config (materialEditor.*)
+	MaterialPreviewEnv  previewEnv;
 };
 
 // The material-authoring surface: a node blackboard (QtNodes) on the left and a live model preview

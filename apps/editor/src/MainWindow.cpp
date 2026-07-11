@@ -72,6 +72,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.previewEnv.irradiance = matSettings["irradiance"].GetOrDefault(std::string());
 		matDesc.previewEnv.prefilter  = matSettings["prefilter"].GetOrDefault(std::string());
 		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
+		matDesc.previewEnv.exposure   = matSettings["exposure"].GetOrDefault(1.0f);
 
 		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
 	}

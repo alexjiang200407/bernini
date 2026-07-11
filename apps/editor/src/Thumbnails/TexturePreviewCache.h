@@ -19,11 +19,8 @@ class TexturePreviewCache : public QObject
 	Q_OBJECT
 
 public:
-	// The longer edge of a decoded preview. Larger than any node draws it, so zooming the graph in
-	// scales down rather than up.
 	static constexpr int c_PreviewDim = 256;
 
-	// Roughly 256 distinct textures at the worst-case 256x256x4 an entry can cost.
 	static constexpr int c_BudgetKb = 64 * 1024;
 
 	explicit TexturePreviewCache(QObject* parent = nullptr);

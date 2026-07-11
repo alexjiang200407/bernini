@@ -297,6 +297,10 @@ namespace bgl
 				{
 					u = draw.cameraPos;
 				}
+				if (auto u = matData["exposure"]; u.IsValid())
+				{
+					u = draw.exposure;
+				}
 			}
 
 			auto gfxState   = MeshletState();
