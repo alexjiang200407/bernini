@@ -26,13 +26,22 @@ endif()
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-add_custom_target(copy_assets
+file(GLOB_RECURSE ASSET_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/assets/*")
+
+set(ASSET_STAMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/.assets.stamp")
+
+add_custom_command(
+    OUTPUT "${ASSET_STAMP}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/assets"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
+    COMMAND ${CMAKE_COMMAND} -E touch "${ASSET_STAMP}"
+    DEPENDS ${ASSET_FILES}
     COMMENT "Copying assets to the runtime output directory"
     VERBATIM
 )
+
+add_custom_target(copy_assets DEPENDS "${ASSET_STAMP}")
 
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
