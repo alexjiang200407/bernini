@@ -5,7 +5,7 @@ Usage:
     python scripts/get_targets.py                 # every target + type
     python scripts/get_targets.py --type EXECUTABLE
     python scripts/get_targets.py --json
-    python scripts/get_targets.py --build-dir build/msvc-release
+    python scripts/get_targets.py --build-dir build/ninja-msvc-release
 
 Requires a configured build dir; run `just build` (or any preset configure) first.
 The build dir defaults to the preset recorded in scripts/config.json.
@@ -28,7 +28,8 @@ def main():
 
     build_dirs = ct.find_build_dirs(cfg.build_dir(args.build_dir))
     if not build_dirs:
-        print("No CMake File API reply found. Configure a build first (e.g. `just build`).", file=sys.stderr)
+        print("No CMake File API codemodel found. Configure the build first:\n"
+              "    just build --configure", file=sys.stderr)
         return 2
 
     aggregated = {}

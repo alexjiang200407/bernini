@@ -123,7 +123,7 @@ if (BUILD_TESTS)
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	copy_to_target(assetlib_tests ITEMS ${CMAKE_SOURCE_DIR}/assets)
+	add_dependencies(assetlib_tests copy_assets)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${ASSETLIB_TESTS_SOURCES})
 

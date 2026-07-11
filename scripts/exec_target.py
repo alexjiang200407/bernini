@@ -46,7 +46,8 @@ def main():
 
     build_dirs = ct.find_build_dirs(cfg.build_dir(args.build_dir))
     if not build_dirs:
-        print("No CMake File API reply found. Configure/build first (e.g. `just build`).", file=sys.stderr)
+        print("No CMake File API codemodel found. Configure the build first:\n"
+              "    just build --configure", file=sys.stderr)
         return 2
 
     candidates = []
