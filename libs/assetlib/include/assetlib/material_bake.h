@@ -32,6 +32,17 @@ namespace assetlib
 	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc);
 
 	/**
+	 * Whether `fileName` is a name bakeMaterial could have written: `<group>_<16 hex digits>.ktx2`.
+	 *
+	 * The counterpart of the bake's naming, and deliberately kept beside it so the two cannot drift. It
+	 * is what lets a prune tell a baked map apart from a hand-placed one sharing the directory
+	 * (`skybox.ktx2`, `brdf_lut.ktx2`), which must never be swept. Matching the pattern says the bake
+	 * *could* have written the file, not that it did, and never that anything still references it.
+	 */
+	[[nodiscard]] bool
+	isBakedMapName(std::string_view fileName) noexcept;
+
+	/**
 	 * Strips the authoring data from a baked material, leaving the shippable form: the triplet, the
 	 * factors and the name. Clears `routes`, `routeStamps` and `editorGraph`, and forces kBaked.
 	 *

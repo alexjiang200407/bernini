@@ -34,6 +34,9 @@ private:
 	OpenProject();
 
 	void
+	CleanUnusedTextures();
+
+	void
 	SetActiveProject(Project project);
 
 	void

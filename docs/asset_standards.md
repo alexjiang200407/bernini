@@ -80,6 +80,13 @@ There are **two producers of textures**, and they compress differently:
   (The Apples model is exactly this: two submeshes, two materials, one shared ORM source.) A map that
   already exists and is newer than every source feeding it is not re-encoded.
 
+  **Nothing owns a map, so nothing deletes one.** Because the name is a hash of the routing, re-baking a
+  material whose routes changed writes a *new* file and simply stops naming the old one, which stays on
+  disk forever. Reclaiming those is a whole-project mark and sweep -- never "delete the maps this
+  material used to name", which would take a map still shared with someone else -- and that is what
+  [libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h)
+  does. See [Pruning unused baked maps](#pruning-unused-baked-maps).
+
   For that to be sound, **each group is sized independently**, to the largest source routed into *that
   group*. If the whole material shared one resolution, a material's ORM output would silently depend on
   the size of its base-colour texture, and two otherwise-identical ORM groups would diverge.
@@ -296,6 +303,36 @@ both file and VRAM.
 
 ---
 
+## Pruning unused baked maps
+
+A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so
+`<Data>/Textures/` grows monotonically. `findUnusedBakedTextures` / `deleteUnusedBakedTextures`
+([libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h))
+reclaim them, exposed as `assetlib_cli prune` and as the editor's **File ▸ Clean Unused Textures…**.
+The scan is separate from the delete so both surfaces can show what they are about to destroy and take
+a confirmation first.
+
+It is a **mark and sweep over the whole project**, and each half has a rule that is easy to get wrong:
+
+* **Mark** — every `.bmaterial` below the data root is loaded and its baked triplet marked live,
+  **whatever its `mode` says**. A `kLoose` material still carries the triplet of its last bake, and
+  that bake is a valid thing to switch back to; deleting its maps because the renderer happens to be
+  drawing from the routes today would destroy it. A material that fails to load **aborts the scan**
+  rather than being skipped — an unread material is one whose references cannot be known, and the maps
+  it alone keeps alive would otherwise be swept as garbage.
+* **Sweep** — only files matching the bake's own naming, `<group>_<16 hex>.ktx2`, are candidates.
+  That test is `isBakedMapName`, deliberately kept in `material_bake.cpp` beside the `c_Groups` table
+  that *writes* the names, so the two cannot drift. It is what keeps the hand-placed maps sharing the
+  directory — `skybox.ktx2`, `iem.ktx2`, `pmrem.ktx2`, `brdf_lut.ktx2`, which are named in config and
+  by no material at all — from being swept as unreferenced.
+
+Because a baked name is a content hash, the live set is keyed by **file name**, not by the path a
+material stored: the name alone identifies the map, and a material that reached it through a different
+`textureDir` still protects it. Every ambiguity is resolved toward *keeping* a file, which is the only
+direction a prune is allowed to err in.
+
+---
+
 ## Risky / Non-obvious contracts
 
 * **Base color must carry an sRGB format.** Nothing in the pixel shader decodes gamma — the sampler
@@ -337,6 +374,12 @@ assetlib_cli describe Data/Materials/skin.bmaterial      # mode, factors, triple
 
 # ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
 assetlib_cli describe Data/Materials/skin.bmaterial -d Data
+
+# List the baked maps no material references any more, and delete nothing
+assetlib_cli prune -d Data --dry-run
+
+# Delete them. Asks first; -y skips the prompt, and a closed stdin answers no
+assetlib_cli prune -d Data
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps

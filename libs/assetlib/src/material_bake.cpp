@@ -197,16 +197,21 @@ namespace assetlib
 			return hash;
 		}
 
+		// Hex digits of the content hash in a baked map's name -- a uint64 printed as %016llx.
+		constexpr size_t c_HashDigits = 16;
+
+		constexpr std::string_view c_MapExtension = ".ktx2";
+
 		std::string
 		bakeFileName(const std::string& key, const Group& group)
 		{
-			char hex[17] = {};
+			char hex[c_HashDigits + 1] = {};
 			std::snprintf(
 				hex,
 				sizeof(hex),
 				"%016llx",
 				static_cast<unsigned long long>(hash64(key)));
-			return std::string(group.name) + '_' + hex + ".ktx2";
+			return std::string(group.name) + '_' + hex + std::string(c_MapExtension);
 		}
 
 		/**
@@ -338,6 +343,33 @@ namespace assetlib
 
 		// The triplet now exists, so draw from it. The routes stay: they are how it gets re-baked.
 		material.mode = MaterialMode::kBaked;
+	}
+
+	bool
+	isBakedMapName(std::string_view fileName) noexcept
+	{
+		if (!fileName.ends_with(c_MapExtension))
+			return false;
+		fileName.remove_suffix(c_MapExtension.size());
+
+		// The group name is itself allowed no underscore, so the last one is the hash separator.
+		const size_t separator = fileName.rfind('_');
+		if (separator == std::string_view::npos)
+			return false;
+
+		const std::string_view prefix = fileName.substr(0, separator);
+		const std::string_view digits = fileName.substr(separator + 1);
+
+		const auto isHex = [](char c) noexcept {
+			return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+		};
+
+		if (digits.size() != c_HashDigits || !std::ranges::all_of(digits, isHex))
+			return false;
+
+		return std::ranges::any_of(c_Groups, [prefix](const Group& group) noexcept {
+			return prefix == group.name;
+		});
 	}
 
 	void
