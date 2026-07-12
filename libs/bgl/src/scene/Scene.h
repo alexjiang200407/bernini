@@ -123,6 +123,12 @@ namespace bgl
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) override;
 
 		void
+		UpdatePbrMaterial(MaterialHandle material, const PbrMaterialDesc& desc) override;
+
+		void
+		UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc) override;
+
+		void
 		DeleteMaterial(MaterialHandle material) override;
 
 		void
@@ -133,6 +139,14 @@ namespace bgl
 		DeleteGeom(GeomHandle geom) override;
 
 	private:
+		// The desc -> GPU-struct conversion, shared by Create* and Update*, so a material built by
+		// either route is byte-identical (including the default-texture fallbacks for absent maps).
+		[[nodiscard]] idl::PbrMaterial
+		BuildPbrMaterial(const PbrMaterialDesc& desc) const;
+
+		[[nodiscard]] idl::LoosePbrMaterial
+		BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const;
+
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 

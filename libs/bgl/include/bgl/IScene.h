@@ -164,6 +164,23 @@ namespace bgl
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) = 0;
 
 		/**
+		 * Rewrites a material's contents in place, keeping its handle and its slot.
+		 *
+		 * A submesh stores the material's entry *index*, so every submesh bound to `material` picks
+		 * the new textures and factors up with no rebinding -- this is how a texture is swapped on a
+		 * live material. The PSO bucket derives from the material's *type*, which an update cannot
+		 * change, so pipeline state is unaffected too.
+		 *
+		 * @throws SceneError if the handle is invalid, expired, or not of the matching type.
+		 */
+		virtual void
+		UpdatePbrMaterial(MaterialHandle material, const PbrMaterialDesc& desc) = 0;
+
+		/** The loose (per-channel) counterpart of UpdatePbrMaterial. */
+		virtual void
+		UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc) = 0;
+
+		/**
 		 * Destroys a material created by CreatePbrMaterial or CreateLoosePbrMaterial, freeing its
 		 * slot in the corresponding material buffer.
 		 *

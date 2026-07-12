@@ -22,7 +22,33 @@ here, not in either of them.
 
 ## Contents
 
-- `AssetFactory` — constructed with an `IScene` and the project's **Data directory**. Every asset
+- `AssetManager` — constructed with an `ISceneView` and the project's **Data directory**. Every asset
   reference Bernini stores is a path relative to that root, so it is supplied once at construction
-  rather than threaded through every call. The factory owns identity: a path maps to one texture upload
-  and one material, however many times it is asked for. Nothing is evicted; its lifetime is the scene's.
+  rather than threaded through every call.
+
+### AssetManager: identity is the path, lifetime is a reference count
+
+**Identity.** A path maps to one texture upload and one material, however many times it is asked for.
+Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes. Cubes and spheres have
+no file, so they are not shared — but they are refcounted like anything else.
+
+**Lifetime.** References run along the edges the assets themselves have:
+
+```
+instance -> geom -> material -> texture
+```
+
+`AcquireMesh` acquires the materials its submeshes name, which acquires the textures those materials
+name; `Release*` runs the chain in reverse and destroys only at zero.
+
+That is not just tidy — **it is what makes deletion safe**. `bgl` deliberately tracks nothing, and
+documents preconditions it cannot check: a material may not be deleted while a submesh is bound to it,
+a texture may not be deleted while a material routes it, and geometry may not be deleted while an
+instance references it (`IScene::DeleteGeom`). A reference count of zero *means* exactly those things.
+The manager owns instances for that last one: an instance holding a reference on its geom is what makes
+"the last reference is gone" imply "nothing is drawing it".
+
+**Swapping.** `SetSubmeshMaterial` rebinds a submesh (acquiring the new material, releasing the old).
+`SetMaterialTexture` / `SetMaterialRoute` swap a map on a live material: the scene rewrites the entry
+in place (`IScene::UpdatePbrMaterial`), so the handle stays valid and every submesh bound to it follows
+without being rebound. The material is shared by path, so the change is seen by everything using it.

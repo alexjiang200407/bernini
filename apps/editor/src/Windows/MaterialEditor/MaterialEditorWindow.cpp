@@ -718,9 +718,18 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 		return out;
 	};
 
-	for (unsigned int i = 0; i < 4; ++i) desc.baseColor[i] = route(i);
-	for (unsigned int i = 0; i < 3; ++i) desc.orm[i] = route(4 + i);
-	for (unsigned int i = 0; i < 2; ++i) desc.normal[i] = route(7 + i);
+	// The channel runs come from BMaterial.h, which owns the `routes` array a graph is saved into.
+	// A literal offset here would silently disagree with the baker the moment a channel is added.
+	const auto channel = [](const assetlib::ChannelGroup& group, size_t component) {
+		return static_cast<unsigned int>(assetlib::ChannelIndex(group, component));
+	};
+
+	for (size_t i = 0; i < desc.baseColor.size(); ++i)
+		desc.baseColor[i] = route(channel(assetlib::c_BaseColorChannels, i));
+	for (size_t i = 0; i < desc.orm.size(); ++i)
+		desc.orm[i] = route(channel(assetlib::c_OrmChannels, i));
+	for (size_t i = 0; i < desc.normal.size(); ++i)
+		desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
 
 	m_Preview->SetSubmeshMaterial(
 		static_cast<uint32_t>(submeshIndex),

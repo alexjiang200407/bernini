@@ -8,7 +8,7 @@
 #include <assetlib/image_io.h>
 #include <bgl/bgl.h>
 #include <format>
-#include <gamelib/AssetFactory.h>
+#include <gamelib/AssetManager.h>
 #include <stdexcept>
 
 #define WIN32_LEAN_AND_MEAN
@@ -45,7 +45,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				   "-e,--exposure",
 				   exposure,
 				   "Camera exposure: scales radiance before the AgX tone map. The right value "
-			       "depends "
+				   "depends "
 				   "on the environment's absolute radiance scale, so it changes with the IBL maps")
 				->check(CLI::NonNegativeNumber);
 			app.add_flag(
@@ -116,21 +116,18 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		const auto dataRoot = std::filesystem::path(dataRootPath);
 		const auto model    = assetlib::load(dataRoot / modelPath);
 
-		// The factory holds the data root and the path -> handle identity: a texture shared by several
-		// routes, or a material shared by several submeshes, is loaded once. It honours each material's
-		// mode -- a baked one samples its optimized triplet, a loose one samples the source routes the
-		// material editor authored.
-		auto assets = game::AssetFactory(*scene, dataRoot);
-
-		auto materials = std::vector<bgl::MaterialHandle>();
-		materials.reserve(model.materials.size());
-		for (const auto& materialFile : model.materials)
-			materials.push_back(assets.LoadMaterial(materialFile));
+		// The manager holds the data root and the path -> handle identity: a texture shared by several
+		// routes, or a material shared by several submeshes, is loaded once. Acquiring a mesh acquires
+		// the materials its submeshes name and the textures those materials name, so the whole tree
+		// comes in -- and goes out -- with one call. It honours each material's mode: a baked one
+		// samples its optimized triplet, a loose one samples the source routes the material editor
+		// authored.
+		auto assets = game::AssetManager(view, dataRoot);
 
 		auto geoms = std::vector<bgl::GeomHandle>();
 		geoms.reserve(model.meshes.size());
 		for (uint32_t m = 0; m < model.meshes.size(); ++m)
-			geoms.push_back(scene->AddStaticMesh(model, m, materials));
+			geoms.push_back(assets.AcquireMesh(modelPath, m));
 
 		const auto worldMatrix = [&](uint32_t node) {
 			auto m = glm::mat4(1.0f);
@@ -148,7 +145,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				continue;
 
 			const auto world = worldMatrix(n);
-			view->CreateStaticMeshInstance(geoms[node.mesh], world);
+			assets.CreateInstance(geoms[node.mesh], world);
 
 			const auto& meshEntry = model.meshes[node.mesh];
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
