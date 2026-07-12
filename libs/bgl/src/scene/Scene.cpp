@@ -191,6 +191,56 @@ namespace bgl
 
 			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
 		}
+
+		/**
+		 * Hands back the ranges of a geom that failed to build.
+		 *
+		 * Every Add() is registered here and released on the way out, unless Commit() says the geom was
+		 * built and now owns them.
+		 */
+		class GeomRollback
+		{
+		public:
+			GeomRollback() = default;
+
+			GeomRollback(const GeomRollback&) = delete;
+			GeomRollback&
+			operator=(const GeomRollback&) = delete;
+
+			// Passes `handle` straight back, so an Add() can be wrapped where it stands.
+			template <typename Buffer>
+			core::multi_slot_handle
+			Track(Buffer& buffer, core::multi_slot_handle handle)
+			{
+				m_Undo.emplace_back([&buffer, handle]() { buffer.Erase(handle); });
+				return handle;
+			}
+
+			void
+			Commit() noexcept
+			{
+				m_Undo.clear();
+			}
+
+			~GeomRollback()
+			{
+				// Newest first, so no range is freed before one allocated after it.
+				for (auto undo = m_Undo.rbegin(); undo != m_Undo.rend(); ++undo)
+				{
+					try
+					{
+						(*undo)();
+					}
+					catch (...)
+					{
+						// Already unwinding the failure that matters; a failed undo must not replace it.
+					}
+				}
+			}
+
+		private:
+			std::vector<std::function<void()>> m_Undo;
+		};
 	}
 
 	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
@@ -359,10 +409,19 @@ namespace bgl
 		{
 			const auto vertexWords = PackVertices(verts);
 
-			const auto baseVertexGlobal  = m_VertexDataBuffer.Add(vertexWords);
-			const auto baseMapGlobal     = m_VertexMapBuffer.Add(build.vertexMap);
-			const auto baseIndexGlobal   = m_IndexBuffer.Add(build.localIndices);
-			const auto baseMeshletGlobal = m_MeshletBuffer.Add(build.meshlets);
+			// Nothing below is the scene's until Commit(); see GeomRollback. The fallback sphere the
+			// editor shows after a failed load goes through here, so a leak here is what would take
+			// the fallback down too.
+			auto rollback = GeomRollback();
+
+			const auto baseVertexGlobal =
+				rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(vertexWords));
+			const auto baseMapGlobal =
+				rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(build.vertexMap));
+			const auto baseIndexGlobal =
+				rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(build.localIndices));
+			const auto baseMeshletGlobal =
+				rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(build.meshlets));
 
 			auto submesh        = idl::Submesh();
 			submesh.layout      = MakeProceduralLayout();
@@ -377,8 +436,9 @@ namespace bgl
 			}
 			submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
 
-			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
-			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
+			const auto submeshSpan = std::span<const idl::Submesh>(&submesh, 1);
+			const auto baseSubmeshGlobal =
+				rollback.Track(m_SubmeshBuffer, m_SubmeshBuffer.Add(submeshSpan));
 
 			auto submeshRange = idl::RangeWithCount();
 			submeshRange      = baseSubmeshGlobal;
@@ -386,6 +446,9 @@ namespace bgl
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
+
+			// The geom owns its ranges now, and DeleteGeom is what gives them back.
+			rollback.Commit();
 
 			return retVal;
 		}
@@ -569,6 +632,67 @@ namespace bgl
 		return AddProceduralGeom(planeVerts, planeIndices, material);
 	}
 
+	void
+	Scene::RequireFitsBudget(const assetlib::BMesh& mesh, const assetlib::Mesh& meshEntry) const
+	{
+		uint64_t vertexBytes = 0;
+		uint64_t meshlets    = 0;
+		uint64_t vertexMap   = 0;
+		uint64_t indices     = 0;
+
+		for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+		{
+			const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+
+			// Each submesh is allocated its own whole number of 4-byte words, so round up per submesh
+			// rather than over the total: that is what the allocator will actually be asked for.
+			const uint64_t bytes = static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
+			vertexBytes += (bytes + 3u) / 4u * 4u;
+
+			meshlets += src.meshletCount;
+
+			for (uint32_t m = 0; m < src.meshletCount; ++m)
+			{
+				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+				vertexMap += ml.vertexCount;
+				indices += static_cast<uint64_t>(ml.triangleCount) * 3u;
+			}
+		}
+
+		const auto atLeastOne = [](uint32_t n) -> uint64_t { return n != 0 ? n : 1u; };
+
+		// Mirrors how the constructor sizes the arenas -- including that maxIndices budgets the vertex
+		// map and the index buffer separately, and that maxSubmeshes falls back to maxMeshlets.
+		const uint64_t maxVertexBytes = atLeastOne((m_Desc.maxVertexBufferByteSize + 3u) / 4u) * 4u;
+		const uint64_t maxMeshlets    = atLeastOne(m_Desc.maxMeshlets);
+		const uint64_t maxIndices     = atLeastOne(m_Desc.maxIndices);
+		const uint64_t maxSubmeshes =
+			atLeastOne(m_Desc.maxSubmeshes != 0 ? m_Desc.maxSubmeshes : m_Desc.maxMeshlets);
+
+		const auto require = [](uint64_t         needed,
+		                        uint64_t         budget,
+		                        std::string_view what,
+		                        std::string_view field) {
+			if (needed <= budget)
+				return;
+
+			throw SceneError(
+				std::format(
+					"AddStaticMesh: the mesh needs {} {}, more than the scene's entire budget of "
+					"{} (SceneDesc::{}); it cannot be loaded until that budget is raised",
+					needed,
+					what,
+					budget,
+					field));
+		};
+
+		require(vertexBytes, maxVertexBytes, "bytes of vertex data", "maxVertexBufferByteSize");
+		require(meshlets, maxMeshlets, "meshlets", "maxMeshlets");
+		require(vertexMap, maxIndices, "meshlet vertex indices", "maxIndices");
+		require(indices, maxIndices, "meshlet triangle indices", "maxIndices");
+		require(meshEntry.submeshCount, maxSubmeshes, "submeshes", "maxSubmeshes");
+	}
+
 	GeomHandle
 	Scene::AddStaticMesh(
 		const assetlib::BMesh&          mesh,
@@ -605,17 +729,40 @@ namespace bgl
 				}
 			}
 
+			RequireFitsBudget(mesh, meshEntry);
+
 			// One GPU submesh per source submesh, in order: callers address geometry by source
 			// submesh index (that is what an asset's material slots are numbered by), so the two
 			// must stay 1:1.
 			std::vector<idl::Submesh> submeshes;
 			submeshes.reserve(meshEntry.submeshCount);
 
+			// Nothing below is the scene's until Commit(); see GeomRollback.
+			auto rollback = GeomRollback();
+
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
 
-				const uint32_t        vertexBytes = src.vertexCount * src.layout.stride;
+				const uint64_t vertexBytes =
+					static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
+
+				// The offset and length come from the file, so they are the caller's claim about the
+				// buffer, not a fact about it. Trusting them would read off the end of a truncated or
+				// malformed .bmesh.
+				if (src.vertexByteOffset + vertexBytes > mesh.vertexData.size())
+				{
+					throw SceneError(
+						std::format(
+							"AddStaticMesh: submesh {} claims {} bytes of vertex data at offset "
+							"{}, "
+							"past the end of the mesh's {}-byte vertex buffer",
+							s,
+							vertexBytes,
+							src.vertexByteOffset,
+							mesh.vertexData.size()));
+				}
+
 				std::vector<uint32_t> vertexWords((vertexBytes + 3u) / 4u, 0u);
 				std::memcpy(
 					vertexWords.data(),
@@ -656,12 +803,14 @@ namespace bgl
 					meshlets.push_back(out);
 				}
 
-				auto submesh        = idl::Submesh();
-				submesh.layout      = ConvertLayout(src.layout);
-				submesh.meshlets    = m_MeshletBuffer.Add(meshlets);
-				submesh.vertexMap   = m_VertexMapBuffer.Add(vertexMap);
-				submesh.vertexData  = m_VertexDataBuffer.Add(vertexWords);
-				submesh.indices     = m_IndexBuffer.Add(localIndices);
+				auto submesh     = idl::Submesh();
+				submesh.layout   = ConvertLayout(src.layout);
+				submesh.meshlets = rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(meshlets));
+				submesh.vertexMap =
+					rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(vertexMap));
+				submesh.vertexData =
+					rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(vertexWords));
+				submesh.indices = rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(localIndices));
 				submesh.vertexCount = src.vertexCount;
 				if (material.IsValid())
 				{
@@ -672,8 +821,9 @@ namespace bgl
 				submeshes.push_back(submesh);
 			}
 
-			const auto baseSubmeshGlobal =
-				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
+			const auto baseSubmeshGlobal = rollback.Track(
+				m_SubmeshBuffer,
+				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes)));
 
 			// RangeWithCount is assignable from the buffer handle, but not constructible from it.
 			auto submeshRange = idl::RangeWithCount();
@@ -682,6 +832,9 @@ namespace bgl
 			auto retVal     = GeomHandle();
 			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
+
+			// The geom owns its ranges now, and DeleteGeom is what gives them back.
+			rollback.Commit();
 
 			return retVal;
 		}

@@ -163,6 +163,20 @@ namespace bgl
 			std::span<const uint32_t>  indices,
 			MaterialHandle             material);
 
+		/**
+		 * Rejects a mesh that could never fit in this scene, whatever else is loaded.
+		 *
+		 * Sums what the mesh would need from each arena and compares it against that arena's whole
+		 * budget -- not against what happens to be free. The two failures want different answers from
+		 * the caller: this one means the scene is configured too small for the asset and says which
+		 * SceneDesc field to raise, whereas running out of room with other geometry loaded means
+		 * something has to be unloaded first, and is left to the allocator to report.
+		 *
+		 * @throws SceneError naming the budget the mesh overruns and by how much.
+		 */
+		void
+		RequireFitsBudget(const assetlib::BMesh& mesh, const assetlib::Mesh& meshEntry) const;
+
 		// The desc -> GPU-struct conversion, shared by Create* and Update*, so a material built by
 		// either route is byte-identical (including the default-texture fallbacks for absent maps).
 		[[nodiscard]] idl::PbrMaterial
