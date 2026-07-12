@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QResizeEvent>
@@ -235,27 +236,35 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 {
 	// Deserializing the .bmesh is the slow half and touches no bgl state, so it runs on
 	// a worker. Everything below mutates the Scene and the SceneView, which carry no locks, so it
-	// has to wait until the worker is done.
+	// has to wait until the worker is done. assetlib::load is one indivisible read, so there is no
+	// point in a cancel button that could not interrupt it.
 	assetlib::BMesh mesh;
-	QString         readError;
+	const QString   name = QString::fromStdString(path.filename().string());
 
-	const bool read = background::RunWithLoadingScreen(
+	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
-		QString("Loading %1").arg(QString::fromStdString(path.filename().string())),
+		QString("Loading %1").arg(name),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Reading mesh...");
 			mesh = assetlib::load(path);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
-		},
-		&readError);
+		});
 
-	if (!read)
+	if (!result.Completed())
 	{
 		qWarning(
 			"MaterialPreview: failed to load mesh '%s': %s",
 			path.string().c_str(),
-			qPrintable(readError));
+			qPrintable(result.error));
+
+		// The user dropped this mesh in expecting to author against it; falling back to the sphere with
+		// no word as to why would read as the drop having been ignored.
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Load Mesh"),
+			QStringLiteral("Could not load '%1':\n\n%2").arg(name, result.error));
+
 		ShowDefaultSphere();
 		return;
 	}

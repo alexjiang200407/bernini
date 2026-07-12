@@ -20,6 +20,8 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPushButton>
+#include <QStringList>
 #include <QUrl>
 
 #include <assetlib/bmesh_gltf.h>
@@ -33,6 +35,53 @@ namespace
 	{
 		const auto ext = QFileInfo(localFile).suffix().toLower();
 		return ext == "glb" || ext == "gltf";
+	}
+
+	/**
+	 * Asks before an import writes over anything that is already there, listing what it would replace.
+	 *
+	 * Both an existing `.bmesh` and an existing texture folder are destructive to import onto: the mesh
+	 * is simply overwritten, and the extracted textures are named tex0.ktx2, tex1.ktx2 ... by index, so
+	 * they land on top of whatever the folder's previous occupant left under those names. Neither is
+	 * recoverable, and neither is something the OS will refuse on the user's behalf.
+	 *
+	 * @return true to go ahead, false if the user would rather not.
+	 */
+	bool
+	ConfirmOverwrite(
+		QWidget*                     parent,
+		const QString&               name,
+		const std::filesystem::path& bmeshPath,
+		bool                         bmeshExists,
+		const std::filesystem::path& textureDir,
+		bool                         textureDirExists)
+	{
+		auto replaced = QStringList();
+
+		if (bmeshExists)
+			replaced << QString::fromStdWString(bmeshPath.wstring());
+		if (textureDirExists)
+			replaced << QString::fromStdWString(textureDir.wstring());
+
+		if (replaced.isEmpty())
+			return true;
+
+		auto confirm = QMessageBox(parent);
+		confirm.setWindowTitle("Import Asset");
+		confirm.setIcon(QMessageBox::Warning);
+		confirm.setText(QString("Importing '%1' will overwrite existing files.").arg(name));
+		confirm.setInformativeText(
+			"The mesh is replaced, and extracted textures are written as tex0.ktx2, tex1.ktx2\n"
+			"and so on by index -- landing on top of any file already using those names.\n\n"
+			"This cannot be undone.");
+		confirm.setDetailedText(replaced.join('\n'));
+
+		auto* overwrite = confirm.addButton("Overwrite", QMessageBox::DestructiveRole);
+		confirm.addButton(QMessageBox::Cancel);
+		confirm.setDefaultButton(QMessageBox::Cancel);
+		confirm.exec();
+
+		return confirm.clickedButton() == overwrite;
 	}
 }
 
@@ -319,10 +368,15 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
-		ImportMesh(
+		const ImportOutcome outcome = ImportMesh(
 			file,
 			targetDir,
 			dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString());
+
+		// Cancelling one import of a multi-file drop abandons the drop. Carrying on would answer the
+		// user's "stop" by immediately putting the next options dialog in front of them.
+		if (outcome == ImportOutcome::kCancelled)
+			break;
 	}
 
 	event->acceptProposedAction();
@@ -358,7 +412,7 @@ ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
 	return m_FileModel->rootPath();
 }
 
-void
+ContentExplorerWindow::ImportOutcome
 ContentExplorerWindow::ImportMesh(
 	const QString& sourceFile,
 	const QString& targetDir,
@@ -371,49 +425,98 @@ ContentExplorerWindow::ImportMesh(
 
 	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
 	// own folder or the next one silently overwrites it. m_RootPath is the project's Data directory.
+	//
+	// Left empty when no textures are being extracted, and it must stay that way: joining an empty
+	// subdirectory would name the texture root itself, which RollBack would then happily delete.
 	const bool     importTextures = !textureSubdir.isEmpty();
-	const fs::path textureDir     = fs::path(m_RootPath.toStdWString()) /
-	                                AssetImporterDialog::c_TextureRoot /
-	                                fs::path(textureSubdir.toStdWString());
+	const fs::path textureDir     = importTextures ? fs::path(m_RootPath.toStdWString()) /
+	                                                     AssetImporterDialog::c_TextureRoot /
+	                                                     fs::path(textureSubdir.toStdWString()) :
+	                                                 fs::path();
+
+	fs::path bmeshPath = meshDir / source.filename();
+	bmeshPath.replace_extension(".bmesh");
 
 	const QString name = QFileInfo(sourceFile).fileName();
+
+	// Sampled before a byte is written, because they decide two things: whether the user has to be
+	// asked first, and -- if the import then fails or is cancelled -- what may be deleted to undo it.
+	std::error_code ec;
+	const bool      bmeshExisted      = fs::exists(bmeshPath, ec);
+	const bool      textureDirExisted = !textureDir.empty() && fs::exists(textureDir, ec);
+
+	if (!ConfirmOverwrite(this, name, bmeshPath, bmeshExisted, textureDir, textureDirExisted))
+		return ImportOutcome::kCancelled;
 
 	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
 	// freeze the editor for minutes on a large asset. None of it touches bgl, so the whole import
 	// runs on a worker; only the message box below is back on the UI thread.
-	QString    error;
-	const bool imported = background::RunWithLoadingScreen(
+	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QString("Importing %1").arg(name),
 		[&](background::Progress& progress) {
+			const assetlib::CancelToken cancel = progress.Cancellation();
+
 			progress.Report(0, 0, QString("Parsing %1...").arg(name));
-			const auto mesh = assetlib::loadFromGltf(source);
+			const auto mesh = assetlib::loadFromGltf(source, cancel);
 
 			progress.Report(0, 0, "Writing mesh...");
-			fs::path bmeshPath = meshDir / source.filename();
-			bmeshPath.replace_extension(".bmesh");
 			assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
 
 			if (importTextures)
 			{
-				std::error_code ec;
-				fs::create_directories(textureDir, ec);
-
-				assetlib::writeTextures(mesh, textureDir, [&](size_t done, size_t total) {
-					progress.Report(
-						static_cast<int>(done),
-						static_cast<int>(total),
-						QString("Compressing textures (%1 of %2)...").arg(done + 1).arg(total));
-				});
+				assetlib::writeTextures(
+					mesh,
+					textureDir,
+					[&](size_t done, size_t total) {
+						progress.Report(
+							static_cast<int>(done),
+							static_cast<int>(total),
+							QString("Compressing textures (%1 of %2)...").arg(done + 1).arg(total));
+					},
+					cancel);
 			}
 		},
-		&error);
+		background::Cancellable::kYes);
 
-	if (!imported)
-	{
-		QMessageBox::warning(
-			this,
-			"Import Asset",
-			QString("Failed to import '%1':\n%2").arg(name, error));
-	}
+	if (result.Completed())
+		return ImportOutcome::kImported;
+
+	// A cancelled cook throws where it stood, so the mesh may be on disk pointing at textures that were
+	// never extracted. Neither outcome may leave that behind for the user to trip over later.
+	RollBack(bmeshPath, bmeshExisted, textureDir, textureDirExisted);
+
+	if (result.Cancelled())
+		return ImportOutcome::kCancelled;
+
+	QMessageBox::warning(
+		this,
+		"Import Asset",
+		QString("Failed to import '%1':\n\n%2").arg(name, result.error));
+
+	return ImportOutcome::kFailed;
+}
+
+void
+ContentExplorerWindow::RollBack(
+	const std::filesystem::path& bmeshPath,
+	bool                         bmeshExisted,
+	const std::filesystem::path& textureDir,
+	bool                         textureDirExisted)
+{
+	namespace fs = std::filesystem;
+
+	std::error_code ec;
+
+	if (!bmeshExisted)
+		fs::remove(bmeshPath, ec);
+
+	// remove_all is recursive, so the folder it is handed had better be the one this import made. An
+	// empty path means no textures were extracted; a path naming the texture root itself would mean the
+	// import's subdirectory got lost somewhere, and taking the root down with it is not a recovery.
+	const auto textureRoot = fs::path(AssetImporterDialog::c_TextureRoot);
+	if (textureDirExisted || textureDir.empty() || textureDir.filename() == textureRoot)
+		return;
+
+	fs::remove_all(textureDir, ec);
 }
