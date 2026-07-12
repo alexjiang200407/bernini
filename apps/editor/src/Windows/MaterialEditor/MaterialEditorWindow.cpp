@@ -24,27 +24,27 @@
 #include <assetlib/material_bake.h>
 
 #include "Thumbnails/TexturePreviewCache.h"
+#include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
+#include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 
-using QtNodes::DataFlowGraphicsScene;
-using QtNodes::DataFlowGraphModel;
 using QtNodes::NodeDelegateModelRegistry;
 
 namespace
 {
-	// The graph's single sink. Every material is compiled from it.
-	MaterialOutputNode*
-	FindOutputNode(DataFlowGraphModel& model)
+	struct OutputType
 	{
-		for (const QtNodes::NodeId nodeId : model.allNodeIds())
-		{
-			if (auto* output = model.delegateModel<MaterialOutputNode>(nodeId))
-				return output;
-		}
-		return nullptr;
-	}
+		const char* label;
+		const char* modelName;
+	};
+
+	constexpr std::array<OutputType, 2> c_OutputTypes = { {
+		{ "Opaque", "MaterialOutput" },
+		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
+	} };
 
 	// A `.bmaterial`'s texture references are relative to the project's Data root -- not to the
 	// material file -- so a material names `textures_src/tex1.ktx2` and `Textures/orm_ab12.ktx2`
@@ -149,7 +149,29 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		&QComboBox::currentIndexChanged,
 		this,
 		&MaterialEditorWindow::SelectSubmesh);
-	leftLayout->addWidget(m_SubmeshSelector);
+
+	// The graph's sink, chosen rather than dragged in: a material has exactly one, and which one it is
+	// *is* the alpha mode. The context menu does not offer them (see MaterialGraphScene).
+	m_OutputSelector = new QComboBox(leftPanel);
+	for (const OutputType& type : c_OutputTypes)
+		m_OutputSelector->addItem(QLatin1String(type.label));
+	m_OutputSelector->setEnabled(false);
+	m_OutputSelector->setToolTip(QStringLiteral(
+		"Alpha Tested adds a base-color alpha input and a cutoff: pixels below it are "
+		"discarded"));
+	connect(
+		m_OutputSelector,
+		&QComboBox::
+			activated,  // activated, not currentIndexChanged: only a user's pick swaps the sink
+		this,
+		&MaterialEditorWindow::SetOutputType);
+
+	auto* selectors = new QHBoxLayout();
+	selectors->setContentsMargins(0, 0, 0, 0);
+	selectors->addWidget(m_SubmeshSelector, 1);
+	selectors->addWidget(new QLabel(QStringLiteral("Output"), leftPanel));
+	selectors->addWidget(m_OutputSelector);
+	leftLayout->addLayout(selectors);
 
 	m_GraphView = new MaterialGraphView(leftPanel);  // its scene is set per selected submesh
 	leftLayout->addWidget(m_GraphView);
@@ -193,9 +215,14 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_Registry->registerModel<TextureNode>(
 		[scene, previews]() { return std::make_unique<TextureNode>(scene, previews); },
 		"Input");
+	// Registered so the graph can create one by name and restore one from a saved graph -- but hidden
+	// from the context menu, because a sink is switched, not added.
 	m_Registry->registerModel<MaterialOutputNode>(
 		[]() { return std::make_unique<MaterialOutputNode>(); },
-		"Output");
+		QLatin1String(c_OutputCategory));
+	m_Registry->registerModel<AlphaTestedMaterialOutputNode>(
+		[]() { return std::make_unique<AlphaTestedMaterialOutputNode>(); },
+		QLatin1String(c_OutputCategory));
 
 	splitter->addWidget(leftPanel);
 	splitter->addWidget(rightPanel);
@@ -235,13 +262,13 @@ MaterialEditorWindow::ResetGraph(int submeshIndex, const QJsonObject& graph)
 		m_GraphView->setScene(nullptr);
 
 	entry.scene.reset();
-	entry.model = std::make_unique<DataFlowGraphModel>(m_Registry);
-	entry.scene = std::make_unique<DataFlowGraphicsScene>(*entry.model);
+	entry.model = std::make_unique<MaterialGraphModel>(m_Registry);
+	entry.scene = std::make_unique<MaterialGraphScene>(*entry.model);
 
 	if (graph.isEmpty())
 	{
-		// A fresh graph holds just the sink node the material is compiled from.
-		const QtNodes::NodeId outputId = entry.model->addNode(QStringLiteral("MaterialOutput"));
+		const QtNodes::NodeId outputId =
+			entry.model->addNode(QLatin1String(c_OutputTypes[0].modelName));
 		entry.model->setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
 	}
 	else
@@ -252,9 +279,21 @@ MaterialEditorWindow::ResetGraph(int submeshIndex, const QJsonObject& graph)
 	if (m_CurrentSubmesh == submeshIndex)
 		m_GraphView->setScene(entry.scene.get());
 
-	// Recompile whenever anything the material depends on changes. The Output node is the only sink,
-	// and every upstream edit reaches it through setInData.
-	MaterialOutputNode* output = FindOutputNode(*entry.model);
+	MaterialOutputNode* output = WatchOutputNode(submeshIndex);
+
+	if (m_CurrentSubmesh == submeshIndex)
+		SyncOutputSelector();
+
+	return output;
+}
+
+MaterialOutputNode*
+MaterialEditorWindow::WatchOutputNode(int submeshIndex)
+{
+	// Recompile whenever anything the material depends on changes. The sink is the only one, and every
+	// upstream edit reaches it through setInData.
+	MaterialOutputNode* output =
+		m_SubmeshGraphs[static_cast<size_t>(submeshIndex)].model->OutputNode();
 	if (output != nullptr)
 	{
 		connect(output, &MaterialOutputNode::Changed, this, [this, submeshIndex]() {
@@ -262,6 +301,52 @@ MaterialEditorWindow::ResetGraph(int submeshIndex, const QJsonObject& graph)
 		});
 	}
 	return output;
+}
+
+void
+MaterialEditorWindow::SetOutputType(int comboIndex)
+{
+	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraphs.size()))
+		return;
+	if (comboIndex < 0 || comboIndex >= static_cast<int>(c_OutputTypes.size()))
+		return;
+
+	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)];
+
+	const QString modelName =
+		QLatin1String(c_OutputTypes[static_cast<size_t>(comboIndex)].modelName);
+	if (!entry.model->SetOutputType(modelName))
+		return;
+
+	// The old sink took its Changed connection with it, and the new one starts unwatched.
+	WatchOutputNode(m_CurrentSubmesh);
+	CompileGraph(m_CurrentSubmesh);
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::SyncOutputSelector()
+{
+	const bool hasGraph =
+		m_CurrentSubmesh >= 0 && m_CurrentSubmesh < static_cast<int>(m_SubmeshGraphs.size());
+
+	m_OutputSelector->setEnabled(hasGraph);
+	if (!hasGraph)
+		return;
+
+	const MaterialOutputNode* output =
+		m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].model->OutputNode();
+	if (output == nullptr)
+		return;
+
+	const auto it = std::ranges::find_if(c_OutputTypes, [&output](const OutputType& type) {
+		return output->name() == QLatin1String(type.modelName);
+	});
+	if (it == c_OutputTypes.end())
+		return;
+
+	const QSignalBlocker blocker(m_OutputSelector);
+	m_OutputSelector->setCurrentIndex(static_cast<int>(std::distance(c_OutputTypes.begin(), it)));
 }
 
 void
@@ -305,6 +390,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 	// Switching submesh swaps the blackboard to that submesh's own graph.
 	m_CurrentSubmesh = index;
 	m_GraphView->setScene(m_SubmeshGraphs[static_cast<size_t>(index)].scene.get());
+	SyncOutputSelector();
 	RefreshActions();
 }
 
@@ -370,7 +456,7 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraphs.size()))
 		return;
 
-	DataFlowGraphModel& model = *m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].model;
+	MaterialGraphModel& model = *m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].model;
 
 	const QtNodes::NodeId nodeId = model.addNode(QStringLiteral("Texture"));
 	model.setNodeData(nodeId, QtNodes::NodeRole::Position, scenePos);
@@ -415,12 +501,16 @@ MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPat
 
 	material.name = QFileInfo(materialPath).completeBaseName().toStdString();
 
-	MaterialOutputNode* output = FindOutputNode(*entry.model);
+	const MaterialOutputNode* output = entry.model->OutputNode();
 	if (output != nullptr)
 	{
 		material.baseColorFactor = output->BaseColorFactor();
 		material.metallicFactor  = output->MetallicFactor();
 		material.roughnessFactor = output->RoughnessFactor();
+
+		material.alphaMode =
+			output->IsAlphaTested() ? assetlib::AlphaMode::kMask : assetlib::AlphaMode::kOpaque;
+		material.alphaCutoff = output->AlphaCutoff();
 
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
 		{
@@ -671,9 +761,8 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 	if (submeshIndex < 0 || submeshIndex >= static_cast<int>(m_SubmeshGraphs.size()))
 		return;
 
-	DataFlowGraphModel& model = *m_SubmeshGraphs[static_cast<size_t>(submeshIndex)].model;
-
-	const MaterialOutputNode* output = FindOutputNode(model);
+	const MaterialOutputNode* output =
+		m_SubmeshGraphs[static_cast<size_t>(submeshIndex)].model->OutputNode();
 	if (output == nullptr)
 		return;
 
@@ -681,6 +770,9 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 	desc.baseColorFactor = output->BaseColorFactor();
 	desc.metallicFactor  = output->MetallicFactor();
 	desc.roughnessFactor = output->RoughnessFactor();
+
+	desc.layerType = output->IsAlphaTested() ? bgl::LayerType::kAlphaTest : bgl::LayerType::kOpaque;
+	desc.alphaCutoff = output->AlphaCutoff();
 
 	const auto route = [&](unsigned int channel) {
 		const ChannelData::Route wired = output->Route(channel);

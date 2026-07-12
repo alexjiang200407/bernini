@@ -8,8 +8,15 @@
 
 class QCheckBox;
 class QDoubleSpinBox;
+class QFormLayout;
 class QPushButton;
 
+/**
+ * The graph's sink: the opaque material. Its base color exposes only RGB -- there is no alpha port,
+ * because an opaque material has nothing to do with alpha. Author a cutout with
+ * AlphaTestedMaterialOutputNode instead, which is the same node with the alpha channel added.
+ *
+ */
 class MaterialOutputNode : public QtNodes::NodeDelegateModel
 {
 	Q_OBJECT
@@ -18,7 +25,8 @@ public:
 	static constexpr unsigned int c_ChannelCount = 9;
 	static constexpr unsigned int c_GroupCount   = 3;
 
-	static constexpr std::array<unsigned int, c_GroupCount> c_GroupSizes = { 4, 3, 2 };
+	// How many channels each group has in BMaterial::routes. Distinct from how many a node exposes.
+	static constexpr std::array<unsigned int, c_GroupCount> c_GroupChannels = { 4, 3, 2 };
 
 	MaterialOutputNode();
 
@@ -66,8 +74,23 @@ public:
 		return true;
 	}
 
+	// The route wired into canonical channel `index`. A channel this node does not expose (the opaque
+	// node's base-color alpha) is never routed.
 	[[nodiscard]] ChannelData::Route
 	Route(unsigned int index) const;
+
+	// Whether the material this node compiles to is a cutout, and the alpha it cuts at.
+	[[nodiscard]] virtual bool
+	IsAlphaTested() const noexcept
+	{
+		return false;
+	}
+
+	[[nodiscard]] virtual float
+	AlphaCutoff() const noexcept
+	{
+		return 0.5f;
+	}
 
 	[[nodiscard]] glm::vec4
 	BaseColorFactor() const noexcept
@@ -91,6 +114,14 @@ Q_SIGNALS:
 	void
 	Changed();
 
+protected:
+	// `baseColorArity` is 3 (RGB) for an opaque material, 4 (RGBA) for a cutout.
+	explicit MaterialOutputNode(unsigned int baseColorArity);
+
+	// Rows appended to the embedded form, after the factors. Nothing by default.
+	virtual void
+	AddExtraRows(QWidget* parent, QFormLayout* form);
+
 private:
 	void
 	PickBaseColor();
@@ -100,6 +131,10 @@ private:
 
 	void
 	SetGroupExpanded(unsigned int group, bool expanded);
+
+	// A group with more than one channel shows one wide port until it is split.
+	[[nodiscard]] bool
+	IsCollapsed(unsigned int group) const;
 
 	[[nodiscard]] unsigned int
 	GroupFirstPort(unsigned int group) const;
@@ -112,9 +147,12 @@ private:
 	[[nodiscard]] PortRef
 	ResolvePort(QtNodes::PortIndex port) const;
 
+	// First canonical channel of a group: 0, 4, 7.
 	[[nodiscard]] static unsigned int
 	GroupChannelOffset(unsigned int group);
 
+	// How many channels of each group this node exposes; only base color differs between the two.
+	std::array<unsigned int, c_GroupCount> m_GroupSizes = { 3, 3, 2 };
 	std::array<unsigned int, c_GroupCount> m_GroupPorts = { 1, 1, 1 };
 
 	std::array<std::shared_ptr<ChannelData>, c_GroupCount>   m_Bundles;
