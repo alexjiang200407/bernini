@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/cancel.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -20,7 +21,8 @@ namespace assetlib
 	 * Writes `mesh` to `path` as a `.bmesh` container. Only the mesh itself is written; the textures
 	 * and materials it references are separate files (see writeTextures).
 	 *
-	 * @throws std::runtime_error if the file cannot be written.
+	 * @throws std::runtime_error if the file cannot be written, naming the OS's reason (an existing file
+	 *         that is read-only or held open by another process, a missing parent directory, ...).
 	 */
 	void
 	save(const BMesh& mesh, const std::filesystem::path& path);
@@ -70,32 +72,46 @@ namespace assetlib
 	 * Each texture is Basis-UASTC supercompressed, which dominates the cost of an import -- pass
 	 * `onProgress` to drive a progress bar. It is called on the calling thread.
 	 *
-	 * @throws std::runtime_error if a file cannot be written.
+	 * @param cancel Polled once per texture. A single encode cannot be interrupted, so the wait for a
+	 *        signalled token is one texture long -- seconds, at 4K. Whatever was already written stays
+	 *        on disk.
+	 * @throws std::runtime_error if `outDir` cannot be created or a file cannot be written.
+	 * @throws Cancelled if `cancel` is signalled.
 	 */
 	void
 	writeTextures(
 		const imp::BMeshImport&      mesh,
 		const std::filesystem::path& outDir,
-		const TextureProgressFn&     onProgress = {});
+		const TextureProgressFn&     onProgress = {},
+		const CancelToken&           cancel     = {});
 
 	/**
 	 * Writes each material in `mesh` into `outDir` as a `matN.bmaterial` file (matching the path handles
 	 * toBMesh assembles), mapping each material's texture indices to the `texN.ktx2` names writeTextures
 	 * emits.
 	 *
-	 * @throws std::runtime_error if a file cannot be written.
+	 * @throws std::runtime_error if `outDir` cannot be created or a file cannot be written.
+	 * @throws Cancelled if `cancel` is signalled.
 	 */
 	void
-	writeMaterials(const imp::BMeshImport& mesh, const std::filesystem::path& outDir);
+	writeMaterials(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		const CancelToken&           cancel = {});
 
 	/**
 	 * Bakes an import to disk under `outDir`: writes `<name>.bmesh`, one `matN.bmaterial` per material,
 	 * and one `texN.ktx2` per texture. This is the complete modular form the runtime loads.
 	 *
-	 * @throws std::runtime_error if a file cannot be written.
+	 * @throws std::runtime_error if `outDir` cannot be created or a file cannot be written.
+	 * @throws Cancelled if `cancel` is signalled, in which case `outDir` holds a partial bake.
 	 */
 	void
-	bake(const imp::BMeshImport& mesh, const std::filesystem::path& outDir, std::string_view name);
+	bake(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		std::string_view             name,
+		const CancelToken&           cancel = {});
 
 	/**
 	 * Writes `mesh` to `path` as a Wavefront `.obj` for inspection in an external model viewer -- a

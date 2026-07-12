@@ -88,9 +88,17 @@ namespace assetlib
 		void
 		check(ktx_error_code_e code, const char* what, const std::filesystem::path& path)
 		{
-			if (code != KTX_SUCCESS)
-				throw std::runtime_error(
-					std::string(what) + " '" + path.string() + "': " + ktxErrorString(code));
+			if (code == KTX_SUCCESS)
+				return;
+
+			auto message = std::string(what) + " '" + path.string() + "': " + ktxErrorString(code);
+
+			const bool fileError = code == KTX_FILE_OPEN_FAILED || code == KTX_FILE_WRITE_ERROR ||
+			                       code == KTX_FILE_READ_ERROR;
+			if (fileError && errno != 0)
+				message += " (" + std::generic_category().message(errno) + ")";
+
+			throw std::runtime_error(message);
 		}
 
 		// The block format a bake target transcodes to. kNone / kBasisUASTC never reach here.
@@ -215,8 +223,10 @@ namespace assetlib
 	ImageData
 	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode)
 	{
-		ktxTexture2*           texture = nullptr;
-		const ktx_error_code_e rc      = ktxTexture2_CreateFromNamedFile(
+		ktxTexture2* texture = nullptr;
+
+		errno                     = 0;  // so check() reads this call's reason, not a stale one
+		const ktx_error_code_e rc = ktxTexture2_CreateFromNamedFile(
 			path.string().c_str(),
 			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
 			&texture);
@@ -312,6 +322,8 @@ namespace assetlib
 			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
 
 		Ktx2Owner owner;
+
+		errno = 0;  // so check() reads this call's reason, not a stale one
 		check(
 			ktxTexture2_CreateFromNamedFile(
 				path.string().c_str(),
@@ -489,8 +501,13 @@ namespace assetlib
 			}
 		}
 
-		const ktx_error_code_e wc = ktxTexture_WriteToNamedFile(base, path.string().c_str());
+		errno                         = 0;
+		const ktx_error_code_e wc     = ktxTexture_WriteToNamedFile(base, path.string().c_str());
+		const int              reason = errno;
+
 		ktxTexture_Destroy(base);
+
+		errno = reason;
 		check(wc, "assetlib::writeKTX2: failed to write", path);
 	}
 }
