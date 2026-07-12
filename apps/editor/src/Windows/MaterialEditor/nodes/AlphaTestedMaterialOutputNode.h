@@ -4,14 +4,6 @@
 
 class QDoubleSpinBox;
 
-/**
- * The cutout sink: MaterialOutputNode with the base-color alpha channel added, plus the cutoff a
- * pixel's alpha must reach to survive.
- *
- * Ending a graph in this node -- rather than routing an alpha channel into the opaque one -- is what
- * makes the material a cutout. The alpha port exists on this node and nowhere else, so "routes alpha"
- * and "is alpha tested" cannot disagree.
- */
 class AlphaTestedMaterialOutputNode : public MaterialOutputNode
 {
 	Q_OBJECT

@@ -18,11 +18,6 @@ namespace assetlib
 		/**
 		 * The mark phase: the name of every baked map that some material below `dataRoot` still points
 		 * at.
-		 *
-		 * Keyed by file name rather than by the path the material stores. A baked name is a content hash
-		 * of the map, so the name alone identifies it -- and matching on the name also keeps a map alive
-		 * that a material reached through some other `textureDir`. Both are errors in the direction of
-		 * keeping a file, which is the only direction a prune may err in.
 		 */
 		LiveSet
 		markLiveMaps(const std::filesystem::path& dataRoot)
@@ -92,9 +87,6 @@ namespace assetlib
 
 			const std::string name = entry.path().filename().string();
 
-			// A file the bake could not have written is not ours to delete, whoever put it here:
-			// skybox.ktx2 and brdf_lut.ktx2 share this directory and are referenced by config, not by
-			// any material.
 			if (!isBakedMapName(name))
 				continue;
 
@@ -132,9 +124,6 @@ namespace assetlib
 				continue;
 			}
 
-			// `removed` is false, with no error, for a file that had already gone. That is the outcome
-			// the caller asked for, so it counts as deleted -- but its bytes were reclaimed by whoever
-			// got there first, not by us.
 			++result.deleted;
 			if (removed)
 				result.bytes += texture.bytes;

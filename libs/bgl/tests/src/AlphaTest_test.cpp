@@ -13,20 +13,6 @@ namespace
 
 	constexpr uint32_t c_MaskSize = 256;
 
-	/**
-	 * A base-color texture with a hole in it: opaque leafy green everywhere except a centred disc,
-	 * which is fully transparent. Deliberately the inverse of the obvious thing -- a transparent *hole*
-	 * in an opaque quad, rather than an opaque disc on a transparent field -- because the background
-	 * can only show through the middle of the quad if pixels were genuinely discarded.
-	 *
-	 * The RGB written under the hole is the same green as everywhere else, but do not rely on that: BC7
-	 * is free to pick any colour for a texel whose alpha is 0, since nothing is meant to sample it, and
-	 * in practice the encoder lands on white. (That is exactly why a real foliage pipeline dilates the
-	 * colour outward under the transparent region before encoding -- otherwise a bilinear tap across
-	 * the cutout edge drags that arbitrary colour in.) What separates the two cases here is therefore
-	 * not the colour but the *hole*: with kMask the background is visible through the quad, with
-	 * kOpaque the quad is unbroken.
-	 */
 	assetlib::ImageData
 	makeHoleMask()
 	{
@@ -68,14 +54,6 @@ namespace
 	}
 }
 
-/**
- * Draws an alpha-tested material on a plane -- the end-to-end proof that a cutout actually cuts.
- *
- * The base color is round-tripped through the *real* BC7 encoder rather than uploaded raw, because
- * that is the format the material bake now emits for a cutout, and the thing most likely to go wrong
- * is the alpha not surviving compression. BC1 (what the bake emits for an opaque material) has no
- * alpha channel at all, so a cutout baked to it would sample alpha = 1 everywhere and cut nothing.
- */
 TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render]")
 {
 	auto opts             = bgl::GraphicsOptions();

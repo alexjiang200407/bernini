@@ -48,13 +48,13 @@ and portability.
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema
   - [x] Static Mesh Asset Import
-- [ ] Materials (PBR)
+- [x] Materials (PBR)
   - [x] Implement PBR IBL
   - [x] ktx2 textures
   - [x] Implement Alpha Test alpha mode
   - [x] Texture Asset Import
-  - [ ] Editor Material Graph
-    - [ ] Choose Material Type: PBR only for now
+  - [x] Editor Material Graph
+    - [x] Choose Material Type: PBR only for now
     - [x] Choose Material Options: e.g. Alpha Mode
     - [x] Link Textures to output nodes (BRDF for PBR)
 - [ ] Culling

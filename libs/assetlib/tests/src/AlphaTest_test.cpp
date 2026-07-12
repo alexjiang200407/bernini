@@ -54,9 +54,6 @@ namespace
 		return makeMask(size, [period](uint32_t x, uint32_t) { return (x % period) == 0; });
 	}
 
-	// A filled disc -- the shape a real cutout actually is. Unlike a grating it does not alias into a
-	// uniform grey, so its coverage stays a fine-grained function of the alpha scale and can be matched
-	// closely rather than only bounded.
 	std::vector<std::byte>
 	discMask(uint32_t size, float radiusFraction)
 	{
