@@ -23,6 +23,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
 
+#include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
@@ -636,25 +637,65 @@ MaterialEditorWindow::BakeCurrentMaterial()
 	if (path.isEmpty() || m_DataRoot.empty())
 		return;  // nowhere to write the maps; Save As first, inside a project
 
+	const auto materialPath = std::filesystem::path(path.toStdWString());
+
+	auto desc     = assetlib::MaterialBakeDesc();
+	desc.dataRoot = m_DataRoot;
+
+	// Read off the live graph, so the bake reflects the board as it is right now rather than whatever
+	// was last written to disk. It has to happen here, on the UI thread: the worker below may not touch
+	// the node models.
+	auto material = assetlib::BMaterial();
 	try
 	{
-		// Bake from the graph as it is right now, not from whatever was last written to disk.
-		const auto materialPath = std::filesystem::path(path.toStdWString());
-
-		auto desc     = assetlib::MaterialBakeDesc();
-		desc.dataRoot = m_DataRoot;
-
-		assetlib::BMaterial material = BuildMaterial(m_CurrentSubmesh, path);
-		assetlib::bakeMaterial(material, desc);
-		assetlib::saveMaterial(material, materialPath);
+		material = BuildMaterial(m_CurrentSubmesh, path);
 	}
 	catch (const std::exception& e)
 	{
-		qWarning("MaterialEditor: failed to bake '%s': %s", qPrintable(path), e.what());
+		qWarning(
+			"MaterialEditor: failed to compile '%s' for baking: %s",
+			qPrintable(path),
+			e.what());
 		QMessageBox::warning(
 			window(),
 			QStringLiteral("Bake Material"),
-			QStringLiteral("Could not bake the material:\n%1").arg(QString::fromLatin1(e.what())));
+			QStringLiteral("Could not bake the material:\n\n%1").arg(QString::fromUtf8(e.what())));
+		return;
+	}
+
+	const QString name = QFileInfo(path).fileName();
+
+	// A bake decodes, resizes and re-encodes a KTX2 for each of the three maps, which used to freeze
+	// the editor for as long as it took. It touches files only, never bgl, so it belongs on a worker.
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		this,
+		QString("Baking %1").arg(name),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Compositing maps...");
+			assetlib::bakeMaterial(material, desc, progress.Cancellation());
+
+			progress.Report(0, 0, "Writing material...");
+			assetlib::saveMaterial(material, materialPath);
+		},
+		background::Cancellable::kYes);
+
+	// Nothing to undo on a cancel: bakeMaterial leaves `material` untouched unless every map was
+	// produced, and a map it did write is named by the hash of its inputs -- so it is a correct,
+	// reusable file that the next bake picks up as already up to date, and Clean Unused Textures
+	// sweeps if it never is.
+	if (result.Cancelled())
+		return;
+
+	if (result.Failed())
+	{
+		qWarning(
+			"MaterialEditor: failed to bake '%s': %s",
+			qPrintable(path),
+			qPrintable(result.error));
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake Material"),
+			QStringLiteral("Could not bake the material:\n\n%1").arg(result.error));
 		return;
 	}
 
