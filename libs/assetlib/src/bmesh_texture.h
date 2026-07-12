@@ -9,11 +9,16 @@ namespace assetlib
 	 * handles -- so it slots straight into imp::BMeshImport::textures and is baked to a standalone
 	 * `.ktx2` by writeTextures.
 	 *
-	 * @param rgba   width*height*4 bytes, row-major, no padding.
-	 * @param width  Image width in pixels.
-	 * @param height Image height in pixels.
+	 * @param rgba        width*height*4 bytes, row-major, no padding.
+	 * @param width       Image width in pixels.
+	 * @param height      Image height in pixels.
+	 * @param alphaCutoff The cutout threshold in [0,1], or empty for a map with no alpha test.
 	 * @throws std::runtime_error if `rgba` is too small or the mip resize fails.
 	 */
 	[[nodiscard]] ImageData
-	rgba8ToImage(std::span<const std::byte> rgba, uint32_t width, uint32_t height);
+	rgba8ToImage(
+		std::span<const std::byte> rgba,
+		uint32_t                   width,
+		uint32_t                   height,
+		std::optional<float>       alphaCutoff = std::nullopt);
 }

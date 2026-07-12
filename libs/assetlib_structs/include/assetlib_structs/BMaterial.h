@@ -9,6 +9,12 @@ namespace assetlib
 		kLoose = 1,
 	};
 
+	enum class AlphaMode : uint32_t
+	{
+		kOpaque = 0,
+		kMask   = 1,
+	};
+
 	struct ChannelRoute
 	{
 		std::string texture;      // path to the source texture file (empty when unrouted)
@@ -36,6 +42,9 @@ namespace assetlib
 		glm::vec4   baseColorFactor = glm::vec4(1.0f);
 		float       metallicFactor  = 1.0f;
 		float       roughnessFactor = 1.0f;
+
+		AlphaMode alphaMode   = AlphaMode::kOpaque;
+		float     alphaCutoff = 0.5f;
 
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 
