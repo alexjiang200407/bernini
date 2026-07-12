@@ -34,13 +34,6 @@ public:
 	 * Replaces the sink with the registered model named `modelName` -- this is how a material is
 	 * switched between opaque and alpha-tested.
 	 *
-	 * Rebuilds it rather than mutating it, because the two sinks are different node types with
-	 * different ports. Position, factors and split state carry over; so does every wire whose port
-	 * still exists *and* still type-checks. Switching to a cutout therefore keeps a split base
-	 * color's R/G/B wires and leaves the new alpha port empty, but drops a collapsed base-color wire
-	 * -- the port went from a 3-wide RGB to a 4-wide RGBA, and QtNodes would never have let you make
-	 * that connection by hand.
-	 *
 	 * @return whether the sink changed (false if it was already this type, or there is no sink).
 	 */
 	bool

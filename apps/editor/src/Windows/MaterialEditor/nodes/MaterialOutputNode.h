@@ -11,12 +11,6 @@ class QDoubleSpinBox;
 class QFormLayout;
 class QPushButton;
 
-/**
- * The graph's sink: the opaque material. Its base color exposes only RGB -- there is no alpha port,
- * because an opaque material has nothing to do with alpha. Author a cutout with
- * AlphaTestedMaterialOutputNode instead, which is the same node with the alpha channel added.
- *
- */
 class MaterialOutputNode : public QtNodes::NodeDelegateModel
 {
 	Q_OBJECT

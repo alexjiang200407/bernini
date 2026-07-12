@@ -35,14 +35,7 @@ namespace assetlib
 	 * Finds the baked maps under `desc.textureDir` that no material references any more, without
 	 * deleting anything. A re-bake whose routes changed writes a new content-hashed file and leaves the
 	 * old one behind, so these accumulate; this is how they are found.
-	 *
-	 * Mark and sweep. **Mark**: every `.bmaterial` below `dataRoot` is loaded and the three entries of
-	 * its baked triplet are taken as live -- regardless of the material's `mode`, because a kLoose
-	 * material still carries the triplet of its last bake and deleting those maps would destroy a valid
-	 * bake. **Sweep**: everything in the texture directory that `bakeMaterial` could have written (see
-	 * isBakedMapName) and that nothing marked is reported as unused. A hand-placed map such as
-	 * `skybox.ktx2` or `brdf_lut.ktx2` never matches the bake's naming and so is never a candidate.
-	 *
+     *
 	 * A missing texture directory is not an error -- nothing has been baked, so nothing is unused.
 	 *
 	 * @throws std::runtime_error if `dataRoot` does not exist, or if any `.bmaterial` below it cannot be
