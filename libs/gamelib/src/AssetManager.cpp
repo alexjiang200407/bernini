@@ -295,7 +295,13 @@ namespace game
 
 		// The instance's reference is what keeps the geometry alive while it is being drawn.
 		++it->second.refCount;
-		m_Instances.emplace(instance.handle.index, InstanceRecord{ instance, geom.handle.index });
+
+		auto record      = InstanceRecord();
+		record.handle    = instance;
+		record.geomSlot  = geom.handle.index;
+		record.overrides = std::vector<bgl::MaterialHandle>(it->second.submeshMaterials.size());
+
+		m_Instances.emplace(instance.handle.index, std::move(record));
 
 		return instance;
 	}
@@ -307,10 +313,14 @@ namespace game
 		if (it == m_Instances.end())
 			return;
 
-		const uint32_t geomSlot = it->second.geomSlot;
+		const uint32_t                         geomSlot  = it->second.geomSlot;
+		const std::vector<bgl::MaterialHandle> overrides = std::move(it->second.overrides);
 
 		m_View->DeleteMeshInstance(it->second.handle);
 		m_Instances.erase(it);
+
+		// The instance is gone, so nothing wears these any more.
+		for (const bgl::MaterialHandle material : overrides) ReleaseMaterial(material);
 
 		DropGeomRef(geomSlot);
 	}
@@ -443,6 +453,58 @@ namespace game
 
 		m_Scene->SetSubmeshMaterial(geom, submeshIndex, replacement);
 		record.submeshMaterials[submeshIndex] = replacement;
+
+		ReleaseMaterial(previous);
+	}
+
+	void
+	AssetManager::SetInstanceSubmeshMaterial(
+		bgl::MeshInstanceHandle instance,
+		uint32_t                submeshIndex,
+		std::string_view        materialRelPath)
+	{
+		const auto it = m_Instances.find(instance.handle.index);
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to SetInstanceSubmeshMaterial is not owned by this "
+				"AssetManager");
+
+		InstanceRecord& record = it->second;
+		if (submeshIndex >= record.overrides.size())
+			throw bgl::SceneError(
+				"submeshIndex passed to SetInstanceSubmeshMaterial is out of range");
+
+		// Acquire before releasing: overriding with the material already worn must not drop the count
+		// to zero and delete it out from under itself.
+		const bgl::MaterialHandle replacement = AcquireMaterial(materialRelPath);
+		const bgl::MaterialHandle previous    = record.overrides[submeshIndex];
+
+		m_View->SetSubmeshMaterialOverride(record.handle, submeshIndex, replacement);
+		record.overrides[submeshIndex] = replacement;
+
+		ReleaseMaterial(previous);
+	}
+
+	void
+	AssetManager::ClearInstanceSubmeshMaterial(
+		bgl::MeshInstanceHandle instance,
+		uint32_t                submeshIndex)
+	{
+		const auto it = m_Instances.find(instance.handle.index);
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to ClearInstanceSubmeshMaterial is not owned by this "
+				"AssetManager");
+
+		InstanceRecord& record = it->second;
+		if (submeshIndex >= record.overrides.size())
+			throw bgl::SceneError(
+				"submeshIndex passed to ClearInstanceSubmeshMaterial is out of range");
+
+		const bgl::MaterialHandle previous = record.overrides[submeshIndex];
+
+		m_View->ClearSubmeshMaterialOverride(record.handle, submeshIndex);
+		record.overrides[submeshIndex] = {};
 
 		ReleaseMaterial(previous);
 	}

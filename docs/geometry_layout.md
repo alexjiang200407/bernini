@@ -70,6 +70,17 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   Scene/SceneView split rests on (see `IScene::DeleteGeom`). The re-resolve is O(live instances), but
   it only runs on the frame after an authoring-time change, never per frame.
 
+  The **override** is per instance and lives on the view (`SceneView::MeshMeta::overrides`, parallel
+  to its submesh instances), set through `ISceneView::SetSubmeshMaterialOverride`. It takes effect
+  immediately — there is no epoch to wait for, because only one instance changed. It also **outranks
+  the default**: the epoch re-resolve skips an overridden submesh, so a later `SetSubmeshMaterial` on
+  the geom does not tear a skin off the unit wearing it.
+
+  Lifetime is the usual bargain: an override is a raw slot index like every other material binding, so
+  deleting a material an instance still wears re-points it at whatever takes the slot next.
+  `gamelib`'s `AssetManager` is what makes it safe — an override holds a reference, released by
+  `ClearInstanceSubmeshMaterial` or by `DestroyInstance`.
+
 * **Vertex data is type-erased bytes, decoded by a `VertexLayout` descriptor.** The vertex buffer
   is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a
   `StructuredBuffer<Vertex>`. Each submesh's `VertexLayout` (attribute semantics/formats/offsets +
