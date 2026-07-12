@@ -10,6 +10,19 @@ namespace game
 		constexpr size_t c_BaseColorFirst = 0;
 		constexpr size_t c_OrmFirst       = 4;
 		constexpr size_t c_NormalFirst    = 7;
+
+		bgl::LayerType
+		toLayerType(assetlib::AlphaMode mode)
+		{
+			switch (mode)
+			{
+			case assetlib::AlphaMode::kMask:
+				return bgl::LayerType::kAlphaTest;
+			case assetlib::AlphaMode::kOpaque:
+				break;
+			}
+			return bgl::LayerType::kOpaque;
+		}
 	}
 
 	AssetFactory::AssetFactory(bgl::IScene& scene, std::filesystem::path dataRoot) :
@@ -53,6 +66,8 @@ namespace game
 			desc.baseColorFactor = material.baseColorFactor;
 			desc.metallicFactor  = material.metallicFactor;
 			desc.roughnessFactor = material.roughnessFactor;
+			desc.layerType       = toLayerType(material.alphaMode);
+			desc.alphaCutoff     = material.alphaCutoff;
 
 			const auto route = [&](size_t index) {
 				const assetlib::ChannelRoute& source = material.routes[index];
@@ -76,6 +91,8 @@ namespace game
 		desc.baseColorFactor = material.baseColorFactor;
 		desc.metallicFactor  = material.metallicFactor;
 		desc.roughnessFactor = material.roughnessFactor;
+		desc.layerType       = toLayerType(material.alphaMode);
+		desc.alphaCutoff     = material.alphaCutoff;
 
 		desc.baseColorTexture = LoadTexture(material.baseColorTexture);
 		desc.normalTexture    = LoadTexture(material.normalTexture);
