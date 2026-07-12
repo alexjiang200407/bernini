@@ -4,6 +4,7 @@
 #include <assetlib/image_io.h>
 
 #include "bmesh_texture.h"
+#include "fs_util.h"
 
 #include <stb_image_resize2.h>
 
@@ -335,14 +336,13 @@ namespace assetlib
 	}
 
 	void
-	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc)
+	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc, const CancelToken& cancel)
 	{
 		const std::unordered_map<std::string, Source> sources =
 			loadSources(material, desc.dataRoot);
 
 		const std::filesystem::path outDir = desc.dataRoot / desc.textureDir;
-		std::error_code             ec;
-		std::filesystem::create_directories(outDir, ec);
+		createDirectories(outDir);
 
 		// Which triplet field each group fills, in c_Groups order.
 		std::string* const outputs[] = {
@@ -350,6 +350,10 @@ namespace assetlib
 			&material.ormTexture,
 			&material.normalTexture,
 		};
+
+		// Written into `material` only once every map has been produced, so a cancelled or failed bake
+		// leaves the caller's material exactly as it found it rather than half-repointed.
+		std::array<std::string, c_Groups.size()> baked;
 
 		for (size_t g = 0; g < c_Groups.size(); ++g)
 		{
@@ -359,6 +363,8 @@ namespace assetlib
 			// fall back to white / flat-normal, exactly what an all-default map would have been.
 			if (!groupIsRouted(material, group))
 				continue;
+
+			throwIfCancelled(cancel);
 
 			const auto [width, height] = groupExtent(material, group, sources);
 
@@ -384,8 +390,12 @@ namespace assetlib
 			}
 
 			// Recorded relative to the data root, not to the material file.
-			*outputs[g] = (desc.textureDir / name).generic_string();
+			baked[g] = (desc.textureDir / name).generic_string();
 		}
+
+		for (size_t g = 0; g < c_Groups.size(); ++g)
+			if (!baked[g].empty())
+				*outputs[g] = baked[g];
 
 		// Record what each source measured, so a later edit to one of them shows up as a stale bake.
 		for (size_t i = 0; i < c_LooseChannelCount; ++i)

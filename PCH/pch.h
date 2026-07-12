@@ -5,6 +5,7 @@
 #include <atomic>
 #include <bitset>
 #include <cassert>
+#include <cerrno>
 #include <chrono>
 #include <concepts>
 #include <cstddef>
@@ -28,6 +29,7 @@
 #include <sstream>
 #include <stack>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <thread>
