@@ -6,9 +6,18 @@
 #include <QTimer>
 #include <bgl/IGraphics.h>
 
+namespace
+{
+	constexpr int c_ResizeSettleMs = 200;
+}
+
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
 	QWidget(parent), m_Desc(std::move(desc))
 {
+	m_ResizeTimer = new QTimer(this);
+	m_ResizeTimer->setSingleShot(true);
+	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
+
 	m_Width  = static_cast<uint32_t>(std::max(1, width()));
 	m_Height = static_cast<uint32_t>(std::max(1, height()));
 
@@ -33,10 +42,10 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// so it reliably fires before vsync and the cadence stays at one refresh.
 	m_FrameTimer->setTimerType(Qt::PreciseTimer);
 
+	// Deliberately not SyncSize'd here: the frame loop must not chase the window's size, or it would
+	// resize the backbuffers on the very next frame and undo the settle timer below.
 	m_FrameClock.start();
 	connect(m_FrameTimer, &QTimer::timeout, this, [this]() {
-		SyncSize(width(), height());
-
 		const qint64 startNs = m_FrameClock.nsecsElapsed();
 		DrawFrame(m_Desc.gfx.Get());
 		const qint64 endNs = m_FrameClock.nsecsElapsed();
@@ -77,13 +86,15 @@ void
 RenderTargetWindow::resizeEvent(QResizeEvent* event)
 {
 	QWidget::resizeEvent(event);
-	SyncSize(event->size().width(), event->size().height());
+	m_ResizeTimer->start(c_ResizeSettleMs);
 }
 
 void
 RenderTargetWindow::showEvent(QShowEvent* event)
 {
 	QWidget::showEvent(event);
+
+	m_ResizeTimer->stop();
 	SyncSize(width(), height());
 
 	// The frame rate is paced by the vsync-locked Present, not by this timer: DXGI queues frames and
@@ -101,6 +112,11 @@ void
 RenderTargetWindow::hideEvent(QHideEvent* event)
 {
 	m_FrameTimer->stop();
+
+	// Nothing is presenting while hidden, so a pending resize has nothing to serve; showEvent takes
+	// the size again anyway.
+	m_ResizeTimer->stop();
+
 	QWidget::hideEvent(event);
 }
 
@@ -127,5 +143,18 @@ RenderTargetWindow::SyncSize(int w, int h)
 
 	m_Width  = width;
 	m_Height = height;
+
+	// Resize idles the whole GPU (Graphics::Resize -> CommandQueue::Flush) before it can release the
+	// backbuffers, so it costs a full pipeline drain. Time it and say so: with the settle timer there
+	// should be exactly one of these per drag, and if there is more than one, the timer is not doing
+	// its job.
+	QElapsedTimer resizeClock;
+	resizeClock.start();
 	m_Desc.gfx->Resize(m_RenderTarget, width, height);
+
+	qWarning(
+		"RenderTarget: resized to %ux%u in %.1f ms",
+		width,
+		height,
+		static_cast<double>(resizeClock.nsecsElapsed()) * 1.0e-6);
 }

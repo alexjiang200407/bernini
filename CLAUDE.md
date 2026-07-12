@@ -73,8 +73,8 @@ Everything is driven by `just` from the repo root, via the `justfile`. Each reci
 ```bash
 just                              # list the recipes
 just init                         # write scripts/config.json for this machine (see below)
-just build [target]               # configure + build (default: all targets). --preset, --config, --dry-run
-just run <target> [-- args...]    # run an executable target with cwd set to its output dir
+just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
+just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
 just format <files...>            # clang-format in place (--check to verify only)
 just idl                          # regenerate the IDL C++ headers and Slang copies
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
@@ -94,7 +94,9 @@ Every key is optional and every lookup falls back to auto-detection, so a fresh 
 
 # Build
 
-Use `just build`. It configures and builds the preset from `config.json` (or `windows-vs2026-msvc-dx12-debug` if there is none), and sets up the MSVC developer environment via the configured `precommand` — falling back to locating vcvars with vswhere when no `precommand` is set and the preset's generator needs it (Visual Studio / Ninja / NMake on Windows).
+Use `just build`. It builds the preset from `config.json` (or `windows-vs2026-msvc-dx12-debug` if there is none), and sets up the MSVC developer environment via the configured `precommand` — falling back to locating vcvars with vswhere when no `precommand` is set and the preset's generator needs it (Visual Studio / Ninja / NMake on Windows).
+
+**The configure step is skipped once a build dir has been configured.** CMake regenerates itself: the generated buildsystem re-runs `cmake` when a `CMakeLists.txt` changes, and — because every `file(GLOB_RECURSE)` here passes `CONFIGURE_DEPENDS` — also when a glob picks up a new or deleted source file. So adding a source file needs no configure; just build. `build.py` only configures for what the buildsystem can't see for itself: an unconfigured/wiped dir, a missing File API codemodel, or an edited `CMakePresets.json` (presets never enter the buildsystem, so a changed `cacheVariable` would otherwise be ignored — detected by content hash, not mtime, so a `git checkout` doesn't trigger a needless reconfigure). Force one with `just build --configure`.
 
 ```bash
 just build                                  # configured preset, all targets

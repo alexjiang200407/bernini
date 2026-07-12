@@ -35,7 +35,6 @@ public:
 	}
 
 protected:
-	// Keeps the render target's backbuffers matched to the window's client size.
 	void
 	resizeEvent(QResizeEvent* event) override;
 
@@ -84,7 +83,13 @@ private:
 	void
 	ReportFrameTiming(qint64 startNs, qint64 endNs);
 
-	QTimer*                 m_FrameTimer = nullptr;
+	QTimer* m_FrameTimer = nullptr;
+
+	// Single-shot, restarted by every resizeEvent, so it only fires once the window has been still
+	// long enough to call the drag finished. That firing is the only thing that resizes the
+	// backbuffers.
+	QTimer* m_ResizeTimer = nullptr;
+
 	RenderTargetWindowDesc  m_Desc;
 	bgl::RenderTargetHandle m_RenderTarget;
 	bgl::SceneViewHandle    m_SceneView;

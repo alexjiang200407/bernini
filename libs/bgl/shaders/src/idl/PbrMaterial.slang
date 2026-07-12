@@ -12,6 +12,6 @@ public struct PbrMaterial
     public float metallicFactor;
     public float roughnessFactor;
 
-    // Cutout threshold. Only read by the alpha-test PSOs; an opaque material never samples it.
+    // Only read by the alpha-test PSOs
     public float alphaCutoff;
 };

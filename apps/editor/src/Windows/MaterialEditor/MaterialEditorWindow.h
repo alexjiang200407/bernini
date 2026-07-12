@@ -99,6 +99,12 @@ private:
 	void
 	SaveCurrentMaterial(bool saveAs);
 
+	// What the save dialog should offer for a submesh that has never been saved: the project's
+	// Materials directory, under the submesh's name. A submesh that already has a `.bmaterial` needs
+	// none of this -- its own path already puts the dialog in the right place.
+	[[nodiscard]] QString
+	DefaultMaterialPath() const;
+
 	// Composites the current submesh's routed source textures into the optimized triplet, writes the
 	// maps beside its `.bmaterial`, and saves it. Requires the material to already have a path.
 	void
