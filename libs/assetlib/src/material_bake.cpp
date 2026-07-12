@@ -21,11 +21,11 @@ namespace assetlib
 			uint32_t height = 0;
 		};
 
-		// The three maps a material bakes to, and which of the nine PbrChannel routes feed each.
+		// The three maps a material bakes to. Which routes feed each is not restated here: the run comes
+		// from BMaterial.h, which owns the `routes` array and is the one place its layout is described.
 		struct Group
 		{
-			size_t          first;
-			size_t          count;
+			ChannelGroup    channels;
 			const char*     name;      // file-name prefix, also part of the content hash
 			uint8_t         fallback;  // what an unrouted channel of this group samples
 			bool            srgb;
@@ -33,10 +33,10 @@ namespace assetlib
 		};
 
 		constexpr std::array<Group, 3> c_Groups = { {
-			{ 0, 4, "basecolor", 0xFF, true, Ktx2Compression::kBC1_RGB },
-			{ 4, 3, "orm", 0xFF, false, Ktx2Compression::kBC7_RGBA },
+			{ c_BaseColorChannels, "basecolor", 0xFF, true, Ktx2Compression::kBC1_RGB },
+			{ c_OrmChannels, "orm", 0xFF, false, Ktx2Compression::kBC7_RGBA },
 			// An unrouted normal axis is 0.5, i.e. zero once the shader maps [0,1] to [-1,1].
-			{ 7, 2, "normal", 0x80, false, Ktx2Compression::kBC5_RG },
+			{ c_NormalChannels, "normal", 0x80, false, Ktx2Compression::kBC5_RG },
 		} };
 
 		bool
@@ -129,7 +129,9 @@ namespace assetlib
 		bool
 		groupIsRouted(const BMaterial& material, const Group& group)
 		{
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 				if (!material.routes[i].texture.empty())
 					return true;
 			return false;
@@ -145,7 +147,9 @@ namespace assetlib
 		{
 			uint32_t width  = 0;
 			uint32_t height = 0;
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 			{
 				const ChannelRoute& route = material.routes[i];
 				if (route.texture.empty())
@@ -171,7 +175,9 @@ namespace assetlib
 			                  std::to_string(height) + '|' +
 			                  std::to_string(static_cast<uint32_t>(group.compression));
 
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 			{
 				const ChannelRoute& route = material.routes[i];
 				key += '|';
@@ -230,9 +236,10 @@ namespace assetlib
 			auto scaled = std::unordered_map<std::string, Rgba8>();
 
 			Rgba8 out(texels * 4u, std::byte{ 0xFF });
-			for (size_t component = 0; component < group.count; ++component)
+			for (size_t component = 0; component < group.channels.count; ++component)
 			{
-				const ChannelRoute& route = material.routes[group.first + component];
+				const ChannelRoute& route =
+					material.routes[ChannelIndex(group.channels, component)];
 
 				if (route.texture.empty())
 				{
@@ -270,7 +277,9 @@ namespace assetlib
 			if (stamp.size == 0)
 				return false;  // missing, or empty and so not a real map
 
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 			{
 				const ChannelRoute& route = material.routes[i];
 				if (route.texture.empty())
