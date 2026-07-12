@@ -31,15 +31,17 @@ namespace game
 		std::vector<std::string>
 		TexturePaths(const assetlib::BMaterial& material)
 		{
+			const assetlib::PbrParams& pbr = material.pbr;
+
 			if (material.mode == assetlib::MaterialMode::kLoose)
 			{
 				auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
 				for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
-					paths[i] = material.routes[i].texture;
+					paths[i] = pbr.routes[i].texture;
 				return paths;
 			}
 
-			return { material.baseColorTexture, material.normalTexture, material.ormTexture };
+			return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 		}
 	}
 
@@ -140,6 +142,12 @@ namespace game
 	bgl::MaterialHandle
 	AssetManager::CreateMaterial(const assetlib::BMaterial& material, std::string key)
 	{
+		if (material.shadingModel != assetlib::ShadingModel::kPbr)
+			throw bgl::SceneError(
+				"AssetManager: shading model " +
+				std::to_string(static_cast<uint32_t>(material.shadingModel)) +
+				" is not supported by the renderer");
+
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
 		const std::vector<std::string> paths = TexturePaths(material);
 
@@ -462,13 +470,13 @@ namespace game
 		switch (slot)
 		{
 		case TextureSlot::kBaseColor:
-			record.source.baseColorTexture = std::move(path);
+			record.source.pbr.baseColorTexture = std::move(path);
 			break;
 		case TextureSlot::kNormal:
-			record.source.normalTexture = std::move(path);
+			record.source.pbr.normalTexture = std::move(path);
 			break;
 		case TextureSlot::kOrm:
-			record.source.ormTexture = std::move(path);
+			record.source.pbr.ormTexture = std::move(path);
 			break;
 		}
 
@@ -497,8 +505,8 @@ namespace game
 		if (channel >= assetlib::c_LooseChannelCount)
 			throw bgl::SceneError("channel passed to SetMaterialRoute is out of range");
 
-		record.source.routes[channel].texture = std::string(relPath);
-		record.source.routes[channel].channel = sourceChannel;
+		record.source.pbr.routes[channel].texture = std::string(relPath);
+		record.source.pbr.routes[channel].channel = sourceChannel;
 
 		RebuildMaterial(record);
 	}
@@ -530,12 +538,14 @@ namespace game
 	bgl::PbrMaterialDesc
 	AssetManager::BakedDesc(const MaterialRecord& record) const
 	{
+		const assetlib::PbrParams& pbr = record.source.pbr;
+
 		auto desc            = bgl::PbrMaterialDesc();
-		desc.baseColorFactor = record.source.baseColorFactor;
-		desc.metallicFactor  = record.source.metallicFactor;
-		desc.roughnessFactor = record.source.roughnessFactor;
-		desc.layerType       = ToLayerType(record.source.alphaMode);
-		desc.alphaCutoff     = record.source.alphaCutoff;
+		desc.baseColorFactor = pbr.baseColorFactor;
+		desc.metallicFactor  = pbr.metallicFactor;
+		desc.roughnessFactor = pbr.roughnessFactor;
+		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		desc.baseColorTexture = record.textures[0];
 		desc.normalTexture    = record.textures[1];
@@ -547,17 +557,19 @@ namespace game
 	bgl::LoosePbrMaterialDesc
 	AssetManager::LooseDesc(const MaterialRecord& record) const
 	{
+		const assetlib::PbrParams& pbr = record.source.pbr;
+
 		auto desc            = bgl::LoosePbrMaterialDesc();
-		desc.baseColorFactor = record.source.baseColorFactor;
-		desc.metallicFactor  = record.source.metallicFactor;
-		desc.roughnessFactor = record.source.roughnessFactor;
-		desc.layerType       = ToLayerType(record.source.alphaMode);
-		desc.alphaCutoff     = record.source.alphaCutoff;
+		desc.baseColorFactor = pbr.baseColorFactor;
+		desc.metallicFactor  = pbr.metallicFactor;
+		desc.roughnessFactor = pbr.roughnessFactor;
+		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		const auto route = [&](size_t index) {
 			auto out    = bgl::ChannelRouteDesc();
 			out.texture = record.textures[index];
-			out.channel = record.source.routes[index].channel;
+			out.channel = pbr.routes[index].channel;
 			return out;
 		};
 

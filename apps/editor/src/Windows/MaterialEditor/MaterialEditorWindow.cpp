@@ -479,6 +479,8 @@ MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPat
 
 	auto material = assetlib::BMaterial();
 
+	material.shadingModel = assetlib::ShadingModel::kPbr;
+
 	// The graph authors per-channel routes, so a material that has never been baked is loose.
 	material.mode = assetlib::MaterialMode::kLoose;
 
@@ -492,10 +494,10 @@ MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPat
 		{
 			const assetlib::BMaterial existing = assetlib::loadMaterial(file);
 			material.mode                      = existing.mode;
-			material.baseColorTexture          = existing.baseColorTexture;
-			material.normalTexture             = existing.normalTexture;
-			material.ormTexture                = existing.ormTexture;
-			material.routeStamps               = existing.routeStamps;
+			material.pbr.baseColorTexture      = existing.pbr.baseColorTexture;
+			material.pbr.normalTexture         = existing.pbr.normalTexture;
+			material.pbr.ormTexture            = existing.pbr.ormTexture;
+			material.pbr.routeStamps           = existing.pbr.routeStamps;
 		}
 		catch (const std::exception& e)
 		{
@@ -508,20 +510,22 @@ MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPat
 	const MaterialOutputNode* output = entry.model->OutputNode();
 	if (output != nullptr)
 	{
-		material.baseColorFactor = output->BaseColorFactor();
-		material.metallicFactor  = output->MetallicFactor();
-		material.roughnessFactor = output->RoughnessFactor();
+		assetlib::PbrParams& pbr = material.pbr;
 
-		material.alphaMode =
+		pbr.baseColorFactor = output->BaseColorFactor();
+		pbr.metallicFactor  = output->MetallicFactor();
+		pbr.roughnessFactor = output->RoughnessFactor();
+
+		pbr.alphaMode =
 			output->IsAlphaTested() ? assetlib::AlphaMode::kMask : assetlib::AlphaMode::kOpaque;
-		material.alphaCutoff = output->AlphaCutoff();
+		pbr.alphaCutoff = output->AlphaCutoff();
 
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
 		{
 			const ChannelData::Route wired = output->Route(i);
 
-			material.routes[i].texture = Rebase(wired.path, dir, true).toStdString();
-			material.routes[i].channel = wired.channel;
+			pbr.routes[i].texture = Rebase(wired.path, dir, true).toStdString();
+			pbr.routes[i].channel = wired.channel;
 		}
 	}
 
@@ -759,12 +763,12 @@ MaterialEditorWindow::OpenMaterialInto(int submeshIndex, const QString& path, bo
 	if (graph.isEmpty() && output != nullptr)
 	{
 		auto seed          = QJsonObject();
-		seed["baseColorR"] = material.baseColorFactor.r;
-		seed["baseColorG"] = material.baseColorFactor.g;
-		seed["baseColorB"] = material.baseColorFactor.b;
-		seed["baseColorA"] = material.baseColorFactor.a;
-		seed["metallic"]   = material.metallicFactor;
-		seed["roughness"]  = material.roughnessFactor;
+		seed["baseColorR"] = material.pbr.baseColorFactor.r;
+		seed["baseColorG"] = material.pbr.baseColorFactor.g;
+		seed["baseColorB"] = material.pbr.baseColorFactor.b;
+		seed["baseColorA"] = material.pbr.baseColorFactor.a;
+		seed["metallic"]   = material.pbr.metallicFactor;
+		seed["roughness"]  = material.pbr.roughnessFactor;
 		output->load(seed);
 	}
 
