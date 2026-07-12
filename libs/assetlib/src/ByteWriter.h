@@ -36,14 +36,12 @@ namespace assetlib
 			m_Buffer.insert(m_Buffer.end(), first, first + values.size_bytes());
 		}
 
-		/** Pads with zero bytes until size() is a multiple of `alignment`. */
 		void
 		alignTo(size_t alignment)
 		{
 			m_Buffer.resize(core::align(m_Buffer.size(), alignment), std::byte{ 0 });
 		}
 
-		/** Overwrites sizeof(T) bytes at `offset`. Precondition: the range is already present. */
 		template <core::type_traits::trivially_copyable T>
 		void
 		patchPod(size_t offset, const T& value)
