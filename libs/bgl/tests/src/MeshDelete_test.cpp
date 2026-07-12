@@ -510,3 +510,111 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 }
+
+// The whole point of moving the material onto the instance: two instances of one geom, wearing
+// different materials, bucketed into different PSOs. A skin.
+TEST_CASE("A material override changes one instance and not its siblings", "[material][pso][scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(CubeSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 4);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	auto pbr         = bgl::MaterialHandle();
+	pbr.materialType = bgl::MaterialType::kPBR;
+
+	// A cutout: same material *type*, different layer, so it lands in a different PSO bucket.
+	auto cutout         = bgl::MaterialHandle();
+	cutout.materialType = bgl::MaterialType::kPBR;
+	cutout.layerType    = bgl::LayerType::kAlphaTest;
+
+	auto geom = scene->AddCubeGeom(pbr);
+	REQUIRE(geom.IsValid());
+
+	auto worn  = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto plain = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	REQUIRE(worn.IsValid());
+	REQUIRE(plain.IsValid());
+
+	auto  instBuffers    = view->GetInstanceBuffers();
+	auto& instanceBuffer = std::get<0>(instBuffers);
+	auto& meshBuffer     = std::get<1>(instBuffers);
+
+	const auto psoOf = [&](bgl::MeshInstanceHandle instance) {
+		const auto& meta = meshBuffer.MetaAt(instance.handle.index);
+		return instanceBuffer[meta.submeshInstances[0]].pso;
+	};
+
+	auto gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto device       = gfxBase->GetDevice();
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	auto cmdListDesc = bgl::CommandListDesc();
+	cmdListDesc.type = bgl::QueueType::kGraphics;
+
+	auto cmdList =
+		device->CreateCommandList(cmdListDesc, cmdAllocator, gfxBase->GetResourceManagerCpy());
+
+	const auto pumpUpdate = [&]() {
+		cmdList->Open(cmdQueue, cmdAllocator);
+		view->Update(cmdList);
+		cmdList->Close();
+		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+	};
+
+	// Both start on the geom's default.
+	CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+	CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+
+	SECTION("the override takes effect immediately, on that instance alone")
+	{
+		view->SetSubmeshMaterialOverride(worn, 0, cutout);
+
+		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kAlphaTest_StaticMesh_PBR));
+		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+	}
+
+	SECTION("clearing it returns that instance to the default")
+	{
+		view->SetSubmeshMaterialOverride(worn, 0, cutout);
+		view->ClearSubmeshMaterialOverride(worn, 0);
+
+		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+	}
+
+	SECTION("an override outranks a later change to the geom's default")
+	{
+		view->SetSubmeshMaterialOverride(worn, 0, cutout);
+
+		auto nullMat         = bgl::MaterialHandle();
+		nullMat.materialType = bgl::MaterialType::kNull;
+		scene->SetSubmeshMaterial(geom, 0, nullMat);
+
+		// The epoch re-resolve must skip the overridden instance and rewrite only its sibling.
+		pumpUpdate();
+
+		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kAlphaTest_StaticMesh_PBR));
+		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+	}
+
+	SECTION("a bad handle or index throws")
+	{
+		REQUIRE_THROWS_AS(view->SetSubmeshMaterialOverride(worn, 1, cutout), bgl::SceneError);
+		REQUIRE_THROWS_AS(
+			view->SetSubmeshMaterialOverride(bgl::MeshInstanceHandle{}, 0, cutout),
+			bgl::SceneError);
+		REQUIRE_THROWS_AS(
+			view->SetSubmeshMaterialOverride(worn, 0, bgl::MaterialHandle{}),
+			bgl::SceneError);
+		REQUIRE_THROWS_AS(view->ClearSubmeshMaterialOverride(worn, 1), bgl::SceneError);
+	}
+}

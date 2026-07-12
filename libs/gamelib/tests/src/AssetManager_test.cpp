@@ -402,6 +402,86 @@ TEST_CASE("AssetManager swaps a submesh's material", "[gamelib][assets]")
 	CHECK((*fx).MaterialRefCount(m1) == 0);
 }
 
+TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
+{
+	Fixture fx("bernini_am_override_material");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteTexture(fx.root.path / "Textures" / "b.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "skin.bmaterial", "Textures/b.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+
+	// Two units, same mesh. One will wear a skin.
+	const bgl::MeshInstanceHandle worn  = (*fx).CreateInstance(geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle plain = (*fx).CreateInstance(geom, glm::mat4(1.0f));
+
+	const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	(*fx).ReleaseMaterial(m0);
+	REQUIRE((*fx).MaterialRefCount(m0) == 1);  // held by the geom's submesh, once
+
+	(*fx).SetInstanceSubmeshMaterial(worn, 0, "Materials/skin.bmaterial");
+
+	const bgl::MaterialHandle skin = (*fx).AcquireMaterial("Materials/skin.bmaterial");
+	(*fx).ReleaseMaterial(skin);
+
+	SECTION("the override holds a reference, and the default is untouched")
+	{
+		// The override is a reference of its own: the skin cannot be destroyed while an instance
+		// wears it. The geom's default is not disturbed -- `plain` still draws it.
+		CHECK((*fx).MaterialRefCount(skin) == 1);
+		CHECK((*fx).MaterialRefCount(m0) == 1);
+	}
+
+	SECTION("clearing it releases the material")
+	{
+		(*fx).ClearInstanceSubmeshMaterial(worn, 0);
+
+		CHECK((*fx).MaterialRefCount(skin) == 0);
+		CHECK((*fx).MaterialRefCount(m0) == 1);
+	}
+
+	SECTION("destroying the instance releases what it wore")
+	{
+		(*fx).DestroyInstance(worn);
+
+		CHECK((*fx).MaterialRefCount(skin) == 0);
+
+		// ...and its sibling, which never overrode anything, is unaffected.
+		CHECK((*fx).MaterialRefCount(m0) == 1);
+	}
+
+	SECTION("overriding twice releases the first, and re-overriding with the same is not a leak")
+	{
+		(*fx).SetInstanceSubmeshMaterial(worn, 0, "Materials/m0.bmaterial");
+		CHECK((*fx).MaterialRefCount(skin) == 0);
+		CHECK((*fx).MaterialRefCount(m0) == 2);  // the geom's submesh, and this instance's override
+
+		// Acquire-before-release: re-overriding with the material already worn must not delete it.
+		(*fx).SetInstanceSubmeshMaterial(worn, 0, "Materials/m0.bmaterial");
+		CHECK((*fx).MaterialRefCount(m0) == 2);
+	}
+
+	SECTION("a foreign instance or an out-of-range submesh throws")
+	{
+		REQUIRE_THROWS_AS(
+			(*fx).SetInstanceSubmeshMaterial(worn, 1, "Materials/skin.bmaterial"),
+			bgl::SceneError);
+		REQUIRE_THROWS_AS(
+			(*fx).SetInstanceSubmeshMaterial(
+				bgl::MeshInstanceHandle{},
+				0,
+				"Materials/skin.bmaterial"),
+			bgl::SceneError);
+	}
+
+	(*fx).DestroyInstance(plain);
+}
+
 TEST_CASE("AssetManager refcounts procedural geometry", "[gamelib][assets]")
 {
 	// A cube and a sphere have no file to be keyed by, but they are geometry: they are refcounted,

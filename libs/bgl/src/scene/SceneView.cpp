@@ -107,13 +107,15 @@ namespace bgl
 
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
+			meta.overrides.assign(submeshCount, MaterialHandle{});
+
 			for (uint32_t s = 0; s < submeshCount; ++s)
 			{
 				auto instance         = SubmeshInstance();
 				instance.meshInstance = meshHandle;
 				instance.submeshIndex = s;
 
-				ResolveShading(instance, submeshes.range.offsetStart);
+				ResolveShading(instance, submeshes.range.offsetStart, MaterialHandle{});
 
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
@@ -154,6 +156,53 @@ namespace bgl
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
+	}
+
+	MeshMeta&
+	SceneView::MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				std::format("MeshInstanceHandle passed to {} is invalid or already removed", what));
+		}
+
+		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+
+		if (submeshIndex >= meta.submeshInstances.size())
+		{
+			throw SceneError(std::format("submeshIndex passed to {} is out of range", what));
+		}
+
+		return meta;
+	}
+
+	void
+	SceneView::SetSubmeshMaterialOverride(
+		MeshInstanceHandle instance,
+		uint32_t           submeshIndex,
+		MaterialHandle     material)
+	{
+		if (!material.IsValid())
+		{
+			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterialOverride");
+		}
+
+		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
+
+		meta.overrides[submeshIndex] = material;
+
+		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
+	}
+
+	void
+	SceneView::ClearSubmeshMaterialOverride(MeshInstanceHandle instance, uint32_t submeshIndex)
+	{
+		MeshMeta& meta = MetaFor(instance, submeshIndex, "ClearSubmeshMaterialOverride");
+
+		meta.overrides[submeshIndex] = MaterialHandle{};
+
+		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
 
 	void
@@ -214,10 +263,15 @@ namespace bgl
 	}
 
 	void
-	SceneView::ResolveShading(SubmeshInstance& instance, uint32_t submeshRoot) const
+	SceneView::ResolveShading(
+		SubmeshInstance& instance,
+		uint32_t         submeshRoot,
+		MaterialHandle   materialOverride) const
 	{
 		const MaterialHandle material =
-			m_SceneRaw->GetSubmeshDefaultMaterial(submeshRoot, instance.submeshIndex);
+			materialOverride.IsValid() ?
+				materialOverride :
+				m_SceneRaw->GetSubmeshDefaultMaterial(submeshRoot, instance.submeshIndex);
 
 		// An invalid handle leaves the entry alone; the kNull PSO's pixel shader never reads it.
 		if (material.IsValid())
@@ -226,6 +280,33 @@ namespace bgl
 		}
 
 		instance.pso = SubmeshPso(GeomType::kStaticMesh, material);
+	}
+
+	void
+	SceneView::RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex)
+	{
+		const idl::Mesh& mesh = m_MeshBuffer.AtIndex(meshIndex);
+		const MeshMeta&  meta = m_MeshBuffer.MetaAt(meshIndex);
+
+		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
+		if (!m_InstanceBuffer.IsValid(handle))
+		{
+			return;
+		}
+
+		SubmeshInstance instance = m_InstanceBuffer[handle];
+
+		const idl::Entry material = instance.material;
+		const uint32_t   pso      = instance.pso;
+
+		ResolveShading(instance, mesh.submeshes.range.offsetStart, meta.overrides[submeshIndex]);
+
+		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
+		// a whole block to change nothing.
+		if (instance.material.offset != material.offset || instance.pso != pso)
+		{
+			m_InstanceBuffer.Set(handle, instance);
+		}
 	}
 
 	void
@@ -239,29 +320,17 @@ namespace bgl
 				continue;
 			}
 
-			const idl::Mesh& mesh = m_MeshBuffer.AtIndex(meshIndex);
-			const MeshMeta&  meta = m_MeshBuffer.MetaAt(meshIndex);
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 
-			for (const core::slot_handle handle : meta.submeshInstances)
+			for (uint32_t s = 0; s < meta.submeshInstances.size(); ++s)
 			{
-				if (!m_InstanceBuffer.IsValid(handle))
+				// An override outranks the default, so a default change is not its business.
+				if (meta.overrides[s].IsValid())
 				{
 					continue;
 				}
 
-				SubmeshInstance instance = m_InstanceBuffer[handle];
-
-				const idl::Entry material = instance.material;
-				const uint32_t   pso      = instance.pso;
-
-				ResolveShading(instance, mesh.submeshes.range.offsetStart);
-
-				// Set marks the element's block dirty, so writing back an unchanged instance would
-				// re-upload a whole block to change nothing.
-				if (instance.material.offset != material.offset || instance.pso != pso)
-				{
-					m_InstanceBuffer.Set(handle, instance);
-				}
+				RefreshSubmeshInstance(meshIndex, s);
 			}
 		}
 	}
