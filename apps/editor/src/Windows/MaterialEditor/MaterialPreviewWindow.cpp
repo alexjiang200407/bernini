@@ -177,25 +177,43 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 void
 MaterialPreviewWindow::ClearGeometry()
 {
-	try
+	// Instances first, and this order is load-bearing: the scene does not track instances and
+	// will not stop us deleting geometry out from under one. An instance that outlives its geom
+	// keeps drawing the range it copied, which the next mesh will be allocated into.
+	//
+	// Each delete is guarded on its own, not the loop: the lists are cleared below either way, so an
+	// instance skipped because an earlier one threw would be dropped while still live in the SceneView
+	// -- still drawing a range that the next mesh is about to be allocated into. That renders garbage
+	// meshlet counts, which faults the GPU, which parks the editor forever on the frame fence. Whatever
+	// goes wrong here, every handle must still get its delete attempted.
+	for (const bgl::MeshInstanceHandle& instance : m_Instances)
 	{
-		// Instances first, and this order is load-bearing: the scene does not track instances and
-		// will not stop us deleting geometry out from under one. An instance that outlives its geom
-		// keeps drawing the range it copied, which the next mesh will be allocated into.
-		for (const bgl::MeshInstanceHandle& instance : m_Instances)
+		if (!instance.IsValid())
+			continue;
+
+		try
 		{
-			if (instance.IsValid())
-				PreviewView()->DeleteMeshInstance(instance);
+			PreviewView()->DeleteMeshInstance(instance);
 		}
-		for (const bgl::GeomHandle& geom : m_Geoms)
+		catch (const std::exception& e)
 		{
-			if (geom.IsValid())
-				PreviewScene()->DeleteGeom(geom);
+			qWarning("MaterialPreview: failed to delete an instance: %s", e.what());
 		}
 	}
-	catch (const std::exception& e)
+
+	for (const bgl::GeomHandle& geom : m_Geoms)
 	{
-		qWarning("MaterialPreview: failed to clear geometry: %s", e.what());
+		if (!geom.IsValid())
+			continue;
+
+		try
+		{
+			PreviewScene()->DeleteGeom(geom);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialPreview: failed to delete a geom: %s", e.what());
+		}
 	}
 
 	m_Instances.clear();
@@ -219,8 +237,26 @@ MaterialPreviewWindow::ShowDefaultSphere()
 {
 	ClearGeometry();
 
-	m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
-	m_Instances.push_back(PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
+	// This is what every failed load falls back to, so it is called from inside the handler for that
+	// failure -- and it is the end of the line: there is nothing further to fall back to, and a throw
+	// from here would leave the catch block, leave dropEvent, and reach Qt's event loop, which does not
+	// handle exceptions and terminates the editor. So it reports and leaves the preview empty instead.
+	try
+	{
+		m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
+		m_Instances.push_back(
+			PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialPreview: could not show the default sphere: %s", e.what());
+
+		// The geom may have been made and only the instance failed; ClearGeometry gives it back and
+		// leaves every list empty and consistent, which an empty preview needs just as much.
+		ClearGeometry();
+		Q_EMIT GeometryChanged();
+		return;
+	}
 
 	m_SubmeshRefs.push_back({ 0, 0, 0 });
 	m_SubmeshNames = QStringList{ "Sphere" };  // procedural sphere: a single submesh
@@ -342,6 +378,15 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 	catch (const std::exception& e)
 	{
 		qWarning("MaterialPreview: failed to load mesh '%s': %s", path.string().c_str(), e.what());
+
+		// Reverting to the sphere without a word reads as the drop having been ignored. A mesh too big
+		// for the scene's budgets lands here, and its SceneError names the budget to raise -- which the
+		// user can act on only if they are shown it.
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Load Mesh"),
+			QStringLiteral("Could not show '%1':\n\n%2").arg(name, QString::fromUtf8(e.what())));
+
 		ShowDefaultSphere();
 	}
 }
