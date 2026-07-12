@@ -108,9 +108,16 @@ enum class Color {
 
 # Comments (CRITICAL)
 
+- The default is **no comment**. Keep the ones you do write as short as possible — one line where it fits.
 - Only comment under these circumstances
 	- There are non-obvious Pre-Conditions and Post-Conditions e.g. will throw error if xxx
 	- Important Clarifications
+	- Why the obvious approach was *not* taken
+- **Never narrate.** No play-by-play (`// Now we do X`, `// Loop over the submeshes`), no restating the
+  line below it (`// Bump the epoch` over `++m_Epoch;`), and no explaining the *change* rather than the
+  code (`// This is now per-instance`, `// Moved from Submesh`). A comment describes the code as it is,
+  for someone who has no idea a change ever happened — the diff and the commit message carry the rest.
+- If it needs a paragraph, it belongs in `./docs`.
 - Use javadoc comments for comments above functions structs e.g.
 
 ```cpp

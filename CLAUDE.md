@@ -19,6 +19,24 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 Always read the [Style Guide](./STYLE.md)
 
+## Comments: as few as possible, as short as possible
+
+The default is **no comment**. Write one only for a constraint the code cannot show: a non-obvious
+pre/post-condition, a hazard, or why the obvious approach was *not* taken. Keep it to one line where
+you can. If it needs a paragraph, it belongs in `./docs`, not in the source.
+
+**Never narrate.** These are all noise and must not be written:
+
+- Play-by-play: `// Now we resolve the material`, `// First, allocate the range`, `// Loop over the submeshes`.
+- Restating the code: `// Bump the epoch` above `++m_MaterialEpoch;`.
+- Explaining the *change* rather than the code: `// This is now per-instance`, `// Moved from Submesh`,
+  `// used to live on the GPU struct`. The diff and the commit message are where that belongs — a
+  comment addressed to the reviewer is dead weight the moment the PR merges.
+- Justifying yourself to the reader: `// which is what makes this correct`, `// exactly what we want`.
+
+A comment states a fact about the code as it is now, to someone reading it a year from now who has
+no idea a change ever happened.
+
 # Documentation Index
 
 Read through these documents if you deem them necessary to your given task. If you modify something that is touched on in these docs, you need to modify the docs as well.
