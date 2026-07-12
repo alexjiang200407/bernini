@@ -3,6 +3,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
+#include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceHandle.h>
@@ -66,6 +67,9 @@ namespace bgl
 		float     metallicFactor  = 1.0f;
 		float     roughnessFactor = 1.0f;
 
+		LayerType layerType   = LayerType::kOpaque;
+		float     alphaCutoff = 0.5f;
+
 		// Optional material maps, from AddTextureAsset.
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
@@ -83,6 +87,11 @@ namespace bgl
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		float     metallicFactor  = 1.0f;
 		float     roughnessFactor = 1.0f;
+
+		// Cutout; see PbrMaterialDesc. A loose material routes its alpha explicitly (baseColor[3]),
+		// so unlike a baked one it can always sample a real alpha channel.
+		LayerType layerType   = LayerType::kOpaque;
+		float     alphaCutoff = 0.5f;
 
 		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
 		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic

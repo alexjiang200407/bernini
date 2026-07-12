@@ -181,14 +181,14 @@ namespace bgl
 			return dst;
 		}
 
-		// The PSO bucket cached on a submesh, derived from its geom + material type. An absent
-		// material falls back to kNull (unlit) -- the same default the old per-instance path used.
 		uint32_t
 		SubmeshPso(GeomType geomType, MaterialHandle material)
 		{
 			const MaterialType type =
 				material.IsValid() ? material.materialType : MaterialType::kNull;
-			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type));
+			const LayerType layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
+
+			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
 		}
 	}
 
@@ -712,9 +712,11 @@ namespace bgl
 		material.baseColorFactor  = desc.baseColorFactor;
 		material.metallicFactor   = desc.metallicFactor;
 		material.roughnessFactor  = desc.roughnessFactor;
+		material.alphaCutoff      = desc.alphaCutoff;
 
 		const core::slot_handle slot = m_Pbr.Add(material);
-		return MaterialHandle{ MaterialType::kPBR, slot };
+
+		return MaterialHandle{ MaterialType::kPBR, desc.layerType, slot };
 	}
 
 	MaterialHandle
@@ -775,9 +777,10 @@ namespace bgl
 		material.baseColorFactor = desc.baseColorFactor;
 		material.metallicFactor  = desc.metallicFactor;
 		material.roughnessFactor = desc.roughnessFactor;
+		material.alphaCutoff     = desc.alphaCutoff;
 
 		const core::slot_handle slot = m_Loose.Add(material);
-		return MaterialHandle{ MaterialType::kLoosePbr, slot };
+		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, slot };
 	}
 
 	void

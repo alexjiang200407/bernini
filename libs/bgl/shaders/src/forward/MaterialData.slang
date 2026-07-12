@@ -3,6 +3,7 @@ import idl.PbrMaterial;
 import idl.LoosePbrMaterial;
 import idl.ChannelSource;
 import idl.IPbrMaterial;
+import idl.IAlphaTestMaterial;
 import idl.TextureHandle;
 import idl.SamplerHandle;
 import forward.common;
@@ -26,7 +27,7 @@ struct MaterialData
 
 ConstantBuffer<MaterialData> materialData;
 
-extension PbrMaterial : IPbrMaterial
+extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
 {
     static PbrMaterial Load(uint index)
     {
@@ -46,6 +47,11 @@ extension PbrMaterial : IPbrMaterial
     float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
         return normalTexture.Sample(s, uv).xy;
+    }
+
+    float GetAlphaCutoff()
+    {
+        return alphaCutoff;
     }
 }
 
@@ -71,7 +77,7 @@ float SampleLooseChannel(ChannelSource cs, SamplerHandle s, float2 uv)
     return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
 }
 
-extension LoosePbrMaterial : IPbrMaterial
+extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 {
     static LoosePbrMaterial Load(uint index)
     {
@@ -104,17 +110,22 @@ extension LoosePbrMaterial : IPbrMaterial
             SampleLooseChannel(sources[8], s, uv)
         ); // Y
     }
+
+    float GetAlphaCutoff()
+    {
+        return alphaCutoff;
+    }
 }
 
-public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
+// The shared tail of both shading paths. Base color is passed in rather than sampled here, so the
+// alpha-tested path can test it without sampling the texture a second time.
+float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor)
 {
     let wrapSampler = materialData.anisioLinearWrapSampler;
 
-    M material = M.Load(input.materialIndex);
-
     return ShadeSurface(
         input,
-        material.GetBaseColor(wrapSampler, input.uv),
+        baseColor,
         material.GetORM(wrapSampler, input.uv),
         material.GetNormalXY(wrapSampler, input.uv),
         materialData.cameraPos,
@@ -124,4 +135,29 @@ public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
         materialData.linearClampSampler,
         materialData.exposure
     );
+}
+
+public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
+{
+    let wrapSampler = materialData.anisioLinearWrapSampler;
+
+    M material = M.Load(input.materialIndex);
+
+    return ShadeWithBaseColor(input, material, material.GetBaseColor(wrapSampler, input.uv));
+}
+
+public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+{
+    let wrapSampler = materialData.anisioLinearWrapSampler;
+
+    M material = M.Load(input.materialIndex);
+
+    let baseColor = material.GetBaseColor(wrapSampler, input.uv);
+
+    if (baseColor.a < material.GetAlphaCutoff())
+    {
+        discard;
+    }
+
+    return ShadeWithBaseColor(input, material, baseColor);
 }

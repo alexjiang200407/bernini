@@ -92,12 +92,13 @@ namespace bgl
 
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
-		constexpr auto c_GeomSrc       = "Forward_StaticMesh"sv;
-		constexpr auto c_PbrPixelSrc   = "Forward_PBR"sv;
-		constexpr auto c_LoosePixelSrc = "Forward_PBR_Loose"sv;
-		constexpr auto c_NullPixelSrc  = "Forward_Null"sv;
-		// Debug: pixel shader that raises a GPU assertion (see MaterialType::kAssert).
-		constexpr auto c_AssertPixelSrc = "Forward_Assert"sv;
+		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
+		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
+		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
+		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
+		constexpr auto c_PbrCutoutPixelSrc   = "Forward_PBR_AlphaTest"sv;
+		constexpr auto c_LooseCutoutPixelSrc = "Forward_PBR_Loose_AlphaTest"sv;
+		constexpr auto c_AssertPixelSrc      = "Forward_Assert"sv;
 
 		struct PsoConfig
 		{
@@ -116,12 +117,19 @@ namespace bgl
 			// kOpaque_StaticMesh_LoosePbr
 			{ c_LoosePixelSrc, RasterCullMode::kBack, true, false },
 			// kAlphaTest_StaticMesh_PBR
-			{ c_PbrPixelSrc, RasterCullMode::kNone, true, false },
+			{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
+			// kAlphaTest_StaticMesh_LoosePbr
+			{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
 			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
+
+		static_assert(
+			std::ranges::none_of(c_Psos, [](const PsoConfig& cfg) { return cfg.pixelSrc.empty(); }),
+			"every PsoType needs a row in c_Psos; a missing one silently value-initializes to an "
+			"empty pixel shader");
 
 		MeshletKernel
 		BuildForwardKernel(IDevice* device, const PsoConfig& cfg)
