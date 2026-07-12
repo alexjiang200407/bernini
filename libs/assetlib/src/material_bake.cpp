@@ -135,6 +135,32 @@ namespace assetlib
 			return false;
 		}
 
+		/**
+		 * Whether this group has to carry a real alpha channel.
+		 *
+		 * Base color is the only 4-channel group, so it is the only one with an alpha component at all
+		 * -- ORM and normal have none. Whether that component matters is the material's authored alpha
+		 * mode, *not* something inferred from the routes: an importer that wires all four channels of
+		 * every texture out of habit would otherwise turn every material into a cutout.
+		 */
+		bool
+		groupCarriesAlpha(const BMaterial& material, const Group& group)
+		{
+			return group.count == 4 && material.alphaMode == AlphaMode::kMask;
+		}
+
+		/**
+		 * The block format this group bakes to, which is a property of the *material*, not of the group
+		 * alone.
+		 *
+		 */
+		Ktx2Compression
+		groupCompression(const BMaterial& material, const Group& group)
+		{
+			return groupCarriesAlpha(material, group) ? Ktx2Compression::kBC7_RGBA :
+			                                            group.compression;
+		}
+
 		// A group is sized to the largest source routed into *it*, so its output does not depend on any
 		// texture outside the group -- which is what lets two materials share the baked file.
 		std::pair<uint32_t, uint32_t>
@@ -163,13 +189,22 @@ namespace assetlib
 		 * resolution and format, and the ordered (source, channel) pair feeding each of its components.
 		 * Two materials that agree on all of this produce byte-identical output, so they should -- and
 		 * do -- name the same file.
+		 *
+		 * `compression` is the *resolved* format, not `group.compression`: base color bakes to BC1 or
+		 * BC7 depending on whether the material routes alpha, and the two must not converge on one file
+		 * name.
 		 */
 		std::string
-		bakeKey(const BMaterial& material, const Group& group, uint32_t width, uint32_t height)
+		bakeKey(
+			const BMaterial& material,
+			const Group&     group,
+			uint32_t         width,
+			uint32_t         height,
+			Ktx2Compression  compression)
 		{
 			std::string key = std::string(group.name) + '|' + std::to_string(width) + 'x' +
 			                  std::to_string(height) + '|' +
-			                  std::to_string(static_cast<uint32_t>(group.compression));
+			                  std::to_string(static_cast<uint32_t>(compression));
 
 			for (size_t i = group.first; i < group.first + group.count; ++i)
 			{
@@ -317,16 +352,25 @@ namespace assetlib
 
 			const auto [width, height] = groupExtent(material, group, sources);
 
-			// The file name is the content that defines it, so identical groups across materials
-			// converge on one file rather than each writing a copy under its own material's name.
-			const std::string name   = bakeFileName(bakeKey(material, group, width, height), group);
-			const auto        target = outDir / name;
+			const Ktx2Compression compression = groupCompression(material, group);
+
+			const std::string name =
+				bakeFileName(bakeKey(material, group, width, height, compression), group);
+			const auto target = outDir / name;
 
 			if (!isUpToDate(target, material, group, desc.dataRoot))
 			{
-				const ImageData image =
-					rgba8ToImage(compose(material, group, sources, width, height), width, height);
-				writeKTX2(image, target, group.srgb, group.compression);
+				const std::optional<float> mipCutoff = groupCarriesAlpha(material, group) ?
+				                                           std::optional(material.alphaCutoff) :
+				                                           std::nullopt;
+
+				const ImageData image = rgba8ToImage(
+					compose(material, group, sources, width, height),
+					width,
+					height,
+					mipCutoff);
+
+				writeKTX2(image, target, group.srgb, compression);
 			}
 
 			// Recorded relative to the data root, not to the material file.

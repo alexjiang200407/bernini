@@ -10,11 +10,8 @@ namespace assetlib
 	namespace
 	{
 		constexpr uint32_t c_Magic = 0x54414D42u;  // 'B','M','A','T' little-endian
-		// v2 adds the material mode + the per-channel `routes` table (loose materials). v3 appends the
-		// editor's node graph. v4 appends the per-route bake provenance. Older files still load: v1
-		// (triplet + factors only) as Baked with empty routes, v2 with no graph, v3 with no stamps --
-		// a v3 loose material therefore reports its bake as stale, which is correct: it never had one.
-		constexpr uint16_t c_VersionMajor = 4;
+
+		constexpr uint16_t c_VersionMajor = 5;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
@@ -60,6 +57,8 @@ namespace assetlib
 			writer.writePod(stamp.size);
 			writer.writePod(stamp.mtime);
 		}
+		writer.writePod(static_cast<uint32_t>(material.alphaMode));
+		writer.writePod(material.alphaCutoff);
 		return writer.take();
 	}
 
@@ -70,16 +69,17 @@ namespace assetlib
 
 		if (reader.readPod<uint32_t>() != c_Magic)
 			throw std::runtime_error("bmaterial: bad magic");
+
 		const auto versionMajor = reader.readPod<uint16_t>();
 		(void)reader.readPod<uint16_t>();  // minor is forward-compatible
-		if (versionMajor < 1 || versionMajor > c_VersionMajor)
-			throw std::runtime_error("bmaterial: unsupported major version");
+
+		if (versionMajor != c_VersionMajor)
+			throw std::runtime_error(
+				"bmaterial: unsupported version " + std::to_string(versionMajor) + " (expected " +
+				std::to_string(c_VersionMajor) + "); re-bake the material");
 
 		BMaterial material;
-		// The material mode is a v2 addition; a v1 file predates loose materials, so it is Baked.
-		material.mode             = (versionMajor >= 2) ?
-		                                static_cast<MaterialMode>(reader.readPod<uint32_t>()) :
-		                                MaterialMode::kBaked;
+		material.mode             = static_cast<MaterialMode>(reader.readPod<uint32_t>());
 		material.baseColorFactor  = reader.readPod<glm::vec4>();
 		material.metallicFactor   = reader.readPod<float>();
 		material.roughnessFactor  = reader.readPod<float>();
@@ -87,30 +87,24 @@ namespace assetlib
 		material.baseColorTexture = readString(reader);
 		material.normalTexture    = readString(reader);
 		material.ormTexture       = readString(reader);
-		// The routes table is a v2 addition; a v1 file leaves it default (all unrouted).
-		if (versionMajor >= 2)
+
+		for (ChannelRoute& route : material.routes)
 		{
-			for (ChannelRoute& route : material.routes)
-			{
-				route.texture = readString(reader);
-				route.channel = reader.readPod<uint16_t>();
-			}
+			route.texture = readString(reader);
+			route.channel = reader.readPod<uint16_t>();
 		}
-		// The editor graph is a v3 addition; older files simply have none.
-		if (versionMajor >= 3)
+
+		material.editorGraph = readString(reader);
+
+		for (SourceStamp& stamp : material.routeStamps)
 		{
-			material.editorGraph = readString(reader);
+			stamp.size  = reader.readPod<uint64_t>();
+			stamp.mtime = reader.readPod<int64_t>();
 		}
-		// The bake provenance is a v4 addition; older files leave it zeroed, which reads as "never
-		// baked" and so as stale.
-		if (versionMajor >= 4)
-		{
-			for (SourceStamp& stamp : material.routeStamps)
-			{
-				stamp.size  = reader.readPod<uint64_t>();
-				stamp.mtime = reader.readPod<int64_t>();
-			}
-		}
+
+		material.alphaMode   = static_cast<AlphaMode>(reader.readPod<uint32_t>());
+		material.alphaCutoff = reader.readPod<float>();
+
 		return material;
 	}
 
