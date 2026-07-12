@@ -206,11 +206,11 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 	// The alpha mode is authored -- in the editor, by ending the graph in an Alpha Tested Material
 	// Output node rather than the opaque one. The bake reads it and never infers it.
 	BMaterial cutout;
-	cutout.alphaMode = AlphaMode::kMask;
-	cutout.routes[0] = { "leaf.ktx2", 0 };  // base R
-	cutout.routes[1] = { "leaf.ktx2", 1 };  // base G
-	cutout.routes[2] = { "leaf.ktx2", 2 };  // base B
-	cutout.routes[3] = { "leaf.ktx2", 3 };  // base A
+	cutout.pbr.alphaMode = AlphaMode::kMask;
+	cutout.pbr.routes[0] = { "leaf.ktx2", 0 };  // base R
+	cutout.pbr.routes[1] = { "leaf.ktx2", 1 };  // base G
+	cutout.pbr.routes[2] = { "leaf.ktx2", 2 };  // base B
+	cutout.pbr.routes[3] = { "leaf.ktx2", 3 };  // base A
 
 	REQUIRE_NOTHROW(bakeMaterial(cutout, MaterialBakeDesc{ dir.path }));
 
@@ -219,7 +219,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		// BC1 has no alpha at all (libktx's only BC1 target is documented "opaque only, no
 		// punchthrough alpha support yet"), so baking a cutout to it would composite the mask and then
 		// silently throw it away -- the shader would sample alpha = 1 everywhere and cut nothing out.
-		const ImageData baked = loadKTX2(dir.path / cutout.baseColorTexture);
+		const ImageData baked = loadKTX2(dir.path / cutout.pbr.baseColorTexture);
 		REQUIRE(baked.vkFormat == VkFormat::BC7_SRGB_BLOCK);
 	}
 
@@ -227,7 +227,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 	{
 		// Stored on the material rather than re-derived at load, because stripAuthoringData drops the
 		// routes for a shipping build -- there would be nothing left to derive it from.
-		REQUIRE(cutout.alphaMode == AlphaMode::kMask);
+		REQUIRE(cutout.pbr.alphaMode == AlphaMode::kMask);
 	}
 
 	SECTION("an opaque material that routes alpha anyway is still opaque, still BC1")
@@ -238,16 +238,16 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		// memory. Routing alpha is not a request to test against it -- ending the graph in the cutout
 		// node is.
 		BMaterial opaque;
-		opaque.routes[0] = { "leaf.ktx2", 0 };
-		opaque.routes[1] = { "leaf.ktx2", 1 };
-		opaque.routes[2] = { "leaf.ktx2", 2 };
-		opaque.routes[3] = { "leaf.ktx2", 3 };  // routed, and deliberately ignored
+		opaque.pbr.routes[0] = { "leaf.ktx2", 0 };
+		opaque.pbr.routes[1] = { "leaf.ktx2", 1 };
+		opaque.pbr.routes[2] = { "leaf.ktx2", 2 };
+		opaque.pbr.routes[3] = { "leaf.ktx2", 3 };  // routed, and deliberately ignored
 
 		REQUIRE_NOTHROW(bakeMaterial(opaque, MaterialBakeDesc{ dir.path }));
 
-		const ImageData baked = loadKTX2(dir.path / opaque.baseColorTexture);
+		const ImageData baked = loadKTX2(dir.path / opaque.pbr.baseColorTexture);
 		CHECK(baked.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
-		CHECK(opaque.alphaMode == AlphaMode::kOpaque);
+		CHECK(opaque.pbr.alphaMode == AlphaMode::kOpaque);
 	}
 
 	SECTION("the cutout and opaque variants cannot collide on one file name")
@@ -256,13 +256,13 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		// *resolved* compression, so the two name different files -- otherwise whichever baked second
 		// would be read as the other, and the cutout would load a BC1 map with no alpha.
 		BMaterial opaque;
-		opaque.routes = cutout.routes;
+		opaque.pbr.routes = cutout.pbr.routes;
 
 		REQUIRE_NOTHROW(bakeMaterial(opaque, MaterialBakeDesc{ dir.path }));
 
-		REQUIRE(opaque.baseColorTexture != cutout.baseColorTexture);
-		CHECK(std::filesystem::exists(dir.path / opaque.baseColorTexture));
-		CHECK(std::filesystem::exists(dir.path / cutout.baseColorTexture));
+		REQUIRE(opaque.pbr.baseColorTexture != cutout.pbr.baseColorTexture);
+		CHECK(std::filesystem::exists(dir.path / opaque.pbr.baseColorTexture));
+		CHECK(std::filesystem::exists(dir.path / cutout.pbr.baseColorTexture));
 	}
 }
 
@@ -271,16 +271,16 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BakeDir dir("bernini_bake_alpha_io");
 
 	BMaterial material;
-	material.alphaMode        = AlphaMode::kMask;
-	material.alphaCutoff      = 0.25f;
-	material.baseColorTexture = "Textures/basecolor_dead.ktx2";
+	material.pbr.alphaMode        = AlphaMode::kMask;
+	material.pbr.alphaCutoff      = 0.25f;
+	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
 	REQUIRE_NOTHROW(saveMaterial(material, path));
 
 	const BMaterial loaded = loadMaterial(path);
-	CHECK(loaded.alphaMode == AlphaMode::kMask);
-	CHECK(loaded.alphaCutoff == 0.25f);
+	CHECK(loaded.pbr.alphaMode == AlphaMode::kMask);
+	CHECK(loaded.pbr.alphaCutoff == 0.25f);
 }
 
 TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][alphatest]")
@@ -289,8 +289,8 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	// alternative to a version check is not "it still works", it is reading v4's bytes with v5's
 	// layout and getting a material made of garbage.
 	BMaterial material;
-	material.alphaMode   = AlphaMode::kMask;
-	material.alphaCutoff = 0.25f;
+	material.pbr.alphaMode   = AlphaMode::kMask;
+	material.pbr.alphaCutoff = 0.25f;
 
 	std::vector<std::byte> bytes = serializeMaterial(material);
 

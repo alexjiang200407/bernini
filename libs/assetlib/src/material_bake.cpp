@@ -21,8 +21,7 @@ namespace assetlib
 			uint32_t height = 0;
 		};
 
-		// The three maps a material bakes to. Which routes feed each is not restated here: the run comes
-		// from BMaterial.h, which owns the `routes` array and is the one place its layout is described.
+		// The three maps a PBR material bakes to.
 		struct Group
 		{
 			ChannelGroup    channels;
@@ -100,11 +99,11 @@ namespace assetlib
 
 		// Decodes every distinct source the material routes, each at its own resolution.
 		std::unordered_map<std::string, Source>
-		loadSources(const BMaterial& material, const std::filesystem::path& dataRoot)
+		loadSources(const PbrParams& pbr, const std::filesystem::path& dataRoot)
 		{
 			auto sources = std::unordered_map<std::string, Source>();
 
-			for (const ChannelRoute& route : material.routes)
+			for (const ChannelRoute& route : pbr.routes)
 			{
 				if (route.texture.empty() || sources.contains(route.texture))
 					continue;
@@ -127,12 +126,12 @@ namespace assetlib
 		}
 
 		bool
-		groupIsRouted(const BMaterial& material, const Group& group)
+		groupIsRouted(const PbrParams& pbr, const Group& group)
 		{
 			for (size_t i = ChannelIndex(group.channels, 0);
 			     i < ChannelIndex(group.channels, group.channels.count);
 			     ++i)
-				if (!material.routes[i].texture.empty())
+				if (!pbr.routes[i].texture.empty())
 					return true;
 			return false;
 		}
@@ -146,10 +145,10 @@ namespace assetlib
 		 * every texture out of habit would otherwise turn every material into a cutout.
 		 */
 		bool
-		groupCarriesAlpha(const BMaterial& material, const Group& group)
+		groupCarriesAlpha(const PbrParams& pbr, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
-			       material.alphaMode == AlphaMode::kMask;
+			       pbr.alphaMode == AlphaMode::kMask;
 		}
 
 		/**
@@ -158,17 +157,16 @@ namespace assetlib
 		 *
 		 */
 		Ktx2Compression
-		groupCompression(const BMaterial& material, const Group& group)
+		groupCompression(const PbrParams& pbr, const Group& group)
 		{
-			return groupCarriesAlpha(material, group) ? Ktx2Compression::kBC7_RGBA :
-			                                            group.compression;
+			return groupCarriesAlpha(pbr, group) ? Ktx2Compression::kBC7_RGBA : group.compression;
 		}
 
 		// A group is sized to the largest source routed into *it*, so its output does not depend on any
 		// texture outside the group -- which is what lets two materials share the baked file.
 		std::pair<uint32_t, uint32_t>
 		groupExtent(
-			const BMaterial&                               material,
+			const PbrParams&                               pbr,
 			const Group&                                   group,
 			const std::unordered_map<std::string, Source>& sources)
 		{
@@ -178,7 +176,7 @@ namespace assetlib
 			     i < ChannelIndex(group.channels, group.channels.count);
 			     ++i)
 			{
-				const ChannelRoute& route = material.routes[i];
+				const ChannelRoute& route = pbr.routes[i];
 				if (route.texture.empty())
 					continue;
 
@@ -201,7 +199,7 @@ namespace assetlib
 		 */
 		std::string
 		bakeKey(
-			const BMaterial& material,
+			const PbrParams& pbr,
 			const Group&     group,
 			uint32_t         width,
 			uint32_t         height,
@@ -215,7 +213,7 @@ namespace assetlib
 			     i < ChannelIndex(group.channels, group.channels.count);
 			     ++i)
 			{
-				const ChannelRoute& route = material.routes[i];
+				const ChannelRoute& route = pbr.routes[i];
 				key += '|';
 				key += route.texture;  // empty for an unrouted channel: the fallback is implied
 				key += ':';
@@ -264,7 +262,7 @@ namespace assetlib
 		 */
 		Rgba8
 		compose(
-			const BMaterial&                               material,
+			const PbrParams&                               pbr,
 			const Group&                                   group,
 			const std::unordered_map<std::string, Source>& sources,
 			uint32_t                                       width,
@@ -279,8 +277,7 @@ namespace assetlib
 			Rgba8 out(texels * 4u, std::byte{ 0xFF });
 			for (size_t component = 0; component < group.channels.count; ++component)
 			{
-				const ChannelRoute& route =
-					material.routes[ChannelIndex(group.channels, component)];
+				const ChannelRoute& route = pbr.routes[ChannelIndex(group.channels, component)];
 
 				if (route.texture.empty())
 				{
@@ -310,7 +307,7 @@ namespace assetlib
 		bool
 		isUpToDate(
 			const std::filesystem::path& target,
-			const BMaterial&             material,
+			const PbrParams&             pbr,
 			const Group&                 group,
 			const std::filesystem::path& dataRoot)
 		{
@@ -322,7 +319,7 @@ namespace assetlib
 			     i < ChannelIndex(group.channels, group.channels.count);
 			     ++i)
 			{
-				const ChannelRoute& route = material.routes[i];
+				const ChannelRoute& route = pbr.routes[i];
 				if (route.texture.empty())
 					continue;
 
@@ -337,8 +334,14 @@ namespace assetlib
 	void
 	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc)
 	{
-		const std::unordered_map<std::string, Source> sources =
-			loadSources(material, desc.dataRoot);
+		if (material.shadingModel != ShadingModel::kPbr)
+			throw std::runtime_error(
+				"assetlib::bakeMaterial: shading model " +
+				std::to_string(static_cast<uint32_t>(material.shadingModel)) + " has no bake step");
+
+		PbrParams& pbr = material.pbr;
+
+		const std::unordered_map<std::string, Source> sources = loadSources(pbr, desc.dataRoot);
 
 		const std::filesystem::path outDir = desc.dataRoot / desc.textureDir;
 		std::error_code             ec;
@@ -346,9 +349,9 @@ namespace assetlib
 
 		// Which triplet field each group fills, in c_Groups order.
 		std::string* const outputs[] = {
-			&material.baseColorTexture,
-			&material.ormTexture,
-			&material.normalTexture,
+			&pbr.baseColorTexture,
+			&pbr.ormTexture,
+			&pbr.normalTexture,
 		};
 
 		for (size_t g = 0; g < c_Groups.size(); ++g)
@@ -357,25 +360,24 @@ namespace assetlib
 
 			// A group with nothing routed is not baked at all: an empty triplet entry makes the runtime
 			// fall back to white / flat-normal, exactly what an all-default map would have been.
-			if (!groupIsRouted(material, group))
+			if (!groupIsRouted(pbr, group))
 				continue;
 
-			const auto [width, height] = groupExtent(material, group, sources);
+			const auto [width, height] = groupExtent(pbr, group, sources);
 
-			const Ktx2Compression compression = groupCompression(material, group);
+			const Ktx2Compression compression = groupCompression(pbr, group);
 
 			const std::string name =
-				bakeFileName(bakeKey(material, group, width, height, compression), group);
+				bakeFileName(bakeKey(pbr, group, width, height, compression), group);
 			const auto target = outDir / name;
 
-			if (!isUpToDate(target, material, group, desc.dataRoot))
+			if (!isUpToDate(target, pbr, group, desc.dataRoot))
 			{
-				const std::optional<float> mipCutoff = groupCarriesAlpha(material, group) ?
-				                                           std::optional(material.alphaCutoff) :
-				                                           std::nullopt;
+				const std::optional<float> mipCutoff =
+					groupCarriesAlpha(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
 
 				const ImageData image = rgba8ToImage(
-					compose(material, group, sources, width, height),
+					compose(pbr, group, sources, width, height),
 					width,
 					height,
 					mipCutoff);
@@ -390,9 +392,9 @@ namespace assetlib
 		// Record what each source measured, so a later edit to one of them shows up as a stale bake.
 		for (size_t i = 0; i < c_LooseChannelCount; ++i)
 		{
-			material.routeStamps[i] = material.routes[i].texture.empty() ?
-			                              SourceStamp{} :
-			                              stampOf(desc.dataRoot / material.routes[i].texture);
+			pbr.routeStamps[i] = pbr.routes[i].texture.empty() ?
+			                         SourceStamp{} :
+			                         stampOf(desc.dataRoot / pbr.routes[i].texture);
 		}
 
 		// The triplet now exists, so draw from it. The routes stay: they are how it gets re-baked.
@@ -429,20 +431,36 @@ namespace assetlib
 	void
 	stripAuthoringData(BMaterial& material)
 	{
-		const bool hasRoutes = std::ranges::any_of(material.routes, [](const ChannelRoute& route) {
-			return !route.texture.empty();
-		});
+		// Routes are a PBR notion, so PBR is the only model that can be stripped down to nothing. A
+		// model with no authoring form has nothing to lose and is validated by its absence.
+		const bool isPbr = material.shadingModel == ShadingModel::kPbr;
 
-		if (hasRoutes && material.baseColorTexture.empty() && material.ormTexture.empty() &&
-		    material.normalTexture.empty())
+		if (isPbr)
 		{
-			throw std::runtime_error(
-				"assetlib::stripAuthoringData: the material has never been baked; stripping its "
-				"routes would leave nothing to render");
+			const PbrParams& pbr = material.pbr;
+
+			const bool hasRoutes = std::ranges::any_of(pbr.routes, [](const ChannelRoute& route) {
+				return !route.texture.empty();
+			});
+
+			// Checked before anything is cleared: a material that cannot be stripped must come out of
+			// this call untouched, not half-stripped.
+			if (hasRoutes && pbr.baseColorTexture.empty() && pbr.ormTexture.empty() &&
+			    pbr.normalTexture.empty())
+			{
+				throw std::runtime_error(
+					"assetlib::stripAuthoringData: the material has never been baked; stripping "
+					"its "
+					"routes would leave nothing to render");
+			}
 		}
 
-		material.routes      = {};
-		material.routeStamps = {};
+		if (isPbr)
+		{
+			material.pbr.routes      = {};
+			material.pbr.routeStamps = {};
+		}
+
 		material.editorGraph.clear();
 		material.mode = MaterialMode::kBaked;
 	}

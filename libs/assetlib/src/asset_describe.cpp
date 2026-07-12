@@ -28,6 +28,19 @@ namespace assetlib
 		}
 
 		const char*
+		shadingModelName(ShadingModel model)
+		{
+			switch (model)
+			{
+			case ShadingModel::kPbr:
+				return "pbr";
+			case ShadingModel::kCount:
+				break;
+			}
+			return "(unknown)";
+		}
+
+		const char*
 		semanticName(VertexSemantic semantic)
 		{
 			switch (semantic)
@@ -126,6 +139,69 @@ namespace assetlib
 		}
 
 		void
+		describePbr(std::string& out, const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		{
+			out += std::format(
+				"  baseColorFactor   ({:.3g}, {:.3g}, {:.3g}, {:.3g})\n",
+				pbr.baseColorFactor.x,
+				pbr.baseColorFactor.y,
+				pbr.baseColorFactor.z,
+				pbr.baseColorFactor.w);
+			out += std::format("  metallicFactor    {:.3g}\n", pbr.metallicFactor);
+			out += std::format("  roughnessFactor   {:.3g}\n", pbr.roughnessFactor);
+
+			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
+			// bake's output, which is why it is printed either way.
+			out += "\n  baked textures\n";
+			out += std::format("    baseColor       {}\n", texturePathOr(pbr.baseColorTexture));
+			out += std::format("    normal          {}\n", texturePathOr(pbr.normalTexture));
+			out += std::format("    orm             {}\n", texturePathOr(pbr.ormTexture));
+
+			out += "\n  channel routes\n";
+			for (size_t i = 0; i < c_LooseChannelCount; ++i)
+			{
+				const ChannelRoute& route = pbr.routes[i];
+				if (route.texture.empty())
+				{
+					out += std::format("    {:<15} (unrouted)\n", c_ChannelNames[i]);
+					continue;
+				}
+
+				const char* swizzle =
+					route.channel < c_ChannelSwizzle.size() ? c_ChannelSwizzle[route.channel] : "?";
+
+				out +=
+					std::format("    {:<15} {} [{}]\n", c_ChannelNames[i], route.texture, swizzle);
+
+				// Compare the source as it is now against the stamp taken when the bake ran. Without a
+				// data root there is nothing to stat, so only the recorded stamp is reported.
+				const SourceStamp& baked = pbr.routeStamps[i];
+				if (dataRoot.empty())
+				{
+					out += std::format(
+						"                    baked from {} B, mtime {}\n",
+						baked.size,
+						baked.mtime);
+					continue;
+				}
+
+				const SourceStamp live = stampOf(dataRoot / route.texture);
+				if (live == SourceStamp{})
+					out += "                    source is missing\n";
+				else if (live == baked)
+					out += std::format("                    up to date ({} B)\n", live.size);
+				else
+					out += std::format(
+						"                    STALE: source is {} B / mtime {}, baked from {} B / "
+						"mtime {}\n",
+						live.size,
+						live.mtime,
+						baked.size,
+						baked.mtime);
+			}
+		}
+
+		void
 		describeLayout(std::string& out, const VertexLayout& layout)
 		{
 			out += std::format("      layout   stride {} B:", layout.stride);
@@ -217,63 +293,18 @@ namespace assetlib
 		std::string out;
 
 		out += std::format("bmaterial '{}'\n", material.name);
+		out += std::format("  shadingModel      {}\n", shadingModelName(material.shadingModel));
 		out += std::format("  mode              {}\n", modeName(material.mode));
-		out += std::format(
-			"  baseColorFactor   ({:.3g}, {:.3g}, {:.3g}, {:.3g})\n",
-			material.baseColorFactor.x,
-			material.baseColorFactor.y,
-			material.baseColorFactor.z,
-			material.baseColorFactor.w);
-		out += std::format("  metallicFactor    {:.3g}\n", material.metallicFactor);
-		out += std::format("  roughnessFactor   {:.3g}\n", material.roughnessFactor);
 
-		// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last bake's
-		// output, which is why it is printed either way.
-		out += "\n  baked textures\n";
-		out += std::format("    baseColor       {}\n", texturePathOr(material.baseColorTexture));
-		out += std::format("    normal          {}\n", texturePathOr(material.normalTexture));
-		out += std::format("    orm             {}\n", texturePathOr(material.ormTexture));
-
-		out += "\n  channel routes\n";
-		for (size_t i = 0; i < c_LooseChannelCount; ++i)
+		switch (material.shadingModel)
 		{
-			const ChannelRoute& route = material.routes[i];
-			if (route.texture.empty())
-			{
-				out += std::format("    {:<15} (unrouted)\n", c_ChannelNames[i]);
-				continue;
-			}
+		case ShadingModel::kPbr:
+			describePbr(out, material.pbr, dataRoot);
+			break;
 
-			const char* swizzle =
-				route.channel < c_ChannelSwizzle.size() ? c_ChannelSwizzle[route.channel] : "?";
-
-			out += std::format("    {:<15} {} [{}]\n", c_ChannelNames[i], route.texture, swizzle);
-
-			// Compare the source as it is now against the stamp taken when the bake ran. Without a data
-			// root there is nothing to stat, so only the recorded stamp is reported.
-			const SourceStamp& baked = material.routeStamps[i];
-			if (dataRoot.empty())
-			{
-				out += std::format(
-					"                    baked from {} B, mtime {}\n",
-					baked.size,
-					baked.mtime);
-				continue;
-			}
-
-			const SourceStamp live = stampOf(dataRoot / route.texture);
-			if (live == SourceStamp{})
-				out += "                    source is missing\n";
-			else if (live == baked)
-				out += std::format("                    up to date ({} B)\n", live.size);
-			else
-				out += std::format(
-					"                    STALE: source is {} B / mtime {}, baked from {} B / mtime "
-				    "{}\n",
-					live.size,
-					live.mtime,
-					baked.size,
-					baked.mtime);
+		case ShadingModel::kCount:
+			out += "  (unknown shading model; its parameters cannot be described)\n";
+			break;
 		}
 
 		if (!dataRoot.empty())

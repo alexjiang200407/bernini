@@ -3,6 +3,12 @@
 
 namespace assetlib
 {
+	enum class ShadingModel : uint32_t
+	{
+		kPbr = 0,
+		kCount,
+	};
+
 	enum class MaterialMode : uint32_t
 	{
 		kBaked = 0,
@@ -60,14 +66,13 @@ namespace assetlib
 	inline constexpr ChannelGroup c_OrmChannels{ PbrChannel::kAo, 3 };
 	inline constexpr ChannelGroup c_NormalChannels{ PbrChannel::kNormalX, 2 };
 
-	/** The index of `channel` in `BMaterial::routes`. */
 	[[nodiscard]] inline constexpr size_t
 	ChannelIndex(PbrChannel channel) noexcept
 	{
 		return static_cast<size_t>(channel);
 	}
 
-	/** The index of the `component`-th channel of `group` in `BMaterial::routes`. */
+	/** The index of the `component`-th channel of `group` in `PbrParams::routes`. */
 	[[nodiscard]] inline constexpr size_t
 	ChannelIndex(const ChannelGroup& group, size_t component) noexcept
 	{
@@ -80,10 +85,8 @@ namespace assetlib
 		"The channel groups must partition routes exactly; a channel in none of them is never "
 		"baked");
 
-	struct BMaterial
+	struct PbrParams
 	{
-		MaterialMode mode = MaterialMode::kBaked;
-
 		std::string baseColorTexture;  // path to the base-color texture file (empty when absent)
 		std::string normalTexture;     // path to the normal texture file (empty when absent)
 		std::string ormTexture;        // path to the occlusion/roughness/metallic texture file
@@ -97,10 +100,18 @@ namespace assetlib
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 
 		std::array<SourceStamp, c_LooseChannelCount> routeStamps;
+	};
 
+	struct BMaterial
+	{
 		std::string name;
 
-		// The material editor's node graph, as an opaque JSON blob
+		ShadingModel shadingModel = ShadingModel::kPbr;
+
+		MaterialMode mode = MaterialMode::kBaked;
+
 		std::string editorGraph;
+
+		PbrParams pbr;
 	};
 }

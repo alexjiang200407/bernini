@@ -65,9 +65,9 @@ namespace
 	void
 	WriteBakedMaterial(const std::filesystem::path& path, const std::string& baseColor)
 	{
-		auto material             = assetlib::BMaterial();
-		material.mode             = assetlib::MaterialMode::kBaked;
-		material.baseColorTexture = baseColor;
+		auto material                 = assetlib::BMaterial();
+		material.mode                 = assetlib::MaterialMode::kBaked;
+		material.pbr.baseColorTexture = baseColor;
 
 		std::filesystem::create_directories(path.parent_path());
 		assetlib::saveMaterial(material, path);

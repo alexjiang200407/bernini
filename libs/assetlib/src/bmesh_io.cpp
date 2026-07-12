@@ -154,13 +154,15 @@ namespace assetlib
 		toBMaterial(const imp::BMeshImport& mesh, const imp::BMaterialImport& material)
 		{
 			BMaterial out;
-			out.baseColorTexture = texturePath(material.baseColorTexture);
-			out.normalTexture    = texturePath(material.normalTexture);
-			out.ormTexture       = texturePath(material.ormTexture);
-			out.baseColorFactor  = material.baseColorFactor;
-			out.metallicFactor   = material.metallicFactor;
-			out.roughnessFactor  = material.roughnessFactor;
-			out.name             = nameFromPool(mesh.stringPool, material.nameOffset);
+			out.name         = nameFromPool(mesh.stringPool, material.nameOffset);
+			out.shadingModel = ShadingModel::kPbr;  // glTF *is* metallic-roughness
+
+			out.pbr.baseColorTexture = texturePath(material.baseColorTexture);
+			out.pbr.normalTexture    = texturePath(material.normalTexture);
+			out.pbr.ormTexture       = texturePath(material.ormTexture);
+			out.pbr.baseColorFactor  = material.baseColorFactor;
+			out.pbr.metallicFactor   = material.metallicFactor;
+			out.pbr.roughnessFactor  = material.roughnessFactor;
 			return out;
 		}
 	}
