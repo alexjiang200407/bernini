@@ -14,6 +14,8 @@ class QJsonObject;
 class QLabel;
 class QPointF;
 class QPushButton;
+class MaterialGraphModel;
+class MaterialGraphScene;
 class MaterialGraphView;
 
 namespace assetlib
@@ -23,8 +25,6 @@ namespace assetlib
 
 namespace QtNodes
 {
-	class DataFlowGraphModel;
-	class DataFlowGraphicsScene;
 	class NodeDelegateModelRegistry;
 }
 
@@ -68,6 +68,21 @@ private:
 	// Shows the selected submesh's graph (each submesh has its own; switching clears the board).
 	void
 	SelectSubmesh(int index);
+
+	// Swaps the current graph's sink to the type the Output combo now names -- which is how a material
+	// is made opaque or alpha-tested. A no-op if it is already that type.
+	void
+	SetOutputType(int comboIndex);
+
+	// Points the Output combo at whatever sink the current graph actually has, without re-entering
+	// SetOutputType.
+	void
+	SyncOutputSelector();
+
+	// Subscribes to the sink's Changed signal so edits recompile the material. Call after anything
+	// that replaces the sink -- a fresh graph, a loaded one, a switched output type.
+	class MaterialOutputNode*
+	WatchOutputNode(int submeshIndex);
 
 	// Compiles a submesh's graph into a loose material and binds it to that submesh, live.
 	void
@@ -129,8 +144,8 @@ private:
 	// is declared after it (destroyed first).
 	struct SubmeshGraph
 	{
-		std::unique_ptr<QtNodes::DataFlowGraphModel>    model;
-		std::unique_ptr<QtNodes::DataFlowGraphicsScene> scene;
+		std::unique_ptr<MaterialGraphModel> model;
+		std::unique_ptr<MaterialGraphScene> scene;
 
 		// The `.bmaterial` this submesh's graph is bound to. Empty until saved or opened -- notably
 		// for the default sphere, which is not backed by any asset and so can only ever "Save As".
@@ -140,6 +155,7 @@ private:
 	int                       m_CurrentSubmesh = -1;
 
 	QComboBox*         m_SubmeshSelector = nullptr;
+	QComboBox*         m_OutputSelector  = nullptr;
 	MaterialGraphView* m_GraphView       = nullptr;
 	QPushButton*       m_OpenButton      = nullptr;
 	QPushButton*       m_SaveButton      = nullptr;
