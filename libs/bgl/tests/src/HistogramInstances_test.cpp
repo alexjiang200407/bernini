@@ -58,38 +58,10 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
 		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
 
-	// The PSO bucket now lives on the submesh, reached through the mesh instance. Build the
-	// indirection the histogram reads: one mesh whose submesh range holds one submesh per bucket
-	// (each carrying that bucket's pso); every instance points at that mesh and the submesh index
-	// for its bucket.
+	// The PSO bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
+	// no submesh, no indirection to build. Two instances of one submesh are free to bucket
+	// differently, which is exactly what a per-instance material override is.
 	constexpr uint32_t kBucketCount = static_cast<uint32_t>(std::size(buckets));
-
-	auto submeshBuffer = bgl::RangeBuffer<bgl::idl::Submesh>();
-	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = kBucketCount;
-		desc.debugName = "Histogram Submeshes";
-		submeshBuffer.Init(desc, resourceManager);
-	}
-	std::array<bgl::idl::Submesh, kBucketCount> submeshes{};
-	for (uint32_t b = 0; b < kBucketCount; ++b)
-	{
-		submeshes[b].pso = static_cast<uint32_t>(buckets[b]);
-	}
-	const auto submeshRange =
-		submeshBuffer.Add(std::span<const bgl::idl::Submesh>(submeshes.data(), submeshes.size()));
-
-	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();
-	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 1;
-		desc.debugName = "Histogram Meshes";
-		meshBuffer.Init(desc, resourceManager);
-	}
-	auto mesh             = bgl::idl::Mesh();
-	mesh.transform        = glm::mat4(1.0f);
-	mesh.submeshes        = submeshRange;
-	const auto meshHandle = meshBuffer.Add(mesh);
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
@@ -100,9 +72,13 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	}
 
 	const auto addInstance = [&](uint32_t bucketIdx) {
-		auto instance         = bgl::SubmeshInstance();
-		instance.meshInstance = meshHandle;  // Entry::operator=(slot_handle)
-		instance.submeshIndex = bucketIdx;
+		auto instance = bgl::SubmeshInstance();
+
+		// Any non-null mesh entry: the shader only tests it against the padding sentinel.
+		instance.meshInstance.offset = 0u;
+		instance.submeshIndex        = 0u;
+		instance.pso                 = static_cast<uint32_t>(buckets[bucketIdx]);
+
 		instanceBuffer.Add(instance);
 	};
 
@@ -153,8 +129,6 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// ComputeBuffer wraps its UAV handle in a struct, so it binds through the same
 	// smart-buffer path (by BufferHandle) as the read-only instance buffer.
 	histogramKernel["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
-	histogramKernel["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();
-	histogramKernel["gUniforms"]["submeshBuffer"]  = submeshBuffer.GetBufferHandle();
 	histogramKernel["gUniforms"]["outBuffer"]      = outBuffer.GetBufferHandle();
 
 	prefixSumKernel["gUniforms"]["inOutBuffer"] = outBuffer.GetBufferHandle();
@@ -181,29 +155,12 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
-	// Upload the instances (and the mesh/submesh indirection they resolve through) and zero the
-	// histogram.
+	// Upload the instances and zero the histogram. The instance buffer is the sort's only input.
 	instanceBuffer.Update(cmdList);
-	meshBuffer.Update(cmdList);
-	submeshBuffer.Update(cmdList);
 	outBuffer.Clear(cmdList);
 
 	cmdList->Barrier(
 		instanceBuffer.GetBufferHandle(),
-		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kShaderResource));
-	cmdList->Barrier(
-		meshBuffer.GetBufferHandle(),
-		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kShaderResource));
-	cmdList->Barrier(
-		submeshBuffer.GetBufferHandle(),
 		bufferBarrier(
 			bgl::BarrierSyncFlag::kCopy,
 			bgl::BarrierAccessFlag::kCopyDest,
@@ -278,8 +235,6 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	outBuffer.Release(fence, false);
 	instanceBuffer.Release(fence, false);
-	meshBuffer.Release(fence, false);
-	submeshBuffer.Release(fence, false);
 	resourceManager->DestroyReadbackBuffer(rbHistogram, fence, false);
 	resourceManager->DestroyReadbackBuffer(rbPrefixSum, fence, false);
 }

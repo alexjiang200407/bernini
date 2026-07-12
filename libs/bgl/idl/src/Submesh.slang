@@ -1,8 +1,6 @@
 import Range;
 import RangeWithCount;
 import Meshlet;
-import Entry;
-import IMaterial;
 import VertexLayout;
 
 public struct Submesh
@@ -13,8 +11,6 @@ public struct Submesh
     public Range<uint> vertexData;
     public Range<uint> indices;
     public uint vertexCount;
-    public Entry<IMaterial> material;
-    public uint pso;
 
     public RangeWithCount<Meshlet> GetMeshletRange() { return meshlets; }
 

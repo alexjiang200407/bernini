@@ -131,4 +131,13 @@ namespace bgl
 			gfatal("Invalid GeomType");
 		}
 	}
+
+	uint32_t
+	SubmeshPso(GeomType geomType, MaterialHandle material)
+	{
+		const MaterialType type  = material.IsValid() ? material.materialType : MaterialType::kNull;
+		const LayerType    layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
+
+		return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
+	}
 }

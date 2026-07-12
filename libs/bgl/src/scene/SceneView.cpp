@@ -3,6 +3,7 @@
 #include "idl/Constants.h"
 #include "scene/Scene.h"
 #include "types/SubmeshInstance.h"
+#include "util/util.h"
 #include <core/math.h>
 
 namespace bgl
@@ -104,8 +105,6 @@ namespace bgl
 
 			auto& meta = m_MeshBuffer.MetaAt(meshHandle.index);
 
-			// The PSO bucket is a property of each submesh (idl::Submesh::pso), so the instance
-			// carries only its mesh + submesh index; the compaction sort resolves the PSO.
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
 			for (uint32_t s = 0; s < submeshCount; ++s)
@@ -114,8 +113,13 @@ namespace bgl
 				instance.meshInstance = meshHandle;
 				instance.submeshIndex = s;
 
+				ResolveShading(instance, submeshes.range.offsetStart);
+
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
+
+			// m_SceneEpoch is deliberately not advanced: these instances are current, but their
+			// siblings may not be, and marking the view clean would strand them on a stale material.
 
 			auto instanceHandle   = MeshInstanceHandle();
 			instanceHandle.handle = meshHandle;
@@ -210,8 +214,68 @@ namespace bgl
 	}
 
 	void
+	SceneView::ResolveShading(SubmeshInstance& instance, uint32_t submeshRoot) const
+	{
+		const MaterialHandle material =
+			m_SceneRaw->GetSubmeshDefaultMaterial(submeshRoot, instance.submeshIndex);
+
+		// An invalid handle leaves the entry alone; the kNull PSO's pixel shader never reads it.
+		if (material.IsValid())
+		{
+			instance.material = material.handle;
+		}
+
+		instance.pso = SubmeshPso(GeomType::kStaticMesh, material);
+	}
+
+	void
+	SceneView::ReresolveInstances()
+	{
+		// Slots are not compacted, so the live meshes are the allocated indices.
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const idl::Mesh& mesh = m_MeshBuffer.AtIndex(meshIndex);
+			const MeshMeta&  meta = m_MeshBuffer.MetaAt(meshIndex);
+
+			for (const core::slot_handle handle : meta.submeshInstances)
+			{
+				if (!m_InstanceBuffer.IsValid(handle))
+				{
+					continue;
+				}
+
+				SubmeshInstance instance = m_InstanceBuffer[handle];
+
+				const idl::Entry material = instance.material;
+				const uint32_t   pso      = instance.pso;
+
+				ResolveShading(instance, mesh.submeshes.range.offsetStart);
+
+				// Set marks the element's block dirty, so writing back an unchanged instance would
+				// re-upload a whole block to change nothing.
+				if (instance.material.offset != material.offset || instance.pso != pso)
+				{
+					m_InstanceBuffer.Set(handle, instance);
+				}
+			}
+		}
+	}
+
+	void
 	SceneView::Update(ICommandList* cmdList)
 	{
+		// Must run before the flush below, so what it rewrites is uploaded in the same Update.
+		if (const uint64_t epoch = m_SceneRaw->MaterialEpoch(); epoch != m_SceneEpoch)
+		{
+			ReresolveInstances();
+			m_SceneEpoch = epoch;
+		}
+
 		auto buffers = GetInstanceBuffers();
 		std::apply(
 			[cmdList](auto&... buffer) {

@@ -32,9 +32,7 @@ namespace bgl
 		GetScene() const noexcept = 0;
 
 		/**
-		 * Places an instance of `geom` in this view. Material is a property of the geom's
-		 * submeshes (set at geom creation or via Scene::SetSubmeshMaterial), so it is not passed
-		 * here; every submesh's PSO is derived from its own cached material.
+		 * Places an instance of `geom` in this view, one drawable per submesh.
 		 */
 		virtual MeshInstanceHandle
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;

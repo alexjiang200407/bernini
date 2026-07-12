@@ -17,6 +17,7 @@ import uniforms.ForwardData;
 void EvaluateVertices(
     Mesh mesh,
     Submesh submesh,
+    SubmeshInstance instance,
     Meshlet meshlet,
     uint gtid,
     inout OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts
@@ -41,7 +42,8 @@ void EvaluateVertices(
         vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
         vertexOut.uv = vertex.uv;
         vertexOut.tangent = float4(mul((float3x3)mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
-        vertexOut.materialIndex = submesh.material.GetOffset();
+
+        vertexOut.materialIndex = instance.material.GetOffset();
 
         verts[v] = vertexOut;
     }
@@ -95,6 +97,6 @@ void MSMain(
 
     SetMeshOutputCounts(meshlet.vertexCount, meshlet.triangleCount);
 
-    EvaluateVertices(mesh, submesh, meshlet, gtid, verts);
+    EvaluateVertices(mesh, submesh, payload.instance, meshlet, gtid, verts);
     EvaluatePrimitives(submesh, meshlet, gtid, tris);
 }

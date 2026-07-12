@@ -74,6 +74,33 @@ namespace bgl
 			return m_GeomSubmeshes[index];
 		}
 
+		/**
+		 * The default material of submesh `submeshIndex` of the geom whose range starts at
+		 * `submeshRoot`. A SceneView resolves a SubmeshInstance from this when it has no override.
+		 *
+		 * A dead or shorter range yields a null handle (drawn unlit) rather than asserting: an
+		 * instance may outlive its geom (see IScene::DeleteGeom), and the epoch re-resolve walks every
+		 * instance, so one stale instance must not turn an authoring action into a crash.
+		 */
+		[[nodiscard]] MaterialHandle
+		GetSubmeshDefaultMaterial(uint32_t submeshRoot, uint32_t submeshIndex) const noexcept
+		{
+			if (!m_SubmeshBuffer.IsIndexValid(submeshRoot))
+			{
+				return {};
+			}
+
+			const SubmeshDefaults& defaults = m_SubmeshBuffer.MetaAt(submeshRoot);
+			return submeshIndex < defaults.size() ? defaults[submeshIndex] : MaterialHandle{};
+		}
+
+		/** Bumped by every SetSubmeshMaterial; a SceneView polls it in Update and re-resolves. */
+		[[nodiscard]] uint64_t
+		MaterialEpoch() const noexcept
+		{
+			return m_MaterialEpoch;
+		}
+
 		[[nodiscard]] const std::string&
 		ResourceNamespace() const noexcept
 		{
@@ -178,11 +205,18 @@ namespace bgl
 		// what makes a GeomHandle expire when its geom is deleted (see IsGeomAlive).
 		core::slot_vector<idl::RangeWithCount> m_GeomSubmeshes;
 
-		RangeBuffer<idl::Submesh> m_SubmeshBuffer;
-		RangeBuffer<idl::Meshlet> m_MeshletBuffer;
-		RangeBuffer<uint32_t>     m_VertexMapBuffer;
-		RangeBuffer<uint32_t>     m_VertexDataBuffer;
-		RangeBuffer<uint32_t>     m_IndexBuffer;
+		// Moves whenever a submesh's default material does. SceneViews poll it; see MaterialEpoch.
+		uint64_t m_MaterialEpoch = 0;
+
+		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
+		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
+		using SubmeshDefaults = std::vector<MaterialHandle>;
+
+		RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
+		RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
+		RangeBuffer<uint32_t>                      m_VertexMapBuffer;
+		RangeBuffer<uint32_t>                      m_VertexDataBuffer;
+		RangeBuffer<uint32_t>                      m_IndexBuffer;
 
 		EntryBuffer<idl::PbrMaterial>      m_Pbr;
 		EntryBuffer<idl::LoosePbrMaterial> m_Loose;

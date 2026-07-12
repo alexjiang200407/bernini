@@ -1,6 +1,11 @@
+#include "cmd/CommandAllocator.h"
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
+#include "gfx/GraphicsBase.h"
 #include "idl/idl.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/util.h"
 #include <bgl/IGraphics.h>
 #include <bgl/PsoType.h>
 
@@ -282,17 +287,19 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	auto  geomBuffers   = scene->GetBuffers();
-	auto& submeshBuffer = std::get<0>(geomBuffers);
-
 	auto pbr         = bgl::MaterialHandle();
 	pbr.materialType = bgl::MaterialType::kPBR;
 
+	// The submesh's *default* material -- the PSO is no longer cached on the GPU submesh, it is
+	// resolved from this onto each SubmeshInstance. Checking the default is checking what every
+	// non-overridden instance of this geom will bucket into.
 	const auto checkPso = [&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::PsoType expected) {
 		const bgl::idl::RangeWithCount& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
 		INFO("source submesh " << sourceIndex);
 		CHECK(
-			submeshBuffer.AtIndex(submeshes.range.offsetStart + sourceIndex).pso ==
+			bgl::SubmeshPso(
+				bgl::GeomType::kStaticMesh,
+				scene->GetSubmeshDefaultMaterial(submeshes.range.offsetStart, sourceIndex)) ==
 			static_cast<uint32_t>(expected));
 	};
 
@@ -331,33 +338,35 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	// Material (and thus PSO) is now a per-geom property cached on the submesh; created with the
-	// kNull material, the cube's submesh starts on the Null PSO.
+	// The default material of a geom's submesh is what its instances resolve their PSO from; created
+	// with the kNull material, the cube's submesh defaults to the Null PSO.
 	auto nullMat         = bgl::MaterialHandle();
 	nullMat.materialType = bgl::MaterialType::kNull;
 
 	auto geom = scene->AddCubeGeom(nullMat);
 	REQUIRE(geom.IsValid());
 
-	// The cube is the first geom, so its single submesh is at global index 0 in the Scene's
-	// submesh buffer; read its cached pso directly.
-	auto  geomBuffers   = scene->GetBuffers();
-	auto& submeshBuffer = std::get<0>(geomBuffers);
+	// The cube is the first geom, so its single submesh is at global index 0.
+	const auto psoOfDefault = [&]() {
+		return bgl::SubmeshPso(bgl::GeomType::kStaticMesh, scene->GetSubmeshDefaultMaterial(0, 0));
+	};
 
-	CHECK(
-		submeshBuffer.AtIndex(0).pso ==
-		static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
 
-	SECTION("A valid material updates the submesh's PSO")
+	SECTION("A valid material re-selects the submesh's PSO, and bumps the epoch")
 	{
 		auto pbr         = bgl::MaterialHandle();
 		pbr.materialType = bgl::MaterialType::kPBR;
 
+		const uint64_t before = scene->MaterialEpoch();
+
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 0, pbr));
 
-		CHECK(
-			submeshBuffer.AtIndex(0).pso ==
-			static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+
+		// The epoch is what carries the change to instances placed before it: a SceneView polls it in
+		// Update and re-resolves. Without the bump, a live instance would keep its stale PSO forever.
+		CHECK(scene->MaterialEpoch() != before);
 	}
 
 	SECTION("Out-of-range submesh index throws")
@@ -382,5 +391,122 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 		pbr.materialType = bgl::MaterialType::kPBR;
 
 		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(bgl::GeomHandle{}, 0, pbr), bgl::SceneError);
+	}
+}
+
+// The PSO is resolved onto the instance at placement time, so a default-material change made *after*
+// an instance exists has to reach it somehow. It does not do so by a push -- the Scene deliberately
+// keeps no record of who placed what -- but by a pull: SetSubmeshMaterial bumps the Scene's material
+// epoch, and the SceneView re-resolves in its next Update. Without that, an instance placed before
+// the change would keep drawing with the stale PSO forever, which is a silent wrong-pixel-shader bug
+// rather than a crash.
+TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[material][pso][scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(CubeSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 4);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	auto nullMat         = bgl::MaterialHandle();
+	nullMat.materialType = bgl::MaterialType::kNull;
+
+	auto geom = scene->AddCubeGeom(nullMat);
+	REQUIRE(geom.IsValid());
+
+	// Placed *before* the material changes: this is the instance the epoch has to reach.
+	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	REQUIRE(inst.IsValid());
+
+	auto  instBuffers    = view->GetInstanceBuffers();
+	auto& instanceBuffer = std::get<0>(instBuffers);
+	auto& meshBuffer     = std::get<1>(instBuffers);
+
+	const auto& meta = meshBuffer.MetaAt(inst.handle.index);
+	REQUIRE(meta.submeshInstances.size() == 1);
+	const auto submeshInstance = meta.submeshInstances[0];
+
+	const auto instancePso = [&]() { return instanceBuffer[submeshInstance].pso; };
+
+	// It resolved off the geom's default at placement time.
+	CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+
+	// SceneView::Update is where the pull happens, and it flushes dirty blocks, so it needs a real
+	// command list to record the upload into.
+	auto gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto device       = gfxBase->GetDevice();
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	auto cmdListDesc = bgl::CommandListDesc();
+	cmdListDesc.type = bgl::QueueType::kGraphics;
+
+	auto cmdList =
+		device->CreateCommandList(cmdListDesc, cmdAllocator, gfxBase->GetResourceManagerCpy());
+
+	const auto pumpUpdate = [&]() {
+		cmdList->Open(cmdQueue, cmdAllocator);
+		view->Update(cmdList);
+		cmdList->Close();
+		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+	};
+
+	// An Update with nothing changed must not disturb it.
+	pumpUpdate();
+	CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+
+	auto pbr         = bgl::MaterialHandle();
+	pbr.materialType = bgl::MaterialType::kPBR;
+
+	auto cutout         = bgl::MaterialHandle();
+	cutout.materialType = bgl::MaterialType::kPBR;
+	cutout.layerType    = bgl::LayerType::kAlphaTest;
+
+	SECTION("the change reaches an instance placed before it")
+	{
+		scene->SetSubmeshMaterial(geom, 0, pbr);
+
+		// Not until the view runs: the Scene cannot reach into a view it does not know exists.
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+
+		pumpUpdate();
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+	}
+
+	SECTION("the layer type moves the instance to a different PSO bucket")
+	{
+		// Same material *type*, different layer -- so this only lands in the right bucket if the
+		// resolve keeps the whole MaterialHandle rather than just its buffer index.
+		scene->SetSubmeshMaterial(geom, 0, cutout);
+		pumpUpdate();
+
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kAlphaTest_StaticMesh_PBR));
+	}
+
+	SECTION("an instance placed after the change is already current")
+	{
+		scene->SetSubmeshMaterial(geom, 0, pbr);
+
+		auto later = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		REQUIRE(later.IsValid());
+
+		const auto& laterMeta = meshBuffer.MetaAt(later.handle.index);
+		REQUIRE(laterMeta.submeshInstances.size() == 1);
+
+		CHECK(
+			instanceBuffer[laterMeta.submeshInstances[0]].pso ==
+			static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+
+		// ...and the older one still catches up on the next Update, rather than being stranded by the
+		// newer placement having already advanced the view's epoch.
+		pumpUpdate();
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 }
