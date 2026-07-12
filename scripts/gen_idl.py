@@ -2,15 +2,21 @@
 """Generate the C++ headers and Slang copies from the .slang IDL modules.
 
 Drives the built `bgl_idlgen` tool over every module in `bgl/idl/src`, writing:
-  - a banner-stamped Slang copy to   bgl/shaders/idl/<rel>.slang   (every module)
-  - a generated C++ header to        bgl/src/idl/<rel>.h           (modules that
-                                                                    define structs)
+  - a banner-stamped Slang copy to   bgl/shaders/src/idl/<rel>.slang  (every module)
+  - an internal C++ header to        bgl/src/idl/<rel>.h              (IDL_CPP_SOURCES)
+  - a public  C++ header to          bgl/include/bgl/<rel>.h          (IDL_PUBLIC_CPP_SOURCES,
+                                                                       in namespace `bgl`)
 
-Each module is written under both output roots at the SAME path it has relative
-to the source root, so its import path, .slang location, #include and .h location
-stay in lockstep (see bgl/idl/idlgen.cpp). Interface/generic-only modules carry
-no concrete layout, so the tool skips their C++ header on its own -- which is why
-this passes both output roots uniformly and needs no per-file list.
+Each module is written under its output root at the SAME path it has relative to
+the source root, so its import path, .slang location, #include and .h location
+stay in lockstep (see bgl/idl/idlgen.cpp).
+
+**Which module goes where is decided by bgl/idl/src/CMakelists.txt, and that file
+is the single source of truth** -- the two lists are parsed straight out of it
+rather than copied here, because a copy drifts. A module in neither list gets no
+C++ header at all, only the Slang copy. Passing one output root uniformly (which
+this script used to do) silently emitted the public modules into the internal
+directory, in the wrong namespace, as files nobody had asked for.
 
 This is the same generation the `bgl_idl_generate` CMake target performs; use it
 to regenerate on demand without a full build. The tool path is resolved from the
@@ -26,6 +32,7 @@ Usage:
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 
@@ -35,7 +42,29 @@ import util.config as cfg
 TOOL = "bgl_idlgen"
 SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "src")
 CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "src", "idl")
+PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "include", "bgl")
 SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "shaders", "src", "idl")
+IDL_CMAKE = os.path.join(SRC_ROOT, "CMakelists.txt")
+
+
+def read_routing():
+    """The {module file name -> (cpp out dir, namespace)} routing, read from the CMakeLists.
+
+    Mirrors the IDL_CPP_SOURCES / IDL_PUBLIC_CPP_SOURCES lists there. A module in
+    neither list is absent from the mapping and gets no C++ header.
+    """
+    with open(IDL_CMAKE, encoding="utf-8") as f:
+        cmake = f.read()
+
+    def names(var):
+        m = re.search(r"set\(\s*" + var + r"\s(.*?)\)", cmake, re.S)
+        if not m:
+            raise SystemExit(f"error: {var} not found in {IDL_CMAKE}")
+        return [n for n in m.group(1).split() if n.endswith(".slang")]
+
+    routing = {n: (CPP_OUT_DIR, None) for n in names("IDL_CPP_SOURCES")}
+    routing.update({n: (PUBLIC_CPP_OUT_DIR, "bgl") for n in names("IDL_PUBLIC_CPP_SOURCES")})
+    return routing
 
 
 def resolve_tool(build_dir, config):
@@ -106,16 +135,27 @@ def main():
         print(f"warning: no .slang modules found under {SRC_ROOT}", file=sys.stderr)
         return 0
 
+    routing = read_routing()
+
     failures = 0
     for module in modules:
         cmd = [
             tool,
             "--src-root", SRC_ROOT,
             "--slang-out-dir", SLANG_OUT_DIR,
-            "--cpp-out-dir", CPP_OUT_DIR,
             "-I", SRC_ROOT,
-            module,
         ]
+
+        # A module the CMakeLists routes nowhere gets no --cpp-out-dir, so the tool emits only the
+        # Slang copy -- exactly as the build does for it.
+        out_dir, namespace = routing.get(os.path.basename(module), (None, None))
+        if out_dir:
+            cmd += ["--cpp-out-dir", out_dir]
+        if namespace:
+            cmd += ["--namespace", namespace]
+
+        cmd.append(module)
+
         rel = os.path.relpath(module, SRC_ROOT)
         if args.dry_run:
             print(f"[{rel}] " + " ".join(cmd))
