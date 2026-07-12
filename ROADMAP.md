@@ -51,11 +51,11 @@ and portability.
 - [ ] Materials (PBR)
   - [x] Implement PBR IBL
   - [x] ktx2 textures
-  - [ ] Implement Alpha Test alpha mode
+  - [x] Implement Alpha Test alpha mode
   - [x] Texture Asset Import
   - [ ] Editor Material Graph
     - [ ] Choose Material Type: PBR only for now
-    - [ ] Choose Material Options: e.g. Alpha Mode
+    - [x] Choose Material Options: e.g. Alpha Mode
     - [x] Link Textures to output nodes (BRDF for PBR)
 - [ ] Culling
   - [ ] Frustum Culling

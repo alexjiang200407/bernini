@@ -54,7 +54,7 @@ must feed data that matches.
 
 | Map | Color space | Mesh import → on GPU | **Material bake** → on GPU | Channels | Default when absent |
 |---|---|---|---|---|---|
-| **Base color** | **sRGB** (hardware-decoded) | UASTC sRGB → **BC7 sRGB** | **BC1 sRGB** (direct) | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
+| **Base color** | **sRGB** (hardware-decoded) | UASTC sRGB → **BC7 sRGB** | **BC1 sRGB** opaque · **BC7 sRGB** cutout (direct) | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
 | **Normal** | linear | UASTC → **BC7** | **BC5 UNORM** (direct) | RG = tangent-space X/Y (**Z reconstructed** in shader) | flat `(0.5,0.5,1)` |
 | **ORM** | linear | UASTC → **BC7** | **BC7 UNORM** (direct) | R = AO · G = roughness · B = metallic | 1×1 white (AO=1; factors drive) |
 | **IBL irradiance** | linear (HDR) | KTX2 cube map (float, uncompressed) | — | prefiltered diffuse cube | — (required via `SetEnvironmentMap`) |
@@ -91,10 +91,52 @@ There are **two producers of textures**, and they compress differently:
   group*. If the whole material shared one resolution, a material's ORM output would silently depend on
   the size of its base-colour texture, and two otherwise-identical ORM groups would diverge.
 
-Two consequences of the baked formats worth knowing: **BC1 has no alpha**, so a base-colour alpha route
-is dropped by the bake; and the compositor copies channel *bytes*, so a channel routed into base colour
-is written into an sRGB map regardless of its own source's tag — keep one decode role per source
-texture.
+**A cutout material bakes its base colour to a different format.** BC1 has no alpha whatsoever —
+libktx's only BC1 target is `KTX_TTF_BC1_RGB`, documented *"opaque only, no punchthrough alpha support
+yet"* — so the bake cannot emit a BC1 map with a mask, and for a long time it silently composited a
+routed alpha channel and then threw it away at transcode. So the base-colour group's format is a
+function of the *material*, not a constant:
+
+| `alphaMode` | format | notes |
+|---|---|---|
+| `kOpaque` | `BC1_RGB_SRGB` | 4 bpp; unchanged, so no existing asset re-cooks |
+| `kMask` | `BC7_SRGB` | 8 bpp; carries alpha in an independent channel |
+
+**The alpha mode is authored, never inferred.** In the material editor, a graph ends in either a
+**Material Output** node or an **Alpha Tested Material Output** node; the alpha port exists only on the
+latter, along with the cutoff. Which sink the graph ends in *is* the alpha mode, so "routes an alpha
+channel" and "is a cutout" cannot disagree — and the opaque node's base-colour port is 3-wide (RGB), so
+the type system rejects the wrong wiring rather than tolerating it.
+
+> Inferring cutout from "the material routes `routes[3]`" was tried and is wrong. glTF importers
+> routinely wire all four channels of every texture whether or not the alpha means anything, which
+> turned every material in a project into a two-sided BC7 cutout that cut nothing out, at double the
+> memory. Routing alpha is not a request to test against it.
+
+The mode is **stored** on the material rather than re-derived at load, because `stripAuthoringData`
+clears `routes` for a shipping build — a derived-at-load flag would be lost with them. The resolved
+format is part of the bake key, so a cutout and an opaque variant of the same routing cannot converge on
+one file name.
+
+BC7 rather than BC1's 1-bit punch-through, even though a cutout only needs one bit, because punch-through
+makes transparency and *black* the same code point: a cut texel is forced to RGB (0,0,0), and any bilinear
+tap across the silhouette drags that black in — dark fringing round every leaf, and unfixable, since you
+cannot express "transparent but green". It also drops every silhouette block to 3-colour RGB. BC7 keeps
+alpha independent, which is what lets a pipeline dilate colour out under the transparent region.
+
+> **Corollary: RGB under a transparent texel is undefined.** BC7 is free to pick any colour where alpha is
+> 0 — nothing is supposed to sample it — and in practice the encoder lands on white. Dilate the colour
+> outward under the mask *before* baking if you care about the filtered edge.
+
+**Cutout mips preserve alpha coverage.** Averaging an alpha mask down a mip chain shrinks the area that
+survives the cutoff, so a naively mipped cutout thins out and dissolves with distance — foliage that
+evaporates as it recedes. For a cutout, `rgba8ToImage` rescales each level's alpha so the fraction of
+texels passing the cutoff matches mip 0's. The rescale takes the smallest scale that still *reaches* mip
+0's coverage, so a level can come out marginally fat but never thin: fat is invisible, thin is not.
+
+One more consequence of the baked formats: the compositor copies channel *bytes*, so a channel routed into
+base colour is written into an sRGB map regardless of its own source's tag — keep one decode role per
+source texture.
 
 * **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
   (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`; `writeTextures`
