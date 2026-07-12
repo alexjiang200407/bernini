@@ -371,8 +371,11 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 		if (!materialPath.isEmpty() &&
 		    std::filesystem::exists(std::filesystem::path(materialPath.toStdWString())))
 		{
-			OpenMaterialInto(index, materialPath, false);
+			OpenMaterialInto(index, materialPath, false);  // compiles the graph it loads
+			continue;
 		}
+
+		CompileGraph(index);
 	}
 
 	m_SubmeshSelector->setEnabled(!m_SubmeshGraphs.empty());
