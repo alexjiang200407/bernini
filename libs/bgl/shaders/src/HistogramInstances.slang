@@ -1,11 +1,7 @@
 import types.SubmeshInstance;
 import types.ComputeBuffer;
 import types.PackedBuffer;
-import types.EntryBuffer;
-import types.RangeBuffer;
 import idl.PsoType;
-import idl.Mesh;
-import idl.Submesh;
 import idl.Constants;
 import debug.dbg;
 
@@ -14,8 +10,6 @@ static const uint kPsoCount = uint(PsoType::kCount);
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
-    EntryBuffer<Mesh> meshBuffer;
-    RangeBuffer<Submesh> submeshBuffer;
     ComputeBuffer<uint> outBuffer;
 };
 
@@ -37,9 +31,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     if (!instance.meshInstance.Null())
     {
-        let mesh = gUniforms.meshBuffer.Get(instance.meshInstance);
-        let submesh = gUniforms.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
-        let psoType = submesh.pso;
+        let psoType = instance.pso;
 
         dbg_assert(psoType < kPsoCount, ErrorCode.kInvalidPsoType);
 

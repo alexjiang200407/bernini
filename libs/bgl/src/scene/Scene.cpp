@@ -182,15 +182,6 @@ namespace bgl
 			return dst;
 		}
 
-		uint32_t
-		SubmeshPso(GeomType geomType, MaterialHandle material)
-		{
-			const MaterialType type =
-				material.IsValid() ? material.materialType : MaterialType::kNull;
-			const LayerType layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
-
-			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
-		}
 	}
 
 	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
@@ -371,14 +362,11 @@ namespace bgl
 			submesh.vertexData  = baseVertexGlobal;
 			submesh.indices     = baseIndexGlobal;
 			submesh.vertexCount = static_cast<uint32_t>(verts.size());
-			if (material.IsValid())
-			{
-				submesh.material = material.handle;
-			}
-			submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
 
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
+
+			m_SubmeshBuffer.MetaAt(baseSubmeshGlobal.index) = SubmeshDefaults{ material };
 
 			auto submeshRange = idl::RangeWithCount();
 			submeshRange      = baseSubmeshGlobal;
@@ -611,6 +599,9 @@ namespace bgl
 			std::vector<idl::Submesh> submeshes;
 			submeshes.reserve(meshEntry.submeshCount);
 
+			std::vector<MaterialHandle> defaults;
+			defaults.reserve(meshEntry.submeshCount);
+
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
@@ -663,17 +654,16 @@ namespace bgl
 				submesh.vertexData  = m_VertexDataBuffer.Add(vertexWords);
 				submesh.indices     = m_IndexBuffer.Add(localIndices);
 				submesh.vertexCount = src.vertexCount;
-				if (material.IsValid())
-				{
-					submesh.material = material.handle;
-				}
-				submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
 
 				submeshes.push_back(submesh);
+				defaults.push_back(material);
 			}
 
 			const auto baseSubmeshGlobal =
 				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
+
+			// Meta is keyed at the range root, so it can only be filed once the range is allocated.
+			m_SubmeshBuffer.MetaAt(baseSubmeshGlobal.index) = std::move(defaults);
 
 			// RangeWithCount is assignable from the buffer handle, but not constructible from it.
 			auto submeshRange = idl::RangeWithCount();
@@ -901,12 +891,9 @@ namespace bgl
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}
 
-		const uint32_t globalIndex = submeshes.range.offsetStart + submeshIndex;
-
-		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
-		submesh.material = material.handle;
-		submesh.pso      = SubmeshPso(geom.geomType, material);
-		m_SubmeshBuffer.SetAtIndex(globalIndex, submesh);
+		// Nothing is uploaded: the epoch is what carries this to instances already placed.
+		m_SubmeshBuffer.MetaAt(submeshes.range.offsetStart)[submeshIndex] = material;
+		++m_MaterialEpoch;
 	}
 
 	void
