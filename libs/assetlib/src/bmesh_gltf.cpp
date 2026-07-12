@@ -475,6 +475,7 @@ namespace assetlib
 #else
 			(void)mesh;
 			(void)model;
+			static_assert(false, "gltf texture loading is only implemented on Windows right now");
 #endif
 		}
 
