@@ -728,21 +728,6 @@ namespace
 		return out;
 	}
 
-	void
-	WriteFile(const fs::path& path, std::string content)
-	{
-		if (path.has_parent_path())
-		{
-			fs::create_directories(path.parent_path());
-		}
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-		{
-			core::throw_runtime_error("could not open output file {}", path.string());
-		}
-		out << content;
-	}
-
 	std::string
 	ReadFile(const fs::path& path)
 	{
@@ -754,6 +739,41 @@ namespace
 		std::ostringstream ss;
 		ss << in.rdbuf();
 		return ss.str();
+	}
+
+	/**
+	 * Writes `content` with LF line endings, and only when that is not already what is on disk.
+	 *
+	 * These outputs are checked in, so their line endings are not a private matter. The generator emits
+	 * "\n" itself, but a Slang copy carries its source module through verbatim -- and the source is
+	 * checked out with CRLF on Windows, which used to ride straight into the output. Git stored the CRLF
+	 * while normalizing the file back to LF on the way in, so every generated file showed up modified
+	 * after every build, forever, with no content change to show for it.
+	 *
+	 * Skipping an unchanged write is the other half of the same problem: rewriting a byte-identical file
+	 * only bumps its mtime, which makes the build recompile everything that includes it for nothing.
+	 */
+	void
+	WriteFile(const fs::path& path, std::string content)
+	{
+		std::erase(content, '\r');
+
+		std::error_code ec;
+		if (fs::exists(path, ec) && ReadFile(path) == content)
+		{
+			return;
+		}
+
+		if (path.has_parent_path())
+		{
+			fs::create_directories(path.parent_path());
+		}
+		std::ofstream out(path, std::ios::binary);
+		if (!out)
+		{
+			core::throw_runtime_error("could not open output file {}", path.string());
+		}
+		out << content;
 	}
 
 	void
