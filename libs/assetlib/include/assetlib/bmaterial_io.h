@@ -17,7 +17,7 @@ namespace assetlib
 
 	/**
 	 * Writes `material` to `path` as a `.bmaterial` file. Texture references are file paths (relative
-	 * to the material file), so the textures remain standalone, shareable assets.
+	 * to the data directory)
 	 *
 	 * @throws std::runtime_error if the file cannot be written.
 	 */

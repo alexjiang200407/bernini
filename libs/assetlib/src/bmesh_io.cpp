@@ -13,9 +13,7 @@ namespace assetlib
 	namespace
 	{
 		constexpr uint32_t c_Magic = 0x48534D42u;  // 'B','M','S','H' little-endian
-		// v3 changed what `materials` paths are relative to: the project's data root, not the mesh
-		// file. The bytes are unchanged, so a v2 file would load and silently resolve its materials
-		// against the wrong directory. It is rejected instead; re-import or re-save the mesh.
+
 		constexpr uint16_t c_VersionMajor = 3;
 		constexpr uint16_t c_VersionMinor = 0;
 		constexpr size_t   c_ChunkAlign   = 16;
@@ -300,8 +298,6 @@ namespace assetlib
 		out.indexData        = mesh.indexData;
 		out.stringPool       = mesh.stringPool;
 
-		// Submesh::material indexes this parallel list of `.bmaterial` path handles; the files
-		// themselves are written by writeMaterials / bake.
 		out.materials.reserve(mesh.materials.size());
 		for (size_t i = 0; i < mesh.materials.size(); ++i) out.materials.push_back(materialPath(i));
 		return out;

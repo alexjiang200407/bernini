@@ -21,11 +21,11 @@ namespace assetlib
 			uint32_t height = 0;
 		};
 
-		// The three maps a material bakes to, and which of the nine PbrChannel routes feed each.
+		// The three maps a material bakes to. Which routes feed each is not restated here: the run comes
+		// from BMaterial.h, which owns the `routes` array and is the one place its layout is described.
 		struct Group
 		{
-			size_t          first;
-			size_t          count;
+			ChannelGroup    channels;
 			const char*     name;      // file-name prefix, also part of the content hash
 			uint8_t         fallback;  // what an unrouted channel of this group samples
 			bool            srgb;
@@ -33,10 +33,10 @@ namespace assetlib
 		};
 
 		constexpr std::array<Group, 3> c_Groups = { {
-			{ 0, 4, "basecolor", 0xFF, true, Ktx2Compression::kBC1_RGB },
-			{ 4, 3, "orm", 0xFF, false, Ktx2Compression::kBC7_RGBA },
+			{ c_BaseColorChannels, "basecolor", 0xFF, true, Ktx2Compression::kBC1_RGB },
+			{ c_OrmChannels, "orm", 0xFF, false, Ktx2Compression::kBC7_RGBA },
 			// An unrouted normal axis is 0.5, i.e. zero once the shader maps [0,1] to [-1,1].
-			{ 7, 2, "normal", 0x80, false, Ktx2Compression::kBC5_RG },
+			{ c_NormalChannels, "normal", 0x80, false, Ktx2Compression::kBC5_RG },
 		} };
 
 		bool
@@ -129,10 +129,39 @@ namespace assetlib
 		bool
 		groupIsRouted(const BMaterial& material, const Group& group)
 		{
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 				if (!material.routes[i].texture.empty())
 					return true;
 			return false;
+		}
+
+		/**
+		 * Whether this group has to carry a real alpha channel.
+		 *
+		 * Base color is the only 4-channel group, so it is the only one with an alpha component at all
+		 * -- ORM and normal have none. Whether that component matters is the material's authored alpha
+		 * mode, *not* something inferred from the routes: an importer that wires all four channels of
+		 * every texture out of habit would otherwise turn every material into a cutout.
+		 */
+		bool
+		groupCarriesAlpha(const BMaterial& material, const Group& group)
+		{
+			return group.channels.count == c_BaseColorChannels.count &&
+			       material.alphaMode == AlphaMode::kMask;
+		}
+
+		/**
+		 * The block format this group bakes to, which is a property of the *material*, not of the group
+		 * alone.
+		 *
+		 */
+		Ktx2Compression
+		groupCompression(const BMaterial& material, const Group& group)
+		{
+			return groupCarriesAlpha(material, group) ? Ktx2Compression::kBC7_RGBA :
+			                                            group.compression;
 		}
 
 		// A group is sized to the largest source routed into *it*, so its output does not depend on any
@@ -145,7 +174,9 @@ namespace assetlib
 		{
 			uint32_t width  = 0;
 			uint32_t height = 0;
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 			{
 				const ChannelRoute& route = material.routes[i];
 				if (route.texture.empty())
@@ -163,15 +194,26 @@ namespace assetlib
 		 * resolution and format, and the ordered (source, channel) pair feeding each of its components.
 		 * Two materials that agree on all of this produce byte-identical output, so they should -- and
 		 * do -- name the same file.
+		 *
+		 * `compression` is the *resolved* format, not `group.compression`: base color bakes to BC1 or
+		 * BC7 depending on whether the material routes alpha, and the two must not converge on one file
+		 * name.
 		 */
 		std::string
-		bakeKey(const BMaterial& material, const Group& group, uint32_t width, uint32_t height)
+		bakeKey(
+			const BMaterial& material,
+			const Group&     group,
+			uint32_t         width,
+			uint32_t         height,
+			Ktx2Compression  compression)
 		{
 			std::string key = std::string(group.name) + '|' + std::to_string(width) + 'x' +
 			                  std::to_string(height) + '|' +
-			                  std::to_string(static_cast<uint32_t>(group.compression));
+			                  std::to_string(static_cast<uint32_t>(compression));
 
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 			{
 				const ChannelRoute& route = material.routes[i];
 				key += '|';
@@ -197,16 +239,21 @@ namespace assetlib
 			return hash;
 		}
 
+		// Hex digits of the content hash in a baked map's name -- a uint64 printed as %016llx.
+		constexpr size_t c_HashDigits = 16;
+
+		constexpr std::string_view c_MapExtension = ".ktx2";
+
 		std::string
 		bakeFileName(const std::string& key, const Group& group)
 		{
-			char hex[17] = {};
+			char hex[c_HashDigits + 1] = {};
 			std::snprintf(
 				hex,
 				sizeof(hex),
 				"%016llx",
 				static_cast<unsigned long long>(hash64(key)));
-			return std::string(group.name) + '_' + hex + ".ktx2";
+			return std::string(group.name) + '_' + hex + std::string(c_MapExtension);
 		}
 
 		/**
@@ -230,9 +277,10 @@ namespace assetlib
 			auto scaled = std::unordered_map<std::string, Rgba8>();
 
 			Rgba8 out(texels * 4u, std::byte{ 0xFF });
-			for (size_t component = 0; component < group.count; ++component)
+			for (size_t component = 0; component < group.channels.count; ++component)
 			{
-				const ChannelRoute& route = material.routes[group.first + component];
+				const ChannelRoute& route =
+					material.routes[ChannelIndex(group.channels, component)];
 
 				if (route.texture.empty())
 				{
@@ -270,7 +318,9 @@ namespace assetlib
 			if (stamp.size == 0)
 				return false;  // missing, or empty and so not a real map
 
-			for (size_t i = group.first; i < group.first + group.count; ++i)
+			for (size_t i = ChannelIndex(group.channels, 0);
+			     i < ChannelIndex(group.channels, group.channels.count);
+			     ++i)
 			{
 				const ChannelRoute& route = material.routes[i];
 				if (route.texture.empty())
@@ -312,16 +362,25 @@ namespace assetlib
 
 			const auto [width, height] = groupExtent(material, group, sources);
 
-			// The file name is the content that defines it, so identical groups across materials
-			// converge on one file rather than each writing a copy under its own material's name.
-			const std::string name   = bakeFileName(bakeKey(material, group, width, height), group);
-			const auto        target = outDir / name;
+			const Ktx2Compression compression = groupCompression(material, group);
+
+			const std::string name =
+				bakeFileName(bakeKey(material, group, width, height, compression), group);
+			const auto target = outDir / name;
 
 			if (!isUpToDate(target, material, group, desc.dataRoot))
 			{
-				const ImageData image =
-					rgba8ToImage(compose(material, group, sources, width, height), width, height);
-				writeKTX2(image, target, group.srgb, group.compression);
+				const std::optional<float> mipCutoff = groupCarriesAlpha(material, group) ?
+				                                           std::optional(material.alphaCutoff) :
+				                                           std::nullopt;
+
+				const ImageData image = rgba8ToImage(
+					compose(material, group, sources, width, height),
+					width,
+					height,
+					mipCutoff);
+
+				writeKTX2(image, target, group.srgb, compression);
 			}
 
 			// Recorded relative to the data root, not to the material file.
@@ -338,6 +397,33 @@ namespace assetlib
 
 		// The triplet now exists, so draw from it. The routes stay: they are how it gets re-baked.
 		material.mode = MaterialMode::kBaked;
+	}
+
+	bool
+	isBakedMapName(std::string_view fileName) noexcept
+	{
+		if (!fileName.ends_with(c_MapExtension))
+			return false;
+		fileName.remove_suffix(c_MapExtension.size());
+
+		// The group name is itself allowed no underscore, so the last one is the hash separator.
+		const size_t separator = fileName.rfind('_');
+		if (separator == std::string_view::npos)
+			return false;
+
+		const std::string_view prefix = fileName.substr(0, separator);
+		const std::string_view digits = fileName.substr(separator + 1);
+
+		const auto isHex = [](char c) noexcept {
+			return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+		};
+
+		if (digits.size() != c_HashDigits || !std::ranges::all_of(digits, isHex))
+			return false;
+
+		return std::ranges::any_of(c_Groups, [prefix](const Group& group) noexcept {
+			return prefix == group.name;
+		});
 	}
 
 	void

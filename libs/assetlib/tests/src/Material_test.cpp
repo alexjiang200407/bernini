@@ -200,8 +200,12 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 	std::filesystem::remove_all(dir);
 }
 
-TEST_CASE("deserializeMaterial reads a v1 stream as a Baked material", "[bmaterial][io]")
+TEST_CASE("deserializeMaterial rejects an outdated stream", "[bmaterial][io]")
 {
+	// Only the current major version loads; an older file is re-baked, not migrated. The check has to
+	// be loud, because the alternative to rejecting a v1 stream is not "it still works" -- it is
+	// reading v1's bytes with the current layout and producing a material made of garbage.
+	//
 	// Hand-build a v1 .bmaterial byte stream (predates the mode + routes fields).
 	std::vector<std::byte> v1;
 	const auto             putPod = [&](auto value) {
@@ -225,16 +229,7 @@ TEST_CASE("deserializeMaterial reads a v1 stream as a Baked material", "[bmateri
 	putStr("");                                  // normalTexture
 	putStr("orm.ktx2");                          // ormTexture
 
-	const auto mat = deserializeMaterial(v1);
-
-	REQUIRE(mat.mode == MaterialMode::kBaked);
-	REQUIRE(mat.name == "old");
-	REQUIRE(mat.baseColorTexture == "base.ktx2");
-	REQUIRE(mat.normalTexture.empty());
-	REQUIRE(mat.ormTexture == "orm.ktx2");
-	REQUIRE(mat.metallicFactor == Catch::Approx(0.6f));
-	// A v1 file carries no routes; they default to unrouted.
-	for (const auto& route : mat.routes) REQUIRE(route.texture.empty());
+	REQUIRE_THROWS_AS(deserializeMaterial(v1), std::runtime_error);
 }
 
 TEST_CASE("deserializeMaterial rejects a stream with bad magic", "[bmaterial][io]")

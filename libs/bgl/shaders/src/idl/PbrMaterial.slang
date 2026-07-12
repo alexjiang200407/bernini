@@ -11,4 +11,7 @@ public struct PbrMaterial
     public float4 baseColorFactor;
     public float metallicFactor;
     public float roughnessFactor;
+
+    // Only read by the alpha-test PSOs
+    public float alphaCutoff;
 };

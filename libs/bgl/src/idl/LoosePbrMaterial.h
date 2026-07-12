@@ -27,12 +27,14 @@ namespace bgl::idl
 		glm::vec4 baseColorFactor;
 		float metallicFactor;
 		float roughnessFactor;
+		float alphaCutoff;
 	};
 
-	static_assert(sizeof(LoosePbrMaterial) == 96);
+	static_assert(sizeof(LoosePbrMaterial) == 100);
 	static_assert(offsetof(LoosePbrMaterial, sources) == 0);
 	static_assert(offsetof(LoosePbrMaterial, baseColorFactor) == 72);
 	static_assert(offsetof(LoosePbrMaterial, metallicFactor) == 88);
 	static_assert(offsetof(LoosePbrMaterial, roughnessFactor) == 92);
+	static_assert(offsetof(LoosePbrMaterial, alphaCutoff) == 96);
 
 }

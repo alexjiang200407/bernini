@@ -56,9 +56,12 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a
   `StructuredBuffer<Vertex>`. Each submesh's `VertexLayout` (attribute semantics/formats/offsets +
   `stride`) tells the shader how to decode a vertex at a byte offset. `Vertex` is the *full-fat*
-  authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g.
-  the 32-byte position/normal/uv the procedural cube/sphere use) and describe it with a matching
-  layout. See `DecodeVertex` in
+  authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g. a
+  mesh import whose source primitive carries no tangent emits a 32-byte position/normal/uv vertex)
+  and describe it with a matching layout. The procedural primitives emit the **full 48-byte**
+  pos/normal/uv/tangent — see `VertexGen` in
+  [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
+  `DecodeVertex` in
   [Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
@@ -157,8 +160,20 @@ Structs are populated bottom-up, each parent storing the offset the buffer hands
 * Nothing reaches the GPU until an open command list calls `Update(cmdList)` on each buffer, which
   copies only the dirty blocks.
 
-For a concrete procedural builder (cube / sphere meshletization), see
-[Scene.cpp](libs/bgl/src/scene/Scene.cpp).
+For a concrete procedural builder, see [Scene.cpp](libs/bgl/src/scene/Scene.cpp). The three
+primitives — `AddCubeGeom`, `AddSphereGeom`, `AddPlaneGeom` — only generate vertices and indices;
+they all hand off to `Scene::AddProceduralGeom`, which greedily meshletizes under the
+`cMaxVerticesPerMeshlet` / `cMaxPrimsPerMeshlet` caps and performs the upload sequence above. A
+primitive whose grid exceeds the 65535 meshlets one `DispatchMesh` can launch is rejected rather
+than silently truncated.
+
+`AddPlaneGeom` is an **upright quad**, not a ground plane: a flat `width` × `height` surface spanning
+XY and facing **+Z**, wound counter-clockwise seen from +Z — the same convention as the cube's +Z
+face. It carries no orientation of its own, so a floor is just the quad with a −90° rotation about X
+on the *instance transform*; baking the floor orientation into the primitive would only force every
+other caller to rotate it back. Its tangent handedness is `w = +1`: the bitangent must come out along
++v (which is +Y), and `cross(+Z, +X)` is +Y. The wrong sign there silently inverts every normal map's
+green channel.
 
 ---
 
@@ -176,13 +191,14 @@ For a concrete procedural builder (cube / sphere meshletization), see
 * **`Range` / `RangeWithCount` / `Entry` default to `0xFFFFFFFF` (null).** Check `Null()` before
   dereferencing; a zero-initialized struct is *not* a valid range.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
-* **`GeomAsset::submeshes` is indexed by source submesh, and only stays so while the mapping is
+* **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the GPU array directly with that number. Any change
   that makes `AddStaticMesh` emit a number of submeshes other than `meshEntry.submeshCount` silently
   breaks every such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
   triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
   expand it at the *instance* level, not in the geometry buffers.
+* **Destroy every mesh instance placed from a geom before you `DeleteGeom` it.**
 * **A mirror-buffer handle is only valid while its range is live.** After `Erase`, the generation
   bumps and the stale handle reports invalid; the raw GPU-side offset carries no generation, so
   code that stored only the offset must re-validate against the buffer before reuse.

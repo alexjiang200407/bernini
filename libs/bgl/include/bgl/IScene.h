@@ -3,6 +3,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
+#include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceHandle.h>
@@ -66,6 +67,9 @@ namespace bgl
 		float     metallicFactor  = 1.0f;
 		float     roughnessFactor = 1.0f;
 
+		LayerType layerType   = LayerType::kOpaque;
+		float     alphaCutoff = 0.5f;
+
 		// Optional material maps, from AddTextureAsset.
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
@@ -83,6 +87,11 @@ namespace bgl
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		float     metallicFactor  = 1.0f;
 		float     roughnessFactor = 1.0f;
+
+		// Cutout; see PbrMaterialDesc. A loose material routes its alpha explicitly (baseColor[3]),
+		// so unlike a baked one it can always sample a real alpha channel.
+		LayerType layerType   = LayerType::kOpaque;
+		float     alphaCutoff = 0.5f;
 
 		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
 		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic
@@ -107,11 +116,31 @@ namespace bgl
 		virtual GeomHandle
 		AddCubeGeom(MaterialHandle material = {}) = 0;
 
+		/**
+		 * Adds a procedurally generated UV sphere of `radius`, centred on the origin, as static-mesh
+		 * geometry.
+		 *
+		 * @throws SceneError if either segment count is 0, or a buffer allocation fails.
+		 */
 		virtual GeomHandle
 		AddSphereGeom(
 			uint32_t       xSegments,
 			uint32_t       ySegments,
 			float          radius,
+			MaterialHandle material = {}) = 0;
+
+		/**
+		 * Adds a procedurally generated plane as static-mesh geometry: a flat `width` x `height` quad
+		 * centred on the origin, subdivided into an `xSegments` x `ySegments` grid.
+		 * @throws SceneError if either segment count is 0, if the grid needs more meshlets than one
+		 *         dispatch can launch, or if a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddPlaneGeom(
+			uint32_t       xSegments,
+			uint32_t       ySegments,
+			float          width,
+			float          height,
 			MaterialHandle material = {}) = 0;
 
 		/**
@@ -164,6 +193,23 @@ namespace bgl
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) = 0;
 
 		/**
+		 * Rewrites a material's contents in place, keeping its handle and its slot.
+		 *
+		 * A submesh stores the material's entry *index*, so every submesh bound to `material` picks
+		 * the new textures and factors up with no rebinding -- this is how a texture is swapped on a
+		 * live material. The PSO bucket derives from the material's *type*, which an update cannot
+		 * change, so pipeline state is unaffected too.
+		 *
+		 * @throws SceneError if the handle is invalid, expired, or not of the matching type.
+		 */
+		virtual void
+		UpdatePbrMaterial(MaterialHandle material, const PbrMaterialDesc& desc) = 0;
+
+		/** The loose (per-channel) counterpart of UpdatePbrMaterial. */
+		virtual void
+		UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc) = 0;
+
+		/**
 		 * Destroys a material created by CreatePbrMaterial or CreateLoosePbrMaterial, freeing its
 		 * slot in the corresponding material buffer.
 		 *
@@ -190,11 +236,22 @@ namespace bgl
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material) = 0;
 
 		/**
+		 * Whether `geom` still refers to live geometry in this scene.
+		 */
+		[[nodiscard]] virtual bool
+		IsGeomAlive(GeomHandle geom) const noexcept = 0;
+
+		/**
 		 * Removes geometry and frees its underlying vertex/index/meshlet data.
 		 *
+		 * @pre Every mesh instance placed from this geom has been destroyed
+		 *      (ISceneView::DeleteMeshInstance). The scene does not track instances and cannot
+		 *      check: an instance holds a plain copy of the geom's submesh range, with no
+		 *      generation, so one that outlives its geometry will draw whatever geometry is
+		 *      allocated into that range next. Owning that lifetime is the caller's job.
+		 *
 		 * @param geom A handle returned by a geometry-creating method.
-		 * @throws SceneError if the handle is invalid, already removed, or still
-		 *         referenced by one or more live mesh instances (held by a SceneView).
+		 * @throws SceneError if the handle is invalid or already removed.
 		 */
 		virtual void
 		DeleteGeom(GeomHandle geom) = 0;

@@ -5,6 +5,7 @@
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <bgl/PsoType.h>
 #include <core/math.h>
 #include <numbers>
@@ -13,14 +14,6 @@ namespace bgl
 {
 	namespace
 	{
-		struct VertexGen
-		{
-			glm::vec3 pos;
-			glm::vec3 normal;
-			glm::vec2 uv;
-			glm::vec4 tangent;
-		};
-
 		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
 
 		struct BufferInfo
@@ -81,6 +74,96 @@ namespace bgl
 			return words;
 		}
 
+		// A meshletized primitive: the meshlets, and the two pools they index into.
+		struct MeshletBuild
+		{
+			std::vector<idl::Meshlet> meshlets;
+			std::vector<uint32_t>     vertexMap;     // meshlet-local slot -> geometry vertex
+			std::vector<uint32_t>     localIndices;  // meshlet-local slots, 3 per triangle
+		};
+
+		/**
+		 * Greedily packs `indices` into meshlets, in triangle order, filling each one until the next
+		 * triangle would push it past cMaxVerticesPerMeshlet or cMaxPrimsPerMeshlet.
+		 *
+		 * Those two caps are the mesh shader's output-array sizes, so a meshlet that overruns either
+		 * renders garbage rather than failing. Each meshlet therefore remaps the vertices it touches to
+		 * a local slot; a vertex shared across meshlets is simply stored in each of them.
+		 */
+		MeshletBuild
+		BuildMeshlets(std::span<const VertexGen> verts, std::span<const uint32_t> indices)
+		{
+			auto build = MeshletBuild();
+
+			const uint32_t totalTriangles = static_cast<uint32_t>(indices.size() / 3u);
+			uint32_t       trianglesDone  = 0u;
+
+			while (trianglesDone < totalTriangles)
+			{
+				auto meshlet                 = idl::Meshlet();
+				meshlet.relativeVertexOffset = static_cast<uint32_t>(build.vertexMap.size());
+				meshlet.relativeIndexOffset  = static_cast<uint32_t>(build.localIndices.size());
+
+				std::unordered_map<uint32_t, uint32_t> localRemap;
+				uint32_t                               localVertexCount   = 0u;
+				uint32_t                               localTriangleCount = 0u;
+
+				while (trianglesDone < totalTriangles)
+				{
+					const uint32_t triBase = trianglesDone * 3u;
+					const uint32_t tri[3]  = { indices[triBase],
+						                       indices[triBase + 1u],
+						                       indices[triBase + 2u] };
+
+					uint32_t newVertices = 0u;
+					for (uint32_t i = 0u; i < 3u; ++i)
+					{
+						if (!localRemap.contains(tri[i]))
+						{
+							++newVertices;
+						}
+					}
+
+					if (localVertexCount + newVertices > idl::cMaxVerticesPerMeshlet ||
+					    localTriangleCount + 1u > idl::cMaxPrimsPerMeshlet)
+					{
+						break;
+					}
+
+					for (uint32_t i = 0u; i < 3u; ++i)
+					{
+						const uint32_t geomVertexIdx = tri[i];
+						if (!localRemap.contains(geomVertexIdx))
+						{
+							localRemap[geomVertexIdx] = localVertexCount++;
+							build.vertexMap.push_back(geomVertexIdx);
+						}
+						build.localIndices.push_back(localRemap[geomVertexIdx]);
+					}
+
+					++localTriangleCount;
+					++trianglesDone;
+				}
+
+				meshlet.vertexCount   = static_cast<uint16_t>(localVertexCount);
+				meshlet.triangleCount = static_cast<uint16_t>(localTriangleCount);
+
+				auto minBound = glm::vec3(std::numeric_limits<float>::max());
+				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
+				for (const auto& [geomVertexIdx, localIdx] : localRemap)
+				{
+					minBound = glm::min(minBound, verts[geomVertexIdx].pos);
+					maxBound = glm::max(maxBound, verts[geomVertexIdx].pos);
+				}
+				meshlet.boundingCenter = (minBound + maxBound) * 0.5f;
+				meshlet.boundingRadius = glm::distance(maxBound, meshlet.boundingCenter);
+
+				build.meshlets.push_back(meshlet);
+			}
+
+			return build;
+		}
+
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
 
 		idl::VertexLayout
@@ -99,14 +182,14 @@ namespace bgl
 			return dst;
 		}
 
-		// The PSO bucket cached on a submesh, derived from its geom + material type. An absent
-		// material falls back to kNull (unlit) -- the same default the old per-instance path used.
 		uint32_t
 		SubmeshPso(GeomType geomType, MaterialHandle material)
 		{
 			const MaterialType type =
 				material.IsValid() ? material.materialType : MaterialType::kNull;
-			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type));
+			const LayerType layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
+
+			return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
 		}
 	}
 
@@ -124,9 +207,7 @@ namespace bgl
 		// rounded up to whole 4-byte words.
 		const uint32_t maxVertexWords = (m_Desc.maxVertexBufferByteSize + 3u) / 4u;
 
-		// Geometry assets are CPU-only (they hold the shared submeshes descriptor +
-		// refcount); the heavy data lives in the GPU range buffers below.
-		m_GeomAssets.reset(m_Desc.maxGeom);
+		m_GeomSubmeshes.reset(m_Desc.maxGeom);
 
 		{
 			auto submeshBufferDesc      = RangeBufferDesc();
@@ -257,81 +338,31 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddCubeGeom(MaterialHandle material)
+	Scene::AddProceduralGeom(
+		std::span<const VertexGen> verts,
+		std::span<const uint32_t>  indices,
+		MaterialHandle             material)
 	{
+		const auto build = BuildMeshlets(verts, indices);
+
+		// One DispatchMesh can launch at most this many thread groups, and a procedural primitive is
+		// one submesh, so its meshlets all have to fit in a single dispatch.
+		if (build.meshlets.size() > c_MaxDispatchMeshGroups)
+		{
+			throw SceneError(
+				"Scene::AddProceduralGeom: the primitive needs " +
+				std::to_string(build.meshlets.size()) + " meshlets, over the " +
+				std::to_string(c_MaxDispatchMeshGroups) + " a single dispatch can launch");
+		}
+
 		try
 		{
-			// 6 faces x 4 verts (24 total) so each face carries its own normal, uv
-			// and tangent -- an 8-vertex cube can't express per-face attributes.
-			struct FaceBasis
-			{
-				glm::vec3 normal;
-				glm::vec3 tangent;  // +u direction; bitangent = cross(normal, tangent)
-			};
-			static const FaceBasis faces[6] = {
-				{ { 1, 0, 0 }, { 0, 0, -1 } },   // +X
-				{ { -1, 0, 0 }, { 0, 0, 1 } },   // -X
-				{ { 0, 1, 0 }, { 1, 0, 0 } },    // +Y
-				{ { 0, -1, 0 }, { 1, 0, 0 } },   // -Y
-				{ { 0, 0, 1 }, { 1, 0, 0 } },    // +Z
-				{ { 0, 0, -1 }, { -1, 0, 0 } },  // -Z
-			};
-			// Per-face corners in (s, t) order: BL, BR, TR, TL -- CCW from outside.
-			static const glm::vec2 corners[4] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+			const auto vertexWords = PackVertices(verts);
 
-			std::vector<VertexGen> cubeVertices;
-			std::vector<uint32_t>  cubeIndices;
-			cubeVertices.reserve(24);
-			cubeIndices.reserve(36);
-
-			for (const auto& face : faces)
-			{
-				const glm::vec3 up   = glm::cross(face.normal, face.tangent);
-				const uint32_t  base = static_cast<uint32_t>(cubeVertices.size());
-
-				for (const auto& c : corners)
-				{
-					auto v    = VertexGen();
-					v.pos     = face.normal + c.x * face.tangent + c.y * up;
-					v.normal  = face.normal;
-					v.uv      = glm::vec2((c.x + 1.0f) * 0.5f, (c.y + 1.0f) * 0.5f);
-					v.tangent = glm::vec4(face.tangent, 1.0f);
-					cubeVertices.push_back(v);
-				}
-
-				cubeIndices.push_back(base + 0u);
-				cubeIndices.push_back(base + 1u);
-				cubeIndices.push_back(base + 2u);
-				cubeIndices.push_back(base + 0u);
-				cubeIndices.push_back(base + 2u);
-				cubeIndices.push_back(base + 3u);
-			}
-
-			const auto vertexWords      = PackVertices(cubeVertices);
-			const auto baseVertexGlobal = m_VertexDataBuffer.Add(vertexWords);
-
-			auto mapIndices = std::vector<uint32_t>(cubeVertices.size());
-			for (uint32_t i = 0; i < mapIndices.size(); ++i)
-			{
-				mapIndices[i] = i;
-			}
-
-			const auto baseMapGlobal   = m_VertexMapBuffer.Add(mapIndices);
-			const auto baseIndexGlobal = m_IndexBuffer.Add(cubeIndices);
-
-			auto m = idl::Meshlet();
-
-			m.relativeVertexOffset = 0;
-			m.vertexCount          = static_cast<uint8_t>(cubeVertices.size());
-
-			m.relativeIndexOffset = 0;
-			m.triangleCount       = static_cast<uint8_t>(cubeIndices.size() / 3);
-
-			m.boundingCenter = glm::vec3{ 0.0f };
-			m.boundingRadius = glm::sqrt(3.0f);
-
-			const auto meshletSpan       = std::span<const idl::Meshlet>(&m, 1);
-			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshletSpan);
+			const auto baseVertexGlobal  = m_VertexDataBuffer.Add(vertexWords);
+			const auto baseMapGlobal     = m_VertexMapBuffer.Add(build.vertexMap);
+			const auto baseIndexGlobal   = m_IndexBuffer.Add(build.localIndices);
+			const auto baseMeshletGlobal = m_MeshletBuffer.Add(build.meshlets);
 
 			auto submesh        = idl::Submesh();
 			submesh.layout      = MakeProceduralLayout();
@@ -339,7 +370,7 @@ namespace bgl
 			submesh.vertexMap   = baseMapGlobal;
 			submesh.vertexData  = baseVertexGlobal;
 			submesh.indices     = baseIndexGlobal;
-			submesh.vertexCount = static_cast<uint32_t>(cubeVertices.size());
+			submesh.vertexCount = static_cast<uint32_t>(verts.size());
 			if (material.IsValid())
 			{
 				submesh.material = material.handle;
@@ -349,11 +380,11 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -365,162 +396,177 @@ namespace bgl
 	}
 
 	GeomHandle
+	Scene::AddCubeGeom(MaterialHandle material)
+	{
+		// 6 faces x 4 verts (24 total) so each face carries its own normal, uv
+		// and tangent -- an 8-vertex cube can't express per-face attributes.
+		struct FaceBasis
+		{
+			glm::vec3 normal;
+			glm::vec3 tangent;  // +u direction; bitangent = cross(normal, tangent)
+		};
+		static const FaceBasis faces[6] = {
+			{ { 1, 0, 0 }, { 0, 0, -1 } },   // +X
+			{ { -1, 0, 0 }, { 0, 0, 1 } },   // -X
+			{ { 0, 1, 0 }, { 1, 0, 0 } },    // +Y
+			{ { 0, -1, 0 }, { 1, 0, 0 } },   // -Y
+			{ { 0, 0, 1 }, { 1, 0, 0 } },    // +Z
+			{ { 0, 0, -1 }, { -1, 0, 0 } },  // -Z
+		};
+		// Per-face corners in (s, t) order: BL, BR, TR, TL -- CCW from outside.
+		static const glm::vec2 corners[4] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+
+		std::vector<VertexGen> cubeVertices;
+		std::vector<uint32_t>  cubeIndices;
+		cubeVertices.reserve(24);
+		cubeIndices.reserve(36);
+
+		for (const auto& face : faces)
+		{
+			const glm::vec3 up   = glm::cross(face.normal, face.tangent);
+			const uint32_t  base = static_cast<uint32_t>(cubeVertices.size());
+
+			for (const auto& c : corners)
+			{
+				auto v    = VertexGen();
+				v.pos     = face.normal + c.x * face.tangent + c.y * up;
+				v.normal  = face.normal;
+				v.uv      = glm::vec2((c.x + 1.0f) * 0.5f, (c.y + 1.0f) * 0.5f);
+				v.tangent = glm::vec4(face.tangent, 1.0f);
+				cubeVertices.push_back(v);
+			}
+
+			cubeIndices.push_back(base + 0u);
+			cubeIndices.push_back(base + 1u);
+			cubeIndices.push_back(base + 2u);
+			cubeIndices.push_back(base + 0u);
+			cubeIndices.push_back(base + 2u);
+			cubeIndices.push_back(base + 3u);
+		}
+
+		return AddProceduralGeom(cubeVertices, cubeIndices, material);
+	}
+
+	GeomHandle
 	Scene::AddSphereGeom(
 		uint32_t       xSegments,
 		uint32_t       ySegments,
 		float          radius,
 		MaterialHandle material)
 	{
-		try
+		if (xSegments == 0u || ySegments == 0u)
 		{
-			std::vector<VertexGen> sphereVerts;
-			std::vector<uint32_t>  sphereIndices;
-
-			for (uint32_t y = 0u; y <= ySegments; ++y)
-			{
-				for (uint32_t x = 0u; x <= xSegments; ++x)
-				{
-					constexpr auto pi       = std::numbers::pi_v<float>;
-					float          xSegment = static_cast<float>(x) / static_cast<float>(xSegments);
-					float          ySegment = static_cast<float>(y) / static_cast<float>(ySegments);
-					float          xPos = std::cos(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
-					float          yPos = std::cos(ySegment * pi);
-					float          zPos = std::sin(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
-
-					// Tangent follows +u (increasing longitude): d(pos)/d(xSegment),
-					// normalized. bitangent = cross(normal, tangent), so w = +1.
-					const float a = xSegment * 2.0f * pi;
-
-					auto v   = VertexGen();
-					v.pos    = glm::vec3(xPos, yPos, zPos) * radius;
-					v.normal = glm::normalize(v.pos);
-					v.uv     = glm::vec2(xSegment, ySegment);
-					v.tangent =
-						glm::vec4(glm::normalize(glm::vec3(-std::sin(a), 0.0f, std::cos(a))), 1.0f);
-					sphereVerts.push_back(v);
-				}
-			}
-
-			for (uint32_t y = 0u; y < ySegments; ++y)
-			{
-				for (uint32_t x = 0u; x < xSegments; ++x)
-				{
-					sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x);
-					sphereIndices.push_back(y * (xSegments + 1u) + x);
-					sphereIndices.push_back(y * (xSegments + 1u) + x + 1u);
-
-					sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x);
-					sphereIndices.push_back(y * (xSegments + 1u) + x + 1u);
-					sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x + 1u);
-				}
-			}
-
-			const auto vertexWords      = PackVertices(sphereVerts);
-			const auto baseVertexGlobal = m_VertexDataBuffer.Add(vertexWords);
-
-			auto                  meshlets = std::vector<idl::Meshlet>();
-			std::vector<uint32_t> vertexMap;
-			std::vector<uint32_t> localIndices;
-
-			const uint32_t totalTriangles = static_cast<uint32_t>(sphereIndices.size() / 3u);
-			uint32_t       trianglesDone  = 0u;
-
-			while (trianglesDone < totalTriangles)
-			{
-				auto meshlet                 = idl::Meshlet();
-				meshlet.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
-				meshlet.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
-
-				std::unordered_map<uint32_t, uint32_t> localRemap;
-				uint32_t                               localVertexCount   = 0u;
-				uint32_t                               localTriangleCount = 0u;
-
-				while (trianglesDone < totalTriangles)
-				{
-					const uint32_t triBase = trianglesDone * 3u;
-					const uint32_t tri[3]  = { sphereIndices[triBase],
-						                       sphereIndices[triBase + 1u],
-						                       sphereIndices[triBase + 2u] };
-
-					uint32_t newVertices = 0u;
-					for (uint32_t i = 0u; i < 3u; ++i)
-					{
-						if (!localRemap.contains(tri[i]))
-						{
-							++newVertices;
-						}
-					}
-
-					if (localVertexCount + newVertices > idl::cMaxVerticesPerMeshlet ||
-					    localTriangleCount + 1u > idl::cMaxPrimsPerMeshlet)
-					{
-						break;
-					}
-
-					for (uint32_t i = 0u; i < 3u; ++i)
-					{
-						const uint32_t geomVertexIdx = tri[i];
-						if (!localRemap.contains(geomVertexIdx))
-						{
-							localRemap[geomVertexIdx] = localVertexCount++;
-							vertexMap.push_back(geomVertexIdx);
-						}
-						localIndices.push_back(localRemap[geomVertexIdx]);
-					}
-
-					++localTriangleCount;
-					++trianglesDone;
-				}
-
-				meshlet.vertexCount   = static_cast<uint16_t>(localVertexCount);
-				meshlet.triangleCount = static_cast<uint16_t>(localTriangleCount);
-
-				auto minBound = glm::vec3(std::numeric_limits<float>::max());
-				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
-				for (const auto& [geomVertexIdx, localIdx] : localRemap)
-				{
-					minBound = glm::min(minBound, sphereVerts[geomVertexIdx].pos);
-					maxBound = glm::max(maxBound, sphereVerts[geomVertexIdx].pos);
-				}
-				meshlet.boundingCenter = (minBound + maxBound) * 0.5f;
-				meshlet.boundingRadius = glm::distance(maxBound, meshlet.boundingCenter);
-
-				meshlets.push_back(meshlet);
-			}
-
-			const auto baseMapGlobal     = m_VertexMapBuffer.Add(vertexMap);
-			const auto baseIndexGlobal   = m_IndexBuffer.Add(localIndices);
-			const auto baseMeshletGlobal = m_MeshletBuffer.Add(meshlets);
-
-			auto submesh        = idl::Submesh();
-			submesh.layout      = MakeProceduralLayout();
-			submesh.meshlets    = baseMeshletGlobal;
-			submesh.vertexMap   = baseMapGlobal;
-			submesh.vertexData  = baseVertexGlobal;
-			submesh.indices     = baseIndexGlobal;
-			submesh.vertexCount = static_cast<uint32_t>(sphereVerts.size());
-			if (material.IsValid())
-			{
-				submesh.material = material.handle;
-			}
-			submesh.pso = SubmeshPso(GeomType::kStaticMesh, material);
-
-			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
-			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
-
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
-
-			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
-			retVal.geomType = GeomType::kStaticMesh;
-
-			return retVal;
+			throw SceneError(
+				"Scene::AddSphereGeom: xSegments and ySegments must both be at least 1");
 		}
-		catch (const std::runtime_error& e)
+
+		std::vector<VertexGen> sphereVerts;
+		std::vector<uint32_t>  sphereIndices;
+
+		for (uint32_t y = 0u; y <= ySegments; ++y)
 		{
-			throw SceneError(e.what());
+			for (uint32_t x = 0u; x <= xSegments; ++x)
+			{
+				constexpr auto pi       = std::numbers::pi_v<float>;
+				float          xSegment = static_cast<float>(x) / static_cast<float>(xSegments);
+				float          ySegment = static_cast<float>(y) / static_cast<float>(ySegments);
+				float          xPos     = std::cos(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
+				float          yPos     = std::cos(ySegment * pi);
+				float          zPos     = std::sin(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
+
+				// Tangent follows +u (increasing longitude): d(pos)/d(xSegment),
+				// normalized. bitangent = cross(normal, tangent), so w = +1.
+				const float a = xSegment * 2.0f * pi;
+
+				auto v   = VertexGen();
+				v.pos    = glm::vec3(xPos, yPos, zPos) * radius;
+				v.normal = glm::normalize(v.pos);
+				v.uv     = glm::vec2(xSegment, ySegment);
+				v.tangent =
+					glm::vec4(glm::normalize(glm::vec3(-std::sin(a), 0.0f, std::cos(a))), 1.0f);
+				sphereVerts.push_back(v);
+			}
 		}
+
+		for (uint32_t y = 0u; y < ySegments; ++y)
+		{
+			for (uint32_t x = 0u; x < xSegments; ++x)
+			{
+				sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x);
+				sphereIndices.push_back(y * (xSegments + 1u) + x);
+				sphereIndices.push_back(y * (xSegments + 1u) + x + 1u);
+
+				sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x);
+				sphereIndices.push_back(y * (xSegments + 1u) + x + 1u);
+				sphereIndices.push_back((y + 1u) * (xSegments + 1u) + x + 1u);
+			}
+		}
+
+		return AddProceduralGeom(sphereVerts, sphereIndices, material);
+	}
+
+	GeomHandle
+	Scene::AddPlaneGeom(
+		uint32_t       xSegments,
+		uint32_t       ySegments,
+		float          width,
+		float          height,
+		MaterialHandle material)
+	{
+		if (xSegments == 0u || ySegments == 0u)
+		{
+			throw SceneError(
+				"Scene::AddPlaneGeom: xSegments and ySegments must both be at least 1");
+		}
+
+		std::vector<VertexGen> planeVerts;
+		std::vector<uint32_t>  planeIndices;
+		planeVerts.reserve(static_cast<size_t>(xSegments + 1u) * (ySegments + 1u));
+		planeIndices.reserve(static_cast<size_t>(xSegments) * ySegments * 6u);
+
+		for (uint32_t y = 0u; y <= ySegments; ++y)
+		{
+			for (uint32_t x = 0u; x <= xSegments; ++x)
+			{
+				const float u = static_cast<float>(x) / static_cast<float>(xSegments);
+				const float v = static_cast<float>(y) / static_cast<float>(ySegments);
+
+				auto vert   = VertexGen();
+				vert.pos    = glm::vec3((u - 0.5f) * width, (v - 0.5f) * height, 0.0f);
+				vert.normal = glm::vec3(0.0f, 0.0f, 1.0f);
+				vert.uv     = glm::vec2(u, v);
+
+				// +u runs along +X, so the tangent is +X. The bitangent has to come out along +v,
+				// which here is +Y, and cross(+Z, +X) is +Y -- so the handedness is +1. The wrong
+				// sign here inverts every normal map's green channel, silently.
+				vert.tangent = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+				planeVerts.push_back(vert);
+			}
+		}
+
+		const uint32_t rowStride = xSegments + 1u;
+		for (uint32_t y = 0u; y < ySegments; ++y)
+		{
+			for (uint32_t x = 0u; x < xSegments; ++x)
+			{
+				const uint32_t i00 = y * rowStride + x;
+				const uint32_t i10 = i00 + 1u;
+				const uint32_t i01 = i00 + rowStride;
+				const uint32_t i11 = i01 + 1u;
+
+				// Counter-clockwise seen from +Z, exactly like the cube's +Z face, so the quad faces
+				// a camera looking down -Z at it.
+				planeIndices.push_back(i00);
+				planeIndices.push_back(i10);
+				planeIndices.push_back(i11);
+
+				planeIndices.push_back(i00);
+				planeIndices.push_back(i11);
+				planeIndices.push_back(i01);
+			}
+		}
+
+		return AddProceduralGeom(planeVerts, planeIndices, material);
 	}
 
 	GeomHandle
@@ -629,11 +675,12 @@ namespace bgl
 			const auto baseSubmeshGlobal =
 				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			// RangeWithCount is assignable from the buffer handle, but not constructible from it.
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -644,8 +691,8 @@ namespace bgl
 		}
 	}
 
-	MaterialHandle
-	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
+	idl::PbrMaterial
+	Scene::BuildPbrMaterial(const PbrMaterialDesc& desc) const
 	{
 		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
 		const auto flatNormal =
@@ -665,13 +712,40 @@ namespace bgl
 		material.baseColorFactor  = desc.baseColorFactor;
 		material.metallicFactor   = desc.metallicFactor;
 		material.roughnessFactor  = desc.roughnessFactor;
+		material.alphaCutoff      = desc.alphaCutoff;
 
-		const core::slot_handle slot = m_Pbr.Add(material);
-		return MaterialHandle{ MaterialType::kPBR, slot };
+		return material;
 	}
 
 	MaterialHandle
-	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
+	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
+	{
+		const core::slot_handle slot = m_Pbr.Add(BuildPbrMaterial(desc));
+		return MaterialHandle{ MaterialType::kPBR, desc.layerType, slot };
+	}
+
+	void
+	Scene::UpdatePbrMaterial(MaterialHandle material, const PbrMaterialDesc& desc)
+	{
+		if (material.materialType != MaterialType::kPBR)
+		{
+			throw SceneError("MaterialHandle passed to UpdatePbrMaterial is not a kPBR material");
+		}
+		if (!m_Pbr.IsValid(material.handle))
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdatePbrMaterial has expired or is invalid");
+		}
+
+		// Rewriting the entry is all it takes: a submesh stores the material's entry *index*, so every
+		// submesh bound to this material picks the new contents up with no rebinding. The entry keeps
+		// its slot, so caller-held handles stay valid, and the PSO bucket -- which derives from
+		// materialType, not from the desc -- cannot change.
+		m_Pbr.Set(material.handle, BuildPbrMaterial(desc));
+	}
+
+	idl::LoosePbrMaterial
+	Scene::BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const
 	{
 		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
 		const auto flatNormal =
@@ -698,9 +772,20 @@ namespace bgl
 			return cs;
 		};
 
+		// The GPU's channel order is generated from the IDL; the file's is declared in BMaterial.h. They
+		// describe the same nine routes, so a mismatch would silently sample the wrong map -- roughness
+		// read as metallic, say. Pin them together rather than trusting two lists to stay in step.
 		static_assert(
-			idl::cLooseChannelCount == 4 + 3 + 2,
-			"LoosePbrMaterialDesc channel groups must cover every idl::PbrChannel");
+			idl::cLooseChannelCount == assetlib::c_LooseChannelCount,
+			"The GPU and the .bmaterial file must agree on how many loose channels there are");
+		static_assert(
+			static_cast<size_t>(idl::PbrChannel::kBaseColorR) ==
+					assetlib::ChannelIndex(assetlib::PbrChannel::kBaseColorR) &&
+				static_cast<size_t>(idl::PbrChannel::kAo) ==
+					assetlib::ChannelIndex(assetlib::PbrChannel::kAo) &&
+				static_cast<size_t>(idl::PbrChannel::kNormalX) ==
+					assetlib::ChannelIndex(assetlib::PbrChannel::kNormalX),
+			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
 		idl::LoosePbrMaterial material{};
 		// Base color R,G,B,A -> white (any channel samples 1.0).
@@ -728,9 +813,35 @@ namespace bgl
 		material.baseColorFactor = desc.baseColorFactor;
 		material.metallicFactor  = desc.metallicFactor;
 		material.roughnessFactor = desc.roughnessFactor;
+		material.alphaCutoff     = desc.alphaCutoff;
 
-		const core::slot_handle slot = m_Loose.Add(material);
-		return MaterialHandle{ MaterialType::kLoosePbr, slot };
+		return material;
+	}
+
+	MaterialHandle
+	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
+	{
+		const core::slot_handle slot = m_Loose.Add(BuildLoosePbrMaterial(desc));
+		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, slot };
+	}
+
+	void
+	Scene::UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc)
+	{
+		if (material.materialType != MaterialType::kLoosePbr)
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateLoosePbrMaterial is not a kLoosePbr material");
+		}
+		if (!m_Loose.IsValid(material.handle))
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateLoosePbrMaterial has expired or is invalid");
+		}
+
+		// See UpdatePbrMaterial: the entry is rewritten in place, so every submesh bound to this
+		// material follows it and the handle stays valid.
+		m_Loose.Set(material.handle, BuildLoosePbrMaterial(desc));
 	}
 
 	void
@@ -775,7 +886,7 @@ namespace bgl
 		{
 			throw SceneError("GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh");
 		}
-		if (!IsGeomSlotValid(geom.handle))
+		if (!IsGeomAlive(geom))
 		{
 			throw SceneError("GeomHandle passed to SetSubmeshMaterial has expired or is invalid");
 		}
@@ -784,13 +895,13 @@ namespace bgl
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
 
-		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (submeshIndex >= asset.submeshes.count)
+		const idl::RangeWithCount& submeshes = m_GeomSubmeshes[geom.handle.index];
+		if (submeshIndex >= submeshes.count)
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}
 
-		const uint32_t globalIndex = asset.submeshes.range.offsetStart + submeshIndex;
+		const uint32_t globalIndex = submeshes.range.offsetStart + submeshIndex;
 
 		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
 		submesh.material = material.handle;
@@ -806,25 +917,18 @@ namespace bgl
 			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh");
 		}
 
-		if (!m_GeomAssets.valid(geom.handle.index, geom.handle.generation))
+		if (!IsGeomAlive(geom))
 		{
 			throw SceneError("GeomHandle passed to DeleteGeom refers to a deleted or unknown geom");
 		}
 
-		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (asset.refCount != 0)
-		{
-			throw SceneError(
-				std::format(
-					"Cannot delete geom still referenced by {} live mesh instance(s)",
-					asset.refCount));
-		}
+		const auto& submeshes = m_GeomSubmeshes[geom.handle.index];
 
 		// The geometry's per-part ranges live on each Submesh, and each submesh owns its own, so
 		// free them per submesh before releasing the submesh range itself.
-		const uint32_t submeshRoot = asset.submeshes.range.offsetStart;
+		const uint32_t submeshRoot = submeshes.range.offsetStart;
 
-		for (uint32_t i = 0; i < asset.submeshes.count; ++i)
+		for (uint32_t i = 0; i < submeshes.count; ++i)
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
@@ -835,7 +939,7 @@ namespace bgl
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);
-		m_GeomAssets.release_slot(geom.handle.index);
+		m_GeomSubmeshes.release_slot(geom.handle.index);
 	}
 
 	TextureAssetHandle
