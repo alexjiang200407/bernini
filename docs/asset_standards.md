@@ -63,9 +63,12 @@ must feed data that matches.
 
 There are **two producers of textures**, and they compress differently:
 
-* **Mesh import** (`bake` in [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes
-  Basis-UASTC `texN.ktx2`, which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform,
-  and no per-map role needed.
+* **Mesh import** (`writeTextures` in
+  [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes Basis-UASTC `texN.ktx2`,
+  which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform, and no per-map role
+  needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
+  *source* textures a material routes at; they land under `textures_src/` in an editor project.
+*  **An import brings in geometry and textures, never materials.** 
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
   editor's routed source textures into the triplet and writes each map into `<Data>/Textures/`

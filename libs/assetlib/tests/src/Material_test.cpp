@@ -258,42 +258,57 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 	REQUIRE(restored.roughnessFactor == Catch::Approx(0.9f));
 }
 
-TEST_CASE("bake writes a loadable .bmesh with sidecar materials", "[bmesh][bmaterial][bake]")
+TEST_CASE("bake writes a loadable .bmesh and its textures, and no materials", "[bmesh][bake]")
 {
 	const std::filesystem::path glb = "assets/suzanne.glb";
 	REQUIRE(std::filesystem::exists(glb));
 
 	const auto import = loadFromGltf(glb);
-	REQUIRE(import.materials.size() >= 1);
+	REQUIRE(
+		import.materials.size() >= 1);  // the glTF has materials; the bake must not carry them over
 
 	const auto outDir = std::filesystem::temp_directory_path() / "bake_suzanne_test";
 	std::filesystem::remove_all(outDir);
 	bake(import, outDir, "suzanne");
 
-	// The container plus one .bmaterial per material are written to disk.
 	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
-	for (size_t i = 0; i < import.materials.size(); ++i)
-		REQUIRE(std::filesystem::exists(outDir / ("mat" + std::to_string(i) + ".bmaterial")));
 
-	// The loaded container references those material files by the same relative paths, and each one
-	// loads and carries the import's factors.
+	// The textures do come across: they are what a material, once authored, routes at.
+	for (size_t i = 0; i < import.textures.size(); ++i)
+		REQUIRE(std::filesystem::exists(outDir / ("tex" + std::to_string(i) + ".ktx2")));
+
+	// The glTF's PBR materials do not. Nothing is written for them, and -- this is the part that used
+	// to be wrong -- the container does not name files that were never written: every submesh comes out
+	// unassigned rather than pointing at a matN.bmaterial that does not exist.
+	REQUIRE_FALSE(std::filesystem::exists(outDir / "mat0.bmaterial"));
+
 	const auto mesh = load(outDir / "suzanne.bmesh");
-	REQUIRE(mesh.materials.size() == import.materials.size());
+	REQUIRE(mesh.materials.empty());
+	REQUIRE_FALSE(mesh.submeshes.empty());
 
-	for (size_t i = 0; i < mesh.materials.size(); ++i)
-	{
-		const auto material = loadMaterial(outDir / mesh.materials[i]);
-		REQUIRE(material.metallicFactor == Catch::Approx(import.materials[i].metallicFactor));
-		REQUIRE(material.roughnessFactor == Catch::Approx(import.materials[i].roughnessFactor));
-
-		// Any texture a material references must be a file bake actually emitted.
-		for (const std::string& tex :
-		     { material.baseColorTexture, material.normalTexture, material.ormTexture })
-		{
-			if (!tex.empty())
-				REQUIRE(std::filesystem::exists(outDir / tex));
-		}
-	}
+	for (const Submesh& submesh : mesh.submeshes) REQUIRE(submesh.material == c_InvalidIndex);
 
 	std::filesystem::remove_all(outDir);
+}
+
+TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bmaterial][attach]")
+{
+	// The other half of the contract: an import leaves the submeshes unassigned, and this is how they
+	// get a material -- what the material editor calls when a material is saved.
+	const std::filesystem::path glb = "assets/suzanne.glb";
+	REQUIRE(std::filesystem::exists(glb));
+
+	auto mesh = toBMesh(loadFromGltf(glb));
+	REQUIRE(mesh.materials.empty());
+	REQUIRE_FALSE(mesh.submeshes.empty());
+
+	REQUIRE(attachMaterial(mesh, 0, "Materials/suzanne.bmaterial"));
+
+	REQUIRE(mesh.materials.size() == 1);
+	REQUIRE(mesh.materials[0] == "Materials/suzanne.bmaterial");
+	REQUIRE(mesh.submeshes[0].material == 0);
+
+	// Attaching the same material again is a no-op, not a duplicate slot.
+	REQUIRE_FALSE(attachMaterial(mesh, 0, "Materials/suzanne.bmaterial"));
+	REQUIRE(mesh.materials.size() == 1);
 }

@@ -1,6 +1,5 @@
 #include <assetlib/bmesh_io.h>
 
-#include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
 
 #include "ByteReader.h"
@@ -123,45 +122,6 @@ namespace assetlib
 					current.push_back(c);
 				}
 			}
-			return out;
-		}
-
-		// The NUL-terminated name at `offset` in the string pool (empty for offset 0 / out of range).
-		std::string
-		nameFromPool(const std::vector<char>& pool, uint32_t offset)
-		{
-			if (offset == 0 || offset >= pool.size())
-				return {};
-			return std::string(pool.data() + offset);
-		}
-
-		// The standalone file name writeTextures emits for texture `index` (empty when absent).
-		std::string
-		texturePath(uint32_t index)
-		{
-			return index == c_InvalidIndex ? std::string{} :
-			                                 "tex" + std::to_string(index) + ".ktx2";
-		}
-
-		// The file name toBMesh assembles for material `index`.
-		std::string
-		materialPath(size_t index)
-		{
-			return "mat" + std::to_string(index) + ".bmaterial";
-		}
-
-		// Resolves an inline import material into its modular, path-referencing form.
-		BMaterial
-		toBMaterial(const imp::BMeshImport& mesh, const imp::BMaterialImport& material)
-		{
-			BMaterial out;
-			out.baseColorTexture = texturePath(material.baseColorTexture);
-			out.normalTexture    = texturePath(material.normalTexture);
-			out.ormTexture       = texturePath(material.ormTexture);
-			out.baseColorFactor  = material.baseColorFactor;
-			out.metallicFactor   = material.metallicFactor;
-			out.roughnessFactor  = material.roughnessFactor;
-			out.name             = nameFromPool(mesh.stringPool, material.nameOffset);
 			return out;
 		}
 	}
@@ -303,8 +263,15 @@ namespace assetlib
 		out.indexData        = mesh.indexData;
 		out.stringPool       = mesh.stringPool;
 
-		out.materials.reserve(mesh.materials.size());
-		for (size_t i = 0; i < mesh.materials.size(); ++i) out.materials.push_back(materialPath(i));
+		// An import carries no materials across. The glTF's are PBR -- that is the format's shading
+		// model, not necessarily the engine's -- and translating them into `.bmaterial` files would
+		// stamp glTF's model into the engine's own container. Materials are authored in the material
+		// editor instead, and attachMaterial binds one to a submesh when it is saved.
+		//
+		// So the submeshes arrive unassigned, and `materials` stays empty rather than naming files that
+		// nothing writes. The import's textures are still extracted (see writeTextures), which is what
+		// a material needs to route at.
+		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
 
 		return out;
 	}
@@ -379,21 +346,6 @@ namespace assetlib
 	}
 
 	void
-	writeMaterials(
-		const imp::BMeshImport&      mesh,
-		const std::filesystem::path& outDir,
-		const CancelToken&           cancel)
-	{
-		createDirectories(outDir);
-
-		for (size_t i = 0; i < mesh.materials.size(); ++i)
-		{
-			throwIfCancelled(cancel);
-			saveMaterial(toBMaterial(mesh, mesh.materials[i]), outDir / materialPath(i));
-		}
-	}
-
-	void
 	bake(
 		const imp::BMeshImport&      mesh,
 		const std::filesystem::path& outDir,
@@ -403,7 +355,6 @@ namespace assetlib
 		createDirectories(outDir);
 
 		writeTextures(mesh, outDir, {}, cancel);
-		writeMaterials(mesh, outDir, cancel);
 		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
 	}
 
