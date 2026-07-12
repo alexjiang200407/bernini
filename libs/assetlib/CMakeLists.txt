@@ -83,6 +83,20 @@ set_target_properties(assetlib_cli PROPERTIES
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
 
+install(TARGETS assetlib_cli
+	COMPONENT tools
+	RUNTIME_DEPENDENCY_SET assetlib_cli_deps
+	RUNTIME DESTINATION .
+)
+
+install(RUNTIME_DEPENDENCY_SET assetlib_cli_deps
+	PRE_EXCLUDE_REGEXES  "api-ms-win-.*" "ext-ms-.*"
+	POST_EXCLUDE_REGEXES ".*[/\\\\][Ss]ystem32[/\\\\].*"
+	DIRECTORIES "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+	DESTINATION .
+	COMPONENT tools
+)
+
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/cli" PREFIX "Source Files" FILES ${ASSETLIB_CLI_SOURCES} ${ASSETLIB_CLI_HEADERS})
 
 if (BUILD_TESTS)

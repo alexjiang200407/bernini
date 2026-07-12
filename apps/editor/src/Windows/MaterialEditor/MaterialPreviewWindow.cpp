@@ -178,7 +178,9 @@ MaterialPreviewWindow::ClearGeometry()
 {
 	try
 	{
-		// Instances first: a geom cannot be deleted while an instance still references it.
+		// Instances first, and this order is load-bearing: the scene does not track instances and
+		// will not stop us deleting geometry out from under one. An instance that outlives its geom
+		// keeps drawing the range it copied, which the next mesh will be allocated into.
 		for (const bgl::MeshInstanceHandle& instance : m_Instances)
 		{
 			if (instance.IsValid())

@@ -5,6 +5,7 @@
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <bgl/PsoType.h>
 #include <core/math.h>
 #include <numbers>
@@ -206,9 +207,7 @@ namespace bgl
 		// rounded up to whole 4-byte words.
 		const uint32_t maxVertexWords = (m_Desc.maxVertexBufferByteSize + 3u) / 4u;
 
-		// Geometry assets are CPU-only (they hold the shared submeshes descriptor +
-		// refcount); the heavy data lives in the GPU range buffers below.
-		m_GeomAssets.reset(m_Desc.maxGeom);
+		m_GeomSubmeshes.reset(m_Desc.maxGeom);
 
 		{
 			auto submeshBufferDesc      = RangeBufferDesc();
@@ -381,11 +380,11 @@ namespace bgl
 			const auto submeshSpan       = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal = m_SubmeshBuffer.Add(submeshSpan);
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -676,11 +675,12 @@ namespace bgl
 			const auto baseSubmeshGlobal =
 				m_SubmeshBuffer.Add(std::span<const idl::Submesh>(submeshes));
 
-			auto asset      = GeomAsset();
-			asset.submeshes = baseSubmeshGlobal;
+			// RangeWithCount is assignable from the buffer handle, but not constructible from it.
+			auto submeshRange = idl::RangeWithCount();
+			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomAssets.allocate_and_emplace(asset);
+			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			return retVal;
@@ -691,8 +691,8 @@ namespace bgl
 		}
 	}
 
-	MaterialHandle
-	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
+	idl::PbrMaterial
+	Scene::BuildPbrMaterial(const PbrMaterialDesc& desc) const
 	{
 		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
 		const auto flatNormal =
@@ -714,13 +714,38 @@ namespace bgl
 		material.roughnessFactor  = desc.roughnessFactor;
 		material.alphaCutoff      = desc.alphaCutoff;
 
-		const core::slot_handle slot = m_Pbr.Add(material);
-
-		return MaterialHandle{ MaterialType::kPBR, desc.layerType, slot };
+		return material;
 	}
 
 	MaterialHandle
-	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
+	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
+	{
+		const core::slot_handle slot = m_Pbr.Add(BuildPbrMaterial(desc));
+		return MaterialHandle{ MaterialType::kPBR, desc.layerType, slot };
+	}
+
+	void
+	Scene::UpdatePbrMaterial(MaterialHandle material, const PbrMaterialDesc& desc)
+	{
+		if (material.materialType != MaterialType::kPBR)
+		{
+			throw SceneError("MaterialHandle passed to UpdatePbrMaterial is not a kPBR material");
+		}
+		if (!m_Pbr.IsValid(material.handle))
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdatePbrMaterial has expired or is invalid");
+		}
+
+		// Rewriting the entry is all it takes: a submesh stores the material's entry *index*, so every
+		// submesh bound to this material picks the new contents up with no rebinding. The entry keeps
+		// its slot, so caller-held handles stay valid, and the PSO bucket -- which derives from
+		// materialType, not from the desc -- cannot change.
+		m_Pbr.Set(material.handle, BuildPbrMaterial(desc));
+	}
+
+	idl::LoosePbrMaterial
+	Scene::BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const
 	{
 		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
 		const auto flatNormal =
@@ -747,9 +772,20 @@ namespace bgl
 			return cs;
 		};
 
+		// The GPU's channel order is generated from the IDL; the file's is declared in BMaterial.h. They
+		// describe the same nine routes, so a mismatch would silently sample the wrong map -- roughness
+		// read as metallic, say. Pin them together rather than trusting two lists to stay in step.
 		static_assert(
-			idl::cLooseChannelCount == 4 + 3 + 2,
-			"LoosePbrMaterialDesc channel groups must cover every idl::PbrChannel");
+			idl::cLooseChannelCount == assetlib::c_LooseChannelCount,
+			"The GPU and the .bmaterial file must agree on how many loose channels there are");
+		static_assert(
+			static_cast<size_t>(idl::PbrChannel::kBaseColorR) ==
+					assetlib::ChannelIndex(assetlib::PbrChannel::kBaseColorR) &&
+				static_cast<size_t>(idl::PbrChannel::kAo) ==
+					assetlib::ChannelIndex(assetlib::PbrChannel::kAo) &&
+				static_cast<size_t>(idl::PbrChannel::kNormalX) ==
+					assetlib::ChannelIndex(assetlib::PbrChannel::kNormalX),
+			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
 		idl::LoosePbrMaterial material{};
 		// Base color R,G,B,A -> white (any channel samples 1.0).
@@ -779,8 +815,33 @@ namespace bgl
 		material.roughnessFactor = desc.roughnessFactor;
 		material.alphaCutoff     = desc.alphaCutoff;
 
-		const core::slot_handle slot = m_Loose.Add(material);
+		return material;
+	}
+
+	MaterialHandle
+	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
+	{
+		const core::slot_handle slot = m_Loose.Add(BuildLoosePbrMaterial(desc));
 		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, slot };
+	}
+
+	void
+	Scene::UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc)
+	{
+		if (material.materialType != MaterialType::kLoosePbr)
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateLoosePbrMaterial is not a kLoosePbr material");
+		}
+		if (!m_Loose.IsValid(material.handle))
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateLoosePbrMaterial has expired or is invalid");
+		}
+
+		// See UpdatePbrMaterial: the entry is rewritten in place, so every submesh bound to this
+		// material follows it and the handle stays valid.
+		m_Loose.Set(material.handle, BuildLoosePbrMaterial(desc));
 	}
 
 	void
@@ -825,7 +886,7 @@ namespace bgl
 		{
 			throw SceneError("GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh");
 		}
-		if (!IsGeomSlotValid(geom.handle))
+		if (!IsGeomAlive(geom))
 		{
 			throw SceneError("GeomHandle passed to SetSubmeshMaterial has expired or is invalid");
 		}
@@ -834,13 +895,13 @@ namespace bgl
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
 
-		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (submeshIndex >= asset.submeshes.count)
+		const idl::RangeWithCount& submeshes = m_GeomSubmeshes[geom.handle.index];
+		if (submeshIndex >= submeshes.count)
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}
 
-		const uint32_t globalIndex = asset.submeshes.range.offsetStart + submeshIndex;
+		const uint32_t globalIndex = submeshes.range.offsetStart + submeshIndex;
 
 		auto submesh     = m_SubmeshBuffer.AtIndex(globalIndex);
 		submesh.material = material.handle;
@@ -856,25 +917,18 @@ namespace bgl
 			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh");
 		}
 
-		if (!m_GeomAssets.valid(geom.handle.index, geom.handle.generation))
+		if (!IsGeomAlive(geom))
 		{
 			throw SceneError("GeomHandle passed to DeleteGeom refers to a deleted or unknown geom");
 		}
 
-		const GeomAsset& asset = m_GeomAssets[geom.handle.index];
-		if (asset.refCount != 0)
-		{
-			throw SceneError(
-				std::format(
-					"Cannot delete geom still referenced by {} live mesh instance(s)",
-					asset.refCount));
-		}
+		const auto& submeshes = m_GeomSubmeshes[geom.handle.index];
 
 		// The geometry's per-part ranges live on each Submesh, and each submesh owns its own, so
 		// free them per submesh before releasing the submesh range itself.
-		const uint32_t submeshRoot = asset.submeshes.range.offsetStart;
+		const uint32_t submeshRoot = submeshes.range.offsetStart;
 
-		for (uint32_t i = 0; i < asset.submeshes.count; ++i)
+		for (uint32_t i = 0; i < submeshes.count; ++i)
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
@@ -885,7 +939,7 @@ namespace bgl
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);
-		m_GeomAssets.release_slot(geom.handle.index);
+		m_GeomSubmeshes.release_slot(geom.handle.index);
 	}
 
 	TextureAssetHandle

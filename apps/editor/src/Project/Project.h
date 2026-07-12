@@ -5,6 +5,12 @@ class Project
 public:
 	static constexpr auto c_FileExtension = ".berniniproject";
 
+	static constexpr auto c_MeshesDirectoryName      = "Meshes";
+	static constexpr auto c_TexturesDirectoryName    = "Textures";
+	static constexpr auto c_TexturesSrcDirectoryName = "textures_src";
+	static constexpr auto c_MaterialsDirectoryName   = "Materials";
+	static constexpr auto c_LevelsDirectoryName      = "Levels";
+
 	/**
 	 * Creates a new project on disk: scaffolds the Data directory tree
 	 * (Meshes, Textures, Materials) and writes the project metadata file.

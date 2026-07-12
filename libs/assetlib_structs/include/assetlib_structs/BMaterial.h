@@ -30,7 +30,55 @@ namespace assetlib
 		operator==(const SourceStamp&, const SourceStamp&) = default;
 	};
 
-	inline constexpr size_t c_LooseChannelCount = 9;
+	enum class PbrChannel : size_t
+	{
+		kBaseColorR = 0,
+		kBaseColorG,
+		kBaseColorB,
+		kBaseColorA,
+
+		kAo,
+		kRoughness,
+		kMetallic,
+
+		kNormalX,
+		kNormalY,
+
+		kCount,
+	};
+
+	inline constexpr size_t c_LooseChannelCount = static_cast<size_t>(PbrChannel::kCount);
+
+	/** A contiguous run of `routes` that the bake composites into one map. */
+	struct ChannelGroup
+	{
+		PbrChannel first;
+		size_t     count;
+	};
+
+	inline constexpr ChannelGroup c_BaseColorChannels{ PbrChannel::kBaseColorR, 4 };
+	inline constexpr ChannelGroup c_OrmChannels{ PbrChannel::kAo, 3 };
+	inline constexpr ChannelGroup c_NormalChannels{ PbrChannel::kNormalX, 2 };
+
+	/** The index of `channel` in `BMaterial::routes`. */
+	[[nodiscard]] inline constexpr size_t
+	ChannelIndex(PbrChannel channel) noexcept
+	{
+		return static_cast<size_t>(channel);
+	}
+
+	/** The index of the `component`-th channel of `group` in `BMaterial::routes`. */
+	[[nodiscard]] inline constexpr size_t
+	ChannelIndex(const ChannelGroup& group, size_t component) noexcept
+	{
+		return ChannelIndex(group.first) + component;
+	}
+
+	static_assert(
+		c_BaseColorChannels.count + c_OrmChannels.count + c_NormalChannels.count ==
+			c_LooseChannelCount,
+		"The channel groups must partition routes exactly; a channel in none of them is never "
+		"baked");
 
 	struct BMaterial
 	{
