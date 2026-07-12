@@ -41,7 +41,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto scene          = graphics->CreateScene(std::move(sceneDesc));
 		auto view           = graphics->CreateSceneView(scene, 100);
-		auto assertMaterial = bgl::MaterialHandle(bgl::MaterialType::kAssert, core::slot_handle());
+		auto assertMaterial = bgl::MaterialHandle{ .materialType = bgl::MaterialType::kAssert };
 		auto cube           = scene->AddCubeGeom(assertMaterial);
 		view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
 

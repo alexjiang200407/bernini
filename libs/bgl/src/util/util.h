@@ -2,6 +2,7 @@
 #include "types/Format.h"
 #include "types/FormatInfo.h"
 #include <bgl/GeomType.h>
+#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl/PsoType.h>
 
@@ -11,5 +12,5 @@ namespace bgl
 	GetFormatInfo(Format format);
 
 	PsoType
-	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material);
+	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer);
 }

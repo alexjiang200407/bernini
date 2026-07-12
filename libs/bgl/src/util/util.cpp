@@ -95,21 +95,32 @@ namespace bgl
 	}
 
 	PsoType
-	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material)
+	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
 	{
+		if (layer == LayerType::kTransparent)
+			throw std::runtime_error(
+				"LayerType::kTransparent has no PSO: alpha blending is not implemented");
+
+		const bool cutout = layer == LayerType::kAlphaTest;
+
 		switch (geom)
 		{
 		case GeomType::kStaticMesh:
 			switch (material)
 			{
 			case MaterialType::kPBR:
-				return PsoType::kOpaque_StaticMesh_PBR;
+				return cutout ? PsoType::kAlphaTest_StaticMesh_PBR :
+				                PsoType::kOpaque_StaticMesh_PBR;
 			case MaterialType::kLoosePbr:
-				return PsoType::kOpaque_StaticMesh_LoosePbr;
+				return cutout ? PsoType::kAlphaTest_StaticMesh_LoosePbr :
+				                PsoType::kOpaque_StaticMesh_LoosePbr;
+
+			// Neither shades a base color, so there is no alpha to cut against.
 			case MaterialType::kNull:
 				return PsoType::kOpaque_StaticMesh_Null;
 			case MaterialType::kAssert:
 				return PsoType::kAssert_StaticMesh;
+
 			case MaterialType::kInvalid:
 			case MaterialType::kCount:
 				gfatal("Invalid MaterialType");
