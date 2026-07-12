@@ -18,14 +18,11 @@ namespace bgl
 
 	struct MeshMeta
 	{
-		uint32_t                       geomIndex = 0;
 		std::vector<core::slot_handle> submeshInstances;
 	};
 
 	/**
 	 * Owns a per-view instance buffer and references a shared Scene for geometry.
-	 * The geometry refcount lives on the Scene; this view inc/decrements it as
-	 * instances are created/removed, and its destructor releases the remaining ones.
 	 */
 	class SceneView : public core::RefCounter<ISceneView>
 	{

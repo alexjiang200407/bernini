@@ -46,14 +46,29 @@ namespace
 	}
 }
 
-MaterialOutputNode::MaterialOutputNode() = default;
+MaterialOutputNode::MaterialOutputNode() : MaterialOutputNode(3) {}
+
+MaterialOutputNode::MaterialOutputNode(unsigned int baseColorArity)
+{
+	m_GroupSizes[0] = std::min(baseColorArity, c_GroupChannels[0]);
+}
+
+void
+MaterialOutputNode::AddExtraRows(QWidget*, QFormLayout*)
+{}
 
 unsigned int
 MaterialOutputNode::GroupChannelOffset(unsigned int group)
 {
 	unsigned int offset = 0;
-	for (unsigned int g = 0; g < group && g < c_GroupCount; ++g) offset += c_GroupSizes[g];
+	for (unsigned int g = 0; g < group && g < c_GroupCount; ++g) offset += c_GroupChannels[g];
 	return offset;
+}
+
+bool
+MaterialOutputNode::IsCollapsed(unsigned int group) const
+{
+	return group < c_GroupCount && m_GroupPorts[group] == 1 && m_GroupSizes[group] > 1;
 }
 
 unsigned int
@@ -98,9 +113,9 @@ MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 	if (ref.group >= c_GroupCount)
 		return ChannelData::Type(1);
 
-	// One wide port takes the whole group; expanded, each port takes a single channel.
-	const bool collapsed = m_GroupPorts[ref.group] == 1 && c_GroupSizes[ref.group] > 1;
-	return ChannelData::Type(collapsed ? c_GroupSizes[ref.group] : 1);
+	// One wide port takes the whole group; expanded, each port takes a single channel. The opaque
+	// node's base color is a 3-wide RGB port, so a texture's RGBA bundle will not connect to it.
+	return ChannelData::Type(IsCollapsed(ref.group) ? m_GroupSizes[ref.group] : 1);
 }
 
 void
@@ -113,7 +128,7 @@ MaterialOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::
 	// QtNodes pushes a null payload when a wire is removed, so this covers connect and disconnect.
 	auto channelData = std::dynamic_pointer_cast<ChannelData>(data);
 
-	if (m_GroupPorts[ref.group] == 1 && c_GroupSizes[ref.group] > 1)
+	if (IsCollapsed(ref.group))
 		m_Bundles[ref.group] = std::move(channelData);
 	else
 		m_Channels[GroupChannelOffset(ref.group) + ref.offset] = std::move(channelData);
@@ -130,17 +145,20 @@ MaterialOutputNode::Route(unsigned int index) const
 	// Locate the group this output channel belongs to, and its position inside that group.
 	unsigned int group  = 0;
 	unsigned int offset = index;
-	while (group < c_GroupCount && offset >= c_GroupSizes[group])
+	while (group < c_GroupCount && offset >= c_GroupChannels[group])
 	{
-		offset -= c_GroupSizes[group];
+		offset -= c_GroupChannels[group];
 		++group;
 	}
 	if (group >= c_GroupCount)
 		return {};
 
+	if (offset >= m_GroupSizes[group])
+		return {};
+
 	// A collapsed group draws every channel from its one wide payload; an expanded one from the
 	// per-channel payload wired into that channel's own port.
-	if (m_GroupPorts[group] == 1 && c_GroupSizes[group] > 1)
+	if (IsCollapsed(group))
 		return m_Bundles[group] ? m_Bundles[group]->At(offset) : ChannelData::Route{};
 
 	const std::shared_ptr<ChannelData>& channel = m_Channels[index];
@@ -154,7 +172,7 @@ MaterialOutputNode::SetGroupExpanded(unsigned int group, bool expanded)
 		return;
 
 	const unsigned int oldCount = m_GroupPorts[group];
-	const unsigned int newCount = expanded ? c_GroupSizes[group] : 1u;
+	const unsigned int newCount = expanded ? m_GroupSizes[group] : 1u;
 	if (oldCount == newCount)
 		return;
 
@@ -180,7 +198,8 @@ MaterialOutputNode::SetGroupExpanded(unsigned int group, bool expanded)
 	// The removed ports took their wires with them, so the group is now unrouted either way.
 	m_Bundles[group]                 = nullptr;
 	const unsigned int channelOffset = GroupChannelOffset(group);
-	for (unsigned int i = 0; i < c_GroupSizes[group]; ++i) m_Channels[channelOffset + i] = nullptr;
+	for (unsigned int i = 0; i < c_GroupChannels[group]; ++i)
+		m_Channels[channelOffset + i] = nullptr;
 
 	// The port signals rebase connections but do not repaint; this is what redraws the node.
 	Q_EMIT requestNodeUpdate();
@@ -208,6 +227,8 @@ MaterialOutputNode::embeddedWidget()
 
 	m_Roughness = MakeFactorSpin(m_Widget, m_RoughnessFactor);
 	form->addRow(QStringLiteral("Roughness"), m_Roughness);
+
+	AddExtraRows(m_Widget, form);
 
 	// Queued, not called directly: the click arrives while the proxy widget is dispatching the mouse
 	// event, and QColorDialog::getColor spins a nested event loop. Opening it once the proxy has
@@ -333,7 +354,7 @@ MaterialOutputNode::load(const QJsonObject& json)
 	{
 		const bool expanded = group < static_cast<unsigned int>(split.size()) &&
 		                      split[static_cast<int>(group)].toBool();
-		m_GroupPorts[group] = expanded ? c_GroupSizes[group] : 1u;
+		m_GroupPorts[group] = expanded ? m_GroupSizes[group] : 1u;
 	}
 
 	// The widgets only exist once the node has been shown; keep them in step when they do.
@@ -366,7 +387,7 @@ MaterialOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) cons
 	if (ref.group >= c_GroupCount)
 		return {};
 
-	if (m_GroupPorts[ref.group] == 1 && c_GroupSizes[ref.group] > 1)
+	if (IsCollapsed(ref.group))
 		return QString::fromLatin1(c_GroupCaptions[ref.group]);
 
 	return QString::fromLatin1(c_Captions[GroupChannelOffset(ref.group) + ref.offset]);

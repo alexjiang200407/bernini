@@ -77,6 +77,123 @@ TEST_CASE("Geometry", "[geometry][render]")
 		CHECK(bgl::test::MatchesGolden("assets/golden/cube.exp.png", "assets/golden/cube.got.png"));
 	}
 
+	SECTION("Draw Plane - plane.png")
+	{
+		auto scene = gfxBase->CreateScene(sceneDesc);
+		auto view  = gfxBase->CreateSceneView(scene, 8);
+
+		// Head-on, the same camera the cube uses: the quad faces +Z, so this looks straight at it and
+		// it should render as a bounded square, not a surface running off to a horizon.
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 0.0f, 20.0f),
+				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+		// Deliberately not square: a width/height swap would otherwise be invisible here.
+		auto planeGeom = scene->AddPlaneGeom(4, 4, 12.0f, 6.0f);
+		view->CreateStaticMeshInstance(planeGeom, glm::mat4(1.0f));
+
+		auto context     = bgl::RenderContext();
+		context.view     = view;
+		context.camera   = camera;
+		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+
+		gfxBase->DrawFrame(target, context);
+		gfxBase->ScreenshotRaw(target, "assets/golden/plane.got.png");
+
+		CHECK(
+			bgl::test::MatchesGolden("assets/golden/plane.exp.png", "assets/golden/plane.got.png"));
+	}
+
+	SECTION("A subdivided plane splits into meshlets and still draws")
+	{
+		// 64 x 64 quads is 8192 triangles -- far past the 124-triangle / 64-vertex cap a single
+		// meshlet can hold, so unlike the flat 1x1 plane this actually exercises the meshlet split.
+		auto denseDesc                    = sceneDesc;
+		denseDesc.maxMeshlets             = 1024;
+		denseDesc.maxSubmeshes            = 8;
+		denseDesc.maxVertexBufferByteSize = 4u * 1024u * 1024u;
+		denseDesc.maxIndices              = 200000;
+
+		auto scene = gfxBase->CreateScene(denseDesc);
+		auto view  = gfxBase->CreateSceneView(scene, 8);
+
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 0.0f, 20.0f),
+				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+		bgl::GeomHandle planeGeom;
+		REQUIRE_NOTHROW(planeGeom = scene->AddPlaneGeom(64, 64, 12.0f, 6.0f));
+		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(planeGeom, glm::mat4(1.0f)));
+
+		auto context     = bgl::RenderContext();
+		context.view     = view;
+		context.camera   = camera;
+		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+
+		REQUIRE_NOTHROW(gfxBase->DrawFrame(target, context));
+
+		// A subdivided plane is the same surface as a flat one, so it must land on the same pixels --
+		// which is what catches a meshlet split that drops or duplicates a triangle.
+		gfxBase->ScreenshotRaw(target, "assets/golden/plane_dense.got.png");
+		CHECK(
+			bgl::test::MatchesGolden(
+				"assets/golden/plane.exp.png",
+				"assets/golden/plane_dense.got.png"));
+	}
+
+	SECTION("A rotated plane is the floor - plane_floor.png")
+	{
+		// The plane carries no orientation of its own; a floor is just the quad rotated onto XZ. That
+		// is the whole argument for it being an upright quad, so it is worth pinning down.
+		auto scene = gfxBase->CreateScene(sceneDesc);
+		auto view  = gfxBase->CreateSceneView(scene, 8);
+
+		// Above the floor, looking down at it.
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 6.0f, 12.0f),
+				glm::vec3(0.0f, 0.0f, 0.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+		// -90 degrees about X takes +Z (the quad's normal) to +Y (up).
+		const auto toFloor =
+			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+		auto planeGeom = scene->AddPlaneGeom(4, 4, 10.0f, 10.0f);
+		view->CreateStaticMeshInstance(planeGeom, toFloor);
+
+		auto context     = bgl::RenderContext();
+		context.view     = view;
+		context.camera   = camera;
+		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+
+		gfxBase->DrawFrame(target, context);
+		gfxBase->ScreenshotRaw(target, "assets/golden/plane_floor.got.png");
+
+		// Visible from above rather than back-face culled to an empty frame: the rotation took the
+		// front face with it, so the winding is right.
+		CHECK(
+			bgl::test::MatchesGolden(
+				"assets/golden/plane_floor.exp.png",
+				"assets/golden/plane_floor.got.png"));
+	}
+
+	SECTION("AddPlaneGeom rejects a zero segment count")
+	{
+		// A zero would divide by zero deriving the UVs, and there is no sensible plane to build.
+		auto scene = gfxBase->CreateScene(sceneDesc);
+
+		CHECK_THROWS_AS(scene->AddPlaneGeom(0, 4, 1.0f, 1.0f), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddPlaneGeom(4, 0, 1.0f, 1.0f), bgl::SceneError);
+	}
+
 	SECTION("Draw Sphere and Cube - sphere_cube.png")
 	{
 		auto scene = gfxBase->CreateScene(sceneDesc);

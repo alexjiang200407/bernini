@@ -4,6 +4,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/texture_prune.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -13,6 +14,38 @@ namespace
 		kMesh,
 		kMaterial,
 	};
+
+	std::string
+	formatBytes(uint64_t bytes)
+	{
+		constexpr std::array<const char*, 4> c_Units = { { "B", "KiB", "MiB", "GiB" } };
+
+		auto   value = static_cast<double>(bytes);
+		size_t unit  = 0;
+		while (value >= 1024.0 && unit + 1 < c_Units.size())
+		{
+			value /= 1024.0;
+			++unit;
+		}
+
+		char text[32] = {};
+		std::snprintf(text, sizeof(text), unit == 0 ? "%.0f %s" : "%.1f %s", value, c_Units[unit]);
+		return text;
+	}
+
+	// Reads a yes/no answer from stdin. A closed or piped-empty stdin answers no: the safe direction
+	// for a destructive command that nobody is there to confirm.
+	bool
+	confirm(const std::string& question)
+	{
+		std::cout << question << " [y/N] " << std::flush;
+
+		std::string answer;
+		if (!std::getline(std::cin, answer))
+			return false;
+
+		return answer == "y" || answer == "Y" || answer == "yes";
+	}
 
 	// Both containers open with a 4-byte magic, so the kind is read from the file rather than guessed
 	// from its extension -- `describe` then works on a file named anything.
@@ -88,6 +121,25 @@ main(int argc, char** argv)
 		describeBrief,
 		"Mesh only: print the summary and material table, but not every submesh");
 
+	std::string pruneDataRoot;
+	std::string pruneTextureDir = "Textures";
+	bool        pruneDryRun     = false;
+	bool        pruneYes        = false;
+
+	auto* prune = app.add_subcommand(
+		"prune",
+		"Delete the baked textures under a project's data root that no material references any "
+		"more");
+	prune->add_option("-d,--data-root", pruneDataRoot, "Project data directory to prune")
+		->required()
+		->check(CLI::ExistingDirectory);
+	prune->add_option(
+		"-t,--texture-dir",
+		pruneTextureDir,
+		"Directory the material bake writes into, relative to the data root (default: Textures)");
+	prune->add_flag("--dry-run", pruneDryRun, "List what would be deleted and delete nothing");
+	prune->add_flag("-y,--yes", pruneYes, "Delete without asking for confirmation");
+
 	CLI11_PARSE(app, argc, argv);
 
 	if (*bake)
@@ -149,6 +201,71 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("describe failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*prune)
+	{
+		try
+		{
+			auto desc       = assetlib::TexturePruneDesc();
+			desc.dataRoot   = pruneDataRoot;
+			desc.textureDir = pruneTextureDir;
+
+			const auto scan = assetlib::findUnusedBakedTextures(desc);
+
+			spdlog::info(
+				"Scanned {} materials: {} baked maps still referenced, {} present in '{}'",
+				scan.materialsScanned,
+				scan.liveMaps,
+				scan.candidates,
+				pruneTextureDir);
+
+			if (scan.unused.empty())
+			{
+				spdlog::info("Nothing to prune.");
+				return 0;
+			}
+
+			// The listing is the command's output, so it goes to stdout rather than through the logger.
+			std::cout << "Unused (" << scan.unused.size() << ", " << formatBytes(scan.bytes)
+					  << "):\n";
+			for (const assetlib::UnusedTexture& texture : scan.unused)
+				std::cout << "  " << texture.path << "  (" << formatBytes(texture.bytes) << ")\n";
+			std::cout << std::flush;
+
+			if (pruneDryRun)
+			{
+				spdlog::info("Dry run: nothing deleted. Re-run without --dry-run to delete.");
+				return 0;
+			}
+
+			if (!pruneYes && !confirm(
+								 "Delete " + std::to_string(scan.unused.size()) +
+								 " unused baked textures (" + formatBytes(scan.bytes) + ")?"))
+			{
+				spdlog::info("Cancelled: nothing deleted.");
+				return 0;
+			}
+
+			const auto result = assetlib::deleteUnusedBakedTextures(scan, desc);
+
+			spdlog::info(
+				"Deleted {} textures, reclaiming {}",
+				result.deleted,
+				formatBytes(result.bytes));
+
+			if (!result.failed.empty())
+			{
+				for (const std::string& path : result.failed)
+					spdlog::error("could not delete '{}'", path);
+				return 1;
+			}
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("prune failed: {}", e.what());
 			return 1;
 		}
 	}

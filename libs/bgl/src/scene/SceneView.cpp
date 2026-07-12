@@ -69,19 +69,8 @@ namespace bgl
 
 	SceneView::~SceneView() noexcept
 	{
-		// Every live instance contributed a refcount to its geom on the shared Scene.
-		// Release them here so Scene::DeleteGeom works once this view is gone. The
-		// Scene outlives the view (m_Scene keeps it alive), so the slots stay valid.
-		for (uint32_t i = 0; i < m_MaxInstances; ++i)
-		{
-			if (!m_MeshBuffer.IsIndexValid(i))
-				continue;
-
-			const uint32_t geomIndex = m_MeshBuffer.MetaAt(i).geomIndex;
-			if (m_SceneRaw != nullptr && m_SceneRaw->IsGeomIndexValid(geomIndex))
-				m_SceneRaw->DecGeomRef(geomIndex);
-		}
-
+		// Nothing to release back to the Scene: instances reference geometry by value and keep
+		// nothing alive. Dropping this view's buffers drops its instances with them.
 		logger::trace("~SceneView");
 	}
 
@@ -94,7 +83,7 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance must be of type kStaticMesh");
 		}
 
-		if (!m_SceneRaw->IsGeomSlotValid(geom.handle))
+		if (!m_SceneRaw->IsGeomAlive(geom))
 		{
 			throw SceneError(
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
@@ -102,20 +91,22 @@ namespace bgl
 
 		try
 		{
-			const GeomAsset& asset = m_SceneRaw->GetGeomAsset(geom.handle.index);
+			// Copied by value, and never revisited: from here the instance no longer refers to the
+			// geom, only to the range its submeshes occupied. Deleting the geom out from under it
+			// leaves it drawing whatever lands in that range next.
+			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
 			auto mesh      = idl::Mesh();
 			mesh.transform = transform;
-			mesh.submeshes = asset.submeshes;
+			mesh.submeshes = submeshes;
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
-			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
-			meta.geomIndex = geom.handle.index;
+			auto& meta = m_MeshBuffer.MetaAt(meshHandle.index);
 
 			// The PSO bucket is a property of each submesh (idl::Submesh::pso), so the instance
 			// carries only its mesh + submesh index; the compaction sort resolves the PSO.
-			const uint32_t submeshCount = asset.submeshes.count;
+			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
 			for (uint32_t s = 0; s < submeshCount; ++s)
 			{
@@ -125,8 +116,6 @@ namespace bgl
 
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
-
-			m_SceneRaw->IncGeomRef(geom.handle.index);
 
 			auto instanceHandle   = MeshInstanceHandle();
 			instanceHandle.handle = meshHandle;
@@ -159,13 +148,6 @@ namespace bgl
 				m_InstanceBuffer.Erase(submeshInstance);
 			}
 		}
-
-		const uint32_t geomIndex = meta.geomIndex;
-		gassert(
-			m_SceneRaw->IsGeomIndexValid(geomIndex),
-			"Mesh record references a missing geom asset");
-
-		m_SceneRaw->DecGeomRef(geomIndex);
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
 	}
