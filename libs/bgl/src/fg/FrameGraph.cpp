@@ -63,6 +63,17 @@ namespace bgl
 			       a.access.underlying() == b.access.underlying() && a.layout == b.layout;
 		}
 
+		bool
+		NeedsBarrier(const AccessState& before, const AccessState& after) noexcept
+		{
+			if (!StateEqual(before, after))
+			{
+				return true;
+			}
+
+			return after.access.any(BarrierAccessFlag::kUnorderedAccess);
+		}
+
 		AccessState
 		Merge(const AccessState& a, const AccessState& b) noexcept
 		{
@@ -404,7 +415,7 @@ namespace bgl
 			for (const auto& [name, target] : targets)
 			{
 				ImportedRes& res = m_Imported[name];
-				if (StateEqual(res.current, target))
+				if (!NeedsBarrier(res.current, target))
 				{
 					continue;
 				}
