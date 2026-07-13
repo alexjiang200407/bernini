@@ -177,13 +177,21 @@ namespace background
 		{
 			dialog.setCancelButtonText("Cancel");
 
+			// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
+			// macros, which record a method index, whereas the pointer-to-member disconnect only matches
+			// connections that recorded a slot object -- so it finds nothing, returns false, and leaves
+			// the screen free to dismiss itself the moment Cancel is pressed.
 			// QProgressDialog wires canceled() to its own cancel(), which hides the screen. We want the
 			// opposite: keep it up, and ask the worker to stop.
-			QObject::disconnect(
-				&dialog,
-				&QProgressDialog::canceled,
-				&dialog,
-				&QProgressDialog::cancel);
+			//
+			// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
+			// macros, which record a method index, whereas the pointer-to-member disconnect only matches
+			// connections that recorded a slot object -- so it would find nothing, quietly return false,
+			// and leave the screen free to dismiss itself the moment Cancel is pressed.
+			const bool disconnected =
+				QObject::disconnect(&dialog, SIGNAL(canceled()), &dialog, SLOT(cancel()));
+			Q_ASSERT(disconnected);
+			Q_UNUSED(disconnected);
 
 			QObject::connect(&dialog, &QProgressDialog::canceled, &dialog, [&]() {
 				source.request_stop();
