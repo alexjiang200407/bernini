@@ -4,7 +4,6 @@ If exception occurs should show popup. Import mesh, texture, material, OS errors
 Delete Material / Texture / Mesh in content explorer. Should check for no references first
 Material should show current baked textures if any
 Show thumbnail for meshes
-Set Default Material Greyed out if already default
 Bake Material button removed. Context menu action in Content Explorer
 Make default material 0.5 metallic and 1 roughness
 

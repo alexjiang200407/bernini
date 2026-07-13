@@ -87,6 +87,11 @@ private:
 	void
 	SetDefaultMaterial(int submeshIndex);
 
+	/** Whether the `.bmesh` already names `materialPath` as `submeshIndex`'s material -- in which case
+	 *  Set Default Material would rewrite it to what it already says. */
+	[[nodiscard]] bool
+	IsSubmeshDefault(int submeshIndex, const QString& materialPath) const;
+
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
 
