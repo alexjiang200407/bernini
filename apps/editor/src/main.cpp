@@ -4,6 +4,8 @@
 #include <QFile>
 #include <QTextStream>
 
+#include <core/err/util.h>
+
 #include "MainWindow.h"
 
 namespace
@@ -44,6 +46,8 @@ namespace
 int
 main(int argc, char* argv[])
 {
+	core::install_crash_handlers();
+
 	QApplication app(argc, argv);
 
 	qInstallMessageHandler(LogToFile);
