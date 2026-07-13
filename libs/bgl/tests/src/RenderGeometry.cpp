@@ -5,6 +5,7 @@
 #include "gfx/GraphicsBase.h"
 #include "resource/ResourceManager.h"
 #include "util/GoldenImage.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 
 TEST_CASE("Geometry", "[geometry][render]")
@@ -14,7 +15,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
 	auto gfx                      = bgl::CreateGraphics(opts);
 
@@ -404,7 +405,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
 	auto gfx                      = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
