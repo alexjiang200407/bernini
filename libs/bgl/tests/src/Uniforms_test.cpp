@@ -1,12 +1,13 @@
 #include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/MeshletPipeline.h"
+#include "util/GpuValidation.h"
 
 TEST_CASE("Uniforms", "[uniforms]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
 	opts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 

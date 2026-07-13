@@ -9,6 +9,7 @@
 #include "resource/Texture.h"
 #include "types/ClearValue.h"
 #include "types/Format.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 
@@ -16,7 +17,7 @@ TEST_CASE("Readback", "[readback]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
 
 	auto gfx = bgl::CreateGraphics(opts);

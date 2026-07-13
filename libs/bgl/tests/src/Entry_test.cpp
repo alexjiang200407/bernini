@@ -2,13 +2,14 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "scene/EntryBuffer.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 
 TEST_CASE("EntryBuffer", "[entry][scene]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
 
 	auto gfx = bgl::CreateGraphics(opts);

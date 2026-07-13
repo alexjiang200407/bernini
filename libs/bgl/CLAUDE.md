@@ -28,6 +28,20 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 ## bgl_tests
 
 - After running bgl_tests always check the log to see the warnings, errors and basic info.
+- The suite is slow: nearly all of its runtime is `CreateGraphics`, which every test does at least
+  once (and Catch2 re-runs a `TEST_CASE` body per `SECTION`, so a multi-section test pays it again
+  each time). Budget minutes, not seconds, and do not mistake that for a hang.
+- **D3D12 GPU-based validation is opt-in**, via `--gpu-validation`:
+
+  ```bash
+  just run bgl_tests                       # ~5 min: debug layer on, GPU validation off
+  just run bgl_tests -- --gpu-validation   # ~10 min: for a final verification run
+  ```
+
+  It patches every shader, which takes device creation from ~3s to ~18s and doubles the suite. The
+  D3D12 **debug layer is a separate thing and stays on either way** — it is what catches ordinary API
+  misuse; this only adds the shader-level checks. Run it before merging anything that touches
+  shaders, barriers, or descriptors.
 
 ## Shaders
 
