@@ -32,9 +32,7 @@ namespace bgl
 		GetScene() const noexcept = 0;
 
 		/**
-		 * Places an instance of `geom` in this view. Material is a property of the geom's
-		 * submeshes (set at geom creation or via Scene::SetSubmeshMaterial), so it is not passed
-		 * here; every submesh's PSO is derived from its own cached material.
+		 * Places an instance of `geom` in this view, one drawable per submesh.
 		 */
 		virtual MeshInstanceHandle
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
@@ -49,6 +47,36 @@ namespace bgl
 		 */
 		virtual void
 		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
+
+		/**
+		 * Overrides the material of one submesh of ONE instance, leaving the geom's default -- and
+		 * every other instance of it -- alone. This is what a cosmetic skin is: one mesh, a different
+		 * material per unit. The PSO follows the override, so an opaque instance and a cutout instance
+		 * of the same geom draw from different pipelines.
+		 *
+		 * The override outranks the default: a later Scene::SetSubmeshMaterial does not disturb it.
+		 *
+		 * Like every material binding this is a raw slot index, so deleting a material an instance
+		 * still overrides with re-points that instance at whatever takes the slot next. Clear the
+		 * override first, or let gamelib's AssetManager refcount it.
+		 *
+		 * @throws SceneError if the instance handle is invalid, the material is invalid, or
+		 *         `submeshIndex` is out of range for the instance's geometry.
+		 */
+		virtual void
+		SetSubmeshMaterialOverride(
+			MeshInstanceHandle instance,
+			uint32_t           submeshIndex,
+			MaterialHandle     material) = 0;
+
+		/**
+		 * Drops the override set by SetSubmeshMaterialOverride; that submesh returns to the geom's
+		 * default material. A no-op on a submesh that has no override.
+		 *
+		 * @throws SceneError if the instance handle is invalid, or `submeshIndex` is out of range.
+		 */
+		virtual void
+		ClearSubmeshMaterialOverride(MeshInstanceHandle instance, uint32_t submeshIndex) = 0;
 
 		virtual uint32_t
 		GetInstanceCount() const noexcept = 0;

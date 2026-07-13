@@ -67,8 +67,11 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	if (old->name() == modelName)
 		return false;
 
-	const QPointF     position = nodeData(oldId, NodeRole::Position).value<QPointF>();
-	const QJsonObject state    = nodeData(oldId, NodeRole::InternalData).value<QJsonObject>();
+	const QPointF position = nodeData(oldId, NodeRole::Position).value<QPointF>();
+
+	// Straight off the delegate, not through nodeData(InternalData): that wraps the state in an
+	// "internal-data" envelope, and load() expects the state itself.
+	const QJsonObject state = old->save();
 
 	const std::unordered_set<ConnectionId> wires = allConnectionIds(oldId);
 	const std::vector<ConnectionId>        incoming(wires.begin(), wires.end());
@@ -85,7 +88,12 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 
 	setNodeData(newId, NodeRole::Position, position);
 
-	setNodeData(newId, NodeRole::InternalData, state);
+	// Hand the state to the delegate itself. DataFlowGraphModel::setNodeData ignores InternalData
+	// outright, so going through it would silently drop the factors and the split layout the artist
+	// had dialled in -- and switching a material between opaque and cutout would quietly reset it.
+	// Loading straight after the node is created is what QtNodes' own loadNode does.
+	if (MaterialOutputNode* sink = delegateModel<MaterialOutputNode>(newId); sink != nullptr)
+		sink->load(state);
 
 	for (const ConnectionId& wire : incoming)
 	{

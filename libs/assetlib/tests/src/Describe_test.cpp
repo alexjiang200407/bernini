@@ -10,15 +10,15 @@ namespace
 	routedMaterial()
 	{
 		BMaterial material;
-		material.name             = "skin";
-		material.mode             = MaterialMode::kLoose;
-		material.metallicFactor   = 0.0f;
-		material.roughnessFactor  = 0.75f;
-		material.baseColorTexture = "Textures/basecolor_dead.ktx2";
+		material.name                 = "skin";
+		material.mode                 = MaterialMode::kLoose;
+		material.pbr.metallicFactor   = 0.0f;
+		material.pbr.roughnessFactor  = 0.75f;
+		material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
-		material.routes[0] = { "textures_src/skin.ktx2", 0 };
-		material.routes[1] = { "textures_src/skin.ktx2", 1 };
-		material.routes[5] = { "textures_src/mask.ktx2", 3 };  // roughness <- mask.a
+		material.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };
+		material.pbr.routes[1] = { "textures_src/skin.ktx2", 1 };
+		material.pbr.routes[5] = { "textures_src/mask.ktx2", 3 };  // roughness <- mask.a
 		return material;
 	}
 }
@@ -62,7 +62,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	}
 
 	BMaterial material;
-	material.routes[0] = { "textures_src/skin.ktx2", 0 };
+	material.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };
 
 	SECTION("a source that has drifted from its stamp is STALE")
 	{
@@ -73,8 +73,9 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 
 	SECTION("a source matching its stamp is up to date")
 	{
-		material.routeStamps[0]   = stampOf(source);
-		material.baseColorTexture = "Textures/baked.ktx2";  // a bake that actually produced a map
+		material.pbr.routeStamps[0] = stampOf(source);
+		material.pbr.baseColorTexture =
+			"Textures/baked.ktx2";  // a bake that actually produced a map
 
 		const std::string text = describe(material, root);
 		CHECK(text.find("up to date") != std::string::npos);
@@ -83,7 +84,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 
 	SECTION("a missing source is called out rather than reported as a mismatch")
 	{
-		material.routes[0] = { "textures_src/gone.ktx2", 0 };
+		material.pbr.routes[0] = { "textures_src/gone.ktx2", 0 };
 
 		const std::string text = describe(material, root);
 		CHECK(text.find("source is missing") != std::string::npos);

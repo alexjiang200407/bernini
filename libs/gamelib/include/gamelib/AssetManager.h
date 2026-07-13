@@ -128,6 +128,27 @@ namespace game
 			std::string_view materialRelPath);
 
 		/**
+		 * Overrides one submesh of ONE instance with the material at `materialRelPath`, leaving the
+		 * geom's default -- and every other instance of it -- alone. A cosmetic skin.
+		 *
+		 * Acquires the new material and releases the override this instance held, so the override is a
+		 * reference like any other: the material cannot be destroyed while an instance still wears it.
+		 * That is what makes bgl's raw-slot binding safe (see ISceneView::SetSubmeshMaterialOverride).
+		 *
+		 * @throws bgl::SceneError if the instance is not one this manager owns, or the submesh index
+		 *         is out of range.
+		 */
+		void
+		SetInstanceSubmeshMaterial(
+			bgl::MeshInstanceHandle instance,
+			uint32_t                submeshIndex,
+			std::string_view        materialRelPath);
+
+		/** Drops the override; the submesh returns to the geom's default and the material is released. */
+		void
+		ClearInstanceSubmeshMaterial(bgl::MeshInstanceHandle instance, uint32_t submeshIndex);
+
+		/**
 		 * Swaps one map of a *baked* material, acquiring the new texture and releasing the old.
 		 *
 		 * The material is rewritten in place, so its handle stays valid and every submesh bound to it
@@ -201,6 +222,12 @@ namespace game
 		{
 			bgl::MeshInstanceHandle handle;
 			uint32_t                geomSlot = 0;
+
+			// Per submesh, the material this instance overrides its geom's default with. Invalid means
+			// none. Each valid one holds a reference, released by ClearInstanceSubmeshMaterial or by
+			// DestroyInstance -- the same edge as every other reference, just one level lower:
+			// instance -> material, alongside instance -> geom -> material.
+			std::vector<bgl::MaterialHandle> overrides;
 		};
 
 		// A baked and a loose material live in *different* buffers, so their slot indices collide --

@@ -46,14 +46,24 @@ namespace assetlib
 
 				++live.materials;
 
-				// The triplet whatever the material's `mode` says. A kLoose material still carries the
-				// maps its last bake wrote, and they are a valid bake to switch back to -- deleting them
-				// because the renderer happens to be drawing from the routes today would destroy it.
-				for (const std::string* map :
-				     { &material.baseColorTexture, &material.normalTexture, &material.ormTexture })
+				const auto mark = [&live](const std::string& map) {
+					if (!map.empty())
+						live.maps.insert(std::filesystem::path(map).filename().string());
+				};
+
+				switch (material.shadingModel)
 				{
-					if (!map->empty())
-						live.maps.insert(std::filesystem::path(*map).filename().string());
+				case ShadingModel::kPbr:
+					mark(material.pbr.baseColorTexture);
+					mark(material.pbr.normalTexture);
+					mark(material.pbr.ormTexture);
+					break;
+
+				case ShadingModel::kCount:
+					throw std::runtime_error(
+						"assetlib::findUnusedBakedTextures: the material '" +
+						entry.path().string() +
+						"' names an unknown shading model, so its baked maps cannot be known");
 				}
 			}
 

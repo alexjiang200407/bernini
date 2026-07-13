@@ -44,34 +44,34 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	writeSource(dir.path / "packed.ktx2", 16, { { 10, 60, 90, 255 } });
 
 	BMaterial mat;
-	mat.mode      = MaterialMode::kLoose;
-	mat.routes[0] = { "albedo.ktx2", 0 };  // base R
-	mat.routes[1] = { "albedo.ktx2", 1 };  // base G
-	mat.routes[2] = { "albedo.ktx2", 2 };  // base B
-	mat.routes[5] = { "packed.ktx2", 1 };  // roughness <- packed.G
-	mat.routes[6] = { "packed.ktx2", 2 };  // metallic  <- packed.B
+	mat.mode          = MaterialMode::kLoose;
+	mat.pbr.routes[0] = { "albedo.ktx2", 0 };  // base R
+	mat.pbr.routes[1] = { "albedo.ktx2", 1 };  // base G
+	mat.pbr.routes[2] = { "albedo.ktx2", 2 };  // base B
+	mat.pbr.routes[5] = { "packed.ktx2", 1 };  // roughness <- packed.G
+	mat.pbr.routes[6] = { "packed.ktx2", 2 };  // metallic  <- packed.B
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
 	SECTION("it fills the triplet and switches to the baked representation")
 	{
 		REQUIRE(mat.mode == MaterialMode::kBaked);
-		REQUIRE(std::filesystem::exists(dir.path / mat.baseColorTexture));
-		REQUIRE(std::filesystem::exists(dir.path / mat.ormTexture));
+		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.baseColorTexture));
+		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.ormTexture));
 	}
 
 	SECTION("baked maps land under the data root's texture directory, not beside the material")
 	{
 		// The recorded path is relative to the data root, whatever directory the material lives in.
-		REQUIRE(mat.baseColorTexture.starts_with("Textures/basecolor_"));
-		REQUIRE(mat.ormTexture.starts_with("Textures/orm_"));
-		REQUIRE(mat.baseColorTexture.ends_with(".ktx2"));
+		REQUIRE(mat.pbr.baseColorTexture.starts_with("Textures/basecolor_"));
+		REQUIRE(mat.pbr.ormTexture.starts_with("Textures/orm_"));
+		REQUIRE(mat.pbr.baseColorTexture.ends_with(".ktx2"));
 	}
 
 	SECTION("a group with nothing routed is not baked")
 	{
 		// No normal channel is routed, so no normal map is written; the runtime falls back to flat.
-		REQUIRE(mat.normalTexture.empty());
+		REQUIRE(mat.pbr.normalTexture.empty());
 		REQUIRE(
 			std::ranges::none_of(
 				std::filesystem::directory_iterator(dir.path / "Textures"),
@@ -82,22 +82,23 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 
 	SECTION("each map lands in its own block format")
 	{
-		REQUIRE(loadKTX2(dir.path / mat.baseColorTexture).vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
-		REQUIRE(loadKTX2(dir.path / mat.ormTexture).vkFormat == VkFormat::BC7_UNORM_BLOCK);
+		REQUIRE(
+			loadKTX2(dir.path / mat.pbr.baseColorTexture).vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
+		REQUIRE(loadKTX2(dir.path / mat.pbr.ormTexture).vkFormat == VkFormat::BC7_UNORM_BLOCK);
 	}
 
 	SECTION("the routes and the graph survive the bake")
 	{
 		// The whole point of the coexistence: a baked material can still be reopened and re-baked.
-		REQUIRE(mat.routes[0].texture == "albedo.ktx2");
-		REQUIRE(mat.routes[5].channel == 1);
+		REQUIRE(mat.pbr.routes[0].texture == "albedo.ktx2");
+		REQUIRE(mat.pbr.routes[5].channel == 1);
 	}
 
 	SECTION("it stamps every routed source and leaves unrouted ones zeroed")
 	{
-		REQUIRE(mat.routeStamps[0] == stampOf(dir.path / "albedo.ktx2"));
-		REQUIRE(mat.routeStamps[5] == stampOf(dir.path / "packed.ktx2"));
-		REQUIRE(mat.routeStamps[3] == SourceStamp{});  // base A is unrouted
+		REQUIRE(mat.pbr.routeStamps[0] == stampOf(dir.path / "albedo.ktx2"));
+		REQUIRE(mat.pbr.routeStamps[5] == stampOf(dir.path / "packed.ktx2"));
+		REQUIRE(mat.pbr.routeStamps[3] == SourceStamp{});  // base A is unrouted
 		REQUIRE_FALSE(bakeIsStale(mat, dir.path));
 	}
 
@@ -150,13 +151,13 @@ TEST_CASE("bakeMaterial routes each channel from its own source", "[bmaterial][b
 	writeSource(dir.path / "c.ktx2", 16, { { 0, 0, 64, 255 } });
 
 	BMaterial mat;
-	mat.routes[0] = { "a.ktx2", 0 };  // base R <- a.R = 240
-	mat.routes[1] = { "b.ktx2", 1 };  // base G <- b.G = 128
-	mat.routes[2] = { "c.ktx2", 2 };  // base B <- c.B = 64
+	mat.pbr.routes[0] = { "a.ktx2", 0 };  // base R <- a.R = 240
+	mat.pbr.routes[1] = { "b.ktx2", 1 };  // base G <- b.G = 128
+	mat.pbr.routes[2] = { "c.ktx2", 2 };  // base B <- c.B = 64
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
-	const auto rgb = firstBc1Color(loadKTX2(dir.path / mat.baseColorTexture));
+	const auto rgb = firstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
 
 	// The UASTC -> BC1 round trip is lossy and BC1 quantizes to 5/6/5 bits, so allow a wide margin.
 	// It is still far tighter than any channel swap: these three values are 64 apart or more.
@@ -173,13 +174,13 @@ TEST_CASE("bakeMaterial fills an unrouted channel with its neutral value", "[bma
 	writeSource(dir.path / "a.ktx2", 16, { { 240, 10, 10, 255 } });
 
 	BMaterial mat;
-	mat.routes[0] = { "a.ktx2", 0 };  // only base R is routed
+	mat.pbr.routes[0] = { "a.ktx2", 0 };  // only base R is routed
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
 	// G and B are unrouted, so they sample 1.0 and let baseColorFactor drive them.
 	constexpr double c_Bc1Margin = 12.0;
-	const auto       rgb         = firstBc1Color(loadKTX2(dir.path / mat.baseColorTexture));
+	const auto       rgb         = firstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
 	CHECK(rgb[0] == Catch::Approx(240).margin(c_Bc1Margin));
 	CHECK(rgb[1] == Catch::Approx(255).margin(c_Bc1Margin));
 	CHECK(rgb[2] == Catch::Approx(255).margin(c_Bc1Margin));
@@ -193,13 +194,13 @@ TEST_CASE("bakeMaterial resamples sources to the largest routed one", "[bmateria
 	writeSource(dir.path / "big.ktx2", 32, { { 0, 255, 0, 255 } });
 
 	BMaterial mat;
-	mat.routes[0] = { "small.ktx2", 0 };
-	mat.routes[1] = { "big.ktx2", 1 };
+	mat.pbr.routes[0] = { "small.ktx2", 0 };
+	mat.pbr.routes[1] = { "big.ktx2", 1 };
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
 	// The composited map takes the largest source's dimensions, not the first route's.
-	const ImageData baked = loadKTX2(dir.path / mat.baseColorTexture);
+	const ImageData baked = loadKTX2(dir.path / mat.pbr.baseColorTexture);
 	REQUIRE(baked.width == 32);
 	REQUIRE(baked.height == 32);
 }
@@ -229,17 +230,17 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 	writeSource(dir.path / "albedo2.ktx2", 16, { { 0, 200, 0, 255 } });
 
 	const auto ormRoutes = [](BMaterial& mat) {
-		mat.routes[4] = { "orm.ktx2", 0 };
-		mat.routes[5] = { "orm.ktx2", 1 };
-		mat.routes[6] = { "orm.ktx2", 2 };
+		mat.pbr.routes[4] = { "orm.ktx2", 0 };
+		mat.pbr.routes[5] = { "orm.ktx2", 1 };
+		mat.pbr.routes[6] = { "orm.ktx2", 2 };
 	};
 
 	BMaterial apple1;
-	apple1.routes[0] = { "albedo1.ktx2", 0 };
+	apple1.pbr.routes[0] = { "albedo1.ktx2", 0 };
 	ormRoutes(apple1);
 
 	BMaterial apple2;
-	apple2.routes[0] = { "albedo2.ktx2", 0 };  // a *different* base colour
+	apple2.pbr.routes[0] = { "albedo2.ktx2", 0 };  // a *different* base colour
 	ormRoutes(apple2);
 
 	REQUIRE_NOTHROW(bakeMaterial(apple1, MaterialBakeDesc{ dir.path }));
@@ -249,13 +250,13 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 
 	SECTION("the shared group converges on one file")
 	{
-		REQUIRE(apple1.ormTexture == apple2.ormTexture);
+		REQUIRE(apple1.pbr.ormTexture == apple2.pbr.ormTexture);
 		REQUIRE(countMaps(textures, "orm_") == 1);
 	}
 
 	SECTION("the groups that differ do not")
 	{
-		REQUIRE(apple1.baseColorTexture != apple2.baseColorTexture);
+		REQUIRE(apple1.pbr.baseColorTexture != apple2.pbr.baseColorTexture);
 		REQUIRE(countMaps(textures, "basecolor_") == 2);
 	}
 
@@ -266,11 +267,11 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 		writeSource(dir.path / "albedo2.ktx2", 64, { { 0, 200, 0, 255 } });
 
 		BMaterial apple3;
-		apple3.routes[0] = { "albedo2.ktx2", 0 };
+		apple3.pbr.routes[0] = { "albedo2.ktx2", 0 };
 		ormRoutes(apple3);
 
 		REQUIRE_NOTHROW(bakeMaterial(apple3, MaterialBakeDesc{ dir.path }));
-		REQUIRE(apple3.ormTexture == apple1.ormTexture);
+		REQUIRE(apple3.pbr.ormTexture == apple1.pbr.ormTexture);
 		REQUIRE(countMaps(textures, "orm_") == 1);
 	}
 }
@@ -282,10 +283,10 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 	writeSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
 
 	BMaterial mat;
-	mat.routes[0] = { "a.ktx2", 0 };
+	mat.pbr.routes[0] = { "a.ktx2", 0 };
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
-	const auto baked = dir.path / mat.baseColorTexture;
+	const auto baked = dir.path / mat.pbr.baseColorTexture;
 
 	// Overwrite the baked map with a sentinel. Whether the next bake rewrites it is then observable
 	// directly, rather than through an mtime whose resolution is only one second.
@@ -301,7 +302,7 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 	};
 
 	BMaterial again;
-	again.routes[0] = { "a.ktx2", 0 };
+	again.pbr.routes[0] = { "a.ktx2", 0 };
 
 	SECTION("nothing changed: the existing map is reused")
 	{
@@ -310,7 +311,7 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 		REQUIRE_NOTHROW(bakeMaterial(again, MaterialBakeDesc{ dir.path }));
 
 		REQUIRE(sentinelSurvives());
-		REQUIRE(again.baseColorTexture == mat.baseColorTexture);
+		REQUIRE(again.pbr.baseColorTexture == mat.pbr.baseColorTexture);
 	}
 
 	SECTION("a source touched after the map was written forces a re-encode")
@@ -334,14 +335,14 @@ TEST_CASE("bakeMaterial honours a custom texture directory", "[bmaterial][bake]"
 	writeSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
 
 	BMaterial mat;
-	mat.routes[0] = { "a.ktx2", 0 };
+	mat.pbr.routes[0] = { "a.ktx2", 0 };
 
 	auto desc       = MaterialBakeDesc{ dir.path };
 	desc.textureDir = "cooked";
 	REQUIRE_NOTHROW(bakeMaterial(mat, desc));
 
-	REQUIRE(mat.baseColorTexture.starts_with("cooked/basecolor_"));
-	REQUIRE(std::filesystem::exists(dir.path / mat.baseColorTexture));
+	REQUIRE(mat.pbr.baseColorTexture.starts_with("cooked/basecolor_"));
+	REQUIRE(std::filesystem::exists(dir.path / mat.pbr.baseColorTexture));
 }
 
 TEST_CASE("bakeMaterial rejects a material with nothing routed", "[bmaterial][bake]")
@@ -363,13 +364,13 @@ TEST_CASE("bakeMaterial accepts a Basis-supercompressed source", "[bmaterial][ba
 	REQUIRE(loadKTX2(dir.path / "uastc.ktx2").vkFormat == VkFormat::BC7_UNORM_BLOCK);
 
 	BMaterial mat;
-	mat.routes[0] = { "uastc.ktx2", 0 };
-	mat.routes[1] = { "uastc.ktx2", 1 };
-	mat.routes[2] = { "uastc.ktx2", 2 };
+	mat.pbr.routes[0] = { "uastc.ktx2", 0 };
+	mat.pbr.routes[1] = { "uastc.ktx2", 1 };
+	mat.pbr.routes[2] = { "uastc.ktx2", 2 };
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
-	const auto rgb = firstBc1Color(loadKTX2(dir.path / mat.baseColorTexture));
+	const auto rgb = firstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
 	CHECK(rgb[0] == Catch::Approx(200).margin(12));
 }
 
@@ -387,7 +388,7 @@ TEST_CASE("bakeMaterial rejects an already-baked source", "[bmaterial][bake]")
 		Ktx2Compression::kBC7_RGBA);
 
 	BMaterial mat;
-	mat.routes[0] = { "baked.ktx2", 0 };
+	mat.pbr.routes[0] = { "baked.ktx2", 0 };
 
 	REQUIRE_THROWS_AS(bakeMaterial(mat, MaterialBakeDesc{ dir.path }), std::runtime_error);
 }
@@ -395,31 +396,31 @@ TEST_CASE("bakeMaterial rejects an already-baked source", "[bmaterial][bake]")
 TEST_CASE("stripAuthoringData leaves only the shippable form", "[bmaterial][bake]")
 {
 	BMaterial mat;
-	mat.mode             = MaterialMode::kBaked;
-	mat.baseColorTexture = "m_basecolor.ktx2";
-	mat.routes[0]        = { "albedo.ktx2", 0 };
-	mat.routeStamps[0]   = { 12, 34 };
-	mat.editorGraph      = R"({"nodes":[]})";
-	mat.roughnessFactor  = 0.25f;
+	mat.mode                 = MaterialMode::kBaked;
+	mat.pbr.baseColorTexture = "m_basecolor.ktx2";
+	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
+	mat.pbr.routeStamps[0]   = { 12, 34 };
+	mat.editorGraph          = R"({"nodes":[]})";
+	mat.pbr.roughnessFactor  = 0.25f;
 
 	REQUIRE_NOTHROW(stripAuthoringData(mat));
 
 	REQUIRE(mat.editorGraph.empty());
-	REQUIRE(mat.routes[0].texture.empty());
-	REQUIRE(mat.routeStamps[0] == SourceStamp{});
+	REQUIRE(mat.pbr.routes[0].texture.empty());
+	REQUIRE(mat.pbr.routeStamps[0] == SourceStamp{});
 	REQUIRE(mat.mode == MaterialMode::kBaked);
 
 	// What the runtime actually needs is untouched.
-	REQUIRE(mat.baseColorTexture == "m_basecolor.ktx2");
-	REQUIRE(mat.roughnessFactor == 0.25f);
+	REQUIRE(mat.pbr.baseColorTexture == "m_basecolor.ktx2");
+	REQUIRE(mat.pbr.roughnessFactor == 0.25f);
 }
 
 TEST_CASE("stripAuthoringData refuses to strip an unbaked material", "[bmaterial][bake]")
 {
 	// Its routes are the only description of it; dropping them would render it undrawable.
 	BMaterial mat;
-	mat.mode      = MaterialMode::kLoose;
-	mat.routes[0] = { "albedo.ktx2", 0 };
+	mat.mode          = MaterialMode::kLoose;
+	mat.pbr.routes[0] = { "albedo.ktx2", 0 };
 
 	REQUIRE_THROWS_AS(stripAuthoringData(mat), std::runtime_error);
 }

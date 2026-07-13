@@ -1,10 +1,8 @@
 # Features
-Maybe add a material swapping system where the user can override the meshes material
-Add Cancel for Asset imports
-If exception occurs should show popup. Import mesh, texture, material, OS errors cant overwrite etc
-Delete Material / Texture / Mesh. Should check for no references first
+Delete Material / Texture / Mesh in content explorer. Should check for no references first
 Material should show current baked textures if any
 Show thumbnail for meshes
+Bake Material button removed. Context menu action in Content Explorer
 
 # Bugs
 Sometimes, when exiting, refuses to exist

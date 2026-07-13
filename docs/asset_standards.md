@@ -63,9 +63,12 @@ must feed data that matches.
 
 There are **two producers of textures**, and they compress differently:
 
-* **Mesh import** (`bake` in [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes
-  Basis-UASTC `texN.ktx2`, which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform,
-  and no per-map role needed.
+* **Mesh import** (`writeTextures` in
+  [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes Basis-UASTC `texN.ktx2`,
+  which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform, and no per-map role
+  needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
+  *source* textures a material routes at; they land under `textures_src/` in an editor project.
+*  **An import brings in geometry and textures, never materials.** 
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
   editor's routed source textures into the triplet and writes each map into `<Data>/Textures/`
@@ -149,8 +152,8 @@ source texture.
   A material bake instead writes the per-map targets above, which load without transcoding.
 * **Factors are linear** and live in the material, not the texture:
   `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`.
-  See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and the
-  on-disk `.bmaterial` in
+  See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and, on disk,
+  `PbrParams` — the `.bmaterial`'s PBR payload — in
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h).
 * **Defaults come from the scene**, not the file — a null texture handle resolves to a 1×1 solid
   (white base/ORM, flat normal) built in
@@ -239,37 +242,52 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
-* **`.bmaterial`** (v4) — a material in **both** of its forms at once. Struct:
+* **`.bmaterial`** (v6) — **a shading-model tag plus that model's parameters**. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
+
   * **Every texture path is relative to the project's Data root**, not to the material file: a material
     in `Data/Materials/` names `textures_src/tex1.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
     lives. A standalone baked model directory is its own data root, which is how a `matN.bmaterial`
     beside its `texN.ktx2` still resolves.
+  * `mode` (`kBaked` / `kLoose`) says which representation **the renderer should draw from**. It is *not*
+    a statement about which fields are filled, and it is on the material rather than in the payload
+    because it is a property of the asset, not of the shading system.
+  * `editorGraph` — the node graph, as an opaque JSON blob. Nothing outside the editor reads it and it
+    never affects rendering; it exists so reopening a material restores the board that produced the
+    routes, node positions and unwired nodes included.
+
+  **`PbrParams` — the metallic-roughness payload**, in *both* of its forms at once:
+
   * **Sources** — a 9-entry `routes` table. Each PBR output channel (base colour R,G,B,A; ORM ao,
     roughness, metallic; normal X,Y) names a *source* texture and which of *its* RGBA channels to read.
     This is what the material editor authors, and what `LoosePbrMaterial` samples directly with no bake.
-  * **Optimized** — the baseColor / normal / orm triplet, plus the factors. The output of `bakeMaterial`
-    (or of a glTF import), and what `PbrMaterial` consumes. A bake writes them into
-    `<Data>/Textures/`.
+  * **Optimized** — the baseColor / normal / orm triplet, plus the factors and the alpha mode/cutoff. The
+    output of `bakeMaterial` (or of a glTF import), and what `PbrMaterial` consumes. A bake writes the
+    maps into `<Data>/Textures/`.
   * Both may be populated simultaneously, and normally are: a baked material keeps its routes so it can
-    be reopened, re-authored and re-baked. `mode` says which representation **the renderer should draw
-    from** — it is *not* a statement about which fields are filled.
+    be reopened, re-authored and re-baked.
   * `routeStamps` — parallel to `routes`: the size + mtime each source measured when the bake read it.
     `bakeIsStale(material, dir)` re-stats the sources and reports whether the triplet still reflects
     them. Editing a source therefore surfaces as a stale bake rather than silently rendering the old
     cooked textures. Size+mtime, not a content hash: verifying a hash would mean reading every source on
-    every load, and a false positive only costs a rebake.
-  * `editorGraph` — the node graph, as an opaque JSON blob. Nothing outside the editor reads it and it
-    never affects rendering; it exists so reopening a material restores the board that produced the
-    routes, node positions and unwired nodes included.
+    every load, and a false positive only costs a rebake. **Baking is a PBR notion** — `bakeMaterial`
+    rejects any other model, and `bakeIsStale` reports one as never-stale, because it has no bake step to
+    have drifted from.
   * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
     `editorGraph` and forces `kBaked`, leaving the triplet + factors + name. A shipping build carries no
     source-texture references. It refuses to strip a material that was never baked, which would leave
-    nothing to render.
-  * Older files still load: v1 (factors + triplet) as `kBaked` with empty routes, v2 with no graph, v3
-    with no stamps — so a v3 loose material reports its bake as stale, which is correct: it never had one.
+    nothing to render — and it refuses *before* clearing anything, so a rejected material comes out
+    untouched rather than half-stripped.
+
+  **There is exactly one readable version, and no migration path.** `deserializeMaterial`
+
+  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a `write*`/`read*`
+  pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
+  garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
+  today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
+  `shadingModel` with no `default`, so the compiler names every one of them.
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture, all in one directory.
 

@@ -30,6 +30,10 @@ build *args:
 run target *args:
     @{{ python }} scripts/exec_target.py {{ target }} {{ args }}
 
+# Build and run every test suite (or only those matching the given names).
+test *args:
+    @{{ python }} scripts/run_tests.py {{ args }}
+
 # Build the CLI tools and stage them (with their DLLs) into ./dist, for PATH.
 install *args:
     @{{ python }} scripts/install.py {{ args }}

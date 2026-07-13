@@ -26,9 +26,9 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   dispatches/draws where a later one reads or overwrites what an earlier one wrote to the **same**
   resource (a UAV read-after-write / write-after-write), the graph cannot see it and inserts
   nothing — the two commands race. Prefer **splitting the work into separate passes** so the graph
-  derives the barrier from the declared access change (e.g. producer declares
-  `kUnorderedAccess`, consumer declares `kShaderResource`). Only when the dispatches must stay in
-  one pass (e.g. they share a UAV as both in and out) issue the intra-pass barrier yourself — this
+  derives the barrier from the declared accesses — including when both declare `kUnorderedAccess`,
+  which barriers even though the state is unchanged (see below). Only when the dispatches must stay
+  in one pass (e.g. they share a UAV as both in and out) issue the intra-pass barrier yourself — this
   is the one sanctioned exception to "pass code must not barrier." *Bug precedent:* the
   histogram and prefix-sum dispatches in `CompactInstancesPass` shared one buffer in a single pass
   with no barrier between them; the scan raced the histogram and produced wrong prefix sums —
@@ -64,6 +64,18 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 * **Enhanced barriers, merged per pass.** An `AccessState` is `(sync, access, layout)`. Multiple
   declared accesses to one resource within a single pass are merged (union of sync/access, last
   non-undefined layout) into one transition. Buffers ignore `layout`.
+
+* **An unchanged state emits no barrier — except for a UAV.** `DeriveBarriers` skips a resource whose
+  declared state matches the one it is already in: two consecutive readers of an SRV need nothing
+  between them. A `kUnorderedAccess` access is the exception and always barriers, even against an
+  identical prior state, because *the state machine cannot see a UAV hazard*: a pass that writes a
+  UAV and a following pass that reads it declare the very same `(sync, access)`, so a diff-driven
+  graph would emit nothing and let the two dispatches overlap. The barrier it emits has
+  `before == after` — which is exactly how enhanced barriers spell a UAV barrier. *Bug precedent:*
+  `CompactInstancesPass` writes `psoPrefixSum` in its scan pass and reads it in the following
+  compaction pass, both as a UAV; with no barrier the compaction read pre-scan counts and scattered
+  instances to the wrong bucket offsets — nondeterministic flicker, again only in scenes mixing PSO
+  buckets.
 
 * **The frame is consumed on execute.** `Execute` (and `Reset`) clears passes, imports, and queue
   bindings and requires a fresh `Compile` before the next `Execute`; only `m_LastState` survives.

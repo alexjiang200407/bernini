@@ -28,6 +28,10 @@ namespace
 MaterialGraphView::MaterialGraphView(QWidget* parent) : QtNodes::GraphicsView(parent)
 {
 	setAcceptDrops(true);
+
+	// Hold the centre through a resize, so a graph centred while the panel was still being laid out
+	// stays centred once it has its real size.
+	setResizeAnchor(QGraphicsView::AnchorViewCenter);
 }
 
 void

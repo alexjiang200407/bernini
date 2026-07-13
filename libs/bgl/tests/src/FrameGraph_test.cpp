@@ -481,6 +481,25 @@ TEST_CASE("FrameGraph: emits no barrier when the state is unchanged", "[fg]")
 	CHECK(fg.BarriersFor("ReadB").Empty());
 }
 
+TEST_CASE("FrameGraph: a same-state UAV access still gets a barrier", "[fg]")
+{
+	FrameGraph fg;
+	fg.ImportBuffer("buf", MakeBuffer(3));  // imported in a 'none' state
+
+	fg.AddPass(PassDesc{}.SetName("Write").AddBufferArg(UavBuf("buf")).SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("ReadWrite").AddBufferArg(UavBuf("buf")).SetSideEffect());
+
+	fg.Compile(&NullRm());
+
+	// Nothing about the state changes between the two, but the second reads what the first wrote:
+	// without this barrier the dispatches may overlap.
+	const PassBarriers& barriers = fg.BarriersFor("ReadWrite");
+	REQUIRE(barriers.bufferDescs.size() == 1);
+	CHECK(barriers.bufferHandles[0].slot.index == 3);
+	CHECK(barriers.bufferDescs[0].accessBefore == BarrierAccessFlag::kUnorderedAccess);
+	CHECK(barriers.bufferDescs[0].accessAfter == BarrierAccessFlag::kUnorderedAccess);
+}
+
 //
 // Error handling
 //

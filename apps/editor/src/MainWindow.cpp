@@ -180,26 +180,25 @@ MainWindow::CleanUnusedTextures()
 	auto desc     = assetlib::TexturePruneDesc();
 	desc.dataRoot = m_Project->GetDataDirectory();
 
-	auto    scan = assetlib::TexturePruneScan();
-	QString error;
+	auto scan = assetlib::TexturePruneScan();
 
 	// Scanning parses every .bmaterial in the project, so it runs off the UI thread. It reads assetlib
-	// only, never bgl, which is what the loading screen requires of its worker.
-	const bool scanned = background::RunWithLoadingScreen(
+	// only, never bgl, which is what the loading screen requires of its worker. findUnusedBakedTextures
+	// takes no cancel token, so the screen offers no button that would not work.
+	const background::TaskResult scanned = background::RunWithLoadingScreen(
 		this,
 		"Clean Unused Textures",
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Scanning materials...");
 			scan = assetlib::findUnusedBakedTextures(desc);
-		},
-		&error);
+		});
 
-	if (!scanned)
+	if (!scanned.Completed())
 	{
 		QMessageBox::warning(
 			this,
 			"Clean Unused Textures",
-			QString("Could not scan the project:\n%1").arg(error));
+			QString("Could not scan the project:\n\n%1").arg(scanned.error));
 		return;
 	}
 

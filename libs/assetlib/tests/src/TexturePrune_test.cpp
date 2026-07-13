@@ -44,7 +44,7 @@ namespace
 	bakeAndSave(const DataRoot& root, const char* name, const char* source)
 	{
 		BMaterial material;
-		material.routes[0] = { source, 0 };
+		material.pbr.routes[0] = { source, 0 };
 
 		bakeMaterial(material, MaterialBakeDesc{ root.path });
 		saveMaterial(material, root.path / "Materials" / name);
@@ -100,7 +100,7 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 	const BMaterial first  = bakeAndSave(root, "mat.bmaterial", "a.ktx2");
 	const BMaterial second = bakeAndSave(root, "mat.bmaterial", "b.ktx2");
 
-	REQUIRE(first.baseColorTexture != second.baseColorTexture);
+	REQUIRE(first.pbr.baseColorTexture != second.pbr.baseColorTexture);
 	REQUIRE(countMaps(root.textures()) == 2);
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
@@ -108,7 +108,7 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 	SECTION("the abandoned map is reported, and only it")
 	{
 		REQUIRE(scan.unused.size() == 1);
-		CHECK(scan.unused.front().path == first.baseColorTexture);
+		CHECK(scan.unused.front().path == first.pbr.baseColorTexture);
 		CHECK(scan.unused.front().bytes > 0);
 		CHECK(scan.bytes == scan.unused.front().bytes);
 	}
@@ -128,8 +128,8 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 		CHECK(result.bytes == scan.bytes);
 		CHECK(result.failed.empty());
 
-		CHECK_FALSE(std::filesystem::exists(root.path / first.baseColorTexture));
-		CHECK(std::filesystem::exists(root.path / second.baseColorTexture));
+		CHECK_FALSE(std::filesystem::exists(root.path / first.pbr.baseColorTexture));
+		CHECK(std::filesystem::exists(root.path / second.pbr.baseColorTexture));
 		CHECK(countMaps(root.textures()) == 1);
 	}
 
@@ -156,10 +156,10 @@ TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "
 
 	// A second material bakes the same map, then re-bakes onto a different source and drops it.
 	BMaterial rebaked = bakeAndSave(root, "rebaked.bmaterial", "shared.ktx2");
-	REQUIRE(rebaked.baseColorTexture == keeper.baseColorTexture);
+	REQUIRE(rebaked.pbr.baseColorTexture == keeper.pbr.baseColorTexture);
 
 	rebaked = bakeAndSave(root, "rebaked.bmaterial", "other.ktx2");
-	REQUIRE(rebaked.baseColorTexture != keeper.baseColorTexture);
+	REQUIRE(rebaked.pbr.baseColorTexture != keeper.pbr.baseColorTexture);
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
 
@@ -168,7 +168,7 @@ TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "
 	CHECK(scan.unused.empty());
 
 	deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
-	CHECK(std::filesystem::exists(root.path / keeper.baseColorTexture));
+	CHECK(std::filesystem::exists(root.path / keeper.pbr.baseColorTexture));
 }
 
 TEST_CASE("findUnusedBakedTextures keeps a loose material's baked triplet", "[texture_prune]")
@@ -227,7 +227,7 @@ TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[
 		<< "not a material";
 
 	REQUIRE_THROWS_AS(findUnusedBakedTextures(TexturePruneDesc{ root.path }), std::runtime_error);
-	CHECK(std::filesystem::exists(root.path / material.baseColorTexture));
+	CHECK(std::filesystem::exists(root.path / material.pbr.baseColorTexture));
 }
 
 TEST_CASE("findUnusedBakedTextures handles a project with nothing baked", "[texture_prune]")
@@ -265,11 +265,11 @@ TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[textur
 	bake.textureDir = "cooked";
 
 	BMaterial material;
-	material.routes[0] = { "a.ktx2", 0 };
+	material.pbr.routes[0] = { "a.ktx2", 0 };
 	bakeMaterial(material, bake);
-	const std::string orphan = material.baseColorTexture;
+	const std::string orphan = material.pbr.baseColorTexture;
 
-	material.routes[0] = { "b.ktx2", 0 };
+	material.pbr.routes[0] = { "b.ktx2", 0 };
 	bakeMaterial(material, bake);
 	saveMaterial(material, root.path / "Materials" / "mat.bmaterial");
 
