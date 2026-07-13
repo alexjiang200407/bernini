@@ -44,6 +44,14 @@ private:
 	QString
 	ResolveDropDirectory(const QPoint& windowPos) const;
 
+	/** What became of an import, so a multi-file drop knows whether to carry on with the next one. */
+	enum class ImportOutcome
+	{
+		kImported,
+		kCancelled,  // by the user, at the overwrite prompt or on the loading screen
+		kFailed,     // already reported to the user
+	};
+
 	/**
 	 * Converts a dropped glTF/glb into the engine .bmesh format written to `targetDir`.
 	 *
@@ -51,11 +59,29 @@ private:
 	 * root) to extract the mesh's textures into; empty skips texture extraction. Each import needs
 	 * its own folder because the extracted files are named by index, not by source name.
 	 *
-	 * Runs on a worker thread behind a loading screen: parsing and, above all, supercompressing the
-	 * textures take long enough to freeze the editor. Nothing here touches bgl.
+	 * Runs on a worker thread behind a cancellable loading screen: parsing and, above all,
+	 * supercompressing the textures take long enough to freeze the editor. Nothing here touches bgl.
+	 *
+	 * Asks before overwriting anything, reports a failure to the user, and on either a failure or a
+	 * cancel removes the half-written files it had produced -- see RollBack.
 	 */
-	void
+	[[nodiscard]] ImportOutcome
 	ImportMesh(const QString& sourceFile, const QString& targetDir, const QString& textureSubdir);
+
+	/**
+	 * Deletes what an import got as far as writing, so a cancelled or failed one leaves nothing behind:
+	 * a `.bmesh` naming textures that were never extracted, or a half-supercompressed texture folder.
+	 *
+	 * Only what the import itself created, and never anything that was already there -- a texture folder
+	 * that predates the import is left alone, files and all, because the user was asked before it was
+	 * written into and its other contents are not ours to delete.
+	 */
+	static void
+	RollBack(
+		const std::filesystem::path& bmeshPath,
+		bool                         bmeshExisted,
+		const std::filesystem::path& textureDir,
+		bool                         textureDirExisted);
 
 	/** Detaches the models and disables the explorer, leaving both views empty. */
 	void

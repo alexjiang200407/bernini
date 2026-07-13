@@ -1,3 +1,4 @@
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 
 namespace
@@ -36,7 +37,7 @@ namespace
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = true;
+		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 

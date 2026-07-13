@@ -1,10 +1,10 @@
 #include <assetlib/bmesh_io.h>
 
-#include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
 
 #include "ByteReader.h"
 #include "ByteWriter.h"
+#include "fs_util.h"
 
 #include <core/file/file.h>
 
@@ -124,45 +124,6 @@ namespace assetlib
 			}
 			return out;
 		}
-
-		// The NUL-terminated name at `offset` in the string pool (empty for offset 0 / out of range).
-		std::string
-		nameFromPool(const std::vector<char>& pool, uint32_t offset)
-		{
-			if (offset == 0 || offset >= pool.size())
-				return {};
-			return std::string(pool.data() + offset);
-		}
-
-		// The standalone file name writeTextures emits for texture `index` (empty when absent).
-		std::string
-		texturePath(uint32_t index)
-		{
-			return index == c_InvalidIndex ? std::string{} :
-			                                 "tex" + std::to_string(index) + ".ktx2";
-		}
-
-		// The file name toBMesh assembles for material `index`.
-		std::string
-		materialPath(size_t index)
-		{
-			return "mat" + std::to_string(index) + ".bmaterial";
-		}
-
-		// Resolves an inline import material into its modular, path-referencing form.
-		BMaterial
-		toBMaterial(const imp::BMeshImport& mesh, const imp::BMaterialImport& material)
-		{
-			BMaterial out;
-			out.baseColorTexture = texturePath(material.baseColorTexture);
-			out.normalTexture    = texturePath(material.normalTexture);
-			out.ormTexture       = texturePath(material.ormTexture);
-			out.baseColorFactor  = material.baseColorFactor;
-			out.metallicFactor   = material.metallicFactor;
-			out.roughnessFactor  = material.roughnessFactor;
-			out.name             = nameFromPool(mesh.stringPool, material.nameOffset);
-			return out;
-		}
 	}
 
 	std::vector<std::byte>
@@ -265,15 +226,19 @@ namespace assetlib
 	void
 	save(const BMesh& mesh, const std::filesystem::path& path)
 	{
-		const auto    bytes = serialize(mesh);
+		const auto bytes = serialize(mesh);
+
+		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
+		errno = 0;
 		std::ofstream out(path, std::ios::binary);
 		if (!out)
-			throw std::runtime_error("bmesh: cannot open file for writing: " + path.string());
+			throw std::runtime_error(fileErrorMessage("bmesh: cannot open file for writing", path));
+
 		out.write(
 			reinterpret_cast<const char*>(bytes.data()),
 			static_cast<std::streamsize>(bytes.size()));
 		if (!out)
-			throw std::runtime_error("bmesh: failed to write file: " + path.string());
+			throw std::runtime_error(fileErrorMessage("bmesh: failed to write file", path));
 	}
 
 	BMesh
@@ -298,8 +263,8 @@ namespace assetlib
 		out.indexData        = mesh.indexData;
 		out.stringPool       = mesh.stringPool;
 
-		out.materials.reserve(mesh.materials.size());
-		for (size_t i = 0; i < mesh.materials.size(); ++i) out.materials.push_back(materialPath(i));
+		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
+
 		return out;
 	}
 
@@ -347,10 +312,10 @@ namespace assetlib
 	writeTextures(
 		const imp::BMeshImport&      mesh,
 		const std::filesystem::path& outDir,
-		const TextureProgressFn&     onProgress)
+		const TextureProgressFn&     onProgress,
+		const CancelToken&           cancel)
 	{
-		std::error_code ec;
-		std::filesystem::create_directories(outDir, ec);
+		createDirectories(outDir);
 
 		// Textures used as base color are sRGB (tagged so the GPU sampler decodes them); normal and
 		// ORM maps carry linear data and are written as-is.
@@ -361,6 +326,8 @@ namespace assetlib
 
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
+			throwIfCancelled(cancel);
+
 			if (onProgress)
 				onProgress(i, mesh.textures.size());
 
@@ -371,23 +338,15 @@ namespace assetlib
 	}
 
 	void
-	writeMaterials(const imp::BMeshImport& mesh, const std::filesystem::path& outDir)
+	bake(
+		const imp::BMeshImport&      mesh,
+		const std::filesystem::path& outDir,
+		std::string_view             name,
+		const CancelToken&           cancel)
 	{
-		std::error_code ec;
-		std::filesystem::create_directories(outDir, ec);
+		createDirectories(outDir);
 
-		for (size_t i = 0; i < mesh.materials.size(); ++i)
-			saveMaterial(toBMaterial(mesh, mesh.materials[i]), outDir / materialPath(i));
-	}
-
-	void
-	bake(const imp::BMeshImport& mesh, const std::filesystem::path& outDir, std::string_view name)
-	{
-		std::error_code ec;
-		std::filesystem::create_directories(outDir, ec);
-
-		writeTextures(mesh, outDir);
-		writeMaterials(mesh, outDir);
+		writeTextures(mesh, outDir, {}, cancel);
 		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
 	}
 
@@ -424,9 +383,10 @@ namespace assetlib
 	void
 	writeObj(const BMesh& mesh, const std::filesystem::path& path, bool fromMeshlets)
 	{
+		errno = 0;
 		std::ofstream out(path);
 		if (!out)
-			throw std::runtime_error("obj: cannot open file for writing: " + path.string());
+			throw std::runtime_error(fileErrorMessage("obj: cannot open file for writing", path));
 
 		out << "# Bernini BMesh -> OBJ ("
 			<< (fromMeshlets ? "reconstructed from meshlets" : "raw index buffer") << ")\n";

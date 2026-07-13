@@ -50,6 +50,25 @@ public:
 	void
 	Reset();
 
+	/**
+	 * Whether the mesh already names `materialPath` for the submesh -- in which case Set Default
+	 * Material would rewrite the `.bmesh` to say what it already says.
+	 *
+	 * `boundPath` is what the `.bmesh` names (empty when the submesh is unbound, which is never
+	 * "already default"). The two are compared as *files*, not as strings: they reach here by
+	 * different routes -- one from a file dialog, one from the mesh's own relative path resolved
+	 * against the data root -- and can spell the same file differently.
+	 */
+	[[nodiscard]] static bool
+	IsAlreadyDefault(const QString& boundPath, const QString& materialPath);
+
+	/**
+	 * The scene point a graph should be centred on: the middle of its output node, not its corner --
+	 * a node centred by its corner hangs off the left of the panel. Empty for a graph with no sink.
+	 */
+	[[nodiscard]] static std::optional<QPointF>
+	OutputCentre(MaterialGraphModel& model);
+
 private:
 	void
 	SetPreviewGeometry(const QStringList& submeshNames);
@@ -66,8 +85,26 @@ private:
 	class MaterialOutputNode*
 	WatchOutputNode(int submeshIndex);
 
+	/** Scrolls the graph view to the current submesh's output node. The sink is what you author back
+	 *  from, so it is where a freshly opened or freshly loaded graph should start. */
+	void
+	CenterOnOutput();
+
 	void
 	CompileGraph(int submeshIndex);
+
+	/** Destroys every graph's preview material. The graphs must not be drawn after this. */
+	void
+	ReleasePreviewMaterials();
+
+	/**
+	 * Writes the material at `materialPath` into the `.bmesh` as `submeshIndex`'s default, so every
+	 * instance of that mesh -- in the preview, in a level, in the game -- picks it up on load.
+	 *
+	 * The deliberate act the preview's instance overrides exist to keep separate from authoring.
+	 */
+	void
+	SetDefaultMaterial(int submeshIndex);
 
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
@@ -112,16 +149,22 @@ private:
 		std::unique_ptr<MaterialGraphScene> scene;
 
 		QString materialPath;
+
+		// The live material this graph is previewed through. Created once and rewritten in place on
+		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's
+		// loose-material buffer is a fixed-size slot pool.
+		bgl::MaterialHandle preview;
 	};
 	std::vector<SubmeshGraph> m_SubmeshGraphs;
 	int                       m_CurrentSubmesh = -1;
 
-	QComboBox*         m_SubmeshSelector = nullptr;
-	QComboBox*         m_OutputSelector  = nullptr;
-	MaterialGraphView* m_GraphView       = nullptr;
-	QPushButton*       m_OpenButton      = nullptr;
-	QPushButton*       m_SaveButton      = nullptr;
-	QPushButton*       m_SaveAsButton    = nullptr;
-	QPushButton*       m_BakeButton      = nullptr;
-	QLabel*            m_MaterialLabel   = nullptr;
+	QComboBox*         m_SubmeshSelector  = nullptr;
+	QComboBox*         m_OutputSelector   = nullptr;
+	MaterialGraphView* m_GraphView        = nullptr;
+	QPushButton*       m_OpenButton       = nullptr;
+	QPushButton*       m_SaveButton       = nullptr;
+	QPushButton*       m_SaveAsButton     = nullptr;
+	QPushButton*       m_BakeButton       = nullptr;
+	QPushButton*       m_SetDefaultButton = nullptr;
+	QLabel*            m_MaterialLabel    = nullptr;
 };

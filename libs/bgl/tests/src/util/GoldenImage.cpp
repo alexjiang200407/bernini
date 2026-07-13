@@ -91,4 +91,42 @@ namespace bgl::test
 
 		return matches;
 	}
+
+	Rgba
+	MeanColor(const std::string& path, int x, int y, int w, int h)
+	{
+		int width = 0, height = 0, channels = 0;
+
+		unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+		if (pixels == nullptr)
+			throw std::runtime_error("MeanColor: cannot read '" + path + "'");
+
+		if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > width || y + h > height)
+		{
+			stbi_image_free(pixels);
+			throw std::runtime_error(
+				"MeanColor: the box falls outside '" + path + "' (" + std::to_string(width) + "x" +
+				std::to_string(height) + ")");
+		}
+
+		double sum[4] = { 0.0, 0.0, 0.0, 0.0 };
+
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const size_t texel = (static_cast<size_t>(row) * width + col) * 4;
+				for (int c = 0; c < 4; ++c) sum[c] += pixels[texel + c];
+			}
+		}
+
+		stbi_image_free(pixels);
+
+		const auto texels = static_cast<double>(w) * h * 255.0;
+
+		return Rgba{ static_cast<float>(sum[0] / texels),
+			         static_cast<float>(sum[1] / texels),
+			         static_cast<float>(sum[2] / texels),
+			         static_cast<float>(sum[3] / texels) };
+	}
 }

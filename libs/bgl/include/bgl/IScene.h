@@ -225,9 +225,8 @@ namespace bgl
 		DeleteMaterial(MaterialHandle material) = 0;
 
 		/**
-		 * Rebinds the material of one submesh of a geom. Because a geom's submeshes are shared by
-		 * every instance placed from it, this changes the material (and its PSO bucket) for all of
-		 * them. `submeshIndex` is relative to the geom's submesh range.
+		 * Sets the **default** material of one submesh of a geom. `submeshIndex` is relative to the
+		 * geom's submesh range.
 		 *
 		 * @throws SceneError if the geom handle is invalid, the material is invalid, or the submesh
 		 *         index is out of range.

@@ -5,13 +5,14 @@
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "scene/PackedBuffer.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 
 TEST_CASE("PackedBuffer", "[packed][scene]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
 
 	auto gfx = bgl::CreateGraphics(opts);

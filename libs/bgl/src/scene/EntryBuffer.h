@@ -97,6 +97,12 @@ namespace bgl
 			return m_Entries.allocated(index);
 		}
 
+		[[nodiscard]] uint32_t
+		Capacity() const noexcept
+		{
+			return m_Desc.maxCount;
+		}
+
 		template <typename... Args>
 		core::slot_handle
 		EmplaceBack(Args&&... args)

@@ -92,14 +92,6 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
 					.AddBufferArg(
-						"scene.meshInstanceBuffer",
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						"scene.submeshBuffer",
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
 						"compactedInstances.psoPrefixSumBuffer",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
@@ -111,14 +103,6 @@ namespace bgl
 					.SetName(std::format("Compact Instances {}", draw.drawIdx))
 					.AddBufferArg(
 						"scene.instanceBuffer",
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						"scene.meshInstanceBuffer",
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						"scene.submeshBuffer",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
 					.AddBufferArg(
@@ -165,13 +149,9 @@ namespace bgl
 		}
 
 		auto instanceBuffer     = ctx.GetBuffer("scene.instanceBuffer");
-		auto meshBuffer         = ctx.GetBuffer("scene.meshInstanceBuffer");
-		auto submeshBuffer      = ctx.GetBuffer("scene.submeshBuffer");
 		auto psoPrefixSumBuffer = ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer");
 
 		m_Histogram["gUniforms"]["instanceBuffer"] = instanceBuffer;
-		m_Histogram["gUniforms"]["meshBuffer"]     = meshBuffer;
-		m_Histogram["gUniforms"]["submeshBuffer"]  = submeshBuffer;
 
 		// Reuse histogram buffer as prefix sum buffer
 		m_Histogram["gUniforms"]["outBuffer"] = psoPrefixSumBuffer;
@@ -221,15 +201,11 @@ namespace bgl
 		}
 
 		auto instanceBuffer              = ctx.GetBuffer("scene.instanceBuffer");
-		auto meshBuffer                  = ctx.GetBuffer("scene.meshInstanceBuffer");
-		auto submeshBuffer               = ctx.GetBuffer("scene.submeshBuffer");
 		auto compactedInstancesBuffer    = ctx.GetBuffer("scene.compactedInstances");
 		auto psoPrefixSumBuffer          = ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer");
 		auto compactedDispatchArgsBuffer = ctx.GetBuffer("compactedInstances.compactDispatchArgs");
 
 		m_CompactInstances["gUniforms"]["instanceBuffer"]     = instanceBuffer;
-		m_CompactInstances["gUniforms"]["meshBuffer"]         = meshBuffer;
-		m_CompactInstances["gUniforms"]["submeshBuffer"]      = submeshBuffer;
 		m_CompactInstances["gUniforms"]["psoPrefixSum"]       = psoPrefixSumBuffer;
 		m_CompactInstances["gUniforms"]["compactedInstances"] = compactedInstancesBuffer;
 		m_CompactInstances["gUniforms"]["dispatchArgs"]       = compactedDispatchArgsBuffer;

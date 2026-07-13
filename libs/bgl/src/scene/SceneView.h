@@ -19,6 +19,7 @@ namespace bgl
 	struct MeshMeta
 	{
 		std::vector<core::slot_handle> submeshInstances;
+		std::vector<MaterialHandle>    overrides;
 	};
 
 	/**
@@ -54,6 +55,15 @@ namespace bgl
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
+
+		void
+		SetSubmeshMaterialOverride(
+			MeshInstanceHandle instance,
+			uint32_t           submeshIndex,
+			MaterialHandle     material) override;
+
+		void
+		ClearSubmeshMaterialOverride(MeshInstanceHandle instance, uint32_t submeshIndex) override;
 
 		void
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
@@ -110,11 +120,44 @@ namespace bgl
 		Update(ICommandList* cmdList);
 
 	private:
+		/**
+		 * Fills `instance`'s material + PSO: `override` if it is valid, else the Scene's default for
+		 * that submesh. `submeshRoot` is where its geom's range starts; the instance names its own
+		 * offset into that range.
+		 *
+		 * The only place a SubmeshInstance's shading is decided, so an instance that was just placed,
+		 * one that was just overridden, and one re-resolved by a default change cannot disagree.
+		 */
+		void
+		ResolveShading(
+			SubmeshInstance& instance,
+			uint32_t         submeshRoot,
+			MaterialHandle   materialOverride) const;
+
+		/** Re-resolves one submesh instance of `meshIndex` and uploads it if it moved. */
+		void
+		RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex);
+
+		/**
+		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
+		 * only those that changed. O(instances), but only runs after a SetSubmeshMaterial -- an
+		 * authoring action.
+		 */
+		void
+		ReresolveInstances();
+
+		/** The mesh record `instance` names, with `submeshIndex` bounds-checked against it. */
+		[[nodiscard]] MeshMeta&
+		MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what);
+
 		SceneHandle                       m_Scene;
 		Scene*                            m_SceneRaw = nullptr;
 		core::SharedRef<IResourceManager> m_ResourceManager;
 		std::string                       m_NamePrefix;
 		uint32_t                          m_MaxInstances = 0;
+
+		// The Scene material epoch these instances were resolved against. See Scene::MaterialEpoch.
+		uint64_t m_SceneEpoch = 0;
 
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;

@@ -19,6 +19,24 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 Always read the [Style Guide](./STYLE.md)
 
+## Comments: as few as possible, as short as possible
+
+The default is **no comment**. Write one only for a constraint the code cannot show: a non-obvious
+pre/post-condition, a hazard, or why the obvious approach was *not* taken. Keep it to one line where
+you can. If it needs a paragraph, it belongs in `./docs`, not in the source.
+
+**Never narrate.** These are all noise and must not be written:
+
+- Play-by-play: `// Now we resolve the material`, `// First, allocate the range`, `// Loop over the submeshes`.
+- Restating the code: `// Bump the epoch` above `++m_MaterialEpoch;`.
+- Explaining the *change* rather than the code: `// This is now per-instance`, `// Moved from Submesh`,
+  `// used to live on the GPU struct`. The diff and the commit message are where that belongs — a
+  comment addressed to the reviewer is dead weight the moment the PR merges.
+- Justifying yourself to the reader: `// which is what makes this correct`, `// exactly what we want`.
+
+A comment states a fact about the code as it is now, to someone reading it a year from now who has
+no idea a change ever happened.
+
 # Documentation Index
 
 Read through these documents if you deem them necessary to your given task. If you modify something that is touched on in these docs, you need to modify the docs as well.
@@ -75,6 +93,7 @@ just                              # list the recipes
 just init                         # write scripts/config.json for this machine (see below)
 just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
+just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build
 just format <files...>            # clang-format in place (--check to verify only)
 just idl                          # regenerate the IDL C++ headers and Slang copies
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
@@ -82,7 +101,19 @@ just exes                         # resolve executable paths (--target NAME prin
 just count                        # count source files and lines by language
 ```
 
-`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+
+## Tests
+
+`just test` discovers the suites rather than listing them: every executable target named
+`*_tests` is one, so adding a target is all it takes for it to be run. They exist only when
+`BUILD_TESTS` is on, which the debug presets set and the release ones do not.
+
+Every suite is Catch2, so they all take the same flags. A full run is minutes, nearly all of it
+`bgl_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
+suite does not stop the others; the summary at the end says which failed. To pass a flag to one
+suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
+`just run editor_tests -- "[materialgraph]"` to run one tag.
 
 ## Configuration
 

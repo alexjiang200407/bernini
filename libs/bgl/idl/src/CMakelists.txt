@@ -5,6 +5,17 @@ set(IDL_SRC_ROOT           "${CMAKE_CURRENT_SOURCE_DIR}")
 
 file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")
 
+# Every module that emits a C++ mirror must be named in exactly one of the two lists below --
+# CMake declares the .h as an OUTPUT, so it cannot glob for it. `scripts/gen_idl.py` (`just idl`)
+# parses these same two lists, so the two generation paths cannot drift and emit different trees.
+#
+# A module in NEITHER list gets its Slang copy only, and no C++ header. That is correct for the
+# interface- and generic-only modules -- IMaterial, IPbrMaterial, IAlphaTestMaterial, and the
+# `Entry<T>` / `Range<T>` / `RangeWithCount<T>` offset primitives. A generic has no concrete layout
+# to mirror, so idlgen skips it (and says so); their C++ counterparts in src/idl are **hand-written**
+# and carry no generated banner. Listing one here would declare a CMake OUTPUT nothing produces.
+
+# Internal: namespace `bgl::idl`, emitted into src/idl.
 set(IDL_CPP_SOURCES
     Meshlet.slang
     VertexLayout.slang
@@ -18,8 +29,13 @@ set(IDL_CPP_SOURCES
     TextureHandle.slang
     SamplerHandle.slang
     ErrorCode.slang
+    DispatchArgs.slang
 )
 
+# Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public
+# headers (MaterialHandle, PsoType is used by ForwardPass and callers), so they cannot live behind
+# `bgl::idl`. There is deliberately no `bgl::idl` copy of either -- a second, differently-namespaced
+# definition of the same enum is a duplicate waiting to be included by mistake.
 set(IDL_PUBLIC_CPP_SOURCES
     MaterialType.slang
     PsoType.slang

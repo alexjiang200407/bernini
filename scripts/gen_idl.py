@@ -2,19 +2,25 @@
 """Generate the C++ headers and Slang copies from the .slang IDL modules.
 
 Drives the built `bgl_idlgen` tool over every module in `bgl/idl/src`, writing:
-  - a banner-stamped Slang copy to   bgl/shaders/idl/<rel>.slang   (every module)
-  - a generated C++ header to        bgl/src/idl/<rel>.h           (modules that
-                                                                    define structs)
+  - a banner-stamped Slang copy to   bgl/shaders/src/idl/<rel>.slang   (every module)
+  - a generated C++ header, to one of two roots depending on the module:
+      * bgl/include/bgl/<rel>.h  in namespace `bgl`      (IDL_PUBLIC_CPP_SOURCES)
+      * bgl/src/idl/<rel>.h      in namespace `bgl::idl` (IDL_CPP_SOURCES)
+    A module in neither list gets no C++ header at all -- correct for the
+    interface/generic-only modules, which carry no concrete layout to mirror.
 
-Each module is written under both output roots at the SAME path it has relative
-to the source root, so its import path, .slang location, #include and .h location
-stay in lockstep (see bgl/idl/idlgen.cpp). Interface/generic-only modules carry
-no concrete layout, so the tool skips their C++ header on its own -- which is why
-this passes both output roots uniformly and needs no per-file list.
+Each module is written under its output root at the SAME path it has relative to
+the source root, so its import path, .slang location, #include and .h location
+stay in lockstep (see bgl/idl/idlgen.cpp).
 
-This is the same generation the `bgl_idl_generate` CMake target performs; use it
-to regenerate on demand without a full build. The tool path is resolved from the
-CMake File API codemodel (generator-agnostic), like find_executables.py.
+**The two lists are read from `bgl/idl/src/CMakelists.txt`, not restated here.**
+This must produce byte-for-byte the same tree as the `bgl_idl_generate` CMake
+target, and the only way to guarantee that is to route from the same source. A
+copy of the lists here drifted once already: it emitted a `bgl::idl::PsoType`
+beside the real `bgl::PsoType`, and left the public header stale.
+
+The tool path is resolved from the CMake File API codemodel
+(generator-agnostic), like find_executables.py.
 
 Usage:
     just idl                                # regenerate everything
@@ -26,6 +32,7 @@ Usage:
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 
@@ -35,7 +42,53 @@ import util.config as cfg
 TOOL = "bgl_idlgen"
 SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "src")
 CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "src", "idl")
+PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "include", "bgl")
 SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "shaders", "src", "idl")
+IDL_CMAKE = os.path.join(SRC_ROOT, "CMakelists.txt")
+
+
+def cmake_list(text, name):
+    """The .slang entries of a `set(<name> ...)` block in a CMakeLists."""
+    match = re.search(r"set\(\s*" + re.escape(name) + r"\b(.*?)\)", text, re.S)
+    if not match:
+        return set()
+    body = re.sub(r"#.*", "", match.group(1))  # strip comments
+    return set(re.findall(r"[\w./\\-]+\.slang", body))
+
+
+def load_routing():
+    """(public, internal) module-name sets, read from the IDL CMakeLists."""
+    with open(IDL_CMAKE, encoding="utf-8") as handle:
+        text = handle.read()
+
+    public = cmake_list(text, "IDL_PUBLIC_CPP_SOURCES")
+    internal = cmake_list(text, "IDL_CPP_SOURCES")
+
+    if not public and not internal:
+        raise SystemExit(
+            f"error: no IDL_CPP_SOURCES / IDL_PUBLIC_CPP_SOURCES found in {IDL_CMAKE}. "
+            f"Its format changed; gen_idl.py routes from those lists and cannot guess."
+        )
+
+    both = public & internal
+    if both:
+        raise SystemExit(
+            f"error: {', '.join(sorted(both))} appear in BOTH IDL_CPP_SOURCES and "
+            f"IDL_PUBLIC_CPP_SOURCES. A module emits one C++ header, in one namespace."
+        )
+
+    return public, internal
+
+
+def cpp_args_for(module, public, internal):
+    """The --cpp-out-dir/--namespace flags for one module (empty = Slang copy only)."""
+    name = os.path.basename(module)
+
+    if name in public:
+        return ["--cpp-out-dir", PUBLIC_CPP_OUT_DIR, "--namespace", "bgl"]
+    if name in internal:
+        return ["--cpp-out-dir", CPP_OUT_DIR]
+    return []
 
 
 def resolve_tool(build_dir, config):
@@ -106,13 +159,15 @@ def main():
         print(f"warning: no .slang modules found under {SRC_ROOT}", file=sys.stderr)
         return 0
 
+    public, internal = load_routing()
+
     failures = 0
     for module in modules:
         cmd = [
             tool,
             "--src-root", SRC_ROOT,
             "--slang-out-dir", SLANG_OUT_DIR,
-            "--cpp-out-dir", CPP_OUT_DIR,
+            *cpp_args_for(module, public, internal),
             "-I", SRC_ROOT,
             module,
         ]

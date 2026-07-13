@@ -1,11 +1,7 @@
 import types.ComputeBuffer;
 import types.SubmeshInstance;
 import types.PackedBuffer;
-import types.EntryBuffer;
-import types.RangeBuffer;
 import idl.PsoType;
-import idl.Mesh;
-import idl.Submesh;
 import idl.DispatchArgs;
 import idl.Constants;
 
@@ -14,8 +10,6 @@ static const uint kPsoCount = uint(PsoType::kCount);
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
-    EntryBuffer<Mesh> meshBuffer;
-    RangeBuffer<Submesh> submeshBuffer;
     ComputeBuffer<uint> psoPrefixSum;
     ComputeBuffer<uint> compactedInstances;
     ComputeBuffer<DispatchArgs> dispatchArgs;
@@ -33,9 +27,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
         return;
     }
 
-    let mesh = gUniforms.meshBuffer.Get(instance.meshInstance);
-    let submesh = gUniforms.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
-    let psoType = submesh.pso;
+    let psoType = instance.pso;
     if (psoType >= kPsoCount)
     {
         return;

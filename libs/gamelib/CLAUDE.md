@@ -36,6 +36,7 @@ no file, so they are not shared — but they are refcounted like anything else.
 
 ```
 instance -> geom -> material -> texture
+         \-> material (per-submesh override, when one is worn)
 ```
 
 `AcquireMesh` acquires the materials its submeshes name, which acquires the textures those materials
@@ -52,3 +53,11 @@ The manager owns instances for that last one: an instance holding a reference on
 `SetMaterialTexture` / `SetMaterialRoute` swap a map on a live material: the scene rewrites the entry
 in place (`IScene::UpdatePbrMaterial`), so the handle stays valid and every submesh bound to it follows
 without being rebound. The material is shared by path, so the change is seen by everything using it.
+
+**Skins.** `SetSubmeshMaterial` changes a geom's **default**, so it reaches every instance placed from
+it. `SetInstanceSubmeshMaterial` overrides **one instance** and leaves its siblings alone — the same
+unit mesh, a different material per unit. The override outranks the default and holds a reference of
+its own, which is the edge above: `ClearInstanceSubmeshMaterial` and `DestroyInstance` release it.
+Without that reference `bgl` would happily let the material be deleted out from under an instance
+still wearing it, since a binding there is a bare slot index with no generation
+(`ISceneView::SetSubmeshMaterialOverride`).

@@ -45,12 +45,41 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   [Constants.h](libs/bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere for culling.
 
-* **A `Submesh` is the unit of pipeline state, and is 1:1 with a source submesh.** It carries one
-  material, one PSO, and one vertex layout, and `Scene::AddStaticMesh` emits exactly one per source
-  submesh, in source order. Its meshlet count is *unbounded* — up to the 65535 thread groups a
-  `DispatchMesh` can launch — and is a dispatch dimension, never a partitioning criterion. Nothing
-  may split a submesh on meshlet count: doing so duplicates the partition's identity across the
-  pieces and breaks source-index addressing (see the contract below).
+* **A `Submesh` is pure geometry, and is 1:1 with a source submesh.** It carries one vertex layout
+  and its meshlet/vertex/index ranges — and *nothing about shading*. `Scene::AddStaticMesh` emits
+  exactly one per source submesh, in source order. Its meshlet count is *unbounded* — up to the 65535
+  thread groups a `DispatchMesh` can launch — and is a dispatch dimension, never a partitioning
+  criterion. Nothing may split a submesh on meshlet count: doing so duplicates the partition's
+  identity across the pieces and breaks source-index addressing (see the contract below).
+
+* **The `SubmeshInstance` is the unit of pipeline state.** It carries the *resolved* `material` entry
+  and `pso` — the geom's default material, unless that instance overrides it. They live on the
+  instance and not on the `Submesh` because a submesh is shared by every instance placed from its
+  geom: a cosmetic **skin** (the same unit mesh, a different material per unit) has nowhere else to
+  go. The counting sort buckets on `SubmeshInstance::pso`, so an overridden instance can draw from a
+  different pipeline than its sibling — an opaque unit and a cutout one, from one geom.
+
+  The **default** material lives host-side on the `Scene`, in a vector parallel to the submesh buffer
+  (`Scene::GetSubmeshDefaultMaterial`), not in `idl::Submesh`. The GPU has no use for it — the
+  instance carries the resolved value — and the PSO needs the handle's `layerType`, which a bare
+  buffer index cannot carry.
+
+  `Scene::SetSubmeshMaterial` changes that default and bumps a **material epoch**. A `SceneView`
+  compares the epoch in its `Update` and re-resolves its instances when it has moved. That is a
+  *pull*: the Scene never learns that SceneViews exist, which is the invariant the whole
+  Scene/SceneView split rests on (see `IScene::DeleteGeom`). The re-resolve is O(live instances), but
+  it only runs on the frame after an authoring-time change, never per frame.
+
+  The **override** is per instance and lives on the view (`SceneView::MeshMeta::overrides`, parallel
+  to its submesh instances), set through `ISceneView::SetSubmeshMaterialOverride`. It takes effect
+  immediately — there is no epoch to wait for, because only one instance changed. It also **outranks
+  the default**: the epoch re-resolve skips an overridden submesh, so a later `SetSubmeshMaterial` on
+  the geom does not tear a skin off the unit wearing it.
+
+  Lifetime is the usual bargain: an override is a raw slot index like every other material binding, so
+  deleting a material an instance still wears re-points it at whatever takes the slot next.
+  `gamelib`'s `AssetManager` is what makes it safe — an override holds a reference, released by
+  `ClearInstanceSubmeshMaterial` or by `DestroyInstance`.
 
 * **Vertex data is type-erased bytes, decoded by a `VertexLayout` descriptor.** The vertex buffer
   is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a
@@ -79,10 +108,17 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | Struct | File | Role |
 |---|---|---|
 | `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>` + total meshlet count. |
-| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, material entry. |
+| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
 | `Vertex` | [Vertex.slang](libs/bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
+
+One struct in the same buffers is **not** IDL-generated and is hand-mirrored instead, so the two
+copies must be kept in step by hand:
+
+| Struct | Files | Role |
+|---|---|---|
+| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl/shaders/src/types/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl/src/types/SubmeshInstance.h) | One drawable: a `Mesh` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
 
 ### Offset primitives
 
@@ -109,8 +145,9 @@ store. All three dirty-track writes and flush via `Update(cmdList)`.
 
 ```mermaid
 flowchart TD
+    Inst["SubmeshInstance (the drawable)<br/>meshInstance + submeshIndex<br/><b>+ resolved material + pso</b>"]
     Mesh["Mesh (root)<br/>transform + submeshes"]
-    Submesh["Submesh<br/>layout + ranges + material"]
+    Submesh["Submesh<br/>layout + ranges (geometry only)"]
     Meshlet["Meshlet<br/>rel offsets + bounds"]
     VMap["vertexMap buffer&lt;uint&gt;"]
     VData["vertexData buffer (bytes)"]
@@ -118,10 +155,12 @@ flowchart TD
     Layout["VertexLayout"]
     Mat["material Entry&lt;IMaterial&gt;"]
 
+    Inst -- "Entry&lt;Mesh&gt;" --> Mesh
+    Inst -- "submeshIndex → one of" --> Submesh
+    Inst -- "Entry&lt;IMaterial&gt; (override, else the geom default)" --> Mat
     Mesh -- "RangeWithCount&lt;Submesh&gt;" --> Submesh
     Submesh -- "RangeWithCount&lt;Meshlet&gt;" --> Meshlet
     Submesh -- "layout (decode rule)" --> Layout
-    Submesh -- "Entry&lt;IMaterial&gt;" --> Mat
     Meshlet -- "relativeVertexOffset → window in" --> VMap
     Meshlet -- "relativeIndexOffset → window in" --> IdxBuf
     VMap -- "geometry vertex index → bytes at" --> VData
@@ -193,11 +232,19 @@ green channel.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
-  submesh; `Scene::SetSubmeshMaterial` indexes the GPU array directly with that number. Any change
-  that makes `AddStaticMesh` emit a number of submeshes other than `meshEntry.submeshCount` silently
-  breaks every such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
+  submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,
+  and a `SceneView` resolves each `SubmeshInstance` from the same index. Any change that makes
+  `AddStaticMesh` emit a number of submeshes other than `meshEntry.submeshCount` silently breaks every
+  such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
   triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
-  expand it at the *instance* level, not in the geometry buffers.
+  expand it at the *instance* level, not in the geometry buffers — which is exactly where the
+  material and PSO now live.
+* **A stale instance reads a stale default.** An instance that outlives its geom keeps a by-value copy
+  of the submesh range, so a re-resolve looks up whatever default now occupies that index. That is the
+  same bargain `IScene::DeleteGeom` already documents (it would draw whatever geometry lands in the
+  range next), not a new hazard — but it is why the defaults are a plain vector rather than
+  `RangeBuffer`'s `Meta`, whose accessor would `gassert` on the dead range and turn
+  documented-garbage into a crash.
 * **Destroy every mesh instance placed from a geom before you `DeleteGeom` it.**
 * **A mirror-buffer handle is only valid while its range is live.** After `Erase`, the generation
   bumps and the stale handle reports invalid; the raw GPU-side offset carries no generation, so

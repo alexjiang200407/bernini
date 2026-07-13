@@ -31,15 +31,17 @@ namespace game
 		std::vector<std::string>
 		TexturePaths(const assetlib::BMaterial& material)
 		{
+			const assetlib::PbrParams& pbr = material.pbr;
+
 			if (material.mode == assetlib::MaterialMode::kLoose)
 			{
 				auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
 				for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
-					paths[i] = material.routes[i].texture;
+					paths[i] = pbr.routes[i].texture;
 				return paths;
 			}
 
-			return { material.baseColorTexture, material.normalTexture, material.ormTexture };
+			return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 		}
 	}
 
@@ -140,6 +142,12 @@ namespace game
 	bgl::MaterialHandle
 	AssetManager::CreateMaterial(const assetlib::BMaterial& material, std::string key)
 	{
+		if (material.shadingModel != assetlib::ShadingModel::kPbr)
+			throw bgl::SceneError(
+				"AssetManager: shading model " +
+				std::to_string(static_cast<uint32_t>(material.shadingModel)) +
+				" is not supported by the renderer");
+
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
 		const std::vector<std::string> paths = TexturePaths(material);
 
@@ -287,7 +295,13 @@ namespace game
 
 		// The instance's reference is what keeps the geometry alive while it is being drawn.
 		++it->second.refCount;
-		m_Instances.emplace(instance.handle.index, InstanceRecord{ instance, geom.handle.index });
+
+		auto record      = InstanceRecord();
+		record.handle    = instance;
+		record.geomSlot  = geom.handle.index;
+		record.overrides = std::vector<bgl::MaterialHandle>(it->second.submeshMaterials.size());
+
+		m_Instances.emplace(instance.handle.index, std::move(record));
 
 		return instance;
 	}
@@ -299,10 +313,14 @@ namespace game
 		if (it == m_Instances.end())
 			return;
 
-		const uint32_t geomSlot = it->second.geomSlot;
+		const uint32_t                         geomSlot  = it->second.geomSlot;
+		const std::vector<bgl::MaterialHandle> overrides = std::move(it->second.overrides);
 
 		m_View->DeleteMeshInstance(it->second.handle);
 		m_Instances.erase(it);
+
+		// The instance is gone, so nothing wears these any more.
+		for (const bgl::MaterialHandle material : overrides) ReleaseMaterial(material);
 
 		DropGeomRef(geomSlot);
 	}
@@ -440,6 +458,58 @@ namespace game
 	}
 
 	void
+	AssetManager::SetInstanceSubmeshMaterial(
+		bgl::MeshInstanceHandle instance,
+		uint32_t                submeshIndex,
+		std::string_view        materialRelPath)
+	{
+		const auto it = m_Instances.find(instance.handle.index);
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to SetInstanceSubmeshMaterial is not owned by this "
+				"AssetManager");
+
+		InstanceRecord& record = it->second;
+		if (submeshIndex >= record.overrides.size())
+			throw bgl::SceneError(
+				"submeshIndex passed to SetInstanceSubmeshMaterial is out of range");
+
+		// Acquire before releasing: overriding with the material already worn must not drop the count
+		// to zero and delete it out from under itself.
+		const bgl::MaterialHandle replacement = AcquireMaterial(materialRelPath);
+		const bgl::MaterialHandle previous    = record.overrides[submeshIndex];
+
+		m_View->SetSubmeshMaterialOverride(record.handle, submeshIndex, replacement);
+		record.overrides[submeshIndex] = replacement;
+
+		ReleaseMaterial(previous);
+	}
+
+	void
+	AssetManager::ClearInstanceSubmeshMaterial(
+		bgl::MeshInstanceHandle instance,
+		uint32_t                submeshIndex)
+	{
+		const auto it = m_Instances.find(instance.handle.index);
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to ClearInstanceSubmeshMaterial is not owned by this "
+				"AssetManager");
+
+		InstanceRecord& record = it->second;
+		if (submeshIndex >= record.overrides.size())
+			throw bgl::SceneError(
+				"submeshIndex passed to ClearInstanceSubmeshMaterial is out of range");
+
+		const bgl::MaterialHandle previous = record.overrides[submeshIndex];
+
+		m_View->ClearSubmeshMaterialOverride(record.handle, submeshIndex);
+		record.overrides[submeshIndex] = {};
+
+		ReleaseMaterial(previous);
+	}
+
+	void
 	AssetManager::SetMaterialTexture(
 		bgl::MaterialHandle material,
 		TextureSlot         slot,
@@ -462,13 +532,13 @@ namespace game
 		switch (slot)
 		{
 		case TextureSlot::kBaseColor:
-			record.source.baseColorTexture = std::move(path);
+			record.source.pbr.baseColorTexture = std::move(path);
 			break;
 		case TextureSlot::kNormal:
-			record.source.normalTexture = std::move(path);
+			record.source.pbr.normalTexture = std::move(path);
 			break;
 		case TextureSlot::kOrm:
-			record.source.ormTexture = std::move(path);
+			record.source.pbr.ormTexture = std::move(path);
 			break;
 		}
 
@@ -497,8 +567,8 @@ namespace game
 		if (channel >= assetlib::c_LooseChannelCount)
 			throw bgl::SceneError("channel passed to SetMaterialRoute is out of range");
 
-		record.source.routes[channel].texture = std::string(relPath);
-		record.source.routes[channel].channel = sourceChannel;
+		record.source.pbr.routes[channel].texture = std::string(relPath);
+		record.source.pbr.routes[channel].channel = sourceChannel;
 
 		RebuildMaterial(record);
 	}
@@ -530,12 +600,14 @@ namespace game
 	bgl::PbrMaterialDesc
 	AssetManager::BakedDesc(const MaterialRecord& record) const
 	{
+		const assetlib::PbrParams& pbr = record.source.pbr;
+
 		auto desc            = bgl::PbrMaterialDesc();
-		desc.baseColorFactor = record.source.baseColorFactor;
-		desc.metallicFactor  = record.source.metallicFactor;
-		desc.roughnessFactor = record.source.roughnessFactor;
-		desc.layerType       = ToLayerType(record.source.alphaMode);
-		desc.alphaCutoff     = record.source.alphaCutoff;
+		desc.baseColorFactor = pbr.baseColorFactor;
+		desc.metallicFactor  = pbr.metallicFactor;
+		desc.roughnessFactor = pbr.roughnessFactor;
+		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		desc.baseColorTexture = record.textures[0];
 		desc.normalTexture    = record.textures[1];
@@ -547,17 +619,19 @@ namespace game
 	bgl::LoosePbrMaterialDesc
 	AssetManager::LooseDesc(const MaterialRecord& record) const
 	{
+		const assetlib::PbrParams& pbr = record.source.pbr;
+
 		auto desc            = bgl::LoosePbrMaterialDesc();
-		desc.baseColorFactor = record.source.baseColorFactor;
-		desc.metallicFactor  = record.source.metallicFactor;
-		desc.roughnessFactor = record.source.roughnessFactor;
-		desc.layerType       = ToLayerType(record.source.alphaMode);
-		desc.alphaCutoff     = record.source.alphaCutoff;
+		desc.baseColorFactor = pbr.baseColorFactor;
+		desc.metallicFactor  = pbr.metallicFactor;
+		desc.roughnessFactor = pbr.roughnessFactor;
+		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		const auto route = [&](size_t index) {
 			auto out    = bgl::ChannelRouteDesc();
 			out.texture = record.textures[index];
-			out.channel = record.source.routes[index].channel;
+			out.channel = pbr.routes[index].channel;
 			return out;
 		};
 
