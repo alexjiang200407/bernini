@@ -294,9 +294,33 @@ MaterialEditorWindow::ResetGraph(int submeshIndex, const QJsonObject& graph)
 	MaterialOutputNode* output = WatchOutputNode(submeshIndex);
 
 	if (m_CurrentSubmesh == submeshIndex)
+	{
 		SyncOutputSelector();
+		CenterOnOutput();
+	}
 
 	return output;
+}
+
+void
+MaterialEditorWindow::CenterOnOutput()
+{
+	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraphs.size()))
+		return;
+
+	const SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)];
+	if (entry.model == nullptr || m_GraphView->scene() != entry.scene.get())
+		return;
+
+	const QtNodes::NodeId outputId = entry.model->OutputNodeId();
+	if (outputId == QtNodes::InvalidNodeId)
+		return;
+
+	const QPointF pos =
+		entry.model->nodeData(outputId, QtNodes::NodeRole::Position).value<QPointF>();
+	const QSize size = entry.model->nodeData(outputId, QtNodes::NodeRole::Size).value<QSize>();
+
+	m_GraphView->centerOn(pos + QPointF(size.width() * 0.5, size.height() * 0.5));
 }
 
 MaterialOutputNode*
@@ -410,6 +434,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 	m_CurrentSubmesh = index;
 	m_GraphView->setScene(m_SubmeshGraphs[static_cast<size_t>(index)].scene.get());
 	SyncOutputSelector();
+	CenterOnOutput();
 	RefreshActions();
 }
 
