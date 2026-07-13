@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QResizeEvent>
@@ -175,25 +176,34 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 void
 MaterialPreviewWindow::ClearGeometry()
 {
-	try
+	for (const InstanceRef& instance : m_Instances)
 	{
-		// Instances first, and this order is load-bearing: the scene does not track instances and
-		// will not stop us deleting geometry out from under one. An instance that outlives its geom
-		// keeps drawing the range it copied, which the next mesh will be allocated into.
-		for (const InstanceRef& instance : m_Instances)
+		if (!instance.handle.IsValid())
+			continue;
+
+		try
 		{
-			if (instance.handle.IsValid())
-				PreviewView()->DeleteMeshInstance(instance.handle);
+			PreviewView()->DeleteMeshInstance(instance.handle);
 		}
-		for (const bgl::GeomHandle& geom : m_Geoms)
+		catch (const std::exception& e)
 		{
-			if (geom.IsValid())
-				PreviewScene()->DeleteGeom(geom);
+			qWarning("MaterialPreview: failed to delete an instance: %s", e.what());
 		}
 	}
-	catch (const std::exception& e)
+
+	for (const bgl::GeomHandle& geom : m_Geoms)
 	{
-		qWarning("MaterialPreview: failed to clear geometry: %s", e.what());
+		if (!geom.IsValid())
+			continue;
+
+		try
+		{
+			PreviewScene()->DeleteGeom(geom);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialPreview: failed to delete a geom: %s", e.what());
+		}
 	}
 
 	m_Instances.clear();
@@ -217,9 +227,20 @@ MaterialPreviewWindow::ShowDefaultSphere()
 {
 	ClearGeometry();
 
-	m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
-	m_Instances.push_back(
-		{ PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+	try
+	{
+		m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
+		m_Instances.push_back(
+			{ PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialPreview: could not show the default sphere: %s", e.what());
+
+		ClearGeometry();
+		Q_EMIT GeometryChanged();
+		return;
+	}
 
 	m_SubmeshRefs.push_back({ 0, 0, 0 });
 	m_SubmeshNames = QStringList{ "Sphere" };  // procedural sphere: a single submesh
@@ -233,29 +254,31 @@ MaterialPreviewWindow::ShowDefaultSphere()
 void
 MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 {
-	// Deserializing the .bmesh is the slow half and touches no bgl state, so it runs on
-	// a worker. Everything below mutates the Scene and the SceneView, which carry no locks, so it
-	// has to wait until the worker is done.
 	assetlib::BMesh mesh;
-	QString         readError;
+	const QString   name = QString::fromStdString(path.filename().string());
 
-	const bool read = background::RunWithLoadingScreen(
+	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
-		QString("Loading %1").arg(QString::fromStdString(path.filename().string())),
+		QString("Loading %1").arg(name),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Reading mesh...");
 			mesh = assetlib::load(path);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
-		},
-		&readError);
+		});
 
-	if (!read)
+	if (!result.Completed())
 	{
 		qWarning(
 			"MaterialPreview: failed to load mesh '%s': %s",
 			path.string().c_str(),
-			qPrintable(readError));
+			qPrintable(result.error));
+
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Load Mesh"),
+			QStringLiteral("Could not load '%1':\n\n%2").arg(name, result.error));
+
 		ShowDefaultSphere();
 		return;
 	}
@@ -334,6 +357,12 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 	catch (const std::exception& e)
 	{
 		qWarning("MaterialPreview: failed to load mesh '%s': %s", path.string().c_str(), e.what());
+
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Load Mesh"),
+			QStringLiteral("Could not show '%1':\n\n%2").arg(name, QString::fromUtf8(e.what())));
+
 		ShowDefaultSphere();
 	}
 }

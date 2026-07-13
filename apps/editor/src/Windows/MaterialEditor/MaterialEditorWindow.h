@@ -50,6 +50,25 @@ public:
 	void
 	Reset();
 
+	/**
+	 * Whether the mesh already names `materialPath` for the submesh -- in which case Set Default
+	 * Material would rewrite the `.bmesh` to say what it already says.
+	 *
+	 * `boundPath` is what the `.bmesh` names (empty when the submesh is unbound, which is never
+	 * "already default"). The two are compared as *files*, not as strings: they reach here by
+	 * different routes -- one from a file dialog, one from the mesh's own relative path resolved
+	 * against the data root -- and can spell the same file differently.
+	 */
+	[[nodiscard]] static bool
+	IsAlreadyDefault(const QString& boundPath, const QString& materialPath);
+
+	/**
+	 * The scene point a graph should be centred on: the middle of its output node, not its corner --
+	 * a node centred by its corner hangs off the left of the panel. Empty for a graph with no sink.
+	 */
+	[[nodiscard]] static std::optional<QPointF>
+	OutputCentre(MaterialGraphModel& model);
+
 private:
 	void
 	SetPreviewGeometry(const QStringList& submeshNames);
@@ -86,11 +105,6 @@ private:
 	 */
 	void
 	SetDefaultMaterial(int submeshIndex);
-
-	/** Whether the `.bmesh` already names `materialPath` as `submeshIndex`'s material -- in which case
-	 *  Set Default Material would rewrite it to what it already says. */
-	[[nodiscard]] bool
-	IsSubmeshDefault(int submeshIndex, const QString& materialPath) const;
 
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);

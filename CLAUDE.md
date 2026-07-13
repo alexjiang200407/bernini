@@ -93,6 +93,7 @@ just                              # list the recipes
 just init                         # write scripts/config.json for this machine (see below)
 just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
+just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build
 just format <files...>            # clang-format in place (--check to verify only)
 just idl                          # regenerate the IDL C++ headers and Slang copies
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
@@ -100,7 +101,19 @@ just exes                         # resolve executable paths (--target NAME prin
 just count                        # count source files and lines by language
 ```
 
-`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+
+## Tests
+
+`just test` discovers the suites rather than listing them: every executable target named
+`*_tests` is one, so adding a target is all it takes for it to be run. They exist only when
+`BUILD_TESTS` is on, which the debug presets set and the release ones do not.
+
+Every suite is Catch2, so they all take the same flags. A full run is minutes, nearly all of it
+`bgl_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
+suite does not stop the others; the summary at the end says which failed. To pass a flag to one
+suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
+`just run editor_tests -- "[materialgraph]"` to run one tag.
 
 ## Configuration
 

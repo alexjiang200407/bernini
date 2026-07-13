@@ -429,12 +429,15 @@ namespace assetlib
 		buildTextures(
 			BMeshImport&           mesh,
 			const tinygltf::Model& model,
-			std::vector<uint32_t>& imageToTexture)
+			std::vector<uint32_t>& imageToTexture,
+			const CancelToken&     cancel)
 		{
 			imageToTexture.assign(model.images.size(), c_InvalidIndex);
 #ifdef _WIN32
 			for (size_t i = 0; i < model.images.size(); ++i)
 			{
+				throwIfCancelled(cancel);
+
 				const auto& image = model.images[i];
 				if (image.image.empty() || image.width <= 0 || image.height <= 0 || image.bits != 8)
 					continue;
@@ -475,6 +478,7 @@ namespace assetlib
 #else
 			(void)mesh;
 			(void)model;
+			(void)cancel;
 			static_assert(false, "gltf texture loading is only implemented on Windows right now");
 #endif
 		}
@@ -533,7 +537,7 @@ namespace assetlib
 	}
 
 	BMeshImport
-	loadFromGltf(const std::filesystem::path& path)
+	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel)
 	{
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;
@@ -559,6 +563,8 @@ namespace assetlib
 
 		for (const auto& gltfMesh : model.meshes)
 		{
+			throwIfCancelled(cancel);
+
 			Mesh entry{};
 			entry.firstSubmesh = static_cast<uint32_t>(mesh.submeshes.size());
 			entry.nameOffset   = addName(mesh, gltfMesh.name);
@@ -583,7 +589,7 @@ namespace assetlib
 		}
 
 		std::vector<uint32_t> imageToTexture;
-		buildTextures(mesh, model, imageToTexture);
+		buildTextures(mesh, model, imageToTexture, cancel);
 		buildMaterials(mesh, model, imageToTexture);
 		return mesh;
 	}

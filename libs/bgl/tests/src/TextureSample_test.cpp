@@ -10,6 +10,7 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "types/ComputeState.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -27,7 +28,7 @@ TEST_CASE(
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
