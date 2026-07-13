@@ -117,6 +117,11 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		"Composite the routed source textures into the optimized "
 		"baseColor / orm / normal maps"));
 
+	m_SetDefaultButton = new QPushButton(QStringLiteral("Set Default Material"), leftPanel);
+	m_SetDefaultButton->setToolTip(QStringLiteral(
+		"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads with "
+		"it.\nThe preview only overrides the instances in front of you until you do."));
+
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
 			window(),
@@ -129,6 +134,9 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
 	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
 	connect(m_BakeButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeCurrentMaterial);
+	connect(m_SetDefaultButton, &QPushButton::clicked, this, [this]() {
+		SetDefaultMaterial(m_CurrentSubmesh);
+	});
 
 	// Names the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes to.
 	m_MaterialLabel = new QLabel(leftPanel);
@@ -139,6 +147,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	toolbar->addWidget(m_SaveButton);
 	toolbar->addWidget(m_SaveAsButton);
 	toolbar->addWidget(m_BakeButton);
+	toolbar->addWidget(m_SetDefaultButton);
 	toolbar->addWidget(m_MaterialLabel, 1);
 	leftLayout->addLayout(toolbar);
 
@@ -248,6 +257,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 MaterialEditorWindow::~MaterialEditorWindow()
 {
+	ReleasePreviewMaterials();
+
 	// Detach the view before the per-submesh scenes/models are destroyed, so the view never holds a
 	// dangling scene pointer during teardown.
 	if (m_GraphView)
@@ -353,6 +364,10 @@ MaterialEditorWindow::SyncOutputSelector()
 void
 MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 {
+	// The preview's instances -- and the overrides naming these materials -- were destroyed before
+	// this was emitted, so nothing wears them any more.
+	ReleasePreviewMaterials();
+
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
 	m_SubmeshGraphs.clear();
@@ -422,6 +437,11 @@ MaterialEditorWindow::RefreshActions()
 			QStringLiteral(
 				"Composite the routed source textures into the optimized "
 				"baseColor / orm / normal maps"));
+
+	// Binding a submesh needs a saved material to bind, and a `.bmesh` to write it into: the default
+	// sphere is procedural and has neither.
+	const bool hasMesh = m_Preview != nullptr && !m_Preview->MeshPath().empty();
+	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh);
 
 	if (materialPath.isEmpty())
 	{
@@ -578,7 +598,30 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	}
 
 	entry.materialPath = path;
-	AttachMaterialToMesh(m_CurrentSubmesh, path);
+
+	// A submesh with no material yet is bound by its first Save -- there is nothing to overwrite, and
+	// leaving it unbound would mean saving a material the mesh never references. Once it has one,
+	// Save writes only the `.bmaterial`: rebinding the mesh is Set Default Material's job, and doing
+	// it here would edit the shared asset every time the user pressed Ctrl+S.
+	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(m_CurrentSubmesh).isEmpty())
+	{
+		AttachMaterialToMesh(m_CurrentSubmesh, path);
+	}
+
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
+{
+	if (submeshIndex < 0 || submeshIndex >= static_cast<int>(m_SubmeshGraphs.size()))
+		return;
+
+	const QString path = m_SubmeshGraphs[static_cast<size_t>(submeshIndex)].materialPath;
+	if (path.isEmpty())
+		return;  // nothing on disk to point the mesh at; Save first
+
+	AttachMaterialToMesh(submeshIndex, path);
 	RefreshActions();
 }
 
@@ -688,6 +731,10 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 
 		if (assetlib::attachMaterial(mesh, source, relative))
 			assetlib::save(mesh, meshPath);
+
+		// The mesh names it now, so the preview's cached bindings must say so too -- otherwise the
+		// next Save would still see this submesh as unbound and rewrite the `.bmesh` again.
+		m_Preview->SetSubmeshMaterialPath(static_cast<uint32_t>(submeshIndex), materialPath);
 	}
 	catch (const std::exception& e)
 	{
@@ -821,7 +868,49 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 	for (size_t i = 0; i < desc.normal.size(); ++i)
 		desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
 
-	m_Preview->SetSubmeshMaterial(
-		static_cast<uint32_t>(submeshIndex),
-		m_Desc.scene->CreateLoosePbrMaterial(desc));
+	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(submeshIndex)];
+
+	// An in-place rewrite keeps the handle, so the instances already overriding with it follow the
+	// edit with no rebinding -- but only while the PSO bucket is unchanged. The bucket comes from the
+	// handle's layer, which an update cannot rewrite, so flipping the sink between Material Output
+	// and Alpha Tested Material Output needs a new material or the cutout would not cut.
+	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType)
+	{
+		m_Desc.scene->UpdateLoosePbrMaterial(entry.preview, desc);
+		return;
+	}
+
+	const bgl::MaterialHandle previous = entry.preview;
+
+	// Bind the replacement before destroying what it replaces: a deleted material leaves its slot to
+	// be reused, and an instance still overriding with it would silently wear whatever lands there.
+	entry.preview = m_Desc.scene->CreateLoosePbrMaterial(desc);
+	m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(submeshIndex), entry.preview);
+
+	if (previous.IsValid())
+		m_Desc.scene->DeleteMaterial(previous);
+}
+
+void
+MaterialEditorWindow::ReleasePreviewMaterials()
+{
+	if (m_Desc.scene == nullptr)
+		return;
+
+	for (SubmeshGraph& entry : m_SubmeshGraphs)
+	{
+		if (!entry.preview.IsValid())
+			continue;
+
+		try
+		{
+			m_Desc.scene->DeleteMaterial(entry.preview);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialEditor: could not release a preview material: %s", e.what());
+		}
+
+		entry.preview = {};
+	}
 }

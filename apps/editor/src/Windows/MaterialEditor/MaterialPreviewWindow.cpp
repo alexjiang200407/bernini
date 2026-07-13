@@ -181,10 +181,10 @@ MaterialPreviewWindow::ClearGeometry()
 		// Instances first, and this order is load-bearing: the scene does not track instances and
 		// will not stop us deleting geometry out from under one. An instance that outlives its geom
 		// keeps drawing the range it copied, which the next mesh will be allocated into.
-		for (const bgl::MeshInstanceHandle& instance : m_Instances)
+		for (const InstanceRef& instance : m_Instances)
 		{
-			if (instance.IsValid())
-				PreviewView()->DeleteMeshInstance(instance);
+			if (instance.handle.IsValid())
+				PreviewView()->DeleteMeshInstance(instance.handle);
 		}
 		for (const bgl::GeomHandle& geom : m_Geoms)
 		{
@@ -219,7 +219,8 @@ MaterialPreviewWindow::ShowDefaultSphere()
 	ClearGeometry();
 
 	m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
-	m_Instances.push_back(PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
+	m_Instances.push_back(
+		{ PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
 
 	m_SubmeshRefs.push_back({ 0, 0, 0 });
 	m_SubmeshNames = QStringList{ "Sphere" };  // procedural sphere: a single submesh
@@ -309,7 +310,8 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 			const glm::mat4 world = WorldTransform(mesh, nodeIndex);
 			m_Instances.push_back(
-				PreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world));
+				{ PreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
+			      it->second });
 
 			const assetlib::Mesh& entry = mesh.meshes[node.mesh];
 			for (uint32_t i = 0; i < entry.submeshCount; ++i)
@@ -349,12 +351,22 @@ MaterialPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHa
 
 	try
 	{
-		PreviewScene()->SetSubmeshMaterial(m_Geoms[ref.geomIndex], ref.localSubmesh, material);
+		// An override on the instances, not Scene::SetSubmeshMaterial on the geom. Compiling a graph
+		// happens on every keystroke, and the geom's default is the *asset's* material: rewriting it
+		// here would edit the .bmesh's binding as a side effect of typing.
+		for (const InstanceRef& instance : m_Instances)
+		{
+			if (instance.geomIndex == ref.geomIndex && instance.handle.IsValid())
+			{
+				PreviewView()->SetSubmeshMaterialOverride(
+					instance.handle,
+					ref.localSubmesh,
+					material);
+			}
+		}
 	}
 	catch (const std::exception& e)
 	{
-		// A source submesh can split into several GPU submeshes when it exceeds the meshlet cap, so
-		// the source submesh index is not always a valid GPU submesh index.
 		qWarning("MaterialPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
 	}
 }
