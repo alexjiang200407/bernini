@@ -85,9 +85,6 @@ target_link_libraries(editor_lib
 		nlohmann_json::nlohmann_json
 )
 
-if(RENDERER_BACKEND STREQUAL "DX12")
-	target_link_libraries(editor_lib PUBLIC bgl_d3d12_agility)
-endif()
 
 target_precompile_headers(editor_lib
 	PUBLIC
@@ -104,6 +101,15 @@ qt_add_executable(editor
 )
 
 target_link_libraries(editor PRIVATE editor_lib)
+
+# On the executable, NOT on editor_lib. The Agility SDK loader looks up D3D12SDKVersion /
+# D3D12SDKPath as exports of the .exe, and bgl_d3d12_agility is an OBJECT library -- CMake does not
+# carry one object library's object files through another, so linking it to editor_lib (also OBJECT)
+# drops it on the floor. The exports go missing, D3D12 falls back to the system runtime, and
+# D3D12CreateDevice fails with E_INVALIDARG.
+if(RENDERER_BACKEND STREQUAL "DX12")
+	target_link_libraries(editor PRIVATE bgl_d3d12_agility)
+endif()
 
 set_target_properties(editor PROPERTIES
 	WIN32_EXECUTABLE ON
