@@ -465,8 +465,15 @@ MaterialEditorWindow::RefreshActions()
 
 	// Binding a submesh needs a saved material to bind, and a `.bmesh` to write it into: the default
 	// sphere is procedural and has neither.
-	const bool hasMesh = m_Preview != nullptr && !m_Preview->MeshPath().empty();
-	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh);
+	const bool hasMesh   = m_Preview != nullptr && !m_Preview->MeshPath().empty();
+	const bool isDefault = IsSubmeshDefault(m_CurrentSubmesh, materialPath);
+
+	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
+	m_SetDefaultButton->setToolTip(
+		isDefault ?
+			QStringLiteral("The mesh already uses this material for this submesh") :
+			QStringLiteral(
+				"Write this material into the mesh, so every instance of it loads with it"));
 
 	if (materialPath.isEmpty())
 	{
@@ -648,6 +655,22 @@ MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 
 	AttachMaterialToMesh(submeshIndex, path);
 	RefreshActions();
+}
+
+bool
+MaterialEditorWindow::IsSubmeshDefault(int submeshIndex, const QString& materialPath) const
+{
+	if (m_Preview == nullptr || materialPath.isEmpty())
+		return false;
+
+	const QString bound = m_Preview->SubmeshMaterialPaths().value(submeshIndex);
+	if (bound.isEmpty())
+		return false;
+
+	// Compare as files, not as strings: the two reach here by different routes -- one from a file
+	// dialog, one from the `.bmesh`'s own relative path resolved against the data root -- and can
+	// spell the same file differently.
+	return QFileInfo(bound) == QFileInfo(materialPath);
 }
 
 QString
