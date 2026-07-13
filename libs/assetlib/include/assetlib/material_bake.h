@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/cancel.h>
 #include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
@@ -25,11 +26,15 @@ namespace assetlib
 	 *
 	 * **Baked maps are shared, not owned.**
 	 *
+	 * @param cancel Polled once per map, before the encode that dominates the cost. `material` is then
+	 *        left as it was -- a cancelled bake never half-updates it -- but any map already written
+	 *        stays on disk, where the next bake finds it up to date and reuses it.
 	 * @throws std::runtime_error if nothing is routed, a source is missing or undecodable, or a map
 	 *         cannot be written.
+	 * @throws Cancelled if `cancel` is signalled.
 	 */
 	void
-	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc);
+	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc, const CancelToken& cancel = {});
 
 	/**
 	 * Whether `fileName` is a name bakeMaterial could have written: `<group>_<16 hex digits>.ktx2`.

@@ -190,6 +190,14 @@ namespace bgl
 			std::span<const uint32_t>  indices,
 			MaterialHandle             material);
 
+		/**
+		 * Rejects a mesh that could never fit in this scene, whatever else is loaded.
+		 *
+		 * @throws SceneError naming the budget the mesh overruns and by how much.
+		 */
+		void
+		RequireFitsBudget(const assetlib::BMesh& mesh, const assetlib::Mesh& meshEntry) const;
+
 		// The desc -> GPU-struct conversion, shared by Create* and Update*, so a material built by
 		// either route is byte-identical (including the default-texture fallbacks for absent maps).
 		[[nodiscard]] idl::PbrMaterial

@@ -728,21 +728,6 @@ namespace
 		return out;
 	}
 
-	void
-	WriteFile(const fs::path& path, std::string content)
-	{
-		if (path.has_parent_path())
-		{
-			fs::create_directories(path.parent_path());
-		}
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-		{
-			core::throw_runtime_error("could not open output file {}", path.string());
-		}
-		out << content;
-	}
-
 	std::string
 	ReadFile(const fs::path& path)
 	{
@@ -754,6 +739,33 @@ namespace
 		std::ostringstream ss;
 		ss << in.rdbuf();
 		return ss.str();
+	}
+
+	/**
+	 * Writes `content` with LF line endings, and only when that is not already what is on disk.
+	 *
+	 */
+	void
+	WriteFile(const fs::path& path, std::string content)
+	{
+		std::erase(content, '\r');
+
+		std::error_code ec;
+		if (fs::exists(path, ec) && ReadFile(path) == content)
+		{
+			return;
+		}
+
+		if (path.has_parent_path())
+		{
+			fs::create_directories(path.parent_path());
+		}
+		std::ofstream out(path, std::ios::binary);
+		if (!out)
+		{
+			core::throw_runtime_error("could not open output file {}", path.string());
+		}
+		out << content;
 	}
 
 	void

@@ -15,6 +15,7 @@
 #include "types/ComputeState.h"
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
 #include <bgl/PsoType.h>
 
@@ -29,7 +30,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

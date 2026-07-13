@@ -9,6 +9,7 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "types/ComputeState.h"
+#include "util/GpuValidation.h"
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
@@ -87,7 +88,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -209,7 +210,7 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

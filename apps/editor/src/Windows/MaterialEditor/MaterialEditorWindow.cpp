@@ -23,6 +23,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
 
+#include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
@@ -302,6 +303,24 @@ MaterialEditorWindow::ResetGraph(int submeshIndex, const QJsonObject& graph)
 	return output;
 }
 
+std::optional<QPointF>
+MaterialEditorWindow::OutputCentre(MaterialGraphModel& model)
+{
+	const QtNodes::NodeId outputId = model.OutputNodeId();
+	if (outputId == QtNodes::InvalidNodeId)
+		return std::nullopt;
+
+	const QPointF pos  = model.nodeData(outputId, QtNodes::NodeRole::Position).value<QPointF>();
+	const QSize   size = model.nodeData(outputId, QtNodes::NodeRole::Size).value<QSize>();
+
+	// A node is only measured once it has a graphics object, so a model with no scene reports -1 x -1.
+	// Half of that would centre just off the node's corner, which is worse than its corner.
+	if (!size.isValid())
+		return pos;
+
+	return pos + QPointF(size.width() * 0.5, size.height() * 0.5);
+}
+
 void
 MaterialEditorWindow::CenterOnOutput()
 {
@@ -312,15 +331,8 @@ MaterialEditorWindow::CenterOnOutput()
 	if (entry.model == nullptr || m_GraphView->scene() != entry.scene.get())
 		return;
 
-	const QtNodes::NodeId outputId = entry.model->OutputNodeId();
-	if (outputId == QtNodes::InvalidNodeId)
-		return;
-
-	const QPointF pos =
-		entry.model->nodeData(outputId, QtNodes::NodeRole::Position).value<QPointF>();
-	const QSize size = entry.model->nodeData(outputId, QtNodes::NodeRole::Size).value<QSize>();
-
-	m_GraphView->centerOn(pos + QPointF(size.width() * 0.5, size.height() * 0.5));
+	if (const std::optional<QPointF> centre = OutputCentre(*entry.model))
+		m_GraphView->centerOn(*centre);
 }
 
 MaterialOutputNode*
@@ -465,8 +477,12 @@ MaterialEditorWindow::RefreshActions()
 
 	// Binding a submesh needs a saved material to bind, and a `.bmesh` to write it into: the default
 	// sphere is procedural and has neither.
-	const bool hasMesh   = m_Preview != nullptr && !m_Preview->MeshPath().empty();
-	const bool isDefault = IsSubmeshDefault(m_CurrentSubmesh, materialPath);
+	const bool hasMesh = m_Preview != nullptr && !m_Preview->MeshPath().empty();
+
+	const QString boundPath = m_Preview != nullptr ?
+	                              m_Preview->SubmeshMaterialPaths().value(m_CurrentSubmesh) :
+	                              QString();
+	const bool    isDefault = IsAlreadyDefault(boundPath, materialPath);
 
 	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 	m_SetDefaultButton->setToolTip(
@@ -658,19 +674,28 @@ MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 }
 
 bool
-MaterialEditorWindow::IsSubmeshDefault(int submeshIndex, const QString& materialPath) const
+MaterialEditorWindow::IsAlreadyDefault(const QString& boundPath, const QString& materialPath)
 {
-	if (m_Preview == nullptr || materialPath.isEmpty())
+	if (boundPath.isEmpty() || materialPath.isEmpty())
 		return false;
 
-	const QString bound = m_Preview->SubmeshMaterialPaths().value(submeshIndex);
-	if (bound.isEmpty())
-		return false;
+	// Not QFileInfo's own comparison: it falls back to canonicalFilePath(), which is *empty* for a
+	// file that does not exist -- so two different missing paths compare equal, and a material whose
+	// file has been deleted would grey the button out on any mesh.
+	//
+	// weakly_canonical resolves the part of the path that does exist and normalises the rest, so it
+	// works either way. Case-insensitively, because this is a Windows tool (see the editor CLAUDE.md).
+	const auto normalise = [](const QString& path) {
+		const auto source = std::filesystem::path(path.toStdWString());
 
-	// Compare as files, not as strings: the two reach here by different routes -- one from a file
-	// dialog, one from the `.bmesh`'s own relative path resolved against the data root -- and can
-	// spell the same file differently.
-	return QFileInfo(bound) == QFileInfo(materialPath);
+		std::error_code ec;
+		const auto      resolved = std::filesystem::weakly_canonical(source, ec);
+
+		return QString::fromStdWString(
+			ec ? source.lexically_normal().wstring() : resolved.wstring());
+	};
+
+	return normalise(boundPath).compare(normalise(materialPath), Qt::CaseInsensitive) == 0;
 }
 
 QString
@@ -731,25 +756,65 @@ MaterialEditorWindow::BakeCurrentMaterial()
 	if (path.isEmpty() || m_DataRoot.empty())
 		return;  // nowhere to write the maps; Save As first, inside a project
 
+	const auto materialPath = std::filesystem::path(path.toStdWString());
+
+	auto desc     = assetlib::MaterialBakeDesc();
+	desc.dataRoot = m_DataRoot;
+
+	// Read off the live graph, so the bake reflects the board as it is right now rather than whatever
+	// was last written to disk. It has to happen here, on the UI thread: the worker below may not touch
+	// the node models.
+	auto material = assetlib::BMaterial();
 	try
 	{
-		// Bake from the graph as it is right now, not from whatever was last written to disk.
-		const auto materialPath = std::filesystem::path(path.toStdWString());
-
-		auto desc     = assetlib::MaterialBakeDesc();
-		desc.dataRoot = m_DataRoot;
-
-		assetlib::BMaterial material = BuildMaterial(m_CurrentSubmesh, path);
-		assetlib::bakeMaterial(material, desc);
-		assetlib::saveMaterial(material, materialPath);
+		material = BuildMaterial(m_CurrentSubmesh, path);
 	}
 	catch (const std::exception& e)
 	{
-		qWarning("MaterialEditor: failed to bake '%s': %s", qPrintable(path), e.what());
+		qWarning(
+			"MaterialEditor: failed to compile '%s' for baking: %s",
+			qPrintable(path),
+			e.what());
 		QMessageBox::warning(
 			window(),
 			QStringLiteral("Bake Material"),
-			QStringLiteral("Could not bake the material:\n%1").arg(QString::fromLatin1(e.what())));
+			QStringLiteral("Could not bake the material:\n\n%1").arg(QString::fromUtf8(e.what())));
+		return;
+	}
+
+	const QString name = QFileInfo(path).fileName();
+
+	// A bake decodes, resizes and re-encodes a KTX2 for each of the three maps, which used to freeze
+	// the editor for as long as it took. It touches files only, never bgl, so it belongs on a worker.
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		this,
+		QString("Baking %1").arg(name),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Compositing maps...");
+			assetlib::bakeMaterial(material, desc, progress.Cancellation());
+
+			progress.Report(0, 0, "Writing material...");
+			assetlib::saveMaterial(material, materialPath);
+		},
+		background::Cancellable::kYes);
+
+	// Nothing to undo on a cancel: bakeMaterial leaves `material` untouched unless every map was
+	// produced, and a map it did write is named by the hash of its inputs -- so it is a correct,
+	// reusable file that the next bake picks up as already up to date, and Clean Unused Textures
+	// sweeps if it never is.
+	if (result.Cancelled())
+		return;
+
+	if (result.Failed())
+	{
+		qWarning(
+			"MaterialEditor: failed to bake '%s': %s",
+			qPrintable(path),
+			qPrintable(result.error));
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake Material"),
+			QStringLiteral("Could not bake the material:\n\n%1").arg(result.error));
 		return;
 	}
 

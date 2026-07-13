@@ -1,8 +1,10 @@
 #include "Async/BackgroundTask.h"
 
+#include <QCloseEvent>
 #include <QEventLoop>
 #include <QMetaObject>
 #include <QProgressDialog>
+#include <QPushButton>
 #include <QRunnable>
 #include <QThreadPool>
 #include <QWidget>
@@ -18,6 +20,12 @@ namespace background
 		void
 		Apply(int done, int total, const QString& label)
 		{
+			// Once the user has asked to stop, the worker's remaining reports describe work that is
+			// about to be thrown away. Letting them through would overwrite "Cancelling..." with a
+			// label and a bar that both suggest the import is still going somewhere.
+			if (m_Cancelling)
+				return;
+
 			if (!label.isEmpty())
 				m_Dialog->setLabelText(label);
 
@@ -26,8 +34,23 @@ namespace background
 			m_Dialog->setValue(done);
 		}
 
+		void
+		ShowCancelling()
+		{
+			m_Cancelling = true;
+
+			m_Dialog->setLabelText("Cancelling...");
+			m_Dialog->setRange(0, 0);
+			m_Dialog->setValue(0);
+
+			// The work is going to be discarded, so there is nothing left to cancel a second time.
+			if (auto* button = m_Dialog->findChild<QPushButton*>())
+				button->setEnabled(false);
+		}
+
 	private:
-		QProgressDialog* m_Dialog = nullptr;
+		QProgressDialog* m_Dialog     = nullptr;
+		bool             m_Cancelling = false;
 	};
 
 	void
@@ -42,8 +65,39 @@ namespace background
 			Qt::QueuedConnection);
 	}
 
+	assetlib::CancelToken
+	Progress::Cancellation() const
+	{
+		return m_Cancel;
+	}
+
 	namespace
 	{
+		/**
+		 * QProgressDialog dismisses itself the instant Cancel is pressed, and Esc or the title-bar X
+		 * close it outright.
+		 */
+		class LoadingScreen : public QProgressDialog
+		{
+		public:
+			using QProgressDialog::QProgressDialog;
+
+			void
+			reject() override
+			{
+				// Esc already reaches canceled() through the cancel button's shortcut; all QDialog's own
+				// handling of it would add is closing the screen.
+			}
+
+		protected:
+			void
+			closeEvent(QCloseEvent* event) override
+			{
+				Q_EMIT canceled();
+				event->ignore();
+			}
+		};
+
 		class WorkTask : public QRunnable
 		{
 		public:
@@ -51,10 +105,9 @@ namespace background
 				std::function<void(Progress&)> work,
 				Progress                       progress,
 				QEventLoop*                    loop,
-				QString*                       error,
-				bool*                          ok) :
-				m_Work(std::move(work)), m_Progress(progress), m_Loop(loop), m_Error(error),
-				m_Ok(ok)
+				TaskResult*                    result) :
+				m_Work(std::move(work)), m_Progress(std::move(progress)), m_Loop(loop),
+				m_Result(result)
 			{
 				setAutoDelete(true);
 			}
@@ -65,11 +118,22 @@ namespace background
 				try
 				{
 					m_Work(m_Progress);
-					*m_Ok = true;
+					m_Result->status = TaskStatus::kCompleted;
+				}
+				catch (const assetlib::Cancelled&)
+				{
+					// The user asked for this, so it is an outcome, not an error to report.
+					m_Result->status = TaskStatus::kCancelled;
 				}
 				catch (const std::exception& e)
 				{
-					*m_Error = QString::fromUtf8(e.what());
+					m_Result->status = TaskStatus::kFailed;
+					m_Result->error  = QString::fromUtf8(e.what());
+				}
+				catch (...)
+				{
+					m_Result->status = TaskStatus::kFailed;
+					m_Result->error  = QStringLiteral("an unknown error occurred");
 				}
 
 				// Queued, so quit() runs on the UI thread from inside the nested loop. Posting this
@@ -80,47 +144,74 @@ namespace background
 		private:
 			std::function<void(Progress&)> m_Work;
 			Progress                       m_Progress;
-			QEventLoop*                    m_Loop  = nullptr;
-			QString*                       m_Error = nullptr;
-			bool*                          m_Ok    = nullptr;
+			QEventLoop*                    m_Loop   = nullptr;
+			TaskResult*                    m_Result = nullptr;
 		};
 	}
 
-	bool
+	TaskResult
 	RunWithLoadingScreen(
 		QWidget*                              parent,
 		const QString&                        title,
 		const std::function<void(Progress&)>& work,
-		QString*                              error)
+		Cancellable                           cancellable)
 	{
 		QWidget* owner = parent != nullptr ? parent->window() : nullptr;
 
-		QProgressDialog dialog(title, QString(), 0, 0, owner);
+		LoadingScreen dialog(title, QString(), 0, 0, owner);
 		dialog.setWindowTitle(title);
 		dialog.setWindowModality(Qt::ApplicationModal);
-		dialog.setCancelButton(nullptr);  // assetlib exposes no cancellation hooks
 		dialog.setAutoClose(false);
 		dialog.setAutoReset(false);
 		dialog.setMinimumDuration(0);
-		dialog.setValue(0);
 
 		ProgressRelay relay(&dialog);
 		QEventLoop    loop;
-		QString       message;
-		bool          ok = false;
+		TaskResult    result;
+
+		auto source = std::stop_source();
+
+		if (cancellable == Cancellable::kYes)
+		{
+			dialog.setCancelButtonText("Cancel");
+
+			// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
+			// macros, which record a method index, whereas the pointer-to-member disconnect only matches
+			// connections that recorded a slot object -- so it finds nothing, returns false, and leaves
+			// the screen free to dismiss itself the moment Cancel is pressed.
+			// QProgressDialog wires canceled() to its own cancel(), which hides the screen. We want the
+			// opposite: keep it up, and ask the worker to stop.
+			//
+			// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
+			// macros, which record a method index, whereas the pointer-to-member disconnect only matches
+			// connections that recorded a slot object -- so it would find nothing, quietly return false,
+			// and leave the screen free to dismiss itself the moment Cancel is pressed.
+			const bool disconnected =
+				QObject::disconnect(&dialog, SIGNAL(canceled()), &dialog, SLOT(cancel()));
+			Q_ASSERT(disconnected);
+			Q_UNUSED(disconnected);
+
+			QObject::connect(&dialog, &QProgressDialog::canceled, &dialog, [&]() {
+				source.request_stop();
+				relay.ShowCancelling();
+			});
+		}
+		else
+		{
+			dialog.setCancelButton(nullptr);
+		}
+
+		dialog.setValue(0);
 
 		// A private pool, so an import never queues behind a texture-preview decode. Its destructor
 		// waits for the task, which has already finished by the time control reaches it.
 		QThreadPool pool;
 		pool.setMaxThreadCount(1);
-		pool.start(new WorkTask(work, Progress(&relay), &loop, &message, &ok));
+		pool.start(new WorkTask(work, Progress(&relay, source.get_token()), &loop, &result));
 
 		// Spins rather than blocks, so the DX12 viewports keep painting behind the dialog.
 		loop.exec();
 
-		if (!ok && error != nullptr)
-			*error = message;
-
-		return ok;
+		return result;
 	}
 }
