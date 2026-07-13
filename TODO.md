@@ -5,7 +5,6 @@ Delete Material / Texture / Mesh in content explorer. Should check for no refere
 Material should show current baked textures if any
 Show thumbnail for meshes
 Bake Material button removed. Context menu action in Content Explorer
-Make default material 0.5 metallic and 1 roughness
 
 # Bugs
 Sometimes, when exiting, refuses to exist
