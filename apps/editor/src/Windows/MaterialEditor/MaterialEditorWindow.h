@@ -69,6 +69,19 @@ private:
 	void
 	CompileGraph(int submeshIndex);
 
+	/** Destroys every graph's preview material. The graphs must not be drawn after this. */
+	void
+	ReleasePreviewMaterials();
+
+	/**
+	 * Writes the material at `materialPath` into the `.bmesh` as `submeshIndex`'s default, so every
+	 * instance of that mesh -- in the preview, in a level, in the game -- picks it up on load.
+	 *
+	 * The deliberate act the preview's instance overrides exist to keep separate from authoring.
+	 */
+	void
+	SetDefaultMaterial(int submeshIndex);
+
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
 
@@ -112,16 +125,22 @@ private:
 		std::unique_ptr<MaterialGraphScene> scene;
 
 		QString materialPath;
+
+		// The live material this graph is previewed through. Created once and rewritten in place on
+		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's
+		// loose-material buffer is a fixed-size slot pool.
+		bgl::MaterialHandle preview;
 	};
 	std::vector<SubmeshGraph> m_SubmeshGraphs;
 	int                       m_CurrentSubmesh = -1;
 
-	QComboBox*         m_SubmeshSelector = nullptr;
-	QComboBox*         m_OutputSelector  = nullptr;
-	MaterialGraphView* m_GraphView       = nullptr;
-	QPushButton*       m_OpenButton      = nullptr;
-	QPushButton*       m_SaveButton      = nullptr;
-	QPushButton*       m_SaveAsButton    = nullptr;
-	QPushButton*       m_BakeButton      = nullptr;
-	QLabel*            m_MaterialLabel   = nullptr;
+	QComboBox*         m_SubmeshSelector  = nullptr;
+	QComboBox*         m_OutputSelector   = nullptr;
+	MaterialGraphView* m_GraphView        = nullptr;
+	QPushButton*       m_OpenButton       = nullptr;
+	QPushButton*       m_SaveButton       = nullptr;
+	QPushButton*       m_SaveAsButton     = nullptr;
+	QPushButton*       m_BakeButton       = nullptr;
+	QPushButton*       m_SetDefaultButton = nullptr;
+	QLabel*            m_MaterialLabel    = nullptr;
 };

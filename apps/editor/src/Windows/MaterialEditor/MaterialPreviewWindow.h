@@ -40,14 +40,31 @@ public:
 		return m_SubmeshNames;
 	}
 
-	// Applies a material to one submesh of the preview geometry (as the node graph compiles).
+	/**
+	 * Shows `material` on one submesh of the preview, as the node graph compiles.
+	 *
+	 * An *instance override*, not a change to the geometry's default: authoring a graph must not
+	 * rewrite the shared asset. Committing it to the mesh is a deliberate act -- see the editor's
+	 * Set Default Material.
+	 */
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);
 
+	// The `.bmaterial` each submesh is bound to in the `.bmesh`, absolute. Empty where the mesh names
+	// none -- which is what tells a first Save to bind it from a later one that must not.
 	const QStringList&
 	SubmeshMaterialPaths() const noexcept
 	{
 		return m_SubmeshMaterialPaths;
+	}
+
+	// Records that `submeshIndex` is now bound to `absolutePath` on disk. Called after the `.bmesh`
+	// has actually been rewritten, so the two do not drift.
+	void
+	SetSubmeshMaterialPath(uint32_t submeshIndex, const QString& absolutePath)
+	{
+		if (submeshIndex < static_cast<uint32_t>(m_SubmeshMaterialPaths.size()))
+			m_SubmeshMaterialPaths[static_cast<int>(submeshIndex)] = absolutePath;
 	}
 
 	// The project's Data directory. A mesh names its materials relative to it, so the preview cannot
@@ -121,14 +138,23 @@ private:
 		uint32_t sourceSubmesh = 0;  // index into the .bmesh's submeshes array
 	};
 
-	std::vector<bgl::GeomHandle>         m_Geoms;
-	std::vector<bgl::MeshInstanceHandle> m_Instances;
-	std::vector<SubmeshRef>              m_SubmeshRefs;
-	bgl::MaterialHandle                  m_DefaultMaterial;
-	QStringList                          m_SubmeshNames;
-	QStringList                          m_SubmeshMaterialPaths;
-	std::filesystem::path                m_MeshPath;  // empty for the default sphere
-	std::filesystem::path                m_DataRoot;  // empty until a project is opened
+	// A mesh may be instanced by several nodes, so a geom can have more than one instance. An
+	// override is per instance, so applying one to a submesh means applying it to every instance of
+	// the geom that owns it -- which needs the edge back.
+	struct InstanceRef
+	{
+		bgl::MeshInstanceHandle handle;
+		uint32_t                geomIndex = 0;
+	};
+
+	std::vector<bgl::GeomHandle> m_Geoms;
+	std::vector<InstanceRef>     m_Instances;
+	std::vector<SubmeshRef>      m_SubmeshRefs;
+	bgl::MaterialHandle          m_DefaultMaterial;
+	QStringList                  m_SubmeshNames;
+	QStringList                  m_SubmeshMaterialPaths;
+	std::filesystem::path        m_MeshPath;  // empty for the default sphere
+	std::filesystem::path        m_DataRoot;  // empty until a project is opened
 
 	glm::vec3 m_FocusCenter = glm::vec3(0.0f);
 	float     m_FocusRadius = 1.0f;
