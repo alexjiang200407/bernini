@@ -166,9 +166,8 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 		}
 	}
 
-	// One neutral material, reused for every geometry swap, until the node graph drives one.
 	m_DefaultMaterial = scene->CreatePbrMaterial(
-		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.1f, .roughnessFactor = 0.5f });
+		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.0f, .roughnessFactor = 1.0f });
 
 	ShowDefaultSphere();
 }
