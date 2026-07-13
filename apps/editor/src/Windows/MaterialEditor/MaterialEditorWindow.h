@@ -66,6 +66,11 @@ private:
 	class MaterialOutputNode*
 	WatchOutputNode(int submeshIndex);
 
+	/** Scrolls the graph view to the current submesh's output node. The sink is what you author back
+	 *  from, so it is where a freshly opened or freshly loaded graph should start. */
+	void
+	CenterOnOutput();
+
 	void
 	CompileGraph(int submeshIndex);
 
