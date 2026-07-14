@@ -39,46 +39,51 @@ namespace bgl
 			       dxgiFormat == 91 /* DXGI_FORMAT_B8G8R8A8_UNORM_SRGB */;
 		}
 
-		// Repack a mapped GPU readback (256-byte-aligned padded rows, possibly BGRA) into a tight
-		// RGBA buffer and write it as a PNG via stb_image_write -- cross-platform, replacing the old
-		// DirectXTex DDS / WIC PNG encoders. `src` already points past the readback's base offset.
-		void
-		writeReadbackPng(
-			const std::string& filepath,
-			const uint8_t*     src,
-			size_t             rowPitch,
-			uint32_t           width,
-			uint32_t           height,
-			uint32_t           dxgiFormat)
+		bool
+		isSrgb(uint32_t dxgiFormat)
+		{
+			return dxgiFormat == 29 /* DXGI_FORMAT_R8G8B8A8_UNORM_SRGB */ ||
+			       dxgiFormat == 91 /* DXGI_FORMAT_B8G8R8A8_UNORM_SRGB */;
+		}
+
+		// A mapped GPU readback as an RGBA8 image: drops the padding D3D12 aligns each row to, and
+		// swaps R and B if the backbuffer was BGRA. `src` already points past the readback's base
+		// offset.
+		assetlib::ImageData
+		readbackToImage(
+			const uint8_t* src,
+			size_t         rowPitch,
+			uint32_t       width,
+			uint32_t       height,
+			uint32_t       dxgiFormat)
 		{
 			if (src == nullptr)
 			{
-				throw GraphicsError(std::format("Screenshot '{}': null readback source", filepath));
+				throw GraphicsError("Screenshot: null readback source");
 			}
 			if (width == 0 || height == 0)
 			{
 				throw GraphicsError(
-					std::format(
-						"Screenshot '{}': invalid dimensions {}x{}",
-						filepath,
-						width,
-						height));
+					std::format("Screenshot: invalid dimensions {}x{}", width, height));
 			}
 
-			if (const std::filesystem::path parent = std::filesystem::path(filepath).parent_path();
-			    !parent.empty())
-			{
-				std::error_code ec;
-				std::filesystem::create_directories(parent, ec);
-			}
+			const size_t tightPitch = static_cast<size_t>(width) * 4;
 
-			const bool           bgra = isBgra(dxgiFormat);
-			std::vector<uint8_t> rgba(static_cast<size_t>(width) * height * 4);
+			auto image     = assetlib::ImageData();
+			image.width    = width;
+			image.height   = height;
+			image.vkFormat = isSrgb(dxgiFormat) ? assetlib::VkFormat::R8G8B8A8_SRGB :
+			                                      assetlib::VkFormat::R8G8B8A8_UNORM;
+			image.pixels   = core::fixed_buffer<std::byte>(tightPitch * height);
+			image.subresources.push_back({ 0, tightPitch, tightPitch * height });
+
+			const bool bgra = isBgra(dxgiFormat);
+			auto*      dst  = reinterpret_cast<uint8_t*>(image.pixels.data());
 
 			for (uint32_t y = 0; y < height; ++y)
 			{
 				const uint8_t* row = src + static_cast<size_t>(y) * rowPitch;
-				uint8_t*       out = rgba.data() + static_cast<size_t>(y) * width * 4;
+				uint8_t*       out = dst + static_cast<size_t>(y) * tightPitch;
 				for (uint32_t x = 0; x < width; ++x)
 				{
 					const uint8_t* p = row + static_cast<size_t>(x) * 4;
@@ -90,21 +95,36 @@ namespace bgl
 				}
 			}
 
+			return image;
+		}
+
+		// Encodes a tight RGBA8 image as a PNG via stb_image_write -- cross-platform, replacing the
+		// old DirectXTex DDS / WIC PNG encoders.
+		void
+		writePng(const std::string& filepath, const assetlib::ImageData& image)
+		{
+			if (const std::filesystem::path parent = std::filesystem::path(filepath).parent_path();
+			    !parent.empty())
+			{
+				std::error_code ec;
+				std::filesystem::create_directories(parent, ec);
+			}
+
 			if (stbi_write_png(
 					filepath.c_str(),
-					static_cast<int>(width),
-					static_cast<int>(height),
+					static_cast<int>(image.width),
+					static_cast<int>(image.height),
 					4,
-					rgba.data(),
-					static_cast<int>(width) * 4) == 0)
+					image.pixels.data(),
+					static_cast<int>(image.width) * 4) == 0)
 			{
 				throw GraphicsError(
 					std::format(
 						"Screenshot failed to write PNG '{}' ({}x{}) -- path may be unwritable "
 						"or the disk is full",
 						filepath,
-						width,
-						height));
+						image.width,
+						image.height));
 			}
 		}
 	}
@@ -146,6 +166,9 @@ namespace bgl
 
 		virtual void
 		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) override;
+
+		assetlib::ImageData
+		ScreenshotToMemory(const RenderTargetHandle& target) override;
 
 		const GraphicsOptions&
 		GetOptions() const
@@ -224,6 +247,11 @@ namespace bgl
 		void
 		InspectDebugSlot(uint32_t index);
 #endif
+
+		// Shared body of the three Screenshot* entry points. `caller` names the one that asked, so a
+		// mid-frame call reports the name the user wrote.
+		assetlib::ImageData
+		CaptureBackbuffer(const RenderTargetHandle& target, std::string_view caller);
 
 	private:
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
@@ -817,12 +845,15 @@ namespace bgl
 		}
 	}
 
-	void
-	Graphics::ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath)
+	// The last presented backbuffer of `target`, read back into a tight RGBA8 image. Blocks on the
+	// shared queue twice: once for the frame that produced the backbuffer, once for the copy below.
+	assetlib::ImageData
+	Graphics::CaptureBackbuffer(const RenderTargetHandle& target, std::string_view caller)
 	{
 		if (m_FrameActive)
 		{
-			throw GraphicsError("ScreenshotRaw cannot be called between BeginFrame and EndFrame");
+			throw GraphicsError(
+				std::format("{} cannot be called between BeginFrame and EndFrame", caller));
 		}
 
 		RenderTarget& rt = *target->As<RenderTarget>();
@@ -840,7 +871,7 @@ namespace bgl
 
 		auto readbackDesc      = ReadbackBufferDesc();
 		readbackDesc.byteSize  = layout.totalBytes;
-		readbackDesc.debugName = "ScreenshotRaw Readback";
+		readbackDesc.debugName = "Screenshot Readback";
 
 		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
 
@@ -876,12 +907,9 @@ namespace bgl
 		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 		m_CommandQueue->WaitForFenceCPUBlocking(fence);
 
-		// Repack the mapped readback into a tight RGBA buffer and encode a PNG (cross-platform).
 		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
 
-		gassert(
-			resource != nullptr,
-			"ScreenshotRaw failed to get D3D12Resource from texture handle");
+		gassert(resource != nullptr, "Screenshot failed to get D3D12Resource from texture handle");
 
 		auto resourceDesc = resource->GetDesc();
 
@@ -889,13 +917,16 @@ namespace bgl
 
 		try
 		{
-			writeReadbackPng(
-				filepath,
+			auto image = readbackToImage(
 				static_cast<const uint8_t*>(mapped) + layout.offset,
 				static_cast<size_t>(layout.rowPitch),
 				static_cast<uint32_t>(resourceDesc.Width),
 				static_cast<uint32_t>(resourceDesc.Height),
 				static_cast<uint32_t>(resourceDesc.Format));
+
+			m_ResourceManager->UnmapReadback(readback);
+			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+			return image;
 		}
 		catch (...)
 		{
@@ -903,100 +934,24 @@ namespace bgl
 			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
 			throw;
 		}
+	}
 
-		m_ResourceManager->UnmapReadback(readback);
-		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+	void
+	Graphics::ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath)
+	{
+		writePng(filepath, CaptureBackbuffer(target, "ScreenshotRaw"));
 	}
 
 	void
 	Graphics::ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath)
 	{
-		if (m_FrameActive)
-		{
-			throw GraphicsError("ScreenshotPng cannot be called between BeginFrame and EndFrame");
-		}
+		writePng(filepath, CaptureBackbuffer(target, "ScreenshotPng"));
+	}
 
-		RenderTarget& rt = *target->As<RenderTarget>();
-
-		const UINT    index         = rt.m_LastPresentedIndex;
-		TextureHandle textureHandle = rt.m_BackBuffers[index].textureHandle;
-
-		// Make sure the frame that produced this backbuffer has finished.
-		if (rt.m_FenceValues[index] != 0)
-		{
-			m_CommandQueue->WaitForFenceCPUBlocking(rt.m_FenceValues[index]);
-		}
-
-		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
-
-		auto readbackDesc      = ReadbackBufferDesc();
-		readbackDesc.byteSize  = layout.totalBytes;
-		readbackDesc.debugName = "ScreenshotPng Readback";
-
-		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
-
-		rt.m_CommandAllocator[index]->ResetAllocator();
-		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
-
-		{
-			auto barrier = TextureBarrierDesc();
-			barrier.AddSyncBefore(BarrierSyncFlag::kNone)
-				.AddAccessBefore(BarrierAccessFlag::kNone)
-				.SetLayoutBefore(BarrierLayout::kPresent)
-				.AddSyncAfter(BarrierSyncFlag::kCopy)
-				.AddAccessAfter(BarrierAccessFlag::kCopySource)
-				.SetLayoutAfter(BarrierLayout::kCopySource);
-			m_CommandList->Barrier(textureHandle, barrier);
-		}
-
-		m_CommandList->CopyTextureToReadback(readback, textureHandle);
-
-		{
-			auto barrier = TextureBarrierDesc();
-			barrier.AddSyncBefore(BarrierSyncFlag::kCopy)
-				.AddAccessBefore(BarrierAccessFlag::kCopySource)
-				.SetLayoutBefore(BarrierLayout::kCopySource)
-				.AddSyncAfter(BarrierSyncFlag::kNone)
-				.AddAccessAfter(BarrierAccessFlag::kNone)
-				.SetLayoutAfter(BarrierLayout::kPresent);
-			m_CommandList->Barrier(textureHandle, barrier);
-		}
-
-		m_CommandList->Close();
-
-		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
-		m_CommandQueue->WaitForFenceCPUBlocking(fence);
-
-		// Repack the mapped readback into a tight RGBA buffer and encode a PNG (cross-platform).
-		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
-
-		gassert(
-			resource != nullptr,
-			"ScreenshotPng failed to get D3D12Resource from texture handle");
-
-		auto resourceDesc = resource->GetDesc();
-
-		const void* mapped = m_ResourceManager->MapReadback(readback);
-
-		try
-		{
-			writeReadbackPng(
-				filepath,
-				static_cast<const uint8_t*>(mapped) + layout.offset,
-				static_cast<size_t>(layout.rowPitch),
-				static_cast<uint32_t>(resourceDesc.Width),
-				static_cast<uint32_t>(resourceDesc.Height),
-				static_cast<uint32_t>(resourceDesc.Format));
-		}
-		catch (...)
-		{
-			m_ResourceManager->UnmapReadback(readback);
-			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
-			throw;
-		}
-
-		m_ResourceManager->UnmapReadback(readback);
-		m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+	assetlib::ImageData
+	Graphics::ScreenshotToMemory(const RenderTargetHandle& target)
+	{
+		return CaptureBackbuffer(target, "ScreenshotToMemory");
 	}
 
 	GraphicsHandle
