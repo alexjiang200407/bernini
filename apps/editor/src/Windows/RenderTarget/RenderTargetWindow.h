@@ -23,6 +23,14 @@ class RenderTargetWindow : public QWidget
 public:
 	explicit RenderTargetWindow(QWidget* parent = nullptr, RenderTargetWindowDesc desc = {});
 
+	// The view this window draws. Held, so it can outlive the window in something that places
+	// instances into it -- the shared AssetManager does exactly that.
+	bgl::SceneViewHandle
+	View() const noexcept
+	{
+		return m_SceneView;
+	}
+
 	void
 	DrawFrame(bgl::IGraphics* gfx)
 	{

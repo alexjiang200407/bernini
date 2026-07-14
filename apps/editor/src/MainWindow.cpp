@@ -21,6 +21,7 @@
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
 #include <core/settings/Settings.h>
+#include <gamelib/AssetManager.h>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
@@ -89,14 +90,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
 		matDesc.previewEnv.exposure   = matSettings["exposure"].GetOrDefault(1.0f);
 
-		auto thumbDesc       = AssetThumbnailDesc();
-		thumbDesc.gfx        = m_Graphics;
-		thumbDesc.scene      = m_Scene;
-		thumbDesc.skybox     = matDesc.previewEnv.skybox;
-		thumbDesc.irradiance = matDesc.previewEnv.irradiance;
-		thumbDesc.prefilter  = matDesc.previewEnv.prefilter;
-		thumbDesc.brdfLut    = matDesc.previewEnv.brdfLut;
-		thumbDesc.exposure   = matDesc.previewEnv.exposure;
+		auto thumbSettings     = settings["thumbnails"];
+		auto thumbDesc         = AssetThumbnailDesc();
+		thumbDesc.gfx          = m_Graphics;
+		thumbDesc.scene        = m_Scene;
+		thumbDesc.dimension    = thumbSettings["dimension"].GetOrDefault(256u);
+		thumbDesc.maxInstances = thumbSettings["maxInstances"].GetOrDefault(256u);
+		thumbDesc.skybox       = thumbSettings["skybox"].GetOrDefault(std::string());
+		thumbDesc.irradiance   = thumbSettings["irradiance"].GetOrDefault(std::string());
+		thumbDesc.prefilter    = thumbSettings["prefilter"].GetOrDefault(std::string());
+		thumbDesc.brdfLut      = thumbSettings["brdfLut"].GetOrDefault(std::string());
+		thumbDesc.exposure     = thumbSettings["exposure"].GetOrDefault(1.0f);
 
 		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
 		m_Thumbnails     = new AssetThumbnailCache(std::move(thumbDesc), this);
@@ -290,10 +294,24 @@ MainWindow::SetActiveProject(Project project)
 
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
-	// Root the thumbnails before the explorer: rooting the explorer paints tiles, and each one that
-	// misses asks for a render straight away -- a material cannot be resolved without a data root.
+	// A manager resolves every path against one Data root, so a new project needs a new one. The
+	// consumers below borrow it, so it has to be replaced before any of them are told about it.
 	if (m_Thumbnails)
-		m_Thumbnails->SetDataRoot(m_Project->GetDataDirectory());
+		m_Thumbnails->SetAssets(nullptr);
+
+	m_Assets.reset();
+
+	if (m_LevelEditor)
+	{
+		m_Assets = std::make_unique<game::AssetManager>(
+			m_LevelEditor->View(),
+			m_Project->GetDataDirectory());
+	}
+
+	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
+	// asks for a render straight away -- a material cannot be resolved without a manager.
+	if (m_Thumbnails)
+		m_Thumbnails->SetAssets(m_Assets.get());
 
 	m_ContentExplorer->SetRootPath(dataDir);
 

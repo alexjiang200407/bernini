@@ -23,8 +23,9 @@ struct AssetThumbnailDesc
 	bgl::GraphicsHandle gfx;
 	bgl::SceneHandle    scene;
 
-	// The IBL + skybox the thumbnail is lit and shot against. The same maps the Material Editor's
-	// preview uses; empty paths degrade to an unlit-looking shot.
+	uint32_t dimension    = 256;
+	uint32_t maxInstances = 256;
+
 	std::string skybox;
 	std::string irradiance;
 	std::string prefilter;
@@ -50,24 +51,25 @@ class AssetThumbnailCache : public QObject
 	Q_OBJECT
 
 public:
-	// Rendered larger than it is shown, so the grid stays crisp when the icon is scaled.
-	static constexpr int c_ThumbnailDim = 256;
-
 	static constexpr int c_BudgetKb = 64 * 1024;
 
 	explicit AssetThumbnailCache(AssetThumbnailDesc desc, QObject* parent = nullptr);
 	~AssetThumbnailCache() override;
 
 	/**
-	 * Points the cache at the project's Data directory, which is what a material path -- named by a
-	 * `.bmesh`, or naming a `.bmaterial` itself -- resolves against. Until one is set, materials
-	 * cannot be resolved and every mesh draws in the neutral default.
+	 * Points the cache at the editor's asset manager, which owns the project's Data root and is the
+	 * only route from a `.bmaterial` to a scene material. Null (the default, and what a closed project
+	 * means) leaves materials unresolvable, so they get no thumbnail and every mesh draws in the
+	 * neutral default.
 	 *
-	 * Drops everything already rendered: the same relative path means a different asset under a
+	 * Borrowed, not owned: one manager is shared across the editor so that a material loaded twice is
+	 * one upload and one reference count. It must outlive this cache.
+	 *
+	 * Drops everything already rendered -- the same relative path means a different asset under a
 	 * different root.
 	 */
 	void
-	SetDataRoot(const std::filesystem::path& dataRoot);
+	SetAssets(game::AssetManager* assets);
 
 	// Whether `path` names an asset this cache knows how to draw.
 	[[nodiscard]] static bool
@@ -94,12 +96,19 @@ public:
 		return m_RenderTarget.Get() != nullptr;
 	}
 
+	// The edge length of a rendered thumbnail, in pixels.
+	[[nodiscard]] uint32_t
+	Dimension() const noexcept
+	{
+		return m_Desc.dimension;
+	}
+
 Q_SIGNALS:
 	void
 	ThumbnailReady(const QString& path, const QPixmap& thumbnail);
 
 private:
-	enum class Kind
+	enum class ThumbnailType
 	{
 		kMesh,
 		kMaterial,
@@ -112,7 +121,7 @@ private:
 	struct PendingRender
 	{
 		QString                                path;
-		Kind                                   kind = Kind::kMesh;
+		ThumbnailType                          type = ThumbnailType::kMesh;
 		std::shared_ptr<assetlib::BMesh>       mesh;
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;
@@ -121,7 +130,7 @@ private:
 	// Hands a finished read back. Called by a worker via a queued invocation, so it always runs on the
 	// UI thread. A null `prefetch` means the read failed and only clears the in-flight entry.
 	void
-	Enqueue(const QString& path, Kind kind, PendingRender pending);
+	Enqueue(const QString& path, ThumbnailType type, PendingRender pending);
 
 	// Renders the next queued asset, if any. One per call so the event loop keeps turning.
 	void
@@ -160,6 +169,10 @@ private:
 	void
 	ReleaseMaterials();
 
+	// The project's Data directory, or empty when no project is open.
+	[[nodiscard]] std::filesystem::path
+	DataRoot() const;
+
 	// `path` relative to the data root, which is how every asset reference is stored. Empty if it does
 	// not lie under the root.
 	[[nodiscard]] std::string
@@ -186,9 +199,8 @@ private:
 	// Turns a `.bmaterial` into a scene material, and owns the textures it names. The editor's only
 	// route to that: the baked/loose branch lives in gamelib and nowhere else.
 	//
-	// Null until SetDataRoot -- it resolves every path against a root, so it cannot exist without one.
-	std::unique_ptr<game::AssetManager> m_Assets;
-	std::filesystem::path               m_DataRoot;
+	// Not owned -- see SetAssets. Null until a project is open.
+	game::AssetManager* m_Assets = nullptr;
 
 	// Live only for the duration of one render.
 	std::vector<bgl::GeomHandle>         m_Geoms;
