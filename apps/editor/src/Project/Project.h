@@ -44,6 +44,17 @@ public:
 	void
 	Save() const;
 
+	/**
+	 * Whether `relativeToData` is one of the directories the project is scaffolded with -- the data root
+	 * itself, or one of the categories beneath it -- and so is not the user's to delete. Open() puts a
+	 * missing one straight back, so deleting one would not even stick.
+	 *
+	 * Only the categories themselves. A folder the user made inside one, like `Materials/kirk`, is
+	 * theirs.
+	 */
+	[[nodiscard]] static bool
+	IsRequiredDirectory(const std::filesystem::path& relativeToData);
+
 	const std::string&
 	GetName() const noexcept
 	{

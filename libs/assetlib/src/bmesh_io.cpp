@@ -248,6 +248,66 @@ namespace assetlib
 		return deserialize(bytes);
 	}
 
+	std::vector<std::string>
+	loadMaterialPaths(const std::filesystem::path& path)
+	{
+		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
+		errno = 0;
+		std::ifstream in(path, std::ios::binary);
+		if (!in)
+			throw std::runtime_error(fileErrorMessage("bmesh: cannot open file for reading", path));
+
+		std::error_code ec;
+		const auto      fileSize = std::filesystem::file_size(path, ec);
+		if (ec)
+			throw std::runtime_error(fileErrorMessage("bmesh: cannot size file", path));
+
+		// Every offset below comes out of the file, so each is checked against its real size before it is
+		// seeked to: a corrupt chunkCount would otherwise size an allocation.
+		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
+			if (offset + bytes > fileSize)
+				throw std::runtime_error("bmesh: chunk extends past end of file");
+
+			in.seekg(static_cast<std::streamoff>(offset));
+			in.read(static_cast<char*>(dst), static_cast<std::streamsize>(bytes));
+			if (!in)
+				throw std::runtime_error(fileErrorMessage("bmesh: failed to read file", path));
+		};
+
+		FileHeader header{};
+		readAt(&header, sizeof(header), 0);
+
+		if (header.magic != c_Magic)
+			throw std::runtime_error("bmesh: bad magic");
+		if (header.versionMajor != c_VersionMajor)
+			throw std::runtime_error("bmesh: unsupported major version");
+		if (header.byteOrder != 0)
+			throw std::runtime_error("bmesh: unsupported byte order");
+
+		std::vector<ChunkEntry> table(header.chunkCount);
+		if (!table.empty())
+			readAt(table.data(), table.size() * sizeof(ChunkEntry), header.chunkTableOffset);
+
+		for (const ChunkEntry& entry : table)
+		{
+			if (entry.id != static_cast<uint32_t>(ChunkId::kMaterialPaths))
+				continue;
+
+			if (entry.elementSize != sizeof(char))
+				throw std::runtime_error("bmesh: chunk element size mismatch");
+
+			std::vector<char> pool(entry.byteSize);
+			if (!pool.empty())
+				readAt(pool.data(), pool.size(), entry.offset);
+
+			return unpackStrings(pool);
+		}
+
+		// Absent, not malformed -- deserialize treats the chunk as optional, and a mesh that names no
+		// material is exactly what an import produces.
+		return {};
+	}
+
 	BMesh
 	toBMesh(const imp::BMeshImport& mesh)
 	{

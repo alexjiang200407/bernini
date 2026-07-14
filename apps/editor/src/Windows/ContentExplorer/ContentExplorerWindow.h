@@ -1,9 +1,11 @@
 #pragma once
 
+#include <QStringList>
 #include <QWidget>
 
 #include "ui_ContentExplorerWindow.h"
 
+class QAbstractItemView;
 class QFileSystemModel;
 class QLabel;
 class QModelIndex;
@@ -14,7 +16,20 @@ class ContentExplorerWindow : public QWidget
 	Q_OBJECT
 
 public:
-	explicit ContentExplorerWindow(QWidget* parent = nullptr);
+	/**
+	 * A function that returns the asset paths that are still open
+	 */
+	using AssetsHeldOpenFn = std::function<QStringList()>;
+
+	/**
+	 * `assetsHeldOpen` has no default because it guards a deletion. An open graph holds a material in
+	 * memory, and its next Save would write a deleted one straight back -- nothing on disk records that,
+	 * so the reference graph cannot see it and only this can. A guard that could be left unwired would
+	 * fail open, silently, and MainWindow is not covered by a test that would notice.
+	 *
+	 * A caller with genuinely nothing open says so: `[] { return QStringList(); }`.
+	 */
+	ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen);
 
 	/**
 	 * Points both views at the given directory and enables the explorer: the tree
@@ -24,6 +39,17 @@ public:
 	 */
 	void
 	SetRootPath(const QString& path);
+
+	/**
+	 * The data-root-relative path of the thing at `index` that may be deleted -- an asset file, or a
+	 * directory the project is not scaffolded with. Empty for a file of no kind the project tracks, for
+	 * one of the scaffolded directories, for anything outside the data root, or for no row at all.
+	 *
+	 * `dataRoot` is what the explorer is rooted at. Lifted out of the menu handler because it is the one
+	 * thing a delete cannot afford to get wrong, and a QMenu cannot be driven from a test.
+	 */
+	[[nodiscard]] static QString
+	AssetAt(const QFileSystemModel& model, const QModelIndex& index, const QString& dataRoot);
 
 protected:
 	// Keeps the empty-directory placeholder sized to the file table's viewport.
@@ -93,8 +119,31 @@ private:
 	void
 	ShowFileMenu(const QPoint& pos);
 
+	/**
+	 * The right-click menu both views share: Add Directory, and Delete on an asset. The tree lists files
+	 * as well as folders, so an asset can be deleted from either side without navigating to it first.
+	 */
 	void
-	AddDirectory(QFileSystemModel* model, const QModelIndex& parent);
+	ShowAssetMenu(QAbstractItemView& view, QFileSystemModel& model, const QPoint& pos);
+
+	/**
+	 * Deletes `asset` (data-root-relative), having first established that nothing references it: no
+	 * material samples the texture, no mesh names the material.
+	 *
+	 * Deleting a mesh is never refused and never cascades -- the materials it named are shareable assets
+	 * and stay where they are. The maps a deleted material leaves behind are what Clean Unused Textures
+	 * sweeps.
+	 */
+	void
+	DeleteAsset(const QString& asset);
+
+	/**
+	 * `parentPath` rather than a QModelIndex: this runs a modal below, and QFileSystemModel populates on
+	 * a worker whose row insertions invalidate every index into it. The index is re-derived from the
+	 * path once the dialog is down.
+	 */
+	void
+	AddDirectory(QFileSystemModel* model, const QString& parentPath);
 
 	void
 	UpdateEmptyPlaceholder();
@@ -104,4 +153,5 @@ private:
 	QFileSystemModel*         m_FileModel;
 	QLabel*                   m_EmptyPlaceholder = nullptr;
 	QString                   m_RootPath;
+	AssetsHeldOpenFn          m_AssetsHeldOpen;
 };

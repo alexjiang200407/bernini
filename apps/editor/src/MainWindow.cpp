@@ -113,7 +113,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
-	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock);
+
+	// The explorer refuses to delete a material the Material Editor has open, whose next Save would
+	// write it straight back. Asked at each deletion, so there is no copy of the answer to go stale.
+	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
+		return m_MaterialEditor->OpenMaterialPaths();
+	});
 
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);

@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include <assetlib/asset_describe.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
@@ -9,7 +10,7 @@
 
 namespace
 {
-	enum class AssetKind
+	enum class ContainerType
 	{
 		kMesh,
 		kMaterial,
@@ -47,9 +48,26 @@ namespace
 		return answer == "y" || answer == "Y" || answer == "yes";
 	}
 
-	// Both containers open with a 4-byte magic, so the kind is read from the file rather than guessed
-	// from its extension -- `describe` then works on a file named anything.
-	AssetKind
+	std::string_view
+	describeRefKind(assetlib::RefKind kind)
+	{
+		switch (kind)
+		{
+		case assetlib::RefKind::kSubmeshMaterial:
+			return "names, as a submesh material,";
+		case assetlib::RefKind::kBakedMap:
+			return "baked";
+		case assetlib::RefKind::kChannelRoute:
+			return "routes a channel from";
+		}
+
+		return "references";
+	}
+
+	// Both containers open with a 4-byte magic, so the type is read from the file rather than guessed
+	// from its extension -- `describe` then works on a file named anything. This is the deliberate
+	// opposite of assetlib::assetTypeFromExtension, which never opens the file.
+	ContainerType
 	sniff(const std::filesystem::path& path)
 	{
 		constexpr uint32_t c_MeshMagic     = 0x48534D42u;  // 'BMSH'
@@ -61,9 +79,9 @@ namespace
 			throw std::runtime_error("cannot read the file header of " + path.string());
 
 		if (magic == c_MeshMagic)
-			return AssetKind::kMesh;
+			return ContainerType::kMesh;
 		if (magic == c_MaterialMagic)
-			return AssetKind::kMaterial;
+			return ContainerType::kMaterial;
 
 		throw std::runtime_error(
 			path.string() + " is neither a .bmesh nor a .bmaterial (unrecognized magic)");
@@ -120,6 +138,21 @@ main(int argc, char** argv)
 		"-b,--brief",
 		describeBrief,
 		"Mesh only: print the summary and material table, but not every submesh");
+
+	std::string refsDataRoot;
+	std::string refsAsset;
+
+	auto* refs = app.add_subcommand(
+		"refs",
+		"Print what references an asset, and whether it can therefore be deleted");
+	refs->add_option("-d,--data-root", refsDataRoot, "Project data directory to scan")
+		->required()
+		->check(CLI::ExistingDirectory);
+	refs->add_option(
+		"asset",
+		refsAsset,
+		"Asset to report on, relative to the data root. Omitted, the whole project is summarised, "
+		"and every dangling reference listed");
 
 	std::string pruneDataRoot;
 	std::string pruneTextureDir = "Textures";
@@ -191,7 +224,7 @@ main(int argc, char** argv)
 
 			// Straight to stdout, not the logger: this is the command's output, so it should pipe into
 			// a file or a diff without spdlog's timestamps and level prefixes in the way.
-			if (sniff(path) == AssetKind::kMesh)
+			if (sniff(path) == ContainerType::kMesh)
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
 			else
 				std::cout << assetlib::describe(
@@ -201,6 +234,70 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("describe failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*refs)
+	{
+		try
+		{
+			auto desc     = assetlib::AssetRefScanDesc();
+			desc.dataRoot = refsDataRoot;
+
+			const auto graph = assetlib::AssetRefGraph::Scan(desc);
+
+			spdlog::info(
+				"Scanned {} meshes and {} materials: {} references",
+				graph.meshesScanned,
+				graph.materialsScanned,
+				graph.Edges().size());
+
+			// The listing is the command's output, so it goes to stdout rather than through the logger.
+			if (refsAsset.empty())
+			{
+				if (graph.broken.empty())
+				{
+					spdlog::info("No dangling references.");
+					return 0;
+				}
+
+				std::cout << "Dangling (" << graph.broken.size() << "):\n";
+				for (const assetlib::AssetRef& ref : graph.broken)
+					std::cout << "  " << ref.referrer << " -> " << ref.target << " (missing)\n";
+				std::cout << std::flush;
+				return 0;
+			}
+
+			const auto plan = assetlib::planDeletion(graph, refsAsset);
+
+			if (plan.Allowed())
+			{
+				std::cout << refsAsset << ": nothing references it; it can be deleted.\n"
+						  << std::flush;
+				return 0;
+			}
+
+			// Assets, not edges: one material routing four channels from four textures in a folder
+			// holds it four times over, and reporting that as four referrers would read as a bug.
+			auto holders = std::set<std::string>();
+			for (const assetlib::AssetRef& ref : plan.blockers) holders.insert(ref.referrer);
+
+			std::cout << refsAsset << ": referenced by " << holders.size()
+					  << (holders.size() == 1 ? " asset" : " assets")
+					  << ", so it cannot be deleted.\n";
+
+			// Named with the target, because for a directory the referrer alone does not say what in it
+			// is being held, and that is what the user has to go and re-route.
+			for (const assetlib::AssetRef& ref : plan.blockers)
+				std::cout << "  " << ref.referrer << ' ' << describeRefKind(ref.kind) << ' '
+						  << ref.target << '\n';
+
+			std::cout << std::flush;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("refs failed: {}", e.what());
 			return 1;
 		}
 	}
