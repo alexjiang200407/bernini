@@ -1,6 +1,7 @@
 #include "ContentExplorerWindow.h"
 
 #include "Async/BackgroundTask.h"
+#include "Project/Project.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 
 #include <QAbstractItemView>
@@ -24,6 +25,7 @@
 #include <QStringList>
 #include <QUrl>
 
+#include <assetlib/asset_refs.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
 
@@ -85,7 +87,8 @@ namespace
 	}
 }
 
-ContentExplorerWindow::ContentExplorerWindow(QWidget* parent) : QWidget(parent)
+ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen) :
+	QWidget(parent), m_AssetsHeldOpen(std::move(assetsHeldOpen))
 {
 	m_Ui.setupUi(this);
 
@@ -266,20 +269,7 @@ ContentExplorerWindow::ShowHierarchyMenu(const QPoint& pos)
 	if (m_Ui.FileExplorer->model() != m_HierarchyModel)
 		return;
 
-	// Add the new directory inside the clicked folder, or at the tree root when the click missed a
-	// row. The tree lists files too, so a click on one targets the folder that contains it.
-	const auto index = m_Ui.FileExplorer->indexAt(pos);
-
-	QModelIndex parent = m_Ui.FileExplorer->rootIndex();
-	if (index.isValid())
-		parent = m_HierarchyModel->isDir(index) ? index : index.parent();
-	if (!parent.isValid())
-		parent = m_Ui.FileExplorer->rootIndex();
-
-	auto  menu   = QMenu(this);
-	auto* addDir = menu.addAction("Add Directory");
-	if (menu.exec(m_Ui.FileExplorer->viewport()->mapToGlobal(pos)) == addDir)
-		AddDirectory(m_HierarchyModel, parent);
+	ShowAssetMenu(*m_Ui.FileExplorer, *m_HierarchyModel, pos);
 }
 
 void
@@ -288,21 +278,236 @@ ContentExplorerWindow::ShowFileMenu(const QPoint& pos)
 	if (m_Ui.CurrentDirectoryExplorer->model() != m_FileModel)
 		return;
 
-	const auto index  = m_Ui.CurrentDirectoryExplorer->indexAt(pos);
-	const auto parent = (index.isValid() && m_FileModel->isDir(index)) ?
-	                        index :
-	                        m_Ui.CurrentDirectoryExplorer->rootIndex();
-
-	auto  menu   = QMenu(this);
-	auto* addDir = menu.addAction("Add Directory");
-	if (menu.exec(m_Ui.CurrentDirectoryExplorer->viewport()->mapToGlobal(pos)) == addDir)
-		AddDirectory(m_FileModel, parent);
+	ShowAssetMenu(*m_Ui.CurrentDirectoryExplorer, *m_FileModel, pos);
 }
 
 void
-ContentExplorerWindow::AddDirectory(QFileSystemModel* model, const QModelIndex& parent)
+ContentExplorerWindow::ShowAssetMenu(
+	QAbstractItemView& view,
+	QFileSystemModel&  model,
+	const QPoint&      pos)
 {
+	const QModelIndex index = view.indexAt(pos);
+
+	QModelIndex parent = view.rootIndex();
+	if (index.isValid())
+		parent = model.isDir(index) ? index : index.parent();
 	if (!parent.isValid())
+		parent = view.rootIndex();
+
+	const QString parentPath = model.filePath(parent);
+	const QString asset      = AssetAt(model, index, m_RootPath);
+
+	auto  menu   = QMenu(this);
+	auto* addDir = menu.addAction("Add Directory");
+
+	QAction* remove = nullptr;
+	if (!asset.isEmpty())
+	{
+		menu.addSeparator();
+		remove = menu.addAction("Delete");
+	}
+
+	QAction* const chosen = menu.exec(view.viewport()->mapToGlobal(pos));
+
+	if (chosen == addDir)
+		AddDirectory(&model, parentPath);
+	else if (remove != nullptr && chosen == remove)
+		DeleteAsset(asset);
+}
+
+QString
+ContentExplorerWindow::AssetAt(
+	const QFileSystemModel& model,
+	const QModelIndex&      index,
+	const QString&          dataRoot)
+{
+	if (!index.isValid() || dataRoot.isEmpty())
+		return {};
+
+	const QString path     = model.filePath(index);
+	const QString relative = QDir(dataRoot).relativeFilePath(path);
+
+	// Something outside the project is not the project's to delete, whatever it is named.
+	if (relative.isEmpty() || relative == "." || relative.startsWith(".."))
+		return {};
+
+	if (model.isDir(index))
+	{
+		return Project::IsRequiredDirectory(relative.toStdWString()) ? QString() : relative;
+	}
+
+	return assetlib::assetTypeFromExtension(path.toStdWString()) ? relative : QString();
+}
+
+void
+ContentExplorerWindow::DeleteAsset(const QString& asset)
+{
+	const QString absolute    = QDir(m_RootPath).absoluteFilePath(asset);
+	const bool    isDirectory = QFileInfo(absolute).isDir();
+
+	const auto holdsOpen = [&](const QString& open) {
+		if (!isDirectory)
+			return QFileInfo(open) == QFileInfo(absolute);
+
+		return !QDir(absolute).relativeFilePath(open).startsWith("..");
+	};
+
+	for (const QString& open : m_AssetsHeldOpen())
+	{
+		if (!holdsOpen(open))
+			continue;
+
+		QMessageBox::warning(
+			this,
+			"Delete",
+			QString(
+				"%1 is open in the Material Editor.\n\nClose it there first, or saving it "
+				"would write it back.")
+				.arg(
+					isDirectory ? QString("'%1' holds a material that").arg(asset) :
+								  QString("'%1'").arg(asset)));
+		return;
+	}
+
+	auto desc     = assetlib::AssetRefScanDesc();
+	desc.dataRoot = m_RootPath.toStdWString();
+
+	auto graph = std::optional<assetlib::AssetRefGraph>();
+
+	// The scan parses every mesh and material in the project, so it runs off the UI thread. It reads
+	// assetlib only, never bgl, which is what the loading screen requires of its worker. It takes no
+	// cancel token, so the screen offers no button that would not work.
+	const background::TaskResult scanned =
+		background::RunWithLoadingScreen(this, "Delete", [&](background::Progress& progress) {
+			progress.Report(0, 0, "Checking references...");
+			graph = assetlib::AssetRefGraph::Scan(desc);
+		});
+
+	if (!scanned.Completed())
+	{
+		// A mesh or material that will not parse aborts the scan, and rightly so: its references cannot
+		// be known, and one of them may be the file about to be deleted.
+		QMessageBox::warning(
+			this,
+			"Delete",
+			QString("Could not work out what references '%1', so it was not deleted:\n\n%2")
+				.arg(asset, scanned.error));
+		return;
+	}
+
+	const assetlib::DeletionPlan plan = assetlib::planDeletion(*graph, asset.toStdString());
+
+	if (!plan.Allowed())
+	{
+		auto referrers = QStringList();
+		for (const assetlib::AssetRef& ref : plan.blockers)
+			referrers << QString::fromStdString(ref.referrer);
+		referrers.removeDuplicates();
+		referrers.sort();
+
+		const bool one = referrers.size() == 1;
+
+		auto blocked = QMessageBox(this);
+		blocked.setWindowTitle("Delete");
+		blocked.setIcon(QMessageBox::Warning);
+		blocked.setText(QString("'%1' cannot be deleted.").arg(asset));
+		blocked.setInformativeText(
+			isDirectory ?
+				QString(
+					"%1 outside this folder still %2 something inside it. Re-route or delete "
+					"%3 first.")
+					.arg(one ? QString("One asset") : QString("%1 assets").arg(referrers.size()))
+					.arg(one ? "references" : "reference")
+					.arg(one ? "it" : "them") :
+				QString("%1 still %2 it. Re-route or delete %3 first.")
+					.arg(one ? QString("One asset") : QString("%1 assets").arg(referrers.size()))
+					.arg(one ? "references" : "reference")
+					.arg(one ? "it" : "them"));
+		blocked.setDetailedText(referrers.join('\n'));
+		blocked.exec();
+		return;
+	}
+
+	auto contents = QStringList();
+	for (const std::string& file : plan.contents) contents << QString::fromStdString(file);
+
+	auto confirm = QMessageBox(this);
+	confirm.setWindowTitle("Delete");
+	confirm.setIcon(QMessageBox::Warning);
+
+	if (plan.IsDirectory())
+	{
+		confirm.setText(QString("Delete '%1' and everything in it?").arg(asset));
+		confirm.setInformativeText(
+			contents.isEmpty() ?
+				QString("The folder is empty.\n\nThis cannot be undone.") :
+				QString(
+					"%1 file(s) will be deleted. Nothing outside the folder references any of "
+					"them.\n\nThis cannot be undone.")
+					.arg(contents.size()));
+		confirm.setDetailedText(contents.join('\n'));
+	}
+	else if (plan.assetType == assetlib::AssetType::kMesh)
+	{
+		// The one kind whose deletion leaves something behind, and the user should not have to wonder
+		// whether it took the materials with it.
+		confirm.setText(QString("Delete '%1'?").arg(asset));
+		confirm.setInformativeText(
+			"Nothing references it. The materials it uses are shared, and stay in place.");
+	}
+	else
+	{
+		confirm.setText(QString("Delete '%1'?").arg(asset));
+		confirm.setInformativeText("Nothing references it. This cannot be undone.");
+	}
+
+	auto* remove = confirm.addButton("Delete", QMessageBox::DestructiveRole);
+	confirm.addButton(QMessageBox::Cancel);
+	confirm.setDefaultButton(QMessageBox::Cancel);
+	confirm.exec();
+
+	if (confirm.clickedButton() != remove)
+		return;
+
+	const assetlib::DeletionResult result = assetlib::deleteAsset(plan, desc);
+
+	switch (result.status)
+	{
+	case assetlib::DeletionStatus::kDeleted:
+		// The model watches the directory, so the row goes on its own -- but a view rooted *inside* what
+		// just went is left showing a folder that no longer exists, and has nowhere to navigate back to.
+		if (isDirectory)
+		{
+			const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
+
+			if (!QDir(absolute).relativeFilePath(shown).startsWith(".."))
+				m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(m_RootPath));
+		}
+		return;
+
+	case assetlib::DeletionStatus::kFailed:
+		QMessageBox::warning(
+			this,
+			"Delete",
+			QString("'%1' could not be deleted:\n\n%2\n\nIt may be open in another program.")
+				.arg(asset, QString::fromStdString(result.error)));
+		return;
+
+	case assetlib::DeletionStatus::kRefused:
+		// Something wrote a reference to it between the scan and the confirmation.
+		QMessageBox::warning(
+			this,
+			"Delete",
+			QString("'%1' is referenced again, and was not deleted.").arg(asset));
+		return;
+	}
+}
+
+void
+ContentExplorerWindow::AddDirectory(QFileSystemModel* model, const QString& parentPath)
+{
+	if (parentPath.isEmpty())
 		return;
 
 	bool       ok   = false;
@@ -317,7 +522,9 @@ ContentExplorerWindow::AddDirectory(QFileSystemModel* model, const QModelIndex& 
 	if (!ok || name.isEmpty())
 		return;
 
-	if (!model->mkdir(parent, name).isValid())
+	const QModelIndex parent = model->index(parentPath);
+
+	if (!parent.isValid() || !model->mkdir(parent, name).isValid())
 		QMessageBox::warning(
 			this,
 			"Add Directory",

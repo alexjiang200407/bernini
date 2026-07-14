@@ -8,6 +8,18 @@ static constexpr std::array<std::string_view, 5> c_RequiredDirectories = {
 	Project::c_LevelsDirectoryName,
 };
 
+bool
+Project::IsRequiredDirectory(const std::filesystem::path& relativeToData)
+{
+	const std::string path = relativeToData.lexically_normal().generic_string();
+
+	// The data root itself, however it was spelled to get here.
+	if (path.empty() || path == "." || path == "/")
+		return true;
+
+	return std::ranges::find(c_RequiredDirectories, path) != c_RequiredDirectories.end();
+}
+
 Project
 Project::Create(const std::filesystem::path& projectFile, std::string_view name)
 {

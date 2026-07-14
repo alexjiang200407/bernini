@@ -36,6 +36,20 @@ namespace assetlib
 	load(const std::filesystem::path& path);
 
 	/**
+	 * The material paths `path` names, read without deserializing its geometry: the header, the chunk
+	 * table and the material chunk alone. That chunk is a few hundred bytes in a file of many megabytes,
+	 * so a caller surveying every mesh in a project -- which is what a reference scan does -- must come
+	 * through here rather than load().
+	 *
+	 * The paths are returned as stored, in `mesh.materials` order, duplicates and all: a submesh slot can
+	 * legitimately repeat a path (see attachMaterial).
+	 *
+	 * @throws std::runtime_error if the file cannot be read or is malformed.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	loadMaterialPaths(const std::filesystem::path& path);
+
+	/**
 	 * Bakes a flattened import into its modular file form: the geometry is copied verbatim and every
 	 * submesh arrives with no material (`Submesh::material` is c_InvalidIndex, `materials` is empty).
 	 *
