@@ -450,6 +450,17 @@ MaterialEditorWindow::SelectSubmesh(int index)
 	RefreshActions();
 }
 
+QStringList
+MaterialEditorWindow::OpenMaterialPaths() const
+{
+	auto paths = QStringList();
+	for (const SubmeshGraph& graph : m_SubmeshGraphs)
+		if (!graph.materialPath.isEmpty())
+			paths << graph.materialPath;
+
+	return paths;
+}
+
 void
 MaterialEditorWindow::RefreshActions()
 {

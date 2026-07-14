@@ -230,3 +230,31 @@ TEST_CASE("Saving a project twice writes the same project", "[project]")
 
 	REQUIRE(ReadText(sandbox.ProjectFile()) == afterCreate);
 }
+
+TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
+{
+	// Every asset path in the project is written against this layout, and Open puts a missing category
+	// straight back -- so deleting one would not even stick.
+	CHECK(Project::IsRequiredDirectory(Project::c_MeshesDirectoryName));
+	CHECK(Project::IsRequiredDirectory(Project::c_TexturesDirectoryName));
+	CHECK(Project::IsRequiredDirectory(Project::c_TexturesSrcDirectoryName));
+	CHECK(Project::IsRequiredDirectory(Project::c_MaterialsDirectoryName));
+	CHECK(Project::IsRequiredDirectory(Project::c_LevelsDirectoryName));
+
+	SECTION("nor is the data root they sit in, however it is spelled")
+	{
+		CHECK(Project::IsRequiredDirectory(""));
+		CHECK(Project::IsRequiredDirectory("."));
+		CHECK(Project::IsRequiredDirectory("Meshes/.."));
+	}
+
+	SECTION("but a folder made inside one is")
+	{
+		CHECK_FALSE(Project::IsRequiredDirectory("textures_src/kirk"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Materials/kirk"));
+
+		// Only the categories themselves, at the top. A folder that merely shares the name is the user's.
+		CHECK_FALSE(Project::IsRequiredDirectory("Meshes/Meshes"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Props"));
+	}
+}

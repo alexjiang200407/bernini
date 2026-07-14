@@ -83,12 +83,15 @@ There are **two producers of textures**, and they compress differently:
   (The Apples model is exactly this: two submeshes, two materials, one shared ORM source.) A map that
   already exists and is newer than every source feeding it is not re-encoded.
 
-  **Nothing owns a map, so nothing deletes one.** Because the name is a hash of the routing, re-baking a
-  material whose routes changed writes a *new* file and simply stops naming the old one, which stays on
-  disk forever. Reclaiming those is a whole-project mark and sweep -- never "delete the maps this
-  material used to name", which would take a map still shared with someone else -- and that is what
-  [libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h)
+  **Nothing owns a map, so nothing deletes one implicitly.** Because the name is a hash of the routing,
+  re-baking a material whose routes changed writes a *new* file and simply stops naming the old one,
+  which stays on disk forever. Reclaiming those is a whole-project mark and sweep -- never "delete the
+  maps this material used to name", which would take a map still shared with someone else -- and that is
+  what [libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h)
   does. See [Pruning unused baked maps](#pruning-unused-baked-maps).
+
+  A map *is* deleted when the user asks for that map by name, which the editor allows only once it has
+  established that no material references it. See [Deleting assets](#deleting-assets).
 
   For that to be sound, **each group is sized independently**, to the largest source routed into *that
   group*. If the whole material shared one resolution, a material's ORM output would silently depend on
@@ -393,6 +396,85 @@ direction a prune is allowed to err in.
 
 ---
 
+## Deleting assets
+
+The prune reclaims what nothing names any more. Deleting an asset is the opposite question — *the user
+has named this file; may it go?* — and it is answered by the reference graph in
+[libs/assetlib/include/assetlib/asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h), exposed as
+`assetlib_cli refs` and as **Delete** on the Content Explorer's right-click menu.
+
+Assets reference each other **by path relative to the data root**, and there is no manifest, no GUID and
+no back-index: identity *is* the path. So "what references this?" is answered by walking the project.
+There are exactly three edges:
+
+| Edge | Held by | Field |
+| --- | --- | --- |
+| mesh → material | `.bmesh` | `BMesh::materials`, which `Submesh::material` indexes into |
+| material → baked map | `.bmaterial` | `PbrParams::baseColorTexture` / `normalTexture` / `ormTexture` |
+| material → source texture | `.bmaterial` | `PbrParams::routes[i].texture`, one per channel |
+
+A material names textures **twice** — the triplet its last bake wrote, and the sources it routes each
+channel from. Both hold a file alive: the triplet is what the renderer samples, the routes are what a
+re-bake reads. The prune marks only the triplet, which is why it cannot answer this question.
+
+From those edges, three rules:
+
+* **A mesh always deletes**, and **its materials are left in place**. Nothing produces an edge into a
+  `.bmesh`, so this falls out of the graph rather than being a special case. A material is a shareable
+  asset that a mesh happens to name, not a part of it.
+* **A material deletes only if no mesh names it.**
+* **A texture deletes only if no material names it** — as either a baked map or a routed source.
+
+Deletion is **not cascading**. The maps a deleted material leaves behind are precisely what the prune
+already collects, so the two compose instead of duplicating each other.
+
+### Deleting a directory
+
+A directory deletes **everything beneath it**, and is held *only by an edge reaching into it from
+outside* — `AssetRefGraph::ReferrersInto`. The other two kinds of edge are not blockers, and this is
+the whole rule:
+
+* An edge **wholly inside** it holds nothing back: both ends go together.
+* An edge **pointing out of** it is fine, for exactly the reason deleting a mesh does not take its
+  materials — what the deleted thing referenced was never the deleted thing's to take.
+
+So `Meshes/` always deletes and leaves every material, while `textures_src/kirk/` does not, because the
+materials in `Materials/kirk/` route from it. A reference into *any depth* of the directory holds it, so
+`textures_src/` is held by a material naming `textures_src/kirk/tex0.ktx2`.
+
+`DeletionPlan::contents` lists **every file** beneath the directory, not just the ones the project
+tracks: `remove_all` does not ask what a file is for, so a `notes.txt` the user dropped in the folder
+goes with it, and the count they are warned with has to say so.
+
+Which directories the *project* cannot spare is not a question assetlib can answer — it does not know
+what a project is. That rule is `Project::IsRequiredDirectory`: the data root, and the categories
+`Project::Create` scaffolds (`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open`
+puts a missing one straight back, so deleting one would not even stick. A folder made *inside* a
+category, like `textures_src/kirk`, is the user's.
+
+Three things the implementation must get right, each of which is a real failure and not a hypothetical:
+
+* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data, and only its material list is
+  wanted. `loadMaterialPaths` seeks to the `kMaterialPaths` chunk instead: in Test Project that chunk is
+  0.0015%–0.017% of the file, so surveying its meshes reads ~3 KB rather than 16.8 MB. That is what lets
+  the graph be rebuilt on demand rather than cached.
+* **The graph is never cached.** The data root is shared with the user's file manager. A cached graph
+  would not merely go stale, it would be *wrong* — refusing a deletion while naming a blocker that had
+  since been deleted from under it. A *target* that is missing is recorded in `broken` and is not an
+  error, or one file removed behind the editor's back would make every deletion in the project
+  impossible. A *referrer* that will not parse **aborts the scan**, for the reason the prune's mark phase
+  does: edges we cannot see are edges we would delete through.
+* **Edges are deduplicated on (referrer, target, kind).** `attachMaterial` splits a shared slot rather
+  than repointing its siblings, so a `.bmesh` legitimately names one material from two submesh slots —
+  `tree_alpha_test.bmesh` does. Reporting that mesh twice would misstate how much is holding the
+  material.
+
+`deleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
+decodes `.ktx2` thumbnails on a thread pool, and Windows will not unlink a file that is open. "Still
+referenced" and "the file is in use" are different things to tell a user, and are different statuses.
+
+---
+
 ## Risky / Non-obvious contracts
 
 * **Base color must carry an sRGB format.** Nothing in the pixel shader decodes gamma — the sampler
@@ -440,6 +522,10 @@ assetlib_cli prune -d Data --dry-run
 
 # Delete them. Asks first; -y skips the prompt, and a closed stdin answers no
 assetlib_cli prune -d Data
+
+# Why will the editor not let me delete this? -- who references it, and how
+assetlib_cli refs -d Data Textures/basecolor_700a22db7b7ef785.ktx2
+assetlib_cli refs -d Data                    # summary, and every dangling reference in the project
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps

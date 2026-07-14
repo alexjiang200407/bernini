@@ -69,6 +69,13 @@ public:
 	[[nodiscard]] static std::optional<QPointF>
 	OutputCentre(MaterialGraphModel& model);
 
+	/**
+	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph
+	 * would not stick: the graph still holds it, and the next Save writes it straight back.
+	 */
+	[[nodiscard]] QStringList
+	OpenMaterialPaths() const;
+
 private:
 	void
 	SetPreviewGeometry(const QStringList& submeshNames);
