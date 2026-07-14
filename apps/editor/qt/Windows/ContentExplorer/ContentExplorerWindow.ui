@@ -27,7 +27,7 @@
        </sizepolicy>
       </property>
      </widget>
-     <widget class="QTableView" name="CurrentDirectoryExplorer">
+     <widget class="QListView" name="CurrentDirectoryExplorer">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
         <horstretch>2</horstretch>

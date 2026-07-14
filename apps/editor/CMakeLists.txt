@@ -80,6 +80,7 @@ target_link_libraries(editor_lib
 		core
 		bgl
 		assetlib
+		gamelib
 		Qt6::Widgets
 		QtNodes::QtNodes
 		nlohmann_json::nlohmann_json
