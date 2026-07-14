@@ -556,3 +556,98 @@ TEST_CASE("AssetManager resolves paths against its data root", "[gamelib][assets
 	CHECK((*fx).DataRoot() == fx.root.path);
 	CHECK((*fx).AcquireTexture("nested/deep/tex.ktx2").textureSlot);
 }
+
+TEST_CASE("materialTextures names a material's textures in slot order", "[gamelib][assets]")
+{
+	// The order the record's texture handles parallel. A caller decoding them ahead of time reads it
+	// to know what to decode, so it is public and it is pinned here.
+	auto baked                 = assetlib::BMaterial();
+	baked.mode                 = assetlib::MaterialMode::kBaked;
+	baked.pbr.baseColorTexture = "Textures/base.ktx2";
+	baked.pbr.normalTexture    = "Textures/nrm.ktx2";
+	baked.pbr.ormTexture       = "Textures/orm.ktx2";
+
+	CHECK(
+		game::materialTextures(baked) ==
+		std::vector<std::string>{ "Textures/base.ktx2", "Textures/nrm.ktx2", "Textures/orm.ktx2" });
+
+	// A loose material is its authoring routes instead, one slot per channel, unrouted ones empty.
+	auto loose                        = assetlib::BMaterial();
+	loose.mode                        = assetlib::MaterialMode::kLoose;
+	loose.pbr.routes[0].texture       = "Textures/albedo.ktx2";
+	const std::vector<std::string> ch = game::materialTextures(loose);
+
+	REQUIRE(ch.size() == assetlib::c_LooseChannelCount);
+	CHECK(ch[0] == "Textures/albedo.ktx2");
+	CHECK(ch[1].empty());
+}
+
+TEST_CASE("A prefetched texture is uploaded without its file being read", "[gamelib][assets]")
+{
+	// The whole point of a prefetch: the decode -- the expensive, pure-CPU half -- can run anywhere,
+	// leaving only the upload on the render thread.
+	Fixture fx("bernini_am_prefetch");
+
+	// Never written to disk. AcquireTexture is documented to throw on a missing file (and a sibling
+	// test pins that), so if this succeeds, the file was not read -- which is exactly the claim.
+	constexpr auto c_Path = "Textures/never_on_disk.ktx2";
+
+	auto image     = assetlib::ImageData();
+	image.width    = 1;
+	image.height   = 1;
+	image.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
+	image.pixels   = core::fixed_buffer<std::byte>(4);
+	std::fill_n(image.pixels.data(), 4, std::byte{ 0xFF });
+	image.subresources.push_back({ 0, 4, 4 });
+
+	auto prefetch = game::TexturePrefetch();
+	prefetch.emplace(c_Path, std::move(image));
+
+	const auto tex = (*fx).AcquireTexture(c_Path, &prefetch);
+
+	CHECK(tex.textureSlot);
+	CHECK((*fx).TextureRefCount(tex) == 1);
+
+	// Consumed, not copied: an ImageData is a whole mip chain and holding it after the upload would
+	// double the peak.
+	CHECK(prefetch.empty());
+}
+
+TEST_CASE("A prefetch the texture is missing from falls back to the file", "[gamelib][assets]")
+{
+	// A partial prefetch is a valid one -- a texture whose decode failed is simply left out of it.
+	Fixture fx("bernini_am_prefetch_partial");
+	WriteTexture(fx.root.path / "Textures" / "real.ktx2");
+
+	auto prefetch = game::TexturePrefetch();  // empty
+
+	CHECK((*fx).AcquireTexture("Textures/real.ktx2", &prefetch).textureSlot);
+
+	// And a miss in both places is still an error, not a silent default.
+	CHECK_THROWS_AS((*fx).AcquireTexture("Textures/absent.ktx2", &prefetch), std::runtime_error);
+}
+
+TEST_CASE("A material's textures come from the prefetch when it carries them", "[gamelib][assets]")
+{
+	Fixture fx("bernini_am_prefetch_material");
+
+	// The material file exists; the texture it names never does.
+	constexpr auto c_Texture = "Textures/only_prefetched.ktx2";
+	WriteBakedMaterial(fx.root.path / "Materials" / "m.bmaterial", c_Texture);
+
+	auto image     = assetlib::ImageData();
+	image.width    = 1;
+	image.height   = 1;
+	image.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
+	image.pixels   = core::fixed_buffer<std::byte>(4);
+	std::fill_n(image.pixels.data(), 4, std::byte{ 0xFF });
+	image.subresources.push_back({ 0, 4, 4 });
+
+	auto prefetch = game::TexturePrefetch();
+	prefetch.emplace(c_Texture, std::move(image));
+
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m.bmaterial", &prefetch);
+
+	REQUIRE(mat.IsValid());
+	CHECK(prefetch.empty());
+}

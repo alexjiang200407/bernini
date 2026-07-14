@@ -54,6 +54,21 @@ The manager owns instances for that last one: an instance holding a reference on
 in place (`IScene::UpdatePbrMaterial`), so the handle stays valid and every submesh bound to it follows
 without being rebound. The material is shared by path, so the change is seen by everything using it.
 
+**Prefetching.** Loading a texture is two steps with opposite constraints: `assetlib::loadKTX2`
+transcodes a whole Basis mip chain — expensive, and pure CPU, so it can run on any thread — and then
+`IScene::AddTextureAsset` uploads it, which must be on the render thread like every other bgl call.
+Fused, the expensive half is stuck on the render thread.
+
+`TexturePrefetch` unfuses them. It is a map of already-decoded `ImageData` keyed by the relative path
+it will be asked for; hand one to `AcquireTexture` / `AcquireMaterial` and a matching entry is moved
+out and uploaded instead of the file being read. `materialTextures()` is public so a caller can see
+what a material will need *before* acquiring it, and decode that list off-thread. A path the prefetch
+does not carry falls back to reading the file, so a partial prefetch is a valid one — a texture whose
+decode failed is simply left out.
+
+The editor's `AssetThumbnailCache` is the reason it exists: it decodes on a worker and uploads on the
+UI thread, which is the only way a folder of meshes can populate without freezing the editor.
+
 **Skins.** `SetSubmeshMaterial` changes a geom's **default**, so it reaches every instance placed from
 it. `SetInstanceSubmeshMaterial` overrides **one instance** and leaves its siblings alone — the same
 unit mesh, a different material per unit. The override outranks the default and holds a reference of

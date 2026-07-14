@@ -25,24 +25,25 @@ namespace game
 			return bgl::LayerType::kOpaque;
 		}
 
-		// The textures a material names, in the order MaterialRecord::textures parallels: the baked
-		// triplet, or the nine authoring routes. One order per mode, in one place, so the record's
-		// texture references and the desc it rebuilds can never fall out of step.
-		std::vector<std::string>
-		TexturePaths(const assetlib::BMaterial& material)
+	}
+
+	// The order MaterialRecord::textures parallels: the baked triplet, or the nine authoring routes.
+	// One order per mode, in one place, so the record's texture references and the desc it rebuilds
+	// can never fall out of step.
+	std::vector<std::string>
+	materialTextures(const assetlib::BMaterial& material)
+	{
+		const assetlib::PbrParams& pbr = material.pbr;
+
+		if (material.mode == assetlib::MaterialMode::kLoose)
 		{
-			const assetlib::PbrParams& pbr = material.pbr;
-
-			if (material.mode == assetlib::MaterialMode::kLoose)
-			{
-				auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
-				for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
-					paths[i] = pbr.routes[i].texture;
-				return paths;
-			}
-
-			return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
+			auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
+			for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
+				paths[i] = pbr.routes[i].texture;
+			return paths;
 		}
+
+		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 	}
 
 	AssetManager::AssetManager(bgl::SceneViewHandle view, std::filesystem::path dataRoot) :
@@ -91,7 +92,7 @@ namespace game
 	// --- Acquire ----------------------------------------------------------------------------------
 
 	bgl::TextureAssetHandle
-	AssetManager::AcquireTexture(std::string_view relPath)
+	AssetManager::AcquireTexture(std::string_view relPath, TexturePrefetch* prefetch)
 	{
 		// An absent map is not an error: the scene substitutes its own default (white, or a flat
 		// normal) for an invalid handle.
@@ -105,10 +106,24 @@ namespace game
 			return record.handle;
 		}
 
+		// Someone decoded this for us off the render thread. Take it; only the upload has to be here.
+		auto decoded = assetlib::ImageData();
+		bool hoisted = false;
+		if (prefetch != nullptr)
+		{
+			if (const auto it = prefetch->find(relPath); it != prefetch->end())
+			{
+				decoded = std::move(it->second);
+				prefetch->erase(it);
+				hoisted = true;
+			}
+		}
+
 		auto key = std::string(relPath);
 
-		const bgl::TextureAssetHandle handle =
-			m_Scene->AddTextureAsset(assetlib::loadKTX2(m_DataRoot / key), key);
+		const bgl::TextureAssetHandle handle = m_Scene->AddTextureAsset(
+			hoisted ? std::move(decoded) : assetlib::loadKTX2(m_DataRoot / key),
+			key);
 
 		m_TextureByPath.emplace(key, handle.textureSlot.index);
 		m_Textures.emplace(handle.textureSlot.index, TextureRecord{ std::move(key), handle, 1 });
@@ -117,7 +132,7 @@ namespace game
 	}
 
 	bgl::MaterialHandle
-	AssetManager::AcquireMaterial(std::string_view relPath)
+	AssetManager::AcquireMaterial(std::string_view relPath, TexturePrefetch* prefetch)
 	{
 		if (relPath.empty())
 			return {};
@@ -136,11 +151,14 @@ namespace game
 		// compiler move `key` out from under the path it is supposed to build.
 		const assetlib::BMaterial material = assetlib::loadMaterial(m_DataRoot / key);
 
-		return CreateMaterial(material, std::move(key));
+		return CreateMaterial(material, std::move(key), prefetch);
 	}
 
 	bgl::MaterialHandle
-	AssetManager::CreateMaterial(const assetlib::BMaterial& material, std::string key)
+	AssetManager::CreateMaterial(
+		const assetlib::BMaterial& material,
+		std::string                key,
+		TexturePrefetch*           prefetch)
 	{
 		if (material.shadingModel != assetlib::ShadingModel::kPbr)
 			throw bgl::SceneError(
@@ -149,10 +167,10 @@ namespace game
 				" is not supported by the renderer");
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
-		const std::vector<std::string> paths = TexturePaths(material);
+		const std::vector<std::string> paths = materialTextures(material);
 
 		auto textures = std::vector<bgl::TextureAssetHandle>(paths.size());
-		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i]);
+		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i], prefetch);
 
 		auto record     = MaterialRecord();
 		record.key      = key;
@@ -576,7 +594,7 @@ namespace game
 	void
 	AssetManager::RebuildMaterial(MaterialRecord& record)
 	{
-		const std::vector<std::string> paths = TexturePaths(record.source);
+		const std::vector<std::string> paths = materialTextures(record.source);
 
 		// Acquire the new set before releasing the old: a texture that survives the swap -- the two
 		// maps the edit did not touch, or the same path reassigned -- must not be deleted and
