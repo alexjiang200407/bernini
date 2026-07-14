@@ -31,6 +31,11 @@
 
 namespace
 {
+	// Tile geometry: the thumbnail box, and the cell that holds it plus a name beneath.
+	constexpr int c_TileIconDim = 128;
+	constexpr int c_TileWidth   = 168;
+	constexpr int c_TileHeight  = 190;
+
 	// Mesh file extensions the importer accepts.
 	bool
 	IsImportableMesh(const QString& localFile)
@@ -97,7 +102,7 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 	m_HierarchyModel = new QFileSystemModel(this);
 	m_HierarchyModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
 
-	m_FileModel = new QFileSystemModel(this);
+	m_FileModel = new AssetFileModel(this);
 	m_FileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
 
 	m_Ui.FileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -132,6 +137,12 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 }
 
 void
+ContentExplorerWindow::SetThumbnails(AssetThumbnailCache* thumbnails)
+{
+	m_FileModel->SetThumbnails(thumbnails);
+}
+
+void
 ContentExplorerWindow::SetRootPath(const QString& path)
 {
 	AttachModels();
@@ -156,7 +167,18 @@ ContentExplorerWindow::AttachModels()
 
 	m_Ui.CurrentDirectoryExplorer->setModel(m_FileModel);
 	m_Ui.CurrentDirectoryExplorer->setEditTriggers(QAbstractItemView::NoEditTriggers);
-	m_Ui.CurrentDirectoryExplorer->verticalHeader()->setVisible(false);
+
+	// A grid of tiles, each an asset's thumbnail above its name.
+	m_Ui.CurrentDirectoryExplorer->setViewMode(QListView::IconMode);
+	m_Ui.CurrentDirectoryExplorer->setIconSize(QSize(c_TileIconDim, c_TileIconDim));
+	m_Ui.CurrentDirectoryExplorer->setGridSize(QSize(c_TileWidth, c_TileHeight));
+	m_Ui.CurrentDirectoryExplorer->setResizeMode(QListView::Adjust);
+	m_Ui.CurrentDirectoryExplorer->setUniformItemSizes(true);
+	m_Ui.CurrentDirectoryExplorer->setWordWrap(true);
+
+	// IconMode lets the user shuffle tiles around the grid by default, which would imply an ordering
+	// the folder does not have.
+	m_Ui.CurrentDirectoryExplorer->setMovement(QListView::Static);
 
 	// Assets can be dragged out of the explorer (e.g. a .bmesh onto the Material Editor preview).
 	// QFileSystemModel supplies the file URLs; DragOnly keeps the views from accepting drops, so
@@ -165,14 +187,6 @@ ContentExplorerWindow::AttachModels()
 	m_Ui.FileExplorer->setDragDropMode(QAbstractItemView::DragOnly);
 	m_Ui.CurrentDirectoryExplorer->setDragEnabled(true);
 	m_Ui.CurrentDirectoryExplorer->setDragDropMode(QAbstractItemView::DragOnly);
-
-	// Show only Name and Last Modified, with Name taking the remaining width.
-	m_Ui.CurrentDirectoryExplorer->hideColumn(1);  // Size
-	m_Ui.CurrentDirectoryExplorer->hideColumn(2);  // Type
-	auto* fileHeader = m_Ui.CurrentDirectoryExplorer->horizontalHeader();
-	fileHeader->setStretchLastSection(false);
-	fileHeader->setSectionResizeMode(0, QHeaderView::Stretch);           // Name
-	fileHeader->setSectionResizeMode(3, QHeaderView::ResizeToContents);  // Last Modified
 
 	// Selecting an entry on the left shows the containing folder's contents on the right. The tree
 	// lists files too, and a file is not a directory to root the right-hand view at, so selecting one

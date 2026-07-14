@@ -13,6 +13,7 @@
 
 #include "Async/BackgroundTask.h"
 #include "Project/Project.h"
+#include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
@@ -88,7 +89,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
 		matDesc.previewEnv.exposure   = matSettings["exposure"].GetOrDefault(1.0f);
 
+		auto thumbDesc       = AssetThumbnailDesc();
+		thumbDesc.gfx        = m_Graphics;
+		thumbDesc.scene      = m_Scene;
+		thumbDesc.skybox     = matDesc.previewEnv.skybox;
+		thumbDesc.irradiance = matDesc.previewEnv.irradiance;
+		thumbDesc.prefilter  = matDesc.previewEnv.prefilter;
+		thumbDesc.brdfLut    = matDesc.previewEnv.brdfLut;
+		thumbDesc.exposure   = matDesc.previewEnv.exposure;
+
 		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
+		m_Thumbnails     = new AssetThumbnailCache(std::move(thumbDesc), this);
 	}
 
 	setDockNestingEnabled(true);
@@ -119,6 +130,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
 		return m_MaterialEditor->OpenMaterialPaths();
 	});
+	m_ContentExplorer->SetThumbnails(m_Thumbnails);
 
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
@@ -277,6 +289,12 @@ MainWindow::SetActiveProject(Project project)
 	m_Project = std::make_unique<Project>(std::move(project));
 
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
+
+	// Root the thumbnails before the explorer: rooting the explorer paints tiles, and each one that
+	// misses asks for a render straight away -- a material cannot be resolved without a data root.
+	if (m_Thumbnails)
+		m_Thumbnails->SetDataRoot(m_Project->GetDataDirectory());
+
 	m_ContentExplorer->SetRootPath(dataDir);
 
 	if (m_MaterialEditor)

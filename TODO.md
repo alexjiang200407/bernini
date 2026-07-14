@@ -1,8 +1,9 @@
 # Features
 Delete Material / Texture / Mesh in content explorer. Should check for no references first
 Material should show current baked textures if any
-Show thumbnail for meshes
 Bake Material button removed. Context menu action in Content Explorer
+Async screenshot
+Editor should use the new Asset Manager 
 
 # Bugs
 Sometimes, when exiting, refuses to exist

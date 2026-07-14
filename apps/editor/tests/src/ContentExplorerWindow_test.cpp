@@ -5,8 +5,8 @@
 
 #include <QDragEnterEvent>
 #include <QFileSystemModel>
+#include <QListView>
 #include <QMimeData>
-#include <QTableView>
 #include <QTemporaryDir>
 #include <QTreeView>
 
@@ -48,10 +48,10 @@ namespace
 		return window.findChild<QTreeView*>("FileExplorer");
 	}
 
-	QTableView*
+	QListView*
 	Files(const ContentExplorerWindow& window)
 	{
-		return window.findChild<QTableView*>("CurrentDirectoryExplorer");
+		return window.findChild<QListView*>("CurrentDirectoryExplorer");
 	}
 
 	/** Whether the window would take this drag. */
