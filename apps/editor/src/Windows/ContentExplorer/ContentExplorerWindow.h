@@ -3,8 +3,11 @@
 #include <QStringList>
 #include <QWidget>
 
+#include "Windows/ContentExplorer/AssetFileModel.h"
+
 #include "ui_ContentExplorerWindow.h"
 
+class AssetThumbnailCache;
 class QAbstractItemView;
 class QFileSystemModel;
 class QLabel;
@@ -39,6 +42,10 @@ public:
 	 */
 	void
 	SetRootPath(const QString& path);
+
+	// Supplies the grid's thumbnails. Without one the tiles keep their shell icons.
+	void
+	SetThumbnails(AssetThumbnailCache* thumbnails);
 
 	/**
 	 * The data-root-relative path of the thing at `index` that may be deleted -- an asset file, or a
@@ -150,7 +157,7 @@ private:
 
 	Ui::ContentExplorerWindow m_Ui;
 	QFileSystemModel*         m_HierarchyModel;
-	QFileSystemModel*         m_FileModel;
+	AssetFileModel*           m_FileModel;
 	QLabel*                   m_EmptyPlaceholder = nullptr;
 	QString                   m_RootPath;
 	AssetsHeldOpenFn          m_AssetsHeldOpen;

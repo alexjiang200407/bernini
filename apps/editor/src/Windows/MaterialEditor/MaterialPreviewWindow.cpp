@@ -1,6 +1,7 @@
 #include "MaterialPreviewWindow.h"
 
 #include "Async/BackgroundTask.h"
+#include "Mesh/BMeshUtil.h"
 
 #include <QDebug>
 #include <QDragEnterEvent>
@@ -39,57 +40,10 @@ namespace
 		}
 	}
 
-	// The NUL-terminated name at `offset` in a BMesh's string pool (empty for offset 0 / out of range).
-	std::string
-	NameFromPool(const std::vector<char>& pool, uint32_t offset)
-	{
-		if (offset == 0 || offset >= pool.size())
-			return {};
-		return std::string(pool.data() + offset);
-	}
-
 	bool
 	IsPreviewMesh(const QString& localFile)
 	{
 		return localFile.endsWith(".bmesh", Qt::CaseInsensitive);
-	}
-
-	// A node's transform composed with all of its ancestors'.
-	glm::mat4
-	WorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
-	{
-		auto     world = glm::mat4(1.0f);
-		uint32_t index = nodeIndex;
-		while (index != assetlib::c_InvalidIndex && index < mesh.nodes.size())
-		{
-			const assetlib::Node& node = mesh.nodes[index];
-			world                      = assetlib::toMatrix(node.localTransform) * world;
-			index                      = node.parent;
-		}
-		return world;
-	}
-
-	// Grows [outMin,outMax] to contain the submesh's box after `transform`, corner by corner (the
-	// box is not axis-aligned once rotated).
-	void
-	GrowBounds(
-		const glm::mat4& transform,
-		const glm::vec3& boxMin,
-		const glm::vec3& boxMax,
-		glm::vec3&       outMin,
-		glm::vec3&       outMax)
-	{
-		for (int corner = 0; corner < 8; ++corner)
-		{
-			const auto point = glm::vec3(
-				(corner & 1) ? boxMax.x : boxMin.x,
-				(corner & 2) ? boxMax.y : boxMin.y,
-				(corner & 4) ? boxMax.z : boxMin.z);
-
-			const auto world = glm::vec3(transform * glm::vec4(point, 1.0f));
-			outMin           = glm::min(outMin, world);
-			outMax           = glm::max(outMax, world);
-		}
 	}
 
 	QString
@@ -320,8 +274,8 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				{
 					const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
 
-					auto name =
-						QString::fromStdString(NameFromPool(mesh.stringPool, submesh.nameOffset));
+					auto name = QString::fromStdString(
+						bmesh::NameFromPool(mesh.stringPool, submesh.nameOffset));
 					if (name.isEmpty())
 						name = QString("Submesh %1").arg(m_SubmeshNames.size());
 					m_SubmeshNames << name;
@@ -330,7 +284,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				}
 			}
 
-			const glm::mat4 world = WorldTransform(mesh, nodeIndex);
+			const glm::mat4 world = bmesh::WorldTransform(mesh, nodeIndex);
 			m_Instances.push_back(
 				{ PreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
 			      it->second });
@@ -339,7 +293,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			for (uint32_t i = 0; i < entry.submeshCount; ++i)
 			{
 				const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-				GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
+				bmesh::GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
 			}
 		}
 

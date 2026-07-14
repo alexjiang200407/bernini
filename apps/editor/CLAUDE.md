@@ -9,6 +9,11 @@ editor imports it (via assetlib) and converts it into the game-ready format.
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.
 - Windows-only for now.
 - CMake: `./CMakeLists.txt`
+- Links `gamelib` as well as `bgl` and `assetlib`. `gamelib` is the seam that owns "load this
+  asset into a scene", and its `AssetManager` holds the **only** implementation of the
+  baked-vs-loose branch that turns an `assetlib::BMaterial` into a `bgl::MaterialHandle`.
+  Reach for it rather than rebuilding that branch — a material must render the same however
+  it was loaded.
 
 ## editor_lib
 
@@ -55,10 +60,15 @@ why `just test` cannot forward arguments to a suite. The only thing genuinely lo
 `QTRY_*`, replaced by `editor::test::WaitFor` in `tests/src/util/QtSupport.h`.
 
 ```bash
-just test editor                       # the suite; about a second
-just run editor_tests -- "[project]"   # one tag
+just test editor                        # the suite; about fifteen seconds
+just run editor_tests -- "[project]"    # one tag
+just run editor_tests -- "~[render]"    # skip the GPU cases; back to about a second
 just run editor_tests -- --list-tests
 ```
+
+Nearly all of that fifteen seconds is `CreateGraphics`, which every `[render]` case pays
+(Catch2 re-runs a `TEST_CASE` body per `SECTION`, so a multi-section one pays it again each
+time). Everything else still runs on the CPU in about a second.
 
 ## Adding a suite
 
@@ -76,12 +86,19 @@ for anything Qt does off-thread, like `QFileSystemModel` scanning a directory) a
 
 ## What is testable, and what is not
 
-Anything that needs a `bgl::IGraphics` needs a **real D3D12 device and a real window**:
-`RenderTargetWindow`'s constructor calls `CreateRenderTarget` with `winId()` and
-`headless = false`, and does not guard a null device. That is `RenderTargetWindow`,
-`LevelEditorWindow`, `MaterialPreviewWindow`, and `MainWindow` (whose constructor
-creates the device). **None of them are covered.** Covering them needs a seam first —
-a `headless` flag on `RenderTargetWindowDesc`, or a fake `IGraphics`.
+What blocks coverage is the **window**, not the device. `RenderTargetWindow`'s constructor
+calls `CreateRenderTarget` with `winId()` and `headless = false`, and does not guard a null
+device — so `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow` and
+`MainWindow` (whose constructor creates the device) are **not covered**. Covering them needs
+a seam first: a `headless` flag on `RenderTargetWindowDesc`, or a fake `IGraphics`.
+
+A **device alone is fine**. `editor_tests` links `bgl_d3d12_agility` (on the executable — see
+`tests/CMakeLists.txt` for why an OBJECT library cannot carry it through `editor_lib`), so a
+test may call `CreateGraphics` and render headlessly. `AssetThumbnailCache` is the one renderer
+built that way — it owns a headless target and needs no `winId()` — and is covered end to end
+in `AssetThumbnailCache_test.cpp`, which renders a real `.bmesh` and a real `.bmaterial` and
+writes each to `assets/golden/thumbnail_*.got.png` to be looked at. Tag such cases `[render]`
+so they can be skipped.
 
 Everything else runs on the CPU in about a second, because the pieces that matter were
 already built to work without a device: `MaterialEditorWindow` degrades to "No graphics

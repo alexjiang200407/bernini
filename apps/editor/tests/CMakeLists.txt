@@ -37,6 +37,10 @@ target_link_libraries(editor_tests PRIVATE
 	Qt6::Test
 )
 
+if(RENDERER_BACKEND STREQUAL "DX12")
+	target_link_libraries(editor_tests PRIVATE bgl_d3d12_agility)
+endif()
+
 target_precompile_headers(editor_tests
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )

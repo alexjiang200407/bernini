@@ -9,6 +9,7 @@
 class QDockWidget;
 class Project;
 class ContentExplorerWindow;
+class AssetThumbnailCache;
 class LevelEditorWindow;
 class MaterialEditorWindow;
 
@@ -53,6 +54,7 @@ private:
 	QDockWidget*                    m_LevelEditorDock     = nullptr;
 	QDockWidget*                    m_MaterialEditorDock  = nullptr;
 	QDockWidget*                    m_ContentExplorerDock = nullptr;
+	AssetThumbnailCache*            m_Thumbnails          = nullptr;
 	core::SharedRef<bgl::IGraphics> m_Graphics;
 	core::SharedRef<bgl::IScene>    m_Scene;
 };
