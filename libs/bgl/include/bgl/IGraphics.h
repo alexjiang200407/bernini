@@ -104,6 +104,16 @@ namespace bgl
 		virtual void
 		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) = 0;
 
+		/**
+		 * Reads `target`'s last presented backbuffer back into a tightly packed RGBA8 image --
+		 * the same shape assetlib::loadKTX2Preview yields, so a CPU consumer (an editor
+		 * thumbnail) can wrap the pixels without a codec or a temp file.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame.
+		 */
+		virtual assetlib::ImageData
+		ScreenshotToMemory(const RenderTargetHandle& target) = 0;
+
 		virtual SceneHandle
 		CreateScene(SceneDesc desc) = 0;
 
