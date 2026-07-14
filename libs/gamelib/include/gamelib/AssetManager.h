@@ -1,11 +1,36 @@
 #pragma once
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <core/str/str.h>
 
 namespace game
 {
+	/**
+	 * The texture files `material` names, relative to the data root: the baked triplet, or the nine
+	 * authoring routes. Unrouted slots come back as empty strings, so the result is positional.
+	 *
+	 * Public because decoding a texture is expensive and pure CPU, while uploading it is neither --
+	 * it must happen on the render thread. A caller that wants the decode off that thread needs to
+	 * know what to decode before it acquires anything. See TexturePrefetch.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	materialTextures(const assetlib::BMaterial& material);
+
+	/**
+	 * Textures decoded ahead of time, keyed by the data-root-relative path they will be asked for.
+	 *
+	 * `assetlib::loadKTX2` transcodes a whole Basis mip chain and is the dominant cost of loading a
+	 * material -- but it touches no GPU state, so it can run anywhere, unlike the upload that follows.
+	 * Hand one of these to AcquireTexture / AcquireMaterial and a matching entry is consumed instead
+	 * of the file being read, leaving only the upload on the render thread.
+	 *
+	 * Entries are moved out as they are used. A path that is not present simply falls back to reading
+	 * the file, so a partial prefetch is a valid one.
+	 */
+	using TexturePrefetch = core::str::unordered_str_map<assetlib::ImageData>;
+
 	/**
 	 * Owns the lifetime of everything loaded from disk into a `bgl::IScene`: textures, materials,
 	 * geometry, and the instances placed from it.
@@ -53,19 +78,23 @@ namespace game
 		 * Uploads the `.ktx2` at `relPath`, or shares the upload from a previous call. An empty path
 		 * yields an invalid handle, which the scene reads as "absent" and replaces with its default.
 		 *
+		 * @param prefetch Optional decoded images to upload instead of reading the file. See
+		 *        TexturePrefetch; a path it does not carry is read from disk as usual.
 		 * @throws std::runtime_error if the file cannot be read or decoded.
 		 */
 		bgl::TextureAssetHandle
-		AcquireTexture(std::string_view relPath);
+		AcquireTexture(std::string_view relPath, TexturePrefetch* prefetch = nullptr);
 
 		/**
 		 * Creates the scene material the `.bmaterial` at `relPath` describes, or shares the one from a
 		 * previous call, acquiring a reference to every texture it names.
 		 *
+		 * @param prefetch Optional decoded images for the textures it names -- the way to keep their
+		 *        decode off the render thread. materialTextures() says what to put in one.
 		 * @throws std::runtime_error if the file cannot be read, or the scene cannot allocate.
 		 */
 		bgl::MaterialHandle
-		AcquireMaterial(std::string_view relPath);
+		AcquireMaterial(std::string_view relPath, TexturePrefetch* prefetch = nullptr);
 
 		/**
 		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath`, or shares the geometry from a previous
@@ -243,7 +272,10 @@ namespace game
 		// kLoose samples the authoring routes directly (up to nine). The only place that branch lives,
 		// so a material renders the same however it was loaded.
 		bgl::MaterialHandle
-		CreateMaterial(const assetlib::BMaterial& material, std::string key);
+		CreateMaterial(
+			const assetlib::BMaterial& material,
+			std::string                key,
+			TexturePrefetch*           prefetch = nullptr);
 
 		// Drops one reference to a geom by its slot, destroying it at zero. Shared by ReleaseGeom and
 		// DestroyInstance, which are the two things that hold geometry references.
