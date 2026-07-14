@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 #include <core/ref/SharedRef.h>
+#include <gamelib/AssetManager.h>
 
 #include "ui_MainWindow.h"
 
@@ -57,4 +58,9 @@ private:
 	AssetThumbnailCache*            m_Thumbnails          = nullptr;
 	core::SharedRef<bgl::IGraphics> m_Graphics;
 	core::SharedRef<bgl::IScene>    m_Scene;
+
+	// The editor's one asset manager, over the Level Editor's view. Shared, so a material loaded by
+	// the thumbnails and by the level is one upload and one reference count. Rebuilt per project,
+	// because it resolves every path against that project's Data root.
+	std::unique_ptr<game::AssetManager> m_Assets;
 };
