@@ -19,9 +19,6 @@
 
 namespace
 {
-	// A mesh is instanced per node, so the view needs room for every node that references one.
-	constexpr uint32_t c_MaxInstances = 256;
-
 	// The backbuffer and the per-frame upload rings are c_BufferCount deep, so a single draw can
 	// present a slot the asset's instance data has not reached yet. Draw enough to fill every slot.
 	constexpr int c_WarmupFrames = 6;
@@ -171,12 +168,12 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 	try
 	{
 		auto rtDesc     = bgl::RenderTargetDesc();
-		rtDesc.width    = c_ThumbnailDim;
-		rtDesc.height   = c_ThumbnailDim;
+		rtDesc.width    = static_cast<int>(m_Desc.dimension);
+		rtDesc.height   = static_cast<int>(m_Desc.dimension);
 		rtDesc.headless = true;
 
 		m_RenderTarget = gfx->CreateRenderTarget(rtDesc);
-		m_SceneView    = gfx->CreateSceneView(m_Desc.scene, c_MaxInstances);
+		m_SceneView    = gfx->CreateSceneView(m_Desc.scene, m_Desc.maxInstances);
 	}
 	catch (const std::exception& e)
 	{
@@ -233,26 +230,26 @@ AssetThumbnailCache::~AssetThumbnailCache()
 }
 
 void
-AssetThumbnailCache::SetDataRoot(const std::filesystem::path& dataRoot)
+AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 {
-	if (m_DataRoot == dataRoot)
+	if (m_Assets == assets)
 		return;
 
-	m_DataRoot = dataRoot;
+	// Hand the old project's assets back through the manager that owns them, before we let go of it.
+	ReleaseGeometry();
+	ReleaseMaterials();
+
+	m_Assets = assets;
 
 	m_Cache.clear();
 	m_Queue.clear();
 	m_InFlight.clear();
+}
 
-	// Hand the old root's assets back through the manager that owns them, before it goes.
-	ReleaseGeometry();
-	ReleaseMaterials();
-	m_Assets.reset();
-
-	if (!IsReady() || dataRoot.empty())
-		return;
-
-	m_Assets = std::make_unique<game::AssetManager>(m_SceneView, dataRoot);
+std::filesystem::path
+AssetThumbnailCache::DataRoot() const
+{
+	return m_Assets != nullptr ? m_Assets->DataRoot() : std::filesystem::path();
 }
 
 bool
@@ -272,12 +269,13 @@ AssetThumbnailCache::FileStamp(const QString& path)
 std::string
 AssetThumbnailCache::ToRelative(const QString& path) const
 {
-	if (m_DataRoot.empty())
+	const std::filesystem::path dataRoot = DataRoot();
+	if (dataRoot.empty())
 		return {};
 
 	std::error_code ec;
 	const auto      relative =
-		std::filesystem::relative(std::filesystem::path(path.toStdWString()), m_DataRoot, ec);
+		std::filesystem::relative(std::filesystem::path(path.toStdWString()), dataRoot, ec);
 
 	if (ec || relative.empty() || *relative.begin() == "..")
 		return {};
@@ -336,24 +334,24 @@ AssetThumbnailCache::Request(const QString& path)
 		     stamp]() mutable {
 				auto pending     = PendingRender();
 				pending.path     = path;
-				pending.kind     = material ? Kind::kMaterial : Kind::kMesh;
+				pending.type     = material ? ThumbnailType::kMaterial : ThumbnailType::kMesh;
 				pending.mesh     = std::move(mesh);
 				pending.prefetch = std::move(prefetch);
 				pending.stamp    = stamp;
 
-				Enqueue(path, pending.kind, std::move(pending));
+				Enqueue(path, pending.type, std::move(pending));
 			},
 			Qt::QueuedConnection);
 	};
 
-	m_Pool.start(new LoadTask(path, ToRelative(path), material, m_DataRoot, std::move(sink)));
+	m_Pool.start(new LoadTask(path, ToRelative(path), material, DataRoot(), std::move(sink)));
 }
 
 void
-AssetThumbnailCache::Enqueue(const QString& path, Kind kind, PendingRender pending)
+AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRender pending)
 {
 	// The worker failed: no prefetch, and for a mesh no mesh either.
-	if (pending.prefetch == nullptr || (kind == Kind::kMesh && pending.mesh == nullptr))
+	if (pending.prefetch == nullptr || (type == ThumbnailType::kMesh && pending.mesh == nullptr))
 	{
 		m_InFlight.remove(path);
 		return;
@@ -382,7 +380,8 @@ AssetThumbnailCache::DrainOne()
 	QImage image;
 	try
 	{
-		image = pending.kind == Kind::kMesh ? RenderMesh(pending) : RenderMaterial(pending);
+		image =
+			pending.type == ThumbnailType::kMesh ? RenderMesh(pending) : RenderMaterial(pending);
 	}
 	catch (const std::exception& e)
 	{
@@ -521,10 +520,11 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 			std::max(0.001f, radius * 0.01f),
 			distance + radius * 50.0f);
 
-	auto rc     = bgl::RenderContext();
-	rc.camera   = camera;
-	rc.view     = m_SceneView;
-	rc.viewport = bgl::Viewport(c_ThumbnailDim, c_ThumbnailDim);
+	auto rc   = bgl::RenderContext();
+	rc.camera = camera;
+	rc.view   = m_SceneView;
+	rc.viewport =
+		bgl::Viewport(static_cast<float>(m_Desc.dimension), static_cast<float>(m_Desc.dimension));
 
 	for (int i = 0; i < c_WarmupFrames; ++i) m_Desc.gfx->DrawFrame(m_RenderTarget, rc);
 
