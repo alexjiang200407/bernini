@@ -1,4 +1,6 @@
+
 # Bernini
+<img width="1919" height="973" alt="Screenshot 2026-07-15 013327" src="https://github.com/user-attachments/assets/43cfd696-225b-4005-bce3-073646b83f46" />
 
 ## Build
 
@@ -80,5 +82,7 @@ Skip it if you like; `python scripts/<script>.py` does everything the recipes do
 - GPU Driven Instance Rendering
 - Forward Renderer
 - Clustered Geometry
-- Cross Platform (Windows, Linux, Xbox)
+- Cross Platform
 - Image Based Lighting
+- PBR
+- Bindless Resources
