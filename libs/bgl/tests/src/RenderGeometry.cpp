@@ -70,7 +70,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/cube.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/cube.got.png");
 
 		// Compare against the committed golden (deployed next to the exe under
 		// assets/golden/); on mismatch (or a missing golden) "assets/golden/cube.got.png" is left
@@ -102,7 +102,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/plane.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/plane.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden("assets/golden/plane.exp.png", "assets/golden/plane.got.png"));
@@ -141,7 +141,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 
 		// A subdivided plane is the same surface as a flat one, so it must land on the same pixels --
 		// which is what catches a meshlet split that drops or duplicates a triangle.
-		gfxBase->ScreenshotRaw(target, "assets/golden/plane_dense.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/plane_dense.got.png");
 		CHECK(
 			bgl::test::MatchesGolden(
 				"assets/golden/plane.exp.png",
@@ -176,7 +176,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/plane_floor.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/plane_floor.got.png");
 
 		// Visible from above rather than back-face culled to an empty frame: the rotation took the
 		// front face with it, so the winding is right.
@@ -224,7 +224,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/sphere_cube.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/sphere_cube.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -273,7 +273,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		gfxBase->Draw(sphereContext);
 		gfxBase->EndFrame();
 
-		gfxBase->ScreenshotRaw(target, "assets/golden/two_scenes_sphere_cube.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/two_scenes_sphere_cube.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -310,7 +310,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/two_cubes.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/two_cubes.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -349,7 +349,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/delete_sphere_cube.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/delete_sphere_cube.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -386,7 +386,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
 		gfxBase->DrawFrame(target, context);
-		gfxBase->ScreenshotRaw(target, "assets/golden/delete_two_cubes.got.png");
+		gfxBase->ScreenshotPng(target, "assets/golden/delete_two_cubes.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -472,8 +472,8 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	gfxBase->DrawFrame(targetA, cubeContext);
 	gfxBase->DrawFrame(targetB, twoContext);
 
-	gfxBase->ScreenshotRaw(targetA, "assets/golden/two_targets_a.got.png");
-	gfxBase->ScreenshotRaw(targetB, "assets/golden/two_targets_b.got.png");
+	gfxBase->ScreenshotPng(targetA, "assets/golden/two_targets_a.got.png");
+	gfxBase->ScreenshotPng(targetB, "assets/golden/two_targets_b.got.png");
 
 	CHECK(
 		bgl::test::MatchesGolden(

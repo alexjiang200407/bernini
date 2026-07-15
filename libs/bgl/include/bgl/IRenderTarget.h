@@ -21,7 +21,7 @@ namespace bgl
 	 * A render output: a swapchain (windowed) or offscreen backbuffers (headless),
 	 * plus depth, owned independently of the renderer. One Graphics can drive many
 	 * RenderTargets. Created with IGraphics::CreateRenderTarget and passed to
-	 * IGraphics::BeginFrame / Resize / ScreenshotRaw.
+	 * IGraphics::BeginFrame / Resize / ScreenshotPng.
 	 */
 	class BGL_API IRenderTarget : public core::Ref
 	{

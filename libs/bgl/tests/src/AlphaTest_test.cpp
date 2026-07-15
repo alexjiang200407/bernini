@@ -129,7 +129,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
 		gfx->DrawFrame(target, context);
-		gfx->ScreenshotRaw(target, "assets/golden/alpha_test_plane.got.png");
+		gfx->ScreenshotPng(target, "assets/golden/alpha_test_plane.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -154,7 +154,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
 		gfx->DrawFrame(target, context);
-		gfx->ScreenshotRaw(target, "assets/golden/alpha_test_opaque.got.png");
+		gfx->ScreenshotPng(target, "assets/golden/alpha_test_opaque.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -251,7 +251,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
 		gfx->DrawFrame(target, context);
-		gfx->ScreenshotRaw(target, "assets/golden/alpha_test_leaf.got.png");
+		gfx->ScreenshotPng(target, "assets/golden/alpha_test_leaf.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -275,7 +275,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
 		gfx->DrawFrame(target, context);
-		gfx->ScreenshotRaw(target, "assets/golden/alpha_test_leaf_opaque.got.png");
+		gfx->ScreenshotPng(target, "assets/golden/alpha_test_leaf_opaque.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
