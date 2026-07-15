@@ -46,11 +46,22 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 ## Shaders
 
 - Shaders are compiled at runtime. `IShader`/`CreateShader(module, entry)` only names a Slang
-  module + entry point; the actual DXIL is generated per-PSO in `pipeline_util::BuildPipelineLayout`,
-  which links all of a PSO's entry points into one program and pulls both the bytecode
-  (`getEntryPointCode`) and the reflection/root-signature from that single linked program. Because
-  both come from the same link, bindings always agree — shaders do **not** need explicit
-  `register(bN, spaceM)` on their constant buffers.
+  module + entry point; the module source is loaded **lazily** (first `GetSlangModule()`), and the
+  actual DXIL is generated per-PSO in `pipeline_util::BuildPipelineLayout`, which links all of a
+  PSO's entry points into one program and pulls both the bytecode (`getEntryPointCode`) and the
+  reflection/root-signature from that single linked program. Because both come from the same link,
+  bindings always agree — shaders do **not** need explicit `register(bN, spaceM)` on their constant
+  buffers.
+- A persistent shader cache (`src/d3d12/shadercache`, enabled by `GraphicsOptions::shaderCacheDir`)
+  short-circuits both slow stages: a program cache holds DXIL + serialized reflection (skipping the
+  whole Slang compile — a hit never even loads the module), and an `ID3D12PipelineLibrary` holds the
+  driver-compiled PSO. It self-invalidates on any shader-source, compiler, or option change. To make
+  reflection cacheable and backend-agnostic, `Uniforms` is built from a serialized `ReflectedLayout`
+  POD (`src/uniforms`), not the live Slang reflection object.
+- Precompiled Slang IR modules (`.slang-module`) are **not** used: Slang 2026.7.x cannot resolve
+  cross-module generic specializations from separately-serialized modules, and the shader layer
+  leans on generics heavily (`idl.Entry`, `idl.Range`, the `types.*Buffer` bindless primitives), so
+  a stray `.slang-module` on the search path poisons every consumer with no source fallback.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`), which are
   staged into each target's output dir by the `bgl_copy_shader_src` / `bgl_copy_shader_tests`
   targets. A new `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its

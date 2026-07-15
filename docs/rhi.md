@@ -64,6 +64,19 @@ doc and a header disagree, trust the header, then fix this doc.
   Creation and command recording run on the render thread and must be externally synchronized.
   A command list is single-threaded between `Open` and `Close`.
 
+* **The shader cache is configuration, not an RHI object.** Compiling shaders is slow (front-end
+  parse dominates) and is otherwise paid on every launch. A persistent, backend-owned cache avoids
+  it, but it is an internal optimization — not a caller-visible resource — so it is **not** an `I*`
+  interface. The only thing that crosses the RHI boundary is one API-agnostic knob,
+  `GraphicsOptions::shaderCacheDir` (empty ⇒ disabled), just like the descriptor-heap capacities.
+  The `Device` owns the cache and consults it transparently during pipeline creation; callers see no
+  signature change. The cache has two layers, each skipping a different compile stage: a program
+  cache (DXIL + serialized reflection) skips the whole Slang pipeline, and an `ID3D12PipelineLibrary`
+  skips the driver's DXIL→ISA compile. Both blob formats are the backend's private business — a
+  future Vulkan backend reads the same directory and backs it with `VkPipelineCache`. To keep this
+  possible, reflection is decoupled from the live Slang reflection object into a serializable
+  `ReflectedLayout` POD (what `Uniforms` is built from).
+
 ---
 
 ## Interface Index
@@ -215,12 +228,15 @@ Everything else is self-explanatory from the header.
 ### IDevice
 
 * **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
-  defaults to `"main"`. No bytecode is loaded here. The module source is resolved through the
-  device's Slang session search paths (`./shaders/src`, `./shaders/tests`), so run binaries with
-  cwd set to their output dir (see project scripts). The DXIL is generated per-PSO at pipeline
-  creation: `BuildPipelineLayout` links all of a PSO's entry points into one program and pulls
-  both the bytecode (`getEntryPointCode`) and the reflection/root-signature from that single
-  linked program, so bindings always agree (no per-shader `register(bN, spaceM)` needed).
+  defaults to `"main"`. No source is read here: the Slang module is **loaded lazily** on the first
+  `GetSlangModule()`, which only happens when a PSO must actually compile (a shader-cache miss). The
+  module source is resolved through the device's Slang session search paths (`./shaders/src`,
+  `./shaders/tests`), so run binaries with cwd set to their output dir (see project scripts). The
+  DXIL and reflection are generated per-PSO at pipeline creation: `BuildPipelineLayout` links all of
+  a PSO's entry points into one program and pulls both the bytecode (`getEntryPointCode`) and the
+  reflection/root-signature from that single linked program, so bindings always agree (no per-shader
+  `register(bN, spaceM)` needed). On a **shader-cache hit** none of this runs — the DXIL and
+  reflection come straight off disk and no Slang module is loaded at all.
 
 ### Uniforms / Kernel
 

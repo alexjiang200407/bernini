@@ -1,6 +1,7 @@
 #include "pipeline/ComputePipeline_d3d12.h"
 #include "pipeline/util.h"
 #include "resource/Shader.h"
+#include "shadercache/ShaderCache_d3d12.h"
 
 // clang-format off
 #pragma warning(push)
@@ -24,6 +25,7 @@ namespace bgl
 	ComputePipeline::ComputePipeline(
 		ID3D12Device*              device,
 		slang::ISession*           session,
+		ShaderCache*               cache,
 		const ComputePipelineDesc& desc) : m_Desc(desc)
 	{
 		gassert(session != nullptr, "Session cannot be null");
@@ -34,9 +36,8 @@ namespace bgl
 		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
 
 		pipeline_util::PipelineLayout pipelineLayout =
-			pipeline_util::BuildPipelineLayout(device, session, { desc.shader });
+			pipeline_util::BuildPipelineLayout(device, session, cache, { desc.shader });
 
-		m_LinkedProgram        = std::move(pipelineLayout.linkedProgram);
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
@@ -51,15 +52,26 @@ namespace bgl
 		psoDesc.RootSignature      = m_RootSignature.Get();
 
 		psoDesc.ComputeShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
-		psoDesc.ComputeShader      = D3D12_SHADER_BYTECODE{ codeIt->second->getBufferPointer(),
-			                                                codeIt->second->getBufferSize() };
+		psoDesc.ComputeShader =
+			D3D12_SHADER_BYTECODE{ codeIt->second.data(), codeIt->second.size() };
 
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
 		streamDesc.SizeInBytes                   = sizeof(ComputePsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
-			d3d12ErrChecker;
+		const uint64_t identity =
+			cache != nullptr ?
+				ShaderCache::CombineHash(0, codeIt->second.data(), codeIt->second.size()) :
+				0;
+
+		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
+		{
+			device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
+				d3d12ErrChecker;
+
+			if (cache != nullptr)
+				cache->StorePipeline(identity, m_PipelineState.Get());
+		}
 	}
 
 	ComputePipeline::~ComputePipeline() noexcept

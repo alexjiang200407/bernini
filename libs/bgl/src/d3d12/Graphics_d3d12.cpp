@@ -364,7 +364,10 @@ namespace bgl
 
 		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
 
-		m_Device = core::SharedRef<Device>::Make(m_D3D12Device, m_SlangGlobalSession);
+		m_Device = core::SharedRef<Device>::Make(
+			m_D3D12Device,
+			m_SlangGlobalSession,
+			m_Opts.shaderCacheDir);
 
 		// Route debug-layer and GPU-based-validation messages (which otherwise only
 		// reach an attached debugger) into the spdlog log.

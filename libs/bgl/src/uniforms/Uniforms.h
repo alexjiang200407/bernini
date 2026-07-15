@@ -5,40 +5,14 @@
 #include "resource/Shader.h"
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
+#include "uniforms/ReflectedLayout.h"
+#include "uniforms/UniformValueType.h"
 #include <core/err/util.h>
 
 namespace bgl
 {
 	class IMeshletPipeline;
 	class IComputePipeline;
-
-	enum class UniformType
-	{
-		kArray,
-		kStruct,
-		kValue,
-		kNull,
-	};
-
-	enum class UniformValueType
-	{
-		kInt,
-		kInt2,
-		kInt3,
-		kInt4,
-		kUInt,
-		kUInt2,
-		kDescriptorHandle = kUInt2,
-		kUInt3,
-		kUInt4,
-		kFloat,
-		kFloat2,
-		kFloat3,
-		kFloat4,
-		kBool,
-		kMat4x4,
-		kNone,
-	};
 
 	namespace detail
 	{
@@ -397,11 +371,8 @@ namespace bgl
 		}
 
 	private:
-		static UniformValueType
-		ResolveScalarType(slang::TypeReflection* type);
-
 		static std::unique_ptr<detail::UniformsNode>
-		BuildNode(slang::TypeLayoutReflection* typeLayout);
+		BuildNode(const ReflectedLayout& layout);
 
 	private:
 		std::unique_ptr<detail::UniformsNode> m_Root           = nullptr;
