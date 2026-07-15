@@ -1,34 +1,13 @@
 #pragma once
 #include <spdlog/sinks/basic_file_sink.h>
 
-namespace bgl
-{
-	template <typename... Args>
-	void
-	gassert(bool condition, fmt::format_string<Args...> msg, Args&&... args)
-	{
-		if (!condition)
-		{
-			// Pass fmt::forward to preserve types correctly
-			logger::error(msg, std::forward<Args>(args)...);
-#if defined(_MSC_VER)
-			__debugbreak();
+// A breakpoint only under a debug build: __debugbreak() in a shipping build raises a breakpoint
+// exception that crashes the process whether or not a debugger is attached.
+#if defined(_MSC_VER) && !defined(NDEBUG)
+#	define GDEBUG_BREAK() __debugbreak()
+#else
+#	define GDEBUG_BREAK() ((void)0)
 #endif
-			std::terminate();
-		}
-	}
-
-	template <typename... Args>
-	[[noreturn]] void
-	gfatal(fmt::format_string<Args...> msg, Args&&... args)
-	{
-		logger::critical(msg, std::forward<Args>(args)...);
-
-#if defined(_MSC_VER)
-		__debugbreak();
-#endif
-		std::terminate();
-	}
 
 #define GWARN_ONCE(fmt_str, ...)                  \
 	do                                            \
@@ -41,14 +20,35 @@ namespace bgl
 		}                                         \
 	} while (0)
 
+namespace bgl
+{
 	template <typename... Args>
 	void
-	gerror(fmt::format_string<Args...> msg, Args&&... args)
+	gassert(bool condition, fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		if (!condition)
+		{
+			// Pass fmt::forward to preserve types correctly
+			logger::error(msg, std::forward<Args>(args)...);
+			GDEBUG_BREAK();
+			std::terminate();
+		}
+	}
+
+	template <typename... Args>
+	[[noreturn]] void
+	gfatal(fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		logger::critical(msg, std::forward<Args>(args)...);
+		GDEBUG_BREAK();
+		std::terminate();
+	}
+
+	template <typename... Args>
+	void
+	gerror(fmt::format_string<Args...> msg, Args&&... args) noexcept
 	{
 		logger::error(msg, std::forward<Args>(args)...);
-
-#if defined(_MSC_VER)
-		__debugbreak();
-#endif
+		GDEBUG_BREAK();
 	}
 }
