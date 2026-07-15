@@ -18,7 +18,7 @@ namespace bgl
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
 		m_EnableDebug(enableDebug), m_Wnd(desc.wnd), m_Width(desc.width), m_Height(desc.height)
 	{
-		for (UINT i = 0; i < c_BufferCount; i++)
+		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
 			m_CommandAllocator[i] = m_Device->CreateCommandAllocator();
 		}
@@ -51,7 +51,7 @@ namespace bgl
 
 		m_SwapChain.Reset();
 
-		for (UINT i = 0; i < c_BufferCount; i++)
+		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
 			m_CommandAllocator[i].Reset();
 		}
@@ -64,7 +64,7 @@ namespace bgl
 		sd.Width                 = static_cast<UINT>(m_Width);
 		sd.Height                = static_cast<UINT>(m_Height);
 		sd.Format                = DXGI_FORMAT_B8G8R8A8_UNORM;
-		sd.BufferCount           = c_BufferCount;
+		sd.BufferCount           = c_SwapchainImageCount;
 		sd.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.SwapEffect            = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		sd.Scaling               = DXGI_SCALING_STRETCH;
@@ -92,14 +92,14 @@ namespace bgl
 	{
 		{
 			TextureDesc textureDesc{};
-			textureDesc.format       = Format::BGRA8_UNORM;
-			textureDesc.width        = static_cast<uint32_t>(m_Width);
-			textureDesc.height       = static_cast<uint32_t>(m_Height);
-			textureDesc.dimension    = TextureDimension::kTexture2D;
-			textureDesc.usage        = TextureUsageFlag::kRenderTarget;
-			textureDesc.initalLayout = BarrierLayout::kPresent;
+			textureDesc.format        = Format::BGRA8_UNORM;
+			textureDesc.width         = static_cast<uint32_t>(m_Width);
+			textureDesc.height        = static_cast<uint32_t>(m_Height);
+			textureDesc.dimension     = TextureDimension::kTexture2D;
+			textureDesc.usage         = TextureUsageFlag::kRenderTarget;
+			textureDesc.initialLayout = BarrierLayout::kPresent;
 
-			for (UINT i = 0; i < c_BufferCount; i++)
+			for (UINT i = 0; i < c_SwapchainImageCount; i++)
 			{
 				wrl::ComPtr<ID3D12Resource> backBuffer;
 				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
@@ -119,14 +119,14 @@ namespace bgl
 		}
 
 		{
-			auto depthTextureDesc         = TextureDesc();
-			depthTextureDesc.format       = Format::D24S8;
-			depthTextureDesc.width        = static_cast<uint32_t>(m_Width);
-			depthTextureDesc.height       = static_cast<uint32_t>(m_Height);
-			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
-			depthTextureDesc.debugName    = "Depth Buffer";
-			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
-			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
+			auto depthTextureDesc          = TextureDesc();
+			depthTextureDesc.format        = Format::D24S8;
+			depthTextureDesc.width         = static_cast<uint32_t>(m_Width);
+			depthTextureDesc.height        = static_cast<uint32_t>(m_Height);
+			depthTextureDesc.dimension     = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName     = "Depth Buffer";
+			depthTextureDesc.usage         = TextureUsageFlag::kDepthStencil;
+			depthTextureDesc.initialLayout = BarrierLayout::kDepthWrite;
 
 			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
 
@@ -145,7 +145,7 @@ namespace bgl
 	RenderTarget::CreateOffscreenRenderTargets()
 	{
 		{
-			for (auto i = 0u; i < c_BufferCount; i++)
+			for (auto i = 0u; i < c_SwapchainImageCount; i++)
 			{
 				auto texDesc      = TextureDesc();
 				texDesc.width     = static_cast<uint32_t>(m_Width);
@@ -168,14 +168,14 @@ namespace bgl
 		}
 
 		{
-			auto depthTextureDesc         = TextureDesc();
-			depthTextureDesc.format       = Format::D24S8;
-			depthTextureDesc.width        = static_cast<uint32_t>(m_Width);
-			depthTextureDesc.height       = static_cast<uint32_t>(m_Height);
-			depthTextureDesc.dimension    = TextureDimension::kTexture2D;
-			depthTextureDesc.debugName    = "Depth Buffer";
-			depthTextureDesc.usage        = TextureUsageFlag::kDepthStencil;
-			depthTextureDesc.initalLayout = BarrierLayout::kDepthWrite;
+			auto depthTextureDesc          = TextureDesc();
+			depthTextureDesc.format        = Format::D24S8;
+			depthTextureDesc.width         = static_cast<uint32_t>(m_Width);
+			depthTextureDesc.height        = static_cast<uint32_t>(m_Height);
+			depthTextureDesc.dimension     = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName     = "Depth Buffer";
+			depthTextureDesc.usage         = TextureUsageFlag::kDepthStencil;
+			depthTextureDesc.initialLayout = BarrierLayout::kDepthWrite;
 
 			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
 
@@ -193,7 +193,7 @@ namespace bgl
 	void
 	RenderTarget::DestroyRenderTargets(uint64_t fenceValue)
 	{
-		for (UINT i = 0; i < c_BufferCount; i++)
+		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
 			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, fenceValue, false);
 			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, fenceValue, false);

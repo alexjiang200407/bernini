@@ -134,7 +134,7 @@ namespace bgl
 		 * the next frame's inspection).
 		 *
 		 * Lifetime note tied to frame latency: assertions are read back and reported a
-		 * few frames AFTER they fire (the readback ring is c_BufferCount deep), so the
+		 * few frames AFTER they fire (the readback ring is c_SwapchainImageCount deep), so the
 		 * handler object must stay valid across that window -- simplest rule: it must
 		 * outlive this IGraphics. Clearing to nullptr does not cancel an already
 		 * in-flight assertion; that pending report then falls back to the crash path --

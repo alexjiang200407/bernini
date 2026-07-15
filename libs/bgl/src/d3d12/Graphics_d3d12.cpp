@@ -296,8 +296,8 @@ namespace bgl
 		static constexpr uint32_t c_DebugBufferCapacity = 256;
 
 		DebugBuffer          m_DebugBuffer;
-		ReadbackBufferHandle m_DebugReadbacks[c_BufferCount];
-		bool                 m_DebugReadbackPending[c_BufferCount] = {};
+		ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
+		bool                 m_DebugReadbackPending[c_SwapchainImageCount] = {};
 #endif
 	};
 }
@@ -442,7 +442,7 @@ namespace bgl
 		// The GPU is idle (flushed above), so assertions from the final frames whose slot
 		// was never reused by a later BeginFrame are now safe to inspect -- drain them so
 		// tail-frame (and few-frame) assertions are not silently missed.
-		for (uint32_t i = 0; i < c_BufferCount; ++i)
+		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
 		{
 			InspectDebugSlot(i);
 		}
@@ -696,7 +696,7 @@ namespace bgl
 		// Snapshot this frame's GPU assertions into the slot's readback buffer, then
 		// leave the debug buffer in copy-dest ready for next frame's reset. The copy
 		// rides this command list, gated by rt.m_FenceValues[index] set below; it is
-		// inspected at the BeginFrame that reuses this slot (~c_BufferCount frames on).
+		// inspected at the BeginFrame that reuses this slot (~c_SwapchainImageCount frames on).
 		m_CommandList->BeginEvent("GPU Debug Buffer Readback");
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
@@ -736,7 +736,7 @@ namespace bgl
 
 		if (rt.m_Headless)
 		{
-			rt.m_FrameIndex = (index + 1) % c_BufferCount;
+			rt.m_FrameIndex = (index + 1) % c_SwapchainImageCount;
 		}
 		else
 		{
@@ -785,8 +785,12 @@ namespace bgl
 
 		if (!rt.m_Headless)
 		{
-			rt.m_SwapChain
-					->ResizeBuffers(c_BufferCount, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0) >>
+			rt.m_SwapChain->ResizeBuffers(
+				c_SwapchainImageCount,
+				width,
+				height,
+				DXGI_FORMAT_B8G8R8A8_UNORM,
+				0) >>
 				d3d12ErrChecker;
 
 			rt.m_FrameIndex = rt.m_SwapChain->GetCurrentBackBufferIndex();

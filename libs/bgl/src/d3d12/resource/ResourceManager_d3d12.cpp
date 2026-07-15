@@ -241,8 +241,8 @@ namespace bgl
 		desc.usage     = TextureUsageFlag::kSRV;
 		desc.dimension =
 			image.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
-		desc.initalLayout = BarrierLayout::kCopyDest;
-		desc.debugName    = std::move(debugName);
+		desc.initialLayout = BarrierLayout::kCopyDest;
+		desc.debugName     = std::move(debugName);
 
 		std::vector<TextureSubresourceData> subresources;
 		subresources.reserve(image.subresources.size());
@@ -260,12 +260,12 @@ namespace bgl
 		const uint8_t pixel[4] = { r, g, b, a };
 
 		TextureDesc desc;
-		desc.width        = 1;
-		desc.height       = 1;
-		desc.format       = Format::RGBA8_UNORM;
-		desc.usage        = TextureUsageFlag::kSRV;
-		desc.initalLayout = BarrierLayout::kCopyDest;
-		desc.debugName    = "Solid Texture";
+		desc.width         = 1;
+		desc.height        = 1;
+		desc.format        = Format::RGBA8_UNORM;
+		desc.usage         = TextureUsageFlag::kSRV;
+		desc.initialLayout = BarrierLayout::kCopyDest;
+		desc.debugName     = "Solid Texture";
 
 		// Procedural, not a file load: build the 1x1 pixel and go through the same raw
 		// upload path as any other texture.

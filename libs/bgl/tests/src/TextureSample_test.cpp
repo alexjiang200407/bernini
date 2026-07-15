@@ -51,13 +51,13 @@ TEST_CASE(
 	debugBuffer.Init(kCapacity, resourceManager);
 
 	// A 1x1 RGBA8 texture we will upload a known red texel into.
-	auto texDesc         = bgl::TextureDesc();
-	texDesc.width        = 1;
-	texDesc.height       = 1;
-	texDesc.format       = bgl::Format::RGBA8_UNORM;
-	texDesc.usage        = bgl::TextureUsageFlag::kSRV;
-	texDesc.initalLayout = bgl::BarrierLayout::kCopyDest;
-	texDesc.debugName    = "Texture Sample Test";
+	auto texDesc          = bgl::TextureDesc();
+	texDesc.width         = 1;
+	texDesc.height        = 1;
+	texDesc.format        = bgl::Format::RGBA8_UNORM;
+	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.debugName     = "Texture Sample Test";
 
 	auto texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));

@@ -91,10 +91,10 @@ namespace bgl
 
 		UINT             m_FrameIndex         = 0;
 		UINT             m_LastPresentedIndex = 0;
-		TextureRtvHandle m_BackBuffers[c_BufferCount];
+		TextureRtvHandle m_BackBuffers[c_SwapchainImageCount];
 		TextureDsvHandle m_DepthBuffer;
-		UINT64           m_FenceValues[c_BufferCount] = { 0, 0 };
+		UINT64           m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
 
-		CommandAllocatorHandle m_CommandAllocator[c_BufferCount];
+		CommandAllocatorHandle m_CommandAllocator[c_SwapchainImageCount];
 	};
 }
