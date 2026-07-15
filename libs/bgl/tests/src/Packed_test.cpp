@@ -252,5 +252,34 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		CHECK_FALSE(pb.IsBlockDirty(9999));
 	}
 
+	SECTION("Update skips a block left dirty above the shrunken size")
+	{
+		auto desc      = bgl::PackedBufferDesc();
+		desc.maxCount  = 8;
+		desc.blockSize = 2 * sizeof(int);  // Two elements per block => 4 blocks.
+		desc.debugName = "PackedBuffer Underflow";
+
+		auto pb = PackedInt(desc, resourceManager);
+
+		std::vector<PackedInt::Handle> handles;
+		for (int i = 0; i < 8; ++i) handles.push_back(pb.EmplaceBack(i));
+
+		pb.Update(cmdList);
+		REQUIRE(pb.CountDirtyBlocks() == 0);
+
+		// Dirty the top block, then erase from the tail so nothing swaps: the top
+		// block stays dirty while the data shrinks to cover only block 0.
+		pb.Set(handles.back(), 700);
+		for (size_t i = handles.size(); i-- > 1;) pb.Erase(handles[i]);
+
+		REQUIRE(pb.Count() == 1);
+		CHECK(pb.IsBlockDirty(3));
+
+		// Without the offset >= totalBytes guard this issues a ~4 GB WriteBuffer.
+		pb.Update(cmdList);
+		CHECK(pb.CountDirtyBlocks() == 0);
+		CHECK(pb[handles.front()] == 0);
+	}
+
 	cmdList->Close();
 }

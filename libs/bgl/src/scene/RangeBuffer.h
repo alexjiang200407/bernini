@@ -351,6 +351,11 @@ namespace bgl
 			const uint32_t offset = startBlk * m_Desc.blockSize;
 			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
 
+			if (offset >= totalBytes)
+			{
+				return;
+			}
+
 			if (offset + size > totalBytes)
 			{
 				size = totalBytes - offset;
