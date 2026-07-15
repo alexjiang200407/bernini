@@ -278,7 +278,7 @@ namespace bgl
 					}
 				}
 
-				if (auto anisoUniform = matData["anisioLinearWrapSampler"]; anisoUniform.IsValid())
+				if (auto anisoUniform = matData["anisoLinearWrapSampler"]; anisoUniform.IsValid())
 				{
 					anisoUniform = draw.anisoLinearWrapSampler;
 				}
