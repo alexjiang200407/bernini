@@ -28,6 +28,22 @@ TEST_CASE("slot_vector reuses released slots and refuses to overrun maxSlots", "
 	REQUIRE(slots.allocated(b.index));
 }
 
+TEST_CASE("slot_vector try_allocate returns a null handle on exhaustion", "[slot_vector]")
+{
+	core::slot_vector<int> slots(2);
+
+	REQUIRE_FALSE(slots.try_allocate_slot().is_null());
+	auto b = slots.try_allocate_and_emplace(5);
+	REQUIRE(slots[b] == 5);
+
+	// The pool is full: try_ hands back null where allocate_slot would throw.
+	REQUIRE(slots.try_allocate_slot().is_null());
+
+	// A freed slot is allocatable again.
+	slots.release_slot(b);
+	REQUIRE_FALSE(slots.try_allocate_slot().is_null());
+}
+
 TEST_CASE("slot_vector emplaces into a reused slot", "[slot_vector]")
 {
 	core::slot_vector<int> slots(2);

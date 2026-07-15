@@ -47,19 +47,33 @@ namespace core
 			return allocate_and_emplace();
 		}
 
+		// Returns a null handle when the pool is exhausted rather than throwing.
+		[[nodiscard]] slot_handle
+		try_allocate_slot()
+		{
+			return try_allocate_and_emplace();
+		}
+
 		template <typename... Args>
 		[[nodiscard]] slot_handle
 		allocate_and_emplace(Args&&... args)
 		{
-			uint32_t index      = slot_handle::invalid_index;
-			uint32_t generation = 0;
+			slot_handle handle = try_allocate_and_emplace(std::forward<Args>(args)...);
+			if (handle.is_null())
+				throw std::runtime_error("slot_vector: no free slots remaining");
+			return handle;
+		}
 
+		template <typename... Args>
+		[[nodiscard]] slot_handle
+		try_allocate_and_emplace(Args&&... args)
+		{
 			if (!m_FreeIndices.empty())
 			{
-				index = m_FreeIndices.back();
+				const uint32_t index = m_FreeIndices.back();
 				m_FreeIndices.pop_back();
 
-				generation                 = m_Meta[index].generation;
+				const uint32_t generation  = m_Meta[index].generation;
 				m_Meta[index].is_allocated = true;
 
 				m_Data[index] = T(std::forward<Args>(args)...);
@@ -69,10 +83,10 @@ namespace core
 
 			if (m_MaxSlots != 0 && m_Data.size() >= m_MaxSlots)
 			{
-				throw std::runtime_error("slot_vector: no free slots remaining");
+				return {};
 			}
 
-			index = static_cast<uint32_t>(m_Data.size());
+			const uint32_t index = static_cast<uint32_t>(m_Data.size());
 
 			m_Data.emplace_back(std::forward<Args>(args)...);
 
@@ -81,7 +95,7 @@ namespace core
 			meta.is_allocated = true;
 			m_Meta.push_back(meta);
 
-			return { index, generation };
+			return { index, 0 };
 		}
 
 		/**

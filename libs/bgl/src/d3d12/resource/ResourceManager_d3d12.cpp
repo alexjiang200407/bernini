@@ -68,7 +68,12 @@ namespace bgl
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
-		auto bufferSlotHandle = m_CbvSrvUavSlots.allocate_slot();
+		auto bufferSlotHandle = m_CbvSrvUavSlots.try_allocate_slot();
+		if (bufferSlotHandle.is_null())
+		{
+			logger::error("CreateStructBuffer '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
+			return BufferHandle{};
+		}
 
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
@@ -140,7 +145,12 @@ namespace bgl
 		// shader-visible descriptor slot.
 		if (desc.usage.any(TextureUsageFlag::kSRV))
 		{
-			auto slot = m_CbvSrvUavSlots.allocate_slot();
+			auto slot = m_CbvSrvUavSlots.try_allocate_slot();
+			if (slot.is_null())
+			{
+				logger::error("CreateTexture '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
+				return TextureHandle{};
+			}
 
 			Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slot.index, desc);
 
@@ -154,7 +164,12 @@ namespace bgl
 			return TextureHandle{ slot, desc.usage };
 		}
 
-		auto slot              = m_Textures.allocate_slot();
+		auto slot = m_Textures.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
+			return TextureHandle{};
+		}
 		m_Textures[slot.index] = Texture(m_Device.Get(), nullptr, slot.index, desc);
 		return TextureHandle{ slot, desc.usage };
 	}
@@ -162,8 +177,13 @@ namespace bgl
 	SamplerHandle
 	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
-		auto     samplerSlotHandle = m_Samplers.allocate_slot();
-		uint32_t slotIndex         = samplerSlotHandle.index;
+		auto samplerSlotHandle = m_Samplers.try_allocate_slot();
+		if (samplerSlotHandle.is_null())
+		{
+			logger::error("CreateSampler: sampler pool exhausted");
+			return SamplerHandle{};
+		}
+		uint32_t slotIndex = samplerSlotHandle.index;
 
 		Sampler sampler(m_Device.Get(), m_SamplerHeap.Get(), slotIndex, desc);
 
@@ -289,7 +309,12 @@ namespace bgl
 	{
 		gassert(desc.byteSize > 0, "Readback buffer requires a positive byte size");
 
-		auto     slot      = m_ReadbackBuffers.allocate_slot();
+		auto slot = m_ReadbackBuffers.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateReadbackBuffer: readback pool exhausted");
+			return ReadbackBufferHandle{};
+		}
 		uint32_t slotIndex = slot.index;
 
 		m_ReadbackBuffers[slotIndex] = ReadbackBuffer(m_Device.Get(), desc);
@@ -304,7 +329,12 @@ namespace bgl
 	{
 		if (desc.usage.any(TextureUsageFlag::kSRV))
 		{
-			auto slot = m_CbvSrvUavSlots.allocate_slot();
+			auto slot = m_CbvSrvUavSlots.try_allocate_slot();
+			if (slot.is_null())
+			{
+				logger::error("CreateTexture '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
+				return TextureHandle{};
+			}
 
 			Texture texture(
 				m_Device.Get(),
@@ -323,7 +353,12 @@ namespace bgl
 			return TextureHandle{ slot, desc.usage };
 		}
 
-		auto slot = m_Textures.allocate_slot();
+		auto slot = m_Textures.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
+			return TextureHandle{};
+		}
 		m_Textures[slot.index] =
 			Texture(m_Device.Get(), nullptr, slot.index, std::move(d3d12Texture), desc);
 		return TextureHandle{ slot, desc.usage };
@@ -334,7 +369,12 @@ namespace bgl
 	{
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
-		auto                        rtvSlotHandle = m_Rtvs.allocate_slot();
+		auto                        rtvSlotHandle = m_Rtvs.try_allocate_slot();
+		if (rtvSlotHandle.is_null())
+		{
+			logger::error("CreateRtv: RTV pool exhausted");
+			return RtvHandle{};
+		}
 
 		uint32_t descriptorIndex = rtvSlotHandle.index;
 		Rtv      rtv(m_Device.Get(), textureHandle, m_RtvHeap.Get(), descriptorIndex, desc);
@@ -761,7 +801,12 @@ namespace bgl
 	{
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
-		auto                        dsvSlotHandle = m_Dsvs.allocate_slot();
+		auto                        dsvSlotHandle = m_Dsvs.try_allocate_slot();
+		if (dsvSlotHandle.is_null())
+		{
+			logger::error("CreateDsv: DSV pool exhausted");
+			return DsvHandle{};
+		}
 
 		uint32_t descriptorIndex = dsvSlotHandle.index;
 		Dsv      dsv(m_Device.Get(), textureHandle, m_DsvHeap.Get(), descriptorIndex, desc);
