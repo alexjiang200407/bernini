@@ -163,6 +163,8 @@ namespace bgl
 			else
 			{
 				m_CurrentChunk = CreateChunk(sizeToAllocate);
+				if (!m_CurrentChunk)
+					return false;
 			}
 		}
 
