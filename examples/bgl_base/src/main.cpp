@@ -76,6 +76,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enableGPUValidationLayer = false;
 		gfxOpts.enablePixDebug           = true;
 		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
+		gfxOpts.shaderCacheDir           = "shadercache";
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
 
