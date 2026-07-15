@@ -61,6 +61,10 @@ FrameGraph usage.
 
 Overview of all the Frame Graph Passes
 
+**[Shader Cache](./docs/shader_cache.md)**
+
+The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are cached to disk to skip shader compilation across runs, how it is invalidated, and why `.slang-module` IR is not used.
+
 **[IDL Codegen](./docs/idlgen.md)**
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
