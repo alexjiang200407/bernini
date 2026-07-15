@@ -6,7 +6,7 @@ namespace bgl::idl
 	struct RangeWithCount
 	{
 		Range    range;
-		uint32_t count;
+		uint32_t count = 0;
 
 		[[nodiscard]]
 		bool
@@ -23,4 +23,8 @@ namespace bgl::idl
 			return *this;
 		}
 	};
+
+	static_assert(
+		sizeof(RangeWithCount) == 2 * sizeof(uint32_t),
+		"RangeWithCount must mirror the Slang layout");
 }

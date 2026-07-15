@@ -6,7 +6,7 @@ namespace bgl::idl
 	struct Range
 	{
 	public:
-		uint32_t offsetStart;
+		uint32_t offsetStart = 0xFFFFFFFF;
 
 		[[nodiscard]]
 		bool
@@ -22,4 +22,6 @@ namespace bgl::idl
 			return *this;
 		}
 	};
+
+	static_assert(sizeof(Range) == sizeof(uint32_t), "Range must mirror the Slang layout");
 }
