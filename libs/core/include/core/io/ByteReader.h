@@ -1,7 +1,7 @@
 #pragma once
 #include <core/type_traits.h>
 
-namespace assetlib
+namespace core::io
 {
 	/** Bounds-checked forward cursor over a byte stream. Throws std::runtime_error on overrun. */
 	class ByteReader
@@ -19,7 +19,7 @@ namespace assetlib
 		readBytes(size_t count)
 		{
 			if (count > remaining())
-				throw std::runtime_error("bmesh: unexpected end of stream");
+				throw std::runtime_error("byte stream: unexpected end of stream");
 			const auto out = m_Bytes.subspan(m_Cursor, count);
 			m_Cursor += count;
 			return out;
@@ -39,7 +39,7 @@ namespace assetlib
 		seek(size_t offset)
 		{
 			if (offset > m_Bytes.size())
-				throw std::runtime_error("bmesh: seek out of range");
+				throw std::runtime_error("byte stream: seek out of range");
 			m_Cursor = offset;
 		}
 
