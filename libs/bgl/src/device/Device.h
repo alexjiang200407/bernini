@@ -69,7 +69,7 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandAllocator>
-		CreateCommandAllocator() const noexcept = 0;
+		CreateCommandAllocator(QueueType type = QueueType::kGraphics) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandQueue>
