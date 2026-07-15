@@ -31,10 +31,10 @@ namespace bgl
 			kOff,
 		};
 
-		bool enableDebugLayer;
-		bool enableGPUValidationLayer;
-		bool enablePixDebug;
-		bool strictError = false;
+		bool enableDebugLayer         = false;
+		bool enableGPUValidationLayer = false;
+		bool enablePixDebug           = false;
+		bool strictError              = false;
 
 		LogLevel logLevel = LogLevel::kError;
 
