@@ -11,10 +11,15 @@ config.json is git-ignored. It describes a machine, not the project -- see
 scripts/config.example.json for the shape and scripts/util/config.py for the
 schema.
 
-Also offers to install `just`, the task runner behind the root justfile. That is
-optional -- every recipe is a one-line call into these scripts, so
-`python scripts/build.py ...` works with or without it -- which is why this asks
-rather than installs.
+Also offers to install `just` (the task runner behind the root justfile) and the
+GitHub CLI `gh` (which bcp-revise uses for PR reviews). Both are optional -- every
+recipe is a one-line call into these scripts, so `python scripts/build.py ...`
+works without `just`, and only the review workflow needs `gh` -- which is why this
+asks rather than installs.
+
+Finally, offers to set up this developer's morgana-coding-agent key, which bcp-revise
+posts PR review replies with. Also optional, and skipped by a blank answer. See
+docs/ai-coding.md.
 
 Bootstrap this with `python scripts/init.py`; afterwards it is `just init`.
 
@@ -24,6 +29,8 @@ Usage:
     just init --show                                # print what would be written
     just init --force                               # overwrite without confirming
     just init --no-just                             # skip the `just` check
+    just init --no-gh                               # skip the GitHub CLI check
+    just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
 import argparse
@@ -36,6 +43,15 @@ import util.cmake_tools as ct
 import util.config as cfg
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
+
+# The shared morgana-coding-agent GitHub App that bcp-revise posts PR replies as. The
+# App ID is not a secret -- it identifies the App, the same one for everyone -- so it
+# lives here. Each developer supplies their own private key; see docs/ai-coding.md.
+BOT_APP_ID = "4304152"
+BOT_KEYS_URL = "https://github.com/settings/apps/morgana-coding-agent/keys"
+BOT_DIR = os.path.join(os.path.expanduser("~"), ".claude")
+BOT_KEY = os.path.join(BOT_DIR, "morgana-coding-agent.private-key.pem")
+BOT_ENV = os.path.join(BOT_DIR, "morgana-coding-agent.env")
 
 
 def selectable_presets():
@@ -147,6 +163,108 @@ def ensure_just():
         print("note: `just` isn't on PATH in this shell yet -- open a new one.")
 
 
+def ensure_hooks():
+    """Point git at the committed .githooks directory.
+
+    core.hooksPath is machine-local config, not committed, so a fresh clone has to
+    opt in once. The prepare-commit-msg hook there attributes commits to the
+    morgana-coding-agent bot; see docs/ai-coding.md.
+    """
+    hooks_dir = ".githooks"
+    try:
+        current = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"],
+            cwd=ct.REPO_ROOT, capture_output=True, text=True,
+        ).stdout.strip()
+    except OSError:
+        print("warning: git not found; skipped core.hooksPath setup.", file=sys.stderr)
+        return
+
+    if current == hooks_dir:
+        print(f"git hooks: {hooks_dir}")
+        return
+    if subprocess.run(["git", "config", "core.hooksPath", hooks_dir], cwd=ct.REPO_ROOT).returncode:
+        print("warning: could not set core.hooksPath.", file=sys.stderr)
+        return
+    print(f"git hooks: set core.hooksPath to {hooks_dir}")
+
+
+def find_gh():
+    """Path to the GitHub CLI, or None. Checks PATH, then the standard install dir.
+
+    winget installs gh under Program Files, which isn't necessarily on this
+    process's PATH even when it is on the user's -- so a PATH miss isn't absence.
+    """
+    found = shutil.which("gh")
+    if found:
+        return found
+    if sys.platform == "win32":
+        for var in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+            base = os.environ.get(var)
+            if base:
+                candidate = os.path.join(base, "GitHub CLI", "gh.exe")
+                if os.path.isfile(candidate):
+                    return candidate
+    return None
+
+
+def ensure_gh():
+    """Report on the GitHub CLI, which bcp-revise uses to read PR reviews and post
+    replies. It is not a Python package -- the `gh` on PyPI is an unrelated project --
+    so it is a manual install; only the review workflow needs it.
+    """
+    found = find_gh()
+    if found:
+        print(f"gh is installed: {found}")
+        if not shutil.which("gh"):
+            print(f"note: gh isn't on this shell's PATH; add {os.path.dirname(found)} to PATH.")
+        return
+    print("\ngh (GitHub CLI) was not found. bcp-revise uses it for PR reviews.\n"
+          "Install it from https://cli.github.com/ and add it to PATH; it is not a pip package.")
+
+
+def ensure_bot_key():
+    """Set up this developer's key for the morgana-coding-agent App bcp-revise posts with.
+
+    Optional: only devs who run the review-reply skill need it. Each dev uses their
+    own private key for the shared App, so a leaked key is revoked per person without
+    disturbing anyone else. The key is copied into ~/.claude (outside the repo, never
+    committed); the App ID is written beside it. See docs/ai-coding.md.
+    """
+    if os.path.isfile(BOT_KEY) and os.path.isfile(BOT_ENV):
+        print(f"bot key is configured: {BOT_KEY}")
+        return
+    if not interactive():
+        return
+
+    print("\nThe morgana-coding-agent GitHub App lets bcp-revise post PR review replies under a\n"
+          "bot identity instead of your own account. It is optional -- set it up only if you\n"
+          "run that skill. Generate your own private key (Generate a private key) at:\n"
+          f"    {BOT_KEYS_URL}\n"
+          "then give the path to the downloaded .pem. See docs/ai-coding.md.")
+    raw = ask("path to the bot private key .pem (blank to skip): ").strip('"')
+    if not raw:
+        print("skipped; bcp-revise posts as your own account until you run this again.")
+        return
+
+    src = os.path.expanduser(os.path.expandvars(raw))
+    if not os.path.isfile(src):
+        print(f"  '{raw}' does not exist; skipped.", file=sys.stderr)
+        return
+
+    os.makedirs(BOT_DIR, exist_ok=True)
+    shutil.copyfile(src, BOT_KEY)
+    with open(BOT_ENV, "w", encoding="utf-8") as fh:
+        fh.write(f"MORGANA_APP_ID={BOT_APP_ID}\n")
+        fh.write("MORGANA_KEY=~/.claude/morgana-coding-agent.private-key.pem\n")
+    for path in (BOT_KEY, BOT_ENV):
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass  # NTFS via Git Bash ignores mode bits; the files are in the user profile.
+    print(f"wrote {BOT_KEY}\nwrote {BOT_ENV}")
+
+
 def detect(preset, arch):
     """Work out the config for `preset`. Returns (config dict, [(label, value), ...])."""
     generator = ct.generator_of(preset)
@@ -234,6 +352,8 @@ def main():
     parser.add_argument("--force", action="store_true", help="Overwrite an existing config.json without asking.")
     parser.add_argument("--show", action="store_true", help="Print the config that would be written; write nothing.")
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
+    parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
+    parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
     existing = cfg.load()
@@ -264,6 +384,11 @@ def main():
     # After the config, so a failed/declined install never costs you the config.
     if not args.no_just:
         ensure_just()
+    if not args.no_gh:
+        ensure_gh()
+    ensure_hooks()
+    if not args.no_bot:
+        ensure_bot_key()
     return 0
 
 

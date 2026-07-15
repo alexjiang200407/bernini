@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+# Attribute AI-assisted commits to the morgana-coding-agent bot: append its
+# Co-authored-by trailer (once) and drop any Claude one, so the bot -- not a tool --
+# is the recorded co-author. GitHub matches co-authors by the no-reply email below.
+# Enabled by `git config core.hooksPath .githooks` (set by `just init`).
+# See docs/ai-coding.md.
+msg="$1"
+trailer='Co-authored-by: morgana-coding-agent[bot] <305433938+morgana-coding-agent[bot]@users.noreply.github.com>'
+
+# Attribute to the bot instead of the assistant tool.
+grep -vi '^Co-authored-by: Claude' "$msg" > "$msg.tmp" && mv "$msg.tmp" "$msg"
+
+# Nothing to do if the bot trailer is already present (e.g. an amend).
+grep -qF "$trailer" "$msg" && exit 0
+
+# Insert before the first comment line git will strip; append if there are none.
+awk -v t="$trailer" '
+  !placed && /^#/ { print t; placed = 1 }
+  { print }
+  END { if (!placed) { print ""; print t } }
+' "$msg" > "$msg.tmp" && mv "$msg.tmp" "$msg"
