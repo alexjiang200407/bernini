@@ -975,21 +975,21 @@ namespace bgl
 	{
 		switch (value)
 		{
-		case StencilOp::Keep:
+		case StencilOp::kKeep:
 			return D3D12_STENCIL_OP_KEEP;
-		case StencilOp::Zero:
+		case StencilOp::kZero:
 			return D3D12_STENCIL_OP_ZERO;
-		case StencilOp::Replace:
+		case StencilOp::kReplace:
 			return D3D12_STENCIL_OP_REPLACE;
-		case StencilOp::IncrementAndClamp:
+		case StencilOp::kIncrementAndClamp:
 			return D3D12_STENCIL_OP_INCR_SAT;
-		case StencilOp::DecrementAndClamp:
+		case StencilOp::kDecrementAndClamp:
 			return D3D12_STENCIL_OP_DECR_SAT;
-		case StencilOp::Invert:
+		case StencilOp::kInvert:
 			return D3D12_STENCIL_OP_INVERT;
-		case StencilOp::IncrementAndWrap:
+		case StencilOp::kIncrementAndWrap:
 			return D3D12_STENCIL_OP_INCR;
-		case StencilOp::DecrementAndWrap:
+		case StencilOp::kDecrementAndWrap:
 			return D3D12_STENCIL_OP_DECR;
 		default:
 			gfatal("Unknown StencilOp value");
@@ -1001,21 +1001,21 @@ namespace bgl
 	{
 		switch (value)
 		{
-		case ComparisonFunc::Never:
+		case ComparisonFunc::kNever:
 			return D3D12_COMPARISON_FUNC_NEVER;
-		case ComparisonFunc::Less:
+		case ComparisonFunc::kLess:
 			return D3D12_COMPARISON_FUNC_LESS;
-		case ComparisonFunc::Equal:
+		case ComparisonFunc::kEqual:
 			return D3D12_COMPARISON_FUNC_EQUAL;
-		case ComparisonFunc::LessOrEqual:
+		case ComparisonFunc::kLessOrEqual:
 			return D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		case ComparisonFunc::Greater:
+		case ComparisonFunc::kGreater:
 			return D3D12_COMPARISON_FUNC_GREATER;
-		case ComparisonFunc::NotEqual:
+		case ComparisonFunc::kNotEqual:
 			return D3D12_COMPARISON_FUNC_NOT_EQUAL;
-		case ComparisonFunc::GreaterOrEqual:
+		case ComparisonFunc::kGreaterOrEqual:
 			return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-		case ComparisonFunc::Always:
+		case ComparisonFunc::kAlways:
 			return D3D12_COMPARISON_FUNC_ALWAYS;
 		default:
 			gfatal("Unknown ComparisonFunc value");
@@ -1057,15 +1057,15 @@ namespace bgl
 	{
 		switch (mode)
 		{
-		case SamplerAddressMode::Clamp:
+		case SamplerAddressMode::kClamp:
 			return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		case SamplerAddressMode::Wrap:
+		case SamplerAddressMode::kWrap:
 			return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		case SamplerAddressMode::Border:
+		case SamplerAddressMode::kBorder:
 			return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		case SamplerAddressMode::Mirror:
+		case SamplerAddressMode::kMirror:
 			return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-		case SamplerAddressMode::MirrorOnce:
+		case SamplerAddressMode::kMirrorOnce:
 			return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
 		}
 		gfatal("Unsupported sampler address mode: {}", static_cast<uint32_t>(mode));
@@ -1077,16 +1077,16 @@ namespace bgl
 		D3D12_FILTER_REDUCTION_TYPE reduction;
 		switch (desc.reductionType)
 		{
-		case SamplerReductionType::Standard:
+		case SamplerReductionType::kStandard:
 			reduction = D3D12_FILTER_REDUCTION_TYPE_STANDARD;
 			break;
-		case SamplerReductionType::Comparison:
+		case SamplerReductionType::kComparison:
 			reduction = D3D12_FILTER_REDUCTION_TYPE_COMPARISON;
 			break;
-		case SamplerReductionType::Minimum:
+		case SamplerReductionType::kMinimum:
 			reduction = D3D12_FILTER_REDUCTION_TYPE_MINIMUM;
 			break;
-		case SamplerReductionType::Maximum:
+		case SamplerReductionType::kMaximum:
 			reduction = D3D12_FILTER_REDUCTION_TYPE_MAXIMUM;
 			break;
 		default:
@@ -1119,7 +1119,7 @@ namespace bgl
 
 		d3d12Desc.MipLODBias     = desc.mipBias;
 		d3d12Desc.MaxAnisotropy  = static_cast<UINT>(desc.maxAnisotropy);
-		d3d12Desc.ComparisonFunc = desc.reductionType == SamplerReductionType::Comparison ?
+		d3d12Desc.ComparisonFunc = desc.reductionType == SamplerReductionType::kComparison ?
 		                               D3D12_COMPARISON_FUNC_LESS :
 		                               D3D12_COMPARISON_FUNC_NEVER;
 

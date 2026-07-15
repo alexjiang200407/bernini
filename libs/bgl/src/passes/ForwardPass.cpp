@@ -153,7 +153,7 @@ namespace bgl
 			auto depth = DepthStencilState{};
 			depth.SetDepthTestEnable(true)
 				.SetDepthWriteEnable(cfg.depthWrite)
-				.SetDepthFunc(ComparisonFunc::Less)
+				.SetDepthFunc(ComparisonFunc::kLess)
 				.SetStencilEnable(false);
 
 			auto blend = BlendState{};

@@ -308,11 +308,11 @@ namespace bgl
 		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
 			m_ResourceManager->CreateSampler(
 				SamplerDesc().SetAllFilters(true).SetMaxAnisotropy(16.f).SetAllAddressModes(
-					SamplerAddressMode::Wrap));
+					SamplerAddressMode::kWrap));
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kLinearClamp)] =
 			m_ResourceManager->CreateSampler(
-				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::Clamp));
+				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
 
 		// Default material textures: white (base color / ORM -> ao=1, factors drive
 		// roughness+metal) and a flat tangent-space normal (0.5,0.5,1).

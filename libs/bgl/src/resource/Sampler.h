@@ -8,27 +8,19 @@ namespace bgl
 
 	enum class SamplerAddressMode : uint8_t
 	{
-		// D3D names
-		Clamp,
-		Wrap,
-		Border,
-		Mirror,
-		MirrorOnce,
-
-		// Vulkan names
-		ClampToEdge       = Clamp,
-		Repeat            = Wrap,
-		ClampToBorder     = Border,
-		MirroredRepeat    = Mirror,
-		MirrorClampToEdge = MirrorOnce
+		kClamp,
+		kWrap,
+		kBorder,
+		kMirror,
+		kMirrorOnce
 	};
 
 	enum class SamplerReductionType : uint8_t
 	{
-		Standard,
-		Comparison,
-		Minimum,
-		Maximum
+		kStandard,
+		kComparison,
+		kMinimum,
+		kMaximum
 	};
 
 	struct SamplerHandle
@@ -52,10 +44,10 @@ namespace bgl
 		bool                 minFilter     = true;
 		bool                 magFilter     = true;
 		bool                 mipFilter     = true;
-		SamplerAddressMode   addressU      = SamplerAddressMode::Clamp;
-		SamplerAddressMode   addressV      = SamplerAddressMode::Clamp;
-		SamplerAddressMode   addressW      = SamplerAddressMode::Clamp;
-		SamplerReductionType reductionType = SamplerReductionType::Standard;
+		SamplerAddressMode   addressU      = SamplerAddressMode::kClamp;
+		SamplerAddressMode   addressV      = SamplerAddressMode::kClamp;
+		SamplerAddressMode   addressW      = SamplerAddressMode::kClamp;
+		SamplerReductionType reductionType = SamplerReductionType::kStandard;
 
 		SamplerDesc&
 		SetBorderColor(const Color& color)
