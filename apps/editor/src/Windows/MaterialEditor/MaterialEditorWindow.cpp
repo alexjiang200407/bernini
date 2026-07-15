@@ -21,9 +21,7 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
-#include <assetlib/material_bake.h>
 
-#include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
@@ -106,22 +104,19 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	leftLayout->setContentsMargins(0, 0, 0, 0);
 	leftLayout->setSpacing(0);
 
-	// Material asset actions, acting on the selected submesh's graph.
-	auto* toolbar = new QHBoxLayout();
-	toolbar->setContentsMargins(2, 2, 2, 2);
+	// A material properties panel down the left of the graph: what the material *is* -- the file it is
+	// bound to, its actions, which submesh, the output type, and its baked textures -- kept apart from
+	// the board that wires it.
+	auto* graphSplitter = new QSplitter(Qt::Horizontal, leftPanel);
 
-	m_OpenButton   = new QPushButton(QStringLiteral("Open..."), leftPanel);
-	m_SaveButton   = new QPushButton(QStringLiteral("Save"), leftPanel);
-	m_SaveAsButton = new QPushButton(QStringLiteral("Save As..."), leftPanel);
-	m_BakeButton   = new QPushButton(QStringLiteral("Bake"), leftPanel);
-	m_BakeButton->setToolTip(QStringLiteral(
-		"Composite the routed source textures into the optimized "
-		"baseColor / orm / normal maps"));
+	auto* propertiesPanel  = new QWidget(graphSplitter);
+	auto* propertiesLayout = new QVBoxLayout(propertiesPanel);
+	propertiesLayout->setContentsMargins(4, 4, 4, 4);
 
-	m_SetDefaultButton = new QPushButton(QStringLiteral("Set Default Material"), leftPanel);
-	m_SetDefaultButton->setToolTip(QStringLiteral(
-		"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads with "
-		"it.\nThe preview only overrides the instances in front of you until you do."));
+	// Material file actions, acting on the selected submesh's graph.
+	m_OpenButton   = new QPushButton(QStringLiteral("Open..."), propertiesPanel);
+	m_SaveButton   = new QPushButton(QStringLiteral("Save"), propertiesPanel);
+	m_SaveAsButton = new QPushButton(QStringLiteral("Save As..."), propertiesPanel);
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
@@ -134,25 +129,34 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	});
 	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
 	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
-	connect(m_BakeButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeCurrentMaterial);
+
+	auto* fileActions = new QHBoxLayout();
+	fileActions->setContentsMargins(0, 0, 0, 0);
+	fileActions->addWidget(m_OpenButton);
+	fileActions->addWidget(m_SaveButton);
+	fileActions->addWidget(m_SaveAsButton);
+	propertiesLayout->addLayout(fileActions);
+
+	m_SetDefaultButton = new QPushButton(QStringLiteral("Set Default Material"), propertiesPanel);
+	m_SetDefaultButton->setToolTip(QStringLiteral(
+		"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads with "
+		"it.\nThe preview only overrides the instances in front of you until you do."));
 	connect(m_SetDefaultButton, &QPushButton::clicked, this, [this]() {
 		SetDefaultMaterial(m_CurrentSubmesh);
 	});
+	propertiesLayout->addWidget(m_SetDefaultButton);
 
-	// Names the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes to.
-	m_MaterialLabel = new QLabel(leftPanel);
+	// The path of the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes to.
+	m_MaterialLabel = new QLabel(propertiesPanel);
 	m_MaterialLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	m_MaterialLabel->setWordWrap(true);
 	m_MaterialLabel->setStyleSheet("color: gray;");
+	propertiesLayout->addWidget(m_MaterialLabel);
 
-	toolbar->addWidget(m_OpenButton);
-	toolbar->addWidget(m_SaveButton);
-	toolbar->addWidget(m_SaveAsButton);
-	toolbar->addWidget(m_BakeButton);
-	toolbar->addWidget(m_SetDefaultButton);
-	toolbar->addWidget(m_MaterialLabel, 1);
-	leftLayout->addLayout(toolbar);
+	propertiesLayout->addSpacing(8);
 
-	m_SubmeshSelector = new QComboBox(leftPanel);
+	propertiesLayout->addWidget(new QLabel(QStringLiteral("Submesh"), propertiesPanel));
+	m_SubmeshSelector = new QComboBox(propertiesPanel);
 	m_SubmeshSelector->setPlaceholderText("No submesh");
 	m_SubmeshSelector->setEnabled(false);
 	connect(
@@ -160,10 +164,12 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		&QComboBox::currentIndexChanged,
 		this,
 		&MaterialEditorWindow::SelectSubmesh);
+	propertiesLayout->addWidget(m_SubmeshSelector);
 
 	// The graph's sink, chosen rather than dragged in: a material has exactly one, and which one it is
 	// *is* the alpha mode. The context menu does not offer them (see MaterialGraphScene).
-	m_OutputSelector = new QComboBox(leftPanel);
+	propertiesLayout->addWidget(new QLabel(QStringLiteral("Output"), propertiesPanel));
+	m_OutputSelector = new QComboBox(propertiesPanel);
 	for (const OutputType& type : c_OutputTypes)
 		m_OutputSelector->addItem(QLatin1String(type.label));
 	m_OutputSelector->setEnabled(false);
@@ -176,21 +182,34 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 			activated,  // activated, not currentIndexChanged: only a user's pick swaps the sink
 		this,
 		&MaterialEditorWindow::SetOutputType);
+	propertiesLayout->addWidget(m_OutputSelector);
 
-	auto* selectors = new QHBoxLayout();
-	selectors->setContentsMargins(0, 0, 0, 0);
-	selectors->addWidget(m_SubmeshSelector, 1);
-	selectors->addWidget(new QLabel(QStringLiteral("Output"), leftPanel));
-	selectors->addWidget(m_OutputSelector);
-	leftLayout->addLayout(selectors);
+	// The material's current baked textures, if any. Read-only: the graph authors the routes they are
+	// composited from, and the Content Explorer's Bake is what rewrites them.
+	m_BakedTexturesLabel = new QLabel(propertiesPanel);
+	m_BakedTexturesLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	m_BakedTexturesLabel->setWordWrap(true);
+	m_BakedTexturesLabel->setStyleSheet("color: gray;");
+	m_BakedTexturesLabel->hide();
+	propertiesLayout->addWidget(m_BakedTexturesLabel);
 
-	m_GraphView = new MaterialGraphView(leftPanel);  // its scene is set per selected submesh
-	leftLayout->addWidget(m_GraphView);
+	propertiesLayout->addStretch(1);
+
+	m_GraphView = new MaterialGraphView(graphSplitter);  // its scene is set per selected submesh
 	connect(
 		m_GraphView,
 		&MaterialGraphView::TextureDropped,
 		this,
 		&MaterialEditorWindow::AddTextureNode);
+
+	// The properties panel keeps its width; the graph takes the rest.
+	graphSplitter->addWidget(propertiesPanel);
+	graphSplitter->addWidget(m_GraphView);
+	graphSplitter->setStretchFactor(0, 0);
+	graphSplitter->setStretchFactor(1, 1);
+	graphSplitter->setSizes({ 250, 800 });
+
+	leftLayout->addWidget(graphSplitter);
 
 	// Model Preview. It renders the editor's shared Scene through a SceneView of its own, so the
 	// geometry pools are sized once (in config.json) rather than split across two scenes.
@@ -319,6 +338,32 @@ MaterialEditorWindow::OutputCentre(MaterialGraphModel& model)
 		return pos;
 
 	return pos + QPointF(size.width() * 0.5, size.height() * 0.5);
+}
+
+QString
+MaterialEditorWindow::BakedTexturesSummary(const assetlib::BMaterial& material)
+{
+	// A baked triplet is a PBR notion, and a material carries one only once it has been baked -- so a
+	// never-baked or non-PBR material has nothing to list. A kLoose material keeps the triplet of its
+	// last bake, which is still worth showing: "current baked textures, if any".
+	if (material.shadingModel != assetlib::ShadingModel::kPbr)
+		return {};
+
+	const assetlib::PbrParams& pbr = material.pbr;
+	if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty())
+		return {};
+
+	const auto line = [](const char* label, const std::string& path) {
+		return QStringLiteral("%1: %2").arg(
+			QLatin1String(label),
+			path.empty() ? QStringLiteral("—") : QString::fromStdString(path));
+	};
+
+	return QStringLiteral("Baked textures\n%1\n%2\n%3")
+	    .arg(
+			line("Base color", pbr.baseColorTexture),
+			line("Normal", pbr.normalTexture),
+			line("ORM", pbr.ormTexture));
 }
 
 void
@@ -473,18 +518,9 @@ MaterialEditorWindow::RefreshActions()
 	const QString materialPath =
 		hasGraph ? m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].materialPath : QString();
 
-	// "Save" and "Bake" both need somewhere to write. The default sphere has no backing asset, so they
-	// stay disabled there until the graph has been given a path by Save As.
+	// "Save" needs somewhere to write. The default sphere has no backing asset, so it stays disabled
+	// there until the graph has been given a path by Save As.
 	m_SaveButton->setEnabled(!materialPath.isEmpty());
-
-	// Baking writes into <Data>/Textures and records paths relative to <Data>, so it needs a project.
-	m_BakeButton->setEnabled(!materialPath.isEmpty() && !m_DataRoot.empty());
-	m_BakeButton->setToolTip(
-		m_DataRoot.empty() ?
-			QStringLiteral("Open a project first: baked maps go under its Data root") :
-			QStringLiteral(
-				"Composite the routed source textures into the optimized "
-				"baseColor / orm / normal maps"));
 
 	// Binding a submesh needs a saved material to bind, and a `.bmesh` to write it into: the default
 	// sphere is procedural and has neither.
@@ -506,31 +542,42 @@ MaterialEditorWindow::RefreshActions()
 	{
 		m_MaterialLabel->setText(QStringLiteral("(unsaved)"));
 		m_MaterialLabel->setToolTip(QString());
+		m_BakedTexturesLabel->clear();
+		m_BakedTexturesLabel->hide();
 		return;
 	}
 
 	// Whether the baked maps still match the source textures the graph routes. A material saved but
-	// never baked reads as stale, which is what it is: it has no optimized textures yet.
-	bool stale = true;
+	// never baked reads as stale, which is what it is: it has no optimized textures yet. Loaded once for
+	// both this and the baked-texture listing below.
+	bool    stale = true;
+	QString bakedSummary;
 	try
 	{
-		const auto file = std::filesystem::path(materialPath.toStdWString());
-		stale           = assetlib::bakeIsStale(assetlib::loadMaterial(file), m_DataRoot);
+		const auto                file     = std::filesystem::path(materialPath.toStdWString());
+		const assetlib::BMaterial material = assetlib::loadMaterial(file);
+		stale                              = assetlib::bakeIsStale(material, m_DataRoot);
+		bakedSummary                       = BakedTexturesSummary(material);
 	}
 	catch (const std::exception& e)
 	{
 		// The file may not exist yet (Save As has set the path but not written it). Say nothing.
-		qWarning("MaterialEditor: could not check bake freshness: %s", e.what());
+		qWarning("MaterialEditor: could not read the material: %s", e.what());
 	}
 
-	// Show the file name, with the full path on hover -- the toolbar is too narrow for a whole path.
-	const QString name = QFileInfo(materialPath).fileName();
-	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(name) : name);
+	m_BakedTexturesLabel->setText(bakedSummary);
+	m_BakedTexturesLabel->setVisible(!bakedSummary.isEmpty());
+
+	// The material's path, word-wrapped in the properties panel. A stale marker says the baked maps no
+	// longer match the sources the graph routes.
+	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(materialPath) : materialPath);
 	m_MaterialLabel->setStyleSheet(stale ? "color: #c08040;" : "color: gray;");
 	m_MaterialLabel->setToolTip(
-		stale ? QStringLiteral("%1\nThe baked textures do not match its sources. Bake to update.")
-					.arg(materialPath) :
-				materialPath);
+		stale ?
+			QStringLiteral(
+				"The baked textures do not match its sources. Bake it from the Content Explorer "
+				"to update.") :
+			QString());
 }
 
 void
@@ -754,81 +801,6 @@ MaterialEditorWindow::Reset()
 	m_GraphView->setScene(nullptr);
 	m_SubmeshGraphs.clear();
 	m_CurrentSubmesh = -1;
-	RefreshActions();
-}
-
-void
-MaterialEditorWindow::BakeCurrentMaterial()
-{
-	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraphs.size()))
-		return;
-
-	const QString path = m_SubmeshGraphs[static_cast<size_t>(m_CurrentSubmesh)].materialPath;
-	if (path.isEmpty() || m_DataRoot.empty())
-		return;  // nowhere to write the maps; Save As first, inside a project
-
-	const auto materialPath = std::filesystem::path(path.toStdWString());
-
-	auto desc     = assetlib::MaterialBakeDesc();
-	desc.dataRoot = m_DataRoot;
-
-	// Read off the live graph, so the bake reflects the board as it is right now rather than whatever
-	// was last written to disk. It has to happen here, on the UI thread: the worker below may not touch
-	// the node models.
-	auto material = assetlib::BMaterial();
-	try
-	{
-		material = BuildMaterial(m_CurrentSubmesh, path);
-	}
-	catch (const std::exception& e)
-	{
-		qWarning(
-			"MaterialEditor: failed to compile '%s' for baking: %s",
-			qPrintable(path),
-			e.what());
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Bake Material"),
-			QStringLiteral("Could not bake the material:\n\n%1").arg(QString::fromUtf8(e.what())));
-		return;
-	}
-
-	const QString name = QFileInfo(path).fileName();
-
-	// A bake decodes, resizes and re-encodes a KTX2 for each of the three maps, which used to freeze
-	// the editor for as long as it took. It touches files only, never bgl, so it belongs on a worker.
-	const background::TaskResult result = background::RunWithLoadingScreen(
-		this,
-		QString("Baking %1").arg(name),
-		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Compositing maps...");
-			assetlib::bakeMaterial(material, desc, progress.Cancellation());
-
-			progress.Report(0, 0, "Writing material...");
-			assetlib::saveMaterial(material, materialPath);
-		},
-		background::Cancellable::kYes);
-
-	// Nothing to undo on a cancel: bakeMaterial leaves `material` untouched unless every map was
-	// produced, and a map it did write is named by the hash of its inputs -- so it is a correct,
-	// reusable file that the next bake picks up as already up to date, and Clean Unused Textures
-	// sweeps if it never is.
-	if (result.Cancelled())
-		return;
-
-	if (result.Failed())
-	{
-		qWarning(
-			"MaterialEditor: failed to bake '%s': %s",
-			qPrintable(path),
-			qPrintable(result.error));
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Bake Material"),
-			QStringLiteral("Could not bake the material:\n\n%1").arg(result.error));
-		return;
-	}
-
 	RefreshActions();
 }
 

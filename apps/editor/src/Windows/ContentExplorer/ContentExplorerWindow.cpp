@@ -22,12 +22,15 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
+#include <QSplitter>
 #include <QStringList>
 #include <QUrl>
 
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/material_bake.h>
 
 namespace
 {
@@ -96,6 +99,12 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 	QWidget(parent), m_AssetsHeldOpen(std::move(assetsHeldOpen))
 {
 	m_Ui.setupUi(this);
+
+	// The file tree needs only enough width for folder names; the grid of thumbnails takes the rest and
+	// grows with the panel.
+	m_Ui.splitter->setStretchFactor(0, 0);
+	m_Ui.splitter->setStretchFactor(1, 1);
+	m_Ui.splitter->setSizes({ 220, 700 });
 
 	// The hierarchy shows files as well as directories, so an asset can be found and dragged straight
 	// out of the tree without first navigating to its folder in the right-hand view.
@@ -315,10 +324,13 @@ ContentExplorerWindow::ShowAssetMenu(
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
 
+	QAction* bake   = nullptr;
 	QAction* remove = nullptr;
 	if (!asset.isEmpty())
 	{
 		menu.addSeparator();
+		if (IsMaterialAsset(asset))
+			bake = menu.addAction("Bake");
 		remove = menu.addAction("Delete");
 	}
 
@@ -326,8 +338,63 @@ ContentExplorerWindow::ShowAssetMenu(
 
 	if (chosen == addDir)
 		AddDirectory(&model, parentPath);
+	else if (bake != nullptr && chosen == bake)
+		BakeMaterial(asset);
 	else if (remove != nullptr && chosen == remove)
 		DeleteAsset(asset);
+}
+
+bool
+ContentExplorerWindow::IsMaterialAsset(const QString& asset)
+{
+	const std::optional<assetlib::AssetType> type =
+		assetlib::assetTypeFromExtension(asset.toStdWString());
+	return type && *type == assetlib::AssetType::kMaterial;
+}
+
+void
+ContentExplorerWindow::BakeMaterial(const QString& asset)
+{
+	const std::filesystem::path dataRoot = m_RootPath.toStdWString();
+	const std::filesystem::path materialPath =
+		dataRoot / std::filesystem::path(asset.toStdWString());
+
+	auto desc     = assetlib::MaterialBakeDesc();
+	desc.dataRoot = dataRoot;
+
+	auto material = assetlib::BMaterial();
+
+	// Compositing decodes, resizes and re-encodes a KTX2 for each map, so it runs off the UI thread. It
+	// touches files only, never bgl. Baking reads the material off disk, so the routes it composites are
+	// the ones last saved -- Save in the Material Editor first to bake unsaved edits.
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		this,
+		QString("Baking %1").arg(QFileInfo(asset).fileName()),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Reading material...");
+			material = assetlib::loadMaterial(materialPath);
+
+			progress.Report(0, 0, "Compositing maps...");
+			assetlib::bakeMaterial(material, desc, progress.Cancellation());
+
+			progress.Report(0, 0, "Writing material...");
+			assetlib::saveMaterial(material, materialPath);
+		},
+		background::Cancellable::kYes);
+
+	if (result.Cancelled())
+		return;
+
+	if (result.Failed())
+	{
+		QMessageBox::warning(
+			this,
+			"Bake Material",
+			QString("Could not bake '%1':\n\n%2").arg(QFileInfo(asset).fileName(), result.error));
+	}
+
+	// A map bakeMaterial wrote is named by the hash of its inputs, so a cancelled or re-run bake leaves
+	// only correct, reusable files. The thumbnail cache watches the material's mtime and repaints itself.
 }
 
 QString

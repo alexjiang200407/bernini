@@ -271,6 +271,19 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 	CHECK(asset == QString(sample.asset));
 }
 
+TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
+{
+	// Baking composites a material's routes into its triplet, so it means nothing for a mesh, a texture
+	// or a directory -- the menu offers it for a `.bmaterial` alone. By the extension, case and all.
+	CHECK(ContentExplorerWindow::IsMaterialAsset("Materials/skin.bmaterial"));
+	CHECK(ContentExplorerWindow::IsMaterialAsset("Materials/skin.BMATERIAL"));
+
+	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset("Meshes/tree.bmesh"));
+	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset("Textures/base.ktx2"));
+	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset("textures_src/kirk"));  // a directory
+	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset(""));
+}
+
 TEST_CASE("The directories the project is scaffolded with cannot be deleted", "[contentexplorer]")
 {
 	// Every asset path in the project is written against this layout, and Project::Open puts a missing

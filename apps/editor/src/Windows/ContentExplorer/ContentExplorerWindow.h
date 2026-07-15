@@ -58,6 +58,13 @@ public:
 	[[nodiscard]] static QString
 	AssetAt(const QFileSystemModel& model, const QModelIndex& index, const QString& dataRoot);
 
+	/**
+	 * Whether `asset` (a data-root-relative path) is a material, and so gets a Bake action. By the
+	 * extension alone, like AssetAt -- a `.bmaterial` is the only thing baking has anything to do.
+	 */
+	[[nodiscard]] static bool
+	IsMaterialAsset(const QString& asset);
+
 protected:
 	// Keeps the empty-directory placeholder sized to the file table's viewport.
 	bool
@@ -143,6 +150,14 @@ private:
 	 */
 	void
 	DeleteAsset(const QString& asset);
+
+	/**
+	 * Composites the material at `asset` (data-root-relative) down to its baked triplet and rewrites it,
+	 * on the loading-screen worker. Reads the material off disk, so it bakes the routes last saved --
+	 * see the Material Editor's Save.
+	 */
+	void
+	BakeMaterial(const QString& asset);
 
 	/**
 	 * `parentPath` rather than a QModelIndex: this runs a modal below, and QFileSystemModel populates on

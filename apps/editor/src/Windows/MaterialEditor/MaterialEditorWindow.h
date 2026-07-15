@@ -70,6 +70,15 @@ public:
 	OutputCentre(MaterialGraphModel& model);
 
 	/**
+	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
+	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
+	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and the
+	 * Content Explorer's Bake is what rewrites them.
+	 */
+	[[nodiscard]] static QString
+	BakedTexturesSummary(const assetlib::BMaterial& material);
+
+	/**
 	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph
 	 * would not stick: the graph still holds it, and the next Save writes it straight back.
 	 */
@@ -123,9 +132,6 @@ private:
 	DefaultMaterialPath() const;
 
 	void
-	BakeCurrentMaterial();
-
-	void
 	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
 
 	void
@@ -171,7 +177,10 @@ private:
 	QPushButton*       m_OpenButton       = nullptr;
 	QPushButton*       m_SaveButton       = nullptr;
 	QPushButton*       m_SaveAsButton     = nullptr;
-	QPushButton*       m_BakeButton       = nullptr;
 	QPushButton*       m_SetDefaultButton = nullptr;
 	QLabel*            m_MaterialLabel    = nullptr;
+
+	// The current material's baked texture paths, hidden until one is open and baked. See
+	// BakedTexturesSummary.
+	QLabel* m_BakedTexturesLabel = nullptr;
 };
