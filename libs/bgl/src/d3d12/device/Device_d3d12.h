@@ -37,7 +37,7 @@ namespace bgl
 		CreateShader(ShaderDesc desc) const noexcept override;
 
 		core::SharedRef<ICommandAllocator>
-		CreateCommandAllocator() const noexcept override;
+		CreateCommandAllocator(QueueType type) const noexcept override;
 
 		core::SharedRef<ICommandQueue>
 		CreateCommandQueue(QueueType type) const noexcept override;

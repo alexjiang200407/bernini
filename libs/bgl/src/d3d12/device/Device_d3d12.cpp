@@ -100,12 +100,12 @@ namespace bgl
 	}
 
 	CommandAllocatorHandle
-	Device::CreateCommandAllocator() const noexcept
+	Device::CreateCommandAllocator(QueueType type) const noexcept
 	{
 		auto d3d12CmdAllocator = wrl::ComPtr<ID3D12CommandAllocator>();
 
 		m_Device->CreateCommandAllocator(
-			D3D12_COMMAND_LIST_TYPE_DIRECT,
+			ConvertQueueType(type),
 			IID_PPV_ARGS(&d3d12CmdAllocator)) >>
 			d3d12ErrChecker;
 
