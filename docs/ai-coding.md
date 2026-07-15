@@ -66,19 +66,20 @@ fell back to your account — run `mint-bot-token.sh` alone to see the error on 
 
 ## Commit attribution
 
-AI-assisted commits are co-authored by the bot rather than the assistant tool. The committed hook
-[`.githooks/prepare-commit-msg`](../.githooks/prepare-commit-msg) appends one trailer to every commit
-message and removes any `Co-authored-by: Claude …` line, so the recorded co-author is:
+AI-assisted commits are co-authored by the bot rather than the assistant tool. The assistant already
+stamps its own `Co-authored-by: Claude …` trailer when it writes a commit; the committed hook
+[`.githooks/prepare-commit-msg`](../.githooks/prepare-commit-msg) swaps that line for the bot:
 
 ```
 Co-authored-by: morgana-coding-agent[bot] <305433938+morgana-coding-agent[bot]@users.noreply.github.com>
 ```
 
-GitHub matches co-authors by that no-reply email — `<user-id>+<login>@users.noreply.github.com`,
-where the user id (`305433938`) is stable across App renames. The hook is idempotent (an amend does
-not duplicate the trailer). It runs only because `just init` sets `core.hooksPath` to `.githooks`;
-that is machine-local config, not committed, so a fresh clone opts in through `just init` (or
-`git config core.hooksPath .githooks`).
+A commit with no assistant trailer — a purely human one — is left untouched, so the bot is credited
+only where it actually did the work. GitHub matches co-authors by that no-reply email —
+`<user-id>+<login>@users.noreply.github.com`, where the user id (`305433938`) is stable across App
+renames. The hook is idempotent (an amend does not duplicate the trailer). It runs only because
+`just init` sets `core.hooksPath` to `.githooks`; that is machine-local config, not committed, so a
+fresh clone opts in through `just init` (or `git config core.hooksPath .githooks`).
 
 ## First-time project setup (maintainer, once)
 

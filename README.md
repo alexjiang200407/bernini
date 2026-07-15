@@ -73,6 +73,10 @@ That pulls `rust-just`, which ships `just` as a prebuilt binary wheel — one co
 
 Skip it if you like; `python scripts/<script>.py` does everything the recipes do.
 
+### gh (GitHub CLI)
+
+Only needed for the `bcp-revise` AI code-review workflow, which reads PR reviews and posts replies with it (see [docs/ai-coding.md](docs/ai-coding.md)). Not a Python package — the `gh` on PyPI is an unrelated project — so install it from [cli.github.com](https://cli.github.com/) and add it to PATH. `python scripts/init.py` reports whether it is found.
+
 ### clang format
 1. If not using Visual Studio download manually and add to PATH environment variable
 2. or download from Visual Studio Installer
