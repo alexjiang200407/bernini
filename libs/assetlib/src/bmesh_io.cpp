@@ -2,14 +2,17 @@
 
 #include <assetlib/image_io.h>
 
-#include "ByteReader.h"
-#include "ByteWriter.h"
 #include "fs_util.h"
 
 #include <core/file/file.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 
 namespace assetlib
 {
+	using core::io::ByteReader;
+	using core::io::ByteWriter;
+
 	namespace
 	{
 		constexpr uint32_t c_Magic = 0x48534D42u;  // 'B','M','S','H' little-endian

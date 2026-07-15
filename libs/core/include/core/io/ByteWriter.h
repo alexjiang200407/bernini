@@ -2,9 +2,9 @@
 #include <core/math.h>
 #include <core/type_traits.h>
 
-namespace assetlib
+namespace core::io
 {
-	/** Append-only little-endian byte buffer used to build the container stream. */
+	/** Append-only little-endian byte buffer. */
 	class ByteWriter
 	{
 	public:
