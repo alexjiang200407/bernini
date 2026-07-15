@@ -38,6 +38,13 @@ namespace bgl
 
 		LogLevel logLevel = LogLevel::kError;
 
+		// Directory for the persistent shader cache (compiled shader programs and
+		// their reflection). Empty disables caching, so every launch recompiles from
+		// source. Resolved relative to the process working directory. The backend
+		// owns the on-disk format; it self-invalidates when the shader source or the
+		// shader compiler changes.
+		std::string shaderCacheDir;
+
 		// Capacities for the graphics-owned descriptor heaps / resource pools.
 		uint32_t maxCbvSrvUavs = 1000;
 		uint32_t maxRtvs       = 5;

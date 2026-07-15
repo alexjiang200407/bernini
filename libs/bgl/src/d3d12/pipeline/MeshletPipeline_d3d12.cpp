@@ -2,6 +2,7 @@
 #include "pipeline/util.h"
 #include "resource/Rtv_d3d12.h"
 #include "resource/Shader.h"
+#include "shadercache/ShaderCache_d3d12.h"
 #include <core/math.h>
 
 // clang-format off
@@ -36,6 +37,7 @@ namespace bgl
 	MeshletPipeline::MeshletPipeline(
 		ID3D12Device*              device,
 		slang::ISession*           session,
+		ShaderCache*               cache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
 		gassert(session != nullptr, "Session cannot be null");
@@ -49,9 +51,9 @@ namespace bgl
 		pipeline_util::PipelineLayout pipelineLayout = pipeline_util::BuildPipelineLayout(
 			device,
 			session,
+			cache,
 			{ desc.meshShader, desc.pixelShader, desc.ampShader });
 
-		m_LinkedProgram        = std::move(pipelineLayout.linkedProgram);
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
@@ -66,8 +68,7 @@ namespace bgl
 				found != pipelineLayout.entryPointCode.end(),
 				"Missing compiled bytecode for shader");
 
-			return D3D12_SHADER_BYTECODE{ found->second->getBufferPointer(),
-				                          found->second->getBufferSize() };
+			return D3D12_SHADER_BYTECODE{ found->second.data(), found->second.size() };
 		};
 
 		MeshletPsoStream psoDesc = {};
@@ -124,8 +125,52 @@ namespace bgl
 		streamDesc.SizeInBytes                   = sizeof(MeshletPsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
-			d3d12ErrChecker;
+		uint64_t identity = 0;
+		if (cache != nullptr)
+		{
+			for (const core::SharedRef<IShader>& shader :
+			     { desc.meshShader, desc.pixelShader, desc.ampShader })
+			{
+				if (shader == nullptr)
+					continue;
+
+				const std::vector<std::byte>& dxil = pipelineLayout.entryPointCode.at(shader.Get());
+				identity = ShaderCache::CombineHash(identity, dxil.data(), dxil.size());
+			}
+
+			// The render state is part of the graphics PSO but not the bytecode, so it
+			// must contribute to the identity. These structs are zero-initialized before
+			// conversion, so their padding is deterministic across runs.
+			identity = ShaderCache::CombineHash(
+				identity,
+				&psoDesc.RasterizerState,
+				sizeof(psoDesc.RasterizerState));
+			identity = ShaderCache::CombineHash(
+				identity,
+				&psoDesc.DepthStencilState,
+				sizeof(psoDesc.DepthStencilState));
+			identity =
+				ShaderCache::CombineHash(identity, &psoDesc.BlendState, sizeof(psoDesc.BlendState));
+			identity = ShaderCache::CombineHash(
+				identity,
+				&psoDesc.RenderTargets,
+				sizeof(psoDesc.RenderTargets));
+			identity =
+				ShaderCache::CombineHash(identity, &psoDesc.DSVFormat, sizeof(psoDesc.DSVFormat));
+			identity = ShaderCache::CombineHash(
+				identity,
+				&psoDesc.PrimitiveTopologyType,
+				sizeof(psoDesc.PrimitiveTopologyType));
+		}
+
+		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
+		{
+			device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
+				d3d12ErrChecker;
+
+			if (cache != nullptr)
+				cache->StorePipeline(identity, m_PipelineState.Get());
+		}
 	}
 
 	MeshletPipeline::~MeshletPipeline() noexcept

@@ -4,12 +4,15 @@
 
 namespace bgl
 {
+	class ShaderCache;
+
 	class MeshletPipeline : public core::RefCounter<IMeshletPipeline>
 	{
 	public:
 		MeshletPipeline(
 			ID3D12Device*              device,
 			slang::ISession*           session,
+			ShaderCache*               cache,
 			const MeshletPipelineDesc& desc);
 
 		~MeshletPipeline() noexcept override;
@@ -68,10 +71,9 @@ namespace bgl
 		}
 
 	private:
-		MeshletPipelineDesc                  m_Desc;
-		wrl::ComPtr<ID3D12PipelineState>     m_PipelineState;
-		wrl::ComPtr<ID3D12RootSignature>     m_RootSignature;
-		Slang::ComPtr<slang::IComponentType> m_LinkedProgram;
-		UniformLayoutMap                     m_UniformLayoutEntries;
+		MeshletPipelineDesc              m_Desc;
+		wrl::ComPtr<ID3D12PipelineState> m_PipelineState;
+		wrl::ComPtr<ID3D12RootSignature> m_RootSignature;
+		UniformLayoutMap                 m_UniformLayoutEntries;
 	};
 }

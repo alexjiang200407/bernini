@@ -13,15 +13,35 @@
 #include "resource/ResourceManager_d3d12.h"
 #include "resource/Shader.h"
 #include "resource/Shader_d3d12.h"
+#include "shadercache/ShaderCache_d3d12.h"
 #include "slang/ErrorChecker.h"
 #include "types/QueueType.h"
 #include <core/ref/SharedRef.h>
 
 namespace bgl
 {
+	namespace
+	{
+		const char* const kShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
+
+		// Compile options that change generated code, folded into every cache key so a
+		// compiler upgrade or a debug/release switch never reuses stale binaries.
+		std::string
+		ShaderCacheSalt(slang::IGlobalSession* globalSession)
+		{
+			std::string salt = globalSession->getBuildTagString();
+			salt += "|sm_6_6|column-major";
+#if defined(BERNINI_GPU_DEBUG)
+			salt += "|gpu-debug";
+#endif
+			return salt;
+		}
+	}
+
 	Device::Device(
 		wrl::ComPtr<ID3D12Device>            device,
-		Slang::ComPtr<slang::IGlobalSession> globalSession) :
+		Slang::ComPtr<slang::IGlobalSession> globalSession,
+		const std::string&                   shaderCacheDir) :
 		m_Device(std::move(device)), m_SlangGlobalSession(std::move(globalSession))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
@@ -33,12 +53,12 @@ namespace bgl
 		targetDesc.format  = SLANG_DXIL;
 		targetDesc.profile = m_SlangGlobalSession->findProfile("sm_6_6");
 
-		const char* searchPaths[] = { "./shaders/src", "./shaders/tests" };
+		const char* const* searchPaths = kShaderSearchPaths;
 
 		sessionDesc.targetCount     = 1;
 		sessionDesc.targets         = &targetDesc;
 		sessionDesc.searchPaths     = searchPaths;
-		sessionDesc.searchPathCount = std::size(searchPaths);
+		sessionDesc.searchPathCount = std::size(kShaderSearchPaths);
 
 		// Match the column-major convention the CPU side uploads matrices in (and that the
 		// offline slangc default used). The Slang API's SessionDesc otherwise defaults to
@@ -59,7 +79,20 @@ namespace bgl
 		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef()) >> errChecker;
 
 		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
+
+		if (!shaderCacheDir.empty())
+		{
+			m_ShaderCache = std::make_unique<ShaderCache>(
+				m_Device.Get(),
+				shaderCacheDir,
+				ShaderCacheSalt(m_SlangGlobalSession.get()),
+				std::vector<std::string>(
+					std::begin(kShaderSearchPaths),
+					std::end(kShaderSearchPaths)));
+		}
 	}
+
+	Device::~Device() noexcept { logger::trace("~Device"); }
 
 	CommandListHandle
 	Device::CreateCommandList(
@@ -90,13 +123,21 @@ namespace bgl
 	MeshletPipelineHandle
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<MeshletPipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
+		return core::SharedRef<MeshletPipeline>::Make(
+			m_Device.Get(),
+			m_SlangSession.get(),
+			m_ShaderCache.get(),
+			desc);
 	}
 
 	ComputePipelineHandle
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<ComputePipeline>::Make(m_Device.Get(), m_SlangSession.get(), desc);
+		return core::SharedRef<ComputePipeline>::Make(
+			m_Device.Get(),
+			m_SlangSession.get(),
+			m_ShaderCache.get(),
+			desc);
 	}
 
 	CommandAllocatorHandle

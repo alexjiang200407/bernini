@@ -1,10 +1,8 @@
 #include "uniforms/Uniforms.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
-#include "slang/ErrorChecker.h"
 #include "uniforms/DescriptorHandle.h"
 #include <core/str/str.h>
-#include <slang.h>
 
 namespace bgl
 {
@@ -253,7 +251,7 @@ namespace bgl
 
 		m_Size           = entry.size;
 		m_RootParamIndex = entry.rootParamIndex;
-		m_Root           = BuildNode(entry.layout);
+		m_Root           = BuildNode(*entry.layout);
 		m_Buffer.resize(entry.size, std::byte{ 0 });
 	}
 
@@ -267,153 +265,43 @@ namespace bgl
 
 		m_Size           = entry.size;
 		m_RootParamIndex = entry.rootParamIndex;
-		m_Root           = BuildNode(entry.layout);
+		m_Root           = BuildNode(*entry.layout);
 		m_Buffer.resize(entry.size, std::byte{ 0 });
 	}
 
-	UniformValueType
-	Uniforms::ResolveScalarType(slang::TypeReflection* type)
-	{
-		auto kind = type->getKind();
-
-		if (kind == slang::TypeReflection::Kind::Matrix)
-		{
-			gassert(
-				type->getRowCount() == 4 && type->getColumnCount() == 4,
-				"Only float mat4x4 supported for now");
-			return UniformValueType::kMat4x4;
-		}
-
-		uint32_t               componentCount = 1;
-		slang::TypeReflection* scalarType     = type;
-
-		if (kind == slang::TypeReflection::Kind::Vector)
-		{
-			componentCount = static_cast<uint32_t>(type->getElementCount());
-			scalarType     = type->getElementType();
-		}
-
-		auto scalarKind = scalarType->getScalarType();
-		bool isFloat    = scalarKind == slang::TypeReflection::ScalarType::Float32;
-		bool isInt      = scalarKind == slang::TypeReflection::ScalarType::Int32;
-		bool isUInt     = scalarKind == slang::TypeReflection::ScalarType::UInt32;
-		bool isBool     = scalarKind == slang::TypeReflection::ScalarType::Bool;
-
-		if (isBool)
-			return UniformValueType::kBool;
-
-		if (isFloat)
-		{
-			switch (componentCount)
-			{
-			case 1:
-				return UniformValueType::kFloat;
-			case 2:
-				return UniformValueType::kFloat2;
-			case 3:
-				return UniformValueType::kFloat3;
-			case 4:
-				return UniformValueType::kFloat4;
-			}
-		}
-
-		if (isInt)
-		{
-			switch (componentCount)
-			{
-			case 1:
-				return UniformValueType::kInt;
-			case 2:
-				return UniformValueType::kInt2;
-			case 3:
-				return UniformValueType::kInt3;
-			case 4:
-				return UniformValueType::kInt4;
-			}
-		}
-
-		if (isUInt)
-		{
-			switch (componentCount)
-			{
-			case 1:
-				return UniformValueType::kUInt;
-			case 2:
-				return UniformValueType::kUInt2;
-			case 3:
-				return UniformValueType::kUInt3;
-			case 4:
-				return UniformValueType::kUInt4;
-			}
-		}
-
-		gfatal("Unsupported scalar/vector type in push constants");
-	}
-
-#define HANDLE_UNSUPPORTED_TYPE_KIND(kind) \
-	case kind:                             \
-		gfatal("Unsupported type kind in push constants: " #kind)
-
 	std::unique_ptr<detail::UniformsNode>
-	Uniforms::BuildNode(slang::TypeLayoutReflection* typeLayout)
+	Uniforms::BuildNode(const ReflectedLayout& layout)
 	{
-		using Kind = slang::TypeReflection::Kind;
-
-		switch (typeLayout->getKind())
+		switch (layout.kind)
 		{
-		case Kind::Struct:
+		case UniformType::kStruct:
 		{
 			detail::UniformStructNode::MemberMap members;
-			uint32_t                             fieldCount = typeLayout->getFieldCount();
 
-			for (uint32_t i = 0; i < fieldCount; ++i)
+			for (const ReflectedField& field : layout.fields)
 			{
-				slang::VariableLayoutReflection* field          = typeLayout->getFieldByIndex(i);
-				size_t                           relativeOffset = field->getOffset();
-				std::string                      fieldName      = field->getName();
-
-				members[fieldName] = { BuildNode(field->getTypeLayout()), relativeOffset };
+				members[field.name] = { BuildNode(field.layout), field.offset };
 			}
 
-			return std::make_unique<detail::UniformStructNode>(
-				std::move(members),
-				typeLayout->getSize());
+			return std::make_unique<detail::UniformStructNode>(std::move(members), layout.size);
 		}
 
-		case Kind::Array:
+		case UniformType::kArray:
 		{
+			gassert(layout.element.size() == 1, "Array layout must carry one element type");
+
 			return std::make_unique<detail::UniformArrayNode>(
-				BuildNode(typeLayout->getElementTypeLayout()),
-				typeLayout->getElementCount(),
-				typeLayout->getStride());
+				BuildNode(layout.element.front()),
+				layout.arrayCount,
+				layout.arrayStride);
 		}
 
-		case Kind::Scalar:
-		case Kind::Vector:
-		case Kind::Matrix:
-		{
-			return std::make_unique<detail::UniformValueNode>(
-				ResolveScalarType(typeLayout->getType()));
-		}
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ConstantBuffer);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::DynamicResource);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Enum);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Feedback);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::GenericTypeParameter);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Interface);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::MeshOutput);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::None);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::OutputStream);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ParameterBlock);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Pointer);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Resource);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::SamplerState);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ShaderStorageBuffer);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Specialized);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::TextureBuffer);
+		case UniformType::kValue:
+			return std::make_unique<detail::UniformValueNode>(layout.valueType);
 
+		case UniformType::kNull:
 		default:
-			gfatal("Unsupported type kind in push constants");
+			gfatal("Unsupported reflected layout kind in push constants");
 		}
 	}
 }

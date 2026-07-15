@@ -4,15 +4,17 @@
 namespace bgl
 {
 	struct ShaderDesc;
+	class ShaderCache;
 
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
 		Device(
 			wrl::ComPtr<ID3D12Device>            device,
-			Slang::ComPtr<slang::IGlobalSession> globalSession);
+			Slang::ComPtr<slang::IGlobalSession> globalSession,
+			const std::string&                   shaderCacheDir);
 
-		~Device() noexcept override { logger::trace("~Device"); }
+		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;
 		Device(Device&&) noexcept      = delete;
 
@@ -63,5 +65,7 @@ namespace bgl
 		// after it
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
 		Slang::ComPtr<slang::ISession>       m_SlangSession;
+
+		std::unique_ptr<ShaderCache> m_ShaderCache;
 	};
 }
