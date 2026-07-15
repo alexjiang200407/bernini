@@ -21,7 +21,7 @@ struct MaterialData
     TextureHandle prefilterMap;
     TextureHandle brdfLUT;
 
-    SamplerHandle anisioLinearWrapSampler;
+    SamplerHandle anisoLinearWrapSampler;
     SamplerHandle linearClampSampler;
 };
 
@@ -121,7 +121,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 // alpha-tested path can test it without sampling the texture a second time.
 float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor)
 {
-    let wrapSampler = materialData.anisioLinearWrapSampler;
+    let wrapSampler = materialData.anisoLinearWrapSampler;
 
     return ShadeSurface(
         input,
@@ -139,7 +139,7 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
 
 public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
 {
-    let wrapSampler = materialData.anisioLinearWrapSampler;
+    let wrapSampler = materialData.anisoLinearWrapSampler;
 
     M material = M.Load(input.materialIndex);
 
@@ -148,7 +148,7 @@ public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
 
 public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
 {
-    let wrapSampler = materialData.anisioLinearWrapSampler;
+    let wrapSampler = materialData.anisoLinearWrapSampler;
 
     M material = M.Load(input.materialIndex);
 
