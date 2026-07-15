@@ -233,13 +233,16 @@ TEST_CASE("A scalar wired into a split port routes only that channel", "[materia
 	REQUIRE(node.Route(kMetallic).path.isEmpty());
 }
 
-TEST_CASE("A material output's factors default to one", "[materialoutput]")
+TEST_CASE("A material output has sensible default factors", "[materialoutput]")
 {
 	const MaterialOutputNode node;
 
+	// Base colour white and metallic 1.0 follow glTF (a factor multiplies its texture, so 1.0 is
+	// "use it as authored"); roughness defaults glossy rather than fully matte, so a fresh material
+	// reads as a surface rather than a flat card.
 	REQUIRE(node.BaseColorFactor() == glm::vec4(1.0f));
 	REQUIRE(node.MetallicFactor() == 1.0f);
-	REQUIRE(node.RoughnessFactor() == 1.0f);
+	REQUIRE(node.RoughnessFactor() == 0.2f);
 	REQUIRE(!node.IsAlphaTested());
 	REQUIRE(node.name() == QString("MaterialOutput"));
 }
