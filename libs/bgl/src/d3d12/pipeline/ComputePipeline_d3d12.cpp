@@ -41,7 +41,7 @@ namespace bgl
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
-		auto codeIt = pipelineLayout.entryPointCode.find(desc.shader.Get());
+		auto codeIt = pipelineLayout.entryPointCode.find(desc.shader->GetDesc().entryPointName);
 		gassert(
 			codeIt != pipelineLayout.entryPointCode.end(),
 			"Missing compiled bytecode for compute shader");
@@ -59,10 +59,9 @@ namespace bgl
 		streamDesc.SizeInBytes                   = sizeof(ComputePsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		const uint64_t identity =
-			cache != nullptr ?
-				ShaderCache::CombineHash(0, codeIt->second.data(), codeIt->second.size()) :
-				0;
+		uint64_t identity = 0;
+		if (cache != nullptr)
+			identity = ShaderCache::CombineHash(0, codeIt->second);
 
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
 		{

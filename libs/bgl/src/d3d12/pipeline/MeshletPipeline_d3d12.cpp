@@ -63,7 +63,7 @@ namespace bgl
 				return D3D12_SHADER_BYTECODE{ nullptr, 0 };
 			}
 
-			auto found = pipelineLayout.entryPointCode.find(shader.Get());
+			auto found = pipelineLayout.entryPointCode.find(shader->GetDesc().entryPointName);
 			gassert(
 				found != pipelineLayout.entryPointCode.end(),
 				"Missing compiled bytecode for shader");
@@ -134,33 +134,20 @@ namespace bgl
 				if (shader == nullptr)
 					continue;
 
-				const std::vector<std::byte>& dxil = pipelineLayout.entryPointCode.at(shader.Get());
-				identity = ShaderCache::CombineHash(identity, dxil.data(), dxil.size());
+				identity = ShaderCache::CombineHash(
+					identity,
+					pipelineLayout.entryPointCode.at(shader->GetDesc().entryPointName));
 			}
 
 			// The render state is part of the graphics PSO but not the bytecode, so it
 			// must contribute to the identity. These structs are zero-initialized before
 			// conversion, so their padding is deterministic across runs.
-			identity = ShaderCache::CombineHash(
-				identity,
-				&psoDesc.RasterizerState,
-				sizeof(psoDesc.RasterizerState));
-			identity = ShaderCache::CombineHash(
-				identity,
-				&psoDesc.DepthStencilState,
-				sizeof(psoDesc.DepthStencilState));
-			identity =
-				ShaderCache::CombineHash(identity, &psoDesc.BlendState, sizeof(psoDesc.BlendState));
-			identity = ShaderCache::CombineHash(
-				identity,
-				&psoDesc.RenderTargets,
-				sizeof(psoDesc.RenderTargets));
-			identity =
-				ShaderCache::CombineHash(identity, &psoDesc.DSVFormat, sizeof(psoDesc.DSVFormat));
-			identity = ShaderCache::CombineHash(
-				identity,
-				&psoDesc.PrimitiveTopologyType,
-				sizeof(psoDesc.PrimitiveTopologyType));
+			identity = ShaderCache::CombineHash(identity, psoDesc.RasterizerState);
+			identity = ShaderCache::CombineHash(identity, psoDesc.DepthStencilState);
+			identity = ShaderCache::CombineHash(identity, psoDesc.BlendState);
+			identity = ShaderCache::CombineHash(identity, psoDesc.RenderTargets);
+			identity = ShaderCache::CombineHash(identity, psoDesc.DSVFormat);
+			identity = ShaderCache::CombineHash(identity, psoDesc.PrimitiveTopologyType);
 		}
 
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))

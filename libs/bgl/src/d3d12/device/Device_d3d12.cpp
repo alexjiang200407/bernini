@@ -22,7 +22,7 @@ namespace bgl
 {
 	namespace
 	{
-		const char* const kShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
+		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
 
 		// Compile options that change generated code, folded into every cache key so a
 		// compiler upgrade or a debug/release switch never reuses stale binaries.
@@ -53,12 +53,12 @@ namespace bgl
 		targetDesc.format  = SLANG_DXIL;
 		targetDesc.profile = m_SlangGlobalSession->findProfile("sm_6_6");
 
-		const char* const* searchPaths = kShaderSearchPaths;
+		const char* const* searchPaths = c_ShaderSearchPaths;
 
 		sessionDesc.targetCount     = 1;
 		sessionDesc.targets         = &targetDesc;
 		sessionDesc.searchPaths     = searchPaths;
-		sessionDesc.searchPathCount = std::size(kShaderSearchPaths);
+		sessionDesc.searchPathCount = std::size(c_ShaderSearchPaths);
 
 		// Match the column-major convention the CPU side uploads matrices in (and that the
 		// offline slangc default used). The Slang API's SessionDesc otherwise defaults to
@@ -87,8 +87,8 @@ namespace bgl
 				shaderCacheDir,
 				ShaderCacheSalt(m_SlangGlobalSession.get()),
 				std::vector<std::string>(
-					std::begin(kShaderSearchPaths),
-					std::end(kShaderSearchPaths)));
+					std::begin(c_ShaderSearchPaths),
+					std::end(c_ShaderSearchPaths)));
 		}
 	}
 

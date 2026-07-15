@@ -1,5 +1,7 @@
 #include "shadercache/ShaderCache_d3d12.h"
 #include <core/file/file.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 
 namespace bgl
 {
@@ -73,112 +75,57 @@ namespace bgl
 			return salt;
 		}
 
-		class ByteWriter
+		using core::io::ByteReader;
+		using core::io::ByteWriter;
+
+		void
+		WriteString(ByteWriter& writer, std::string_view value)
 		{
-		public:
-			void
-			U32(uint32_t value)
-			{
-				const auto* p = reinterpret_cast<const std::byte*>(&value);
-				m_Bytes.insert(m_Bytes.end(), p, p + sizeof(value));
-			}
+			writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
+			writer.writeBytes(std::as_bytes(std::span<const char>(value.data(), value.size())));
+		}
 
-			void
-			Str(std::string_view value)
-			{
-				U32(static_cast<uint32_t>(value.size()));
-				const auto* p = reinterpret_cast<const std::byte*>(value.data());
-				m_Bytes.insert(m_Bytes.end(), p, p + value.size());
-			}
-
-			void
-			Blob(const std::vector<std::byte>& value)
-			{
-				U32(static_cast<uint32_t>(value.size()));
-				m_Bytes.insert(m_Bytes.end(), value.begin(), value.end());
-			}
-
-			[[nodiscard]] const std::vector<std::byte>&
-			Bytes() const
-			{
-				return m_Bytes;
-			}
-
-		private:
-			std::vector<std::byte> m_Bytes;
-		};
-
-		// Bounds-checked reader; throws on truncation so a corrupt or partially written
-		// file is treated as a miss.
-		class ByteReader
+		std::string
+		ReadString(ByteReader& reader)
 		{
-		public:
-			explicit ByteReader(const std::vector<std::byte>& bytes) : m_Bytes(bytes) {}
+			const uint32_t                   size = reader.readPod<uint32_t>();
+			const std::span<const std::byte> raw  = reader.readBytes(size);
+			return std::string(reinterpret_cast<const char*>(raw.data()), size);
+		}
 
-			ByteReader(const ByteReader&) = delete;
+		void
+		WriteBlob(ByteWriter& writer, const std::vector<std::byte>& value)
+		{
+			writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
+			writer.writeBytes(value);
+		}
 
-			ByteReader&
-			operator=(const ByteReader&) = delete;
-
-			uint32_t
-			U32()
-			{
-				uint32_t value = 0;
-				Read(&value, sizeof(value));
-				return value;
-			}
-
-			std::string
-			Str()
-			{
-				const uint32_t size = U32();
-				std::string    value(size, '\0');
-				Read(value.data(), size);
-				return value;
-			}
-
-			std::vector<std::byte>
-			Blob()
-			{
-				const uint32_t         size = U32();
-				std::vector<std::byte> value(size);
-				Read(value.data(), size);
-				return value;
-			}
-
-		private:
-			void
-			Read(void* dst, size_t size)
-			{
-				if (m_Cursor + size > m_Bytes.size())
-					throw std::runtime_error("shader cache entry truncated");
-
-				std::memcpy(dst, m_Bytes.data() + m_Cursor, size);
-				m_Cursor += size;
-			}
-
-			const std::vector<std::byte>& m_Bytes;
-			size_t                        m_Cursor = 0;
-		};
+		std::vector<std::byte>
+		ReadBlob(ByteReader& reader)
+		{
+			const uint32_t                   size = reader.readPod<uint32_t>();
+			const std::span<const std::byte> raw  = reader.readBytes(size);
+			return std::vector<std::byte>(raw.begin(), raw.end());
+		}
 
 		void
 		WriteLayout(ByteWriter& writer, const ReflectedLayout& layout)
 		{
-			writer.U32(static_cast<uint32_t>(layout.kind));
-			writer.U32(static_cast<uint32_t>(layout.valueType));
-			writer.U32(layout.size);
-			writer.U32(layout.arrayCount);
-			writer.U32(layout.arrayStride);
+			writer.writePod<uint32_t>(static_cast<uint32_t>(layout.kind));
+			writer.writePod<uint32_t>(static_cast<uint32_t>(layout.valueType));
+			writer.writePod<uint32_t>(layout.size);
+			writer.writePod<uint32_t>(layout.arrayCount);
+			writer.writePod<uint32_t>(layout.arrayStride);
 
-			writer.U32(static_cast<uint32_t>(layout.fields.size()));
+			writer.writePod<uint32_t>(static_cast<uint32_t>(layout.fields.size()));
 			for (const ReflectedField& field : layout.fields)
 			{
-				writer.Str(field.name);
-				writer.U32(field.offset);
+				WriteString(writer, field.name);
+				writer.writePod<uint32_t>(field.offset);
 				WriteLayout(writer, field.layout);
 			}
 
-			writer.U32(static_cast<uint32_t>(layout.element.size()));
+			writer.writePod<uint32_t>(static_cast<uint32_t>(layout.element.size()));
 			for (const ReflectedLayout& element : layout.element) WriteLayout(writer, element);
 		}
 
@@ -186,24 +133,24 @@ namespace bgl
 		ReadLayout(ByteReader& reader)
 		{
 			ReflectedLayout layout;
-			layout.kind        = static_cast<UniformType>(reader.U32());
-			layout.valueType   = static_cast<UniformValueType>(reader.U32());
-			layout.size        = reader.U32();
-			layout.arrayCount  = reader.U32();
-			layout.arrayStride = reader.U32();
+			layout.kind        = static_cast<UniformType>(reader.readPod<uint32_t>());
+			layout.valueType   = static_cast<UniformValueType>(reader.readPod<uint32_t>());
+			layout.size        = reader.readPod<uint32_t>();
+			layout.arrayCount  = reader.readPod<uint32_t>();
+			layout.arrayStride = reader.readPod<uint32_t>();
 
-			const uint32_t fieldCount = reader.U32();
+			const uint32_t fieldCount = reader.readPod<uint32_t>();
 			layout.fields.reserve(fieldCount);
 			for (uint32_t i = 0; i < fieldCount; ++i)
 			{
 				ReflectedField field;
-				field.name   = reader.Str();
-				field.offset = reader.U32();
+				field.name   = ReadString(reader);
+				field.offset = reader.readPod<uint32_t>();
 				field.layout = ReadLayout(reader);
 				layout.fields.push_back(std::move(field));
 			}
 
-			const uint32_t elementCount = reader.U32();
+			const uint32_t elementCount = reader.readPod<uint32_t>();
 			layout.element.reserve(elementCount);
 			for (uint32_t i = 0; i < elementCount; ++i)
 				layout.element.push_back(ReadLayout(reader));
@@ -216,25 +163,25 @@ namespace bgl
 		{
 			ByteWriter writer;
 
-			writer.U32(static_cast<uint32_t>(program.cbuffers.size()));
+			writer.writePod<uint32_t>(static_cast<uint32_t>(program.cbuffers.size()));
 			for (const CachedCbuffer& cbuffer : program.cbuffers)
 			{
-				writer.Str(cbuffer.name);
-				writer.U32(cbuffer.size);
-				writer.U32(cbuffer.rootParamIndex);
-				writer.U32(cbuffer.shaderRegister);
-				writer.U32(cbuffer.registerSpace);
+				WriteString(writer, cbuffer.name);
+				writer.writePod<uint32_t>(cbuffer.size);
+				writer.writePod<uint32_t>(cbuffer.rootParamIndex);
+				writer.writePod<uint32_t>(cbuffer.shaderRegister);
+				writer.writePod<uint32_t>(cbuffer.registerSpace);
 				WriteLayout(writer, cbuffer.layout);
 			}
 
-			writer.U32(static_cast<uint32_t>(program.entryPointDxil.size()));
+			writer.writePod<uint32_t>(static_cast<uint32_t>(program.entryPointDxil.size()));
 			for (const auto& [entry, dxil] : program.entryPointDxil)
 			{
-				writer.Str(entry);
-				writer.Blob(dxil);
+				WriteString(writer, entry);
+				WriteBlob(writer, dxil);
 			}
 
-			return writer.Bytes();
+			return writer.take();
 		}
 
 		CachedProgram
@@ -243,26 +190,26 @@ namespace bgl
 			ByteReader    reader(bytes);
 			CachedProgram program;
 
-			const uint32_t cbufferCount = reader.U32();
+			const uint32_t cbufferCount = reader.readPod<uint32_t>();
 			program.cbuffers.reserve(cbufferCount);
 			for (uint32_t i = 0; i < cbufferCount; ++i)
 			{
 				CachedCbuffer cbuffer;
-				cbuffer.name           = reader.Str();
-				cbuffer.size           = reader.U32();
-				cbuffer.rootParamIndex = reader.U32();
-				cbuffer.shaderRegister = reader.U32();
-				cbuffer.registerSpace  = reader.U32();
+				cbuffer.name           = ReadString(reader);
+				cbuffer.size           = reader.readPod<uint32_t>();
+				cbuffer.rootParamIndex = reader.readPod<uint32_t>();
+				cbuffer.shaderRegister = reader.readPod<uint32_t>();
+				cbuffer.registerSpace  = reader.readPod<uint32_t>();
 				cbuffer.layout         = ReadLayout(reader);
 				program.cbuffers.push_back(std::move(cbuffer));
 			}
 
-			const uint32_t entryCount = reader.U32();
+			const uint32_t entryCount = reader.readPod<uint32_t>();
 			program.entryPointDxil.reserve(entryCount);
 			for (uint32_t i = 0; i < entryCount; ++i)
 			{
-				std::string            entry = reader.Str();
-				std::vector<std::byte> dxil  = reader.Blob();
+				std::string            entry = ReadString(reader);
+				std::vector<std::byte> dxil  = ReadBlob(reader);
 				program.entryPointDxil.emplace_back(std::move(entry), std::move(dxil));
 			}
 
@@ -362,9 +309,9 @@ namespace bgl
 	}
 
 	uint64_t
-	ShaderCache::CombineHash(uint64_t seed, const void* data, size_t size)
+	ShaderCache::CombineHash(uint64_t seed, std::span<const std::byte> bytes)
 	{
-		return HashBytes(data, size, seed);
+		return HashBytes(bytes.data(), bytes.size(), seed);
 	}
 
 	bool

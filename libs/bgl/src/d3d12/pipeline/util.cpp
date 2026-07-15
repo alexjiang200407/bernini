@@ -183,7 +183,7 @@ namespace bgl::pipeline_util
 					found != program.entryPointDxil.end(),
 					"Cached program is missing bytecode for a shader");
 
-				result.entryPointCode[shader] = found->second;
+				result.entryPointCode[entryName] = found->second;
 			}
 
 			return result;
