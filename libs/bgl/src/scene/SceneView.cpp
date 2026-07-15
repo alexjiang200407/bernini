@@ -61,7 +61,10 @@ namespace bgl
 		{
 			auto compactedInstancesDesc = ComputeBufferDesc();
 			compactedInstancesDesc.SetElement<uint32_t>();
-			compactedInstancesDesc.maxCount  = m_MaxInstances;
+			// Match the instance buffer: the compact pass appends one entry per live instance, of
+			// which there can be as many as that (padded) buffer holds.
+			compactedInstancesDesc.maxCount =
+				core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
 			compactedInstancesDesc.debugName = "Compacted Instances";
 
 			m_CompactedInstances.Init(std::move(compactedInstancesDesc), m_ResourceManager);
