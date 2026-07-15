@@ -14,7 +14,7 @@
 #include "resource/Shader.h"
 #include "resource/Shader_d3d12.h"
 #include "shadercache/ShaderCache_d3d12.h"
-#include "slang/ErrorChecker.h"
+#include "slang/SlangErrorChecker.h"
 #include "types/QueueType.h"
 #include <core/ref/SharedRef.h>
 

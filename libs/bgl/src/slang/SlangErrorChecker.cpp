@@ -1,4 +1,4 @@
-#include "slang/ErrorChecker.h"
+#include "slang/SlangErrorChecker.h"
 #include <slang.h>
 
 namespace bgl

@@ -10,9 +10,9 @@ namespace wrl = Microsoft::WRL;
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-#include "ErrorChecker.h"
+#include "D3d12ErrorChecker.h"
 
 #include <slang-com-ptr.h>
 #include <slang.h>
 
-#include "slang/ErrorChecker.h"
+#include "slang/SlangErrorChecker.h"

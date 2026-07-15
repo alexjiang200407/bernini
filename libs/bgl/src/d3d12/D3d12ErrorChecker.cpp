@@ -1,4 +1,4 @@
-#include "ErrorChecker.h"
+#include "D3d12ErrorChecker.h"
 
 namespace bgl
 {
@@ -30,7 +30,7 @@ namespace bgl
 	}
 
 	void
-	operator>>(HRESULT hr, ErrorChecker)
+	operator>>(HRESULT hr, D3d12ErrorChecker)
 	{
 		if (!FAILED(hr))
 			return;
