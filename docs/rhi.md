@@ -64,18 +64,13 @@ doc and a header disagree, trust the header, then fix this doc.
   Creation and command recording run on the render thread and must be externally synchronized.
   A command list is single-threaded between `Open` and `Close`.
 
-* **The shader cache is configuration, not an RHI object.** Compiling shaders is slow (front-end
-  parse dominates) and is otherwise paid on every launch. A persistent, backend-owned cache avoids
-  it, but it is an internal optimization — not a caller-visible resource — so it is **not** an `I*`
-  interface. The only thing that crosses the RHI boundary is one API-agnostic knob,
-  `GraphicsOptions::shaderCacheDir` (empty ⇒ disabled), just like the descriptor-heap capacities.
-  The `Device` owns the cache and consults it transparently during pipeline creation; callers see no
-  signature change. The cache has two layers, each skipping a different compile stage: a program
-  cache (DXIL + serialized reflection) skips the whole Slang pipeline, and an `ID3D12PipelineLibrary`
-  skips the driver's DXIL→ISA compile. Both blob formats are the backend's private business — a
-  future Vulkan backend reads the same directory and backs it with `VkPipelineCache`. To keep this
-  possible, reflection is decoupled from the live Slang reflection object into a serializable
-  `ReflectedLayout` POD (what `Uniforms` is built from).
+* **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
+  is **not** an `I*` interface — the only thing crossing the boundary is
+  `GraphicsOptions::shaderCacheDir` (empty ⇒ disabled), like the descriptor-heap capacities. The
+  backend owns its two layers (a program cache of DXIL + reflection, and an
+  `ID3D12PipelineLibrary`); to keep reflection cacheable and backend-agnostic it is decoupled from
+  the live Slang object into a serializable `ReflectedLayout` POD. See
+  [Shader Cache](docs/shader_cache.md).
 
 ---
 
