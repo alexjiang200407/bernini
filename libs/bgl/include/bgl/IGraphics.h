@@ -5,7 +5,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/RenderContext.h>
 #include <bgl/error.h>
-#include <bgl/util.h>
+#include <bgl/api.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 

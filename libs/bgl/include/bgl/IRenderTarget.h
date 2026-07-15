@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl/util.h>
+#include <bgl/api.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 

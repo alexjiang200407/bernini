@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl/util.h>
+#include <bgl/api.h>
 
 namespace bgl
 {

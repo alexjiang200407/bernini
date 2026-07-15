@@ -11,7 +11,7 @@
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
-#include <bgl/util.h>
+#include <bgl/api.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
