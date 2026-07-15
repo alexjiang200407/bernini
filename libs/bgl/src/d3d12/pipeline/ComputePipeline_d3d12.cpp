@@ -6,13 +6,16 @@
 #pragma warning(push)
 #pragma warning(disable: 4324) // structure was padded due to alignment specifier
 #pragma warning(disable: 5029) // Allow __declspec(align) on non-class types
-        struct PSO_STREAM
+namespace
+{
+        struct ComputePsoStream
         {
             typedef __declspec(align(sizeof(void*))) D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ALIGNED_TYPE;
 
             ALIGNED_TYPE RootSignature_Type;        ID3D12RootSignature* RootSignature;
             ALIGNED_TYPE ComputeShader_Type;        D3D12_SHADER_BYTECODE ComputeShader;
         };
+}
 #pragma warning(pop)
 // clang-format on
 
@@ -42,7 +45,7 @@ namespace bgl
 			codeIt != pipelineLayout.entryPointCode.end(),
 			"Missing compiled bytecode for compute shader");
 
-		PSO_STREAM psoDesc = {};
+		ComputePsoStream psoDesc = {};
 
 		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
 		psoDesc.RootSignature      = m_RootSignature.Get();
@@ -52,7 +55,7 @@ namespace bgl
 			                                                codeIt->second->getBufferSize() };
 
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
-		streamDesc.SizeInBytes                   = sizeof(PSO_STREAM);
+		streamDesc.SizeInBytes                   = sizeof(ComputePsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
 		device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
