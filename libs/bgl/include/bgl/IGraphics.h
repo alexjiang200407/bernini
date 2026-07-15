@@ -99,9 +99,6 @@ namespace bgl
 		Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height) = 0;
 
 		virtual void
-		ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath) = 0;
-
-		virtual void
 		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) = 0;
 
 		/**

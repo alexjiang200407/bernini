@@ -108,7 +108,7 @@ TEST_CASE("Resize recreates the backbuffers", "[resize][graphics]")
 
 	gfx->BeginFrame(target);
 	gfx->EndFrame();
-	gfx->ScreenshotRaw(target, before);
+	gfx->ScreenshotPng(target, before);
 
 	const auto beforeSize = ReadPngSize(before);
 	CHECK(beforeSize.width == 16);
@@ -118,7 +118,7 @@ TEST_CASE("Resize recreates the backbuffers", "[resize][graphics]")
 
 	gfx->BeginFrame(target);
 	gfx->EndFrame();
-	gfx->ScreenshotRaw(target, after);
+	gfx->ScreenshotPng(target, after);
 
 	const auto afterSize = ReadPngSize(after);
 	CHECK(afterSize.width == 64);
@@ -148,7 +148,7 @@ TEST_CASE("Resize with an existing static mesh instance", "[resize][graphics]")
 	// and produce a frame at the new size.
 	const std::string shot = "resize_mesh.png";
 	RenderFrame(gfx, target, scene, 128, 96);
-	gfx->ScreenshotRaw(target, shot);
+	gfx->ScreenshotPng(target, shot);
 
 	const auto size = ReadPngSize(shot);
 	CHECK(size.width == 128);
@@ -172,7 +172,7 @@ TEST_CASE("Resize after drawing a frame", "[resize][graphics]")
 
 	// Draw once at the original size.
 	RenderFrame(gfx, target, scene, 64, 64);
-	gfx->ScreenshotRaw(target, before);
+	gfx->ScreenshotPng(target, before);
 
 	const auto beforeSize = ReadPngSize(before);
 	CHECK(beforeSize.width == 64);
@@ -182,7 +182,7 @@ TEST_CASE("Resize after drawing a frame", "[resize][graphics]")
 	// exercises the FrameGraph re-importing the recreated backbuffer/depth.
 	gfx->Resize(target, 160, 120);
 	RenderFrame(gfx, target, scene, 160, 120);
-	gfx->ScreenshotRaw(target, after);
+	gfx->ScreenshotPng(target, after);
 
 	const auto afterSize = ReadPngSize(after);
 	CHECK(afterSize.width == 160);
@@ -208,7 +208,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 
 		gfx->BeginFrame(target);
 		gfx->EndFrame();
-		gfx->ScreenshotRaw(target, shot);
+		gfx->ScreenshotPng(target, shot);
 
 		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 48);
@@ -223,7 +223,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 
 		gfx->BeginFrame(target);
 		gfx->EndFrame();
-		gfx->ScreenshotRaw(target, shot);
+		gfx->ScreenshotPng(target, shot);
 
 		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 77);
@@ -241,7 +241,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 
 		gfx->BeginFrame(target);
 		gfx->EndFrame();
-		gfx->ScreenshotRaw(target, shot);
+		gfx->ScreenshotPng(target, shot);
 
 		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 80);
@@ -254,7 +254,7 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 
 		gfx->BeginFrame(target);
 		gfx->EndFrame();
-		gfx->ScreenshotRaw(target, shot);
+		gfx->ScreenshotPng(target, shot);
 
 		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 1);
@@ -267,12 +267,12 @@ TEST_CASE("Resize edge cases", "[resize][graphics]")
 
 		gfx->Resize(target, 256, 256);
 		RenderFrame(gfx, target, scene, 256, 256);
-		gfx->ScreenshotRaw(target, shot);
+		gfx->ScreenshotPng(target, shot);
 		CHECK(ReadPngSize(shot).width == 256);
 
 		gfx->Resize(target, 4, 4);
 		RenderFrame(gfx, target, scene, 4, 4);
-		gfx->ScreenshotRaw(target, shot);
+		gfx->ScreenshotPng(target, shot);
 
 		const auto size = ReadPngSize(shot);
 		CHECK(size.width == 4);

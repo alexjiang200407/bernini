@@ -161,9 +161,6 @@ namespace bgl
 		void
 		Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height) override;
 
-		void
-		ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath) override;
-
 		virtual void
 		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) override;
 
@@ -933,12 +930,6 @@ namespace bgl
 			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
 			throw;
 		}
-	}
-
-	void
-	Graphics::ScreenshotRaw(const RenderTargetHandle& target, const std::string& filepath)
-	{
-		writePng(filepath, CaptureBackbuffer(target, "ScreenshotRaw"));
 	}
 
 	void

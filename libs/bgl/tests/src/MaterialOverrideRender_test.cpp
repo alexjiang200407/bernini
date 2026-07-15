@@ -145,7 +145,7 @@ TEST_CASE(
 			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
 
 		gfx->DrawFrame(target, context);
-		gfx->ScreenshotRaw(target, path);
+		gfx->ScreenshotPng(target, path);
 
 		return path;
 	};

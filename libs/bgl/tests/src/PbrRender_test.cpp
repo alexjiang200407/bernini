@@ -85,7 +85,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 		gfx->DrawFrame(target, context);
 	}
 
-	gfx->ScreenshotRaw(target, "assets/golden/pbr_ibl.got.png");
+	gfx->ScreenshotPng(target, "assets/golden/pbr_ibl.got.png");
 
 	CHECK(
 		bgl::test::MatchesGolden("assets/golden/pbr_ibl.exp.png", "assets/golden/pbr_ibl.got.png"));
@@ -166,7 +166,7 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 		gfx->DrawFrame(target, context);
 	}
 
-	gfx->ScreenshotRaw(target, "assets/golden/loose_pbr_ibl.got.png");
+	gfx->ScreenshotPng(target, "assets/golden/loose_pbr_ibl.got.png");
 
 	// Compares against the SAME golden as the PBR case: loose-with-defaults must match PBR-with-defaults.
 	CHECK(

@@ -225,11 +225,11 @@ TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 		REQUIRE_THROWS_AS(gfx->EndFrame(), bgl::GraphicsError);
 	}
 
-	SECTION("ScreenshotRaw between BeginFrame and EndFrame throws")
+	SECTION("ScreenshotPng between BeginFrame and EndFrame throws")
 	{
 		gfx->BeginFrame(target);
 		REQUIRE_THROWS_AS(
-			gfx->ScreenshotRaw(target, "assets/golden/should_not_exist.png"),
+			gfx->ScreenshotPng(target, "assets/golden/should_not_exist.png"),
 			bgl::GraphicsError);
 	}
 }
