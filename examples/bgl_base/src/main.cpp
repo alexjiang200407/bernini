@@ -123,7 +123,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		// comes in -- and goes out -- with one call. It honours each material's mode: a baked one
 		// samples its optimized triplet, a loose one samples the source routes the material editor
 		// authored.
-		auto assets = game::AssetManager(view, dataRoot);
+		auto assets = game::AssetManager(scene, dataRoot);
 
 		auto geoms = std::vector<bgl::GeomHandle>();
 		geoms.reserve(model.meshes.size());
@@ -146,7 +146,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				continue;
 
 			const auto world = worldMatrix(n);
-			assets.CreateInstance(geoms[node.mesh], world);
+			assets.CreateInstance(view, geoms[node.mesh], world);
 
 			const auto& meshEntry = model.meshes[node.mesh];
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)

@@ -304,12 +304,10 @@ MainWindow::SetActiveProject(Project project)
 
 	m_Assets.reset();
 
-	if (m_LevelEditor)
-	{
-		m_Assets = std::make_unique<game::AssetManager>(
-			m_LevelEditor->View(),
-			m_Project->GetDataDirectory());
-	}
+	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
+	// shares is one upload and one reference count no matter which view shows it. Each view names itself
+	// when it places an instance.
+	m_Assets = std::make_unique<game::AssetManager>(m_Scene, m_Project->GetDataDirectory());
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
 	// asks for a render straight away -- a material cannot be resolved without a manager.
