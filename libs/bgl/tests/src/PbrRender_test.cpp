@@ -18,7 +18,7 @@ namespace
 		OnGpuAssertion(const bgl::GpuAssertionReport& report) noexcept override
 		{
 			++calls;
-			errcodes.assign(report.errcodes, report.errcodes + report.errcodeCount);
+			errcodes.assign(report.errcodes.begin(), report.errcodes.end());
 		}
 	};
 }

@@ -198,7 +198,7 @@ namespace
 		{
 			++calls;
 			raisedCount = report.raisedCount;
-			errcodes.assign(report.errcodes, report.errcodes + report.errcodeCount);
+			errcodes.assign(report.errcodes.begin(), report.errcodes.end());
 		}
 	};
 }

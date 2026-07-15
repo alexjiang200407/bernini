@@ -525,10 +525,9 @@ namespace bgl
 			}
 
 			GpuAssertionReport pub;
-			pub.raisedCount  = report->count;
-			pub.overflow     = report->overflow;
-			pub.errcodes     = errcodes.data();
-			pub.errcodeCount = static_cast<uint32_t>(errcodes.size());
+			pub.raisedCount = report->count;
+			pub.overflow    = report->overflow;
+			pub.errcodes    = std::span<const uint32_t>(errcodes.data(), errcodes.size());
 
 			m_GpuAssertionHandler->OnGpuAssertion(pub);
 			return;
