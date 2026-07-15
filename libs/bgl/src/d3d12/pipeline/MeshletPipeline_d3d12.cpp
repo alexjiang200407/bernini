@@ -8,7 +8,9 @@
 #pragma warning(push)
 #pragma warning(disable: 4324) // structure was padded due to alignment specifier
 #pragma warning(disable: 5029) // Allow __declspec(align) on non-class types
-        struct PSO_STREAM
+namespace
+{
+        struct MeshletPsoStream
         {
             typedef __declspec(align(sizeof(void*))) D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ALIGNED_TYPE;
 
@@ -25,6 +27,7 @@
             ALIGNED_TYPE RenderTargets_Type;        D3D12_RT_FORMAT_ARRAY RenderTargets;
             ALIGNED_TYPE DSVFormat_Type;            DXGI_FORMAT DSVFormat;
         };
+}
 #pragma warning(pop)
 // clang-format on
 
@@ -67,7 +70,7 @@ namespace bgl
 				                          found->second->getBufferSize() };
 		};
 
-		PSO_STREAM psoDesc = {};
+		MeshletPsoStream psoDesc = {};
 
 		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
 		psoDesc.RootSignature      = m_RootSignature.Get();
@@ -118,7 +121,7 @@ namespace bgl
 		psoDesc.DSVFormat      = ConvertFormat(desc.dsvFormat);
 
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
-		streamDesc.SizeInBytes                   = sizeof(PSO_STREAM);
+		streamDesc.SizeInBytes                   = sizeof(MeshletPsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
 		device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
