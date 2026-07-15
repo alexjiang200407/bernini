@@ -45,7 +45,7 @@ namespace bgl
 		IRenderTarget() noexcept = default;
 	};
 
-	using RenderTargetHandle = core::SharedRef<IRenderTarget>;
+	using RenderTargetRef = core::SharedRef<IRenderTarget>;
 }
 
 template class BGL_API core::SharedRef<bgl::IRenderTarget>;

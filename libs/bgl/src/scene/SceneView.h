@@ -29,7 +29,7 @@ namespace bgl
 	{
 	public:
 		SceneView(
-			const SceneHandle&                scene,
+			const SceneRef&                   scene,
 			uint32_t                          maxInstances,
 			core::SharedRef<IResourceManager> resourceManager);
 
@@ -44,7 +44,7 @@ namespace bgl
 		SceneView&
 		operator=(SceneView&&) noexcept = delete;
 
-		const SceneHandle&
+		const SceneRef&
 		GetScene() const noexcept override
 		{
 			return m_Scene;
@@ -150,7 +150,7 @@ namespace bgl
 		[[nodiscard]] MeshMeta&
 		MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what);
 
-		SceneHandle                       m_Scene;
+		SceneRef                          m_Scene;
 		Scene*                            m_SceneRaw = nullptr;
 		core::SharedRef<IResourceManager> m_ResourceManager;
 		std::string                       m_NamePrefix;

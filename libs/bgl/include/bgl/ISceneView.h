@@ -28,7 +28,7 @@ namespace bgl
 		/**
 		 * The Scene whose geometry this view instances. The view keeps it alive.
 		 */
-		virtual const SceneHandle&
+		virtual const SceneRef&
 		GetScene() const noexcept = 0;
 
 		/**
@@ -120,7 +120,7 @@ namespace bgl
 		ISceneView() noexcept = default;
 	};
 
-	using SceneViewHandle = core::SharedRef<ISceneView>;
+	using SceneViewRef = core::SharedRef<ISceneView>;
 }
 
 template class BGL_API core::SharedRef<bgl::ISceneView>;

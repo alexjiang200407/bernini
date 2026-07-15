@@ -39,7 +39,7 @@ namespace bgl
 		ResourceManager(
 			wrl::ComPtr<ID3D12Device>  device,
 			const ResourceManagerDesc& desc,
-			CommandQueueHandle         submissionQueue);
+			CommandQueueRef            submissionQueue);
 
 		ResourceManager(const ResourceManager&)     = delete;
 		ResourceManager(ResourceManager&&) noexcept = delete;
@@ -275,7 +275,7 @@ namespace bgl
 		std::vector<PendingDeletion> m_PendingDeletions;
 
 		// The queue every command list is submitted on
-		CommandQueueHandle m_SubmissionQueue;
+		CommandQueueRef m_SubmissionQueue;
 
 		friend class DeviceImpl;
 	};

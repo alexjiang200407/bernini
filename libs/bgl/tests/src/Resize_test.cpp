@@ -41,8 +41,8 @@ namespace
 		return opts;
 	}
 
-	bgl::RenderTargetHandle
-	HeadlessTarget(const bgl::GraphicsHandle& gfx, int width, int height)
+	bgl::RenderTargetRef
+	HeadlessTarget(const bgl::GraphicsRef& gfx, int width, int height)
 	{
 		auto desc     = bgl::RenderTargetDesc();
 		desc.width    = width;
@@ -51,8 +51,8 @@ namespace
 		return gfx->CreateRenderTarget(desc);
 	}
 
-	bgl::SceneViewHandle
-	MakeCubeScene(const bgl::GraphicsHandle& gfx)
+	bgl::SceneViewRef
+	MakeCubeScene(const bgl::GraphicsRef& gfx)
 	{
 		auto desc                    = bgl::SceneDesc();
 		desc.maxGeom                 = 8;
@@ -70,11 +70,11 @@ namespace
 
 	void
 	RenderFrame(
-		const bgl::GraphicsHandle&     gfx,
-		const bgl::RenderTargetHandle& target,
-		const bgl::SceneViewHandle&    view,
-		uint32_t                       width,
-		uint32_t                       height)
+		const bgl::GraphicsRef&     gfx,
+		const bgl::RenderTargetRef& target,
+		const bgl::SceneViewRef&    view,
+		uint32_t                    width,
+		uint32_t                    height)
 	{
 		auto       camera = bgl::Camera();
 		const auto aspect = static_cast<float>(width) / static_cast<float>(height);

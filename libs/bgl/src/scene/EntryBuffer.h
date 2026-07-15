@@ -39,13 +39,13 @@ namespace bgl
 
 	public:
 		EntryBuffer() noexcept = default;
-		EntryBuffer(EntryBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		EntryBuffer(EntryBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
 		void
-		Init(EntryBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		Init(EntryBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			gassert(desc.maxCount > 0, "EntryBuffer must have a positive maxCount");
 			gassert(desc.blockSize > 0, "Block size must be greater than zero");
@@ -344,10 +344,10 @@ namespace bgl
 		}
 
 	private:
-		EntryBufferDesc       m_Desc;
-		ResourceManagerHandle m_ResourceManager;
-		BufferHandle          m_BufferHandle;
-		core::slot_vector<T>  m_Entries;
+		EntryBufferDesc      m_Desc;
+		ResourceManagerRef   m_ResourceManager;
+		BufferHandle         m_BufferHandle;
+		core::slot_vector<T> m_Entries;
 
 		MetaStorage m_Metadata;
 

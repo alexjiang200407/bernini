@@ -47,5 +47,5 @@ namespace bgl
 		GetDesc() const noexcept = 0;
 	};
 
-	using ShaderHandle = core::SharedRef<IShader>;
+	using ShaderRef = core::SharedRef<IShader>;
 }

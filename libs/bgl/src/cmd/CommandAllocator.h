@@ -23,5 +23,5 @@ namespace bgl
 		ResetAllocator() noexcept = 0;
 	};
 
-	using CommandAllocatorHandle = core::SharedRef<ICommandAllocator>;
+	using CommandAllocatorRef = core::SharedRef<ICommandAllocator>;
 }

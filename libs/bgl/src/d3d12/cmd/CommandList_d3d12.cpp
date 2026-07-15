@@ -4,13 +4,13 @@
 #include "cmd/CommandQueue.h"
 #include "cmd/Version.h"
 #include "constants/constants.h"
+#include "convert_d3d12.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_d3d12.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "uniforms/Uniforms.h"
-#include "convert_d3d12.h"
 #include <core/math.h>
 
 #if defined(USE_PIX) && defined(_WIN32)
@@ -22,7 +22,7 @@ namespace bgl
 	CommandList::CommandList(
 		const CommandListDesc& desc,
 		ICommandAllocator*     commandAllocator,
-		ResourceManagerHandle  resourceManager) :
+		ResourceManagerRef     resourceManager) :
 		m_Desc(desc), m_ResourceManager(std::move(resourceManager)),
 		m_UploadManager(
 			m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy(),

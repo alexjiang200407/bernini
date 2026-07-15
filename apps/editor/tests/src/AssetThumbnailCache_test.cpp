@@ -29,8 +29,8 @@ namespace
 	// Material Editor's preview is lit by.
 	struct Fixture
 	{
-		bgl::GraphicsHandle               gfx;
-		bgl::SceneHandle                  scene;
+		bgl::GraphicsRef                  gfx;
+		bgl::SceneRef                     scene;
 		std::optional<game::AssetManager> assets;
 
 		Fixture()

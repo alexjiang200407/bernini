@@ -92,5 +92,5 @@ namespace bgl
 			const noexcept = 0;
 	};
 
-	using DeviceHandle = core::SharedRef<IDevice>;
+	using DeviceRef = core::SharedRef<IDevice>;
 }

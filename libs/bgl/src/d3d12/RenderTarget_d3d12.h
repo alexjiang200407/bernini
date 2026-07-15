@@ -34,9 +34,9 @@ namespace bgl
 	public:
 		RenderTarget(
 			const RenderTargetDesc& desc,
-			DeviceHandle            device,
-			CommandQueueHandle      queue,
-			ResourceManagerHandle   resourceManager,
+			DeviceRef               device,
+			CommandQueueRef         queue,
+			ResourceManagerRef      resourceManager,
 			bool                    enableDebug);
 
 		~RenderTarget() noexcept override;
@@ -77,9 +77,9 @@ namespace bgl
 		void
 		DestroyRenderTargets(uint64_t fenceValue);
 
-		DeviceHandle          m_Device;
-		CommandQueueHandle    m_CommandQueue;
-		ResourceManagerHandle m_ResourceManager;
+		DeviceRef          m_Device;
+		CommandQueueRef    m_CommandQueue;
+		ResourceManagerRef m_ResourceManager;
 
 		bool  m_Headless    = false;
 		bool  m_EnableDebug = false;
@@ -95,6 +95,6 @@ namespace bgl
 		TextureDsvHandle m_DepthBuffer;
 		UINT64           m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
 
-		CommandAllocatorHandle m_CommandAllocator[c_SwapchainImageCount];
+		CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
 	};
 }

@@ -10,9 +10,9 @@ namespace bgl
 {
 	RenderTarget::RenderTarget(
 		const RenderTargetDesc& desc,
-		DeviceHandle            device,
-		CommandQueueHandle      queue,
-		ResourceManagerHandle   resourceManager,
+		DeviceRef               device,
+		CommandQueueRef         queue,
+		ResourceManagerRef      resourceManager,
 		bool                    enableDebug) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),

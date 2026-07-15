@@ -27,7 +27,7 @@ namespace bgl
 	}
 
 	SceneView::SceneView(
-		const SceneHandle&                scene,
+		const SceneRef&                   scene,
 		uint32_t                          maxInstances,
 		core::SharedRef<IResourceManager> resourceManager) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)), m_MaxInstances(maxInstances)

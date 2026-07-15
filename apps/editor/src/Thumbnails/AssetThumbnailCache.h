@@ -20,8 +20,8 @@ class QTimer;
 
 struct AssetThumbnailDesc
 {
-	bgl::GraphicsHandle gfx;
-	bgl::SceneHandle    scene;
+	bgl::GraphicsRef gfx;
+	bgl::SceneRef    scene;
 
 	uint32_t dimension    = 256;
 	uint32_t maxInstances = 256;
@@ -191,10 +191,10 @@ private:
 	QThreadPool           m_Pool;
 	QTimer*               m_DrainTimer = nullptr;
 
-	AssetThumbnailDesc      m_Desc;
-	bgl::RenderTargetHandle m_RenderTarget;
-	bgl::SceneViewHandle    m_SceneView;
-	bgl::MaterialHandle     m_DefaultMaterial;
+	AssetThumbnailDesc   m_Desc;
+	bgl::RenderTargetRef m_RenderTarget;
+	bgl::SceneViewRef    m_SceneView;
+	bgl::MaterialHandle  m_DefaultMaterial;
 
 	// Turns a `.bmaterial` into a scene material, and owns the textures it names. The editor's only
 	// route to that: the baked/loose branch lives in gamelib and nowhere else.

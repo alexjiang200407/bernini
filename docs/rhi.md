@@ -33,7 +33,7 @@ doc and a header disagree, trust the header, then fix this doc.
 * **Interface objects use intrusive refcounting.** Every `I*` derives from `core::Ref`
   (`AddRef`/`Release`) and is held behind `core::SharedRef<T>` (analogous to
   `Microsoft::WRL::ComPtr`). Each interface exposes a `…Handle` alias
-  (`DeviceHandle`, `CommandListHandle`, …). Interfaces delete copy/move — they are non-value
+  (`DeviceRef`, `CommandListRef`, …). Interfaces delete copy/move — they are non-value
   types, always held behind a `SharedRef`.
 
 * **`IDevice` is the sole factory.** All objects — shaders, pipelines, kernels, command
@@ -253,10 +253,10 @@ Everything else is self-explanatory from the header.
 ```cpp
 // Setup (render thread)
 IDevice*               device = graphics->GetDevice();
-ResourceManagerHandle  rm     = device->CreateResourceManager(ResourceManagerDesc{});
-CommandQueueHandle     queue  = device->CreateGraphicsCommandQueue();
-CommandAllocatorHandle alloc  = device->CreateCommandAllocator();
-CommandListHandle      cmd    = device->CreateCommandList({QueueType::kGraphics}, alloc, rm);
+ResourceManagerRef  rm     = device->CreateResourceManager(ResourceManagerDesc{});
+CommandQueueRef     queue  = device->CreateGraphicsCommandQueue();
+CommandAllocatorRef alloc  = device->CreateCommandAllocator();
+CommandListRef      cmd    = device->CreateCommandList({QueueType::kGraphics}, alloc, rm);
 
 ComputeKernel kernel = device->CreateComputeKernel(
     ComputePipelineDesc()
