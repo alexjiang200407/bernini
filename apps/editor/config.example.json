@@ -8,7 +8,8 @@
         "maxRtvs": 32,
         "maxDsvs": 16,
         "maxTextures": 2048,
-        "strictError": false
+        "strictError": false,
+        "enableShaderCache": true
     },
     "scene": {
         "maxGeom": 256,
