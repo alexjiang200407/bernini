@@ -1,5 +1,6 @@
 #pragma once
 #include "uniforms/ReflectedLayout.h"
+#include <core/type_traits.h>
 
 namespace bgl
 {
@@ -24,19 +25,9 @@ namespace bgl
 		std::vector<std::pair<std::string, std::vector<std::byte>>> entryPointDxil;
 	};
 
-	// Persistent, on-disk cache of compiled shaders, keyed by their source composition
-	// and compile options. It has two layers, each skipping a different compile stage
-	// that is otherwise paid on every launch:
-	//   * the program cache (.bsc files) holds DXIL + reflection, skipping the whole
-	//     slang pipeline (front-end parse + DXIL codegen);
-	//   * the pipeline library (an ID3D12PipelineLibrary blob) holds driver-compiled
-	//     PSOs, skipping the driver's DXIL -> GPU-ISA compile.
-	//
-	// Program-cache invalidation is coarse and automatic: a single hash folds the
-	// shader compiler version, the compile options, this cache's format version, and
-	// the content of every shader source file. Any change flips every key, so stale
-	// entries are missed and recompiled. The pipeline library additionally
-	// self-invalidates against the driver and adapter (D3D12 rejects a foreign blob).
+	// Persistent, two-layer on-disk cache of compiled shaders: a program cache (DXIL +
+	// reflection) and an ID3D12PipelineLibrary of driver-compiled PSOs. See
+	// docs/shader_cache.md.
 	class ShaderCache
 	{
 	public:
@@ -70,10 +61,18 @@ namespace bgl
 		void
 		Store(uint64_t key, const CachedProgram& program) const;
 
-		// Rolling hash of arbitrary bytes, used by pipeline creation to derive a PSO's
-		// identity from its bytecode and render state. Seed the first call with 0.
+		// Rolling hash used by pipeline creation to derive a PSO's identity from its
+		// bytecode and render state. Seed the first call with 0.
 		[[nodiscard]] static uint64_t
-		CombineHash(uint64_t seed, const void* data, size_t size);
+		CombineHash(uint64_t seed, std::span<const std::byte> bytes);
+
+		template <core::type_traits::trivially_copyable T>
+			requires(!std::convertible_to<const T&, std::span<const std::byte>>)
+		[[nodiscard]] static uint64_t
+		CombineHash(uint64_t seed, const T& value)
+		{
+			return CombineHash(seed, std::as_bytes(std::span<const T, 1>(&value, 1)));
+		}
 
 		// Loads a driver-compiled PSO previously stored under an identical identity.
 		// Returns false on a miss (including when the library is unavailable); the
