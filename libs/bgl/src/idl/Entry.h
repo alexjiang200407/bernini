@@ -5,7 +5,7 @@ namespace bgl::idl
 {
 	struct Entry
 	{
-		uint32_t offset = 0;
+		uint32_t offset = 0xFFFFFFFF;
 
 		[[nodiscard]]
 		bool
@@ -21,4 +21,6 @@ namespace bgl::idl
 			return *this;
 		}
 	};
+
+	static_assert(sizeof(Entry) == sizeof(uint32_t), "Entry must mirror the Slang layout");
 }

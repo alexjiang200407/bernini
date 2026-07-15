@@ -365,11 +365,9 @@ namespace bgl
 		const uint32_t padded = core::round_up(count, idl::cHistogramGroupSize);
 		if (padded > count)
 		{
-			std::vector<SubmeshInstance> tail(padded - count);
-			for (SubmeshInstance& instance : tail)
-			{
-				instance.meshInstance.offset = 0xFFFFFFFFu;  // Null(): skipped by the sort
-			}
+			// A default SubmeshInstance is skipped by the sort (Null meshInstance, pso kInvalid);
+			// upload it into the histogram-group tail so the padding never enters a real bucket.
+			const std::vector<SubmeshInstance> tail(padded - count);
 			cmdList->WriteBuffer(
 				m_InstanceBuffer.GetBufferHandle(),
 				tail.data(),
