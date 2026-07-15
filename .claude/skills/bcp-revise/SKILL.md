@@ -108,7 +108,14 @@ git push
 Close the loop **on GitHub**, not just in chat. The reviewer should not have to diff your push
 against their comments to find out what you did.
 
+Post as the **morgana-coding-agent bot** when it is set up, so review replies don't read as if the
+author wrote them by hand — see [docs/ai-coding.md](docs/ai-coding.md). Mint a token once and export
+it for the `gh` calls below; if the bot isn't configured the command fails quietly and `gh` uses the
+logged-in account instead.
+
 ```bash
+GH_TOKEN=$(bash .claude/skills/bcp-revise/mint-bot-token.sh 2>/dev/null) && export GH_TOKEN
+
 # Reply in the thread of a specific inline comment (use its id from step 1).
 gh api repos/{owner}/{repo}/pulls/{n}/comments/{comment_id}/replies -f body="..."
 

@@ -73,6 +73,10 @@ PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlet
 
 Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma field must be 1.0, and how to verify the maps before shipping them.
 
+**[AI Coding Bot](./docs/ai-coding.md)**
+
+Setting up the `morgana-coding-agent` GitHub App so AI-driven PR review replies post, and commits are co-authored, under a bot identity instead of your own account.
+
 # Directory Structure
 
 ## Debug
