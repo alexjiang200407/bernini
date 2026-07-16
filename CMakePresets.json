@@ -148,7 +148,10 @@
         "msvc",
         "dx12",
         "debug"
-      ]
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
     },
     {
       "name": "windows-ninja-msvc-dx12-release",
@@ -161,7 +164,10 @@
         "msvc",
         "dx12",
         "release"
-      ]
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     },
     {
       "name": "windows-clang-dx12-debug",
