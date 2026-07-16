@@ -5,7 +5,7 @@ import idl.ErrorCode;
 __exported import idl.ErrorCode;
 
 static const uint kDbgHeaderWords = 4;
-static const uint kDbgRecordWords = 1;
+static const uint kDbgRecordWords = 4;
 
 struct DebugGlobals
 {
@@ -14,7 +14,10 @@ struct DebugGlobals
 
 ConstantBuffer<DebugGlobals> gDebug;
 
-void dbg_raise(ErrorCode errcode)
+// `value`/`limit` are the two sides of the comparison that failed, and `context` names what the
+// shader was working on -- without them a record says only that something went wrong,
+// which is not enough to find it. See DebugRecord.
+void dbg_raise(ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)
 {
 #if defined(BERNINI_GPU_DEBUG)
     uint slot;
@@ -25,6 +28,9 @@ void dbg_raise(ErrorCode errcode)
     {
         let base = kDbgHeaderWords + slot * kDbgRecordWords;
         gDebug.buffer[base + 0] = errcode;
+        gDebug.buffer[base + 1] = value;
+        gDebug.buffer[base + 2] = limit;
+        gDebug.buffer[base + 3] = context;
     }
     else
     {
@@ -33,10 +39,10 @@ void dbg_raise(ErrorCode errcode)
 #endif
 }
 
-void dbg_assert(bool condition, ErrorCode errcode)
+void dbg_assert(bool condition, ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)
 {
     if (!condition)
     {
-        dbg_raise(errcode);
+        dbg_raise(errcode, value, limit, context);
     }
 }
