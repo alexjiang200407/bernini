@@ -4,19 +4,40 @@ on:
   issue_comment:
     types: [created]
 
+  # issue_comment only ever runs the default branch's copy of this file, so a change
+  # here cannot be tested from a branch. workflow_dispatch can: it runs the version on
+  # whatever --ref you give it. Everything below the trigger is then testable without
+  # merging first.
+  #
+  #   gh workflow run review.yml --ref <branch> -f pr=<number>
+  #
+  # (Dispatch only becomes available once this file is on the default branch.)
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to review"
+        required: true
+        type: string
+
 # The App token posts the review; GITHUB_TOKEN only has to read the repo.
 permissions:
   contents: read
+
+env:
+  # The PR under review, whichever trigger fired.
+  PR: ${{ github.event.issue.number || inputs.pr }}
 
 jobs:
   review:
     # issue_comment fires for plain issues too -- github.event.issue.pull_request is
     # set only on pull requests. The author gate matters: without it, anyone who can
-    # comment can spend the subscription's quota.
+    # comment can spend the subscription's quota. Dispatch needs no gate: it already
+    # requires write access to the repo.
     if: >-
-      github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@makoto') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       contains(github.event.comment.body, '@makoto') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -25,7 +46,7 @@ jobs:
       # needs the PR's code and enough history to diff it against the base.
       - uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
+          ref: refs/pull/${{ env.PR }}/head
           fetch-depth: 0
 
       # App ID is an identifier, not a secret -- same as BOT_APP_ID in scripts/init.py.
@@ -46,5 +67,13 @@ jobs:
         with:
           github_token: ${{ steps.app-token.outputs.token }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: "/bcp-review ${{ github.repository }} pull request ${{ github.event.issue.number }}"
-          claude_args: "--max-turns 20"
+          prompt: "/bcp-review ${{ github.repository }} pull request ${{ env.PR }}"
+          # CI has no human to approve tool use, so anything not allowlisted here is
+          # DENIED -- without this the run burns every turn being refused and never
+          # reads the diff. gh covers the diff and the review post; Read/Grep/Glob are
+          # what the skill needs to read around a hunk. No write tools: it cannot edit
+          # the repo.
+          claude_args: |
+            --allowedTools "Bash(gh:*),Bash(git:*),Read,Grep,Glob"
+            --max-turns 40
+            --model claude-opus-4-8
