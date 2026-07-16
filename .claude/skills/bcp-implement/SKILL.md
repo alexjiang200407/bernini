@@ -91,9 +91,9 @@ just test editor gamelib   # only these
 fail with "Permission denied". Run them sequentially.
 
 Then **check the logs**, which is where problems appear that no assertion catches. They sit beside
-the executable (`build/<preset>/bin/`): `bgl.log`, and a `<exe>_crash.log` if something died. Note a
-stale log from an earlier day is not evidence about this run — check the timestamps before drawing a
-conclusion from one.
+the executable (`build/<preset>/bin/`): `bgl.log`, and a `<exe>_crash_<stamp>.log` if something died.
+Crash logs are stamped and accumulate, so the newest is the only one this run wrote — check the
+timestamps before drawing a conclusion from any log.
 
 If the change touches **shaders, barriers, or descriptors**, run GPU-based validation before the PR.
 It patches every shader, so it roughly doubles the suite — but it is the only thing that catches a

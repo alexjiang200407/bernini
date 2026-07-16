@@ -53,7 +53,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgl.log` |
 | Silent wrong output, want a timeline of what the engine did | **`bgl.log`** (raise `logLevel` to `kTrace`) |
 | Broken internal invariant should stop the process now | **`gassert`/`gfatal`** |
-| Process already crashed; need the stack | **`{exe}_crash.log`** |
+| Process already crashed; need the stack | **`{exe}_crash_*.log`** (newest) |
 
 ---
 
@@ -183,15 +183,19 @@ Defined in [libs/bgl/src/error/gassert.h](libs/bgl/src/error/gassert.h) (PCH-inc
 
 ---
 
-## 4. Crash log — `{exe}_crash.log`
+## 4. Crash log — `{exe}_crash_YYYYMMDD_HHMMSS.log`
 
 A post-mortem stack trace, provided by **core** (not bgl):
 [libs/core/src/err/util.cpp](libs/core/src/err/util.cpp), `core::crash_signal_handle`. On a
-fatal signal it truncates `./{exe_stem}_crash.log`, writes a `cpptrace` stack trace, then
+fatal signal it writes `./{exe_stem}_crash_YYYYMMDD_HHMMSS.log` — a `cpptrace` stack trace — then
 `std::exit`. The app/test entry point registers it for `SIGSEGV/SIGABRT/SIGFPE` (e.g.
 [libs/assetlib/tests/src/main.cpp](libs/assetlib/tests/src/main.cpp)). Because `gassert`/`gfatal`
 call `std::terminate` → `SIGABRT`, a CPU assert failure lands here. After any crash, look for
-`{exe_stem}_crash.log` (and other `.log` files) in the failing executable's directory.
+the newest `{exe_stem}_crash_*.log` (and other `.log` files) in the failing executable's directory.
+
+The name is stamped, so a crash never overwrites the one before it and a reproduction attempt can
+be compared against the original. The ordinary logs are overwritten per run. Crashes within the
+same second do still collide.
 
 ---
 

@@ -1,5 +1,6 @@
 #include <DemoWindow.h>
 #include <bgl/bgl.h>
+#include <core/err/util.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -7,6 +8,8 @@
 int APIENTRY
 wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 {
+	core::install_crash_handlers();
+
 	try
 	{
 		auto opts       = demo::WindowOptions{};

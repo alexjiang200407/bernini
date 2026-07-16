@@ -89,7 +89,7 @@ The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, 
 - Use `just exes` or `just run` to locate and launch binaries.
 - When running a binary located here you need to set the cwd to the target directory otherwise the filepaths fail (`just run` does this for you)
 - Do not hardcode executable paths. The runtime output dir depends on the generator (`bin/<config>` for multi-config generators like VS/Xcode, `bin` for Ninja/Make) so it can't be read statically from CMakeLists. Use the commands below to resolve and run targets instead.
-- If a program crashes, a crashlog may exist. It will be at the location of the executable named `{exe_stem}_crash.log`
+- If a program crashes, a crashlog may exist. It will be at the location of the executable named `{exe_stem}_crash_YYYYMMDD_HHMMSS.log` — stamped, so crashes accumulate rather than overwrite each other. Read the newest unless you are comparing runs.
 - Other logs may also exist. So scan for other `.log` files inside the failing executable directory.
 
 # Scripts
