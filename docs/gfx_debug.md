@@ -64,13 +64,21 @@ reads the buffer back a few frames later and either crashes (`gfatal`) or forwar
 registered handler.
 
 **Shader side** — [libs/bgl/shaders/src/debug/dbg.slang](libs/bgl/shaders/src/debug/dbg.slang):
-* `dbg_raise(ErrorCode errcode)` — atomically appends one record; sets the overflow flag if the
-  buffer is full.
-* `dbg_assert(bool condition, ErrorCode errcode)` — `dbg_raise` when `!condition`.
+* `dbg_raise(ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)` — atomically
+  appends one record; sets the overflow flag if the buffer is full.
+* `dbg_assert(bool condition, ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)`
+  — `dbg_raise` when `!condition`.
+* **Pass the operands.** `value`/`limit` are the two sides of the comparison that failed and
+  `context` names what the shader was working on (the submesh, meshlet or instance). They default to
+  zero so a raise that is not a comparison stays terse — but a record without them says only that
+  something went wrong, which cannot be traced back to *which* draw. One bad submesh raises once per
+  vertex, so a bare errcode arrives a thousand times over and still names nothing.
 * Error codes are the generated enum
   [idl/ErrorCode.slang](libs/bgl/shaders/src/idl/ErrorCode.slang) / C++ mirror
   [idl/ErrorCode.h](libs/bgl/src/idl/ErrorCode.h) (`kUnknown=1 … kInvalidVertexIndex=7`). Add
-  new codes there, not inline. See [IDL Codegen](docs/idlgen.md).
+  new codes there, not inline — and give the new code a name in `ErrorCodeName`
+  ([DebugReadback.h](libs/bgl/src/debug/DebugReadback.h)), which the build enforces. See
+  [IDL Codegen](docs/idlgen.md).
 
 **Consumer API** — [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h),
 [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h):
@@ -115,8 +123,17 @@ flowchart TD
   the engine wires the live buffer from reflection, so every shader that imports `debug.dbg`
   gets it auto-bound.
 * **Layout constants must match** between [DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
-  [dbg.slang](libs/bgl/shaders/src/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=1`).
-  Changing a record's shape means editing both.
+  [dbg.slang](libs/bgl/shaders/src/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
+  Changing a record's shape means editing both, plus the `DebugRecord` IDL struct the readback
+  decodes over the words. A `static_assert` in `DebugBuffer.h` catches the struct and the word count
+  disagreeing; nothing catches `dbg.slang` disagreeing, so change it in the same commit.
+* **A slot in the readback ring is Graphics-wide, but every `RenderTarget` indexes it with a frame
+  index of its own.** With more than one target (the editor has three) the target that inspects a
+  slot need not be the one that filled it, so `InspectDebugSlot` waits on the fence recorded for the
+  copy rather than the caller's `rt.m_FenceValues[index]` — which gates a different frame entirely,
+  and is absent altogether for a target that has not yet drawn at that slot. Two consequences remain:
+  a report can be attributed to the wrong target (read the record's `context`, not the stack), and a
+  second target's copy can overwrite a slot before anyone inspects it, dropping those assertions.
 * **Handler lifetime spans the frame-latency window.** Reports arrive `c_SwapchainImageCount` frames
   after they fire, so the handler must stay valid across that window — simplest rule: it must
   outlive the `IGraphics`. @pre for a clean teardown: call `DiscardPendingGpuAssertions()`
