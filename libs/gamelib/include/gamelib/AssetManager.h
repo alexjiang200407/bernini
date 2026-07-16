@@ -47,16 +47,18 @@ namespace game
 		};
 
 		/**
-		 * @param view     The view instances are placed in; its scene is what assets are uploaded to.
-		 *                 Both are *held*, not borrowed: the destructor hands every asset back to the
-		 *                 scene, so the manager keeps the scene alive rather than trusting the caller to
-		 *                 have declared it in an order that outlives us.
+		 * @param scene    The scene assets are uploaded to. *Held*, not borrowed: the destructor hands
+		 *                 every asset back to it, so the manager keeps it alive rather than trusting the
+		 *                 caller to have declared it in an order that outlives us. Textures, materials and
+		 *                 geometry belong to the scene and are shared across every view drawn from it, so
+		 *                 one manager serves them all -- CreateInstance names the view each instance goes
+		 *                 in, and holds it for as long as the instance lives there.
 		 * @param dataRoot The project's Data directory; every path handed to this manager is relative
 		 *                 to it. A standalone baked model directory is its own data root.
 		 *
-		 * @throws bgl::SceneError if `view` is null.
+		 * @throws bgl::SceneError if `scene` is null.
 		 */
-		AssetManager(bgl::SceneViewHandle view, std::filesystem::path dataRoot);
+		AssetManager(bgl::SceneHandle scene, std::filesystem::path dataRoot);
 
 		/** Releases everything still held, in dependency order. */
 		~AssetManager();
@@ -119,17 +121,23 @@ namespace game
 			bgl::MaterialHandle material = {});
 
 		/**
-		 * Places `geom` in the view at `transform`. The instance holds a reference on the geometry, so
-		 * geometry cannot be deleted while it is still being drawn.
+		 * Places `geom` in `view` at `transform`. The instance holds a reference on the geometry, so
+		 * geometry cannot be deleted while it is still being drawn, and holds `view` too, so the view it
+		 * lives in outlives it. `view` must draw this manager's scene.
 		 *
-		 * @throws bgl::SceneError if the geom is not one this manager owns, or has expired.
+		 * @throws bgl::SceneError if `view` is null, or the geom is not one this manager owns or has
+		 *         expired.
 		 */
 		bgl::MeshInstanceHandle
-		CreateInstance(bgl::GeomHandle geom, const glm::mat4& transform);
+		CreateInstance(bgl::SceneViewHandle view, bgl::GeomHandle geom, const glm::mat4& transform);
 
-		/** Destroys the instance and drops its reference on its geometry. */
+		/**
+		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was
+		 * created in: an instance's slot index is unique only within its view, so the manager needs both
+		 * to find it.
+		 */
 		void
-		DestroyInstance(bgl::MeshInstanceHandle instance);
+		DestroyInstance(bgl::SceneViewHandle view, bgl::MeshInstanceHandle instance);
 
 		// --- Release: drop one reference. At zero the asset is destroyed, and its own references
 		//     are released in turn. ------------------------------------------------------------
@@ -164,18 +172,22 @@ namespace game
 		 * reference like any other: the material cannot be destroyed while an instance still wears it.
 		 * That is what makes bgl's raw-slot binding safe (see ISceneView::SetSubmeshMaterialOverride).
 		 *
-		 * @throws bgl::SceneError if the instance is not one this manager owns, or the submesh index
-		 *         is out of range.
+		 * @throws bgl::SceneError if the instance is not one this manager owns in `view`, or the submesh
+		 *         index is out of range.
 		 */
 		void
 		SetInstanceSubmeshMaterial(
+			bgl::SceneViewHandle    view,
 			bgl::MeshInstanceHandle instance,
 			uint32_t                submeshIndex,
 			std::string_view        materialRelPath);
 
 		/** Drops the override; the submesh returns to the geom's default and the material is released. */
 		void
-		ClearInstanceSubmeshMaterial(bgl::MeshInstanceHandle instance, uint32_t submeshIndex);
+		ClearInstanceSubmeshMaterial(
+			bgl::SceneViewHandle    view,
+			bgl::MeshInstanceHandle instance,
+			uint32_t                submeshIndex);
 
 		/**
 		 * Swaps one map of a *baked* material, acquiring the new texture and releasing the old.
@@ -250,7 +262,12 @@ namespace game
 		struct InstanceRecord
 		{
 			bgl::MeshInstanceHandle handle;
-			uint32_t                geomSlot = 0;
+
+			// The view this instance was placed in, and is deleted from. Held, so a view cannot be
+			// destroyed while the manager still has an instance to hand back to it.
+			bgl::SceneViewHandle view;
+
+			uint32_t geomSlot = 0;
 
 			// Per submesh, the material this instance overrides its geom's default with. Invalid means
 			// none. Each valid one holds a reference, released by ClearInstanceSubmeshMaterial or by
@@ -266,6 +283,27 @@ namespace game
 		{
 			return (static_cast<uint64_t>(material.materialType) << 32) | material.handle.index;
 		}
+
+		// An instance's slot index is unique only within its view -- each view numbers its own from 0 --
+		// so a scene-wide manager keys an instance by its view together with its index. The pointer is an
+		// identity only; InstanceRecord::view is the reference that keeps the view alive.
+		struct InstanceKey
+		{
+			const bgl::ISceneView* view  = nullptr;
+			uint32_t               index = 0;
+
+			[[nodiscard]] bool
+			operator==(const InstanceKey&) const noexcept = default;
+		};
+
+		struct InstanceKeyHash
+		{
+			[[nodiscard]] size_t
+			operator()(const InstanceKey& key) const noexcept
+			{
+				return std::hash<const void*>{}(key.view) * 31 + key.index;
+			}
+		};
 
 		// Creates the scene material a BMaterial describes, honouring its `mode`, and acquiring a
 		// reference to every texture it names. kBaked samples the optimized triplet (three reads);
@@ -303,7 +341,6 @@ namespace game
 		void
 		DestroyGeom(GeomRecord& record);
 
-		bgl::SceneViewHandle  m_View;
 		bgl::SceneHandle      m_Scene;
 		std::filesystem::path m_DataRoot;
 
@@ -314,6 +351,7 @@ namespace game
 		std::unordered_map<uint32_t, TextureRecord>  m_Textures;
 		std::unordered_map<uint64_t, MaterialRecord> m_Materials;
 		std::unordered_map<uint32_t, GeomRecord>     m_Geoms;
-		std::unordered_map<uint32_t, InstanceRecord> m_Instances;
+
+		std::unordered_map<InstanceKey, InstanceRecord, InstanceKeyHash> m_Instances;
 	};
 }

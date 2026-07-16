@@ -22,9 +22,12 @@ here, not in either of them.
 
 ## Contents
 
-- `AssetManager` — constructed with an `ISceneView` and the project's **Data directory**. Every asset
-  reference Bernini stores is a path relative to that root, so it is supplied once at construction
-  rather than threaded through every call.
+- `AssetManager` — constructed with an `IScene` and the project's **Data directory**. Textures,
+  materials and geometry belong to the scene and are shared across every view drawn from it, so the
+  manager is one per scene, and `CreateInstance` names the view each instance is placed in (holding it
+  alive for as long as the instance lives there). Every asset reference Bernini stores is a path
+  relative to the Data root, so it is supplied once at construction rather than threaded through every
+  call.
 
 ### AssetManager: identity is the path, lifetime is a reference count
 

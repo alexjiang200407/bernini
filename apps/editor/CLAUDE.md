@@ -116,9 +116,9 @@ Two things a test cannot drive, and why:
 
 - **Modal dialogs** (`QFileDialog`, `QMessageBox`, `QInputDialog`, `QMenu::exec`) are
   called directly on the concrete Qt types, with no injection seam. Triggering one from
-  a test hangs it. This is what keeps `ContentExplorerWindow::ImportMesh`,
+  a test hangs it. This is what keeps `ContentExplorerWindow::ImportMesh` and `BakeMaterial`,
   `MainWindow::NewProject`/`OpenProject`/`CleanUnusedTextures`, and
-  `MaterialEditorWindow`'s save/open/bake uncovered — including `RollBack`, which is the
+  `MaterialEditorWindow`'s save/open uncovered — including `RollBack`, which is the
   code that deletes files when an import fails and is therefore the code most worth
   testing. Hoisting those rules into a GUI-free header would unlock them.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is

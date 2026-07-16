@@ -31,7 +31,6 @@ namespace
 	{
 		bgl::GraphicsHandle               gfx;
 		bgl::SceneHandle                  scene;
-		bgl::SceneViewHandle              view;
 		std::optional<game::AssetManager> assets;
 
 		Fixture()
@@ -52,11 +51,9 @@ namespace
 
 			scene = gfx->CreateScene(sceneDesc);
 
-			// The editor shares one manager, over the Level Editor's view. Nothing here draws through
-			// that view -- the cache places its instances in its own -- but the manager needs one, and
-			// materials and textures are scene-level so they are shared either way.
-			view = gfx->CreateSceneView(scene, 16);
-			assets.emplace(view, std::filesystem::path(c_DataRoot));
+			// The editor shares one manager over its one scene. Materials and textures are the scene's,
+			// so the cache shares them with every other view even though it renders in its own.
+			assets.emplace(scene, std::filesystem::path(c_DataRoot));
 		}
 
 		[[nodiscard]] AssetThumbnailDesc

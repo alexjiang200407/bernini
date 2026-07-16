@@ -46,16 +46,14 @@ namespace game
 		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 	}
 
-	AssetManager::AssetManager(bgl::SceneViewHandle view, std::filesystem::path dataRoot) :
-		m_View(std::move(view)), m_DataRoot(std::move(dataRoot))
+	AssetManager::AssetManager(bgl::SceneHandle scene, std::filesystem::path dataRoot) :
+		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot))
 	{
-		if (!m_View)
-			throw bgl::SceneError("AssetManager requires a valid SceneView");
-
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
 		// still be there -- and with a bare reference that was only true if the caller happened to
 		// declare them in the right order.
-		m_Scene = m_View->GetScene();
+		if (!m_Scene)
+			throw bgl::SceneError("AssetManager requires a valid Scene");
 	}
 
 	AssetManager::~AssetManager()
@@ -67,7 +65,7 @@ namespace game
 		try
 		{
 			for (const auto& [slot, instance] : m_Instances)
-				m_View->DeleteMeshInstance(instance.handle);
+				instance.view->DeleteMeshInstance(instance.handle);
 			m_Instances.clear();
 
 			for (const auto& [slot, geom] : m_Geoms) m_Scene->DeleteGeom(geom.handle);
@@ -299,8 +297,14 @@ namespace game
 	// --- Instances --------------------------------------------------------------------------------
 
 	bgl::MeshInstanceHandle
-	AssetManager::CreateInstance(bgl::GeomHandle geom, const glm::mat4& transform)
+	AssetManager::CreateInstance(
+		bgl::SceneViewHandle view,
+		bgl::GeomHandle      geom,
+		const glm::mat4&     transform)
 	{
+		if (!view)
+			throw bgl::SceneError("CreateInstance requires a valid SceneView");
+
 		const auto it = m_Geoms.find(geom.handle.index);
 		if (it == m_Geoms.end() || !m_Scene->IsGeomAlive(geom))
 		{
@@ -309,32 +313,35 @@ namespace game
 				"expired");
 		}
 
-		const bgl::MeshInstanceHandle instance = m_View->CreateStaticMeshInstance(geom, transform);
+		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(geom, transform);
 
 		// The instance's reference is what keeps the geometry alive while it is being drawn.
 		++it->second.refCount;
 
+		const InstanceKey key{ view.Get(), instance.handle.index };
+
 		auto record      = InstanceRecord();
 		record.handle    = instance;
+		record.view      = std::move(view);
 		record.geomSlot  = geom.handle.index;
 		record.overrides = std::vector<bgl::MaterialHandle>(it->second.submeshMaterials.size());
 
-		m_Instances.emplace(instance.handle.index, std::move(record));
+		m_Instances.emplace(key, std::move(record));
 
 		return instance;
 	}
 
 	void
-	AssetManager::DestroyInstance(bgl::MeshInstanceHandle instance)
+	AssetManager::DestroyInstance(bgl::SceneViewHandle view, bgl::MeshInstanceHandle instance)
 	{
-		const auto it = m_Instances.find(instance.handle.index);
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
 		if (it == m_Instances.end())
 			return;
 
 		const uint32_t                         geomSlot  = it->second.geomSlot;
 		const std::vector<bgl::MaterialHandle> overrides = std::move(it->second.overrides);
 
-		m_View->DeleteMeshInstance(it->second.handle);
+		it->second.view->DeleteMeshInstance(it->second.handle);
 		m_Instances.erase(it);
 
 		// The instance is gone, so nothing wears these any more.
@@ -477,11 +484,12 @@ namespace game
 
 	void
 	AssetManager::SetInstanceSubmeshMaterial(
+		bgl::SceneViewHandle    view,
 		bgl::MeshInstanceHandle instance,
 		uint32_t                submeshIndex,
 		std::string_view        materialRelPath)
 	{
-		const auto it = m_Instances.find(instance.handle.index);
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
 		if (it == m_Instances.end())
 			throw bgl::SceneError(
 				"MeshInstanceHandle passed to SetInstanceSubmeshMaterial is not owned by this "
@@ -497,7 +505,7 @@ namespace game
 		const bgl::MaterialHandle replacement = AcquireMaterial(materialRelPath);
 		const bgl::MaterialHandle previous    = record.overrides[submeshIndex];
 
-		m_View->SetSubmeshMaterialOverride(record.handle, submeshIndex, replacement);
+		record.view->SetSubmeshMaterialOverride(record.handle, submeshIndex, replacement);
 		record.overrides[submeshIndex] = replacement;
 
 		ReleaseMaterial(previous);
@@ -505,10 +513,11 @@ namespace game
 
 	void
 	AssetManager::ClearInstanceSubmeshMaterial(
+		bgl::SceneViewHandle    view,
 		bgl::MeshInstanceHandle instance,
 		uint32_t                submeshIndex)
 	{
-		const auto it = m_Instances.find(instance.handle.index);
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
 		if (it == m_Instances.end())
 			throw bgl::SceneError(
 				"MeshInstanceHandle passed to ClearInstanceSubmeshMaterial is not owned by this "
@@ -521,7 +530,7 @@ namespace game
 
 		const bgl::MaterialHandle previous = record.overrides[submeshIndex];
 
-		m_View->ClearSubmeshMaterialOverride(record.handle, submeshIndex);
+		record.view->ClearSubmeshMaterialOverride(record.handle, submeshIndex);
 		record.overrides[submeshIndex] = {};
 
 		ReleaseMaterial(previous);

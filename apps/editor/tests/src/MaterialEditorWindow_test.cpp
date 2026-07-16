@@ -5,6 +5,8 @@
 #include <QDir>
 #include <QTemporaryDir>
 
+#include <assetlib_structs/BMaterial.h>
+
 // Set Default Material writes the material into the `.bmesh`. Doing that when the mesh already names
 // it rewrites the file to say what it already says, so the button greys out -- which turns on telling
 // "the same file" from "a different one", and the two paths being compared reach the window by
@@ -103,4 +105,52 @@ TEST_CASE("Case is not what tells two materials apart", "[materialeditor]")
 		MaterialEditorWindow::IsAlreadyDefault(
 			"C:/Data/Materials/Leaf.bmaterial",
 			"C:/data/materials/leaf.bmaterial"));
+}
+
+TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
+{
+	// "Show the current baked textures if any": the paths the material's last bake wrote, one per line,
+	// so the artist can see what the mesh actually samples without opening the files.
+	auto material                 = assetlib::BMaterial();
+	material.shadingModel         = assetlib::ShadingModel::kPbr;
+	material.mode                 = assetlib::MaterialMode::kBaked;
+	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
+	material.pbr.normalTexture    = "Textures/normal_c3d4.ktx2";
+	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
+
+	const QString summary = MaterialEditorWindow::BakedTexturesSummary(material);
+
+	CHECK(summary.contains("Textures/basecolor_a1b2.ktx2"));
+	CHECK(summary.contains("Textures/normal_c3d4.ktx2"));
+	CHECK(summary.contains("Textures/orm_e5f6.ktx2"));
+}
+
+TEST_CASE("A material with no baked triplet lists nothing", "[materialeditor]")
+{
+	// A material authored but never baked carries only routes, no triplet -- there is nothing baked to
+	// show, and the empty string is what keeps the label hidden.
+	auto material                  = assetlib::BMaterial();
+	material.shadingModel          = assetlib::ShadingModel::kPbr;
+	material.mode                  = assetlib::MaterialMode::kLoose;
+	material.pbr.routes[0].texture = "textures_src/albedo.ktx2";  // a source route, not a baked map
+
+	CHECK(MaterialEditorWindow::BakedTexturesSummary(material).isEmpty());
+}
+
+TEST_CASE(
+	"A material baked without every map shows a dash for the one it lacks",
+	"[materialeditor]")
+{
+	// Base colour and ORM baked, no normal routed: the missing map reads as a dash rather than a blank
+	// that looks like a bug, and the listing still shows because something is baked.
+	auto material                 = assetlib::BMaterial();
+	material.shadingModel         = assetlib::ShadingModel::kPbr;
+	material.mode                 = assetlib::MaterialMode::kBaked;
+	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
+	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
+
+	const QString summary = MaterialEditorWindow::BakedTexturesSummary(material);
+
+	REQUIRE_FALSE(summary.isEmpty());
+	CHECK(summary.contains(QString::fromUtf8("—")));
 }

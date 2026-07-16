@@ -154,7 +154,7 @@ private:
 
 	glm::vec4 m_BaseColorFactor = glm::vec4(1.0f);
 	float     m_MetallicFactor  = 1.0f;
-	float     m_RoughnessFactor = 1.0f;
+	float     m_RoughnessFactor = 0.2f;
 
 	QWidget*                             m_Widget      = nullptr;
 	QPushButton*                         m_ColorButton = nullptr;

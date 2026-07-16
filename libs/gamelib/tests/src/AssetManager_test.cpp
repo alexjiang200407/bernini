@@ -154,7 +154,7 @@ namespace
 		{
 			scene = gfx->CreateScene(AssetSceneDesc());
 			view  = gfx->CreateSceneView(scene, 16);
-			assets.emplace(view, root.path);
+			assets.emplace(scene, root.path);
 		}
 
 		// The manager is non-copyable, so these would be implicitly deleted anyway; say so, because
@@ -329,7 +329,7 @@ TEST_CASE("AssetManager: an instance keeps its geometry alive", "[gamelib][asset
 
 	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
 
-	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
 	CHECK((*fx).GeomRefCount(geom) == 2);  // ours + the instance's
 
@@ -339,7 +339,50 @@ TEST_CASE("AssetManager: an instance keeps its geometry alive", "[gamelib][asset
 	CHECK(fx.scene->IsGeomAlive(geom));
 
 	// Destroying the instance drops the last reference, and only now is it deleted.
-	(*fx).DestroyInstance(inst);
+	(*fx).DestroyInstance(fx.view, inst);
+	CHECK((*fx).GeomRefCount(geom) == 0);
+	CHECK_FALSE(fx.scene->IsGeomAlive(geom));
+}
+
+TEST_CASE("AssetManager places instances into more than one view", "[gamelib][assets]")
+{
+	// One scene, more than one view: the Level Editor's viewport and the Material Editor's preview both
+	// draw the editor's single scene. The manager is the scene's, so geometry it holds is one upload
+	// counted once however many views instance it, and each instance names the view it lives in.
+	Fixture fx("bernini_am_multiview");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+
+	const bgl::SceneViewHandle second = fx.gfx->CreateSceneView(fx.scene, 16);
+
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+
+	// A null view is refused here, not left to crash inside bgl.
+	REQUIRE_THROWS_AS(
+		(*fx).CreateInstance(bgl::SceneViewHandle{}, geom, glm::mat4(1.0f)),
+		bgl::SceneError);
+
+	// The same geometry, instanced once in each view.
+	const bgl::MeshInstanceHandle inFirst  = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle inSecond = (*fx).CreateInstance(second, geom, glm::mat4(1.0f));
+
+	// Ours, plus one per instance -- across both views.
+	CHECK((*fx).GeomRefCount(geom) == 3);
+
+	(*fx).ReleaseGeom(geom);
+	CHECK((*fx).GeomRefCount(geom) == 2);  // the two instances still hold it, one per view
+	CHECK(fx.scene->IsGeomAlive(geom));
+
+	// Destroying the first view's instance does not disturb the second's.
+	(*fx).DestroyInstance(fx.view, inFirst);
+	CHECK((*fx).GeomRefCount(geom) == 1);
+	CHECK(fx.scene->IsGeomAlive(geom));
+
+	(*fx).DestroyInstance(second, inSecond);
 	CHECK((*fx).GeomRefCount(geom) == 0);
 	CHECK_FALSE(fx.scene->IsGeomAlive(geom));
 }
@@ -417,14 +460,14 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
 
 	// Two units, same mesh. One will wear a skin.
-	const bgl::MeshInstanceHandle worn  = (*fx).CreateInstance(geom, glm::mat4(1.0f));
-	const bgl::MeshInstanceHandle plain = (*fx).CreateInstance(geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle worn  = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle plain = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 
 	const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Materials/m0.bmaterial");
 	(*fx).ReleaseMaterial(m0);
 	REQUIRE((*fx).MaterialRefCount(m0) == 1);  // held by the geom's submesh, once
 
-	(*fx).SetInstanceSubmeshMaterial(worn, 0, "Materials/skin.bmaterial");
+	(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Materials/skin.bmaterial");
 
 	const bgl::MaterialHandle skin = (*fx).AcquireMaterial("Materials/skin.bmaterial");
 	(*fx).ReleaseMaterial(skin);
@@ -439,7 +482,7 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 
 	SECTION("clearing it releases the material")
 	{
-		(*fx).ClearInstanceSubmeshMaterial(worn, 0);
+		(*fx).ClearInstanceSubmeshMaterial(fx.view, worn, 0);
 
 		CHECK((*fx).MaterialRefCount(skin) == 0);
 		CHECK((*fx).MaterialRefCount(m0) == 1);
@@ -447,7 +490,7 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 
 	SECTION("destroying the instance releases what it wore")
 	{
-		(*fx).DestroyInstance(worn);
+		(*fx).DestroyInstance(fx.view, worn);
 
 		CHECK((*fx).MaterialRefCount(skin) == 0);
 
@@ -457,29 +500,30 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 
 	SECTION("overriding twice releases the first, and re-overriding with the same is not a leak")
 	{
-		(*fx).SetInstanceSubmeshMaterial(worn, 0, "Materials/m0.bmaterial");
+		(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Materials/m0.bmaterial");
 		CHECK((*fx).MaterialRefCount(skin) == 0);
 		CHECK((*fx).MaterialRefCount(m0) == 2);  // the geom's submesh, and this instance's override
 
 		// Acquire-before-release: re-overriding with the material already worn must not delete it.
-		(*fx).SetInstanceSubmeshMaterial(worn, 0, "Materials/m0.bmaterial");
+		(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Materials/m0.bmaterial");
 		CHECK((*fx).MaterialRefCount(m0) == 2);
 	}
 
 	SECTION("a foreign instance or an out-of-range submesh throws")
 	{
 		REQUIRE_THROWS_AS(
-			(*fx).SetInstanceSubmeshMaterial(worn, 1, "Materials/skin.bmaterial"),
+			(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 1, "Materials/skin.bmaterial"),
 			bgl::SceneError);
 		REQUIRE_THROWS_AS(
 			(*fx).SetInstanceSubmeshMaterial(
+				fx.view,
 				bgl::MeshInstanceHandle{},
 				0,
 				"Materials/skin.bmaterial"),
 			bgl::SceneError);
 	}
 
-	(*fx).DestroyInstance(plain);
+	(*fx).DestroyInstance(fx.view, plain);
 }
 
 TEST_CASE("AssetManager refcounts procedural geometry", "[gamelib][assets]")
@@ -506,9 +550,9 @@ TEST_CASE("AssetManager refcounts procedural geometry", "[gamelib][assets]")
 	// Ours, plus one from each geom's single submesh.
 	CHECK((*fx).MaterialRefCount(mat) == 3);
 
-	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(cube, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, cube, glm::mat4(1.0f));
 	CHECK((*fx).GeomRefCount(cube) == 2);
-	(*fx).DestroyInstance(inst);
+	(*fx).DestroyInstance(fx.view, inst);
 
 	(*fx).ReleaseGeom(cube);
 	CHECK_FALSE(fx.scene->IsGeomAlive(cube));
@@ -535,8 +579,7 @@ TEST_CASE("AssetManager keeps its scene alive", "[gamelib][assets]")
 
 	{
 		auto scene = gfx->CreateScene(AssetSceneDesc());
-		auto view  = gfx->CreateSceneView(scene, 16);
-		assets.emplace(view, root.path);
+		assets.emplace(scene, root.path);
 	}
 	// Every handle the caller held is gone. The scene survives on the manager's reference alone.
 

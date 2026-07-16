@@ -70,11 +70,29 @@ public:
 	OutputCentre(MaterialGraphModel& model);
 
 	/**
+	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
+	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
+	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and the
+	 * Content Explorer's Bake is what rewrites them.
+	 */
+	[[nodiscard]] static QString
+	BakedTexturesSummary(const assetlib::BMaterial& material);
+
+	/**
 	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph
 	 * would not stick: the graph still holds it, and the next Save writes it straight back.
 	 */
 	[[nodiscard]] QStringList
 	OpenMaterialPaths() const;
+
+	/**
+	 * Re-reads the open material from disk, for a caller that has just rewritten one -- the Content
+	 * Explorer's Bake. The graph is authored here and is not what changed; the panel's staleness marker
+	 * and baked-texture listing are read off the file, so nothing else would notice until the next time
+	 * the user touched a control.
+	 */
+	void
+	RefreshMaterialState();
 
 private:
 	void
@@ -123,9 +141,6 @@ private:
 	DefaultMaterialPath() const;
 
 	void
-	BakeCurrentMaterial();
-
-	void
 	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
 
 	void
@@ -165,13 +180,13 @@ private:
 	std::vector<SubmeshGraph> m_SubmeshGraphs;
 	int                       m_CurrentSubmesh = -1;
 
-	QComboBox*         m_SubmeshSelector  = nullptr;
-	QComboBox*         m_OutputSelector   = nullptr;
-	MaterialGraphView* m_GraphView        = nullptr;
-	QPushButton*       m_OpenButton       = nullptr;
-	QPushButton*       m_SaveButton       = nullptr;
-	QPushButton*       m_SaveAsButton     = nullptr;
-	QPushButton*       m_BakeButton       = nullptr;
-	QPushButton*       m_SetDefaultButton = nullptr;
-	QLabel*            m_MaterialLabel    = nullptr;
+	QComboBox*         m_SubmeshSelector    = nullptr;
+	QComboBox*         m_OutputSelector     = nullptr;
+	MaterialGraphView* m_GraphView          = nullptr;
+	QPushButton*       m_OpenButton         = nullptr;
+	QPushButton*       m_SaveButton         = nullptr;
+	QPushButton*       m_SaveAsButton       = nullptr;
+	QPushButton*       m_SetDefaultButton   = nullptr;
+	QLabel*            m_MaterialLabel      = nullptr;
+	QLabel*            m_BakedTexturesLabel = nullptr;
 };

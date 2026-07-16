@@ -171,25 +171,23 @@ namespace background
 
 		auto source = std::stop_source();
 
+		// QProgressDialog wires canceled() to its own cancel(), which hides the screen. We want the
+		// opposite: keep it up until the worker unwinds. Disconnected for both kinds of work -- the X
+		// emits canceled() whether or not there is a cancel button, and cancel() would hide the screen
+		// out from under a worker that cannot be stopped, unblocking the app behind it.
+		//
+		// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
+		// macros, which record a method index, whereas the pointer-to-member disconnect only matches
+		// connections that recorded a slot object -- so it would find nothing, quietly return false,
+		// and leave the screen free to dismiss itself the moment Cancel is pressed.
+		const bool disconnected =
+			QObject::disconnect(&dialog, SIGNAL(canceled()), &dialog, SLOT(cancel()));
+		Q_ASSERT(disconnected);
+		Q_UNUSED(disconnected);
+
 		if (cancellable == Cancellable::kYes)
 		{
 			dialog.setCancelButtonText("Cancel");
-
-			// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
-			// macros, which record a method index, whereas the pointer-to-member disconnect only matches
-			// connections that recorded a slot object -- so it finds nothing, returns false, and leaves
-			// the screen free to dismiss itself the moment Cancel is pressed.
-			// QProgressDialog wires canceled() to its own cancel(), which hides the screen. We want the
-			// opposite: keep it up, and ask the worker to stop.
-			//
-			// This has to be the SIGNAL/SLOT form. QProgressDialog makes that connection with the string
-			// macros, which record a method index, whereas the pointer-to-member disconnect only matches
-			// connections that recorded a slot object -- so it would find nothing, quietly return false,
-			// and leave the screen free to dismiss itself the moment Cancel is pressed.
-			const bool disconnected =
-				QObject::disconnect(&dialog, SIGNAL(canceled()), &dialog, SLOT(cancel()));
-			Q_ASSERT(disconnected);
-			Q_UNUSED(disconnected);
 
 			QObject::connect(&dialog, &QProgressDialog::canceled, &dialog, [&]() {
 				source.request_stop();
@@ -203,8 +201,13 @@ namespace background
 
 		dialog.setValue(0);
 
-		// A private pool, so an import never queues behind a texture-preview decode. Its destructor
-		// waits for the task, which has already finished by the time control reaches it.
+		// A private pool, so an import never queues behind a texture-preview decode.
+		//
+		// Declared last, so it is destroyed first: its destructor waits for the task, and `loop` and
+		// `result` must outlive that wait. Normally the task is long finished by then, but
+		// QCoreApplication::exit() -- a session logoff -- exits every event loop on this thread,
+		// including the nested one below, while the worker is still running. The wait is what keeps it
+		// from writing into a dead stack frame.
 		QThreadPool pool;
 		pool.setMaxThreadCount(1);
 		pool.start(new WorkTask(work, Progress(&relay, source.get_token()), &loop, &result));
