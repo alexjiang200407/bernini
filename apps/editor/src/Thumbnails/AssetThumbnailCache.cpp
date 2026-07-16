@@ -19,7 +19,7 @@
 
 namespace
 {
-	// The backbuffer and the per-frame upload rings are c_BufferCount deep, so a single draw can
+	// The backbuffer and the per-frame upload rings are c_SwapchainImageCount deep, so a single draw can
 	// present a slot the asset's instance data has not reached yet. Draw enough to fill every slot.
 	constexpr int c_WarmupFrames = 6;
 
