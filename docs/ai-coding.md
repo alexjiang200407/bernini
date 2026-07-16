@@ -1,18 +1,30 @@
-# AI Coding Bot
+# AI Coding Bots
 
-When an AI assistant acts on a pull request — applying review feedback with
-[`bcp-revise`](../.claude/skills/bcp-revise/SKILL.md), then replying to each comment on GitHub — the
-replies post under whichever account `gh` is logged in as. By default that is the developer's own
-account, so machine-written review replies show their name and avatar, which reads as if they typed
-them by hand.
+When an AI assistant acts on a pull request, whatever it posts goes up under whichever account `gh`
+is logged in as. By default that is the developer's own account, so machine-written comments show
+their name and avatar, which reads as if they typed them by hand.
 
-The **`morgana-coding-agent` GitHub App** gives that work its own identity: review replies post as
-`morgana-coding-agent[bot]` with the `bot` badge, and AI-assisted commits are co-authored by the
-same bot (below). The App is a first-class GitHub actor — it does not consume a collaborator seat,
-its permissions are scoped to exactly what it needs, and it sidesteps the "one machine user per
-human" gray area of a second personal account.
+Two **GitHub Apps** give that work its own identity. An App is a first-class GitHub actor — it does
+not consume a collaborator seat, its permissions are scoped to exactly what it needs, and it
+sidesteps the "one machine user per human" gray area of a second personal account.
 
-## How it works
+| | Coding agent | Review agent |
+| --- | --- | --- |
+| App ID | `4304152` (`morgana-coding-agent`) | `4314134` |
+| Does | applies review feedback with [`bcp-revise`](../.claude/skills/bcp-revise/SKILL.md), replies to each comment, co-authors commits | reviews a pull request when tagged |
+| Runs | locally, on a developer's machine | on a GitHub Actions runner |
+| Triggered by | a developer running `bcp-revise` | commenting `@makoto` on a pull request |
+| Key lives in | `~/.claude/`, **one per developer** | the repository's Actions secrets, **one shared key** |
+| `just init` | prompts for the key | not involved |
+
+They are separate Apps because they need separate avatars, and that separation turns out to buy
+something else: the shared-key model that a server-side agent forces is confined to the reviewer,
+while the coding agent keeps per-developer keys and per-developer revocation.
+
+Both hold the same permission — **Pull requests: Read and write**. GitHub has no comment-only
+pull-request scope, so a reviewer cannot be granted anything narrower than a reviser.
+
+## How App authentication works
 
 A GitHub App cannot post directly; it authenticates in two hops:
 
@@ -20,16 +32,20 @@ A GitHub App cannot post directly; it authenticates in two hops:
 2. Exchange the JWT for an **installation access token** scoped to the repo. That token (`ghs_…`) is
    what `gh` uses, and it expires after one hour.
 
-[`mint-bot-token.sh`](../.claude/skills/bcp-revise/mint-bot-token.sh) does both hops with `openssl`
-and `curl` — both ship in Git Bash, so there are no extra dependencies — and prints the token.
+The coding agent does both hops with
+[`mint-bot-token.sh`](../.claude/skills/bcp-revise/mint-bot-token.sh), which needs only `openssl` and
+`curl` — both ship in Git Bash, so there are no extra dependencies — and prints the token.
 `bcp-revise` exports it as `GH_TOKEN` for the reply step, and falls back to the logged-in account
-when the bot is not set up on this machine.
+when the bot is not set up on this machine. The review agent does the same exchange with
+[`actions/create-github-app-token`](https://github.com/actions/create-github-app-token), which avoids
+writing a `.pem` to the runner's disk.
 
-The App is registered and installed **once** for the whole project (below). After that, each
-developer who runs `bcp-revise` sets up their **own private key** — one App, many keys — so a leaked
-key is revoked for that one person without disturbing anyone else.
+Each App is registered and installed **once** for the whole project (below). After that, each
+developer who runs `bcp-revise` sets up their **own private key** for the coding agent — one App,
+many keys — so a leaked key is revoked for that one person without disturbing anyone else. The review
+agent has a single key, held only as a repository secret; nobody sets it up locally.
 
-## Per-developer setup
+## Coding agent: per-developer setup
 
 `bcp-revise` reads reviews and posts replies with the **GitHub CLI** (`gh`). It is not a pip package
 — the `gh` on PyPI is unrelated — so install it from <https://cli.github.com/> and add it to PATH.
@@ -64,7 +80,7 @@ GH_TOKEN=$(bash .claude/skills/bcp-revise/mint-bot-token.sh) gh api user --jq .l
 It should print `morgana-coding-agent[bot]`. If it prints your own login, the mint failed and `gh`
 fell back to your account — run `mint-bot-token.sh` alone to see the error on stderr.
 
-## Commit attribution
+## Coding agent: commit attribution
 
 AI-assisted commits are co-authored by the bot rather than the assistant tool. The assistant already
 stamps its own `Co-authored-by: Claude …` trailer when it writes a commit; the committed hook
@@ -81,28 +97,75 @@ renames. The hook is idempotent (an amend does not duplicate the trailer). It ru
 `just init` sets `core.hooksPath` to `.githooks`; that is machine-local config, not committed, so a
 fresh clone opts in through `just init` (or `git config core.hooksPath .githooks`).
 
-## First-time project setup (maintainer, once)
+The review agent never commits, so no trailer applies to it.
 
-Already done for `bernini` (App ID `4304152`). These steps exist so the App can be recreated or
-audited, and are **not** repeated per developer.
+## Review agent: tag to review
+
+Comment `@makoto` on a pull request and
+[`.github/workflows/review.yml`](../.github/workflows/review.yml) reviews it. Nothing is cloned and
+no machine of yours is involved, so a review can be asked for from anywhere and answered whenever.
+
+The workflow triggers on `issue_comment` — GitHub models pull-request comments as issue comments —
+and three properties of that trigger are load-bearing:
+
+- **It always runs the workflow file from the default branch**, never the version on the pull
+  request's branch. A pull request therefore cannot edit the workflow to reach the secrets. This is
+  also why a change to `review.yml` does nothing until it lands on `master`: you cannot test it from
+  a branch.
+- **The job is gated on `author_association`** (`OWNER`, `MEMBER`, `COLLABORATOR`). Without that
+  gate, anyone who can comment can spend the subscription's quota.
+- **The reviewer reads the diff; it never runs the pull request's code.** Keeping it that way is what
+  makes it safe to hold secrets in a job that is looking at untrusted input.
+
+### Secrets
+
+Two repository secrets, at Settings → Secrets and variables → Actions:
+
+| Secret | Value |
+| --- | --- |
+| `MAKOTO_REVIEW_KEY` | the review App's private key — the whole `.pem`, `BEGIN`/`END` lines included |
+| `CLAUDE_CODE_OAUTH_TOKEN` | output of `claude setup-token`, run locally |
+
+The App ID is inline in the workflow, not a secret — it is an identifier, the same way `BOT_APP_ID`
+is hardcoded in [`scripts/init.py`](../scripts/init.py).
+
+`CLAUDE_CODE_OAUTH_TOKEN` bills the **Claude Max subscription** rather than the API. A Max plan does
+not include API access — Console and API are billed separately — so this token is what lets the
+reviewer run without an API key. Two consequences follow. Reviews draw on the same quota as your own
+interactive Claude Code sessions, so a large review competes with your own headroom. And the token
+expires and must be rotated by re-running `claude setup-token` and updating the secret; nothing warns
+you first, so a reviewer that has gone quiet is worth checking here.
+
+Never set `ANTHROPIC_API_KEY` alongside it. A static API credential silently takes precedence and
+bills per token.
+
+## First-time project setup (maintainer, once per App)
+
+Already done for `bernini`: the coding agent is App ID `4304152`, the review agent `4314134`. These
+steps exist so an App can be recreated or audited, and are **not** repeated per developer.
 
 ### 1. Register the App
 
 GitHub → **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**.
 
-- **Name**: `morgana-coding-agent` (this becomes the `morgana-coding-agent[bot]` login and the
-  keys-page URL slug).
-- **Homepage URL**: the repo URL. **Callback URL** and **Webhook URL**: leave blank.
-- **Webhook**: uncheck **Active** — the bot only makes API calls, it receives no events.
-- **Repository permissions → Pull requests: Read and write** — to post review replies and comments.
+- **Name**: the name becomes the `…[bot]` login and the keys-page URL slug.
+- **Homepage URL**: the repo URL. **Callback URL**, **Setup URL** and **Webhook URL**: leave blank.
+- **Webhook**: uncheck **Active** — the bots only make API calls, they receive no events. This holds
+  for the review agent too: the `issue_comment` subscription belongs to GitHub Actions, not the App.
+- **Repository permissions → Pull requests: Read and write** — to post reviews, replies and comments.
   Leave everything else **No access**. *(Without a repository permission, GitHub will not let the App
   be granted access to any repo — the installation shows "No repositories".)*
 - **Where can this app be installed?**: **Only on this account**.
 
-Create it, then note the numeric **App ID** and set it as `BOT_APP_ID` in
-[`scripts/init.py`](../scripts/init.py) so `just init` writes it for everyone. Renaming the App later
-changes its slug and login but keeps the App ID and the bot's user id, so only the URLs and
-display names in this repo need updating — the co-author email stays valid.
+Create it, then note the numeric **App ID**. For the coding agent it is set as `BOT_APP_ID` in
+[`scripts/init.py`](../scripts/init.py) so `just init` writes it for everyone; for the review agent it
+is inline in `review.yml`. Upload the App's avatar from its settings page — that is what
+distinguishes the two bots in a pull request's timeline, and it cannot be set from the registration
+form. The **Client ID** shown on the same page is for OAuth user-authorization flows and is unused
+here.
+
+Renaming an App later changes its slug and login but keeps the App ID and the bot's user id, so only
+the URLs and display names in this repo need updating — the co-author email stays valid.
 
 ### 2. Install the App on the repo
 
@@ -110,25 +173,38 @@ On the App's settings page, **Install App** → install on the account → **Onl
 → pick **bernini**. This creates the installation the tokens are scoped to. If you later change the
 App's permissions, GitHub holds them as *pending* until you approve them on this installation.
 
+### 3. Distribute the key
+
+- **Coding agent**: nothing to distribute. Each developer generates their own key through
+  `just init`.
+- **Review agent**: generate one key and paste the `.pem` into the `MAKOTO_REVIEW_KEY` repository
+  secret. GitHub shows the key once and never again, so do this before losing the file.
+
 ## Revoking access
 
-Because each developer holds their own key, access is removed per person without rotating anything
-for the rest of the team:
+The two Apps revoke differently, and the difference is the reason they are two Apps:
 
-- **Remove one developer**: delete their public key on
+- **Remove one developer from the coding agent**: delete their public key on
   <https://github.com/settings/apps/morgana-coding-agent/keys>. Their `.pem` stops working
-  immediately; every other key keeps working.
-- **Cut the bot off entirely**: **Suspend** or **Uninstall** the installation on the repo. That
-  disables all keys at once.
+  immediately; every other developer's key keeps working.
+- **Cut the review agent off**: delete the `MAKOTO_REVIEW_KEY` secret, or rotate the App's key. There
+  is only one key, so this stops the reviewer for everyone at once — there is no per-person
+  revocation for a credential that belongs to no person.
+- **Cut a bot off entirely**: **Suspend** or **Uninstall** its installation on the repo. That
+  disables all of that App's keys at once.
 
 ## Security notes
 
-- **A private key is a credential.** Anyone with one can act as the bot on the repo. Keep it in
-  `~/.claude/` (outside the repo tree) and never commit it. Each dev's key is theirs alone.
-- **Tokens are short-lived by design.** `mint-bot-token.sh` prints a fresh one-hour token each run
-  and never writes it to disk; there is nothing to rotate or revoke at the token level.
-- **Scope is minimal.** The App can only read and write pull requests on the one repo it is installed
-  on. It cannot push code, change settings, or touch other repositories.
-- **The committed files hold no secrets.** `mint-bot-token.sh` and the `BOT_APP_ID` in `init.py` only
-  identify the App and read the key from `~/.claude/` at runtime. The App ID is an identifier, not a
-  secret; the private keys and `morgana-coding-agent.env` live only under `~/.claude/`.
+- **A private key is a credential.** Anyone with one can act as that bot on the repo. Keep the coding
+  agent's in `~/.claude/` (outside the repo tree) and never commit it. Each dev's key is theirs alone.
+- **The review agent's key is shared and lives in Actions secrets.** That is the cost of running on a
+  server rather than a laptop, and it is contained to the reviewer by design.
+- **Tokens are short-lived by design.** Both paths mint a fresh one-hour installation token per run
+  and never write it to disk; there is nothing to rotate or revoke at that level. The exception is
+  `CLAUDE_CODE_OAUTH_TOKEN`, which is long-lived and is a Claude credential rather than a GitHub one.
+- **Scope is minimal.** Each App can only read and write pull requests on the one repo it is
+  installed on. Neither can push code, change settings, or touch other repositories.
+- **The committed files hold no secrets.** `mint-bot-token.sh`, the `BOT_APP_ID` in `init.py`, and the
+  App ID in `review.yml` only identify the Apps and read their keys at runtime. An App ID is an
+  identifier, not a secret; the private keys and `morgana-coding-agent.env` live only under
+  `~/.claude/` or in the repository's Actions secrets.

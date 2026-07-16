@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# A PR gets one review-worthy result, not one per intermediate push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: compile (ninja-msvc, Debug)
+    runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The vcpkg preset resolves its toolchain through $env{VCPKG_ROOT}; the runner
+      # image ships vcpkg but exports it as VCPKG_INSTALLATION_ROOT.
+      - name: Point VCPKG_ROOT at the preinstalled vcpkg
+        shell: pwsh
+        run: |
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      # Without this every run rebuilds slang, ktx, sdl3 and the rest from source.
+      # vcpkg.json carries the builtin-baseline, so hashing it keys the whole dep set.
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-x64-windows-
+
+      # Compile only: the ninja-msvc-debug preset has BUILD_TESTS=ON, so the suites are
+      # built but never run -- they need a GPU and a machine this runner isn't. Qt is
+      # absent, so apps/editor is skipped (CMakeLists.txt find_package(Qt6 QUIET)).
+      # build.py locates vcvars via vswhere when config.json is absent, as it is here.
+      - name: Build
+        run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
