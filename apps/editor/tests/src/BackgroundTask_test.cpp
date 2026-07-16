@@ -272,6 +272,33 @@ TEST_CASE("A cancelled worker's progress does not overwrite 'Cancelling...'", "[
 	REQUIRE(result.Cancelled());
 }
 
+TEST_CASE("Closing the loading screen cannot dismiss work that has no cancel", "[background]")
+{
+	// The X emits canceled() whether or not there is a cancel button, and QProgressDialog's own slot
+	// answers it by hiding. A hidden screen leaves the modal window list, which hands the editor back
+	// to the user -- and the app back to being closable -- while the worker is still running.
+	std::atomic<bool> closed = false;
+
+	bool stayedUp = false;
+
+	OnLoadingScreen([&](QProgressDialog& dialog) {
+		QCloseEvent close;
+		QCoreApplication::sendEvent(&dialog, &close);
+
+		stayedUp = dialog.isVisible() && !close.isAccepted();
+		closed.store(true);
+		return true;
+	});
+
+	background::RunWithLoadingScreen(
+		nullptr,
+		"Working",
+		[&](background::Progress&) { WaitOnWorker(closed); },
+		background::Cancellable::kNo);
+
+	REQUIRE(stayedUp);
+}
+
 TEST_CASE("Closing the loading screen cancels rather than dismissing it", "[background]")
 {
 	std::atomic<bool> closed = false;
