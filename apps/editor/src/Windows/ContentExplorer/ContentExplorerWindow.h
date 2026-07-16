@@ -65,6 +65,14 @@ public:
 	[[nodiscard]] static bool
 	IsMaterialAsset(const QString& asset);
 
+Q_SIGNALS:
+	/**
+	 * A bake rewrote `asset` (data-root-relative) on disk. Anything showing what that file says -- the
+	 * Material Editor's properties panel -- has to re-read it; nothing here watches the filesystem.
+	 */
+	void
+	MaterialBaked(const QString& asset);
+
 protected:
 	// Keeps the empty-directory placeholder sized to the file table's viewport.
 	bool

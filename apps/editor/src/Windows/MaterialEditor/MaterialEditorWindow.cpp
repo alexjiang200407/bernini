@@ -507,6 +507,12 @@ MaterialEditorWindow::OpenMaterialPaths() const
 }
 
 void
+MaterialEditorWindow::RefreshMaterialState()
+{
+	RefreshActions();
+}
+
+void
 MaterialEditorWindow::RefreshActions()
 {
 	const bool hasGraph =

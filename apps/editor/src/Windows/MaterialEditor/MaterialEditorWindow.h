@@ -85,6 +85,15 @@ public:
 	[[nodiscard]] QStringList
 	OpenMaterialPaths() const;
 
+	/**
+	 * Re-reads the open material from disk, for a caller that has just rewritten one -- the Content
+	 * Explorer's Bake. The graph is authored here and is not what changed; the panel's staleness marker
+	 * and baked-texture listing are read off the file, so nothing else would notice until the next time
+	 * the user touched a control.
+	 */
+	void
+	RefreshMaterialState();
+
 private:
 	void
 	SetPreviewGeometry(const QStringList& submeshNames);
@@ -171,16 +180,13 @@ private:
 	std::vector<SubmeshGraph> m_SubmeshGraphs;
 	int                       m_CurrentSubmesh = -1;
 
-	QComboBox*         m_SubmeshSelector  = nullptr;
-	QComboBox*         m_OutputSelector   = nullptr;
-	MaterialGraphView* m_GraphView        = nullptr;
-	QPushButton*       m_OpenButton       = nullptr;
-	QPushButton*       m_SaveButton       = nullptr;
-	QPushButton*       m_SaveAsButton     = nullptr;
-	QPushButton*       m_SetDefaultButton = nullptr;
-	QLabel*            m_MaterialLabel    = nullptr;
-
-	// The current material's baked texture paths, hidden until one is open and baked. See
-	// BakedTexturesSummary.
-	QLabel* m_BakedTexturesLabel = nullptr;
+	QComboBox*         m_SubmeshSelector    = nullptr;
+	QComboBox*         m_OutputSelector     = nullptr;
+	MaterialGraphView* m_GraphView          = nullptr;
+	QPushButton*       m_OpenButton         = nullptr;
+	QPushButton*       m_SaveButton         = nullptr;
+	QPushButton*       m_SaveAsButton       = nullptr;
+	QPushButton*       m_SetDefaultButton   = nullptr;
+	QLabel*            m_MaterialLabel      = nullptr;
+	QLabel*            m_BakedTexturesLabel = nullptr;
 };

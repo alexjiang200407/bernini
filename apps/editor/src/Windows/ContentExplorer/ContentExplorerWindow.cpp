@@ -100,8 +100,6 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 {
 	m_Ui.setupUi(this);
 
-	// The file tree needs only enough width for folder names; the grid of thumbnails takes the rest and
-	// grows with the panel.
 	m_Ui.splitter->setStretchFactor(0, 0);
 	m_Ui.splitter->setStretchFactor(1, 1);
 	m_Ui.splitter->setSizes({ 220, 700 });
@@ -382,6 +380,8 @@ ContentExplorerWindow::BakeMaterial(const QString& asset)
 		},
 		background::Cancellable::kYes);
 
+	// A map bakeMaterial wrote is named by the hash of its inputs, so a cancelled or re-run bake leaves
+	// only correct, reusable files.
 	if (result.Cancelled())
 		return;
 
@@ -391,10 +391,12 @@ ContentExplorerWindow::BakeMaterial(const QString& asset)
 			this,
 			"Bake Material",
 			QString("Could not bake '%1':\n\n%2").arg(QFileInfo(asset).fileName(), result.error));
+		return;
 	}
 
-	// A map bakeMaterial wrote is named by the hash of its inputs, so a cancelled or re-run bake leaves
-	// only correct, reusable files. The thumbnail cache watches the material's mtime and repaints itself.
+	// The thumbnail cache watches the material's mtime and repaints itself; the Material Editor does
+	// not, and is showing what this file said before the bake.
+	Q_EMIT MaterialBaked(asset);
 }
 
 QString

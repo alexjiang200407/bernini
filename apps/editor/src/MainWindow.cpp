@@ -139,6 +139,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails);
 
+	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
+	// staleness marker and the baked-texture listing from.
+	connect(
+		m_ContentExplorer,
+		&ContentExplorerWindow::MaterialBaked,
+		m_MaterialEditor,
+		&MaterialEditorWindow::RefreshMaterialState);
+
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
