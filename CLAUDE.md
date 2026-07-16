@@ -17,7 +17,7 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 - clang-format each .cpp .h and .slang file modified via `just format <files...>` (or `python scripts/format.py <files...>`; use `--check` to verify without editing). It finds clang-format via `scripts/config.json`, then PATH, then the Visual Studio LLVM component; if none exists it tells the user to install it.
 
-Always read the [Style Guide](./STYLE.md)
+The Style Guide is imported here, so it is in context from the start of every session and never has to be opened: @STYLE.md
 
 ## Comments: as few as possible, as short as possible
 
@@ -77,9 +77,9 @@ PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlet
 
 Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma field must be 1.0, and how to verify the maps before shipping them.
 
-**[AI Coding Bot](./docs/ai-coding.md)**
+**[AI Coding Bots](./docs/ai-coding.md)**
 
-Setting up the `morgana-coding-agent` GitHub App so AI-driven PR review replies post, and commits are co-authored, under a bot identity instead of your own account.
+The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when tagged `@makoto` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
 # Directory Structure
 

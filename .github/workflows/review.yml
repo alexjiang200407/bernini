@@ -1,0 +1,50 @@
+name: Review
+
+on:
+  issue_comment:
+    types: [created]
+
+# The App token posts the review; GITHUB_TOKEN only has to read the repo.
+permissions:
+  contents: read
+
+jobs:
+  review:
+    # issue_comment fires for plain issues too -- github.event.issue.pull_request is
+    # set only on pull requests. The author gate matters: without it, anyone who can
+    # comment can spend the subscription's quota.
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@makoto') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # issue_comment checks out the default branch, not the PR. Reviewing the diff
+      # needs the PR's code and enough history to diff it against the base.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 0
+
+      # App ID is an identifier, not a secret -- same as BOT_APP_ID in scripts/init.py.
+      - name: Mint the review bot token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: "4314134"
+          private-key: ${{ secrets.MAKOTO_REVIEW_KEY }}
+
+      # /bcp-review is this repo's own skill, checked out above -- it carries the layering
+      # rules and the false-positive list a generic reviewer gets backwards. CLAUDE.md
+      # (which imports STYLE.md) loads from the checkout on its own.
+      #
+      # claude_code_oauth_token bills the Max subscription. Never pass anthropic_api_key
+      # alongside it -- a static credential silently takes precedence and bills per token.
+      - uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "/bcp-review ${{ github.repository }} pull request ${{ github.event.issue.number }}"
+          claude_args: "--max-turns 20"
