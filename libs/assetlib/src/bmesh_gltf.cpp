@@ -433,7 +433,6 @@ namespace assetlib
 			const CancelToken&     cancel)
 		{
 			imageToTexture.assign(model.images.size(), c_InvalidIndex);
-#ifdef _WIN32
 			for (size_t i = 0; i < model.images.size(); ++i)
 			{
 				throwIfCancelled(cancel);
@@ -475,12 +474,6 @@ namespace assetlib
 					static_cast<uint32_t>(width),
 					static_cast<uint32_t>(height)));
 			}
-#else
-			(void)mesh;
-			(void)model;
-			(void)cancel;
-			static_assert(false, "gltf texture loading is only implemented on Windows right now");
-#endif
 		}
 
 		// Maps a glTF texture index (-> its source image -> BMeshImport::textures) to a BMeshImport

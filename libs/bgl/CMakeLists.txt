@@ -62,6 +62,15 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
 endif()
 
+enable_strict_compiler(bgl_objects)
+
+# CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
+# backend's IR, so nothing below can be built without one.
+if(NOT RENDERER_BACKEND)
+	message(STATUS "RENDERER_BACKEND unset - bgl_objects only (no bgl runtime, shaders or tests)")
+	return()
+endif()
+
 if(RENDERER_BACKEND STREQUAL "DX12")	
 	add_library(bgl SHARED
 		$<TARGET_OBJECTS:bgl_objects>
@@ -84,7 +93,7 @@ add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src bgl_idl_generate)
 
 target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
-enable_strict_compiler(bgl bgl_objects)
+enable_strict_compiler(bgl)
 
 target_compile_definitions(bgl PRIVATE
 	BGL_EXPORTS
@@ -94,14 +103,14 @@ target_compile_definitions(bgl_objects PRIVATE
 	BGL_EXPORTS
 )
 
-target_compile_definitions(bgl_d3d12 PRIVATE
-	BGL_EXPORTS
-)
-
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 
-if(RENDERER_BACKEND STREQUAL "DX12")	
-	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_DX12)	
+if(RENDERER_BACKEND STREQUAL "DX12")
+	target_compile_definitions(bgl_d3d12 PRIVATE
+		BGL_EXPORTS
+	)
+
+	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_DX12)
 	target_link_libraries(bgl PRIVATE bgl_d3d12)
 
 	find_package(directx12-agility CONFIG REQUIRED)

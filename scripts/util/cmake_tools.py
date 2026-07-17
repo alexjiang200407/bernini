@@ -145,6 +145,26 @@ def generator_of(preset):
     return _resolve_field(preset, by_name, "generator")
 
 
+def host_system_name():
+    """The value CMake would give ${hostSystemName} here."""
+    return {"win32": "Windows", "darwin": "Darwin"}.get(sys.platform, "Linux")
+
+
+def runs_on_host(preset):
+    """False when the preset's `condition` excludes this machine.
+
+    Only the hostSystemName equality form the presets actually use is understood;
+    anything else is treated as satisfied and left for CMake to reject.
+    """
+    _, by_name = load_presets()
+    condition = _resolve_field(preset, by_name, "condition")
+    if not isinstance(condition, dict):
+        return True
+    if condition.get("type") != "equals" or condition.get("lhs") != "${hostSystemName}":
+        return True
+    return condition.get("rhs") == host_system_name()
+
+
 def _resolve_cache_var(name, by_name, key, seen=None):
     """First value of cache variable `key`, searching the preset then its inherits.
 

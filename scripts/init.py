@@ -54,13 +54,34 @@ BOT_KEY = os.path.join(BOT_DIR, "morgana-coding-agent.private-key.pem")
 BOT_ENV = os.path.join(BOT_DIR, "morgana-coding-agent.env")
 
 
+if sys.platform == "darwin":
+    CLANG_HINT = "Install the Xcode Command Line Tools (xcode-select --install), or `brew install llvm`."
+    CLANG_FORMAT_HINT = "It ships with LLVM: `brew install clang-format`, or `brew install llvm`."
+    CMAKE_HINT = "Install CMake: `brew install cmake`."
+    NINJA_HINT = "This preset's generator is Ninja: `brew install ninja`."
+else:
+    CLANG_HINT = (
+        'Install the "C++ Clang tools for Windows" (LLVM) component from the Visual Studio '
+        "Installer, or give the LLVM bin directory."
+    )
+    CLANG_FORMAT_HINT = (
+        'It ships with the "C++ Clang tools for Windows" (LLVM) component, or with LLVM itself.'
+    )
+    CMAKE_HINT = "Install CMake, or point at the copy inside Visual Studio."
+    NINJA_HINT = "This preset's generator is Ninja, so a ninja binary is required."
+
+
 def selectable_presets():
-    """The presets a user can actually choose: name + display name, hidden ones dropped."""
+    """The presets a user can actually choose: name + display name, hidden ones dropped.
+
+    Presets whose `condition` rules out this host are dropped too, so the menu never
+    offers one that cannot configure here.
+    """
     data, _by_name = ct.load_presets()
     return [
         (p["name"], p.get("displayName", ""))
         for p in data.get("configurePresets", [])
-        if not p.get("hidden")
+        if not p.get("hidden") and ct.runs_on_host(p["name"])
     ]
 
 
@@ -304,14 +325,14 @@ def detect(preset, arch):
 
     cmake = ct.find_cmake()
     if not cmake:
-        cmake = ask_path("cmake", "Install CMake, or point at the copy inside Visual Studio.")
+        cmake = ask_path("cmake", CMAKE_HINT)
     if cmake:
         tools["cmake"] = cmake
 
     if generator and "ninja" in generator.lower():
         ninja = ct.find_ninja()
         if not ninja:
-            ninja = ask_path("ninja", "This preset's generator is Ninja, so a ninja binary is required.")
+            ninja = ask_path("ninja", NINJA_HINT)
         if ninja:
             tools["ninja"] = ninja
 
@@ -320,21 +341,14 @@ def detect(preset, arch):
         if clang:
             tools["clang"] = clang["c"]
         else:
-            answer = ask_path(
-                "clang",
-                'Install the "C++ Clang tools for Windows" (LLVM) component from the Visual Studio '
-                "Installer, or give the LLVM bin directory.",
-            )
+            answer = ask_path("clang", CLANG_HINT)
             if answer:
                 tools["clang"] = answer
 
     # clang-format is needed by `just format` regardless of which compiler builds.
     clang_format = ct.find_clang_format()
     if not clang_format:
-        clang_format = ask_path(
-            "clang-format",
-            'It ships with the "C++ Clang tools for Windows" (LLVM) component, or with LLVM itself.',
-        )
+        clang_format = ask_path("clang-format", CLANG_FORMAT_HINT)
     if clang_format:
         tools["clang-format"] = clang_format
 
