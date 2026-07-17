@@ -14,50 +14,34 @@ import idl.ErrorCode;
 // forwardData uniform
 import uniforms.ForwardData;
 
-void EvaluateVertices(
-    Mesh mesh,
-    Submesh submesh,
-    SubmeshInstance instance,
-    Meshlet meshlet,
-    uint gtid,
-    inout OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts
-)
+// Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
+// any function that takes an OutputVertices/OutputIndices parameter, so only MSMain may index them.
+ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance, Meshlet meshlet, uint v)
 {
-    // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
-    // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
-    for (uint v = gtid; v < meshlet.vertexCount; v += cMeshGroupSize)
-    {
-        uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
+    uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
-        dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
+    dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
 
-        uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
-        DecodedVertex vertex = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);
+    uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
+    DecodedVertex vertex = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);
 
-        float4 worldPos = mul(mesh.transform, float4(vertex.position, 1.0));
+    float4 worldPos = mul(mesh.transform, float4(vertex.position, 1.0));
 
-        ForwardVSOut vertexOut;
-        vertexOut.position = mul(forwardData.viewProj, worldPos);
-        vertexOut.worldPos = worldPos.xyz;
-        vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
-        vertexOut.uv = vertex.uv;
-        vertexOut.tangent = float4(mul((float3x3)mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
+    ForwardVSOut vertexOut;
+    vertexOut.position = mul(forwardData.viewProj, worldPos);
+    vertexOut.worldPos = worldPos.xyz;
+    vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
+    vertexOut.uv = vertex.uv;
+    vertexOut.tangent = float4(mul((float3x3)mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
 
-        vertexOut.materialIndex = instance.material.GetOffset();
+    vertexOut.materialIndex = instance.material.GetOffset();
 
-        verts[v] = vertexOut;
-    }
+    return vertexOut;
 }
 
-void EvaluatePrimitives(Submesh submesh, Meshlet meshlet, uint gtid, inout OutputIndices<uint3, cMaxPrimsPerMeshlet> tris)
+uint3 EvaluatePrimitive(Submesh submesh, Meshlet meshlet, uint t)
 {
-    // Same striding as the vertices: cMaxPrimsPerMeshlet (124) triangles do not fit one per thread.
-    // Every triangle SetMeshOutputCounts declared must be written, or the unwritten ones rasterize
-    // from undefined indices.
-    for (uint t = gtid; t < meshlet.triangleCount; t += cMeshGroupSize)
-    {
-        tris[t] = forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + t * 3);
-    }
+    return forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + t * 3);
 }
 
 [numthreads(cThreadsPerInstance, 1, 1)]
@@ -109,6 +93,17 @@ void MSMain(
 
     SetMeshOutputCounts(meshlet.vertexCount, meshlet.triangleCount);
 
-    EvaluateVertices(mesh, submesh, payload.instance, meshlet, gtid, verts);
-    EvaluatePrimitives(submesh, meshlet, gtid, tris);
+    // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
+    // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
+    for (uint v = gtid; v < meshlet.vertexCount; v += cMeshGroupSize)
+    {
+        verts[v] = EvaluateVertex(mesh, submesh, payload.instance, meshlet, v);
+    }
+
+    // Same striding. Every triangle SetMeshOutputCounts declared must be written, or the unwritten
+    // ones rasterize from undefined indices.
+    for (uint t = gtid; t < meshlet.triangleCount; t += cMeshGroupSize)
+    {
+        tris[t] = EvaluatePrimitive(submesh, meshlet, t);
+    }
 }
