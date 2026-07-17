@@ -110,16 +110,36 @@ TEST_CASE("Loading nothing leaves a texture node's path empty", "[texturenode]")
 	REQUIRE(node->save()["texture"].toString().isEmpty());
 }
 
-TEST_CASE("Without a scene a texture node routes nothing", "[texturenode]")
+TEST_CASE("A texture node with no path routes nothing", "[texturenode]")
 {
 	const auto node = HeadlessNode();
-	node->SetTexturePath("Textures/albedo.ktx2");
 
-	// There is no scene to upload the texture to, so there is no texture to route -- every port
-	// stays empty rather than handing the material a handle that resolves to nothing.
+	// Nothing is named, so there is nothing to route: every port stays empty.
 	for (QtNodes::PortIndex port = 0; port < QtNodes::PortIndex(TextureNode::c_PortCount); ++port)
 	{
 		INFO("port " << port);
 		REQUIRE(node->outData(port) == nullptr);
+	}
+}
+
+TEST_CASE("A texture node routes its file even with no scene to load it into", "[texturenode]")
+{
+	const auto node = HeadlessNode();
+	node->SetTexturePath("Textures/albedo.ktx2");
+
+	// A route is a (file, channel) pair, and the file is named whether or not anything could load it.
+	// The handle is null here -- there is no scene to upload to -- and that is not the same as being
+	// unrouted: Scene::BuildLoosePbrMaterial resolves a null handle to the very default an unrouted
+	// channel gets, so the material renders identically either way. What differs is what a *save*
+	// records, and gating this on the handle would quietly drop the route from the material the graph
+	// compiles to -- unwiring a channel because its texture could not be shown.
+	for (QtNodes::PortIndex port = 0; port < QtNodes::PortIndex(TextureNode::c_PortCount); ++port)
+	{
+		INFO("port " << port);
+
+		const auto data = std::dynamic_pointer_cast<ChannelData>(node->outData(port));
+		REQUIRE(data != nullptr);
+		REQUIRE(data->At(0).path == QString("Textures/albedo.ktx2"));
+		REQUIRE_FALSE(data->At(0).texture.textureSlot);
 	}
 }

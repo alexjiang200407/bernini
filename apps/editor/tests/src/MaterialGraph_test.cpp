@@ -2,6 +2,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
@@ -27,26 +28,14 @@ namespace
 	using QtNodes::NodeRole;
 
 	/**
-	 * The registry the material editor builds, minus the graphics. TextureNode takes a null scene and
-	 * a null preview cache on purpose -- that is what the editor itself passes when it runs without a
+	 * The registry the material editor ships, minus the graphics. TextureNode takes a null scene and a
+	 * null preview cache on purpose -- that is what the editor itself passes when it runs without a
 	 * device, and it keeps every test in this file off the GPU.
 	 */
 	std::shared_ptr<NodeDelegateModelRegistry>
 	Registry()
 	{
-		auto registry = std::make_shared<NodeDelegateModelRegistry>();
-
-		registry->registerModel<TextureNode>(
-			[]() { return std::make_unique<TextureNode>(nullptr, nullptr); },
-			"Input");
-		registry->registerModel<MaterialOutputNode>(
-			[]() { return std::make_unique<MaterialOutputNode>(); },
-			QLatin1String(c_OutputCategory));
-		registry->registerModel<AlphaTestedMaterialOutputNode>(
-			[]() { return std::make_unique<AlphaTestedMaterialOutputNode>(); },
-			QLatin1String(c_OutputCategory));
-
-		return registry;
+		return MakeMaterialNodeRegistry(nullptr, nullptr);
 	}
 
 	/** A drop payload carrying one local file, as the content explorer produces. */

@@ -27,11 +27,10 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
-
-using QtNodes::NodeDelegateModelRegistry;
 
 namespace
 {
@@ -46,52 +45,6 @@ namespace
 		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
 	} };
 
-	// A `.bmaterial`'s texture references are relative to the project's Data root -- not to the
-	// material file -- so a material names `textures_src/tex1.ktx2` and `Textures/orm_ab12.ktx2`
-	// whatever directory it lives in. Texture nodes hold absolute paths while the graph is live, so the
-	// saved graph is rewritten on the way out and back in. An empty `dir` (no project open) leaves the
-	// path alone, as do paths that cannot be expressed relative to it -- a different drive, say. Both
-	// stay absolute: still correct, merely not relocatable.
-	QString
-	Rebase(const QString& path, const std::filesystem::path& dir, bool toRelative)
-	{
-		if (path.isEmpty() || dir.empty())
-			return path;
-
-		std::error_code       ec;
-		const auto            source = std::filesystem::path(path.toStdWString());
-		std::filesystem::path result =
-			toRelative ? std::filesystem::relative(source, dir, ec) : (dir / source);
-		if (ec || result.empty())
-			return path;
-
-		result = toRelative ? result : std::filesystem::weakly_canonical(result, ec);
-		if (ec)
-			return path;
-
-		return QString::fromStdWString(result.generic_wstring());
-	}
-
-	// Rewrites every Texture node's stored path in a saved graph. QtNodes nests each delegate's own
-	// save() under "internal-data", which is where TextureNode wrote its "texture" key.
-	void
-	RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool toRelative)
-	{
-		QJsonArray nodes = graph["nodes"].toArray();
-		for (QJsonValueRef nodeValue : nodes)
-		{
-			QJsonObject node     = nodeValue.toObject();
-			QJsonObject internal = node["internal-data"].toObject();
-
-			if (internal["model-name"].toString() != QLatin1String("Texture"))
-				continue;
-
-			internal["texture"]   = Rebase(internal["texture"].toString(), dir, toRelative);
-			node["internal-data"] = internal;
-			nodeValue             = node;
-		}
-		graph["nodes"] = nodes;
-	}
 }
 
 MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindowDesc desc) :
@@ -239,20 +192,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	m_TexturePreviews = new TexturePreviewCache(this);
 
-	m_Registry            = std::make_shared<NodeDelegateModelRegistry>();
-	bgl::IScene* scene    = m_Desc.scene ? m_Desc.scene.Get() : nullptr;
-	auto*        previews = m_TexturePreviews;
-	m_Registry->registerModel<TextureNode>(
-		[scene, previews]() { return std::make_unique<TextureNode>(scene, previews); },
-		"Input");
-	// Registered so the graph can create one by name and restore one from a saved graph -- but hidden
-	// from the context menu, because a sink is switched, not added.
-	m_Registry->registerModel<MaterialOutputNode>(
-		[]() { return std::make_unique<MaterialOutputNode>(); },
-		QLatin1String(c_OutputCategory));
-	m_Registry->registerModel<AlphaTestedMaterialOutputNode>(
-		[]() { return std::make_unique<AlphaTestedMaterialOutputNode>(); },
-		QLatin1String(c_OutputCategory));
+	m_Registry =
+		MakeMaterialNodeRegistry(m_Desc.scene ? m_Desc.scene.Get() : nullptr, m_TexturePreviews);
 
 	splitter->addWidget(leftPanel);
 	splitter->addWidget(rightPanel);
@@ -606,15 +547,8 @@ MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPat
 {
 	const SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(submeshIndex)];
 
-	// Texture references are stored relative to the Data root, not to the material file.
-	const std::filesystem::path& dir = m_DataRoot;
-
-	auto material = assetlib::BMaterial();
-
-	material.shadingModel = assetlib::ShadingModel::kPbr;
-
-	// The graph authors per-channel routes, so a material that has never been baked is loose.
-	material.mode = assetlib::MaterialMode::kLoose;
+	assetlib::BMaterial material =
+		CompileMaterial(*entry.model, QFileInfo(materialPath).completeBaseName(), m_DataRoot);
 
 	// A material already on disk keeps whatever a previous bake produced: the triplet, its provenance
 	// and the mode. Rebuilding purely from the graph would throw the optimized textures away on every
@@ -636,36 +570,6 @@ MaterialEditorWindow::BuildMaterial(int submeshIndex, const QString& materialPat
 			qWarning("MaterialEditor: could not read the existing material: %s", e.what());
 		}
 	}
-
-	material.name = QFileInfo(materialPath).completeBaseName().toStdString();
-
-	const MaterialOutputNode* output = entry.model->OutputNode();
-	if (output != nullptr)
-	{
-		assetlib::PbrParams& pbr = material.pbr;
-
-		pbr.baseColorFactor = output->BaseColorFactor();
-		pbr.metallicFactor  = output->MetallicFactor();
-		pbr.roughnessFactor = output->RoughnessFactor();
-
-		pbr.alphaMode =
-			output->IsAlphaTested() ? assetlib::AlphaMode::kMask : assetlib::AlphaMode::kOpaque;
-		pbr.alphaCutoff = output->AlphaCutoff();
-
-		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
-		{
-			const ChannelData::Route wired = output->Route(i);
-
-			pbr.routes[i].texture = Rebase(wired.path, dir, true).toStdString();
-			pbr.routes[i].channel = wired.channel;
-		}
-	}
-
-	// Keep the graph itself alongside the routes it compiles to, so reopening restores the authoring
-	// state -- node positions, factors, and nodes that are not wired to anything.
-	QJsonObject graph = entry.model->save();
-	RebaseGraphTextures(graph, dir, true);
-	material.editorGraph = QJsonDocument(graph).toJson(QJsonDocument::Compact).toStdString();
 
 	return material;
 }
