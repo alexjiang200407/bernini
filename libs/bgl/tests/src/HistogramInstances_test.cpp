@@ -57,7 +57,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	constexpr uint32_t     paddedCount = groupCount * kThreadsPerGroup;
 	constexpr bgl::PsoType buckets[]   = { bgl::PsoType::kOpaque_StaticMesh_PBR,
 		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
-		                                   bgl::PsoType::kAssert_StaticMesh };
+		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
 
 	// The PSO bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
 	// no submesh, no indirection to build. Two instances of one submesh are free to bucket

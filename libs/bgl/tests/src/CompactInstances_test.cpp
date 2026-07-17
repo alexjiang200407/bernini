@@ -55,10 +55,10 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 		bgl::idl::cHistogramGroupSize;
 
 	// kOpaque_StaticMesh_PBR is bucket 1, so its base is the (empty) null bucket: 0 before the scan
-	// and 0 after. The later buckets are the ones with something to get wrong.
+	// and 0 after. The alpha-test and transparent buckets are the ones with something to get wrong.
 	constexpr bgl::PsoType buckets[]   = { bgl::PsoType::kOpaque_StaticMesh_PBR,
 		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
-		                                   bgl::PsoType::kAssert_StaticMesh };
+		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
 	constexpr uint32_t     bucketCount = static_cast<uint32_t>(std::size(buckets));
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();

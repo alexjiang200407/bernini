@@ -120,6 +120,8 @@ namespace bgl
 			{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
 			// kAlphaTest_StaticMesh_LoosePbr
 			{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
+			// kTransparent_StaticMesh_PBR
+			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
