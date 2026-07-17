@@ -13,7 +13,7 @@
     "stb",
     "meshoptimizer",
     "ktx",
-    "sdl3",
+    { "name": "sdl3", "platform": "windows" },
     { "name": "directx-headers", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },
     { "name": "winpixevent", "platform": "windows" }
