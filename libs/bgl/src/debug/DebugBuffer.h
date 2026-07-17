@@ -1,4 +1,5 @@
 #pragma once
+#include "idl/DebugRecord.h"
 #include "scene/ComputeBuffer.h"
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -23,7 +24,12 @@ namespace bgl
 	public:
 		// Word layout -- MUST stay in sync with dbg.slang.
 		static constexpr uint32_t kHeaderWords = 4;
-		static constexpr uint32_t kRecordWords = 1;  // == sizeof(idl::DebugRecord) / 4
+		static constexpr uint32_t kRecordWords = 4;
+
+		static_assert(
+			kRecordWords * sizeof(uint32_t) == sizeof(idl::DebugRecord),
+			"dbg.slang writes kRecordWords words per record and the readback reads a DebugRecord "
+			"over them; a field added to one and not the other decodes as garbage");
 
 		static constexpr uint32_t kCounterWord  = 0;
 		static constexpr uint32_t kOverflowWord = 1;

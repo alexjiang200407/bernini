@@ -298,6 +298,11 @@ namespace bgl
 		DebugBuffer          m_DebugBuffer;
 		ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
 		bool                 m_DebugReadbackPending[c_SwapchainImageCount] = {};
+
+		// The fence that gates each slot's copy. A slot is Graphics-wide but every RenderTarget
+		// indexes it with a frame index of its own, so the target that inspects a slot need not be
+		// the one that filled it -- and must not wait on its own fence to decide the copy has landed.
+		uint64_t m_DebugReadbackFence[c_SwapchainImageCount] = {};
 #endif
 	};
 }
@@ -493,6 +498,12 @@ namespace bgl
 		}
 		m_DebugReadbackPending[index] = false;
 
+		// Not the caller's rt.m_FenceValues[index]: that gates the caller's own last frame at this
+		// slot, which says nothing about a copy another target submitted into the same slot. A target
+		// that has never drawn here has no fence at all, so BeginFrame waits on nothing and would map
+		// a buffer the GPU is still writing.
+		m_CommandQueue->WaitForFenceCPUBlocking(m_DebugReadbackFence[index]);
+
 		const void* mapped = m_ResourceManager->MapReadback(m_DebugReadbacks[index]);
 		gassert(mapped != nullptr, "Failed to map GPU debug readback");
 
@@ -508,9 +519,33 @@ namespace bgl
 			"GPU assertion(s) fired: {} raised{}",
 			report->count,
 			report->overflow ? " (debug buffer overflowed; some records dropped)" : "");
+
+		// Identical records are the norm rather than the exception: one bad submesh raises once per
+		// vertex, so the interesting thing is which distinct failures happened, not a thousand copies
+		// of one. Ordered by first appearance, because that is the one that has a cause.
+		auto seen = std::vector<std::pair<idl::DebugRecord, uint32_t>>();
 		for (const idl::DebugRecord& rec : report->records)
 		{
-			msg += std::format("\n  errcode={}", rec.errcode);
+			const auto same = [&rec](const std::pair<idl::DebugRecord, uint32_t>& entry) {
+				return entry.first.errcode == rec.errcode && entry.first.value == rec.value &&
+				       entry.first.limit == rec.limit && entry.first.context == rec.context;
+			};
+
+			if (const auto it = std::ranges::find_if(seen, same); it != seen.end())
+				++it->second;
+			else
+				seen.emplace_back(rec, 1u);
+		}
+
+		for (const auto& [rec, times] : seen)
+		{
+			msg += std::format(
+				"\n  {} value={} limit={} context={} (x{})",
+				ErrorCodeName(rec.errcode),
+				rec.value,
+				rec.limit,
+				rec.context,
+				times);
 		}
 
 		if (m_GpuAssertionHandler != nullptr)
@@ -695,8 +730,8 @@ namespace bgl
 #if defined(BERNINI_GPU_DEBUG)
 		// Snapshot this frame's GPU assertions into the slot's readback buffer, then
 		// leave the debug buffer in copy-dest ready for next frame's reset. The copy
-		// rides this command list, gated by rt.m_FenceValues[index] set below; it is
-		// inspected at the BeginFrame that reuses this slot (~c_SwapchainImageCount frames on).
+		// rides this command list, gated by the fence recorded below; it is inspected at
+		// the next BeginFrame that lands on this slot, whichever target that belongs to.
 		m_CommandList->BeginEvent("GPU Debug Buffer Readback");
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
@@ -722,6 +757,11 @@ namespace bgl
 		m_CommandList->Close();
 
 		rt.m_FenceValues[index] = m_CommandQueue->ExecuteCommandList(m_CommandList);
+
+#if defined(BERNINI_GPU_DEBUG)
+		// The readback copy rode the list just submitted, so this is what gates it.
+		m_DebugReadbackFence[index] = rt.m_FenceValues[index];
+#endif
 
 		if (!rt.m_Headless)
 		{

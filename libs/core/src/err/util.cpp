@@ -3,6 +3,7 @@
 #include <cpptrace/cpptrace.hpp>
 
 #include <csignal>
+#include <ctime>
 
 #if defined(_WIN32)
 #	define WIN32_LEAN_AND_MEAN
@@ -16,12 +17,31 @@ namespace core
 {
 	namespace
 	{
+		/**
+		 * `{exe}_crash_YYYYMMDD_HHMMSS.log`, next to the executable.
+		 */
+		std::string
+		crash_log_path()
+		{
+			const std::time_t now = std::time(nullptr);
+
+			std::tm local = {};
+#if defined(_WIN32)
+			localtime_s(&local, &now);
+#else
+			localtime_r(&now, &local);
+#endif
+
+			char stamp[32] = {};
+			std::strftime(stamp, sizeof(stamp), "%Y%m%d_%H%M%S", &local);
+
+			return "./" + get_executable_name() + "_crash_" + stamp + ".log";
+		}
+
 		void
 		write_crash_log(std::string_view reason)
 		{
-			std::ofstream log_file(
-				"./" + get_executable_name() + "_crash.log",
-				std::ios::out | std::ios::trunc);
+			std::ofstream log_file(crash_log_path(), std::ios::out | std::ios::trunc);
 
 			if (!log_file.is_open())
 			{

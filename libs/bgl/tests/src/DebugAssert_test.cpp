@@ -33,10 +33,19 @@ namespace
 	}
 
 	void
-	SetRecord(std::vector<uint32_t>& words, uint32_t i, uint32_t errcode)
+	SetRecord(
+		std::vector<uint32_t>& words,
+		uint32_t               i,
+		uint32_t               errcode,
+		uint32_t               value   = 0,
+		uint32_t               limit   = 0,
+		uint32_t               context = 0)
 	{
 		const uint32_t base = bgl::DebugBuffer::kHeaderWords + i * bgl::DebugBuffer::kRecordWords;
-		words[base]         = errcode;
+		words[base + 0]     = errcode;
+		words[base + 1]     = value;
+		words[base + 2]     = limit;
+		words[base + 3]     = context;
 	}
 }
 
@@ -66,6 +75,40 @@ TEST_CASE("InspectDebugReadback decodes debug-buffer records", "[debug][gpu-asse
 		CHECK(report->records[1].errcode == 6u);
 	}
 
+	SECTION("a record carries what failed, not just that something did")
+	{
+		// The operands are the whole point: "kInvalidVertexIndex" says a vertex index was out of
+		// range, and only these say which one, of what, and where -- which is the difference between
+		// a stack trace to guess from and a bug report.
+		auto image = MakeDebugImage(/*count*/ 1, /*overflow*/ 0, /*capacity*/ 8);
+		SetRecord(image, 0, 7u, /*value*/ 4211u, /*limit*/ 1089u, /*context*/ 3u);
+
+		const auto report = bgl::InspectDebugReadback(image.data(), 8);
+		REQUIRE(report.has_value());
+		REQUIRE(report->records.size() == 1);
+		CHECK(report->records[0].errcode == 7u);
+		CHECK(report->records[0].value == 4211u);
+		CHECK(report->records[0].limit == 1089u);
+		CHECK(report->records[0].context == 3u);
+	}
+
+	SECTION("a record's payload is read from its own words, not the next record's")
+	{
+		// Records are packed, so a decoder that has the stride wrong still reports record 0 fine and
+		// silently reads record 1 out of the tail of record 0.
+		auto image = MakeDebugImage(/*count*/ 2, /*overflow*/ 0, /*capacity*/ 8);
+		SetRecord(image, 0, 1u, 10u, 20u, 30u);
+		SetRecord(image, 1, 2u, 40u, 50u, 60u);
+
+		const auto report = bgl::InspectDebugReadback(image.data(), 8);
+		REQUIRE(report.has_value());
+		REQUIRE(report->records.size() == 2);
+		CHECK(report->records[1].errcode == 2u);
+		CHECK(report->records[1].value == 40u);
+		CHECK(report->records[1].limit == 50u);
+		CHECK(report->records[1].context == 60u);
+	}
+
 	SECTION("overflow caps decoded records at capacity")
 	{
 		auto image = MakeDebugImage(/*count*/ 20, /*overflow*/ 1, /*capacity*/ 2);
@@ -78,6 +121,18 @@ TEST_CASE("InspectDebugReadback decodes debug-buffer records", "[debug][gpu-asse
 		CHECK(report->overflow);
 		CHECK(report->records.size() == 2);  // capped, not 20
 	}
+}
+
+TEST_CASE("An errcode reports by name", "[debug][gpu-assert]")
+{
+	// "errcode=7" makes a reader count enum entries to find out what fired. The name still greps
+	// back to the dbg_assert that raised it; the enum's `k` is a code convention, not part of it.
+	CHECK(bgl::ErrorCodeName(7u) == "InvalidVertexIndex");
+	CHECK(bgl::ErrorCodeName(1u) == "Unknown");
+
+	// A shader newer than this build raises a code the enum has no name for. Reporting the number
+	// beats dropping the record, because a stale shader is exactly when this gets read.
+	CHECK(bgl::ErrorCodeName(999u) == "999");
 }
 
 // End-to-end: a compute shader calls dbg_raise() from one thread; the record must
@@ -177,6 +232,12 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	CHECK_FALSE(report->overflow);
 	REQUIRE(report->records.size() == 1);
 	CHECK(report->records[0].errcode == 1u);
+
+	// The operands the shader raised with, through the atomic append and the readback. A record
+	// whose payload does not survive this is a record that cannot name what went wrong.
+	CHECK(report->records[0].value == 111u);
+	CHECK(report->records[0].limit == 222u);
+	CHECK(report->records[0].context == 333u);
 
 	resourceManager->UnmapReadback(rb);
 

@@ -1,10 +1,48 @@
 #pragma once
 #include "debug/DebugBuffer.h"
 #include "idl/DebugRecord.h"
+#include "idl/ErrorCode.h"
 
 #if defined(BERNINI_GPU_DEBUG)
 namespace bgl
 {
+	/**
+	 * An errcode's name for the crash message, without the enum's `k` prefix. A code the enum does
+	 * not carry is reported as its number rather than dropped -- a stale shader is exactly when this
+	 * is being read.
+	 *
+	 * Deliberately a switch with no default, so adding an ErrorCode without a name fails the build.
+	 *
+	 * Not noexcept: the longer names do not fit a small-string buffer, so this allocates.
+	 */
+	[[nodiscard]] inline std::string
+	ErrorCodeName(uint32_t errcode)
+	{
+		switch (static_cast<idl::ErrorCode>(errcode))
+		{
+		case idl::ErrorCode::kUnknown:
+			return "Unknown";
+		case idl::ErrorCode::kInvalidVertexLayout:
+			return "InvalidVertexLayout";
+		case idl::ErrorCode::kInvalidSubmeshIndex:
+			return "InvalidSubmeshIndex";
+		case idl::ErrorCode::kInvalidMeshletIndex:
+			return "InvalidMeshletIndex";
+		case idl::ErrorCode::kMeshletVertexOverflow:
+			return "MeshletVertexOverflow";
+		case idl::ErrorCode::kMeshletPrimitiveOverflow:
+			return "MeshletPrimitiveOverflow";
+		case idl::ErrorCode::kInvalidVertexIndex:
+			return "InvalidVertexIndex";
+		case idl::ErrorCode::kInvalidSubmeshInstance:
+			return "InvalidSubmeshInstance";
+		case idl::ErrorCode::kInvalidPsoType:
+			return "InvalidPsoType";
+		}
+
+		return std::to_string(errcode);
+	}
+
 	// One decoded frame of GPU assertions read back from a DebugBuffer.
 	struct DebugReport
 	{

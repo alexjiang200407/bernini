@@ -35,8 +35,11 @@ namespace bgl
 		operator=(CommandList&&) noexcept = delete;
 
 		void
-		WriteBuffer(BufferHandle handle, const void* data, size_t offset, size_t byteSize) noexcept
-			override;
+		WriteBuffer(
+			BufferHandle handle,
+			const void*  data,
+			size_t       gpuBufferOffset,
+			size_t       byteSize) noexcept override;
 
 		void
 		WriteTexture(

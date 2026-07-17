@@ -29,7 +29,7 @@ void EvaluateVertices(
     {
         uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
-        dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex);
+        dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
 
         uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
         DecodedVertex vertex = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);
@@ -83,17 +83,29 @@ void MSMain(
 {
     let mesh = forwardData.meshBuffer.Get(payload.instance.meshInstance);
 
-    dbg_assert(payload.instance.submeshIndex < mesh.submeshes.count, ErrorCode.kInvalidSubmeshIndex);
+    dbg_assert(
+        payload.instance.submeshIndex < mesh.submeshes.count,
+        ErrorCode.kInvalidSubmeshIndex,
+        payload.instance.submeshIndex,
+        mesh.submeshes.count,
+        payload.instance.meshInstance.GetOffset()
+    );
 
     let submesh = forwardData.submeshBuffer.Get(mesh.submeshes, payload.instance.submeshIndex);
 
-    dbg_assert(gid < submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex);
-    dbg_assert(submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout);
+    dbg_assert(
+        gid < submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex, gid, submesh.GetMeshletCount(), payload.instance.submeshIndex
+    );
+    dbg_assert(submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout, submesh.layout.stride, 0, payload.instance.submeshIndex);
 
     let meshlet = forwardData.meshletBuffer.Get(submesh.meshlets, gid);
 
-    dbg_assert(meshlet.vertexCount <= cMaxVerticesPerMeshlet, ErrorCode.kMeshletVertexOverflow);
-    dbg_assert(meshlet.triangleCount <= cMaxPrimsPerMeshlet, ErrorCode.kMeshletPrimitiveOverflow);
+    dbg_assert(
+        meshlet.vertexCount <= cMaxVerticesPerMeshlet, ErrorCode.kMeshletVertexOverflow, meshlet.vertexCount, cMaxVerticesPerMeshlet, gid
+    );
+    dbg_assert(
+        meshlet.triangleCount <= cMaxPrimsPerMeshlet, ErrorCode.kMeshletPrimitiveOverflow, meshlet.triangleCount, cMaxPrimsPerMeshlet, gid
+    );
 
     SetMeshOutputCounts(meshlet.vertexCount, meshlet.triangleCount);
 

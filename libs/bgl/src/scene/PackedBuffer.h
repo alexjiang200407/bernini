@@ -296,7 +296,7 @@ namespace bgl
 
 			if (size > 0)
 			{
-				cmdList->WriteBuffer(m_BufferHandle, m_Entries.data(), offset, size);
+				cmdList->WriteBufferSlice(m_BufferHandle, m_Entries.data(), offset, size);
 			}
 		}
 

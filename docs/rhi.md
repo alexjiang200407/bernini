@@ -185,9 +185,14 @@ Everything else is self-explanatory from the header.
 
 * **`Open` / `Close` ordering.** Record only between them (`IsOpen()` reports state). `Open`
   requires a non-null queue and allocator; the **allocator must already be reset** if reused.
-* **`WriteBuffer(handle, data, [offset,] byteSize)`** — the destination buffer must be in a
-  writable state and the range must fit. Staged through the list's upload ring
-  (`CommandListDesc::uploadChunkSize`).
+* **`WriteBuffer(handle, data, [gpuBufferOffset,] byteSize)`** — the destination buffer must be in
+  a writable state and the range must fit. Staged through the list's upload ring
+  (`CommandListDesc::uploadChunkSize`). `data` points at the region's own bytes; the offset
+  applies to the destination only.
+* **`WriteBufferSlice(handle, cpuMirror, offset, byteSize)`** — for a CPU mirror that shadows the
+  buffer byte-for-byte, where `offset` applies to both sides. Prefer it over `WriteBuffer` for
+  dirty-region flushes: passing a mirror's base to `WriteBuffer` uploads the mirror's *first*
+  bytes into a later region, corrupting whatever range lives there.
 * **`CopyBufferToReadback` / `CopyTextureToReadback`** — source must already be in a
   copy-source state/layout. Texture copy uses subresource 0's linear footprint
   (`GetTextureReadbackLayout`).
