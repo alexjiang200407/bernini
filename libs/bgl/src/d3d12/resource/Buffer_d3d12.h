@@ -1,6 +1,6 @@
 #pragma once
-#include "resource/Buffer.h"
 #include "convert_d3d12.h"
+#include "resource/Buffer.h"
 
 namespace bgl
 {
@@ -63,8 +63,7 @@ namespace bgl
 
 	private:
 		BufferDesc                  m_Desc;
-		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle = {};
 		wrl::ComPtr<ID3D12Resource> m_Buffer;
 	};
 }

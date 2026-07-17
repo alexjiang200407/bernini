@@ -25,13 +25,6 @@ namespace bgl
 	template <EntryBufferConcept T, typename Meta = void>
 	class EntryBuffer
 	{
-	public:
-		struct CopyRange
-		{
-			uint32_t offsetBytes = 0;
-			uint32_t sizeBytes   = 0;
-		};
-
 	private:
 		static constexpr bool c_HasMeta = !std::is_void_v<Meta>;
 		using MetaElem                  = std::conditional_t<c_HasMeta, Meta, int>;
