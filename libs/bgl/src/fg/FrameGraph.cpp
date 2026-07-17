@@ -263,16 +263,6 @@ namespace bgl
 
 		for (const PassNode& pass : m_Passes)
 		{
-			const bool hasAttachments =
-				!pass.desc.colorAttachments.empty() || !pass.desc.depthAttachment.IsNull();
-			if (hasAttachments && resourceManager == nullptr)
-			{
-				core::throw_runtime_error(
-					"FrameGraph::Compile: pass '{}' has attachments but no ResourceManager was "
-					"provided to resolve them",
-					pass.desc.name);
-			}
-
 			const auto rejectIfImported = [&](TextureHandle tex) {
 				for (const auto& [name, res] : m_Imported)
 				{
