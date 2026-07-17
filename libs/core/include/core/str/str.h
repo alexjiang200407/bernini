@@ -2,11 +2,15 @@
 
 namespace core::str
 {
+#if defined(_WIN32)
+	// Bridges to Win32's wide-character APIs. No other platform has one, so these are declared
+	// only where they can be implemented.
 	std::wstring
 	string_to_wide(std::string_view str);
 
 	std::string
 	wide_to_string(std::wstring_view ws);
+#endif
 
 	size_t toUtf32(std::span<char16_t>, std::span<char32_t>);
 
