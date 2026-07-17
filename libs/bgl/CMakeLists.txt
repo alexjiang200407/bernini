@@ -62,6 +62,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
 endif()
 
+enable_strict_compiler(bgl_objects)
+
 # Everything below needs a backend: CreateGraphics is only ever defined inside one, and the shader
 # validation step compiles for the backend's IR. bgl_objects is backend-free and still builds.
 if(NOT RENDERER_BACKEND)
@@ -91,7 +93,7 @@ add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src bgl_idl_generate)
 
 target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
-enable_strict_compiler(bgl bgl_objects)
+enable_strict_compiler(bgl)
 
 target_compile_definitions(bgl PRIVATE
 	BGL_EXPORTS
