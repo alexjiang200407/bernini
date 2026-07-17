@@ -72,7 +72,7 @@ namespace bgl
 	CommandList::WriteBuffer(
 		BufferHandle handle,
 		const void*  data,
-		size_t       offset,
+		size_t       gpuBufferOffset,
 		size_t       byteSize) noexcept
 	{
 		auto& buffer = m_ResourceManager->GetBuffer(handle);
@@ -98,7 +98,7 @@ namespace bgl
 
 		m_CommandList->CopyBufferRegion(
 			buffer.GetD3D12Resource(),
-			offset,
+			gpuBufferOffset,
 			m_CurrentUploadBuffer.Get(),
 			offsetInUploadBuffer,
 			byteSize);

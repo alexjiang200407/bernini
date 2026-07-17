@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "resource/Buffer.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/RangeBuffer.h"
 #include "util/GpuValidation.h"
@@ -198,6 +199,67 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		CHECK_FALSE(rb.IsValid(reused));
 
 		CHECK_FALSE(rb.IsValid(core::multi_slot_handle{}));
+	}
+
+	// Regression: IssueCopy used to source every upload from the mirror's base, so a dirty run
+	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region. Invisible until
+	// something allocates beyond the first block -- e.g. a thumbnail sphere added after a large
+	// mesh -- whose GPU data then belonged to another range entirely.
+	SECTION("A dirty range past the first block uploads its own bytes")
+	{
+		auto desc      = bgl::RangeBufferDesc();
+		desc.maxCount  = 16;
+		desc.blockSize = 4 * sizeof(uint32_t);  // Four elements per block => 4 blocks.
+		desc.debugName = "RangeBuffer Offset Upload";
+
+		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+
+		// Fill blocks 0-1 and flush, so the next upload's dirty run cannot start at block 0.
+		const uint32_t low[]     = { 100, 101, 102, 103, 104, 105, 106, 107 };
+		auto           lowHandle = rb.Add(std::span<const uint32_t>(low, std::size(low)));
+		rb.Update(cmdList);
+
+		const uint32_t high[]     = { 200, 201, 202, 203 };
+		auto           highHandle = rb.Add(std::span<const uint32_t>(high, std::size(high)));
+		REQUIRE(highHandle.index == 8);  // Entirely inside block 2.
+		rb.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = desc.maxCount * sizeof(uint32_t);
+		rbDesc.debugName = "RangeBuffer Offset Upload Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(rb.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		for (uint32_t i = 0; i < std::size(low); ++i)
+		{
+			CHECK(mapped[lowHandle.index + i] == low[i]);
+		}
+		for (uint32_t i = 0; i < std::size(high); ++i)
+		{
+			CHECK(mapped[highHandle.index + i] == high[i]);
+		}
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, fence, false);
+		rb.Release(fence, false);
+
+		// The case-wide Close below expects an open list.
+		cmdList->Open(cmdQueue, cmdAllocator);
 	}
 
 	cmdList->Close();

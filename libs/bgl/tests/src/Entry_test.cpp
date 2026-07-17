@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "resource/Readback.h"
 #include "scene/EntryBuffer.h"
 #include "util/GpuValidation.h"
 #include <bgl/IGraphics.h>
@@ -230,6 +231,61 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		auto reused = entryBuffer.Add(2);
 		CHECK(reused.index == a.index);
 		CHECK(entryBuffer.MetaAt(reused.index).refCount == 0);
+	}
+
+	// Regression: IssueCopy used to source every upload from the mirror's base, so a dirty run
+	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
+	SECTION("A dirty slot past the first block uploads its own bytes")
+	{
+		auto desc      = bgl::EntryBufferDesc();
+		desc.maxCount  = 16;
+		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 4 blocks.
+		desc.debugName = "EntryBuffer Offset Upload";
+
+		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+
+		core::slot_handle handles[9];
+		for (int i = 0; i < 9; ++i) handles[i] = entryBuffer.EmplaceBack(100 + i);
+		entryBuffer.Update(cmdList);
+
+		// Only block 2 goes dirty: its upload sources the mirror at that offset, not the
+		// mirror's start.
+		entryBuffer.Set(handles[8], 999);
+		entryBuffer.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = desc.maxCount * sizeof(int);
+		rbDesc.debugName = "EntryBuffer Offset Upload Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(entryBuffer.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, entryBuffer.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const int*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		for (int i = 0; i < 8; ++i)
+		{
+			CHECK(mapped[i] == 100 + i);
+		}
+		CHECK(mapped[8] == 999);
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, fence, false);
+		entryBuffer.Release(fence, false);
+
+		// The case-wide Close below expects an open list.
+		cmdList->Open(cmdQueue, cmdAllocator);
 	}
 
 	cmdList->Close();

@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "resource/Buffer.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/PackedBuffer.h"
 #include "util/GpuValidation.h"
@@ -279,6 +280,61 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		pb.Update(cmdList);
 		CHECK(pb.CountDirtyBlocks() == 0);
 		CHECK(pb[handles.front()] == 0);
+	}
+
+	// Regression: IssueCopy used to source every upload from the mirror's base, so a dirty run
+	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
+	SECTION("A dirty element past the first block uploads its own bytes")
+	{
+		auto desc      = bgl::PackedBufferDesc();
+		desc.maxCount  = 16;
+		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 4 blocks.
+		desc.debugName = "PackedBuffer Offset Upload";
+
+		auto pb = PackedInt(desc, resourceManager);
+
+		std::vector<PackedInt::Handle> handles;
+		for (int i = 0; i < 9; ++i) handles.push_back(pb.EmplaceBack(100 + i));
+		pb.Update(cmdList);
+
+		// Only block 2 goes dirty: its upload sources the mirror at that offset, not the
+		// mirror's start.
+		pb.Set(handles[8], 999);
+		pb.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = desc.maxCount * sizeof(int);
+		rbDesc.debugName = "PackedBuffer Offset Upload Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(pb.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, pb.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const int*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		for (int i = 0; i < 8; ++i)
+		{
+			CHECK(mapped[i] == 100 + i);
+		}
+		CHECK(mapped[8] == 999);
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, fence, false);
+		pb.Release(fence, false);
+
+		// The case-wide Close below expects an open list.
+		cmdList->Open(cmdQueue, cmdAllocator);
 	}
 
 	cmdList->Close();

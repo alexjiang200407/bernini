@@ -44,12 +44,35 @@ namespace bgl
 			WriteBuffer(handle, data, 0, byteSize);
 		}
 
+		/**
+		 * Writes `byteSize` bytes read from `data` into the buffer at `gpuBufferOffset`.
+		 * `data` is the source of the region itself, not the buffer's base; for a CPU
+		 * mirror that shadows the buffer 1:1, use WriteBufferSlice.
+		 */
 		virtual void
 		WriteBuffer(
 			BufferHandle handle,
 			const void*  data,
-			size_t       offset,
+			size_t       gpuBufferOffset,
 			size_t       byteSize) noexcept = 0;
+
+		/**
+		 * Uploads one slice of a CPU mirror that shadows the buffer byte-for-byte:
+		 * the `byteSize` bytes at `offset` into `cpuMirror` land at `offset` in the buffer.
+		 */
+		void
+		WriteBufferSlice(
+			BufferHandle handle,
+			const void*  cpuMirror,
+			size_t       offset,
+			size_t       byteSize) noexcept
+		{
+			WriteBuffer(
+				handle,
+				static_cast<const std::byte*>(cpuMirror) + offset,
+				offset,
+				byteSize);
+		}
 
 		/**
 		 * Uploads CPU pixel data into every subresource of a texture. The texture must
