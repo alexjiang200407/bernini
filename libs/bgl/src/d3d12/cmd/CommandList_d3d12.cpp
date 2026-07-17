@@ -26,7 +26,9 @@ namespace bgl
 		m_Desc(desc), m_ResourceManager(std::move(resourceManager)),
 		m_UploadManager(
 			m_ResourceManager->As<ResourceManager>()->GetD3D12DeviceCpy(),
-			desc.uploadChunkSize)
+			desc.uploadChunkSize,
+			0,
+			false)
 	{
 		gassert(commandAllocator != nullptr, "Command allocator cannot be null");
 		gassert(m_ResourceManager != nullptr, "Resource manager cannot be null");
@@ -82,6 +84,7 @@ namespace bgl
 		auto success = m_UploadManager.SuballocateBuffer(
 			m_LastCompletedFence,
 			byteSize,
+			nullptr,
 			m_CurrentUploadBuffer,
 			&offsetInUploadBuffer,
 			&cpuVA,
@@ -134,6 +137,7 @@ namespace bgl
 		auto success = m_UploadManager.SuballocateBuffer(
 			m_LastCompletedFence,
 			totalBytes,
+			nullptr,
 			m_CurrentUploadBuffer,
 			&offsetInUploadBuffer,
 			&cpuVA,
@@ -669,6 +673,7 @@ namespace bgl
 		auto success = m_UploadManager.SuballocateBuffer(
 			m_LastCompletedFence,
 			size,
+			nullptr,
 			m_CurrentUploadBuffer,
 			&offsetInUploadBuffer,
 			&cpuVA,
