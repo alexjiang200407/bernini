@@ -120,3 +120,43 @@ TEST_CASE("loadFromGltf imports the Suzanne test model", "[bmesh][gltf]")
 	REQUIRE(restored.vertexData == mesh.vertexData);
 	REQUIRE(restored.meshlets.size() == mesh.meshlets.size());
 }
+
+TEST_CASE(
+	"A glTF's images arrive decoded, and its materials point at them",
+	"[bmesh][gltf][textures]")
+{
+	// apples.glb is the only test model carrying images: suzanne.glb has none, so no other case
+	// reaches buildTextures at all.
+	const std::filesystem::path glb = "assets/apples.glb";
+	REQUIRE(std::filesystem::exists(glb));
+
+	const auto import = loadFromGltf(glb);
+
+	REQUIRE(import.textures.size() == 2);
+
+	for (const ImageData& texture : import.textures)
+	{
+		REQUIRE(texture.width > 0);
+		REQUIRE(texture.height > 0);
+		REQUIRE(texture.mipLevels >= 1);
+		REQUIRE(texture.subresources.size() == texture.mipLevels);
+
+		// pixels holds the whole mip pyramid, so only the base subresource has a size derivable
+		// from the dimensions.
+		const auto& base = texture.subresources.front();
+		REQUIRE(base.rowPitch == static_cast<uint64_t>(texture.width) * 4);
+		REQUIRE(base.slicePitch == base.rowPitch * texture.height);
+		REQUIRE(texture.pixels.size() >= base.offset + base.slicePitch);
+
+		// An allocated-but-never-filled buffer is all zeroes, so this is what separates a decode
+		// from a plausible-looking no-op.
+		REQUIRE(
+			std::ranges::any_of(texture.pixels, [](std::byte b) { return b != std::byte{ 0 }; }));
+	}
+
+	// imageToTexture is what carries a glTF image index across to a textures index; a material that
+	// still points at nothing means the mapping never got built.
+	REQUIRE(std::ranges::any_of(import.materials, [&](const BMaterialImport& material) {
+		return material.baseColorTexture < import.textures.size();
+	}));
+}
