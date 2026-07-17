@@ -689,7 +689,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 
 		auto options          = ImportOptions();
 		options.textureSubdir = dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString();
-		options.pbrMaterials  = dialog.ImportPbrMaterials();
+		options.pbrMaterials  = dialog.CanImportPbrMaterials();
 
 		const ImportOutcome outcome = ImportMesh(file, targetDir, options);
 

@@ -24,9 +24,8 @@ namespace assetlib
 	/** What a file's material table holds, without the cost of importing it. See probeGltfMaterials. */
 	struct GltfMaterialProbe
 	{
-		size_t materialCount = 0;
-		size_t pbrMaterialCount =
-			0;  // of those, the ones imp::BMaterialImport::isPbr would be set for
+		size_t materialCount    = 0;
+		size_t pbrMaterialCount = 0;
 	};
 
 	/**

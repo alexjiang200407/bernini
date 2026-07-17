@@ -128,19 +128,8 @@ private:
 	/** What the import dialog asked for. */
 	struct ImportOptions
 	{
-		/**
-		 * Folder beneath `AssetImporterDialog::c_TextureRoot` (under the Data root) to extract the
-		 * mesh's textures into; empty skips texture extraction. Each import needs its own folder
-		 * because the extracted files are named by index, not by source name.
-		 */
-		QString textureSubdir;
-
-		/**
-		 * Derive a `.bmaterial` from each PBR material the glTF carries and bind it to the submeshes
-		 * cut from it. Ignored without `textureSubdir`: a derived material routes at the extracted
-		 * textures, and one written without them would name files nothing wrote.
-		 */
-		bool pbrMaterials = false;
+		QString textureSubdir;      // folder under c_TextureRoot; empty skips texture extraction
+		bool pbrMaterials = false;  // ignored without textureSubdir -- a material routes at those
 	};
 
 	/**
@@ -162,7 +151,7 @@ private:
 	{
 		std::filesystem::path path;             // empty when the import writes no such directory
 		bool                  existed = false;  // whether it was there before the import started
-		std::string categoryRoot;  // the project category it sits under, never itself removable
+		std::string_view      categoryRoot;  // the category it sits under, never itself removable
 	};
 
 	/**

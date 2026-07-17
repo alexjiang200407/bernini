@@ -116,7 +116,7 @@ AssetImporterDialog::ImportTextures() const
 }
 
 bool
-AssetImporterDialog::ImportPbrMaterials() const
+AssetImporterDialog::CanImportPbrMaterials() const
 {
 	// Disabled means unavailable, whatever the box happens to be showing.
 	return m_ImportPbrMaterials->isEnabled() && m_ImportPbrMaterials->isChecked();

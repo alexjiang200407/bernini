@@ -60,7 +60,7 @@ TEST_CASE("PBR materials come across when the file has some", "[assetimporter]")
 	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(2, 2));
 
 	REQUIRE(MaterialsBox(dialog)->isEnabled());
-	REQUIRE(dialog.ImportPbrMaterials());
+	REQUIRE(dialog.CanImportPbrMaterials());
 }
 
 TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
@@ -73,25 +73,25 @@ TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
 	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, probe);
 
 	REQUIRE(!MaterialsBox(dialog)->isEnabled());
-	REQUIRE(!dialog.ImportPbrMaterials());
+	REQUIRE(!dialog.CanImportPbrMaterials());
 }
 
 TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]")
 {
 	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(1, 1));
 
-	REQUIRE(dialog.ImportPbrMaterials());
+	REQUIRE(dialog.CanImportPbrMaterials());
 
 	// A derived material routes at the extracted texN.ktx2 files. Writing one when those files are not
 	// being written would name textures that do not exist -- the reference an import must never make.
 	TexturesBox(dialog)->setChecked(false);
 
 	REQUIRE(!MaterialsBox(dialog)->isEnabled());
-	REQUIRE(!dialog.ImportPbrMaterials());
+	REQUIRE(!dialog.CanImportPbrMaterials());
 
 	TexturesBox(dialog)->setChecked(true);
 
-	REQUIRE(dialog.ImportPbrMaterials());
+	REQUIRE(dialog.CanImportPbrMaterials());
 }
 
 TEST_CASE("The texture folder defaults to the file's name", "[assetimporter]")

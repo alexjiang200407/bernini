@@ -29,16 +29,9 @@ public:
 	bool
 	ImportTextures() const;
 
-	/**
-	 * Whether to derive a `.bmaterial` from each of the glTF's PBR materials and bind it to the
-	 * submeshes cut from it.
-	 *
-	 * False unless the file has a PBR material to derive one from, and unless textures are coming
-	 * across too: a derived material routes at the extracted `texN.ktx2` files, so importing one
-	 * without them would write a material naming textures nothing wrote.
-	 */
+	/** Whether to derive a `.bmaterial` from each of the glTF's PBR materials and bind it. */
 	bool
-	ImportPbrMaterials() const;
+	CanImportPbrMaterials() const;
 
 	bool
 	ImportAnimations() const;

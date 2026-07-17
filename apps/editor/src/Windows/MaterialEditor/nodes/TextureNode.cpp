@@ -73,11 +73,9 @@ TextureNode::outData(QtNodes::PortIndex port)
 	if (port < 0 || static_cast<unsigned int>(port) >= c_PortCount)
 		return nullptr;
 
-	// A route is a (file, channel) pair, so the path alone decides whether this node feeds one. The
-	// handle may be null -- the file failed to load, or there is no device to load it with -- and the
-	// route still stands: Scene::BuildLoosePbrMaterial resolves a null handle to the same default an
-	// unrouted channel gets. Gating on the handle instead would drop the route from the material the
-	// graph compiles to, silently unwiring a channel whose texture merely could not be shown.
+	// A route is a (file, channel) pair, so the path decides whether this node feeds one -- not the
+	// handle, which is null when there is no device to load the file with. A null handle resolves to
+	// the same default an unrouted channel gets, so gating on it would drop the route instead.
 	if (m_Path.isEmpty())
 		return nullptr;
 

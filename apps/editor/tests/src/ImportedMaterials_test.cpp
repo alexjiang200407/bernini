@@ -250,3 +250,40 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 		"textures_src/hydrant/tex0.ktx2");
 	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorA)].channel == 3);
 }
+
+TEST_CASE("One texture used as two maps routes both at the same file", "[importedmaterials]")
+{
+	const TempProject project;
+
+	// The extractor deduplicates by image, so a glTF material naming one image for both base colour and
+	// ORM arrives with both indices equal. Each map still gets its own node wired to its own port; the
+	// routes just name the same file. (A real asset does this with a combined albedo/mask texture.)
+	auto shared             = PbrMaterial();
+	shared.baseColorTexture = 3;
+	shared.ormTexture       = 3;
+	shared.normalTexture    = assetlib::c_InvalidIndex;
+
+	const auto imported = ImportWith({ shared }, { "Shared" });
+	auto       mesh     = assetlib::toBMesh(imported);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		imported,
+		mesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir());
+
+	const assetlib::BMaterial material =
+		assetlib::loadMaterial(project.MaterialDir() / "Shared.bmaterial");
+
+	// Base colour and ORM both name tex3, each reading the channels its own role wants.
+	CHECK(
+		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorR)].texture ==
+		"textures_src/hydrant/tex3.ktx2");
+	CHECK(
+		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kAo)].texture ==
+		"textures_src/hydrant/tex3.ktx2");
+	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kAo)].channel == 0);
+	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kRoughness)].channel == 1);
+	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kNormalX)].texture.empty());
+}

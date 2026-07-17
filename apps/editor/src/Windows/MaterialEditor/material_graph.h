@@ -7,14 +7,10 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
+#include <bgl/IScene.h>
 
 class MaterialGraphModel;
 class TexturePreviewCache;
-
-namespace bgl
-{
-	class IScene;
-}
 
 /**
  * Rewrites `path` relative to `dir`, or resolves it against `dir` when `toRelative` is false.
