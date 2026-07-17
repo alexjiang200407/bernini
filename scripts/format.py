@@ -76,9 +76,12 @@ def main():
 
     clang_format = cfg.find_clang_format()
     if not clang_format:
-        print("clang-format was not found.\n"
-              "Install the \"C++ Clang tools for Windows\" (LLVM) component from the Visual Studio Installer,\n"
-              "or install LLVM and add clang-format to your PATH.\n"
+        if sys.platform == "darwin":
+            install = "Install it with `brew install clang-format` (or `brew install llvm`).\n"
+        else:
+            install = ("Install the \"C++ Clang tools for Windows\" (LLVM) component from the Visual "
+                       "Studio Installer,\nor install LLVM and add clang-format to your PATH.\n")
+        print("clang-format was not found.\n" + install +
               "If it lives somewhere else, run `just init` to record its path.", file=sys.stderr)
         return 1
 

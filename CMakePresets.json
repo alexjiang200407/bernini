@@ -13,6 +13,23 @@
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "PLATFORM": "WINDOWS"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "macos",
+      "hidden": true,
+      "cacheVariables": {
+        "PLATFORM": "MACOS"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
       }
     },
     {
@@ -198,6 +215,34 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "macos-clang-debug",
+      "displayName": "macOS Clang Debug ninja - no renderer backend yet",
+      "binaryDir": "${sourceDir}/build/macos-clang-debug",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "debug"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-clang-release",
+      "displayName": "macOS Clang Release ninja - no renderer backend yet",
+      "binaryDir": "${sourceDir}/build/macos-clang-release",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "release"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
 
   ],
@@ -239,6 +284,14 @@
     {
       "name": "windows-clang-dx12-release",
       "configurePreset": "windows-clang-dx12-release"
+    },
+    {
+      "name": "macos-clang-debug",
+      "configurePreset": "macos-clang-debug"
+    },
+    {
+      "name": "macos-clang-release",
+      "configurePreset": "macos-clang-release"
     }
   ]
 }
