@@ -64,8 +64,8 @@ endif()
 
 enable_strict_compiler(bgl_objects)
 
-# Everything below needs a backend: CreateGraphics is only ever defined inside one, and the shader
-# validation step compiles for the backend's IR. bgl_objects is backend-free and still builds.
+# CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
+# backend's IR, so nothing below can be built without one.
 if(NOT RENDERER_BACKEND)
 	message(STATUS "RENDERER_BACKEND unset - bgl_objects only (no bgl runtime, shaders or tests)")
 	return()

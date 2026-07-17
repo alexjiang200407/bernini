@@ -9,8 +9,7 @@ namespace core::file
 	{
 		Dl_info info = {};
 
-		// Takes the address of this function, so it resolves to whichever image core was linked
-		// into -- not to the executable.
+		// Resolves to the image core was linked into, not the executable.
 		if (dladdr(reinterpret_cast<const void*>(&getLibraryPath), &info) == 0)
 			return {};
 
