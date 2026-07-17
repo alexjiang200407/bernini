@@ -3,12 +3,21 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPointF>
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+
+namespace
+{
+	constexpr double c_TextureNodeX   = -160.0;
+	constexpr double c_TextureNodeGap = 210.0;
+	constexpr double c_OutputNodeX    = 220.0;
+	constexpr double c_OutputNodeY    = 40.0;
+}
 
 QString
 Rebase(const QString& path, const std::filesystem::path& dir, bool toRelative)
@@ -110,4 +119,72 @@ CompileMaterial(
 	material.editorGraph = QJsonDocument(graph).toJson(QJsonDocument::Compact).toStdString();
 
 	return material;
+}
+
+void
+BuildImportedMaterialGraph(
+	MaterialGraphModel&                   model,
+	const assetlib::imp::BMaterialImport& material,
+	const ImportedMaterialMaps&           maps)
+{
+	const bool alphaTested = material.alphaMode == assetlib::AlphaMode::kMask;
+
+	const QtNodes::NodeId outputId = model.addNode(
+		alphaTested ? QStringLiteral("AlphaTestedMaterialOutput") :
+					  QStringLiteral("MaterialOutput"));
+	model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(c_OutputNodeX, c_OutputNodeY));
+
+	auto* output = model.delegateModel<MaterialOutputNode>(outputId);
+	if (output == nullptr)
+		return;
+
+	// The sink's own deserialization path is what carries the factors in; restoring a saved graph sets
+	// them the same way. `alphaCutoff` is ignored by the opaque sink, and `split` is absent, which
+	// leaves every group collapsed to the one wide port each map wires into below.
+	auto factors           = QJsonObject();
+	factors["baseColorR"]  = material.baseColorFactor.r;
+	factors["baseColorG"]  = material.baseColorFactor.g;
+	factors["baseColorB"]  = material.baseColorFactor.b;
+	factors["baseColorA"]  = material.baseColorFactor.a;
+	factors["metallic"]    = material.metallicFactor;
+	factors["roughness"]   = material.roughnessFactor;
+	factors["alphaCutoff"] = material.alphaCutoff;
+	output->load(factors);
+
+	struct Wire
+	{
+		QString      path;
+		unsigned int texturePort;
+		unsigned int outputPort;
+	};
+
+	// Each map feeds its group's whole port: glTF packs occlusion/roughness/metallic in RGB, which is
+	// the ORM order, and a normal map's Z is reconstructed in the shader, so only RG is taken. Base
+	// colour draws alpha only for a cutout -- the opaque sink's port is 3-wide, and routing an alpha
+	// that nothing tests against is what turns a project into cutouts that cut nothing out.
+	const std::array<Wire, 3> wires = { {
+		{ maps.baseColor, alphaTested ? 0u : 1u, 0u },
+		{ maps.orm, 1u, 1u },
+		{ maps.normal, 2u, 2u },
+	} };
+
+	double y = 0.0;
+	for (const Wire& wire : wires)
+	{
+		if (wire.path.isEmpty())
+			continue;
+
+		const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
+		model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, y));
+		y += c_TextureNodeGap;
+
+		if (auto* texture = model.delegateModel<TextureNode>(textureId))
+			texture->SetTexturePath(wire.path);
+
+		model.addConnection(
+			QtNodes::ConnectionId{ textureId,
+		                           static_cast<QtNodes::PortIndex>(wire.texturePort),
+		                           outputId,
+		                           static_cast<QtNodes::PortIndex>(wire.outputPort) });
+	}
 }

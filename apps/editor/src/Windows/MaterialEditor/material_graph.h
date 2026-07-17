@@ -6,6 +6,7 @@
 #include <QtNodes/NodeDelegateModelRegistry>
 
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
 
 class MaterialGraphModel;
 class TexturePreviewCache;
@@ -61,3 +62,25 @@ CompileMaterial(
 	MaterialGraphModel&          model,
 	const QString&               name,
 	const std::filesystem::path& dataRoot);
+
+/** The maps a glTF material names, as absolute paths. Empty where it names none. */
+struct ImportedMaterialMaps
+{
+	QString baseColor;
+	QString normal;
+	QString orm;
+};
+
+/**
+ * Lays out the board a glTF material describes in `model`, which must be empty: a Texture node per map
+ * it names, each wired whole into its group's port on a sink of the alpha mode the material declares.
+ *
+ * The graph is the material -- CompileMaterial reads the routes back out of it, so this is the only
+ * place that decides what a glTF material routes where, and there is no second table to disagree with.
+ * Paths are absolute here, as in a live graph; CompileMaterial rebases them on the way to disk.
+ */
+void
+BuildImportedMaterialGraph(
+	MaterialGraphModel&                   model,
+	const assetlib::imp::BMaterialImport& material,
+	const ImportedMaterialMaps&           maps);

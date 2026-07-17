@@ -37,6 +37,13 @@ must feed data that matches.
   Normal, ORM, and the IBL maps carry linear data and are sampled raw.
 * **ORM packing follows glTF metallic-roughness.** One texture, `R` = occlusion (AO), `G` =
   roughness, `B` = metallic. `roughness *= roughnessFactor`, `metallic *= metallicFactor`.
+* **assetlib never derives a material; the editor's import does.** `toBMesh` lands every submesh
+  unassigned, and `attachMaterial` is the only thing that ever binds one — so `assetlib_cli bake`
+  produces geometry and textures and nothing else. The editor's import is a *caller* of that seam: it
+  builds the graph each PBR glTF material describes, writes the `.bmaterial`, and attaches it. The
+  split matters because a glTF material is only glTF's shading model, and the choice to accept it is
+  the editor's to make per import, not a property of the container. See
+  [Importing a glTF's materials](#importing-a-gltfs-materials).
 * **Honest vertex layout.** The importer packs *only* the attributes the source primitive provides
   and never fabricates a normal or tangent. Missing optional attributes decode to defaults on the
   GPU. **Position is the only required attribute**, and it must be the first one. See
@@ -68,7 +75,6 @@ There are **two producers of textures**, and they compress differently:
   which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
   *source* textures a material routes at; they land under `textures_src/` in an editor project.
-*  **An import brings in geometry and textures, never materials.** 
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
   editor's routed source textures into the triplet and writes each map into `<Data>/Textures/`
@@ -301,9 +307,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 ```mermaid
 flowchart TD
     GLTF[".glb / .gltf"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures)"]
-    IMP -- "bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets)"]
-    IMP -- "bake" --> BMAT["matN.bmaterial (factors + tex paths)"]
+    IMP -- "toBMesh / bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets, submeshes unassigned)"]
     IMP -- "bake / writeTextures (writeKTX2)" --> TEX["texN.ktx2 (per map)"]
+    IMP -. "editor import only: graph per PBR material" .-> BMAT["&lt;name&gt;.bmaterial (routes + editorGraph)"]
+    BMAT -. "attachMaterial" .-> BMESH
 
     BMESH -- "assetlib::load" --> SCENE
     BMAT -- "loadMaterial" --> SCENE
@@ -365,6 +372,42 @@ both file and VRAM.
   `MatchesGolden`), replacing `DirectX::ComputeMSE`. Golden refs are `assets/golden/<name>.exp.png`.
 
 ---
+
+## Importing a glTF's materials
+
+An editor import offers **Import PBR materials**, and when it is taken, each of the glTF's PBR
+materials becomes one `.bmaterial` under `Materials/<subdir>/`, bound to the submeshes cut from it.
+The box is disabled when the file has nothing to derive one from — `probeGltfMaterials`
+([libs/assetlib/include/assetlib/bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h)) reads the
+material table with a **stubbed image loader**, so the dialog can ask the question without paying for
+the decode that dominates an import.
+
+Five rules, each of which is a way to get this wrong:
+
+* **PBR-ness is the absence of an extension, not the presence of `pbrMetallicRoughness`.** Metallic-
+  roughness *is* glTF's shading model; tinygltf default-constructs the struct whether or not the file
+  declares it, so testing for it would call every material PBR. `KHR_materials_unlit` and
+  `KHR_materials_pbrSpecularGlossiness` are what say otherwise, and such a material is **skipped** —
+  its submeshes arrive unassigned and render unlit, which both runtimes already do. Importing one as
+  PBR would not be an approximation but a fabrication: its metallic/roughness fields are glTF's
+  defaults, not the author's.
+* **The graph *is* the material.** The import builds a `MaterialGraphModel` — a Texture node per map,
+  wired into the sink — and `CompileMaterial` reads the routes back out of it, exactly as the material
+  editor's Save does. There is no second table mapping glTF to routes that could drift from the board,
+  and the material reopens as the graph that produced it rather than a blank one.
+* **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the
+  guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*
+  sink and wires base colour RGBA, `OPAQUE` builds the 3-wide one and wires RGB, and the alpha stays
+  unrouted. **`BLEND` imports as opaque** — the engine's PBR has no blended mode, so its colour,
+  normal and ORM are right and only its transparency is lost.
+* **Materials cannot come across without textures.** They route at the extracted `texN.ktx2` files, so
+  the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
+  dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.
+* **Every `.bmaterial` is written before any submesh names one.** A failure part-way through therefore
+  leaves a mesh naming only materials that exist, and the rollback takes the whole folder.
+
+The result is `kLoose`: the import runs no bake, so there is no triplet, and the maps are sampled
+straight from the routes until someone bakes it.
 
 ## Pruning unused baked maps
 

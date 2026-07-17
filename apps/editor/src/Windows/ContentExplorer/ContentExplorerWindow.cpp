@@ -3,6 +3,8 @@
 #include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
+#include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/material_graph.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -48,31 +50,46 @@ namespace
 	}
 
 	/**
-	 * Asks before an import writes over anything that is already there, listing what it would replace.
+	 * A file stem for a glTF material called `name`, unique among `taken`, which it is added to.
 	 *
-	 * Both an existing `.bmesh` and an existing texture folder are destructive to import onto: the mesh
-	 * is simply overwritten, and the extracted textures are named tex0.ktx2, tex1.ktx2 ... by index, so
-	 * they land on top of whatever the folder's previous occupant left under those names. Neither is
-	 * recoverable, and neither is something the OS will refuse on the user's behalf.
+	 * A glTF material name is free text: it can be empty, repeat, or hold separators that would send the
+	 * file somewhere other than the import's own folder. `index` names the ones that reduce to nothing.
+	 */
+	QString
+	UniqueMaterialStem(const std::string& name, size_t index, QSet<QString>& taken)
+	{
+		static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
+
+		QString stem =
+			QString::fromStdString(name).trimmed().replace(c_Unsafe, QStringLiteral("_"));
+
+		// "." and ".." name a directory rather than a file, and a leading dot hides it.
+		while (stem.startsWith('.')) stem.remove(0, 1);
+		if (stem.isEmpty())
+			stem = QStringLiteral("material%1").arg(index);
+
+		// Case-insensitively: two materials called "Rust" and "rust" are one file on Windows.
+		QString unique = stem;
+		for (int n = 2; taken.contains(unique.toLower()); ++n)
+			unique = QStringLiteral("%1_%2").arg(stem).arg(n);
+
+		taken.insert(unique.toLower());
+		return unique;
+	}
+
+	/**
+	 * Asks before an import writes over anything that is already there, `replaced` being what it would.
 	 *
-	 * @return true to go ahead, false if the user would rather not.
+	 * An existing `.bmesh`, texture folder or material folder are all destructive to import onto: the
+	 * mesh is simply overwritten, and the extracted textures are named tex0.ktx2, tex1.ktx2 ... by
+	 * index, so they land on top of whatever the folder's previous occupant left under those names.
+	 * None of it is recoverable, and none of it is something the OS will refuse on the user's behalf.
+	 *
+	 * @return true to go ahead, false if the user would rather not (and for nothing to replace).
 	 */
 	bool
-	ConfirmOverwrite(
-		QWidget*                     parent,
-		const QString&               name,
-		const std::filesystem::path& bmeshPath,
-		bool                         bmeshExists,
-		const std::filesystem::path& textureDir,
-		bool                         textureDirExists)
+	ConfirmOverwrite(QWidget* parent, const QString& name, const QStringList& replaced)
 	{
-		auto replaced = QStringList();
-
-		if (bmeshExists)
-			replaced << QString::fromStdWString(bmeshPath.wstring());
-		if (textureDirExists)
-			replaced << QString::fromStdWString(textureDir.wstring());
-
 		if (replaced.isEmpty())
 			return true;
 
@@ -654,14 +671,27 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		if (!IsImportableMesh(file))
 			continue;
 
-		AssetImporterDialog dialog(file, targetDir, this);
+		// What the file's materials are decides what the dialog may offer, so it is read before the
+		// dialog is built. A file that will not parse is left to the import to report.
+		auto materials = assetlib::GltfMaterialProbe();
+		try
+		{
+			materials = assetlib::probeGltfMaterials(std::filesystem::path(file.toStdWString()));
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("Import: could not read '%s': %s", qPrintable(file), e.what());
+		}
+
+		AssetImporterDialog dialog(file, targetDir, materials, this);
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
-		const ImportOutcome outcome = ImportMesh(
-			file,
-			targetDir,
-			dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString());
+		auto options          = ImportOptions();
+		options.textureSubdir = dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString();
+		options.pbrMaterials  = dialog.ImportPbrMaterials();
+
+		const ImportOutcome outcome = ImportMesh(file, targetDir, options);
 
 		// Cancelling one import of a multi-file drop abandons the drop. Carrying on would answer the
 		// user's "stop" by immediately putting the next options dialog in front of them.
@@ -702,27 +732,98 @@ ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
 	return m_FileModel->rootPath();
 }
 
-ContentExplorerWindow::ImportOutcome
-ContentExplorerWindow::ImportMesh(
-	const QString& sourceFile,
-	const QString& targetDir,
-	const QString& textureSubdir)
+void
+ContentExplorerWindow::WriteImportedMaterials(
+	const assetlib::imp::BMeshImport& imported,
+	assetlib::BMesh&                  mesh,
+	const std::filesystem::path&      dataRoot,
+	const std::filesystem::path&      materialDir,
+	const std::filesystem::path&      textureDir)
 {
 	namespace fs = std::filesystem;
 
-	const fs::path source  = fs::path(sourceFile.toStdWString());
-	const fs::path meshDir = fs::path(targetDir.toStdWString());
+	fs::create_directories(materialDir);
+
+	// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on purpose.
+	const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr);
+
+	const auto texturePath = [&](uint32_t index) {
+		return index == assetlib::c_InvalidIndex ?
+		           QString() :
+		           QString::fromStdWString(
+					   (textureDir / assetlib::textureFileName(index)).wstring());
+	};
+
+	auto taken    = QSet<QString>();
+	auto relative = std::vector<std::string>(imported.materials.size());
+
+	for (size_t i = 0; i < imported.materials.size(); ++i)
+	{
+		const assetlib::imp::BMaterialImport& source = imported.materials[i];
+
+		// A material whose shading model the engine has no payload for is left behind rather than
+		// stamped into a PBR one it never was.
+		if (!source.isPbr)
+			continue;
+
+		const QString stem = UniqueMaterialStem(
+			assetlib::nameFromPool(imported.stringPool, source.nameOffset),
+			i,
+			taken);
+		const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
+
+		MaterialGraphModel model(registry);
+		BuildImportedMaterialGraph(
+			model,
+			source,
+			ImportedMaterialMaps{ texturePath(source.baseColorTexture),
+		                          texturePath(source.normalTexture),
+		                          texturePath(source.ormTexture) });
+
+		assetlib::saveMaterial(CompileMaterial(model, stem, dataRoot), file);
+
+		relative[i] = Rebase(QString::fromStdWString(file.wstring()), dataRoot, true).toStdString();
+	}
+
+	// Only once every file is on disk: a `.bmesh` naming a material that does not exist is what
+	// gamelib's AcquireMaterial throws on, and is the reference an import must never make.
+	for (size_t i = 0; i < imported.submeshes.size(); ++i)
+	{
+		const uint32_t index = imported.submeshes[i].material;
+		if (index >= relative.size() || relative[index].empty())
+			continue;
+
+		assetlib::attachMaterial(mesh, static_cast<uint32_t>(i), relative[index]);
+	}
+}
+
+ContentExplorerWindow::ImportOutcome
+ContentExplorerWindow::ImportMesh(
+	const QString&       sourceFile,
+	const QString&       targetDir,
+	const ImportOptions& options)
+{
+	namespace fs = std::filesystem;
+
+	const fs::path source   = fs::path(sourceFile.toStdWString());
+	const fs::path meshDir  = fs::path(targetDir.toStdWString());
+	const fs::path dataRoot = fs::path(m_RootPath.toStdWString());
+	const fs::path subdir   = fs::path(options.textureSubdir.toStdWString());
 
 	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
 	// own folder or the next one silently overwrites it. m_RootPath is the project's Data directory.
 	//
 	// Left empty when no textures are being extracted, and it must stay that way: joining an empty
 	// subdirectory would name the texture root itself, which RollBack would then happily delete.
-	const bool     importTextures = !textureSubdir.isEmpty();
-	const fs::path textureDir     = importTextures ? fs::path(m_RootPath.toStdWString()) /
-	                                                     AssetImporterDialog::c_TextureRoot /
-	                                                     fs::path(textureSubdir.toStdWString()) :
-	                                                 fs::path();
+	const bool     importTextures = !options.textureSubdir.isEmpty();
+	const fs::path textureDir =
+		importTextures ? dataRoot / AssetImporterDialog::c_TextureRoot / subdir : fs::path();
+
+	// The materials mirror the textures' folder under the Materials category, and for the same reason:
+	// they are named from the glTF, so two imports sharing a folder would collide.
+	const bool     importMaterials = options.pbrMaterials && importTextures;
+	const fs::path materialDir =
+		importMaterials ? dataRoot / Project::c_MaterialsDirectoryName / subdir : fs::path();
 
 	fs::path bmeshPath = meshDir / source.filename();
 	bmeshPath.replace_extension(".bmesh");
@@ -732,31 +833,42 @@ ContentExplorerWindow::ImportMesh(
 	// Sampled before a byte is written, because they decide two things: whether the user has to be
 	// asked first, and -- if the import then fails or is cancelled -- what may be deleted to undo it.
 	std::error_code ec;
-	const bool      bmeshExisted      = fs::exists(bmeshPath, ec);
-	const bool      textureDirExisted = !textureDir.empty() && fs::exists(textureDir, ec);
+	const bool      bmeshExisted       = fs::exists(bmeshPath, ec);
+	const bool      textureDirExisted  = !textureDir.empty() && fs::exists(textureDir, ec);
+	const bool      materialDirExisted = !materialDir.empty() && fs::exists(materialDir, ec);
 
-	if (!ConfirmOverwrite(this, name, bmeshPath, bmeshExisted, textureDir, textureDirExisted))
+	const std::array<ImportedDir, 2> dirs = { {
+		{ textureDir, textureDirExisted, AssetImporterDialog::c_TextureRoot },
+		{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
+	} };
+
+	auto replaced = QStringList();
+	if (bmeshExisted)
+		replaced << QString::fromStdWString(bmeshPath.wstring());
+	for (const ImportedDir& dir : dirs)
+		if (dir.existed)
+			replaced << QString::fromStdWString(dir.path.wstring());
+
+	if (!ConfirmOverwrite(this, name, replaced))
 		return ImportOutcome::kCancelled;
 
 	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
-	// freeze the editor for minutes on a large asset. None of it touches bgl, so the whole import
-	// runs on a worker; only the message box below is back on the UI thread.
-	const background::TaskResult result = background::RunWithLoadingScreen(
+	// freeze the editor for minutes on a large asset. None of it touches bgl, so it runs on a worker.
+	auto imported = std::optional<assetlib::imp::BMeshImport>();
+
+	background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QString("Importing %1").arg(name),
 		[&](background::Progress& progress) {
 			const assetlib::CancelToken cancel = progress.Cancellation();
 
 			progress.Report(0, 0, QString("Parsing %1...").arg(name));
-			const auto mesh = assetlib::loadFromGltf(source, cancel);
-
-			progress.Report(0, 0, "Writing mesh...");
-			assetlib::save(assetlib::toBMesh(mesh), bmeshPath);
+			imported = assetlib::loadFromGltf(source, cancel);
 
 			if (importTextures)
 			{
 				assetlib::writeTextures(
-					mesh,
+					*imported,
 					textureDir,
 					[&](size_t done, size_t total) {
 						progress.Report(
@@ -769,12 +881,29 @@ ContentExplorerWindow::ImportMesh(
 		},
 		background::Cancellable::kYes);
 
+	// The material graphs cannot run on the worker -- their nodes own QPixmaps, which belong to the GUI
+	// thread -- so the mesh is written here too, after the materials it must name are on disk.
 	if (result.Completed())
-		return ImportOutcome::kImported;
+	{
+		try
+		{
+			assetlib::BMesh mesh = assetlib::toBMesh(*imported);
 
-	// A cancelled cook throws where it stood, so the mesh may be on disk pointing at textures that were
-	// never extracted. Neither outcome may leave that behind for the user to trip over later.
-	RollBack(bmeshPath, bmeshExisted, textureDir, textureDirExisted);
+			if (importMaterials)
+				WriteImportedMaterials(*imported, mesh, dataRoot, materialDir, textureDir);
+
+			assetlib::save(mesh, bmeshPath);
+			return ImportOutcome::kImported;
+		}
+		catch (const std::exception& e)
+		{
+			result.error = QString::fromLatin1(e.what());
+		}
+	}
+
+	// A cancelled cook throws where it stood, so the textures may be half-written and the mesh may name
+	// materials that never landed. Neither outcome may leave that behind for the user to trip over.
+	RollBack(bmeshPath, bmeshExisted, dirs);
 
 	if (result.Cancelled())
 		return ImportOutcome::kCancelled;
@@ -791,8 +920,7 @@ void
 ContentExplorerWindow::RollBack(
 	const std::filesystem::path& bmeshPath,
 	bool                         bmeshExisted,
-	const std::filesystem::path& textureDir,
-	bool                         textureDirExisted)
+	std::span<const ImportedDir> dirs)
 {
 	namespace fs = std::filesystem;
 
@@ -801,12 +929,15 @@ ContentExplorerWindow::RollBack(
 	if (!bmeshExisted)
 		fs::remove(bmeshPath, ec);
 
-	// remove_all is recursive, so the folder it is handed had better be the one this import made. An
-	// empty path means no textures were extracted; a path naming the texture root itself would mean the
-	// import's subdirectory got lost somewhere, and taking the root down with it is not a recovery.
-	const auto textureRoot = fs::path(AssetImporterDialog::c_TextureRoot);
-	if (textureDirExisted || textureDir.empty() || textureDir.filename() == textureRoot)
-		return;
+	for (const ImportedDir& dir : dirs)
+	{
+		// remove_all is recursive, so the folder it is handed had better be the one this import made. An
+		// empty path means the import wrote no such folder; a path naming the category root itself would
+		// mean the import's subdirectory got lost somewhere, and taking the root down with it is not a
+		// recovery.
+		if (dir.existed || dir.path.empty() || dir.path.filename() == fs::path(dir.categoryRoot))
+			continue;
 
-	fs::remove_all(textureDir, ec);
+		fs::remove_all(dir.path, ec);
+	}
 }
