@@ -14,9 +14,6 @@ struct DebugGlobals
 
 ConstantBuffer<DebugGlobals> gDebug;
 
-// `value`/`limit` are the two sides of the comparison that failed, and `context` names what the
-// shader was working on -- without them a record says only that something went wrong,
-// which is not enough to find it. See DebugRecord.
 void dbg_raise(ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)
 {
 #if defined(BERNINI_GPU_DEBUG)

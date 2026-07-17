@@ -7,9 +7,9 @@
 namespace bgl
 {
 	/**
-	 * The name of an errcode as a shader spells it, for the crash message. A code the enum does not
-	 * carry is reported as its number rather than dropped -- a stale shader is exactly when this is
-	 * being read.
+	 * An errcode's name for the crash message, without the enum's `k` prefix. A code the enum does
+	 * not carry is reported as its number rather than dropped -- a stale shader is exactly when this
+	 * is being read.
 	 *
 	 * Deliberately a switch with no default, so adding an ErrorCode without a name fails the build.
 	 *
@@ -21,23 +21,23 @@ namespace bgl
 		switch (static_cast<idl::ErrorCode>(errcode))
 		{
 		case idl::ErrorCode::kUnknown:
-			return "kUnknown";
+			return "Unknown";
 		case idl::ErrorCode::kInvalidVertexLayout:
-			return "kInvalidVertexLayout";
+			return "InvalidVertexLayout";
 		case idl::ErrorCode::kInvalidSubmeshIndex:
-			return "kInvalidSubmeshIndex";
+			return "InvalidSubmeshIndex";
 		case idl::ErrorCode::kInvalidMeshletIndex:
-			return "kInvalidMeshletIndex";
+			return "InvalidMeshletIndex";
 		case idl::ErrorCode::kMeshletVertexOverflow:
-			return "kMeshletVertexOverflow";
+			return "MeshletVertexOverflow";
 		case idl::ErrorCode::kMeshletPrimitiveOverflow:
-			return "kMeshletPrimitiveOverflow";
+			return "MeshletPrimitiveOverflow";
 		case idl::ErrorCode::kInvalidVertexIndex:
-			return "kInvalidVertexIndex";
+			return "InvalidVertexIndex";
 		case idl::ErrorCode::kInvalidSubmeshInstance:
-			return "kInvalidSubmeshInstance";
+			return "InvalidSubmeshInstance";
 		case idl::ErrorCode::kInvalidPsoType:
-			return "kInvalidPsoType";
+			return "InvalidPsoType";
 		}
 
 		return std::to_string(errcode);

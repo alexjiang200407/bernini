@@ -125,10 +125,10 @@ TEST_CASE("InspectDebugReadback decodes debug-buffer records", "[debug][gpu-asse
 
 TEST_CASE("An errcode reports by name", "[debug][gpu-assert]")
 {
-	// "errcode=7" makes a reader count enum entries to find out what fired. The name is what the
-	// shader says, so it can be grepped straight back to the dbg_assert that raised it.
-	CHECK(bgl::ErrorCodeName(7u) == "kInvalidVertexIndex");
-	CHECK(bgl::ErrorCodeName(1u) == "kUnknown");
+	// "errcode=7" makes a reader count enum entries to find out what fired. The name still greps
+	// back to the dbg_assert that raised it; the enum's `k` is a code convention, not part of it.
+	CHECK(bgl::ErrorCodeName(7u) == "InvalidVertexIndex");
+	CHECK(bgl::ErrorCodeName(1u) == "Unknown");
 
 	// A shader newer than this build raises a code the enum has no name for. Reporting the number
 	// beats dropping the record, because a stale shader is exactly when this gets read.
