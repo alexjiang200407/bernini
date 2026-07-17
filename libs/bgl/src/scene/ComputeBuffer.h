@@ -12,13 +12,13 @@ namespace bgl
 	{
 	public:
 		ComputeBuffer() noexcept = default;
-		ComputeBuffer(ComputeBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		ComputeBuffer(ComputeBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
 		void
-		Init(ComputeBufferDesc desc, ResourceManagerHandle resourceManager) noexcept;
+		Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager) noexcept;
 
 		// True once Init() has created the GPU buffer and before Release().
 		[[nodiscard]] bool
@@ -71,9 +71,9 @@ namespace bgl
 		}
 
 	private:
-		ComputeBufferDesc     m_Desc;
-		ResourceManagerHandle m_ResourceManager;
-		BufferHandle          m_Handle;
+		ComputeBufferDesc  m_Desc;
+		ResourceManagerRef m_ResourceManager;
+		BufferHandle       m_Handle;
 	};
 
 	template <typename T>

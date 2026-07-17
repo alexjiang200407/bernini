@@ -468,7 +468,7 @@ namespace bgl
 	}
 
 	void
-	FrameGraph::RegisterQueue(std::string name, CommandQueueHandle queue, CommandListHandle list)
+	FrameGraph::RegisterQueue(std::string name, CommandQueueRef queue, CommandListRef list)
 	{
 		m_Queues.insert_or_assign(
 			std::move(name),

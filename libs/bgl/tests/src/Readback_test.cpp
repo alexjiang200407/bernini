@@ -98,13 +98,13 @@ TEST_CASE("Readback", "[readback]")
 		const float    clear[4] = { 0.25f, 0.5f, 0.75f, 1.0f };
 
 		// RGBA32_FLOAT so the cleared values come back bit-for-bit.
-		auto texDesc         = bgl::TextureDesc();
-		texDesc.width        = width;
-		texDesc.height       = height;
-		texDesc.format       = bgl::Format::RGBA32_FLOAT;
-		texDesc.usage        = bgl::TextureUsageFlag::kRenderTarget;
-		texDesc.initalLayout = bgl::BarrierLayout::kRenderTarget;
-		texDesc.debugName    = "Readback Source Texture";
+		auto texDesc          = bgl::TextureDesc();
+		texDesc.width         = width;
+		texDesc.height        = height;
+		texDesc.format        = bgl::Format::RGBA32_FLOAT;
+		texDesc.usage         = bgl::TextureUsageFlag::kRenderTarget;
+		texDesc.initialLayout = bgl::BarrierLayout::kRenderTarget;
+		texDesc.debugName     = "Readback Source Texture";
 		texDesc.clearValue.SetColor(bgl::Color(clear[0], clear[1], clear[2], clear[3]));
 
 		auto tex = resourceManager->CreateTexture(texDesc);

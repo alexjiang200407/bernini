@@ -39,7 +39,7 @@ namespace bgl
 		auto depth = DepthStencilState{};
 		depth.SetDepthTestEnable(true)
 			.SetDepthWriteEnable(false)
-			.SetDepthFunc(ComparisonFunc::LessOrEqual)
+			.SetDepthFunc(ComparisonFunc::kLessOrEqual)
 			.SetStencilEnable(false);
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);

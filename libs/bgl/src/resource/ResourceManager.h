@@ -214,5 +214,5 @@ namespace bgl
 			uint8_t       stencil) noexcept = 0;
 	};
 
-	using ResourceManagerHandle = core::SharedRef<IResourceManager>;
+	using ResourceManagerRef = core::SharedRef<IResourceManager>;
 }

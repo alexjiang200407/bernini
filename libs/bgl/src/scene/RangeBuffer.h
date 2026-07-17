@@ -31,13 +31,13 @@ namespace bgl
 
 	public:
 		RangeBuffer() noexcept = default;
-		RangeBuffer(RangeBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		RangeBuffer(RangeBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
 		void
-		Init(RangeBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		Init(RangeBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			gassert(desc.maxCount > 0, "RangeBuffer must have a positive count");
 			gassert(desc.blockSize > 0, "Block size must be greater than zero");
@@ -368,9 +368,9 @@ namespace bgl
 		}
 
 	private:
-		RangeBufferDesc       m_Desc;
-		ResourceManagerHandle m_ResourceManager;
-		BufferHandle          m_BufferHandle;
+		RangeBufferDesc    m_Desc;
+		ResourceManagerRef m_ResourceManager;
+		BufferHandle       m_BufferHandle;
 
 		MetaStorage m_Metadata;
 

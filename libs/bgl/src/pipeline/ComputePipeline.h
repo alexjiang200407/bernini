@@ -52,5 +52,5 @@ namespace bgl
 		GetUniformBufferNames() const noexcept = 0;
 	};
 
-	using ComputePipelineHandle = core::SharedRef<IComputePipeline>;
+	using ComputePipelineRef = core::SharedRef<IComputePipeline>;
 }

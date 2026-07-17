@@ -150,7 +150,7 @@ namespace bgl
 		operator=(Graphics&&) noexcept = delete;
 
 		void
-		BeginFrame(const RenderTargetHandle& target) override;
+		BeginFrame(const RenderTargetRef& target) override;
 
 		void
 		Draw(const RenderContext& context) override;
@@ -159,13 +159,13 @@ namespace bgl
 		EndFrame() override;
 
 		void
-		Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height) override;
+		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) override;
 
 		virtual void
-		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) override;
+		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) override;
 
 		assetlib::ImageData
-		ScreenshotToMemory(const RenderTargetHandle& target) override;
+		ScreenshotToMemory(const RenderTargetRef& target) override;
 
 		const GraphicsOptions&
 		GetOptions() const
@@ -185,19 +185,19 @@ namespace bgl
 			return m_ResourceManager.Get();
 		}
 
-		SceneHandle
+		SceneRef
 		CreateScene(SceneDesc desc) override
 		{
 			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
 		}
 
-		SceneViewHandle
-		CreateSceneView(const SceneHandle& scene, uint32_t maxInstances) override
+		SceneViewRef
+		CreateSceneView(const SceneRef& scene, uint32_t maxInstances) override
 		{
 			return core::SharedRef<SceneView>::Make(scene, maxInstances, m_ResourceManager);
 		}
 
-		RenderTargetHandle
+		RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
 			return core::SharedRef<RenderTarget>::Make(
@@ -248,20 +248,20 @@ namespace bgl
 		// Shared body of the three Screenshot* entry points. `caller` names the one that asked, so a
 		// mid-frame call reports the name the user wrote.
 		assetlib::ImageData
-		CaptureBackbuffer(const RenderTargetHandle& target, std::string_view caller);
+		CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller);
 
 	private:
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
 
 		GraphicsOptions m_Opts;
 
-		DeviceHandle       m_Device;
-		CommandQueueHandle m_CommandQueue;
-		CommandListHandle  m_CommandList;
+		DeviceRef       m_Device;
+		CommandQueueRef m_CommandQueue;
+		CommandListRef  m_CommandList;
 
 		// Allocator used only to construct m_CommandList; per-frame recording uses the
 		// active target's own allocator ring.
-		CommandAllocatorHandle m_BootstrapAllocator;
+		CommandAllocatorRef m_BootstrapAllocator;
 
 		bool m_FrameActive = false;
 
@@ -276,11 +276,11 @@ namespace bgl
 		wrl::ComPtr<ID3D12InfoQueue1> m_D3D12InfoQueue;
 		DWORD                         m_MessageCallbackCookie = 0;
 
-		ResourceManagerHandle m_ResourceManager;
-		PreparePresentPass    m_PreparePresentPass;
-		ForwardPass           m_Forward;
-		SkyboxPass            m_Skybox;
-		CompactInstancesPass  m_CompactInstances;
+		ResourceManagerRef   m_ResourceManager;
+		PreparePresentPass   m_PreparePresentPass;
+		ForwardPass          m_Forward;
+		SkyboxPass           m_Skybox;
+		CompactInstancesPass m_CompactInstances;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 
@@ -296,8 +296,8 @@ namespace bgl
 		static constexpr uint32_t c_DebugBufferCapacity = 256;
 
 		DebugBuffer          m_DebugBuffer;
-		ReadbackBufferHandle m_DebugReadbacks[c_BufferCount];
-		bool                 m_DebugReadbackPending[c_BufferCount] = {};
+		ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
+		bool                 m_DebugReadbackPending[c_SwapchainImageCount] = {};
 #endif
 	};
 }
@@ -442,7 +442,7 @@ namespace bgl
 		// The GPU is idle (flushed above), so assertions from the final frames whose slot
 		// was never reused by a later BeginFrame are now safe to inspect -- drain them so
 		// tail-frame (and few-frame) assertions are not silently missed.
-		for (uint32_t i = 0; i < c_BufferCount; ++i)
+		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
 		{
 			InspectDebugSlot(i);
 		}
@@ -538,7 +538,7 @@ namespace bgl
 #endif
 
 	void
-	Graphics::BeginFrame(const RenderTargetHandle& target)
+	Graphics::BeginFrame(const RenderTargetRef& target)
 	{
 		if (m_FrameActive)
 		{
@@ -696,7 +696,7 @@ namespace bgl
 		// Snapshot this frame's GPU assertions into the slot's readback buffer, then
 		// leave the debug buffer in copy-dest ready for next frame's reset. The copy
 		// rides this command list, gated by rt.m_FenceValues[index] set below; it is
-		// inspected at the BeginFrame that reuses this slot (~c_BufferCount frames on).
+		// inspected at the BeginFrame that reuses this slot (~c_SwapchainImageCount frames on).
 		m_CommandList->BeginEvent("GPU Debug Buffer Readback");
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
@@ -736,7 +736,7 @@ namespace bgl
 
 		if (rt.m_Headless)
 		{
-			rt.m_FrameIndex = (index + 1) % c_BufferCount;
+			rt.m_FrameIndex = (index + 1) % c_SwapchainImageCount;
 		}
 		else
 		{
@@ -748,7 +748,7 @@ namespace bgl
 	}
 
 	void
-	Graphics::Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height)
+	Graphics::Resize(const RenderTargetRef& target, uint32_t width, uint32_t height)
 	{
 		if (m_FrameActive)
 		{
@@ -785,8 +785,12 @@ namespace bgl
 
 		if (!rt.m_Headless)
 		{
-			rt.m_SwapChain
-					->ResizeBuffers(c_BufferCount, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0) >>
+			rt.m_SwapChain->ResizeBuffers(
+				c_SwapchainImageCount,
+				width,
+				height,
+				DXGI_FORMAT_B8G8R8A8_UNORM,
+				0) >>
 				d3d12ErrChecker;
 
 			rt.m_FrameIndex = rt.m_SwapChain->GetCurrentBackBufferIndex();
@@ -847,7 +851,7 @@ namespace bgl
 	// The last presented backbuffer of `target`, read back into a tight RGBA8 image. Blocks on the
 	// shared queue twice: once for the frame that produced the backbuffer, once for the copy below.
 	assetlib::ImageData
-	Graphics::CaptureBackbuffer(const RenderTargetHandle& target, std::string_view caller)
+	Graphics::CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller)
 	{
 		if (m_FrameActive)
 		{
@@ -936,18 +940,18 @@ namespace bgl
 	}
 
 	void
-	Graphics::ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath)
+	Graphics::ScreenshotPng(const RenderTargetRef& target, const std::string& filepath)
 	{
 		writePng(filepath, CaptureBackbuffer(target, "ScreenshotPng"));
 	}
 
 	assetlib::ImageData
-	Graphics::ScreenshotToMemory(const RenderTargetHandle& target)
+	Graphics::ScreenshotToMemory(const RenderTargetRef& target)
 	{
 		return CaptureBackbuffer(target, "ScreenshotToMemory");
 	}
 
-	GraphicsHandle
+	GraphicsRef
 	CreateGraphics(const GraphicsOptions& opts)
 	{
 		return core::SharedRef<Graphics>::Make(opts);

@@ -71,7 +71,7 @@ namespace bgl
 
 		wrl::ComPtr<ID3D12Device10> device10;
 		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
-		auto initialLayout = ConvertBarrierLayout(desc.initalLayout);
+		auto initialLayout = ConvertBarrierLayout(desc.initialLayout);
 
 		CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
 

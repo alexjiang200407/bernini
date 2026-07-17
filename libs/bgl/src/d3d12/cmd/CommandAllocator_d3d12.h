@@ -1,5 +1,5 @@
 #pragma once
-#include "ErrorChecker.h"
+#include "D3d12ErrorChecker.h"
 #include "cmd/CommandAllocator.h"
 
 namespace bgl

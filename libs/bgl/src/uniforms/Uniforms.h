@@ -21,7 +21,7 @@ namespace bgl
 		struct TraversalResult
 		{
 			UniformsNode* node;
-			size_t        relativeOffset;
+			size_t        absoluteOffset;
 
 			[[nodiscard]] bool
 			IsValid() const

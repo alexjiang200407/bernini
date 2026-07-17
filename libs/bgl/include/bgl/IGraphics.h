@@ -4,8 +4,8 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/RenderContext.h>
+#include <bgl/api.h>
 #include <bgl/error.h>
-#include <bgl/util.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 
@@ -65,7 +65,7 @@ namespace bgl
 		 * Creates a render output (windowed swapchain or headless offscreen). One
 		 * Graphics can own many targets and render to each independently.
 		 */
-		virtual RenderTargetHandle
+		virtual RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) = 0;
 
 		/**
@@ -75,7 +75,7 @@ namespace bgl
 		 * @throws GraphicsError if a frame is already active.
 		 */
 		virtual void
-		BeginFrame(const RenderTargetHandle& target) = 0;
+		BeginFrame(const RenderTargetRef& target) = 0;
 
 		virtual void
 		Draw(const RenderContext& context) = 0;
@@ -84,7 +84,7 @@ namespace bgl
 		EndFrame() = 0;
 
 		void
-		DrawFrame(const RenderTargetHandle& target, const RenderContext& context)
+		DrawFrame(const RenderTargetRef& target, const RenderContext& context)
 		{
 			BeginFrame(target);
 			Draw(context);
@@ -99,10 +99,10 @@ namespace bgl
 		 *         dimension is zero.
 		 */
 		virtual void
-		Resize(const RenderTargetHandle& target, uint32_t width, uint32_t height) = 0;
+		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) = 0;
 
 		virtual void
-		ScreenshotPng(const RenderTargetHandle& target, const std::string& filepath) = 0;
+		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) = 0;
 
 		/**
 		 * Reads `target`'s last presented backbuffer back into a tightly packed RGBA8 image --
@@ -112,13 +112,13 @@ namespace bgl
 		 * @throws GraphicsError if called between BeginFrame and EndFrame.
 		 */
 		virtual assetlib::ImageData
-		ScreenshotToMemory(const RenderTargetHandle& target) = 0;
+		ScreenshotToMemory(const RenderTargetRef& target) = 0;
 
-		virtual SceneHandle
+		virtual SceneRef
 		CreateScene(SceneDesc desc) = 0;
 
-		virtual SceneViewHandle
-		CreateSceneView(const SceneHandle& scene, uint32_t maxInstances) = 0;
+		virtual SceneViewRef
+		CreateSceneView(const SceneRef& scene, uint32_t maxInstances) = 0;
 
 		/**
 		 * Registers a sink for GPU assertions (dbg_raise) the engine detects during
@@ -134,7 +134,7 @@ namespace bgl
 		 * the next frame's inspection).
 		 *
 		 * Lifetime note tied to frame latency: assertions are read back and reported a
-		 * few frames AFTER they fire (the readback ring is c_BufferCount deep), so the
+		 * few frames AFTER they fire (the readback ring is c_SwapchainImageCount deep), so the
 		 * handler object must stay valid across that window -- simplest rule: it must
 		 * outlive this IGraphics. Clearing to nullptr does not cancel an already
 		 * in-flight assertion; that pending report then falls back to the crash path --
@@ -162,9 +162,9 @@ namespace bgl
 		IGraphics() noexcept = default;
 	};
 
-	using GraphicsHandle = core::SharedRef<IGraphics>;
+	using GraphicsRef = core::SharedRef<IGraphics>;
 
-	BGL_API GraphicsHandle
+	BGL_API GraphicsRef
 	CreateGraphics(const GraphicsOptions& opts);
 }
 

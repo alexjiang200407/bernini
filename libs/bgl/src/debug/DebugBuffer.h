@@ -32,7 +32,7 @@ namespace bgl
 		DebugBuffer() noexcept = default;
 
 		void
-		Init(uint32_t recordCapacity, ResourceManagerHandle resourceManager) noexcept
+		Init(uint32_t recordCapacity, ResourceManagerRef resourceManager) noexcept
 		{
 			m_Capacity = recordCapacity;
 

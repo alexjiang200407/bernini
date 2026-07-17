@@ -58,7 +58,7 @@ namespace game
 		 *
 		 * @throws bgl::SceneError if `scene` is null.
 		 */
-		AssetManager(bgl::SceneHandle scene, std::filesystem::path dataRoot);
+		AssetManager(bgl::SceneRef scene, std::filesystem::path dataRoot);
 
 		/** Releases everything still held, in dependency order. */
 		~AssetManager();
@@ -129,7 +129,7 @@ namespace game
 		 *         expired.
 		 */
 		bgl::MeshInstanceHandle
-		CreateInstance(bgl::SceneViewHandle view, bgl::GeomHandle geom, const glm::mat4& transform);
+		CreateInstance(bgl::SceneViewRef view, bgl::GeomHandle geom, const glm::mat4& transform);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was
@@ -137,7 +137,7 @@ namespace game
 		 * to find it.
 		 */
 		void
-		DestroyInstance(bgl::SceneViewHandle view, bgl::MeshInstanceHandle instance);
+		DestroyInstance(bgl::SceneViewRef view, bgl::MeshInstanceHandle instance);
 
 		// --- Release: drop one reference. At zero the asset is destroyed, and its own references
 		//     are released in turn. ------------------------------------------------------------
@@ -177,7 +177,7 @@ namespace game
 		 */
 		void
 		SetInstanceSubmeshMaterial(
-			bgl::SceneViewHandle    view,
+			bgl::SceneViewRef    view,
 			bgl::MeshInstanceHandle instance,
 			uint32_t                submeshIndex,
 			std::string_view        materialRelPath);
@@ -185,7 +185,7 @@ namespace game
 		/** Drops the override; the submesh returns to the geom's default and the material is released. */
 		void
 		ClearInstanceSubmeshMaterial(
-			bgl::SceneViewHandle    view,
+			bgl::SceneViewRef    view,
 			bgl::MeshInstanceHandle instance,
 			uint32_t                submeshIndex);
 
@@ -265,7 +265,7 @@ namespace game
 
 			// The view this instance was placed in, and is deleted from. Held, so a view cannot be
 			// destroyed while the manager still has an instance to hand back to it.
-			bgl::SceneViewHandle view;
+			bgl::SceneViewRef view;
 
 			uint32_t geomSlot = 0;
 
@@ -341,7 +341,7 @@ namespace game
 		void
 		DestroyGeom(GeomRecord& record);
 
-		bgl::SceneHandle      m_Scene;
+		bgl::SceneRef         m_Scene;
 		std::filesystem::path m_DataRoot;
 
 		core::str::unordered_str_map<uint32_t> m_TextureByPath;

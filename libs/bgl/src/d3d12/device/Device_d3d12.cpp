@@ -14,7 +14,7 @@
 #include "resource/Shader.h"
 #include "resource/Shader_d3d12.h"
 #include "shadercache/ShaderCache_d3d12.h"
-#include "slang/ErrorChecker.h"
+#include "slang/SlangErrorChecker.h"
 #include "types/QueueType.h"
 #include <core/ref/SharedRef.h>
 
@@ -94,11 +94,11 @@ namespace bgl
 
 	Device::~Device() noexcept { logger::trace("~Device"); }
 
-	CommandListHandle
+	CommandListRef
 	Device::CreateCommandList(
 		const CommandListDesc& desc,
-		CommandAllocatorHandle commandAllocator,
-		ResourceManagerHandle  resourceManager) const noexcept
+		CommandAllocatorRef    commandAllocator,
+		ResourceManagerRef     resourceManager) const noexcept
 	{
 		return core::SharedRef<CommandList>::Make(
 			desc,
@@ -106,7 +106,7 @@ namespace bgl
 			std::move(resourceManager));
 	}
 
-	ResourceManagerHandle
+	ResourceManagerRef
 	Device::CreateResourceManager(
 		const ResourceManagerDesc&     desc,
 		core::SharedRef<ICommandQueue> submissionQueue) const noexcept
@@ -114,13 +114,13 @@ namespace bgl
 		return core::SharedRef<ResourceManager>::Make(m_Device, desc, std::move(submissionQueue));
 	}
 
-	ShaderHandle
+	ShaderRef
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
 		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession);
 	}
 
-	MeshletPipelineHandle
+	MeshletPipelineRef
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
 		return core::SharedRef<MeshletPipeline>::Make(
@@ -130,7 +130,7 @@ namespace bgl
 			desc);
 	}
 
-	ComputePipelineHandle
+	ComputePipelineRef
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
 		return core::SharedRef<ComputePipeline>::Make(
@@ -140,7 +140,7 @@ namespace bgl
 			desc);
 	}
 
-	CommandAllocatorHandle
+	CommandAllocatorRef
 	Device::CreateCommandAllocator(QueueType type) const noexcept
 	{
 		auto d3d12CmdAllocator = wrl::ComPtr<ID3D12CommandAllocator>();
@@ -153,7 +153,7 @@ namespace bgl
 		return core::SharedRef<CommandAllocator>::Make(std::move(d3d12CmdAllocator));
 	}
 
-	CommandQueueHandle
+	CommandQueueRef
 	Device::CreateCommandQueue(QueueType type) const noexcept
 	{
 		return core::SharedRef<CommandQueue>::Make(type, m_Device.Get());

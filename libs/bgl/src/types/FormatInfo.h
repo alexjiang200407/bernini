@@ -16,7 +16,7 @@ namespace bgl
 		Format      format;
 		const char* name;
 		uint8_t     bytesPerBlock;
-		uint8_t     blockSize;
+		uint8_t     blockEdgeTexels;  // 1 for uncompressed formats, 4 for BC blocks
 		FormatKind  kind;
 		bool        hasRed    : 1;
 		bool        hasGreen  : 1;

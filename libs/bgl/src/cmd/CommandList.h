@@ -59,7 +59,7 @@ namespace bgl
 		 */
 		virtual void
 		WriteTexture(
-			TextureHandle                             handle,
+			TextureHandle                           handle,
 			std::span<const TextureSubresourceData> subresources) noexcept = 0;
 
 		/**
@@ -175,5 +175,5 @@ namespace bgl
 		GetType() const noexcept = 0;
 	};
 
-	using CommandListHandle = core::SharedRef<ICommandList>;
+	using CommandListRef = core::SharedRef<ICommandList>;
 }

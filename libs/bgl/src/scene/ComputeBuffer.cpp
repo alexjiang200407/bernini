@@ -3,7 +3,7 @@
 namespace bgl
 {
 	void
-	ComputeBuffer::Init(ComputeBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+	ComputeBuffer::Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 	{
 		gassert(desc.maxCount > 0, "ComputeBuffer must have a positive count");
 		gassert(desc.elementSize > 0, "ComputeBuffer element size must be greater than zero");

@@ -11,9 +11,9 @@ class QTimer;
 
 struct RenderTargetWindowDesc
 {
-	bgl::GraphicsHandle gfx          = nullptr;
-	bgl::SceneHandle    scene        = nullptr;
-	uint32_t            maxInstances = 0;
+	bgl::GraphicsRef gfx          = nullptr;
+	bgl::SceneRef    scene        = nullptr;
+	uint32_t         maxInstances = 0;
 };
 
 class RenderTargetWindow : public QWidget
@@ -25,7 +25,7 @@ public:
 
 	// The view this window draws. Held, so it can outlive the window in something that places
 	// instances into it -- the shared AssetManager does exactly that.
-	bgl::SceneViewHandle
+	bgl::SceneViewRef
 	View() const noexcept
 	{
 		return m_SceneView;
@@ -98,12 +98,12 @@ private:
 	// backbuffers.
 	QTimer* m_ResizeTimer = nullptr;
 
-	RenderTargetWindowDesc  m_Desc;
-	bgl::RenderTargetHandle m_RenderTarget;
-	bgl::SceneViewHandle    m_SceneView;
-	bgl::Camera             camera;
-	uint32_t                m_Width  = 1;
-	uint32_t                m_Height = 1;
+	RenderTargetWindowDesc m_Desc;
+	bgl::RenderTargetRef   m_RenderTarget;
+	bgl::SceneViewRef      m_SceneView;
+	bgl::Camera            camera;
+	uint32_t               m_Width  = 1;
+	uint32_t               m_Height = 1;
 
 	QElapsedTimer m_FrameClock;  // monotonic clock for the timings above
 	qint64        m_LastFrameStartNs = -1;

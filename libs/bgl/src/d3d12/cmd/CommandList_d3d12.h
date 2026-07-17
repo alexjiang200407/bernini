@@ -22,7 +22,7 @@ namespace bgl
 		CommandList(
 			const CommandListDesc& desc,
 			ICommandAllocator*     commandAllocator,
-			ResourceManagerHandle  resourceManager);
+			ResourceManagerRef     resourceManager);
 		~CommandList() noexcept override { logger::trace("~CommandList"); }
 
 		CommandList(const CommandList&) noexcept = delete;
@@ -147,8 +147,8 @@ namespace bgl
 		void
 		ApplyMeshletState() noexcept;
 
-		CommandListDesc       m_Desc;
-		ResourceManagerHandle m_ResourceManager;
+		CommandListDesc    m_Desc;
+		ResourceManagerRef m_ResourceManager;
 
 		// Must be deleted after UploadManager
 		wrl::ComPtr<ID3D12Resource> m_CurrentUploadBuffer = nullptr;

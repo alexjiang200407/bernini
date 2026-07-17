@@ -86,5 +86,5 @@ namespace bgl
 		GetUniformBufferNames() const noexcept = 0;
 	};
 
-	using MeshletPipelineHandle = core::SharedRef<IMeshletPipeline>;
+	using MeshletPipelineRef = core::SharedRef<IMeshletPipeline>;
 }

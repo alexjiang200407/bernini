@@ -145,9 +145,9 @@ namespace
 	struct Fixture
 	{
 		DataRoot                          root;
-		bgl::GraphicsHandle               gfx;
-		bgl::SceneHandle                  scene;
-		bgl::SceneViewHandle              view;
+		bgl::GraphicsRef                  gfx;
+		bgl::SceneRef                     scene;
+		bgl::SceneViewRef                 view;
 		std::optional<game::AssetManager> assets;
 
 		explicit Fixture(const char* name) : root(name), gfx(bgl::CreateGraphics(HeadlessOptions()))
@@ -357,13 +357,13 @@ TEST_CASE("AssetManager places instances into more than one view", "[gamelib][as
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
 	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
 
-	const bgl::SceneViewHandle second = fx.gfx->CreateSceneView(fx.scene, 16);
+	const bgl::SceneViewRef second = fx.gfx->CreateSceneView(fx.scene, 16);
 
 	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
 
 	// A null view is refused here, not left to crash inside bgl.
 	REQUIRE_THROWS_AS(
-		(*fx).CreateInstance(bgl::SceneViewHandle{}, geom, glm::mat4(1.0f)),
+		(*fx).CreateInstance(bgl::SceneViewRef{}, geom, glm::mat4(1.0f)),
 		bgl::SceneError);
 
 	// The same geometry, instanced once in each view.

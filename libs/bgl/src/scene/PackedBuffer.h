@@ -28,13 +28,13 @@ namespace bgl
 
 	public:
 		PackedBuffer() noexcept = default;
-		PackedBuffer(PackedBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		PackedBuffer(PackedBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
 		void
-		Init(PackedBufferDesc desc, ResourceManagerHandle resourceManager) noexcept
+		Init(PackedBufferDesc desc, ResourceManagerRef resourceManager) noexcept
 		{
 			gassert(desc.maxCount > 0, "PackedBuffer must have a positive maxCount");
 			gassert(desc.blockSize > 0, "Block size must be greater than zero");
@@ -302,7 +302,7 @@ namespace bgl
 
 	private:
 		PackedBufferDesc       m_Desc;
-		ResourceManagerHandle  m_ResourceManager;
+		ResourceManagerRef     m_ResourceManager;
 		BufferHandle           m_BufferHandle;
 		core::packed_vector<T> m_Entries;
 

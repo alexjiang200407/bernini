@@ -98,7 +98,7 @@ namespace bgl
 		ClearValue       clearValue;
 		std::string      debugName;
 
-		BarrierLayout initalLayout = BarrierLayout::kCommon;
+		BarrierLayout initialLayout = BarrierLayout::kCommon;
 	};
 
 	// Different from TextureAssetHandle, this is a handle refers to a

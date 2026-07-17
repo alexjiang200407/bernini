@@ -88,7 +88,7 @@ namespace bgl
 		SetResourceNamespace(std::string resourceNamespace);
 
 		void
-		RegisterQueue(std::string name, CommandQueueHandle queue, CommandListHandle list);
+		RegisterQueue(std::string name, CommandQueueRef queue, CommandListRef list);
 
 		void
 		Compile(IResourceManager* resourceManager);
@@ -165,8 +165,8 @@ namespace bgl
 
 		struct QueueBinding
 		{
-			CommandQueueHandle queue;
-			CommandListHandle  list;
+			CommandQueueRef queue;
+			CommandListRef  list;
 		};
 
 		std::vector<PassNode>                      m_Passes;

@@ -52,5 +52,5 @@ namespace bgl
 		WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept = 0;
 	};
 
-	using CommandQueueHandle = core::SharedRef<ICommandQueue>;
+	using CommandQueueRef = core::SharedRef<ICommandQueue>;
 }

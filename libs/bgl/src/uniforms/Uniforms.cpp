@@ -59,7 +59,7 @@ namespace bgl
 			{
 				TraversalResult result{};
 				result.node           = &g_UniformNullNode;
-				result.relativeOffset = 0;
+				result.absoluteOffset = 0;
 				return result;
 			}
 		}

@@ -9,9 +9,9 @@
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/PsoType.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
-#include <bgl/util.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -259,7 +259,7 @@ namespace bgl
 		IScene() noexcept = default;
 	};
 
-	using SceneHandle = core::SharedRef<IScene>;
+	using SceneRef = core::SharedRef<IScene>;
 }
 
 template class BGL_API core::SharedRef<bgl::IScene>;

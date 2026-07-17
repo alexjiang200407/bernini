@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bgl/util.h>
+#include <bgl/api.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>

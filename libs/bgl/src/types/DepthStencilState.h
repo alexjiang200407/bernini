@@ -4,36 +4,36 @@ namespace bgl
 {
 	enum class StencilOp : uint8_t
 	{
-		Keep              = 1,
-		Zero              = 2,
-		Replace           = 3,
-		IncrementAndClamp = 4,
-		DecrementAndClamp = 5,
-		Invert            = 6,
-		IncrementAndWrap  = 7,
-		DecrementAndWrap  = 8
+		kKeep              = 1,
+		kZero              = 2,
+		kReplace           = 3,
+		kIncrementAndClamp = 4,
+		kDecrementAndClamp = 5,
+		kInvert            = 6,
+		kIncrementAndWrap  = 7,
+		kDecrementAndWrap  = 8
 	};
 
 	enum class ComparisonFunc : uint8_t
 	{
-		Never          = 1,
-		Less           = 2,
-		Equal          = 3,
-		LessOrEqual    = 4,
-		Greater        = 5,
-		NotEqual       = 6,
-		GreaterOrEqual = 7,
-		Always         = 8
+		kNever          = 1,
+		kLess           = 2,
+		kEqual          = 3,
+		kLessOrEqual    = 4,
+		kGreater        = 5,
+		kNotEqual       = 6,
+		kGreaterOrEqual = 7,
+		kAlways         = 8
 	};
 
 	struct DepthStencilState
 	{
 		struct StencilOpDesc
 		{
-			StencilOp      failOp      = StencilOp::Keep;
-			StencilOp      depthFailOp = StencilOp::Keep;
-			StencilOp      passOp      = StencilOp::Keep;
-			ComparisonFunc stencilFunc = ComparisonFunc::Always;
+			StencilOp      failOp      = StencilOp::kKeep;
+			StencilOp      depthFailOp = StencilOp::kKeep;
+			StencilOp      passOp      = StencilOp::kKeep;
+			ComparisonFunc stencilFunc = ComparisonFunc::kAlways;
 
 			constexpr StencilOpDesc&
 			SetFailOp(StencilOp value)
@@ -63,7 +63,7 @@ namespace bgl
 
 		bool           depthTestEnable   = false;
 		bool           depthWriteEnable  = true;
-		ComparisonFunc depthFunc         = ComparisonFunc::Less;
+		ComparisonFunc depthFunc         = ComparisonFunc::kLess;
 		bool           stencilEnable     = false;
 		uint8_t        stencilReadMask   = 0xff;
 		uint8_t        stencilWriteMask  = 0xff;

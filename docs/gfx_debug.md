@@ -28,7 +28,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   dispatch is auto-wired. See [Geometry Layout](docs/geometry_layout.md) for how other implicit
   globals are bound.
 * **GPU→CPU reporting is asynchronous and frame-latent.** `dbg_raise` only atomically appends a
-  record on the GPU. The buffer is copied to a readback ring and inspected `c_BufferCount`
+  record on the GPU. The buffer is copied to a readback ring and inspected `c_SwapchainImageCount`
   frames later, so a report surfaces a few frames *after* the shader raised it. Consequences for
   handler lifetime are in the contracts below.
 * **The debug-buffer decode is a pure function**, split out of the orchestration so the crash
@@ -95,7 +95,7 @@ registered handler.
 flowchart TD
     Shader["Shader: dbg_raise(errcode)"] -- "InterlockedAdd into gDebug (b0,space7)" --> Buf["DebugBuffer (uint UAV)"]
     Graphics["Graphics (BeginFrame)"] -- "Reset() header + SetActiveDebugBuffer()" --> Buf
-    Graphics -- "EndFrame: copy to readback ring" --> Ring["Readback ring (c_BufferCount deep)"]
+    Graphics -- "EndFrame: copy to readback ring" --> Ring["Readback ring (c_SwapchainImageCount deep)"]
     Ring -- "map, N frames later" --> Inspect["InspectDebugReadback()"]
     Inspect -- "DebugReport" --> Decide{"handler set?"}
     Decide -- "no" --> Crash["gfatal() -> terminate"]
@@ -117,7 +117,7 @@ flowchart TD
 * **Layout constants must match** between [DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
   [dbg.slang](libs/bgl/shaders/src/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=1`).
   Changing a record's shape means editing both.
-* **Handler lifetime spans the frame-latency window.** Reports arrive `c_BufferCount` frames
+* **Handler lifetime spans the frame-latency window.** Reports arrive `c_SwapchainImageCount` frames
   after they fire, so the handler must stay valid across that window — simplest rule: it must
   outlive the `IGraphics`. @pre for a clean teardown: call `DiscardPendingGpuAssertions()`
   *before* clearing the handler, or an in-flight report falls back to the crash path.

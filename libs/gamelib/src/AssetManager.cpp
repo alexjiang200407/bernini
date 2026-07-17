@@ -46,7 +46,7 @@ namespace game
 		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 	}
 
-	AssetManager::AssetManager(bgl::SceneHandle scene, std::filesystem::path dataRoot) :
+	AssetManager::AssetManager(bgl::SceneRef scene, std::filesystem::path dataRoot) :
 		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot))
 	{
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
@@ -298,7 +298,7 @@ namespace game
 
 	bgl::MeshInstanceHandle
 	AssetManager::CreateInstance(
-		bgl::SceneViewHandle view,
+		bgl::SceneViewRef view,
 		bgl::GeomHandle      geom,
 		const glm::mat4&     transform)
 	{
@@ -332,7 +332,7 @@ namespace game
 	}
 
 	void
-	AssetManager::DestroyInstance(bgl::SceneViewHandle view, bgl::MeshInstanceHandle instance)
+	AssetManager::DestroyInstance(bgl::SceneViewRef view, bgl::MeshInstanceHandle instance)
 	{
 		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
 		if (it == m_Instances.end())
@@ -484,7 +484,7 @@ namespace game
 
 	void
 	AssetManager::SetInstanceSubmeshMaterial(
-		bgl::SceneViewHandle    view,
+		bgl::SceneViewRef    view,
 		bgl::MeshInstanceHandle instance,
 		uint32_t                submeshIndex,
 		std::string_view        materialRelPath)
@@ -513,7 +513,7 @@ namespace game
 
 	void
 	AssetManager::ClearInstanceSubmeshMaterial(
-		bgl::SceneViewHandle    view,
+		bgl::SceneViewRef    view,
 		bgl::MeshInstanceHandle instance,
 		uint32_t                submeshIndex)
 	{

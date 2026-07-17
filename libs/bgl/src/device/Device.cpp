@@ -4,7 +4,7 @@
 
 namespace bgl
 {
-	ShaderHandle
+	ShaderRef
 	IDevice::CreateShader(std::string slangModuleName, std::string entryPointName) const noexcept
 	{
 		auto desc            = ShaderDesc();
@@ -15,7 +15,7 @@ namespace bgl
 		return CreateShader(std::move(desc));
 	}
 
-	CommandQueueHandle
+	CommandQueueRef
 	IDevice::CreateGraphicsCommandQueue() const noexcept
 	{
 		return CreateCommandQueue(QueueType::kGraphics);

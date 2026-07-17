@@ -515,8 +515,8 @@ TEST_CASE("FrameGraph: GetBuffer on an undeclared buffer throws", "[fg]")
 
 	fg.Compile(&NullRm());
 
-	CommandListHandle  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueHandle queue = core::SharedRef<NullCommandQueue>::Make();
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
@@ -533,8 +533,8 @@ TEST_CASE("FrameGraph: GetBuffer on a transient (unimported) buffer throws", "[f
 
 	fg.Compile(&NullRm());
 
-	CommandListHandle  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueHandle queue = core::SharedRef<NullCommandQueue>::Make();
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
@@ -553,8 +553,8 @@ TEST_CASE("FrameGraph: GetBuffer resolves an imported buffer; imports clear afte
 	fg.Compile(&NullRm());
 	REQUIRE(fg.ImportedResourceCount() == 1);
 
-	CommandListHandle  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueHandle queue = core::SharedRef<NullCommandQueue>::Make();
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	fg.Execute();
 
