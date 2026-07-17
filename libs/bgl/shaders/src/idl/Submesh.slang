@@ -14,7 +14,5 @@ public struct Submesh
     public Range<uint> indices;
     public uint vertexCount;
 
-    public RangeWithCount<Meshlet> GetMeshletRange() { return meshlets; }
-
     public uint GetMeshletCount() { return meshlets.count; }
 };
