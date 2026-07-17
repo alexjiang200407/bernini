@@ -53,11 +53,13 @@ namespace assetlib
 	 * Bakes a flattened import into its modular file form: the geometry is copied verbatim and every
 	 * submesh arrives with no material (`Submesh::material` is c_InvalidIndex, `materials` is empty).
 	 *
-	 * **An import does not carry materials across.** A glTF's materials are PBR, which is that format's
-	 * shading model and not necessarily the engine's, so deriving `.bmaterial` files from them would
-	 * stamp glTF's model into the engine's own container. Materials are authored in the material editor
-	 * and bound to a submesh by attachMaterial when saved. The import's *textures* are still extracted
-	 * (see writeTextures) -- they are what a material routes at.
+	 * **This does not carry materials across, and nothing in assetlib does.** A glTF's materials are
+	 * PBR, which is that format's shading model and not necessarily the engine's, so deriving
+	 * `.bmaterial` files here would stamp glTF's model into the engine's own container for every
+	 * caller -- including `assetlib_cli bake`, which has no user to ask. attachMaterial is the only
+	 * thing that binds a material, and a caller that wants the glTF's has to derive them and call it:
+	 * the editor's import does exactly that, behind a checkbox, for the PBR ones alone. The import's
+	 * *textures* are still extracted (see writeTextures) -- they are what a material routes at.
 	 */
 	[[nodiscard]] BMesh
 	toBMesh(const imp::BMeshImport& mesh);
@@ -77,6 +79,21 @@ namespace assetlib
 	 */
 	bool
 	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
+
+	/**
+	 * The name writeTextures gives the `index`-th texture of an import. A caller that must name one of
+	 * those files -- to route a material at it -- has to come through here rather than spell the
+	 * convention out a second time.
+	 */
+	[[nodiscard]] std::string
+	textureFileName(size_t index);
+
+	/**
+	 * The name at `offset` in a mesh's `stringPool` (BMesh's or BMeshImport's -- they pool names the
+	 * same way). Empty for offset 0, which is the empty string, or for an offset past the pool.
+	 */
+	[[nodiscard]] std::string
+	nameFromPool(const std::vector<char>& pool, uint32_t offset);
 
 	/**
 	 * Reports that `done` of `total` textures have been written. Called before each texture, so the

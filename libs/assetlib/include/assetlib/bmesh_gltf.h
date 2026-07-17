@@ -20,4 +20,22 @@ namespace assetlib
 	 */
 	[[nodiscard]] imp::BMeshImport
 	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel = {});
+
+	/** What a file's material table holds, without the cost of importing it. See probeGltfMaterials. */
+	struct GltfMaterialProbe
+	{
+		size_t materialCount = 0;
+		size_t pbrMaterialCount =
+			0;  // of those, the ones imp::BMaterialImport::isPbr would be set for
+	};
+
+	/**
+	 * Reads `path`'s material table alone, so a caller can decide what to offer before committing to an
+	 * import. No image is decoded: the parse runs with a stubbed image loader, which is what makes this
+	 * cheap enough to call from a UI thread. The file is still read in full, so the cost is its size.
+	 *
+	 * @throws std::runtime_error if the file cannot be read or is not valid glTF.
+	 */
+	[[nodiscard]] GltfMaterialProbe
+	probeGltfMaterials(const std::filesystem::path& path);
 }

@@ -28,13 +28,40 @@ namespace
     { "bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR" } ]
 })";
 
+	/**
+	 * The triangle, plus a material table covering every shading model and alpha mode the importer has
+	 * to tell apart. Nothing references them: what a material *is* does not depend on being drawn, and
+	 * the primitive's own material index is exercised by the geometry tests above.
+	 */
+	constexpr const char* c_MaterialsGltf = R"({
+  "asset": { "version": "2.0" },
+  "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness" ],
+  "materials": [
+    { "name": "plain", "pbrMetallicRoughness": { "metallicFactor": 0.25, "roughnessFactor": 0.5 } },
+    { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3 },
+    { "name": "glass", "alphaMode": "BLEND" },
+    { "name": "sign", "extensions": { "KHR_materials_unlit": {} } },
+    { "name": "old", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } }
+  ]
+})";
+
 	std::filesystem::path
-	writeTempGltf()
+	writeTempGltf(const char* json = c_TriangleGltf, const char* name = "bmesh_triangle_test.gltf")
 	{
-		const auto    path = std::filesystem::temp_directory_path() / "bmesh_triangle_test.gltf";
+		const auto    path = std::filesystem::temp_directory_path() / name;
 		std::ofstream out(path, std::ios::binary);
-		out << c_TriangleGltf;
+		out << json;
 		return path;
+	}
+
+	/** The materials document, imported and cleaned up. */
+	BMeshImport
+	loadMaterialsGltf()
+	{
+		const auto path = writeTempGltf(c_MaterialsGltf, "bmesh_materials_test.gltf");
+		auto       mesh = loadFromGltf(path);
+		std::filesystem::remove(path);
+		return mesh;
 	}
 }
 
@@ -157,4 +184,76 @@ TEST_CASE(
 	REQUIRE(std::ranges::any_of(import.materials, [&](const BMaterialImport& material) {
 		return material.baseColorTexture < import.textures.size();
 	}));
+}
+
+TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
+{
+	const auto mesh = loadMaterialsGltf();
+	REQUIRE(mesh.materials.size() == 5);
+
+	// The engine's PBR has no blended mode, so BLEND has nowhere to map but opaque -- the base colour,
+	// normal and ORM of such a material are still right, and only its transparency is lost.
+	CHECK(mesh.materials[0].alphaMode == AlphaMode::kOpaque);
+	CHECK(mesh.materials[1].alphaMode == AlphaMode::kMask);
+	CHECK(mesh.materials[1].alphaCutoff == Catch::Approx(0.3f));
+	CHECK(mesh.materials[2].alphaMode == AlphaMode::kOpaque);
+
+	// glTF's own default, not the engine's: a MASK material that names no cutoff cuts at 0.5.
+	CHECK(mesh.materials[0].alphaCutoff == Catch::Approx(0.5f));
+}
+
+TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf]")
+{
+	const auto mesh = loadMaterialsGltf();
+	REQUIRE(mesh.materials.size() == 5);
+
+	// Metallic-roughness is glTF's shading model, so a material is PBR unless it says otherwise. The
+	// two that do say otherwise carry fields that are glTF's defaults rather than the author's intent,
+	// which is why importing them as PBR would be a lie rather than an approximation.
+	CHECK(mesh.materials[0].isPbr);
+	CHECK(mesh.materials[1].isPbr);
+	CHECK(mesh.materials[2].isPbr);
+	CHECK_FALSE(mesh.materials[3].isPbr);  // KHR_materials_unlit
+	CHECK_FALSE(mesh.materials[4].isPbr);  // KHR_materials_pbrSpecularGlossiness
+}
+
+TEST_CASE("probeGltfMaterials counts the PBR materials", "[bmesh][gltf]")
+{
+	const auto path  = writeTempGltf(c_MaterialsGltf, "bmesh_probe_test.gltf");
+	const auto probe = probeGltfMaterials(path);
+	std::filesystem::remove(path);
+
+	CHECK(probe.materialCount == 5);
+	CHECK(probe.pbrMaterialCount == 3);
+}
+
+TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")
+{
+	// The stubbed image loader is the whole point of the probe, and it is also the thing most likely to
+	// make it disagree with an import -- a loader that fails rather than no-ops takes the parse down
+	// with it. apples.glb is the only fixture with real textures, so it is the only one where the stub
+	// is exercised at all.
+	const std::filesystem::path glb = "assets/apples.glb";
+	REQUIRE(std::filesystem::exists(glb));
+
+	const auto import = loadFromGltf(glb);
+	const auto probe  = probeGltfMaterials(glb);
+
+	REQUIRE_FALSE(import.textures.empty());
+	CHECK(probe.materialCount == import.materials.size());
+	CHECK(
+		probe.pbrMaterialCount ==
+		static_cast<size_t>(
+			std::ranges::count_if(import.materials, [](const BMaterialImport& material) {
+				return material.isPbr;
+			})));
+}
+
+TEST_CASE("A glTF that will not parse is reported, not guessed at", "[bmesh][gltf]")
+{
+	const auto path = writeTempGltf("{ not json", "bmesh_broken_test.gltf");
+
+	CHECK_THROWS_AS(probeGltfMaterials(path), std::runtime_error);
+
+	std::filesystem::remove(path);
 }

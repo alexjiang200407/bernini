@@ -495,6 +495,22 @@ namespace assetlib
 			return imageToTexture[static_cast<size_t>(source)];
 		}
 
+		// glTF's shading model is metallic-roughness unless the material overrides it, so PBR-ness is
+		// decided by the absence of an extension rather than the presence of pbrMetallicRoughness --
+		// which tinygltf default-constructs whether or not the file declares it.
+		bool
+		isPbrMaterial(const tinygltf::Material& material)
+		{
+			return !material.extensions.contains("KHR_materials_unlit") &&
+			       !material.extensions.contains("KHR_materials_pbrSpecularGlossiness");
+		}
+
+		AlphaMode
+		toAlphaMode(const std::string& gltfAlphaMode)
+		{
+			return gltfAlphaMode == "MASK" ? AlphaMode::kMask : AlphaMode::kOpaque;
+		}
+
 		void
 		buildMaterials(
 			BMeshImport&                 mesh,
@@ -507,6 +523,9 @@ namespace assetlib
 				const auto& pbr = gltfMat.pbrMetallicRoughness;
 
 				BMaterialImport material{};
+				material.isPbr       = isPbrMaterial(gltfMat);
+				material.alphaMode   = toAlphaMode(gltfMat.alphaMode);
+				material.alphaCutoff = static_cast<float>(gltfMat.alphaCutoff);
 				material.baseColorTexture =
 					mapTexture(model, pbr.baseColorTexture.index, imageToTexture);
 				material.ormTexture =
@@ -529,25 +548,67 @@ namespace assetlib
 		}
 	}
 
+	namespace
+	{
+		void
+		loadModel(
+			tinygltf::TinyGLTF&          loader,
+			tinygltf::Model&             model,
+			const std::filesystem::path& path)
+		{
+			std::string error;
+			std::string warning;
+
+			auto extension = path.extension().string();
+			std::ranges::transform(extension, extension.begin(), [](char c) {
+				return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+			});
+
+			const bool ok = extension == ".glb" ?
+			                    loader.LoadBinaryFromFile(&model, &error, &warning, path.string()) :
+			                    loader.LoadASCIIFromFile(&model, &error, &warning, path.string());
+			if (!ok)
+				throw std::runtime_error(
+					"bmesh: failed to load glTF '" + path.string() + "': " + error);
+		}
+	}
+
+	GltfMaterialProbe
+	probeGltfMaterials(const std::filesystem::path& path)
+	{
+		tinygltf::TinyGLTF loader;
+		tinygltf::Model    model;
+
+		// Decoding every texture to answer a question about the material table is the whole cost of an
+		// import; the stub keeps the parse to the glTF's JSON and buffers.
+		loader.SetImageLoader(
+			[](tinygltf::Image*,
+		       const int,
+		       std::string*,
+		       std::string*,
+		       int,
+		       int,
+		       const unsigned char*,
+		       int,
+		       void*) { return true; },
+			nullptr);
+
+		loadModel(loader, model, path);
+
+		GltfMaterialProbe probe{};
+		probe.materialCount = model.materials.size();
+		probe.pbrMaterialCount =
+			static_cast<size_t>(std::ranges::count_if(model.materials, isPbrMaterial));
+		return probe;
+	}
+
 	BMeshImport
 	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel)
 	{
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;
-		std::string        error;
-		std::string        warning;
 
-		auto extension = path.extension().string();
-		std::ranges::transform(extension, extension.begin(), [](char c) {
-			return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
-		});
-
-		const bool ok = extension == ".glb" ?
-		                    loader.LoadBinaryFromFile(&model, &error, &warning, path.string()) :
-		                    loader.LoadASCIIFromFile(&model, &error, &warning, path.string());
-		if (!ok)
-			throw std::runtime_error(
-				"bmesh: failed to load glTF '" + path.string() + "': " + error);
+		loadModel(loader, model, path);
 
 		BMeshImport mesh;
 		mesh.stringPool.push_back('\0');  // offset 0 == empty string
