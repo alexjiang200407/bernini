@@ -33,6 +33,10 @@ namespace bgl
 			{
 				kernel.Reset();
 			}
+			for (MeshletKernel& kernel : m_PrepassKernels)
+			{
+				kernel.Reset();
+			}
 		}
 
 		void
@@ -50,5 +54,8 @@ namespace bgl
 		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
 
 		std::array<MeshletKernel, c_PsoCount> m_Kernels;
+
+		// Depth-only pre-pass kernels; only the self-occluding transparent PSO slots are built.
+		std::array<MeshletKernel, c_PsoCount> m_PrepassKernels;
 	};
 }

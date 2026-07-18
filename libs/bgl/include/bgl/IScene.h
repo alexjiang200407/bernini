@@ -70,6 +70,10 @@ namespace bgl
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// Blend only: draw a depth-only pre-pass so the surface self-occludes (hair, foliage),
+		// blending only the front layer past `alphaCutoff` instead of every layer through.
+		bool occlude = false;
+
 		// Optional material maps, from AddTextureAsset.
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
@@ -92,6 +96,9 @@ namespace bgl
 		// so unlike a baked one it can always sample a real alpha channel.
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
+
+		// Blend only: depth-only pre-pass self-occlusion. See PbrMaterialDesc.
+		bool occlude = false;
 
 		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
 		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic

@@ -95,7 +95,7 @@ namespace bgl
 	}
 
 	PsoType
-	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
+	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer, bool occlude)
 	{
 		const bool cutout = layer == LayerType::kMask;
 		const bool blend  = layer == LayerType::kBlend;
@@ -107,12 +107,14 @@ namespace bgl
 			{
 			case MaterialType::kPBR:
 				if (blend)
-					return PsoType::kTransparent_StaticMesh_PBR;
+					return occlude ? PsoType::kTransparentOcclude_StaticMesh_PBR :
+					                 PsoType::kTransparent_StaticMesh_PBR;
 				return cutout ? PsoType::kAlphaTest_StaticMesh_PBR :
 				                PsoType::kOpaque_StaticMesh_PBR;
 			case MaterialType::kLoosePbr:
 				if (blend)
-					return PsoType::kTransparent_StaticMesh_LoosePbr;
+					return occlude ? PsoType::kTransparentOcclude_StaticMesh_LoosePbr :
+					                 PsoType::kTransparent_StaticMesh_LoosePbr;
 				return cutout ? PsoType::kAlphaTest_StaticMesh_LoosePbr :
 				                PsoType::kOpaque_StaticMesh_LoosePbr;
 
@@ -137,7 +139,15 @@ namespace bgl
 	IsTransparentPso(uint32_t pso) noexcept
 	{
 		return pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_PBR) ||
-		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr);
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr) ||
+		       IsOccludeTransparentPso(pso);
+	}
+
+	bool
+	IsOccludeTransparentPso(uint32_t pso) noexcept
+	{
+		return pso == static_cast<uint32_t>(PsoType::kTransparentOcclude_StaticMesh_PBR) ||
+		       pso == static_cast<uint32_t>(PsoType::kTransparentOcclude_StaticMesh_LoosePbr);
 	}
 
 	uint32_t
@@ -145,7 +155,8 @@ namespace bgl
 	{
 		const MaterialType type  = material.IsValid() ? material.materialType : MaterialType::kNull;
 		const LayerType    layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
+		const bool         occlude = material.IsValid() && material.occlude;
 
-		return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
+		return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer, occlude));
 	}
 }

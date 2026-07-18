@@ -160,3 +160,18 @@ public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
 
     return ShadeWithBaseColor(input, material, baseColor);
 }
+
+// Depth-only pre-pass for a self-occluding blend material: keep only the fragments whose base-color
+// alpha clears the cutoff, so the front layer's depth is what the Equal-tested colour pass matches.
+// Writes no colour; the pipeline binds no render target.
+public void PrepassDiscard<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+{
+    let wrapSampler = materialData.anisoLinearWrapSampler;
+
+    M material = M.Load(input.materialIndex);
+
+    if (material.GetBaseColor(wrapSampler, input.uv).a < material.GetAlphaCutoff())
+    {
+        discard;
+    }
+}
