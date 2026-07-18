@@ -1,19 +1,22 @@
 #pragma once
+#include "metal_cpp.h"
+
 #include <bgl/IRenderTarget.h>
+#include <core/err/util.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
 {
 	/**
-	 * A windowed Metal render output. Wraps the CAMetalLayer the caller's view owns; each frame
-	 * acquires a drawable from it. `RenderTargetDesc::wnd` is the CAMetalLayer for a Metal target
-	 * (the demo window hands one over via SDL_Metal_GetLayer).
+	 * A windowed Metal render output. Wraps the CA::MetalLayer the caller's view owns (SDL hands one
+	 * over via SDL_Metal_GetLayer); `RenderTargetDesc::wnd` is that layer for a Metal target. Each
+	 * frame acquires a drawable from it. The layer is not owned here -- the view owns it.
 	 */
 	class RenderTarget final : public core::RefCounter<IRenderTarget>
 	{
 	public:
-		RenderTarget(const RenderTargetDesc& desc, id<MTLDevice> device);
-		~RenderTarget() noexcept override;
+		RenderTarget(const RenderTargetDesc& desc, MTL::Device* device);
+		~RenderTarget() noexcept override = default;
 
 		uint32_t
 		GetWidth() const noexcept override
@@ -27,7 +30,7 @@ namespace bgl
 			return m_Height;
 		}
 
-		CAMetalLayer*
+		CA::MetalLayer*
 		Layer() const noexcept
 		{
 			return m_Layer;
@@ -37,8 +40,8 @@ namespace bgl
 		Resize(uint32_t width, uint32_t height) noexcept;
 
 	private:
-		CAMetalLayer* m_Layer  = nil;
-		uint32_t      m_Width  = 0;
-		uint32_t      m_Height = 0;
+		CA::MetalLayer* m_Layer  = nullptr;
+		uint32_t        m_Width  = 0;
+		uint32_t        m_Height = 0;
 	};
 }

@@ -25,6 +25,12 @@ vertex VOut vmain(uint vid [[vertex_id]]) {
 }
 fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 )";
+
+		NS::String*
+		Str(const char* utf8)
+		{
+			return NS::String::string(utf8, NS::UTF8StringEncoding);
+		}
 	}
 
 	class Graphics final : public core::RefCounter<GraphicsBase>
@@ -34,14 +40,17 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		{
 			logger::set_level(static_cast<logger::level::level_enum>(opts.logLevel));
 
-			m_Device = MTLCreateSystemDefaultDevice();
-			if (m_Device == nil)
+			NS::SharedPtr<NS::AutoreleasePool> pool =
+				NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
+
+			m_Device = NS::TransferPtr(MTL::CreateSystemDefaultDevice());
+			if (!m_Device)
 			{
 				core::throw_runtime_error("no Metal device available");
 			}
-			m_Queue = [m_Device newCommandQueue];
+			m_Queue = NS::TransferPtr(m_Device->newCommandQueue());
 
-			logger::info("Metal device: {}", [m_Device.name UTF8String]);
+			logger::info("Metal device: {}", m_Device->name()->utf8String());
 
 			BuildTrianglePipeline();
 		}
@@ -51,7 +60,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
-			return core::SharedRef<RenderTarget>::Make(desc, m_Device);
+			return core::SharedRef<RenderTarget>::Make(desc, m_Device.get());
 		}
 
 		void
@@ -62,27 +71,29 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 				core::throw_runtime_error("BeginFrame called while a frame is already active");
 			}
 			m_FrameActive = true;
+			m_FramePool   = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
 			auto* rt   = static_cast<RenderTarget*>(target.Get());
-			m_Drawable = [rt->Layer() nextDrawable];
-			if (m_Drawable == nil)
+			m_Drawable = rt->Layer()->nextDrawable();
+			if (m_Drawable == nullptr)
 			{
 				// A transient miss (occluded window, mid-resize, pool exhausted). The frame stays
-				// active so the paired EndFrame is still valid; it no-ops when the drawable is nil.
+				// active so the paired EndFrame is still valid; it no-ops when the drawable is null.
 				return;
 			}
 
-			MTLRenderPassDescriptor* pass  = [MTLRenderPassDescriptor renderPassDescriptor];
-			pass.colorAttachments[0].texture     = m_Drawable.texture;
-			pass.colorAttachments[0].loadAction  = MTLLoadActionClear;
-			pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-			pass.colorAttachments[0].clearColor  = MTLClearColorMake(0.09, 0.09, 0.11, 1.0);
+			MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+			MTL::RenderPassColorAttachmentDescriptor* c = pass->colorAttachments()->object(0);
+			c->setTexture(m_Drawable->texture());
+			c->setLoadAction(MTL::LoadActionClear);
+			c->setStoreAction(MTL::StoreActionStore);
+			c->setClearColor(MTL::ClearColor::Make(0.09, 0.09, 0.11, 1.0));
 
-			m_Cmd                            = [m_Queue commandBuffer];
-			id<MTLRenderCommandEncoder> enc  = [m_Cmd renderCommandEncoderWithDescriptor:pass];
-			[enc setRenderPipelineState:m_TrianglePipeline];
-			[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-			[enc endEncoding];
+			m_Cmd                          = m_Queue->commandBuffer();
+			MTL::RenderCommandEncoder* enc = m_Cmd->renderCommandEncoder(pass);
+			enc->setRenderPipelineState(m_TrianglePipeline.get());
+			enc->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3));
+			enc->endEncoding();
 		}
 
 		void
@@ -98,13 +109,14 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			{
 				core::throw_runtime_error("EndFrame called with no active frame");
 			}
-			if (m_Drawable != nil)
+			if (m_Drawable != nullptr)
 			{
-				[m_Cmd presentDrawable:m_Drawable];
-				[m_Cmd commit];
+				m_Cmd->presentDrawable(m_Drawable);
+				m_Cmd->commit();
 			}
-			m_Cmd         = nil;
-			m_Drawable    = nil;
+			m_Cmd      = nullptr;
+			m_Drawable = nullptr;
+			m_FramePool.reset();
 			m_FrameActive = false;
 		}
 
@@ -166,38 +178,43 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		void
 		BuildTrianglePipeline()
 		{
-			NSError*       error = nil;
-			id<MTLLibrary> lib =
-				[m_Device newLibraryWithSource:@(c_TriangleMsl) options:nil error:&error];
-			if (lib == nil)
+			NS::Error*                  error = nullptr;
+			NS::SharedPtr<MTL::Library> lib =
+				NS::TransferPtr(m_Device->newLibrary(Str(c_TriangleMsl), nullptr, &error));
+			if (!lib)
 			{
 				core::throw_runtime_error(
 					"triangle shader failed to compile: {}",
-					[error.localizedDescription UTF8String]);
+					error->localizedDescription()->utf8String());
 			}
 
-			MTLRenderPipelineDescriptor* desc = [MTLRenderPipelineDescriptor new];
-			desc.vertexFunction               = [lib newFunctionWithName:@"vmain"];
-			desc.fragmentFunction             = [lib newFunctionWithName:@"fmain"];
-			desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+			NS::SharedPtr<MTL::Function> vfn = NS::TransferPtr(lib->newFunction(Str("vmain")));
+			NS::SharedPtr<MTL::Function> ffn = NS::TransferPtr(lib->newFunction(Str("fmain")));
+
+			NS::SharedPtr<MTL::RenderPipelineDescriptor> desc =
+				NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
+			desc->setVertexFunction(vfn.get());
+			desc->setFragmentFunction(ffn.get());
+			desc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
 
 			m_TrianglePipeline =
-				[m_Device newRenderPipelineStateWithDescriptor:desc error:&error];
-			if (m_TrianglePipeline == nil)
+				NS::TransferPtr(m_Device->newRenderPipelineState(desc.get(), &error));
+			if (!m_TrianglePipeline)
 			{
 				core::throw_runtime_error(
 					"triangle pipeline failed: {}",
-					[error.localizedDescription UTF8String]);
+					error->localizedDescription()->utf8String());
 			}
 		}
 
-		id<MTLDevice>                m_Device           = nil;
-		id<MTLCommandQueue>          m_Queue            = nil;
-		id<MTLRenderPipelineState>   m_TrianglePipeline = nil;
+		NS::SharedPtr<MTL::Device>              m_Device;
+		NS::SharedPtr<MTL::CommandQueue>        m_Queue;
+		NS::SharedPtr<MTL::RenderPipelineState> m_TrianglePipeline;
 
-		bool                    m_FrameActive = false;
-		id<MTLCommandBuffer>    m_Cmd         = nil;
-		id<CAMetalDrawable>     m_Drawable    = nil;
+		bool                               m_FrameActive = false;
+		NS::SharedPtr<NS::AutoreleasePool> m_FramePool;
+		MTL::CommandBuffer*                m_Cmd      = nullptr;  // autoreleased into m_FramePool
+		CA::MetalDrawable*                 m_Drawable = nullptr;  // autoreleased into m_FramePool
 	};
 
 	BGL_API GraphicsRef
