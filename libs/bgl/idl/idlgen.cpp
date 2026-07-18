@@ -238,19 +238,73 @@ namespace
 		}
 	}
 
+	// A struct needs the GPU's ScalarDataLayout (not the host layout) exactly when it embeds a
+	// bindless descriptor handle: a `.Handle` is a pointer on the host (8-aligned) but a uint2 on
+	// the GPU (4-aligned), so the two layouts disagree on struct size and array stride. Those
+	// structs are precisely the ones stored in ScalarDataLayout EntryBuffers. Everything else keeps
+	// the host layout, which already matches its buffer and the C/C++ mirror.
+	bool
+	ContainsHandle(slang::TypeReflection* type)
+	{
+		if (type == nullptr || type->getKind() != TypeKind::Struct)
+		{
+			return false;
+		}
+		for (unsigned i = 0; i < type->getFieldCount(); ++i)
+		{
+			slang::TypeReflection* ftype = type->getFieldByIndex(i)->getType();
+			while (ftype->getKind() == TypeKind::Array)
+			{
+				ftype = ftype->getElementType();
+			}
+			if (StripName(ftype->getName()) == "DescriptorHandle" || ContainsHandle(ftype))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	StructInfo
 	ReflectStruct(
 		slang::DeclReflection*         decl,
 		slang::ProgramLayout*          layout,
+		slang::ProgramLayout*          scalarLayout,
 		std::set<std::string>&         referenced,
 		std::map<std::string, size_t>& enumSizes)
 	{
-		slang::TypeReflection*       type    = decl->getType();
-		slang::TypeLayoutReflection* tlayout = layout->getTypeLayout(type);
+		slang::TypeReflection* type = decl->getType();
+
+		// A handle-bearing struct is laid out by its ScalarDataLayout EntryBuffer element -- that is
+		// how the GPU reads it and it is byte-compatible with the emitted C/C++ mirror. The default
+		// rules the host target would give instead 8-align the handle, disagreeing with the mirror.
+		slang::TypeLayoutReflection* tlayout;
+		if (ContainsHandle(type))
+		{
+			const std::string sbName =
+				std::format("StructuredBuffer<{}, ScalarDataLayout>", type->getName());
+			slang::TypeReflection* sbType = scalarLayout->findTypeByName(sbName.c_str());
+			tlayout =
+				sbType ? scalarLayout->getTypeLayout(sbType)->getElementTypeLayout() : nullptr;
+			if (tlayout == nullptr)
+			{
+				std::cerr << std::format(
+					"error: failed to reflect scalar layout of '{}'\n",
+					type->getName());
+				std::exit(1);
+			}
+		}
+		else
+		{
+			tlayout = layout->getTypeLayout(type);
+		}
 
 		StructInfo info;
 		info.name = StripName(type->getName());
-		info.size = tlayout->getSize();
+		// Stride, not size: the C++ mirror's sizeof rounds up to the struct's alignment (as does an
+		// array element / buffer stride), whereas getSize() is the unpadded tail. They differ for a
+		// struct whose last member is smaller than its alignment (e.g. a uint16 after a handle).
+		info.size = tlayout->getStride();
 
 		const unsigned fieldCount = tlayout->getFieldCount();
 		for (unsigned i = 0; i < fieldCount; ++i)
@@ -908,6 +962,37 @@ main(int argc, char** argv)
 			return 1;
 		}
 
+		// A second session on a real GPU target, used only to reflect the ScalarDataLayout
+		// StructuredBuffer element layout of handle-bearing structs (see ReflectStruct). The host
+		// target above cannot instantiate a StructuredBuffer, and its pointer-sized handles would
+		// mislay those structs anyway.
+		slang::TargetDesc scalarTarget{};
+		scalarTarget.format                  = SLANG_DXIL;
+		scalarTarget.profile                 = globalSession->findProfile("sm_6_6");
+		slang::SessionDesc scalarSessionDesc = session;
+		scalarSessionDesc.targets            = &scalarTarget;
+		scalarSessionDesc.targetCount        = 1;
+
+		ComPtr<slang::ISession> scalarSlangSession;
+		diagnostics.setNull();
+		if (SLANG_FAILED(
+				globalSession->createSession(scalarSessionDesc, scalarSlangSession.writeRef())))
+		{
+			std::cerr << "error: failed to create scalar-layout Slang session\n";
+			return 1;
+		}
+		slang::IModule* scalarModule =
+			scalarSlangSession->loadModule(moduleLoadName.c_str(), diagnostics.writeRef());
+		ReportDiagnostics(diagnostics.get());
+		diagnostics.setNull();
+		slang::ProgramLayout* scalarLayout =
+			scalarModule ? scalarModule->getLayout(0, diagnostics.writeRef()) : nullptr;
+		if (!scalarLayout)
+		{
+			std::cerr << "error: failed to get scalar program layout\n";
+			return 1;
+		}
+
 		std::vector<slang::DeclReflection*> decls;
 		CollectStructDecls(module->getModuleReflection(), decls);
 
@@ -916,7 +1001,7 @@ main(int argc, char** argv)
 		std::vector<StructInfo>       structs;
 		for (slang::DeclReflection* decl : decls)
 		{
-			structs.push_back(ReflectStruct(decl, layout, referenced, enumSizes));
+			structs.push_back(ReflectStruct(decl, layout, scalarLayout, referenced, enumSizes));
 		}
 
 		std::vector<EnumInfo> enums = ParseEnums(source);

@@ -2,7 +2,6 @@
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/DescriptorHandle.h"
-#include <core/str/str.h>
 
 namespace bgl
 {
@@ -106,28 +105,54 @@ namespace bgl
 		class UniformStructNode final : public UniformsNode
 		{
 		public:
-			using MemberMap =
-				core::str::unordered_str_map<std::pair<std::unique_ptr<UniformsNode>, size_t>>;
+			struct Member
+			{
+				std::string                   name;
+				std::unique_ptr<UniformsNode> node;
+				size_t                        offset;
 
-			explicit UniformStructNode(MemberMap members, size_t totalSize) :
+				Member(
+					std::string                   memberName,
+					std::unique_ptr<UniformsNode> memberNode,
+					size_t                        off) :
+					name(std::move(memberName)), node(std::move(memberNode)), offset(off)
+				{}
+
+				Member(Member&&) noexcept = default;
+				Member&
+				operator=(Member&&) noexcept = default;
+				Member(const Member&)        = delete;
+				Member&
+				operator=(const Member&) = delete;
+			};
+
+			explicit UniformStructNode(std::vector<Member> members, size_t totalSize) :
 				m_Members(std::move(members)), m_TotalSize(totalSize)
 			{}
 
 			TraversalResult
 			Traverse(size_t currentOffset, std::string_view member) override
 			{
-				auto it = m_Members.find(member);
-				if (it == m_Members.end())
+				for (const Member& m : m_Members)
+				{
+					if (m.name == member)
+					{
+						return { m.node.get(), currentOffset + m.offset };
+					}
+				}
+				return ReturnNullResult();
+			}
+
+			// Members are addressed by declaration position (see c_HandleUniformMember).
+			TraversalResult
+			Traverse(size_t currentOffset, uint32_t idx) override
+			{
+				if (idx >= m_Members.size())
 				{
 					return ReturnNullResult();
 				}
-				return { it->second.first.get(), currentOffset + it->second.second };
-			}
-
-			TraversalResult
-			Traverse(size_t, uint32_t) override
-			{
-				return ReturnNullResult();
+				const Member& m = m_Members[idx];
+				return { m.node.get(), currentOffset + m.offset };
 			}
 
 			UniformType
@@ -148,8 +173,8 @@ namespace bgl
 			}
 
 		private:
-			MemberMap m_Members;
-			size_t    m_TotalSize;
+			std::vector<Member> m_Members;
+			size_t              m_TotalSize;
 		};
 
 		class UniformArrayNode final : public UniformsNode
@@ -276,11 +301,12 @@ namespace bgl
 		{
 		case UniformType::kStruct:
 		{
-			detail::UniformStructNode::MemberMap members;
+			std::vector<detail::UniformStructNode::Member> members;
+			members.reserve(layout.fields.size());
 
 			for (const ReflectedField& field : layout.fields)
 			{
-				members[field.name] = { BuildNode(field.layout), field.offset };
+				members.emplace_back(field.name, BuildNode(field.layout), field.offset);
 			}
 
 			return std::make_unique<detail::UniformStructNode>(std::move(members), layout.size);

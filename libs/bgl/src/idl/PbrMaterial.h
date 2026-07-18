@@ -15,7 +15,7 @@ namespace bgl::idl
 		float alphaCutoff;
 	};
 
-	static_assert(sizeof(PbrMaterial) == 56);
+	static_assert(sizeof(PbrMaterial) == 52);
 	static_assert(offsetof(PbrMaterial, baseColorTexture) == 0);
 	static_assert(offsetof(PbrMaterial, normalTexture) == 8);
 	static_assert(offsetof(PbrMaterial, ormTexture) == 16);

@@ -3,10 +3,10 @@
 
 namespace bgl
 {
-	// alignas(8): a GPU descriptor handle is a uint2 the shader aligns to 8, so an embedding struct
-	// (e.g. PbrMaterial) pads to match. Two bare uint32_t would be align-4 and shrink the C++ mirror
-	// below the GPU stride, so the generated offsetof/sizeof asserts would fail.
-	class alignas(8) DescriptorHandle
+	// A GPU descriptor handle is a uint2. Under the ScalarDataLayout an EntryBuffer<T> uses, it is
+	// 4-aligned, matching two bare uint32_t here; idlgen reflects that same layout, so the generated
+	// offsetof/sizeof asserts pin the two together.
+	class DescriptorHandle
 	{
 	public:
 		DescriptorHandle() = default;
