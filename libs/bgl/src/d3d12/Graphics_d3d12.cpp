@@ -706,6 +706,11 @@ namespace bgl
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
 
+		// Sort transparent instances back-to-front for this camera before the passes capture `draw`;
+		// the runs drive the forward pass and the ordered list is uploaded by the SceneView update.
+		view_->UpdateTransparentOrder(draw.cameraPos);
+		draw.transparentRuns = view_->GetTransparentRuns();
+
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}

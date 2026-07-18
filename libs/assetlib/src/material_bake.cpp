@@ -143,10 +143,23 @@ namespace assetlib
 		 * Base color is the only 4-channel group, so it is the only one with an alpha component at all
 		 * -- ORM and normal have none. Whether that component matters is the material's authored alpha
 		 * mode, *not* something inferred from the routes: an importer that wires all four channels of
-		 * every texture out of habit would otherwise turn every material into a cutout.
+		 * every texture out of habit would otherwise turn every material into a cutout. Both alpha
+		 * modes that read the channel -- test (kMask) and blend (kBlend) -- keep it, so it bakes BC7.
 		 */
 		bool
 		groupCarriesAlpha(const PbrParams& pbr, const Group& group)
+		{
+			return group.channels.count == c_BaseColorChannels.count &&
+			       (pbr.alphaMode == AlphaMode::kMask || pbr.alphaMode == AlphaMode::kBlend);
+		}
+
+		/**
+		 * Whether this group's mips are coverage-preserving. Only the alpha *test* cutout rescales each
+		 * mip against its cutoff so thin geometry does not dissolve; blend keeps the channel but uses
+		 * plain mips, since it has no threshold to preserve.
+		 */
+		bool
+		groupIsCutout(const PbrParams& pbr, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
 			       pbr.alphaMode == AlphaMode::kMask;
@@ -196,19 +209,26 @@ namespace assetlib
 		 *
 		 * `compression` is the *resolved* format, not `group.compression`: base color bakes to BC1 or
 		 * BC7 depending on whether the material routes alpha, and the two must not converge on one file
-		 * name.
+		 * name. `mipCutoff` is likewise part of the identity: a cutout and a blend material can route
+		 * the same base color to the same BC7 format yet need different (coverage vs plain) mips.
 		 */
 		std::string
 		bakeKey(
-			const PbrParams& pbr,
-			const Group&     group,
-			uint32_t         width,
-			uint32_t         height,
-			Ktx2Compression  compression)
+			const PbrParams&     pbr,
+			const Group&         group,
+			uint32_t             width,
+			uint32_t             height,
+			Ktx2Compression      compression,
+			std::optional<float> mipCutoff)
 		{
 			std::string key = std::string(group.name) + '|' + std::to_string(width) + 'x' +
 			                  std::to_string(height) + '|' +
 			                  std::to_string(static_cast<uint32_t>(compression));
+
+			if (group.channels.count == c_BaseColorChannels.count)
+			{
+				key += mipCutoff ? "|cut:" + std::to_string(*mipCutoff) : "|cut:none";
+			}
 
 			for (size_t i = ChannelIndex(group.channels, 0);
 			     i < ChannelIndex(group.channels, group.channels.count);
@@ -371,15 +391,16 @@ namespace assetlib
 
 			const Ktx2Compression compression = groupCompression(pbr, group);
 
+			// Cutout mips are keyed against the cutoff; blend keeps its alpha but bakes plain mips.
+			const std::optional<float> mipCutoff =
+				groupIsCutout(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
+
 			const std::string name =
-				bakeFileName(bakeKey(pbr, group, width, height, compression), group);
+				bakeFileName(bakeKey(pbr, group, width, height, compression, mipCutoff), group);
 			const auto target = outDir / name;
 
 			if (!isUpToDate(target, pbr, group, desc.dataRoot))
 			{
-				const std::optional<float> mipCutoff =
-					groupCarriesAlpha(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
-
 				const ImageData image = rgba8ToImage(
 					compose(pbr, group, sources, width, height),
 					width,

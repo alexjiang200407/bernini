@@ -12,8 +12,9 @@ namespace bgl
 		kAlphaTest_StaticMesh_PBR = 3,
 		kAlphaTest_StaticMesh_LoosePbr = 4,
 		kTransparent_StaticMesh_PBR = 5,
-		kAssert_StaticMesh = 6,
-		kCount = 7,
+		kTransparent_StaticMesh_LoosePbr = 6,
+		kAssert_StaticMesh = 7,
+		kCount = 8,
 	};
 
 	static_assert(sizeof(PsoType) == 2);

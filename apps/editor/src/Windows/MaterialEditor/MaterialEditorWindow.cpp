@@ -40,10 +40,26 @@ namespace
 		const char* modelName;
 	};
 
-	constexpr std::array<OutputType, 2> c_OutputTypes = { {
+	constexpr std::array<OutputType, 3> c_OutputTypes = { {
 		{ "Opaque", "MaterialOutput" },
 		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
+		{ "Alpha Blend", "BlendedMaterialOutput" },
 	} };
+
+	bgl::LayerType
+	ToLayerType(assetlib::AlphaMode mode) noexcept
+	{
+		switch (mode)
+		{
+		case assetlib::AlphaMode::kMask:
+			return bgl::LayerType::kMask;
+		case assetlib::AlphaMode::kBlend:
+			return bgl::LayerType::kBlend;
+		case assetlib::AlphaMode::kOpaque:
+			break;
+		}
+		return bgl::LayerType::kOpaque;
+	}
 
 }
 
@@ -128,7 +144,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_OutputSelector->setEnabled(false);
 	m_OutputSelector->setToolTip(QStringLiteral(
 		"Alpha Tested adds a base-color alpha input and a cutoff: pixels below it are "
-		"discarded"));
+		"discarded. Alpha Blend uses that alpha to blend the surface, back-to-front, with no "
+		"cutoff."));
 	connect(
 		m_OutputSelector,
 		&QComboBox::
@@ -849,7 +866,7 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 	desc.metallicFactor  = output->MetallicFactor();
 	desc.roughnessFactor = output->RoughnessFactor();
 
-	desc.layerType = output->IsAlphaTested() ? bgl::LayerType::kAlphaTest : bgl::LayerType::kOpaque;
+	desc.layerType   = ToLayerType(output->AlphaMode());
 	desc.alphaCutoff = output->AlphaCutoff();
 
 	const auto route = [&](unsigned int channel) {
@@ -878,8 +895,8 @@ MaterialEditorWindow::CompileGraph(int submeshIndex)
 
 	// An in-place rewrite keeps the handle, so the instances already overriding with it follow the
 	// edit with no rebinding -- but only while the PSO bucket is unchanged. The bucket comes from the
-	// handle's layer, which an update cannot rewrite, so flipping the sink between Material Output
-	// and Alpha Tested Material Output needs a new material or the cutout would not cut.
+	// handle's layer, which an update cannot rewrite, so flipping the sink to a different alpha mode
+	// (opaque / cutout / blend) needs a new material or it would keep the old pass.
 	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType)
 	{
 		m_Desc.scene->UpdateLoosePbrMaterial(entry.preview, desc);

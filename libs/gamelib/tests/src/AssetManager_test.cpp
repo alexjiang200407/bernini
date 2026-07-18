@@ -63,11 +63,15 @@ namespace
 	}
 
 	void
-	WriteBakedMaterial(const std::filesystem::path& path, const std::string& baseColor)
+	WriteBakedMaterial(
+		const std::filesystem::path& path,
+		const std::string&           baseColor,
+		assetlib::AlphaMode          alphaMode = assetlib::AlphaMode::kOpaque)
 	{
 		auto material                 = assetlib::BMaterial();
 		material.mode                 = assetlib::MaterialMode::kBaked;
 		material.pbr.baseColorTexture = baseColor;
+		material.pbr.alphaMode        = alphaMode;
 
 		std::filesystem::create_directories(path.parent_path());
 		assetlib::saveMaterial(material, path);
@@ -174,6 +178,27 @@ namespace
 			return *assets;
 		}
 	};
+}
+
+TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[gamelib][assets]")
+{
+	// The seam that lets an imported glTF's BLEND material render translucent: the baked alpha mode
+	// has to reach bgl as the matching LayerType, which is what decides the PSO the submesh draws.
+	Fixture fx("bernini_am_alphamode");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "opaque.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(
+		fx.root.path / "Materials" / "cutout.bmaterial",
+		"Textures/a.ktx2",
+		assetlib::AlphaMode::kMask);
+	WriteBakedMaterial(
+		fx.root.path / "Materials" / "blend.bmaterial",
+		"Textures/a.ktx2",
+		assetlib::AlphaMode::kBlend);
+
+	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
+	CHECK((*fx).AcquireMaterial("Materials/cutout.bmaterial").layerType == bgl::LayerType::kMask);
+	CHECK((*fx).AcquireMaterial("Materials/blend.bmaterial").layerType == bgl::LayerType::kBlend);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")

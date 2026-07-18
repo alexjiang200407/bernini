@@ -245,7 +245,7 @@ TEST_CASE(
 		cutoutDesc.baseColorTexture = masked;
 		cutoutDesc.metallicFactor   = 0.0f;
 		cutoutDesc.roughnessFactor  = 1.0f;
-		cutoutDesc.layerType        = bgl::LayerType::kAlphaTest;
+		cutoutDesc.layerType        = bgl::LayerType::kMask;
 		cutoutDesc.alphaCutoff      = 0.5f;
 
 		const auto opaque = scene->CreatePbrMaterial(opaqueDesc);

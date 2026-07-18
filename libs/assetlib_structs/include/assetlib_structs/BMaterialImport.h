@@ -20,7 +20,6 @@ namespace assetlib::imp
 		float     metallicFactor   = 1.0f;
 		float     roughnessFactor  = 1.0f;
 
-		/** glTF's BLEND lands here as kOpaque: the engine's PBR has no blended mode to map it to. */
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
 

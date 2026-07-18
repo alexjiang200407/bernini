@@ -23,6 +23,12 @@ public:
 		return QStringLiteral("AlphaTestedMaterialOutput");
 	}
 
+	[[nodiscard]] assetlib::AlphaMode
+	AlphaMode() const noexcept override
+	{
+		return assetlib::AlphaMode::kMask;
+	}
+
 	[[nodiscard]] bool
 	IsAlphaTested() const noexcept override
 	{

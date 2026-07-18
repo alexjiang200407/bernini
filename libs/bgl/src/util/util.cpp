@@ -97,11 +97,8 @@ namespace bgl
 	PsoType
 	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
 	{
-		if (layer == LayerType::kTransparent)
-			throw std::runtime_error(
-				"LayerType::kTransparent has no PSO: alpha blending is not implemented");
-
-		const bool cutout = layer == LayerType::kAlphaTest;
+		const bool cutout = layer == LayerType::kMask;
+		const bool blend  = layer == LayerType::kBlend;
 
 		switch (geom)
 		{
@@ -109,13 +106,17 @@ namespace bgl
 			switch (material)
 			{
 			case MaterialType::kPBR:
+				if (blend)
+					return PsoType::kTransparent_StaticMesh_PBR;
 				return cutout ? PsoType::kAlphaTest_StaticMesh_PBR :
 				                PsoType::kOpaque_StaticMesh_PBR;
 			case MaterialType::kLoosePbr:
+				if (blend)
+					return PsoType::kTransparent_StaticMesh_LoosePbr;
 				return cutout ? PsoType::kAlphaTest_StaticMesh_LoosePbr :
 				                PsoType::kOpaque_StaticMesh_LoosePbr;
 
-			// Neither shades a base color, so there is no alpha to cut against.
+			// Neither shades a base color, so there is no alpha to cut or blend against.
 			case MaterialType::kNull:
 				return PsoType::kOpaque_StaticMesh_Null;
 			case MaterialType::kAssert:
@@ -130,6 +131,13 @@ namespace bgl
 		default:
 			gfatal("Invalid GeomType");
 		}
+	}
+
+	bool
+	IsTransparentPso(uint32_t pso) noexcept
+	{
+		return pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_PBR) ||
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr);
 	}
 
 	uint32_t

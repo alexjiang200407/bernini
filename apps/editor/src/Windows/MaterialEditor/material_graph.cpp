@@ -7,6 +7,7 @@
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/BlendedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
@@ -75,6 +76,9 @@ MakeMaterialNodeRegistry(bgl::IScene* scene, TexturePreviewCache* previews)
 	registry->registerModel<AlphaTestedMaterialOutputNode>(
 		[]() { return std::make_unique<AlphaTestedMaterialOutputNode>(); },
 		QLatin1String(c_OutputCategory));
+	registry->registerModel<BlendedMaterialOutputNode>(
+		[]() { return std::make_unique<BlendedMaterialOutputNode>(); },
+		QLatin1String(c_OutputCategory));
 
 	return registry;
 }
@@ -101,8 +105,7 @@ CompileMaterial(
 		pbr.metallicFactor  = output->MetallicFactor();
 		pbr.roughnessFactor = output->RoughnessFactor();
 
-		pbr.alphaMode =
-			output->IsAlphaTested() ? assetlib::AlphaMode::kMask : assetlib::AlphaMode::kOpaque;
+		pbr.alphaMode   = output->AlphaMode();
 		pbr.alphaCutoff = output->AlphaCutoff();
 
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
@@ -128,10 +131,15 @@ BuildImportedMaterialGraph(
 	const ImportedMaterialMaps&           maps)
 {
 	const bool alphaTested = material.alphaMode == assetlib::AlphaMode::kMask;
+	const bool blended     = material.alphaMode == assetlib::AlphaMode::kBlend;
+	// A cutout and a blend sink both expose a 4-wide base-color port; the opaque one is 3-wide.
+	const bool carriesAlpha = alphaTested || blended;
 
-	const QtNodes::NodeId outputId = model.addNode(
-		alphaTested ? QStringLiteral("AlphaTestedMaterialOutput") :
-					  QStringLiteral("MaterialOutput"));
+	const QString outputModel = alphaTested ? QStringLiteral("AlphaTestedMaterialOutput") :
+	                            blended     ? QStringLiteral("BlendedMaterialOutput") :
+	                                          QStringLiteral("MaterialOutput");
+
+	const QtNodes::NodeId outputId = model.addNode(outputModel);
 	model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(c_OutputNodeX, c_OutputNodeY));
 
 	auto* output = model.delegateModel<MaterialOutputNode>(outputId);
@@ -163,7 +171,7 @@ BuildImportedMaterialGraph(
 	// colour draws alpha only for a cutout -- the opaque sink's port is 3-wide, and routing an alpha
 	// that nothing tests against is what turns a project into cutouts that cut nothing out.
 	const std::array<Wire, 3> wires = { {
-		{ maps.baseColor, alphaTested ? 0u : 1u, 0u },
+		{ maps.baseColor, carriesAlpha ? 0u : 1u, 0u },
 		{ maps.orm, 1u, 1u },
 		{ maps.normal, 2u, 2u },
 	} };

@@ -45,6 +45,10 @@ namespace bgl
 		Execute(const DrawData& draw, const PassContext& resources);
 
 	private:
+		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
+		void
+		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
+
 		std::array<MeshletKernel, c_PsoCount> m_Kernels;
 	};
 }

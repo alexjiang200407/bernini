@@ -12,6 +12,13 @@ public struct ForwardData
 {
     public float4x4 viewProj;
     public uint psoIndex;
+
+    // Where this draw's slice of the instance-index list starts. The opaque path adds the GPU
+    // prefix-sum base on top (usePrefixSumBase != 0); the transparent path passes a CPU-computed
+    // run offset directly (usePrefixSumBase == 0).
+    public uint instanceListBase;
+    public uint usePrefixSumBase;
+
     public PackedBuffer<SubmeshInstance> instanceBuffer;
     public EntryBuffer<Mesh> meshBuffer;
     public RangeBuffer<Submesh> submeshBuffer;

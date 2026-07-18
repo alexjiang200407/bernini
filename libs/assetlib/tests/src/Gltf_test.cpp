@@ -191,12 +191,11 @@ TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 	const auto mesh = loadMaterialsGltf();
 	REQUIRE(mesh.materials.size() == 5);
 
-	// The engine's PBR has no blended mode, so BLEND has nowhere to map but opaque -- the base colour,
-	// normal and ORM of such a material are still right, and only its transparency is lost.
+	// Each of glTF's three alpha modes maps to its own: OPAQUE, MASK (alpha test), BLEND (alpha blend).
 	CHECK(mesh.materials[0].alphaMode == AlphaMode::kOpaque);
 	CHECK(mesh.materials[1].alphaMode == AlphaMode::kMask);
 	CHECK(mesh.materials[1].alphaCutoff == Catch::Approx(0.3f));
-	CHECK(mesh.materials[2].alphaMode == AlphaMode::kOpaque);
+	CHECK(mesh.materials[2].alphaMode == AlphaMode::kBlend);
 
 	// glTF's own default, not the engine's: a MASK material that names no cutoff cuts at 0.5.
 	CHECK(mesh.materials[0].alphaCutoff == Catch::Approx(0.5f));

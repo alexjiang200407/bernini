@@ -1,6 +1,7 @@
 #pragma once
 #include "resource/FrameBuffer.h"
 #include "resource/Sampler.h"
+#include "scene/transparent_sort.h"
 #include "types/EnvironmentMap.h"
 #include "types/ViewportState.h"
 #include <bgl/SkyboxDesc.h>
@@ -27,5 +28,8 @@ namespace bgl
 
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
+
+		// Depth-sorted transparent draw runs, back-to-front, built CPU-side for this view/camera.
+		std::vector<TransparentRun> transparentRuns;
 	};
 }

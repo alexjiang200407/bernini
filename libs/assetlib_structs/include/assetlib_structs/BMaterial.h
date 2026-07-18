@@ -19,6 +19,7 @@ namespace assetlib
 	{
 		kOpaque = 0,
 		kMask   = 1,
+		kBlend  = 2,
 	};
 
 	struct ChannelRoute
