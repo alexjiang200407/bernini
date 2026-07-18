@@ -66,12 +66,14 @@ namespace
 	WriteBakedMaterial(
 		const std::filesystem::path& path,
 		const std::string&           baseColor,
-		assetlib::AlphaMode          alphaMode = assetlib::AlphaMode::kOpaque)
+		assetlib::AlphaMode          alphaMode = assetlib::AlphaMode::kOpaque,
+		bool                         occlude   = false)
 	{
 		auto material                 = assetlib::BMaterial();
 		material.mode                 = assetlib::MaterialMode::kBaked;
 		material.pbr.baseColorTexture = baseColor;
 		material.pbr.alphaMode        = alphaMode;
+		material.pbr.occlude          = occlude;
 
 		std::filesystem::create_directories(path.parent_path());
 		assetlib::saveMaterial(material, path);
@@ -195,10 +197,23 @@ TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[
 		fx.root.path / "Materials" / "blend.bmaterial",
 		"Textures/a.ktx2",
 		assetlib::AlphaMode::kBlend);
+	WriteBakedMaterial(
+		fx.root.path / "Materials" / "hair.bmaterial",
+		"Textures/a.ktx2",
+		assetlib::AlphaMode::kBlend,
+		true);  // occlude
 
 	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
 	CHECK((*fx).AcquireMaterial("Materials/cutout.bmaterial").layerType == bgl::LayerType::kMask);
-	CHECK((*fx).AcquireMaterial("Materials/blend.bmaterial").layerType == bgl::LayerType::kBlend);
+
+	const bgl::MaterialHandle blend = (*fx).AcquireMaterial("Materials/blend.bmaterial");
+	CHECK(blend.layerType == bgl::LayerType::kBlend);
+	CHECK_FALSE(blend.occlude);
+
+	// occlude carries through the bake so the renderer picks the self-occluding (pre-pass) PSO.
+	const bgl::MaterialHandle hair = (*fx).AcquireMaterial("Materials/hair.bmaterial");
+	CHECK(hair.layerType == bgl::LayerType::kBlend);
+	CHECK(hair.occlude);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")
