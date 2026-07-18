@@ -1,12 +1,11 @@
 import idl.TextureHandle;
-import idl.SamplerHandle;
 import util.Tonemap;
 
 struct SkyboxData
 {
     float4x4 clipToWorld; // inverse(viewProj) with camera translation removed
     TextureCubeHandle cubeTex;
-    SamplerHandle sampler;
+    SamplerState.Handle sampler;
     float exposure;
     float mipLevel;
 };

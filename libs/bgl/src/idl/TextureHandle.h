@@ -1,6 +1,5 @@
 // THIS IS A FILE GENERATED FROM TextureHandle.slang. DO NOT EDIT MANUALLY
 #pragma once
-#include "uniforms/DescriptorHandle.h"
 
 namespace bgl::idl
 {

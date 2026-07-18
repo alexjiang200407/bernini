@@ -1,6 +1,5 @@
 import forward.common;
 import idl.TextureHandle;
-import idl.SamplerHandle;
 import util.Tonemap;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
@@ -45,7 +44,7 @@ public float4 ShadeSurface(
     TextureCubeHandle irradianceMap,
     TextureCubeHandle prefilterMap,
     TextureHandle brdfLUT,
-    SamplerHandle clampSampler,
+    SamplerState.Handle clampSampler,
     float exposure
 )
 {

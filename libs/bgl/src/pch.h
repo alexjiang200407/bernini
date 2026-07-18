@@ -12,6 +12,8 @@ namespace bgl
 #include <bgl/error.h>
 #include <bgl/glm.h>
 
+#include "uniforms/DescriptorHandle.h"
+
 #include <slang-com-ptr.h>
 #include <slang.h>
 

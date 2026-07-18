@@ -80,7 +80,6 @@ TEST_CASE(
 	REQUIRE(kernel.uniforms.contains("gUniforms"));
 	REQUIRE(kernel.uniforms.contains("gDebug"));
 
-	// Assigning the RHI handles writes a descriptor handle into each shader-side handle.
 	kernel["gUniforms"]["texture"] = texture;
 	kernel["gUniforms"]["sampler"] = sampler;
 
