@@ -35,11 +35,14 @@ namespace bgl
 	void
 	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept
 	{
-		if (m_Event->signaledValue() >= fenceValue)
+		// Block until the fence actually reaches fenceValue -- the d3d12 counterpart waits INFINITE.
+		// MTL::SharedEvent's CPU wait is bounded, so loop: it returns on signal or timeout, and a
+		// timeout must not be mistaken for completion (that would let a caller read GPU work still in
+		// flight). A real hang blocks here, exactly as an INFINITE wait would.
+		while (m_Event->signaledValue() < fenceValue)
 		{
-			return;
+			m_Event->waitUntilSignaledValue(fenceValue, /*timeoutMs*/ 5000);
 		}
-		m_Event->waitUntilSignaledValue(fenceValue, /*timeoutMs*/ 5000);
 	}
 
 	// Cross-queue GPU synchronization is unused while there is a single queue; these land with the
