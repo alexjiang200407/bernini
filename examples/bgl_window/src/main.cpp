@@ -1,13 +1,15 @@
 #include <DemoWindow.h>
+#include <SDL3/SDL.h>
 #include <bgl/bgl.h>
-
-#include <cstdio>
+#include <core/err/util.h>
 
 // A minimal window that attaches Graphics and draws a triangle every frame -- the smallest end-to-end
 // proof of a backend: create the device, open a window, present a drawable in a loop.
 int
 main()
 {
+	core::install_crash_handlers();
+
 	try
 	{
 		auto opts       = demo::WindowOptions{};
@@ -43,7 +45,7 @@ main()
 	}
 	catch (const std::exception& e)
 	{
-		std::fprintf(stderr, "fatal: %s\n", e.what());
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Bernini - Fatal Error", e.what(), nullptr);
 		return 1;
 	}
 }
