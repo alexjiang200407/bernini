@@ -844,7 +844,7 @@ namespace bgl
 		// (default-constructed) handle falls back to the given default texture.
 		const auto resolve = [](TextureAssetHandle tex, core::slot_handle fallback) {
 			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ slot.index };
+			return idl::TextureHandle{ DescriptorHandle(slot) };
 		};
 
 		idl::PbrMaterial material{};
@@ -903,12 +903,12 @@ namespace bgl
 			idl::ChannelSource cs{};
 			if (route.texture.textureSlot)
 			{
-				cs.texture = idl::TextureHandle{ route.texture.textureSlot.index };
+				cs.texture = idl::TextureHandle{ DescriptorHandle(route.texture.textureSlot) };
 				cs.channel = route.channel;
 			}
 			else
 			{
-				cs.texture = idl::TextureHandle{ fallbackTex.index };
+				cs.texture = idl::TextureHandle{ DescriptorHandle(fallbackTex) };
 				cs.channel = fallbackChannel;
 			}
 			return cs;

@@ -1,14 +1,23 @@
 // THIS IS A FILE GENERATED FROM TextureHandle.slang. DO NOT EDIT MANUALLY
 #pragma once
+#include "uniforms/DescriptorHandle.h"
 
 namespace bgl::idl
 {
 	struct TextureHandle
 	{
-		uint32_t index;
+		DescriptorHandle texture;
 	};
 
-	static_assert(sizeof(TextureHandle) == 4);
-	static_assert(offsetof(TextureHandle, index) == 0);
+	static_assert(sizeof(TextureHandle) == 8);
+	static_assert(offsetof(TextureHandle, texture) == 0);
+
+	struct TextureCubeHandle
+	{
+		DescriptorHandle texture;
+	};
+
+	static_assert(sizeof(TextureCubeHandle) == 8);
+	static_assert(offsetof(TextureCubeHandle, texture) == 0);
 
 }

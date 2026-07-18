@@ -657,12 +657,22 @@ namespace
 		out += Banner(bannerFrom);
 		out += "#pragma once\n";
 
+		// Engine types a field may reference that are not IDL modules, so `imports` does not carry
+		// them. A `.Handle` field reflects as DescriptorHandle, whose C++ definition lives here.
+		static const std::map<std::string, std::string> kBuiltinIncludes = {
+			{ "DescriptorHandle", "uniforms/DescriptorHandle.h" },
+		};
+
 		std::set<std::string> includes;
 		for (const std::string& name : referenced)
 		{
 			if (auto it = imports.find(name); it != imports.end())
 			{
 				includes.insert(it->second);
+			}
+			else if (auto b = kBuiltinIncludes.find(name); b != kBuiltinIncludes.end())
+			{
+				includes.insert(b->second);
 			}
 		}
 		for (const std::string& header : includes)

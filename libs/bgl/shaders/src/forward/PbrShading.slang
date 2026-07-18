@@ -42,8 +42,8 @@ public float4 ShadeSurface(
     float3 orm,
     float2 normalXY,
     float3 cameraPos,
-    TextureHandle irradianceMap,
-    TextureHandle prefilterMap,
+    TextureCubeHandle irradianceMap,
+    TextureCubeHandle prefilterMap,
     TextureHandle brdfLUT,
     SamplerHandle clampSampler,
     float exposure

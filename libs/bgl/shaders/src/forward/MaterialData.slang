@@ -17,8 +17,8 @@ struct MaterialData
     EntryBuffer<PbrMaterial> pbrMaterials;
     EntryBuffer<LoosePbrMaterial> looseMaterials;
 
-    TextureHandle irradianceMap;
-    TextureHandle prefilterMap;
+    TextureCubeHandle irradianceMap;
+    TextureCubeHandle prefilterMap;
     TextureHandle brdfLUT;
 
     SamplerHandle anisoLinearWrapSampler;

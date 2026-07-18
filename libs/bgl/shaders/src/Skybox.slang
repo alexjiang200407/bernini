@@ -5,7 +5,7 @@ import util.Tonemap;
 struct SkyboxData
 {
     float4x4 clipToWorld; // inverse(viewProj) with camera translation removed
-    TextureHandle cubeTex;
+    TextureCubeHandle cubeTex;
     SamplerHandle sampler;
     float exposure;
     float mipLevel;

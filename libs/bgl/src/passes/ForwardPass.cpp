@@ -282,8 +282,8 @@ namespace bgl
 				clampUniform = draw.linearClampSampler;
 			}
 
-			// IBL maps: assigning the RHI TextureHandle writes its bindless SRV index
-			// into the shader-side TextureHandle's `index` member.
+			// IBL maps: assigning the RHI TextureHandle writes a descriptor handle into the
+			// shader-side handle's sole member.
 			if (auto u = matData["irradianceMap"]; u.IsValid())
 			{
 				u = draw.env.irradiance;

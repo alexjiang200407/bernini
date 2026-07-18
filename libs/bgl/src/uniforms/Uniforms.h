@@ -213,9 +213,9 @@ namespace bgl
 			AccessorBase&
 			operator=(SamplerHandle handle)
 			{
-				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformIndex].IsValid())
+				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformIndex] = static_cast<uint32_t>(handle.idx);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.idx);
 					return *this;
 				}
 
@@ -227,9 +227,9 @@ namespace bgl
 			AccessorBase&
 			operator=(TextureHandle handle)
 			{
-				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformIndex].IsValid())
+				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformIndex] = static_cast<uint32_t>(handle.slot.index);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.slot);
 					return *this;
 				}
 
@@ -241,9 +241,9 @@ namespace bgl
 			AccessorBase&
 			operator=(TextureAssetHandle handle)
 			{
-				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformIndex].IsValid())
+				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformIndex] = static_cast<uint32_t>(handle.textureSlot.index);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.textureSlot);
 					return *this;
 				}
 

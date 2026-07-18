@@ -1,5 +1,5 @@
 
 public struct SamplerHandle
 {
-    public uint index;
+    public SamplerState.Handle sampler;
 };

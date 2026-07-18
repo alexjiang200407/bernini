@@ -3,8 +3,8 @@
 
 namespace bgl
 {
-	// The three precomputed image-based-lighting resources Forward_PBR samples.
-	// TextureHandle.idx is the bindless SRV index the shader reads.
+	// The three precomputed image-based-lighting resources Forward_PBR samples. Each RHI handle's
+	// slot becomes a descriptor handle the shader samples through.
 	struct EnvironmentMap
 	{
 		TextureHandle irradiance;  // cubemap
