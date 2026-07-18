@@ -4,6 +4,8 @@
 
 #include <glm/vec4.hpp>
 
+#include <assetlib_structs/BMaterial.h>
+
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 
 class QCheckBox;
@@ -72,6 +74,14 @@ public:
 	// node's base-color alpha) is never routed.
 	[[nodiscard]] ChannelData::Route
 	Route(unsigned int index) const;
+
+	// The alpha mode the material this sink compiles to is authored with; the sink type *is* the
+	// choice. Opaque here, overridden by the cutout and blend sinks.
+	[[nodiscard]] virtual assetlib::AlphaMode
+	AlphaMode() const noexcept
+	{
+		return assetlib::AlphaMode::kOpaque;
+	}
 
 	// Whether the material this node compiles to is a cutout, and the alpha it cuts at.
 	[[nodiscard]] virtual bool

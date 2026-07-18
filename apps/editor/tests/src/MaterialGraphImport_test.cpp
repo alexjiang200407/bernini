@@ -1,5 +1,6 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -97,6 +98,31 @@ TEST_CASE("A cutout import routes the alpha it cuts against", "[materialimport]"
 
 	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kMask);
 	CHECK(material.pbr.alphaCutoff == Catch::Approx(0.25f));
+	CHECK(Route(material, PbrChannel::kBaseColorA).texture == "textures_src/hydrant/tex0.ktx2");
+	CHECK(Route(material, PbrChannel::kBaseColorA).channel == 3);
+}
+
+TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]")
+{
+	auto imported      = assetlib::imp::BMaterialImport();
+	imported.alphaMode = assetlib::AlphaMode::kBlend;
+
+	// Built directly, to inspect the sink the import chose before compiling it.
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	BuildImportedMaterialGraph(model, imported, AllMaps());
+
+	REQUIRE(model.OutputNode() != nullptr);
+	CHECK(model.OutputNode()->name() == QStringLiteral("BlendedMaterialOutput"));
+	CHECK(model.OutputNode()->AlphaMode() == assetlib::AlphaMode::kBlend);
+	// It is not the cutout sink: blend keeps the alpha but tests nothing against a cutoff.
+	CHECK_FALSE(model.OutputNode()->IsAlphaTested());
+
+	const assetlib::BMaterial material =
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
+
+	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kBlend);
+
+	// Blend reads the base-color alpha, like a cutout, so its 4-wide port routes channel 3.
 	CHECK(Route(material, PbrChannel::kBaseColorA).texture == "textures_src/hydrant/tex0.ktx2");
 	CHECK(Route(material, PbrChannel::kBaseColorA).channel == 3);
 }
