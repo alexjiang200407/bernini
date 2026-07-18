@@ -435,15 +435,10 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 	bgl::IScene*     scene = m_Desc.scene.Get();
 	bgl::ISceneView* view  = m_SceneView.Get();
 
-	// A submesh names its material by index into this. A mesh that names none -- every fresh import,
-	// since toBMesh drops the source's materials -- gets the neutral default.
 	auto materials = std::vector<bgl::MaterialHandle>();
-	materials.reserve(std::max<size_t>(1, mesh.materials.size()));
+	materials.reserve(mesh.materials.size());
 	for (const std::string& relPath : mesh.materials)
 		materials.push_back(AcquireMaterial(relPath, pending.prefetch.get()));
-
-	if (materials.empty())
-		materials.push_back(m_DefaultMaterial);
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -462,13 +457,19 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 		if (inserted)
 			m_Geoms.push_back(scene->AddStaticMesh(mesh, node.mesh, materials));
 
-		const glm::mat4 world = bmesh::WorldTransform(mesh, nodeIndex);
-		m_Instances.push_back(view->CreateStaticMeshInstance(m_Geoms[it->second], world));
+		const glm::mat4               world = bmesh::WorldTransform(mesh, nodeIndex);
+		const bgl::MeshInstanceHandle instance =
+			view->CreateStaticMeshInstance(m_Geoms[it->second], world);
+		m_Instances.push_back(instance);
 
 		const assetlib::Mesh& entry = mesh.meshes[node.mesh];
 		for (uint32_t i = 0; i < entry.submeshCount; ++i)
 		{
 			const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+
+			if (submesh.material >= materials.size())
+				view->SetSubmeshMaterialOverride(instance, i, m_DefaultMaterial);
+
 			bmesh::GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
 		}
 	}

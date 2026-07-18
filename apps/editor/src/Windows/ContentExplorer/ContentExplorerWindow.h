@@ -121,7 +121,8 @@ private:
 	enum class ImportOutcome
 	{
 		kImported,
-		kCancelled,  // by the user, at the overwrite prompt or on the loading screen
+		kCancelled,  // by the user, on the loading screen
+		kBlocked,    // an asset of that name already exists; reported to the user
 		kFailed,     // already reported to the user
 	};
 
