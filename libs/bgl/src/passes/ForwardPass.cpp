@@ -95,15 +95,15 @@ namespace bgl
 
 		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
 
-		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
-		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
-		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
-		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
-		constexpr auto c_PbrCutoutPixelSrc   = "Forward_PBR_AlphaTest"sv;
-		constexpr auto c_LooseCutoutPixelSrc = "Forward_PBR_Loose_AlphaTest"sv;
-		constexpr auto c_PbrPrepassSrc       = "Forward_PBR_Prepass"sv;
-		constexpr auto c_LoosePrepassSrc     = "Forward_PBR_Loose_Prepass"sv;
-		constexpr auto c_AssertPixelSrc      = "Forward_Assert"sv;
+		constexpr auto c_GeomSrc               = "Forward_StaticMesh"sv;
+		constexpr auto c_PbrPixelSrc           = "Forward_PBR"sv;
+		constexpr auto c_LoosePixelSrc         = "Forward_PBR_Loose"sv;
+		constexpr auto c_NullPixelSrc          = "Forward_Null"sv;
+		constexpr auto c_PbrCutoutPixelSrc     = "Forward_PBR_AlphaTest"sv;
+		constexpr auto c_LooseCutoutPixelSrc   = "Forward_PBR_Loose_AlphaTest"sv;
+		constexpr auto c_TransparentSrc        = "Forward_Transparent"sv;
+		constexpr auto c_TransparentPrepassSrc = "Forward_Transparent_Prepass"sv;
+		constexpr auto c_AssertPixelSrc        = "Forward_Assert"sv;
 
 		struct PsoConfig
 		{
@@ -130,13 +130,13 @@ namespace bgl
 			// kAlphaTest_StaticMesh_LoosePbr
 			{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
-			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true },
+			{ c_TransparentSrc, RasterCullMode::kNone, false, true },
 			// kTransparent_StaticMesh_LoosePbr
-			{ c_LoosePixelSrc, RasterCullMode::kNone, false, true },
+			{ c_TransparentSrc, RasterCullMode::kNone, false, true },
 			// kTransparentOcclude_StaticMesh_PBR: front layer only, matched to the pre-pass depth.
-			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
+			{ c_TransparentSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
 			// kTransparentOcclude_StaticMesh_LoosePbr
-			{ c_LoosePixelSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
+			{ c_TransparentSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
@@ -151,14 +151,14 @@ namespace bgl
 
 		static constexpr std::array<PrepassEntry, 2> c_Prepasses = { {
 			{ PsoType::kTransparentOcclude_StaticMesh_PBR,
-			  { c_PbrPrepassSrc,
+			  { c_TransparentPrepassSrc,
 			    RasterCullMode::kNone,
 			    true,
 			    false,
 			    ComparisonFunc::kLess,
 			    true } },
 			{ PsoType::kTransparentOcclude_StaticMesh_LoosePbr,
-			  { c_LoosePrepassSrc,
+			  { c_TransparentPrepassSrc,
 			    RasterCullMode::kNone,
 			    true,
 			    false,

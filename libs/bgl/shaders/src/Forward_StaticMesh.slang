@@ -35,6 +35,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     vertexOut.tangent = float4(mul((float3x3)mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
 
     vertexOut.materialIndex = instance.material.GetOffset();
+    vertexOut.materialIsLoose = IsLoosePso(instance.pso) ? 1u : 0u;
 
     return vertexOut;
 }

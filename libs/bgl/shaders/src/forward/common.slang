@@ -1,5 +1,6 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
+import idl.PsoType;
 import idl.Mesh;
 import idl.Submesh;
 
@@ -16,7 +17,19 @@ public struct ForwardVSOut
     public float2 uv : TEXCOORD0;
     public float4 tangent : TANGENT;
     public nointerpolation uint materialIndex : MATERIAL;
+
+    // Which material buffer materialIndex addresses. The transparent pipelines are shared by both
+    // material types, so their pixel shader cannot know it from the PSO the way the others do.
+    public nointerpolation uint materialIsLoose : MATERIALTYPE;
 };
+
+// A loose material stores its channels as routes rather than a baked triplet, so it reads from a
+// different buffer. The PSO the instance resolved to is what says which.
+public bool IsLoosePso(uint pso)
+{
+    return pso == uint(PsoType::kOpaque_StaticMesh_LoosePbr) || pso == uint(PsoType::kAlphaTest_StaticMesh_LoosePbr) ||
+           pso == uint(PsoType::kTransparent_StaticMesh_LoosePbr) || pso == uint(PsoType::kTransparentOcclude_StaticMesh_LoosePbr);
+}
 
 public void ASBase(
     ConstantBuffer<ForwardData> sceneData,
