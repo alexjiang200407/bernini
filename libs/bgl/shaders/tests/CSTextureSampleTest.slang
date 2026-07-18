@@ -1,12 +1,10 @@
 import debug.dbg;
 import idl.ErrorCode;
 import idl.TextureHandle;
-import idl.SamplerHandle;
-
 struct Uniforms
 {
     TextureHandle texture;
-    SamplerHandle sampler;
+    SamplerState.Handle sampler;
 };
 
 ConstantBuffer<Uniforms> gUniforms;

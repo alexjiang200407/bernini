@@ -20,8 +20,9 @@ namespace bgl
 		                                                                      "rangeBuffer"sv };
 
 	/**
-	 * The struct member name holding the descriptor index inside an idl resource
-	 * handle (e.g. SamplerHandle { uint index; }).
+	 * Index of the sole member holding the descriptor inside an idl resource handle -- the
+	 * `DescriptorHandle` in e.g. TextureHandle { Texture2D.Handle texture; }. Addressed by position
+	 * rather than name because the member is spelled differently across handles (texture / sampler).
 	 */
-	constexpr auto c_HandleUniformIndex = "index"sv;
+	constexpr uint32_t c_HandleUniformMember = 0;
 }

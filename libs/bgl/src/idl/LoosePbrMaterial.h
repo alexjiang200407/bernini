@@ -30,11 +30,11 @@ namespace bgl::idl
 		float alphaCutoff;
 	};
 
-	static_assert(sizeof(LoosePbrMaterial) == 100);
+	static_assert(sizeof(LoosePbrMaterial) == 136);
 	static_assert(offsetof(LoosePbrMaterial, sources) == 0);
-	static_assert(offsetof(LoosePbrMaterial, baseColorFactor) == 72);
-	static_assert(offsetof(LoosePbrMaterial, metallicFactor) == 88);
-	static_assert(offsetof(LoosePbrMaterial, roughnessFactor) == 92);
-	static_assert(offsetof(LoosePbrMaterial, alphaCutoff) == 96);
+	static_assert(offsetof(LoosePbrMaterial, baseColorFactor) == 108);
+	static_assert(offsetof(LoosePbrMaterial, metallicFactor) == 124);
+	static_assert(offsetof(LoosePbrMaterial, roughnessFactor) == 128);
+	static_assert(offsetof(LoosePbrMaterial, alphaCutoff) == 132);
 
 }
