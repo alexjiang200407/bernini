@@ -32,11 +32,12 @@ jobs:
     # issue_comment fires for plain issues too -- github.event.issue.pull_request is
     # set only on pull requests. The author gate matters: without it, anyone who can
     # comment can spend the subscription's quota. Dispatch needs no gate: it already
-    # requires write access to the repo.
+    # requires write access to the repo. startsWith, not contains: a link or a quoted
+    # command that merely mentions /review must not spend a run.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@makoto') &&
+       startsWith(github.event.comment.body, '/review') &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 20

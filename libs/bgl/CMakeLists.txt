@@ -4,7 +4,7 @@ file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/d3d12/.*")
+list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
@@ -15,7 +15,7 @@ file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/d3d12/.*")
+list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
@@ -55,11 +55,15 @@ target_link_libraries(bgl_objects
 
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(src/d3d12)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	add_subdirectory(src/metal)
 endif()
 
 add_dependencies(bgl_objects bgl_idl_generate)
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	add_dependencies(bgl_metal bgl_idl_generate)
 endif()
 
 enable_strict_compiler(bgl_objects)
@@ -71,13 +75,19 @@ if(NOT RENDERER_BACKEND)
 	return()
 endif()
 
-if(RENDERER_BACKEND STREQUAL "DX12")	
+if(RENDERER_BACKEND STREQUAL "DX12")
 	add_library(bgl SHARED
 		$<TARGET_OBJECTS:bgl_objects>
 		$<TARGET_OBJECTS:bgl_d3d12>
 		${BGL_SHARED_HEADERS}
 	)
-else()	
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	add_library(bgl SHARED
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_metal>
+		${BGL_SHARED_HEADERS}
+	)
+else()
 	add_library(bgl SHARED
 		$<TARGET_OBJECTS:bgl_objects>
 		${BGL_SHARED_HEADERS}
@@ -89,7 +99,7 @@ target_include_directories(bgl
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src bgl_idl_generate)
+add_dependencies(bgl bgl_idl_generate)
 
 target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
 
@@ -103,9 +113,12 @@ target_compile_definitions(bgl_objects PRIVATE
 	BGL_EXPORTS
 )
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
-
+# The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal skeleton
+# compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step yet.
 if(RENDERER_BACKEND STREQUAL "DX12")
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+	add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src)
+
 	target_compile_definitions(bgl_d3d12 PRIVATE
 		BGL_EXPORTS
 	)
@@ -116,10 +129,18 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx12-agility CONFIG REQUIRED)
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	target_compile_definitions(bgl_metal PRIVATE BGL_EXPORTS)
+	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_METAL)
+	# bgl embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
+	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
+	enable_strict_compiler(bgl_metal)
 endif()
 
 
-if (BUILD_TESTS)
+# The suite creates a real device and renders golden images; only the D3D12 backend implements the
+# full RHI so far. Metal RHI tests arrive with the resource/pipeline objects (a later slice).
+if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     find_package(Catch2 CONFIG REQUIRED)
 	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
 

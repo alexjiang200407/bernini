@@ -79,7 +79,7 @@ Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma 
 
 **[AI Coding Bots](./docs/ai-coding.md)**
 
-The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when tagged `@makoto` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
+The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
 # Directory Structure
 

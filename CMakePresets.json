@@ -33,6 +33,13 @@
       }
     },
     {
+      "name": "metal",
+      "hidden": true,
+      "cacheVariables": {
+        "RENDERER_BACKEND": "METAL"
+      }
+    },
+    {
       "name": "ninja",
       "hidden": true,
       "generator": "Ninja",
@@ -218,12 +225,13 @@
     },
     {
       "name": "macos-clang-debug",
-      "displayName": "macOS Clang Debug ninja - no renderer backend yet",
+      "displayName": "macOS Clang Debug ninja - Metal",
       "binaryDir": "${sourceDir}/build/macos-clang-debug",
       "inherits": [
         "vcpkg",
         "macos",
         "clang",
+        "metal",
         "debug"
       ],
       "cacheVariables": {
@@ -232,12 +240,13 @@
     },
     {
       "name": "macos-clang-release",
-      "displayName": "macOS Clang Release ninja - no renderer backend yet",
+      "displayName": "macOS Clang Release ninja - Metal",
       "binaryDir": "${sourceDir}/build/macos-clang-release",
       "inherits": [
         "vcpkg",
         "macos",
         "clang",
+        "metal",
         "release"
       ],
       "cacheVariables": {
