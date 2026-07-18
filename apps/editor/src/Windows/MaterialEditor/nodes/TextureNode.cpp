@@ -72,7 +72,11 @@ TextureNode::outData(QtNodes::PortIndex port)
 {
 	if (port < 0 || static_cast<unsigned int>(port) >= c_PortCount)
 		return nullptr;
-	if (!m_Texture.textureSlot)
+
+	// A route is a (file, channel) pair, so the path decides whether this node feeds one -- not the
+	// handle, which is null when there is no device to load the file with. A null handle resolves to
+	// the same default an unrouted channel gets, so gating on it would drop the route instead.
+	if (m_Path.isEmpty())
 		return nullptr;
 
 	const auto index = static_cast<unsigned int>(port);

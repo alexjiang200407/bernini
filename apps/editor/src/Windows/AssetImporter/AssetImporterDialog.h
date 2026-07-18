@@ -2,6 +2,8 @@
 
 #include <QDialog>
 
+#include <assetlib/bmesh_gltf.h>
+
 class QCheckBox;
 class QLineEdit;
 
@@ -14,13 +16,22 @@ public:
 	// directory. Shown as a fixed prefix on the destination field.
 	static constexpr auto c_TextureRoot = "textures_src";
 
+	/**
+	 * @param materials What probeGltfMaterials found in `sourceFile`. The dialog only reads it -- the
+	 *        caller probes, so the dialog stays a dialog and a test can pose any answer.
+	 */
 	explicit AssetImporterDialog(
-		const QString& sourceFile,
-		const QString& targetDir,
-		QWidget*       parent = nullptr);
+		const QString&                     sourceFile,
+		const QString&                     targetDir,
+		const assetlib::GltfMaterialProbe& materials = {},
+		QWidget*                           parent    = nullptr);
 
 	bool
 	ImportTextures() const;
+
+	/** Whether to derive a `.bmaterial` from each of the glTF's PBR materials and bind it. */
+	bool
+	CanImportPbrMaterials() const;
 
 	bool
 	ImportAnimations() const;
@@ -35,8 +46,13 @@ public:
 	TextureSubdirectory() const;
 
 private:
-	QCheckBox* m_ImportTextures   = nullptr;
-	QCheckBox* m_ImportAnimations = nullptr;
-	QLineEdit* m_TextureSubdir    = nullptr;
+	// Whether the source has anything to import; separate from the box, which is also off when
+	// textures are.
+	bool m_HasPbrMaterials = false;
+
+	QCheckBox* m_ImportTextures     = nullptr;
+	QCheckBox* m_ImportPbrMaterials = nullptr;
+	QCheckBox* m_ImportAnimations   = nullptr;
+	QLineEdit* m_TextureSubdir      = nullptr;
 	QString    m_DefaultSubdir;
 };

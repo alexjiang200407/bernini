@@ -11,17 +11,29 @@ namespace
 	constexpr auto c_SourceFile = "C:/Assets/Exports/stone_wall.glb";
 	constexpr auto c_TargetDir  = "C:/Project/Data/Meshes";
 
-	/** The dialog's two checkboxes, in the order it builds them. Neither has an objectName. */
+	/** A probe result posing as a file with `pbr` PBR materials out of `total`. */
+	assetlib::GltfMaterialProbe
+	Probe(size_t total, size_t pbr)
+	{
+		return assetlib::GltfMaterialProbe{ total, pbr };
+	}
+
 	QCheckBox*
 	TexturesBox(const AssetImporterDialog& dialog)
 	{
-		return dialog.findChildren<QCheckBox*>().value(0);
+		return dialog.findChild<QCheckBox*>("importTextures");
+	}
+
+	QCheckBox*
+	MaterialsBox(const AssetImporterDialog& dialog)
+	{
+		return dialog.findChild<QCheckBox*>("importPbrMaterials");
 	}
 
 	QCheckBox*
 	AnimationsBox(const AssetImporterDialog& dialog)
 	{
-		return dialog.findChildren<QCheckBox*>().value(1);
+		return dialog.findChild<QCheckBox*>("importAnimations");
 	}
 
 	QLineEdit*
@@ -41,6 +53,45 @@ TEST_CASE("The importer offers to bring textures across, but not animations", "[
 
 	REQUIRE(TexturesBox(dialog) != nullptr);
 	REQUIRE(AnimationsBox(dialog) != nullptr);
+}
+
+TEST_CASE("PBR materials come across when the file has some", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(2, 2));
+
+	REQUIRE(MaterialsBox(dialog)->isEnabled());
+	REQUIRE(dialog.CanImportPbrMaterials());
+}
+
+TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
+{
+	// The offer is refused rather than silently doing nothing: there is no material to derive.
+	const auto probe = GENERATE(
+		Probe(0, 0),   // no materials at all
+		Probe(3, 0));  // materials, but every one of them unlit or spec/gloss
+
+	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, probe);
+
+	REQUIRE(!MaterialsBox(dialog)->isEnabled());
+	REQUIRE(!dialog.CanImportPbrMaterials());
+}
+
+TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(1, 1));
+
+	REQUIRE(dialog.CanImportPbrMaterials());
+
+	// A derived material routes at the extracted texN.ktx2 files. Writing one when those files are not
+	// being written would name textures that do not exist -- the reference an import must never make.
+	TexturesBox(dialog)->setChecked(false);
+
+	REQUIRE(!MaterialsBox(dialog)->isEnabled());
+	REQUIRE(!dialog.CanImportPbrMaterials());
+
+	TexturesBox(dialog)->setChecked(true);
+
+	REQUIRE(dialog.CanImportPbrMaterials());
 }
 
 TEST_CASE("The texture folder defaults to the file's name", "[assetimporter]")

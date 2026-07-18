@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib_structs/BMaterial.h>
 #include <core/glm.h>
 
 namespace assetlib::imp
@@ -18,6 +19,18 @@ namespace assetlib::imp
 		glm::vec4 baseColorFactor  = glm::vec4(1.0f);
 		float     metallicFactor   = 1.0f;
 		float     roughnessFactor  = 1.0f;
-		uint32_t  nameOffset       = 0;
+
+		/** glTF's BLEND lands here as kOpaque: the engine's PBR has no blended mode to map it to. */
+		AlphaMode alphaMode   = AlphaMode::kOpaque;
+		float     alphaCutoff = 0.5f;
+
+		/**
+		 * Whether metallic-roughness is really this material's shading model. False when it declares one
+		 * the engine cannot represent (KHR_materials_unlit, KHR_materials_pbrSpecularGlossiness), whose
+		 * fields above are then glTF's defaults rather than the author's intent.
+		 */
+		bool isPbr = true;
+
+		uint32_t nameOffset = 0;
 	};
 }

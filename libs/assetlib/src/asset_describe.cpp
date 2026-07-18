@@ -1,6 +1,7 @@
 #include <assetlib/asset_describe.h>
 
 #include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh_io.h>
 
 namespace assetlib
 {
@@ -101,15 +102,6 @@ namespace assetlib
 				return "u32";
 			}
 			return "?";
-		}
-
-		// The NUL-terminated name at `offset` in the string pool (empty for offset 0 / out of range).
-		std::string
-		nameFromPool(const std::vector<char>& pool, uint32_t offset)
-		{
-			if (offset == 0 || offset >= pool.size())
-				return {};
-			return std::string(pool.data() + offset);
 		}
 
 		std::string

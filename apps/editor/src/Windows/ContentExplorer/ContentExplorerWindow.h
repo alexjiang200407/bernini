@@ -3,6 +3,9 @@
 #include <QStringList>
 #include <QWidget>
 
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BMeshImport.h>
+
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "ui_ContentExplorerWindow.h"
@@ -65,6 +68,28 @@ public:
 	[[nodiscard]] static bool
 	IsMaterialAsset(const QString& asset);
 
+	/**
+	 * Derives a `.bmaterial` from every PBR material `imported` carries, writes it under `materialDir`,
+	 * and points each submesh cut from it at the file (relative to `dataRoot`, like every asset
+	 * reference). Each is routed at the `texN.ktx2` files `writeTextures` puts in `textureDir`.
+	 *
+	 * Non-PBR materials are skipped, leaving their submeshes unassigned -- which both runtimes already
+	 * render unlit. Every file is written before any submesh is pointed at one, so a failure part-way
+	 * leaves a mesh naming only materials that exist.
+	 *
+	 * Public, and taking everything it needs, because the import that calls it cannot be driven from a
+	 * test -- it is behind a modal dialog -- and this is the half worth pinning.
+	 *
+	 * @throws std::runtime_error if a file cannot be written.
+	 */
+	static void
+	WriteImportedMaterials(
+		const assetlib::imp::BMeshImport& imported,
+		assetlib::BMesh&                  mesh,
+		const std::filesystem::path&      dataRoot,
+		const std::filesystem::path&      materialDir,
+		const std::filesystem::path&      textureDir);
+
 Q_SIGNALS:
 	/**
 	 * A bake rewrote `asset` (data-root-relative) on disk. Anything showing what that file says -- the
@@ -100,21 +125,34 @@ private:
 		kFailed,     // already reported to the user
 	};
 
+	/** What the import dialog asked for. */
+	struct ImportOptions
+	{
+		QString textureSubdir;      // folder under c_TextureRoot; empty skips texture extraction
+		bool pbrMaterials = false;  // ignored without textureSubdir -- a material routes at those
+	};
+
 	/**
 	 * Converts a dropped glTF/glb into the engine .bmesh format written to `targetDir`.
 	 *
-	 * `textureSubdir` names a folder beneath `AssetImporterDialog::c_TextureRoot` (under the Data
-	 * root) to extract the mesh's textures into; empty skips texture extraction. Each import needs
-	 * its own folder because the extracted files are named by index, not by source name.
-	 *
-	 * Runs on a worker thread behind a cancellable loading screen: parsing and, above all,
-	 * supercompressing the textures take long enough to freeze the editor. Nothing here touches bgl.
+	 * Parsing and supercompressing the textures run on a worker thread behind a cancellable loading
+	 * screen: they take long enough to freeze the editor. Nothing there touches bgl. The material
+	 * graphs are built afterwards, back on the UI thread -- their nodes own QPixmaps, which belong to
+	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
 	 *
 	 * Asks before overwriting anything, reports a failure to the user, and on either a failure or a
 	 * cancel removes the half-written files it had produced -- see RollBack.
 	 */
 	[[nodiscard]] ImportOutcome
-	ImportMesh(const QString& sourceFile, const QString& targetDir, const QString& textureSubdir);
+	ImportMesh(const QString& sourceFile, const QString& targetDir, const ImportOptions& options);
+
+	/** A directory an import writes into, and whether the import is the one that made it. */
+	struct ImportedDir
+	{
+		std::filesystem::path path;             // empty when the import writes no such directory
+		bool                  existed = false;  // whether it was there before the import started
+		std::string_view      categoryRoot;  // the category it sits under, never itself removable
+	};
 
 	/**
 	 * Deletes what an import got as far as writing, so a cancelled or failed one leaves nothing behind:
@@ -128,8 +166,7 @@ private:
 	RollBack(
 		const std::filesystem::path& bmeshPath,
 		bool                         bmeshExisted,
-		const std::filesystem::path& textureDir,
-		bool                         textureDirExisted);
+		std::span<const ImportedDir> dirs);
 
 	/** Detaches the models and disables the explorer, leaving both views empty. */
 	void

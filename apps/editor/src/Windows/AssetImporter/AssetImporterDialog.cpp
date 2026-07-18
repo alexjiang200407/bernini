@@ -35,14 +35,16 @@ namespace
 }
 
 AssetImporterDialog::AssetImporterDialog(
-	const QString& sourceFile,
-	const QString& targetDir,
-	QWidget*       parent) : QDialog(parent)
+	const QString&                     sourceFile,
+	const QString&                     targetDir,
+	const assetlib::GltfMaterialProbe& materials,
+	QWidget*                           parent) : QDialog(parent)
 {
 	setWindowTitle("Import Asset");
 	setModal(true);
 
-	m_DefaultSubdir = QFileInfo(sourceFile).completeBaseName();
+	m_DefaultSubdir   = QFileInfo(sourceFile).completeBaseName();
+	m_HasPbrMaterials = materials.pbrMaterialCount > 0;
 
 	auto* layout = new QVBoxLayout(this);
 
@@ -52,6 +54,7 @@ AssetImporterDialog::AssetImporterDialog(
 	layout->addLayout(info);
 
 	m_ImportTextures = new QCheckBox("Import textures", this);
+	m_ImportTextures->setObjectName("importTextures");
 	m_ImportTextures->setChecked(true);
 	m_ImportTextures->setToolTip("Extract the mesh's textures into the project.");
 	layout->addWidget(m_ImportTextures);
@@ -76,7 +79,27 @@ AssetImporterDialog::AssetImporterDialog(
 	// The destination is meaningless when nothing is being extracted.
 	connect(m_ImportTextures, &QCheckBox::toggled, m_TextureSubdir, &QWidget::setEnabled);
 
+	m_ImportPbrMaterials = new QCheckBox("Import PBR materials", this);
+	m_ImportPbrMaterials->setObjectName("importPbrMaterials");
+	m_ImportPbrMaterials->setToolTip(
+		m_HasPbrMaterials ?
+			"Derive a material from each of the glTF's PBR materials and bind it to the submeshes "
+			"cut from it. Each is routed at this import's textures and can be reopened in the "
+			"Material Editor." :
+			"This file has no PBR material to derive one from.");
+	layout->addWidget(m_ImportPbrMaterials);
+
+	// A derived material routes at the extracted textures, so it cannot come across without them.
+	const auto refreshMaterials = [this](bool importingTextures) {
+		const bool available = m_HasPbrMaterials && importingTextures;
+		m_ImportPbrMaterials->setEnabled(available);
+		m_ImportPbrMaterials->setChecked(available);
+	};
+	connect(m_ImportTextures, &QCheckBox::toggled, this, refreshMaterials);
+	refreshMaterials(m_ImportTextures->isChecked());
+
 	m_ImportAnimations = new QCheckBox("Import animations", this);
+	m_ImportAnimations->setObjectName("importAnimations");
 	m_ImportAnimations->setChecked(false);
 	layout->addWidget(m_ImportAnimations);
 
@@ -90,6 +113,13 @@ bool
 AssetImporterDialog::ImportTextures() const
 {
 	return m_ImportTextures->isChecked();
+}
+
+bool
+AssetImporterDialog::CanImportPbrMaterials() const
+{
+	// Disabled means unavailable, whatever the box happens to be showing.
+	return m_ImportPbrMaterials->isEnabled() && m_ImportPbrMaterials->isChecked();
 }
 
 bool

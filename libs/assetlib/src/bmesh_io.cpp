@@ -371,6 +371,20 @@ namespace assetlib
 		return true;
 	}
 
+	std::string
+	textureFileName(size_t index)
+	{
+		return "tex" + std::to_string(index) + ".ktx2";
+	}
+
+	std::string
+	nameFromPool(const std::vector<char>& pool, uint32_t offset)
+	{
+		if (offset == 0 || offset >= pool.size())
+			return {};
+		return std::string(pool.data() + offset);
+	}
+
 	void
 	writeTextures(
 		const imp::BMeshImport&      mesh,
@@ -394,9 +408,10 @@ namespace assetlib
 			if (onProgress)
 				onProgress(i, mesh.textures.size());
 
-			auto path = outDir / ("tex" + std::to_string(i));
-			path.replace_extension(".ktx2");
-			writeKTX2(mesh.textures[i], path, srgbTextures.contains(static_cast<uint32_t>(i)));
+			writeKTX2(
+				mesh.textures[i],
+				outDir / textureFileName(i),
+				srgbTextures.contains(static_cast<uint32_t>(i)));
 		}
 	}
 
