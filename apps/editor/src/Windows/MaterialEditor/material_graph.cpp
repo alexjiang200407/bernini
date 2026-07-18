@@ -107,6 +107,7 @@ CompileMaterial(
 
 		pbr.alphaMode   = output->AlphaMode();
 		pbr.alphaCutoff = output->AlphaCutoff();
+		pbr.occlude     = output->Occlude();
 
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
 		{
