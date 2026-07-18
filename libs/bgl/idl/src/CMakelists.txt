@@ -27,7 +27,6 @@ set(IDL_CPP_SOURCES
     LoosePbrMaterial.slang
     ChannelSource.slang
     TextureHandle.slang
-    SamplerHandle.slang
     ErrorCode.slang
     DispatchArgs.slang
 )

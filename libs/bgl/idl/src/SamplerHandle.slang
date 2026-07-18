@@ -1,5 +1,1 @@
-
-public struct SamplerHandle
-{
-    public SamplerState.Handle sampler;
-};
+public typealias SamplerHandle = SamplerState.Handle;

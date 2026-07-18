@@ -213,9 +213,10 @@ namespace bgl
 			AccessorBase&
 			operator=(SamplerHandle handle)
 			{
-				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
+				if (GetType() == UniformType::kValue &&
+				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.idx);
+					*this = DescriptorHandle(handle.idx);
 					return *this;
 				}
 
