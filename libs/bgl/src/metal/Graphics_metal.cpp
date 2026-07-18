@@ -1,5 +1,8 @@
 #include "RenderTarget_metal.h"
 
+#include "cmd/CommandQueue_metal.h"
+#include "device/Device_metal.h"
+
 #include "gfx/GraphicsBase.h"
 
 #include <bgl/RenderContext.h>
@@ -43,14 +46,19 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			NS::SharedPtr<NS::AutoreleasePool> pool =
 				NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
-			m_Device = NS::TransferPtr(MTL::CreateSystemDefaultDevice());
-			if (!m_Device)
+			NS::SharedPtr<MTL::Device> mtlDevice =
+				NS::TransferPtr(MTL::CreateSystemDefaultDevice());
+			if (!mtlDevice)
 			{
 				core::throw_runtime_error("no Metal device available");
 			}
-			m_Queue = NS::TransferPtr(m_Device->newCommandQueue());
 
-			logger::info("Metal device: {}", m_Device->name()->utf8String());
+			m_Device    = core::SharedRef<Device>::Make(mtlDevice.get());
+			m_Queue     = m_Device->CreateGraphicsCommandQueue();
+			m_MtlDevice = mtlDevice.get();
+			m_MtlQueue  = static_cast<CommandQueue*>(m_Queue.Get())->GetMTLCommandQueue();
+
+			logger::info("Metal device: {}", m_MtlDevice->name()->utf8String());
 
 			BuildTrianglePipeline();
 		}
@@ -60,7 +68,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
-			return core::SharedRef<RenderTarget>::Make(desc, m_Device.get());
+			return core::SharedRef<RenderTarget>::Make(desc, m_MtlDevice);
 		}
 
 		void
@@ -89,7 +97,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			c->setStoreAction(MTL::StoreActionStore);
 			c->setClearColor(MTL::ClearColor::Make(0.09, 0.09, 0.11, 1.0));
 
-			m_Cmd                          = m_Queue->commandBuffer();
+			m_Cmd                          = m_MtlQueue->commandBuffer();
 			MTL::RenderCommandEncoder* enc = m_Cmd->renderCommandEncoder(pass);
 			enc->setRenderPipelineState(m_TrianglePipeline.get());
 			enc->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3));
@@ -133,7 +141,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		IDevice*
 		GetDevice() const noexcept override
 		{
-			return nullptr;
+			return m_Device.Get();
 		}
 
 		core::SharedRef<IResourceManager>
@@ -180,7 +188,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		{
 			NS::Error*                  error = nullptr;
 			NS::SharedPtr<MTL::Library> lib =
-				NS::TransferPtr(m_Device->newLibrary(Str(c_TriangleMsl), nullptr, &error));
+				NS::TransferPtr(m_MtlDevice->newLibrary(Str(c_TriangleMsl), nullptr, &error));
 			if (!lib)
 			{
 				core::throw_runtime_error(
@@ -198,7 +206,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			desc->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
 
 			m_TrianglePipeline =
-				NS::TransferPtr(m_Device->newRenderPipelineState(desc.get(), &error));
+				NS::TransferPtr(m_MtlDevice->newRenderPipelineState(desc.get(), &error));
 			if (!m_TrianglePipeline)
 			{
 				core::throw_runtime_error(
@@ -207,8 +215,10 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			}
 		}
 
-		NS::SharedPtr<MTL::Device>              m_Device;
-		NS::SharedPtr<MTL::CommandQueue>        m_Queue;
+		DeviceRef                               m_Device;
+		CommandQueueRef                         m_Queue;
+		MTL::Device*                            m_MtlDevice = nullptr;  // owned by m_Device
+		MTL::CommandQueue*                      m_MtlQueue  = nullptr;  // owned by m_Queue
 		NS::SharedPtr<MTL::RenderPipelineState> m_TrianglePipeline;
 
 		bool                               m_FrameActive = false;
