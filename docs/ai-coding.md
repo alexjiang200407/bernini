@@ -13,7 +13,7 @@ sidesteps the "one machine user per human" gray area of a second personal accoun
 | App ID | `4304152` (`morgana-coding-agent`) | `4314134` |
 | Does | applies review feedback with [`bcp-revise`](../.claude/skills/bcp-revise/SKILL.md), replies to each comment, co-authors commits | reviews a pull request when tagged |
 | Runs | locally, on a developer's machine | on a GitHub Actions runner |
-| Triggered by | a developer running `bcp-revise` | commenting `@makoto` on a pull request |
+| Triggered by | a developer running `bcp-revise` | commenting `/review` on a pull request |
 | Key lives in | `~/.claude/`, **one per developer** | the repository's Actions secrets, **one shared key** |
 | `just init` | prompts for the key | not involved |
 
@@ -99,11 +99,17 @@ fresh clone opts in through `just init` (or `git config core.hooksPath .githooks
 
 The review agent never commits, so no trailer applies to it.
 
-## Review agent: tag to review
+## Review agent: comment to review
 
-Comment `@makoto` on a pull request and
+Open a pull request comment with `/review` and
 [`.github/workflows/review.yml`](../.github/workflows/review.yml) reviews it. Nothing is cloned and
 no machine of yours is involved, so a review can be asked for from anywhere and answered whenever.
+
+The trigger is a bare slash command rather than an `@`-mention on purpose: GitHub resolves a mention
+against real accounts, so any username-shaped trigger notifies whoever holds that name — or whoever
+registers it later. `/review` can never address a person. It is matched with `startsWith`, so
+trailing instructions are fine (`/review focus on the Metal backend`) but a comment that merely links
+to or quotes the command does not spend a run.
 
 The workflow triggers on `issue_comment` — GitHub models pull-request comments as issue comments —
 and three properties of that trigger are load-bearing:
