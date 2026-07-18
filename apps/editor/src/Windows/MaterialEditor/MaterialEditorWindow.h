@@ -108,7 +108,7 @@ private:
 	SyncOutputSelector();
 
 	class MaterialOutputNode*
-	WatchOutputNode(int submeshIndex);
+	WatchOutputNode(int graphIndex);
 
 	/** Scrolls the graph view to the current submesh's output node. The sink is what you author back
 	 *  from, so it is where a freshly opened or freshly loaded graph should start. */
@@ -116,7 +116,7 @@ private:
 	CenterOnOutput();
 
 	void
-	CompileGraph(int submeshIndex);
+	CompileGraph(int graphIndex);
 
 	/** Destroys every graph's preview material. The graphs must not be drawn after this. */
 	void
@@ -144,16 +144,25 @@ private:
 	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
 
 	void
-	OpenMaterialInto(int submeshIndex, const QString& path, bool interactive = true);
+	OpenMaterialInto(int graphIndex, const QString& path, bool interactive = true);
 
 	[[nodiscard]] assetlib::BMaterial
-	BuildMaterial(int submeshIndex, const QString& materialPath) const;
+	BuildMaterial(int graphIndex, const QString& materialPath) const;
 
 	class MaterialOutputNode*
-	ResetGraph(int submeshIndex, const QJsonObject& graph);
+	ResetGraph(int graphIndex, const QJsonObject& graph);
 
 	void
 	RefreshActions();
+
+	/** The graph backing the selected submesh, or -1 when nothing is selected. */
+	[[nodiscard]] int
+	CurrentGraph() const noexcept;
+
+	/** The graph already open for `materialPath` (file-wise), or -1 -- so submeshes sharing a material
+	 *  share one graph. */
+	[[nodiscard]] int
+	FindGraphForPath(const QString& materialPath) const;
 
 	MaterialEditorWindowDesc m_Desc;
 
@@ -165,6 +174,8 @@ private:
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
+	// One per distinct material, not per submesh: submeshes naming the same material path share a
+	// graph, so editing it once updates every submesh wearing it. `submeshes` lists the ones it drives.
 	struct SubmeshGraph
 	{
 		std::unique_ptr<MaterialGraphModel> model;
@@ -176,9 +187,15 @@ private:
 		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's
 		// loose-material buffer is a fixed-size slot pool.
 		bgl::MaterialHandle preview;
+
+		std::vector<uint32_t> submeshes;
 	};
 	std::vector<SubmeshGraph> m_SubmeshGraphs;
-	int                       m_CurrentSubmesh = -1;
+
+	// Submesh index -> index into m_SubmeshGraphs (or -1). The submesh selector and every per-submesh
+	// mesh binding are indexed by submesh; the graphs are keyed by material, so this bridges the two.
+	std::vector<int> m_SubmeshGraph;
+	int              m_CurrentSubmesh = -1;
 
 	QComboBox*         m_SubmeshSelector    = nullptr;
 	QComboBox*         m_OutputSelector     = nullptr;
