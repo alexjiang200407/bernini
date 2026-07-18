@@ -9,6 +9,5 @@ namespace bgl::idl
 	constexpr uint32_t cThreadsPerInstance = 64;
 	constexpr uint32_t cHistogramGroupSize = 256;
 	constexpr uint32_t cCompactGroupSize = 128;
-	constexpr float PI = 3.14159265359f;
 
 }

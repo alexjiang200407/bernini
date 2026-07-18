@@ -10,7 +10,6 @@ import types.RangeBuffer;
 
 public struct ForwardData
 {
-    public float3 cameraPos;
     public float4x4 viewProj;
     public uint psoIndex;
     public PackedBuffer<SubmeshInstance> instanceBuffer;

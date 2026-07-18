@@ -1,6 +1,6 @@
 #pragma once
-#include "resource/Texture.h"
 #include "convert_d3d12.h"
+#include "resource/Texture.h"
 
 namespace bgl
 {
@@ -72,8 +72,7 @@ namespace bgl
 
 	private:
 		TextureDesc                 m_Desc;
-		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle = {};
 		wrl::ComPtr<ID3D12Resource> m_Texture;
 	};
 }

@@ -6,7 +6,7 @@ namespace bgl
 		ID3D12Device*         device,
 		ID3D12DescriptorHeap* descriptorHeap,
 		uint32_t              descriptorIndex,
-		const TextureDesc&    desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
+		const TextureDesc&    desc) : m_Desc(desc)
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(desc.width > 0, "Texture width must be greater than zero");
@@ -93,8 +93,7 @@ namespace bgl
 		ID3D12DescriptorHeap*       descriptorHeap,
 		uint32_t                    descriptorIndex,
 		wrl::ComPtr<ID3D12Resource> texture,
-		const TextureDesc&          desc) :
-		m_Desc(desc), m_DescriptorIndex(descriptorIndex), m_Texture(std::move(texture))
+		const TextureDesc&          desc) : m_Desc(desc), m_Texture(std::move(texture))
 	{
 		gassert(device != nullptr, "Device cannot be null");
 		gassert(desc.width > 0, "Texture width must be greater than zero");

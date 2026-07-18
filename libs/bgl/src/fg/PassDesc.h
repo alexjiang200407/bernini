@@ -77,7 +77,6 @@ namespace bgl
 	private:
 		core::str::unordered_str_map<BufferEntry>  m_Buffers;
 		core::str::unordered_str_map<TextureEntry> m_Textures;
-		core::SharedRef<IResourceManager>          m_ResourceManager;
 		ICommandList*                              m_CommandList  = nullptr;
 		ICommandQueue*                             m_CommandQueue = nullptr;
 

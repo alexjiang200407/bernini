@@ -9,7 +9,7 @@ namespace bgl
 		wrl::ComPtr<ID3D12Device>  device,
 		const ResourceManagerDesc& desc,
 		CommandQueueRef            submissionQueue) :
-		m_Desc(desc), m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
+		m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
 		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs),
 		m_Dsvs(desc.maxDsvs), m_SubmissionQueue(std::move(submissionQueue))
 	{

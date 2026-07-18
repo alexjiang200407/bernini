@@ -237,7 +237,6 @@ namespace bgl
 		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
 
 	private:
-		ResourceManagerDesc               m_Desc;
 		wrl::ComPtr<ID3D12Device>         m_Device;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
@@ -276,7 +275,5 @@ namespace bgl
 
 		// The queue every command list is submitted on
 		CommandQueueRef m_SubmissionQueue;
-
-		friend class DeviceImpl;
 	};
 }
