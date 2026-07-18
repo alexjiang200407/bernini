@@ -42,11 +42,18 @@ namespace demo
 			throw std::runtime_error("SDL_CreateWindow failed: " + err);
 		}
 
-		m_id           = SDL_GetWindowID(m_window);
+		m_id = SDL_GetWindowID(m_window);
+#if defined(__APPLE__)
+		// A Metal target binds to a CAMetalLayer, not a raw window handle. SDL owns the view and
+		// its layer; the backend interprets `RenderTargetDesc::wnd` as the CAMetalLayer.
+		m_metalView    = SDL_Metal_CreateView(m_window);
+		m_nativeHandle = SDL_Metal_GetLayer(m_metalView);
+#else
 		m_nativeHandle = SDL_GetPointerProperty(
 			SDL_GetWindowProperties(m_window),
 			SDL_PROP_WINDOW_WIN32_HWND_POINTER,
 			nullptr);
+#endif
 
 		if (options.captureMouse)
 		{
@@ -61,6 +68,11 @@ namespace demo
 	{
 		auto& reg = Registry();
 		reg.erase(std::remove(reg.begin(), reg.end(), this), reg.end());
+
+#if defined(__APPLE__)
+		if (m_metalView)
+			SDL_Metal_DestroyView(m_metalView);
+#endif
 
 		if (m_window)
 			SDL_DestroyWindow(m_window);

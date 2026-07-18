@@ -45,7 +45,8 @@ namespace demo
 
 		unsigned int m_id           = 0;  // SDL_WindowID
 		SDL_Window*  m_window       = nullptr;
-		void*        m_nativeHandle = nullptr;
+		void*        m_nativeHandle = nullptr;  // HWND (Windows) or CAMetalLayer* (macOS)
+		void*        m_metalView    = nullptr;  // SDL_MetalView, macOS only
 		bool         m_shouldClose  = false;
 	};
 
