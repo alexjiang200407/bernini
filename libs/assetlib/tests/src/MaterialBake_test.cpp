@@ -109,6 +109,41 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	}
 }
 
+TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmaterial][bake]")
+{
+	const BakeDir dir("bernini_bake_blend");
+
+	// A base colour whose alpha channel actually carries data (A = 128, not opaque).
+	writeSource(dir.path / "albedo.ktx2", 16, { { 200, 100, 50, 128 } });
+
+	const auto bakeBaseColor = [&](AlphaMode mode) {
+		BMaterial mat;
+		mat.mode          = MaterialMode::kLoose;
+		mat.pbr.routes[0] = { "albedo.ktx2", 0 };
+		mat.pbr.routes[1] = { "albedo.ktx2", 1 };
+		mat.pbr.routes[2] = { "albedo.ktx2", 2 };
+		mat.pbr.routes[3] = { "albedo.ktx2", 3 };  // base A -- only meaningful once alpha is kept
+		mat.pbr.alphaMode = mode;
+		REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+		return mat.pbr.baseColorTexture;
+	};
+
+	SECTION("a blend base color bakes to BC7, not the alpha-less BC1")
+	{
+		// BC1 would silently drop the alpha channel and there could be no blending.
+		REQUIRE(
+			loadKTX2(dir.path / bakeBaseColor(AlphaMode::kBlend)).vkFormat ==
+			VkFormat::BC7_SRGB_BLOCK);
+	}
+
+	SECTION("cutout and blend do not converge on one baked map")
+	{
+		// Identical routes and both BC7, but cutout bakes coverage-preserving mips against its cutoff
+		// and blend bakes plain ones -- different bytes, so they must not share a file.
+		REQUIRE(bakeBaseColor(AlphaMode::kMask) != bakeBaseColor(AlphaMode::kBlend));
+	}
+}
+
 namespace
 {
 	// The colour a BC1 texture's first block decodes to, read straight out of the block's two RGB565

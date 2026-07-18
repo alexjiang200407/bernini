@@ -19,6 +19,8 @@ namespace game
 			{
 			case assetlib::AlphaMode::kMask:
 				return bgl::LayerType::kAlphaTest;
+			case assetlib::AlphaMode::kBlend:
+				return bgl::LayerType::kTransparent;
 			case assetlib::AlphaMode::kOpaque:
 				break;
 			}
@@ -299,8 +301,8 @@ namespace game
 	bgl::MeshInstanceHandle
 	AssetManager::CreateInstance(
 		bgl::SceneViewRef view,
-		bgl::GeomHandle      geom,
-		const glm::mat4&     transform)
+		bgl::GeomHandle   geom,
+		const glm::mat4&  transform)
 	{
 		if (!view)
 			throw bgl::SceneError("CreateInstance requires a valid SceneView");
@@ -484,7 +486,7 @@ namespace game
 
 	void
 	AssetManager::SetInstanceSubmeshMaterial(
-		bgl::SceneViewRef    view,
+		bgl::SceneViewRef       view,
 		bgl::MeshInstanceHandle instance,
 		uint32_t                submeshIndex,
 		std::string_view        materialRelPath)
@@ -513,7 +515,7 @@ namespace game
 
 	void
 	AssetManager::ClearInstanceSubmeshMaterial(
-		bgl::SceneViewRef    view,
+		bgl::SceneViewRef       view,
 		bgl::MeshInstanceHandle instance,
 		uint32_t                submeshIndex)
 	{

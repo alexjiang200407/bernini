@@ -508,7 +508,11 @@ namespace assetlib
 		AlphaMode
 		toAlphaMode(const std::string& gltfAlphaMode)
 		{
-			return gltfAlphaMode == "MASK" ? AlphaMode::kMask : AlphaMode::kOpaque;
+			if (gltfAlphaMode == "MASK")
+				return AlphaMode::kMask;
+			if (gltfAlphaMode == "BLEND")
+				return AlphaMode::kBlend;
+			return AlphaMode::kOpaque;
 		}
 
 		void
