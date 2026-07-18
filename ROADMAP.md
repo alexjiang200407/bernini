@@ -52,7 +52,8 @@ and portability.
   - [x] Implement PBR IBL
   - [x] ktx2 textures
   - [x] Implement Alpha Test alpha mode
-  - [x] Implement Alpha Blend alpha mode (CPU depth sort; GPU radix sort is the eventual replacement)
+  - [x] Implement Alpha Blend alpha mode
+  - [ ] Transparent depth pre-pass for self occlusion
   - [x] Texture Asset Import
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now
@@ -99,7 +100,7 @@ and portability.
 - [ ] Water
 - [ ] Screen-space / Volume Decal Pipeline
 - [ ] FX
-  - [ ] WBOIT
+  - [ ] WBOIT — order-independent transparency; supersedes the alpha-blend CPU sort (see Materials)
   - [ ] GPU Compute Particle System
   - [ ] HZB-based Particle Collision
   - [ ] Outline Shader
