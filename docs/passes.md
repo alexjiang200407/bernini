@@ -33,9 +33,10 @@ flowchart TD
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
-Every pass but `PreparePresent` reads the imported `backbuffer` texture; `Compact Instances` and
-`Forward` read the scene/view buffers imported by
-[Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
+`Clear`, `Skybox`, and `Forward` take the imported `backbuffer` texture as a render target;
+`PreparePresent` only transitions it to present; `Compact Instances` is a pure compute pass that
+touches no textures at all. `Compact Instances` and `Forward` read the scene/view buffers imported
+by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
 resource namespace (see [Frame Graph](docs/framegraph.md)).
 
@@ -78,11 +79,11 @@ culling, so it fills only where nothing has been drawn.
 Buckets the view's `SubmeshInstance`s by PSO into contiguous ranges and builds the per-PSO indirect
 dispatch arguments that `Forward` consumes. Owns three compute kernels (`HistogramInstances`,
 `PrefixSumInstances`, `CompactInstances`) and two scene-independent `ComputeBuffer`s sized
-`c_PsoCount`: `psoPrefixSumBuffer` and `compactedDispatchArgs`, both imported globally (namespace-free).
+`c_PsoCount`: `psoPrefixSumBuffer` and `compactDispatchArgs`, both imported globally (namespace-free).
 
 It adds **three sub-passes**:
 
-1. **Clear** — zeroes `psoPrefixSumBuffer` and seeds every `compactedDispatchArgs` entry to
+1. **Clear** — zeroes `psoPrefixSumBuffer` and seeds every `compactDispatchArgs` entry to
    `{ 0, 1, 1 }` (a group count of 0 with Y = Z = 1). Both buffers are declared copy-dest.
 2. **Histogram and Prefix Sum** — the histogram dispatch counts instances per PSO into
    `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into exclusive prefix
@@ -94,7 +95,7 @@ It adds **three sub-passes**:
    prefix-sum offset and finalizes each PSO's dispatch args. Skipped when the instance count is 0.
 
 * **In:** `scene.instanceBuffer` (SRV).
-* **Out:** `scene.compactedInstances`, `psoPrefixSumBuffer`, `compactedDispatchArgs` (all UAV /
+* **Out:** `scene.compactedInstances`, `psoPrefixSumBuffer`, `compactDispatchArgs` (all UAV /
   indirect-args downstream).
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
@@ -110,9 +111,9 @@ but not a misordering.
 Per bucket it populates the `forwardData` and `materialData` cbuffers (scene buffers, view-proj,
 `psoIndex`, samplers, IBL maps, camera position, exposure), binds the meshlet state (viewport +
 color/depth framebuffer), and calls `DispatchMeshIndirect(pso)`, whose grid comes from the
-`compactedDispatchArgs` entry that `Compact Instances` produced.
+`compactDispatchArgs` entry that `Compact Instances` produced.
 
-* **In:** the backbuffer as a render target; `compactedDispatchArgs` as indirect args; the nine
+* **In:** the backbuffer as a render target; `compactDispatchArgs` as indirect args; the nine
   `c_ForwardDataBuffers` scene buffers and the two `c_MaterialBuffers` (PBR + loose). Missing a
   `forwardData` key is fatal (`gfatal`); a missing `materialData` key is skipped silently.
 * **Out:** the backbuffer (rendered), depth.
