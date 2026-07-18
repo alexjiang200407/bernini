@@ -121,7 +121,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		desc.baseColorTexture = texture;
 		desc.metallicFactor   = 0.0f;
 		desc.roughnessFactor  = 0.6f;
-		desc.layerType        = bgl::LayerType::kAlphaTest;
+		desc.layerType        = bgl::LayerType::kMask;
 		desc.alphaCutoff      = 0.5f;
 
 		auto material = scene->CreatePbrMaterial(desc);
@@ -243,7 +243,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		desc.baseColorTexture = texture;
 		desc.metallicFactor   = 0.0f;
 		desc.roughnessFactor  = 0.6f;
-		desc.layerType        = bgl::LayerType::kAlphaTest;
+		desc.layerType        = bgl::LayerType::kMask;
 		desc.alphaCutoff      = 0.5f;
 
 		auto material = scene->CreatePbrMaterial(desc);

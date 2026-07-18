@@ -399,7 +399,7 @@ Five rules, each of which is a way to get this wrong:
   guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*
   sink and wires base colour RGBA, `OPAQUE` builds the 3-wide one and wires RGB with the alpha left
   unrouted, and `BLEND` builds a *Blended* sink — base colour RGBA like the cutout, but its alpha is
-  kept for the blend (`kBlend` → `LayerType::kTransparent`) rather than tested against a cutoff.
+  kept for the blend (`AlphaMode::kBlend` → `LayerType::kBlend`) rather than tested against a cutoff.
 * **Materials cannot come across without textures.** They route at the extracted `texN.ktx2` files, so
   the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
   dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.

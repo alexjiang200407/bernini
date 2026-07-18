@@ -24,7 +24,7 @@ namespace
 			baseColor;  // alpha < 1 drives the blend; no texture needed (white default)
 		desc.metallicFactor  = 0.0f;
 		desc.roughnessFactor = 0.9f;
-		desc.layerType       = bgl::LayerType::kTransparent;
+		desc.layerType       = bgl::LayerType::kBlend;
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);

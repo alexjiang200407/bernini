@@ -197,12 +197,8 @@ TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[
 		assetlib::AlphaMode::kBlend);
 
 	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
-	CHECK(
-		(*fx).AcquireMaterial("Materials/cutout.bmaterial").layerType ==
-		bgl::LayerType::kAlphaTest);
-	CHECK(
-		(*fx).AcquireMaterial("Materials/blend.bmaterial").layerType ==
-		bgl::LayerType::kTransparent);
+	CHECK((*fx).AcquireMaterial("Materials/cutout.bmaterial").layerType == bgl::LayerType::kMask);
+	CHECK((*fx).AcquireMaterial("Materials/blend.bmaterial").layerType == bgl::LayerType::kBlend);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")

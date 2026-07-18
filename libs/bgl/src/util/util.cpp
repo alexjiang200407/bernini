@@ -97,8 +97,8 @@ namespace bgl
 	PsoType
 	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
 	{
-		const bool cutout = layer == LayerType::kAlphaTest;
-		const bool blend  = layer == LayerType::kTransparent;
+		const bool cutout = layer == LayerType::kMask;
+		const bool blend  = layer == LayerType::kBlend;
 
 		switch (geom)
 		{

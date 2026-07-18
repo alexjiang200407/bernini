@@ -6,8 +6,8 @@ namespace bgl
 	{
 		kInvalid = static_cast<uint8_t>(-1),
 		kOpaque  = 0,
-		kAlphaTest,
-		kTransparent,
+		kMask,
+		kBlend,
 		kCount,
 	};
 }

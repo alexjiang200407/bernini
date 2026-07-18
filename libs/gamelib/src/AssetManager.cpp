@@ -18,9 +18,9 @@ namespace game
 			switch (mode)
 			{
 			case assetlib::AlphaMode::kMask:
-				return bgl::LayerType::kAlphaTest;
+				return bgl::LayerType::kMask;
 			case assetlib::AlphaMode::kBlend:
-				return bgl::LayerType::kTransparent;
+				return bgl::LayerType::kBlend;
 			case assetlib::AlphaMode::kOpaque:
 				break;
 			}

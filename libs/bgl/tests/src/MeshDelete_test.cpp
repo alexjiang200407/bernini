@@ -467,7 +467,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 
 	auto cutout         = bgl::MaterialHandle();
 	cutout.materialType = bgl::MaterialType::kPBR;
-	cutout.layerType    = bgl::LayerType::kAlphaTest;
+	cutout.layerType    = bgl::LayerType::kMask;
 
 	SECTION("the change reaches an instance placed before it")
 	{
@@ -532,7 +532,7 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 	// A cutout: same material *type*, different layer, so it lands in a different PSO bucket.
 	auto cutout         = bgl::MaterialHandle();
 	cutout.materialType = bgl::MaterialType::kPBR;
-	cutout.layerType    = bgl::LayerType::kAlphaTest;
+	cutout.layerType    = bgl::LayerType::kMask;
 
 	auto geom = scene->AddCubeGeom(pbr);
 	REQUIRE(geom.IsValid());
