@@ -53,7 +53,8 @@ and portability.
   - [x] ktx2 textures
   - [x] Implement Alpha Test alpha mode
   - [x] Implement Alpha Blend alpha mode
-  - [ ] Transparent depth pre-pass for self occlusion
+  - [x] Transparent depth pre-pass for self occlusion (per-material `occlude`)
+  - [ ] GPU radix sort for transparent depth ordering — replaces the per-frame CPU sort
   - [x] Texture Asset Import
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now
@@ -66,6 +67,11 @@ and portability.
   - [ ] Culling verification
 - [ ] Motion Vectors
   - [ ] TAA
+    - [ ] Hashed (dithered) alpha — stochastic alpha test resolved by TAA into soft edges and
+      fractional coverage. The fix for card-based hair/foliage, whose density is authored to come
+      from stacked layers: neither blend (too transparent once occluded) nor alpha test (hard edges,
+      two-sided/z-fight facets) can reproduce it. Depends on TAA — dithered alpha alone is just
+      noise. Chosen over MSAA + alpha-to-coverage.
 - [ ] Animation
   - [ ] Animation Asset Import (clips, skeleton, etc)
   - [ ] Skinned Meshes & Animation
