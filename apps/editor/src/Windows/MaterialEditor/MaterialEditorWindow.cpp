@@ -246,7 +246,7 @@ MaterialEditorWindow::~MaterialEditorWindow()
 MaterialOutputNode*
 MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 {
-	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
 
 	const bool current = CurrentGraph() == graphIndex;
 	if (current)
@@ -332,7 +332,7 @@ MaterialEditorWindow::CenterOnOutput()
 	if (graphIndex < 0)
 		return;
 
-	const SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(graphIndex)];
+	const MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
 	if (entry.model == nullptr || m_GraphView->scene() != entry.scene.get())
 		return;
 
@@ -346,7 +346,7 @@ MaterialEditorWindow::WatchOutputNode(int graphIndex)
 	// Recompile whenever anything the material depends on changes. The sink is the only one, and every
 	// upstream edit reaches it through setInData.
 	MaterialOutputNode* output =
-		m_SubmeshGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
+		m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
 	if (output != nullptr)
 	{
 		connect(output, &MaterialOutputNode::Changed, this, [this, graphIndex]() {
@@ -365,7 +365,7 @@ MaterialEditorWindow::SetOutputType(int comboIndex)
 	if (comboIndex < 0 || comboIndex >= static_cast<int>(c_OutputTypes.size()))
 		return;
 
-	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
 
 	const QString modelName =
 		QLatin1String(c_OutputTypes[static_cast<size_t>(comboIndex)].modelName);
@@ -388,7 +388,7 @@ MaterialEditorWindow::SyncOutputSelector()
 		return;
 
 	const MaterialOutputNode* output =
-		m_SubmeshGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
+		m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
 	if (output == nullptr)
 		return;
 
@@ -411,8 +411,8 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
-	m_SubmeshGraphs.clear();
-	m_SubmeshGraph.assign(static_cast<size_t>(submeshNames.size()), -1);
+	m_MaterialGraphs.clear();
+	m_GraphForSubmesh.assign(static_cast<size_t>(submeshNames.size()), -1);
 	m_CurrentSubmesh = -1;
 
 	const QStringList materialPaths =
@@ -430,18 +430,18 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 		if (const int shared = materialPath.isEmpty() ? -1 : FindGraphForPath(materialPath);
 		    shared >= 0)
 		{
-			SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(shared)];
+			MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(shared)];
 			entry.submeshes.push_back(static_cast<uint32_t>(index));
-			m_SubmeshGraph[static_cast<size_t>(index)] = shared;
+			m_GraphForSubmesh[static_cast<size_t>(index)] = shared;
 
 			if (entry.preview.IsValid())
 				m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(index), entry.preview);
 			continue;
 		}
 
-		const int graphIndex = static_cast<int>(m_SubmeshGraphs.size());
-		m_SubmeshGraphs.emplace_back().submeshes.push_back(static_cast<uint32_t>(index));
-		m_SubmeshGraph[static_cast<size_t>(index)] = graphIndex;
+		const int graphIndex = static_cast<int>(m_MaterialGraphs.size());
+		m_MaterialGraphs.emplace_back().submeshes.push_back(static_cast<uint32_t>(index));
+		m_GraphForSubmesh[static_cast<size_t>(index)] = graphIndex;
 
 		ResetGraph(graphIndex, QJsonObject());
 
@@ -465,16 +465,16 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 void
 MaterialEditorWindow::SelectSubmesh(int index)
 {
-	if (index < 0 || index >= static_cast<int>(m_SubmeshGraph.size()))
+	if (index < 0 || index >= static_cast<int>(m_GraphForSubmesh.size()))
 		return;
 
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a
 	// material have in common.
 	m_CurrentSubmesh = index;
 
-	const int graphIndex = m_SubmeshGraph[static_cast<size_t>(index)];
+	const int graphIndex = m_GraphForSubmesh[static_cast<size_t>(index)];
 	m_GraphView->setScene(
-		graphIndex >= 0 ? m_SubmeshGraphs[static_cast<size_t>(graphIndex)].scene.get() : nullptr);
+		graphIndex >= 0 ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].scene.get() : nullptr);
 
 	SyncOutputSelector();
 	CenterOnOutput();
@@ -484,17 +484,17 @@ MaterialEditorWindow::SelectSubmesh(int index)
 int
 MaterialEditorWindow::CurrentGraph() const noexcept
 {
-	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_SubmeshGraph.size()))
+	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_GraphForSubmesh.size()))
 		return -1;
 
-	return m_SubmeshGraph[static_cast<size_t>(m_CurrentSubmesh)];
+	return m_GraphForSubmesh[static_cast<size_t>(m_CurrentSubmesh)];
 }
 
 int
 MaterialEditorWindow::FindGraphForPath(const QString& materialPath) const
 {
-	for (size_t i = 0; i < m_SubmeshGraphs.size(); ++i)
-		if (IsAlreadyDefault(m_SubmeshGraphs[i].materialPath, materialPath))
+	for (size_t i = 0; i < m_MaterialGraphs.size(); ++i)
+		if (IsAlreadyDefault(m_MaterialGraphs[i].materialPath, materialPath))
 			return static_cast<int>(i);
 
 	return -1;
@@ -504,7 +504,7 @@ QStringList
 MaterialEditorWindow::OpenMaterialPaths() const
 {
 	auto paths = QStringList();
-	for (const SubmeshGraph& graph : m_SubmeshGraphs)
+	for (const MaterialGraph& graph : m_MaterialGraphs)
 		if (!graph.materialPath.isEmpty())
 			paths << graph.materialPath;
 
@@ -527,7 +527,7 @@ MaterialEditorWindow::RefreshActions()
 	m_SaveAsButton->setEnabled(hasGraph);
 
 	const QString materialPath =
-		hasGraph ? m_SubmeshGraphs[static_cast<size_t>(graphIndex)].materialPath : QString();
+		hasGraph ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].materialPath : QString();
 
 	// "Save" needs somewhere to write. The default sphere has no backing asset, so it stays disabled
 	// there until the graph has been given a path by Save As.
@@ -598,7 +598,7 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 	if (graphIndex < 0)
 		return;
 
-	MaterialGraphModel& model = *m_SubmeshGraphs[static_cast<size_t>(graphIndex)].model;
+	MaterialGraphModel& model = *m_MaterialGraphs[static_cast<size_t>(graphIndex)].model;
 
 	const QtNodes::NodeId nodeId = model.addNode(QStringLiteral("Texture"));
 	model.setNodeData(nodeId, QtNodes::NodeRole::Position, scenePos);
@@ -610,7 +610,7 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 assetlib::BMaterial
 MaterialEditorWindow::BuildMaterial(int graphIndex, const QString& materialPath) const
 {
-	const SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(graphIndex)];
+	const MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
 
 	assetlib::BMaterial material =
 		CompileMaterial(*entry.model, QFileInfo(materialPath).completeBaseName(), m_DataRoot);
@@ -646,7 +646,7 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	if (graphIndex < 0)
 		return;
 
-	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
 
 	QString path = entry.materialPath;
 	if (saveAs || path.isEmpty())
@@ -696,14 +696,14 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 void
 MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 {
-	if (submeshIndex < 0 || submeshIndex >= static_cast<int>(m_SubmeshGraph.size()))
+	if (submeshIndex < 0 || submeshIndex >= static_cast<int>(m_GraphForSubmesh.size()))
 		return;
 
-	const int graphIndex = m_SubmeshGraph[static_cast<size_t>(submeshIndex)];
+	const int graphIndex = m_GraphForSubmesh[static_cast<size_t>(submeshIndex)];
 	if (graphIndex < 0)
 		return;
 
-	const QString path = m_SubmeshGraphs[static_cast<size_t>(graphIndex)].materialPath;
+	const QString path = m_MaterialGraphs[static_cast<size_t>(graphIndex)].materialPath;
 	if (path.isEmpty())
 		return;  // nothing on disk to point the mesh at; Save first
 
@@ -779,8 +779,8 @@ MaterialEditorWindow::Reset()
 	// No graphics device, so there is no preview to drive the rebuild.
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
-	m_SubmeshGraphs.clear();
-	m_SubmeshGraph.clear();
+	m_MaterialGraphs.clear();
+	m_GraphForSubmesh.clear();
 	m_CurrentSubmesh = -1;
 	RefreshActions();
 }
@@ -832,7 +832,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 void
 MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool interactive)
 {
-	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_SubmeshGraphs.size()))
+	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_MaterialGraphs.size()))
 		return;
 
 	auto material = assetlib::BMaterial();
@@ -896,7 +896,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		output->load(seed);
 	}
 
-	m_SubmeshGraphs[static_cast<size_t>(graphIndex)].materialPath = path;
+	m_MaterialGraphs[static_cast<size_t>(graphIndex)].materialPath = path;
 
 	CompileGraph(graphIndex);
 	RefreshActions();
@@ -907,11 +907,11 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 {
 	if (m_Preview == nullptr || m_Desc.scene == nullptr)
 		return;
-	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_SubmeshGraphs.size()))
+	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_MaterialGraphs.size()))
 		return;
 
 	const MaterialOutputNode* output =
-		m_SubmeshGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
+		m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
 	if (output == nullptr)
 		return;
 
@@ -945,7 +945,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	for (size_t i = 0; i < desc.normal.size(); ++i)
 		desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
 
-	SubmeshGraph& entry = m_SubmeshGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
 
 	// An in-place rewrite keeps the handle, so the instances already overriding with it follow the
 	// edit with no rebinding -- but only while the PSO bucket is unchanged. The bucket comes from the
@@ -975,7 +975,7 @@ MaterialEditorWindow::ReleasePreviewMaterials()
 	if (m_Desc.scene == nullptr)
 		return;
 
-	for (SubmeshGraph& entry : m_SubmeshGraphs)
+	for (MaterialGraph& entry : m_MaterialGraphs)
 	{
 		if (!entry.preview.IsValid())
 			continue;

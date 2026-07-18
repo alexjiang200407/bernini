@@ -174,9 +174,9 @@ private:
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
-	// One per distinct material, not per submesh: submeshes naming the same material path share a
-	// graph, so editing it once updates every submesh wearing it. `submeshes` lists the ones it drives.
-	struct SubmeshGraph
+	// Submeshes naming the same material path share one graph, so editing it once updates every
+	// submesh wearing it. `submeshes` lists the ones it drives.
+	struct MaterialGraph
 	{
 		std::unique_ptr<MaterialGraphModel> model;
 		std::unique_ptr<MaterialGraphScene> scene;
@@ -190,11 +190,11 @@ private:
 
 		std::vector<uint32_t> submeshes;
 	};
-	std::vector<SubmeshGraph> m_SubmeshGraphs;
+	std::vector<MaterialGraph> m_MaterialGraphs;
 
-	// Submesh index -> index into m_SubmeshGraphs (or -1). The submesh selector and every per-submesh
+	// Submesh index -> index into m_MaterialGraphs (or -1). The submesh selector and every per-submesh
 	// mesh binding are indexed by submesh; the graphs are keyed by material, so this bridges the two.
-	std::vector<int> m_SubmeshGraph;
+	std::vector<int> m_GraphForSubmesh;
 	int              m_CurrentSubmesh = -1;
 
 	QComboBox*         m_SubmeshSelector    = nullptr;
