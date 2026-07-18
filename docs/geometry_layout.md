@@ -107,7 +107,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>` + total meshlet count. |
+| `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>`. |
 | `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
 | `Vertex` | [Vertex.slang](libs/bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
@@ -242,9 +242,10 @@ green channel.
 * **A stale instance reads a stale default.** An instance that outlives its geom keeps a by-value copy
   of the submesh range, so a re-resolve looks up whatever default now occupies that index. That is the
   same bargain `IScene::DeleteGeom` already documents (it would draw whatever geometry lands in the
-  range next), not a new hazard — but it is why the defaults are a plain vector rather than
-  `RangeBuffer`'s `Meta`, whose accessor would `gassert` on the dead range and turn
-  documented-garbage into a crash.
+  range next), not a new hazard. The defaults ride on the `RangeBuffer` as `Meta`, so they are
+  allocated and freed with the geometry; `Scene::GetSubmeshDefaultMaterial` checks `IsIndexValid`
+  before the `Meta` accessor, so a range that was freed and not reused resolves to a null material
+  rather than tripping the accessor's `gassert`.
 * **Destroy every mesh instance placed from a geom before you `DeleteGeom` it.**
 * **A mirror-buffer handle is only valid while its range is live.** After `Erase`, the generation
   bumps and the stale handle reports invalid; the raw GPU-side offset carries no generation, so
