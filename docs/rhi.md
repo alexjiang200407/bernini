@@ -13,14 +13,19 @@ doc and a header disagree, trust the header, then fix this doc.
 
 ## Design Choices
 
-* **Resources are `uint32_t` index handles, not ref-counted pointers.** `CreateStructBuffer`,
-  `CreateTexture`, `CreateRtv`, etc. return a small trivially-copyable handle
-  (`{ uint32_t idx; uint32_t generation; }`) owned by `IResourceManager`, not a
-  `SharedRef`. Copy handles freely; they are values. A `generation` counter guards against
-  use-after-free: destroying a resource bumps the slot's generation so stale handle copies
-  fail `Valid*Handle`. `idx == 0xFFFFFFFF` denotes null (`IsNull()`). This keeps GPU resources
-  out of the refcount machinery and enables bindless-style binding (the index *is* the
-  descriptor).
+* **Resources are index handles, not ref-counted pointers.** `CreateStructBuffer`, `CreateTexture`,
+  `CreateRtv`, etc. return a small trivially-copyable handle owned by `IResourceManager`, not a
+  `SharedRef`. Copy handles freely; they are values. Every handle is an `{ index, generation }`
+  pair: the index locates the slot, and a `generation` counter guards against use-after-free —
+  destroying a resource bumps the slot's generation so stale copies fail `Valid*Handle`. A null
+  handle has index `0xFFFFFFFF` (`IsNull()`). The index *is* the bindless descriptor, which keeps
+  GPU resources out of the refcount machinery.
+
+  **Two handle layouts, one meaning.** `BufferHandle` and `TextureHandle` wrap a
+  `core::slot_handle` (reached as `.slot.index` / `.slot.generation`); `RtvHandle`, `DsvHandle`, and
+  `SamplerHandle` hand-roll the same two fields inline (`.idx` / `.generation`). Both are
+  `{ index, generation }` and both null-test through `IsNull()`, but the accessor spelling differs —
+  do not assume one field name across handle families.
 
 * **Samplers are descriptor-heap-only handles.** `CreateSampler(SamplerDesc)` returns a
   `SamplerHandle` (same `{idx, generation}` shape) but a sampler has **no backing GPU
@@ -60,9 +65,14 @@ doc and a header disagree, trust the header, then fix this doc.
   never call `Barrier` directly. See [Frame Graph](docs/framegraph.md) and
   [Pipeline State](docs/pipeline_state.md).
 
-* **No internal synchronization.** Methods are `noexcept`; interfaces provide no locking.
-  Creation and command recording run on the render thread and must be externally synchronized.
-  A command list is single-threaded between `Open` and `Close`.
+* **External synchronization; interfaces are not thread-safe.** Methods are `noexcept`. The RHI is
+  built for a single render thread: creation and command recording must be externally synchronized,
+  and a command list is single-threaded between `Open` and `Close`. Most interfaces take no locks.
+  The exception is `ICommandQueue`, which holds two internal mutexes and locks around parts of its
+  fence bookkeeping (`ExecuteCommandList`, `Flush`, `WaitForFenceCPUBlocking`); that locking is
+  **incomplete** — `PollCurrentFenceValue` does an unlocked read-modify-write of the same cached
+  fence value — so it is not a thread-safety guarantee. Synchronize the queue externally like
+  everything else.
 
 * **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
   is **not** an `I*` interface — the only thing crossing the boundary is
@@ -143,6 +153,8 @@ flowchart TD
 
 * **Render thread + external sync.** No interface is thread-safe. Object creation
   (`IDevice`, `IResourceManager`) and recording (`ICommandList`) run on the render thread.
+  `ICommandQueue` takes internal locks on some fence operations, but the coverage is incomplete
+  (see Design Choices) — do not treat it as thread-safe.
 * **One recorder per command list**, between `Open` and `Close`. Never share an open list.
 * **Fences are the only sync primitive.** `ExecuteCommandList` returns a monotonic fence value.
   CPU waits (`WaitForFenceCPUBlocking`, `IsFenceComplete`) and GPU-side waits
