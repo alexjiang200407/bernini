@@ -30,8 +30,10 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 	class Graphics final : public core::RefCounter<GraphicsBase>
 	{
 	public:
-		explicit Graphics(const GraphicsOptions& opts) : m_Opts(opts)
+		explicit Graphics(const GraphicsOptions& opts)
 		{
+			logger::set_level(static_cast<logger::level::level_enum>(opts.logLevel));
+
 			m_Device = MTLCreateSystemDefaultDevice();
 			if (m_Device == nil)
 			{
@@ -65,7 +67,8 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			m_Drawable = [rt->Layer() nextDrawable];
 			if (m_Drawable == nil)
 			{
-				m_FrameActive = false;
+				// A transient miss (occluded window, mid-resize, pool exhausted). The frame stays
+				// active so the paired EndFrame is still valid; it no-ops when the drawable is nil.
 				return;
 			}
 
@@ -188,7 +191,6 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 			}
 		}
 
-		GraphicsOptions              m_Opts;
 		id<MTLDevice>                m_Device           = nil;
 		id<MTLCommandQueue>          m_Queue            = nil;
 		id<MTLRenderPipelineState>   m_TrianglePipeline = nil;
