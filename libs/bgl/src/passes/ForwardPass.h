@@ -1,5 +1,6 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
+#include "types/MeshletState.h"
 #include <bgl/PsoType.h>
 
 namespace bgl
@@ -52,6 +53,18 @@ namespace bgl
 		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
 		void
 		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
+
+		/**
+		 * The depth-sorted transparent phase, drawn after the opaque buckets and inside the same pass:
+		 * a depth-only pre-pass for the self-occluding runs, then every run's blended draw
+		 * back-to-front. The pre-pass has to share this pass's depth attachment and sit between the
+		 * two colour loops, which is why it is a sub-draw here rather than a pass of its own.
+		 */
+		void
+		DrawTransparentRuns(
+			const DrawData&    draw,
+			const PassContext& resources,
+			MeshletState       colorState);
 
 		std::array<MeshletKernel, c_PsoCount> m_Kernels;
 

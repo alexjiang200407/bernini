@@ -100,22 +100,37 @@ It adds **three sub-passes**:
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 
-The main geometry pass: a mesh-shader forward render that issues **one indirect dispatch per PSO
-bucket**. It holds `c_PsoCount` `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config
-table (pixel-shader module + raster/depth/blend state). The amplification and mesh shaders are the
-shared `Forward_StaticMesh` module; the pixel shader varies per bucket (`Forward_Null`,
-`Forward_PBR`, `Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
-`Forward_Assert`). **`c_Psos` order must match `PsoType`** — a `static_assert` catches an empty row
-but not a misordering.
+The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
+`MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
+raster/depth/blend state), plus a second `m_PrepassKernels` array whose only built slots are the
+self-occluding transparent PSOs. The amplification and mesh shaders are always the shared
+`Forward_StaticMesh` module; the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
+`Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`, `Forward_PBR_Prepass`,
+`Forward_PBR_Loose_Prepass`, `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a
+`static_assert` catches an empty row but not a misordering.
 
-Per bucket it populates the `forwardData` and `materialData` cbuffers (scene buffers, view-proj,
-`psoIndex`, samplers, IBL maps, camera position, exposure), binds the meshlet state (viewport +
-color/depth framebuffer), and calls `DispatchMeshIndirect(pso)`, whose grid comes from the
-`compactDispatchArgs` entry that `Compact Instances` produced.
+**Opaque and alpha-test** are PSO-bucketed: per bucket it populates the `forwardData` and
+`materialData` cbuffers (scene buffers, view-proj, `psoIndex`, samplers, IBL maps, camera position,
+exposure), binds the meshlet state (viewport + color/depth framebuffer), and calls
+`DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
+`Compact Instances` produced.
+
+**Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
+afterwards by `DrawTransparentRuns`, inside the same pass. It walks `DrawData::transparentRuns`
+(back-to-front spans of one PSO, sliced from the CPU-sorted `sortedTransparentInstances` list) and
+issues a **direct** `DispatchMesh` per run, pointing the amp shader at the run's slice via
+`instanceListBase`/`usePrefixSumBase`.
+
+A run whose material sets `occlude` (the `kTransparentOcclude_*` buckets) is drawn **twice**: first a
+depth-only pre-pass — a **0-RTV pipeline** bound to a depth-only framebuffer, alpha-discarding below
+the material's cutoff and writing depth — then its colour draw with `depthFunc == Equal`, so only the
+front layer blends. The pre-pass must share this pass's depth attachment and sit between the two
+colour loops, which is why it is a sub-draw here rather than a pass of its own.
 
 * **In:** the backbuffer as a render target; `compactDispatchArgs` as indirect args; the nine
-  `c_ForwardDataBuffers` scene buffers and the two `c_MaterialBuffers` (PBR + loose). Missing a
-  `forwardData` key is fatal (`gfatal`); a missing `materialData` key is skipped silently.
+  `c_ForwardDataBuffers` scene buffers, `sortedTransparentInstances`, and the two
+  `c_MaterialBuffers` (PBR + loose). Missing a `forwardData` key is fatal (`gfatal`); a missing
+  `materialData` key is skipped silently.
 * **Out:** the backbuffer (rendered), depth.
 * **Skipped** when the view's instance count is 0.
 

@@ -398,11 +398,21 @@ namespace bgl
 			cmd->DispatchMeshIndirect(pso);
 		}
 
-		// Transparent: one direct DispatchMesh per depth-sorted run, reading the CPU-built list at
-		// the run's offset. Runs are back-to-front, so blending composites in the correct order.
+		DrawTransparentRuns(draw, resources, gfxState);
+	}
+
+	void
+	ForwardPass::DrawTransparentRuns(
+		const DrawData&    draw,
+		const PassContext& resources,
+		MeshletState       colorState)
+	{
+		// One direct DispatchMesh per depth-sorted run, reading the CPU-built list at the run's
+		// offset. Runs are back-to-front, so blending composites in the correct order.
 		if (!draw.transparentRuns.empty())
 		{
-			const auto sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
+			ICommandList* cmd             = resources.GetCommandList();
+			const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
 
 			// Depth pre-pass: self-occluding runs write their front layer's depth first, with no
 			// colour target, so each such run's Equal-tested colour draw below blends only that layer.
@@ -448,8 +458,8 @@ namespace bgl
 					(*forwardData)["usePrefixSumBase"]   = 0u;
 				}
 
-				gfxState.kernel = &kernel;
-				cmd->SetMeshletState(gfxState);
+				colorState.kernel = &kernel;
+				cmd->SetMeshletState(colorState);
 				cmd->DispatchMesh(run.count, 1, 1);
 			}
 		}
