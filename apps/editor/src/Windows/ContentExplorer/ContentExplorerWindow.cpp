@@ -78,37 +78,32 @@ namespace
 	}
 
 	/**
-	 * Asks before an import writes over anything that is already there, `replaced` being what it would.
+	 * Reports that an import would land on an asset that is already there and refuses it -- import
+	 * never overwrites. `replaced` is what it would have written over: an existing `.bmesh`, texture
+	 * folder or material folder all count, each being destructive to import onto and none of it
+	 * recoverable. The user renames or removes the existing files and imports again.
 	 *
-	 * An existing `.bmesh`, texture folder or material folder are all destructive to import onto: the
-	 * mesh is simply overwritten, and the extracted textures are named tex0.ktx2, tex1.ktx2 ... by
-	 * index, so they land on top of whatever the folder's previous occupant left under those names.
-	 * None of it is recoverable, and none of it is something the OS will refuse on the user's behalf.
-	 *
-	 * @return true to go ahead, false if the user would rather not (and for nothing to replace).
+	 * @return true when something already exists, so the import must not proceed; false when nothing
+	 *         collides.
 	 */
 	bool
-	ConfirmOverwrite(QWidget* parent, const QString& name, const QStringList& replaced)
+	ReportImportConflict(QWidget* parent, const QString& name, const QStringList& replaced)
 	{
 		if (replaced.isEmpty())
-			return true;
+			return false;
 
-		auto confirm = QMessageBox(parent);
-		confirm.setWindowTitle("Import Asset");
-		confirm.setIcon(QMessageBox::Warning);
-		confirm.setText(QString("Importing '%1' will overwrite existing files.").arg(name));
-		confirm.setInformativeText(
-			"The mesh is replaced, and extracted textures are written as tex0.ktx2, tex1.ktx2\n"
-			"and so on by index -- landing on top of any file already using those names.\n\n"
-			"This cannot be undone.");
-		confirm.setDetailedText(replaced.join('\n'));
+		auto message = QMessageBox(parent);
+		message.setWindowTitle("Import Asset");
+		message.setIcon(QMessageBox::Warning);
+		message.setText(
+			QString("Cannot import '%1': it would overwrite files already in the project.").arg(name));
+		message.setInformativeText(
+			"Import never overwrites. Remove the listed files, or choose a different texture folder, "
+			"then import again.");
+		message.setDetailedText(replaced.join('\n'));
+		message.exec();
 
-		auto* overwrite = confirm.addButton("Overwrite", QMessageBox::DestructiveRole);
-		confirm.addButton(QMessageBox::Cancel);
-		confirm.setDefaultButton(QMessageBox::Cancel);
-		confirm.exec();
-
-		return confirm.clickedButton() == overwrite;
+		return true;
 	}
 }
 
@@ -830,8 +825,9 @@ ContentExplorerWindow::ImportMesh(
 
 	const QString name = QFileInfo(sourceFile).fileName();
 
-	// Sampled before a byte is written, because they decide two things: whether the user has to be
-	// asked first, and -- if the import then fails or is cancelled -- what may be deleted to undo it.
+	// Sampled before a byte is written, because they decide two things: whether the import collides
+	// with something already there (and must be refused), and -- if it then fails or is cancelled --
+	// what may be deleted to undo it.
 	std::error_code ec;
 	const bool      bmeshExisted       = fs::exists(bmeshPath, ec);
 	const bool      textureDirExisted  = !textureDir.empty() && fs::exists(textureDir, ec);
@@ -849,8 +845,8 @@ ContentExplorerWindow::ImportMesh(
 		if (dir.existed)
 			replaced << QString::fromStdWString(dir.path.wstring());
 
-	if (!ConfirmOverwrite(this, name, replaced))
-		return ImportOutcome::kCancelled;
+	if (ReportImportConflict(this, name, replaced))
+		return ImportOutcome::kBlocked;
 
 	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
 	// freeze the editor for minutes on a large asset. None of it touches bgl, so it runs on a worker.
