@@ -1,0 +1,128 @@
+#include "gfx/GraphicsBase.h"
+#include "util/GoldenImage.h"
+#include <assetlib/image_io.h>
+#include <bgl/Camera.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+
+namespace
+{
+	constexpr uint32_t c_Width  = 600;
+	constexpr uint32_t c_Height = 800;
+
+	// A translucent plane at world-space depth z, facing the camera.
+	void
+	addPane(
+		const bgl::SceneRef&     scene,
+		const bgl::SceneViewRef& view,
+		const glm::vec4&         baseColor,
+		float                    z)
+	{
+		auto desc = bgl::PbrMaterialDesc();
+		desc.baseColorFactor =
+			baseColor;  // alpha < 1 drives the blend; no texture needed (white default)
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 0.9f;
+		desc.layerType       = bgl::LayerType::kTransparent;
+
+		auto material = scene->CreatePbrMaterial(desc);
+		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
+		view->CreateStaticMeshInstance(plane, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z)));
+	}
+}
+
+// Two translucent panes overlap at screen centre: red near the camera, blue behind it. Correct
+// back-to-front compositing makes red dominate the overlap; drawing them in PSO/creation order
+// instead would let the far blue win. The second half proves the result is a pure function of the
+// camera, not of the order the instances were created in -- the whole point of the depth sort.
+TEST_CASE(
+	"Translucent panes composite back-to-front regardless of creation order",
+	"[transparent][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 8;
+	sceneDesc.maxMeshlets             = 512;
+	sceneDesc.maxSubmeshes            = 8;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
+	sceneDesc.maxPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+
+	const glm::vec4 red{ 1.0f, 0.03f, 0.03f, 0.5f };
+	const glm::vec4 blue{ 0.03f, 0.03f, 1.0f, 0.5f };
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 0.0f, 19.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	// z=5 is nearer the camera (at z=20) than z=0, so red must win the overlap.
+	constexpr float c_NearZ = 5.0f;
+	constexpr float c_FarZ  = 0.0f;
+
+	const std::string gotFar  = "assets/golden/transparent_far_first.got.png";
+	const std::string gotNear = "assets/golden/transparent_near_first.got.png";
+
+	const auto render = [&](bool farFirst, const std::string& path) {
+		auto view = gfx->CreateSceneView(scene, 8);
+		view->SetEnvironmentMap(
+			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+
+		if (farFirst)
+		{
+			addPane(scene, view, blue, c_FarZ);
+			addPane(scene, view, red, c_NearZ);
+		}
+		else
+		{
+			addPane(scene, view, red, c_NearZ);
+			addPane(scene, view, blue, c_FarZ);
+		}
+
+		auto context     = bgl::RenderContext();
+		context.view     = view;
+		context.camera   = camera;
+		context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		gfx->DrawFrame(target, context);
+		gfx->ScreenshotPng(target, path);
+	};
+
+	render(true, gotFar);
+	render(false, gotNear);
+
+	// The overlap sits at screen centre. A real hit is well above the black background's ~0 luma.
+	const bgl::test::Rgba centre = bgl::test::MeanColor(gotFar, 200, 300, 200, 200);
+	INFO("centre rgba = " << centre.r << ", " << centre.g << ", " << centre.b);
+	REQUIRE(centre.Luma() > 0.02f);
+
+	// Back-to-front: the near red pane composites over the far blue one.
+	CHECK(centre.r > centre.b);
+
+	// Creation order must not matter: far-first and near-first produce the same frame.
+	CHECK(bgl::test::MatchesGolden(gotFar, gotNear));
+}

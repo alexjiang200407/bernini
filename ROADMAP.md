@@ -52,7 +52,7 @@ and portability.
   - [x] Implement PBR IBL
   - [x] ktx2 textures
   - [x] Implement Alpha Test alpha mode
-  - [ ] Implement Alpha Blend alpha mode
+  - [x] Implement Alpha Blend alpha mode (CPU depth sort; GPU radix sort is the eventual replacement)
   - [x] Texture Asset Import
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now

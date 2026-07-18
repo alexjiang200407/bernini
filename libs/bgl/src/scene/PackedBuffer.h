@@ -103,6 +103,13 @@ namespace bgl
 			return m_Entries.size();
 		}
 
+		// The live elements in dense (GPU) order; element i is what the shaders read at index i.
+		[[nodiscard]] std::span<const T>
+		DenseEntries() const noexcept
+		{
+			return std::span<const T>(static_cast<const T*>(m_Entries.data()), m_Entries.size());
+		}
+
 		void
 		Set(Handle handle, T value)
 		{

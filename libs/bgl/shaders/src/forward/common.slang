@@ -24,9 +24,14 @@ public void ASBase(
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
 {
-    // compactedInstances is bucketed by PSO; this indirect dispatch only covers our bucket,
-    // so offset SV_GroupID by the bucket's start (exclusive prefix sum of prior PSO counts).
-    uint base = (sceneData.psoIndex == 0u) ? 0u : sceneData.psoPrefixSum[sceneData.psoIndex - 1u];
+    // The opaque path is bucketed by PSO, so its base is the exclusive prefix sum of prior PSO
+    // counts (a GPU value). The transparent path is a separate depth-sorted list drawn in runs, so
+    // it passes the run's start offset directly and skips the prefix sum.
+    uint base = sceneData.instanceListBase;
+    if (sceneData.usePrefixSumBase != 0u)
+    {
+        base += (sceneData.psoIndex == 0u) ? 0u : sceneData.psoPrefixSum[sceneData.psoIndex - 1u];
+    }
     uint drawInstanceIdx = sceneData.compactedInstances[base + gid];
     let instance = sceneData.instanceBuffer.Get(drawInstanceIdx);
     let mesh = sceneData.meshBuffer.Get(instance.meshInstance);

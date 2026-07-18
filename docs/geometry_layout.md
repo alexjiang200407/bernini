@@ -59,6 +59,13 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   go. The counting sort buckets on `SubmeshInstance::pso`, so an overridden instance can draw from a
   different pipeline than its sibling — an opaque unit and a cutout one, from one geom.
 
+  **Transparent PSOs are the exception.** Blending must composite back-to-front, which is a depth
+  order, not a PSO order. So an instance whose `pso` is transparent (`IsTransparentPso`) is excluded
+  from the counting-sort buckets and instead placed in a separate, per-frame depth-sorted list
+  (`scene.sortedTransparentInstances`), drawn after the opaque buckets in the same forward pass. The
+  list is sorted CPU-side each frame and sliced into per-PSO runs; see
+  [transparent_sort.h](libs/bgl/src/scene/transparent_sort.h) and `ForwardPass::Execute`.
+
   The **default** material lives host-side on the `Scene`, in a vector parallel to the submesh buffer
   (`Scene::GetSubmeshDefaultMaterial`), not in `idl::Submesh`. The GPU has no use for it — the
   instance carries the resolved value — and the PSO needs the handle's `layerType`, which a bare

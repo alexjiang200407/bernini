@@ -21,4 +21,12 @@ namespace bgl
 	 */
 	uint32_t
 	SubmeshPso(GeomType geomType, MaterialHandle material);
+
+	/**
+	 * Whether `pso` draws with alpha blending. Its instances are excluded from the PSO-bucketed
+	 * counting sort and drawn from a separate depth-sorted list instead, since blending order is
+	 * depth-first, not PSO-first.
+	 */
+	bool
+	IsTransparentPso(uint32_t pso) noexcept;
 }

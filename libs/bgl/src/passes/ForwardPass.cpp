@@ -13,6 +13,7 @@
 #include "scene/Scene.h"
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
+#include "util/util.h"
 #include <bgl/ISceneView.h>
 #include <bgl/PsoType.h>
 
@@ -92,6 +93,8 @@ namespace bgl
 
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
+		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
+
 		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
 		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
@@ -122,6 +125,8 @@ namespace bgl
 			{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
 			// kTransparent_StaticMesh_PBR
 			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true },
+			// kTransparent_StaticMesh_LoosePbr
+			{ c_LoosePixelSrc, RasterCullMode::kNone, false, true },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
@@ -204,7 +209,11 @@ namespace bgl
 			.AddBufferArg(
 				BufferArg{ std::string(c_DispatchArgsBuffer),
 		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument });
+		                   BarrierAccessFlag::kIndirectArgument })
+			.AddBufferArg(
+				BufferArg{ std::string(c_SortedTransparentBuffer),
+		                   BarrierSyncFlag::kVertexShader,
+		                   BarrierAccessFlag::kUnorderedAccess });
 
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
@@ -222,6 +231,83 @@ namespace bgl
 	}
 
 	void
+	ForwardPass::BindKernel(
+		MeshletKernel&     kernel,
+		const DrawData&    draw,
+		const PassContext& resources)
+	{
+		if (auto foundForwardData = kernel.FindUniforms("forwardData"))
+		{
+			auto& forwardData = *foundForwardData;
+
+			for (const SceneBuffer& binding : c_ForwardDataBuffers)
+			{
+				const auto handle = resources.GetBuffer(binding.graphName);
+
+				auto uniform = forwardData[binding.uniformKey];
+				if (uniform.IsValid())
+				{
+					uniform = handle;
+				}
+				else
+				{
+					gfatal(
+						"{} key doesn't exist in uniforms. Most likely an error",
+						binding.uniformKey);
+				}
+			}
+
+			forwardData["viewProj"] = draw.viewProj;
+		}
+
+		if (auto foundMatData = kernel.FindUniforms("materialData"))
+		{
+			auto& matData = *foundMatData;
+			for (const auto& binding : c_MaterialBuffers)
+			{
+				const auto handle  = resources.GetBuffer(binding.graphName);
+				auto       uniform = matData[binding.uniformKey];
+				if (uniform.IsValid())
+				{
+					uniform = handle;
+				}
+			}
+
+			if (auto anisoUniform = matData["anisoLinearWrapSampler"]; anisoUniform.IsValid())
+			{
+				anisoUniform = draw.anisoLinearWrapSampler;
+			}
+			if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
+			{
+				clampUniform = draw.linearClampSampler;
+			}
+
+			// IBL maps: assigning the RHI TextureHandle writes its bindless SRV index
+			// into the shader-side TextureHandle's `index` member.
+			if (auto u = matData["irradianceMap"]; u.IsValid())
+			{
+				u = draw.env.irradiance;
+			}
+			if (auto u = matData["prefilterMap"]; u.IsValid())
+			{
+				u = draw.env.prefilter;
+			}
+			if (auto u = matData["brdfLUT"]; u.IsValid())
+			{
+				u = draw.env.brdfLut;
+			}
+			if (auto u = matData["cameraPos"]; u.IsValid())
+			{
+				u = draw.cameraPos;
+			}
+			if (auto u = matData["exposure"]; u.IsValid())
+			{
+				u = draw.exposure;
+			}
+		}
+	}
+
+	void
 	ForwardPass::Execute(const DrawData& draw, const PassContext& resources)
 	{
 		ICommandList* cmd = resources.GetCommandList();
@@ -233,96 +319,64 @@ namespace bgl
 			return;
 		}
 
+		auto gfxState = MeshletState();
+		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
+		gfxState.frameBuffer = FrameBuffer()
+		                           .AddColorAttachment(draw.backBufferHandle)
+		                           .SetDepthAttachment(draw.depthBufferHandle);
+
 		const auto dispatchArgs = resources.GetBuffer(c_DispatchArgsBuffer);
 
+		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
+		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
 		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
 		{
+			if (IsTransparentPso(pso))
+			{
+				continue;
+			}
+
 			MeshletKernel& kernel = m_Kernels[pso];
 			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
-			if (auto foundForwardData = kernel.FindUniforms("forwardData"))
+			BindKernel(kernel, draw, resources);
+			if (auto forwardData = kernel.FindUniforms("forwardData"))
 			{
-				auto& forwardData = *foundForwardData;
-
-				for (const SceneBuffer& binding : c_ForwardDataBuffers)
-				{
-					const auto handle = resources.GetBuffer(binding.graphName);
-
-					auto uniform = forwardData[binding.uniformKey];
-					if (uniform.IsValid())
-					{
-						uniform = handle;
-					}
-					else
-					{
-						gfatal(
-							"{} key doesn't exist in uniforms. Most likely an error",
-							binding.uniformKey);
-					}
-				}
-
-				forwardData["viewProj"] = draw.viewProj;
-				forwardData["psoIndex"] = static_cast<uint32_t>(pso);
+				(*forwardData)["psoIndex"]         = static_cast<uint32_t>(pso);
+				(*forwardData)["instanceListBase"] = 0u;
+				(*forwardData)["usePrefixSumBase"] = 1u;
 			}
 
-			if (auto foundMatData = kernel.FindUniforms("materialData"))
-			{
-				auto& matData = *foundMatData;
-				for (const auto& binding : c_MaterialBuffers)
-				{
-					const auto handle  = resources.GetBuffer(binding.graphName);
-					auto       uniform = matData[binding.uniformKey];
-					if (uniform.IsValid())
-					{
-						uniform = handle;
-					}
-				}
-
-				if (auto anisoUniform = matData["anisoLinearWrapSampler"]; anisoUniform.IsValid())
-				{
-					anisoUniform = draw.anisoLinearWrapSampler;
-				}
-				if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
-				{
-					clampUniform = draw.linearClampSampler;
-				}
-
-				// IBL maps: assigning the RHI TextureHandle writes its bindless SRV index
-				// into the shader-side TextureHandle's `index` member.
-				if (auto u = matData["irradianceMap"]; u.IsValid())
-				{
-					u = draw.env.irradiance;
-				}
-				if (auto u = matData["prefilterMap"]; u.IsValid())
-				{
-					u = draw.env.prefilter;
-				}
-				if (auto u = matData["brdfLUT"]; u.IsValid())
-				{
-					u = draw.env.brdfLut;
-				}
-				if (auto u = matData["cameraPos"]; u.IsValid())
-				{
-					u = draw.cameraPos;
-				}
-				if (auto u = matData["exposure"]; u.IsValid())
-				{
-					u = draw.exposure;
-				}
-			}
-
-			auto gfxState   = MeshletState();
-			gfxState.kernel = &kernel;
-			gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
-			gfxState.frameBuffer = FrameBuffer()
-			                           .AddColorAttachment(draw.backBufferHandle)
-			                           .SetDepthAttachment(draw.depthBufferHandle);
-
+			gfxState.kernel       = &kernel;
 			gfxState.indirectArgs = dispatchArgs;
-
 			cmd->SetMeshletState(gfxState);
-
 			cmd->DispatchMeshIndirect(pso);
+		}
+
+		// Transparent: one direct DispatchMesh per depth-sorted run, reading the CPU-built list at
+		// the run's offset. Runs are back-to-front, so blending composites in the correct order.
+		if (!draw.transparentRuns.empty())
+		{
+			const auto sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
+
+			for (const TransparentRun& run : draw.transparentRuns)
+			{
+				MeshletKernel& kernel = m_Kernels[run.pso];
+				gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+
+				BindKernel(kernel, draw, resources);
+				if (auto forwardData = kernel.FindUniforms("forwardData"))
+				{
+					(*forwardData)["compactedInstances"] = sortedInstances;
+					(*forwardData)["psoIndex"]           = run.pso;
+					(*forwardData)["instanceListBase"]   = run.offset;
+					(*forwardData)["usePrefixSumBase"]   = 0u;
+				}
+
+				gfxState.kernel = &kernel;
+				cmd->SetMeshletState(gfxState);
+				cmd->DispatchMesh(run.count, 1, 1);
+			}
 		}
 	}
 
