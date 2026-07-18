@@ -401,11 +401,17 @@ namespace assetlib
 
 			if (!isUpToDate(target, pbr, group, desc.dataRoot))
 			{
-				const ImageData image = rgba8ToImage(
-					compose(pbr, group, sources, width, height),
-					width,
-					height,
-					mipCutoff);
+				Rgba8 composed = compose(pbr, group, sources, width, height);
+
+				// A cutout/blend base colour keeps its alpha channel, so bleed opaque colour under the
+				// transparent texels before BC7 sees them -- otherwise a block on a cutout edge stores
+				// arbitrary colour there and it fringes back across the edge (worst at coarse mips).
+				if (groupCarriesAlpha(pbr, group))
+				{
+					dilateColorIntoTransparent(composed, width, height);
+				}
+
+				const ImageData image = rgba8ToImage(composed, width, height, mipCutoff);
 
 				writeKTX2(image, target, group.srgb, compression);
 			}

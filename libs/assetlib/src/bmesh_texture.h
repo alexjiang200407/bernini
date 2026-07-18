@@ -21,4 +21,20 @@ namespace assetlib
 		uint32_t                   width,
 		uint32_t                   height,
 		std::optional<float>       alphaCutoff = std::nullopt);
+
+	/**
+	 * Bleeds colour outward into fully-transparent (alpha == 0) texels: each takes the RGB of its
+	 * nearest opaque neighbour (a multi-source breadth-first flood). Alpha is left untouched.
+	 *
+	 * Run this on a cutout/blend base colour *before* mip generation and BC7 compression. A BC7 block
+	 * straddling a cutout edge otherwise encodes whatever colour sits under the transparent texels --
+	 * which the artist never painted -- and bilinear filtering or a coarse mip drags that colour back
+	 * across the edge as a fringe. Filling those texels with real edge colour removes the fringe.
+	 *
+	 * @param rgba   width*height*4 bytes, row-major; modified in place.
+	 * @param width  Image width in pixels.
+	 * @param height Image height in pixels.
+	 */
+	void
+	dilateColorIntoTransparent(std::span<std::byte> rgba, uint32_t width, uint32_t height);
 }

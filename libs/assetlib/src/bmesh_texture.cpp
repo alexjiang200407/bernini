@@ -178,4 +178,59 @@ namespace assetlib
 
 		return out;
 	}
+
+	void
+	dilateColorIntoTransparent(std::span<std::byte> rgba, uint32_t width, uint32_t height)
+	{
+		const size_t texels = static_cast<size_t>(width) * height;
+		if (rgba.size() < texels * 4u)
+			throw std::runtime_error(
+				"dilateColorIntoTransparent: buffer smaller than width*height*4");
+
+		// Multi-source BFS from every opaque texel. Each transparent texel it reaches takes the RGB of
+		// whichever opaque texel got there first, i.e. the nearest one -- alpha stays put.
+		auto                  filled = std::vector<bool>(texels, false);
+		std::vector<uint32_t> frontier;
+		frontier.reserve(texels);
+
+		for (size_t t = 0; t < texels; ++t)
+		{
+			if (std::to_integer<uint8_t>(rgba[t * 4u + 3u]) != 0u)
+			{
+				filled[t] = true;
+				frontier.push_back(static_cast<uint32_t>(t));
+			}
+		}
+
+		// Nothing to seed from, or nothing to fill: either way there is no fringe to remove.
+		if (frontier.empty() || frontier.size() == texels)
+			return;
+
+		for (size_t head = 0; head < frontier.size(); ++head)
+		{
+			const uint32_t t = frontier[head];
+			const uint32_t x = t % width;
+			const uint32_t y = t / width;
+
+			const auto spread = [&](uint32_t nx, uint32_t ny) {
+				const size_t n = static_cast<size_t>(ny) * width + nx;
+				if (filled[n])
+					return;
+				filled[n]         = true;
+				rgba[n * 4u + 0u] = rgba[t * 4u + 0u];
+				rgba[n * 4u + 1u] = rgba[t * 4u + 1u];
+				rgba[n * 4u + 2u] = rgba[t * 4u + 2u];
+				frontier.push_back(static_cast<uint32_t>(n));
+			};
+
+			if (x > 0)
+				spread(x - 1u, y);
+			if (x + 1u < width)
+				spread(x + 1u, y);
+			if (y > 0)
+				spread(x, y - 1u);
+			if (y + 1u < height)
+				spread(x, y + 1u);
+		}
+	}
 }
