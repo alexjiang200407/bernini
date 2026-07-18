@@ -52,6 +52,7 @@ and portability.
   - [x] Implement PBR IBL
   - [x] ktx2 textures
   - [x] Implement Alpha Test alpha mode
+  - [ ] Implement Alpha Blend alpha mode
   - [x] Texture Asset Import
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now
@@ -62,46 +63,49 @@ and portability.
   - [ ] Geometry Cluster Culling
   - [ ] Two-pass HZB occlusion culling
   - [ ] Culling verification
-- [ ] Ink Shader Proof of Concept
+- [ ] Motion Vectors
+  - [ ] TAA
+- [ ] Animation
+  - [ ] Animation Asset Import (clips, skeleton, etc)
+  - [ ] Skinned Meshes & Animation
+    - [ ] GPU skinning (compute): write deformed verts to a transient buffer for the mesh path
+    - [ ] Bone palette buffer, GPU-resident, per-instance indexed
+    - [ ] Pose Sampling
+    - [ ] Cross Fade blending
+    - [ ] Animation Preview + Playback at different LODs
+    - [ ] Vertex Animation Textures (VAT)
+    - [ ] Double-buffer the bone palette — required for skinned motion vectors
+    - [ ] Optional / Defer
+      - [ ] Bone Mask
+      - [ ] Notify / event placement on the clip timeline
+      - [ ] State Machine
+- [ ] LODs
+  - [ ] Editor LOD Generator for Static and Skinned
+  - [ ] LOD Selection for Skinned and Static meshes
+  - [ ] Animation Ticking & Taging LODs
+  - [ ] Compute Skinning Bandwidth
+  - [ ] Test Motion Vectors for all geometry types: LODs, Skinned meshes during animation
 - [ ] Light and Shadow
   - [ ] Directional Lighting
   - [ ] Point Light
   - [ ] Ambient / Sky Light
   - [ ] Cascading Shadow Mapping
   - [ ] Static vs. Dynamic Shadow
-- [ ] Animation
-  - [ ] Animation Asset Import (clips, skeleton, etc)
-  - [ ] Skinned Meshes & Animation
-    - [ ] GPU skinning (compute): write deformed verts to a transient buffer for the mesh path
-    - [ ] Bone palette buffer, GPU-resident, per-instance indexed
-    - [ ] Animation runtime: pose sampling, blend/cross-fade, state machine / blend tree
-    - [ ] Double-buffer the bone palette — required for skinned motion vectors
-  - [ ] Vertex Animation Textures (VAT)
-- [ ] LODs
-  - [ ] Editor LOD Generator for Static and Skinned
-  - [ ] LOD Selection for Skinned and Static meshes
-  - [ ] Animation Ticking & Taging LODs
-  - [ ] Compute Skinning Bandwidth
   - [ ] Shadow LODs
-- [ ] Motion Vectors
-  - [ ] TAA
-  - [ ] Test Motion Vectors for all geometry types: LODs, Skinned meshes during animation
 - [ ] Scene Representation
-- [ ] Alpha Blending
-  - [ ] WBOIT (weighted, blended order-independent transparency — no per-draw sorting)
-  - [ ] Depth test against opaque, no depth write
-  - [ ] Exclude from MV / TAA history (transparents ghost otherwise)
-  - [ ] Verify: overlapping colored quads composite identically regardless of draw order
 - [ ] Foliage
   - [ ] Grass
   - [ ] Trees
 - [ ] Water
 - [ ] Screen-space / Volume Decal Pipeline
 - [ ] FX
+  - [ ] WBOIT
   - [ ] GPU Compute Particle System
   - [ ] HZB-based Particle Collision
   - [ ] Outline Shader
   - [ ] Render Axis
+- [ ] Decals
+  - [ ] Material Parameters (damage texture, etc) for regular units
 - [ ] Post Processing
   - [ ] LUT
   - [ ] Color Grading
@@ -125,6 +129,8 @@ and portability.
 - [ ] Ink Shading
 - [ ] Screen space reflections
 - [ ] Gpu Virtual Memory
+- [ ] Texture-space decals - Render decals into the mesh's UV/texture space, not screen space for heroes
+
 
 ## Module 2: Game Logic
 
@@ -158,4 +164,3 @@ and portability.
 - [ ] Asset Streaming Pipeline
 - [ ] CPU Spatial Partitioning
 - [ ] Game Serialization
-
