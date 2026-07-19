@@ -48,7 +48,7 @@ namespace bgl
 		gassert(m_Open, "WriteBuffer on a closed command list");
 		gassert(m_ResourceManager->ValidBufferHandle(handle), "WriteBuffer on an invalid handle");
 
-		auto* dst = m_ResourceManager->GetBuffer(handle).GetMetalBuffer();
+		auto* dst = m_ResourceManager->GetBuffer(handle).GetMTLResource();
 
 		// A private buffer cannot be written from the CPU; stage the bytes in a shared buffer and blit
 		// them across on the GPU timeline, so the write orders ahead of a later readback copy. The
@@ -71,11 +71,11 @@ namespace bgl
 			"CopyBufferToReadback: invalid destination");
 
 		const auto& srcBuffer = m_ResourceManager->GetBuffer(src);
-		auto*       dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMetalBuffer();
+		auto*       dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMTLResource();
 
 		auto* blit = m_CmdBuffer->blitCommandEncoder();
 		blit->copyFromBuffer(
-			srcBuffer.GetMetalBuffer(),
+			srcBuffer.GetMTLResource(),
 			0,
 			dstBuffer,
 			0,

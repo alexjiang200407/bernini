@@ -26,7 +26,7 @@ namespace bgl
 		}
 
 		[[nodiscard]] MTL::Buffer*
-		GetMetalBuffer() const noexcept
+		GetMTLResource() const noexcept
 		{
 			return m_Buffer.get();
 		}
