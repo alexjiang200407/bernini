@@ -54,7 +54,8 @@ and portability.
   - [x] Implement Alpha Test alpha mode
   - [x] Implement Alpha Blend alpha mode
   - [x] Transparent depth pre-pass for self occlusion (per-material `occlude`)
-  - [ ] GPU radix sort for transparent depth ordering — replaces the per-frame CPU sort
+  - [x] GPU sort for transparent depth ordering — replaces the per-frame CPU sort. Bitonic, one
+    workgroup, capped at 1024 transparent instances; a multi-group radix sort is the scale-up.
   - [x] Texture Asset Import
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now
