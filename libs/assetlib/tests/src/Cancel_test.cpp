@@ -164,7 +164,7 @@ TEST_CASE("bakeMaterial stops on a signalled token and leaves the material alone
 	writeSource(dir.path / "albedo.ktx2", 16);
 
 	BMaterial mat;
-	mat.mode      = MaterialMode::kLoose;
+	mat.mode          = MaterialMode::kLoose;
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };
 	mat.pbr.routes[1] = { "albedo.ktx2", 1 };
 	mat.pbr.routes[2] = { "albedo.ktx2", 2 };

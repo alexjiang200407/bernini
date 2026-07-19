@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Format staged C++ and Slang sources with clang-format before they are committed, so nothing lands
+# unformatted. Runs scripts/format.py (which locates clang-format via scripts/config.json, then PATH,
+# then the Visual Studio LLVM component) on the staged .cpp/.slang files and re-stages them. Enabled
+# by `git config core.hooksPath .githooks` (set by `just init`).
+
+# Staged source files that still exist (Added/Copied/Modified/Renamed) -- .cpp and .slang only.
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cpp' '*.slang')
+[ -z "$files" ] && exit 0
+
+if command -v python3 >/dev/null 2>&1; then
+	py=python3
+else
+	py=python
+fi
+
+# shellcheck disable=SC2086
+"$py" scripts/format.py $files || exit 1
+
+# Re-stage the (possibly reformatted) files so the formatting is part of this commit.
+# shellcheck disable=SC2086
+printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 git add
