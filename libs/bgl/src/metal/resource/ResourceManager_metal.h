@@ -3,6 +3,8 @@
 
 #include "resource/Buffer_metal.h"
 #include "resource/ReadbackBuffer_metal.h"
+#include "resource/Rtv_metal.h"
+#include "resource/Texture_metal.h"
 
 #include "resource/ResourceManager.h"
 
@@ -12,9 +14,9 @@
 namespace bgl
 {
 	/**
-	 * The Metal resource manager. This slice owns only buffers and readback buffers -- the pieces the
-	 * headless compute/readback path needs. Textures, samplers, RTV/DSV and the bindless argument
-	 * buffer arrive with the render and scene slices; those factories are gunimplemented for now.
+	 * The Metal resource manager. Owns buffers, readback buffers, render-target textures and RTVs.
+	 * SRV/sampler textures with uploads, depth (DSV) and the bindless argument buffer arrive with the
+	 * scene slice; those factories are gunimplemented for now.
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
@@ -76,13 +78,47 @@ namespace bgl
 		[[nodiscard]] bool
 		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
 
-		// ---- not yet implemented (render + scene slices) ----
+		// ---- render targets (no SRV/sampler upload yet -- that is the scene slice) ----
 
 		TextureHandle
-		CreateTexture(const TextureDesc&) noexcept override
-		{
-			gunimplemented(k);
-		}
+		CreateTexture(const TextureDesc& desc) noexcept override;
+
+		RtvHandle
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
+
+		void
+		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
+			override;
+
+		void
+		DestroyTexture(TextureHandle handle) noexcept override;
+
+		void
+		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
+
+		const Texture&
+		GetTexture(TextureHandle handle) const noexcept override;
+
+		const Rtv&
+		GetRtv(RtvHandle handle) const noexcept override;
+
+		TextureHandle
+		GetRtvTexture(RtvHandle handle) const noexcept override;
+
+		TextureReadbackLayout
+		GetTextureReadbackLayout(TextureHandle handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidTextureHandle(const TextureHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidRtvHandle(const RtvHandle& handle) const noexcept override;
+
+		void
+		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept override;
+
+		// ---- not yet implemented (scene slice: SRV textures, samplers, depth) ----
+
 		TextureHandle
 		CreateTexture(const TextureDesc&, std::span<const TextureSubresourceData>) noexcept override
 		{
@@ -109,22 +145,7 @@ namespace bgl
 			gunimplemented(k);
 		}
 		void
-		DestroyTexture(TextureHandle, uint64_t, bool) noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
-		DestroyTexture(TextureHandle) noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
 		DestroySampler(SamplerHandle, uint64_t, bool) noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
-		DestroyRtv(RtvHandle, uint64_t, bool) noexcept override
 		{
 			gunimplemented(k);
 		}
@@ -133,18 +154,8 @@ namespace bgl
 		{
 			gunimplemented(k);
 		}
-		RtvHandle
-		CreateRtv(TextureHandle, const RtvDesc&) noexcept override
-		{
-			gunimplemented(k);
-		}
 		DsvHandle
 		CreateDsv(TextureHandle, const DsvDesc&) noexcept override
-		{
-			gunimplemented(k);
-		}
-		const Rtv&
-		GetRtv(RtvHandle) const noexcept override
 		{
 			gunimplemented(k);
 		}
@@ -154,32 +165,12 @@ namespace bgl
 			gunimplemented(k);
 		}
 		TextureHandle
-		GetRtvTexture(RtvHandle) const noexcept override
-		{
-			gunimplemented(k);
-		}
-		TextureHandle
 		GetDsvTexture(DsvHandle) const noexcept override
-		{
-			gunimplemented(k);
-		}
-		const Texture&
-		GetTexture(TextureHandle) const noexcept override
 		{
 			gunimplemented(k);
 		}
 		const Sampler&
 		GetSampler(SamplerHandle) const noexcept override
-		{
-			gunimplemented(k);
-		}
-		TextureReadbackLayout
-		GetTextureReadbackLayout(TextureHandle) const noexcept override
-		{
-			gunimplemented(k);
-		}
-		bool
-		ValidTextureHandle(const TextureHandle&) const noexcept override
 		{
 			gunimplemented(k);
 		}
@@ -194,17 +185,7 @@ namespace bgl
 			gunimplemented(k);
 		}
 		bool
-		ValidRtvHandle(const RtvHandle&) const noexcept override
-		{
-			gunimplemented(k);
-		}
-		bool
 		ValidDsvHandle(const DsvHandle&) const noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
-		ClearRtv(ICommandList*, RtvHandle, float[4]) noexcept override
 		{
 			gunimplemented(k);
 		}
@@ -215,11 +196,12 @@ namespace bgl
 		}
 
 	private:
-		static constexpr const char* k =
-			"Metal ResourceManager: not implemented yet (render/scene slice)";
+		static constexpr const char* k = "Metal ResourceManager: not implemented yet (scene slice)";
 
 		MTL::Device*                      m_Device = nullptr;
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_Readbacks;
+		core::slot_vector<Texture>        m_Textures;
+		core::slot_vector<Rtv>            m_Rtvs;
 	};
 }

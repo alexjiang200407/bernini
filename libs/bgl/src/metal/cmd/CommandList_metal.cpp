@@ -86,6 +86,53 @@ namespace bgl
 	}
 
 	void
+	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept
+	{
+		gassert(m_Open, "CopyTextureToReadback on a closed command list");
+		gassert(
+			m_ResourceManager->ValidTextureHandle(src),
+			"CopyTextureToReadback: invalid source");
+		gassert(
+			m_ResourceManager->ValidReadbackBufferHandle(dst),
+			"CopyTextureToReadback: invalid destination");
+
+		const Texture&              tex    = m_ResourceManager->GetTexture(src);
+		const TextureDesc&          desc   = tex.GetDesc();
+		const TextureReadbackLayout layout = m_ResourceManager->GetTextureReadbackLayout(src);
+		MTL::Buffer* dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMTLResource();
+
+		auto* blit = m_CmdBuffer->blitCommandEncoder();
+		blit->copyFromTexture(
+			tex.GetMTLResource(),
+			0,
+			0,
+			MTL::Origin(0, 0, 0),
+			MTL::Size(desc.width, desc.height, 1),
+			dstBuffer,
+			layout.offset,
+			layout.rowPitch,
+			layout.totalBytes);
+		blit->endEncoding();
+	}
+
+	void
+	CommandList::ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept
+	{
+		gassert(m_Open, "ClearRenderTarget on a closed command list");
+
+		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+		MTL::RenderPassColorAttachmentDescriptor* color = pass->colorAttachments()->object(0);
+		color->setTexture(texture);
+		color->setLoadAction(MTL::LoadActionClear);
+		color->setStoreAction(MTL::StoreActionStore);
+		color->setClearColor(
+			MTL::ClearColor::Make(clearVal[0], clearVal[1], clearVal[2], clearVal[3]));
+
+		// An empty pass: the Clear load action writes the color and Store keeps it.
+		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
+	}
+
+	void
 	CommandList::BeginEvent(std::string_view name) noexcept
 	{
 		m_CmdBuffer->pushDebugGroup(

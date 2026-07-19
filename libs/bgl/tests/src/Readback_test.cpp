@@ -105,11 +105,8 @@ TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback][metal]")
 	resourceManager->DestroyBuffer(src, fence, false);
 }
 
-TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
+TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback][metal]")
 {
-#if defined(RENDERER_BACKEND_METAL)
-	SKIP("texture render-target readback is not implemented on the Metal backend yet");
-#endif
 	const uint32_t width    = 4;
 	const uint32_t height   = 4;
 	const float    clear[4] = { 0.25f, 0.5f, 0.75f, 1.0f };

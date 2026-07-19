@@ -1,5 +1,8 @@
 #include "resource/ResourceManager_metal.h"
 
+#include "cmd/CommandList_metal.h"
+#include "util_metal.h"
+
 namespace bgl
 {
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc&) :
@@ -108,5 +111,110 @@ namespace bgl
 	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept
 	{
 		return !handle.IsNull() && m_Readbacks.valid(handle.slot);
+	}
+
+	TextureHandle
+	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
+	{
+		const auto slot = m_Textures.try_allocate_and_emplace(m_Device, desc);
+		if (slot.is_null())
+		{
+			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
+			return TextureHandle{};
+		}
+		return TextureHandle{ slot, desc.usage };
+	}
+
+	RtvHandle
+	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
+	{
+		gassert(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
+		const auto slot = m_Rtvs.try_allocate_and_emplace(desc, textureHandle);
+		if (slot.is_null())
+		{
+			logger::error("CreateRtv '{}': RTV pool exhausted", desc.debugName);
+			return RtvHandle{};
+		}
+		return RtvHandle{ slot.index, slot.generation };
+	}
+
+	void
+	ResourceManager::DestroyTexture(TextureHandle handle, uint64_t, bool) noexcept
+	{
+		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
+		m_Textures.release_slot(handle.slot);
+	}
+
+	void
+	ResourceManager::DestroyTexture(TextureHandle handle) noexcept
+	{
+		DestroyTexture(handle, 0, false);
+	}
+
+	void
+	ResourceManager::DestroyRtv(RtvHandle handle, uint64_t, bool) noexcept
+	{
+		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
+		m_Rtvs.release_slot(handle.idx);
+	}
+
+	const Texture&
+	ResourceManager::GetTexture(TextureHandle handle) const noexcept
+	{
+		return m_Textures[handle.slot];
+	}
+
+	const Rtv&
+	ResourceManager::GetRtv(RtvHandle handle) const noexcept
+	{
+		// RtvHandle carries its own generation (it is not a slot_handle), so the raw-index lookup
+		// below can't check it -- validate explicitly, as GetTexture gets for free from slot_handle.
+		gassert(ValidRtvHandle(handle), "Invalid RTV handle");
+		return m_Rtvs[handle.idx];
+	}
+
+	TextureHandle
+	ResourceManager::GetRtvTexture(RtvHandle handle) const noexcept
+	{
+		return GetRtv(handle).GetTextureHandle();
+	}
+
+	TextureReadbackLayout
+	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const noexcept
+	{
+		const TextureDesc& desc = GetTexture(handle).GetDesc();
+
+		// Metal has no 256-byte row-pitch rule (unlike D3D12), so the rows pack tight.
+		TextureReadbackLayout layout;
+		layout.rowSizeBytes = static_cast<uint64_t>(desc.width) * FormatBytesPerPixel(desc.format);
+		layout.rowPitch     = layout.rowSizeBytes;
+		layout.rowCount     = desc.height;
+		layout.offset       = 0;
+		layout.totalBytes   = layout.rowPitch * desc.height;
+		return layout;
+	}
+
+	bool
+	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
+	{
+		return !handle.IsNull() && m_Textures.valid(handle.slot) &&
+		       !m_Textures[handle.slot].IsNull();
+	}
+
+	bool
+	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const noexcept
+	{
+		return !handle.IsNull() && m_Rtvs.valid(handle.idx, handle.generation) &&
+		       !m_Rtvs[handle.idx].IsNull();
+	}
+
+	void
+	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
+	{
+		gassert(ValidRtvHandle(handle), "ClearRtv on an invalid RTV handle");
+		gassert(cmdList != nullptr && cmdList->IsOpen(), "ClearRtv needs an open command list");
+
+		MTL::Texture* texture = GetTexture(GetRtv(handle).GetTextureHandle()).GetMTLResource();
+		cmdList->As<CommandList>()->ClearRenderTarget(texture, clearVal);
 	}
 }

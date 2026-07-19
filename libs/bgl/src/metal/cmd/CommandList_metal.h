@@ -36,6 +36,14 @@ namespace bgl
 		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept override;
 
 		void
+		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept override;
+
+		// Clears a texture by running an empty render pass with a clear load action. Not on the RHI
+		// interface -- ResourceManager::ClearRtv drives it (Metal has no free-standing clear).
+		void
+		ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept;
+
+		void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept override;
 
 		void
@@ -92,11 +100,6 @@ namespace bgl
 
 		void
 		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
-		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
 		{
 			gunimplemented(k);
 		}
