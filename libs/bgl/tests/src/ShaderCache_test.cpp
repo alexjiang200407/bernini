@@ -123,8 +123,10 @@ TEST_CASE(
 	const std::vector<fs::path> warmFiles = ProgramCacheFiles(cacheDir);
 	CHECK(warmFiles == coldFiles);
 
+	// The extra parens keep Catch from decomposing the comparison: libc++'s file_time_type has a
+	// __int128 rep it cannot stringify, so it is checked as a plain bool.
 	for (size_t i = 0; i < warmFiles.size() && i < coldTimes.size(); ++i)
-		CHECK(fs::last_write_time(warmFiles[i]) == coldTimes[i]);
+		CHECK((fs::last_write_time(warmFiles[i]) == coldTimes[i]));
 
 	// A corrupt entry must not be trusted: the run recovers by recompiling.
 	{

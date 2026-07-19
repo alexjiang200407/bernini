@@ -62,7 +62,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		auto cubeGeom = scene->AddCubeGeom();
-		auto cubeInst = view->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
 
 		auto context     = bgl::RenderContext();
 		context.view     = view;
