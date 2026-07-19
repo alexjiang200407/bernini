@@ -9,6 +9,42 @@
 
 namespace bgl
 {
+	namespace
+	{
+		struct PatchedUniform
+		{
+			std::vector<std::byte>    bytes;
+			std::vector<MTL::Buffer*> resident;  // buffers the encoder must make resident
+		};
+
+		// Copies a uniform mirror and rewrites each bindless handle field from its slot index to the
+		// referenced buffer's gpuAddress (what the emitted MSL dereferences), collecting those buffers
+		// so the caller can mark them resident. Shared by the compute and mesh dispatch paths.
+		PatchedUniform
+		PatchUniformHandles(
+			const Uniforms&              uniforms,
+			const std::vector<uint32_t>& handleOffsets,
+			ResourceManager*             rm)
+		{
+			PatchedUniform result;
+			const size_t   size = uniforms.GetSize();
+			result.bytes.resize(size);
+			std::memcpy(result.bytes.data(), uniforms.Data(), size);
+
+			for (uint32_t offset : handleOffsets)
+			{
+				uint32_t slotIndex = 0;
+				std::memcpy(&slotIndex, result.bytes.data() + offset, sizeof(uint32_t));
+
+				MTL::Buffer*   buffer = rm->GetBufferBySlotIndex(slotIndex);
+				const uint64_t addr   = buffer->gpuAddress();
+				std::memcpy(result.bytes.data() + offset, &addr, sizeof(uint64_t));
+				result.resident.push_back(buffer);
+			}
+			return result;
+		}
+	}
+
 	CommandList::CommandList(
 		const CommandListDesc& desc,
 		ICommandAllocator*,
@@ -158,9 +194,6 @@ namespace bgl
 	{
 		gassert(m_Open, "DispatchMesh on a closed command list");
 		gassert(m_MeshletState.kernel != nullptr, "DispatchMesh without a meshlet state");
-		gassert(
-			m_MeshletState.kernel->uniforms.empty(),
-			"Metal DispatchMesh: mesh-shader uniform binding not implemented yet");
 
 		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
 		auto* rm       = m_ResourceManager->As<ResourceManager>();
@@ -181,6 +214,30 @@ namespace bgl
 
 		MTL::RenderCommandEncoder* enc = m_CmdBuffer->renderCommandEncoder(pass);
 		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
+
+		// A cbuffer reflects at one buffer index that every stage using it shares, so bind each to all
+		// stages present (an unused bind is ignored). setBytes caps at 4KB, which cbuffers stay under.
+		const bool hasObject     = m_MeshletState.kernel->pipeline->GetDesc().ampShader != nullptr;
+		MTL::RenderStages stages = MTL::RenderStageMesh | MTL::RenderStageFragment;
+		if (hasObject)
+			stages |= MTL::RenderStageObject;
+
+		for (const auto& [name, uniforms] : m_MeshletState.kernel->uniforms)
+		{
+			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
+			const PatchedUniform     patched =
+				PatchUniformHandles(uniforms, pipeline->GetHandleOffsets(name), rm);
+
+			for (MTL::Buffer* buffer : patched.resident)
+				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite, stages);
+
+			const void*  bytes = patched.bytes.data();
+			const size_t size  = patched.bytes.size();
+			enc->setMeshBytes(bytes, size, entry.rootParamIndex);
+			enc->setFragmentBytes(bytes, size, entry.rootParamIndex);
+			if (hasObject)
+				enc->setObjectBytes(bytes, size, entry.rootParamIndex);
+		}
 
 		// Single viewport/scissor only; multi-viewport (setViewports + a viewport-index shader) lands
 		// if a pass ever needs it.
@@ -235,27 +292,13 @@ namespace bgl
 		for (const auto& [name, uniforms] : m_ComputeState.kernel->uniforms)
 		{
 			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
-			const size_t             size  = uniforms.GetSize();
+			const PatchedUniform     patched =
+				PatchUniformHandles(uniforms, pipeline->GetHandleOffsets(name), rm);
 
-			// The shared mirror carries each handle's slot.index; Metal wants the buffer's gpuAddress
-			// there. Patch a copy, make each referenced buffer resident, then bind the copy at the
-			// kernel's [[buffer(rootParamIndex)]] slot.
-			std::vector<std::byte> patched(size);
-			std::memcpy(patched.data(), uniforms.Data(), size);
-
-			for (uint32_t offset : pipeline->GetHandleOffsets(name))
-			{
-				uint32_t slotIndex = 0;
-				std::memcpy(&slotIndex, patched.data() + offset, sizeof(uint32_t));
-
-				MTL::Buffer*   buffer = rm->GetBufferBySlotIndex(slotIndex);
-				const uint64_t addr   = buffer->gpuAddress();
-				std::memcpy(patched.data() + offset, &addr, sizeof(uint64_t));
-
+			for (MTL::Buffer* buffer : patched.resident)
 				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
-			}
 
-			enc->setBytes(patched.data(), size, entry.rootParamIndex);
+			enc->setBytes(patched.bytes.data(), patched.bytes.size(), entry.rootParamIndex);
 		}
 
 		enc->dispatchThreadgroups(MTL::Size(x, y, z), pipeline->GetThreadsPerThreadgroup());
