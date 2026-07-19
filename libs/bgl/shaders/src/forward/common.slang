@@ -1,5 +1,6 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
+import idl.Constants;
 import idl.PsoType;
 import idl.Mesh;
 import idl.Submesh;
@@ -38,13 +39,18 @@ public void ASBase(
 )
 {
     // The opaque path is bucketed by PSO, so its base is the exclusive prefix sum of prior PSO
-    // counts (a GPU value). The transparent path is a separate depth-sorted list drawn in runs, so
-    // it passes the run's start offset directly and skips the prefix sum.
-    uint base = sceneData.instanceListBase;
-    if (sceneData.usePrefixSumBase != 0u)
+    // counts. The transparent path is a separate depth-sorted list split by occlude class, so its
+    // base is the partition's start. Both are GPU values the CPU cannot know at record time.
+    uint base;
+    if (sceneData.baseSource == cBaseSourceTransparentPartition)
     {
-        base += (sceneData.psoIndex == 0u) ? 0u : sceneData.psoPrefixSum[sceneData.psoIndex - 1u];
+        base = sceneData.transparentPartitionBase[sceneData.partitionIndex];
     }
+    else
+    {
+        base = (sceneData.psoIndex == 0u) ? 0u : sceneData.psoPrefixSum[sceneData.psoIndex - 1u];
+    }
+
     uint drawInstanceIdx = sceneData.compactedInstances[base + gid];
     let instance = sceneData.instanceBuffer.Get(drawInstanceIdx);
     let mesh = sceneData.meshBuffer.Get(instance.meshInstance);

@@ -56,12 +56,12 @@ namespace bgl
 
 		/**
 		 * The depth-sorted transparent phase, drawn after the opaque buckets and inside the same pass:
-		 * a depth-only pre-pass for the self-occluding runs, then every run's blended draw
-		 * back-to-front. The pre-pass has to share this pass's depth attachment and sit between the
-		 * two colour loops, which is why it is a sub-draw here rather than a pass of its own.
+		 * a depth-only pre-pass over the self-occluding partition, then both partitions' blended
+		 * draws back-to-front. The pre-pass has to share this pass's depth attachment and sit between
+		 * the colour draws, which is why it is a sub-draw here rather than a pass of its own.
 		 */
 		void
-		DrawTransparentRuns(
+		DrawTransparent(
 			const DrawData&    draw,
 			const PassContext& resources,
 			MeshletState       colorState);

@@ -22,6 +22,8 @@ namespace bgl
 		} };
 
 		constexpr std::string_view c_SortedTransparentName = "scene.sortedTransparentInstances";
+		constexpr std::string_view c_TransparentKeysName   = "scene.transparentSortEntries";
+		constexpr std::string_view c_TransparentCountName  = "scene.transparentSortCount";
 
 		// Each SceneView gets a process-unique namespace so views sharing one Scene
 		// don't collide in the frame graph.
@@ -80,6 +82,27 @@ namespace bgl
 			sortedTransparentDesc.debugName = "Sorted Transparent Instances";
 
 			m_SortedTransparentInstances.Init(std::move(sortedTransparentDesc), m_ResourceManager);
+		}
+
+		{
+			// One (key, instance) pair per live instance. Sized off the instance buffer rather than
+			// the sort's capacity so the depth-key pass, which appends without knowing how many
+			// instances are transparent, cannot run past the end -- only the sort itself is capped.
+			auto keysDesc = ComputeBufferDesc();
+			keysDesc.SetElement<glm::uvec2>();
+			keysDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
+			keysDesc.debugName = "Transparent Sort Entries";
+
+			m_TransparentSortEntries.Init(std::move(keysDesc), m_ResourceManager);
+		}
+
+		{
+			auto countDesc = ComputeBufferDesc();
+			countDesc.SetElement<uint32_t>();
+			countDesc.maxCount  = 1;
+			countDesc.debugName = "Transparent Sort Count";
+
+			m_TransparentSortCount.Init(std::move(countDesc), m_ResourceManager);
 		}
 	}
 
@@ -351,31 +374,6 @@ namespace bgl
 	}
 
 	void
-	SceneView::UpdateTransparentOrder(const glm::vec3& cameraPos)
-	{
-		m_TransparentDrawables.clear();
-
-		const std::span<const SubmeshInstance> instances = m_InstanceBuffer.DenseEntries();
-		for (uint32_t i = 0; i < instances.size(); ++i)
-		{
-			const SubmeshInstance& instance = instances[i];
-			if (!IsTransparentPso(instance.pso))
-			{
-				continue;
-			}
-
-			const glm::mat4& transform =
-				m_MeshBuffer.AtIndex(instance.meshInstance.offset).transform;
-			const glm::vec3 toCamera = glm::vec3(transform[3]) - cameraPos;
-
-			m_TransparentDrawables.push_back(
-				TransparentDrawable{ glm::dot(toCamera, toCamera), instance.pso, i });
-		}
-
-		BuildTransparentDrawOrder(m_TransparentDrawables, m_TransparentOrder, m_TransparentRuns);
-	}
-
-	void
 	SceneView::Update(ICommandList* cmdList)
 	{
 		// Must run before the flush below, so what it rewrites is uploaded in the same Update.
@@ -400,14 +398,6 @@ namespace bgl
 				}());
 			},
 			buffers);
-
-		if (!m_TransparentOrder.empty())
-		{
-			cmdList->WriteBuffer(
-				m_SortedTransparentInstances.GetBufferHandle(),
-				m_TransparentOrder.data(),
-				m_TransparentOrder.size() * sizeof(uint32_t));
-		}
 
 		const uint32_t count  = m_InstanceBuffer.Size();
 		const uint32_t padded = core::round_up(count, idl::cHistogramGroupSize);
@@ -464,5 +454,13 @@ namespace bgl
 		std::string sortedName(c_SortedTransparentName);
 		fg.ImportBuffer(sortedName, m_SortedTransparentInstances.GetBufferHandle());
 		resourceNames.push_back(std::move(sortedName));
+
+		std::string keysName(c_TransparentKeysName);
+		fg.ImportBuffer(keysName, m_TransparentSortEntries.GetBufferHandle());
+		resourceNames.push_back(std::move(keysName));
+
+		std::string countName(c_TransparentCountName);
+		fg.ImportBuffer(countName, m_TransparentSortCount.GetBufferHandle());
+		resourceNames.push_back(std::move(countName));
 	}
 }

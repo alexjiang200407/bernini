@@ -16,6 +16,7 @@
 #include "passes/ForwardPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/SkyboxPass.h"
+#include "passes/TransparentSortPass.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
@@ -281,6 +282,7 @@ namespace bgl
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
 		CompactInstancesPass m_CompactInstances;
+		TransparentSortPass  m_TransparentSort;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 
@@ -409,6 +411,7 @@ namespace bgl
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
+		m_TransparentSort.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
 
@@ -442,6 +445,7 @@ namespace bgl
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_CompactInstances.Release(shutdownFenceValue, false);
+		m_TransparentSort.Release(shutdownFenceValue, false);
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The GPU is idle (flushed above), so assertions from the final frames whose slot
@@ -706,11 +710,7 @@ namespace bgl
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
 
-		// Sort transparent instances back-to-front for this camera before the passes capture `draw`;
-		// the runs drive the forward pass and the ordered list is uploaded by the SceneView update.
-		view_->UpdateTransparentOrder(draw.cameraPos);
-		draw.transparentRuns = view_->GetTransparentRuns();
-
+		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}
