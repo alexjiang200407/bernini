@@ -17,9 +17,10 @@ namespace bgl
 			std::vector<MTL::Buffer*> resident;  // buffers the encoder must make resident
 		};
 
-		// Copies a uniform mirror and rewrites each bindless handle field from its slot index to the
-		// referenced buffer's gpuAddress (what the emitted MSL dereferences), collecting those buffers
-		// so the caller can mark them resident. Shared by the compute and mesh dispatch paths.
+		// D3D12 writes a bindless handle's slot index into the cbuffer and a directly-indexed heap
+		// resolves it in-shader; Metal has no such heap, so at dispatch each handle field is rewritten
+		// from its slot index to the buffer's gpuAddress (what the emitted MSL dereferences). Copies
+		// the mirror, does that rewrite, and returns the buffers to make resident. Compute and mesh.
 		PatchedUniform
 		PatchUniformHandles(
 			const Uniforms&              uniforms,
