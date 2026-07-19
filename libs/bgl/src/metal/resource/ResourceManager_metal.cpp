@@ -167,6 +167,9 @@ namespace bgl
 	const Rtv&
 	ResourceManager::GetRtv(RtvHandle handle) const noexcept
 	{
+		// RtvHandle carries its own generation (it is not a slot_handle), so the raw-index lookup
+		// below can't check it -- validate explicitly, as GetTexture gets for free from slot_handle.
+		gassert(ValidRtvHandle(handle), "Invalid RTV handle");
 		return m_Rtvs[handle.idx];
 	}
 
