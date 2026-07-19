@@ -14,7 +14,7 @@ namespace bgl
 	/**
 	 * The Metal resource manager. This slice owns only buffers and readback buffers -- the pieces the
 	 * headless compute/readback path needs. Textures, samplers, RTV/DSV and the bindless argument
-	 * buffer arrive with the render and scene slices; those factories gfatal for now.
+	 * buffer arrive with the render and scene slices; those factories are gunimplemented for now.
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
@@ -72,137 +72,137 @@ namespace bgl
 		TextureHandle
 		CreateTexture(const TextureDesc&) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		TextureHandle
 		CreateTexture(const TextureDesc&, std::span<const TextureSubresourceData>) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		TextureHandle
 		CreateTexture(const assetlib::ImageData&, std::string) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		TextureHandle
 		CreateSolidTexture(uint8_t, uint8_t, uint8_t, uint8_t) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		SamplerHandle
 		CreateSampler(const SamplerDesc&) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		FlushPendingTextureUploads(ICommandList*) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DestroyTexture(TextureHandle, uint64_t, bool) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DestroyTexture(TextureHandle) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DestroySampler(SamplerHandle, uint64_t, bool) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DestroyRtv(RtvHandle, uint64_t, bool) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DestroyDsv(DsvHandle, uint64_t, bool) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		RtvHandle
 		CreateRtv(TextureHandle, const RtvDesc&) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		DsvHandle
 		CreateDsv(TextureHandle, const DsvDesc&) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		const Rtv&
 		GetRtv(RtvHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		const Dsv&
 		GetDsv(DsvHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		TextureHandle
 		GetRtvTexture(RtvHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		TextureHandle
 		GetDsvTexture(DsvHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		const Texture&
 		GetTexture(TextureHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		const Sampler&
 		GetSampler(SamplerHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		TextureReadbackLayout
 		GetTextureReadbackLayout(TextureHandle) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		bool
 		ValidTextureHandle(const TextureHandle&) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		bool
 		IsTextureCube(const TextureHandle&) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		bool
 		ValidSamplerHandle(const SamplerHandle&) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		bool
 		ValidRtvHandle(const RtvHandle&) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		bool
 		ValidDsvHandle(const DsvHandle&) const noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		ClearRtv(ICommandList*, RtvHandle, float[4]) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		ClearDsv(ICommandList*, DsvHandle, float, uint8_t) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 
 	private:

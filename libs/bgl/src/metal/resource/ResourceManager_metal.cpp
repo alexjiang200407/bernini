@@ -2,15 +2,6 @@
 
 namespace bgl
 {
-	namespace
-	{
-		core::slot_handle
-		ToSlot(ReadbackBufferHandle h) noexcept
-		{
-			return core::slot_handle{ h.idx, h.generation };
-		}
-	}
-
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc&) :
 		m_Device(device)
 	{}
@@ -21,8 +12,12 @@ namespace bgl
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
-		const uint64_t byteSize = static_cast<uint64_t>(desc.stride) * desc.elementCount;
-		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, byteSize, desc.debugName);
+		BufferDesc bufferDesc;
+		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
+		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.debugName = desc.debugName;
+
+		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, bufferDesc);
 		if (slot.is_null())
 		{
 			logger::error("CreateStructBuffer '{}': buffer pool exhausted", desc.debugName);
@@ -34,6 +29,8 @@ namespace bgl
 	BufferHandle
 	ResourceManager::CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept
 	{
+		// A compute buffer is a GPU-only structured buffer with UAV access; reuse the
+		// structured-buffer path to create it.
 		StructBufferDesc sbDesc;
 		sbDesc.stride       = desc.elementSize;
 		sbDesc.elementCount = desc.maxCount;
@@ -45,14 +42,13 @@ namespace bgl
 	ReadbackBufferHandle
 	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept
 	{
-		const auto slot =
-			m_Readbacks.try_allocate_and_emplace(m_Device, desc.byteSize, desc.debugName);
+		const auto slot = m_Readbacks.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
 			logger::error("CreateReadbackBuffer '{}': readback pool exhausted", desc.debugName);
 			return ReadbackBufferHandle{};
 		}
-		return ReadbackBufferHandle{ slot.index, slot.generation };
+		return ReadbackBufferHandle{ slot };
 	}
 
 	void
@@ -68,7 +64,7 @@ namespace bgl
 	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, uint64_t, bool) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback handle");
-		m_Readbacks.release_slot(ToSlot(handle));
+		m_Readbacks.release_slot(handle.slot);
 	}
 
 	void
@@ -87,13 +83,13 @@ namespace bgl
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
-		return m_Readbacks[ToSlot(handle)];
+		return m_Readbacks[handle.slot];
 	}
 
 	const void*
 	ResourceManager::MapReadback(ReadbackBufferHandle handle) noexcept
 	{
-		return m_Readbacks[ToSlot(handle)].Contents();
+		return m_Readbacks[handle.slot].GetData();
 	}
 
 	void
@@ -111,6 +107,6 @@ namespace bgl
 	bool
 	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept
 	{
-		return !handle.IsNull() && m_Readbacks.valid(ToSlot(handle));
+		return !handle.IsNull() && m_Readbacks.valid(handle.slot);
 	}
 }

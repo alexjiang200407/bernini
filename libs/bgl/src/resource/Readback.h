@@ -1,4 +1,5 @@
 #pragma once
+#include <core/containers/slot_handle.h>
 
 namespace bgl
 {
@@ -12,13 +13,12 @@ namespace bgl
 
 	struct ReadbackBufferHandle
 	{
-		uint32_t idx        = 0xFFFFFFFF;
-		uint32_t generation = 0;
+		core::slot_handle slot;
 
 		[[nodiscard]] bool
 		IsNull() const
 		{
-			return idx == 0xFFFFFFFF;
+			return slot.is_null();
 		}
 	};
 

@@ -319,7 +319,7 @@ namespace bgl
 
 		m_ReadbackBuffers[slotIndex] = ReadbackBuffer(m_Device.Get(), desc);
 
-		return ReadbackBufferHandle{ slotIndex, slot.generation };
+		return ReadbackBufferHandle{ slot };
 	}
 
 	TextureHandle
@@ -548,15 +548,15 @@ namespace bgl
 
 		if (deferred)
 		{
-			m_ReadbackBuffers.retire_slot(handle.idx);
+			m_ReadbackBuffers.retire_slot(handle.slot.index);
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kReadback,
-				handle.idx,
+				handle.slot.index,
 				currentFenceValue);
 		}
 		else
 		{
-			m_ReadbackBuffers.release_slot(handle.idx);
+			m_ReadbackBuffers.release_slot(handle.slot.index);
 		}
 	}
 
@@ -655,12 +655,12 @@ namespace bgl
 	bool
 	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept
 	{
-		if (!m_ReadbackBuffers.valid(handle.idx, handle.generation))
+		if (!m_ReadbackBuffers.valid(handle.slot))
 		{
 			return false;
 		}
 
-		return !m_ReadbackBuffers[handle.idx].IsNull();
+		return !m_ReadbackBuffers[handle.slot.index].IsNull();
 	}
 
 	bool
@@ -711,7 +711,7 @@ namespace bgl
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
-		return m_ReadbackBuffers[handle.idx];
+		return m_ReadbackBuffers[handle.slot.index];
 	}
 
 	TextureReadbackLayout
@@ -748,14 +748,14 @@ namespace bgl
 	ResourceManager::MapReadback(ReadbackBufferHandle handle) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
-		return m_ReadbackBuffers[handle.idx].Map();
+		return m_ReadbackBuffers[handle.slot.index].Map();
 	}
 
 	void
 	ResourceManager::UnmapReadback(ReadbackBufferHandle handle) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Invalid readback buffer handle");
-		m_ReadbackBuffers[handle.idx].Unmap();
+		m_ReadbackBuffers[handle.slot.index].Unmap();
 	}
 
 	const Rtv&

@@ -12,7 +12,7 @@ namespace bgl
 	/**
 	 * The Metal command list. This slice records only buffer uploads and buffer->readback copies onto
 	 * a single MTL::CommandBuffer built per Open(); the compute/mesh/texture path lands with the
-	 * render slices and gfatals for now.
+	 * render slices and is gunimplemented for now.
 	 *
 	 * Barriers are no-ops: Metal hazard-tracks resources referenced within one command buffer, so the
 	 * FrameGraph's upload->copy ordering holds without explicit fences.
@@ -93,37 +93,37 @@ namespace bgl
 		void
 		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		SetMeshletState(const MeshletState&) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		DispatchMeshIndirect(uint32_t) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		SetComputeState(const ComputeState&) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 		void
 		Dispatch(uint32_t, uint32_t, uint32_t) noexcept override
 		{
-			gfatal(k);
+			gunimplemented(k);
 		}
 
 	private:
@@ -134,8 +134,9 @@ namespace bgl
 		ResourceManagerRef m_ResourceManager;
 		MTL::Device*       m_Device = nullptr;
 
-		NS::SharedPtr<MTL::CommandBuffer>       m_CmdBuffer;
-		std::vector<NS::SharedPtr<MTL::Buffer>> m_StagingBuffers;
-		bool                                    m_Open = false;
+		NS::SharedPtr<MTL::CommandBuffer> m_CmdBuffer;
+		NS::SharedPtr<NS::AutoreleasePool>
+			 m_ScopePool;  // drains at Close; scopes Open..Close temporaries
+		bool m_Open = false;
 	};
 }

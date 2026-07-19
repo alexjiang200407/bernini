@@ -49,35 +49,35 @@ namespace bgl
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc) const noexcept
 	{
-		gfatal("Metal backend: CreateShader not implemented yet");
+		gunimplemented("Metal backend: CreateShader not implemented yet");
 		return nullptr;
 	}
 
 	core::SharedRef<IComputePipeline>
 	Device::CreateComputePipeline(const ComputePipelineDesc&) const noexcept
 	{
-		gfatal("Metal backend: CreateComputePipeline not implemented yet");
+		gunimplemented("Metal backend: CreateComputePipeline not implemented yet");
 		return nullptr;
 	}
 
 	core::SharedRef<IMeshletPipeline>
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc&) const noexcept
 	{
-		gfatal("Metal backend: CreateMeshletPipeline not implemented yet");
+		gunimplemented("Metal backend: CreateMeshletPipeline not implemented yet");
 		return nullptr;
 	}
 
 	Uniforms
 	Device::CreateUniforms(IMeshletPipeline const*, const std::string&) const noexcept
 	{
-		gfatal("Metal backend: CreateUniforms not implemented yet");
+		gunimplemented("Metal backend: CreateUniforms not implemented yet");
 		return Uniforms{};
 	}
 
 	Uniforms
 	Device::CreateUniforms(IComputePipeline const*, const std::string&) const noexcept
 	{
-		gfatal("Metal backend: CreateUniforms not implemented yet");
+		gunimplemented("Metal backend: CreateUniforms not implemented yet");
 		return Uniforms{};
 	}
 }

@@ -59,18 +59,18 @@ namespace bgl
 	void
 	CommandQueue::InsertWait(uint64_t) noexcept
 	{
-		gfatal("Metal backend: InsertWait not implemented yet");
+		gunimplemented("Metal backend: InsertWait not implemented yet");
 	}
 
 	void
 	CommandQueue::InsertWaitForQueueFence(ICommandQueue*, uint64_t) const noexcept
 	{
-		gfatal("Metal backend: InsertWaitForQueueFence not implemented yet");
+		gunimplemented("Metal backend: InsertWaitForQueueFence not implemented yet");
 	}
 
 	void
 	CommandQueue::InsertWaitForQueue(ICommandQueue*) const noexcept
 	{
-		gfatal("Metal backend: InsertWaitForQueue not implemented yet");
+		gunimplemented("Metal backend: InsertWaitForQueue not implemented yet");
 	}
 }
