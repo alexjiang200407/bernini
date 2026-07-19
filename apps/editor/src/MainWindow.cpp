@@ -164,6 +164,10 @@ MainWindow::~MainWindow()
 	m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
+	// After the thumbnails, which release their materials back through it, and before the viewports,
+	// so the instances it deletes leave views that are still standing.
+	m_Renderer->Invoke([&] { m_Assets.reset(); });
+
 	delete m_LevelEditor;
 	delete m_MaterialEditor;
 }
@@ -318,7 +322,9 @@ MainWindow::SetActiveProject(Project project)
 	if (m_Thumbnails)
 		m_Thumbnails->SetAssets(nullptr);
 
-	m_Assets.reset();
+	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
+	// thread like any other scene mutation -- the viewports are still drawing at this point.
+	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
 	// shares is one upload and one reference count no matter which view shows it. Each view names itself
