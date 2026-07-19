@@ -2,6 +2,7 @@
 
 #include "slang/SlangErrorChecker.h"
 #include "uniforms/SlangReflection.h"
+#include "uniforms/Uniforms.h"  // detail::ValueTypeSize
 
 #include <core/err/util.h>
 
@@ -9,11 +10,10 @@ namespace bgl
 {
 	namespace
 	{
-		// Slang's Metal reflection reports sizes/offsets for *ordinary* constant data only, so a bindless
-		// handle (a resource, not ordinary bytes) is invisible to getSize()/getOffset() -- a handle-only
-		// cbuffer measures 0. But in the emitted MSL each handle is a real 8-byte device pointer. So the
-		// constant-buffer byte layout is recomputed here from field sizes/alignments (natural C/MSL
-		// rules), independent of the untrustworthy Metal reflection numbers. Returns the type's size.
+		// Metal reflection can't be trusted for constant-buffer byte layout: a handle is a resource,
+		// invisible to the ordinary-data category, so a handle-only cbuffer measures 0 -- yet the
+		// emitted MSL lays each handle out as a real 8-byte device pointer. So the layout is recomputed
+		// here from field sizes/alignments (natural MSL rules) instead of reflection's numbers.
 		uint32_t
 		MetalLayoutSize(const ReflectedLayout& layout);
 
@@ -69,27 +69,9 @@ namespace bgl
 			switch (layout.kind)
 			{
 			case UniformType::kValue:
-				if (layout.isResourceHandle)
-					return 8;
-				switch (layout.valueType)
-				{
-				case UniformValueType::kMat4x4:
-					return 64;
-				case UniformValueType::kFloat4:
-				case UniformValueType::kInt4:
-				case UniformValueType::kUInt4:
-					return 16;
-				case UniformValueType::kFloat3:
-				case UniformValueType::kInt3:
-				case UniformValueType::kUInt3:
-					return 12;
-				case UniformValueType::kFloat2:
-				case UniformValueType::kInt2:
-				case UniformValueType::kUInt2:
-					return 8;
-				default:
-					return 4;
-				}
+				return layout.isResourceHandle ?
+				           8u :
+				           static_cast<uint32_t>(detail::ValueTypeSize(layout.valueType));
 			case UniformType::kArray:
 			{
 				if (layout.element.empty())
@@ -101,7 +83,38 @@ namespace bgl
 			}
 			case UniformType::kStruct:
 			default:
-				return 0;  // structs are sized by MetalizeStruct
+				return 0;  // structs are sized by MetalizeLayout
+			}
+		}
+
+		// The byte offset of every bindless handle field within the cbuffer. Precomputed once so the
+		// dispatch-time gpuAddress translation doesn't re-walk the layout each call.
+		void
+		CollectHandleOffsets(
+			const ReflectedLayout& layout,
+			uint32_t               base,
+			std::vector<uint32_t>& out)
+		{
+			switch (layout.kind)
+			{
+			case UniformType::kValue:
+				if (layout.isResourceHandle)
+					out.push_back(base);
+				break;
+			case UniformType::kStruct:
+				for (const ReflectedField& field : layout.fields)
+					CollectHandleOffsets(field.layout, base + field.offset, out);
+				break;
+			case UniformType::kArray:
+				if (!layout.element.empty())
+					for (uint32_t i = 0; i < layout.arrayCount; ++i)
+						CollectHandleOffsets(
+							layout.element.front(),
+							base + i * layout.arrayStride,
+							out);
+				break;
+			default:
+				break;
 			}
 		}
 
@@ -189,6 +202,10 @@ namespace bgl
 			// ordinary-data category), so recompute the layout from the field types.
 			ReflectedLayout reflected = ReflectLayoutFromSlang(elementLayout);
 			const uint32_t  size      = MetalizeLayout(reflected);
+
+			std::vector<uint32_t> handleOffsets;
+			CollectHandleOffsets(reflected, 0, handleOffsets);
+			m_HandleOffsets[param->getName()] = std::move(handleOffsets);
 
 			UniformLayoutEntry entry{};
 			entry.size   = size;

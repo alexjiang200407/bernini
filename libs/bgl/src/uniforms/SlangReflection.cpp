@@ -143,11 +143,8 @@ namespace bgl
 		case Kind::Resource:
 		case Kind::SamplerState:
 		{
-			// On the Metal target a bindless handle (RWStructuredBuffer/Texture/SamplerState `.Handle`)
-			// reflects as a Resource/SamplerState, not the uint2 vector the D3D12 target emits. It
-			// occupies 8 bytes in the constant buffer -- a resource id the CPU fills with a
-			// DescriptorHandle -- so lower it to the same kDescriptorHandle either backend writes.
-			// DXIL never reaches here: its handles already arrive as Kind::Vector uint2.
+			// Metal reflects a bindless handle as a Resource/SamplerState (D3D12 emits a uint2). Lower
+			// it to the same 8-byte kDescriptorHandle either backend writes. DXIL never reaches here.
 			result.kind             = UniformType::kValue;
 			result.valueType        = UniformValueType::kDescriptorHandle;
 			result.size             = 8;  // two uint32 -- a resource id / device pointer

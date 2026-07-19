@@ -7,33 +7,6 @@
 
 namespace bgl
 {
-	namespace
-	{
-		// Byte offsets of every bindless resource handle within a uniform mirror.
-		void
-		CollectHandleOffsets(const ReflectedLayout& layout, size_t base, std::vector<size_t>& out)
-		{
-			switch (layout.kind)
-			{
-			case UniformType::kValue:
-				if (layout.isResourceHandle)
-					out.push_back(base);
-				break;
-			case UniformType::kStruct:
-				for (const ReflectedField& field : layout.fields)
-					CollectHandleOffsets(field.layout, base + field.offset, out);
-				break;
-			case UniformType::kArray:
-				if (!layout.element.empty())
-					for (uint32_t i = 0; i < layout.arrayCount; ++i)
-						CollectHandleOffsets(layout.element[0], base + i * layout.arrayStride, out);
-				break;
-			default:
-				break;
-			}
-		}
-	}
-
 	CommandList::CommandList(
 		const CommandListDesc& desc,
 		ICommandAllocator*,
@@ -154,11 +127,7 @@ namespace bgl
 			std::vector<std::byte> patched(size);
 			std::memcpy(patched.data(), uniforms.Data(), size);
 
-			std::vector<size_t> handleOffsets;
-			if (entry.layout)
-				CollectHandleOffsets(*entry.layout, 0, handleOffsets);
-
-			for (size_t offset : handleOffsets)
+			for (uint32_t offset : pipeline->GetHandleOffsets(name))
 			{
 				uint32_t slotIndex = 0;
 				std::memcpy(&slotIndex, patched.data() + offset, sizeof(uint32_t));

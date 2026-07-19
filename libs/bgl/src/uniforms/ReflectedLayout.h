@@ -17,10 +17,8 @@ namespace bgl
 		uint32_t         arrayCount  = 0;
 		uint32_t         arrayStride = 0;
 
-		// A bindless resource handle rather than a plain value. Only the Metal backend sets and reads
-		// this: its handles reflect as Resource/SamplerState and are indistinguishable from a genuine
-		// uint2 by valueType alone, yet must be translated to a gpuAddress at dispatch. False on D3D12,
-		// where the index the handle carries is used verbatim.
+		// A bindless handle, not a plain uint2 (they share a valueType). Metal-only: it marks the
+		// fields the backend translates to a gpuAddress at dispatch. Always false on D3D12.
 		bool                         isResourceHandle = false;
 		std::vector<ReflectedField>  fields;   // kStruct members
 		std::vector<ReflectedLayout> element;  // kArray element type (0 or 1 entry)

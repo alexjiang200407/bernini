@@ -57,10 +57,21 @@ namespace bgl
 			return m_ThreadsPerThreadgroup;
 		}
 
+		// Byte offsets of the cbuffer's bindless handle fields, for the dispatch-time gpuAddress
+		// translation. Precomputed at build so Dispatch never re-walks the layout.
+		[[nodiscard]] const std::vector<uint32_t>&
+		GetHandleOffsets(std::string_view name) const noexcept
+		{
+			auto it = m_HandleOffsets.find(name);
+			gassert(it != m_HandleOffsets.end(), "Unknown uniform buffer name");
+			return it->second;
+		}
+
 	private:
-		ComputePipelineDesc                      m_Desc;
-		NS::SharedPtr<MTL::ComputePipelineState> m_PipelineState;
-		UniformLayoutMap                         m_UniformLayoutEntries;
-		MTL::Size                                m_ThreadsPerThreadgroup = MTL::Size(1, 1, 1);
+		ComputePipelineDesc                                 m_Desc;
+		NS::SharedPtr<MTL::ComputePipelineState>            m_PipelineState;
+		UniformLayoutMap                                    m_UniformLayoutEntries;
+		core::str::unordered_str_map<std::vector<uint32_t>> m_HandleOffsets;
+		MTL::Size m_ThreadsPerThreadgroup = MTL::Size(1, 1, 1);
 	};
 }
