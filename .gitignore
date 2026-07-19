@@ -21,3 +21,6 @@ apps/editor/config.json
 
 # `just install` stages the CLI tools here; this is the dir you put on PATH.
 dist/
+
+TODO.md
+docs/specs
