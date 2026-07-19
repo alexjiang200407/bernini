@@ -83,7 +83,7 @@ TEST_CASE("DeleteMaterial frees a material slot for reuse", "[material][delete][
 	{
 		// kNull and kAssert name shading behaviour; they own no entry in either material buffer.
 		REQUIRE_THROWS_AS(
-			scene->DeleteMaterial(bgl::MaterialHandle{ bgl::MaterialType::kNull, {}, {} }),
+			scene->DeleteMaterial(bgl::MaterialHandle{ .materialType = bgl::MaterialType::kNull }),
 			bgl::SceneError);
 		REQUIRE_THROWS_AS(scene->DeleteMaterial(bgl::MaterialHandle{}), bgl::SceneError);
 	}
