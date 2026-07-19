@@ -44,6 +44,18 @@ namespace bgl
 		std::terminate();
 	}
 
+	// A path that is declared but not yet built -- a backend mid-port, a feature slice not landed.
+	// Same effect as gfatal; the distinct name marks intent at the call site (it *will* be built,
+	// as opposed to a genuine invariant violation).
+	template <typename... Args>
+	[[noreturn]] void
+	gunimplemented(fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		logger::critical(msg, std::forward<Args>(args)...);
+		GDEBUG_BREAK();
+		std::terminate();
+	}
+
 	template <typename... Args>
 	void
 	gerror(fmt::format_string<Args...> msg, Args&&... args) noexcept

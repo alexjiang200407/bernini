@@ -4,6 +4,7 @@
 #include "device/Device_metal.h"
 
 #include "gfx/GraphicsBase.h"
+#include "resource/ResourceManager.h"
 
 #include <bgl/RenderContext.h>
 #include <core/ref/RefCounter.h>
@@ -53,10 +54,11 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 				core::throw_runtime_error("no Metal device available");
 			}
 
-			m_Device    = core::SharedRef<Device>::Make(mtlDevice.get());
-			m_Queue     = m_Device->CreateGraphicsCommandQueue();
-			m_MtlDevice = mtlDevice.get();
-			m_MtlQueue  = static_cast<CommandQueue*>(m_Queue.Get())->GetMTLCommandQueue();
+			m_Device          = core::SharedRef<Device>::Make(mtlDevice.get());
+			m_Queue           = m_Device->CreateGraphicsCommandQueue();
+			m_MtlDevice       = mtlDevice.get();
+			m_MtlQueue        = static_cast<CommandQueue*>(m_Queue.Get())->GetMTLCommandQueue();
+			m_ResourceManager = m_Device->CreateResourceManager(ResourceManagerDesc{}, m_Queue);
 
 			logger::info("Metal device: {}", m_MtlDevice->name()->utf8String());
 
@@ -147,7 +149,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 		core::SharedRef<IResourceManager>
 		GetResourceManagerCpy() const noexcept override
 		{
-			return nullptr;
+			return m_ResourceManager;
 		}
 
 		SceneRef
@@ -217,6 +219,7 @@ fragment float4 fmain(VOut in [[stage_in]]) { return float4(in.col, 1.0); }
 
 		DeviceRef                               m_Device;
 		CommandQueueRef                         m_Queue;
+		ResourceManagerRef                      m_ResourceManager;
 		MTL::Device*                            m_MtlDevice = nullptr;  // owned by m_Device
 		MTL::CommandQueue*                      m_MtlQueue  = nullptr;  // owned by m_Queue
 		NS::SharedPtr<MTL::RenderPipelineState> m_TrianglePipeline;

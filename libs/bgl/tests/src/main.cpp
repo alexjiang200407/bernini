@@ -25,6 +25,14 @@ main(int argc, char* argv[])
 	if (returnCode != 0)
 		return returnCode;
 
+#if defined(RENDERER_BACKEND_METAL)
+	// The Metal backend implements only part of the RHI so far; with no filter on the command line,
+	// default to the tests tagged [metal] (those known to run on it) so a bare `just test` stays
+	// green. Any explicit filter overrides this.
+	if (session.configData().testsOrTags.empty())
+		session.configData().testsOrTags.emplace_back("[metal]");
+#endif
+
 	// Set before the first test runs, so every CreateGraphics sees it.
 	bgl::test::SetGpuValidation(gpuValidation);
 

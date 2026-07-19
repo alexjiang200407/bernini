@@ -1,7 +1,9 @@
 #include "device/Device_metal.h"
 
 #include "cmd/CommandAllocator_metal.h"
+#include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
+#include "resource/ResourceManager_metal.h"
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
@@ -27,54 +29,55 @@ namespace bgl
 
 	core::SharedRef<ICommandList>
 	Device::CreateCommandList(
-		const CommandListDesc&,
-		core::SharedRef<ICommandAllocator>,
-		core::SharedRef<IResourceManager>) const noexcept
+		const CommandListDesc&             desc,
+		core::SharedRef<ICommandAllocator> commandAllocator,
+		core::SharedRef<IResourceManager>  resourceManager) const noexcept
 	{
-		gfatal("Metal backend: CreateCommandList not implemented yet");
-		return nullptr;
+		return core::SharedRef<CommandList>::Make(
+			desc,
+			commandAllocator.Get(),
+			std::move(resourceManager));
 	}
 
 	core::SharedRef<IResourceManager>
-	Device::CreateResourceManager(const ResourceManagerDesc&, core::SharedRef<ICommandQueue>)
+	Device::CreateResourceManager(const ResourceManagerDesc& desc, core::SharedRef<ICommandQueue>)
 		const noexcept
 	{
-		gfatal("Metal backend: CreateResourceManager not implemented yet");
-		return nullptr;
+		return core::SharedRef<ResourceManager>::Make(m_Device.get(), desc);
 	}
 
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc) const noexcept
 	{
-		gfatal("Metal backend: CreateShader not implemented yet");
+		gunimplemented("Metal backend: CreateShader not implemented yet");
 		return nullptr;
 	}
 
 	core::SharedRef<IComputePipeline>
 	Device::CreateComputePipeline(const ComputePipelineDesc&) const noexcept
 	{
-		gfatal("Metal backend: CreateComputePipeline not implemented yet");
+		gunimplemented("Metal backend: CreateComputePipeline not implemented yet");
 		return nullptr;
 	}
 
 	core::SharedRef<IMeshletPipeline>
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc&) const noexcept
 	{
-		gfatal("Metal backend: CreateMeshletPipeline not implemented yet");
+		gunimplemented("Metal backend: CreateMeshletPipeline not implemented yet");
 		return nullptr;
 	}
 
 	Uniforms
 	Device::CreateUniforms(IMeshletPipeline const*, const std::string&) const noexcept
 	{
-		gfatal("Metal backend: CreateUniforms not implemented yet");
+		gunimplemented("Metal backend: CreateUniforms not implemented yet");
 		return Uniforms{};
 	}
 
 	Uniforms
 	Device::CreateUniforms(IComputePipeline const*, const std::string&) const noexcept
 	{
-		gfatal("Metal backend: CreateUniforms not implemented yet");
+		gunimplemented("Metal backend: CreateUniforms not implemented yet");
 		return Uniforms{};
 	}
 }
