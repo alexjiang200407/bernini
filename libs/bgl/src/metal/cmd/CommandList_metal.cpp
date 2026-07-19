@@ -3,6 +3,8 @@
 #include "cmd/CommandQueue_metal.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_metal.h"
+#include "pipeline/MeshletKernel.h"
+#include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
 
 namespace bgl
@@ -143,6 +145,73 @@ namespace bgl
 	CommandList::EndEvent() noexcept
 	{
 		m_CmdBuffer->popDebugGroup();
+	}
+
+	void
+	CommandList::SetMeshletState(const MeshletState& gfxState) noexcept
+	{
+		m_MeshletState = gfxState;
+	}
+
+	void
+	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
+	{
+		gassert(m_Open, "DispatchMesh on a closed command list");
+		gassert(m_MeshletState.kernel != nullptr, "DispatchMesh without a meshlet state");
+		gassert(
+			m_MeshletState.kernel->uniforms.empty(),
+			"Metal DispatchMesh: mesh-shader uniform binding not implemented yet");
+
+		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
+		auto* rm       = m_ResourceManager->As<ResourceManager>();
+
+		// Describe the render pass from the framebuffer. Load-preserve: clears are their own pass, so
+		// prior contents (e.g. an earlier ClearRtv) survive into this draw.
+		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+		const FrameBuffer&         fb   = m_MeshletState.frameBuffer;
+		for (size_t i = 0; i < fb.colorAttachments.size(); ++i)
+		{
+			MTL::Texture* texture =
+				rm->GetTexture(rm->GetRtvTexture(fb.colorAttachments[i])).GetMTLResource();
+			MTL::RenderPassColorAttachmentDescriptor* c = pass->colorAttachments()->object(i);
+			c->setTexture(texture);
+			c->setLoadAction(MTL::LoadActionLoad);
+			c->setStoreAction(MTL::StoreActionStore);
+		}
+
+		MTL::RenderCommandEncoder* enc = m_CmdBuffer->renderCommandEncoder(pass);
+		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
+
+		// Single viewport/scissor only; multi-viewport (setViewports + a viewport-index shader) lands
+		// if a pass ever needs it.
+		const auto& viewports = m_MeshletState.viewportState.viewports;
+		if (!viewports.empty())
+		{
+			const Viewport& vp = viewports.front();
+			enc->setViewport(
+				MTL::Viewport{ vp.minX,
+			                   vp.minY,
+			                   vp.maxX - vp.minX,
+			                   vp.maxY - vp.minY,
+			                   vp.minZ,
+			                   vp.maxZ });
+		}
+		const auto& scissors = m_MeshletState.viewportState.scissorRects;
+		if (!scissors.empty())
+		{
+			const Rect& r = scissors.front();
+			enc->setScissorRect(
+				MTL::ScissorRect{ static_cast<NS::UInteger>(r.minX),
+			                      static_cast<NS::UInteger>(r.minY),
+			                      static_cast<NS::UInteger>(r.maxX - r.minX),
+			                      static_cast<NS::UInteger>(r.maxY - r.minY) });
+		}
+
+		enc->drawMeshThreadgroups(
+			MTL::Size(x, y, z),
+			pipeline->GetThreadsPerObjectThreadgroup(),
+			pipeline->GetThreadsPerMeshThreadgroup());
+		enc->endEncoding();
 	}
 
 	void

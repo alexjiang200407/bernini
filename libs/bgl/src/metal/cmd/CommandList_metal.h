@@ -104,20 +104,19 @@ namespace bgl
 			gunimplemented(k);
 		}
 		void
-		SetMeshletState(const MeshletState&) noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
-		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
-		{
-			gunimplemented(k);
-		}
-		void
 		DispatchMeshIndirect(uint32_t) noexcept override
 		{
 			gunimplemented(k);
 		}
+
+		void
+		SetMeshletState(const MeshletState& gfxState) noexcept override;
+
+		void
+		DispatchMesh(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) noexcept override;
 
 		void
 		SetComputeState(const ComputeState& computeState) noexcept override;
@@ -140,6 +139,7 @@ namespace bgl
 		NS::SharedPtr<NS::AutoreleasePool>
 					 m_ScopePool;  // drains at Close; scopes Open..Close temporaries
 		ComputeState m_ComputeState;
+		MeshletState m_MeshletState;
 		bool         m_Open = false;
 	};
 }
