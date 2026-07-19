@@ -27,6 +27,15 @@ namespace bgl
 			return m_Device;
 		}
 
+		// Resolves a bindless buffer handle's slot index (as carried in a DescriptorHandle) to its
+		// Metal buffer, for the dispatch-time gpuAddress translation. The index is trusted -- it came
+		// from a handle the engine already validated when it wrote the uniform.
+		[[nodiscard]] MTL::Buffer*
+		GetBufferBySlotIndex(uint32_t index) const noexcept
+		{
+			return m_Buffers[index].GetMTLResource();
+		}
+
 		BufferHandle
 		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
 

@@ -139,6 +139,19 @@ namespace bgl
 			result.size      = static_cast<uint32_t>(typeLayout->getSize());
 			return result;
 		}
+
+		case Kind::Resource:
+		case Kind::SamplerState:
+		{
+			// Metal reflects a bindless handle as a Resource/SamplerState (D3D12 emits a uint2). Lower
+			// it to the same 8-byte kDescriptorHandle either backend writes. DXIL never reaches here.
+			result.kind             = UniformType::kValue;
+			result.valueType        = UniformValueType::kDescriptorHandle;
+			result.size             = 8;  // two uint32 -- a resource id / device pointer
+			result.isResourceHandle = true;
+			return result;
+		}
+
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ConstantBuffer);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::DynamicResource);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Enum);
@@ -150,8 +163,6 @@ namespace bgl
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::OutputStream);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ParameterBlock);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Pointer);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Resource);
-			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::SamplerState);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::ShaderStorageBuffer);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::Specialized);
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::TextureBuffer);

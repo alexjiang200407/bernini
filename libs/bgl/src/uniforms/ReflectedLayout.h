@@ -11,11 +11,15 @@ namespace bgl
 	// cached to disk (see the shader cache) instead of re-reflecting the source.
 	struct ReflectedLayout
 	{
-		UniformType                  kind        = UniformType::kNull;
-		UniformValueType             valueType   = UniformValueType::kNone;
-		uint32_t                     size        = 0;
-		uint32_t                     arrayCount  = 0;
-		uint32_t                     arrayStride = 0;
+		UniformType      kind        = UniformType::kNull;
+		UniformValueType valueType   = UniformValueType::kNone;
+		uint32_t         size        = 0;
+		uint32_t         arrayCount  = 0;
+		uint32_t         arrayStride = 0;
+
+		// A bindless handle, not a plain uint2 (they share a valueType). Metal-only: it marks the
+		// fields the backend translates to a gpuAddress at dispatch. Always false on D3D12.
+		bool                         isResourceHandle = false;
 		std::vector<ReflectedField>  fields;   // kStruct members
 		std::vector<ReflectedLayout> element;  // kArray element type (0 or 1 entry)
 	};

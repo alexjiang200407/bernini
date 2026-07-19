@@ -1,6 +1,8 @@
 #include "cmd/CommandList_metal.h"
 
 #include "cmd/CommandQueue_metal.h"
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/ComputePipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
 
 namespace bgl
@@ -94,5 +96,53 @@ namespace bgl
 	CommandList::EndEvent() noexcept
 	{
 		m_CmdBuffer->popDebugGroup();
+	}
+
+	void
+	CommandList::SetComputeState(const ComputeState& computeState) noexcept
+	{
+		m_ComputeState = computeState;
+	}
+
+	void
+	CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept
+	{
+		gassert(m_Open, "Dispatch on a closed command list");
+		gassert(m_ComputeState.kernel != nullptr, "Dispatch without a compute state");
+
+		auto* pipeline = m_ComputeState.kernel->pipeline->As<ComputePipeline>();
+		auto* rm       = m_ResourceManager->As<ResourceManager>();
+
+		auto* enc = m_CmdBuffer->computeCommandEncoder();
+		enc->setComputePipelineState(pipeline->GetMTLPipelineState());
+
+		for (const auto& [name, uniforms] : m_ComputeState.kernel->uniforms)
+		{
+			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
+			const size_t             size  = uniforms.GetSize();
+
+			// The shared mirror carries each handle's slot.index; Metal wants the buffer's gpuAddress
+			// there. Patch a copy, make each referenced buffer resident, then bind the copy at the
+			// kernel's [[buffer(rootParamIndex)]] slot.
+			std::vector<std::byte> patched(size);
+			std::memcpy(patched.data(), uniforms.Data(), size);
+
+			for (uint32_t offset : pipeline->GetHandleOffsets(name))
+			{
+				uint32_t slotIndex = 0;
+				std::memcpy(&slotIndex, patched.data() + offset, sizeof(uint32_t));
+
+				MTL::Buffer*   buffer = rm->GetBufferBySlotIndex(slotIndex);
+				const uint64_t addr   = buffer->gpuAddress();
+				std::memcpy(patched.data() + offset, &addr, sizeof(uint64_t));
+
+				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
+			}
+
+			enc->setBytes(patched.data(), size, entry.rootParamIndex);
+		}
+
+		enc->dispatchThreadgroups(MTL::Size(x, y, z), pipeline->GetThreadsPerThreadgroup());
+		enc->endEncoding();
 	}
 }

@@ -58,6 +58,8 @@ namespace bgl
 			const noexcept override;
 
 	private:
-		NS::SharedPtr<MTL::Device> m_Device;
+		NS::SharedPtr<MTL::Device>           m_Device;
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+		Slang::ComPtr<slang::ISession>       m_SlangSession;
 	};
 }

@@ -3,7 +3,9 @@
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
+#include "pipeline/ComputePipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
+#include "resource/Shader_metal.h"
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
@@ -13,7 +15,32 @@
 
 namespace bgl
 {
-	Device::Device(MTL::Device* device) : m_Device(NS::RetainPtr(device)) {}
+	namespace
+	{
+		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
+	}
+
+	Device::Device(MTL::Device* device) : m_Device(NS::RetainPtr(device))
+	{
+		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
+		gassert(m_SlangGlobalSession != nullptr, "Failed to create Slang global session");
+
+		slang::SessionDesc sessionDesc = {};
+		slang::TargetDesc  targetDesc  = {};
+
+		targetDesc.format  = SLANG_METAL;
+		targetDesc.profile = m_SlangGlobalSession->findProfile("sm_6_6");
+
+		sessionDesc.targetCount     = 1;
+		sessionDesc.targets         = &targetDesc;
+		sessionDesc.searchPaths     = c_ShaderSearchPaths;
+		sessionDesc.searchPathCount = std::size(c_ShaderSearchPaths);
+		// Match the column-major convention the CPU side uploads matrices in (see Device_d3d12).
+		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
+		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef());
+		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
+	}
 
 	core::SharedRef<ICommandQueue>
 	Device::CreateCommandQueue(QueueType) const noexcept
@@ -47,17 +74,15 @@ namespace bgl
 	}
 
 	core::SharedRef<IShader>
-	Device::CreateShader(ShaderDesc) const noexcept
+	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		gunimplemented("Metal backend: CreateShader not implemented yet");
-		return nullptr;
+		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession.get());
 	}
 
 	core::SharedRef<IComputePipeline>
-	Device::CreateComputePipeline(const ComputePipelineDesc&) const noexcept
+	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		gunimplemented("Metal backend: CreateComputePipeline not implemented yet");
-		return nullptr;
+		return core::SharedRef<ComputePipeline>::Make(m_Device.get(), m_SlangSession.get(), desc);
 	}
 
 	core::SharedRef<IMeshletPipeline>
@@ -75,9 +100,9 @@ namespace bgl
 	}
 
 	Uniforms
-	Device::CreateUniforms(IComputePipeline const*, const std::string&) const noexcept
+	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
 	{
-		gunimplemented("Metal backend: CreateUniforms not implemented yet");
-		return Uniforms{};
+		return Uniforms(pipeline, cbufferName);
 	}
 }
