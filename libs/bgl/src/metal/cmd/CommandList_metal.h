@@ -115,16 +115,15 @@ namespace bgl
 		{
 			gunimplemented(k);
 		}
+
 		void
-		SetComputeState(const ComputeState&) noexcept override
-		{
-			gunimplemented(k);
-		}
+		SetComputeState(const ComputeState& computeState) noexcept override;
+
 		void
-		Dispatch(uint32_t, uint32_t, uint32_t) noexcept override
-		{
-			gunimplemented(k);
-		}
+		Dispatch(
+			uint32_t threadGroupCountX,
+			uint32_t threadGroupCountY,
+			uint32_t threadGroupCountZ) noexcept override;
 
 	private:
 		static constexpr const char* k =
@@ -136,7 +135,8 @@ namespace bgl
 
 		NS::SharedPtr<MTL::CommandBuffer> m_CmdBuffer;
 		NS::SharedPtr<NS::AutoreleasePool>
-			 m_ScopePool;  // drains at Close; scopes Open..Close temporaries
-		bool m_Open = false;
+					 m_ScopePool;  // drains at Close; scopes Open..Close temporaries
+		ComputeState m_ComputeState;
+		bool         m_Open = false;
 	};
 }
