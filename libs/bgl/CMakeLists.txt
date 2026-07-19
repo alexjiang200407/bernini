@@ -250,6 +250,18 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 
 	add_dependencies(bgl_tests bgl_idl_generate copy_assets)
 
+	# The Metal backend compiles Slang at runtime, so the raw .slang sources must sit next to the exe
+	# (the session's search paths). The D3D12 build gets this from bgl_copy_shader_src/tests, which
+	# live behind the build-time slangc validation; stage them directly here instead.
+	add_custom_command(TARGET bgl_tests POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "$<TARGET_FILE_DIR:bgl_tests>/shaders/src"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests" "$<TARGET_FILE_DIR:bgl_tests>/shaders/tests"
+		COMMENT "Staging Slang sources for runtime Metal compilation"
+		VERBATIM
+	)
+
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)
