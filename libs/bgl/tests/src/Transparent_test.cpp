@@ -33,6 +33,30 @@ namespace
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
 		view->CreateStaticMeshInstance(plane, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z)));
 	}
+
+	// The same blend material authored the other way: a loose material routes its channels
+	// explicitly, and an unrouted one falls back to exactly the PbrMaterial defaults (white for base
+	// colour / ORM, flat normal for XY). So with no routes and matching factors the two must shade
+	// identically -- while taking opposite branches of the shared transparent pixel shader.
+	void
+	addLoosePane(
+		const bgl::SceneRef&     scene,
+		const bgl::SceneViewRef& view,
+		const glm::vec4&         baseColor,
+		float                    z,
+		bool                     occlude = false)
+	{
+		auto desc            = bgl::LoosePbrMaterialDesc();
+		desc.baseColorFactor = baseColor;
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 0.9f;
+		desc.layerType       = bgl::LayerType::kBlend;
+		desc.occlude         = occlude;
+
+		auto material = scene->CreateLoosePbrMaterial(desc);
+		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
+		view->CreateStaticMeshInstance(plane, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z)));
+	}
 }
 
 // Two translucent panes overlap at screen centre: red near the camera, blue behind it. Correct
@@ -206,4 +230,103 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 	// The pre-pass stamps the near red pane's depth, so the far blue is depth-rejected: its
 	// contribution to the overlap drops sharply.
 	CHECK(bOcclude < bPlain * 0.65f);
+}
+
+// The transparent colour and pre-pass shaders are shared by both material types and branch on a
+// per-instance discriminator. Every other transparent case here uses a baked PBR material, so the
+// loose branch -- the one the Material Editor's preview actually takes -- would otherwise be
+// exercised by nothing. Authoring the same material both ways must produce the same pixels; if the
+// discriminator were wrong the loose render would read the other material buffer entirely.
+TEST_CASE("A loose blend material renders the same as the baked one", "[transparent][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 16;
+	sceneDesc.maxMeshlets             = 1024;
+	sceneDesc.maxSubmeshes            = 16;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
+	sceneDesc.maxPbrMaterials         = 8;
+	sceneDesc.maxLoosePbrMaterials    = 8;
+
+	const glm::vec4 red{ 1.0f, 0.03f, 0.03f, 0.5f };
+	const glm::vec4 blue{ 0.03f, 0.03f, 1.0f, 0.5f };
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 0.0f, 19.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	// A scene per render, so only one of the two material buffers is ever populated. Sharing one
+	// would let a read of the *wrong* buffer land on an identically-authored material and match
+	// anyway -- the test would then pass even with the type discriminator broken.
+	const auto render = [&](bool loose, bool occlude, const std::string& path) {
+		auto scene = gfx->CreateScene(sceneDesc);
+		auto view  = gfx->CreateSceneView(scene, 8);
+		view->SetEnvironmentMap(
+			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+
+		if (loose)
+		{
+			addLoosePane(scene, view, blue, 0.0f, occlude);
+			addLoosePane(scene, view, red, 5.0f, occlude);
+		}
+		else
+		{
+			addPane(scene, view, blue, 0.0f, occlude);
+			addPane(scene, view, red, 5.0f, occlude);
+		}
+
+		auto context     = bgl::RenderContext();
+		context.view     = view;
+		context.camera   = camera;
+		context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		gfx->DrawFrame(target, context);
+		gfx->ScreenshotPng(target, path);
+	};
+
+	SECTION("plain blend")
+	{
+		render(false, false, "assets/golden/transparent_uber_baked.got.png");
+		render(true, false, "assets/golden/transparent_uber_loose.got.png");
+
+		CHECK(
+			bgl::test::MatchesGolden(
+				"assets/golden/transparent_uber_baked.got.png",
+				"assets/golden/transparent_uber_loose.got.png"));
+	}
+
+	// Covers the pre-pass shader too, which carries the same branch.
+	SECTION("self-occluding blend")
+	{
+		render(false, true, "assets/golden/transparent_uber_baked_occlude.got.png");
+		render(true, true, "assets/golden/transparent_uber_loose_occlude.got.png");
+
+		CHECK(
+			bgl::test::MatchesGolden(
+				"assets/golden/transparent_uber_baked_occlude.got.png",
+				"assets/golden/transparent_uber_loose_occlude.got.png"));
+	}
 }
