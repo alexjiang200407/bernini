@@ -137,6 +137,15 @@ if (BUILD_TESTS)
 
     foreach(SHADER ${SLANG_TEST_SOURCES})
         get_filename_component(SHADER_BARE_NAME "${SHADER}" NAME_WE)
+        get_filename_component(SHADER_FILENAME "${SHADER}" NAME)
+
+        # This build-time validation infers the stage from a VS/PS/GS/MS/AS/CS filename prefix and
+        # compiles the `main` entry. A multi-stage test shader (mesh + pixel in one file, with named
+        # entry points) fits neither, so skip it here -- it is still staged below and validated when
+        # the test compiles it at runtime.
+        if(NOT SHADER_FILENAME MATCHES "^(VS|PS|GS|MS|AS|CS)")
+            continue()
+        endif()
 
         compile_shader(
             FILE     "${SHADER}"
