@@ -82,7 +82,11 @@ namespace bgl
 			d3d12ErrChecker;
 
 		swap->QueryInterface(IID_PPV_ARGS(&m_SwapChain)) >> d3d12ErrChecker;
-		factory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER) >> d3d12ErrChecker;
+		// NO_WINDOW_CHANGES stops DXGI hooking the window's message queue. Without it a Present issued
+		// from a thread other than the window's can deadlock against that queue, and bgl resizes the
+		// swapchain itself rather than letting DXGI respond to window changes.
+		factory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER) >>
+			d3d12ErrChecker;
 
 		m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
 	}
