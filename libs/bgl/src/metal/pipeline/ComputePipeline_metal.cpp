@@ -10,13 +10,6 @@ namespace bgl
 {
 	namespace
 	{
-		// Metal reflection can't be trusted for constant-buffer byte layout: a handle is a resource,
-		// invisible to the ordinary-data category, so a handle-only cbuffer measures 0 -- yet the
-		// emitted MSL lays each handle out as a real 8-byte device pointer. So the layout is recomputed
-		// here from field sizes/alignments (natural MSL rules) instead of reflection's numbers.
-		uint32_t
-		MetalLayoutSize(const ReflectedLayout& layout);
-
 		uint32_t
 		MetalAlign(const ReflectedLayout& layout)
 		{
@@ -63,30 +56,6 @@ namespace bgl
 			return (offset + align - 1) & ~(align - 1);
 		}
 
-		uint32_t
-		MetalLayoutSize(const ReflectedLayout& layout)
-		{
-			switch (layout.kind)
-			{
-			case UniformType::kValue:
-				return layout.isResourceHandle ?
-				           8u :
-				           static_cast<uint32_t>(detail::ValueTypeSize(layout.valueType));
-			case UniformType::kArray:
-			{
-				if (layout.element.empty())
-					return 0;
-				const uint32_t stride = AlignUp(
-					MetalLayoutSize(layout.element.front()),
-					MetalAlign(layout.element.front()));
-				return stride * layout.arrayCount;
-			}
-			case UniformType::kStruct:
-			default:
-				return 0;  // structs are sized by MetalizeLayout
-			}
-		}
-
 		// The byte offset of every bindless handle field within the cbuffer. Precomputed once so the
 		// dispatch-time gpuAddress translation doesn't re-walk the layout each call.
 		void
@@ -118,33 +87,51 @@ namespace bgl
 			}
 		}
 
-		// Recomputes field offsets and struct sizes for the whole tree under Metal's byte layout.
-		// Returns the (aligned) size of `layout`.
+		// Recomputes the whole tree's field offsets, leaf data sizes, and array strides under Metal's
+		// cbuffer layout, and returns the type's *footprint* (its slot size). Metal reflection can't
+		// supply these: a bindless handle is a resource, invisible to the ordinary-data category, so a
+		// handle-bearing cbuffer measures 0 there while the emitted MSL lays each handle out as an
+		// 8-byte device pointer. `size` on a leaf stays the data size the CPU writes (a cbuffer float3
+		// is 12 bytes of data), which is smaller than its 16-byte footprint.
 		uint32_t
 		MetalizeLayout(ReflectedLayout& layout)
 		{
-			if (layout.kind == UniformType::kStruct)
+			switch (layout.kind)
+			{
+			case UniformType::kValue:
+				layout.size = layout.isResourceHandle ?
+				                  8u :
+				                  static_cast<uint32_t>(detail::ValueTypeSize(layout.valueType));
+				return AlignUp(layout.size, MetalAlign(layout));
+
+			case UniformType::kArray:
+			{
+				if (layout.element.empty())
+					return 0;
+				const uint32_t elementFootprint = MetalizeLayout(layout.element.front());
+				layout.arrayStride              = elementFootprint;
+				layout.size                     = elementFootprint * layout.arrayCount;
+				return layout.size;
+			}
+
+			case UniformType::kStruct:
 			{
 				uint32_t offset = 0;
 				for (ReflectedField& field : layout.fields)
 				{
-					const uint32_t fieldSize  = MetalizeLayout(field.layout);
-					const uint32_t fieldAlign = MetalAlign(field.layout);
-					offset                    = AlignUp(offset, fieldAlign);
-					field.offset              = offset;
-					offset += fieldSize;
+					const uint32_t footprint = MetalizeLayout(field.layout);
+					offset                   = AlignUp(offset, MetalAlign(field.layout));
+					field.offset             = offset;
+					offset += footprint;
 				}
 				layout.size = AlignUp(offset, MetalAlign(layout));
 				return layout.size;
 			}
 
-			if (layout.kind == UniformType::kArray && !layout.element.empty())
-			{
-				MetalizeLayout(layout.element.front());
+			default:
+				layout.size = 0;
+				return 0;
 			}
-
-			layout.size = MetalLayoutSize(layout);
-			return layout.size;
 		}
 	}
 
