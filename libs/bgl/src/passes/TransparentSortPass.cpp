@@ -142,7 +142,7 @@ namespace bgl
 		cmd->WriteBuffer(ctx.GetBuffer(c_CountBuffer), &c_Zero, sizeof(c_Zero));
 
 		// Seeded rather than zeroed: a frame with no transparent instances still has the forward
-		// pass issue its two indirect dispatches, and a zeroed y/z would be an invalid dispatch.
+		// pass issue its three indirect dispatches, and a zeroed y/z would be an invalid dispatch.
 		static constexpr std::array<idl::DispatchArgs, idl::cTransparentPartitionCount> c_Seed =
 			[] {
 				std::array<idl::DispatchArgs, idl::cTransparentPartitionCount> seed{};

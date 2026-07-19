@@ -26,10 +26,13 @@ public struct ForwardVSOut
 
 // A loose material stores its channels as routes rather than a baked triplet, so it reads from a
 // different buffer. The PSO the instance resolved to is what says which.
-public bool IsLoosePso(uint pso)
+//
+// Written as comparisons, not a switch over the enum: the switch form silently misclassifies here
+// in the mesh-shader stage, which the loose-vs-baked render test catches.
+public bool IsLoosePso(PsoType pso)
 {
-    return pso == uint(PsoType::kOpaque_StaticMesh_LoosePbr) || pso == uint(PsoType::kAlphaTest_StaticMesh_LoosePbr) ||
-           pso == uint(PsoType::kTransparent_StaticMesh_LoosePbr) || pso == uint(PsoType::kTransparentOcclude_StaticMesh_LoosePbr);
+    return pso == PsoType::kOpaque_StaticMesh_LoosePbr || pso == PsoType::kAlphaTest_StaticMesh_LoosePbr ||
+           pso == PsoType::kTransparent_StaticMesh_LoosePbr || pso == PsoType::kTransparentOcclude_StaticMesh_LoosePbr;
 }
 
 public void ASBase(

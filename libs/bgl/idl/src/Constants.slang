@@ -19,8 +19,18 @@ public static const uint cCompactGroupSize = 128;
 
 // One workgroup sorts the whole transparent list in groupshared memory, which caps how many
 // transparent instances a view can draw. A multi-group radix sort is the scale-up past this.
+//
+// Both are bounded by per-backend device limits, not just by taste. Groupshared use is
+// cTransparentSortCapacity * 8 bytes = 8 KiB, under every target's floor (D3D12 32 KiB, Vulkan's
+// guaranteed minimum 16 KiB). The group size is the tighter one: D3D12, Metal and desktop Vulkan
+// all allow 1024 invocations, but Vulkan only *guarantees* 128, so a Vulkan backend must validate
+// this against maxComputeWorkGroupInvocations rather than assume it.
 public static const uint cTransparentSortCapacity = 1024; // must stay a power of two
 public static const uint cTransparentSortGroupSize = 512; // one thread per compare-exchange pair
+
+// Fills the sort's tail so padding never displaces a real entry. Reserved: TransparentDepthKeys
+// caps real keys below it, or padding could sort into the drawn prefix.
+public static const uint cSortPadKey = 0xFFFFFFFF;
 
 // The sorted list is partitioned by occlude class: [self-occluding][plain]. Each partition is one
 // indirect dispatch, so the draw needs no discovered run list.

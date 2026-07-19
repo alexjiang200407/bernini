@@ -67,13 +67,17 @@ TEST_CASE(
 		float        z;
 		bgl::PsoType pso;
 	};
-	const std::array<Placement, 6> placements = { {
+	const std::array<Placement, 7> placements = { {
 		{ 10.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
 		{ 5.0f, bgl::PsoType::kOpaque_StaticMesh_PBR },
 		{ 30.0f, bgl::PsoType::kTransparentOcclude_StaticMesh_LoosePbr },
 		{ 20.0f, bgl::PsoType::kTransparent_StaticMesh_LoosePbr },
 		{ 7.0f, bgl::PsoType::kAlphaTest_StaticMesh_PBR },
 		{ 50.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
+		// Exactly at the camera: distSq is 0, which inverts to all-ones and would key to the sort's
+		// padding value if the key were not capped below it. Padding could then outrank a real entry
+		// and put 0xFFFFFFFF into the drawn range, which ASBase dereferences unchecked.
+		{ 0.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
 	} };
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;
@@ -237,6 +241,11 @@ TEST_CASE(
 	{
 		INFO("instance " << entry.instance << " key " << entry.key);
 		CHECK(transparentInstances.contains(entry.instance));
+
+		// The sort reserves this value for its tail padding; a real key reaching it lets padding
+		// displace a real entry into the drawn prefix.
+		CHECK(entry.key != bgl::idl::cSortPadKey);
+
 		keyOfInstance.emplace(entry.instance, entry.key);
 	}
 	REQUIRE(keyOfInstance.size() == transparentInstances.size());

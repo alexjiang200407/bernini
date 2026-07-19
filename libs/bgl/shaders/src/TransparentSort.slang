@@ -33,11 +33,11 @@ void main(uint tid: SV_GroupThreadID)
         gOccludeCount = 0u;
     }
 
-    // Pad to the full power of two with the maximum key so the padding sorts to the tail and never
+    // Pad to the full power of two with the reserved key so the padding sorts to the tail and never
     // displaces a real entry.
     for (uint i = tid; i < cTransparentSortCapacity; i += cTransparentSortGroupSize)
     {
-        gItems[i] = (i < n) ? gUniforms.entries[i] : uint2(0xFFFFFFFFu, 0xFFFFFFFFu);
+        gItems[i] = (i < n) ? gUniforms.entries[i] : uint2(cSortPadKey, cSortPadKey);
     }
     GroupMemoryBarrierWithGroupSync();
 
