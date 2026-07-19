@@ -11,6 +11,7 @@
 
 class MaterialGraphModel;
 class TexturePreviewCache;
+class Renderer;
 
 /**
  * Rewrites `path` relative to `dir`, or resolves it against `dir` when `toRelative` is false.
@@ -35,11 +36,11 @@ RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool t
 /**
  * The node types a material graph can hold.
  *
- * `scene` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph be
- * built and compiled with no graphics device.
+ * `renderer` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph
+ * be built and compiled with no graphics device.
  */
 [[nodiscard]] std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
-MakeMaterialNodeRegistry(bgl::IScene* scene, TexturePreviewCache* previews);
+MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews);
 
 /**
  * Compiles `model` into the material it authors: the factors and alpha mode of its sink, the nine

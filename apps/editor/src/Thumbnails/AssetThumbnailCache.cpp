@@ -1,6 +1,7 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 
 #include "Mesh/BMeshUtil.h"
+#include "Render/Renderer.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -159,64 +160,72 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 
 	// No device (the editor runs without one in tests): stay inert. Lookup then always misses and
 	// Request is a no-op, so callers need no special case.
-	if (m_Desc.gfx.Get() == nullptr || m_Desc.scene.Get() == nullptr)
+	if (m_Desc.renderer == nullptr)
 		return;
 
-	bgl::IGraphics* gfx   = m_Desc.gfx.Get();
-	bgl::IScene*    scene = m_Desc.scene.Get();
-
-	try
-	{
-		auto rtDesc     = bgl::RenderTargetDesc();
-		rtDesc.width    = static_cast<int>(m_Desc.dimension);
-		rtDesc.height   = static_cast<int>(m_Desc.dimension);
-		rtDesc.headless = true;
-
-		m_RenderTarget = gfx->CreateRenderTarget(rtDesc);
-		m_SceneView    = gfx->CreateSceneView(m_Desc.scene, m_Desc.maxInstances);
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("AssetThumbnail: no render target, thumbnails disabled: %s", e.what());
-		m_RenderTarget = nullptr;
-		m_SceneView    = nullptr;
-		return;
-	}
-
-	bgl::ISceneView* view = m_SceneView.Get();
-	view->SetExposure(m_Desc.exposure);
-
-	const auto irradiance = TryLoadTexture(scene, m_Desc.irradiance);
-	const auto prefilter  = TryLoadTexture(scene, m_Desc.prefilter);
-	const auto brdfLut    = TryLoadTexture(scene, m_Desc.brdfLut);
-	if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
-	{
+	m_Desc.renderer->Invoke([&] {
 		try
 		{
-			view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
+			auto rtDesc     = bgl::RenderTargetDesc();
+			rtDesc.width    = static_cast<int>(m_Desc.dimension);
+			rtDesc.height   = static_cast<int>(m_Desc.dimension);
+			rtDesc.headless = true;
+
+			m_RenderTarget = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtDesc);
+			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
+				m_Desc.renderer->GetScene(),
+				m_Desc.maxInstances);
 		}
 		catch (const std::exception& e)
 		{
-			qWarning("AssetThumbnail: SetEnvironmentMap failed: %s", e.what());
+			qWarning("AssetThumbnail: no render target, thumbnails disabled: %s", e.what());
+			m_RenderTarget = nullptr;
+			m_SceneView    = nullptr;
+			return;
 		}
-	}
 
-	if (const auto skybox = TryLoadTexture(scene, m_Desc.skybox); skybox.textureSlot)
-	{
-		try
-		{
-			view->SetSkyBox({ skybox });
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("AssetThumbnail: SetSkyBox failed: %s", e.what());
-		}
-	}
+		bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
+		bgl::ISceneView* view  = m_SceneView.Get();
+		view->SetExposure(m_Desc.exposure);
 
-	// What a submesh gets when the mesh names no material, or names one that will not load. A fresh
-	// import names none at all: toBMesh drops the source's materials on purpose.
-	m_DefaultMaterial = scene->CreatePbrMaterial(
-		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.0f, .roughnessFactor = 1.0f });
+		const auto irradiance = TryLoadTexture(scene, m_Desc.irradiance);
+		const auto prefilter  = TryLoadTexture(scene, m_Desc.prefilter);
+		const auto brdfLut    = TryLoadTexture(scene, m_Desc.brdfLut);
+		if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
+		{
+			try
+			{
+				view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: SetEnvironmentMap failed: %s", e.what());
+			}
+		}
+
+		if (const auto skybox = TryLoadTexture(scene, m_Desc.skybox); skybox.textureSlot)
+		{
+			try
+			{
+				view->SetSkyBox({ skybox });
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: SetSkyBox failed: %s", e.what());
+			}
+		}
+
+		// What a submesh gets when the mesh names no material, or names one that will not load. A
+		// fresh import names none at all: toBMesh drops the source's materials on purpose.
+		m_DefaultMaterial = scene->CreatePbrMaterial(
+			{ .baseColorFactor = glm::vec4(1.0f),
+		      .metallicFactor  = 0.0f,
+		      .roughnessFactor = 1.0f });
+	});
+
+	// Target creation may have failed inside the closure and left the cache inert.
+	if (!IsReady())
+		return;
 
 	m_DrainTimer = new QTimer(this);
 	m_DrainTimer->setInterval(0);
@@ -227,6 +236,29 @@ AssetThumbnailCache::~AssetThumbnailCache()
 {
 	ReleaseGeometry();
 	ReleaseMaterials();
+
+	if (m_Desc.renderer == nullptr)
+		return;
+
+	// Member destruction would otherwise release these on whichever thread ran the destructor -- the
+	// GUI thread -- flushing the command queue and freeing SceneView's allocations while the render
+	// thread is still presenting the viewports.
+	m_Desc.renderer->Invoke([&] {
+		if (m_DefaultMaterial.IsValid())
+		{
+			try
+			{
+				m_Desc.renderer->GetScene()->DeleteMaterial(m_DefaultMaterial);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: failed to delete the default material: %s", e.what());
+			}
+		}
+
+		m_SceneView    = nullptr;
+		m_RenderTarget = nullptr;
+	});
 }
 
 void
@@ -377,18 +409,21 @@ AssetThumbnailCache::DrainOne()
 	const PendingRender pending = m_Queue.dequeue();
 	m_InFlight.remove(pending.path);
 
-	QImage image;
-	try
-	{
-		image =
-			pending.type == ThumbnailType::kMesh ? RenderMesh(pending) : RenderMaterial(pending);
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("AssetThumbnail: cannot render '%s': %s", qPrintable(pending.path), e.what());
-	}
+	const QImage image = m_Desc.renderer->Invoke([&] {
+		QImage img;
+		try
+		{
+			img = pending.type == ThumbnailType::kMesh ? RenderMesh(pending) :
+			                                             RenderMaterial(pending);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("AssetThumbnail: cannot render '%s': %s", qPrintable(pending.path), e.what());
+		}
 
-	ReleaseGeometry();
+		ReleaseGeometry();
+		return img;
+	});
 
 	if (image.isNull())
 		return;
@@ -432,7 +467,7 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 {
 	const assetlib::BMesh& mesh = *pending.mesh;
 
-	bgl::IScene*     scene = m_Desc.scene.Get();
+	bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
 	bgl::ISceneView* view  = m_SceneView.Get();
 
 	auto materials = std::vector<bgl::MaterialHandle>();
@@ -494,7 +529,7 @@ AssetThumbnailCache::RenderMaterial(const PendingRender& pending)
 	// authored it against.
 	const bgl::MaterialHandle material = AcquireMaterial(relPath, pending.prefetch.get());
 
-	m_Geoms.push_back(m_Desc.scene->AddSphereGeom(32, 32, 1.0f, material));
+	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
 
 	return Shoot(glm::vec3(0.0f), 1.0f);
@@ -527,9 +562,11 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 	rc.viewport =
 		bgl::Viewport(static_cast<float>(m_Desc.dimension), static_cast<float>(m_Desc.dimension));
 
-	for (int i = 0; i < c_WarmupFrames; ++i) m_Desc.gfx->DrawFrame(m_RenderTarget, rc);
+	for (int i = 0; i < c_WarmupFrames; ++i)
+		m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, rc);
 
-	const assetlib::ImageData shot = m_Desc.gfx->ScreenshotToMemory(m_RenderTarget);
+	const assetlib::ImageData shot =
+		m_Desc.renderer->GetGraphics()->ScreenshotToMemory(m_RenderTarget);
 
 	// Deep-copy: `shot` owns the pixels and dies at the end of this scope.
 	return QImage(
@@ -547,35 +584,37 @@ AssetThumbnailCache::ReleaseGeometry()
 	if (!IsReady())
 		return;
 
-	for (const bgl::MeshInstanceHandle& instance : m_Instances)
-	{
-		if (!instance.IsValid())
-			continue;
+	m_Desc.renderer->Invoke([&] {
+		for (const bgl::MeshInstanceHandle& instance : m_Instances)
+		{
+			if (!instance.IsValid())
+				continue;
 
-		try
-		{
-			m_SceneView->DeleteMeshInstance(instance);
+			try
+			{
+				m_SceneView->DeleteMeshInstance(instance);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: failed to delete an instance: %s", e.what());
+			}
 		}
-		catch (const std::exception& e)
-		{
-			qWarning("AssetThumbnail: failed to delete an instance: %s", e.what());
-		}
-	}
 
-	for (const bgl::GeomHandle& geom : m_Geoms)
-	{
-		if (!geom.IsValid())
-			continue;
+		for (const bgl::GeomHandle& geom : m_Geoms)
+		{
+			if (!geom.IsValid())
+				continue;
 
-		try
-		{
-			m_Desc.scene->DeleteGeom(geom);
+			try
+			{
+				m_Desc.renderer->GetScene()->DeleteGeom(geom);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: failed to delete a geom: %s", e.what());
+			}
 		}
-		catch (const std::exception& e)
-		{
-			qWarning("AssetThumbnail: failed to delete a geom: %s", e.what());
-		}
-	}
+	});
 
 	m_Instances.clear();
 	m_Geoms.clear();
@@ -584,23 +623,25 @@ AssetThumbnailCache::ReleaseGeometry()
 void
 AssetThumbnailCache::ReleaseMaterials()
 {
-	if (m_Assets == nullptr)
+	if (m_Assets == nullptr || !IsReady())
 	{
 		m_Materials.clear();
 		return;
 	}
 
-	for (const bgl::MaterialHandle& material : m_Materials)
-	{
-		try
+	m_Desc.renderer->Invoke([&] {
+		for (const bgl::MaterialHandle& material : m_Materials)
 		{
-			m_Assets->ReleaseMaterial(material);
+			try
+			{
+				m_Assets->ReleaseMaterial(material);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: failed to release a material: %s", e.what());
+			}
 		}
-		catch (const std::exception& e)
-		{
-			qWarning("AssetThumbnail: failed to release a material: %s", e.what());
-		}
-	}
+	});
 
 	m_Materials.clear();
 }

@@ -2,6 +2,7 @@
 
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
+#include "Render/Renderer.h"
 
 #include <QDebug>
 #include <QDragEnterEvent>
@@ -83,46 +84,50 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	RenderTargetWindowDesc rt,
 	MaterialPreviewEnv     env) : RenderTargetWindow(parent, std::move(rt))
 {
-	bgl::IScene*     scene = PreviewScene();
-	bgl::ISceneView* view  = PreviewView();
-
-	view->SetExposure(env.exposure);
-
 	setAcceptDrops(true);
 
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.
 	setFocusPolicy(Qt::StrongFocus);
 
-	// IBL needs all three maps to be valid; the skybox is independent of them.
-	const auto irradiance = TryLoadTexture(scene, env.irradiance);
-	const auto prefilter  = TryLoadTexture(scene, env.prefilter);
-	const auto brdfLut    = TryLoadTexture(scene, env.brdfLut);
-	if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
-	{
-		try
-		{
-			view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialPreview: SetEnvironmentMap failed: %s", e.what());
-		}
-	}
+	m_DefaultMaterial = GetRenderer()->Invoke([&] {
+		bgl::IScene*     scene = PreviewScene();
+		bgl::ISceneView* view  = PreviewView();
 
-	if (const auto skybox = TryLoadTexture(scene, env.skybox); skybox.textureSlot)
-	{
-		try
-		{
-			view->SetSkyBox({ skybox });
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialPreview: SetSkyBox failed: %s", e.what());
-		}
-	}
+		view->SetExposure(env.exposure);
 
-	m_DefaultMaterial = scene->CreatePbrMaterial(
-		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.0f, .roughnessFactor = 1.0f });
+		// IBL needs all three maps to be valid; the skybox is independent of them.
+		const auto irradiance = TryLoadTexture(scene, env.irradiance);
+		const auto prefilter  = TryLoadTexture(scene, env.prefilter);
+		const auto brdfLut    = TryLoadTexture(scene, env.brdfLut);
+		if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
+		{
+			try
+			{
+				view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialPreview: SetEnvironmentMap failed: %s", e.what());
+			}
+		}
+
+		if (const auto skybox = TryLoadTexture(scene, env.skybox); skybox.textureSlot)
+		{
+			try
+			{
+				view->SetSkyBox({ skybox });
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialPreview: SetSkyBox failed: %s", e.what());
+			}
+		}
+
+		return scene->CreatePbrMaterial(
+			{ .baseColorFactor = glm::vec4(1.0f),
+		      .metallicFactor  = 0.0f,
+		      .roughnessFactor = 1.0f });
+	});
 
 	ShowDefaultSphere();
 }
@@ -130,35 +135,37 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 void
 MaterialPreviewWindow::ClearGeometry()
 {
-	for (const InstanceRef& instance : m_Instances)
-	{
-		if (!instance.handle.IsValid())
-			continue;
+	GetRenderer()->Invoke([&] {
+		for (const InstanceRef& instance : m_Instances)
+		{
+			if (!instance.handle.IsValid())
+				continue;
 
-		try
-		{
-			PreviewView()->DeleteMeshInstance(instance.handle);
+			try
+			{
+				PreviewView()->DeleteMeshInstance(instance.handle);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialPreview: failed to delete an instance: %s", e.what());
+			}
 		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialPreview: failed to delete an instance: %s", e.what());
-		}
-	}
 
-	for (const bgl::GeomHandle& geom : m_Geoms)
-	{
-		if (!geom.IsValid())
-			continue;
+		for (const bgl::GeomHandle& geom : m_Geoms)
+		{
+			if (!geom.IsValid())
+				continue;
 
-		try
-		{
-			PreviewScene()->DeleteGeom(geom);
+			try
+			{
+				PreviewScene()->DeleteGeom(geom);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialPreview: failed to delete a geom: %s", e.what());
+			}
 		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialPreview: failed to delete a geom: %s", e.what());
-		}
-	}
+	});
 
 	m_Instances.clear();
 	m_Geoms.clear();
@@ -183,9 +190,11 @@ MaterialPreviewWindow::ShowDefaultSphere()
 
 	try
 	{
-		m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
-		m_Instances.push_back(
-			{ PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+		GetRenderer()->Invoke([&] {
+			m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
+			m_Instances.push_back(
+				{ PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+		});
 	}
 	catch (const std::exception& e)
 	{
@@ -239,70 +248,81 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 	try
 	{
-		ClearGeometry();
-
-		bgl::IScene* scene = PreviewScene();
-
-		// The preview authors a material, so bind the same neutral material to every source material
-		// slot; the graph then rebinds it per submesh.
-		const auto materials = std::vector<bgl::MaterialHandle>(
-			std::max<size_t>(1, mesh.materials.size()),
-			m_DefaultMaterial);
-
-		// A .bmesh spreads its submeshes across several meshes, and a node instances a mesh (the same
-		// mesh can be instanced by several nodes). Upload each mesh once, then place an instance for
-		// every node that references one, at that node's world transform.
-		auto geomForMesh = std::unordered_map<uint32_t, uint32_t>();  // mesh index -> m_Geoms index
-		auto aabbMin     = glm::vec3(std::numeric_limits<float>::max());
-		auto aabbMax     = glm::vec3(std::numeric_limits<float>::lowest());
-
-		for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
+		struct Focus
 		{
-			const assetlib::Node& node = mesh.nodes[nodeIndex];
-			if (node.mesh == assetlib::c_InvalidIndex || node.mesh >= mesh.meshes.size())
-				continue;
+			glm::vec3 center;
+			float     radius;
+		};
 
-			auto [it, inserted] =
-				geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
-			if (inserted)
+		const Focus focus = GetRenderer()->Invoke([&] {
+			ClearGeometry();
+
+			bgl::IScene* scene = PreviewScene();
+
+			// The preview authors a material, so bind the same neutral material to every source
+			// material slot; the graph then rebinds it per submesh.
+			const auto materials = std::vector<bgl::MaterialHandle>(
+				std::max<size_t>(1, mesh.materials.size()),
+				m_DefaultMaterial);
+
+			// A .bmesh spreads its submeshes across several meshes, and a node instances a mesh (the
+			// same mesh can be instanced by several nodes). Upload each mesh once, then place an
+			// instance for every node that references one, at that node's world transform.
+			auto geomForMesh =
+				std::unordered_map<uint32_t, uint32_t>();  // mesh index -> m_Geoms index
+			auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
+			auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
+
+			for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
 			{
-				m_Geoms.push_back(scene->AddStaticMesh(mesh, node.mesh, materials));
+				const assetlib::Node& node = mesh.nodes[nodeIndex];
+				if (node.mesh == assetlib::c_InvalidIndex || node.mesh >= mesh.meshes.size())
+					continue;
 
-				// Name each of this mesh's submeshes once, in the order the selector will show them.
+				auto [it, inserted] =
+					geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
+				if (inserted)
+				{
+					m_Geoms.push_back(scene->AddStaticMesh(mesh, node.mesh, materials));
+
+					// Name each of this mesh's submeshes once, in the order the selector shows them.
+					const assetlib::Mesh& entry = mesh.meshes[node.mesh];
+					for (uint32_t i = 0; i < entry.submeshCount; ++i)
+					{
+						const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+
+						auto name = QString::fromStdString(
+							bmesh::NameFromPool(mesh.stringPool, submesh.nameOffset));
+						if (name.isEmpty())
+							name = QString("Submesh %1").arg(m_SubmeshNames.size());
+						m_SubmeshNames << name;
+						m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, m_DataRoot);
+						m_SubmeshRefs.push_back({ it->second, i, entry.firstSubmesh + i });
+					}
+				}
+
+				const glm::mat4 world = bmesh::WorldTransform(mesh, nodeIndex);
+				m_Instances.push_back(
+					{ PreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
+				      it->second });
+
 				const assetlib::Mesh& entry = mesh.meshes[node.mesh];
 				for (uint32_t i = 0; i < entry.submeshCount; ++i)
 				{
 					const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-
-					auto name = QString::fromStdString(
-						bmesh::NameFromPool(mesh.stringPool, submesh.nameOffset));
-					if (name.isEmpty())
-						name = QString("Submesh %1").arg(m_SubmeshNames.size());
-					m_SubmeshNames << name;
-					m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, m_DataRoot);
-					m_SubmeshRefs.push_back({ it->second, i, entry.firstSubmesh + i });
+					bmesh::GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
 				}
 			}
 
-			const glm::mat4 world = bmesh::WorldTransform(mesh, nodeIndex);
-			m_Instances.push_back(
-				{ PreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
-			      it->second });
+			if (m_Geoms.empty())
+				throw std::runtime_error("no node references a mesh");
 
-			const assetlib::Mesh& entry = mesh.meshes[node.mesh];
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-			{
-				const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-				bmesh::GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
-			}
-		}
+			const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
+			const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
+			return Focus{ center, radius };
+		});
 
-		if (m_Geoms.empty())
-			throw std::runtime_error("no node references a mesh");
-
-		const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
-		const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
-		FocusOn(center, radius);
+		FocusOn(focus.center, focus.radius);
 
 		m_MeshPath = path;
 
@@ -324,33 +344,36 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 void
 MaterialPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material)
 {
-	if (!material.IsValid() || submeshIndex >= m_SubmeshRefs.size())
-		return;
+	// Fire-and-forget: a graph compiles on every keystroke, and the override needs no result back.
+	GetRenderer()->Post([this, submeshIndex, material] {
+		if (!material.IsValid() || submeshIndex >= m_SubmeshRefs.size())
+			return;
 
-	const SubmeshRef& ref = m_SubmeshRefs[submeshIndex];
-	if (ref.geomIndex >= m_Geoms.size() || !m_Geoms[ref.geomIndex].IsValid())
-		return;
+		const SubmeshRef& ref = m_SubmeshRefs[submeshIndex];
+		if (ref.geomIndex >= m_Geoms.size() || !m_Geoms[ref.geomIndex].IsValid())
+			return;
 
-	try
-	{
-		// An override on the instances, not Scene::SetSubmeshMaterial on the geom. Compiling a graph
-		// happens on every keystroke, and the geom's default is the *asset's* material: rewriting it
-		// here would edit the .bmesh's binding as a side effect of typing.
-		for (const InstanceRef& instance : m_Instances)
+		try
 		{
-			if (instance.geomIndex == ref.geomIndex && instance.handle.IsValid())
+			// An override on the instances, not Scene::SetSubmeshMaterial on the geom. The geom's
+			// default is the *asset's* material: rewriting it here would edit the .bmesh's binding as
+			// a side effect of typing.
+			for (const InstanceRef& instance : m_Instances)
 			{
-				PreviewView()->SetSubmeshMaterialOverride(
-					instance.handle,
-					ref.localSubmesh,
-					material);
+				if (instance.geomIndex == ref.geomIndex && instance.handle.IsValid())
+				{
+					PreviewView()->SetSubmeshMaterialOverride(
+						instance.handle,
+						ref.localSubmesh,
+						material);
+				}
 			}
 		}
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("MaterialPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
-	}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
+		}
+	});
 }
 
 void

@@ -13,6 +13,7 @@
 
 #include "Async/BackgroundTask.h"
 #include "Project/Project.h"
+#include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
@@ -57,8 +58,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		if (gfxSettings["enableShaderCache"].GetOrDefault(false))
 			gfxOpts.shaderCacheDir = "shadercache";
 
-		m_Graphics = bgl::CreateGraphics(gfxOpts);
-
 		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
 		// preview) renders it through a SceneView of its own, so geometry, textures and materials
 		// are pooled here once and these budgets must cover all of them together.
@@ -73,19 +72,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		sceneDesc.maxPbrMaterials      = sceneSettings["maxPbrMaterials"].GetOrDefault(256);
 		sceneDesc.maxLoosePbrMaterials = sceneSettings["maxLoosePbrMaterials"].GetOrDefault(256);
 
-		m_Scene = m_Graphics->CreateScene(sceneDesc);
+		// The renderer owns the Graphics and the Scene and, once threaded, is the only thing that
+		// touches them. Every viewport and the thumbnail cache render through it.
+		m_Renderer = std::make_unique<Renderer>(gfxOpts, sceneDesc);
 
 		auto levelDesc         = RenderTargetWindowDesc();
-		levelDesc.gfx          = m_Graphics;
-		levelDesc.scene        = m_Scene;
+		levelDesc.renderer     = m_Renderer.get();
 		levelDesc.maxInstances = settings["levelEditor"]["maxInstances"].GetOrDefault(1000);
 
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
 
 		auto matSettings              = settings["materialEditor"];
 		auto matDesc                  = MaterialEditorWindowDesc();
-		matDesc.gfx                   = m_Graphics;
-		matDesc.scene                 = m_Scene;
+		matDesc.renderer              = m_Renderer.get();
 		matDesc.maxPreviewInstances   = matSettings["maxPreviewInstances"].GetOrDefault(16u);
 		matDesc.previewEnv.skybox     = matSettings["skybox"].GetOrDefault(std::string());
 		matDesc.previewEnv.irradiance = matSettings["irradiance"].GetOrDefault(std::string());
@@ -95,8 +94,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 		auto thumbSettings     = settings["thumbnails"];
 		auto thumbDesc         = AssetThumbnailDesc();
-		thumbDesc.gfx          = m_Graphics;
-		thumbDesc.scene        = m_Scene;
+		thumbDesc.renderer     = m_Renderer.get();
 		thumbDesc.dimension    = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.maxInstances = thumbSettings["maxInstances"].GetOrDefault(256u);
 		thumbDesc.skybox       = thumbSettings["skybox"].GetOrDefault(std::string());
@@ -106,7 +104,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		thumbDesc.exposure     = thumbSettings["exposure"].GetOrDefault(1.0f);
 
 		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
-		m_Thumbnails     = new AssetThumbnailCache(std::move(thumbDesc), this);
+		m_Thumbnails     = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
 	}
 
 	setDockNestingEnabled(true);
@@ -137,7 +135,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
 		return m_MaterialEditor->OpenMaterialPaths();
 	});
-	m_ContentExplorer->SetThumbnails(m_Thumbnails);
+	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
 
 	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
 	// staleness marker and the baked-texture listing from.
@@ -158,7 +156,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	ShowEmptyState();
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+	// Everything that renders releases its bgl objects through the Renderer, so all of it has to be
+	// gone before the Renderer member is. Qt would otherwise destroy these as children of this window,
+	// which happens after the members -- with the render thread already stopped.
+	m_ContentExplorer->SetThumbnails(nullptr);
+	m_Thumbnails.reset();
+
+	// After the thumbnails, which release their materials back through it, and before the viewports,
+	// so the instances it deletes leave views that are still standing.
+	m_Renderer->Invoke([&] { m_Assets.reset(); });
+
+	delete m_LevelEditor;
+	delete m_MaterialEditor;
+}
 
 void
 MainWindow::NewProject()
@@ -310,12 +322,15 @@ MainWindow::SetActiveProject(Project project)
 	if (m_Thumbnails)
 		m_Thumbnails->SetAssets(nullptr);
 
-	m_Assets.reset();
+	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
+	// thread like any other scene mutation -- the viewports are still drawing at this point.
+	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
 	// shares is one upload and one reference count no matter which view shows it. Each view names itself
 	// when it places an instance.
-	m_Assets = std::make_unique<game::AssetManager>(m_Scene, m_Project->GetDataDirectory());
+	m_Assets =
+		std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetDataDirectory());
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
 	// asks for a render straight away -- a material cannot be resolved without a manager.

@@ -23,6 +23,7 @@
 #include <assetlib/bmesh_io.h>
 
 #include "Project/Project.h"
+#include "Render/Renderer.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
@@ -120,6 +121,11 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_MaterialLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	m_MaterialLabel->setWordWrap(true);
 	m_MaterialLabel->setStyleSheet("color: gray;");
+
+	// A path has no spaces to wrap at, so the label's minimum width would otherwise be a whole
+	// directory name and become the floor for the panel -- and for the splitter above it. Ignored
+	// drops it out of that calculation; the tooltip carries the path once it is too narrow to read.
+	m_MaterialLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	propertiesLayout->addWidget(m_MaterialLabel);
 
 	propertiesLayout->addSpacing(8);
@@ -160,6 +166,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_BakedTexturesLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	m_BakedTexturesLabel->setWordWrap(true);
 	m_BakedTexturesLabel->setStyleSheet("color: gray;");
+	m_BakedTexturesLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	m_BakedTexturesLabel->hide();
 	propertiesLayout->addWidget(m_BakedTexturesLabel);
 
@@ -184,11 +191,10 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	// Model Preview. It renders the editor's shared Scene through a SceneView of its own, so the
 	// geometry pools are sized once (in config.json) rather than split across two scenes.
 	QWidget* rightPanel = nullptr;
-	if (m_Desc.gfx && m_Desc.scene)
+	if (m_Desc.renderer != nullptr)
 	{
 		auto rtDesc         = RenderTargetWindowDesc();
-		rtDesc.gfx          = m_Desc.gfx;
-		rtDesc.scene        = m_Desc.scene;
+		rtDesc.renderer     = m_Desc.renderer;
 		rtDesc.maxInstances = m_Desc.maxPreviewInstances;
 
 		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
@@ -209,8 +215,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	m_TexturePreviews = new TexturePreviewCache(this);
 
-	m_Registry =
-		MakeMaterialNodeRegistry(m_Desc.scene ? m_Desc.scene.Get() : nullptr, m_TexturePreviews);
+	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews);
 
 	splitter->addWidget(leftPanel);
 	splitter->addWidget(rightPanel);
@@ -583,12 +588,14 @@ MaterialEditorWindow::RefreshActions()
 	// longer match the sources the graph routes.
 	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(materialPath) : materialPath);
 	m_MaterialLabel->setStyleSheet(stale ? "color: #c08040;" : "color: gray;");
+
+	// The path leads, because the label clips it once the panel is narrow.
 	m_MaterialLabel->setToolTip(
-		stale ?
-			QStringLiteral(
-				"The baked textures do not match its sources. Bake it from the Content Explorer "
-				"to update.") :
-			QString());
+		stale ? QStringLiteral(
+					"%1\n\nThe baked textures do not match its sources. Bake it from the "
+					"Content Explorer to update.")
+					.arg(materialPath) :
+				materialPath);
 }
 
 void
@@ -905,7 +912,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 void
 MaterialEditorWindow::CompileGraph(int graphIndex)
 {
-	if (m_Preview == nullptr || m_Desc.scene == nullptr)
+	if (m_Preview == nullptr || m_Desc.renderer == nullptr)
 		return;
 	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_MaterialGraphs.size()))
 		return;
@@ -953,45 +960,75 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	// handle's layer *and* its occlude flag, neither of which an update can rewrite, so flipping the
 	// alpha mode (opaque / cutout / blend) or toggling Occlude needs a new material or it would keep
 	// the old pass.
+	Renderer* renderer = m_Desc.renderer;
+
 	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType &&
 	    entry.preview.occlude == desc.occlude)
 	{
-		m_Desc.scene->UpdateLoosePbrMaterial(entry.preview, desc);
+		// Fire-and-forget on every keystroke; the instances already override with this handle, so the
+		// in-place rewrite is all the edit needs.
+		renderer->Post([renderer, handle = entry.preview, desc] {
+			try
+			{
+				renderer->GetScene()->UpdateLoosePbrMaterial(handle, desc);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialEditor: could not update a preview material: %s", e.what());
+			}
+		});
 		return;
 	}
 
 	const bgl::MaterialHandle previous = entry.preview;
 
 	// Bind the replacement before destroying what it replaces: a deleted material leaves its slot to
-	// be reused, and an instance still overriding with it would silently wear whatever lands there.
-	entry.preview = m_Desc.scene->CreateLoosePbrMaterial(desc);
+	// be reused, and an instance still overriding with it would silently wear whatever lands there. The
+	// override (SetSubmeshMaterial) and the delete are both posted, so they run in that order.
+	entry.preview =
+		renderer->Invoke([&] { return renderer->GetScene()->CreateLoosePbrMaterial(desc); });
 	for (const uint32_t submesh : entry.submeshes)
 		m_Preview->SetSubmeshMaterial(submesh, entry.preview);
 
 	if (previous.IsValid())
-		m_Desc.scene->DeleteMaterial(previous);
+	{
+		renderer->Post([renderer, previous] {
+			try
+			{
+				renderer->GetScene()->DeleteMaterial(previous);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialEditor: could not delete a preview material: %s", e.what());
+			}
+		});
+	}
 }
 
 void
 MaterialEditorWindow::ReleasePreviewMaterials()
 {
-	if (m_Desc.scene == nullptr)
+	if (m_Desc.renderer == nullptr)
 		return;
 
-	for (MaterialGraph& entry : m_MaterialGraphs)
-	{
-		if (!entry.preview.IsValid())
-			continue;
-
-		try
+	// Synchronous: the graphs must not be drawn after this returns, and the render loop draws on the
+	// same thread this runs on, so the deletes land between frames.
+	m_Desc.renderer->Invoke([&] {
+		for (MaterialGraph& entry : m_MaterialGraphs)
 		{
-			m_Desc.scene->DeleteMaterial(entry.preview);
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialEditor: could not release a preview material: %s", e.what());
-		}
+			if (!entry.preview.IsValid())
+				continue;
 
-		entry.preview = {};
-	}
+			try
+			{
+				m_Desc.renderer->GetScene()->DeleteMaterial(entry.preview);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MaterialEditor: could not release a preview material: %s", e.what());
+			}
+
+			entry.preview = {};
+		}
+	});
 }

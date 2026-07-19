@@ -163,14 +163,26 @@ add_custom_target(bgl_compile_shaders ALL
     DEPENDS ${SLANG_COMPILE_OUTS}
 )
 
-add_custom_target(bgl_copy_shaders ALL
-    DEPENDS bgl_compile_shaders
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${SHADER_OUT_DIR}"
-            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders"
-    COMMENT "Copying compiled DXIL binaries to runtime output layout"
-    VERBATIM
-)
+# On a multi-config generator the DXIL is compiled into a config-agnostic dir and has to be copied
+# into each per-config runtime dir (bin/<Config>/shaders). On a single-config generator SHADER_OUT_DIR
+# already *is* the runtime shaders dir, so the copy is a directory onto itself -- a no-op that also
+# fails outright ("No such file or directory") if the dir is momentarily absent during a reconfigure.
+# Skip it when the paths coincide; keep the target so its dependents still resolve.
+if(NOT SHADER_OUT_DIR STREQUAL "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
+    add_custom_target(bgl_copy_shaders ALL
+        DEPENDS bgl_compile_shaders
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${SHADER_OUT_DIR}"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders"
+        COMMENT "Copying compiled DXIL binaries to runtime output layout"
+        VERBATIM
+    )
+else()
+    add_custom_target(bgl_copy_shaders ALL
+        DEPENDS bgl_compile_shaders
+        COMMENT "Compiled DXIL already in the runtime output layout"
+    )
+endif()
 
 # Copies pure source files directly into application directory for runtime reflection parsing
 add_custom_target(bgl_copy_shader_src ALL

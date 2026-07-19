@@ -7,11 +7,7 @@
 
 class QLabel;
 class TexturePreviewCache;
-
-namespace bgl
-{
-	class IScene;
-}
+class Renderer;
 
 class TextureNode : public QtNodes::NodeDelegateModel
 {
@@ -24,7 +20,7 @@ public:
 	static constexpr unsigned int c_PortCount    = c_BundleCount + c_ChannelCount;
 
 	// `previews` may be null when the editor runs without graphics; the node then shows no image.
-	TextureNode(bgl::IScene* scene, TexturePreviewCache* previews);
+	TextureNode(Renderer* renderer, TexturePreviewCache* previews);
 
 	QString
 	caption() const override
@@ -89,7 +85,7 @@ private:
 	void
 	RefreshPreview();
 
-	bgl::IScene*            m_Scene    = nullptr;
+	Renderer*               m_Renderer = nullptr;
 	TexturePreviewCache*    m_Previews = nullptr;
 	QString                 m_Path;
 	QString                 m_Caption = QStringLiteral("Texture");

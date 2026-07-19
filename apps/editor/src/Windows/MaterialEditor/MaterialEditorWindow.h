@@ -30,8 +30,7 @@ namespace QtNodes
 
 struct MaterialEditorWindowDesc
 {
-	bgl::GraphicsRef   gfx                 = nullptr;
-	bgl::SceneRef      scene               = nullptr;
+	Renderer*          renderer            = nullptr;
 	uint32_t           maxPreviewInstances = 16;
 	MaterialPreviewEnv previewEnv;
 };
