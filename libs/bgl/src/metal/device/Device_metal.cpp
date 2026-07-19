@@ -4,6 +4,7 @@
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
 #include "pipeline/ComputePipeline_metal.h"
+#include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
 #include "resource/Shader_metal.h"
 
@@ -86,17 +87,16 @@ namespace bgl
 	}
 
 	core::SharedRef<IMeshletPipeline>
-	Device::CreateMeshletPipeline(const MeshletPipelineDesc&) const noexcept
+	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		gunimplemented("Metal backend: CreateMeshletPipeline not implemented yet");
-		return nullptr;
+		return core::SharedRef<MeshletPipeline>::Make(m_Device.get(), m_SlangSession.get(), desc);
 	}
 
 	Uniforms
-	Device::CreateUniforms(IMeshletPipeline const*, const std::string&) const noexcept
+	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
 	{
-		gunimplemented("Metal backend: CreateUniforms not implemented yet");
-		return Uniforms{};
+		return Uniforms(pipeline, cbufferName);
 	}
 
 	Uniforms
