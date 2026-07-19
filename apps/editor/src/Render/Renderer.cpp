@@ -16,18 +16,32 @@ Renderer::Renderer(const bgl::GraphicsOptions& gfxOpts, const bgl::SceneDesc& sc
 	try
 	{
 		Invoke([&] {
-			m_Graphics = bgl::CreateGraphics(gfxOpts);
-			m_Scene    = m_Graphics->CreateScene(sceneDesc);
+			try
+			{
+				m_Graphics = bgl::CreateGraphics(gfxOpts);
+				m_Scene    = m_Graphics->CreateScene(sceneDesc);
 
-			// Parented to this, so it belongs to the render thread and is destroyed from it.
-			m_FrameTimer = new QTimer(this);
+				// Parented to this, so it belongs to the render thread and is destroyed from it.
+				m_FrameTimer = new QTimer(this);
 
-			// Present is vsync-locked, and DXGI queues frames until Present blocks -- so the timer does
-			// not pace anything, it only re-drives the loop once the previous frame returns. It must
-			// stay zero-interval: any non-zero one is quantised to the Windows tick (~15.6ms), which
-			// would make the timer the pacer and stretch frames to ~33ms.
-			m_FrameTimer->setTimerType(Qt::PreciseTimer);
-			connect(m_FrameTimer, &QTimer::timeout, this, [this] { Frame(); });
+				// Present is vsync-locked, and DXGI queues frames until Present blocks -- so the timer
+				// does not pace anything, it only re-drives the loop once the previous frame returns. It
+				// must stay zero-interval: any non-zero one is quantised to the Windows tick (~15.6ms),
+				// which would make the timer the pacer and stretch frames to ~33ms.
+				m_FrameTimer->setTimerType(Qt::PreciseTimer);
+				connect(m_FrameTimer, &QTimer::timeout, this, [this] { Frame(); });
+			}
+			catch (...)
+			{
+				// Whatever got as far as being assigned is released here rather than by the constructor's
+				// unwind, which runs on the calling thread with this one already stopped.
+				delete m_FrameTimer;
+				m_FrameTimer = nullptr;
+
+				m_Scene    = nullptr;
+				m_Graphics = nullptr;
+				throw;
+			}
 		});
 	}
 	catch (...)
