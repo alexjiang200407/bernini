@@ -190,12 +190,9 @@ namespace bgl
 		m_MeshletState = gfxState;
 	}
 
-	void
-	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
+	MTL::RenderCommandEncoder*
+	CommandList::BeginMeshRenderPass() noexcept
 	{
-		gassert(m_Open, "DispatchMesh on a closed command list");
-		gassert(m_MeshletState.kernel != nullptr, "DispatchMesh without a meshlet state");
-
 		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
 		auto* rm       = m_ResourceManager->As<ResourceManager>();
 
@@ -265,8 +262,49 @@ namespace bgl
 			                      static_cast<NS::UInteger>(r.maxY - r.minY) });
 		}
 
+		return enc;
+	}
+
+	void
+	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
+	{
+		gassert(m_Open, "DispatchMesh on a closed command list");
+		gassert(m_MeshletState.kernel != nullptr, "DispatchMesh without a meshlet state");
+
+		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
+
+		MTL::RenderCommandEncoder* enc = BeginMeshRenderPass();
 		enc->drawMeshThreadgroups(
 			MTL::Size(x, y, z),
+			pipeline->GetThreadsPerObjectThreadgroup(),
+			pipeline->GetThreadsPerMeshThreadgroup());
+		enc->endEncoding();
+	}
+
+	void
+	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
+	{
+		gassert(m_Open, "DispatchMeshIndirect on a closed command list");
+		gassert(m_MeshletState.kernel != nullptr, "DispatchMeshIndirect without a meshlet state");
+		gassert(
+			!m_MeshletState.indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
+
+		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
+
+		// The engine writes an array of idl::DispatchArgs (three uint32 counts) at this buffer; Metal's
+		// indirect mesh draw reads one MTL::DispatchThreadgroupsIndirectArguments, an identical layout,
+		// so argIdx indexes at the same stride D3D12's command signature uses.
+		static_assert(
+			sizeof(MTL::DispatchThreadgroupsIndirectArguments) == 3 * sizeof(uint32_t),
+			"Metal indirect mesh argument stride must match idl::DispatchArgs");
+		MTL::Buffer* argsBuffer =
+			m_ResourceManager->GetBuffer(m_MeshletState.indirectArgs).GetMTLResource();
+
+		MTL::RenderCommandEncoder* enc = BeginMeshRenderPass();
+		enc->drawMeshThreadgroups(
+			argsBuffer,
+			static_cast<NS::UInteger>(argIdx) * sizeof(MTL::DispatchThreadgroupsIndirectArguments),
 			pipeline->GetThreadsPerObjectThreadgroup(),
 			pipeline->GetThreadsPerMeshThreadgroup());
 		enc->endEncoding();

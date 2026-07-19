@@ -103,11 +103,6 @@ namespace bgl
 		{
 			gunimplemented(k);
 		}
-		void
-		DispatchMeshIndirect(uint32_t) noexcept override
-		{
-			gunimplemented(k);
-		}
 
 		void
 		SetMeshletState(const MeshletState& gfxState) noexcept override;
@@ -119,6 +114,9 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 		void
+		DispatchMeshIndirect(uint32_t argIdx) noexcept override;
+
+		void
 		SetComputeState(const ComputeState& computeState) noexcept override;
 
 		void
@@ -128,6 +126,12 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 	private:
+		// Opens a render encoder for the current MeshletState -- render pass from the framebuffer,
+		// pipeline, per-stage cbuffer binding, viewport/scissor -- leaving only the draw call to the
+		// caller. Shared by the direct and indirect DispatchMesh paths.
+		[[nodiscard]] MTL::RenderCommandEncoder*
+		BeginMeshRenderPass() noexcept;
+
 		static constexpr const char* k =
 			"Metal CommandList: not implemented yet (render/scene slice)";
 
