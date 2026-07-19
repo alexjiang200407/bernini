@@ -4,7 +4,6 @@
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
-#include "scene/transparent_sort.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include <bgl/ISceneView.h>
@@ -111,20 +110,6 @@ namespace bgl
 			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_CompactedInstances);
 		}
 
-		/**
-		 * Rebuilds the depth-sorted transparent draw list for `cameraPos`. Called before the frame
-		 * graph is built (it needs the camera), leaving the ordered indices and runs to be uploaded
-		 * by the next `Update` and consumed by the forward pass.
-		 */
-		void
-		UpdateTransparentOrder(const glm::vec3& cameraPos);
-
-		[[nodiscard]] const std::vector<TransparentRun>&
-		GetTransparentRuns() const noexcept
-		{
-			return m_TransparentRuns;
-		}
-
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
@@ -178,12 +163,11 @@ namespace bgl
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
 		ComputeBuffer                    m_CompactedInstances;
 
-		// Depth-sorted transparent path: a GPU index list rebuilt CPU-side each frame, plus the
-		// runs that slice it into per-PSO DispatchMesh calls. See scene/transparent_sort.h.
-		ComputeBuffer                    m_SortedTransparentInstances;
-		std::vector<TransparentDrawable> m_TransparentDrawables;
-		std::vector<uint32_t>            m_TransparentOrder;
-		std::vector<TransparentRun>      m_TransparentRuns;
+		// The depth-sorted transparent path, all written by TransparentSortPass. The keys buffer is
+		// sized off the instance buffer, not the sort capacity: see the note at its initialization.
+		ComputeBuffer m_SortedTransparentInstances;
+		ComputeBuffer m_TransparentSortEntries;
+		ComputeBuffer m_TransparentSortCount;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;

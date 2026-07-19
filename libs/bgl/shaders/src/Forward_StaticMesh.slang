@@ -3,6 +3,7 @@ import forward.ForwardData;
 import idl.Constants;
 import idl.Mesh;
 import idl.Meshlet;
+import idl.PsoType;
 import idl.Submesh;
 import idl.VertexLayout;
 import types.ByteBuffer;
@@ -35,6 +36,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     vertexOut.tangent = float4(mul((float3x3)mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
 
     vertexOut.materialIndex = instance.material.GetOffset();
+    vertexOut.materialIsLoose = IsLoosePso(PsoType(instance.pso)) ? 1u : 0u;
 
     return vertexOut;
 }

@@ -13,11 +13,10 @@ public struct ForwardData
     public float4x4 viewProj;
     public uint psoIndex;
 
-    // Where this draw's slice of the instance-index list starts. The opaque path adds the GPU
-    // prefix-sum base on top (usePrefixSumBase != 0); the transparent path passes a CPU-computed
-    // run offset directly (usePrefixSumBase == 0).
-    public uint instanceListBase;
-    public uint usePrefixSumBase;
+    // Which GPU-side table holds this draw's base into the instance-index list: the opaque path is
+    // bucketed by PSO, the transparent path by occlude partition. Neither base is a CPU value.
+    public uint baseSource;
+    public uint partitionIndex;
 
     public PackedBuffer<SubmeshInstance> instanceBuffer;
     public EntryBuffer<Mesh> meshBuffer;
@@ -28,4 +27,5 @@ public struct ForwardData
     public RangeBuffer<uint> indexBuffer;
     public ComputeBuffer<uint> compactedInstances;
     public ComputeBuffer<uint> psoPrefixSum;
+    public ComputeBuffer<uint> transparentPartitionBase;
 };
