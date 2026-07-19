@@ -10,6 +10,12 @@ Usage:
     python scripts/run_tests.py --list             # name them without running anything
     python scripts/run_tests.py --no-build         # run whatever is already built
     python scripts/run_tests.py --config Release
+    python scripts/run_tests.py -- "[readback]"    # forward a Catch filter to every suite
+    python scripts/run_tests.py bgl -- "[readback]"  # suite-name filter + forwarded Catch filter
+
+Everything after `--` is forwarded verbatim to each suite binary. Every suite is Catch2, so
+this is how one tag or name filter reaches all of them at once -- useful when a backend
+implements only part of the suite and the rest is selected by tag.
 
 Each suite runs with cwd set to its output directory, because the binaries resolve asset
 paths relative to it.
@@ -19,7 +25,7 @@ one should show progress rather than go quiet for minutes, and because Qt emits 
 results through a path a Windows pipe swallows -- capturing editor_tests would silently
 turn a real run into a blank one.
 
-To pass arguments to a single suite, use `just run` instead, which forwards them:
+To pass arguments to a single suite, use `just run` instead, which also forwards them:
 
     just run bgl_tests -- --gpu-validation
 """
@@ -78,7 +84,16 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="Don't build first; run the binaries that are already there.")
     parser.add_argument("--list", action="store_true", help="Name the suites without running them.")
-    args = parser.parse_args()
+
+    # Everything after `--` is forwarded verbatim to every suite binary. Each suite is Catch2, so
+    # this is how a tag or name filter reaches all of them at once: `just test -- "[readback]"`.
+    # `just test bgl -- "[readback]"` combines a suite-name filter with a forwarded Catch filter.
+    argv = sys.argv[1:]
+    forward = []
+    if "--" in argv:
+        split = argv.index("--")
+        argv, forward = argv[:split], argv[split + 1:]
+    args = parser.parse_args(argv)
 
     # Build everything before resolving: a build dir that has never been configured has no
     # codemodel to discover the suites in, and building is what produces one.
@@ -126,7 +141,7 @@ def main():
         print(f"\n=== {name} ===", flush=True)
 
         started = time.monotonic()
-        rc = subprocess.run([exe], cwd=os.path.dirname(exe)).returncode
+        rc = subprocess.run([exe, *forward], cwd=os.path.dirname(exe)).returncode
         results.append((name, rc, time.monotonic() - started))
 
     # A failing suite does not stop the others: one full report beats finding out about the

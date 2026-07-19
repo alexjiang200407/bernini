@@ -138,8 +138,10 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 endif()
 
 
-# The suite creates a real device and renders golden images; only the D3D12 backend implements the
-# full RHI so far. Metal RHI tests arrive with the resource/pipeline objects (a later slice).
+# The suite's sources are backend-agnostic (RHI interfaces + CreateGraphics), so it builds on either
+# backend from one glob. What differs is the backend objects it embeds. On Metal only the tests
+# tagged [metal] run today -- the runner defaults to that tag (tests/src/main.cpp) while the render
+# path is still being ported; the rest are selected explicitly by tag.
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     find_package(Catch2 CONFIG REQUIRED)
 	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
@@ -203,6 +205,56 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	# "assets/golden/<name>.png". copy_assets (root CMakeLists.txt) stages it once
 	# for every consumer.
 	add_dependencies(bgl_tests copy_assets)
+
+	enable_strict_compiler(bgl_tests)
+endif()
+
+if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
+	find_package(Catch2 CONFIG REQUIRED)
+	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
+
+	file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
+	)
+
+	add_executable(bgl_tests
+		${BGL_TESTS_SOURCE}
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_metal>
+	)
+
+	target_include_directories(bgl_tests
+		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
+		PRIVATE
+			${CMAKE_CURRENT_SOURCE_DIR}/include
+			${CMAKE_CURRENT_SOURCE_DIR}/src
+			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+			${Stb_INCLUDE_DIR}
+	)
+
+	target_force_include(bgl_tests
+		PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+	)
+
+	# Embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
+	target_link_libraries(bgl_tests
+		PRIVATE
+			bgl_objects
+			bgl_metal
+			assetlib
+			core
+			Catch2::Catch2
+			Catch2::Catch2WithMain
+			"-framework Metal" "-framework Foundation" "-framework QuartzCore"
+	)
+
+	add_dependencies(bgl_tests bgl_idl_generate copy_assets)
+
+	target_precompile_headers(bgl_tests
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
+	)
+
+	target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_METAL BGL_EXPORTS)
 
 	enable_strict_compiler(bgl_tests)
 endif()
