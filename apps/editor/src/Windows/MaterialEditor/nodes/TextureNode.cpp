@@ -8,6 +8,7 @@
 #include <assetlib/image_io.h>
 #include <bgl/IScene.h>
 
+#include "Render/Renderer.h"
 #include "Thumbnails/TexturePreviewCache.h"
 
 namespace
@@ -15,8 +16,8 @@ namespace
 	constexpr int c_PreviewWidgetDim = 96;
 }
 
-TextureNode::TextureNode(bgl::IScene* scene, TexturePreviewCache* previews) :
-	m_Scene(scene), m_Previews(previews)
+TextureNode::TextureNode(Renderer* renderer, TexturePreviewCache* previews) :
+	m_Renderer(renderer), m_Previews(previews)
 {
 	if (m_Previews == nullptr)
 		return;
@@ -105,13 +106,16 @@ TextureNode::SetTexturePath(const QString& path)
 	m_Preview = QPixmap();
 	RefreshPreview();
 
-	if (m_Scene == nullptr || path.isEmpty())
+	if (m_Renderer == nullptr || path.isEmpty())
 		return;
 
 	try
 	{
-		m_Texture = m_Scene->AddTextureAsset(
-			assetlib::loadKTX2(std::filesystem::path(path.toStdWString())));
+		// Decoded here, so only the upload costs the render thread a round-trip.
+		auto image = assetlib::loadKTX2(std::filesystem::path(path.toStdWString()));
+
+		m_Texture = m_Renderer->Invoke(
+			[&] { return m_Renderer->GetScene()->AddTextureAsset(std::move(image)); });
 		m_Caption = QFileInfo(path).fileName();
 	}
 	catch (const std::exception& e)

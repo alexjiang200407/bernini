@@ -1,3 +1,4 @@
+#include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "util/QtSupport.h"
 
@@ -25,12 +26,26 @@ namespace
 	constexpr auto c_MeshGot     = "assets/golden/thumbnail_mesh.got.png";
 	constexpr auto c_MaterialGot = "assets/golden/thumbnail_material.got.png";
 
-	// Everything a cache needs to actually render: a device, a scene, and the same environment the
-	// Material Editor's preview is lit by.
+	// The scene budget the cache renders against -- small, since a thumbnail holds one mesh at a time.
+	bgl::SceneDesc
+	MakeSceneDesc()
+	{
+		auto sceneDesc                    = bgl::SceneDesc();
+		sceneDesc.maxGeom                 = 32;
+		sceneDesc.maxMeshlets             = 8192;
+		sceneDesc.maxSubmeshes            = 64;
+		sceneDesc.maxVertexBufferByteSize = 8'000'000;
+		sceneDesc.maxIndices              = 500'000;
+		sceneDesc.maxPbrMaterials         = 32;
+		sceneDesc.maxLoosePbrMaterials    = 32;
+		return sceneDesc;
+	}
+
+	// Everything a cache needs to actually render: a renderer (which owns the device and scene, as
+	// MainWindow's does) and the editor's shared asset manager over that scene.
 	struct Fixture
 	{
-		bgl::GraphicsRef                  gfx;
-		bgl::SceneRef                     scene;
+		std::optional<Renderer>           renderer;
 		std::optional<game::AssetManager> assets;
 
 		Fixture()
@@ -38,30 +53,18 @@ namespace
 			auto opts             = bgl::GraphicsOptions();
 			opts.enableDebugLayer = true;
 
-			gfx = bgl::CreateGraphics(opts);
-
-			auto sceneDesc                    = bgl::SceneDesc();
-			sceneDesc.maxGeom                 = 32;
-			sceneDesc.maxMeshlets             = 8192;
-			sceneDesc.maxSubmeshes            = 64;
-			sceneDesc.maxVertexBufferByteSize = 8'000'000;
-			sceneDesc.maxIndices              = 500'000;
-			sceneDesc.maxPbrMaterials         = 32;
-			sceneDesc.maxLoosePbrMaterials    = 32;
-
-			scene = gfx->CreateScene(sceneDesc);
+			renderer.emplace(opts, MakeSceneDesc());
 
 			// The editor shares one manager over its one scene. Materials and textures are the scene's,
 			// so the cache shares them with every other view even though it renders in its own.
-			assets.emplace(scene, std::filesystem::path(c_DataRoot));
+			assets.emplace(renderer->GetScene(), std::filesystem::path(c_DataRoot));
 		}
 
 		[[nodiscard]] AssetThumbnailDesc
-		Desc() const
+		Desc()
 		{
 			auto desc       = AssetThumbnailDesc();
-			desc.gfx        = gfx;
-			desc.scene      = scene;
+			desc.renderer   = &*renderer;
 			desc.skybox     = "assets/skybox.ktx2";
 			desc.irradiance = "assets/iem.ktx2";
 			desc.prefilter  = "assets/pmrem.ktx2";

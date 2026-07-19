@@ -1,10 +1,15 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+
+#include "Render/Renderer.h"
+
 #include <QDebug>
 #include <QHideEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
 #include <bgl/IGraphics.h>
+#include <bgl/RenderContext.h>
+#include <bgl/Viewport.h>
 
 namespace
 {
@@ -21,37 +26,64 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_Width  = static_cast<uint32_t>(std::max(1, width()));
 	m_Height = static_cast<uint32_t>(std::max(1, height()));
 
-	auto rtvDesc     = bgl::RenderTargetDesc();
-	rtvDesc.width    = m_Width;
-	rtvDesc.height   = m_Height;
+	auto rtvDesc   = bgl::RenderTargetDesc();
+	rtvDesc.width  = m_Width;
+	rtvDesc.height = m_Height;
+	// winId() must be resolved here on the GUI thread; the render target is created from the value.
 	rtvDesc.wnd      = reinterpret_cast<void*>(winId());
 	rtvDesc.headless = false;
 
-	m_RenderTarget = m_Desc.gfx->CreateRenderTarget(rtvDesc);
-	m_SceneView    = m_Desc.gfx->CreateSceneView(m_Desc.scene, m_Desc.maxInstances);
+	m_RenderTarget = m_Desc.renderer->Invoke(
+		[&] { return m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc); });
+	m_SceneView = m_Desc.renderer->Invoke([&] {
+		return m_Desc.renderer->GetGraphics()->CreateSceneView(
+			m_Desc.renderer->GetScene(),
+			m_Desc.maxInstances);
+	});
+
+	m_RenderWidth  = m_Width;
+	m_RenderHeight = m_Height;
 
 	setAttribute(Qt::WA_PaintOnScreen);
 	setAttribute(Qt::WA_NoSystemBackground);
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
-	m_FrameTimer = new QTimer(this);
-	// Present is vsync-locked (~16.67ms), and this 16ms timer sits right at that boundary. A coarse
-	// timer (the default) jitters by the OS granularity (~15.6ms after a resize resets the timer
-	// resolution), so it occasionally fires just after the vsync deadline, misses a refresh and waits
-	// for the next -- averaging to ~23ms and staying there. A precise timer forces 1ms OS resolution,
-	// so it reliably fires before vsync and the cadence stays at one refresh.
-	m_FrameTimer->setTimerType(Qt::PreciseTimer);
-
 	// Deliberately not SyncSize'd here: the frame loop must not chase the window's size, or it would
-	// resize the backbuffers on the very next frame and undo the settle timer below.
+	// resize the backbuffers on the very next frame and undo the settle timer above.
 	m_FrameClock.start();
-	connect(m_FrameTimer, &QTimer::timeout, this, [this]() {
-		const qint64 startNs = m_FrameClock.nsecsElapsed();
-		DrawFrame(m_Desc.gfx.Get());
-		const qint64 endNs = m_FrameClock.nsecsElapsed();
+}
 
-		ReportFrameTiming(startNs, endNs);
+RenderTargetWindow::~RenderTargetWindow()
+{
+	if (m_Desc.renderer == nullptr)
+		return;
+
+	if (m_ViewportId != 0)
+		m_Desc.renderer->RemoveViewport(m_ViewportId);
+
+	// A blocking round-trip, so every frame and every camera update posted for this window has already
+	// run by the time it returns: none can outlive the widget.
+	m_Desc.renderer->Invoke([&] {
+		m_SceneView    = nullptr;
+		m_RenderTarget = nullptr;
 	});
+}
+
+void
+RenderTargetWindow::DrawFrame()
+{
+	auto rc     = bgl::RenderContext();
+	rc.camera   = m_RenderCamera;
+	rc.view     = m_SceneView;
+	rc.viewport = bgl::Viewport(m_RenderWidth, m_RenderHeight);
+
+	m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, rc);
+}
+
+void
+RenderTargetWindow::SetCamera(const bgl::Camera& cam)
+{
+	m_Desc.renderer->Post([this, cam] { m_RenderCamera = cam; });
 }
 
 void
@@ -97,21 +129,26 @@ RenderTargetWindow::showEvent(QShowEvent* event)
 	m_ResizeTimer->stop();
 	SyncSize(width(), height());
 
-	// The frame rate is paced by the vsync-locked Present, not by this timer: DXGI queues frames and
-	// Present only blocks once that queue is full, at which point the loop settles onto the refresh
-	// rate. So the timer's only job is to re-drive the loop as soon as the previous frame returns.
-	//
-	// It must be a *zero-interval* timer, which fires whenever the event loop goes idle. Any non-zero
-	// interval is quantised to the Windows timer tick (~15.6ms), which made the timer -- not Present
-	// -- the pacer: it intermittently skipped a tick and stretched a frame to ~33ms (PIX smooths that
-	// mixture into the ~22ms it reports).
-	m_FrameTimer->start(0);
+	if (m_ViewportId == 0)
+	{
+		m_ViewportId = m_Desc.renderer->AddViewport([this]() {
+			const qint64 startNs = m_FrameClock.nsecsElapsed();
+			DrawFrame();
+			const qint64 endNs = m_FrameClock.nsecsElapsed();
+
+			ReportFrameTiming(startNs, endNs);
+		});
+	}
 }
 
 void
 RenderTargetWindow::hideEvent(QHideEvent* event)
 {
-	m_FrameTimer->stop();
+	if (m_ViewportId != 0)
+	{
+		m_Desc.renderer->RemoveViewport(m_ViewportId);
+		m_ViewportId = 0;
+	}
 
 	// Nothing is presenting while hidden, so a pending resize has nothing to serve; showEvent takes
 	// the size again anyway.
@@ -123,7 +160,7 @@ RenderTargetWindow::hideEvent(QHideEvent* event)
 void
 RenderTargetWindow::SyncSize(int w, int h)
 {
-	if (m_RenderTarget == nullptr || m_Desc.gfx == nullptr)
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
 	{
 		return;
 	}
@@ -150,7 +187,13 @@ RenderTargetWindow::SyncSize(int w, int h)
 	// its job.
 	QElapsedTimer resizeClock;
 	resizeClock.start();
-	m_Desc.gfx->Resize(m_RenderTarget, width, height);
+
+	// Blocking, so the size the frame loop reads changes between frames and never mid-frame.
+	m_Desc.renderer->Invoke([&] {
+		m_Desc.renderer->GetGraphics()->Resize(m_RenderTarget, width, height);
+		m_RenderWidth  = width;
+		m_RenderHeight = height;
+	});
 
 	qWarning(
 		"RenderTarget: resized to %ux%u in %.1f ms",

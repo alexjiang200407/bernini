@@ -60,12 +60,12 @@ RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool t
 }
 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
-MakeMaterialNodeRegistry(bgl::IScene* scene, TexturePreviewCache* previews)
+MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews)
 {
 	auto registry = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
 
 	registry->registerModel<TextureNode>(
-		[scene, previews]() { return std::make_unique<TextureNode>(scene, previews); },
+		[renderer, previews]() { return std::make_unique<TextureNode>(renderer, previews); },
 		"Input");
 
 	// Registered so the graph can create one by name and restore one from a saved graph -- but hidden

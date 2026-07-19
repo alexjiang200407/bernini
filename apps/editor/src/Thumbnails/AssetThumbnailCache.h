@@ -17,11 +17,11 @@
 #include <gamelib/AssetManager.h>
 
 class QTimer;
+class Renderer;
 
 struct AssetThumbnailDesc
 {
-	bgl::GraphicsRef gfx;
-	bgl::SceneRef    scene;
+	Renderer* renderer = nullptr;
 
 	uint32_t dimension    = 256;
 	uint32_t maxInstances = 256;
