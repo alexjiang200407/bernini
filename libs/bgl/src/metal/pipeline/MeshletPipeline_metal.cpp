@@ -62,13 +62,8 @@ namespace bgl
 		Slang::ComPtr<slang::IComponentType> linkedProgram;
 		program->link(linkedProgram.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
 
-		// One MSL library holding every entry point (mesh, pixel, and optional object stage).
-		Slang::ComPtr<slang::IBlob> code;
-		linkedProgram->getTargetCode(0, code.writeRef(), errChecker.WriteDiagnosticBlob()) >>
-			errChecker;
-		gassert(code != nullptr, "Failed to generate MSL");
-		std::string msl(static_cast<const char*>(code->getBufferPointer()), code->getBufferSize());
-
+		// The composed program is used only for reflection (the union of every stage's cbuffers) and
+		// the thread-group sizes; the MSL functions are compiled per stage below.
 		slang::ProgramLayout* layout = linkedProgram->getLayout();
 		ReflectCbuffers(layout, m_UniformLayoutEntries, m_HandleOffsets);
 
@@ -91,29 +86,59 @@ namespace bgl
 		NS::SharedPtr<NS::AutoreleasePool> pool =
 			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
-		NS::Error*                  error = nullptr;
-		NS::SharedPtr<MTL::Library> library =
-			NS::TransferPtr(device->newLibrary(Str(msl), nullptr, &error));
-		if (!library)
-		{
-			core::throw_runtime_error(
-				"Metal meshlet library compile failed for '{}': {}",
-				m_Desc.meshShader->GetDesc().debugName,
-				error->localizedDescription()->utf8String());
-		}
+		// Compile each stage to its OWN library. A whole-program MSL drops the mesh output's
+		// interpolant [[user]] attributes, so any mesh->fragment varying fails to link; per-stage
+		// compilation keeps them. (Numbered semantics like TEXCOORD0 still mismatch mesh vs fragment,
+		// so interpolant semantics must be un-numbered -- a Slang MSL quirk.) A returned MTL::Function
+		// retains its library, so the local Library ptr can drop.
+		const auto compileFunction = [&](IShader* shader) -> NS::SharedPtr<MTL::Function> {
+			slang::IModule*                   module = shader->GetSlangModule();
+			Slang::ComPtr<slang::IEntryPoint> entryPoint;
+			module->findEntryPointByName(
+				shader->GetDesc().entryPointName.c_str(),
+				entryPoint.writeRef());
 
-		// Non-"main" entry names emit verbatim into MSL, so look each function up by its entry name.
-		NS::SharedPtr<MTL::Function> meshFn =
-			NS::TransferPtr(library->newFunction(Str(m_Desc.meshShader->GetDesc().entryPointName)));
-		NS::SharedPtr<MTL::Function> fragFn = NS::TransferPtr(
-			library->newFunction(Str(m_Desc.pixelShader->GetDesc().entryPointName)));
-		gassert(meshFn && fragFn, "Meshlet library is missing its mesh or fragment function");
+			slang::IComponentType*               comps[] = { module, entryPoint.get() };
+			Slang::ComPtr<slang::IComponentType> prog;
+			session->createCompositeComponentType(
+				comps,
+				2,
+				prog.writeRef(),
+				errChecker.WriteDiagnosticBlob()) >>
+				errChecker;
+			Slang::ComPtr<slang::IComponentType> linked;
+			prog->link(linked.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
 
+			Slang::ComPtr<slang::IBlob> blob;
+			linked->getEntryPointCode(0, 0, blob.writeRef(), errChecker.WriteDiagnosticBlob()) >>
+				errChecker;
+			std::string entryMsl(
+				static_cast<const char*>(blob->getBufferPointer()),
+				blob->getBufferSize());
+
+			NS::Error*                  err = nullptr;
+			NS::SharedPtr<MTL::Library> lib =
+				NS::TransferPtr(device->newLibrary(Str(entryMsl), nullptr, &err));
+			if (!lib)
+			{
+				core::throw_runtime_error(
+					"Metal meshlet stage compile failed for '{}': {}",
+					shader->GetDesc().debugName,
+					err->localizedDescription()->utf8String());
+			}
+			NS::SharedPtr<MTL::Function> fn =
+				NS::TransferPtr(lib->newFunction(Str(shader->GetDesc().entryPointName)));
+			gassert(fn.get() != nullptr, "Meshlet stage library is missing its entry function");
+			return fn;
+		};
+
+		NS::SharedPtr<MTL::Function> meshFn = compileFunction(m_Desc.meshShader.Get());
+		NS::SharedPtr<MTL::Function> fragFn = compileFunction(m_Desc.pixelShader.Get());
 		NS::SharedPtr<MTL::Function> objFn;
 		if (m_Desc.ampShader != nullptr)
-			objFn = NS::TransferPtr(
-				library->newFunction(Str(m_Desc.ampShader->GetDesc().entryPointName)));
+			objFn = compileFunction(m_Desc.ampShader.Get());
 
+		NS::Error*                                       error = nullptr;
 		NS::SharedPtr<MTL::MeshRenderPipelineDescriptor> pd =
 			NS::TransferPtr(MTL::MeshRenderPipelineDescriptor::alloc()->init());
 		pd->setMeshFunction(meshFn.get());
