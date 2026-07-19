@@ -236,6 +236,29 @@ AssetThumbnailCache::~AssetThumbnailCache()
 {
 	ReleaseGeometry();
 	ReleaseMaterials();
+
+	if (m_Desc.renderer == nullptr)
+		return;
+
+	// Member destruction would otherwise release these on whichever thread ran the destructor -- the
+	// GUI thread -- flushing the command queue and freeing SceneView's allocations while the render
+	// thread is still presenting the viewports.
+	m_Desc.renderer->Invoke([&] {
+		if (m_DefaultMaterial.IsValid())
+		{
+			try
+			{
+				m_Desc.renderer->GetScene()->DeleteMaterial(m_DefaultMaterial);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: failed to delete the default material: %s", e.what());
+			}
+		}
+
+		m_SceneView    = nullptr;
+		m_RenderTarget = nullptr;
+	});
 }
 
 void

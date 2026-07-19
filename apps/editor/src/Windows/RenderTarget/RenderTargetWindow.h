@@ -25,14 +25,6 @@ public:
 	explicit RenderTargetWindow(QWidget* parent = nullptr, RenderTargetWindowDesc desc = {});
 	~RenderTargetWindow() override;
 
-	// The view this window draws. Held, so it can outlive the window in something that places
-	// instances into it -- the shared AssetManager does exactly that.
-	bgl::SceneViewRef
-	View() const noexcept
-	{
-		return m_SceneView;
-	}
-
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
