@@ -11,7 +11,7 @@ namespace bgl
 {
 	namespace
 	{
-		struct PatchedUniform
+		struct MappedUniform
 		{
 			std::vector<std::byte>    bytes;
 			std::vector<MTL::Buffer*> resident;  // buffers the encoder must make resident
@@ -21,14 +21,14 @@ namespace bgl
 		// resolves it in-shader; Metal has no such heap, so at dispatch each handle field is rewritten
 		// from its slot index to the buffer's gpuAddress (what the emitted MSL dereferences). Copies
 		// the mirror, does that rewrite, and returns the buffers to make resident. Compute and mesh.
-		PatchedUniform
-		PatchUniformHandles(
+		MappedUniform
+		MapUniformHandlesToGpuAddresses(
 			const Uniforms&              uniforms,
 			const std::vector<uint32_t>& handleOffsets,
 			ResourceManager*             rm)
 		{
-			PatchedUniform result;
-			const size_t   size = uniforms.GetSize();
+			MappedUniform result;
+			const size_t  size = uniforms.GetSize();
 			result.bytes.resize(size);
 			std::memcpy(result.bytes.data(), uniforms.Data(), size);
 
@@ -226,14 +226,14 @@ namespace bgl
 		for (const auto& [name, uniforms] : m_MeshletState.kernel->uniforms)
 		{
 			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
-			const PatchedUniform     patched =
-				PatchUniformHandles(uniforms, pipeline->GetHandleOffsets(name), rm);
+			const MappedUniform      mapped =
+				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
 
-			for (MTL::Buffer* buffer : patched.resident)
+			for (MTL::Buffer* buffer : mapped.resident)
 				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite, stages);
 
-			const void*  bytes = patched.bytes.data();
-			const size_t size  = patched.bytes.size();
+			const void*  bytes = mapped.bytes.data();
+			const size_t size  = mapped.bytes.size();
 			enc->setMeshBytes(bytes, size, entry.rootParamIndex);
 			enc->setFragmentBytes(bytes, size, entry.rootParamIndex);
 			if (hasObject)
@@ -293,13 +293,13 @@ namespace bgl
 		for (const auto& [name, uniforms] : m_ComputeState.kernel->uniforms)
 		{
 			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
-			const PatchedUniform     patched =
-				PatchUniformHandles(uniforms, pipeline->GetHandleOffsets(name), rm);
+			const MappedUniform      mapped =
+				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
 
-			for (MTL::Buffer* buffer : patched.resident)
+			for (MTL::Buffer* buffer : mapped.resident)
 				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
 
-			enc->setBytes(patched.bytes.data(), patched.bytes.size(), entry.rootParamIndex);
+			enc->setBytes(mapped.bytes.data(), mapped.bytes.size(), entry.rootParamIndex);
 		}
 
 		enc->dispatchThreadgroups(MTL::Size(x, y, z), pipeline->GetThreadsPerThreadgroup());
