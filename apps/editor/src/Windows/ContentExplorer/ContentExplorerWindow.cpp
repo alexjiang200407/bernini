@@ -96,9 +96,11 @@ namespace
 		message.setWindowTitle("Import Asset");
 		message.setIcon(QMessageBox::Warning);
 		message.setText(
-			QString("Cannot import '%1': it would overwrite files already in the project.").arg(name));
+			QString("Cannot import '%1': it would overwrite files already in the project.")
+				.arg(name));
 		message.setInformativeText(
-			"Import never overwrites. Remove the listed files, or choose a different texture folder, "
+			"Import never overwrites. Remove the listed files, or choose a different texture "
+			"folder, "
 			"then import again.");
 		message.setDetailedText(replaced.join('\n'));
 		message.exec();

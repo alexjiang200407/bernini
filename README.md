@@ -46,6 +46,10 @@ clone that hasn't installed it. Or use Visual Studio.
 
 1. Download [here](https://www.python.org/downloads/). Ensure **python3** is discoverable.
 
+### Bash
+
+The helper scripts and git hooks are driven through a POSIX shell. macOS and Linux ship one; on Windows use Git Bash (bundled with [Git for Windows](https://git-scm.com/download/win)) or WSL.
+
 ### Qt
 
 We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt-online-installation.html). In the Qt installer wizard, check Qt for `Development/Qt/Qt x.x.x/MSVC 2022 64-bit` (editor is windows only for now) and uncheck everything else.
