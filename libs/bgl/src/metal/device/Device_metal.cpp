@@ -1,7 +1,9 @@
 #include "device/Device_metal.h"
 
 #include "cmd/CommandAllocator_metal.h"
+#include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
+#include "resource/ResourceManager_metal.h"
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
@@ -27,20 +29,21 @@ namespace bgl
 
 	core::SharedRef<ICommandList>
 	Device::CreateCommandList(
-		const CommandListDesc&,
-		core::SharedRef<ICommandAllocator>,
-		core::SharedRef<IResourceManager>) const noexcept
+		const CommandListDesc&             desc,
+		core::SharedRef<ICommandAllocator> commandAllocator,
+		core::SharedRef<IResourceManager>  resourceManager) const noexcept
 	{
-		gfatal("Metal backend: CreateCommandList not implemented yet");
-		return nullptr;
+		return core::SharedRef<CommandList>::Make(
+			desc,
+			commandAllocator.Get(),
+			std::move(resourceManager));
 	}
 
 	core::SharedRef<IResourceManager>
-	Device::CreateResourceManager(const ResourceManagerDesc&, core::SharedRef<ICommandQueue>)
+	Device::CreateResourceManager(const ResourceManagerDesc& desc, core::SharedRef<ICommandQueue>)
 		const noexcept
 	{
-		gfatal("Metal backend: CreateResourceManager not implemented yet");
-		return nullptr;
+		return core::SharedRef<ResourceManager>::Make(m_Device.get(), desc);
 	}
 
 	core::SharedRef<IShader>

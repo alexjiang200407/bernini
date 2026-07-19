@@ -1,5 +1,7 @@
 #include "cmd/CommandQueue_metal.h"
 
+#include "cmd/CommandList_metal.h"
+
 namespace bgl
 {
 	CommandQueue::CommandQueue(MTL::Device* device) :
@@ -8,10 +10,17 @@ namespace bgl
 	{}
 
 	uint64_t
-	CommandQueue::ExecuteCommandList(ICommandList*) noexcept
+	CommandQueue::ExecuteCommandList(ICommandList* commandList) noexcept
 	{
-		gfatal("Metal backend: ExecuteCommandList not implemented yet");
-		return 0;
+		gassert(commandList != nullptr, "Command list is not initialized.");
+
+		auto* cmdBuffer = commandList->As<CommandList>()->GetCommandBuffer();
+		gassert(cmdBuffer != nullptr, "Command list was not opened before execution");
+
+		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
+		cmdBuffer->commit();
+
+		return m_NextFenceValue++;
 	}
 
 	bool
