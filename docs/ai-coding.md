@@ -68,6 +68,13 @@ When it asks for the key, and you don't have one yet:
 `just init` also points git at the committed hooks (`core.hooksPath = .githooks`) so the
 commit-attribution hook below is active.
 
+That redirect is why the four Git LFS hooks (`post-checkout`, `post-commit`, `post-merge`,
+`pre-push`) are committed alongside it. `git lfs install` writes them to whatever `core.hooksPath`
+names, which on a fresh clone is `.git/hooks` — so pointing it at `.githooks` orphans them, and
+`pre-push`, the hook that uploads LFS objects, stops running. A push would then publish pointer files
+whose objects were never uploaded. Committing them keeps the redirect and the hooks together. Do not
+delete them as regenerable cruft.
+
 A blank answer skips the key — do that if you never run `bcp-revise`; your replies just post as your
 own account. Re-run `just init` any time to set it up later.
 

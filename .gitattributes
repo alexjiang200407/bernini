@@ -84,3 +84,9 @@ libs/bgl/src/idl/**         text eol=lf
 libs/bgl/shaders/src/idl/**  text eol=lf
 libs/bgl/include/bgl/PsoType.h       text eol=lf
 libs/bgl/include/bgl/MaterialType.h  text eol=lf
+
+###############################################################################
+# Git hooks are executed as shell scripts, including by Linux/macOS checkouts.
+# CRLF in a shebang line makes the interpreter lookup fail, so pin them to LF.
+###############################################################################
+.githooks/** text eol=lf
