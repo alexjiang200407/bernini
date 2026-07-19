@@ -121,6 +121,11 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_MaterialLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	m_MaterialLabel->setWordWrap(true);
 	m_MaterialLabel->setStyleSheet("color: gray;");
+
+	// A path has no spaces to wrap at, so the label's minimum width would otherwise be a whole
+	// directory name and become the floor for the panel -- and for the splitter above it. Ignored
+	// drops it out of that calculation; the tooltip carries the path once it is too narrow to read.
+	m_MaterialLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	propertiesLayout->addWidget(m_MaterialLabel);
 
 	propertiesLayout->addSpacing(8);
@@ -161,6 +166,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_BakedTexturesLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	m_BakedTexturesLabel->setWordWrap(true);
 	m_BakedTexturesLabel->setStyleSheet("color: gray;");
+	m_BakedTexturesLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	m_BakedTexturesLabel->hide();
 	propertiesLayout->addWidget(m_BakedTexturesLabel);
 
@@ -583,12 +589,13 @@ MaterialEditorWindow::RefreshActions()
 	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(materialPath) : materialPath);
 	m_MaterialLabel->setStyleSheet(stale ? "color: #c08040;" : "color: gray;");
 
+	// The path leads, because the label clips it once the panel is narrow.
 	m_MaterialLabel->setToolTip(
-		stale ?
-			QStringLiteral(
-				"The baked textures do not match its sources. Bake it from the Content Explorer "
-				"to update.") :
-			QString());
+		stale ? QStringLiteral(
+					"%1\n\nThe baked textures do not match its sources. Bake it from the "
+					"Content Explorer to update.")
+					.arg(materialPath) :
+				materialPath);
 }
 
 void
