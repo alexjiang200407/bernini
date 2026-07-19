@@ -922,6 +922,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	desc.layerType   = ToLayerType(output->AlphaMode());
 	desc.alphaCutoff = output->AlphaCutoff();
+	desc.occlude     = output->Occlude();
 
 	const auto route = [&](unsigned int channel) {
 		const ChannelData::Route wired = output->Route(channel);
@@ -949,9 +950,11 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	// An in-place rewrite keeps the handle, so the instances already overriding with it follow the
 	// edit with no rebinding -- but only while the PSO bucket is unchanged. The bucket comes from the
-	// handle's layer, which an update cannot rewrite, so flipping the sink to a different alpha mode
-	// (opaque / cutout / blend) needs a new material or it would keep the old pass.
-	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType)
+	// handle's layer *and* its occlude flag, neither of which an update can rewrite, so flipping the
+	// alpha mode (opaque / cutout / blend) or toggling Occlude needs a new material or it would keep
+	// the old pass.
+	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType &&
+	    entry.preview.occlude == desc.occlude)
 	{
 		m_Desc.scene->UpdateLoosePbrMaterial(entry.preview, desc);
 		return;

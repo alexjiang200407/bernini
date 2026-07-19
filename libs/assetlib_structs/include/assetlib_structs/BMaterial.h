@@ -98,6 +98,9 @@ namespace assetlib
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// Blend only: render with a depth-only pre-pass so the surface self-occludes (hair, foliage).
+		bool occlude = false;
+
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 
 		std::array<SourceStamp, c_LooseChannelCount> routeStamps;

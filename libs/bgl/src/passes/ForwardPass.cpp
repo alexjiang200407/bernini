@@ -101,6 +101,8 @@ namespace bgl
 		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
 		constexpr auto c_PbrCutoutPixelSrc   = "Forward_PBR_AlphaTest"sv;
 		constexpr auto c_LooseCutoutPixelSrc = "Forward_PBR_Loose_AlphaTest"sv;
+		constexpr auto c_PbrPrepassSrc       = "Forward_PBR_Prepass"sv;
+		constexpr auto c_LoosePrepassSrc     = "Forward_PBR_Loose_Prepass"sv;
 		constexpr auto c_AssertPixelSrc      = "Forward_Assert"sv;
 
 		struct PsoConfig
@@ -109,6 +111,10 @@ namespace bgl
 			RasterCullMode   cull;
 			bool             depthWrite;
 			bool             blend;
+			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
+
+			// A depth-only pass binds no render target and writes no colour (the pre-pass).
+			bool depthOnly = false;
 		};
 
 		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).
@@ -127,8 +133,37 @@ namespace bgl
 			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true },
 			// kTransparent_StaticMesh_LoosePbr
 			{ c_LoosePixelSrc, RasterCullMode::kNone, false, true },
+			// kTransparentOcclude_StaticMesh_PBR: front layer only, matched to the pre-pass depth.
+			{ c_PbrPixelSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
+			// kTransparentOcclude_StaticMesh_LoosePbr
+			{ c_LoosePixelSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
+		} };
+
+		// Depth-only pre-pass configs, keyed by the self-occluding PSO they precede. Write depth for
+		// the front layer (alpha-discarding the rest), so its Equal-tested colour draw blends once.
+		struct PrepassEntry
+		{
+			PsoType   pso;
+			PsoConfig config;
+		};
+
+		static constexpr std::array<PrepassEntry, 2> c_Prepasses = { {
+			{ PsoType::kTransparentOcclude_StaticMesh_PBR,
+			  { c_PbrPrepassSrc,
+			    RasterCullMode::kNone,
+			    true,
+			    false,
+			    ComparisonFunc::kLess,
+			    true } },
+			{ PsoType::kTransparentOcclude_StaticMesh_LoosePbr,
+			  { c_LoosePrepassSrc,
+			    RasterCullMode::kNone,
+			    true,
+			    false,
+			    ComparisonFunc::kLess,
+			    true } },
 		} };
 
 		static_assert(
@@ -146,7 +181,11 @@ namespace bgl
 
 			pipelineDesc.pixelShader = device->CreateShader(std::string(cfg.pixelSrc), "PSMain");
 
-			pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+			// A depth-only pre-pass binds no render target: it exists only to write depth.
+			if (!cfg.depthOnly)
+			{
+				pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+			}
 			pipelineDesc.SetDsvFormat(Format::D24S8);
 
 			auto raster = RasterState();
@@ -158,7 +197,7 @@ namespace bgl
 			auto depth = DepthStencilState{};
 			depth.SetDepthTestEnable(true)
 				.SetDepthWriteEnable(cfg.depthWrite)
-				.SetDepthFunc(ComparisonFunc::kLess)
+				.SetDepthFunc(cfg.depthFunc)
 				.SetStencilEnable(false);
 
 			auto blend = BlendState{};
@@ -192,6 +231,12 @@ namespace bgl
 		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
 		{
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
+		}
+
+		for (const PrepassEntry& entry : c_Prepasses)
+		{
+			m_PrepassKernels[static_cast<size_t>(entry.pso)] =
+				BuildForwardKernel(device, entry.config);
 		}
 	}
 
@@ -353,11 +398,51 @@ namespace bgl
 			cmd->DispatchMeshIndirect(pso);
 		}
 
-		// Transparent: one direct DispatchMesh per depth-sorted run, reading the CPU-built list at
-		// the run's offset. Runs are back-to-front, so blending composites in the correct order.
+		DrawTransparentRuns(draw, resources, gfxState);
+	}
+
+	void
+	ForwardPass::DrawTransparentRuns(
+		const DrawData&    draw,
+		const PassContext& resources,
+		MeshletState       colorState)
+	{
+		// One direct DispatchMesh per depth-sorted run, reading the CPU-built list at the run's
+		// offset. Runs are back-to-front, so blending composites in the correct order.
 		if (!draw.transparentRuns.empty())
 		{
-			const auto sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
+			ICommandList* cmd             = resources.GetCommandList();
+			const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
+
+			// Depth pre-pass: self-occluding runs write their front layer's depth first, with no
+			// colour target, so each such run's Equal-tested colour draw below blends only that layer.
+			auto prepassState = MeshletState();
+			prepassState.viewportState.AddViewportAndScissorRect(draw.viewport);
+			prepassState.frameBuffer = FrameBuffer().SetDepthAttachment(draw.depthBufferHandle);
+
+			for (const TransparentRun& run : draw.transparentRuns)
+			{
+				if (!IsOccludeTransparentPso(run.pso))
+				{
+					continue;
+				}
+
+				MeshletKernel& kernel = m_PrepassKernels[run.pso];
+				gassert(kernel.pipeline.IsInitialized(), "Pre-pass pipeline must be initialized");
+
+				BindKernel(kernel, draw, resources);
+				if (auto forwardData = kernel.FindUniforms("forwardData"))
+				{
+					(*forwardData)["compactedInstances"] = sortedInstances;
+					(*forwardData)["psoIndex"]           = run.pso;
+					(*forwardData)["instanceListBase"]   = run.offset;
+					(*forwardData)["usePrefixSumBase"]   = 0u;
+				}
+
+				prepassState.kernel = &kernel;
+				cmd->SetMeshletState(prepassState);
+				cmd->DispatchMesh(run.count, 1, 1);
+			}
 
 			for (const TransparentRun& run : draw.transparentRuns)
 			{
@@ -373,8 +458,8 @@ namespace bgl
 					(*forwardData)["usePrefixSumBase"]   = 0u;
 				}
 
-				gfxState.kernel = &kernel;
-				cmd->SetMeshletState(gfxState);
+				colorState.kernel = &kernel;
+				cmd->SetMeshletState(colorState);
 				cmd->DispatchMesh(run.count, 1, 1);
 			}
 		}

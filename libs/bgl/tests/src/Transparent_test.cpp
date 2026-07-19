@@ -11,13 +11,15 @@ namespace
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	// A translucent plane at world-space depth z, facing the camera.
+	// A translucent plane at world-space depth z, facing the camera. `occlude` selects the
+	// depth-pre-pass self-occlusion path.
 	void
 	addPane(
 		const bgl::SceneRef&     scene,
 		const bgl::SceneViewRef& view,
 		const glm::vec4&         baseColor,
-		float                    z)
+		float                    z,
+		bool                     occlude = false)
 	{
 		auto desc = bgl::PbrMaterialDesc();
 		desc.baseColorFactor =
@@ -25,6 +27,7 @@ namespace
 		desc.metallicFactor  = 0.0f;
 		desc.roughnessFactor = 0.9f;
 		desc.layerType       = bgl::LayerType::kBlend;
+		desc.occlude         = occlude;
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
@@ -125,4 +128,82 @@ TEST_CASE(
 
 	// Creation order must not matter: far-first and near-first produce the same frame.
 	CHECK(bgl::test::MatchesGolden(gotFar, gotNear));
+}
+
+// The depth pre-pass makes a self-occluding blend material hide its own back layers: the near red
+// pane's depth is stamped first, so the far blue pane is rejected in the overlap instead of bleeding
+// through. Without occlude the blue shows through; with it, the overlap is red over the background.
+TEST_CASE("A self-occluding blend material hides the layers behind it", "[transparent][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.maxGeom                 = 8;
+	sceneDesc.maxMeshlets             = 512;
+	sceneDesc.maxSubmeshes            = 8;
+	sceneDesc.maxVertexBufferByteSize = 800000;
+	sceneDesc.maxIndices              = 20000;
+	sceneDesc.maxPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+
+	const glm::vec4 red{ 1.0f, 0.03f, 0.03f, 0.5f };
+	const glm::vec4 blue{ 0.03f, 0.03f, 1.0f, 0.5f };
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 0.0f, 19.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	const auto overlapBlue = [&](bool occlude, const std::string& path) {
+		auto view = gfx->CreateSceneView(scene, 8);
+		view->SetEnvironmentMap(
+			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
+		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+
+		addPane(scene, view, blue, 0.0f, occlude);  // far
+		addPane(scene, view, red, 5.0f, occlude);   // near
+
+		auto context     = bgl::RenderContext();
+		context.view     = view;
+		context.camera   = camera;
+		context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		gfx->DrawFrame(target, context);
+		gfx->ScreenshotPng(target, path);
+
+		return bgl::test::MeanColor(path, 200, 300, 200, 200).b;
+	};
+
+	const float bPlain   = overlapBlue(false, "assets/golden/transparent_occlude_off.got.png");
+	const float bOcclude = overlapBlue(true, "assets/golden/transparent_occlude_on.got.png");
+
+	INFO("far-blue in overlap: plain=" << bPlain << " occlude=" << bOcclude);
+
+	// Without occlude the far blue clearly bleeds into the overlap (a lit red pane alone carries far
+	// less blue -- the rest is the environment reflecting off it).
+	CHECK(bPlain > 0.35f);
+
+	// The pre-pass stamps the near red pane's depth, so the far blue is depth-rejected: its
+	// contribution to the overlap drops sharply.
+	CHECK(bOcclude < bPlain * 0.65f);
 }

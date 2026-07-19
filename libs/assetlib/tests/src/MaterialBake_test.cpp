@@ -35,6 +35,47 @@ namespace
 	}
 }
 
+TEST_CASE(
+	"dilateColorIntoTransparent bleeds the nearest opaque color over garbage",
+	"[bmaterial][bake]")
+{
+	// 8x1: opaque red at [0,1], opaque blue at [6,7], transparent *garbage gray* between -- the
+	// arbitrary colour BC7 would otherwise store and fringe back across a cutout edge.
+	std::array<std::byte, 8u * 4u> px{};
+	const auto                     set = [&](size_t i, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+		px[i * 4u + 0u] = std::byte{ r };
+		px[i * 4u + 1u] = std::byte{ g };
+		px[i * 4u + 2u] = std::byte{ b };
+		px[i * 4u + 3u] = std::byte{ a };
+	};
+	set(0u, 255, 0, 0, 255);
+	set(1u, 255, 0, 0, 255);
+	for (size_t i = 2u; i <= 5u; ++i) set(i, 128, 128, 128, 0);
+	set(6u, 0, 0, 255, 255);
+	set(7u, 0, 0, 255, 255);
+
+	dilateColorIntoTransparent(px, 8, 1);
+
+	const auto ch = [&](size_t i, size_t c) { return std::to_integer<uint8_t>(px[i * 4u + c]); };
+
+	// Every texel is now red or blue -- the gray garbage is gone (green stays 0 throughout).
+	for (size_t i = 0u; i < 8u; ++i)
+	{
+		CHECK(ch(i, 1u) == 0);
+		CHECK((ch(i, 0u) == 255) != (ch(i, 2u) == 255));
+	}
+
+	// And it is the *nearest* opaque color: 2,3 take red, 4,5 take blue.
+	CHECK(ch(2u, 0u) == 255);
+	CHECK(ch(3u, 0u) == 255);
+	CHECK(ch(4u, 2u) == 255);
+	CHECK(ch(5u, 2u) == 255);
+
+	// Alpha is untouched -- only the color bleeds.
+	CHECK(ch(3u, 3u) == 0);
+	CHECK(ch(0u, 3u) == 255);
+}
+
 TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmaterial][bake]")
 {
 	const BakeDir dir("bernini_bake_material");

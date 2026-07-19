@@ -16,7 +16,7 @@ namespace assetlib
 		constexpr uint32_t c_Magic = 0x54414D42u;  // 'B','M','A','T' little-endian
 
 		constexpr uint16_t c_VersionMajor = 6;
-		constexpr uint16_t c_VersionMinor = 0;
+		constexpr uint16_t c_VersionMinor = 1;  // +1: PbrParams::occlude
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
 		void
@@ -55,10 +55,11 @@ namespace assetlib
 			}
 			writer.writePod(static_cast<uint32_t>(pbr.alphaMode));
 			writer.writePod(pbr.alphaCutoff);
+			writer.writePod<uint8_t>(pbr.occlude ? 1u : 0u);  // minor >= 1
 		}
 
 		PbrParams
-		readPbr(ByteReader& reader)
+		readPbr(ByteReader& reader, uint16_t versionMinor)
 		{
 			PbrParams pbr;
 			pbr.baseColorFactor  = reader.readPod<glm::vec4>();
@@ -79,6 +80,10 @@ namespace assetlib
 			}
 			pbr.alphaMode   = static_cast<AlphaMode>(reader.readPod<uint32_t>());
 			pbr.alphaCutoff = reader.readPod<float>();
+			if (versionMinor >= 1)
+			{
+				pbr.occlude = reader.readPod<uint8_t>() != 0u;
+			}
 			return pbr;
 		}
 
@@ -121,7 +126,7 @@ namespace assetlib
 			throw std::runtime_error("bmaterial: bad magic");
 
 		const auto versionMajor = reader.readPod<uint16_t>();
-		(void)reader.readPod<uint16_t>();  // minor is forward-compatible
+		const auto versionMinor = reader.readPod<uint16_t>();  // additive within a major
 
 		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
@@ -143,7 +148,7 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			material.pbr = readPbr(reader);
+			material.pbr = readPbr(reader, versionMinor);
 			break;
 
 		// Already excluded by the range check above; the case exists so a new model cannot be added

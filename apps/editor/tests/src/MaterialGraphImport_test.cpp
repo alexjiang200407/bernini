@@ -127,6 +127,32 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 	CHECK(Route(material, PbrChannel::kBaseColorA).channel == 3);
 }
 
+TEST_CASE("The blend sink's occlude toggle reaches the compiled material", "[materialimport]")
+{
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId id     = model.addNode(QStringLiteral("BlendedMaterialOutput"));
+	auto*                 output = model.delegateModel<MaterialOutputNode>(id);
+	REQUIRE(output != nullptr);
+
+	// Off by default; a blend material blends every layer until the artist opts into occlusion.
+	CHECK_FALSE(output->Occlude());
+	CHECK_FALSE(CompileMaterial(model, QStringLiteral("m"), c_DataRoot).pbr.occlude);
+
+	// The checkbox and cutoff spin write the same keys their own load reads, so this is what the UI
+	// does. The cutoff is the pre-pass discard threshold.
+	auto on           = QJsonObject();
+	on["occlude"]     = true;
+	on["alphaCutoff"] = 0.2;
+	output->load(on);
+
+	CHECK(output->Occlude());
+	CHECK(output->AlphaCutoff() == Catch::Approx(0.2f));
+
+	const assetlib::BMaterial compiled = CompileMaterial(model, QStringLiteral("m"), c_DataRoot);
+	CHECK(compiled.pbr.occlude);
+	CHECK(compiled.pbr.alphaCutoff == Catch::Approx(0.2f));
+}
+
 TEST_CASE("A map a glTF material does not name is left unrouted", "[materialimport]")
 {
 	auto imported = assetlib::imp::BMaterialImport();

@@ -271,16 +271,18 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BakeDir dir("bernini_bake_alpha_io");
 
 	BMaterial material;
-	material.pbr.alphaMode        = AlphaMode::kMask;
+	material.pbr.alphaMode        = AlphaMode::kBlend;
 	material.pbr.alphaCutoff      = 0.25f;
+	material.pbr.occlude          = true;
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
 	REQUIRE_NOTHROW(saveMaterial(material, path));
 
 	const BMaterial loaded = loadMaterial(path);
-	CHECK(loaded.pbr.alphaMode == AlphaMode::kMask);
+	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
+	CHECK(loaded.pbr.occlude);
 }
 
 TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][alphatest]")
