@@ -1,98 +1,167 @@
-#include "scene/transparent_sort.h"
-#include <bgl/PsoType.h>
+#include "cmd/CommandAllocator.h"
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
+#include "gfx/GraphicsBase.h"
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/ComputePipeline.h"
+#include "resource/Readback.h"
+#include "resource/ResourceManager.h"
+#include "scene/ComputeBuffer.h"
+#include "types/ComputeState.h"
+#include "uniforms/Uniforms.h"
+#include "util/GpuValidation.h"
+#include <bgl/IGraphics.h>
 
 namespace
 {
-	constexpr uint32_t kPbr = static_cast<uint32_t>(bgl::PsoType::kTransparent_StaticMesh_PBR);
-	constexpr uint32_t kLoose =
-		static_cast<uint32_t>(bgl::PsoType::kTransparent_StaticMesh_LoosePbr);
+	// Must match TransparentSort.slang.
+	constexpr uint32_t c_SortCapacity = 1024;
 
-	// The dense instance indices, in the order BuildTransparentDrawOrder emitted them.
-	std::vector<uint32_t>
-	order(std::vector<bgl::TransparentDrawable> drawables, std::vector<bgl::TransparentRun>& runs)
+	struct SortEntry
 	{
-		std::vector<uint32_t> out;
-		bgl::BuildTransparentDrawOrder(drawables, out, runs);
-		return out;
-	}
+		uint32_t key;
+		uint32_t instance;
+	};
 }
 
-TEST_CASE("Transparent draw order is back-to-front", "[transparent]")
+// Sorts the (key, instance) pairs the depth-key pass produces. The payload has to travel with its
+// key -- a sort that ordered the keys but shuffled the instance indices would draw the right depths
+// in the wrong order, which no key-only check would catch. A count that is not a power of two is
+// used so the padding path is exercised rather than assumed.
+TEST_CASE(
+	"Transparent sort orders entries by key and carries the payload",
+	"[compute][transparentsort]")
 {
-	std::vector<bgl::TransparentRun> runs;
+	auto opts                     = bgl::GraphicsOptions();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	// depth is a sort key; larger is farther. Instances 0..2 supplied near-to-far.
-	auto out = order({ { 1.0f, kPbr, 0 }, { 5.0f, kPbr, 1 }, { 3.0f, kPbr, 2 } }, runs);
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
 
-	// Farthest (depth 5, index 1) first, nearest (depth 1, index 0) last.
-	CHECK(out == std::vector<uint32_t>{ 1, 2, 0 });
-}
+	auto gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
 
-TEST_CASE("Transparent order depends only on depth, not input order", "[transparent]")
-{
-	std::vector<bgl::TransparentRun> runsA;
-	std::vector<bgl::TransparentRun> runsB;
+	auto resourceManager = gfxBase->GetResourceManagerCpy();
+	REQUIRE(resourceManager != nullptr);
 
-	const auto a = order({ { 1.0f, kPbr, 0 }, { 2.0f, kPbr, 1 }, { 3.0f, kPbr, 2 } }, runsA);
+	auto device = gfxBase->GetDevice();
 
-	// Same drawables, supplied in the opposite order.
-	const auto b = order({ { 3.0f, kPbr, 2 }, { 2.0f, kPbr, 1 }, { 1.0f, kPbr, 0 } }, runsB);
+	auto cmdListDesc  = bgl::CommandListDesc();
+	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	CHECK(a == b);
-}
+	// Deliberately not a power of two, and deliberately not already sorted. Each key is paired with
+	// an instance derived from it, so the pairing can be checked after the shuffle.
+	constexpr uint32_t c_Count = 613;
 
-TEST_CASE("Equal depths break ties deterministically by instance index", "[transparent]")
-{
-	std::vector<bgl::TransparentRun> runs;
-
-	const auto a = order({ { 4.0f, kPbr, 7 }, { 4.0f, kPbr, 2 }, { 4.0f, kPbr, 5 } }, runs);
-	const auto b = order({ { 4.0f, kPbr, 5 }, { 4.0f, kPbr, 7 }, { 4.0f, kPbr, 2 } }, runs);
-
-	CHECK(a == std::vector<uint32_t>{ 2, 5, 7 });
-	CHECK(a == b);
-}
-
-TEST_CASE("Runs are maximal spans of one PSO in depth order", "[transparent]")
-{
-	std::vector<bgl::TransparentRun> runs;
-
-	// Depth order is far->near: loose(6), pbr(4), pbr(3), loose(1). The two adjacent PBRs are one
-	// run; the PSO switches force three runs total, not four.
-	const auto out = order(
-		{ { 3.0f, kPbr, 0 }, { 6.0f, kLoose, 1 }, { 1.0f, kLoose, 2 }, { 4.0f, kPbr, 3 } },
-		runs);
-
-	REQUIRE(out == std::vector<uint32_t>{ 1, 3, 0, 2 });
-
-	REQUIRE(runs.size() == 3);
-
-	CHECK(runs[0].pso == kLoose);
-	CHECK(runs[0].offset == 0);
-	CHECK(runs[0].count == 1);
-
-	CHECK(runs[1].pso == kPbr);
-	CHECK(runs[1].offset == 1);
-	CHECK(runs[1].count == 2);
-
-	CHECK(runs[2].pso == kLoose);
-	CHECK(runs[2].offset == 3);
-	CHECK(runs[2].count == 1);
-
-	// Offsets and counts tile the list with no gaps or overlaps.
-	uint32_t expectedOffset = 0;
-	for (const bgl::TransparentRun& run : runs)
+	std::vector<SortEntry> input(c_Count);
+	for (uint32_t i = 0; i < c_Count; ++i)
 	{
-		CHECK(run.offset == expectedOffset);
-		expectedOffset += run.count;
+		// A stride coprime with the count walks every value exactly once in a scattered order.
+		const uint32_t key = (i * 2654435761u) % 1000003u;
+		input[i]           = SortEntry{ key, key ^ 0xA5A5A5A5u };
 	}
-	CHECK(expectedOffset == out.size());
-}
 
-TEST_CASE("An empty transparent set yields no order and no runs", "[transparent]")
-{
-	std::vector<bgl::TransparentRun> runs;
-	const auto                       out = order({}, runs);
+	auto entries = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<SortEntry>().SetMaxCount(c_SortCapacity).SetDebugName("Sort Entries");
+		entries.Init(desc, resourceManager);
+	}
 
-	CHECK(out.empty());
-	CHECK(runs.empty());
+	auto counter = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<uint32_t>().SetMaxCount(1).SetDebugName("Sort Count");
+		counter.Init(desc, resourceManager);
+	}
+
+	auto kernel = device->CreateComputeKernel(
+		bgl::ComputePipelineDesc()
+			.SetShader(device->CreateShader("TransparentSort"))
+			.SetDebugName("Transparent Sort"));
+
+	kernel["gUniforms"]["entries"] = entries.GetBufferHandle();
+	kernel["gUniforms"]["count"]   = counter.GetBufferHandle();
+
+	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
+
+	cmdList->WriteBuffer(entries.GetBufferHandle(), input.data(), input.size() * sizeof(SortEntry));
+	cmdList->WriteBuffer(counter.GetBufferHandle(), &c_Count, sizeof(c_Count));
+
+	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
+	                              bgl::BarrierAccessFlag accessBefore,
+	                              bgl::BarrierSyncFlag   syncAfter,
+	                              bgl::BarrierAccessFlag accessAfter) {
+		return bgl::BufferBarrierDesc()
+		    .AddSyncBefore(syncBefore)
+		    .AddAccessBefore(accessBefore)
+		    .AddSyncAfter(syncAfter)
+		    .AddAccessAfter(accessAfter);
+	};
+
+	const auto toWrite = bufferBarrier(
+		bgl::BarrierSyncFlag::kCopy,
+		bgl::BarrierAccessFlag::kCopyDest,
+		bgl::BarrierSyncFlag::kComputeShader,
+		bgl::BarrierAccessFlag::kUnorderedAccess);
+
+	cmdList->Barrier(entries.GetBufferHandle(), toWrite);
+	cmdList->Barrier(counter.GetBufferHandle(), toWrite);
+
+	auto state   = bgl::ComputeState();
+	state.kernel = &kernel;
+	cmdList->SetComputeState(state);
+	cmdList->Dispatch(1, 1, 1);
+
+	cmdList->Barrier(
+		entries.GetBufferHandle(),
+		bufferBarrier(
+			bgl::BarrierSyncFlag::kComputeShader,
+			bgl::BarrierAccessFlag::kUnorderedAccess,
+			bgl::BarrierSyncFlag::kCopy,
+			bgl::BarrierAccessFlag::kCopySource));
+
+	auto readbackDesc      = bgl::ReadbackBufferDesc();
+	readbackDesc.byteSize  = sizeof(SortEntry) * c_SortCapacity;
+	readbackDesc.debugName = "Sort Readback";
+	auto readback          = resourceManager->CreateReadbackBuffer(readbackDesc);
+
+	cmdList->CopyBufferToReadback(readback, entries.GetBufferHandle());
+
+	cmdList->Close();
+	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList.Get()));
+
+	std::vector<SortEntry> got(c_Count);
+	std::memcpy(got.data(), resourceManager->MapReadback(readback), sizeof(SortEntry) * c_Count);
+	resourceManager->UnmapReadback(readback);
+
+	for (uint32_t i = 1; i < c_Count; ++i)
+	{
+		INFO("entry " << i << " key " << got[i].key << " follows " << got[i - 1].key);
+		CHECK(got[i - 1].key <= got[i].key);
+	}
+
+	// The payload must still belong to its key, and the multiset must be exactly what went in --
+	// so nothing was dropped, duplicated, or overwritten by the padding.
+	std::vector<uint32_t> gotKeys;
+	gotKeys.reserve(c_Count);
+	for (const SortEntry& entry : got)
+	{
+		CHECK(entry.instance == (entry.key ^ 0xA5A5A5A5u));
+		gotKeys.push_back(entry.key);
+	}
+
+	std::vector<uint32_t> wantKeys;
+	wantKeys.reserve(c_Count);
+	for (const SortEntry& entry : input) wantKeys.push_back(entry.key);
+
+	std::ranges::sort(wantKeys);
+	std::ranges::sort(gotKeys);
+	CHECK(gotKeys == wantKeys);
+
+	resourceManager->DestroyReadbackBuffer(readback, 0, false);
 }
