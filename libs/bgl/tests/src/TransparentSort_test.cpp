@@ -2,6 +2,8 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "idl/Constants.h"
+#include "idl/DispatchArgs.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
@@ -14,8 +16,7 @@
 
 namespace
 {
-	// Must match TransparentSort.slang.
-	constexpr uint32_t c_SortCapacity = 1024;
+	constexpr uint32_t c_SortCapacity = bgl::idl::cTransparentSortCapacity;
 
 	struct SortEntry
 	{
@@ -79,13 +80,43 @@ TEST_CASE(
 		counter.Init(desc, resourceManager);
 	}
 
+	// Written alongside the sorted entries; this case only asserts on the entries, so these exist to
+	// give the shader somewhere legal to write.
+	auto sortedInstances = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<uint32_t>().SetMaxCount(c_SortCapacity).SetDebugName("Sorted Instances");
+		sortedInstances.Init(desc, resourceManager);
+	}
+
+	auto partitionBase = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<uint32_t>()
+			.SetMaxCount(bgl::idl::cTransparentPartitionCount)
+			.SetDebugName("Partition Base");
+		partitionBase.Init(desc, resourceManager);
+	}
+
+	auto partitionArgs = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<bgl::idl::DispatchArgs>()
+			.SetMaxCount(bgl::idl::cTransparentPartitionCount)
+			.SetDebugName("Partition Dispatch Args");
+		partitionArgs.Init(desc, resourceManager);
+	}
+
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("TransparentSort"))
 			.SetDebugName("Transparent Sort"));
 
-	kernel["gUniforms"]["entries"] = entries.GetBufferHandle();
-	kernel["gUniforms"]["count"]   = counter.GetBufferHandle();
+	kernel["gUniforms"]["entries"]               = entries.GetBufferHandle();
+	kernel["gUniforms"]["count"]                 = counter.GetBufferHandle();
+	kernel["gUniforms"]["sortedInstances"]       = sortedInstances.GetBufferHandle();
+	kernel["gUniforms"]["partitionBase"]         = partitionBase.GetBufferHandle();
+	kernel["gUniforms"]["partitionDispatchArgs"] = partitionArgs.GetBufferHandle();
 
 	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 
