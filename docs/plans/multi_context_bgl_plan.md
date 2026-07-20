@@ -9,7 +9,7 @@ When the work lands, the durable parts move to [rhi.md](../rhi.md) and a new `do
 
 **Naming.** The unit is **`IRenderContext`**, created by `IGraphics::CreateRenderContext`. The name
 is currently taken by the per-draw `{view, camera, viewport}` POD, which is renamed **`RenderJob`**
-in S0b to free it.
+in S0c to free it.
 
 The reuse is deliberate, not opportunistic. This is the D3D11 device/context split: `ID3D11Device`
 is free-threaded and creates resources, while an `ID3D11DeviceContext` is thread-affine and records
@@ -22,26 +22,26 @@ Names built on the POD — `RenderJobQueue`, `RenderJobPool` — were considered
 containment metaphors, and a context holds no jobs. `Draw(job)` records immediately and
 synchronously; the job is an argument, not contents. Reuse is safe because the two shapes share
 nothing (a POD passed by value vs. a refcounted interface behind `SharedRef`), so any stale use is
-a compile error rather than a silent bug, and S0b lands as its own commit — the two meanings never
+a compile error rather than a silent bug, and S0c lands as its own commit — the two meanings never
 coexist in the tree.
 
 **`IRenderContext` is an interface for ABI reasons, not for backend polymorphism.** `passes/`,
 `fg/` and `scene/` contain zero D3D12 references — every piece of per-context state below is already
-backend-agnostic and reaches the GPU through existing RHI interfaces. So there is exactly **one**
-implementation, in core, serving every backend. It is pure-virtual only because bgl ships as a DLL
-and exporting a concrete class with owning members across that boundary is fragile, and so it fits
-the `core::Ref` / `SharedRef` idiom every other RHI object uses — the same reasons `IGraphics` is
-shaped that way.
+backend-agnostic and reaches the GPU through existing RHI interfaces, so a single implementation in
+core serves any backend. It is pure-virtual only because bgl ships as a DLL and exporting a concrete
+class with owning members across that boundary is fragile, and because it then fits the
+`core::Ref` / `SharedRef` idiom every other RHI object uses — the same reasons `IGraphics` is shaped
+that way.
 
-There must never be a `RenderContext_d3d12` or `RenderContext_metal`. Metal gets contexts for free
-the moment its `ICommandQueue` / `ICommandList` work, with no `Graphics_metal` change at all.
+There must never be a `RenderContext_d3d12`. A per-backend subclass would fork portable code for no
+reason; the backend seam is already `ICommandQueue` / `ICommandList` one layer down.
 
 ---
 
 ## 1. What the survey changed about the spec
 
-Seven findings from reading the code. Four make the work easier than the spec assumes, three make
-it harder.
+Ten findings from reading the code. Six make the work easier than the spec assumes, four make it
+harder.
 
 **Easier:**
 
@@ -66,7 +66,16 @@ it harder.
 * **Everything a context owns is already portable.** `grep -rn "d3d12\|D3D12\|dxgi" libs/bgl/src/passes
   libs/bgl/src/fg libs/bgl/src/scene` returns nothing: the framegraph, all five pass objects, and
   `Scene`/`SceneView` are backend-agnostic and reach the GPU only through RHI interfaces. This is
-  what makes a single core implementation viable and keeps Metal out of the change entirely.
+  what makes a single core implementation viable, and it is why the context lives in core rather
+  than behind the backend seam.
+* **`core::slot_vector` pools of fixed capacity never reallocate — verified, not assumed.**
+  `reset(slotCount)` resizes `m_Data`/`m_Meta` to `slotCount` up front and seeds `m_FreeIndices`
+  with every index ([slot_vector.h:17-35](../../libs/core/include/core/containers/slot_vector.h)).
+  `try_allocate_and_emplace` therefore always takes the free-list branch, and the `emplace_back`
+  growth path is unreachable once `m_MaxSlots` is non-zero — exhaustion returns a null handle
+  instead (`:68-95`). `ResourceManager` sizes every pool from `ResourceManagerDesc` at construction,
+  so element addresses are stable for the manager's lifetime. **This is what makes `Get*(handle)` a
+  lock-free read during recording**, and it converts S3's biggest unknown into a regression test.
 
 **Harder:**
 
@@ -87,7 +96,7 @@ it harder.
   part of the `IRenderTarget` interface before the extraction can happen — bounded work, but it is
   a prerequisite of S1, not a detail of it.
 * **`UploadManager` already encodes the queue in its version word and never compares it.**
-  `MakeVersion` packs `QueueType` into bits 60-62 ([Version.h:11-36](../../libs/bgl/src/d3d12/resource/Version.h)),
+  `MakeVersion` packs `QueueType` into bits 60-62 ([Version.h:11-36](../../libs/bgl/src/d3d12/cmd/Version.h)),
   but the reclaim predicate ([UploadManager.cpp:77-81](../../libs/bgl/src/d3d12/resource/UploadManager.cpp))
   compares only the fence value. With one timeline that is correct; with two it will recycle a
   chunk the other context's GPU work is still reading. A latent bug that this change activates.
@@ -165,7 +174,33 @@ the editor, gamelib tests and the examples. It is removed in stage 7, not before
 
 Each stage builds, passes its gate, and is independently revertable. **The win lands at S4.**
 
-### S0 — Measurement first
+### S0a — Retire the Metal backend
+
+Delete `libs/bgl/src/metal/` and the `metal` / `macos-*` presets, after pushing the current state to
+a `backup/metal-backend` branch so nothing is lost.
+
+The reasoning is the author's: the iOS target that motivated it is no longer the direction, the
+backend is incomplete (`Graphics_metal.cpp` stubs `CreateScene`, `CreateSceneView` and both
+screenshot paths), and a major structural change is the moment to drop it rather than port it. Two
+things found while surveying support that:
+
+* **CI never builds it.** The `compile-macos` job runs `macos-clang-debug`, whose preset leaves
+  `RENDERER_BACKEND` unset — it builds `core`, `assetlib`, `assetlib_cli`, `bgl_idlgen` and
+  `bgl_objects` only ([ci.yml:95-101](../../.github/workflows/ci.yml)). The Metal backend has no
+  automated verification at all, so carrying it through this change means porting code that nothing
+  proves still works.
+* **It would otherwise need the S1 prerequisite twice.** `RenderTarget_metal` would have to expose
+  the same per-frame fence/allocator ring through `IRenderTarget` as its D3D12 counterpart, for a
+  backend that cannot run the tests that would validate it.
+
+Keep the `macos-clang-debug` CI job: it builds the backend-free subset and is the only thing keeping
+`core`, `assetlib` and the RHI headers honest about portability — which §7 leans on for concurrency
+testing.
+
+* **Gate:** `just build` and `just test` green on Windows; the `compile-macos` CI job still passes;
+  `backup/metal-backend` exists on the remote and is reachable from the PR description.
+
+### S0b — Measurement first
 
 Nothing below is verifiable without a frame-time number. Add a viewport frame-time readout to the
 editor (rolling mean + max over ~120 frames, drawn in the viewport or the status bar) and a
@@ -175,7 +210,7 @@ editor (rolling mean + max over ~120 frames, drawn in the viewport or the status
   measured — ~20-30 ms typical, ~700 ms worst-case cold. If it does not reproduce, stop and
   re-measure before writing any of the rest.
 
-### S0b — Rename `RenderContext` → `RenderJob`
+### S0c — Rename `RenderContext` → `RenderJob`
 
 Mechanical and isolated. `bgl/RenderContext.h` → `bgl/RenderJob.h`; update `IGraphics::Draw`, the
 Metal and D3D12 backends, the editor's `RenderTargetWindow`/`MaterialPreviewWindow`/
@@ -201,7 +236,7 @@ written for "slot filled by one party, consumed by another".
 
 * **Gate:** `just test` green including golden images; `just run bgl_tests -- --gpu-validation`
   clean (this stage moves barrier-emitting state, so GPU validation is mandatory here, not
-  optional); editor frame time from S0 unchanged within noise.
+  optional); editor frame time from S0b unchanged within noise.
 
 ### S2 — Per-context queue and list
 
@@ -220,24 +255,56 @@ downstream has to change yet.
 
 Three pieces, all still under one context so they can be reviewed in isolation:
 
-1. **Audit pool stability.** `m_CbvSrvUavSlots`, `m_Textures`, `m_Samplers`, `m_Rtvs`, `m_Dsvs`,
-   `m_ReadbackBuffers` are `core::slot_vector`s sized from `ResourceManagerDesc` at construction.
-   Confirm they reserve to capacity and **never reallocate**. If they do, make them do so. This is
-   load-bearing: fixed capacity is what makes `Get*(handle)` a lock-free read during recording
-   while another context allocates. Without it, every per-draw dereference needs a lock.
-2. **Lock allocation and retirement only.** One mutex around `try_allocate_slot` / `retire_slot` /
-   `release_slot` / `m_PendingDeletions`. Not around reads.
-3. **Replace the scalar deletion fence with a gate.** `PendingDeletion::fenceValue` becomes a
-   small vector of `{queue, fenceValue}` — a snapshot, taken at destroy time, of every live
-   context's next fence value. `CleanupExpiredResources` frees a slot when **every** recorded pair
-   has completed. An idle context satisfies its component trivially (completed == last submitted),
-   so a quiet thumbnail context cannot pin memory. Delete the one-arg `Destroy*` convenience
-   overloads ([ResourceManager_d3d12.h:120-124](../../libs/bgl/src/d3d12/resource/ResourceManager_d3d12.h)) —
+1. **Pin pool stability with a test.** §1 establishes that fixed-capacity `slot_vector`s never
+   reallocate, which is what licenses lock-free reads. That is currently a property of the
+   implementation, not a guaranteed one — add a `core_tests` case asserting `data()` is unchanged
+   across a full allocate/retire/reclaim cycle at capacity, so a future `slot_vector` change that
+   introduces growth fails loudly here rather than silently in a renderer race.
+2. **Shard `m_PendingDeletions` per context.** Each context keeps its own retirement list and sweeps
+   its own. This removes the only multi-producer container in the design outright — the alternative,
+   one shared list behind a lock, is contended by every context on every destroy for no benefit.
+3. **Lock only slot allocation and retirement.** One mutex around `try_allocate_slot` /
+   `retire_slot` / `release_slot`. Not around reads, not around the (now per-context) deletion lists.
+4. **Replace the scalar deletion fence with a gate.** `PendingDeletion::fenceValue` becomes a small
+   vector of `{queue, fenceValue}` — a snapshot, taken at destroy time, of every live context's next
+   fence value. `CleanupExpiredResources` frees a slot when **every** recorded pair has completed.
+   Each context publishes its last-completed value as an `std::atomic<uint64_t>`, so the sweep reads
+   other contexts' progress without taking their locks. An idle context satisfies its component
+   trivially (completed == last submitted), so a quiet thumbnail context cannot pin memory. Delete
+   the one-arg `Destroy*` convenience overloads
+   ([ResourceManager_d3d12.h:120-124](../../libs/bgl/src/d3d12/resource/ResourceManager_d3d12.h)) —
    they implicitly read `m_SubmissionQueue->GetNextFenceValue()` and hardcode the single queue.
+
+**Why a mutex and not a lock-free free list.** The question is fair — the free list is a
+`std::vector<uint32_t>` used as a stack ([slot_vector.h:68-95](../../libs/core/include/core/containers/slot_vector.h)),
+and a Treiber stack threading the free indices through `m_Meta` with a tagged
+`std::atomic<uint64_t>` head (index + ABA counter) would make it lock-free with no third-party
+dependency. It is a real option, and pieces 2 and 4 above already remove the other shared structures
+without any lock at all. But it should not be the starting point:
+
+* **The contended region is a `pop_back` on a `uint32_t` vector** — tens of nanoseconds. The
+  per-draw path (`Get*`) never touches it, so this lock is not on the hot path; it is taken on
+  asset load and resource destroy.
+* **Lock-free is exactly the code this project cannot verify.** §7 covers why: there is no
+  ThreadSanitizer on Windows. An ABA bug in a hand-rolled Treiber stack is precisely the failure
+  that survives every test in the suite and then corrupts a descriptor heap in front of a user.
+* **The measurement decides.** If S4 shows contention on this mutex, the lock-free version is a
+  contained, single-file change behind an unchanged `slot_vector` API — it can land later on
+  evidence rather than now on speculation.
+
+**On starvation.** Real but not a practical risk here, and worth being precise about: `std::mutex`
+on Windows is SRWLOCK-based and explicitly *unfair* — it permits barging, so there is no FIFO
+guarantee and a waiter can in principle be skipped repeatedly. What makes that harmless is the
+shape of the workload, not the lock: the critical section is a few instructions, and the contenders
+are a viewport context that touches it rarely and a thumbnail context that touches it in bursts. The
+failure mode to actually watch for is **convoying** — the viewport blocking behind the thumbnail
+context during a bulk asset load — which is bounded by the critical section, not by the size of the
+load, precisely because the lock does not cover the uploads themselves. If S4's frame-time
+distribution shows a tail that correlates with asset loads, that is the signal to revisit.
 
 * **Gate:** `just test` green; `--gpu-validation` clean; a new `bgl_tests` case that creates,
   destroys and recreates enough resources to wrap a small pool, asserting no slot is reused before
-  its gate completes.
+  its gate completes; the `core_tests` pool-stability case from piece 1.
 
 ### S4 — Expose `IRenderContext`; second context; thumbnail cache moves — **the win**
 
@@ -362,25 +429,73 @@ cost is duplicated uploads, not a stall.
 
 ---
 
-## 7. Risks
+## 7. Verifying concurrency on Windows / MSVC
+
+The uncomfortable answer first: **ThreadSanitizer does not exist on Windows.** MSVC ships ASan
+(`/fsanitize=address`) but no TSan, and LLVM's TSan supports Linux, macOS and FreeBSD only — the
+`windows-clang-*` presets do not change that. Valgrind's Helgrind and DRD are Linux-only. So the
+tool that would directly answer "is this data-race free" is unavailable on the primary platform,
+which is a real constraint on the design and is why §S3 argues against hand-rolled lock-free code.
+
+What is available, in descending order of value per unit of effort:
+
+1. **Debug-only thread-affinity assertions — do this in S1, not later.** The contract is "one thread
+   drives a context". Record the owning `std::thread::id` when a context is created and `gassert` it
+   at the top of every entry point (`BeginFrame`, `Draw`, `EndFrame`, `Resize`, capture). This turns
+   the invariant from a documented convention into a deterministic, zero-false-positive failure at
+   the moment of violation. It catches the mistake this change actually invites — a client calling a
+   context from the wrong thread — which no sanitizer would flag as a race anyway, because it is not
+   one until it corrupts something.
+2. **A dedicated stress test.** N contexts × M iterations hammering shared `ResourceManager`
+   allocation and destruction concurrently, under the D3D12 debug layer with GPU validation, with
+   randomized `std::this_thread::yield()` between operations to widen interleaving windows. Races
+   here are probabilistic, so run it long in CI and treat an intermittent failure as a real defect,
+   never as flake.
+3. **TSan the portable pieces on the macOS runner.** The `compile-macos` CI job already builds
+   `core`, `assetlib` and `bgl_objects` with clang. The pure-CPU concurrency logic — `slot_vector`
+   allocation, the multi-timeline deletion gate — is backend-free and can be exercised there under
+   `-fsanitize=thread` by a `core_tests` harness that drives it from several threads. **This is the
+   strongest reason to keep the macOS CI job after S0a removes Metal**, and it is worth deliberately
+   *placing* the deletion gate in a portable header so it falls on the testable side of the line.
+   The honest limit: it covers the data structures, not `ResourceManager`'s D3D12 half.
+4. **Application Verifier** (Windows SDK) for lock and handle misuse, and **`/analyze` with
+   concurrency SAL** (`_Guarded_by_`, `_Requires_lock_held_`) to make the "this field is only
+   touched under that mutex" rule machine-checked rather than a convention.
+
+Intel Inspector does detect races on Windows and is the only tool here that competes with TSan, but
+it is commercial; worth knowing it exists if the stress test ever points at something unreproducible.
+
+**The takeaway for the design:** verification is weak enough on this platform that the plan should
+prefer structures that are *correct by construction* over structures that are *fast and checked* —
+which is what §S3's sharding (no shared container at all) and its preference for a boring mutex over
+a Treiber stack are both buying.
+
+---
+
+## 8. Risks
 
 * **Barrier state divergence across contexts** (§1, §6). The likeliest source of silent corruption.
   Mitigation: `--gpu-validation` is a gate on every stage from S1 on, not just at the end.
-* **`slot_vector` may reallocate.** If S3's audit finds it does, per-draw handle dereference needs
-  a lock and the cost model changes materially. Audit this *first* in S3 — it can invalidate the
-  lock-free-read assumption the whole design rests on.
+* **`slot_vector` growth would invalidate lock-free reads.** §1 verifies fixed-capacity pools never
+  reallocate today, and S3 piece 1 pins it with a test — but it is an implementation property, not a
+  contract of the container. If a future change introduces growth, per-draw handle dereference needs
+  a lock and the cost model changes materially.
 * **The editor viewport is not headlessly testable.** `RenderTargetWindow`'s constructor calls
   `CreateRenderTarget` with `winId()` and `headless = false` with no guard, so "does the viewport
   still get frames while thumbnails render" — the property this whole change exists to guarantee —
-  cannot be pinned by a test. Either add a `headless` flag to `RenderTargetWindowDesc` during S0,
+  cannot be pinned by a test. Either add a `headless` flag to `RenderTargetWindowDesc` during S0b,
   or accept that S4's gate is a manual measurement. **Recommend the flag**; a manual gate on the
   one property that matters will not survive contact with future changes.
 * **Per-context pass objects multiply scratch GPU buffers** — `CompactInstancesPass` alone carries
   two `ComputeBuffer`s per context. Watch VRAM in the S4 measurement.
-* **Someone will try to write `RenderContext_metal`.** The single core implementation is the point
-  (see the naming note above); a per-backend subclass would fork portable code for no reason. The
-  only Metal-side obligation is the S1 prerequisite — `RenderTarget_metal` must expose the same
-  per-frame ring through `IRenderTarget` as its D3D12 counterpart. Guard this in review.
+* **Someone will try to write `RenderContext_d3d12`.** The single core implementation is the point
+  (see the naming note above); a per-backend subclass would fork portable code for no reason, and
+  the backend seam already exists one layer down at `ICommandQueue` / `ICommandList`. Guard this in
+  review.
+* **S0a removes the only non-Windows backend.** After it, `docs/rhi.md`'s backend-agnosticism claims
+  describe an aspiration with one implementation rather than a tested property. Keeping the
+  `compile-macos` job is what stops the RHI headers quietly acquiring Windows assumptions — and §7
+  depends on that job for the only ThreadSanitizer coverage available to this project.
 * **`AssetThumbnailCache`'s second thread is editor-side complexity** the spec does not discuss.
   `Renderer` currently *is* the render thread; it becomes a thread pool with per-context affinity,
   and its destructor ordering (`MainWindow.cpp:159-173`) is already delicate.
