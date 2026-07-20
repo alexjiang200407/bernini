@@ -130,7 +130,7 @@ flowchart TD
 * **A slot in the readback ring is Graphics-wide, but every `RenderTarget` indexes it with a frame
   index of its own.** With more than one target (the editor has three) the target that inspects a
   slot need not be the one that filled it, so `InspectDebugSlot` waits on the fence recorded for the
-  copy rather than the caller's `rt.m_FenceValues[index]` — which gates a different frame entirely,
+  copy rather than the caller's `rt.FrameFence(index)` — which gates a different frame entirely,
   and is absent altogether for a target that has not yet drawn at that slot. Two consequences remain:
   a report can be attributed to the wrong target (read the record's `context`, not the stack), and a
   second target's copy can overwrite a slot before anyone inspects it, dropping those assertions.

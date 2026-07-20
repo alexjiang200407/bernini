@@ -503,7 +503,7 @@ namespace bgl
 		}
 		m_DebugReadbackPending[index] = false;
 
-		// Not the caller's rt.SlotFence(index): that gates the caller's own last frame at this
+		// Not the caller's rt.FrameFence(index): that gates the caller's own last frame at this
 		// slot, which says nothing about a copy another target submitted into the same slot. A target
 		// that has never drawn here has no fence at all, so BeginFrame waits on nothing and would map
 		// a buffer the GPU is still writing.
@@ -589,9 +589,9 @@ namespace bgl
 		gassert(m_ActiveTarget != nullptr, "BeginFrame requires a valid RenderTarget");
 
 		RenderTargetBase& rt    = *m_ActiveTarget;
-		const uint32_t    index = rt.FrameSlot();
+		const uint32_t    index = rt.FrameIndex();
 
-		uint64_t fenceToWaitOn = rt.SlotFence(index);
+		uint64_t fenceToWaitOn = rt.FrameFence(index);
 		if (fenceToWaitOn != 0)
 		{
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
@@ -603,9 +603,9 @@ namespace bgl
 		InspectDebugSlot(index);
 #endif
 
-		rt.SlotAllocator(index)->ResetAllocator();
+		rt.FrameAllocator(index)->ResetAllocator();
 
-		m_CommandList->Open(m_CommandQueue.Get(), rt.SlotAllocator(index));
+		m_CommandList->Open(m_CommandQueue.Get(), rt.FrameAllocator(index));
 
 #if defined(BERNINI_GPU_DEBUG)
 		// Zero the debug buffer's header for this frame, hand it to the shaders as a UAV,
@@ -676,7 +676,7 @@ namespace bgl
 		draw.view              = job.view;
 		draw.viewport          = viewport;
 		draw.viewProj          = viewProj;
-		draw.backBufferHandle  = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameSlot());
+		draw.backBufferHandle  = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
 		draw.depthBufferHandle = m_ActiveTarget->DepthDsv();
 		draw.backBufferName    = std::string(c_BackbufferName);
 
@@ -721,7 +721,7 @@ namespace bgl
 		}
 
 		RenderTargetBase& rt    = *m_ActiveTarget;
-		const uint32_t    index = rt.FrameSlot();
+		const uint32_t    index = rt.FrameIndex();
 
 		m_FrameGraph.SetResourceNamespace("");
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
@@ -759,7 +759,7 @@ namespace bgl
 		m_CommandList->Close();
 
 		const uint64_t frameFence = m_CommandQueue->ExecuteCommandList(m_CommandList);
-		rt.SetSlotFence(index, frameFence);
+		rt.SetFrameFence(index, frameFence);
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The readback copy rode the list just submitted, so this is what gates it.
@@ -857,13 +857,13 @@ namespace bgl
 
 		RenderTargetBase& rt = *target->As<RenderTargetBase>();
 
-		const uint32_t index         = rt.LastPresentedSlot();
+		const uint32_t index         = rt.LastPresentedIndex();
 		TextureHandle  textureHandle = rt.BackbufferTexture(index);
 
 		// Make sure the frame that produced this backbuffer has finished.
-		if (rt.SlotFence(index) != 0)
+		if (rt.FrameFence(index) != 0)
 		{
-			m_CommandQueue->WaitForFenceCPUBlocking(rt.SlotFence(index));
+			m_CommandQueue->WaitForFenceCPUBlocking(rt.FrameFence(index));
 		}
 
 		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
@@ -874,8 +874,8 @@ namespace bgl
 
 		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
 
-		rt.SlotAllocator(index)->ResetAllocator();
-		m_CommandList->Open(m_CommandQueue.Get(), rt.SlotAllocator(index));
+		rt.FrameAllocator(index)->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), rt.FrameAllocator(index));
 
 		{
 			auto barrier = TextureBarrierDesc();

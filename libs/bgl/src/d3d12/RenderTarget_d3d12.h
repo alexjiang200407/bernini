@@ -63,13 +63,13 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint32_t
-		FrameSlot() const noexcept override
+		FrameIndex() const noexcept override
 		{
 			return m_FrameIndex;
 		}
 
 		[[nodiscard]] uint32_t
-		LastPresentedSlot() const noexcept override
+		LastPresentedIndex() const noexcept override
 		{
 			return m_LastPresentedIndex;
 		}
@@ -81,38 +81,38 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint64_t
-		SlotFence(uint32_t slot) const noexcept override
+		FrameFence(uint32_t frameIndex) const noexcept override
 		{
-			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
-			return m_FenceValues[slot];
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			return m_FenceValues[frameIndex];
 		}
 
 		void
-		SetSlotFence(uint32_t slot, uint64_t fenceValue) noexcept override
+		SetFrameFence(uint32_t frameIndex, uint64_t fenceValue) noexcept override
 		{
-			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
-			m_FenceValues[slot] = fenceValue;
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			m_FenceValues[frameIndex] = fenceValue;
 		}
 
 		[[nodiscard]] ICommandAllocator*
-		SlotAllocator(uint32_t slot) const noexcept override
+		FrameAllocator(uint32_t frameIndex) const noexcept override
 		{
-			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
-			return m_CommandAllocator[slot].Get();
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			return m_CommandAllocator[frameIndex].Get();
 		}
 
 		[[nodiscard]] TextureHandle
-		BackbufferTexture(uint32_t slot) const noexcept override
+		BackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
-			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
-			return m_BackBuffers[slot].textureHandle;
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			return m_BackBuffers[frameIndex].textureHandle;
 		}
 
 		[[nodiscard]] RtvHandle
-		BackbufferRtv(uint32_t slot) const noexcept override
+		BackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
-			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
-			return m_BackBuffers[slot].rtvHandle;
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			return m_BackBuffers[frameIndex].rtvHandle;
 		}
 
 		[[nodiscard]] DsvHandle
