@@ -135,16 +135,16 @@ TEST_CASE(
 			0.5f,
 			500.0f);
 
-	auto context     = bgl::RenderContext();
-	context.view     = view;
-	context.camera   = camera;
-	context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 	const auto capture = [&](const char* name) {
 		const auto path =
 			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, path);
 
 		return path;

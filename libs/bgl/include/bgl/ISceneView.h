@@ -11,7 +11,7 @@ namespace bgl
 	 * The SceneView owns the per-view instance buffer and references the Scene whose
 	 * geometry it instances. Many SceneViews can share a single Scene, so geometry
 	 * (meshlets/vertices/indices) is stored once and instanced cheaply per view.
-	 * Rendering takes a SceneView (see RenderContext), not a Scene.
+	 * Rendering takes a SceneView (see RenderJob), not a Scene.
 	 */
 	class BGL_API ISceneView : public core::Ref
 	{

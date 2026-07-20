@@ -61,10 +61,10 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 			0.5f,
 			500.0f);
 
-	auto context     = bgl::RenderContext();
-	context.view     = view;
-	context.camera   = camera;
-	context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-	REQUIRE_NOTHROW(gfx->DrawFrame(target, context));
+	REQUIRE_NOTHROW(gfx->DrawFrame(target, job));
 }

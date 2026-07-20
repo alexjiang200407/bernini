@@ -86,12 +86,12 @@ namespace
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 	}
 }
 

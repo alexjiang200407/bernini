@@ -104,10 +104,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
-		auto context     = bgl::RenderContext{};
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
+		auto job     = bgl::RenderJob{};
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
 
 		// WASD to fly, hold Shift + move the mouse to look around.
 		auto clock = demo::DeltaClock{};
@@ -117,11 +117,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 			if (demo::ApplyFlyCam(camera, clock.Tick()))
 			{
-				// context holds a copy of the camera; refresh it after moving.
-				context.camera = camera;
+				// job holds a copy of the camera; refresh it after moving.
+				job.camera = camera;
 			}
 
-			graphics->DrawFrame(target, context);
+			graphics->DrawFrame(target, job);
 		}
 	}
 	catch (const std::runtime_error& e)

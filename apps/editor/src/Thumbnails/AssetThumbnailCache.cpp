@@ -14,7 +14,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
-#include <bgl/RenderContext.h>
+#include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
 
@@ -556,14 +556,14 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 			std::max(0.001f, radius * 0.01f),
 			distance + radius * 50.0f);
 
-	auto rc   = bgl::RenderContext();
-	rc.camera = camera;
-	rc.view   = m_SceneView;
-	rc.viewport =
+	auto job   = bgl::RenderJob();
+	job.camera = camera;
+	job.view   = m_SceneView;
+	job.viewport =
 		bgl::Viewport(static_cast<float>(m_Desc.dimension), static_cast<float>(m_Desc.dimension));
 
 	for (int i = 0; i < c_WarmupFrames; ++i)
-		m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, rc);
+		m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
 
 	const assetlib::ImageData shot =
 		m_Desc.renderer->GetGraphics()->ScreenshotToMemory(m_RenderTarget);

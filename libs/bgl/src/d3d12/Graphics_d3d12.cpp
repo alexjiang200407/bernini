@@ -20,7 +20,7 @@
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include <bgl/RenderContext.h>
+#include <bgl/RenderJob.h>
 #include <core/file/file.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -154,7 +154,7 @@ namespace bgl
 		BeginFrame(const RenderTargetRef& target) override;
 
 		void
-		Draw(const RenderContext& context) override;
+		Draw(const RenderJob& job) override;
 
 		void
 		EndFrame() override;
@@ -649,22 +649,22 @@ namespace bgl
 	}
 
 	void
-	Graphics::Draw(const RenderContext& context)
+	Graphics::Draw(const RenderJob& job)
 	{
 		if (!m_FrameActive)
 		{
 			throw GraphicsError("Draw must be called between BeginFrame and EndFrame");
 		}
 
-		if (context.view == nullptr)
+		if (job.view == nullptr)
 		{
-			throw GraphicsError("RenderContext passed to Draw requires a SceneView");
+			throw GraphicsError("RenderJob passed to Draw requires a SceneView");
 		}
 
-		auto       view_    = context.view->As<SceneView>();
+		auto       view_    = job.view->As<SceneView>();
 		auto       scene_   = view_->GetScene()->As<Scene>();
-		const auto viewport = context.viewport;
-		const auto viewProj = context.camera.GetViewProjection();
+		const auto viewport = job.viewport;
+		const auto viewProj = job.camera.GetViewProjection();
 
 		const uint32_t drawIdx = m_DrawCount++;
 
@@ -675,7 +675,7 @@ namespace bgl
 
 		auto draw     = DrawData();
 		draw.drawIdx  = drawIdx;
-		draw.view     = context.view;
+		draw.view     = job.view;
 		draw.viewport = viewport;
 		draw.viewProj = viewProj;
 		draw.backBufferHandle =
@@ -686,15 +686,15 @@ namespace bgl
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.cameraPos = glm::vec3(glm::inverse(context.camera.GetView())[3]);
+		draw.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
 
 		draw.env      = view_->GetEnvironmentMap();
 		draw.exposure = view_->GetExposure();
 		draw.skybox   = view_->GetSkybox();
 
-		glm::mat4 viewNoTranslation = context.camera.GetView();
+		glm::mat4 viewNoTranslation = job.camera.GetView();
 		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		glm::mat4 clipToWorld = glm::inverse(context.camera.GetProjection() * viewNoTranslation);
+		glm::mat4 clipToWorld       = glm::inverse(job.camera.GetProjection() * viewNoTranslation);
 
 		if (draw.skybox.has_value())
 		{

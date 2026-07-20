@@ -130,12 +130,12 @@ TEST_CASE(
 			addPane(scene, view, blue, c_FarZ);
 		}
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, path);
 	};
 
@@ -207,12 +207,12 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 		addPane(scene, view, blue, 0.0f, occlude);  // far
 		addPane(scene, view, red, 5.0f, occlude);   // near
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, path);
 
 		return bgl::test::MeanColor(path, 200, 300, 200, 200).b;
@@ -298,12 +298,12 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 			addPane(scene, view, red, 5.0f, occlude);
 		}
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, path);
 	};
 

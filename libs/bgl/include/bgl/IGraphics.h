@@ -3,7 +3,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/RenderContext.h>
+#include <bgl/RenderJob.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <core/ref/Ref.h>
@@ -78,16 +78,16 @@ namespace bgl
 		BeginFrame(const RenderTargetRef& target) = 0;
 
 		virtual void
-		Draw(const RenderContext& context) = 0;
+		Draw(const RenderJob& job) = 0;
 
 		virtual void
 		EndFrame() = 0;
 
 		void
-		DrawFrame(const RenderTargetRef& target, const RenderContext& context)
+		DrawFrame(const RenderTargetRef& target, const RenderJob& job)
 		{
 			BeginFrame(target);
-			Draw(context);
+			Draw(job);
 			EndFrame();
 		}
 

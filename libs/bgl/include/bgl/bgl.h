@@ -8,7 +8,7 @@
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/RenderContext.h>
+#include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
 #include <bgl/error.h>

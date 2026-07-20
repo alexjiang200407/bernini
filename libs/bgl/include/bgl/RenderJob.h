@@ -6,7 +6,7 @@
 
 namespace bgl
 {
-	struct RenderContext
+	struct RenderJob
 	{
 		core::SharedRef<ISceneView> view = nullptr;
 		Camera                      camera;
