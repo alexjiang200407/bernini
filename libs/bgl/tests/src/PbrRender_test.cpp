@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
+#include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGpuAssertionHandler.h>
@@ -27,6 +28,7 @@ namespace
 TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 	opts.logLevel         = bgl::GraphicsOptions::LogLevel::kTrace;
 
@@ -105,6 +107,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 	opts.logLevel         = bgl::GraphicsOptions::LogLevel::kTrace;
 

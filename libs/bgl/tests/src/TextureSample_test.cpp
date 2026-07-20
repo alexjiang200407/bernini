@@ -11,6 +11,7 @@
 #include "resource/ResourceManager.h"
 #include "types/ComputeState.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -27,6 +28,7 @@ TEST_CASE(
 	constexpr uint32_t kCapacity = 16;
 
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

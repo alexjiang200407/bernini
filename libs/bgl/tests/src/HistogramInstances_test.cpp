@@ -16,6 +16,7 @@
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/PsoType.h>
 
@@ -29,6 +30,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	constexpr uint32_t kThreadsPerGroup = 256;
 
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

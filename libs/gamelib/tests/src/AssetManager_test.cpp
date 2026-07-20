@@ -12,6 +12,7 @@ namespace
 	{
 		auto opts             = bgl::GraphicsOptions();
 		opts.enableDebugLayer = false;
+		opts.shaderCacheDir   = "shadercache";
 		return opts;
 	}
 

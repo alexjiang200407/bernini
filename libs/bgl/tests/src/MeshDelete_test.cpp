@@ -5,6 +5,7 @@
 #include "idl/idl.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
 #include <bgl/PsoType.h>
@@ -15,6 +16,7 @@ namespace
 	HeadlessOptions()
 	{
 		auto opts             = bgl::GraphicsOptions();
+		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.enableDebugLayer = false;
 		return opts;
 	}

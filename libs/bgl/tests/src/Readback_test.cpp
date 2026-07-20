@@ -10,6 +10,7 @@
 #include "types/ClearValue.h"
 #include "types/Format.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 
@@ -30,6 +31,7 @@ namespace
 		ReadbackFixture()
 		{
 			auto opts                     = bgl::GraphicsOptions();
+			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 			opts.enableDebugLayer         = true;
 			opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 			opts.enablePixDebug           = true;

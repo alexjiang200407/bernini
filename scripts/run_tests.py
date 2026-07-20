@@ -9,6 +9,7 @@ Usage:
     python scripts/run_tests.py bgl editor         # only suites matching these names
     python scripts/run_tests.py --list             # name them without running anything
     python scripts/run_tests.py --no-build         # run whatever is already built
+    python scripts/run_tests.py -j 1               # one process per suite, output streamed live
     python scripts/run_tests.py --config Release
     python scripts/run_tests.py -- "[readback]"    # forward a Catch filter to every suite
     python scripts/run_tests.py bgl -- "[readback]"  # suite-name filter + forwarded Catch filter
@@ -20,10 +21,15 @@ implements only part of the suite and the rest is selected by tag.
 Each suite runs with cwd set to its output directory, because the binaries resolve asset
 paths relative to it.
 
-Output is *not* captured. A suite writes straight to this console, both because a long
-one should show progress rather than go quiet for minutes, and because Qt emits QTest's
-results through a path a Windows pipe swallows -- capturing editor_tests would silently
-turn a real run into a blank one.
+Each suite is split across several processes by default (`--jobs`), using Catch2's
+`--shard-count`/`--shard-index`. Support is probed per binary, so a suite that does not take
+those flags falls back to a single process however many jobs are asked for.
+
+Output from a *sharded* run is captured and printed one shard at a time, because N processes
+interleaved on one console shred the failure reports. A single-process run is not captured: it
+writes straight to this console, so a long suite shows progress rather than going quiet for
+minutes. That is why `-j 1` is the right flag when a suite is misbehaving and you want to
+watch it.
 
 To pass arguments to a single suite, use `just run` instead, which also forwards them:
 
@@ -41,6 +47,50 @@ import util.config as cfg
 
 # What makes a target a test suite.
 SUITE_SUFFIX = "_tests"
+
+# Shards per suite. Each one is a process holding a graphics device of its own, so this trades
+# memory for wall-clock; past a handful the suites stop scaling and start contending.
+DEFAULT_JOBS = min(4, os.cpu_count() or 1)
+
+
+def supports_sharding(exe):
+    """Whether `exe` takes Catch2's --shard-count/--shard-index.
+
+    Probed rather than assumed: every suite is Catch2 today, but passing the flag to one that
+    is not would fail it rather than split it.
+    """
+    try:
+        help_text = subprocess.run(
+            [exe, "--help"], cwd=os.path.dirname(exe),
+            capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+    return "--shard-count" in help_text
+
+
+def run_sharded(exe, forward, jobs):
+    """Run `exe` as `jobs` concurrent shards; return the worst exit code.
+
+    Each shard's output is captured and printed in shard order once it is all in. Interleaving
+    N processes onto one console would otherwise shred the failure reports, which are the only
+    part of the output anyone reads.
+    """
+    procs = []
+    for index in range(jobs):
+        cmd = [exe, *forward, "--shard-count", str(jobs), "--shard-index", str(index)]
+        procs.append(subprocess.Popen(
+            cmd, cwd=os.path.dirname(exe),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace"))
+
+    worst = 0
+    for index, proc in enumerate(procs):
+        out, _ = proc.communicate()
+        print(f"--- shard {index + 1}/{jobs} (exit {proc.returncode}) ---", flush=True)
+        print(out, end="", flush=True)
+        worst = worst or proc.returncode
+
+    return worst
 
 
 def find_suites(build_dirs, config):
@@ -84,6 +134,10 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="Don't build first; run the binaries that are already there.")
     parser.add_argument("--list", action="store_true", help="Name the suites without running them.")
+    parser.add_argument("-j", "--jobs", type=int, default=DEFAULT_JOBS,
+                        help="Split each suite across this many concurrent processes "
+                             f"(default: {DEFAULT_JOBS}). 1 runs a single process and streams "
+                             "its output live.")
 
     # Everything after `--` is forwarded verbatim to every suite binary. Each suite is Catch2, so
     # this is how a tag or name filter reaches all of them at once: `just test -- "[readback]"`.
@@ -138,10 +192,18 @@ def main():
             results.append((name, 1, 0.0))
             continue
 
-        print(f"\n=== {name} ===", flush=True)
+        jobs = max(1, args.jobs)
+        if jobs > 1 and not supports_sharding(exe):
+            jobs = 1
+
+        label = f" (x{jobs})" if jobs > 1 else ""
+        print(f"\n=== {name}{label} ===", flush=True)
 
         started = time.monotonic()
-        rc = subprocess.run([exe, *forward], cwd=os.path.dirname(exe)).returncode
+        if jobs > 1:
+            rc = run_sharded(exe, forward, jobs)
+        else:
+            rc = subprocess.run([exe, *forward], cwd=os.path.dirname(exe)).returncode
         results.append((name, rc, time.monotonic() - started))
 
     # A failing suite does not stop the others: one full report beats finding out about the

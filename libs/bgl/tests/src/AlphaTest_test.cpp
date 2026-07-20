@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
+#include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -57,6 +58,7 @@ namespace
 TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 
 	auto gfx = bgl::CreateGraphics(opts);
@@ -180,6 +182,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 	constexpr float c_LeafHeight = 14.0f;
 
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 
 	auto gfx = bgl::CreateGraphics(opts);

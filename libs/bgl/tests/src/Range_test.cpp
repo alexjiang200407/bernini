@@ -7,11 +7,13 @@
 #include "resource/ResourceManager.h"
 #include "scene/RangeBuffer.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 
 TEST_CASE("RangeBuffer", "[range][scene]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;

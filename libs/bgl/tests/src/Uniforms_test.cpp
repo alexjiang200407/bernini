@@ -2,10 +2,12 @@
 #include "gfx/GraphicsBase.h"
 #include "pipeline/MeshletPipeline.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 
 TEST_CASE("Uniforms", "[uniforms]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;

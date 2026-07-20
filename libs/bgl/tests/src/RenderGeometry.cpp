@@ -6,6 +6,7 @@
 #include "resource/ResourceManager.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 
 TEST_CASE("Geometry", "[geometry][render]")
@@ -14,6 +15,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 	constexpr uint32_t kHeight = 800;
 
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
@@ -404,6 +406,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	constexpr uint32_t kHeight = 800;
 
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;

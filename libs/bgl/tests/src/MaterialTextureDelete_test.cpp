@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/Scene.h"
+#include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/IGraphics.h>
 
@@ -9,6 +10,7 @@ namespace
 	HeadlessOptions()
 	{
 		auto opts             = bgl::GraphicsOptions();
+		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.enableDebugLayer = false;
 		return opts;
 	}
