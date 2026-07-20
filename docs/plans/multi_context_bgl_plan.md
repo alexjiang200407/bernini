@@ -206,9 +206,24 @@ Nothing below is verifiable without a frame-time number. Add a viewport frame-ti
 editor (rolling mean + max over ~120 frames, drawn in the viewport or the status bar) and a
 `--frame-stats` dump of the same to the log on exit.
 
+**Also decompose the cold path — S5 cannot be decided without it.** The spec's 141-695 ms is a
+single undecomposed number covering at least five different things: decode (already off-thread),
+CPU pool mutation, the staging copies, waiting for upload-ring space, and command recording. Only
+the staging-copy-and-record portion is at risk of returning to the owning context under §6's
+option A′, and right now nobody knows whether that is 20% of the number or 80%. Instrument those
+five buckets separately behind the same `--frame-stats` flag.
+
+Note the staging cost is paid **twice** per texture: `CreateTexture` memcpys the decoded pixels into
+an owned `PendingTextureUpload::bytes`, and `FlushPendingTextureUploads` memcpys them again into the
+upload ring via `WriteTexture`
+([ResourceManager_d3d12.cpp:215-232, :277-306](../../libs/bgl/src/d3d12/resource/ResourceManager_d3d12.cpp)).
+If that double copy dominates, eliminating it is a cheaper win than anything else in this plan and
+should be pulled forward.
+
 * **Gate:** with the folder-populate case reproduced by hand, the readout shows the stall the spec
   measured — ~20-30 ms typical, ~700 ms worst-case cold. If it does not reproduce, stop and
-  re-measure before writing any of the rest.
+  re-measure before writing any of the rest. The five-bucket breakdown is recorded in the PR, because
+  S5's options are scored against it.
 
 ### S0c — Rename `RenderContext` → `RenderJob`
 
@@ -408,24 +423,75 @@ and per-buffer dirty-block tracking.
 | | Latency | Extra memory | Complexity | Barrier correctness |
 |---|---|---|---|---|
 | **A. Single mutator + fence publication** | Reader sees new geometry ≥1 frame late | None | Medium | Owner alone tracks state; readers `InsertWaitForQueue` on the published upload fence |
+| **A′. Split mutation from upload recording** | Same, plus a publish hop for textures | None | Medium-high | Textures bypass the framegraph entirely; geometry still needs an owner |
 | **B. Reader-writer lock over contexts** | Writer starves — recording holds the read lock for a whole frame | None | Low to write, high to live with | **Unsolved** — the lock orders CPU access, not GPU barriers |
 | **C. Per-context snapshot / COW dirty state** | None | Duplicate upload bandwidth | High | Fragile — two contexts may write the same GPU range, benign only if byte-identical |
 | **D. No sharing (S4's interim state)** | None | Env maps + textures duplicated per scene | None, already built | Trivially correct |
 
-**Lean: A.** One context owns all `Scene` mutation and is the only one that records `Scene::Update`;
-other contexts author through a queued request to the owner, and before drawing an epoch they have
-not yet waited on, insert a GPU wait on the owner's published upload fence. It is the only option
-that solves the barrier half rather than only the CPU half, and it needs no extra memory. Its real
-risk is that the owner stalling now stalls its readers — which puts the owner on the viewport
-context, the one that must never block, and makes S6 a prerequisite rather than a follow-up.
-
 **B is not viable alone** — listed because it is the obvious first instinct and it does not address
 the GPU ordering at all.
 
-**D is the honest fallback.** If A measures badly, S4's state is already shipped and correct; the
+**D is the honest fallback.** If A′ measures badly, S4's state is already shipped and correct; the
 cost is duplicated uploads, not a stall.
 
-*This needs your call before S5 begins.*
+### A′ — the refinement worth actually costing
+
+Plain option A has a flaw that nearly cancels the change: if one context owns all mutation *and*
+records every `Scene::Update`, then the owner must be the viewport (an owner that stalls stalls its
+readers) — and the thumbnail cache's bulk staging copies land back on the thread the whole plan
+exists to protect. The isolation survives, but the cold path partly returns.
+
+A′ splits the two things plain A conflates. **Pool mutation and upload recording do not have to
+share an owner.**
+
+**Textures separate cleanly.** A newly created resource has no readers until it is published, and —
+decisively — bindless textures are not framegraph resources: `FlushPendingTextureUploads` emits the
+`COPY_DEST → SHADER_RESOURCE` transition inline
+([ResourceManager_d3d12.cpp:277-306](../../libs/bgl/src/d3d12/resource/ResourceManager_d3d12.cpp)),
+so the `m_LastState` divergence hazard does not apply to them at all. The creating context can
+record its own texture uploads on its own list and publish a fence. The megabytes stay off the
+viewport; only the bookkeeping — a slot allocation, a dirty-block mark, an epoch bump — is
+serialized on the owner.
+
+**Geometry does not.** `AddStaticMesh` appends into the shared `RangeBuffer`s
+(`m_VertexDataBuffer`, `m_IndexBuffer`, `m_MeshletBuffer`). The *range* is new and unread, but the
+buffer object is shared and **is** framegraph-tracked, so its dirty-block flush rides `Scene::Update`
+on somebody's command list. This is where barrier ownership genuinely bites, and it is the part of
+S5 that still needs designing.
+
+So the real question S5 answers is not "who owns the Scene" but: **textures are separable, geometry
+needs an owner, and what does that owner cost** — scored against S0b's five-bucket breakdown.
+
+### Enforcing the CPU half in the type system
+
+Whatever S5 decides, "one context mutates" should not be a convention people remember. Move the
+mutators off `IScene` and behind a move-only, non-copyable capability token:
+
+```cpp
+class SceneWriter {                      // Scene vends exactly one; move-only
+    SceneWriter(const SceneWriter&) = delete;
+    GeomHandle AddStaticMesh(...);       // only reachable through this
+};
+```
+
+Everything else gets a read-only view exposing lookups and draws — `&mut` vs `&` in C++. The
+handles themselves stay trivially copyable values, as `rhi.md` documents: making *them* move-only
+would forbid the shared reads the viewport depends on while doing nothing about the actual hazard,
+which is contention on the pool's free list and dirty-block state, not on any individual handle.
+
+This fits the existing seam: `AssetManager` already carries 14 of the 19 `Scene` mutation call
+sites and already does the `instance → geom → material → texture` refcounting that makes bgl's
+untracked deletes safe. It becomes the token holder. The 5 stragglers
+(`MaterialEditorWindow`, `TextureNode`, `MaterialPreviewWindow`) get routed through it — worth doing
+regardless, since the material graph currently performs synchronous GPU uploads from the GUI thread.
+
+Two limits, so this is not oversold: the token controls *who may mutate*, not *from which thread* —
+nothing stops it being moved across threads, so it pairs with §7's thread-affinity assertions rather
+than replacing them. And it addresses only the CPU half; barrier ownership and upload-fence
+publication are untouched. What it buys is that half of S5 stops being policy and becomes a compile
+error.
+
+*A′ still needs your call before S5 begins, and it should be made against S0b's numbers.*
 
 ---
 
