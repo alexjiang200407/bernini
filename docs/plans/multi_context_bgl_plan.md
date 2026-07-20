@@ -184,21 +184,32 @@ backend is incomplete (`Graphics_metal.cpp` stubs `CreateScene`, `CreateSceneVie
 screenshot paths), and a major structural change is the moment to drop it rather than port it. Two
 things found while surveying support that:
 
-* **CI never builds it.** The `compile-macos` job runs `macos-clang-debug`, whose preset leaves
-  `RENDERER_BACKEND` unset — it builds `core`, `assetlib`, `assetlib_cli`, `bgl_idlgen` and
-  `bgl_objects` only ([ci.yml:95-101](../../.github/workflows/ci.yml)). The Metal backend has no
-  automated verification at all, so carrying it through this change means porting code that nothing
-  proves still works.
+* **CI compiles it but never runs it.** The `compile-macos` job builds `macos-clang-debug`, which
+  *does* set `RENDERER_BACKEND=METAL` (the preset inherits `metal`,
+  [CMakePresets.json:227-240](../../CMakePresets.json)) — so `bgl_metal` and its `bgl_tests` variant
+  are compiled. But the job is compile-only, and on Metal only `[metal]`-tagged tests are wired to
+  run at all ([libs/bgl/CMakeLists.txt:140-146](../../libs/bgl/CMakeLists.txt)). So the backend has
+  syntax verification and no behavioural verification. Carrying it through this change means porting
+  render-path code that nothing executes.
+
+  The comment at [ci.yml:95-101](../../.github/workflows/ci.yml) claims the preset leaves
+  `RENDERER_BACKEND` unset. That is stale — it was written in #47, before any backend existed, and
+  #56 added the preset inherit without updating it. **Fix or delete that comment as part of S0a**;
+  it currently misdescribes what CI does.
 * **It would otherwise need the S1 prerequisite twice.** `RenderTarget_metal` would have to expose
   the same per-frame fence/allocator ring through `IRenderTarget` as its D3D12 counterpart, for a
-  backend that cannot run the tests that would validate it.
+  backend whose render path no test exercises.
 
-Keep the `macos-clang-debug` CI job: it builds the backend-free subset and is the only thing keeping
-`core`, `assetlib` and the RHI headers honest about portability — which §7 leans on for concurrency
-testing.
+**Keep the `compile-macos` job, re-pointed at a backend-free build.** Dropping the `metal` inherit
+leaves `RENDERER_BACKEND` unset, which builds `core`, `assetlib`, `assetlib_cli`, `bgl_idlgen` and
+`bgl_objects` — the configuration the stale comment already describes. That job is the only thing
+keeping `core`, `assetlib` and the RHI headers honest about portability, and §7 depends on it for
+the only ThreadSanitizer coverage available to this project. This is a deliberate re-pointing, not a
+status quo to preserve.
 
-* **Gate:** `just build` and `just test` green on Windows; the `compile-macos` CI job still passes;
-  `backup/metal-backend` exists on the remote and is reachable from the PR description.
+* **Gate:** `just build` and `just test` green on Windows; the `compile-macos` job still passes in
+  its new backend-free configuration; `backup/metal-backend` exists on the remote and is reachable
+  from the PR description.
 
 ### S0b — Measurement first
 
