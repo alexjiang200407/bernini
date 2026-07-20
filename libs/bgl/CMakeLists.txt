@@ -4,7 +4,7 @@ file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/d3d12/.*")
 
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
@@ -15,7 +15,7 @@ file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/d3d12/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
@@ -55,15 +55,11 @@ target_link_libraries(bgl_objects
 
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(src/d3d12)
-elseif(RENDERER_BACKEND STREQUAL "METAL")
-	add_subdirectory(src/metal)
 endif()
 
 add_dependencies(bgl_objects bgl_idl_generate)
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
-elseif(RENDERER_BACKEND STREQUAL "METAL")
-	add_dependencies(bgl_metal bgl_idl_generate)
 endif()
 
 enable_strict_compiler(bgl_objects)
@@ -79,12 +75,6 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_library(bgl SHARED
 		$<TARGET_OBJECTS:bgl_objects>
 		$<TARGET_OBJECTS:bgl_d3d12>
-		${BGL_SHARED_HEADERS}
-	)
-elseif(RENDERER_BACKEND STREQUAL "METAL")
-	add_library(bgl SHARED
-		$<TARGET_OBJECTS:bgl_objects>
-		$<TARGET_OBJECTS:bgl_metal>
 		${BGL_SHARED_HEADERS}
 	)
 else()
@@ -113,8 +103,6 @@ target_compile_definitions(bgl_objects PRIVATE
 	BGL_EXPORTS
 )
 
-# The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal skeleton
-# compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step yet.
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 	add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src)
@@ -129,19 +117,9 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx12-agility CONFIG REQUIRED)
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
-elseif(RENDERER_BACKEND STREQUAL "METAL")
-	target_compile_definitions(bgl_metal PRIVATE BGL_EXPORTS)
-	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_METAL)
-	# bgl embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
-	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
-	enable_strict_compiler(bgl_metal)
 endif()
 
 
-# The suite's sources are backend-agnostic (RHI interfaces + CreateGraphics), so it builds on either
-# backend from one glob. What differs is the backend objects it embeds. On Metal only the tests
-# tagged [metal] run today -- the runner defaults to that tag (tests/src/main.cpp) while the render
-# path is still being ported; the rest are selected explicitly by tag.
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     find_package(Catch2 CONFIG REQUIRED)
 	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
@@ -209,64 +187,3 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	enable_strict_compiler(bgl_tests)
 endif()
 
-if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
-	find_package(Catch2 CONFIG REQUIRED)
-	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
-
-	file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
-		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
-	)
-
-	add_executable(bgl_tests
-		${BGL_TESTS_SOURCE}
-		$<TARGET_OBJECTS:bgl_objects>
-		$<TARGET_OBJECTS:bgl_metal>
-	)
-
-	target_include_directories(bgl_tests
-		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
-		PRIVATE
-			${CMAKE_CURRENT_SOURCE_DIR}/include
-			${CMAKE_CURRENT_SOURCE_DIR}/src
-			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-			${Stb_INCLUDE_DIR}
-	)
-
-	target_force_include(bgl_tests
-		PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
-	)
-
-	# Embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
-	target_link_libraries(bgl_tests
-		PRIVATE
-			bgl_objects
-			bgl_metal
-			assetlib
-			core
-			Catch2::Catch2
-			Catch2::Catch2WithMain
-			"-framework Metal" "-framework Foundation" "-framework QuartzCore"
-	)
-
-	add_dependencies(bgl_tests bgl_idl_generate copy_assets)
-
-	# The Metal backend compiles Slang at runtime, so the raw .slang sources must sit next to the exe
-	# (the session's search paths). The D3D12 build gets this from bgl_copy_shader_src/tests, which
-	# live behind the build-time slangc validation; stage them directly here instead.
-	add_custom_command(TARGET bgl_tests POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_directory
-				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "$<TARGET_FILE_DIR:bgl_tests>/shaders/src"
-		COMMAND ${CMAKE_COMMAND} -E copy_directory
-				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests" "$<TARGET_FILE_DIR:bgl_tests>/shaders/tests"
-		COMMENT "Staging Slang sources for runtime Metal compilation"
-		VERBATIM
-	)
-
-	target_precompile_headers(bgl_tests
-		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
-	)
-
-	target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_METAL BGL_EXPORTS)
-
-	enable_strict_compiler(bgl_tests)
-endif()

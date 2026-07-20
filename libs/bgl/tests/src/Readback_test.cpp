@@ -55,7 +55,7 @@ namespace
 	};
 }
 
-TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback][metal]")
+TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback]")
 {
 	const uint32_t values[] = { 11, 22, 33, 44, 55, 66, 77, 88 };
 
@@ -105,7 +105,7 @@ TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback][metal]")
 	resourceManager->DestroyBuffer(src, fence, false);
 }
 
-TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback][metal]")
+TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
 {
 	const uint32_t width    = 4;
 	const uint32_t height   = 4;

@@ -92,10 +92,10 @@ jobs:
           key: vcpkg-arm64-osx-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-arm64-osx-
 
-      # Compile only, as above. The macos-clang-debug preset leaves RENDERER_BACKEND unset,
-      # so this builds core, assetlib, assetlib_cli, bgl_idlgen and bgl_objects -- the
-      # backend-free RHI. bgl, gamelib, the editor and the examples are skipped until a
-      # Metal backend exists. Assets stay as git-lfs pointers (checkout does not fetch them);
-      # nothing here reads their contents.
+      # Compile only, as above. macos-clang-debug sets no RENDERER_BACKEND, so this builds
+      # core, assetlib, assetlib_cli, bgl_idlgen and bgl_objects -- the backend-free RHI.
+      # bgl, gamelib, the editor and the examples need a backend and are skipped. This job
+      # is what keeps core, assetlib and the RHI headers free of Windows assumptions.
+      # Assets stay as git-lfs pointers (checkout does not fetch them); nothing reads them.
       - name: Build
         run: python scripts/build.py --preset macos-clang-debug
