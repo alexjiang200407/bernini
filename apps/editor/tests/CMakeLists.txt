@@ -60,6 +60,20 @@ if(WIN32)
 		VERBATIM
 		COMMENT "windeployqt: copying Qt runtime next to editor_tests.exe"
 	)
+
+	# windeployqt ships only the platform plugin the binary would use interactively, and the suite
+	# defaults itself to `offscreen` so its widgets never take focus. Deploy that plugin too, and
+	# tell main.cpp it is there -- naming a platform Qt cannot load aborts with a modal error box.
+	if(TARGET Qt6::QOffscreenIntegrationPlugin)
+		add_custom_command(TARGET editor_tests POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>"
+				"$<TARGET_FILE_DIR:editor_tests>/platforms/"
+			VERBATIM
+			COMMENT "copying Qt offscreen platform plugin next to editor_tests.exe"
+		)
+		target_compile_definitions(editor_tests PRIVATE EDITOR_TESTS_HAVE_OFFSCREEN)
+	endif()
 endif()
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${EDITOR_TESTS_SOURCES})
