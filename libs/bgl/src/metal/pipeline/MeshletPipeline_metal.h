@@ -52,6 +52,15 @@ namespace bgl
 			return m_PipelineState.get();
 		}
 
+		// The depth-stencil test/write state, or null when the pipeline has no depth attachment
+		// (dsvFormat unset) -- in which case the render encoder is left with Metal's default (always
+		// pass, no write).
+		[[nodiscard]] MTL::DepthStencilState*
+		GetMTLDepthStencilState() const noexcept
+		{
+			return m_DepthStencilState.get();
+		}
+
 		[[nodiscard]] MTL::Size
 		GetThreadsPerObjectThreadgroup() const noexcept
 		{
@@ -75,6 +84,7 @@ namespace bgl
 	private:
 		MeshletPipelineDesc                     m_Desc;
 		NS::SharedPtr<MTL::RenderPipelineState> m_PipelineState;
+		NS::SharedPtr<MTL::DepthStencilState>   m_DepthStencilState;
 		UniformLayoutMap                        m_UniformLayoutEntries;
 		MetalHandleOffsetMap                    m_HandleOffsets;
 		MTL::Size                               m_ThreadsPerObject = MTL::Size(1, 1, 1);

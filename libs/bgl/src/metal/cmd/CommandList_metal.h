@@ -43,6 +43,11 @@ namespace bgl
 		void
 		ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept;
 
+		// Clears a depth texture by running an empty render pass with a depth clear load action.
+		// ResourceManager::ClearDsv drives it, mirroring ClearRenderTarget.
+		void
+		ClearDepth(MTL::Texture* texture, float depth) noexcept;
+
 		void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept override;
 

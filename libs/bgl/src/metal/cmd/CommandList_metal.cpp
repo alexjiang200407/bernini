@@ -172,6 +172,22 @@ namespace bgl
 	}
 
 	void
+	CommandList::ClearDepth(MTL::Texture* texture, float depth) noexcept
+	{
+		gassert(m_Open, "ClearDepth on a closed command list");
+
+		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+		MTL::RenderPassDepthAttachmentDescriptor* d = pass->depthAttachment();
+		d->setTexture(texture);
+		d->setLoadAction(MTL::LoadActionClear);
+		d->setStoreAction(MTL::StoreActionStore);
+		d->setClearDepth(depth);
+
+		// An empty pass: the Clear load action writes the depth and Store keeps it.
+		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
+	}
+
+	void
 	CommandList::BeginEvent(std::string_view name) noexcept
 	{
 		m_CmdBuffer->pushDebugGroup(
@@ -210,8 +226,23 @@ namespace bgl
 			c->setStoreAction(MTL::StoreActionStore);
 		}
 
+		// Load-preserve the depth attachment too, so its ClearDsv and prior draws' writes survive
+		// into this pass (each DispatchMesh is its own render encoder, so depth crosses passes here).
+		const bool hasDepth = !fb.depthAttachment.IsNull();
+		if (hasDepth)
+		{
+			MTL::Texture* depthTex =
+				rm->GetTexture(rm->GetDsvTexture(fb.depthAttachment)).GetMTLResource();
+			MTL::RenderPassDepthAttachmentDescriptor* d = pass->depthAttachment();
+			d->setTexture(depthTex);
+			d->setLoadAction(MTL::LoadActionLoad);
+			d->setStoreAction(MTL::StoreActionStore);
+		}
+
 		MTL::RenderCommandEncoder* enc = m_CmdBuffer->renderCommandEncoder(pass);
 		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
+		if (hasDepth)
+			enc->setDepthStencilState(pipeline->GetMTLDepthStencilState());
 
 		// A cbuffer reflects at one buffer index that every stage using it shares, so bind each to all
 		// stages present (an unused bind is ignored). setBytes caps at 4KB, which cbuffers stay under.

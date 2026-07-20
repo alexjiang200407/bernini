@@ -149,7 +149,21 @@ namespace bgl
 		for (size_t i = 0; i < m_Desc.rtvFormats.size(); ++i)
 			pd->colorAttachments()->object(i)->setPixelFormat(ConvertFormat(m_Desc.rtvFormats[i]));
 		if (m_Desc.dsvFormat != Format::UNKNOWN)
+		{
 			pd->setDepthAttachmentPixelFormat(ConvertFormat(m_Desc.dsvFormat));
+
+			// Metal bakes the depth test/write into a separate immutable state object bound on the
+			// encoder, not into the render PSO (unlike D3D12's DEPTH_STENCIL subobject). A disabled
+			// test maps to compare-Always so writes still land when depthWriteEnable is set.
+			const DepthStencilState&                   dss = m_Desc.renderState.depthStencilState;
+			NS::SharedPtr<MTL::DepthStencilDescriptor> dsd =
+				NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+			dsd->setDepthCompareFunction(
+				dss.depthTestEnable ? ConvertCompareFunc(dss.depthFunc) :
+									  MTL::CompareFunctionAlways);
+			dsd->setDepthWriteEnabled(dss.depthWriteEnable);
+			m_DepthStencilState = NS::TransferPtr(device->newDepthStencilState(dsd.get()));
+		}
 
 		m_PipelineState = NS::TransferPtr(
 			device->newRenderPipelineState(pd.get(), MTL::PipelineOptionNone, nullptr, &error));

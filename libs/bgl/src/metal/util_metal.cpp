@@ -102,6 +102,31 @@ namespace bgl
 		}
 	}
 
+	MTL::CompareFunction
+	ConvertCompareFunc(ComparisonFunc func) noexcept
+	{
+		switch (func)
+		{
+		case ComparisonFunc::kNever:
+			return MTL::CompareFunctionNever;
+		case ComparisonFunc::kLess:
+			return MTL::CompareFunctionLess;
+		case ComparisonFunc::kEqual:
+			return MTL::CompareFunctionEqual;
+		case ComparisonFunc::kLessOrEqual:
+			return MTL::CompareFunctionLessEqual;
+		case ComparisonFunc::kGreater:
+			return MTL::CompareFunctionGreater;
+		case ComparisonFunc::kNotEqual:
+			return MTL::CompareFunctionNotEqual;
+		case ComparisonFunc::kGreaterOrEqual:
+			return MTL::CompareFunctionGreaterEqual;
+		case ComparisonFunc::kAlways:
+			return MTL::CompareFunctionAlways;
+		}
+		gfatal("Metal backend: unknown ComparisonFunc {}", static_cast<int>(func));
+	}
+
 	uint32_t
 	FormatBytesPerPixel(Format format) noexcept
 	{

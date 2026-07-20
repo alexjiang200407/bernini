@@ -138,6 +138,19 @@ namespace bgl
 		return RtvHandle{ slot.index, slot.generation };
 	}
 
+	DsvHandle
+	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
+	{
+		gassert(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
+		const auto slot = m_Dsvs.try_allocate_and_emplace(desc, textureHandle);
+		if (slot.is_null())
+		{
+			logger::error("CreateDsv '{}': DSV pool exhausted", desc.debugName);
+			return DsvHandle{};
+		}
+		return DsvHandle{ slot.index, slot.generation };
+	}
+
 	void
 	ResourceManager::DestroyTexture(TextureHandle handle, uint64_t, bool) noexcept
 	{
@@ -158,6 +171,13 @@ namespace bgl
 		m_Rtvs.release_slot(handle.idx);
 	}
 
+	void
+	ResourceManager::DestroyDsv(DsvHandle handle, uint64_t, bool) noexcept
+	{
+		gassert(ValidDsvHandle(handle), "Cannot destroy invalid DSV handle");
+		m_Dsvs.release_slot(handle.idx);
+	}
+
 	const Texture&
 	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
@@ -173,10 +193,25 @@ namespace bgl
 		return m_Rtvs[handle.idx];
 	}
 
+	const Dsv&
+	ResourceManager::GetDsv(DsvHandle handle) const noexcept
+	{
+		// DsvHandle carries its own generation (it is not a slot_handle), so the raw-index lookup
+		// below can't check it -- validate explicitly, as GetTexture gets for free from slot_handle.
+		gassert(ValidDsvHandle(handle), "Invalid DSV handle");
+		return m_Dsvs[handle.idx];
+	}
+
 	TextureHandle
 	ResourceManager::GetRtvTexture(RtvHandle handle) const noexcept
 	{
 		return GetRtv(handle).GetTextureHandle();
+	}
+
+	TextureHandle
+	ResourceManager::GetDsvTexture(DsvHandle handle) const noexcept
+	{
+		return GetDsv(handle).GetTextureHandle();
 	}
 
 	TextureReadbackLayout
@@ -208,6 +243,13 @@ namespace bgl
 		       !m_Rtvs[handle.idx].IsNull();
 	}
 
+	bool
+	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const noexcept
+	{
+		return !handle.IsNull() && m_Dsvs.valid(handle.idx, handle.generation) &&
+		       !m_Dsvs[handle.idx].IsNull();
+	}
+
 	void
 	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{
@@ -216,5 +258,21 @@ namespace bgl
 
 		MTL::Texture* texture = GetTexture(GetRtv(handle).GetTextureHandle()).GetMTLResource();
 		cmdList->As<CommandList>()->ClearRenderTarget(texture, clearVal);
+	}
+
+	void
+	ResourceManager::ClearDsv(
+		ICommandList* cmdList,
+		DsvHandle     handle,
+		float         depth,
+		uint8_t) noexcept
+	{
+		gassert(ValidDsvHandle(handle), "ClearDsv on an invalid DSV handle");
+		gassert(cmdList != nullptr && cmdList->IsOpen(), "ClearDsv needs an open command list");
+
+		// Depth-only for this slice: the stencil clear value is ignored (the depth formats supported
+		// here carry no stencil). Stencil clears land with stencil support.
+		MTL::Texture* texture = GetTexture(GetDsv(handle).GetTextureHandle()).GetMTLResource();
+		cmdList->As<CommandList>()->ClearDepth(texture, depth);
 	}
 }

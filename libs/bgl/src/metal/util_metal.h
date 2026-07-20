@@ -1,6 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 
+#include "types/DepthStencilState.h"
 #include "types/Format.h"
 
 namespace bgl
@@ -9,6 +10,10 @@ namespace bgl
 	// (3-channel RGB32; BC block formats, which Apple-silicon GPUs do not support).
 	[[nodiscard]] MTL::PixelFormat
 	ConvertFormat(Format format) noexcept;
+
+	// Maps an engine comparison function to its Metal equivalent (depth/stencil test).
+	[[nodiscard]] MTL::CompareFunction
+	ConvertCompareFunc(ComparisonFunc func) noexcept;
 
 	// Bytes per pixel of an uncompressed color/depth format, for the readback row layout.
 	[[nodiscard]] uint32_t
