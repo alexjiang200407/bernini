@@ -22,7 +22,9 @@ namespace
 {
 	// The backbuffer and the per-frame upload rings are c_SwapchainImageCount deep, so a single draw can
 	// present a slot the asset's instance data has not reached yet. Draw enough to fill every slot.
-	constexpr int c_WarmupFrames = 6;
+	// Must track bgl's c_SwapchainImageCount, which is not public; the thumbnail goldens are what
+	// catch this being too low.
+	constexpr int c_WarmupFrames = 2;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
 	constexpr float c_Yaw   = 0.6f;
