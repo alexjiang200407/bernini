@@ -21,25 +21,6 @@
       }
     },
     {
-      "name": "macos",
-      "hidden": true,
-      "cacheVariables": {
-        "PLATFORM": "MACOS"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
-    },
-    {
-      "name": "metal",
-      "hidden": true,
-      "cacheVariables": {
-        "RENDERER_BACKEND": "METAL"
-      }
-    },
-    {
       "name": "ninja",
       "hidden": true,
       "generator": "Ninja",
@@ -222,38 +203,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
-    },
-    {
-      "name": "macos-clang-debug",
-      "displayName": "macOS Clang Debug ninja - Metal",
-      "binaryDir": "${sourceDir}/build/macos-clang-debug",
-      "inherits": [
-        "vcpkg",
-        "macos",
-        "clang",
-        "metal",
-        "debug"
-      ],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "macos-clang-release",
-      "displayName": "macOS Clang Release ninja - Metal",
-      "binaryDir": "${sourceDir}/build/macos-clang-release",
-      "inherits": [
-        "vcpkg",
-        "macos",
-        "clang",
-        "metal",
-        "release"
-      ],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
     }
-
   ],
   "buildPresets": [
     {
@@ -293,14 +243,6 @@
     {
       "name": "windows-clang-dx12-release",
       "configurePreset": "windows-clang-dx12-release"
-    },
-    {
-      "name": "macos-clang-debug",
-      "configurePreset": "macos-clang-debug"
-    },
-    {
-      "name": "macos-clang-release",
-      "configurePreset": "macos-clang-release"
     }
   ]
 }
