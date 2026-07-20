@@ -74,10 +74,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto cubeGeomA = cubeScene->AddCubeGeom();
 		cubeView->CreateStaticMeshInstance(cubeGeomA, glm::mat4(1.0f));
 
-		auto cubeContext     = bgl::RenderContext();
-		cubeContext.view     = cubeView;
-		cubeContext.camera   = camera;
-		cubeContext.viewport = viewport;
+		auto cubeJob     = bgl::RenderJob();
+		cubeJob.view     = cubeView;
+		cubeJob.camera   = camera;
+		cubeJob.viewport = viewport;
 
 		// Target B: two cubes (origin + x=-5), matching the two_cubes golden.
 		auto twoScene  = gfx->CreateScene(sceneDesc);
@@ -89,10 +89,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		twoView->CreateStaticMeshInstance(cubeGeomB, glm::mat4(1.0f));
 		twoView->CreateStaticMeshInstance(cubeGeomB, secondTransform);
 
-		auto twoContext     = bgl::RenderContext();
-		twoContext.view     = twoView;
-		twoContext.camera   = camera;
-		twoContext.viewport = viewport;
+		auto twoJob     = bgl::RenderJob();
+		twoJob.view     = twoView;
+		twoJob.camera   = camera;
+		twoJob.viewport = viewport;
 
 		while (!wnd1.ShouldClose() || !wnd2.ShouldClose())
 		{
@@ -100,12 +100,12 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 			if (!wnd1.ShouldClose())
 			{
-				gfx->DrawFrame(targetA, cubeContext);
+				gfx->DrawFrame(targetA, cubeJob);
 			}
 
 			if (!wnd2.ShouldClose())
 			{
-				gfx->DrawFrame(targetB, twoContext);
+				gfx->DrawFrame(targetB, twoJob);
 			}
 		}
 	}

@@ -58,10 +58,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
-		auto context   = bgl::RenderContext{};
-		context.view   = view;
-		context.camera = camera;
-		context.viewport =
+		auto job   = bgl::RenderJob{};
+		job.view   = view;
+		job.camera = camera;
+		job.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 
 		while (!wnd.ShouldClose())
@@ -70,7 +70,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 			// With BGL_PIXEL_ASSERT_DEMO enabled, the assertion fired here is read back
 			// and crashes a couple of frames later inside a later DrawFrame/BeginFrame.
-			graphics->DrawFrame(target, context);
+			graphics->DrawFrame(target, job);
 		}
 	}
 	catch (const std::runtime_error& e)

@@ -64,12 +64,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto cubeGeom = scene->AddCubeGeom();
 		view->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/cube.got.png");
 
 		// Compare against the committed golden (deployed next to the exe under
@@ -96,12 +96,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto planeGeom = scene->AddPlaneGeom(4, 4, 12.0f, 6.0f);
 		view->CreateStaticMeshInstance(planeGeom, glm::mat4(1.0f));
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/plane.got.png");
 
 		CHECK(
@@ -132,12 +132,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		REQUIRE_NOTHROW(planeGeom = scene->AddPlaneGeom(64, 64, 12.0f, 6.0f));
 		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(planeGeom, glm::mat4(1.0f)));
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		REQUIRE_NOTHROW(gfxBase->DrawFrame(target, context));
+		REQUIRE_NOTHROW(gfxBase->DrawFrame(target, job));
 
 		// A subdivided plane is the same surface as a flat one, so it must land on the same pixels --
 		// which is what catches a meshlet split that drops or duplicates a triangle.
@@ -170,12 +170,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto planeGeom = scene->AddPlaneGeom(4, 4, 10.0f, 10.0f);
 		view->CreateStaticMeshInstance(planeGeom, toFloor);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/plane_floor.got.png");
 
 		// Visible from above rather than back-face culled to an empty frame: the rotation took the
@@ -218,12 +218,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		view->CreateStaticMeshInstance(cubeGeom, cubeTransform);
 		view->CreateStaticMeshInstance(sphereGeom, sphereTransform);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/sphere_cube.got.png");
 
 		CHECK(
@@ -258,12 +258,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		const auto viewport =
 			bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		auto cubeContext     = bgl::RenderContext();
+		auto cubeContext     = bgl::RenderJob();
 		cubeContext.view     = cubeView;
 		cubeContext.camera   = camera;
 		cubeContext.viewport = viewport;
 
-		auto sphereContext     = bgl::RenderContext();
+		auto sphereContext     = bgl::RenderJob();
 		sphereContext.view     = sphereView;
 		sphereContext.camera   = camera;
 		sphereContext.viewport = viewport;
@@ -304,12 +304,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		view->CreateStaticMeshInstance(cubeGeom, firstTransform);
 		view->CreateStaticMeshInstance(cubeGeom, secondTransform);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/two_cubes.got.png");
 
 		CHECK(
@@ -343,12 +343,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		// frame must match the lone-cube golden.
 		view->DeleteMeshInstance(sphereInst);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/delete_sphere_cube.got.png");
 
 		CHECK(
@@ -380,12 +380,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		// Removing the x=-5 cube leaves only the cube at the origin.
 		view->DeleteMeshInstance(secondInst);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		gfxBase->DrawFrame(target, context);
+		gfxBase->DrawFrame(target, job);
 		gfxBase->ScreenshotPng(target, "assets/golden/delete_two_cubes.got.png");
 
 		CHECK(
@@ -448,7 +448,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	auto cubeGeomA = cubeScene->AddCubeGeom();
 	cubeView->CreateStaticMeshInstance(cubeGeomA, glm::mat4(1.0f));
 
-	auto cubeContext     = bgl::RenderContext();
+	auto cubeContext     = bgl::RenderJob();
 	cubeContext.view     = cubeView;
 	cubeContext.camera   = camera;
 	cubeContext.viewport = viewport;
@@ -463,7 +463,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	twoView->CreateStaticMeshInstance(cubeGeomB, glm::mat4(1.0f));
 	twoView->CreateStaticMeshInstance(cubeGeomB, secondTransform);
 
-	auto twoContext     = bgl::RenderContext();
+	auto twoContext     = bgl::RenderJob();
 	twoContext.view     = twoView;
 	twoContext.camera   = camera;
 	twoContext.viewport = viewport;

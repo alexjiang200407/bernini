@@ -207,17 +207,17 @@ TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 
 	SECTION("Draw outside of a frame throws")
 	{
-		auto context = bgl::RenderContext();
-		context.view = nullptr;
-		REQUIRE_THROWS_AS(gfx->Draw(context), bgl::GraphicsError);
+		auto job = bgl::RenderJob();
+		job.view = nullptr;
+		REQUIRE_THROWS_AS(gfx->Draw(job), bgl::GraphicsError);
 	}
 
 	SECTION("Draw with a null scene throws")
 	{
 		gfx->BeginFrame(target);
-		auto context = bgl::RenderContext();
-		context.view = nullptr;
-		REQUIRE_THROWS_AS(gfx->Draw(context), bgl::GraphicsError);
+		auto job = bgl::RenderJob();
+		job.view = nullptr;
+		REQUIRE_THROWS_AS(gfx->Draw(job), bgl::GraphicsError);
 	}
 
 	SECTION("EndFrame without a matching BeginFrame throws")

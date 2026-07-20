@@ -59,12 +59,12 @@ namespace
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.5f, 500.0f);
 
-		auto context     = bgl::RenderContext();
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(400.0f, 300.0f);
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(400.0f, 300.0f);
 
-		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, context);
+		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
 
 		gfx->ScreenshotPng(target, gotPath);
 	}

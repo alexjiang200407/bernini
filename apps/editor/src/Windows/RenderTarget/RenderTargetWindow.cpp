@@ -8,7 +8,7 @@
 #include <QShowEvent>
 #include <QTimer>
 #include <bgl/IGraphics.h>
-#include <bgl/RenderContext.h>
+#include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 
 namespace
@@ -72,12 +72,12 @@ RenderTargetWindow::~RenderTargetWindow()
 void
 RenderTargetWindow::DrawFrame()
 {
-	auto rc     = bgl::RenderContext();
-	rc.camera   = m_RenderCamera;
-	rc.view     = m_SceneView;
-	rc.viewport = bgl::Viewport(m_RenderWidth, m_RenderHeight);
+	auto job     = bgl::RenderJob();
+	job.camera   = m_RenderCamera;
+	job.view     = m_SceneView;
+	job.viewport = bgl::Viewport(m_RenderWidth, m_RenderHeight);
 
-	m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, rc);
+	m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
 }
 
 void

@@ -180,16 +180,16 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		camera.LookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(fovY, aspect, glm::max(radius * 0.02f, 0.01f), dist + radius * 4.0f);
 
-		auto context     = bgl::RenderContext{};
-		context.view     = view;
-		context.camera   = camera;
-		context.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
+		auto job     = bgl::RenderJob{};
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
 
 		if (headless)
 		{
 			for (uint32_t i = 0; i < frames; ++i)
 			{
-				graphics->DrawFrame(target, context);
+				graphics->DrawFrame(target, job);
 
 				if (i == 0)
 				{
@@ -207,10 +207,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 				if (demo::ApplyFlyCam(camera, clock.Tick(), 1.f))
 				{
-					context.camera = camera;
+					job.camera = camera;
 				}
 
-				graphics->DrawFrame(target, context);
+				graphics->DrawFrame(target, job);
 
 				if (demo::KeyPressed(demo::kScancodeF10))
 				{

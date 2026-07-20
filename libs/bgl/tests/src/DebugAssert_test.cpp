@@ -37,15 +37,15 @@ namespace
 		std::vector<uint32_t>& words,
 		uint32_t               i,
 		uint32_t               errcode,
-		uint32_t               value   = 0,
-		uint32_t               limit   = 0,
-		uint32_t               context = 0)
+		uint32_t               value = 0,
+		uint32_t               limit = 0,
+		uint32_t               job   = 0)
 	{
 		const uint32_t base = bgl::DebugBuffer::kHeaderWords + i * bgl::DebugBuffer::kRecordWords;
 		words[base + 0]     = errcode;
 		words[base + 1]     = value;
 		words[base + 2]     = limit;
-		words[base + 3]     = context;
+		words[base + 3]     = job;
 	}
 }
 
@@ -81,7 +81,7 @@ TEST_CASE("InspectDebugReadback decodes debug-buffer records", "[debug][gpu-asse
 		// range, and only these say which one, of what, and where -- which is the difference between
 		// a stack trace to guess from and a bug report.
 		auto image = MakeDebugImage(/*count*/ 1, /*overflow*/ 0, /*capacity*/ 8);
-		SetRecord(image, 0, 7u, /*value*/ 4211u, /*limit*/ 1089u, /*context*/ 3u);
+		SetRecord(image, 0, 7u, /*value*/ 4211u, /*limit*/ 1089u, /*job*/ 3u);
 
 		const auto report = bgl::InspectDebugReadback(image.data(), 8);
 		REQUIRE(report.has_value());
@@ -307,16 +307,16 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 			glm::vec3(0.0f, 1.0f, 0.0f))
 		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
 
-	auto context     = bgl::RenderContext();
-	context.view     = view;
-	context.camera   = camera;
-	context.viewport = bgl::Viewport(64.0f, 64.0f);
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(64.0f, 64.0f);
 
 	// The snapshot is inspected a few frames after it is recorded (readback ring), so
 	// pump frames until the handler fires (bounded so a real failure still terminates).
 	for (int i = 0; i < 8 && handler.calls == 0; ++i)
 	{
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 	}
 
 	CHECK(handler.calls >= 1);

@@ -110,10 +110,10 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 			0.5f,
 			500.0f);
 
-	auto context     = bgl::RenderContext();
-	context.view     = view;
-	context.camera   = camera;
-	context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 	SECTION("kAlphaTest discards the transparent texels - alpha_test_plane.png")
 	{
@@ -128,7 +128,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/alpha_test_plane.got.png");
 
 		CHECK(
@@ -153,7 +153,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/alpha_test_opaque.got.png");
 
 		CHECK(
@@ -232,10 +232,10 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 			0.5f,
 			500.0f);
 
-	auto context     = bgl::RenderContext();
-	context.view     = view;
-	context.camera   = camera;
-	context.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 	SECTION("the leaf's silhouette survives the bake - alpha_test_leaf.png")
 	{
@@ -250,7 +250,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		auto plane    = scene->AddPlaneGeom(1, 1, c_LeafWidth, c_LeafHeight, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/alpha_test_leaf.got.png");
 
 		CHECK(
@@ -274,7 +274,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		auto plane    = scene->AddPlaneGeom(1, 1, c_LeafWidth, c_LeafHeight, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, context);
+		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/alpha_test_leaf_opaque.got.png");
 
 		CHECK(
