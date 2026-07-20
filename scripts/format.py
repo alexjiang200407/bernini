@@ -29,6 +29,19 @@ def is_slang(path):
     return os.path.splitext(path)[1].lower() == ".slang"
 
 
+# bgl_idlgen stamps this on every file it writes. Formatting those files makes the
+# tree disagree with the generator, so every build dirties them again.
+GENERATED_BANNER = b"DO NOT EDIT MANUALLY"
+
+
+def is_generated(path):
+    try:
+        with open(path, "rb") as f:
+            return GENERATED_BANNER in f.readline()
+    except OSError:
+        return False
+
+
 def slang_assume_filename(path):
     # Keep the directory (so the nearest .clang-format is still bgl/shaders/) but
     # use a .cs extension so clang-format selects the CSharp style document.
@@ -85,8 +98,10 @@ def main():
               "If it lives somewhere else, run `just init` to record its path.", file=sys.stderr)
         return 1
 
-    slang_files = [f for f in args.files if is_slang(f)]
-    other_files = [f for f in args.files if not is_slang(f)]
+    files = [f for f in args.files if not is_generated(f)]
+
+    slang_files = [f for f in files if is_slang(f)]
+    other_files = [f for f in files if not is_slang(f)]
 
     rc = 0
 

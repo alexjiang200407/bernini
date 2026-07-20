@@ -85,6 +85,11 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) | Generated Slang copies (`import idl.<Name>`). |
 | [libs/bgl/src/idl/](libs/bgl/src/idl/) | Generated C++ headers (`bgl::idl::<Name>`), aggregated by the hand-written [libs/bgl/src/idl/idl.h](libs/bgl/src/idl/idl.h). |
 
+**Generated files are never clang-formatted.** `scripts/format.py` skips any file whose first line
+carries the generator's `DO NOT EDIT MANUALLY` banner, so what is committed is byte-for-byte what
+`bgl_idlgen` emits. Formatting them instead makes the tree disagree with the generator, and since
+`bgl_idl_generate` runs as part of an ordinary build, every build then reports the files as dirty.
+
 ---
 
 ## Topology
