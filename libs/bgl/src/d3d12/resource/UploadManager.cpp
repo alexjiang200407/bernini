@@ -165,6 +165,10 @@ namespace bgl
 				m_CurrentChunk = CreateChunk(sizeToAllocate);
 				if (!m_CurrentChunk)
 					return false;
+
+				// Chunks are recycled, never released, so this only ever grows. Without it
+				// m_MemoryLimit could never be reached however many chunks were created.
+				m_AllocatedMemory += m_CurrentChunk->bufferSize;
 			}
 		}
 
