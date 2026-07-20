@@ -176,8 +176,10 @@ Each stage builds, passes its gate, and is independently revertable. **The win l
 
 ### S0a — Retire the Metal backend
 
-Delete `libs/bgl/src/metal/` and the `metal` / `macos-*` presets, after pushing the current state to
-a `backup/metal-backend` branch so nothing is lost.
+Delete `libs/bgl/src/metal/`, the hidden `metal` preset, and the `compile-macos` CI job, after
+pushing the current state to a `backup/metal-backend` branch so nothing is lost. The
+`macos-clang-*` presets stay for now; with the job gone they have no automated user, so they are a
+candidate for the same treatment.
 
 The reasoning is the author's: the iOS target that motivated it is no longer the direction, the
 backend is incomplete (`Graphics_metal.cpp` stubs `CreateScene`, `CreateSceneView` and both
@@ -200,16 +202,16 @@ things found while surveying support that:
   the same per-frame fence/allocator ring through `IRenderTarget` as its D3D12 counterpart, for a
   backend whose render path no test exercises.
 
-**Keep the `compile-macos` job, re-pointed at a backend-free build.** Dropping the `metal` inherit
-leaves `RENDERER_BACKEND` unset, which builds `core`, `assetlib`, `assetlib_cli`, `bgl_idlgen` and
-`bgl_objects` — the configuration the stale comment already describes. That job is the only thing
-keeping `core`, `assetlib` and the RHI headers honest about portability, and §7 depends on it for
-the only ThreadSanitizer coverage available to this project. This is a deliberate re-pointing, not a
-status quo to preserve.
+**The `compile-macos` job goes with it**, leaving no non-Windows CI. It guarded a portability
+nothing currently exercises, on a runner billed at 10x the Linux rate.
 
-* **Gate:** `just build` and `just test` green on Windows; the `compile-macos` job still passes in
-  its new backend-free configuration; `backup/metal-backend` exists on the remote and is reachable
-  from the PR description.
+An earlier draft of this plan argued for keeping it as the only host where ThreadSanitizer could
+run. That was weaker than it read: the job is **compile-only and runs no tests**, so the TSan
+coverage was hypothetical, not something the removal costs. See §7 for where race detection actually
+comes from instead.
+
+* **Gate:** `just build` and `just test` green on Windows; CI green with `compile` as its only job;
+  `backup/metal-backend` exists on the remote and is reachable from the PR description.
 
 ### S0b — Measurement first
 
@@ -528,13 +530,16 @@ What is available, in descending order of value per unit of effort:
    randomized `std::this_thread::yield()` between operations to widen interleaving windows. Races
    here are probabilistic, so run it long in CI and treat an intermittent failure as a real defect,
    never as flake.
-3. **TSan the portable pieces on the macOS runner.** The `compile-macos` CI job already builds
-   `core`, `assetlib` and `bgl_objects` with clang. The pure-CPU concurrency logic — `slot_vector`
-   allocation, the multi-timeline deletion gate — is backend-free and can be exercised there under
-   `-fsanitize=thread` by a `core_tests` harness that drives it from several threads. **This is the
-   strongest reason to keep the macOS CI job after S0a removes Metal**, and it is worth deliberately
-   *placing* the deletion gate in a portable header so it falls on the testable side of the line.
-   The honest limit: it covers the data structures, not `ResourceManager`'s D3D12 half.
+3. **TSan the portable pieces on a Linux job, added when S3 lands.** The pure-CPU concurrency logic
+   — `slot_vector` allocation, the multi-timeline deletion gate — is backend-free, so a job building
+   `core` + `core_tests` under `-fsanitize=thread` can drive it from several threads. Linux is the
+   right host: TSan's best-supported platform, and a tenth the runner cost of macOS. This costs a
+   Linux preset, which does not exist yet — `core` has built on clang/macOS before, so the work is
+   plausible but unproven.
+
+   It is worth deliberately *placing* the deletion gate in a portable header so it falls on the
+   testable side of that line. The honest limit: this covers the data structures, not
+   `ResourceManager`'s D3D12 half — which stays on items 1 and 2.
 4. **Application Verifier** (Windows SDK) for lock and handle misuse, and **`/analyze` with
    concurrency SAL** (`_Guarded_by_`, `_Requires_lock_held_`) to make the "this field is only
    touched under that mutex" rule machine-checked rather than a convention.
@@ -569,10 +574,12 @@ a Treiber stack are both buying.
   (see the naming note above); a per-backend subclass would fork portable code for no reason, and
   the backend seam already exists one layer down at `ICommandQueue` / `ICommandList`. Guard this in
   review.
-* **S0a removes the only non-Windows backend.** After it, `docs/rhi.md`'s backend-agnosticism claims
-  describe an aspiration with one implementation rather than a tested property. Keeping the
-  `compile-macos` job is what stops the RHI headers quietly acquiring Windows assumptions — and §7
-  depends on that job for the only ThreadSanitizer coverage available to this project.
+* **S0a leaves the tree Windows-only, with nothing checking otherwise.** No non-Windows backend and
+  no non-Windows CI, so `docs/rhi.md`'s backend-agnosticism claims become an aspiration with one
+  implementation rather than a tested property, and `core`/`assetlib`/the RHI headers can acquire
+  Windows assumptions silently. That is an accepted cost, not an oversight — but it means the Linux
+  TSan job in §7 will have portability work to pay off before it can run, and that debt grows
+  quietly with time. Worth pricing when S3 gets there rather than being surprised by it.
 * **`AssetThumbnailCache`'s second thread is editor-side complexity** the spec does not discuss.
   `Renderer` currently *is* the render thread; it becomes a thread pool with per-context affinity,
   and its destructor ordering (`MainWindow.cpp:159-173`) is already delicate.
