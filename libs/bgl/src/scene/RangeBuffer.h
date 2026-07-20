@@ -87,12 +87,13 @@ namespace bgl
 				elem.size() < std::numeric_limits<uint32_t>::max(),
 				"Element count exceeds uint32_t limits");
 
+			// AllocateRange already marked this exact range dirty, and nothing can flush between
+			// there and here, so the writes below are covered without marking it a second time.
 			auto handle = AllocateRange(static_cast<uint32_t>(elem.size()));
 			for (auto i = 0u; i < elem.size(); ++i)
 			{
 				m_Data[handle.index + i] = elem[i];
 			}
-			MarkRangeDirty(handle.index, handle.count);
 
 			return handle;
 		}
