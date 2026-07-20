@@ -12,7 +12,8 @@ namespace bgl
 		Device(
 			wrl::ComPtr<ID3D12Device>            device,
 			Slang::ComPtr<slang::IGlobalSession> globalSession,
-			const std::string&                   shaderCacheDir);
+			const std::string&                   shaderCacheDir,
+			bool                                 gpuValidation);
 
 		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;

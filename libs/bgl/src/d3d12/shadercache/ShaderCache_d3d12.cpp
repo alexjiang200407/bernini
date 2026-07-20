@@ -257,11 +257,15 @@ namespace bgl
 		ID3D12Device*                   device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,
-		const std::vector<std::string>& searchPaths) :
+		const std::vector<std::string>& searchPaths,
+		bool                            usePipelineLibrary) :
 		m_CacheDir(std::move(cacheDir)), m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
+
+		if (!usePipelineLibrary)
+			return;
 
 		wrl::ComPtr<ID3D12Device1> device1;
 		if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1))))

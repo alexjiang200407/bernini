@@ -374,7 +374,8 @@ namespace bgl
 		m_Device = core::SharedRef<Device>::Make(
 			m_D3D12Device,
 			m_SlangGlobalSession,
-			m_Opts.shaderCacheDir);
+			m_Opts.shaderCacheDir,
+			m_Opts.enableGPUValidationLayer);
 
 		// Route debug-layer and GPU-based-validation messages (which otherwise only
 		// reach an attached debugger) into the spdlog log.

@@ -41,7 +41,8 @@ namespace bgl
 	Device::Device(
 		wrl::ComPtr<ID3D12Device>            device,
 		Slang::ComPtr<slang::IGlobalSession> globalSession,
-		const std::string&                   shaderCacheDir) :
+		const std::string&                   shaderCacheDir,
+		bool                                 gpuValidation) :
 		m_Device(std::move(device)), m_SlangGlobalSession(std::move(globalSession))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
@@ -88,7 +89,8 @@ namespace bgl
 				ShaderCacheSalt(m_SlangGlobalSession.get()),
 				std::vector<std::string>(
 					std::begin(c_ShaderSearchPaths),
-					std::end(c_ShaderSearchPaths)));
+					std::end(c_ShaderSearchPaths)),
+				!gpuValidation);
 		}
 	}
 

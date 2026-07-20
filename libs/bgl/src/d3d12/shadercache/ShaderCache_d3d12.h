@@ -35,11 +35,16 @@ namespace bgl
 		// contributes to the invalidation hash. optionsSalt captures the compiler
 		// version and compile options that affect codegen. device backs the pipeline
 		// library.
+		//
+		// usePipelineLibrary false keeps the program cache but drops the driver PSO
+		// layer; pass false when GPU-based validation is on. See the note on
+		// m_PsoLibrary.
 		ShaderCache(
 			ID3D12Device*                   device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
-			const std::vector<std::string>& searchPaths);
+			const std::vector<std::string>& searchPaths,
+			bool                            usePipelineLibrary);
 
 		~ShaderCache();
 
@@ -87,8 +92,11 @@ namespace bgl
 		StorePipeline(uint64_t identity, ID3D12PipelineState* pipeline);
 
 	private:
-		std::filesystem::path               m_CacheDir;
-		uint64_t                            m_SourceSalt = 0;
+		std::filesystem::path m_CacheDir;
+		uint64_t              m_SourceSalt = 0;
+
+		// Null when GPU-based validation is on: that run exists to instrument every shader, and a
+		// PSO replayed out of the library was compiled without the instrumentation.
 		wrl::ComPtr<ID3D12PipelineLibrary1> m_PsoLibrary;
 		std::vector<std::byte>              m_PsoLibraryBlob;  // backs m_PsoLibrary
 		bool                                m_PsoLibraryDirty = false;
