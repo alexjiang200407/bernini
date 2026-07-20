@@ -3,10 +3,10 @@
 #include "cmd/CommandQueue.h"
 #include "constants/constants.h"
 #include "device/Device.h"
+#include "gfx/RenderTargetBase.h"
 #include "resource/Dsv.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv.h"
-#include <bgl/IRenderTarget.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
@@ -26,10 +26,10 @@ namespace bgl
 	/**
 	 * A per-output swapchain (windowed) or offscreen backbuffer ring (headless) plus a
 	 * depth buffer, owned independently of Graphics so one renderer can drive many
-	 * outputs. Graphics is a friend: it drives a frame against the bound target using
-	 * this target's backbuffers / fences / allocators.
+	 * outputs. The frame ring is reached through RenderTargetBase, so frame-driving code
+	 * needs neither this type nor D3D12.
 	 */
-	class RenderTarget : public core::RefCounter<IRenderTarget>
+	class RenderTarget : public core::RefCounter<RenderTargetBase>
 	{
 	public:
 		RenderTarget(
@@ -62,9 +62,72 @@ namespace bgl
 			return static_cast<uint32_t>(m_Height);
 		}
 
-	private:
-		friend class Graphics;
+		[[nodiscard]] uint32_t
+		FrameSlot() const noexcept override
+		{
+			return m_FrameIndex;
+		}
 
+		[[nodiscard]] uint32_t
+		LastPresentedSlot() const noexcept override
+		{
+			return m_LastPresentedIndex;
+		}
+
+		[[nodiscard]] bool
+		IsHeadless() const noexcept override
+		{
+			return m_Headless;
+		}
+
+		[[nodiscard]] uint64_t
+		SlotFence(uint32_t slot) const noexcept override
+		{
+			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
+			return m_FenceValues[slot];
+		}
+
+		void
+		SetSlotFence(uint32_t slot, uint64_t fenceValue) noexcept override
+		{
+			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
+			m_FenceValues[slot] = fenceValue;
+		}
+
+		[[nodiscard]] ICommandAllocator*
+		SlotAllocator(uint32_t slot) const noexcept override
+		{
+			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
+			return m_CommandAllocator[slot].Get();
+		}
+
+		[[nodiscard]] TextureHandle
+		BackbufferTexture(uint32_t slot) const noexcept override
+		{
+			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
+			return m_BackBuffers[slot].textureHandle;
+		}
+
+		[[nodiscard]] RtvHandle
+		BackbufferRtv(uint32_t slot) const noexcept override
+		{
+			gassert(slot < c_SwapchainImageCount, "Frame slot out of range");
+			return m_BackBuffers[slot].rtvHandle;
+		}
+
+		[[nodiscard]] DsvHandle
+		DepthDsv() const noexcept override
+		{
+			return m_DepthBuffer.dsvHandle;
+		}
+
+		void
+		PresentAndAdvance() noexcept override;
+
+		void
+		ResizeBackbuffers(uint32_t width, uint32_t height, uint64_t fenceValue) override;
+
+	private:
 		void
 		CreateSwapchain(HWND hWnd);
 
