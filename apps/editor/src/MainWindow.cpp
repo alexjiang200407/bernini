@@ -153,6 +153,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
 
+	SetUpFrameStats();
+
 	ShowEmptyState();
 }
 
@@ -354,6 +356,38 @@ MainWindow::SetActiveProject(Project project)
 	statusBar()->showMessage(
 		QString("Project data: %1")
 			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
+}
+
+void
+MainWindow::SetUpFrameStats()
+{
+	if (m_LevelEditor == nullptr)
+		return;
+
+	m_FrameStats = new QLabel(this);
+	m_FrameStats->setObjectName("FrameStats");
+	m_FrameStats->setToolTip(
+		"Level Editor frame time: mean and worst over the last 120 frames, and how many of them "
+		"overran a vblank.");
+
+	// A permanent widget sits to the right of the bar and survives showMessage, so the project and
+	// texture-cleanup messages cannot overwrite the readout.
+	statusBar()->addPermanentWidget(m_FrameStats);
+
+	// Queued: FrameStatsUpdated is emitted on the render thread and this touches a widget.
+	connect(
+		m_LevelEditor,
+		&RenderTargetWindow::FrameStatsUpdated,
+		this,
+		[this](double meanMs, double maxMs, int missed) {
+			m_FrameStats->setText(
+				QString::asprintf(
+					"frame %.1f ms avg  %.1f ms max  %d missed",
+					meanMs,
+					maxMs,
+					missed));
+		},
+		Qt::QueuedConnection);
 }
 
 void

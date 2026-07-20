@@ -8,6 +8,7 @@ class QTimer;
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <core/stats/RollingWindow.h>
 
 #include "Render/Renderer.h"
 
@@ -70,6 +71,18 @@ protected:
 	void
 	SetCamera(const bgl::Camera& cam);
 
+Q_SIGNALS:
+	/**
+	 * Emitted from the render thread every c_FrameStatsInterval frames. Connect with
+	 * Qt::QueuedConnection: a direct connection would touch the receiving widget off the GUI thread.
+	 *
+	 * @param meanMs   Mean frame time over the window.
+	 * @param maxMs    Worst frame time in the window -- the number a stall shows up in.
+	 * @param missed   Frames in the window that overran a vblank.
+	 */
+	void
+	FrameStatsUpdated(double meanMs, double maxMs, int missed);
+
 private:
 	// Records and presents one frame. Called by the Renderer's frame loop, on the render thread.
 	void
@@ -107,4 +120,17 @@ private:
 	QElapsedTimer m_FrameClock;  // monotonic clock for the timings above
 	qint64        m_LastFrameStartNs = -1;
 	qint64        m_LastFrameEndNs   = -1;
+
+	// ~2 seconds of frames at 60Hz: long enough that one stall does not dominate the mean, short
+	// enough that the readout still tracks what the viewport is doing now.
+	static constexpr std::size_t c_FrameStatsWindow = 120;
+
+	// Frames between FrameStatsUpdated emissions. Emitting per frame would queue 60 cross-thread
+	// events a second to move a number no one can read that fast.
+	static constexpr uint64_t c_FrameStatsInterval = 30;
+
+	// Render thread only, like the timings above.
+	core::RollingWindow<c_FrameStatsWindow> m_FrameTimes;
+	uint32_t                                m_MissedFrames    = 0;
+	uint64_t                                m_FramesSinceEmit = 0;
 };
