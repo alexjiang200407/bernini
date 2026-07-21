@@ -50,6 +50,10 @@ namespace bgl
 
 		virtual void
 		WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept = 0;
+
+		/** Signals a fence past all submitted work and blocks until the GPU reaches it. */
+		virtual void
+		Flush() noexcept = 0;
 	};
 
 	using CommandQueueRef = core::SharedRef<ICommandQueue>;

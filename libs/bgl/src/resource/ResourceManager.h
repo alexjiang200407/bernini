@@ -159,6 +159,13 @@ namespace bgl
 		virtual const Texture&
 		GetTexture(TextureHandle handle) const noexcept = 0;
 
+		// A texture's dimensions, format and usage, without exposing the backend Texture -- so a
+		// caller in backend-agnostic code can read them (the concrete Texture is an incomplete type
+		// there).
+		[[nodiscard]]
+		virtual TextureDesc
+		GetTextureDesc(TextureHandle handle) const noexcept = 0;
+
 		[[nodiscard]]
 		virtual const Sampler&
 		GetSampler(SamplerHandle handle) const noexcept = 0;
