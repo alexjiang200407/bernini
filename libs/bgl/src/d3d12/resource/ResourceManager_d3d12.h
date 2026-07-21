@@ -8,6 +8,7 @@
 #include "resource/Sampler_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <core/containers/slot_vector.h>
+#include <core/containers/static_vector.h>
 
 namespace bgl
 {
@@ -16,12 +17,18 @@ namespace bgl
 	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
 	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
 
+	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
+	// expected over one device. Exceeding it asserts; it is not a hard device limit.
+	constexpr uint32_t c_MaxRegisteredQueues = 8;
+
 	// One registered queue and the fence value it was at when a resource was retired against it.
 	struct QueueGate
 	{
 		ICommandQueue* queue      = nullptr;
 		uint64_t       fenceValue = 0;
 	};
+
+	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
 
 	struct PendingDeletion
 	{
@@ -40,7 +47,8 @@ namespace bgl
 
 		// Freed only once every registered queue passes the fence it was at when the destroy was
 		// recorded. One entry per queue registered at that moment; empty means immediately free.
-		std::vector<QueueGate> gate;
+		// Inline, so a deferred destroy on the per-frame reclamation path allocates nothing.
+		DeletionGate gate;
 	};
 
 	class ResourceManager final : public core::RefCounter<IResourceManager>
@@ -243,7 +251,7 @@ namespace bgl
 	private:
 		// Snapshots every registered queue's next fence value -- the gate a deferred destroy recorded
 		// now must clear before its slot is reclaimed.
-		[[nodiscard]] std::vector<QueueGate>
+		[[nodiscard]] DeletionGate
 		CaptureGate() const noexcept;
 
 		wrl::ComPtr<ID3D12Device>         m_Device;

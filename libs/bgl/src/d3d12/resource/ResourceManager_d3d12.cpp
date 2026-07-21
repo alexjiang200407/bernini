@@ -553,11 +553,10 @@ namespace bgl
 		std::erase(m_RegisteredQueues, queue);
 	}
 
-	std::vector<QueueGate>
+	DeletionGate
 	ResourceManager::CaptureGate() const noexcept
 	{
-		auto gate = std::vector<QueueGate>();
-		gate.reserve(m_RegisteredQueues.size());
+		auto gate = DeletionGate();
 		for (ICommandQueue* queue : m_RegisteredQueues)
 		{
 			gate.push_back({ queue, queue->GetNextFenceValue() });
@@ -569,8 +568,7 @@ namespace bgl
 	ResourceManager::CleanupExpiredResources() noexcept
 	{
 		// Poll each queue once, not per pending deletion.
-		auto completed = std::vector<std::pair<ICommandQueue*, uint64_t>>();
-		completed.reserve(m_RegisteredQueues.size());
+		auto completed = core::static_vector<QueueGate, c_MaxRegisteredQueues>();
 		for (ICommandQueue* queue : m_RegisteredQueues)
 		{
 			completed.push_back({ queue, queue->PollCurrentFenceValue() });
