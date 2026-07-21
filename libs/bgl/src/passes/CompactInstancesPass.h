@@ -35,7 +35,7 @@ namespace bgl
 		Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager);
 
 		void
-		Release(uint64_t fenceVal, bool deferred = true);
+		Release(bool deferred = true);
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

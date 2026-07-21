@@ -32,9 +32,7 @@ namespace bgl
 			core::SharedRef<IResourceManager>  resourceManager) const noexcept override;
 
 		core::SharedRef<IResourceManager>
-		CreateResourceManager(
-			const ResourceManagerDesc&     desc,
-			core::SharedRef<ICommandQueue> submissionQueue) const noexcept override;
+		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept override;
 
 		core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;

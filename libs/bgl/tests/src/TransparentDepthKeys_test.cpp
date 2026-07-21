@@ -276,6 +276,6 @@ TEST_CASE(
 		}
 	}
 
-	resourceManager->DestroyReadbackBuffer(entriesReadback, 0, false);
-	resourceManager->DestroyReadbackBuffer(countReadback, 0, false);
+	resourceManager->DestroyReadbackBuffer(entriesReadback, false);
+	resourceManager->DestroyReadbackBuffer(countReadback, false);
 }

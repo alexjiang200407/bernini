@@ -127,9 +127,9 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyRtv(rtv, fence, false);
-	resourceManager->DestroyTexture(tex, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyRtv(rtv, false);
+	resourceManager->DestroyTexture(tex, false);
 }
 
 // The mesh shader reads a uniform and passes it to the fragment, which reads another -- so a wrong
@@ -241,9 +241,9 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyRtv(rtv, fence, false);
-	resourceManager->DestroyTexture(tex, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyRtv(rtv, false);
+	resourceManager->DestroyTexture(tex, false);
 }
 
 // Two cbuffers with disjoint stage usage (gMesh: mesh only, gFrag: fragment only) confirm the
@@ -357,7 +357,7 @@ TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[mesh
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyRtv(rtv, fence, false);
-	resourceManager->DestroyTexture(tex, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyRtv(rtv, false);
+	resourceManager->DestroyTexture(tex, false);
 }

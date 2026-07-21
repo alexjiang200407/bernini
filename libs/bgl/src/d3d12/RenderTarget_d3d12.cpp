@@ -47,7 +47,7 @@ namespace bgl
 			m_SwapChain->SetFullscreenState(FALSE, nullptr);
 		}
 
-		DestroyRenderTargets(m_CommandQueue->GetNextFenceValue());
+		DestroyRenderTargets();
 
 		m_SwapChain.Reset();
 
@@ -214,9 +214,9 @@ namespace bgl
 	}
 
 	void
-	RenderTarget::ResizeBackbuffers(uint32_t width, uint32_t height, uint64_t fenceValue)
+	RenderTarget::ResizeBackbuffers(uint32_t width, uint32_t height)
 	{
-		DestroyRenderTargets(fenceValue);
+		DestroyRenderTargets();
 
 		m_Width  = static_cast<int>(width);
 		m_Height = static_cast<int>(height);
@@ -251,15 +251,15 @@ namespace bgl
 	}
 
 	void
-	RenderTarget::DestroyRenderTargets(uint64_t fenceValue)
+	RenderTarget::DestroyRenderTargets()
 	{
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
-			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, fenceValue, false);
-			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, fenceValue, false);
+			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, false);
+			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
 		}
 
-		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, fenceValue, false);
-		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, fenceValue, false);
+		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, false);
+		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
 	}
 }

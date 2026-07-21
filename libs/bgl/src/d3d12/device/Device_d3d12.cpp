@@ -109,11 +109,9 @@ namespace bgl
 	}
 
 	ResourceManagerRef
-	Device::CreateResourceManager(
-		const ResourceManagerDesc&     desc,
-		core::SharedRef<ICommandQueue> submissionQueue) const noexcept
+	Device::CreateResourceManager(const ResourceManagerDesc& desc) const noexcept
 	{
-		return core::SharedRef<ResourceManager>::Make(m_Device, desc, std::move(submissionQueue));
+		return core::SharedRef<ResourceManager>::Make(m_Device, desc);
 	}
 
 	ShaderRef

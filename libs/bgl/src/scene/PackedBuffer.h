@@ -243,11 +243,11 @@ namespace bgl
 		}
 
 		void
-		Release(uint64_t fenceValue, bool deferred = true) noexcept
+		Release(bool deferred = true) noexcept
 		{
 			if (!m_BufferHandle.IsNull())
 			{
-				m_ResourceManager->DestroyBuffer(m_BufferHandle, fenceValue, deferred);
+				m_ResourceManager->DestroyBuffer(m_BufferHandle, deferred);
 				m_BufferHandle = {};
 				m_Entries.clear();
 				m_HandleToIndex.clear();

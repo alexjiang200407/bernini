@@ -7,13 +7,11 @@ namespace bgl
 {
 	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device>  device,
-		const ResourceManagerDesc& desc,
-		CommandQueueRef            submissionQueue) :
+		const ResourceManagerDesc& desc) :
 		m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
 		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs),
-		m_Dsvs(desc.maxDsvs), m_SubmissionQueue(std::move(submissionQueue))
+		m_Dsvs(desc.maxDsvs)
 	{
-		gassert(m_SubmissionQueue != nullptr, "ResourceManager requires a submission queue");
 		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
@@ -434,20 +432,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyRtv(
-		RtvHandle handle,
-		uint64_t  currentFenceValue,
-		bool      deferred) noexcept
+	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		if (deferred)
 		{
 			m_Rtvs.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kRtv,
-				handle.idx,
-				currentFenceValue);
+			RetireDeferred(PendingType::kRtv, handle.idx);
 		}
 		else
 		{
@@ -456,20 +448,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyBuffer(
-		BufferHandle handle,
-		uint64_t     currentFenceValue,
-		bool         deferred) noexcept
+	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
 		if (deferred)
 		{
 			m_CbvSrvUavSlots.retire_slot(handle.slot);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kCbvSrvUav,
-				handle.slot.index,
-				currentFenceValue);
+			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index);
 		}
 		else
 		{
@@ -478,10 +464,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyTexture(
-		TextureHandle handle,
-		uint64_t      currentFenceValue,
-		bool          deferred) noexcept
+	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
@@ -501,10 +484,9 @@ namespace bgl
 				m_Textures.retire_slot(handle.slot);
 			}
 
-			m_PendingDeletions.emplace_back(
-				isSrv ? PendingDeletion::Type::kCbvSrvUav : PendingDeletion::Type::kTexture,
-				handle.slot.index,
-				currentFenceValue);
+			RetireDeferred(
+				isSrv ? PendingType::kCbvSrvUav : PendingType::kTexture,
+				handle.slot.index);
 		}
 		else if (isSrv)
 		{
@@ -517,20 +499,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroySampler(
-		SamplerHandle handle,
-		uint64_t      currentFenceValue,
-		bool          deferred) noexcept
+	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
 
 		if (deferred)
 		{
 			m_Samplers.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kSampler,
-				handle.idx,
-				currentFenceValue);
+			RetireDeferred(PendingType::kSampler, handle.idx);
 		}
 		else
 		{
@@ -539,20 +515,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyReadbackBuffer(
-		ReadbackBufferHandle handle,
-		uint64_t             currentFenceValue,
-		bool                 deferred) noexcept
+	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback buffer handle");
 
 		if (deferred)
 		{
 			m_ReadbackBuffers.retire_slot(handle.slot.index);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kReadback,
-				handle.slot.index,
-				currentFenceValue);
+			RetireDeferred(PendingType::kReadback, handle.slot.index);
 		}
 		else
 		{
@@ -561,37 +531,131 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue) noexcept
+	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
-		// The slots were retired when the destroy was recorded, so their handles have been stale
-		// since then. This half destroys the resource and returns the index to the free list.
-		std::erase_if(m_PendingDeletions, [&](const auto& pending) {
-			if (pending.fenceValue <= completedFenceValue)
+		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
+		gassert(
+			m_RegisteredQueues.size() < c_MaxRegisteredQueues,
+			"More than c_MaxRegisteredQueues submission timelines registered");
+		m_RegisteredQueues.push_back(queue);
+	}
+
+	void
+	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
+	{
+		for (uint32_t i = 0; i < m_RegisteredQueues.size(); ++i)
+		{
+			if (m_RegisteredQueues[i] == queue)
 			{
-				switch (pending.type)
+				m_RegisteredQueues[i] = m_RegisteredQueues.back();
+				m_RegisteredQueues.pop_back();
+				break;
+			}
+		}
+
+		// The queue has drained (its owner flushes before unregistering), so it no longer gates any
+		// pending free. Drop it from every batch's gate so no gate outlives the queue's registration
+		// -- otherwise a freed queue's pointer would linger in a gate and, if its address were reused
+		// by a later queue, alias it. A batch left with an empty gate is reclaimed on the next
+		// cleanup. Each queue appears at most once per gate.
+		for (PendingDeletionBatch& batch : m_PendingBatches)
+		{
+			for (uint32_t i = 0; i < batch.gate.size(); ++i)
+			{
+				if (batch.gate[i].queue == queue)
 				{
-				case PendingDeletion::Type::kCbvSrvUav:
-					m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kRtv:
-					m_Rtvs.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kDsv:
-					m_Dsvs.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kTexture:
-					m_Textures.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kReadback:
-					m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kSampler:
-					m_Samplers.reclaim_slot(pending.slotIndex);
+					batch.gate[i] = batch.gate.back();
+					batch.gate.pop_back();
 					break;
 				}
-				return true;
 			}
-			return false;
+		}
+	}
+
+	DeletionGate
+	ResourceManager::CaptureGate() const noexcept
+	{
+		auto gate = DeletionGate();
+		for (ICommandQueue* queue : m_RegisteredQueues)
+		{
+			gate.push_back({ queue, queue->GetNextFenceValue() });
+		}
+		return gate;
+	}
+
+	void
+	ResourceManager::RetireDeferred(PendingType type, uint32_t slotIndex) noexcept
+	{
+		const DeletionGate gate = CaptureGate();
+
+		// Coalesce with the most recent batch when the gate has not moved -- fences only advance, so
+		// consecutive destroys within a frame share one gate rather than each storing a copy.
+		if (m_PendingBatches.empty() || !std::ranges::equal(m_PendingBatches.back().gate, gate))
+		{
+			m_PendingBatches.push_back({ gate, {} });
+		}
+		m_PendingBatches.back().deletions.push_back({ type, slotIndex });
+	}
+
+	void
+	ResourceManager::CleanupExpiredResources() noexcept
+	{
+		// Poll each queue once, not per pending deletion.
+		auto completed = core::static_vector<QueueGate, c_MaxRegisteredQueues>();
+		for (ICommandQueue* queue : m_RegisteredQueues)
+		{
+			completed.push_back({ queue, queue->PollCurrentFenceValue() });
+		}
+
+		const auto isCleared = [&](const QueueGate& entry) {
+			for (const auto& [queue, value] : completed)
+			{
+				if (queue == entry.queue)
+				{
+					return value >= entry.fenceValue;
+				}
+			}
+			// The gated queue is no longer registered: its context flushed and went away, so the
+			// work that could have referenced this resource has completed.
+			return true;
+		};
+
+		const auto reclaim = [&](const PendingDeletion& pending) {
+			switch (pending.type)
+			{
+			case PendingType::kCbvSrvUav:
+				m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kRtv:
+				m_Rtvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kDsv:
+				m_Dsvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kTexture:
+				m_Textures.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kReadback:
+				m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kSampler:
+				m_Samplers.reclaim_slot(pending.slotIndex);
+				break;
+			}
+		};
+
+		// A batch's slots were retired when they were recorded, so their handles have been stale
+		// since then. Freeing the batch reclaims each index into its pool's free list.
+		std::erase_if(m_PendingBatches, [&](const PendingDeletionBatch& batch) {
+			if (!std::ranges::all_of(batch.gate, isCleared))
+			{
+				return false;
+			}
+			for (const PendingDeletion& pending : batch.deletions)
+			{
+				reclaim(pending);
+			}
+			return true;
 		});
 	}
 
@@ -916,20 +980,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyDsv(
-		DsvHandle handle,
-		uint64_t  currentFenceValue,
-		bool      deferred) noexcept
+	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidDsvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		if (deferred)
 		{
 			m_Dsvs.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kDsv,
-				handle.idx,
-				currentFenceValue);
+			RetireDeferred(PendingType::kDsv, handle.idx);
 		}
 		else
 		{

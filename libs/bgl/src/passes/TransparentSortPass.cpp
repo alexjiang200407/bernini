@@ -59,15 +59,15 @@ namespace bgl
 	}
 
 	void
-	TransparentSortPass::Release(uint64_t fenceVal, bool deferred)
+	TransparentSortPass::Release(bool deferred)
 	{
 		logger::trace("TransparentSortPass::Release");
 
 		m_DepthKeys.Reset();
 		m_Sort.Reset();
 
-		m_PartitionDispatchArgs.Release(fenceVal, deferred);
-		m_PartitionBase.Release(fenceVal, deferred);
+		m_PartitionDispatchArgs.Release(deferred);
+		m_PartitionBase.Release(deferred);
 	}
 
 	void

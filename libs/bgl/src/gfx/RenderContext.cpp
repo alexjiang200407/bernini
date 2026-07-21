@@ -121,6 +121,10 @@ namespace bgl
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager))
 	{
+		// This context's queue is one of the timelines a deferred destroy must clear before the
+		// resource manager reclaims a slot.
+		m_ResourceManager->RegisterQueue(m_CommandQueue.Get());
+
 		// The list and its allocator are the context's own -- one recorder per context, so two
 		// contexts can record concurrently. The queue is still shared with Graphics for now.
 		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
@@ -152,14 +156,16 @@ namespace bgl
 		logger::trace("~RenderContext");
 
 		// Idle the GPU so nothing in flight still references what the passes and the debug ring are
-		// about to release.
+		// about to release, then drop this queue from the resource manager's timeline set -- it has
+		// completed, so any remaining deferred free gated on it is now satisfiable.
 		m_CommandQueue->Flush();
-		const uint64_t shutdownFenceValue = m_CommandQueue->GetNextFenceValue();
+		m_ResourceManager->UnregisterQueue(m_CommandQueue.Get());
 
+		// The GPU is idle, so these frees are immediate (deferred = false), needing no gate.
 		m_Forward.Release();
 		m_Skybox.Release();
-		m_CompactInstances.Release(shutdownFenceValue, false);
-		m_TransparentSort.Release(shutdownFenceValue, false);
+		m_CompactInstances.Release(false);
+		m_TransparentSort.Release(false);
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The GPU is idle, so assertions from the final frames whose slot was never reused by a later
@@ -170,9 +176,9 @@ namespace bgl
 		}
 		for (auto& readback : m_DebugReadbacks)
 		{
-			m_ResourceManager->DestroyReadbackBuffer(readback, shutdownFenceValue, false);
+			m_ResourceManager->DestroyReadbackBuffer(readback, false);
 		}
-		m_DebugBuffer.Release(shutdownFenceValue, false);
+		m_DebugBuffer.Release(false);
 #endif
 
 		// Clear retained passes; each pass descriptor holds a resource-manager reference that would
@@ -469,8 +475,7 @@ namespace bgl
 
 		rt.PresentAndAdvance();
 
-		uint64_t currentGPUProgress = m_CommandQueue->PollCurrentFenceValue();
-		m_ResourceManager->CleanupExpiredResources(currentGPUProgress);
+		m_ResourceManager->CleanupExpiredResources();
 
 		m_ActiveTarget = nullptr;
 		m_FrameActive  = false;
@@ -506,7 +511,7 @@ namespace bgl
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_CommandList->Close();
 
-		rt.ResizeBackbuffers(width, height, m_CommandQueue->GetNextFenceValue());
+		rt.ResizeBackbuffers(width, height);
 	}
 
 	// The last presented backbuffer of `target`, read back into a tight RGBA8 image. Blocks on the
@@ -585,13 +590,13 @@ namespace bgl
 				texDesc.format);
 
 			m_ResourceManager->UnmapReadback(readback);
-			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+			m_ResourceManager->DestroyReadbackBuffer(readback, false);
 			return image;
 		}
 		catch (...)
 		{
 			m_ResourceManager->UnmapReadback(readback);
-			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);
+			m_ResourceManager->DestroyReadbackBuffer(readback, false);
 			throw;
 		}
 	}

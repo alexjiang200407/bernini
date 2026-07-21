@@ -332,8 +332,8 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		CHECK(mapped[8] == 999);
 
 		resourceManager->UnmapReadback(readback);
-		resourceManager->DestroyReadbackBuffer(readback, fence, false);
-		pb.Release(fence, false);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		pb.Release(false);
 
 		// The case-wide Close below expects an open list.
 		cmdList->Open(cmdQueue, cmdAllocator);

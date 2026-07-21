@@ -57,10 +57,11 @@ doc and a header disagree, trust the header, then fix this doc.
   dispatch/draw. Assigning a `BufferHandle` writes the resource's **descriptor index** into the
   slot (bindless).
 
-* **Lifetime is fence-based; destruction is deferred.** `ICommandQueue` owns a monotonic fence.
-  Every `Destroy*` takes the queue's current fence value and (by default) defers reclamation;
-  `CleanupExpiredResources(completedFenceValue)` frees what the GPU has finished with. This is
-  the primary safety mechanism against freeing in-flight resources.
+* **Lifetime is fence-based; destruction is deferred.** Every `Destroy*` (by default) defers
+  reclamation: the resource manager snapshots every *registered* submission queue's current fence
+  and frees the slot only once all of them pass it. `CleanupExpiredResources()` runs the sweep. A
+  context registers its queue via `RegisterQueue` so its timeline gates every deferred free; this is
+  the primary safety mechanism against freeing a resource still in flight on *any* queue.
 
 * **Barriers are owned by the FrameGraph, not pass code.** `ICommandList::Barrier(...)` exists
   but the FrameGraph computes and inserts all resource-state transitions. Pass code should
@@ -181,11 +182,16 @@ Everything else is self-explanatory from the header.
   `maxSamplers` heap (exhaustion → null handle) and follow the same deferred-destruction and
   generation rules as other resources. A `Sampler` has no `ID3D12Resource`, so it needs **no
   barriers and no state**; there is no readback or clear path for it.
-* **`Destroy*(handle, currentFenceValue, deferred = true)`** — pass the queue's *current*
-  (submitted) fence value. With `deferred == true` the resource is freed only once
-  `CleanupExpiredResources` runs with a completed value `>= currentFenceValue`. Passing
-  `deferred == false` frees immediately — **only safe when the GPU is idle for that resource.**
-  The handle's generation is bumped either way; stale copies then fail validation.
+* **`Destroy*(handle, deferred = true)`** — no fence value to pass: with `deferred == true` the
+  manager captures the gate itself (a snapshot of every registered queue's next fence) and the
+  resource is freed once `CleanupExpiredResources` sees all of them pass. Passing `deferred == false`
+  frees immediately — **only safe when the GPU is idle for that resource** (e.g. after a `Flush`
+  during resize or teardown). The handle's generation is bumped either way; stale copies then fail
+  validation.
+* **`RegisterQueue` / `UnregisterQueue`** — a context registers its queue so that its timeline gates
+  every subsequent deferred free; it unregisters (after flushing) before the queue is destroyed. A
+  gate entry whose queue is no longer registered counts as cleared — that timeline has drained. With
+  a single registered queue this reduces to the old scalar behaviour.
 * **`Get*(handle)`** — precondition: `handle` is valid. Returns a reference into
   manager-owned storage that is **invalidated when the resource is destroyed**; do not cache it
   across a destroy. Validate first with `Valid*Handle` if unsure.
@@ -277,6 +283,8 @@ CommandQueueRef     queue  = device->CreateGraphicsCommandQueue();
 CommandAllocatorRef alloc  = device->CreateCommandAllocator();
 CommandListRef      cmd    = device->CreateCommandList({QueueType::kGraphics}, alloc, rm);
 
+rm->RegisterQueue(queue.Get());                             // gate deferred frees on this timeline
+
 ComputeKernel kernel = device->CreateComputeKernel(
     ComputePipelineDesc()
         .SetShader(device->CreateShader("Histogram"))
@@ -295,7 +303,7 @@ cmd->Dispatch(core::div_ceil(instanceCount, 256), 1, 1);
 cmd->Close();
 uint64_t fence = queue->ExecuteCommandList(cmd.Get());
 queue->WaitForFenceCPUBlocking(fence);                      // only if the CPU needs the results now
-rm->CleanupExpiredResources(queue->PollCurrentFenceValue());
+rm->CleanupExpiredResources();                              // polls every registered queue
 ```
 
 For a full runnable example, see

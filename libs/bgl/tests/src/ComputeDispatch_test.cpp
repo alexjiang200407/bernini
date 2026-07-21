@@ -95,8 +95,8 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyBuffer(outBuf, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(outBuf, false);
 }
 
 // A mixed cbuffer (float3 + scalar + handle) puts the bindless handle at a non-zero,
@@ -183,6 +183,6 @@ TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[c
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyBuffer(outBuf, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(outBuf, false);
 }

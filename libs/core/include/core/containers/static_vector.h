@@ -70,7 +70,7 @@ namespace core
 		iterator
 		end() noexcept
 		{
-			return iterator(begin()) + current_size;
+			return iterator(begin()) + static_cast<difference_type>(current_size);
 		}
 		const_iterator
 		end() const noexcept
@@ -80,7 +80,7 @@ namespace core
 		const_iterator
 		cend() const noexcept
 		{
-			return const_iterator(cbegin()) + current_size;
+			return const_iterator(cbegin()) + static_cast<difference_type>(current_size);
 		}
 
 		bool

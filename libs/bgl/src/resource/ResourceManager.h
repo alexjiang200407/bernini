@@ -83,49 +83,55 @@ namespace bgl
 		virtual ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept = 0;
 
-		virtual void
-		DestroyBuffer(
-			BufferHandle handle,
-			uint64_t     currentFenceValue,
-			bool         deferred = true) noexcept = 0;
-
-		virtual void
-		DestroyTexture(
-			TextureHandle handle,
-			uint64_t      currentFenceValue,
-			bool          deferred = true) noexcept = 0;
-
 		/**
-		 * Destroys a texture once every frame that could still be sampling it has retired.
+		 * Registers a submission queue as one of the timelines a deferred destroy must clear before
+		 * its resource is reclaimed. Each context registers its own queue; the manager snapshots
+		 * every registered queue at destroy time and frees a resource only once all of them pass.
 		 *
-		 * For callers that own resources but not the submission timeline: the resource manager
-		 * resolves the fence to wait on itself, so there is no value to get wrong and nothing to
-		 * keep up to date. Prefer this to the explicit-fence overload, which exists for the few
-		 * callers (render targets) that already know the fence their resources are tied to.
+		 * @pre the queue outlives its registration -- unregister before it is destroyed.
 		 */
 		virtual void
-		DestroyTexture(TextureHandle handle) noexcept = 0;
+		RegisterQueue(ICommandQueue* queue) noexcept = 0;
+
+		/**
+		 * Removes a queue from the timeline set. Its context has flushed and is going away, so any
+		 * pending free still gated on it is now satisfiable -- CleanupExpiredResources treats a gate
+		 * entry whose queue is no longer registered as complete.
+		 */
+		virtual void
+		UnregisterQueue(ICommandQueue* queue) noexcept = 0;
+
+		/**
+		 * Destroys a resource. `deferred` (the default) retires it now -- staling every handle at
+		 * once -- and reclaims the slot only after every registered queue passes the fence it was at
+		 * when this was called; the manager resolves those fences itself, so there is no value to get
+		 * wrong. `deferred = false` frees immediately and is only safe when the GPU is already idle
+		 * for the resource (e.g. after a Flush during resize or teardown).
+		 */
+		virtual void
+		DestroyBuffer(BufferHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
-		DestroySampler(
-			SamplerHandle handle,
-			uint64_t      currentFenceValue,
-			bool          deferred = true) noexcept = 0;
+		DestroyTexture(TextureHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
-		DestroyReadbackBuffer(
-			ReadbackBufferHandle handle,
-			uint64_t             currentFenceValue,
-			bool                 deferred = true) noexcept = 0;
+		DestroySampler(SamplerHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred = true) noexcept = 0;
+		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
-		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred = true) noexcept = 0;
+		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
-		CleanupExpiredResources(uint64_t completedFenceValue) noexcept = 0;
+		DestroyDsv(DsvHandle handle, bool deferred = true) noexcept = 0;
+
+		/**
+		 * Reclaims every deferred-destroyed resource whose gate has cleared on all registered queues.
+		 * Polls each queue once; call it periodically (each frame's EndFrame does).
+		 */
+		virtual void
+		CleanupExpiredResources() noexcept = 0;
 
 		[[nodiscard]]
 		virtual RtvHandle

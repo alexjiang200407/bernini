@@ -125,7 +125,8 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 
 		// Stand in for the GPU reaching the fence the release was scheduled against. Now the index
 		// returns to the free list, and the next texture reuses it.
-		resourceManager->CleanupExpiredResources(std::numeric_limits<uint64_t>::max());
+		gfxBase->WaitIdle();
+		resourceManager->CleanupExpiredResources();
 
 		const bgl::TextureAssetHandle recycled =
 			scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
@@ -144,7 +145,8 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 		// abort the process a frame later, far from here.
 		REQUIRE_THROWS_AS(scene->DeleteTextureAsset(texture), bgl::SceneError);
 
-		resourceManager->CleanupExpiredResources(std::numeric_limits<uint64_t>::max());
+		gfxBase->WaitIdle();
+		resourceManager->CleanupExpiredResources();
 		CHECK_FALSE(resourceManager->ValidTextureHandle(gpuTexture));
 	}
 

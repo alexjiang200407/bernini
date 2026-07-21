@@ -8,6 +8,7 @@
 #include "resource/Sampler_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <core/containers/slot_vector.h>
+#include <core/containers/static_vector.h>
 
 namespace bgl
 {
@@ -16,30 +17,51 @@ namespace bgl
 	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
 	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
 
+	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
+	// expected over one device. Exceeding it asserts; it is not a hard device limit.
+	constexpr uint32_t c_MaxRegisteredQueues = 8;
+
+	// One registered queue and the fence value it was at when a resource was retired against it.
+	struct QueueGate
+	{
+		ICommandQueue* queue      = nullptr;
+		uint64_t       fenceValue = 0;
+
+		bool
+		operator==(const QueueGate&) const noexcept = default;
+	};
+
+	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
+
+	enum class PendingType
+	{
+		kCbvSrvUav,
+		kRtv,
+		kDsv,
+		kTexture,
+		kReadback,
+		kSampler,
+	};
+
 	struct PendingDeletion
 	{
-		enum class Type
-		{
-			kCbvSrvUav,
-			kRtv,
-			kDsv,
-			kTexture,
-			kReadback,
-			kSampler,
-		};
+		PendingType type      = PendingType::kCbvSrvUav;
+		uint32_t    slotIndex = 0xFFFFFFFF;
+	};
 
-		Type     type       = Type::kCbvSrvUav;
-		uint32_t slotIndex  = 0xFFFFFFFF;
-		uint64_t fenceValue = 0;
+	// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
+	// snapshot the same registered-queue fences, so they batch under one gate rather than each
+	// carrying its own copy. Freed as a group once every queue in `gate` passes.
+	struct PendingDeletionBatch
+	{
+		DeletionGate                 gate;
+		std::vector<PendingDeletion> deletions;
 	};
 
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
-		ResourceManager(
-			wrl::ComPtr<ID3D12Device>  device,
-			const ResourceManagerDesc& desc,
-			CommandQueueRef            submissionQueue);
+		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);
 
 		ResourceManager(const ResourceManager&)     = delete;
 		ResourceManager(ResourceManager&&) noexcept = delete;
@@ -107,34 +129,31 @@ namespace bgl
 		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
 
 		void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
+		RegisterQueue(ICommandQueue* queue) noexcept override;
 
 		void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		UnregisterQueue(ICommandQueue* queue) noexcept override;
 
 		void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroyTexture(TextureHandle handle) noexcept override
-		{
-			DestroyTexture(handle, m_SubmissionQueue->GetNextFenceValue(), true);
-		}
+		DestroyBuffer(BufferHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroySampler(SamplerHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		DestroyTexture(TextureHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroyReadbackBuffer(
-			ReadbackBufferHandle handle,
-			uint64_t             currentFenceValue,
-			bool                 deferred) noexcept override;
+		DestroySampler(SamplerHandle handle, bool deferred = true) noexcept override;
 
 		void
-		CleanupExpiredResources(uint64_t completedFenceValue) noexcept override;
+		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyDsv(DsvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		CleanupExpiredResources() noexcept override;
 
 		[[nodiscard]]
 		bool
@@ -236,10 +255,17 @@ namespace bgl
 		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
 			override;
 
-		void
-		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
-
 	private:
+		// Snapshots every registered queue's next fence value -- the gate a deferred destroy recorded
+		// now must clear before its slot is reclaimed.
+		[[nodiscard]] DeletionGate
+		CaptureGate() const noexcept;
+
+		// Records a retired slot for deferred reclamation, appending it to the batch that shares the
+		// current gate (or opening a new batch when the gate has advanced).
+		void
+		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
+
 		wrl::ComPtr<ID3D12Device>         m_Device;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
@@ -272,11 +298,13 @@ namespace bgl
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 
-		core::slot_vector<Rtv>       m_Rtvs;
-		core::slot_vector<Dsv>       m_Dsvs;
-		std::vector<PendingDeletion> m_PendingDeletions;
+		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
+		std::vector<PendingDeletionBatch> m_PendingBatches;
 
-		// The queue every command list is submitted on
-		CommandQueueRef m_SubmissionQueue;
+		// The submission timelines a deferred destroy must clear. Borrowed: a context registers its
+		// queue on construction and unregisters before the queue dies. Capped at the same bound as a
+		// gate, so registration fails here rather than when CaptureGate would overflow.
+		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
 	};
 }

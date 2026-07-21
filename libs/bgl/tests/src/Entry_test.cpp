@@ -283,8 +283,8 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		CHECK(mapped[8] == 999);
 
 		resourceManager->UnmapReadback(readback);
-		resourceManager->DestroyReadbackBuffer(readback, fence, false);
-		entryBuffer.Release(fence, false);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		entryBuffer.Release(false);
 
 		// The case-wide Close below expects an open list.
 		cmdList->Open(cmdQueue, cmdAllocator);

@@ -257,8 +257,8 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		}
 
 		resourceManager->UnmapReadback(readback);
-		resourceManager->DestroyReadbackBuffer(readback, fence, false);
-		rb.Release(fence, false);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		rb.Release(false);
 
 		// The case-wide Close below expects an open list.
 		cmdList->Open(cmdQueue, cmdAllocator);
