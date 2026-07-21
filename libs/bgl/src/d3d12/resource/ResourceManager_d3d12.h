@@ -166,6 +166,9 @@ namespace bgl
 		const Texture&
 		GetTexture(TextureHandle handle) const noexcept override;
 
+		TextureDesc
+		GetTextureDesc(TextureHandle handle) const noexcept override;
+
 		const Sampler&
 		GetSampler(SamplerHandle handle) const noexcept override;
 

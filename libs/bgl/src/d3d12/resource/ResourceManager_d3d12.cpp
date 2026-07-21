@@ -693,6 +693,12 @@ namespace bgl
 		return m_Textures[handle.slot];
 	}
 
+	TextureDesc
+	ResourceManager::GetTextureDesc(TextureHandle handle) const noexcept
+	{
+		return GetTexture(handle).GetDesc();
+	}
+
 	const Sampler&
 	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
 	{

@@ -34,17 +34,15 @@ namespace bgl
 	{
 		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
 		bool
-		isBgra(uint32_t dxgiFormat)
+		isBgra(Format format)
 		{
-			return dxgiFormat == 87 /* DXGI_FORMAT_B8G8R8A8_UNORM */ ||
-			       dxgiFormat == 91 /* DXGI_FORMAT_B8G8R8A8_UNORM_SRGB */;
+			return format == Format::BGRA8_UNORM || format == Format::SBGRA8_UNORM;
 		}
 
 		bool
-		isSrgb(uint32_t dxgiFormat)
+		isSrgb(Format format)
 		{
-			return dxgiFormat == 29 /* DXGI_FORMAT_R8G8B8A8_UNORM_SRGB */ ||
-			       dxgiFormat == 91 /* DXGI_FORMAT_B8G8R8A8_UNORM_SRGB */;
+			return format == Format::SRGBA8_UNORM || format == Format::SBGRA8_UNORM;
 		}
 
 		// A mapped GPU readback as an RGBA8 image: drops the padding D3D12 aligns each row to, and
@@ -56,7 +54,7 @@ namespace bgl
 			size_t         rowPitch,
 			uint32_t       width,
 			uint32_t       height,
-			uint32_t       dxgiFormat)
+			Format         format)
 		{
 			if (src == nullptr)
 			{
@@ -73,12 +71,12 @@ namespace bgl
 			auto image     = assetlib::ImageData();
 			image.width    = width;
 			image.height   = height;
-			image.vkFormat = isSrgb(dxgiFormat) ? assetlib::VkFormat::R8G8B8A8_SRGB :
-			                                      assetlib::VkFormat::R8G8B8A8_UNORM;
+			image.vkFormat = isSrgb(format) ? assetlib::VkFormat::R8G8B8A8_SRGB :
+			                                  assetlib::VkFormat::R8G8B8A8_UNORM;
 			image.pixels   = core::fixed_buffer<std::byte>(tightPitch * height);
 			image.subresources.push_back({ 0, tightPitch, tightPitch * height });
 
-			const bool bgra = isBgra(dxgiFormat);
+			const bool bgra = isBgra(format);
 			auto*      dst  = reinterpret_cast<uint8_t*>(image.pixels.data());
 
 			for (uint32_t y = 0; y < height; ++y)
@@ -797,7 +795,7 @@ namespace bgl
 
 		// Idle the GPU so no in-flight frame still references the render targets we
 		// are about to release.
-		m_CommandQueue->As<CommandQueue>()->Flush();
+		m_CommandQueue->Flush();
 
 		// Reset the command list so it drops its references to the old backbuffers;
 		// the swap chain cannot be resized while any reference to them is alive.
@@ -906,11 +904,7 @@ namespace bgl
 		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 		m_CommandQueue->WaitForFenceCPUBlocking(fence);
 
-		auto resource = m_ResourceManager->GetTexture(textureHandle).GetD3D12Resource();
-
-		gassert(resource != nullptr, "Screenshot failed to get D3D12Resource from texture handle");
-
-		auto resourceDesc = resource->GetDesc();
+		const TextureDesc texDesc = m_ResourceManager->GetTextureDesc(textureHandle);
 
 		const void* mapped = m_ResourceManager->MapReadback(readback);
 
@@ -919,9 +913,9 @@ namespace bgl
 			auto image = readbackToImage(
 				static_cast<const uint8_t*>(mapped) + layout.offset,
 				static_cast<size_t>(layout.rowPitch),
-				static_cast<uint32_t>(resourceDesc.Width),
-				static_cast<uint32_t>(resourceDesc.Height),
-				static_cast<uint32_t>(resourceDesc.Format));
+				texDesc.width,
+				texDesc.height,
+				texDesc.format);
 
 			m_ResourceManager->UnmapReadback(readback);
 			m_ResourceManager->DestroyReadbackBuffer(readback, fence, false);

@@ -40,7 +40,7 @@ namespace bgl
 		logger::trace("~RenderTarget");
 
 		// Idle the GPU so no in-flight frame still references the backbuffers we free.
-		m_CommandQueue->As<CommandQueue>()->Flush();
+		m_CommandQueue->Flush();
 
 		if (m_SwapChain)
 		{

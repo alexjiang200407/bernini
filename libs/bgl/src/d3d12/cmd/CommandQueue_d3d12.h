@@ -68,7 +68,7 @@ namespace bgl
 		WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept override;
 
 		void
-		Flush() noexcept;
+		Flush() noexcept override;
 
 	private:
 		QueueType                       m_Type;

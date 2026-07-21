@@ -174,6 +174,10 @@ namespace
 		void
 		WaitForFenceCPUBlocking(uint64_t) noexcept override
 		{}
+
+		void
+		Flush() noexcept override
+		{}
 	};
 
 	// A ResourceManager that only resolves attachment views to textures; the rest
@@ -303,6 +307,12 @@ namespace
 		GetTexture(TextureHandle) const noexcept override
 		{
 			std::abort();
+		}
+
+		TextureDesc
+		GetTextureDesc(TextureHandle) const noexcept override
+		{
+			return {};
 		}
 
 		const Sampler&
