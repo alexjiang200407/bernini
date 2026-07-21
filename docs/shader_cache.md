@@ -25,7 +25,8 @@ when this doc disagrees, trust the source, then fix this doc.
   holds DXIL bytecode + serialized reflection for one PSO's shader composition, skipping the entire
   Slang pipeline (front-end parse + DXIL codegen). The *pipeline library* (`<dir>/pipelines.psolib`,
   an `ID3D12PipelineLibrary`) holds driver-compiled PSOs, skipping the driver's DXIL→GPU-ISA
-  compile. A warm launch that hits both touches neither Slang nor the driver compiler.
+  compile. A warm launch that hits both touches neither Slang nor the driver compiler — except
+  under GPU-based validation, which drops the pipeline library entirely (see Risky Contracts).
 
 * **Module loading is lazy so a hit never parses source.** `IShader` no longer loads its Slang
   module in its constructor; `GetSlangModule()` compiles on first call, which only happens on a
@@ -90,6 +91,9 @@ flowchart TD
     CREATE --> PSO
 ```
 
+Under GPU-based validation the `PLIB` layer is absent: no pipeline library exists, so every PSO
+takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
+
 ---
 
 ## Risky / Non-obvious Contracts
@@ -114,6 +118,14 @@ flowchart TD
   to `CreatePipelineState`, so it never affects correctness — but do not assert that a warm run
   leaves `pipelines.psolib` unrewritten. The program cache (`.bsc`), by contrast, is deterministic
   and *is* safe to assert on.
+
+* **The pipeline library is disabled under GPU-based validation.** A PSO replayed from the library
+  carries the instrumentation it was built with, so replaying one into a GBV-enabled device would
+  skip the shader patching that run exists to apply. When `enableGPUValidationLayer` is on, the
+  `ShaderCache` is constructed with `usePipelineLibrary=false` and no `pipelines.psolib` is created
+  or read; every PSO goes through `CreatePipelineState`. The program cache (`.bsc`) is unaffected —
+  the DXIL is identical either way — so only the driver's DXIL→ISA compile is repaid, not the Slang
+  front-end.
 
 * **`GetSlangModule()` is a lazy, memoizing const getter** (`mutable` module handle). @pre it may
   front-end-compile on first call (the slow path) and `gfatal` on a shader error; it does nothing on
