@@ -267,7 +267,7 @@ namespace bgl
 		bool m_FrameActive = false;
 
 		// The render target bound by the current BeginFrame (null outside a frame).
-		RenderTarget* m_ActiveTarget = nullptr;
+		RenderTargetBase* m_ActiveTarget = nullptr;
 
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
@@ -503,7 +503,7 @@ namespace bgl
 		}
 		m_DebugReadbackPending[index] = false;
 
-		// Not the caller's rt.m_FenceValues[index]: that gates the caller's own last frame at this
+		// Not the caller's rt.FrameFence(index): that gates the caller's own last frame at this
 		// slot, which says nothing about a copy another target submitted into the same slot. A target
 		// that has never drawn here has no fence at all, so BeginFrame waits on nothing and would map
 		// a buffer the GPU is still writing.
@@ -585,13 +585,13 @@ namespace bgl
 			throw GraphicsError("BeginFrame called while a frame is already active");
 		}
 
-		m_ActiveTarget = target->As<RenderTarget>();
+		m_ActiveTarget = target->As<RenderTargetBase>();
 		gassert(m_ActiveTarget != nullptr, "BeginFrame requires a valid RenderTarget");
 
-		RenderTarget& rt    = *m_ActiveTarget;
-		const UINT    index = rt.m_FrameIndex;
+		RenderTargetBase& rt    = *m_ActiveTarget;
+		const uint32_t    index = rt.FrameIndex();
 
-		uint64_t fenceToWaitOn = rt.m_FenceValues[index];
+		uint64_t fenceToWaitOn = rt.FrameFence(index);
 		if (fenceToWaitOn != 0)
 		{
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
@@ -603,9 +603,9 @@ namespace bgl
 		InspectDebugSlot(index);
 #endif
 
-		rt.m_CommandAllocator[index]->ResetAllocator();
+		rt.FrameAllocator(index)->ResetAllocator();
 
-		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
+		m_CommandList->Open(m_CommandQueue.Get(), rt.FrameAllocator(index));
 
 #if defined(BERNINI_GPU_DEBUG)
 		// Zero the debug buffer's header for this frame, hand it to the shaders as a UAV,
@@ -630,21 +630,18 @@ namespace bgl
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
-			rt.m_BackBuffers[index].textureHandle,
+			rt.BackbufferTexture(index),
 			AccessState{ BarrierSyncFlag::kNone,
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
 		const std::array<ClearPass::ColorTarget, 1> colorTargets{
 			{ { std::string(c_BackbufferName),
-			    rt.m_BackBuffers[index].rtvHandle,
+			    rt.BackbufferRtv(index),
 			    { 0.0f, 0.0f, 0.0f, 1.0f } } }
 		};
-		ClearPass().AttachToFrameGraph(
-			m_FrameGraph,
-			m_ResourceManager.Get(),
-			colorTargets,
-			rt.m_DepthBuffer.dsvHandle);
+		ClearPass()
+			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, rt.DepthDsv());
 
 		m_FrameActive = true;
 	}
@@ -674,14 +671,13 @@ namespace bgl
 		scene_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		view_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw     = DrawData();
-		draw.drawIdx  = drawIdx;
-		draw.view     = job.view;
-		draw.viewport = viewport;
-		draw.viewProj = viewProj;
-		draw.backBufferHandle =
-			m_ActiveTarget->m_BackBuffers[m_ActiveTarget->m_FrameIndex].rtvHandle;
-		draw.depthBufferHandle = m_ActiveTarget->m_DepthBuffer.dsvHandle;
+		auto draw              = DrawData();
+		draw.drawIdx           = drawIdx;
+		draw.view              = job.view;
+		draw.viewport          = viewport;
+		draw.viewProj          = viewProj;
+		draw.backBufferHandle  = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
+		draw.depthBufferHandle = m_ActiveTarget->DepthDsv();
 		draw.backBufferName    = std::string(c_BackbufferName);
 
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
@@ -724,8 +720,8 @@ namespace bgl
 			throw GraphicsError("EndFrame called without a matching BeginFrame");
 		}
 
-		RenderTarget& rt    = *m_ActiveTarget;
-		const UINT    index = rt.m_FrameIndex;
+		RenderTargetBase& rt    = *m_ActiveTarget;
+		const uint32_t    index = rt.FrameIndex();
 
 		m_FrameGraph.SetResourceNamespace("");
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
@@ -762,32 +758,18 @@ namespace bgl
 
 		m_CommandList->Close();
 
-		rt.m_FenceValues[index] = m_CommandQueue->ExecuteCommandList(m_CommandList);
+		const uint64_t frameFence = m_CommandQueue->ExecuteCommandList(m_CommandList);
+		rt.SetFrameFence(index, frameFence);
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The readback copy rode the list just submitted, so this is what gates it.
-		m_DebugReadbackFence[index] = rt.m_FenceValues[index];
+		m_DebugReadbackFence[index] = frameFence;
 #endif
 
-		if (!rt.m_Headless)
-		{
-			rt.m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
-		}
+		rt.PresentAndAdvance();
 
 		uint64_t currentGPUProgress = m_CommandQueue->PollCurrentFenceValue();
 		m_ResourceManager->CleanupExpiredResources(currentGPUProgress);
-
-		// Remember which backbuffer just received the frame before advancing.
-		rt.m_LastPresentedIndex = index;
-
-		if (rt.m_Headless)
-		{
-			rt.m_FrameIndex = (index + 1) % c_SwapchainImageCount;
-		}
-		else
-		{
-			rt.m_FrameIndex = rt.m_SwapChain->GetCurrentBackBufferIndex();
-		}
 
 		m_ActiveTarget = nullptr;
 		m_FrameActive  = false;
@@ -806,10 +788,9 @@ namespace bgl
 			throw GraphicsError("Resize dimensions must be non-zero");
 		}
 
-		RenderTarget& rt = *target->As<RenderTarget>();
+		RenderTargetBase& rt = *target->As<RenderTargetBase>();
 
-		if (static_cast<uint32_t>(rt.m_Width) == width &&
-		    static_cast<uint32_t>(rt.m_Height) == height)
+		if (rt.GetWidth() == width && rt.GetHeight() == height)
 		{
 			return;
 		}
@@ -824,38 +805,7 @@ namespace bgl
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_CommandList->Close();
 
-		rt.DestroyRenderTargets(m_CommandQueue->GetNextFenceValue());
-
-		rt.m_Width  = static_cast<int>(width);
-		rt.m_Height = static_cast<int>(height);
-
-		if (!rt.m_Headless)
-		{
-			rt.m_SwapChain->ResizeBuffers(
-				c_SwapchainImageCount,
-				width,
-				height,
-				DXGI_FORMAT_B8G8R8A8_UNORM,
-				0) >>
-				d3d12ErrChecker;
-
-			rt.m_FrameIndex = rt.m_SwapChain->GetCurrentBackBufferIndex();
-			rt.CreateRenderTargets();
-		}
-		else
-		{
-			rt.m_FrameIndex = 0;
-			rt.CreateOffscreenRenderTargets();
-		}
-
-		// The GPU is idle and the backbuffers were re-indexed: drop the stale
-		// per-frame fences so the next BeginFrame does not wait on them.
-		for (auto& fenceValue : rt.m_FenceValues)
-		{
-			fenceValue = 0;
-		}
-
-		rt.m_LastPresentedIndex = rt.m_FrameIndex;
+		rt.ResizeBackbuffers(width, height, m_CommandQueue->GetNextFenceValue());
 	}
 
 	void CALLBACK
@@ -905,15 +855,15 @@ namespace bgl
 				std::format("{} cannot be called between BeginFrame and EndFrame", caller));
 		}
 
-		RenderTarget& rt = *target->As<RenderTarget>();
+		RenderTargetBase& rt = *target->As<RenderTargetBase>();
 
-		const UINT    index         = rt.m_LastPresentedIndex;
-		TextureHandle textureHandle = rt.m_BackBuffers[index].textureHandle;
+		const uint32_t index         = rt.LastPresentedIndex();
+		TextureHandle  textureHandle = rt.BackbufferTexture(index);
 
 		// Make sure the frame that produced this backbuffer has finished.
-		if (rt.m_FenceValues[index] != 0)
+		if (rt.FrameFence(index) != 0)
 		{
-			m_CommandQueue->WaitForFenceCPUBlocking(rt.m_FenceValues[index]);
+			m_CommandQueue->WaitForFenceCPUBlocking(rt.FrameFence(index));
 		}
 
 		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
@@ -924,8 +874,8 @@ namespace bgl
 
 		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
 
-		rt.m_CommandAllocator[index]->ResetAllocator();
-		m_CommandList->Open(m_CommandQueue.Get(), rt.m_CommandAllocator[index].Get());
+		rt.FrameAllocator(index)->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), rt.FrameAllocator(index));
 
 		{
 			auto barrier = TextureBarrierDesc();

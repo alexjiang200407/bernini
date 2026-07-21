@@ -195,6 +195,62 @@ namespace bgl
 	}
 
 	void
+	RenderTarget::PresentAndAdvance() noexcept
+	{
+		const UINT index = m_FrameIndex;
+
+		if (!m_Headless)
+		{
+			m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+		}
+
+		// Recorded before advancing: a readback samples the frame that was just presented, not the
+		// one about to be recorded.
+		m_LastPresentedIndex = index;
+
+		// The swapchain, not arithmetic, decides which backbuffer comes next when there is one.
+		m_FrameIndex = m_Headless ? (index + 1) % c_SwapchainImageCount :
+		                            m_SwapChain->GetCurrentBackBufferIndex();
+	}
+
+	void
+	RenderTarget::ResizeBackbuffers(uint32_t width, uint32_t height, uint64_t fenceValue)
+	{
+		DestroyRenderTargets(fenceValue);
+
+		m_Width  = static_cast<int>(width);
+		m_Height = static_cast<int>(height);
+
+		if (!m_Headless)
+		{
+			m_SwapChain->ResizeBuffers(
+				c_SwapchainImageCount,
+				width,
+				height,
+				DXGI_FORMAT_B8G8R8A8_UNORM,
+				0) >>
+				d3d12ErrChecker;
+
+			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+			CreateRenderTargets();
+		}
+		else
+		{
+			m_FrameIndex = 0;
+			CreateOffscreenRenderTargets();
+		}
+
+		// The backbuffers these fences described no longer exist, so the next frame must not wait
+		// on them.
+		for (auto& slotFence : m_FenceValues)
+		{
+			slotFence = 0;
+		}
+
+		m_LastPresentedIndex = m_FrameIndex;
+	}
+
+	void
 	RenderTarget::DestroyRenderTargets(uint64_t fenceValue)
 	{
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
