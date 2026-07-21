@@ -38,6 +38,8 @@ To pass arguments to a single suite, use `just run` instead, which also forwards
 
 import argparse
 import os
+import random
+import re
 import subprocess
 import sys
 import time
@@ -69,16 +71,51 @@ def supports_sharding(exe):
     return "--shard-count" in help_text
 
 
+def count_tests(exe, forward):
+    """How many test cases `exe` would run under the forwarded filter, or None if it can't be read.
+
+    Catch2 ends `--list-tests` with a summary line -- "N test cases" / "N matching test case(s)"
+    -- and that count is what --shard-count divides. Reading it lets the caller avoid handing a
+    shard zero tests, which Catch2 reports as a failure ("No tests ran").
+    """
+    try:
+        out = subprocess.run(
+            [exe, *forward, "--list-tests"], cwd=os.path.dirname(exe),
+            capture_output=True, text=True, timeout=120).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    for line in reversed(out.splitlines()):
+        m = re.search(r"(\d+)\s+(?:matching\s+)?test case", line)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def run_sharded(exe, forward, jobs):
     """Run `exe` as `jobs` concurrent shards; return the worst exit code.
+
+    All shards are pinned to one `--rng-seed`. This suite orders tests randomly by default, and
+    Catch2 partitions the *ordered* list -- so shards that each seeded themselves would shuffle
+    differently, and the slices would neither cover every test nor stay disjoint. A test landing
+    in two shards runs twice at once (they collided on a shared temp directory and failed with
+    "File open failed"); a test landing in none is silently skipped. One shared seed makes every
+    shard order the list identically, so the slices form a true partition. It is printed so a
+    failure can be reproduced. A seed the caller forwarded is left as-is.
 
     Each shard's output is captured and printed in shard order once it is all in. Interleaving
     N processes onto one console would otherwise shred the failure reports, which are the only
     part of the output anyone reads.
     """
+    seed_args = []
+    if not any(a == "--rng-seed" or a.startswith("--rng-seed=") for a in forward):
+        seed = random.randrange(1, 2**32)
+        seed_args = ["--rng-seed", str(seed)]
+        print(f"(sharding {jobs} ways, rng-seed {seed})", flush=True)
+
     procs = []
     for index in range(jobs):
-        cmd = [exe, *forward, "--shard-count", str(jobs), "--shard-index", str(index)]
+        cmd = [exe, *forward, *seed_args, "--shard-count", str(jobs), "--shard-index", str(index)]
         procs.append(subprocess.Popen(
             cmd, cwd=os.path.dirname(exe),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace"))
@@ -195,6 +232,16 @@ def main():
         jobs = max(1, args.jobs)
         if jobs > 1 and not supports_sharding(exe):
             jobs = 1
+
+        # Never make more shards than there are tests to run: Catch2 fails a shard that draws
+        # zero ("No tests ran"), so a small suite -- or any forwarded tag filter that matches
+        # few tests -- would report a spurious failure. Clamping keeps sharding transparent to
+        # the exit code: the suite exits as its single-process run would, only faster. A count
+        # we cannot read (None) leaves jobs alone rather than serialising a large suite.
+        if jobs > 1:
+            matching = count_tests(exe, forward)
+            if matching is not None:
+                jobs = max(1, min(jobs, matching))
 
         label = f" (x{jobs})" if jobs > 1 else ""
         print(f"\n=== {name}{label} ===", flush=True)
