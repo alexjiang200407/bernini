@@ -541,6 +541,24 @@ namespace bgl
 	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
 	{
 		std::erase(m_RegisteredQueues, queue);
+
+		// The queue has drained (its owner flushes before unregistering), so it no longer gates any
+		// pending free. Drop it from every batch's gate so no gate outlives the queue's registration
+		// -- otherwise a freed queue's pointer would linger in a gate and, if its address were reused
+		// by a later queue, alias it. A batch left with an empty gate is reclaimed on the next
+		// cleanup. Each queue appears at most once per gate.
+		for (PendingDeletionBatch& batch : m_PendingBatches)
+		{
+			for (uint32_t i = 0; i < batch.gate.size(); ++i)
+			{
+				if (batch.gate[i].queue == queue)
+				{
+					batch.gate[i] = batch.gate.back();
+					batch.gate.pop_back();
+					break;
+				}
+			}
+		}
 	}
 
 	DeletionGate
