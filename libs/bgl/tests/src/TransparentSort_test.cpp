@@ -12,6 +12,7 @@
 #include "types/ComputeState.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 
 namespace
@@ -34,6 +35,7 @@ TEST_CASE(
 	"[compute][transparentsort]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

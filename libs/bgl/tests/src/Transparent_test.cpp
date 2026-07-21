@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
+#include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -68,6 +69,7 @@ TEST_CASE(
 	"[transparent][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 
 	auto gfx = bgl::CreateGraphics(opts);
@@ -160,6 +162,7 @@ TEST_CASE(
 TEST_CASE("A self-occluding blend material hides the layers behind it", "[transparent][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 
 	auto gfx = bgl::CreateGraphics(opts);
@@ -240,6 +243,7 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 TEST_CASE("A loose blend material renders the same as the baked one", "[transparent][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
 
 	auto gfx = bgl::CreateGraphics(opts);

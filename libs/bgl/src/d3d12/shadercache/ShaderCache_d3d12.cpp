@@ -225,11 +225,19 @@ namespace bgl
 		constexpr const char* kPipelineLibraryFile = "pipelines.psolib";
 
 		// Writes via a temp file then renames, so a crash mid-write never leaves a
-		// half-written file that would later look valid.
+		// half-written file that would later look valid. The temp name carries the process
+		// id because several processes may share one cache directory -- a sharded test run
+		// does -- and a fixed name would let them write into each other's file.
 		bool
 		WriteFileAtomic(const std::filesystem::path& path, const std::byte* data, size_t size)
 		{
-			const std::filesystem::path tmp = path.string() + ".tmp";
+			static std::atomic<uint32_t> counter = 0;
+
+			const std::filesystem::path tmp = std::format(
+				"{}.{}.{}.tmp",
+				path.string(),
+				GetCurrentProcessId(),
+				counter.fetch_add(1, std::memory_order_relaxed));
 
 			std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
 			if (!out)
@@ -257,11 +265,15 @@ namespace bgl
 		ID3D12Device*                   device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,
-		const std::vector<std::string>& searchPaths) :
+		const std::vector<std::string>& searchPaths,
+		bool                            usePipelineLibrary) :
 		m_CacheDir(std::move(cacheDir)), m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
+
+		if (!usePipelineLibrary)
+			return;
 
 		wrl::ComPtr<ID3D12Device1> device1;
 		if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1))))

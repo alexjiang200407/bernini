@@ -1,3 +1,4 @@
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 
 // Exercises the caller-facing error contract of the exported interfaces:
@@ -11,6 +12,7 @@ namespace
 	HeadlessOptions()
 	{
 		auto opts             = bgl::GraphicsOptions();
+		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.enableDebugLayer = false;
 		return opts;
 	}

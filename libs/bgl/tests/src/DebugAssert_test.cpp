@@ -10,6 +10,7 @@
 #include "resource/ResourceManager.h"
 #include "types/ComputeState.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
@@ -142,6 +143,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	constexpr uint32_t kCapacity = 16;
 
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -270,6 +272,7 @@ namespace
 TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][render]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

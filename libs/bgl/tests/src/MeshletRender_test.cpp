@@ -10,6 +10,7 @@
 #include "types/Format.h"
 #include "types/MeshletState.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/Viewport.h>
 #include <catch2/catch_approx.hpp>
@@ -20,6 +21,7 @@
 TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
@@ -135,6 +137,7 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[meshlet]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
@@ -250,6 +253,7 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[meshlet]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;

@@ -9,6 +9,7 @@
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 
 // The first shader-correctness test: a compute kernel writes a known pattern into a bindless
@@ -18,6 +19,7 @@
 TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
@@ -102,6 +104,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[compute]")
 {
 	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer         = true;
 	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.enablePixDebug           = true;
