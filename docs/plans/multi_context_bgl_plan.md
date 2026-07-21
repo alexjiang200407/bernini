@@ -299,13 +299,39 @@ just the fence value (the latent bug from §1) — since it is dormant until a s
 
 ### S3 — `ResourceManager` multi-timeline safety
 
-Three pieces, all still under one context so they can be reviewed in isolation:
+**Most of S3 folds into S4, for the same reason S2's queue folded into S3.** Surveying the code
+after S2a found that the multi-timeline gate — the core of S3 — cannot be built or validated ahead
+of S4:
+
+* **The gate has no way to be exercised under one context.** With one queue the correct gate *is*
+  today's scalar `fenceValue`; the vector-of-`{queue, fenceValue}` only does anything with two
+  timelines, which is S4. Building it now means shipping a degenerate one-element version whose
+  N-timeline correctness — the entire point — no test can reach until the second context exists.
+* **The RM cannot be decoupled from its single queue without the gate.** The one-arg `Destroy`
+  reads `m_SubmissionQueue->GetNextFenceValue()` because the caller (`Scene`, no queue) has no
+  fence to give; removing that dependency requires the RM to answer "safe to free" itself — which
+  *is* the gate. So decoupling (which S2b needs) and the gate are one piece, and that piece needs
+  S4's second timeline to test.
+* Per-context sharding of `m_PendingDeletions` and the allocation mutex are likewise contention
+  machinery for concurrent producers that do not exist until S4.
+
+So the multi-timeline gate, the RM queue-decoupling, the sharding and the mutex **co-land with S4**,
+where the second context is both their first client and their only real test. This is the same
+pattern as the S2 finding: the plan's stage boundaries were finer than the code's dependency
+structure allows, and the honest cut is "build the machinery with the client that exercises it."
+
+**The one piece of S3 that genuinely stands alone (done):**
 
 1. **Pin pool stability with a test.** §1 establishes that fixed-capacity `slot_vector`s never
    reallocate, which is what licenses lock-free reads. That is currently a property of the
-   implementation, not a guaranteed one — add a `core_tests` case asserting `data()` is unchanged
-   across a full allocate/retire/reclaim cycle at capacity, so a future `slot_vector` change that
+   implementation, not a guaranteed one — a `core_tests` case now asserts `data()` is unchanged
+   across a full allocate/retire/reclaim cycle at capacity (twice over, at capacity, confirming
+   exhaustion returns null rather than growing), so a future `slot_vector` change that
    introduces growth fails loudly here rather than silently in a renderer race.
+
+**The machinery that co-lands with S4** (design recorded here, built and tested against the second
+context):
+
 2. **Shard `m_PendingDeletions` per context.** Each context keeps its own retirement list and sweeps
    its own. This removes the only multi-producer container in the design outright — the alternative,
    one shared list behind a lock, is contended by every context on every destroy for no benefit.
