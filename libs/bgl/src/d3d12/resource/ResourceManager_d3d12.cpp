@@ -439,7 +439,7 @@ namespace bgl
 		if (deferred)
 		{
 			m_Rtvs.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(PendingDeletion::Type::kRtv, handle.idx, CaptureGate());
+			RetireDeferred(PendingType::kRtv, handle.idx);
 		}
 		else
 		{
@@ -455,10 +455,7 @@ namespace bgl
 		if (deferred)
 		{
 			m_CbvSrvUavSlots.retire_slot(handle.slot);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kCbvSrvUav,
-				handle.slot.index,
-				CaptureGate());
+			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index);
 		}
 		else
 		{
@@ -487,10 +484,9 @@ namespace bgl
 				m_Textures.retire_slot(handle.slot);
 			}
 
-			m_PendingDeletions.emplace_back(
-				isSrv ? PendingDeletion::Type::kCbvSrvUav : PendingDeletion::Type::kTexture,
-				handle.slot.index,
-				CaptureGate());
+			RetireDeferred(
+				isSrv ? PendingType::kCbvSrvUav : PendingType::kTexture,
+				handle.slot.index);
 		}
 		else if (isSrv)
 		{
@@ -510,10 +506,7 @@ namespace bgl
 		if (deferred)
 		{
 			m_Samplers.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kSampler,
-				handle.idx,
-				CaptureGate());
+			RetireDeferred(PendingType::kSampler, handle.idx);
 		}
 		else
 		{
@@ -529,10 +522,7 @@ namespace bgl
 		if (deferred)
 		{
 			m_ReadbackBuffers.retire_slot(handle.slot.index);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kReadback,
-				handle.slot.index,
-				CaptureGate());
+			RetireDeferred(PendingType::kReadback, handle.slot.index);
 		}
 		else
 		{
@@ -565,6 +555,20 @@ namespace bgl
 	}
 
 	void
+	ResourceManager::RetireDeferred(PendingType type, uint32_t slotIndex) noexcept
+	{
+		const DeletionGate gate = CaptureGate();
+
+		// Coalesce with the most recent batch when the gate has not moved -- fences only advance, so
+		// consecutive destroys within a frame share one gate rather than each storing a copy.
+		if (m_PendingBatches.empty() || !std::ranges::equal(m_PendingBatches.back().gate, gate))
+		{
+			m_PendingBatches.push_back({ gate, {} });
+		}
+		m_PendingBatches.back().deletions.push_back({ type, slotIndex });
+	}
+
+	void
 	ResourceManager::CleanupExpiredResources() noexcept
 	{
 		// Poll each queue once, not per pending deletion.
@@ -587,34 +591,40 @@ namespace bgl
 			return true;
 		};
 
-		// The slots were retired when the destroy was recorded, so their handles have been stale
-		// since then. This half destroys the resource and returns the index to the free list.
-		std::erase_if(m_PendingDeletions, [&](const PendingDeletion& pending) {
-			if (!std::ranges::all_of(pending.gate, isCleared))
+		const auto reclaim = [&](const PendingDeletion& pending) {
+			switch (pending.type)
+			{
+			case PendingType::kCbvSrvUav:
+				m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kRtv:
+				m_Rtvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kDsv:
+				m_Dsvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kTexture:
+				m_Textures.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kReadback:
+				m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kSampler:
+				m_Samplers.reclaim_slot(pending.slotIndex);
+				break;
+			}
+		};
+
+		// A batch's slots were retired when they were recorded, so their handles have been stale
+		// since then. Freeing the batch reclaims each index into its pool's free list.
+		std::erase_if(m_PendingBatches, [&](const PendingDeletionBatch& batch) {
+			if (!std::ranges::all_of(batch.gate, isCleared))
 			{
 				return false;
 			}
-
-			switch (pending.type)
+			for (const PendingDeletion& pending : batch.deletions)
 			{
-			case PendingDeletion::Type::kCbvSrvUav:
-				m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
-				break;
-			case PendingDeletion::Type::kRtv:
-				m_Rtvs.reclaim_slot(pending.slotIndex);
-				break;
-			case PendingDeletion::Type::kDsv:
-				m_Dsvs.reclaim_slot(pending.slotIndex);
-				break;
-			case PendingDeletion::Type::kTexture:
-				m_Textures.reclaim_slot(pending.slotIndex);
-				break;
-			case PendingDeletion::Type::kReadback:
-				m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
-				break;
-			case PendingDeletion::Type::kSampler:
-				m_Samplers.reclaim_slot(pending.slotIndex);
-				break;
+				reclaim(pending);
 			}
 			return true;
 		});
@@ -948,7 +958,7 @@ namespace bgl
 		if (deferred)
 		{
 			m_Dsvs.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(PendingDeletion::Type::kDsv, handle.idx, CaptureGate());
+			RetireDeferred(PendingType::kDsv, handle.idx);
 		}
 		else
 		{

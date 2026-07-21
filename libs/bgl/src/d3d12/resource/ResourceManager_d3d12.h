@@ -26,29 +26,36 @@ namespace bgl
 	{
 		ICommandQueue* queue      = nullptr;
 		uint64_t       fenceValue = 0;
+
+		bool
+		operator==(const QueueGate&) const noexcept = default;
 	};
 
 	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
 
+	enum class PendingType
+	{
+		kCbvSrvUav,
+		kRtv,
+		kDsv,
+		kTexture,
+		kReadback,
+		kSampler,
+	};
+
 	struct PendingDeletion
 	{
-		enum class Type
-		{
-			kCbvSrvUav,
-			kRtv,
-			kDsv,
-			kTexture,
-			kReadback,
-			kSampler,
-		};
+		PendingType type      = PendingType::kCbvSrvUav;
+		uint32_t    slotIndex = 0xFFFFFFFF;
+	};
 
-		Type     type      = Type::kCbvSrvUav;
-		uint32_t slotIndex = 0xFFFFFFFF;
-
-		// Freed only once every registered queue passes the fence it was at when the destroy was
-		// recorded. One entry per queue registered at that moment; empty means immediately free.
-		// Inline, so a deferred destroy on the per-frame reclamation path allocates nothing.
-		DeletionGate gate;
+	// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
+	// snapshot the same registered-queue fences, so they batch under one gate rather than each
+	// carrying its own copy. Freed as a group once every queue in `gate` passes.
+	struct PendingDeletionBatch
+	{
+		DeletionGate                 gate;
+		std::vector<PendingDeletion> deletions;
 	};
 
 	class ResourceManager final : public core::RefCounter<IResourceManager>
@@ -254,6 +261,11 @@ namespace bgl
 		[[nodiscard]] DeletionGate
 		CaptureGate() const noexcept;
 
+		// Records a retired slot for deferred reclamation, appending it to the batch that shares the
+		// current gate (or opening a new batch when the gate has advanced).
+		void
+		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
+
 		wrl::ComPtr<ID3D12Device>         m_Device;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
@@ -286,9 +298,9 @@ namespace bgl
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 
-		core::slot_vector<Rtv>       m_Rtvs;
-		core::slot_vector<Dsv>       m_Dsvs;
-		std::vector<PendingDeletion> m_PendingDeletions;
+		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
+		std::vector<PendingDeletionBatch> m_PendingBatches;
 
 		// The submission timelines a deferred destroy must clear. Borrowed: a context registers its
 		// queue on construction and unregisters before the queue dies.
