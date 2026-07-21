@@ -303,7 +303,8 @@ namespace bgl
 		std::vector<PendingDeletionBatch> m_PendingBatches;
 
 		// The submission timelines a deferred destroy must clear. Borrowed: a context registers its
-		// queue on construction and unregisters before the queue dies.
-		std::vector<ICommandQueue*> m_RegisteredQueues;
+		// queue on construction and unregisters before the queue dies. Capped at the same bound as a
+		// gate, so registration fails here rather than when CaptureGate would overflow.
+		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
 	};
 }

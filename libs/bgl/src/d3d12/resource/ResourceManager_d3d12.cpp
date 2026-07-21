@@ -534,13 +534,24 @@ namespace bgl
 	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
 		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
+		gassert(
+			m_RegisteredQueues.size() < c_MaxRegisteredQueues,
+			"More than c_MaxRegisteredQueues submission timelines registered");
 		m_RegisteredQueues.push_back(queue);
 	}
 
 	void
 	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
 	{
-		std::erase(m_RegisteredQueues, queue);
+		for (uint32_t i = 0; i < m_RegisteredQueues.size(); ++i)
+		{
+			if (m_RegisteredQueues[i] == queue)
+			{
+				m_RegisteredQueues[i] = m_RegisteredQueues.back();
+				m_RegisteredQueues.pop_back();
+				break;
+			}
+		}
 
 		// The queue has drained (its owner flushes before unregistering), so it no longer gates any
 		// pending free. Drop it from every batch's gate so no gate outlives the queue's registration
