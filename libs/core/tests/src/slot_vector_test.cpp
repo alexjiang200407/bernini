@@ -155,3 +155,39 @@ TEST_CASE("slot_vector clear and reset release every element", "[slot_vector]")
 
 	REQUIRE(test::TrackingClean());
 }
+
+// The multi-context renderer reads a slot's element (Get*) on one thread while another allocates,
+// with no lock, on the premise that a fixed-capacity pool never reallocates its backing store --
+// so an element's address is stable for the pool's lifetime. That premise is load-bearing; pin it
+// here so a future slot_vector change that reintroduces growth fails loudly rather than as a data
+// race in a renderer.
+TEST_CASE("slot_vector at a fixed capacity never moves its storage", "[slot_vector]")
+{
+	constexpr uint32_t     c_Capacity = 8u;
+	core::slot_vector<int> slots(c_Capacity);
+
+	const void* const base = slots.data();
+
+	// A full turnover of every slot, twice over, exercising allocate -> retire -> reclaim -- the
+	// exact cycle a resource sees on create/destroy. The backing store must not move under any of it.
+	for (uint32_t round = 0; round < 2u; ++round)
+	{
+		std::array<core::slot_handle, c_Capacity> handles{};
+		for (uint32_t i = 0; i < c_Capacity; ++i)
+		{
+			handles[i] = slots.allocate_and_emplace(static_cast<int>(round * c_Capacity + i));
+			REQUIRE(slots.data() == base);
+		}
+
+		// Exhausted: the next allocation must fail rather than grow the store.
+		REQUIRE(slots.try_allocate_slot().is_null());
+		REQUIRE(slots.data() == base);
+
+		for (const core::slot_handle& handle : handles)
+		{
+			slots.retire_slot(handle.index);
+			slots.reclaim_slot(handle.index);
+			REQUIRE(slots.data() == base);
+		}
+	}
+}
