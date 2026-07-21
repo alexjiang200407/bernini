@@ -266,15 +266,33 @@ written for "slot filled by one party, consumed by another".
   clean (this stage moves barrier-emitting state, so GPU validation is mandatory here, not
   optional); editor frame time from S0b unchanged within noise.
 
-### S2 — Per-context queue and list
+### S2 — Per-context list and allocator
 
-The context creates its own `CommandQueue`, `CommandList` and bootstrap allocator instead of
-borrowing Graphics'. Register the context's queue with its `FrameGraph` under `"main"`. Fix the
-`UploadManager` reclaim predicate to compare the queue identity encoded in the version word, not
-just the fence value — the latent bug from §1.
+**Splits into S2a and S2b because the queue move is blocked by S3.** The plan wrote S2 as "context
+creates its own queue *and* list", with S3 as the `ResourceManager` multi-timeline work. Implementing
+it exposed the ordering being backwards for the queue: three things consume the single queue — the
+context, `CreateRenderTarget` (swapchain creation and present), and the `ResourceManager` (its
+deferred-destruction fence timeline). A render target must present on the same queue its frame was
+recorded on, and the RM keys every deferred free to that queue's timeline. So moving the queue into
+the context requires the RM to stop assuming one queue — which *is* S3. The list and allocator have
+no such coupling.
 
-Still exactly one context is created, so the fence timeline remains globally monotonic and nothing
-downstream has to change yet.
+**S2a (done) — the context owns its command list + bootstrap allocator.** Created in the context's
+constructor from the device instead of handed in by Graphics. The list carries its own
+`UploadManager`, so this is also the "own upload ring" item from §2, for free. One recorder per
+context: the half of S2 that concurrent recording actually needs, and the half with no S3 coupling.
+Graphics keeps owning the one queue; the context and the RM and render targets all share it, exactly
+as before.
+
+* **Gate (met):** `just test` green; `--gpu-validation` clean. No new behaviour — the list is created
+  in a different constructor, recorded and submitted identically.
+
+**S2b (after S3) — the context owns its queue.** Once S3 has removed the RM's single-queue
+assumption (its deletion gate no longer needs a queue at construction), the queue moves into the
+context: it creates its own, registers it with its `FrameGraph` under `"main"`, and
+`CreateRenderTarget` sources the presenting queue from the owning context. This is also where the
+`UploadManager` reclaim-predicate fix lands — comparing the queue identity in the version word, not
+just the fence value (the latent bug from §1) — since it is dormant until a second queue exists.
 
 * **Gate:** `just test` green; `--gpu-validation` clean; a targeted `UploadManager` unit test that
   two versions with equal fence values but different `QueueType` do not alias.

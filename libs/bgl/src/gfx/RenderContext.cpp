@@ -115,15 +115,21 @@ namespace bgl
 	constexpr std::string_view c_BackbufferName = "backbuffer";
 
 	RenderContext::RenderContext(
-		DeviceRef           device,
-		CommandQueueRef     queue,
-		CommandListRef      commandList,
-		CommandAllocatorRef bootstrapAllocator,
-		ResourceManagerRef  resourceManager) :
+		DeviceRef          device,
+		CommandQueueRef    queue,
+		ResourceManagerRef resourceManager) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
-		m_CommandList(std::move(commandList)), m_BootstrapAllocator(std::move(bootstrapAllocator)),
 		m_ResourceManager(std::move(resourceManager))
 	{
+		// The list and its allocator are the context's own -- one recorder per context, so two
+		// contexts can record concurrently. The queue is still shared with Graphics for now.
+		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
+
+		auto cmdListDesc = CommandListDesc();
+		cmdListDesc.type = QueueType::kGraphics;
+		m_CommandList =
+			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
+
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);

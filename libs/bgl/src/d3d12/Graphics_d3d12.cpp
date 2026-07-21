@@ -1,8 +1,5 @@
 #include "RenderTarget_d3d12.h"
-#include "cmd/CommandAllocator_d3d12.h"
-#include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
-#include "cmd/CommandQueue_d3d12.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
 #include "gfx/GraphicsBase.h"
@@ -139,11 +136,6 @@ namespace bgl
 
 		DeviceRef       m_Device;
 		CommandQueueRef m_CommandQueue;
-		CommandListRef  m_CommandList;
-
-		// Allocator used only to construct m_CommandList; per-frame recording uses the
-		// active target's own allocator ring.
-		CommandAllocatorRef m_BootstrapAllocator;
 
 		wrl::ComPtr<ID3D12Debug1>     m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue>   m_DxgiInfoQueue;
@@ -239,8 +231,6 @@ namespace bgl
 				d3d12ErrChecker;
 		}
 
-		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
-
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 
 		{
@@ -255,18 +245,7 @@ namespace bgl
 				m_Device->CreateResourceManager(resourceManagerDesc, m_CommandQueue);
 		}
 
-		CommandListDesc cmdListDesc;
-		cmdListDesc.type = QueueType::kGraphics;
-
-		m_CommandList =
-			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
-
-		m_Context = std::make_unique<RenderContext>(
-			m_Device,
-			m_CommandQueue,
-			m_CommandList,
-			m_BootstrapAllocator,
-			m_ResourceManager);
+		m_Context = std::make_unique<RenderContext>(m_Device, m_CommandQueue, m_ResourceManager);
 	}
 
 	Graphics::~Graphics() noexcept
@@ -277,11 +256,7 @@ namespace bgl
 		// members below -- which is why they must still be alive here.
 		m_Context.reset();
 
-		m_CommandList.Reset();
 		m_ResourceManager.Reset();
-
-		m_BootstrapAllocator.Reset();
-
 		m_CommandQueue.Reset();
 		m_Device.Reset();
 
