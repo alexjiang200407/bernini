@@ -59,11 +59,11 @@ namespace bgl
 		}
 
 		void
-		Release(uint64_t fenceValue, bool deferred = true) noexcept
+		Release(bool deferred = true) noexcept
 		{
 			if (!m_Handle.IsNull())
 			{
-				m_ResourceManager->DestroyBuffer(m_Handle, fenceValue, deferred);
+				m_ResourceManager->DestroyBuffer(m_Handle, deferred);
 				m_Handle = {};
 			}
 

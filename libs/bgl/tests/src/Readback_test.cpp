@@ -103,8 +103,8 @@ TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback]")
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyBuffer(src, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(src, false);
 }
 
 TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
@@ -183,7 +183,7 @@ TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
 
 	resourceManager->UnmapReadback(rb);
 
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroyRtv(rtv, fence, false);
-	resourceManager->DestroyTexture(tex, fence, false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyRtv(rtv, false);
+	resourceManager->DestroyTexture(tex, false);
 }

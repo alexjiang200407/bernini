@@ -243,8 +243,8 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 
 	resourceManager->UnmapReadback(rb);
 
-	debugBuffer.Release(fence, false);
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
+	debugBuffer.Release(false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
 }
 
 namespace

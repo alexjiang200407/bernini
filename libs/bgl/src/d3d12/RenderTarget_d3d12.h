@@ -125,7 +125,7 @@ namespace bgl
 		PresentAndAdvance() noexcept override;
 
 		void
-		ResizeBackbuffers(uint32_t width, uint32_t height, uint64_t fenceValue) override;
+		ResizeBackbuffers(uint32_t width, uint32_t height) override;
 
 	private:
 		void
@@ -138,7 +138,7 @@ namespace bgl
 		CreateOffscreenRenderTargets();
 
 		void
-		DestroyRenderTargets(uint64_t fenceValue);
+		DestroyRenderTargets();
 
 		DeviceRef          m_Device;
 		CommandQueueRef    m_CommandQueue;

@@ -81,10 +81,9 @@ namespace bgl
 		 *
 		 * @pre the GPU is idle for this target -- nothing in flight may still reference the
 		 *      backbuffers, and no command list may hold a reference either.
-		 * @param fenceValue the queue's next fence value, for deferred release of the old targets.
 		 */
 		virtual void
-		ResizeBackbuffers(uint32_t width, uint32_t height, uint64_t fenceValue) = 0;
+		ResizeBackbuffers(uint32_t width, uint32_t height) = 0;
 
 	protected:
 		RenderTargetBase() noexcept = default;

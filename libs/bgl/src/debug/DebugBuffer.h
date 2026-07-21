@@ -90,9 +90,9 @@ namespace bgl
 		}
 
 		void
-		Release(uint64_t fenceValue, bool deferred = true) noexcept
+		Release(bool deferred = true) noexcept
 		{
-			m_Buffer.Release(fenceValue, deferred);
+			m_Buffer.Release(deferred);
 		}
 
 	private:

@@ -340,10 +340,10 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 
 	resourceManager->UnmapReadback(rbCompacted);
 
-	instanceBuffer.Release(fence, false);
-	psoPrefixSum.Release(fence, false);
-	dispatchArgs.Release(fence, false);
-	compacted.Release(fence, false);
-	resourceManager->DestroyReadbackBuffer(rbCompacted, fence, false);
-	resourceManager->DestroyReadbackBuffer(rbPrefixSum, fence, false);
+	instanceBuffer.Release(false);
+	psoPrefixSum.Release(false);
+	dispatchArgs.Release(false);
+	compacted.Release(false);
+	resourceManager->DestroyReadbackBuffer(rbCompacted, false);
+	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
 }

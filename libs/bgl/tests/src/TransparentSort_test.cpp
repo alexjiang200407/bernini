@@ -196,5 +196,5 @@ TEST_CASE(
 	std::ranges::sort(gotKeys);
 	CHECK(gotKeys == wantKeys);
 
-	resourceManager->DestroyReadbackBuffer(readback, 0, false);
+	resourceManager->DestroyReadbackBuffer(readback, false);
 }

@@ -236,8 +236,8 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	}
 	resourceManager->UnmapReadback(rbPrefixSum);
 
-	outBuffer.Release(fence, false);
-	instanceBuffer.Release(fence, false);
-	resourceManager->DestroyReadbackBuffer(rbHistogram, fence, false);
-	resourceManager->DestroyReadbackBuffer(rbPrefixSum, fence, false);
+	outBuffer.Release(false);
+	instanceBuffer.Release(false);
+	resourceManager->DestroyReadbackBuffer(rbHistogram, false);
+	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
 }

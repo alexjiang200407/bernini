@@ -7,13 +7,11 @@ namespace bgl
 {
 	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device>  device,
-		const ResourceManagerDesc& desc,
-		CommandQueueRef            submissionQueue) :
+		const ResourceManagerDesc& desc) :
 		m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
 		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs),
-		m_Dsvs(desc.maxDsvs), m_SubmissionQueue(std::move(submissionQueue))
+		m_Dsvs(desc.maxDsvs)
 	{
-		gassert(m_SubmissionQueue != nullptr, "ResourceManager requires a submission queue");
 		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
@@ -434,20 +432,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyRtv(
-		RtvHandle handle,
-		uint64_t  currentFenceValue,
-		bool      deferred) noexcept
+	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		if (deferred)
 		{
 			m_Rtvs.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kRtv,
-				handle.idx,
-				currentFenceValue);
+			m_PendingDeletions.emplace_back(PendingDeletion::Type::kRtv, handle.idx, CaptureGate());
 		}
 		else
 		{
@@ -456,10 +448,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyBuffer(
-		BufferHandle handle,
-		uint64_t     currentFenceValue,
-		bool         deferred) noexcept
+	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
@@ -469,7 +458,7 @@ namespace bgl
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kCbvSrvUav,
 				handle.slot.index,
-				currentFenceValue);
+				CaptureGate());
 		}
 		else
 		{
@@ -478,10 +467,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyTexture(
-		TextureHandle handle,
-		uint64_t      currentFenceValue,
-		bool          deferred) noexcept
+	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
@@ -504,7 +490,7 @@ namespace bgl
 			m_PendingDeletions.emplace_back(
 				isSrv ? PendingDeletion::Type::kCbvSrvUav : PendingDeletion::Type::kTexture,
 				handle.slot.index,
-				currentFenceValue);
+				CaptureGate());
 		}
 		else if (isSrv)
 		{
@@ -517,10 +503,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroySampler(
-		SamplerHandle handle,
-		uint64_t      currentFenceValue,
-		bool          deferred) noexcept
+	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
 
@@ -530,7 +513,7 @@ namespace bgl
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kSampler,
 				handle.idx,
-				currentFenceValue);
+				CaptureGate());
 		}
 		else
 		{
@@ -539,10 +522,7 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyReadbackBuffer(
-		ReadbackBufferHandle handle,
-		uint64_t             currentFenceValue,
-		bool                 deferred) noexcept
+	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback buffer handle");
 
@@ -552,7 +532,7 @@ namespace bgl
 			m_PendingDeletions.emplace_back(
 				PendingDeletion::Type::kReadback,
 				handle.slot.index,
-				currentFenceValue);
+				CaptureGate());
 		}
 		else
 		{
@@ -561,37 +541,84 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::CleanupExpiredResources(uint64_t completedFenceValue) noexcept
+	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
+		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
+		m_RegisteredQueues.push_back(queue);
+	}
+
+	void
+	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
+	{
+		std::erase(m_RegisteredQueues, queue);
+	}
+
+	std::vector<QueueGate>
+	ResourceManager::CaptureGate() const noexcept
+	{
+		auto gate = std::vector<QueueGate>();
+		gate.reserve(m_RegisteredQueues.size());
+		for (ICommandQueue* queue : m_RegisteredQueues)
+		{
+			gate.push_back({ queue, queue->GetNextFenceValue() });
+		}
+		return gate;
+	}
+
+	void
+	ResourceManager::CleanupExpiredResources() noexcept
+	{
+		// Poll each queue once, not per pending deletion.
+		auto completed = std::vector<std::pair<ICommandQueue*, uint64_t>>();
+		completed.reserve(m_RegisteredQueues.size());
+		for (ICommandQueue* queue : m_RegisteredQueues)
+		{
+			completed.push_back({ queue, queue->PollCurrentFenceValue() });
+		}
+
+		const auto isCleared = [&](const QueueGate& entry) {
+			for (const auto& [queue, value] : completed)
+			{
+				if (queue == entry.queue)
+				{
+					return value >= entry.fenceValue;
+				}
+			}
+			// The gated queue is no longer registered: its context flushed and went away, so the
+			// work that could have referenced this resource has completed.
+			return true;
+		};
+
 		// The slots were retired when the destroy was recorded, so their handles have been stale
 		// since then. This half destroys the resource and returns the index to the free list.
-		std::erase_if(m_PendingDeletions, [&](const auto& pending) {
-			if (pending.fenceValue <= completedFenceValue)
+		std::erase_if(m_PendingDeletions, [&](const PendingDeletion& pending) {
+			if (!std::ranges::all_of(pending.gate, isCleared))
 			{
-				switch (pending.type)
-				{
-				case PendingDeletion::Type::kCbvSrvUav:
-					m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kRtv:
-					m_Rtvs.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kDsv:
-					m_Dsvs.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kTexture:
-					m_Textures.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kReadback:
-					m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
-					break;
-				case PendingDeletion::Type::kSampler:
-					m_Samplers.reclaim_slot(pending.slotIndex);
-					break;
-				}
-				return true;
+				return false;
 			}
-			return false;
+
+			switch (pending.type)
+			{
+			case PendingDeletion::Type::kCbvSrvUav:
+				m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingDeletion::Type::kRtv:
+				m_Rtvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingDeletion::Type::kDsv:
+				m_Dsvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingDeletion::Type::kTexture:
+				m_Textures.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingDeletion::Type::kReadback:
+				m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingDeletion::Type::kSampler:
+				m_Samplers.reclaim_slot(pending.slotIndex);
+				break;
+			}
+			return true;
 		});
 	}
 
@@ -916,20 +943,14 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyDsv(
-		DsvHandle handle,
-		uint64_t  currentFenceValue,
-		bool      deferred) noexcept
+	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidDsvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		if (deferred)
 		{
 			m_Dsvs.retire_slot(handle.idx);
-			m_PendingDeletions.emplace_back(
-				PendingDeletion::Type::kDsv,
-				handle.idx,
-				currentFenceValue);
+			m_PendingDeletions.emplace_back(PendingDeletion::Type::kDsv, handle.idx, CaptureGate());
 		}
 		else
 		{

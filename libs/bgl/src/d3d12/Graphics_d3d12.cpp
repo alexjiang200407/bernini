@@ -84,6 +84,12 @@ namespace bgl
 			return m_ResourceManager.Get();
 		}
 
+		void
+		WaitIdle() noexcept override
+		{
+			m_CommandQueue->Flush();
+		}
+
 		SceneRef
 		CreateScene(SceneDesc desc) override
 		{
@@ -241,8 +247,7 @@ namespace bgl
 			resourceManagerDesc.maxTextures   = m_Opts.maxTextures;
 			resourceManagerDesc.maxSamplers   = m_Opts.maxSamplers;
 
-			m_ResourceManager =
-				m_Device->CreateResourceManager(resourceManagerDesc, m_CommandQueue);
+			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
 
 		m_Context = std::make_unique<RenderContext>(m_Device, m_CommandQueue, m_ResourceManager);

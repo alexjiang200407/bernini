@@ -51,7 +51,7 @@ namespace bgl
 	}
 
 	void
-	CompactInstancesPass::Release(uint64_t fenceVal, bool deferred)
+	CompactInstancesPass::Release(bool deferred)
 	{
 		logger::trace("CompactInstancesPass::Release");
 
@@ -59,8 +59,8 @@ namespace bgl
 		m_PrefixSum.Reset();
 		m_CompactInstances.Reset();
 
-		m_CompactedDispatchArgs.Release(fenceVal, deferred);
-		m_PsoPrefixSumBuffer.Release(fenceVal, deferred);
+		m_CompactedDispatchArgs.Release(deferred);
+		m_PsoPrefixSumBuffer.Release(deferred);
 	}
 
 	void

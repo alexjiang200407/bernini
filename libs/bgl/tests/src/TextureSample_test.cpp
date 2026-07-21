@@ -146,10 +146,10 @@ TEST_CASE(
 
 	resourceManager->UnmapReadback(rb);
 
-	debugBuffer.Release(fence, false);
-	resourceManager->DestroyReadbackBuffer(rb, fence, false);
-	resourceManager->DestroySampler(sampler, fence, false);
-	resourceManager->DestroyTexture(texture, fence, false);
+	debugBuffer.Release(false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroySampler(sampler, false);
+	resourceManager->DestroyTexture(texture, false);
 }
 
 #endif  // BERNINI_GPU_DEBUG

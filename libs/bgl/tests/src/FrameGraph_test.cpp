@@ -255,28 +255,31 @@ namespace
 			return {};
 		}
 		void
-		DestroyBuffer(BufferHandle, uint64_t, bool) noexcept override
+		RegisterQueue(ICommandQueue*) noexcept override
 		{}
 		void
-		DestroyTexture(TextureHandle, uint64_t, bool) noexcept override
+		UnregisterQueue(ICommandQueue*) noexcept override
 		{}
 		void
-		DestroyTexture(TextureHandle) noexcept override
+		DestroyBuffer(BufferHandle, bool) noexcept override
 		{}
 		void
-		DestroySampler(SamplerHandle, uint64_t, bool) noexcept override
+		DestroyTexture(TextureHandle, bool) noexcept override
 		{}
 		void
-		DestroyReadbackBuffer(ReadbackBufferHandle, uint64_t, bool) noexcept override
+		DestroySampler(SamplerHandle, bool) noexcept override
 		{}
 		void
-		DestroyRtv(RtvHandle, uint64_t, bool) noexcept override
+		DestroyReadbackBuffer(ReadbackBufferHandle, bool) noexcept override
 		{}
 		void
-		DestroyDsv(DsvHandle, uint64_t, bool) noexcept override
+		DestroyRtv(RtvHandle, bool) noexcept override
 		{}
 		void
-		CleanupExpiredResources(uint64_t) noexcept override
+		DestroyDsv(DsvHandle, bool) noexcept override
+		{}
+		void
+		CleanupExpiredResources() noexcept override
 		{}
 		RtvHandle
 		CreateRtv(TextureHandle, const RtvDesc&) noexcept override

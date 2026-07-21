@@ -16,6 +16,13 @@ namespace bgl
 	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
 	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
 
+	// One registered queue and the fence value it was at when a resource was retired against it.
+	struct QueueGate
+	{
+		ICommandQueue* queue      = nullptr;
+		uint64_t       fenceValue = 0;
+	};
+
 	struct PendingDeletion
 	{
 		enum class Type
@@ -28,18 +35,18 @@ namespace bgl
 			kSampler,
 		};
 
-		Type     type       = Type::kCbvSrvUav;
-		uint32_t slotIndex  = 0xFFFFFFFF;
-		uint64_t fenceValue = 0;
+		Type     type      = Type::kCbvSrvUav;
+		uint32_t slotIndex = 0xFFFFFFFF;
+
+		// Freed only once every registered queue passes the fence it was at when the destroy was
+		// recorded. One entry per queue registered at that moment; empty means immediately free.
+		std::vector<QueueGate> gate;
 	};
 
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
-		ResourceManager(
-			wrl::ComPtr<ID3D12Device>  device,
-			const ResourceManagerDesc& desc,
-			CommandQueueRef            submissionQueue);
+		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);
 
 		ResourceManager(const ResourceManager&)     = delete;
 		ResourceManager(ResourceManager&&) noexcept = delete;
@@ -107,34 +114,31 @@ namespace bgl
 		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
 
 		void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
+		RegisterQueue(ICommandQueue* queue) noexcept override;
 
 		void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		UnregisterQueue(ICommandQueue* queue) noexcept override;
 
 		void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroyTexture(TextureHandle handle) noexcept override
-		{
-			DestroyTexture(handle, m_SubmissionQueue->GetNextFenceValue(), true);
-		}
+		DestroyBuffer(BufferHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroySampler(SamplerHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		DestroyTexture(TextureHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroyReadbackBuffer(
-			ReadbackBufferHandle handle,
-			uint64_t             currentFenceValue,
-			bool                 deferred) noexcept override;
+		DestroySampler(SamplerHandle handle, bool deferred = true) noexcept override;
 
 		void
-		CleanupExpiredResources(uint64_t completedFenceValue) noexcept override;
+		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyDsv(DsvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		CleanupExpiredResources() noexcept override;
 
 		[[nodiscard]]
 		bool
@@ -236,10 +240,12 @@ namespace bgl
 		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
 			override;
 
-		void
-		DestroyDsv(DsvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
-
 	private:
+		// Snapshots every registered queue's next fence value -- the gate a deferred destroy recorded
+		// now must clear before its slot is reclaimed.
+		[[nodiscard]] std::vector<QueueGate>
+		CaptureGate() const noexcept;
+
 		wrl::ComPtr<ID3D12Device>         m_Device;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
@@ -276,7 +282,8 @@ namespace bgl
 		core::slot_vector<Dsv>       m_Dsvs;
 		std::vector<PendingDeletion> m_PendingDeletions;
 
-		// The queue every command list is submitted on
-		CommandQueueRef m_SubmissionQueue;
+		// The submission timelines a deferred destroy must clear. Borrowed: a context registers its
+		// queue on construction and unregisters before the queue dies.
+		std::vector<ICommandQueue*> m_RegisteredQueues;
 	};
 }
