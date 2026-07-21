@@ -33,12 +33,7 @@ namespace bgl
 	class RenderContext
 	{
 	public:
-		RenderContext(
-			DeviceRef           device,
-			CommandQueueRef     queue,
-			CommandListRef      commandList,
-			CommandAllocatorRef bootstrapAllocator,
-			ResourceManagerRef  resourceManager);
+		RenderContext(DeviceRef device, CommandQueueRef queue, ResourceManagerRef resourceManager);
 
 		~RenderContext() noexcept;
 
@@ -91,13 +86,14 @@ namespace bgl
 		assetlib::ImageData
 		CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller);
 
-		// Borrowed from the owning Graphics: one device, one queue, one list, one bootstrap
-		// allocator, one resource manager shared across all contexts today.
+		// The device, queue and resource manager are borrowed from the owning Graphics and shared
+		// across all contexts today. The command list and its bootstrap allocator are the context's
+		// own -- one recorder per context.
 		DeviceRef           m_Device;
 		CommandQueueRef     m_CommandQueue;
-		CommandListRef      m_CommandList;
-		CommandAllocatorRef m_BootstrapAllocator;
 		ResourceManagerRef  m_ResourceManager;
+		CommandAllocatorRef m_BootstrapAllocator;
+		CommandListRef      m_CommandList;
 
 		bool m_FrameActive = false;
 
