@@ -14,9 +14,10 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 ## The frame
 
-`Graphics` ([d3d12/Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)) drives the frame and
+`RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_Forward`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_PreparePresentPass`). A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
+`m_CompactInstances`, `m_PreparePresentPass`); `Graphics` owns one context and forwards the frame
+methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
 

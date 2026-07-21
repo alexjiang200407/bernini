@@ -44,6 +44,9 @@ target_precompile_headers(bgl_objects
 
 find_package(slang CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(Stb REQUIRED)  # stb_image_write, for RenderContext's screenshot PNG encode
+
+target_include_directories(bgl_objects PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(bgl_objects
 	PUBLIC

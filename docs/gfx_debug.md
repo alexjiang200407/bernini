@@ -95,15 +95,15 @@ registered handler.
 | `DebugBuffer` | [libs/bgl/src/debug/DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants, `Init`/`Reset`/`Release` |
 | `InspectDebugReadback` | [libs/bgl/src/debug/DebugReadback.h](libs/bgl/src/debug/DebugReadback.h) | Pure decode of a mapped readback → `DebugReport` (`nullopt` if nothing fired) |
 | `ICommandList::SetActiveDebugBuffer` | [libs/bgl/src/cmd/CommandList.h](libs/bgl/src/cmd/CommandList.h) | Binds the UAV that subsequent dispatches auto-wire into `gDebug` (see [RHI](docs/rhi.md)) |
-| Orchestration | [libs/bgl/src/d3d12/Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp) | Owns the buffer + readback ring; resets/binds each `BeginFrame`, copies out each `EndFrame`, inspects and crashes-or-forwards |
+| Orchestration | [libs/bgl/src/gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp) | Owns the buffer + readback ring; resets/binds each `BeginFrame`, copies out each `EndFrame`, inspects and crashes-or-forwards |
 
 ### Data flow
 
 ```mermaid
 flowchart TD
     Shader["Shader: dbg_raise(errcode)"] -- "InterlockedAdd into gDebug (b0,space7)" --> Buf["DebugBuffer (uint UAV)"]
-    Graphics["Graphics (BeginFrame)"] -- "Reset() header + SetActiveDebugBuffer()" --> Buf
-    Graphics -- "EndFrame: copy to readback ring" --> Ring["Readback ring (c_SwapchainImageCount deep)"]
+    Ctx["RenderContext (BeginFrame)"] -- "Reset() header + SetActiveDebugBuffer()" --> Buf
+    Ctx -- "EndFrame: copy to readback ring" --> Ring["Readback ring (c_SwapchainImageCount deep)"]
     Ring -- "map, N frames later" --> Inspect["InspectDebugReadback()"]
     Inspect -- "DebugReport" --> Decide{"handler set?"}
     Decide -- "no" --> Crash["gfatal() -> terminate"]
@@ -113,7 +113,7 @@ flowchart TD
 ### Risky / non-obvious contracts
 
 * **`dbg_raise` needs the buffer bound.** Standard passes get it automatically because
-  `Graphics::BeginFrame` calls `SetActiveDebugBuffer`. If you drive an `ICommandList` yourself
+  `RenderContext::BeginFrame` calls `SetActiveDebugBuffer`. If you drive an `ICommandList` yourself
   (custom compute), you must `Reset()` the buffer, barrier it, and `SetActiveDebugBuffer()`
   before the dispatch — otherwise `gDebug` is unbound. See the sketch below.
 * **Debug-only.** In Release the shader body, the C++ types, and the handler invocation are all
@@ -127,7 +127,7 @@ flowchart TD
   Changing a record's shape means editing both, plus the `DebugRecord` IDL struct the readback
   decodes over the words. A `static_assert` in `DebugBuffer.h` catches the struct and the word count
   disagreeing; nothing catches `dbg.slang` disagreeing, so change it in the same commit.
-* **A slot in the readback ring is Graphics-wide, but every `RenderTarget` indexes it with a frame
+* **A slot in the readback ring is context-wide, but every `RenderTarget` indexes it with a frame
   index of its own.** With more than one target (the editor has three) the target that inspects a
   slot need not be the one that filled it, so `InspectDebugSlot` waits on the fence recorded for the
   copy rather than the caller's `rt.FrameFence(index)` — which gates a different frame entirely,
