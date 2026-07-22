@@ -1,4 +1,3 @@
-#include "RenderTarget_d3d12.h"
 #include "cmd/CommandQueue.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
@@ -102,17 +101,19 @@ namespace bgl
 			return core::SharedRef<SceneView>::Make(scene, maxInstances, m_ResourceManager);
 		}
 
+		RenderContextRef
+		CreateRenderContext() override
+		{
+			return core::SharedRef<RenderContext>::Make(
+				m_Device,
+				m_ResourceManager,
+				m_Opts.enableDebugLayer);
+		}
+
 		RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
-			// A target presents on the queue its frames are recorded on, so it is created against
-			// the queue of the context that will drive it.
-			return core::SharedRef<RenderTarget>::Make(
-				desc,
-				m_Device,
-				m_Context->GetCommandQueueCpy(),
-				m_ResourceManager,
-				m_Opts.enableDebugLayer);
+			return m_Context->CreateRenderTarget(desc);
 		}
 
 		void
@@ -151,10 +152,10 @@ namespace bgl
 
 		ResourceManagerRef m_ResourceManager;
 
-		// The device's one submission context. Declared last so it is destroyed first: its teardown
-		// idles the GPU and releases pass/debug resources through the members above, which must
-		// outlive it.
-		std::unique_ptr<RenderContext> m_Context;
+		// The implicit primary context that IGraphics's frame methods drive. Declared last so it is
+		// destroyed first: its teardown idles the GPU and releases pass/debug resources through the
+		// members above, which must outlive it.
+		core::SharedRef<RenderContext> m_Context;
 	};
 }
 
@@ -249,7 +250,10 @@ namespace bgl
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
 
-		m_Context = std::make_unique<RenderContext>(m_Device, m_ResourceManager);
+		m_Context = core::SharedRef<RenderContext>::Make(
+			m_Device,
+			m_ResourceManager,
+			m_Opts.enableDebugLayer);
 	}
 
 	Graphics::~Graphics() noexcept
@@ -258,7 +262,7 @@ namespace bgl
 
 		// Idles the GPU and releases the pass and debug-ring resources it holds, through the
 		// members below -- which is why they must still be alive here.
-		m_Context.reset();
+		m_Context.Reset();
 
 		m_ResourceManager.Reset();
 		m_Device.Reset();
