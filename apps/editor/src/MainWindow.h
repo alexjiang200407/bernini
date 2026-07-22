@@ -7,6 +7,7 @@
 #include "ui_MainWindow.h"
 
 class QDockWidget;
+class QLabel;
 class Project;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
@@ -41,6 +42,10 @@ private:
 	void
 	ShowProjectState();
 
+	// Adds the viewport frame-time readout to the status bar and connects it to the level editor.
+	void
+	SetUpFrameStats();
+
 	Ui::MainWindow            m_Ui;
 	std::unique_ptr<Project>  m_Project;
 	ContentExplorerWindow*    m_ContentExplorer     = nullptr;
@@ -49,6 +54,7 @@ private:
 	QDockWidget*              m_LevelEditorDock     = nullptr;
 	QDockWidget*              m_MaterialEditorDock  = nullptr;
 	QDockWidget*              m_ContentExplorerDock = nullptr;
+	QLabel*                   m_FrameStats          = nullptr;
 	std::unique_ptr<Renderer> m_Renderer;
 
 	// The editor's one asset manager, over the Level Editor's view. Shared, so a material loaded by

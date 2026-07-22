@@ -100,13 +100,25 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs, qint64 endNs)
 		const double drawMs  = static_cast<double>(endNs - startNs) * c_NsToMs;
 		const double gapMs   = static_cast<double>(startNs - m_LastFrameEndNs) * c_NsToMs;
 
+		m_FrameTimes.Push(deltaMs);
+
 		if (deltaMs > c_MissedFrameMs)
 		{
+			++m_MissedFrames;
 			qWarning(
 				"RenderTarget: missed a vblank -- frame %.1f ms (draw %.1f ms, gap %.1f ms)",
 				deltaMs,
 				drawMs,
 				gapMs);
+		}
+
+		if (++m_FramesSinceEmit >= c_FrameStatsInterval)
+		{
+			m_FramesSinceEmit = 0;
+			Q_EMIT FrameStatsUpdated(
+				m_FrameTimes.Mean(),
+				m_FrameTimes.Max(),
+				static_cast<int>(m_MissedFrames));
 		}
 	}
 
@@ -149,6 +161,12 @@ RenderTargetWindow::hideEvent(QHideEvent* event)
 		m_Desc.renderer->RemoveViewport(m_ViewportId);
 		m_ViewportId = 0;
 	}
+
+	// RemoveViewport blocks until the frame loop has dropped this window, so no frame is in flight
+	// and the render thread cannot be mid-ReportFrameTiming. Clearing the timestamps keeps the time
+	// spent hidden from being measured as one enormous frame when the window comes back.
+	m_LastFrameStartNs = -1;
+	m_LastFrameEndNs   = -1;
 
 	// Nothing is presenting while hidden, so a pending resize has nothing to serve; showEvent takes
 	// the size again anyway.
