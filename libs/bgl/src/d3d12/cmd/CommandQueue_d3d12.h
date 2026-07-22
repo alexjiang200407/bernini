@@ -31,13 +31,13 @@ namespace bgl
 		uint64_t
 		GetLastCompletedFence() const noexcept override
 		{
-			return m_LastCompletedFenceValue;
+			return m_LastCompletedFenceValue.load(std::memory_order_relaxed);
 		}
 
 		uint64_t
 		GetNextFenceValue() const noexcept override
 		{
-			return m_NextFenceValue;
+			return m_NextFenceValue.load(std::memory_order_relaxed);
 		}
 
 		void
@@ -77,9 +77,12 @@ namespace bgl
 		std::mutex m_FenceMutex;
 		std::mutex m_EventMutex;
 
+		// Atomic because the resource manager's deferred-destroy sweep reads any registered
+		// queue's counters from whichever context thread runs it; all writes stay on the queue's
+		// own thread (or under m_FenceMutex).
 		wrl::ComPtr<ID3D12Fence> m_Fence;
-		uint64_t                 m_NextFenceValue          = 1;
-		uint64_t                 m_LastCompletedFenceValue = 0;
+		std::atomic<uint64_t>    m_NextFenceValue          = 1;
+		std::atomic<uint64_t>    m_LastCompletedFenceValue = 0;
 		HANDLE                   m_FenceEvent              = nullptr;
 	};
 }

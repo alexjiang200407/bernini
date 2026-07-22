@@ -1,8 +1,10 @@
 #include "scene/Scene.h"
+#include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "idl/Meshlet.h"
 #include "types/SubmeshInstance.h"
+#include "types/vk_format.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
@@ -317,9 +319,9 @@ namespace bgl
 		// Default material textures: white (base color / ORM -> ao=1, factors drive
 		// roughness+metal) and a flat tangent-space normal (0.5,0.5,1).
 		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)] =
-			m_ResourceManager->CreateSolidTexture(255, 255, 255, 255);
+			CreateSolidTexture(255, 255, 255, 255);
 		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)] =
-			m_ResourceManager->CreateSolidTexture(128, 128, 255, 255);
+			CreateSolidTexture(128, 128, 255, 255);
 	}
 
 	void
@@ -332,8 +334,33 @@ namespace bgl
 			},
 			buffers);
 
-		// Flush any textures loaded since the last frame (materials, environment maps).
-		m_ResourceManager->FlushPendingTextureUploads(cmdList);
+		// Flush any textures loaded since the last frame (materials, environment maps). Scene-owned
+		// so the upload rides the same timeline as the frames that sample it -- another context's
+		// list flushing it would leave the two unordered on the GPU.
+		for (const PendingTextureUpload& pending : m_PendingTextureUploads)
+		{
+			std::vector<TextureSubresourceData> subresources;
+			subresources.reserve(pending.image.subresources.size());
+			for (const auto& s : pending.image.subresources)
+			{
+				subresources.push_back(
+					{ pending.image.pixels.data() + s.offset, s.rowPitch, s.slicePitch });
+			}
+
+			cmdList->WriteTexture(pending.handle, subresources);
+
+			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it. These bindless
+			// textures aren't frame-graph resources, so we barrier directly.
+			TextureBarrierDesc barrier;
+			barrier.syncBefore   = BarrierSyncFlag::kCopy;
+			barrier.accessBefore = BarrierAccessFlag::kCopyDest;
+			barrier.layoutBefore = BarrierLayout::kCopyDest;
+			barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
+			barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
+			barrier.layoutAfter  = BarrierLayout::kShaderResource;
+			cmdList->Barrier(pending.handle, barrier);
+		}
+		m_PendingTextureUploads.clear();
 	}
 
 	void
@@ -1084,8 +1111,49 @@ namespace bgl
 	TextureAssetHandle
 	Scene::AddTextureAsset(assetlib::ImageData img, std::string debugName)
 	{
-		const auto gpuTexture = m_ResourceManager->CreateTexture(img, std::move(debugName));
-		return static_cast<TextureAssetHandle>(gpuTexture);
+		return static_cast<TextureAssetHandle>(
+			CreateTextureAsset(std::move(img), std::move(debugName)));
+	}
+
+	TextureHandle
+	Scene::CreateTextureAsset(assetlib::ImageData img, std::string debugName)
+	{
+		TextureDesc desc;
+		desc.width     = img.width;
+		desc.height    = img.height;
+		desc.mipLevels = img.mipLevels;
+		desc.arraySize = img.arraySize;
+		desc.format    = FromVkFormat(img.vkFormat);
+		desc.usage     = TextureUsageFlag::kSRV;
+		desc.dimension =
+			img.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
+		desc.initialLayout = BarrierLayout::kCopyDest;
+		desc.debugName     = std::move(debugName);
+
+		const TextureHandle handle = m_ResourceManager->CreateTexture(desc);
+		if (handle.IsNull())
+		{
+			return handle;
+		}
+
+		m_PendingTextureUploads.push_back({ handle, std::move(img) });
+		return handle;
+	}
+
+	TextureHandle
+	Scene::CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+	{
+		auto img     = assetlib::ImageData();
+		img.width    = 1;
+		img.height   = 1;
+		img.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
+		img.pixels   = core::fixed_buffer<std::byte>(4);
+
+		const uint8_t pixel[4] = { r, g, b, a };
+		std::memcpy(img.pixels.data(), pixel, sizeof(pixel));
+		img.subresources.push_back({ 0, 4, 4 });
+
+		return CreateTextureAsset(std::move(img), "Solid Texture");
 	}
 
 	void

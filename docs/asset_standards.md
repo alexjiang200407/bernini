@@ -587,4 +587,4 @@ upload geometry, draw): [examples/bgl_base/src/main.cpp](examples/bgl_base/src/m
 *Maintenance: the file links above are the load-bearing part of this doc and rot silently if files
 move. Re-check them when the asset pipeline's layout changes — the compression path lives in
 `image_io.cpp` (`writeKTX2` UASTC encode + `loadKTX2` BC7 transcode), the `VkFormat` catalog in
-`assetlib_structs/VkFormat.h`, and its `VkFormatToDXGI` mapping in `libs/bgl/src/d3d12/util_d3d12.cpp`.*
+`assetlib_structs/VkFormat.h`, and its `FromVkFormat` mapping in `libs/bgl/src/types/vk_format.cpp`.*

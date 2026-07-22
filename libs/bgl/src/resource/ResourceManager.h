@@ -43,40 +43,16 @@ namespace bgl
 		virtual BufferHandle
 		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept = 0;
 
+		// Creation is upload-free: the manager makes resources and descriptors, never issues
+		// copies. A caller with pixel data creates the texture, keeps the bytes, and writes them
+		// on its own command list (ICommandList::WriteTexture) -- Scene's pending-upload queue is
+		// the pattern -- so the upload is ordered against the frames that sample it.
 		virtual TextureHandle
 		CreateTexture(const TextureDesc& desc) noexcept = 0;
-
-		// Creates a texture and defers an upload of the given decoded subresource data
-		// (one entry per mip/array subresource, D3D12 order). The RHI never loads or
-		// decodes files -- callers pass already-decoded pixels (see assetlib::loadKTX2).
-		// The upload is flushed by FlushPendingTextureUploads.
-		[[nodiscard]]
-		virtual TextureHandle
-		CreateTexture(
-			const TextureDesc&                      desc,
-			std::span<const TextureSubresourceData> initialData) noexcept = 0;
-
-		// Creates a sampled (kSRV) texture from a decoded image (see assetlib::loadKTX2),
-		// deferring its upload. The image's API-neutral vkFormat is mapped to the engine format
-		// internally, so callers never touch graphics-format types.
-		[[nodiscard]]
-		virtual TextureHandle
-		CreateTexture(const assetlib::ImageData& image, std::string debugName = "") noexcept = 0;
 
 		[[nodiscard]]
 		virtual SamplerHandle
 		CreateSampler(const SamplerDesc& desc) noexcept = 0;
-
-		// Creates a 1x1 RGBA8 texture filled with a solid color (deferred upload).
-		// Handy as a default when a material lacks a texture for some channel.
-		[[nodiscard]]
-		virtual TextureHandle
-		CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a) noexcept = 0;
-
-		// Records pending texture uploads (copy + transition to shader-resource) into
-		// cmd. Call once per frame from a pass that owns a command list (Scene::Update).
-		virtual void
-		FlushPendingTextureUploads(ICommandList* cmd) noexcept = 0;
 
 		// Creates a CPU-readable buffer in the readback heap, used as the
 		// destination of GPU->CPU copies.

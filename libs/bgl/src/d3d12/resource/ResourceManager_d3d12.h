@@ -91,26 +91,8 @@ namespace bgl
 		CreateTexture(const TextureDesc& desc) noexcept override;
 
 		[[nodiscard]]
-		TextureHandle
-		CreateTexture(
-			const TextureDesc&                      desc,
-			std::span<const TextureSubresourceData> initialData) noexcept override;
-
-		[[nodiscard]]
-		TextureHandle
-		CreateTexture(const assetlib::ImageData& image, std::string debugName = "") noexcept
-			override;
-
-		[[nodiscard]]
 		SamplerHandle
 		CreateSampler(const SamplerDesc& desc) noexcept override;
-
-		[[nodiscard]]
-		TextureHandle
-		CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a) noexcept override;
-
-		void
-		FlushPendingTextureUploads(ICommandList* cmd) noexcept override;
 
 		[[nodiscard]]
 		ReadbackBufferHandle
@@ -279,23 +261,6 @@ namespace bgl
 		// m_CbvSrvUavSlots instead, where their slot index is the bindless index.
 		core::slot_vector<Texture> m_Textures;
 
-		// A deferred texture upload owns a contiguous copy of its decoded pixel bytes
-		// (so it survives until the next flush) plus the per-subresource layout needed
-		// to rebuild the upload spans into that buffer.
-		struct PendingSubresource
-		{
-			size_t   offset;
-			uint64_t rowPitch;
-			uint64_t slicePitch;
-		};
-		struct PendingTextureUpload
-		{
-			TextureHandle                   handle;
-			std::vector<std::byte>          bytes;
-			std::vector<PendingSubresource> subresources;
-		};
-		std::vector<PendingTextureUpload> m_PendingTextureUploads;
-
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 
 		core::slot_vector<Rtv>            m_Rtvs;
@@ -306,5 +271,11 @@ namespace bgl
 		// queue on construction and unregisters before the queue dies. Capped at the same bound as a
 		// gate, so registration fails here rather than when CaptureGate would overflow.
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
+
+		// Serializes slot allocation/retirement/reclamation, the deletion batches and the queue
+		// registry across contexts. Get*/Valid* reads stay lockless: slot storage never moves
+		// (fixed-capacity pools, pinned by a core test) and only a handle's owner may destroy it,
+		// so a read never races the retirement of the slot it reads.
+		mutable std::mutex m_PoolMutex;
 	};
 }

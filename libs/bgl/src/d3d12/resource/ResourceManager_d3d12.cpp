@@ -63,6 +63,7 @@ namespace bgl
 	BufferHandle
 	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
@@ -138,6 +139,7 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		// Sampled textures go in the shader-visible pool so the slot index is a valid
 		// bindless SRV index. RTV/DSV-only textures go in m_Textures and never take a
 		// shader-visible descriptor slot.
@@ -175,7 +177,8 @@ namespace bgl
 	SamplerHandle
 	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
-		auto samplerSlotHandle = m_Samplers.try_allocate_slot();
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		auto                        samplerSlotHandle = m_Samplers.try_allocate_slot();
 		if (samplerSlotHandle.is_null())
 		{
 			logger::error("CreateSampler: sampler pool exhausted");
@@ -193,118 +196,10 @@ namespace bgl
 		return SamplerHandle{ slotIndex, samplerSlotHandle.generation };
 	}
 
-	TextureHandle
-	ResourceManager::CreateTexture(
-		const TextureDesc&                      desc,
-		std::span<const TextureSubresourceData> initialData) noexcept
-	{
-		TextureHandle handle = CreateTexture(desc);
-
-		if (initialData.empty())
-		{
-			return handle;
-		}
-
-		// Own a contiguous copy of the decoded pixels so the deferred upload survives
-		// until the next FlushPendingTextureUploads (the caller's data may be transient).
-		PendingTextureUpload pending;
-		pending.handle = handle;
-		pending.subresources.reserve(initialData.size());
-
-		for (const auto& sub : initialData)
-		{
-			const size_t sliceBytes = static_cast<size_t>(sub.slicePitch);
-			const size_t offset     = pending.bytes.size();
-			pending.bytes.resize(offset + sliceBytes);
-			std::memcpy(pending.bytes.data() + offset, sub.data, sliceBytes);
-			pending.subresources.push_back({ offset, sub.rowPitch, sub.slicePitch });
-		}
-
-		m_PendingTextureUploads.push_back(std::move(pending));
-
-		return handle;
-	}
-
-	TextureHandle
-	ResourceManager::CreateTexture(const assetlib::ImageData& image, std::string debugName) noexcept
-	{
-		// Map the decoded image's API-neutral TexFormat + layout onto an engine TextureDesc; the
-		// Vulkan→DXGI→engine format translation stays here so callers never see graphics formats.
-		TextureDesc desc;
-		desc.width     = image.width;
-		desc.height    = image.height;
-		desc.mipLevels = image.mipLevels;
-		desc.arraySize = image.arraySize;
-		desc.format    = ConvertFormat(VkFormatToDXGI(image.vkFormat));
-		desc.usage     = TextureUsageFlag::kSRV;
-		desc.dimension =
-			image.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
-		desc.initialLayout = BarrierLayout::kCopyDest;
-		desc.debugName     = std::move(debugName);
-
-		std::vector<TextureSubresourceData> subresources;
-		subresources.reserve(image.subresources.size());
-		for (const auto& s : image.subresources)
-		{
-			subresources.push_back({ image.pixels.data() + s.offset, s.rowPitch, s.slicePitch });
-		}
-
-		return CreateTexture(desc, subresources);
-	}
-
-	TextureHandle
-	ResourceManager::CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a) noexcept
-	{
-		const uint8_t pixel[4] = { r, g, b, a };
-
-		TextureDesc desc;
-		desc.width         = 1;
-		desc.height        = 1;
-		desc.format        = Format::RGBA8_UNORM;
-		desc.usage         = TextureUsageFlag::kSRV;
-		desc.initialLayout = BarrierLayout::kCopyDest;
-		desc.debugName     = "Solid Texture";
-
-		// Procedural, not a file load: build the 1x1 pixel and go through the same raw
-		// upload path as any other texture.
-		const TextureSubresourceData sub{ pixel, 4, 4 };
-		return CreateTexture(desc, std::span<const TextureSubresourceData>(&sub, 1));
-	}
-
-	void
-	ResourceManager::FlushPendingTextureUploads(ICommandList* cmd) noexcept
-	{
-		for (auto& pending : m_PendingTextureUploads)
-		{
-			// Rebuild the upload spans pointing into our owned byte buffer.
-			std::vector<TextureSubresourceData> subresources;
-			subresources.reserve(pending.subresources.size());
-			for (const auto& s : pending.subresources)
-			{
-				subresources.push_back(
-					{ pending.bytes.data() + s.offset, s.rowPitch, s.slicePitch });
-			}
-
-			cmd->WriteTexture(pending.handle, subresources);
-
-			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it. These
-			// bindless textures aren't frame-graph resources, so we barrier directly.
-			TextureBarrierDesc barrier;
-			barrier.syncBefore   = BarrierSyncFlag::kCopy;
-			barrier.accessBefore = BarrierAccessFlag::kCopyDest;
-			barrier.layoutBefore = BarrierLayout::kCopyDest;
-			barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
-			barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
-			barrier.layoutAfter  = BarrierLayout::kShaderResource;
-			cmd->Barrier(pending.handle, barrier);
-		}
-
-		m_PendingTextureUploads.clear();
-	}
-
 	ReadbackBufferHandle
 	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(desc.byteSize > 0, "Readback buffer requires a positive byte size");
 
 		auto slot = m_ReadbackBuffers.try_allocate_slot();
@@ -325,6 +220,7 @@ namespace bgl
 		wrl::ComPtr<ID3D12Resource> d3d12Texture,
 		const TextureDesc&          desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		if (desc.usage.any(TextureUsageFlag::kSRV))
 		{
 			auto slot = m_CbvSrvUavSlots.try_allocate_slot();
@@ -365,6 +261,7 @@ namespace bgl
 	RtvHandle
 	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
 		auto                        rtvSlotHandle = m_Rtvs.try_allocate_slot();
@@ -434,6 +331,7 @@ namespace bgl
 	void
 	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		if (deferred)
@@ -450,6 +348,7 @@ namespace bgl
 	void
 	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
 		if (deferred)
@@ -466,6 +365,7 @@ namespace bgl
 	void
 	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
 		const bool isSrv = handle.usage.any(TextureUsageFlag::kSRV);
@@ -501,6 +401,7 @@ namespace bgl
 	void
 	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
 
 		if (deferred)
@@ -517,6 +418,7 @@ namespace bgl
 	void
 	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback buffer handle");
 
 		if (deferred)
@@ -533,6 +435,7 @@ namespace bgl
 	void
 	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
 		gassert(
 			m_RegisteredQueues.size() < c_MaxRegisteredQueues,
@@ -543,6 +446,7 @@ namespace bgl
 	void
 	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		for (uint32_t i = 0; i < m_RegisteredQueues.size(); ++i)
 		{
 			if (m_RegisteredQueues[i] == queue)
@@ -600,6 +504,7 @@ namespace bgl
 	void
 	ResourceManager::CleanupExpiredResources() noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		// Poll each queue once, not per pending deletion.
 		auto completed = core::static_vector<QueueGate, c_MaxRegisteredQueues>();
 		for (ICommandQueue* queue : m_RegisteredQueues)
@@ -869,6 +774,7 @@ namespace bgl
 	DsvHandle
 	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
 		auto                        dsvSlotHandle = m_Dsvs.try_allocate_slot();
@@ -982,6 +888,7 @@ namespace bgl
 	void
 	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidDsvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		if (deferred)

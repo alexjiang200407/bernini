@@ -226,29 +226,11 @@ namespace
 		{
 			return {};
 		}
-		TextureHandle
-		CreateTexture(const TextureDesc&, std::span<const TextureSubresourceData>) noexcept override
-		{
-			return {};
-		}
-		TextureHandle
-		CreateTexture(const assetlib::ImageData&, std::string) noexcept override
-		{
-			return {};
-		}
 		SamplerHandle
 		CreateSampler(const SamplerDesc&) noexcept override
 		{
 			return {};
 		}
-		TextureHandle
-		CreateSolidTexture(uint8_t, uint8_t, uint8_t, uint8_t) noexcept override
-		{
-			return {};
-		}
-		void
-		FlushPendingTextureUploads(ICommandList*) noexcept override
-		{}
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc&) noexcept override
 		{

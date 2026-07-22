@@ -206,6 +206,15 @@ namespace bgl
 		[[nodiscard]] idl::LoosePbrMaterial
 		BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const;
 
+		// Creates the texture and queues `img` for upload at the next Update. Null handle (and
+		// nothing queued) when the pool is exhausted.
+		[[nodiscard]] TextureHandle
+		CreateTextureAsset(assetlib::ImageData img, std::string debugName);
+
+		// A 1x1 RGBA8 texture through the same deferred-upload path as any loaded image.
+		[[nodiscard]] TextureHandle
+		CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
@@ -240,6 +249,29 @@ namespace bgl
 			kCount
 		};
 		std::array<TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_DefaultTextures;
+
+		// Decoded pixels awaiting upload, flushed by Update onto the command list of the context
+		// that draws this scene. Scene-owned so one scene's textures never ride another context's
+		// timeline -- an upload must be ordered against the frames that sample it.
+		struct PendingTextureUpload
+		{
+			TextureHandle       handle;
+			assetlib::ImageData image;
+
+			PendingTextureUpload(TextureHandle handle_, assetlib::ImageData image_) noexcept :
+				handle(handle_), image(std::move(image_))
+			{}
+
+			PendingTextureUpload(PendingTextureUpload&&) noexcept = default;
+			PendingTextureUpload(const PendingTextureUpload&)     = delete;
+
+			PendingTextureUpload&
+			operator=(PendingTextureUpload&&) noexcept = default;
+
+			PendingTextureUpload&
+			operator=(const PendingTextureUpload&) = delete;
+		};
+		std::vector<PendingTextureUpload> m_PendingTextureUploads;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 	};
