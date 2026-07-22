@@ -20,18 +20,21 @@ class ContextWorker;
 class QTimer;
 class Renderer;
 
-// A thumbnail scene holds one asset at a time, so its budgets are a fraction of the editor's.
+// A thumbnail scene holds one asset at a time -- but that one asset can be as large as anything
+// the level loads, so the size budgets must match the editor scene's or a mesh near its limits
+// loads in the level yet fails to thumbnail. MainWindow passes its own settings-driven SceneDesc;
+// these mirror its defaults.
 inline bgl::SceneDesc
 ThumbnailSceneDesc()
 {
 	auto desc                    = bgl::SceneDesc();
-	desc.maxGeom                 = 32;
-	desc.maxMeshlets             = 8192;
-	desc.maxSubmeshes            = 64;
-	desc.maxVertexBufferByteSize = 8'000'000;
-	desc.maxIndices              = 500'000;
-	desc.maxPbrMaterials         = 32;
-	desc.maxLoosePbrMaterials    = 32;
+	desc.maxGeom                 = 256;
+	desc.maxMeshlets             = 32768;
+	desc.maxSubmeshes            = 512;
+	desc.maxVertexBufferByteSize = 33'554'432;
+	desc.maxIndices              = 2'000'000;
+	desc.maxPbrMaterials         = 256;
+	desc.maxLoosePbrMaterials    = 256;
 	return desc;
 }
 

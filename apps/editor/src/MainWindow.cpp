@@ -92,9 +92,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
 		matDesc.previewEnv.exposure   = matSettings["exposure"].GetOrDefault(1.0f);
 
-		auto thumbSettings     = settings["thumbnails"];
-		auto thumbDesc         = AssetThumbnailDesc();
-		thumbDesc.renderer     = m_Renderer.get();
+		auto thumbSettings = settings["thumbnails"];
+		auto thumbDesc     = AssetThumbnailDesc();
+		thumbDesc.renderer = m_Renderer.get();
+
+		// The cache's scene must fit whatever the editor's scene fits -- a thumbnail holds one
+		// asset, but any asset the level can load must be renderable here too.
+		thumbDesc.sceneDesc    = sceneDesc;
 		thumbDesc.dimension    = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.maxInstances = thumbSettings["maxInstances"].GetOrDefault(256u);
 		thumbDesc.skybox       = thumbSettings["skybox"].GetOrDefault(std::string());
