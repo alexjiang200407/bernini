@@ -337,30 +337,45 @@ namespace bgl
 		// Flush any textures loaded since the last frame (materials, environment maps). Scene-owned
 		// so the upload rides the same timeline as the frames that sample it -- another context's
 		// list flushing it would leave the two unordered on the GPU.
-		for (const PendingTextureUpload& pending : m_PendingTextureUploads)
+		if (!m_PendingTextureUploads.empty())
 		{
-			std::vector<TextureSubresourceData> subresources;
-			subresources.reserve(pending.image.subresources.size());
-			for (const auto& s : pending.image.subresources)
+			cmdList->BeginEvent("Scene Texture Uploads");
+
+			std::vector<TextureHandle>      handles;
+			std::vector<TextureBarrierDesc> barriers;
+			handles.reserve(m_PendingTextureUploads.size());
+			barriers.reserve(m_PendingTextureUploads.size());
+
+			for (const PendingTextureUpload& pending : m_PendingTextureUploads)
 			{
-				subresources.push_back(
-					{ pending.image.pixels.data() + s.offset, s.rowPitch, s.slicePitch });
+				std::vector<TextureSubresourceData> subresources;
+				subresources.reserve(pending.image.subresources.size());
+				for (const auto& s : pending.image.subresources)
+				{
+					subresources.push_back(
+						{ pending.image.pixels.data() + s.offset, s.rowPitch, s.slicePitch });
+				}
+
+				cmdList->WriteTexture(pending.handle, subresources);
+
+				// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it. These bindless
+				// textures aren't frame-graph resources, so we barrier directly.
+				TextureBarrierDesc barrier;
+				barrier.syncBefore   = BarrierSyncFlag::kCopy;
+				barrier.accessBefore = BarrierAccessFlag::kCopyDest;
+				barrier.layoutBefore = BarrierLayout::kCopyDest;
+				barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
+				barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
+				barrier.layoutAfter  = BarrierLayout::kShaderResource;
+
+				handles.push_back(pending.handle);
+				barriers.push_back(barrier);
 			}
 
-			cmdList->WriteTexture(pending.handle, subresources);
-
-			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it. These bindless
-			// textures aren't frame-graph resources, so we barrier directly.
-			TextureBarrierDesc barrier;
-			barrier.syncBefore   = BarrierSyncFlag::kCopy;
-			barrier.accessBefore = BarrierAccessFlag::kCopyDest;
-			barrier.layoutBefore = BarrierLayout::kCopyDest;
-			barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
-			barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
-			barrier.layoutAfter  = BarrierLayout::kShaderResource;
-			cmdList->Barrier(pending.handle, barrier);
+			cmdList->Barrier(handles, barriers);
+			cmdList->EndEvent();
+			m_PendingTextureUploads.clear();
 		}
-		m_PendingTextureUploads.clear();
 	}
 
 	void

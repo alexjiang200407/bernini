@@ -9,13 +9,14 @@ namespace bgl
 		wrl::ComPtr<ID3D12Device>  device,
 		const ResourceManagerDesc& desc) :
 		m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
-		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs),
-		m_Dsvs(desc.maxDsvs)
+		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures),
+		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
 		gassert(desc.maxTextures > 0, "maxTextures must be greater than zero");
+		gassert(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
 
 		gassert(
 			desc.maxSamplers > 0 && desc.maxSamplers <= 2048,

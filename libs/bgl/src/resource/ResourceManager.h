@@ -17,11 +17,12 @@ namespace bgl
 {
 	struct ResourceManagerDesc
 	{
-		uint32_t maxCbvSrvUavs = 1024;
-		uint32_t maxRtvs       = 128;
-		uint32_t maxDsvs       = 128;
-		uint32_t maxTextures   = 1024;
-		uint32_t maxSamplers   = 128;
+		uint32_t maxCbvSrvUavs      = 1024;
+		uint32_t maxRtvs            = 128;
+		uint32_t maxDsvs            = 128;
+		uint32_t maxTextures        = 1024;
+		uint32_t maxSamplers        = 128;
+		uint32_t maxReadbackBuffers = 64;
 	};
 
 	class IResourceManager : public core::Ref
