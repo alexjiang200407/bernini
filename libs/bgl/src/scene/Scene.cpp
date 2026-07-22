@@ -1183,6 +1183,13 @@ namespace bgl
 				"TextureAssetHandle passed to DeleteTextureAsset has expired or is invalid");
 		}
 
+		// A delete can arrive before Update ever flushed the upload -- a caller may release a
+		// texture without a frame in between (e.g. a render that failed before drawing). The slot
+		// retires now, so the queued write must go with it or the flush writes a stale handle.
+		std::erase_if(m_PendingTextureUploads, [&](const PendingTextureUpload& pending) {
+			return pending.handle == handle;
+		});
+
 		// Frames already submitted may still sample this texture, so only the *release* is deferred:
 		// the resource manager recycles the bindless slot no earlier than the last frame that could
 		// read it.

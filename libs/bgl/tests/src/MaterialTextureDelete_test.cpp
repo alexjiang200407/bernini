@@ -1,3 +1,7 @@
+#include "cmd/CommandAllocator.h"
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "scene/Scene.h"
 #include "util/TestOptions.h"
@@ -154,4 +158,45 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	{
 		REQUIRE_THROWS_AS(scene->DeleteTextureAsset(bgl::TextureAssetHandle{}), bgl::SceneError);
 	}
+}
+
+// A texture can be deleted before Update ever flushed its upload -- a caller that fails between
+// acquiring assets and drawing releases them with no frame in between. The queued write must die
+// with the handle: flushing it later would write through a stale handle (the editor crash this
+// pins), while an upload whose texture still lives must survive the same flush.
+TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][scene]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+	auto resourceManager = gfxBase->GetResourceManagerCpy();
+
+	auto  sceneHandle = gfx->CreateScene(MaterialSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	// Two uploads queued, neither flushed. One texture dies before any frame runs.
+	const bgl::TextureAssetHandle doomed =
+		scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
+	const bgl::TextureAssetHandle kept =
+		scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
+	REQUIRE_NOTHROW(scene->DeleteTextureAsset(doomed));
+
+	// The flush the next frame would run. Before the fix this wrote through the stale handle and
+	// died on the validity assert.
+	auto* device       = gfxBase->GetDevice();
+	auto  cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto  cmdAllocator = device->CreateCommandAllocator();
+	auto  cmdList =
+		device->CreateCommandList({ bgl::QueueType::kGraphics }, cmdAllocator, resourceManager);
+
+	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
+	scene->Update(cmdList.Get());
+	cmdList->Close();
+	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList.Get()));
+
+	// The survivor was untouched by the cancellation.
+	CHECK(resourceManager->ValidTextureHandle(bgl::TextureHandle::From(kept)));
 }
