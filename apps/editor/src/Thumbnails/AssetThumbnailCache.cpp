@@ -1,6 +1,7 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 
 #include "Mesh/BMeshUtil.h"
+#include "Render/ContextWorker.h"
 #include "Render/Renderer.h"
 
 #include <QDateTime>
@@ -165,7 +166,17 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 	if (m_Desc.renderer == nullptr)
 		return;
 
-	m_Desc.renderer->Invoke([&] {
+	try
+	{
+		m_Worker = std::make_unique<ContextWorker>(*m_Desc.renderer, m_Desc.sceneDesc);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("AssetThumbnail: no render context, thumbnails disabled: %s", e.what());
+		return;
+	}
+
+	m_Worker->Invoke([&] {
 		try
 		{
 			auto rtDesc     = bgl::RenderTargetDesc();
@@ -173,10 +184,9 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			rtDesc.height   = static_cast<int>(m_Desc.dimension);
 			rtDesc.headless = true;
 
-			m_RenderTarget = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtDesc);
-			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
-				m_Desc.renderer->GetScene(),
-				m_Desc.maxInstances);
+			m_RenderTarget = m_Worker->GetContext()->CreateRenderTarget(rtDesc);
+			m_SceneView =
+				m_Worker->GetGraphics()->CreateSceneView(m_Worker->GetScene(), m_Desc.maxInstances);
 		}
 		catch (const std::exception& e)
 		{
@@ -186,7 +196,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			return;
 		}
 
-		bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
+		bgl::IScene*     scene = m_Worker->GetScene().Get();
 		bgl::ISceneView* view  = m_SceneView.Get();
 		view->SetExposure(m_Desc.exposure);
 
@@ -239,18 +249,17 @@ AssetThumbnailCache::~AssetThumbnailCache()
 	ReleaseGeometry();
 	ReleaseMaterials();
 
-	if (m_Desc.renderer == nullptr)
+	if (m_Worker == nullptr)
 		return;
 
-	// Member destruction would otherwise release these on whichever thread ran the destructor -- the
-	// GUI thread -- flushing the command queue and freeing SceneView's allocations while the render
-	// thread is still presenting the viewports.
-	m_Desc.renderer->Invoke([&] {
+	// Everything context-affine is released on the worker thread that owns it; member destruction
+	// would otherwise release it from the GUI thread.
+	m_Worker->Invoke([&] {
 		if (m_DefaultMaterial.IsValid())
 		{
 			try
 			{
-				m_Desc.renderer->GetScene()->DeleteMaterial(m_DefaultMaterial);
+				m_Worker->GetScene()->DeleteMaterial(m_DefaultMaterial);
 			}
 			catch (const std::exception& e)
 			{
@@ -258,22 +267,45 @@ AssetThumbnailCache::~AssetThumbnailCache()
 			}
 		}
 
+		m_Assets.reset();
 		m_SceneView    = nullptr;
 		m_RenderTarget = nullptr;
 	});
+
+	// Releases the scene and context on the worker thread, then joins it.
+	m_Worker.reset();
 }
 
 void
-AssetThumbnailCache::SetAssets(game::AssetManager* assets)
+AssetThumbnailCache::SetDataRoot(const std::filesystem::path& dataRoot)
 {
-	if (m_Assets == assets)
+	if (DataRoot() == dataRoot)
 		return;
 
 	// Hand the old project's assets back through the manager that owns them, before we let go of it.
 	ReleaseGeometry();
 	ReleaseMaterials();
 
-	m_Assets = assets;
+	if (IsReady())
+	{
+		// ~AssetManager hands every asset it still holds back to the scene, so both it and its
+		// replacement live on the worker thread with the scene they serve.
+		m_Worker->Invoke([&] {
+			m_Assets.reset();
+
+			if (dataRoot.empty())
+				return;
+
+			try
+			{
+				m_Assets = std::make_unique<game::AssetManager>(m_Worker->GetScene(), dataRoot);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AssetThumbnail: cannot open the data root: %s", e.what());
+			}
+		});
+	}
 
 	m_Cache.clear();
 	m_Queue.clear();
@@ -411,7 +443,7 @@ AssetThumbnailCache::DrainOne()
 	const PendingRender pending = m_Queue.dequeue();
 	m_InFlight.remove(pending.path);
 
-	const QImage image = m_Desc.renderer->Invoke([&] {
+	const QImage image = m_Worker->Invoke([&] {
 		QImage img;
 		try
 		{
@@ -469,7 +501,7 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 {
 	const assetlib::BMesh& mesh = *pending.mesh;
 
-	bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
+	bgl::IScene*     scene = m_Worker->GetScene().Get();
 	bgl::ISceneView* view  = m_SceneView.Get();
 
 	auto materials = std::vector<bgl::MaterialHandle>();
@@ -531,7 +563,7 @@ AssetThumbnailCache::RenderMaterial(const PendingRender& pending)
 	// authored it against.
 	const bgl::MaterialHandle material = AcquireMaterial(relPath, pending.prefetch.get());
 
-	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
+	m_Geoms.push_back(m_Worker->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
 
 	return Shoot(glm::vec3(0.0f), 1.0f);
@@ -564,11 +596,9 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 	job.viewport =
 		bgl::Viewport(static_cast<float>(m_Desc.dimension), static_cast<float>(m_Desc.dimension));
 
-	for (int i = 0; i < c_WarmupFrames; ++i)
-		m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
+	for (int i = 0; i < c_WarmupFrames; ++i) m_Worker->GetContext()->DrawFrame(m_RenderTarget, job);
 
-	const assetlib::ImageData shot =
-		m_Desc.renderer->GetGraphics()->ScreenshotToMemory(m_RenderTarget);
+	const assetlib::ImageData shot = m_Worker->GetContext()->ScreenshotToMemory(m_RenderTarget);
 
 	// Deep-copy: `shot` owns the pixels and dies at the end of this scope.
 	return QImage(
@@ -586,7 +616,7 @@ AssetThumbnailCache::ReleaseGeometry()
 	if (!IsReady())
 		return;
 
-	m_Desc.renderer->Invoke([&] {
+	m_Worker->Invoke([&] {
 		for (const bgl::MeshInstanceHandle& instance : m_Instances)
 		{
 			if (!instance.IsValid())
@@ -609,7 +639,7 @@ AssetThumbnailCache::ReleaseGeometry()
 
 			try
 			{
-				m_Desc.renderer->GetScene()->DeleteGeom(geom);
+				m_Worker->GetScene()->DeleteGeom(geom);
 			}
 			catch (const std::exception& e)
 			{
@@ -631,7 +661,7 @@ AssetThumbnailCache::ReleaseMaterials()
 		return;
 	}
 
-	m_Desc.renderer->Invoke([&] {
+	m_Worker->Invoke([&] {
 		for (const bgl::MaterialHandle& material : m_Materials)
 		{
 			try
