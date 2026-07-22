@@ -114,19 +114,16 @@ namespace bgl
 	// Graph resource name of the active target's backbuffer.
 	constexpr std::string_view c_BackbufferName = "backbuffer";
 
-	RenderContext::RenderContext(
-		DeviceRef          device,
-		CommandQueueRef    queue,
-		ResourceManagerRef resourceManager) :
-		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
-		m_ResourceManager(std::move(resourceManager))
+	RenderContext::RenderContext(DeviceRef device, ResourceManagerRef resourceManager) :
+		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager))
 	{
-		// This context's queue is one of the timelines a deferred destroy must clear before the
-		// resource manager reclaims a slot.
+		// The context's own submission timeline, registered so a deferred destroy cannot reclaim a
+		// slot this queue may still be reading.
+		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 		m_ResourceManager->RegisterQueue(m_CommandQueue.Get());
 
 		// The list and its allocator are the context's own -- one recorder per context, so two
-		// contexts can record concurrently. The queue is still shared with Graphics for now.
+		// contexts can record concurrently.
 		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
 
 		auto cmdListDesc = CommandListDesc();

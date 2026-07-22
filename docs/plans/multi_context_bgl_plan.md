@@ -287,15 +287,22 @@ as before.
 * **Gate (met):** `just test` green; `--gpu-validation` clean. No new behaviour — the list is created
   in a different constructor, recorded and submitted identically.
 
-**S2b (after S3) — the context owns its queue.** Once S3 has removed the RM's single-queue
-assumption (its deletion gate no longer needs a queue at construction), the queue moves into the
-context: it creates its own, registers it with its `FrameGraph` under `"main"`, and
-`CreateRenderTarget` sources the presenting queue from the owning context. This is also where the
-`UploadManager` reclaim-predicate fix lands — comparing the queue identity in the version word, not
-just the fence value (the latent bug from §1) — since it is dormant until a second queue exists.
+**S2b (done) — the context owns its queue.** Once S3 removed the RM's single-queue assumption
+(its deletion gate no longer needs a queue at construction), the queue moved into the context: it
+creates its own, registers it with its `FrameGraph` under `"main"` and with the RM's deletion gate,
+and `CreateRenderTarget` sources the presenting queue from the owning context. Graphics no longer
+owns a queue at all.
 
-* **Gate:** `just test` green; `--gpu-validation` clean; a targeted `UploadManager` unit test that
-  two versions with equal fence values but different `QueueType` do not alias.
+The planned `UploadManager` reclaim-predicate fix — comparing queue identity in the version word —
+turned out to be unimplementable as written: the version word packs `QueueType`, and two contexts'
+graphics queues share `kGraphics`, so the word cannot distinguish them. The sound invariant is
+one level up: the upload ring is per-list, so its raw fence comparison is safe iff **all of one
+list's versions come from a single timeline**. That is now enforced — `CommandList::Open` asserts
+the queue never changes across re-opens — which the per-context architecture satisfies by
+construction (one list, one queue, both owned by the context).
+
+* **Gate (met):** `just test` green. The planned "equal fence values, different `QueueType` do not
+  alias" unit test is superseded by the `Open` assert, which forbids the aliasing setup outright.
 
 ### S3 — `ResourceManager` multi-timeline safety
 

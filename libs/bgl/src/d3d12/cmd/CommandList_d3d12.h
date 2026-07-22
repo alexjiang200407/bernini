@@ -165,6 +165,13 @@ namespace bgl
 		// GPU-assertion buffer auto-bound into a kernel's implicit gDebug cbuffer.
 		BufferHandle m_ActiveDebugBuffer;
 #endif
+		// The one queue this list may ever be opened with, latched at the list's very first Open
+		// and fixed for its lifetime. The upload ring reclaims chunks by comparing raw fence
+		// values, so every version in one list must come from a single timeline: opening on a
+		// different queue would alias fences across queues and reclaim in-flight chunks. An
+		// identity token, never dereferenced -- the owning context keeps the queue alive.
+		const ICommandQueue* m_BoundQueue = nullptr;
+
 		uint64_t m_LastCompletedFence = 0;
 		uint64_t m_RecordingVersion   = 0;
 		bool     m_Open               = false;

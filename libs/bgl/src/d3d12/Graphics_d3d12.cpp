@@ -87,7 +87,7 @@ namespace bgl
 		void
 		WaitIdle() noexcept override
 		{
-			m_CommandQueue->Flush();
+			m_Context->WaitIdle();
 		}
 
 		SceneRef
@@ -105,10 +105,12 @@ namespace bgl
 		RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
+			// A target presents on the queue its frames are recorded on, so it is created against
+			// the queue of the context that will drive it.
 			return core::SharedRef<RenderTarget>::Make(
 				desc,
 				m_Device,
-				m_CommandQueue,
+				m_Context->GetCommandQueueCpy(),
 				m_ResourceManager,
 				m_Opts.enableDebugLayer);
 		}
@@ -140,8 +142,7 @@ namespace bgl
 
 		GraphicsOptions m_Opts;
 
-		DeviceRef       m_Device;
-		CommandQueueRef m_CommandQueue;
+		DeviceRef m_Device;
 
 		wrl::ComPtr<ID3D12Debug1>     m_DebugController;
 		wrl::ComPtr<IDXGIInfoQueue>   m_DxgiInfoQueue;
@@ -237,8 +238,6 @@ namespace bgl
 				d3d12ErrChecker;
 		}
 
-		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
-
 		{
 			auto resourceManagerDesc          = ResourceManagerDesc();
 			resourceManagerDesc.maxCbvSrvUavs = m_Opts.maxCbvSrvUavs;
@@ -250,7 +249,7 @@ namespace bgl
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
 
-		m_Context = std::make_unique<RenderContext>(m_Device, m_CommandQueue, m_ResourceManager);
+		m_Context = std::make_unique<RenderContext>(m_Device, m_ResourceManager);
 	}
 
 	Graphics::~Graphics() noexcept
@@ -262,7 +261,6 @@ namespace bgl
 		m_Context.reset();
 
 		m_ResourceManager.Reset();
-		m_CommandQueue.Reset();
 		m_Device.Reset();
 
 		m_DxgiInfoQueue.Reset();
