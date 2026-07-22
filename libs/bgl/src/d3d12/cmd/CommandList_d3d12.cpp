@@ -238,6 +238,10 @@ namespace bgl
 		gassert(!m_Open, "Command list is already open");
 		gassert(cmdQueue != nullptr, "Command queue cannot be null");
 		gassert(allocator != nullptr, "Command allocator cannot be null");
+		gassert(
+			m_BoundQueue == nullptr || m_BoundQueue == cmdQueue,
+			"A command list must always be opened with the queue that first opened it");
+		m_BoundQueue = cmdQueue;
 
 		auto* d3d12Allocator = allocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
 

@@ -205,6 +205,8 @@ Everything else is self-explanatory from the header.
 
 * **`Open` / `Close` ordering.** Record only between them (`IsOpen()` reports state). `Open`
   requires a non-null queue and allocator; the **allocator must already be reset** if reused.
+  **Every `Open` of a given list must pass the same queue** (asserted): the list's upload ring
+  reclaims chunks by comparing raw fence values, which is only sound against a single timeline.
 * **`WriteBuffer(handle, data, [gpuBufferOffset,] byteSize)`** — the destination buffer must be in
   a writable state and the range must fit. Staged through the list's upload ring
   (`CommandListDesc::uploadChunkSize`). `data` points at the region's own bytes; the offset

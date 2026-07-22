@@ -25,15 +25,15 @@ namespace bgl
 	 * frame. A client drives exactly one context from one thread.
 	 *
 	 * Backend-agnostic by construction -- it reaches the GPU only through the RHI interfaces, so it
-	 * lives in core rather than a backend TU. The device, queue, list and allocator are borrowed from
-	 * the owning Graphics for now; a later stage gives each context its own.
+	 * lives in core rather than a backend TU. The queue, list and allocator are the context's own
+	 * submission machinery; only the device and resource manager are shared across contexts.
 	 *
 	 * Affinity, not thread-safety: like the rest of bgl, exactly one thread may touch a given context.
 	 */
 	class RenderContext
 	{
 	public:
-		RenderContext(DeviceRef device, CommandQueueRef queue, ResourceManagerRef resourceManager);
+		RenderContext(DeviceRef device, ResourceManagerRef resourceManager);
 
 		~RenderContext() noexcept;
 
@@ -70,6 +70,20 @@ namespace bgl
 			m_GpuAssertionHandler = handler;
 		}
 
+		// The context's submission timeline. A render target presents on the queue its frames are
+		// recorded on, so targets driven by this context must be created against this queue.
+		[[nodiscard]] CommandQueueRef
+		GetCommandQueueCpy() const noexcept
+		{
+			return m_CommandQueue;
+		}
+
+		void
+		WaitIdle() noexcept
+		{
+			m_CommandQueue->Flush();
+		}
+
 		void
 		DiscardPendingGpuAssertions() noexcept;
 
@@ -86,9 +100,9 @@ namespace bgl
 		assetlib::ImageData
 		CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller);
 
-		// The device, queue and resource manager are borrowed from the owning Graphics and shared
-		// across all contexts today. The command list and its bootstrap allocator are the context's
-		// own -- one recorder per context.
+		// The device and resource manager are shared across all contexts; the queue, command list
+		// and bootstrap allocator are the context's own -- one submission timeline and one recorder
+		// per context.
 		DeviceRef           m_Device;
 		CommandQueueRef     m_CommandQueue;
 		ResourceManagerRef  m_ResourceManager;
