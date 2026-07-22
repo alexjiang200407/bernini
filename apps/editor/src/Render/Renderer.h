@@ -1,7 +1,8 @@
 #pragma once
 
+#include "Render/invoke.h"
+
 #include <QObject>
-#include <QSemaphore>
 
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -115,57 +116,5 @@ template <typename Fn>
 std::invoke_result_t<Fn>
 Renderer::Invoke(Fn&& fn)
 {
-	using Result = std::invoke_result_t<Fn>;
-
-	if (OnRenderThread())
-		return std::invoke(std::forward<Fn>(fn));
-
-	// A throw on the render thread must come back to the caller, not escape into that thread's event
-	// loop (where it would terminate) and leave the semaphore unreleased (deadlocking this wait).
-	// Reference capture is safe: acquire() blocks here until the closure has released, so the captures
-	// outlive it.
-	QSemaphore         done;
-	std::exception_ptr error;
-	if constexpr (std::is_void_v<Result>)
-	{
-		QMetaObject::invokeMethod(
-			this,
-			[&] {
-				try
-				{
-					std::invoke(fn);
-				}
-				catch (...)
-				{
-					error = std::current_exception();
-				}
-				done.release();
-			},
-			Qt::QueuedConnection);
-		done.acquire();
-		if (error)
-			std::rethrow_exception(error);
-	}
-	else
-	{
-		Result result{};
-		QMetaObject::invokeMethod(
-			this,
-			[&] {
-				try
-				{
-					result = std::invoke(fn);
-				}
-				catch (...)
-				{
-					error = std::current_exception();
-				}
-				done.release();
-			},
-			Qt::QueuedConnection);
-		done.acquire();
-		if (error)
-			std::rethrow_exception(error);
-		return result;
-	}
+	return render::Invoke(*this, std::forward<Fn>(fn));
 }

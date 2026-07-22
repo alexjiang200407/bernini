@@ -426,6 +426,18 @@ not made here. So `AssetThumbnailCache` creates its own context *and* its own `S
 editor's `Renderer` grows a second worker thread that owns it. The cache's `DrainOne` stops using
 `Renderer::Invoke` and posts to that thread instead.
 
+**The editor half is done, save the measurement.** A `ContextWorker` (editor, `Render/`) owns the
+second thread plus the context and scene it drives; the context and scene are *created* through
+`Renderer::Invoke` — pipeline construction shares the shader cache and slang session with the
+primary context, so it is serialized against the render thread rather than raced with it — and
+then driven only by the worker. `AssetThumbnailCache` renders through the worker: its own target,
+scene view, environment maps and default material live there, and `SetAssets(AssetManager*)`
+became `SetDataRoot(path)` — the cache builds its **own** `AssetManager` over its own scene, which
+is the duplicate-upload cost this stage accepts. A side effect worth having: the KTX2 decode of
+the cache's environment maps moved off the render thread with everything else. The S4 frame-time
+measurement (cold folder populating vs. viewport) has not been recorded yet — it needs a manual
+editor session, and `feat/frame-stats` is still parked for the readout.
+
 This costs what the spec says a second device costs — env maps and thumbnail textures uploaded
 twice — but it shares the device, the PSO/shader cache, the descriptor heaps and the resource
 contexts, and it is enough to isolate the stall.
