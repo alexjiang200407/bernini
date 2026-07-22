@@ -44,8 +44,10 @@ doc and a header disagree, trust the header, then fix this doc.
   types, always held behind a `SharedRef`.
 
 * **`IDevice` is the sole factory.** All objects — shaders, pipelines, kernels, command
-  lists/allocators/queues, resource managers, uniforms — are created through `IDevice`. Acquire
-  the device from the `IGraphics` façade via `GetDevice()` (borrowed, non-owning `IDevice*`).
+  lists/allocators/queues, resource managers, render targets, uniforms — are created through
+  `IDevice`. Acquire the device from the `IGraphics` façade via `GetDevice()` (borrowed,
+  non-owning `IDevice*`). `CreateRenderTarget` takes the queue the target will present on, which
+  must be the queue of the context that drives it.
 
 * **Kernel = pipeline + reflected uniforms.** A `ComputeKernel` / `MeshletKernel` bundles a
   pipeline with one `Uniforms` CPU-mirror per constant buffer the shader declares, keyed by

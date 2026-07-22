@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/IGpuAssertionHandler.h>
+#include <bgl/IRenderContext.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -62,8 +63,19 @@ namespace bgl
 		operator=(const IGraphics&) noexcept = delete;
 
 		/**
-		 * Creates a render output (windowed swapchain or headless offscreen). One
-		 * Graphics can own many targets and render to each independently.
+		 * Creates an independent submission context over the same device: its own queue, recorder
+		 * and frame state, so its frames neither block nor are blocked by another context's. The
+		 * device supports a small fixed number of contexts (currently 8, including the primary);
+		 * exceeding it asserts. See IRenderContext for the threading and target/scene rules.
+		 */
+		virtual RenderContextRef
+		CreateRenderContext() = 0;
+
+		/**
+		 * Creates a render output (windowed swapchain or headless offscreen) driven by this
+		 * Graphics's frame methods -- i.e. by the primary context. A target for another context
+		 * must be created with that context's CreateRenderTarget instead. One Graphics can own
+		 * many targets and render to each independently.
 		 */
 		virtual RenderTargetRef
 		CreateRenderTarget(const RenderTargetDesc& desc) = 0;

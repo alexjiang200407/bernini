@@ -3,6 +3,7 @@
 #include "pipeline/MeshletKernel.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
+#include <bgl/IRenderTarget.h>
 #include <core/file/file.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -78,6 +79,20 @@ namespace bgl
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>
 		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept = 0;
+
+		/**
+		 * The target presents on `queue`, so it must be the queue of the context that will drive
+		 * the target.
+		 *
+		 * @throws GraphicsError on swapchain or backbuffer creation failure.
+		 */
+		[[nodiscard]]
+		virtual RenderTargetRef
+		CreateRenderTarget(
+			const RenderTargetDesc&           desc,
+			core::SharedRef<ICommandQueue>    queue,
+			core::SharedRef<IResourceManager> resourceManager,
+			bool                              enableDebug) const = 0;
 
 		[[nodiscard]]
 		virtual Uniforms

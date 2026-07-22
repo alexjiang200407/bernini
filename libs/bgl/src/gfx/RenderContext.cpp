@@ -114,8 +114,12 @@ namespace bgl
 	// Graph resource name of the active target's backbuffer.
 	constexpr std::string_view c_BackbufferName = "backbuffer";
 
-	RenderContext::RenderContext(DeviceRef device, ResourceManagerRef resourceManager) :
-		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager))
+	RenderContext::RenderContext(
+		DeviceRef          device,
+		ResourceManagerRef resourceManager,
+		bool               enableDebug) :
+		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
+		m_EnableDebug(enableDebug)
 	{
 		// The context's own submission timeline, registered so a deferred destroy cannot reclaim a
 		// slot this queue may still be reading.
@@ -280,6 +284,12 @@ namespace bgl
 		gfatal("{}", msg);
 	}
 #endif
+
+	RenderTargetRef
+	RenderContext::CreateRenderTarget(const RenderTargetDesc& desc)
+	{
+		return m_Device->CreateRenderTarget(desc, m_CommandQueue, m_ResourceManager, m_EnableDebug);
+	}
 
 	void
 	RenderContext::BeginFrame(const RenderTargetRef& target)

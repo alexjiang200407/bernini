@@ -390,6 +390,13 @@ distribution shows a tail that correlates with asset loads, that is the signal t
 Ship `IRenderContext` + `CreateRenderContext`. `IGraphics` keeps its frame methods against an
 implicit primary context.
 
+**The API half is done.** `IRenderContext` is public, `IGraphics::CreateRenderContext` mints
+contexts (the internal `RenderContext` implements the interface), and `CreateRenderTarget` lives on
+the context — routed through a new `IDevice::CreateRenderTarget` so the core context class stays
+backend-free. A `bgl_tests` case drives two contexts with interleaved open frames from the public
+API alone, both matching the cube golden. What remains of S4 is the editor half below: the
+thumbnail cache's own context + scene + thread, and the measurement.
+
 **Interim constraint: two contexts must not share a `Scene`.** That is the §6 decision, and it is
 not made here. So `AssetThumbnailCache` creates its own context *and* its own `Scene`, and the
 editor's `Renderer` grows a second worker thread that owns it. The cache's `DrainOne` stops using

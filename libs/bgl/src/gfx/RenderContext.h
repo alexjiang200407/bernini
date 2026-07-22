@@ -13,29 +13,25 @@
 #include "passes/SkyboxPass.h"
 #include "passes/TransparentSortPass.h"
 #include "resource/ResourceManager.h"
-#include <bgl/IGpuAssertionHandler.h>
-#include <bgl/IRenderTarget.h>
-#include <bgl/RenderJob.h>
+#include <bgl/IRenderContext.h>
+#include <core/ref/RefCounter.h>
 
 namespace bgl
 {
 	/**
-	 * One single-threaded submission context over a device: the command list, frame graph, retained
-	 * pass objects and GPU-debug readback ring that turn a RenderJob into a submitted, presented
-	 * frame. A client drives exactly one context from one thread.
+	 * The IRenderContext implementation: the command list, frame graph, retained pass objects and
+	 * GPU-debug readback ring that turn a RenderJob into a submitted, presented frame.
 	 *
 	 * Backend-agnostic by construction -- it reaches the GPU only through the RHI interfaces, so it
 	 * lives in core rather than a backend TU. The queue, list and allocator are the context's own
 	 * submission machinery; only the device and resource manager are shared across contexts.
-	 *
-	 * Affinity, not thread-safety: like the rest of bgl, exactly one thread may touch a given context.
 	 */
-	class RenderContext
+	class RenderContext final : public core::RefCounter<IRenderContext>
 	{
 	public:
-		RenderContext(DeviceRef device, ResourceManagerRef resourceManager);
+		RenderContext(DeviceRef device, ResourceManagerRef resourceManager, bool enableDebug);
 
-		~RenderContext() noexcept;
+		~RenderContext() noexcept override;
 
 		RenderContext(const RenderContext&) noexcept = delete;
 		RenderContext(RenderContext&&) noexcept      = delete;
@@ -46,26 +42,29 @@ namespace bgl
 		RenderContext&
 		operator=(RenderContext&&) noexcept = delete;
 
-		void
-		BeginFrame(const RenderTargetRef& target);
+		RenderTargetRef
+		CreateRenderTarget(const RenderTargetDesc& desc) override;
 
 		void
-		Draw(const RenderJob& job);
+		BeginFrame(const RenderTargetRef& target) override;
 
 		void
-		EndFrame();
+		Draw(const RenderJob& job) override;
 
 		void
-		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height);
+		EndFrame() override;
 
 		void
-		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath);
+		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) override;
+
+		void
+		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) override;
 
 		assetlib::ImageData
-		ScreenshotToMemory(const RenderTargetRef& target);
+		ScreenshotToMemory(const RenderTargetRef& target) override;
 
 		void
-		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept
+		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept override
 		{
 			m_GpuAssertionHandler = handler;
 		}
@@ -85,7 +84,7 @@ namespace bgl
 		}
 
 		void
-		DiscardPendingGpuAssertions() noexcept;
+		DiscardPendingGpuAssertions() noexcept override;
 
 	private:
 #if defined(BERNINI_GPU_DEBUG)
@@ -109,6 +108,7 @@ namespace bgl
 		CommandAllocatorRef m_BootstrapAllocator;
 		CommandListRef      m_CommandList;
 
+		bool m_EnableDebug = false;
 		bool m_FrameActive = false;
 
 		// The render target bound by the current BeginFrame (null outside a frame).
