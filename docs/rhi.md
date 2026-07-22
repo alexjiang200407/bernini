@@ -70,14 +70,15 @@ doc and a header disagree, trust the header, then fix this doc.
   never call `Barrier` directly. See [Frame Graph](docs/framegraph.md) and
   [Pipeline State](docs/pipeline_state.md).
 
-* **External synchronization; interfaces are not thread-safe.** Methods are `noexcept`. The RHI is
-  built for a single render thread: creation and command recording must be externally synchronized,
-  and a command list is single-threaded between `Open` and `Close`. Most interfaces take no locks.
-  The exception is `ICommandQueue`, which holds two internal mutexes and locks around parts of its
-  fence bookkeeping (`ExecuteCommandList`, `Flush`, `WaitForFenceCPUBlocking`); that locking is
-  **incomplete** — `PollCurrentFenceValue` does an unlocked read-modify-write of the same cached
-  fence value — so it is not a thread-safety guarantee. Synchronize the queue externally like
-  everything else.
+* **Context affinity, with a thread-safe resource-manager core.** Methods are `noexcept`. Each
+  submission context (queue + list + frame state) is single-thread-affine: one thread drives it,
+  and a command list is single-threaded between `Open` and `Close`. What contexts share is safe to
+  share: `IResourceManager` creation, destruction and `CleanupExpiredResources` serialize on an
+  internal mutex, and the queue's fence counters are atomics so one context's sweep may read
+  another's progress. `Get*`/`Valid*` reads take no lock — slot storage never moves
+  (fixed-capacity pools) and only a handle's owner may destroy it, so a read never races the
+  retirement of the slot it reads. Everything else (`IScene`, `ISceneView`, pipelines, uniforms)
+  stays externally synchronized: one owner, one thread.
 
 * **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
   is **not** an `I*` interface — the only thing crossing the boundary is
@@ -156,10 +157,10 @@ flowchart TD
 
 ## Threading & Synchronization
 
-* **Render thread + external sync.** No interface is thread-safe. Object creation
-  (`IDevice`, `IResourceManager`) and recording (`ICommandList`) run on the render thread.
-  `ICommandQueue` takes internal locks on some fence operations, but the coverage is incomplete
-  (see Design Choices) — do not treat it as thread-safe.
+* **One thread per context; the shared core is internally synchronized.** Recording
+  (`ICommandList`) and everything scene-level run on the thread that owns their context.
+  `IResourceManager` create/destroy/cleanup and the queue's fence bookkeeping are safe to call
+  from any context's thread (see Design Choices).
 * **One recorder per command list**, between `Open` and `Close`. Never share an open list.
 * **Fences are the only sync primitive.** `ExecuteCommandList` returns a monotonic fence value.
   CPU waits (`WaitForFenceCPUBlocking`, `IsFenceComplete`) and GPU-side waits

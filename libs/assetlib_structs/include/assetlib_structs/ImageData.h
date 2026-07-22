@@ -21,9 +21,8 @@ namespace assetlib
 		uint32_t height    = 0;
 		uint32_t mipLevels = 1;
 		uint32_t arraySize = 1;
-		// The format tag the KTX2 container carries natively. API-neutral on purpose: each RHI
-		// backend maps it to its own format (see the D3D12 VkFormatToDXGI path). Not a DXGI/Metal
-		// format.
+		// The format tag the KTX2 container carries natively. API-neutral on purpose: the renderer
+		// maps it to its own format (bgl's FromVkFormat). Not a DXGI/Metal format.
 		VkFormat vkFormat  = VkFormat::Undefined;
 		bool     isCubemap = false;
 

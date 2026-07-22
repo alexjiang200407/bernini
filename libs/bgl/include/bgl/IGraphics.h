@@ -43,11 +43,12 @@ namespace bgl
 		std::string shaderCacheDir;
 
 		// Capacities for the graphics-owned descriptor heaps / resource pools.
-		uint32_t maxCbvSrvUavs = 1000;
-		uint32_t maxRtvs       = 5;
-		uint32_t maxDsvs       = 5;
-		uint32_t maxTextures   = 1000;
-		uint32_t maxSamplers   = 128;
+		uint32_t maxCbvSrvUavs      = 1000;
+		uint32_t maxRtvs            = 5;
+		uint32_t maxDsvs            = 5;
+		uint32_t maxTextures        = 1000;
+		uint32_t maxSamplers        = 128;
+		uint32_t maxReadbackBuffers = 64;
 	};
 
 	class BGL_API IGraphics : public core::Ref

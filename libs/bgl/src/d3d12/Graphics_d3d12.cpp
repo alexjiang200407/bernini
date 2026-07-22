@@ -240,12 +240,13 @@ namespace bgl
 		}
 
 		{
-			auto resourceManagerDesc          = ResourceManagerDesc();
-			resourceManagerDesc.maxCbvSrvUavs = m_Opts.maxCbvSrvUavs;
-			resourceManagerDesc.maxDsvs       = m_Opts.maxDsvs;
-			resourceManagerDesc.maxRtvs       = m_Opts.maxRtvs;
-			resourceManagerDesc.maxTextures   = m_Opts.maxTextures;
-			resourceManagerDesc.maxSamplers   = m_Opts.maxSamplers;
+			auto resourceManagerDesc               = ResourceManagerDesc();
+			resourceManagerDesc.maxCbvSrvUavs      = m_Opts.maxCbvSrvUavs;
+			resourceManagerDesc.maxDsvs            = m_Opts.maxDsvs;
+			resourceManagerDesc.maxRtvs            = m_Opts.maxRtvs;
+			resourceManagerDesc.maxTextures        = m_Opts.maxTextures;
+			resourceManagerDesc.maxSamplers        = m_Opts.maxSamplers;
+			resourceManagerDesc.maxReadbackBuffers = m_Opts.maxReadbackBuffers;
 
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}

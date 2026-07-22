@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib_structs/VkFormat.h>
 
 #include "resource/Sampler.h"
 #include "resource/Texture.h"
@@ -20,9 +19,6 @@ namespace bgl
 
 	DXGI_FORMAT
 	ConvertFormat(Format bglFormat);
-
-	DXGI_FORMAT
-	VkFormatToDXGI(assetlib::VkFormat vkFormat);
 
 	D3D12_RESOURCE_DIMENSION
 	ConvertResourceDimension(TextureDimension dimension);

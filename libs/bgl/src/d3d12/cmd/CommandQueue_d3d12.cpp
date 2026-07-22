@@ -46,17 +46,25 @@ namespace bgl
 		commandList->As<CommandList>()->SubmitChunks(this);
 
 		std::lock_guard<std::mutex> lockGuard(m_FenceMutex);
-		m_CommandQueue->Signal(m_Fence.Get(), m_NextFenceValue) >> d3d12ErrChecker;
+		m_CommandQueue->Signal(m_Fence.Get(), m_NextFenceValue.load(std::memory_order_relaxed)) >>
+			d3d12ErrChecker;
 
-		return m_NextFenceValue++;
+		return m_NextFenceValue.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	uint64_t
 	CommandQueue::PollCurrentFenceValue() noexcept
 	{
-		m_LastCompletedFenceValue =
-			std::max(m_LastCompletedFenceValue, m_Fence->GetCompletedValue());
-		return m_LastCompletedFenceValue;
+		// Max-update: concurrent pollers (the RM sweep runs on any context's thread) must never
+		// move the published value backwards.
+		const uint64_t completed = m_Fence->GetCompletedValue();
+		uint64_t       previous  = m_LastCompletedFenceValue.load(std::memory_order_relaxed);
+		while (previous < completed && !m_LastCompletedFenceValue.compare_exchange_weak(
+										   previous,
+										   completed,
+										   std::memory_order_relaxed))
+		{}
+		return std::max(previous, completed);
 	}
 
 	void
@@ -92,7 +100,13 @@ namespace bgl
 
 			m_Fence->SetEventOnCompletion(fenceValue, m_FenceEvent);
 			WaitForSingleObjectEx(m_FenceEvent, INFINITE, false);
-			m_LastCompletedFenceValue = fenceValue;
+
+			uint64_t previous = m_LastCompletedFenceValue.load(std::memory_order_relaxed);
+			while (previous < fenceValue && !m_LastCompletedFenceValue.compare_exchange_weak(
+												previous,
+												fenceValue,
+												std::memory_order_relaxed))
+			{}
 		}
 	}
 
@@ -112,12 +126,12 @@ namespace bgl
 	bool
 	CommandQueue::IsFenceComplete(uint64_t fenceValue) noexcept
 	{
-		if (fenceValue > m_LastCompletedFenceValue)
+		if (fenceValue > m_LastCompletedFenceValue.load(std::memory_order_relaxed))
 		{
-			PollCurrentFenceValue();
+			return fenceValue <= PollCurrentFenceValue();
 		}
 
-		return fenceValue <= m_LastCompletedFenceValue;
+		return true;
 	}
 
 }

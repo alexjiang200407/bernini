@@ -397,6 +397,30 @@ backend-free. A `bgl_tests` case drives two contexts with interleaved open frame
 API alone, both matching the cube golden. What remains of S4 is the editor half below: the
 thumbnail cache's own context + scene + thread, and the measurement.
 
+**The concurrency half (§3 pieces 3–4 as co-landed machinery) is done.** What shipped, and where
+it deviated from the design recorded above:
+
+* **The allocation mutex (piece 3), widened to one lock.** One mutex serializes slot
+  allocation/retirement/reclamation, the deletion batches and the queue registry. Piece 2's
+  per-context sharding of the pending deletions was **not** built: destroys arrive via `Scene`,
+  which has no context identity to shard by, and the #85 redesign already coalesces a frame's
+  destroys into one shared-gate batch — the sharding's win — so the shard would add a lookup key
+  that nothing can supply. `Get*`/`Valid*` reads stay lock-free, licensed by piece 1's pool
+  stability test.
+* **The gate (piece 4) landed in #85**; its atomic-publication half landed here as atomics on the
+  queue's fence counters (`m_NextFenceValue`, `m_LastCompletedFenceValue`), so a sweep on one
+  context's thread reads another queue's progress without its lock.
+* **Texture uploads moved out of the RM entirely** (not in the original design, forced by two
+  timelines): the RM-global pending-upload list meant whichever scene flushed first uploaded
+  every scene's textures on its own list, leaving upload and sampling unordered across queues.
+  `Scene` now owns its pending uploads and flushes them in `Update` on the list of the context
+  that draws it. The RM's `CreateTexture(initialData)` / `CreateTexture(ImageData)` /
+  `CreateSolidTexture` / `FlushPendingTextureUploads` are gone; creation is upload-free, and the
+  Vk-format mapping the ImageData overload buried in the backend is now `FromVkFormat` in core.
+* **Verified** by a two-thread `bgl_tests` case: both contexts churn create/draw/destroy per
+  frame against the shared RM, sweeps run from both threads, and each context's final frame still
+  matches the cube golden.
+
 **Interim constraint: two contexts must not share a `Scene`.** That is the §6 decision, and it is
 not made here. So `AssetThumbnailCache` creates its own context *and* its own `Scene`, and the
 editor's `Renderer` grows a second worker thread that owns it. The cache's `DrainOne` stops using
