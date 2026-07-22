@@ -61,7 +61,7 @@ and portability.
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now
     - [x] Choose Material Options: e.g. Alpha Mode
-    - [x] Link Textures to output nodes (BRDF for PBR)
+    -    [x] Link Textures to output nodes (BRDF for PBR)
 - [ ] Culling
   - [ ] Frustum Culling
   - [ ] Geometry Cluster Culling
@@ -95,6 +95,7 @@ and portability.
   - [ ] Compute Skinning Bandwidth
   - [ ] Test Motion Vectors for all geometry types: LODs, Skinned meshes during animation
 - [ ] Light and Shadow
+  - [ ] Async Compute 
   - [ ] Directional Lighting
   - [ ] Point Light
   - [ ] Ambient / Sky Light
