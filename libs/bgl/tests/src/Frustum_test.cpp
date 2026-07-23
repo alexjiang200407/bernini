@@ -135,3 +135,20 @@ TEST_CASE("BuildCullView mirrors the matrix and its extracted planes", "[culling
 		CHECK(glm::length(glm::vec3(view.frustumPlanes[i])) == Catch::Approx(1.0f).margin(1e-5));
 	}
 }
+
+TEST_CASE("A degenerate view-projection culls nothing instead of faulting", "[culling]")
+{
+	// A zero-area viewport -- an editor window before its first layout -- yields a projection full of
+	// zeros or NaNs. Extraction must not fault, and the frustum must keep every sphere: culling may
+	// never drop what a valid view would draw. Both the all-zero and NaN forms exercise the guard,
+	// since `length > 0.0f` is false for each.
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+
+	for (const glm::mat4& viewProj : { glm::mat4(0.0f), glm::mat4(nan) })
+	{
+		const auto planes = bgl::ExtractFrustumPlanes(viewProj);
+
+		CHECK(bgl::SphereIntersectsFrustum(planes, glm::vec3(0.0f), 1.0f));
+		CHECK(bgl::SphereIntersectsFrustum(planes, glm::vec3(1000.0f, -2000.0f, 3000.0f), 0.5f));
+	}
+}

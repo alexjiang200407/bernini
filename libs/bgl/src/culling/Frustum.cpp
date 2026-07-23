@@ -21,8 +21,18 @@ namespace bgl
 		for (glm::vec4& plane : frustum.planes)
 		{
 			const float length = glm::length(glm::vec3(plane));
-			gassert(length > 0.0f, "Degenerate view-projection matrix");
-			plane /= length;
+			if (length > 0.0f)
+			{
+				plane /= length;
+			}
+			else
+			{
+				// A zero-area viewport -- an editor window before its first layout, say -- makes the
+				// projection, and so every plane normal, zero or NaN. Emit a plane containing all of
+				// space so a degenerate view culls nothing instead of crashing: culling must never
+				// drop geometry a valid view would draw. (length > 0.0f is also false for NaN.)
+				plane = glm::vec4(0.0f, 0.0f, 0.0f, std::numeric_limits<float>::max());
+			}
 		}
 
 		return frustum;
