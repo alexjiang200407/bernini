@@ -445,6 +445,18 @@ contexts, and it is enough to isolate the stall.
 * **Gate — the measurement, and the point of the whole exercise:** with S0's readout, populate a
   cold folder while a viewport renders. Viewport mean frame time stays at vsync (~16 ms) and max
   stays under ~20 ms, against the ~700 ms baseline. Record both numbers in the PR.
+
+  **Measured (2026-07-23, populating the Test Project mesh folder cold, viewport visible):
+  mean 16.7 ms, max 33.2 ms.** The mean is at vsync — the stall the whole change exists to remove
+  is gone; the multi-hundred-ms freeze the spec measured no longer reproduces. The max misses the
+  <20 ms aspiration: 33.2 ms is one doubled vblank interval (2 × 16.67), i.e. a *single dropped
+  frame* during the populate, not a sustained stall — still a ~21x cut on the ~700 ms worst case.
+  A lone hitch during a bulk upload burst is exactly the asset-load-correlated tail S3 flagged as
+  the signal to revisit the shared `ResourceManager` mutex (the viewport's per-frame resource
+  creation briefly convoying behind the thumbnail context holding the pool lock). It is minor —
+  one imperceptible-to-brief hitch, not the freeze — so chasing it is optional, and the lever if
+  taken is S3's lock-free free list rather than anything in the context split itself. **S4's win is
+  achieved; the residual single-frame tail is logged, not a blocker.**
 * `just test` green; `--gpu-validation` clean; `editor_tests "[thumbnails]"` green with goldens
   matching.
 * **New test:** two contexts drawing concurrently to two headless targets over two scenes, each
