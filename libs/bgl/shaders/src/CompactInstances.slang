@@ -10,6 +10,7 @@ static const uint kPsoCount = uint(PsoType::kCount);
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
+    ComputeBuffer<uint> visibility;
     ComputeBuffer<uint> psoPrefixSum;
     ComputeBuffer<uint> compactedInstances;
     ComputeBuffer<DispatchArgs> dispatchArgs;
@@ -29,6 +30,12 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let psoType = instance.pso;
     if (psoType >= kPsoCount)
+    {
+        return;
+    }
+
+    // Skip exactly what the histogram skipped, or the bucket bases and the scatter disagree.
+    if (gUniforms.visibility[globalIdx] == 0u)
     {
         return;
     }

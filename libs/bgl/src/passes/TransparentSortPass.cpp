@@ -15,13 +15,14 @@ namespace bgl
 	{
 		// Owned by the SceneView: both are sized off its instance buffer, so the depth-key pass
 		// cannot append past the end however many instances turn out to be transparent.
-		constexpr auto c_EntriesBuffer     = "scene.transparentSortEntries";
-		constexpr auto c_CountBuffer       = "scene.transparentSortCount";
-		constexpr auto c_PartitionBase     = "transparentSort.partitionBase";
-		constexpr auto c_PartitionArgs     = "transparentSort.partitionDispatchArgs";
-		constexpr auto c_SortedTransparent = "scene.sortedTransparentInstances";
-		constexpr auto c_InstanceBuffer    = "scene.instanceBuffer";
-		constexpr auto c_MeshBuffer        = "scene.meshInstanceBuffer";
+		constexpr auto c_EntriesBuffer      = "scene.transparentSortEntries";
+		constexpr auto c_CountBuffer        = "scene.transparentSortCount";
+		constexpr auto c_PartitionBase      = "transparentSort.partitionBase";
+		constexpr auto c_PartitionArgs      = "transparentSort.partitionDispatchArgs";
+		constexpr auto c_SortedTransparent  = "scene.sortedTransparentInstances";
+		constexpr auto c_InstanceBuffer     = "scene.instanceBuffer";
+		constexpr auto c_MeshBuffer         = "scene.meshInstanceBuffer";
+		constexpr auto c_InstanceVisibility = "scene.instanceVisibility";
 	}
 
 	void
@@ -99,6 +100,10 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
 					.AddBufferArg(
+						c_InstanceVisibility,
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferArg(
 						c_EntriesBuffer,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
@@ -166,6 +171,7 @@ namespace bgl
 
 		m_DepthKeys["gUniforms"]["instanceBuffer"] = ctx.GetBuffer(c_InstanceBuffer);
 		m_DepthKeys["gUniforms"]["meshBuffer"]     = ctx.GetBuffer(c_MeshBuffer);
+		m_DepthKeys["gUniforms"]["visibility"]     = ctx.GetBuffer(c_InstanceVisibility);
 		m_DepthKeys["gUniforms"]["outEntries"]     = ctx.GetBuffer(c_EntriesBuffer);
 		m_DepthKeys["gUniforms"]["outCount"]       = ctx.GetBuffer(c_CountBuffer);
 		m_DepthKeys["gUniforms"]["cameraPos"]      = draw.cameraPos;

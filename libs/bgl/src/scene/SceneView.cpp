@@ -21,9 +21,10 @@ namespace bgl
 			{ "scene.compactedInstances" },
 		} };
 
-		constexpr std::string_view c_SortedTransparentName = "scene.sortedTransparentInstances";
-		constexpr std::string_view c_TransparentKeysName   = "scene.transparentSortEntries";
-		constexpr std::string_view c_TransparentCountName  = "scene.transparentSortCount";
+		constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility";
+		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
+		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
+		constexpr std::string_view c_TransparentCountName   = "scene.transparentSortCount";
 
 		// Each SceneView gets a process-unique namespace so views sharing one Scene
 		// don't collide in the frame graph.
@@ -72,6 +73,17 @@ namespace bgl
 			compactedInstancesDesc.debugName = "Compacted Instances";
 
 			m_CompactedInstances.Init(std::move(compactedInstancesDesc), m_ResourceManager);
+		}
+
+		{
+			auto visibilityDesc = ComputeBufferDesc();
+			visibilityDesc.SetElement<uint32_t>();
+			// The cull pass writes one word per instance slot over the whole padded range, so match
+			// the instance buffer's padded size exactly.
+			visibilityDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
+			visibilityDesc.debugName = "Instance Visibility";
+
+			m_InstanceVisibility.Init(std::move(visibilityDesc), m_ResourceManager);
 		}
 
 		{
@@ -450,6 +462,10 @@ namespace bgl
 				}());
 			},
 			buffers);
+
+		std::string visibilityName(c_InstanceVisibilityName);
+		fg.ImportBuffer(visibilityName, m_InstanceVisibility.GetBufferHandle());
+		resourceNames.push_back(std::move(visibilityName));
 
 		std::string sortedName(c_SortedTransparentName);
 		fg.ImportBuffer(sortedName, m_SortedTransparentInstances.GetBufferHandle());

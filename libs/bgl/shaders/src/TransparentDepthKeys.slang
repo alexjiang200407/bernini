@@ -26,6 +26,7 @@ struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
     EntryBuffer<Mesh> meshBuffer;
+    ComputeBuffer<uint> visibility;
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.
     ComputeBuffer<uint2> outEntries;
@@ -44,6 +45,12 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     // The buffer is padded to whole groups with default instances; those name no mesh.
     if (instance.meshInstance.Null())
+    {
+        return;
+    }
+
+    // A frustum-culled instance is drawn by nothing, so it must not take a slot in the sorted list.
+    if (gUniforms.visibility[globalIdx] == 0u)
     {
         return;
     }

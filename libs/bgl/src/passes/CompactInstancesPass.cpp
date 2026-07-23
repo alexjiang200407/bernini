@@ -1,6 +1,7 @@
 #include "passes/CompactInstancesPass.h"
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
+#include "idl/CullView.h"
 #include "idl/DispatchArgs.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
@@ -17,6 +18,11 @@ namespace bgl
 	CompactInstancesPass::Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
 	{
 		gassert(device != nullptr, "Device pointer is null");
+
+		m_CullInstances = device->CreateComputeKernel(
+			ComputePipelineDesc()
+				.SetShader(device->CreateShader("CullInstances"))
+				.SetDebugName("Cull Instances"));
 
 		m_Histogram = device->CreateComputeKernel(
 			ComputePipelineDesc()
@@ -48,6 +54,20 @@ namespace bgl
 
 			m_CompactedDispatchArgs.Init(desc, resourceManager);
 		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<idl::CullView>().SetMaxCount(1).SetDebugName("Cull View");
+
+			m_CullView.Init(desc, resourceManager);
+		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<uint32_t>().SetMaxCount(2).SetDebugName("Cull Stats");
+
+			m_CullStats.Init(desc, resourceManager);
+		}
 	}
 
 	void
@@ -55,12 +75,15 @@ namespace bgl
 	{
 		logger::trace("CompactInstancesPass::Release");
 
+		m_CullInstances.Reset();
 		m_Histogram.Reset();
 		m_PrefixSum.Reset();
 		m_CompactInstances.Reset();
 
 		m_CompactedDispatchArgs.Release(deferred);
 		m_PsoPrefixSumBuffer.Release(deferred);
+		m_CullView.Release(deferred);
+		m_CullStats.Release(deferred);
 	}
 
 	void
@@ -72,6 +95,8 @@ namespace bgl
 			.ImportGlobalBuffer(
 				"compactedInstances.compactDispatchArgs",
 				m_CompactedDispatchArgs.GetBufferHandle())
+			.ImportGlobalBuffer("cull.view", m_CullView.GetBufferHandle())
+			.ImportGlobalBuffer("cull.stats", m_CullStats.GetBufferHandle())
 			.AddPass(
 				PassDesc()
 					.SetName(std::format("Compact Instances Update {}", draw.drawIdx))
@@ -83,7 +108,40 @@ namespace bgl
 						"compactedInstances.compactDispatchArgs",
 						BarrierSyncFlag::kCopy,
 						BarrierAccessFlag::kCopyDest)
-					.SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
+					.AddBufferArg("cull.view", BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest)
+					.AddBufferArg(
+						"cull.stats",
+						BarrierSyncFlag::kCopy,
+						BarrierAccessFlag::kCopyDest)
+					.SetExec([draw, this](const PassContext& ctx) { ExecuteClear(ctx, draw); }))
+			.AddPass(
+				PassDesc()
+					.SetName(std::format("Cull Instances {}", draw.drawIdx))
+					.AddBufferArg(
+						"scene.instanceBuffer",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kShaderResource)
+					.AddBufferArg(
+						"scene.meshInstanceBuffer",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kShaderResource)
+					.AddBufferArg(
+						"scene.submeshBuffer",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kShaderResource)
+					.AddBufferArg(
+						"cull.view",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferArg(
+						"scene.instanceVisibility",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferArg(
+						"cull.stats",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
+					.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
 			.AddPass(
 				PassDesc()
 					.SetName(std::format("Histogram and Prefix Sum Instances {}", draw.drawIdx))
@@ -91,6 +149,10 @@ namespace bgl
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
+					.AddBufferArg(
+						"scene.instanceVisibility",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
 						"compactedInstances.psoPrefixSumBuffer",
 						BarrierSyncFlag::kComputeShader,
@@ -105,6 +167,10 @@ namespace bgl
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
+					.AddBufferArg(
+						"scene.instanceVisibility",
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
 						"scene.compactedInstances",
 						BarrierSyncFlag::kComputeShader,
@@ -123,11 +189,15 @@ namespace bgl
 	}
 
 	void
-	CompactInstancesPass::ExecuteClear(const PassContext& ctx)
+	CompactInstancesPass::ExecuteClear(const PassContext& ctx, const DrawData& draw)
 	{
 		auto cmd = ctx.GetCommandList();
 
 		m_PsoPrefixSumBuffer.Clear(cmd);
+		m_CullStats.Clear(cmd);
+
+		cmd->WriteBuffer(m_CullView.GetBufferHandle(), &draw.cullView, sizeof(idl::CullView));
+
 		static constexpr std::array<idl::DispatchArgs, c_PsoCount> kSeed = [] {
 			std::array<idl::DispatchArgs, c_PsoCount> seed{};
 			for (idl::DispatchArgs& args : seed)
@@ -138,6 +208,32 @@ namespace bgl
 		}();
 
 		cmd->WriteBuffer(m_CompactedDispatchArgs.GetBufferHandle(), kSeed.data(), sizeof(kSeed));
+	}
+
+	void
+	CompactInstancesPass::ExecuteCull(const PassContext& ctx, const DrawData& draw)
+	{
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
+
+		m_CullInstances["gUniforms"]["cullView"]       = ctx.GetBuffer("cull.view");
+		m_CullInstances["gUniforms"]["instanceBuffer"] = ctx.GetBuffer("scene.instanceBuffer");
+		m_CullInstances["gUniforms"]["meshBuffer"]     = ctx.GetBuffer("scene.meshInstanceBuffer");
+		m_CullInstances["gUniforms"]["submeshBuffer"]  = ctx.GetBuffer("scene.submeshBuffer");
+		m_CullInstances["gUniforms"]["visibility"]     = ctx.GetBuffer("scene.instanceVisibility");
+		m_CullInstances["gUniforms"]["stats"]          = ctx.GetBuffer("cull.stats");
+
+		auto cmdList = ctx.GetCommandList();
+
+		auto computeState   = ComputeState();
+		computeState.kernel = &m_CullInstances;
+
+		cmdList->SetComputeState(computeState);
+
+		const auto instanceCount = draw.view->GetInstanceCount();
+		cmdList->Dispatch(core::div_ceil(instanceCount, idl::cHistogramGroupSize), 1, 1);
 	}
 
 	void
@@ -152,6 +248,7 @@ namespace bgl
 		auto psoPrefixSumBuffer = ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer");
 
 		m_Histogram["gUniforms"]["instanceBuffer"] = instanceBuffer;
+		m_Histogram["gUniforms"]["visibility"]     = ctx.GetBuffer("scene.instanceVisibility");
 
 		// Reuse histogram buffer as prefix sum buffer
 		m_Histogram["gUniforms"]["outBuffer"] = psoPrefixSumBuffer;
@@ -205,8 +302,9 @@ namespace bgl
 		auto psoPrefixSumBuffer          = ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer");
 		auto compactedDispatchArgsBuffer = ctx.GetBuffer("compactedInstances.compactDispatchArgs");
 
-		m_CompactInstances["gUniforms"]["instanceBuffer"]     = instanceBuffer;
-		m_CompactInstances["gUniforms"]["psoPrefixSum"]       = psoPrefixSumBuffer;
+		m_CompactInstances["gUniforms"]["instanceBuffer"] = instanceBuffer;
+		m_CompactInstances["gUniforms"]["visibility"]   = ctx.GetBuffer("scene.instanceVisibility");
+		m_CompactInstances["gUniforms"]["psoPrefixSum"] = psoPrefixSumBuffer;
 		m_CompactInstances["gUniforms"]["compactedInstances"] = compactedInstancesBuffer;
 		m_CompactInstances["gUniforms"]["dispatchArgs"]       = compactedDispatchArgsBuffer;
 

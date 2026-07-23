@@ -10,6 +10,7 @@ static const uint kPsoCount = uint(PsoType::kCount);
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
+    ComputeBuffer<uint> visibility;
     ComputeBuffer<uint> outBuffer;
 };
 
@@ -29,7 +30,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     let instance = gUniforms.instanceBuffer[globalIdx];
 
-    if (!instance.meshInstance.Null())
+    if (!instance.meshInstance.Null() && gUniforms.visibility[globalIdx] != 0u)
     {
         let psoType = instance.pso;
 
