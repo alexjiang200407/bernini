@@ -32,6 +32,10 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto gfxOpts             = bgl::GraphicsOptions{};
 		gfxOpts.enableDebugLayer = true;
 		gfxOpts.logLevel         = bgl::GraphicsOptions::LogLevel::kWarn;
+		// Without this, every launch recompiles all pass shaders through the Slang front-end -- the
+		// several-second startup. The cache persists compiled DXIL + driver PSOs across runs, so only
+		// the first launch pays it.
+		gfxOpts.shaderCacheDir = "shadercache";
 
 		constexpr uint32_t kWidth  = 800;
 		constexpr uint32_t kHeight = 600;
