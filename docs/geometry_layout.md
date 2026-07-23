@@ -45,8 +45,10 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   [Constants.h](libs/bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere for culling.
 
-* **A `Submesh` is pure geometry, and is 1:1 with a source submesh.** It carries one vertex layout
-  and its meshlet/vertex/index ranges — and *nothing about shading*. `Scene::AddStaticMesh` emits
+* **A `Submesh` is pure geometry, and is 1:1 with a source submesh.** It carries one vertex layout,
+  its meshlet/vertex/index ranges, and a local-space bounding sphere — and *nothing about shading*.
+  The sphere circumscribes the submesh's AABB: the cooked `assetlib::Submesh` AABB for an asset, a
+  fold over the generated vertices for a procedural geom. `Scene::AddStaticMesh` emits
   exactly one per source submesh, in source order. Its meshlet count is *unbounded* — up to the 65535
   thread groups a `DispatchMesh` can launch — and is a dispatch dimension, never a partitioning
   criterion. Nothing may split a submesh on meshlet count: doing so duplicates the partition's
@@ -116,7 +118,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | Struct | File | Role |
 |---|---|---|
 | `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>`. |
-| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count. No material, no PSO — those are per-instance. |
+| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
 | `Vertex` | [Vertex.slang](libs/bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |

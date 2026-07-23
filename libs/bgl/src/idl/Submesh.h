@@ -14,14 +14,18 @@ namespace bgl::idl
 		Range vertexData;
 		Range indices;
 		uint32_t vertexCount;
+		glm::vec3 boundingCenter;
+		float boundingRadius;
 	};
 
-	static_assert(sizeof(Submesh) == 124);
+	static_assert(sizeof(Submesh) == 140);
 	static_assert(offsetof(Submesh, layout) == 0);
 	static_assert(offsetof(Submesh, meshlets) == 100);
 	static_assert(offsetof(Submesh, vertexMap) == 108);
 	static_assert(offsetof(Submesh, vertexData) == 112);
 	static_assert(offsetof(Submesh, indices) == 116);
 	static_assert(offsetof(Submesh, vertexCount) == 120);
+	static_assert(offsetof(Submesh, boundingCenter) == 124);
+	static_assert(offsetof(Submesh, boundingRadius) == 136);
 
 }
