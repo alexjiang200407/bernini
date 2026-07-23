@@ -42,7 +42,10 @@ namespace bgl
 
 	private:
 		void
-		ExecuteClear(const PassContext& ctx);
+		ExecuteClear(const PassContext& ctx, const DrawData& draw);
+
+		void
+		ExecuteCull(const PassContext& ctx, const DrawData& draw);
 
 		void
 		ExecuteHistogramAndPrefixSum(const PassContext& ctx, const DrawData& draw);
@@ -51,6 +54,7 @@ namespace bgl
 		ExecuteGenerateInstanceDispatchArgs(const PassContext& ctx, const DrawData& draw);
 
 	private:
+		ComputeKernel m_CullInstances;
 		ComputeKernel m_Histogram;
 		ComputeKernel m_PrefixSum;
 		ComputeKernel m_CompactInstances;
@@ -59,5 +63,12 @@ namespace bgl
 		// Not tied to the scene
 		ComputeBuffer m_CompactedDispatchArgs;
 		ComputeBuffer m_PsoPrefixSumBuffer;
+
+		// One CullView per draw, uploaded before the cull dispatch reads it. Per-context, not
+		// per-view: rewritten each draw.
+		ComputeBuffer m_CullView;
+
+		// [tested, frustum-culled], cleared each draw and read back for the stats overlay.
+		ComputeBuffer m_CullStats;
 	};
 }

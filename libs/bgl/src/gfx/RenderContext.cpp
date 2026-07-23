@@ -1,6 +1,7 @@
 #include "gfx/RenderContext.h"
 
 #include "constants/constants.h"
+#include "culling/Frustum.h"
 #include "debug/DebugReadback.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
@@ -397,6 +398,7 @@ namespace bgl
 		draw.view              = job.view;
 		draw.viewport          = viewport;
 		draw.viewProj          = viewProj;
+		draw.cullView          = BuildCullView(viewProj);
 		draw.backBufferHandle  = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
 		draw.depthBufferHandle = m_ActiveTarget->DepthDsv();
 		draw.backBufferName    = std::string(c_BackbufferName);
@@ -428,8 +430,10 @@ namespace bgl
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
 
-		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
+		// Cull first (a sub-pass of CompactInstances writes the visibility word), then the transparent
+		// sort, which reads it.
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
+		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 

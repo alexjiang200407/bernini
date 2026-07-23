@@ -117,6 +117,18 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		outBuffer.Init(desc, resourceManager);
 	}
 
+	// The histogram now gates on a per-instance visibility word the cull pass writes. This test
+	// isolates the counting sort, so it stands in for a cull that passed everything: seeded
+	// all-visible below.
+	auto visibility = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<bgl::idl::InstanceVisibility>();
+		desc.maxCount  = paddedCount;
+		desc.debugName = "Visibility";
+		visibility.Init(desc, resourceManager);
+	}
+
 	auto histogramKernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("HistogramInstances"))
@@ -132,6 +144,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// ComputeBuffer wraps its UAV handle in a struct, so it binds through the same
 	// smart-buffer path (by BufferHandle) as the read-only instance buffer.
 	histogramKernel["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
+	histogramKernel["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
 	histogramKernel["gUniforms"]["outBuffer"]      = outBuffer.GetBufferHandle();
 
 	prefixSumKernel["gUniforms"]["inOutBuffer"] = outBuffer.GetBufferHandle();
@@ -162,6 +175,12 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	instanceBuffer.Update(cmdList);
 	outBuffer.Clear(cmdList);
 
+	const std::vector<uint32_t> allVisible(paddedCount, 1u);
+	cmdList->WriteBuffer(
+		visibility.GetBufferHandle(),
+		allVisible.data(),
+		allVisible.size() * sizeof(uint32_t));
+
 	cmdList->Barrier(
 		instanceBuffer.GetBufferHandle(),
 		bufferBarrier(
@@ -169,6 +188,13 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 			bgl::BarrierAccessFlag::kCopyDest,
 			bgl::BarrierSyncFlag::kComputeShader,
 			bgl::BarrierAccessFlag::kShaderResource));
+	cmdList->Barrier(
+		visibility.GetBufferHandle(),
+		bufferBarrier(
+			bgl::BarrierSyncFlag::kCopy,
+			bgl::BarrierAccessFlag::kCopyDest,
+			bgl::BarrierSyncFlag::kComputeShader,
+			bgl::BarrierAccessFlag::kUnorderedAccess));
 	cmdList->Barrier(
 		outBuffer.GetBufferHandle(),
 		bufferBarrier(
@@ -237,6 +263,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	resourceManager->UnmapReadback(rbPrefixSum);
 
 	outBuffer.Release(false);
+	visibility.Release(false);
 	instanceBuffer.Release(false);
 	resourceManager->DestroyReadbackBuffer(rbHistogram, false);
 	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);

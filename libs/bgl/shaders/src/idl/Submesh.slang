@@ -14,5 +14,9 @@ public struct Submesh
     public Range<uint> indices;
     public uint vertexCount;
 
+    // Local space, like Meshlet's; the world bound is derived per instance from Mesh.transform.
+    public float3 boundingCenter;
+    public float boundingRadius;
+
     public uint GetMeshletCount() { return meshlets.count; }
 };

@@ -4,12 +4,14 @@ import types.PackedBuffer;
 import idl.PsoType;
 import idl.DispatchArgs;
 import idl.Constants;
+import idl.InstanceVisibility;
 
 static const uint kPsoCount = uint(PsoType::kCount);
 
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
+    ComputeBuffer<InstanceVisibility> visibility;
     ComputeBuffer<uint> psoPrefixSum;
     ComputeBuffer<uint> compactedInstances;
     ComputeBuffer<DispatchArgs> dispatchArgs;
@@ -29,6 +31,12 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let psoType = instance.pso;
     if (psoType >= kPsoCount)
+    {
+        return;
+    }
+
+    // Skip exactly what the histogram skipped, or the bucket bases and the scatter disagree.
+    if (gUniforms.visibility[globalIdx].visible == 0u)
     {
         return;
     }

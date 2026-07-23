@@ -84,6 +84,14 @@ namespace bgl
 			std::vector<uint32_t>     localIndices;  // meshlet-local slots, 3 per triangle
 		};
 
+		// (center, radius) circumscribing the box, so it is conservative for whatever the box held.
+		glm::vec4
+		BoundingSphereOf(const glm::vec3& minBound, const glm::vec3& maxBound) noexcept
+		{
+			const glm::vec3 center = (minBound + maxBound) * 0.5f;
+			return glm::vec4(center, glm::distance(maxBound, center));
+		}
+
 		/**
 		 * Greedily packs `indices` into meshlets, in triangle order, filling each one until the next
 		 * triangle would push it past cMaxVerticesPerMeshlet or cMaxPrimsPerMeshlet.
@@ -157,8 +165,9 @@ namespace bgl
 					minBound = glm::min(minBound, verts[geomVertexIdx].pos);
 					maxBound = glm::max(maxBound, verts[geomVertexIdx].pos);
 				}
-				meshlet.boundingCenter = (minBound + maxBound) * 0.5f;
-				meshlet.boundingRadius = glm::distance(maxBound, meshlet.boundingCenter);
+				const glm::vec4 sphere = BoundingSphereOf(minBound, maxBound);
+				meshlet.boundingCenter = glm::vec3(sphere);
+				meshlet.boundingRadius = sphere.w;
 
 				build.meshlets.push_back(meshlet);
 			}
@@ -462,6 +471,21 @@ namespace bgl
 			submesh.vertexData  = baseVertexGlobal;
 			submesh.indices     = baseIndexGlobal;
 			submesh.vertexCount = static_cast<uint32_t>(verts.size());
+
+			if (!verts.empty())
+			{
+				auto minBound = glm::vec3(std::numeric_limits<float>::max());
+				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
+				for (const VertexGen& v : verts)
+				{
+					minBound = glm::min(minBound, v.pos);
+					maxBound = glm::max(maxBound, v.pos);
+				}
+
+				const glm::vec4 sphere = BoundingSphereOf(minBound, maxBound);
+				submesh.boundingCenter = glm::vec3(sphere);
+				submesh.boundingRadius = sphere.w;
+			}
 
 			const auto submeshSpan = std::span<const idl::Submesh>(&submesh, 1);
 			const auto baseSubmeshGlobal =
@@ -844,6 +868,10 @@ namespace bgl
 					rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(vertexWords));
 				submesh.indices = rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(localIndices));
 				submesh.vertexCount = src.vertexCount;
+
+				const glm::vec4 sphere = BoundingSphereOf(src.aabbMin, src.aabbMax);
+				submesh.boundingCenter = glm::vec3(sphere);
+				submesh.boundingRadius = sphere.w;
 
 				submeshes.push_back(submesh);
 				defaults.push_back(material);

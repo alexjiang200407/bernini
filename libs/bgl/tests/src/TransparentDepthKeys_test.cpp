@@ -147,6 +147,17 @@ TEST_CASE(
 		counter.Init(desc, resourceManager);
 	}
 
+	// The depth-key pass now skips frustum-culled instances via a visibility word the cull pass
+	// writes. This test isolates the keying, so it seeds every instance visible below.
+	auto visibility = bgl::ComputeBuffer();
+	{
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<bgl::idl::InstanceVisibility>()
+			.SetMaxCount(c_PaddedCount)
+			.SetDebugName("Visibility");
+		visibility.Init(desc, resourceManager);
+	}
+
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("TransparentDepthKeys"))
@@ -154,6 +165,7 @@ TEST_CASE(
 
 	kernel["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
 	kernel["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();
+	kernel["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
 	kernel["gUniforms"]["outEntries"]     = entries.GetBufferHandle();
 	kernel["gUniforms"]["outCount"]       = counter.GetBufferHandle();
 	kernel["gUniforms"]["cameraPos"]      = glm::vec3(0.0f);
@@ -164,6 +176,12 @@ TEST_CASE(
 	instanceBuffer.Update(cmdList.Get());
 	entries.Clear(cmdList.Get());
 	counter.Clear(cmdList.Get());
+
+	const std::vector<uint32_t> allVisible(c_PaddedCount, 1u);
+	cmdList->WriteBuffer(
+		visibility.GetBufferHandle(),
+		allVisible.data(),
+		allVisible.size() * sizeof(uint32_t));
 
 	// No FrameGraph here, so the copy -> compute transitions are ours to place: without them the
 	// clear can land after the kernel's atomics and zero the count.
@@ -191,6 +209,7 @@ TEST_CASE(
 
 	cmdList->Barrier(instanceBuffer.GetBufferHandle(), toRead);
 	cmdList->Barrier(meshBuffer.GetBufferHandle(), toRead);
+	cmdList->Barrier(visibility.GetBufferHandle(), toWrite);
 	cmdList->Barrier(entries.GetBufferHandle(), toWrite);
 	cmdList->Barrier(counter.GetBufferHandle(), toWrite);
 

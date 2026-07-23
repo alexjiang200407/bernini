@@ -1,4 +1,5 @@
 #pragma once
+#include "idl/CullView.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Sampler.h"
 #include "types/EnvironmentMap.h"
@@ -15,6 +16,7 @@ namespace bgl
 		core::SharedRef<ISceneView> view    = nullptr;
 		Viewport                    viewport;
 		glm::mat4                   viewProj{ 1.0f };
+		idl::CullView               cullView{};
 		glm::vec3                   cameraPos{ 0.0f };
 		RtvHandle                   backBufferHandle;
 		DsvHandle                   depthBufferHandle;

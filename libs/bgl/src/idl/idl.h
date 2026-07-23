@@ -2,8 +2,11 @@
 
 #include "idl/ChannelSource.h"
 #include "idl/Constants.h"
+#include "idl/CullStats.h"
+#include "idl/CullView.h"
 #include "idl/DebugRecord.h"
 #include "idl/Entry.h"
+#include "idl/InstanceVisibility.h"
 #include "idl/LoosePbrMaterial.h"
 #include "idl/Mesh.h"
 #include "idl/Meshlet.h"

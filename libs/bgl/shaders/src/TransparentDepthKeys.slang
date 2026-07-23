@@ -5,6 +5,7 @@ import types.ComputeBuffer;
 import idl.Mesh;
 import idl.PsoType;
 import idl.Constants;
+import idl.InstanceVisibility;
 
 // Mirrors bgl::IsOccludeTransparentPso: the self-occluding buckets, which draw with a depth pre-pass
 // and an Equal-tested colour pass. Their depthFunc is fixed-function, so they cannot share a pipeline
@@ -26,6 +27,7 @@ struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
     EntryBuffer<Mesh> meshBuffer;
+    ComputeBuffer<InstanceVisibility> visibility;
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.
     ComputeBuffer<uint2> outEntries;
@@ -44,6 +46,12 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     // The buffer is padded to whole groups with default instances; those name no mesh.
     if (instance.meshInstance.Null())
+    {
+        return;
+    }
+
+    // A frustum-culled instance is drawn by nothing, so it must not take a slot in the sorted list.
+    if (gUniforms.visibility[globalIdx].visible == 0u)
     {
         return;
     }

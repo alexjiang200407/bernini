@@ -163,6 +163,10 @@ namespace bgl
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
 		ComputeBuffer                    m_CompactedInstances;
 
+		// One word per instance slot, written by the cull pass and read by the counting sort and the
+		// transparent depth-key pass. Sized like the instance buffer.
+		ComputeBuffer m_InstanceVisibility;
+
 		// The depth-sorted transparent path, all written by TransparentSortPass. The keys buffer is
 		// sized off the instance buffer, not the sort capacity: see the note at its initialization.
 		ComputeBuffer m_SortedTransparentInstances;

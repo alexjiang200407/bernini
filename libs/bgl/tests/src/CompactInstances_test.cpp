@@ -121,6 +121,11 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 		makeCompute(bgl::idl::DispatchArgs{}, bgl::c_PsoCount, "Compacted Dispatch Args");
 	auto compacted = makeCompute(uint32_t{}, paddedCount, "Compacted Instances");
 
+	// The histogram and compaction now gate on a per-instance visibility word the cull pass writes.
+	// This test isolates the counting sort, so it stands in for a cull that passed everything: the
+	// buffer is seeded all-visible. Frustum culling has its own test.
+	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, paddedCount, "Visibility");
+
 	const auto makeKernel = [&](const char* module, const char* debugName) {
 		auto kernel = device->CreateComputeKernel(
 			bgl::ComputePipelineDesc()
@@ -141,6 +146,7 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 	fg.ImportBuffer("psoPrefixSum", psoPrefixSum.GetBufferHandle());
 	fg.ImportBuffer("dispatchArgs", dispatchArgs.GetBufferHandle());
 	fg.ImportBuffer("compactedInstances", compacted.GetBufferHandle());
+	fg.ImportBuffer("visibility", visibility.GetBufferHandle());
 
 	// Pass declarations mirror CompactInstancesPass. Diverge from them and this test stops standing
 	// in for the renderer.
@@ -163,11 +169,21 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 				"compactedInstances",
 				bgl::BarrierSyncFlag::kCopy,
 				bgl::BarrierAccessFlag::kCopyDest)
+			.AddBufferArg(
+				"visibility",
+				bgl::BarrierSyncFlag::kCopy,
+				bgl::BarrierAccessFlag::kCopyDest)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				instanceBuffer.Update(cmd);
 				psoPrefixSum.Clear(cmd);
 				compacted.Clear(cmd);
+
+				const std::vector<uint32_t> allVisible(paddedCount, 1u);
+				cmd->WriteBuffer(
+					visibility.GetBufferHandle(),
+					allVisible.data(),
+					allVisible.size() * sizeof(uint32_t));
 
 				std::array<bgl::idl::DispatchArgs, bgl::c_PsoCount> seed{};
 				for (bgl::idl::DispatchArgs& args : seed)
@@ -188,10 +204,15 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 				"psoPrefixSum",
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddBufferArg(
+				"visibility",
+				bgl::BarrierSyncFlag::kComputeShader,
+				bgl::BarrierAccessFlag::kUnorderedAccess)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
 				histogram["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
+				histogram["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
 				histogram["gUniforms"]["outBuffer"]      = psoPrefixSum.GetBufferHandle();
 
 				auto state   = bgl::ComputeState();
@@ -227,6 +248,10 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kUnorderedAccess)
 			.AddBufferArg(
+				"visibility",
+				bgl::BarrierSyncFlag::kComputeShader,
+				bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddBufferArg(
 				"compactedInstances",
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kUnorderedAccess)
@@ -238,6 +263,7 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 				auto* cmd = ctx.GetCommandList();
 
 				compact["gUniforms"]["instanceBuffer"]     = instanceBuffer.GetBufferHandle();
+				compact["gUniforms"]["visibility"]         = visibility.GetBufferHandle();
 				compact["gUniforms"]["psoPrefixSum"]       = psoPrefixSum.GetBufferHandle();
 				compact["gUniforms"]["compactedInstances"] = compacted.GetBufferHandle();
 				compact["gUniforms"]["dispatchArgs"]       = dispatchArgs.GetBufferHandle();
@@ -344,6 +370,7 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 	psoPrefixSum.Release(false);
 	dispatchArgs.Release(false);
 	compacted.Release(false);
+	visibility.Release(false);
 	resourceManager->DestroyReadbackBuffer(rbCompacted, false);
 	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
 }
