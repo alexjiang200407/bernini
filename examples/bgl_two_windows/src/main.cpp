@@ -30,25 +30,27 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.enablePixDebug           = true;
 		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
-
 		constexpr uint32_t kWidth  = 800;
 		constexpr uint32_t kHeight = 600;
 
 		auto gfx = bgl::CreateGraphics(gfxOpts);
 
-		// One renderer driving two independent headless outputs.
+		// Two independent contexts over one device, one per window: the whole point of
+		// IRenderContext. Each owns its target and its scene.
+		auto ctxA = gfx->CreateRenderContext();
+		auto ctxB = gfx->CreateRenderContext();
+
 		auto targetDesc     = bgl::RenderTargetDesc();
 		targetDesc.width    = static_cast<int>(kWidth);
 		targetDesc.height   = static_cast<int>(kHeight);
 		targetDesc.headless = false;
 		targetDesc.wnd      = wnd1.NativeHandle();
 
-		auto targetA = gfx->CreateRenderTarget(targetDesc);
+		auto targetA = ctxA->CreateRenderTarget(targetDesc);
 
 		targetDesc.wnd = wnd2.NativeHandle();
 
-		auto targetB = gfx->CreateRenderTarget(targetDesc);
+		auto targetB = ctxB->CreateRenderTarget(targetDesc);
 
 		auto camera = bgl::Camera();
 		auto aspect = static_cast<float>(kWidth) / static_cast<float>(kHeight);
@@ -100,12 +102,12 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 			if (!wnd1.ShouldClose())
 			{
-				gfx->DrawFrame(targetA, cubeJob);
+				ctxA->DrawFrame(targetA, cubeJob);
 			}
 
 			if (!wnd2.ShouldClose())
 			{
-				gfx->DrawFrame(targetB, twoJob);
+				ctxB->DrawFrame(targetB, twoJob);
 			}
 		}
 	}

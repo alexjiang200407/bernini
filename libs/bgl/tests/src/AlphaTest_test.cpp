@@ -64,11 +64,13 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
+	auto ctx = gfx->CreateRenderContext();
+
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
 	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
-	auto target         = gfx->CreateRenderTarget(targetDesc);
+	auto target         = ctx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -130,8 +132,8 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, job);
-		gfx->ScreenshotPng(target, "assets/golden/alpha_test_plane.got.png");
+		ctx->DrawFrame(target, job);
+		ctx->ScreenshotPng(target, "assets/golden/alpha_test_plane.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -155,8 +157,8 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, job);
-		gfx->ScreenshotPng(target, "assets/golden/alpha_test_opaque.got.png");
+		ctx->DrawFrame(target, job);
+		ctx->ScreenshotPng(target, "assets/golden/alpha_test_opaque.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -188,11 +190,13 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
+	auto ctx = gfx->CreateRenderContext();
+
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
 	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
-	auto target         = gfx->CreateRenderTarget(targetDesc);
+	auto target         = ctx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -253,8 +257,8 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		auto plane    = scene->AddPlaneGeom(1, 1, c_LeafWidth, c_LeafHeight, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, job);
-		gfx->ScreenshotPng(target, "assets/golden/alpha_test_leaf.got.png");
+		ctx->DrawFrame(target, job);
+		ctx->ScreenshotPng(target, "assets/golden/alpha_test_leaf.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -277,8 +281,8 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 		auto plane    = scene->AddPlaneGeom(1, 1, c_LeafWidth, c_LeafHeight, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
-		gfx->DrawFrame(target, job);
-		gfx->ScreenshotPng(target, "assets/golden/alpha_test_leaf_opaque.got.png");
+		ctx->DrawFrame(target, job);
+		ctx->ScreenshotPng(target, "assets/golden/alpha_test_leaf_opaque.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(

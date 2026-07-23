@@ -79,13 +79,14 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.shaderCacheDir           = "shadercache";
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto ctx      = graphics->CreateRenderContext();
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);
 		targetDesc.height   = static_cast<int>(height);
 		targetDesc.headless = headless;
 		targetDesc.wnd      = headless ? nullptr : wnd->NativeHandle();
-		auto target         = graphics->CreateRenderTarget(targetDesc);
+		auto target         = ctx->CreateRenderTarget(targetDesc);
 
 		auto sceneDesc                    = bgl::SceneDesc();
 		sceneDesc.maxIndices              = 200000;
@@ -189,11 +190,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		{
 			for (uint32_t i = 0; i < frames; ++i)
 			{
-				graphics->DrawFrame(target, job);
+				ctx->DrawFrame(target, job);
 
 				if (i == 0)
 				{
-					graphics->ScreenshotPng(target, "bgl_base.png");
+					ctx->ScreenshotPng(target, "bgl_base.png");
 				}
 			}
 		}
@@ -210,13 +211,11 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 					job.camera = camera;
 				}
 
-				graphics->DrawFrame(target, job);
+				ctx->DrawFrame(target, job);
 
 				if (demo::KeyPressed(demo::kScancodeF10))
 				{
-					graphics->ScreenshotPng(
-						target,
-						std::format("screenshot_{}.png", screenshotIndex++));
+					ctx->ScreenshotPng(target, std::format("screenshot_{}.png", screenshotIndex++));
 				}
 			}
 		}

@@ -105,6 +105,12 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	auto resourceManager = gfxBase->GetResourceManagerCpy();
 	REQUIRE(resourceManager != nullptr);
 
+	// The timeline the deferred release is gated against. With no implicit primary context, the
+	// test owns the one registered queue and advances it by hand to stand in for the GPU.
+	auto* device = gfxBase->GetDevice();
+	auto  queue  = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	resourceManager->RegisterQueue(queue.Get());
+
 	auto  sceneHandle = gfx->CreateScene(MaterialSceneDesc());
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
@@ -129,7 +135,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 
 		// Stand in for the GPU reaching the fence the release was scheduled against. Now the index
 		// returns to the free list, and the next texture reuses it.
-		gfxBase->WaitIdle();
+		queue->Flush();
 		resourceManager->CleanupExpiredResources();
 
 		const bgl::TextureAssetHandle recycled =
@@ -149,7 +155,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 		// abort the process a frame later, far from here.
 		REQUIRE_THROWS_AS(scene->DeleteTextureAsset(texture), bgl::SceneError);
 
-		gfxBase->WaitIdle();
+		queue->Flush();
 		resourceManager->CleanupExpiredResources();
 		CHECK_FALSE(resourceManager->ValidTextureHandle(gpuTexture));
 	}
@@ -158,6 +164,8 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	{
 		REQUIRE_THROWS_AS(scene->DeleteTextureAsset(bgl::TextureAssetHandle{}), bgl::SceneError);
 	}
+
+	resourceManager->UnregisterQueue(queue.Get());
 }
 
 // A texture can be deleted before Update ever flushed its upload -- a caller that fails between

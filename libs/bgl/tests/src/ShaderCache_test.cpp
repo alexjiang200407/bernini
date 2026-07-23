@@ -21,11 +21,13 @@ namespace
 		auto gfx = bgl::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
+		auto ctx = gfx->CreateRenderContext();
+
 		auto targetDesc     = bgl::RenderTargetDesc();
 		targetDesc.width    = 400;
 		targetDesc.height   = 300;
 		targetDesc.headless = true;
-		auto target         = gfx->CreateRenderTarget(targetDesc);
+		auto target         = ctx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
 
 		auto sceneDesc                    = bgl::SceneDesc();
@@ -64,9 +66,9 @@ namespace
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(400.0f, 300.0f);
 
-		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+		for (int i = 0; i < 6; ++i) ctx->DrawFrame(target, job);
 
-		gfx->ScreenshotPng(target, gotPath);
+		ctx->ScreenshotPng(target, gotPath);
 	}
 
 	// The program cache: one .bsc per compiled shader program (DXIL + reflection).

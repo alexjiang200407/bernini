@@ -119,18 +119,20 @@ TEST_CASE("Two threads drive two contexts concurrently", "[rendercontext][multic
 	auto gfx                      = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-	REQUIRE(ctx != nullptr);
+	auto ctxA = gfx->CreateRenderContext();
+	auto ctxB = gfx->CreateRenderContext();
+	REQUIRE(ctxA != nullptr);
+	REQUIRE(ctxB != nullptr);
 
 	const auto primaryOps = ContextOps{
-		[&](const bgl::RenderTargetDesc& d) { return gfx->CreateRenderTarget(d); },
-		[&](const bgl::RenderTargetRef& t, const bgl::RenderJob& j) { gfx->DrawFrame(t, j); },
-		[&](const bgl::RenderTargetRef& t, const std::string& p) { gfx->ScreenshotPng(t, p); },
+		[&](const bgl::RenderTargetDesc& d) { return ctxA->CreateRenderTarget(d); },
+		[&](const bgl::RenderTargetRef& t, const bgl::RenderJob& j) { ctxA->DrawFrame(t, j); },
+		[&](const bgl::RenderTargetRef& t, const std::string& p) { ctxA->ScreenshotPng(t, p); },
 	};
 	const auto secondOps = ContextOps{
-		[&](const bgl::RenderTargetDesc& d) { return ctx->CreateRenderTarget(d); },
-		[&](const bgl::RenderTargetRef& t, const bgl::RenderJob& j) { ctx->DrawFrame(t, j); },
-		[&](const bgl::RenderTargetRef& t, const std::string& p) { ctx->ScreenshotPng(t, p); },
+		[&](const bgl::RenderTargetDesc& d) { return ctxB->CreateRenderTarget(d); },
+		[&](const bgl::RenderTargetRef& t, const bgl::RenderJob& j) { ctxB->DrawFrame(t, j); },
+		[&](const bgl::RenderTargetRef& t, const std::string& p) { ctxB->ScreenshotPng(t, p); },
 	};
 
 	std::exception_ptr primaryError;
