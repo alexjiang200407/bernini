@@ -12,6 +12,10 @@ config (falling through to the root C++ one). We route .slang through stdin with
 --assume-filename=<same path>.cs, which sets both the language (C#) and the
 directory used to locate the nearest .clang-format.
 
+Only C-family sources and .slang are formatted. Any other file (a .md, .py or
+.json swept in by a glob) is skipped with a warning rather than handed to
+clang-format, which would parse it as C++ and mangle it.
+
 Usage:
     python scripts/format.py bgl/src/Foo.cpp bgl/src/Foo.h
     python scripts/format.py --check bgl/src/Foo.cpp   # verify only, no edits
@@ -27,6 +31,18 @@ import util.config as cfg
 
 def is_slang(path):
     return os.path.splitext(path)[1].lower() == ".slang"
+
+
+# Extensions clang-format understands as C-family. Anything else (a .md, .py, .json
+# passed by a careless glob) it would silently treat as C++ and mangle -- so we skip
+# it rather than hand it over. .slang is handled separately, routed through C#.
+CLANG_FORMAT_EXTS = frozenset(
+    [".c", ".cc", ".cpp", ".cxx", ".c++", ".h", ".hh", ".hpp", ".hxx", ".h++", ".inl", ".ipp"]
+)
+
+
+def is_clang_formattable(path):
+    return os.path.splitext(path)[1].lower() in CLANG_FORMAT_EXTS
 
 
 # bgl_idlgen stamps this on every file it writes. Formatting those files makes the
@@ -100,17 +116,23 @@ def main():
 
     files = [f for f in args.files if not is_generated(f)]
 
+    # A file clang-format doesn't understand (a .md, .py, .json swept in by a glob) would be
+    # parsed as C++ and mangled. Drop it with a warning instead of corrupting it.
+    skipped = [f for f in files if not is_slang(f) and not is_clang_formattable(f)]
+    for f in skipped:
+        print(f"{f}: skipped (not a clang-format source file)", file=sys.stderr)
+
     slang_files = [f for f in files if is_slang(f)]
-    other_files = [f for f in files if not is_slang(f)]
+    cpp_files = [f for f in files if is_clang_formattable(f)]
 
     rc = 0
 
     # .cpp/.h/etc: clang-format's own extension-based language detection finds the
     # correct .clang-format, so format them directly (one invocation).
-    if other_files:
+    if cpp_files:
         cmd = [clang_format]
         cmd += ["--dry-run", "--Werror"] if args.check else ["-i"]
-        cmd += other_files
+        cmd += cpp_files
         if subprocess.run(cmd).returncode != 0:
             rc = 1
 
