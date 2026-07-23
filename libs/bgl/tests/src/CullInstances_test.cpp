@@ -152,7 +152,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	auto cullView   = makeCompute(bgl::idl::CullView{}, 1, "Cull View");
 	auto visibility = makeCompute(uint32_t{}, padded, "Visibility");
-	auto stats      = makeCompute(uint32_t{}, 2, "Cull Stats");
+	auto stats      = makeCompute(bgl::idl::CullStats{}, 1, "Cull Stats");
 
 	auto cull = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
@@ -242,7 +242,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				cull["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();
 				cull["gUniforms"]["submeshBuffer"]  = submeshBuffer.GetBufferHandle();
 				cull["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
-				cull["gUniforms"]["stats"]          = stats.GetBufferHandle();
+#if defined(BERNINI_GPU_DEBUG)
+				cull["gUniforms"]["stats"] = stats.GetBufferHandle();
+#endif
 
 				auto state   = bgl::ComputeState();
 				state.kernel = &cull;
@@ -257,7 +259,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	rbDesc.debugName  = "Visibility Readback";
 	auto rbVisibility = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	rbDesc.byteSize  = 2 * sizeof(uint32_t);
+	rbDesc.byteSize  = sizeof(bgl::idl::CullStats);
 	rbDesc.debugName = "Cull Stats Readback";
 	auto rbStats     = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -304,11 +306,15 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	}
 	resourceManager->UnmapReadback(rbVisibility);
 
-	const auto* statsOut = static_cast<const uint32_t*>(resourceManager->MapReadback(rbStats));
+#if defined(BERNINI_GPU_DEBUG)
+	// Stats are written only in debug builds; the readback is meaningful only there.
+	const auto* statsOut =
+		static_cast<const bgl::idl::CullStats*>(resourceManager->MapReadback(rbStats));
 	REQUIRE(statsOut != nullptr);
-	CHECK(statsOut[0] == liveCount);       // every live instance is tested
-	CHECK(statsOut[1] == expectedCulled);  // and the outside ones are counted culled
+	CHECK(statsOut->tested == liveCount);              // every live instance is tested
+	CHECK(statsOut->frustumCulled == expectedCulled);  // and the outside ones are counted culled
 	resourceManager->UnmapReadback(rbStats);
+#endif
 
 	resourceManager->DestroyReadbackBuffer(rbVisibility, false);
 	resourceManager->DestroyReadbackBuffer(rbStats, false);

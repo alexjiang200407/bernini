@@ -6,6 +6,7 @@ import types.ComputeBuffer;
 import idl.Mesh;
 import idl.Submesh;
 import idl.CullView;
+import idl.CullStats;
 import idl.Constants;
 import debug.dbg;
 
@@ -20,13 +21,13 @@ struct Uniforms
     EntryBuffer<Mesh> meshBuffer;
     RangeBuffer<Submesh> submeshBuffer;
     ComputeBuffer<uint> visibility;
-    ComputeBuffer<uint> stats;
+
+    // Profiling counters for the C5 overlay and the cull tests; the per-instance atomics are the only
+    // real cost, so they are gated to BERNINI_GPU_DEBUG below.
+    ComputeBuffer<CullStats> stats;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
-
-static const uint kStatTested = 0u;
-static const uint kStatFrustumCulled = 1u;
 
 bool SphereInFrustum(float4 planes[6], float3 center, float radius)
 {
@@ -77,9 +78,11 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     gUniforms.visibility[globalIdx] = visible ? 1u : 0u;
 
-    InterlockedAdd(gUniforms.stats[kStatTested], 1u);
+#if defined(BERNINI_GPU_DEBUG)
+    InterlockedAdd(gUniforms.stats[0].tested, 1u);
     if (!visible)
     {
-        InterlockedAdd(gUniforms.stats[kStatFrustumCulled], 1u);
+        InterlockedAdd(gUniforms.stats[0].frustumCulled, 1u);
     }
+#endif
 }

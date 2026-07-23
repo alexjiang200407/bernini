@@ -64,7 +64,7 @@ namespace bgl
 
 		{
 			auto desc = ComputeBufferDesc();
-			desc.SetElement<uint32_t>().SetMaxCount(2).SetDebugName("Cull Stats");
+			desc.SetElement<idl::CullStats>().SetMaxCount(1).SetDebugName("Cull Stats");
 
 			m_CullStats.Init(desc, resourceManager);
 		}
@@ -218,12 +218,19 @@ namespace bgl
 			return;
 		}
 
-		m_CullInstances["gUniforms"]["cullView"]       = ctx.GetBuffer("cull.view");
-		m_CullInstances["gUniforms"]["instanceBuffer"] = ctx.GetBuffer("scene.instanceBuffer");
-		m_CullInstances["gUniforms"]["meshBuffer"]     = ctx.GetBuffer("scene.meshInstanceBuffer");
-		m_CullInstances["gUniforms"]["submeshBuffer"]  = ctx.GetBuffer("scene.submeshBuffer");
-		m_CullInstances["gUniforms"]["visibility"]     = ctx.GetBuffer("scene.instanceVisibility");
-		m_CullInstances["gUniforms"]["stats"]          = ctx.GetBuffer("cull.stats");
+		Uniforms& uniforms         = m_CullInstances["gUniforms"];
+		uniforms["cullView"]       = ctx.GetBuffer("cull.view");
+		uniforms["instanceBuffer"] = ctx.GetBuffer("scene.instanceBuffer");
+		uniforms["meshBuffer"]     = ctx.GetBuffer("scene.meshInstanceBuffer");
+		uniforms["submeshBuffer"]  = ctx.GetBuffer("scene.submeshBuffer");
+		uniforms["visibility"]     = ctx.GetBuffer("scene.instanceVisibility");
+
+		// The stats writes are gated to BERNINI_GPU_DEBUG, so a release build drops the handle from
+		// the kernel's reflection; bind it only when it survived.
+		if (auto stats = uniforms["stats"]; stats.IsValid())
+		{
+			stats = ctx.GetBuffer("cull.stats");
+		}
 
 		auto cmdList = ctx.GetCommandList();
 

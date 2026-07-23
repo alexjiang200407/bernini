@@ -21,6 +21,7 @@ set(IDL_CPP_SOURCES
     VertexLayout.slang
     Submesh.slang
     CullView.slang
+    CullStats.slang
     Mesh.slang
     DebugRecord.slang
     Constants.slang

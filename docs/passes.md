@@ -78,32 +78,44 @@ culling, so it fills only where nothing has been drawn.
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)
 
-Buckets the view's `SubmeshInstance`s by PSO into contiguous ranges and builds the per-PSO indirect
-dispatch arguments that `Forward` consumes. Owns three compute kernels (`HistogramInstances`,
-`PrefixSumInstances`, `CompactInstances`) and two scene-independent `ComputeBuffer`s sized
-`c_PsoCount`: `psoPrefixSumBuffer` and `compactDispatchArgs`, both imported globally (namespace-free).
+Frustum-culls the view's instances, then buckets the survivors by PSO into contiguous ranges and
+builds the per-PSO indirect dispatch arguments that `Forward` consumes. Owns four compute kernels
+(`CullInstances`, `HistogramInstances`, `PrefixSumInstances`, `CompactInstances`) and the
+scene-independent `ComputeBuffer`s it imports globally (namespace-free): `psoPrefixSumBuffer` and
+`compactDispatchArgs` (sized `c_PsoCount`), `cull.view` (one `CullView` — view-proj + frustum planes
+— rewritten each draw), and `cull.stats` (profiling counters, written only in `BERNINI_GPU_DEBUG`
+builds).
 
-It adds **three sub-passes**:
+It adds **four sub-passes**:
 
-1. **Clear** — zeroes `psoPrefixSumBuffer` and seeds every `compactDispatchArgs` entry to
-   `{ 0, 1, 1 }` (a group count of 0 with Y = Z = 1). Both buffers are declared copy-dest.
-2. **Histogram and Prefix Sum** — the histogram dispatch counts instances per PSO into
+1. **Clear** — zeroes `psoPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
+   `cull.view`, and seeds every `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
+   Y = Z = 1). The written buffers are declared copy-dest.
+2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
+   bounding sphere (`Mesh.transform` × the submesh's local sphere) and writes a per-instance
+   **visibility word** to `scene.instanceVisibility`; the histogram, compaction, and transparent
+   depth-key passes all gate on it, so a culled instance reaches no draw. Skipped when the instance
+   count is 0.
+3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per PSO into
    `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into exclusive prefix
    sums. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
    no barrier between them; the pass issues the one intra-pass UAV barrier itself — the sanctioned
    exception to "pass code must not barrier" (see the barrier caveat in
    [Frame Graph](docs/framegraph.md)). Skipped when the view's instance count is 0.
-3. **Compact Instances** — scatters each instance into `scene.compactedInstances` at its bucket's
-   prefix-sum offset and finalizes each PSO's dispatch args. Skipped when the instance count is 0.
+4. **Compact Instances** — scatters each **visible** instance into `scene.compactedInstances` at its
+   bucket's prefix-sum offset and finalizes each PSO's dispatch args. Skipped when the instance count
+   is 0.
 
-* **In:** `scene.instanceBuffer` (SRV).
-* **Out:** `scene.compactedInstances`, `psoPrefixSumBuffer`, `compactDispatchArgs` (all UAV /
-  indirect-args downstream).
+* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`
+  (all read).
+* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `psoPrefixSumBuffer`,
+  `compactDispatchArgs` (and `cull.stats` in debug) — all UAV / indirect-args downstream.
 
 ### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl/src/passes/TransparentSortPass.cpp)
 
-Depth-sorts the transparent instances on the GPU, in three sub-passes. Runs before `Compact
-Instances` and is independent of it: the two produce different lists from the same instance buffer.
+Depth-sorts the transparent instances on the GPU, in three sub-passes. Runs **after** `Compact
+Instances` and depends on it: the depth-key pass reads the per-instance visibility word the cull
+sub-pass writes, so a frustum-culled transparent instance takes no slot in the sorted list.
 
 1. **Clear** — zeroes the entry counter and seeds both `partitionDispatchArgs` entries to
    `{0, 1, 1}`. Seeded rather than zeroed because a frame with no transparent instances still has the
@@ -129,7 +141,8 @@ nearest ones — a visible artifact, not a memory error. The keys buffer is size
 instance buffer, not off the capacity, so the depth-key pass cannot append past its end no matter how
 many instances turn out to be transparent; only the sort itself is bounded.
 
-* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, the camera position.
+* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
+  position.
 * **Out:** `scene.transparentSortEntries`/`Count` (its own scratch, owned by the view),
   `scene.sortedTransparentInstances`, `transparentSort.partitionBase`,
   `transparentSort.partitionDispatchArgs` (all consumed by `Forward`).
