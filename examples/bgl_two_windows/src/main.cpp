@@ -24,11 +24,14 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		auto wnd2  = demo::DemoWindow{ opts };
 		wnd2.SetPosition(100 + opts.width + 20, 100);
 
-		auto gfxOpts                     = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer         = true;
-		gfxOpts.enableGPUValidationLayer = true;
-		gfxOpts.enablePixDebug           = true;
-		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
+		// GPU-based validation patches every shader and makes each frame ~10-50x slower; with the
+		// window's messages pumped only between two blocking vsync presents, that is slow enough to
+		// starve the pump and paint the window "(Not Responding)". A demo runs at speed: the debug
+		// layer stays on to catch API misuse, but GPU validation, the PIX capturer and per-frame
+		// trace logging are off.
+		auto gfxOpts             = bgl::GraphicsOptions{};
+		gfxOpts.enableDebugLayer = true;
+		gfxOpts.logLevel         = bgl::GraphicsOptions::LogLevel::kWarn;
 
 		constexpr uint32_t kWidth  = 800;
 		constexpr uint32_t kHeight = 600;
