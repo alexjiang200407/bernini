@@ -68,6 +68,9 @@ and portability.
   - [ ] Two-pass HZB occlusion culling
   - [ ] Culling verification
 - [ ] Motion Vectors
+  - [ ] Frame Graph track resource lifetimes
+    - [ ] Transient resources (don't last more than one frame, can reuse after done)
+    - [ ] Ping pong (last until end of next frame)
   - [ ] TAA
     - [ ] Hashed (dithered) alpha — stochastic alpha test resolved by TAA into soft edges and
       fractional coverage. The fix for card-based hair/foliage, whose density is authored to come

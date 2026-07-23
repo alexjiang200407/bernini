@@ -1,7 +1,7 @@
 # GPU culling — implementation plan
 
-Implements the four **Culling** items from the roadmap: Frustum Culling, Geometry Cluster Culling,
-Two-pass HZB occlusion culling, and Culling verification.
+Implements the **Culling** items from the roadmap: Frustum Culling, Two-pass HZB occlusion culling,
+and Culling verification. Geometry Cluster Culling is **dropped** — see the scope note below.
 
 This is a *plan*, not a mirror of code. It records the staging, the verification gate at each
 checkpoint, the design decisions and their reasons, and how this work coexists with the in-flight
@@ -13,6 +13,18 @@ When the work lands, the durable parts move to a new `docs/culling.md`, plus upd
 system removes only work that could never have contributed a pixel. Every existing golden-image
 test is therefore a culling regression test for free, and every checkpoint's gate includes
 "goldens unchanged" — a golden diff after any culling change is a bug, never a regen.
+
+> **Scope update — cluster culling dropped.** Meshlet-level (cluster) culling is dropped. As scoped
+> it was frustum-only (no cooked normal cone, so no backface cull), which pays off only for objects
+> large enough to *straddle* the frustum edge — near-nothing for the on-screen, human-sized skinned
+> meshes that dominate this engine's cost. Skinned meshes cannot use static meshlet bounds anyway
+> (bind-pose spheres are wrong once vertices deform), and the one large mesh class, terrain, is
+> better segmented into tiles that instance-level frustum + HZB culling handle. The real levers for
+> the skinned-human bottleneck are **instance HZB** (hidden characters) and **LOD** (distant ones),
+> not per-meshlet work. Cluster culling stays a possible future optimization for large *static*
+> geometry — but only once a per-meshlet normal cone is cooked, so it earns the backface win rather
+> than just straddle. This removes checkpoint **C2** and the meshlet half of **C4** (C4b); the
+> instance-level path (C1, done; C3; C4a) is unchanged.
 
 ---
 
@@ -29,7 +41,8 @@ Where the pipeline already is, against what the four features need:
 * **Meshlet bounding spheres exist and are dead weight today.** `idl::Meshlet` carries
   `boundingCenter`/`boundingRadius`, populated at import
   ([bmesh_gltf.cpp](../../libs/assetlib/src/bmesh_gltf.cpp)) and by `Scene`'s procedural path —
-  and no shader reads them. Cluster culling is the feature they were cooked for.
+  and no shader reads them. They were cooked for cluster culling, which this plan drops; they stay
+  dead weight until a future revival (see the scope note).
 * **There are no instance- or submesh-level bounds on the GPU.** `idl::Submesh` has ranges and
   counts only; `SubmeshInstance` is `{mesh, submeshIndex, material, pso}`. The cooked
   `assetlib::Submesh` does carry a per-submesh AABB — it just never reached the renderer.
@@ -38,8 +51,8 @@ Where the pipeline already is, against what the four features need:
 * **The amplification shader dispatches blind.** `ASBase`
   ([common.slang](../../libs/bgl/shaders/src/forward/common.slang)) runs one group per instance
   and ends in `DispatchMesh(submesh.GetMeshletCount(), 1, 1, payload)` — every meshlet, every
-  frame. This is the cluster-culling hook: test spheres across the group, compact survivors into
-  the payload, dispatch the survivor count.
+  frame. It stays that way: cluster culling (which would have compacted survivors here) is dropped.
+  It remains the hook if cluster culling is ever revived.
 * **No frustum data reaches the GPU.** `Camera` stores view/projection only; `DrawData` carries
   `viewProj` and `cameraPos`; there is no plane extraction, no near/far, no previous-frame
   anything, on either side of the bus.
@@ -61,26 +74,21 @@ Where the pipeline already is, against what the four features need:
 
 ## 2. Design decisions
 
-### Two levels, two homes
+### One level: instance culling in compute
 
-Culling runs at two granularities with different hosts, and the split is also the portability
-seam:
+Culling runs at the **instance** granularity, in compute. A `CullInstances` kernel is sub-pass 0 of
+`CompactInstancesPass`: one thread per instance computes the world-space bounding sphere
+(`Mesh.transform` × submesh local sphere, radius scaled by the largest column norm) and writes a
+per-instance **visibility word** to a per-view buffer. The existing histogram, compact, and
+`TransparentDepthKeys` kernels read the word and skip invisible instances. One extra dispatch and
+one word of bandwidth per instance, in exchange for: the test runs once (not re-derived in each
+consumer), the transparent path is culled by the same decision, and the word has room for what the
+roadmap sends next — an LOD index, an occlusion phase bit (§C4), an animation-tick tag.
 
-* **Instance level — compute.** A `CullInstances` kernel becomes sub-pass 0 of
-  `CompactInstancesPass`: one thread per instance computes the world-space bounding sphere
-  (`Mesh.transform` × submesh local sphere, radius scaled by the largest column norm) and writes a
-  per-instance **visibility word** to a per-view buffer. The existing histogram, compact, and
-  `TransparentDepthKeys` kernels read the word and skip invisible instances. One extra dispatch and
-  one word of bandwidth per instance, in exchange for: the test runs once (not re-derived in each
-  consumer), the transparent path is culled by the same decision, and the word has room for what
-  the roadmap sends next — an LOD index, an occlusion phase bit (§C4), an animation-tick tag.
-* **Meshlet level — amplification shader.** `ASBase` tests each meshlet's sphere against the
-  frustum (and later the HZB), wave-compacts survivor meshlet indices into the payload, and
-  dispatches the survivor count. This respects the geometry-layout contract — expansion happens at
-  the instance level, the geometry buffers are untouched — and it keeps the mesh-shader-only
-  machinery out of the portable compute path. A future WebGPU backend has no mesh shaders and will
-  need its own geometry path regardless; instance culling in compute survives that, cluster
-  culling goes with the path.
+Meshlet-level (cluster) culling in the amplification shader is **dropped** (see the scope note at
+the top). `ASBase` keeps dispatching every meshlet; the geometry-layout contract and the mesh-shader
+path are untouched. A useful side effect: culling now lives entirely in portable compute, which a
+future WebGPU backend (no mesh shaders) inherits directly, with no separate cull path to port.
 
 ### Bounds come from what is already cooked
 
@@ -128,7 +136,7 @@ not part of this plan, and nothing here forecloses it.
 | `CullView` struct (viewProj, planes[6]; near/far and HZB fields join in C4 with their first consumer) | IDL | Shared C++/Slang; built CPU-side per draw |
 | Per-instance visibility word buffer | `SceneView` | Sized with the instance buffer; a word, not a bit (§2) |
 | CPU frustum-plane extraction + sphere test | `core` or `bgl` math util | Gribb–Hartmann from the combined matrix; unit-testable without a device |
-| Culling stats counters (tested / frustum-culled / meshlet-culled / occlusion-culled) | small `ComputeBuffer`, read back via the existing debug-readback ring | Debug builds and tests; the overlay in C5 reads the same buffer |
+| Culling stats counters (tested / frustum-culled / occlusion-culled) | small `ComputeBuffer`, read back via the existing debug-readback ring | Debug builds and tests; the overlay in C5 reads the same buffer |
 | `TextureUsageFlag::kUnorderedAccess`, depth SRV, per-mip UAVs | RHI (`Texture.h`, `ResourceManager`/`Texture_d3d12`) | C3; the one place D3D12 code is touched |
 | New GPU-assert codes (`kCullSurvivorOverflow`, …) | `libs/bgl/idl/src/ErrorCode.slang` | `dbg_assert` in every cull kernel under `BERNINI_GPU_DEBUG` |
 
@@ -176,24 +184,16 @@ crafted two-submesh mesh.
 **Gate:** `just test` green, goldens unchanged, `--gpu-validation` clean, stats show the expected
 cull count in the crafted scene.
 
-### C2 — Meshlet (cluster) culling
+### C2 — Meshlet (cluster) culling — dropped
 
-* Restructure `ASBase`: the group's threads (`cThreadsPerInstance = 64`) stride the submesh's
-  meshlets, test each sphere (transformed by `Mesh.transform`) against the frustum, compact
-  survivor meshlet indices into the payload via wave ops / groupshared, and
-  `DispatchMesh(survivorCount)`. Mesh shader entry points index meshlets through the payload
-  instead of `SV_GroupID` directly.
-* Submeshes with more meshlets than one payload can carry loop within the group; the payload cap
-  (16 KB → ~4k indices) comfortably exceeds any battle-unit submesh, and
-  `dbg_assert(count <= capacity)` guards the assumption rather than silently truncating.
-* Meshlet-culled counts feed the stats buffer (an atomic add from the AS).
-
-**Verification:** goldens unchanged (the strongest possible statement: compaction reordered every
-meshlet dispatch and no pixel moved); readback of stats for a crafted scene where a large mesh
-straddles the frustum edge asserts a nonzero, bounded cull count; `--gpu-validation` mandatory
-(mesh/amp shader patching).
-
-**Gate:** as C1, plus the stats assertion above.
+Dropped from the plan (see the scope note at the top). As scoped this was frustum-only meshlet
+culling, whose only payoff is objects large enough to straddle the frustum edge; the engine's hot
+geometry (human-sized skinned meshes) does not straddle and cannot use static meshlet bounds, and
+its one large class (terrain) is better segmented into instance-culled tiles. A future revival is
+worth it only with a cooked per-meshlet normal cone, so it earns the backface win — at which point
+it is its own plan, hosted in `ASBase` exactly where §1 identified the hook. `idl::Meshlet` still
+carries its `boundingCenter`/`boundingRadius`; they stay unused until then (or until a meshlet-level
+HZB is ever wanted).
 
 ### C3 — RHI groundwork: depth as a texture, UAV mips, HZB build
 
@@ -215,11 +215,11 @@ create/write/readback.
 
 **Gate:** `just test` green, goldens unchanged, `--gpu-validation` clean.
 
-### C4 — Two-pass HZB occlusion culling
+### C4 — Two-pass HZB occlusion culling (instance level)
 
-The restructuring checkpoint. Split into two landings:
+The restructuring checkpoint. Instance-level only — meshlet-level HZB (the former C4b) is dropped
+with cluster culling; see the scope note at the top.
 
-**C4a — instance level.**
 * `SceneView` gains a persistent visibility history (one word per instance slot).
 * Phase 1: cull (frustum + "visible last frame") → bucket → draw; `HzbBuildPass` runs on the
   resulting depth. Phase 2: cull all instances against frustum + fresh HZB; instances that pass
@@ -234,10 +234,8 @@ The restructuring checkpoint. Split into two landings:
   epoch change clears the history to all-visible. Coarse but correct; per-slot generation tags are
   the refinement if epoch churn shows up in the stats.
 * Transparents are HZB-tested in phase 2 only and never contribute to the HZB.
-
-**C4b — meshlet level.** The AS gains the HZB test beside the frustum test: project the sphere to
-a screen rect, pick the mip where the rect is ~one texel, compare. The projection/mip-selection
-helper is shared shader code — the same function later serves HZB particle collision.
+* The sphere/AABB-to-screen-rect projection and mip-selection are a shared shader helper — the same
+  function later serves HZB particle collision.
 
 **Verification:**
 * Occluder readback test: a wall in front of N instances; phase-2 survivor count ≈ 0 for the
@@ -253,9 +251,9 @@ helper is shared shader code — the same function later serves HZB particle col
 in the crafted scene, editor frame time not regressed (two-phase overhead must pay for itself in
 the target scene; record numbers in the PR).
 
-### C5 — Verification tooling (the fourth roadmap item)
+### C5 — Verification tooling (the verification roadmap item)
 
-What makes the first three trustworthy over time, not just at landing:
+What makes the culling passes trustworthy over time, not just at landing:
 
 * **Freeze-culling debug toggle**: freeze the `CullView` (and HZB) while the camera flies free —
   the standard way to *see* what culling decided. Editor keybind + per-draw debug flag.
@@ -310,28 +308,26 @@ list, allocator, framegraph, pass objects), S4–S7 have not. Rules of the road:
   runs, with exactly its inputs (bounds, camera distance). The visibility *word* (§2) is the
   reserved space; selection writes an LOD index there and compact routes the instance to the
   right submesh range. No new pass will be needed.
-* **Skinned meshes.** Posed geometry breaks static bounds. The provision is an overridable bounds
-  source per instance — conservative bind-pose-plus-slack bounds first, and a per-PSO bypass so
-  skinned buckets can skip meshlet culling until post-skin bounds exist. Design the bounds fetch
-  in the cull kernel behind one function now so the override is a local change.
+* **Skinned meshes.** Posed geometry breaks the static instance bound — the bind-pose sphere is
+  wrong once vertices deform. The provision is an overridable per-instance bounds source:
+  conservative bind-pose-plus-slack bounds first, a post-skin bound later. Design the bounds fetch
+  in the cull kernel behind one function now so the override is a local change. (This is also why
+  cluster culling was dropped — see the scope note — since static meshlet bounds are just as wrong.)
 * **TAA / motion vectors** need previous-frame view-proj plumbing; C4's history machinery
   establishes the "per-view previous-frame state" slot it will extend.
 * **HZB particle collision** consumes the C3/C4 HZB. Export it under a stable framegraph name and
   keep the sphere-vs-HZB helper in shared shader code.
 * **Foliage/grass** is the scale test: instance culling must stay one dispatch over N instances
   with zero CPU per-object work, which this design holds by construction.
-* **WebGPU/Vulkan backends.** Instance culling is portable compute; cluster culling is
-  mesh-shader-tied and stays with the mesh path (§2). Vulkan gets both via `VK_EXT_mesh_shader`;
-  WebGPU needs a different geometry path entirely, which is that backend's problem, not this
-  plan's.
+* **WebGPU/Vulkan backends.** With cluster culling dropped, all culling is portable compute and
+  carries to any backend directly. The mesh-shader geometry path (`ASBase` and the mesh shaders) is
+  a separate backend concern — Vulkan gets it via `VK_EXT_mesh_shader`; WebGPU needs its own
+  geometry path — but that is now orthogonal to culling.
 
 ---
 
 ## 7. Risks
 
-* **The AS restructure (C2) touches every draw on screen.** Mitigated by the strongest gate
-  available — every golden must be byte-stable — and by `--gpu-validation` on the mesh/amp
-  pipeline. Land C2 alone, nothing else in the PR.
 * **Two-phase draw (C4) doubles pass count and interacts with barrier derivation.** The framegraph
   derives barriers from declared accesses, so correctness rides on declaring the HZB and history
   buffers precisely; `m_LastState` persistence across frames is exactly the machinery the
@@ -340,9 +336,6 @@ list, allocator, framegraph, pass objects), S4–S7 have not. Rules of the road:
 * **Instance-slot instability vs. visibility history.** Epoch-clear (§C4a) is correct but may
   thrash in editing workflows where the scene mutates constantly — the stats overlay will show it
   as phase-2 spikes. Acceptable for the editor; the game's battle scenes mutate rarely.
-* **Payload-capacity assumption in C2** (`meshlets per submesh` fits one group's loop). Guarded by
-  `dbg_assert`, not silently truncated; if an asset breaks it, the fix is dispatching multiple AS
-  groups per instance, which changes `DispatchArgs` generation — known, bounded, deferred.
 * **The submesh sphere circumscribes the cooked AABB** — loose for elongated meshes (a sphere
   around a long box), so frustum culling under-culls (never over-culls). Watch the stats; a
   cooked tight sphere is an additive assetlib change if it matters. The cooked AABB itself is
