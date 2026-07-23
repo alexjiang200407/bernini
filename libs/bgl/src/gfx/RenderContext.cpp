@@ -163,6 +163,13 @@ namespace bgl
 		m_ResourceManager->UnregisterQueue(m_CommandQueue.Get());
 
 		// The GPU is idle, so these frees are immediate (deferred = false), needing no gate.
+		for (CaptureSlot& slot : m_Captures)
+		{
+			if (slot.ticketId != 0)
+			{
+				m_ResourceManager->DestroyReadbackBuffer(slot.readback, false);
+			}
+		}
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_CompactInstances.Release(false);
@@ -521,10 +528,14 @@ namespace bgl
 		rt.ResizeBackbuffers(width, height);
 	}
 
-	// The last presented backbuffer of `target`, read back into a tight RGBA8 image. Blocks on the
-	// shared queue twice: once for the frame that produced the backbuffer, once for the copy below.
-	assetlib::ImageData
-	RenderContext::CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller)
+	CaptureTicket
+	RenderContext::SubmitCapture(const RenderTargetRef& target)
+	{
+		return SubmitCaptureImpl(target, "SubmitCapture");
+	}
+
+	CaptureTicket
+	RenderContext::SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller)
 	{
 		if (m_FrameActive)
 		{
@@ -532,27 +543,45 @@ namespace bgl
 				std::format("{} cannot be called between BeginFrame and EndFrame", caller));
 		}
 
+		const auto free = std::ranges::find_if(m_Captures, [](const CaptureSlot& slot) {
+			return slot.ticketId == 0;
+		});
+		if (free == m_Captures.end())
+		{
+			throw GraphicsError(
+				std::format(
+					"{}: all {} capture slots are in flight; resolve or discard one first",
+					caller,
+					c_MaxPendingCaptures));
+		}
+		CaptureSlot& slot = *free;
+
 		RenderTargetBase& rt = *target->As<RenderTargetBase>();
 
 		const uint32_t index         = rt.LastPresentedIndex();
 		TextureHandle  textureHandle = rt.BackbufferTexture(index);
 
-		// Make sure the frame that produced this backbuffer has finished.
-		if (rt.FrameFence(index) != 0)
+		// A discard frees the slot with its copy possibly still in flight; the allocator cannot
+		// be reset under it.
+		if (slot.fence != 0)
 		{
-			m_CommandQueue->WaitForFenceCPUBlocking(rt.FrameFence(index));
+			m_CommandQueue->WaitForFenceCPUBlocking(slot.fence);
 		}
 
-		auto layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
+		if (slot.allocator == nullptr)
+		{
+			slot.allocator = m_Device->CreateCommandAllocator();
+		}
+		slot.allocator->ResetAllocator();
+
+		slot.layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
 
 		auto readbackDesc      = ReadbackBufferDesc();
-		readbackDesc.byteSize  = layout.totalBytes;
-		readbackDesc.debugName = "Screenshot Readback";
+		readbackDesc.byteSize  = slot.layout.totalBytes;
+		readbackDesc.debugName = "Capture Readback";
+		slot.readback          = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
 
-		auto readback = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
-
-		rt.FrameAllocator(index)->ResetAllocator();
-		m_CommandList->Open(m_CommandQueue.Get(), rt.FrameAllocator(index));
+		m_CommandList->Open(m_CommandQueue.Get(), slot.allocator.Get());
 
 		{
 			auto barrier = TextureBarrierDesc();
@@ -565,7 +594,7 @@ namespace bgl
 			m_CommandList->Barrier(textureHandle, barrier);
 		}
 
-		m_CommandList->CopyTextureToReadback(readback, textureHandle);
+		m_CommandList->CopyTextureToReadback(slot.readback, textureHandle);
 
 		{
 			auto barrier = TextureBarrierDesc();
@@ -580,32 +609,107 @@ namespace bgl
 
 		m_CommandList->Close();
 
-		uint64_t fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
-		m_CommandQueue->WaitForFenceCPUBlocking(fence);
+		// No wait on the producing frame's fence: one queue executes in submission order, so the
+		// copy runs after the frame that filled this backbuffer.
+		slot.fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 
 		const TextureDesc texDesc = m_ResourceManager->GetTextureDesc(textureHandle);
+		slot.width                = texDesc.width;
+		slot.height               = texDesc.height;
+		slot.format               = texDesc.format;
 
-		const void* mapped = m_ResourceManager->MapReadback(readback);
+		slot.ticketId = m_NextCaptureId++;
+		return CaptureTicket{ slot.ticketId };
+	}
 
+	RenderContext::CaptureSlot&
+	RenderContext::FindCapture(CaptureTicket ticket)
+	{
+		if (ticket.IsValid())
+		{
+			for (CaptureSlot& slot : m_Captures)
+			{
+				if (slot.ticketId == ticket.id)
+				{
+					return slot;
+				}
+			}
+		}
+		throw GraphicsError("Capture ticket is null, already resolved, or discarded");
+	}
+
+	std::optional<assetlib::ImageData>
+	RenderContext::TryResolveCapture(CaptureTicket ticket)
+	{
+		CaptureSlot& slot = FindCapture(ticket);
+
+		if (!m_CommandQueue->IsFenceComplete(slot.fence))
+		{
+			return std::nullopt;
+		}
+
+		const void* mapped = m_ResourceManager->MapReadback(slot.readback);
+
+		auto image = std::optional<assetlib::ImageData>();
 		try
 		{
-			auto image = readbackToImage(
-				static_cast<const uint8_t*>(mapped) + layout.offset,
-				static_cast<size_t>(layout.rowPitch),
-				texDesc.width,
-				texDesc.height,
-				texDesc.format);
-
-			m_ResourceManager->UnmapReadback(readback);
-			m_ResourceManager->DestroyReadbackBuffer(readback, false);
-			return image;
+			image = readbackToImage(
+				static_cast<const uint8_t*>(mapped) + slot.layout.offset,
+				static_cast<size_t>(slot.layout.rowPitch),
+				slot.width,
+				slot.height,
+				slot.format);
 		}
 		catch (...)
 		{
-			m_ResourceManager->UnmapReadback(readback);
-			m_ResourceManager->DestroyReadbackBuffer(readback, false);
+			m_ResourceManager->UnmapReadback(slot.readback);
+			m_ResourceManager->DestroyReadbackBuffer(slot.readback, false);
+			slot.readback = {};
+			slot.ticketId = 0;
 			throw;
 		}
+
+		m_ResourceManager->UnmapReadback(slot.readback);
+		m_ResourceManager->DestroyReadbackBuffer(slot.readback, false);
+		slot.readback = {};
+		slot.ticketId = 0;
+		return image;
+	}
+
+	void
+	RenderContext::DiscardCapture(CaptureTicket ticket) noexcept
+	{
+		if (!ticket.IsValid())
+		{
+			return;
+		}
+
+		for (CaptureSlot& slot : m_Captures)
+		{
+			if (slot.ticketId == ticket.id)
+			{
+				// The copy may still be in flight: the deferred destroy gates on this queue, and
+				// slot.fence stays recorded so the next submit here waits before resetting the
+				// allocator.
+				m_ResourceManager->DestroyReadbackBuffer(slot.readback, true);
+				slot.readback = {};
+				slot.ticketId = 0;
+				return;
+			}
+		}
+	}
+
+	// The last presented backbuffer of `target`, read back into a tight RGBA8 image. One blocking
+	// wait, on the copy's fence -- which also covers the producing frame, queued before it.
+	assetlib::ImageData
+	RenderContext::CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller)
+	{
+		const CaptureTicket ticket = SubmitCaptureImpl(target, caller);
+		m_CommandQueue->WaitForFenceCPUBlocking(FindCapture(ticket).fence);
+
+		auto image = TryResolveCapture(ticket);
+		gassert(image.has_value(), "Capture fence completed but the resolve returned no image");
+		return std::move(*image);
 	}
 
 	void

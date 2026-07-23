@@ -10,6 +10,21 @@
 namespace bgl
 {
 	/**
+	 * Names one in-flight backbuffer capture. Minted by SubmitCapture; spent by the
+	 * TryResolveCapture that returns its image, or by DiscardCapture.
+	 */
+	struct CaptureTicket
+	{
+		uint64_t id = 0;
+
+		[[nodiscard]] bool
+		IsValid() const noexcept
+		{
+			return id != 0;
+		}
+	};
+
+	/**
 	 * One independent submission context over the shared device: its own command queue, recorder
 	 * and frame state, so work submitted here neither blocks nor is blocked by another context's
 	 * frames. Created with IGraphics::CreateRenderContext; IGraphics's own frame methods drive an
@@ -24,6 +39,9 @@ namespace bgl
 	class BGL_API IRenderContext : public core::Ref
 	{
 	public:
+		// Captures a context may have in flight at once (SubmitCapture throws past this).
+		static constexpr uint32_t c_MaxPendingCaptures = 2;
+
 		IRenderContext(IRenderContext&&) noexcept      = delete;
 		IRenderContext(const IRenderContext&) noexcept = delete;
 
@@ -77,12 +95,41 @@ namespace bgl
 		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) = 0;
 
 		/**
-		 * Reads `target`'s last presented backbuffer back into a tightly packed RGBA8 image.
+		 * Reads `target`'s last presented backbuffer back into a tightly packed RGBA8 image,
+		 * blocking until the GPU copy completes -- SubmitCapture + TryResolveCapture in one call.
 		 *
 		 * @throws GraphicsError if called between BeginFrame and EndFrame.
 		 */
 		virtual assetlib::ImageData
 		ScreenshotToMemory(const RenderTargetRef& target) = 0;
+
+		/**
+		 * Records a copy of `target`'s last presented backbuffer into a context-owned readback
+		 * buffer and returns without waiting for the GPU. Every ticket must be spent with
+		 * TryResolveCapture or DiscardCapture.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, or if
+		 *         c_MaxPendingCaptures captures are already in flight.
+		 */
+		virtual CaptureTicket
+		SubmitCapture(const RenderTargetRef& target) = 0;
+
+		/**
+		 * The image of a submitted capture, or nullopt while the GPU copy is still in flight.
+		 * Returning an image spends the ticket. May be called between BeginFrame and EndFrame.
+		 *
+		 * @throws GraphicsError if the ticket is null or already spent.
+		 */
+		virtual std::optional<assetlib::ImageData>
+		TryResolveCapture(CaptureTicket ticket) = 0;
+
+		/**
+		 * Abandons a submitted capture without waiting for it; the readback buffer is released
+		 * once the GPU is done with it. Spending a ticket twice is a no-op, so teardown paths
+		 * need no bookkeeping.
+		 */
+		virtual void
+		DiscardCapture(CaptureTicket ticket) noexcept = 0;
 
 		/**
 		 * Per-context equivalent of IGraphics::SetGpuAssertionHandler, with the same contract;

@@ -435,8 +435,8 @@ scene view, environment maps and default material live there, and `SetAssets(Ass
 became `SetDataRoot(path)` — the cache builds its **own** `AssetManager` over its own scene, which
 is the duplicate-upload cost this stage accepts. A side effect worth having: the KTX2 decode of
 the cache's environment maps moved off the render thread with everything else. The S4 frame-time
-measurement (cold folder populating vs. viewport) has not been recorded yet — it needs a manual
-editor session, and `feat/frame-stats` is still parked for the readout.
+measurement (cold folder populating vs. viewport) has not been recorded yet — the readout landed
+(#92); the number needs a manual editor session.
 
 This costs what the spec says a second device costs — env maps and thumbnail textures uploaded
 twice — but it shares the device, the PSO/shader cache, the descriptor heaps and the resource
@@ -459,21 +459,33 @@ uploads and completes the spec's one-line test.
 * **Gate:** the S4 measurement holds, *and* env maps/materials are uploaded once — assert by
   instrumenting `Scene::AddTextureAsset` call counts in the thumbnail test.
 
-### S6 — Split-phase capture
+### S6 — Split-phase capture — **done**
 
-`CaptureBackbuffer` (`Graphics_d3d12.cpp:896-956`) blocks the CPU twice: once on the producing
-frame's fence, once on the copy's. Replace with a per-context readback ring modelled directly on
-the debug-readback ring — fence-gated slot, pending flag, idempotent consume.
+`CaptureBackbuffer` blocked the CPU twice: once on the producing frame's fence, once on the
+copy's. Replaced with a per-context capture ring (`RenderContext::CaptureSlot`) modelled on the
+debug-readback ring — fence-gated slot, spent-ticket detection, per-slot allocator.
 
-`SubmitCapture` records the copy and returns a `{slot, fence}` ticket. `TryResolveCapture` returns
-`nullopt` until the fence passes, then maps and converts. `ScreenshotToMemory` stays as
-Submit + wait + Resolve so every existing test keeps working unchanged.
+What shipped, and where it deviated from the sketch above:
 
-`AssetThumbnailCache` then submits during one drain turn and resolves on a later one, so its
-thread never blocks either.
+* `SubmitCapture` records the copy and returns an opaque monotone `CaptureTicket`, waiting on
+  **neither** fence: each slot has its own command allocator (the old first wait existed only to
+  reset the frame ring's allocator), and one queue executes in submission order, so the copy is
+  ordered behind the producing frame with no CPU involvement.
+* `TryResolveCapture` returns `nullopt` until the copy's fence passes, then maps and converts;
+  returning an image spends the ticket, and a spent ticket throws rather than resolving twice.
+  Legal mid-frame, so a caller can poll while recording.
+* `DiscardCapture` (not in the sketch, needed by teardown/project-switch paths) abandons a
+  capture without waiting — the readback is destroyed *deferred*, and the slot keeps its fence so
+  the next submit there waits before resetting the allocator.
+* `ScreenshotToMemory`/`ScreenshotPng` are Submit + wait + Resolve, so every existing golden test
+  exercises the ring end-to-end unchanged.
+* `AssetThumbnailCache::DrainOne` is now a two-step pipeline per event-loop turn: resolve the
+  in-flight capture if its copy landed, then render and submit the next asset — neither the UI
+  thread nor the worker ever blocks on the GPU.
 
 * **Gate:** `just test` green; thumbnail goldens unchanged; thumbnail throughput (thumbnails/sec
-  over a fixed folder) improves against the S4 number, or the stage is not worth keeping.
+  over a fixed folder) improves against the S4 number, or the stage is not worth keeping. The
+  throughput comparison rides the same manual S4 measurement session.
 
 ### S7 — Async upload handoff, and retire the shim
 
