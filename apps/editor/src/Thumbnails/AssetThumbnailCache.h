@@ -157,7 +157,7 @@ private:
 	// One step of the pipeline per call, so the event loop keeps turning: finish the in-flight
 	// capture if its GPU copy has landed, then render and submit the next queued asset.
 	void
-	DrainOne();
+	RenderNextQueued();
 
 	// Abandons the in-flight capture, if any. For teardown and project switches, where its image
 	// would land under a stale key.

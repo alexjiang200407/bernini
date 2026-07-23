@@ -423,7 +423,7 @@ it deviated from the design recorded above:
 
 **Interim constraint: two contexts must not share a `Scene`.** That is the §6 decision, and it is
 not made here. So `AssetThumbnailCache` creates its own context *and* its own `Scene`, and the
-editor's `Renderer` grows a second worker thread that owns it. The cache's `DrainOne` stops using
+editor's `Renderer` grows a second worker thread that owns it. The cache's `RenderNextQueued` stops using
 `Renderer::Invoke` and posts to that thread instead.
 
 **The editor half is done, save the measurement.** A `ContextWorker` (editor, `Render/`) owns the
@@ -479,7 +479,7 @@ What shipped, and where it deviated from the sketch above:
   the next submit there waits before resetting the allocator.
 * `ScreenshotToMemory`/`ScreenshotPng` are Submit + wait + Resolve, so every existing golden test
   exercises the ring end-to-end unchanged.
-* `AssetThumbnailCache::DrainOne` is now a two-step pipeline per event-loop turn: resolve the
+* `AssetThumbnailCache::RenderNextQueued` is now a two-step pipeline per event-loop turn: resolve the
   in-flight capture if its copy landed, then render and submit the next asset — neither the UI
   thread nor the worker ever blocks on the GPU.
 

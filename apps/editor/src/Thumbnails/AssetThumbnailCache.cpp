@@ -254,7 +254,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 
 	m_DrainTimer = new QTimer(this);
 	m_DrainTimer->setInterval(0);
-	connect(m_DrainTimer, &QTimer::timeout, this, &AssetThumbnailCache::DrainOne);
+	connect(m_DrainTimer, &QTimer::timeout, this, &AssetThumbnailCache::RenderNextQueued);
 }
 
 AssetThumbnailCache::~AssetThumbnailCache()
@@ -445,7 +445,7 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 }
 
 void
-AssetThumbnailCache::DrainOne()
+AssetThumbnailCache::RenderNextQueued()
 {
 	if (m_PendingCapture.has_value())
 	{
