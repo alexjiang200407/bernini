@@ -63,6 +63,15 @@ namespace bgl
 		assetlib::ImageData
 		ScreenshotToMemory(const RenderTargetRef& target) override;
 
+		CaptureTicket
+		SubmitCapture(const RenderTargetRef& target) override;
+
+		std::optional<assetlib::ImageData>
+		TryResolveCapture(CaptureTicket ticket) override;
+
+		void
+		DiscardCapture(CaptureTicket ticket) noexcept override;
+
 		void
 		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept override
 		{
@@ -99,6 +108,31 @@ namespace bgl
 		assetlib::ImageData
 		CaptureBackbuffer(const RenderTargetRef& target, std::string_view caller);
 
+		/**
+		 * One in-flight backbuffer capture: its own allocator (the frame ring's cannot be reset
+		 * without waiting on the frame), the readback the copy lands in, and the layout snapshot
+		 * the resolve decodes with. `ticketId` 0 means the slot is free; `fence` outlives the
+		 * ticket so a slot freed by a discard is not re-recorded while its copy is in flight.
+		 */
+		struct CaptureSlot
+		{
+			CommandAllocatorRef   allocator;
+			ReadbackBufferHandle  readback;
+			uint64_t              fence    = 0;
+			uint64_t              ticketId = 0;
+			TextureReadbackLayout layout;
+			uint32_t              width  = 0;
+			uint32_t              height = 0;
+			Format                format{};
+		};
+
+		// The slot a live ticket names. @throws GraphicsError if the ticket is null or spent.
+		[[nodiscard]] CaptureSlot&
+		FindCapture(CaptureTicket ticket);
+
+		CaptureTicket
+		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
+
 		// The device and resource manager are shared across all contexts; the queue, command list
 		// and bootstrap allocator are the context's own -- one submission timeline and one recorder
 		// per context.
@@ -116,6 +150,9 @@ namespace bgl
 
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
+
+		std::array<CaptureSlot, c_MaxPendingCaptures> m_Captures;
+		uint64_t                                      m_NextCaptureId = 1;
 
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;

@@ -34,6 +34,19 @@ namespace
 	constexpr auto c_MeshSuffix     = ".bmesh";
 	constexpr auto c_MaterialSuffix = ".bmaterial";
 
+	// Deep-copy: `shot` owns the pixels and dies with the caller's scope.
+	QImage
+	ToImage(const assetlib::ImageData& shot)
+	{
+		return QImage(
+				   reinterpret_cast<const uchar*>(shot.pixels.data()),
+				   static_cast<int>(shot.width),
+				   static_cast<int>(shot.height),
+				   static_cast<qsizetype>(shot.subresources.front().rowPitch),
+				   QImage::Format_RGBA8888)
+		    .copy();
+	}
+
 	bgl::TextureAssetHandle
 	TryLoadTexture(bgl::IScene* scene, const std::string& path)
 	{
@@ -241,11 +254,12 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 
 	m_DrainTimer = new QTimer(this);
 	m_DrainTimer->setInterval(0);
-	connect(m_DrainTimer, &QTimer::timeout, this, &AssetThumbnailCache::DrainOne);
+	connect(m_DrainTimer, &QTimer::timeout, this, &AssetThumbnailCache::RenderNextQueued);
 }
 
 AssetThumbnailCache::~AssetThumbnailCache()
 {
+	DiscardPendingCapture();
 	ReleaseGeometry();
 	ReleaseMaterials();
 
@@ -283,6 +297,7 @@ AssetThumbnailCache::SetDataRoot(const std::filesystem::path& dataRoot)
 		return;
 
 	// Hand the old project's assets back through the manager that owns them, before we let go of it.
+	DiscardPendingCapture();
 	ReleaseGeometry();
 	ReleaseMaterials();
 
@@ -430,8 +445,49 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 }
 
 void
-AssetThumbnailCache::DrainOne()
+AssetThumbnailCache::RenderNextQueued()
 {
+	if (m_PendingCapture.has_value())
+	{
+		auto image = std::optional<assetlib::ImageData>();
+		try
+		{
+			image = m_Worker->Invoke([&] {
+				return m_Worker->GetContext()->TryResolveCapture(m_PendingCapture->ticket);
+			});
+		}
+		catch (const std::exception& e)
+		{
+			qWarning(
+				"AssetThumbnail: cannot resolve '%s': %s",
+				qPrintable(m_PendingCapture->path),
+				e.what());
+			m_PendingCapture.reset();
+		}
+
+		if (m_PendingCapture.has_value())
+		{
+			if (!image.has_value())
+				return;  // The GPU copy is still in flight; poll again next turn.
+
+			const QPixmap thumbnail = QPixmap::fromImage(ToImage(*image));
+
+			const int costKb = std::max(
+				1,
+				static_cast<int>(
+					(static_cast<qint64>(thumbnail.width()) * thumbnail.height() *
+			         thumbnail.depth() / 8) /
+					1024));
+
+			m_Cache.insert(
+				m_PendingCapture->path,
+				new CachedThumbnail{ thumbnail, m_PendingCapture->stamp },
+				costKb);
+			Q_EMIT ThumbnailReady(m_PendingCapture->path, thumbnail);
+			m_PendingCapture.reset();
+		}
+	}
+
 	if (m_Queue.isEmpty())
 	{
 		// The batch is over, so the materials it shared can go back.
@@ -443,35 +499,36 @@ AssetThumbnailCache::DrainOne()
 	const PendingRender pending = m_Queue.dequeue();
 	m_InFlight.remove(pending.path);
 
-	const QImage image = m_Worker->Invoke([&] {
-		QImage img;
+	const bgl::CaptureTicket ticket = m_Worker->Invoke([&] {
+		auto t = bgl::CaptureTicket();
 		try
 		{
-			img = pending.type == ThumbnailType::kMesh ? RenderMesh(pending) :
-			                                             RenderMaterial(pending);
+			t = pending.type == ThumbnailType::kMesh ? RenderMesh(pending) :
+			                                           RenderMaterial(pending);
 		}
 		catch (const std::exception& e)
 		{
 			qWarning("AssetThumbnail: cannot render '%s': %s", qPrintable(pending.path), e.what());
 		}
 
+		// Safe with the capture in flight: it copies the presented backbuffer, and the scene's
+		// deletes are fence-deferred behind it.
 		ReleaseGeometry();
-		return img;
+		return t;
 	});
 
-	if (image.isNull())
+	if (ticket.IsValid())
+		m_PendingCapture = PendingCapture{ ticket, pending.path, pending.stamp };
+}
+
+void
+AssetThumbnailCache::DiscardPendingCapture()
+{
+	if (!m_PendingCapture.has_value())
 		return;
 
-	const QPixmap thumbnail = QPixmap::fromImage(image);
-
-	const int costKb = std::max(
-		1,
-		static_cast<int>(
-			(static_cast<qint64>(thumbnail.width()) * thumbnail.height() * thumbnail.depth() / 8) /
-			1024));
-
-	m_Cache.insert(pending.path, new CachedThumbnail{ thumbnail, pending.stamp }, costKb);
-	Q_EMIT ThumbnailReady(pending.path, thumbnail);
+	m_Worker->Invoke([&] { m_Worker->GetContext()->DiscardCapture(m_PendingCapture->ticket); });
+	m_PendingCapture.reset();
 }
 
 bgl::MaterialHandle
@@ -496,7 +553,7 @@ AssetThumbnailCache::AcquireMaterial(std::string_view relPath, game::TexturePref
 	}
 }
 
-QImage
+bgl::CaptureTicket
 AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 {
 	const assetlib::BMesh& mesh = *pending.mesh;
@@ -552,7 +609,7 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 	return Shoot(center, radius);
 }
 
-QImage
+bgl::CaptureTicket
 AssetThumbnailCache::RenderMaterial(const PendingRender& pending)
 {
 	const std::string relPath = ToRelative(pending.path);
@@ -569,7 +626,7 @@ AssetThumbnailCache::RenderMaterial(const PendingRender& pending)
 	return Shoot(glm::vec3(0.0f), 1.0f);
 }
 
-QImage
+bgl::CaptureTicket
 AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 {
 	// Pull back far enough that the bounding sphere fits the field of view with a margin. A mesh's
@@ -598,16 +655,7 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 
 	for (int i = 0; i < c_WarmupFrames; ++i) m_Worker->GetContext()->DrawFrame(m_RenderTarget, job);
 
-	const assetlib::ImageData shot = m_Worker->GetContext()->ScreenshotToMemory(m_RenderTarget);
-
-	// Deep-copy: `shot` owns the pixels and dies at the end of this scope.
-	return QImage(
-			   reinterpret_cast<const uchar*>(shot.pixels.data()),
-			   static_cast<int>(shot.width),
-			   static_cast<int>(shot.height),
-			   static_cast<qsizetype>(shot.subresources.front().rowPitch),
-			   QImage::Format_RGBA8888)
-	    .copy();
+	return m_Worker->GetContext()->SubmitCapture(m_RenderTarget);
 }
 
 void

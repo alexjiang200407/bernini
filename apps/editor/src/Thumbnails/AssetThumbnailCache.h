@@ -10,6 +10,7 @@
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderContext.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
@@ -63,7 +64,8 @@ struct AssetThumbnailDesc
  * own submission context, scene and thread -- so a folder populating its tiles neither stalls the
  * viewports' frame loop nor is stalled by it. The `.bmesh` read and texture decode run on the
  * pool; the render is drained from the UI thread one asset per event-loop turn, each handed to the
- * worker.
+ * worker. The readback is split-phase -- submitted on one turn, resolved on a later one -- so no
+ * turn blocks on the GPU.
  *
  * The cache's scene is its own (contexts must not share one), so its assets are uploaded by its
  * own AssetManager, separately from the editor's -- the price of isolation until scenes can be
@@ -152,20 +154,27 @@ private:
 	void
 	Enqueue(const QString& path, ThumbnailType type, PendingRender pending);
 
-	// Renders the next queued asset, if any. One per call so the event loop keeps turning.
+	// One step of the pipeline per call, so the event loop keeps turning: finish the in-flight
+	// capture if its GPU copy has landed, then render and submit the next queued asset.
 	void
-	DrainOne();
+	RenderNextQueued();
+
+	// Abandons the in-flight capture, if any. For teardown and project switches, where its image
+	// would land under a stale key.
+	void
+	DiscardPendingCapture();
 
 	// Puts the mesh in the scene at each node that references it, wearing the materials it names.
-	[[nodiscard]] QImage
+	[[nodiscard]] bgl::CaptureTicket
 	RenderMesh(const PendingRender& pending);
 
 	// Puts a sphere in the scene wearing the material the request named.
-	[[nodiscard]] QImage
+	[[nodiscard]] bgl::CaptureTicket
 	RenderMaterial(const PendingRender& pending);
 
-	// Frames [center, radius], draws, and reads the target back: the half of a render both kinds share.
-	[[nodiscard]] QImage
+	// Frames [center, radius], draws, and submits the readback of the result -- resolved on a
+	// later drain turn, so neither this thread nor the worker waits on the GPU.
+	[[nodiscard]] bgl::CaptureTicket
 	Shoot(const glm::vec3& center, float radius);
 
 	// The scene material the `.bmaterial` at `relPath` describes, or the neutral default if it cannot
@@ -205,6 +214,16 @@ private:
 	};
 
 	mutable QCache<QString, CachedThumbnail> m_Cache{ c_BudgetKb };
+
+	// The one capture whose GPU copy is still in flight, and the cache entry it will become.
+	struct PendingCapture
+	{
+		bgl::CaptureTicket ticket;
+		QString            path;
+		qint64             stamp = 0;
+	};
+
+	std::optional<PendingCapture> m_PendingCapture;
 
 	QSet<QString>         m_InFlight;
 	QQueue<PendingRender> m_Queue;
