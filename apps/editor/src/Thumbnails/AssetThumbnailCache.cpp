@@ -21,11 +21,10 @@
 
 namespace
 {
-	// The backbuffer and the per-frame upload rings are c_SwapchainImageCount deep, so a single draw can
-	// present a slot the asset's instance data has not reached yet. Draw enough to fill every slot.
-	// Must track bgl's c_SwapchainImageCount, which is not public; the thumbnail goldens are what
-	// catch this being too low.
-	constexpr int c_WarmupFrames = 2;
+	// The capture reads the backbuffer the last DrawFrame presented, and that frame's Scene::Update
+	// uploads this asset on its own list -- so one drawn frame is enough. Zero captures a blank
+	// backbuffer; the thumbnail goldens catch a too-low count.
+	constexpr int c_WarmupFrames = 1;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
 	constexpr float c_Yaw   = 0.6f;
