@@ -19,6 +19,7 @@ Renderer::Renderer(const bgl::GraphicsOptions& gfxOpts, const bgl::SceneDesc& sc
 			try
 			{
 				m_Graphics = bgl::CreateGraphics(gfxOpts);
+				m_Context  = m_Graphics->CreateRenderContext();
 				m_Scene    = m_Graphics->CreateScene(sceneDesc);
 
 				// Parented to this, so it belongs to the render thread and is destroyed from it.
@@ -39,6 +40,7 @@ Renderer::Renderer(const bgl::GraphicsOptions& gfxOpts, const bgl::SceneDesc& sc
 				m_FrameTimer = nullptr;
 
 				m_Scene    = nullptr;
+				m_Context  = nullptr;
 				m_Graphics = nullptr;
 				throw;
 			}
@@ -61,6 +63,7 @@ Renderer::~Renderer()
 
 		m_Viewports.clear();
 		m_Scene    = nullptr;
+		m_Context  = nullptr;
 		m_Graphics = nullptr;
 	});
 

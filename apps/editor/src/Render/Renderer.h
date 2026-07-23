@@ -5,6 +5,7 @@
 #include <QObject>
 
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderContext.h>
 #include <bgl/IScene.h>
 
 class QThread;
@@ -78,6 +79,14 @@ public:
 		return m_Graphics;
 	}
 
+	// The primary submission context: the viewports' render targets are created on it and their
+	// frames recorded through it. Only valid to touch on the render thread.
+	[[nodiscard]] const bgl::RenderContextRef&
+	GetContext() const noexcept
+	{
+		return m_Context;
+	}
+
 	// The owned Scene. Only valid to touch on the render thread (inside a Post/Invoke closure).
 	[[nodiscard]] const bgl::SceneRef&
 	GetScene() const noexcept
@@ -108,8 +117,9 @@ private:
 	std::vector<Viewport> m_Viewports;
 	ViewportId            m_NextViewportId = 1;
 
-	bgl::GraphicsRef m_Graphics;
-	bgl::SceneRef    m_Scene;
+	bgl::GraphicsRef      m_Graphics;
+	bgl::RenderContextRef m_Context;
+	bgl::SceneRef         m_Scene;
 };
 
 template <typename Fn>

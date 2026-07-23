@@ -499,20 +499,45 @@ What shipped, and where it deviated from the sketch above:
   over a fixed folder) improves against the S4 number, or the stage is not worth keeping. The
   throughput comparison rides the same manual S4 measurement session.
 
-### S7 — Async upload handoff, and retire the shim
+### S7a — Retire the shim — **done**
+
+The compatibility shim is gone: `IGraphics` no longer has `BeginFrame`/`Draw`/`EndFrame`/
+`DrawFrame`/`Resize`/`ScreenshotPng`/`ScreenshotToMemory`/`CreateRenderTarget`/
+`SetGpuAssertionHandler`/`DiscardPendingGpuAssertions`, and no longer constructs an implicit primary
+context. It is now purely a factory — `CreateRenderContext`, `CreateScene`, `CreateSceneView`, plus
+the `GetDevice`/`GetResourceManagerCpy` escape hatches — and every frame, target and screenshot goes
+through an explicit `IRenderContext`. `IRenderContext` is the sole rendering entry point.
+
+Migrated: the editor (`Renderer` owns a primary `RenderContextRef`; `RenderTargetWindow` records
+through it), all five examples (`bgl_two_windows` became a genuine two-context demo, one context per
+window), and every bgl test.
+
+Two couplings the shim removal exposed, both resolved:
+
+* **`GraphicsBase::WaitIdle` is gone.** It delegated to the primary context's queue; with no primary
+  context there is no single queue to idle. Its only users were two deletion tests, which relied on
+  the implicit primary queue being registered with the RM's deletion gate. Both now create explicit
+  queues, register them, and advance them with `queue->Flush()` — clearer about what timeline the
+  gate waits on, and no longer dependent on a hidden primary.
+* **`MultiQueueDeletion`/`MaterialTextureDelete` no longer assume a registered primary queue.** They
+  register their own, so the N-timeline gate is exercised by queues the test fully controls.
+
+* **Gate (met):** `just test bgl editor` green (`bgl_tests` 34.6s, `editor_tests` 20.8s); `docs/rhi.md`
+  topology + façade description updated. `--gpu-validation` deferred to the pre-merge run.
+
+### S7b — Async upload handoff (remaining)
 
 * Move the render-thread half of asset upload onto the thumbnail context. gamelib's
   `TexturePrefetch` already unfuses decode from upload
   ([AssetManager.h:32](../../libs/gamelib/include/gamelib/AssetManager.h)); this finishes the job so
   the viewport context never pays an upload for a thumbnail.
-* **Revisit `c_WarmupFrames = 6`** ([AssetThumbnailCache.cpp:24-25](../../apps/editor/src/Thumbnails/AssetThumbnailCache.cpp)).
+* **Revisit `c_WarmupFrames`** ([AssetThumbnailCache.cpp](../../apps/editor/src/Thumbnails/AssetThumbnailCache.cpp)).
   It exists because the upload rings are `c_SwapchainImageCount` deep. With a dedicated context and
-  a resolved capture it should drop; measure rather than assume, and keep the goldens honest.
-* Remove `IGraphics::BeginFrame/Draw/EndFrame/Resize/Screenshot*`; callers use a context. Update the
-  editor, examples, gamelib and bgl tests.
+  the S6 resolved capture it should drop; measure rather than assume, and keep the goldens honest.
+  (Depends on S6 landing first.)
 
-* **Gate:** `just test` green; `--gpu-validation` clean; `docs/rhi.md` threading section and a new
-  `docs/render_contexts.md` updated; `docs/passes.md` checked for per-context scratch-buffer claims.
+* **Gate:** `just test` green; `--gpu-validation` clean; a new `docs/render_contexts.md` written;
+  `docs/passes.md` checked for per-context scratch-buffer claims.
 
 ---
 

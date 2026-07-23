@@ -94,7 +94,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [libs/bgl/include/libs/bgl/IGraphics.h](libs/bgl/include/libs/bgl/IGraphics.h) | Public façade above the RHI; owns the device. `GetDevice()` returns the RHI root. |
+| `IGraphics` | [libs/bgl/include/libs/bgl/IGraphics.h](libs/bgl/include/libs/bgl/IGraphics.h) | Public façade above the RHI; owns the device and mints render contexts, scenes and scene views. `GetDevice()` returns the RHI root. Frames, targets and screenshots live on `IRenderContext`, not here. |
 | `IDevice` | [libs/bgl/src/device/Device.h](libs/bgl/src/device/Device.h) | Root factory for every RHI object. |
 | `IResourceManager` | [libs/bgl/src/resource/ResourceManager.h](libs/bgl/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
 | `ICommandQueue` | [libs/bgl/src/cmd/CommandQueue.h](libs/bgl/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
@@ -132,7 +132,8 @@ flowchart TD
     CG["CreateGraphics(GraphicsOptions)"] --> IG[IGraphics]
     IG -- "GetDevice()" --> DEV["IDevice (sole factory)"]
 
-    IG -- owns --> RT[RenderTarget]
+    IG -- "CreateRenderContext()" --> RC["IRenderContext (frames, targets, screenshots)"]
+    RC -- owns --> RT[RenderTarget]
     IG -- owns --> SC[Scene]
     IG -- owns --> SV[SceneView]
 

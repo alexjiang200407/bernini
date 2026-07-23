@@ -41,8 +41,11 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 	auto  rm     = gfxBase->GetResourceManagerCpy();
 	auto* device = gfxBase->GetDevice();
 
-	// The primary context's queue is already registered; add a second, independent timeline.
+	// Two independent timelines registered with the manager. Nothing else registers a queue now
+	// that there is no implicit primary context, so these two are the whole gate.
+	auto queueA = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 	auto queueB = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	rm->RegisterQueue(queueA.Get());
 	rm->RegisterQueue(queueB.Get());
 
 	const bgl::TextureHandle tex  = MakeTexture(rm);
@@ -56,8 +59,8 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 
 	SECTION("advancing only one queue does not reclaim the slot")
 	{
-		// The primary queue reaches its gate...
-		gfxBase->WaitIdle();
+		// queueA reaches its gate...
+		queueA->Flush();
 		rm->CleanupExpiredResources();
 
 		// ...but queueB has not, so the slot is still gated: a new texture must land elsewhere.
@@ -74,17 +77,18 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 
 	SECTION("a queue that unregisters stops gating the free")
 	{
-		// queueB never advances, but its context flushes and leaves. Unregistering scrubs it from the
-		// gate, so the only remaining timeline is the primary queue.
+		// queueB reaches its gate, then leaves. Unregistering scrubs it from the gate, so the only
+		// remaining timeline is queueA.
 		queueB->Flush();
 		rm->UnregisterQueue(queueB.Get());
 
-		gfxBase->WaitIdle();
+		queueA->Flush();
 		rm->CleanupExpiredResources();
 
 		const bgl::TextureHandle recycled = MakeTexture(rm);
 		CHECK(recycled.slot.index == slot);
 	}
 
+	rm->UnregisterQueue(queueA.Get());
 	rm->UnregisterQueue(queueB.Get());
 }

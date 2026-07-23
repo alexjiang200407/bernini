@@ -24,10 +24,5 @@ namespace bgl
 
 		virtual core::SharedRef<IResourceManager>
 		GetResourceManagerCpy() const noexcept = 0;
-
-		// Blocks until the GPU has finished all submitted work. Internal/test facility -- lets a
-		// deferred-destroy gate be reached without driving frames.
-		virtual void
-		WaitIdle() noexcept = 0;
 	};
 }

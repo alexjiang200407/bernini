@@ -58,8 +58,10 @@ TEST_CASE("Two contexts render interleaved frames independently", "[rendercontex
 	auto gfx                      = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-	REQUIRE(ctx != nullptr);
+	auto ctxA = gfx->CreateRenderContext();
+	auto ctxB = gfx->CreateRenderContext();
+	REQUIRE(ctxA != nullptr);
+	REQUIRE(ctxB != nullptr);
 
 	// A target is bound to the context that created it.
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -67,10 +69,10 @@ TEST_CASE("Two contexts render interleaved frames independently", "[rendercontex
 	targetDesc.height   = static_cast<int>(kHeight);
 	targetDesc.headless = true;
 
-	auto primaryTarget = gfx->CreateRenderTarget(targetDesc);
-	auto ctxTarget     = ctx->CreateRenderTarget(targetDesc);
-	REQUIRE(primaryTarget != nullptr);
-	REQUIRE(ctxTarget != nullptr);
+	auto targetA = ctxA->CreateRenderTarget(targetDesc);
+	auto targetB = ctxB->CreateRenderTarget(targetDesc);
+	REQUIRE(targetA != nullptr);
+	REQUIRE(targetB != nullptr);
 
 	// One scene per context: the S4 interim constraint is that contexts do not share a Scene.
 	auto sceneA = gfx->CreateScene(CubeSceneDesc());
@@ -83,17 +85,17 @@ TEST_CASE("Two contexts render interleaved frames independently", "[rendercontex
 
 	// Both frames are open at once, and neither BeginFrame throws: frame-active state is
 	// per-context. Submission order is interleaved on purpose.
-	gfx->BeginFrame(primaryTarget);
-	ctx->BeginFrame(ctxTarget);
+	ctxA->BeginFrame(targetA);
+	ctxB->BeginFrame(targetB);
 
-	gfx->Draw(CubeJob(viewA));
-	ctx->Draw(CubeJob(viewB));
+	ctxA->Draw(CubeJob(viewA));
+	ctxB->Draw(CubeJob(viewB));
 
-	ctx->EndFrame();
-	gfx->EndFrame();
+	ctxB->EndFrame();
+	ctxA->EndFrame();
 
-	gfx->ScreenshotPng(primaryTarget, "assets/golden/multictx_primary.got.png");
-	ctx->ScreenshotPng(ctxTarget, "assets/golden/multictx_second.got.png");
+	ctxA->ScreenshotPng(targetA, "assets/golden/multictx_primary.got.png");
+	ctxB->ScreenshotPng(targetB, "assets/golden/multictx_second.got.png");
 
 	CHECK(
 		bgl::test::MatchesGolden(

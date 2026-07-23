@@ -279,14 +279,17 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
+	auto ctx = gfx->CreateRenderContext();
+	REQUIRE(ctx != nullptr);
+
 	RecordingAssertionHandler handler;
-	gfx->SetGpuAssertionHandler(&handler);
+	ctx->SetGpuAssertionHandler(&handler);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = 64;
 	targetDesc.height   = 64;
 	targetDesc.headless = true;
-	auto target         = gfx->CreateRenderTarget(targetDesc);
+	auto target         = ctx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -319,7 +322,7 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	// pump frames until the handler fires (bounded so a real failure still terminates).
 	for (int i = 0; i < 8 && handler.calls == 0; ++i)
 	{
-		gfx->DrawFrame(target, job);
+		ctx->DrawFrame(target, job);
 	}
 
 	CHECK(handler.calls >= 1);
@@ -327,8 +330,8 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	REQUIRE(handler.errcodes.size() >= 1);
 	CHECK(handler.errcodes[0] == 1u);  // Forward_Assert.slang raises errcode 1
 
-	gfx->DiscardPendingGpuAssertions();
-	gfx->SetGpuAssertionHandler(nullptr);
+	ctx->DiscardPendingGpuAssertions();
+	ctx->SetGpuAssertionHandler(nullptr);
 }
 
 #endif  // BERNINI_GPU_DEBUG
