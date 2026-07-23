@@ -152,7 +152,9 @@ TEST_CASE(
 	auto visibility = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetMaxCount(c_PaddedCount).SetDebugName("Visibility");
+		desc.SetElement<bgl::idl::InstanceVisibility>()
+			.SetMaxCount(c_PaddedCount)
+			.SetDebugName("Visibility");
 		visibility.Init(desc, resourceManager);
 	}
 

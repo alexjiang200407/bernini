@@ -22,6 +22,7 @@ set(IDL_CPP_SOURCES
     Submesh.slang
     CullView.slang
     CullStats.slang
+    InstanceVisibility.slang
     Mesh.slang
     DebugRecord.slang
     Constants.slang

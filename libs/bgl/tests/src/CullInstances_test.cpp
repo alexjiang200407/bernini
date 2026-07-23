@@ -151,7 +151,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	};
 
 	auto cullView   = makeCompute(bgl::idl::CullView{}, 1, "Cull View");
-	auto visibility = makeCompute(uint32_t{}, padded, "Visibility");
+	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, padded, "Visibility");
 	auto stats      = makeCompute(bgl::idl::CullStats{}, 1, "Cull Stats");
 
 	auto cull = device->CreateComputeKernel(
@@ -255,7 +255,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.Compile(resourceManager.Get());
 
 	auto rbDesc       = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize   = static_cast<uint64_t>(padded) * sizeof(uint32_t);
+	rbDesc.byteSize   = static_cast<uint64_t>(padded) * sizeof(bgl::idl::InstanceVisibility);
 	rbDesc.debugName  = "Visibility Readback";
 	auto rbVisibility = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -286,23 +286,23 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	auto fence = cmdQueue->ExecuteCommandList(cmdList);
 	cmdQueue->WaitForFenceCPUBlocking(fence);
 
-	const auto* visibilityOut =
-		static_cast<const uint32_t*>(resourceManager->MapReadback(rbVisibility));
+	const auto* visibilityOut = static_cast<const bgl::idl::InstanceVisibility*>(
+		resourceManager->MapReadback(rbVisibility));
 	REQUIRE(visibilityOut != nullptr);
 
 	uint32_t visibleCount = 0;
 	for (uint32_t i = 0; i < liveCount; ++i)
 	{
 		CAPTURE(i);
-		CHECK((visibilityOut[i] != 0u) == placements[i].visible);
-		visibleCount += visibilityOut[i] != 0u ? 1u : 0u;
+		CHECK((visibilityOut[i].visible != 0u) == placements[i].visible);
+		visibleCount += visibilityOut[i].visible != 0u ? 1u : 0u;
 	}
 	CHECK(visibleCount == liveCount - expectedCulled);
 
 	// Padding slots name no mesh, so the cull writes them 0.
 	for (uint32_t i = liveCount; i < padded; ++i)
 	{
-		CHECK(visibilityOut[i] == 0u);
+		CHECK(visibilityOut[i].visible == 0u);
 	}
 	resourceManager->UnmapReadback(rbVisibility);
 

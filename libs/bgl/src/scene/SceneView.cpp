@@ -77,7 +77,7 @@ namespace bgl
 
 		{
 			auto visibilityDesc = ComputeBufferDesc();
-			visibilityDesc.SetElement<uint32_t>();
+			visibilityDesc.SetElement<idl::InstanceVisibility>();
 			// The cull pass writes one word per instance slot over the whole padded range, so match
 			// the instance buffer's padded size exactly.
 			visibilityDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);

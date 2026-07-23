@@ -123,7 +123,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	auto visibility = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>();
+		desc.SetElement<bgl::idl::InstanceVisibility>();
 		desc.maxCount  = paddedCount;
 		desc.debugName = "Visibility";
 		visibility.Init(desc, resourceManager);

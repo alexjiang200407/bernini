@@ -7,6 +7,7 @@ import idl.Mesh;
 import idl.Submesh;
 import idl.CullView;
 import idl.CullStats;
+import idl.InstanceVisibility;
 import idl.Constants;
 import debug.dbg;
 
@@ -20,7 +21,7 @@ struct Uniforms
     PackedBuffer<SubmeshInstance> instanceBuffer;
     EntryBuffer<Mesh> meshBuffer;
     RangeBuffer<Submesh> submeshBuffer;
-    ComputeBuffer<uint> visibility;
+    ComputeBuffer<InstanceVisibility> visibility;
 
     // Profiling counters for the C5 overlay and the cull tests; the per-instance atomics are the only
     // real cost, so they are gated to BERNINI_GPU_DEBUG below.
@@ -51,7 +52,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
     // Padding and dead slots name no mesh: never visible, never counted.
     if (instance.meshInstance.Null())
     {
-        gUniforms.visibility[globalIdx] = 0u;
+        gUniforms.visibility[globalIdx].visible = 0u;
         return;
     }
 
@@ -76,7 +77,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let visible = SphereInFrustum(gUniforms.cullView[0].frustumPlanes, center, radius);
 
-    gUniforms.visibility[globalIdx] = visible ? 1u : 0u;
+    gUniforms.visibility[globalIdx].visible = visible ? 1u : 0u;
 
 #if defined(BERNINI_GPU_DEBUG)
     InterlockedAdd(gUniforms.stats[0].tested, 1u);

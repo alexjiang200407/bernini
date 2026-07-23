@@ -124,7 +124,7 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 	// The histogram and compaction now gate on a per-instance visibility word the cull pass writes.
 	// This test isolates the counting sort, so it stands in for a cull that passed everything: the
 	// buffer is seeded all-visible. Frustum culling has its own test.
-	auto visibility = makeCompute(uint32_t{}, paddedCount, "Visibility");
+	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, paddedCount, "Visibility");
 
 	const auto makeKernel = [&](const char* module, const char* debugName) {
 		auto kernel = device->CreateComputeKernel(

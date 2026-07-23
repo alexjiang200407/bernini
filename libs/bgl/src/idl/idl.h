@@ -6,6 +6,7 @@
 #include "idl/CullView.h"
 #include "idl/DebugRecord.h"
 #include "idl/Entry.h"
+#include "idl/InstanceVisibility.h"
 #include "idl/LoosePbrMaterial.h"
 #include "idl/Mesh.h"
 #include "idl/Meshlet.h"
