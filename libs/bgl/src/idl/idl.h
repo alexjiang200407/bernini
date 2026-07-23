@@ -2,6 +2,7 @@
 
 #include "idl/ChannelSource.h"
 #include "idl/Constants.h"
+#include "idl/CullView.h"
 #include "idl/DebugRecord.h"
 #include "idl/Entry.h"
 #include "idl/LoosePbrMaterial.h"

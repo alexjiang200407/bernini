@@ -30,9 +30,11 @@ Where the pipeline already is, against what the four features need:
   `boundingCenter`/`boundingRadius`, populated at import
   ([bmesh_gltf.cpp](../../libs/assetlib/src/bmesh_gltf.cpp)) and by `Scene`'s procedural path —
   and no shader reads them. Cluster culling is the feature they were cooked for.
-* **There are no instance- or submesh-level bounds anywhere.** `idl::Submesh` has ranges and
-  counts only; `SubmeshInstance` is `{mesh, submeshIndex, material, pso}`. Frustum culling needs a
-  per-submesh local bound; the world bound is derived in-shader from `Mesh.transform`.
+* **There are no instance- or submesh-level bounds on the GPU.** `idl::Submesh` has ranges and
+  counts only; `SubmeshInstance` is `{mesh, submeshIndex, material, pso}`. The cooked
+  `assetlib::Submesh` does carry a per-submesh AABB — it just never reached the renderer.
+  Frustum culling needs a per-submesh local bound; the world bound is derived in-shader from
+  `Mesh.transform`.
 * **The amplification shader dispatches blind.** `ASBase`
   ([common.slang](../../libs/bgl/shaders/src/forward/common.slang)) runs one group per instance
   and ends in `DispatchMesh(submesh.GetMeshletCount(), 1, 1, payload)` — every meshlet, every
@@ -82,11 +84,11 @@ seam:
 
 ### Bounds come from what is already cooked
 
-`idl::Submesh` gains a local bounding sphere, computed at `Scene::AddStaticMesh` as the union of
-its meshlets' spheres. No assetlib schema change, no re-cook, no new dependency between cook and
-renderer — the meshlet bounds are already in the container and the union is a trivial CPU fold at
-load. If the union proves too loose for long thin meshes, a cooked tight bound is a later,
-additive assetlib change.
+`idl::Submesh` gains a local bounding sphere. Implementation found the source better than the plan
+assumed: `assetlib::Submesh` already carries a tight per-submesh AABB (`aabbMin`/`aabbMax`),
+computed from positions at import — so `Scene::AddStaticMesh` derives the sphere by circumscribing
+the cooked AABB, and `AddProceduralGeom` folds the same AABB over its generated vertices. No
+assetlib schema change, no re-cook, and no meshlet-union approximation needed.
 
 ### Per-view state lives on `SceneView`
 
@@ -103,6 +105,12 @@ and (from C4) an HZB handle and dimensions. Today exactly one is built per `Draw
 and the kernels must not care which. Costing this now is a struct definition; retrofitting it
 later is a signature change through every kernel.
 
+The `CullView` reaches the kernel as a one-element buffer the CPU rewrites each draw, not as
+constant-buffer scalars. A Slang compute cbuffer that also holds bindless `.Handle` buffers drops
+its plain fields from reflection, so the planes would silently vanish beside the instance/mesh
+handles the cull kernel needs. Routing the whole struct through a buffer sidesteps that and is the
+same shape C4 wants anyway: an HZB texture handle is buffer data, not a scalar.
+
 ### No async compute
 
 All culling work records on the context's single `"main"` queue. The framegraph's multi-queue
@@ -117,7 +125,7 @@ not part of this plan, and nothing here forecloses it.
 | Change | Where | Notes |
 |---|---|---|
 | `Submesh` gains `float3 boundingCenter; float boundingRadius` | `libs/bgl/idl/src/Submesh.slang` + `just idl` | Offsets shift; the `static_assert`s in the generated header and any hand-written offset assumptions must follow |
-| `CullView` struct (viewProj, planes[6], near/far, HZB fields) | IDL | Shared C++/Slang; built CPU-side per draw |
+| `CullView` struct (viewProj, planes[6]; near/far and HZB fields join in C4 with their first consumer) | IDL | Shared C++/Slang; built CPU-side per draw |
 | Per-instance visibility word buffer | `SceneView` | Sized with the instance buffer; a word, not a bit (§2) |
 | CPU frustum-plane extraction + sphere test | `core` or `bgl` math util | Gribb–Hartmann from the combined matrix; unit-testable without a device |
 | Culling stats counters (tested / frustum-culled / meshlet-culled / occlusion-culled) | small `ComputeBuffer`, read back via the existing debug-readback ring | Debug builds and tests; the overlay in C5 reads the same buffer |
@@ -138,11 +146,12 @@ No rendering change; everything verifiable on the CPU or by buffer readback.
 
 * Frustum-plane extraction and CPU sphere-vs-frustum test, unit-tested against hand-computable
   cases (axis-aligned frusta, points/spheres straddling each plane, degenerate transforms).
-* `Submesh` bounds in the IDL, populated in `AddStaticMesh` from the meshlet-sphere union.
+* `Submesh` bounds in the IDL, populated from the cooked AABB (`AddStaticMesh`) and a vertex
+  fold (`AddProceduralGeom`).
 * `CullView` struct and the CPU code that fills it, snapshot-tested.
 
 **Gate:** `just test` green; goldens byte-identical (nothing reads the new fields yet); a
-`bgl_tests` readback case asserts the submesh buffer holds the expected union bounds for a
+`bgl_tests` readback case asserts the submesh buffer holds the expected bounding spheres for a
 crafted two-submesh mesh.
 
 ### C1 — Instance frustum culling
@@ -160,7 +169,9 @@ crafted two-submesh mesh.
   `CompactInstances_test.cpp` pattern, extended.
 * A transparent instance outside the frustum is absent from the sorted partition.
 * Every golden test unchanged (all-visible scenes must render identically).
-* Off-by-one sweep: a sphere exactly tangent to each plane survives (conservative test).
+* Off-by-one sweep: a sphere overlapping each plane by a hair survives. (Not *exact* tangency —
+  plane normalization is inexact, so a distance of exactly -radius floats to either side; C0's
+  frustum tests learned this.)
 
 **Gate:** `just test` green, goldens unchanged, `--gpu-validation` clean, stats show the expected
 cull count in the crafted scene.
@@ -332,8 +343,11 @@ list, allocator, framegraph, pass objects), S4–S7 have not. Rules of the road:
 * **Payload-capacity assumption in C2** (`meshlets per submesh` fits one group's loop). Guarded by
   `dbg_assert`, not silently truncated; if an asset breaks it, the fix is dispatching multiple AS
   groups per instance, which changes `DispatchArgs` generation — known, bounded, deferred.
-* **The submesh bound is a union of meshlet spheres** — loose for elongated meshes, so frustum
-  culling under-culls (never over-culls). Watch the stats; a cooked tight bound is additive.
+* **The submesh sphere circumscribes the cooked AABB** — loose for elongated meshes (a sphere
+  around a long box), so frustum culling under-culls (never over-culls). Watch the stats; a
+  cooked tight sphere is an additive assetlib change if it matters. The cooked AABB itself is
+  trusted as-is: a malformed one mis-culls rather than crashes, unlike the byte ranges the load
+  path does validate.
 * **D24S8 SRV portability.** The `R24_UNORM_X8` view is D3D12-specific plumbing in the one place
   it belongs (`bgl_d3d12`); the RHI surface only says "depth is sampleable". Vulkan has an
   equivalent; if a backend ever lacks it, the fallback is a depth copy, behind the same interface.
