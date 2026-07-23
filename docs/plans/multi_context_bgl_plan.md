@@ -531,10 +531,12 @@ Two couplings the shim removal exposed, both resolved:
   `TexturePrefetch` already unfuses decode from upload
   ([AssetManager.h:32](../../libs/gamelib/include/gamelib/AssetManager.h)); this finishes the job so
   the viewport context never pays an upload for a thumbnail.
-* **Revisit `c_WarmupFrames`** ([AssetThumbnailCache.cpp](../../apps/editor/src/Thumbnails/AssetThumbnailCache.cpp)).
-  It exists because the upload rings are `c_SwapchainImageCount` deep. With a dedicated context and
-  the S6 resolved capture it should drop; measure rather than assume, and keep the goldens honest.
-  (Depends on S6 landing first.)
+* **Revisit `c_WarmupFrames` — done, dropped 2 → 1.** Measured against the thumbnail goldens once
+  S6 landed: at 0 the capture is a blank backbuffer and `AssetThumbnailCache_test`'s
+  `DistinctColours > 1` fails; at 1 every golden matches. So one drawn frame is enough — the
+  dedicated context's `Scene::Update` uploads the asset on that frame's own list and the split-phase
+  capture reads the backbuffer it presented, with no per-frame upload lag left to cover. Halves the
+  draws per thumbnail (one render + one capture, down from two renders).
 
 * **Gate:** `just test` green; `--gpu-validation` clean; a new `docs/render_contexts.md` written;
   `docs/passes.md` checked for per-context scratch-buffer claims.
