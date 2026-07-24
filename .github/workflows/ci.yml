@@ -55,7 +55,11 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
 
     steps:
+      # Unlike the compile-only jobs this one runs assetlib_tests, which loads the .glb
+      # meshes; without LFS those are pointer files and every load fails on "Invalid magic".
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: actions/setup-python@v5
         with:

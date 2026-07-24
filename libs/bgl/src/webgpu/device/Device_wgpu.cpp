@@ -154,7 +154,8 @@ namespace bgl::wgpu
 	{
 		// Blocking on a future is opt-in: without TimedWaitAny, wgpuInstanceWaitAny rejects any
 		// non-zero timeout. A browser has no such feature and must poll instead.
-		const auto features = std::array{ WGPUInstanceFeatureName_TimedWaitAny };
+		constexpr auto features =
+			std::array<WGPUInstanceFeatureName, 1>{ { WGPUInstanceFeatureName_TimedWaitAny } };
 
 		auto instanceDesc                 = WGPUInstanceDescriptor{};
 		instanceDesc.requiredFeatureCount = features.size();
