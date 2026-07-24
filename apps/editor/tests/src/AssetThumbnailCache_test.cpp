@@ -60,6 +60,13 @@ namespace
 			assets.emplace(renderer->GetScene(), std::filesystem::path(c_DataRoot));
 		}
 
+		// ~AssetManager hands every asset it still holds back to the scene, and a scene is driven by
+		// one thread -- the render thread. MainWindow tears its manager down the same way.
+		~Fixture()
+		{
+			renderer->Invoke([&] { assets.reset(); });
+		}
+
 		[[nodiscard]] AssetThumbnailDesc
 		Desc()
 		{
