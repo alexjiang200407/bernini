@@ -65,7 +65,7 @@ and portability.
     - [x] Choose Material Options: e.g. Alpha Mode
     - [x] Link Textures to output nodes (BRDF for PBR)
 - [ ] Culling
-  - [ ] Frustum culling — 6 plane/sphere dots, runs first as the cheapest test.
+  - [x] Frustum culling — 6 plane/sphere dots, runs first as the cheapest test.
   - [ ] HZB build (FidelityFX SPD) — single dispatch; reduce with **min** under reversed-Z, and
     handle non-power-of-two mips explicitly or the odd row/column drops the far sample.
   - [ ] HZB occlusion test — screen AABB, mip where it spans ≤2 texels, `GatherRed` 2×2, take farthest.
