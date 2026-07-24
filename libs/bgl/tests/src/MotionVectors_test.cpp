@@ -8,10 +8,12 @@
 #include "resource/Texture.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
 #include <catch2/catch_approx.hpp>
 
@@ -179,6 +181,14 @@ namespace
 		}
 
 		void
+		AddSkybox()
+		{
+			view->SetSkyBox(
+				bgl::SkyboxDesc{
+					scene->AddTextureAsset(assetlib::loadKTX2("assets/skybox.ktx2")) });
+		}
+
+		void
 		RenderFrom(const bgl::Camera& camera)
 		{
 			auto job     = bgl::RenderJob();
@@ -340,6 +350,38 @@ TEST_CASE(
 	// Panning the camera up and to the right drags the surface down and to the left.
 	CHECK(measured.x < 0.0f);
 	CHECK(measured.y > 0.0f);
+}
+
+// The sky is infinitely far, so a camera rotation is the only thing that displaces it -- but it
+// displaces all of it, which is most of a typical frame. Left at zero the sky would read as static
+// through every pan.
+//
+// A pure yaw has a closed form: a direction that now sits at the screen's centre sat at
+// tan(yaw)/tan(halfFov) in NDC before, which owes nothing to the matrices the shader uses. Turning
+// left drags the sky right, and nothing moves vertically.
+TEST_CASE("A camera yaw displaces the skybox horizontally", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddSkybox();
+
+	const float yaw = glm::radians(5.0f);
+
+	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }, yaw));
+
+	// No quad, so the sky is what shaded every pixel including this one.
+	const glm::vec2 sky = centrePixel(fixture.ReadMotionVectors());
+
+	const float expectedX = 0.5f * std::tan(yaw) / std::tan(c_Fov * 0.5f);
+
+	INFO("sky = " << sky.x << ", " << sky.y << "  expectedX = " << expectedX);
+
+	// Turning left drags what was ahead of the camera off to the right.
+	CHECK(sky.x == Catch::Approx(expectedX).margin(2e-3));
+	CHECK(sky.x > 0.0f);
+
+	// A yaw is horizontal; any vertical component means an axis got crossed.
+	CHECK(sky.y == Catch::Approx(0.0f).margin(2e-3));
 }
 
 // Nothing drew the background, so it keeps the cleared value. A consumer reads that as "did not

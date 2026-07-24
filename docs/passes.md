@@ -35,9 +35,9 @@ flowchart TD
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
-`Clear` and `Forward` take the imported `backbuffer` and `motionVectors` textures as render targets,
-`Skybox` the backbuffer alone; `PreparePresent` only transitions the backbuffer to present;
-`Compact Instances` and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
+`Clear`, `Skybox`, and `Forward` take the imported `backbuffer` and `motionVectors` textures as
+render targets; `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
+and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
 resource namespace (see [Frame Graph](docs/framegraph.md)).
@@ -66,7 +66,8 @@ the first as history.
 
 **The transparent phase writes no velocity** — a blended surface has no single depth to reproject —
 so its PSOs declare one render target and `DrawTransparent` binds a framebuffer without the velocity
-attachment. The skybox does not write it either, so the sky reads as static through a camera pan.
+attachment. The skybox does write it, reprojecting the view ray through the previous frame's
+rotation-only view-projection; the sky is at infinity, so a camera translation displaces it nowhere.
 
 ---
 
@@ -91,10 +92,13 @@ culling, so it fills only where nothing has been drawn.
 
 * **No-op** when the view has no skybox (`DrawData::skybox` is empty) — `AttachToFrameGraph` adds
   nothing.
-* **In:** the backbuffer as a render target; samples the skybox cube texture through the view's
-  linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`, `cubeTex`, `sampler`,
-  `exposure`, and `mipLevel`; the constant-buffer name is matched against Slang reflection, so it
-  must track the declaration in `Skybox.slang`.
+* **In:** the backbuffer and the velocity buffer as render targets; samples the skybox cube texture
+  through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,
+  `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, and `mipLevel`; the constant-buffer name is
+  matched against Slang reflection, so it must track the declaration in `Skybox.slang`.
+* `prevWorldToClip` is last frame's rotation-only view-projection with the skybox's own `rotationY`
+  divided back out, so a rotated sky reports the camera's motion and not its own offset. `rotationY`
+  is authoring state, so last frame's spin is taken to be this frame's.
 * Attached per draw, before `Compact Instances` and `Forward`.
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)

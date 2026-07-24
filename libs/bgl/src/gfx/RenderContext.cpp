@@ -430,19 +430,25 @@ namespace bgl
 		draw.exposure = view_->GetExposure();
 		draw.skybox   = view_->GetSkybox();
 
-		glm::mat4 clipToWorld = glm::inverse(camera.rotationOnlyViewProj);
-
 		if (draw.skybox.has_value())
 		{
+			auto skyRotation = glm::mat4(1.0f);
 			if (draw.skybox->rotationY != 0.0f)
 			{
-				clipToWorld = glm::rotate(
-								  glm::mat4(1.0f),
-								  draw.skybox->rotationY,
-								  glm::vec3(0.0f, 1.0f, 0.0f)) *
-				              clipToWorld;
+				skyRotation = glm::rotate(
+					glm::mat4(1.0f),
+					draw.skybox->rotationY,
+					glm::vec3(0.0f, 1.0f, 0.0f));
 			}
-			draw.skyboxClipToWorld = clipToWorld;
+
+			draw.skyboxClipToWorld = skyRotation * glm::inverse(camera.rotationOnlyViewProj);
+
+			// Undoes the spin the ray direction was baked with before reprojecting, so a rotated
+			// skybox reports the camera's motion and not its own offset. rotationY is authoring
+			// state rather than per-frame animation, so last frame's spin is taken to be this one's.
+			draw.skyboxPrevWorldToClip =
+				prevCamera.rotationOnlyViewProj * glm::inverse(skyRotation);
+
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
 

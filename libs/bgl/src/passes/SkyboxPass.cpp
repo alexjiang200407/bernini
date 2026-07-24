@@ -28,6 +28,7 @@ namespace bgl
 		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+		pipelineDesc.AddRtvFormat(Format::RG16_FLOAT);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
 
 		auto raster = RasterState();
@@ -62,6 +63,11 @@ namespace bgl
 				TextureArg{ draw.backBufferName,
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
+		                    BarrierLayout::kRenderTarget })
+			.AddTextureArg(
+				TextureArg{ draw.motionVectorName,
+		                    BarrierSyncFlag::kRenderTarget,
+		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget });
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
@@ -84,7 +90,8 @@ namespace bgl
 		{
 			auto& skybox = *found;
 
-			skybox["clipToWorld"] = draw.skyboxClipToWorld;
+			skybox["clipToWorld"]     = draw.skyboxClipToWorld;
+			skybox["prevWorldToClip"] = draw.skyboxPrevWorldToClip;
 
 			if (auto u = skybox["cubeTex"]; u.IsValid())
 			{
@@ -113,6 +120,7 @@ namespace bgl
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		gfxState.frameBuffer = FrameBuffer()
 		                           .AddColorAttachment(draw.backBufferHandle)
+		                           .AddColorAttachment(draw.motionVectorHandle)
 		                           .SetDepthAttachment(draw.depthBufferHandle);
 
 		cmd->SetMeshletState(gfxState);

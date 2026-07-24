@@ -32,5 +32,6 @@ namespace bgl
 
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
+		glm::mat4                 skyboxPrevWorldToClip{ 1.0f };
 	};
 }
