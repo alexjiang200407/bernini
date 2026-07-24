@@ -1,11 +1,15 @@
 #include <assetlib/asset_describe.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/env_bake.h>
+#include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Skeleton.h>
 
 namespace assetlib
 {
@@ -284,6 +288,17 @@ namespace assetlib
 		out += std::format("  vertexData   {}\n", byteSize(mesh.vertexData.size()));
 		out += std::format("  indexData    {}\n", byteSize(mesh.indexData.size()));
 
+		// A mesh whose layout carries joints but names no skeleton has joint indices nothing can
+		// resolve, which is invisible until it renders as a heap.
+		if (isSkinned(mesh))
+			out += std::format(
+				"  skeleton     {}\n",
+				mesh.skeleton.empty() ? "(SKINNED, but names none)" : mesh.skeleton);
+		else if (!mesh.skeleton.empty())
+			out += std::format(
+				"  skeleton     {} (unused: no submesh carries joints)\n",
+				mesh.skeleton);
+
 		// Every path is relative to the project's data root, not to this file -- worth saying, since a
 		// path that looks broken relative to the .bmesh is usually correct.
 		out += std::format(
@@ -426,6 +441,77 @@ namespace assetlib
 		out += std::format("benv '{}'\n", env.name);
 		out += std::format("  sky               {}\n", referenceOr(env.sky, dataRoot));
 		out += std::format("  lighting          {}\n", referenceOr(env.lighting, dataRoot));
+
+		return out;
+	}
+
+	std::string
+	describe(const Skeleton& skeleton)
+	{
+		std::string out;
+
+		out += "bskel\n";
+		out += std::format("  bones        {}\n", skeleton.bones.size());
+		out += std::format("  signature    {:016x}\n", skeletonSignature(skeleton));
+
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+		{
+			const Bone& bone = skeleton.bones[i];
+			out += std::format(
+				"    [{}] '{}' parent {} bind t{} s{}\n",
+				i,
+				nameFromPool(skeleton.stringPool, bone.nameOffset),
+				bone.parent == c_InvalidIndex ? std::string("(root)") : std::to_string(bone.parent),
+				vec3(bone.bindPose.translation),
+				vec3(bone.bindPose.scale));
+		}
+
+		return out;
+	}
+
+	std::string
+	describe(const AnimationSet& animations, const Skeleton* skeleton)
+	{
+		std::string out;
+
+		out += "banim\n";
+		out += std::format(
+			"  skeleton     {} (path relative to the data root)\n",
+			texturePathOr(animations.skeleton));
+		out += std::format("  bones        {}\n", animations.boneCount);
+		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
+
+		if (skeleton != nullptr)
+			out += std::format(
+				"  binding      {}\n",
+				animationsMatchSkeleton(animations, *skeleton) ?
+					"matches the skeleton" :
+					"DOES NOT MATCH the skeleton -- the clips' joint indices name other bones");
+
+		out += std::format("  clips        {}\n", animations.clips.size());
+		out += std::format(
+			"  samples      {} ({})\n",
+			animations.samples.size(),
+			byteSize(animations.samples.size() * sizeof(Transform)));
+
+		for (size_t i = 0; i < animations.clips.size(); ++i)
+		{
+			const AnimationClip& clip = animations.clips[i];
+			out += std::format(
+				"\n  clip [{}] '{}'\n",
+				i,
+				nameFromPool(animations.stringPool, clip.nameOffset));
+			out += std::format(
+				"    length     {:.3g} s, {} frames at {:.4g} Hz{}\n",
+				clip.duration,
+				clip.frameCount,
+				clip.sampleRate,
+				clip.loop != 0 ? ", looping" : "");
+			out += std::format(
+				"    rootMotion {} ({:.4g} u/s)\n",
+				vec3(clip.rootMotion),
+				clip.locomotionSpeed);
+		}
 
 		return out;
 	}
