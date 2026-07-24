@@ -413,6 +413,36 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   emulation, readback. Storage-buffer-per-stage limit audit happens here.
   *Gate:* the compute-tagged subset of `bgl_tests` (the Metal port's tag mechanism) passes under
   the native WebGPU preset — exact survivor counts from the readback tests, not just "runs".
+* **W1.5 — first pixels: a triangle, below the public API.** A hand-written WGSL vertex+fragment
+  pipeline, a render pass, and a draw of three vertices — reached through `bgl_webgpu`'s own
+  objects, **not** through `CreateGraphics`. Two forms sharing one code path: an **offscreen**
+  one that renders to a `WGPUTexture` and reads the pixels back (this is the CI-testable form —
+  assert the centre pixel is the triangle's colour and a corner is the clear colour), and a
+  **windowed** one that configures a `WGPUSurface` from the SDL3 window and presents, which is
+  the visible artifact.
+  *Gate:* the offscreen form asserts pixel values in `bgl_webgpu_tests`, so it runs in CI on the
+  macOS runner; the windowed form is a manual check.
+
+  This is deliberately out of dependency order, and it is worth it. It retires the two risks the
+  rest of the plan never touches until late — that a `WGPUSurface` can be built from this
+  engine's SDL3 window and presented, and that a render pipeline plus render pass work at all —
+  while they are still cheap to debug in isolation. It needs no Slang, no bindless, no
+  meshlet-expansion, no resource manager, and no FrameGraph. **Nothing built here is
+  throwaway**: the surface handling becomes `IRenderTarget` and the render-pass recording becomes
+  `ICommandList`'s raster half.
+
+  **Why it cannot go through `IGraphics`, and what that costs.** `CreateGraphics` constructs a
+  `RenderContext`, whose constructor eagerly initializes every pass it will ever run —
+  `ForwardPass::Init` loops over `c_PsoCount` building a *meshlet* kernel per PSO, and
+  `SkyboxPass::Init` builds one more
+  ([RenderContext.cpp](../../libs/bgl/src/gfx/RenderContext.cpp), `ForwardPass::Init`). On WebGPU
+  those calls must fail, because there are no mesh shaders. So the public API is **all-or-nothing**:
+  there is no configuration in which a `CreateGraphics` call succeeds but draws nothing, and not
+  even a window that merely clears is reachable before the mesh-shader replacement (W3) and the
+  WGSL pipeline (W2) both exist. Getting a triangle on screen *through the engine's own API* is
+  therefore a W3 deliverable, not an early one — and if that ordering ever needs to change, the
+  change is to make pass initialization lazy or capability-selected rather than eager, which is a
+  `RenderContext` change and should be costed as one.
 * **W2 — shader pipeline.** Slang session targeting WGSL in the native backend;
   `ReflectedLayout` extended with `(group, binding)`; WGSL-target variants of the `types.*Buffer`
   primitives; the two migrations the slangc probe proved necessary — `InterlockedAdd` on plain
@@ -422,9 +452,12 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   *Gate:* all five culling/sort kernels compile from their real Slang sources **and validate
   under Tint** (slangc acceptance alone is not the bar — see § binding), and the W1 tests pass
   against them (byte-identical results vs. the WGSL fixtures).
-* **W3 — raster path.** Textures/RTV/DSV (depth is `depth32float` — the D24S8 remap decision is
-  already made for Metal), render pipelines, the meshlet-expansion kernel + vertex-pulling
-  forward path, SDL3 surface/swapchain, skybox as a plain draw.
+* **W3 — raster path, and the first pixels through the public API.** Textures/RTV/DSV (depth is
+  `depth32float` — the D24S8 remap decision is already made for Metal), render pipelines, the
+  meshlet-expansion kernel + vertex-pulling forward path, `IRenderTarget` over the W1.5 surface
+  code, skybox as a plain draw. This is where `CreateGraphics` first returns successfully, for
+  the reason given under W1.5, and therefore where `examples/bgl_window` first runs on this
+  backend.
   *Gate:* golden-image tests pass under the native WebGPU preset; a cube/sphere/textured-mesh
   scene is pixel-compared against the D3D12 goldens within tolerance. Frustum culling goldens
   prove the indirect chain (culling is image-invariant, so goldens are the gate — the same

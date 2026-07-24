@@ -7,17 +7,17 @@ using namespace bgl;
 
 TEST_CASE("A WebGPU device can be acquired and reports its adapter", "[wgpu][device]")
 {
-	auto device = wgpu::Device(wgpu::DeviceDesc{});
+	auto device = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
 
 	SECTION("the device and its queue are live")
 	{
-		REQUIRE(device.GetHandle() != nullptr);
-		REQUIRE(device.GetQueue() != nullptr);
+		REQUIRE(device->GetHandle() != nullptr);
+		REQUIRE(device->GetQueue() != nullptr);
 	}
 
 	SECTION("the adapter identifies itself and its backend")
 	{
-		const auto& info = device.GetAdapterInfo();
+		const auto& info = device->GetAdapterInfo();
 
 		// A conforming adapter always names a concrete backend; leaving it Undefined means the
 		// info struct was never populated, which a non-empty description would not reveal.
@@ -28,8 +28,8 @@ TEST_CASE("A WebGPU device can be acquired and reports its adapter", "[wgpu][dev
 
 TEST_CASE("Two WebGPU devices can be alive at once", "[wgpu][device]")
 {
-	auto first  = wgpu::Device(wgpu::DeviceDesc{});
-	auto second = wgpu::Device(wgpu::DeviceDesc{});
+	auto first  = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
+	auto second = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
 
-	REQUIRE(first.GetHandle() != second.GetHandle());
+	REQUIRE(first->GetHandle() != second->GetHandle());
 }
