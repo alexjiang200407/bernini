@@ -1,9 +1,9 @@
-# Asset Standards — PBR texture & static-mesh conventions
+# Asset Standards — PBR texture, mesh & rig conventions
 
-The format, color-space, and channel conventions the renderer expects for PBR material textures
-and static-mesh geometry, and how that data flows from glTF import → baked `.bmesh` / `.bmaterial`
-/ texture files → GPU. This is the contract an asset must satisfy to render correctly; the pipeline
-code and shaders enforce it.
+The format, color-space, and channel conventions the renderer expects for PBR material textures,
+mesh geometry and animation rigs, and how that data flows from glTF import → baked `.bmesh` /
+`.bmaterial` / `.bskel` / `.banim` / texture files → GPU. This is the contract an asset must satisfy
+to render correctly; the pipeline code and shaders enforce it.
 
 **This document is a map, not a mirror.** It captures the conventions and cross-cutting decisions —
 not full signatures or per-pixel shader code. The file at each linked path is the source of truth;
@@ -191,6 +191,12 @@ struct — see `DecodeVertex` in
 | normal | `float32x3` | no | default `(0,0,1)` |
 | texcoord0 | `float32x2` | no | default `(0,0)` |
 | tangent | `float32x4` | no | `xyz` + `w` = bitangent handedness; **authored upstream**; absent/zero → geometric-normal fallback |
+| joints0 | `uint16x4` | no | bone indices, **already in the skeleton's bone order** — not the glTF's joint order |
+| weights0 | `unorm16x4` | no | renormalized to sum 1 before quantizing |
+
+**Joints and weights arrive together or not at all.** A joint index with no weight skins nothing and a
+weight with no joint has nothing to skin to, so the importer emits the pair or neither. A mesh carrying
+them is only drawable against the `.bskel` it names — see [Rigs](#rigs).
 
 Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLayout.h](libs/assetlib_structs/include/assetlib_structs/VertexLayout.h)
 (CPU) mirror [libs/bgl/src/idl/VertexLayout.h](libs/bgl/src/idl/VertexLayout.h) (GPU) — the enum
@@ -297,8 +303,90 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them.
+* **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.
+  Struct: [libs/assetlib_structs/include/assetlib_structs/Skeleton.h](libs/assetlib_structs/include/assetlib_structs/Skeleton.h);
+  I/O: [libs/assetlib/include/assetlib/bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h).
+* **`.banim`** (v1) — a clip set: resampled poses, per-clip metadata, and the `.bskel` path they
+  address. Struct: [libs/assetlib_structs/include/assetlib_structs/Animation.h](libs/assetlib_structs/include/assetlib_structs/Animation.h);
+  I/O: [libs/assetlib/include/assetlib/banim_io.h](libs/assetlib/include/assetlib/banim_io.h).
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
-  file per texture, all in one directory.
+  file per texture + `<name>.bskel` and `<name>.banim` if it was rigged, all in one directory.
+
+**All four are the same chunked container**, in
+[libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h): a 32-byte header, 16-byte-aligned chunks,
+a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**, which is
+what a minor version bump means — `.bmesh` v3.**1** added the skeleton path, and every v3.0 file on disk
+still reads, as the static mesh it is. A **major** bump is the one with no migration path.
+
+---
+
+## Rigs
+
+A skeleton and its clips are cooked from the same glTF as the mesh, by the same `loadFromGltf`, because
+a mesh's `JOINTS_0` and a clip's samples are both bare indices into one bone array — they are only
+meaningful together.
+
+**One file is one rig.** The skeleton comes from the glTF's `skins[0]`, and a file with two skins is
+**rejected** rather than silently taking the first, which would bind a mesh to another rig's bones. A
+file with no skin is not a rig with an empty skeleton — it is a static mesh, and its animations, if any,
+drive nodes rather than bones and are left out. Humanoid and equine rigs are therefore separate files
+that export to this same format.
+
+Five rules, each of which is a way to get this wrong:
+
+* **Bones are topologically sorted (`parent < index`), and joint order is not bone order.** `skin.joints`
+  is arbitrary — Blender routinely exports a child before its parent. The import sorts depth-first from
+  each root in `skin.joints` order (so a given file always yields the same bone order) and **remaps
+  everything that indexed by joint**: the mesh's `JOINTS_0` and the inverse bind matrices. The sort is
+  what lets a runtime resolve a pose in one forward pass with no per-bone parent check; a `.bskel` that
+  breaks it is refused by `deserializeSkeleton`, not tolerated, because nothing downstream re-checks.
+  A joint's bone parent is its **nearest joint ancestor**, which glTF allows to be several nodes up.
+* **Clips are resampled to a fixed rate at import — there is no keyframe search at runtime.** The rate
+  is 30 Hz by default (`assetlib_cli bake -r`), and is stored per clip rather than assumed. Frames span
+  the **closed** interval `[0, duration]`, so a one-second clip at 30 Hz is **31** poses; the last lands
+  on `duration` exactly however the rate divides it. glTF's three interpolations are all evaluated
+  offline (`STEP`, `LINEAR` — slerp for rotations, not a four-float lerp — and `CUBICSPLINE`). A bone no
+  channel targets holds its bind pose rather than collapsing to the origin.
+* **Per-clip metadata is derived from the samples, never guessed.** `rootMotion` is bone 0's translation
+  across the clip and `locomotionSpeed` its horizontal component over `duration` — both cosmetic, and
+  neither ever authoritative for a unit's position. glTF has **no loop flag**, so the only evidence is
+  the data: `loop` is set when the last pose matches the first, which is how a looping clip is authored.
+  It is a seed for an author to override, not a fact about the file.
+* **A clip set records the signature of the rig it was cooked against.** `skeletonSignature` hashes every
+  bone's name and parent — everything a joint index means. Nothing about a wrong index is visible in the
+  pose it produces, so `animationsMatchSkeleton` is the only thing that can catch a rig that has had a
+  bone inserted or reordered since. It deliberately does **not** hash the bind pose: re-authoring a rest
+  pose does not invalidate a clip, and treating it as though it did would make every rig tweak a re-cook
+  of every clip set.
+* **The rig is not an authoring choice, unlike a material.** `bake` writes `<name>.bskel` and
+  `<name>.banim` beside the mesh and points `BMesh::skeleton` at them, because joint indices remapped
+  into a bone order that was never written down are indices nothing can resolve. That is an invariant,
+  not a convention: **a mesh carrying joints and naming no skeleton is refused by `serialize` and by
+  `deserialize`** — at write so the file is never produced, at read because a file may not have come
+  from here. It is the editor's import that this catches today, which cooks a `.bmesh` but not yet a
+  rig, and whose existing rollback turns the refusal into a clean failed import.
+
+  Only one direction is enforced. **Naming a skeleton while carrying no joints stays legal**, because
+  that is how a static attachment — a scabbard, a saddle — hangs off a bone.
+
+Not yet done, and deliberately: rotation/translation compression (samples are full-float `Transform`s
+today — the 16 B/bone form is a runtime palette concern, not an import one), per-LOD bone subsets, state
+machine tables, and an editor surface (the importer's *Import animations* checkbox is still inert; the
+CLI is the way in).
+
+### The reference graph
+
+A `.bskel` is the first asset held by two different kinds of edge, and
+[Deleting assets](#deleting-assets) covers both:
+
+| Edge | Held by | Field |
+| --- | --- | --- |
+| mesh → skeleton | `.bmesh` | `BMesh::skeleton` |
+| clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
+
+Both are read without the container's bulk — `loadMeshRefs` and `loadAnimationSkeletonPath` seek to the
+reference chunks, for the reason the material scan does. Nothing produces an edge *into* a `.banim`, so
+a clip set always deletes and leaves its skeleton behind, exactly as a mesh leaves its materials.
 
 ---
 
@@ -306,9 +394,13 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
 ```mermaid
 flowchart TD
-    GLTF[".glb / .gltf"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures)"]
+    GLTF[".glb / .gltf"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
     IMP -- "toBMesh / bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets, submeshes unassigned)"]
     IMP -- "bake / writeTextures (writeKTX2)" --> TEX["texN.ktx2 (per map)"]
+    IMP -- "bake (skinned sources only)" --> SKEL["&lt;name&gt;.bskel (sorted bones)"]
+    IMP -- "bake (skinned sources only)" --> ANIM["&lt;name&gt;.banim (clips resampled to 30 Hz)"]
+    SKEL -. "BMesh::skeleton" .-> BMESH
+    SKEL -. "AnimationSet::skeleton" .-> ANIM
     IMP -. "editor import only: graph per PBR material" .-> BMAT["&lt;name&gt;.bmaterial (routes + editorGraph)"]
     BMAT -. "attachMaterial" .-> BMESH
 
@@ -448,13 +540,15 @@ has named this file; may it go?* — and it is answered by the reference graph i
 
 Assets reference each other **by path relative to the data root**, and there is no manifest, no GUID and
 no back-index: identity *is* the path. So "what references this?" is answered by walking the project.
-There are exactly three edges:
+There are exactly five edges:
 
 | Edge | Held by | Field |
 | --- | --- | --- |
 | mesh → material | `.bmesh` | `BMesh::materials`, which `Submesh::material` indexes into |
 | material → baked map | `.bmaterial` | `PbrParams::baseColorTexture` / `normalTexture` / `ormTexture` |
 | material → source texture | `.bmaterial` | `PbrParams::routes[i].texture`, one per channel |
+| mesh → skeleton | `.bmesh` | `BMesh::skeleton` |
+| clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
 
 A material names textures **twice** — the triplet its last bake wrote, and the sources it routes each
 channel from. Both hold a file alive: the triplet is what the renderer samples, the routes are what a
@@ -462,11 +556,14 @@ re-bake reads. The prune marks only the triplet, which is why it cannot answer t
 
 From those edges, three rules:
 
-* **A mesh always deletes**, and **its materials are left in place**. Nothing produces an edge into a
-  `.bmesh`, so this falls out of the graph rather than being a special case. A material is a shareable
-  asset that a mesh happens to name, not a part of it.
+* **A mesh always deletes**, and **its materials and skeleton are left in place**. Nothing produces an
+  edge into a `.bmesh`, so this falls out of the graph rather than being a special case. A material is a
+  shareable asset that a mesh happens to name, not a part of it — and so is a rig, which a second mesh
+  and every clip set of that character also name.
+* **A clip set always deletes**, for the same reason, and leaves its skeleton behind.
 * **A material deletes only if no mesh names it.**
 * **A texture deletes only if no material names it** — as either a baked map or a routed source.
+* **A skeleton deletes only if no mesh skins to it and no clip set was resampled against it.**
 
 Deletion is **not cascading**. The maps a deleted material leaves behind are precisely what the prune
 already collects, so the two compose instead of duplicating each other.
@@ -497,10 +594,11 @@ category, like `textures_src/kirk`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:
 
-* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data, and only its material list is
-  wanted. `loadMaterialPaths` seeks to the `kMaterialPaths` chunk instead: in Test Project that chunk is
-  0.0015%–0.017% of the file, so surveying its meshes reads ~3 KB rather than 16.8 MB. That is what lets
-  the graph be rebuilt on demand rather than cached.
+* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data, and only its reference chunks
+  are wanted. `loadMeshRefs` seeks to `kMaterialPaths` and `kSkeletonPath` instead: in Test Project those
+  are 0.0015%–0.017% of the file, so surveying its meshes reads ~3 KB rather than 16.8 MB. That is what
+  lets the graph be rebuilt on demand rather than cached. `loadAnimationSkeletonPath` does the same for a
+  `.banim`, whose samples are the bulk.
 * **The graph is never cached.** The data root is shared with the user's file manager. A cached graph
   would not merely go stale, it would be *wrong* — refusing a deletion while naming a blocker that had
   since been deleted from under it. A *target* that is missing is recorded in `broken` and is not an
@@ -549,13 +647,20 @@ referenced" and "the file is in use" are different things to tell a user, and ar
 # Bake a source model into the modular on-disk form (.bmesh + matN.bmaterial + texN.ktx2)
 assetlib_cli bake model.glb -o assets/model -n model
 
+# A rigged source also emits model.bskel + model.banim; -r picks the rate its clips resample to
+assetlib_cli bake soldier.glb -o assets/soldier -n soldier -r 60
+
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
 assetlib_cli obj assets/model/model.bmesh -o model.obj
 
-# Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
+# Print what is actually inside a container (the kind is read from the file's magic, not the name)
 assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
 assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
 assetlib_cli describe Data/Materials/skin.bmaterial      # mode, factors, triplet, routing table
+assetlib_cli describe Data/Meshes/soldier.bskel          # bones, parents, bind pose, signature
+
+# ...and a clip set resolves its skeleton, so a stale binding is reported rather than left to a pose
+assetlib_cli describe Data/Meshes/soldier.banim -d Data
 
 # ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
 assetlib_cli describe Data/Materials/skin.bmaterial -d Data
@@ -572,7 +677,7 @@ assetlib_cli refs -d Data                    # summary, and every dangling refer
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps
-everything else as text. Both containers are opaque binary, so it is the intended answer to "what is
+everything else as text. Every container is opaque binary, so it is the intended answer to "what is
 in this file" — reach for it before hand-decoding a file against the serializer. The unrouted channels
 it lists are the usual cause of a material rendering wrong, since each one silently falls back to a
 default texture (see [Risky / Non-obvious contracts](#risky--non-obvious-contracts)). Rendered by

@@ -1,5 +1,7 @@
 #include <assetlib/bmesh_io.h>
 
+#include <assetlib/banim_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/image_io.h>
 
 #include "chunk_io.h"
@@ -14,7 +16,10 @@ namespace assetlib
 		constexpr uint32_t c_Magic = 0x48534D42u;  // 'B','M','S','H' little-endian
 
 		constexpr uint16_t c_VersionMajor = 3;
-		constexpr uint16_t c_VersionMinor = 0;
+
+		// +1: kSkeletonPath. A chunk is addressed by id and an absent one is not an error, so a v3.0
+		// mesh still reads -- it simply names no skeleton, which is what a static mesh is.
+		constexpr uint16_t c_VersionMinor = 1;
 
 		constexpr std::string_view c_What = "bmesh";
 
@@ -30,13 +35,34 @@ namespace assetlib
 			kVertexData,
 			kIndexData,
 			kStringPool,
-			kMaterialPaths
+			kMaterialPaths,
+			kSkeletonPath
 		};
+
+		/**
+		 * Joint indices address a bone array, so a mesh carrying them and naming no skeleton is a mesh
+		 * whose vertices point at nothing -- and nothing downstream can tell, because a joint index is
+		 * a bare number. Checked at both ends: at write, so the file is never produced, and at read,
+		 * because a file may not have come from here.
+		 *
+		 * Only one direction. Naming a skeleton without carrying joints is how a static attachment --
+		 * a scabbard, a saddle -- hangs off a bone.
+		 */
+		void
+		requireSkeletonIfSkinned(const BMesh& mesh)
+		{
+			if (isSkinned(mesh) && mesh.skeleton.empty())
+				throw std::runtime_error(
+					"bmesh: carries joint indices but names no skeleton, so they resolve to nothing"
+					" (bake it with assetlib_cli, which writes the rig alongside the mesh)");
+		}
 	}
 
 	std::vector<std::byte>
 	serialize(const BMesh& mesh)
 	{
+		requireSkeletonIfSkinned(mesh);
+
 		chunk::Writer writer;
 		writer.Add(ChunkId::kNodes, mesh.nodes);
 		writer.Add(ChunkId::kRoots, mesh.roots);
@@ -49,6 +75,9 @@ namespace assetlib
 		writer.Add(ChunkId::kIndexData, mesh.indexData);
 		writer.Add(ChunkId::kStringPool, mesh.stringPool);
 		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
+		writer.Add(
+			ChunkId::kSkeletonPath,
+			std::vector<char>(mesh.skeleton.begin(), mesh.skeleton.end()));
 		return writer.Finish(c_Magic, c_VersionMajor, c_VersionMinor);
 	}
 
@@ -69,6 +98,11 @@ namespace assetlib
 		mesh.indexData        = reader.Read<std::byte>(ChunkId::kIndexData);
 		mesh.stringPool       = reader.Read<char>(ChunkId::kStringPool);
 		mesh.materials        = chunk::unpackStrings(reader.Read<char>(ChunkId::kMaterialPaths));
+
+		const auto skeleton = reader.Read<char>(ChunkId::kSkeletonPath);
+		mesh.skeleton.assign(skeleton.begin(), skeleton.end());
+
+		requireSkeletonIfSkinned(mesh);
 		return mesh;
 	}
 
@@ -97,24 +131,30 @@ namespace assetlib
 		return deserialize(bytes);
 	}
 
-	std::vector<std::string>
-	loadMaterialPaths(const std::filesystem::path& path)
+	MeshRefs
+	loadMeshRefs(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 1> c_Wanted = { { ChunkId::kMaterialPaths } };
+		constexpr std::array<uint32_t, 2> c_Wanted = { { ChunkId::kMaterialPaths,
+			                                             ChunkId::kSkeletonPath } };
 
 		const auto chunks =
 			chunk::readChunksFromFile(path, c_Magic, c_VersionMajor, c_Wanted, c_What);
 
-		// Absent, not malformed -- deserialize treats the chunk as optional, and a mesh that names no
-		// material is exactly what an import produces.
-		const auto it = chunks.find(ChunkId::kMaterialPaths);
-		if (it == chunks.end())
-			return {};
+		// Absent, not malformed: both chunks are optional, and a mesh that names neither is exactly
+		// what a static import produces.
+		MeshRefs refs;
+		if (const auto it = chunks.find(ChunkId::kMaterialPaths); it != chunks.end())
+			refs.materials = chunk::unpackStrings(
+				std::span<const char>(
+					reinterpret_cast<const char*>(it->second.data()),
+					it->second.size()));
 
-		return chunk::unpackStrings(
-			std::span<const char>(
+		if (const auto it = chunks.find(ChunkId::kSkeletonPath); it != chunks.end())
+			refs.skeleton.assign(
 				reinterpret_cast<const char*>(it->second.data()),
-				it->second.size()));
+				it->second.size());
+
+		return refs;
 	}
 
 	BMesh
@@ -135,6 +175,18 @@ namespace assetlib
 		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
 
 		return out;
+	}
+
+	bool
+	isSkinned(const BMesh& mesh) noexcept
+	{
+		return std::ranges::any_of(mesh.submeshes, [](const Submesh& submesh) {
+			return std::ranges::any_of(
+				std::span(submesh.layout.attributes.data(), submesh.layout.attributeCount),
+				[](const VertexAttribute& attribute) {
+					return attribute.semantic == VertexSemantic::kJoints0;
+				});
+		});
 	}
 
 	bool
@@ -221,6 +273,18 @@ namespace assetlib
 		}
 	}
 
+	std::string
+	skeletonFileName(std::string_view name)
+	{
+		return std::string(name) + ".bskel";
+	}
+
+	std::string
+	animationFileName(std::string_view name)
+	{
+		return std::string(name) + ".banim";
+	}
+
 	void
 	bake(
 		const imp::BMeshImport&      mesh,
@@ -231,7 +295,25 @@ namespace assetlib
 		createDirectories(outDir);
 
 		writeTextures(mesh, outDir, {}, cancel);
-		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
+
+		BMesh baked = toBMesh(mesh);
+
+		// A baked directory is its own data root, so the rig is named the way a texture is: by file
+		// name alone, relative to the directory the three land in together.
+		if (!mesh.skeleton.bones.empty())
+		{
+			baked.skeleton = skeletonFileName(name);
+			saveSkeleton(mesh.skeleton, outDir / baked.skeleton);
+
+			if (!mesh.animations.clips.empty())
+			{
+				AnimationSet animations = mesh.animations;
+				animations.skeleton     = baked.skeleton;
+				saveAnimations(animations, outDir / animationFileName(name));
+			}
+		}
+
+		save(baked, outDir / (std::string(name) + ".bmesh"));
 	}
 
 	namespace

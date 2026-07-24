@@ -5,14 +5,22 @@
 
 namespace assetlib
 {
-	/** Serializes the geometry, hierarchy and material paths of `mesh` into the versioned container. */
+	/**
+	 * Serializes the geometry, hierarchy, material paths and skeleton path of `mesh` into the versioned
+	 * container.
+	 *
+	 * @throws std::runtime_error if `mesh` carries joint indices but names no skeleton -- see isSkinned.
+	 *         Refused here rather than written, because nothing that reads the file afterwards can tell
+	 *         a joint index that resolves to nothing from one that does not.
+	 */
 	[[nodiscard]] std::vector<std::byte>
 	serialize(const BMesh& mesh);
 
 	/**
 	 * Reconstructs a BMesh from a container byte stream.
 	 *
-	 * @throws std::runtime_error on bad magic, unsupported version, or a truncated / malformed stream.
+	 * @throws std::runtime_error on bad magic, unsupported version, a truncated / malformed stream, or a
+	 *         mesh that carries joints and names no skeleton.
 	 */
 	[[nodiscard]] BMesh
 	deserialize(std::span<const std::byte> bytes);
@@ -35,19 +43,28 @@ namespace assetlib
 	[[nodiscard]] BMesh
 	load(const std::filesystem::path& path);
 
+	/** Every asset a `.bmesh` names. See loadMeshRefs. */
+	struct MeshRefs
+	{
+		/**
+		 * As stored, in `mesh.materials` order, duplicates and all: a submesh slot can legitimately
+		 * repeat a path (see attachMaterial).
+		 */
+		std::vector<std::string> materials;
+
+		std::string skeleton;  // empty for a static mesh
+	};
+
 	/**
-	 * The material paths `path` names, read without deserializing its geometry: the header, the chunk
-	 * table and the material chunk alone. That chunk is a few hundred bytes in a file of many megabytes,
-	 * so a caller surveying every mesh in a project -- which is what a reference scan does -- must come
+	 * What `path` references, read without deserializing its geometry: the header, the chunk table and
+	 * the two reference chunks alone. Those are a few hundred bytes in a file of many megabytes, so a
+	 * caller surveying every mesh in a project -- which is what a reference scan does -- must come
 	 * through here rather than load().
-	 *
-	 * The paths are returned as stored, in `mesh.materials` order, duplicates and all: a submesh slot can
-	 * legitimately repeat a path (see attachMaterial).
 	 *
 	 * @throws std::runtime_error if the file cannot be read or is malformed.
 	 */
-	[[nodiscard]] std::vector<std::string>
-	loadMaterialPaths(const std::filesystem::path& path);
+	[[nodiscard]] MeshRefs
+	loadMeshRefs(const std::filesystem::path& path);
 
 	/**
 	 * Bakes a flattened import into its modular file form: the geometry is copied verbatim and every
@@ -88,6 +105,20 @@ namespace assetlib
 	[[nodiscard]] std::string
 	textureFileName(size_t index);
 
+	/** The names bake gives the rig it writes beside a `<name>.bmesh`. */
+	[[nodiscard]] std::string
+	skeletonFileName(std::string_view name);
+
+	[[nodiscard]] std::string
+	animationFileName(std::string_view name);
+
+	/**
+	 * Whether any submesh carries joint indices. Such a mesh is only drawable against a skeleton, so
+	 * one that names none is a mesh whose joint indices mean nothing.
+	 */
+	[[nodiscard]] bool
+	isSkinned(const BMesh& mesh) noexcept;
+
 	/**
 	 * The name at `offset` in a mesh's `stringPool` (BMesh's or BMeshImport's -- they pool names the
 	 * same way). Empty for offset 0, which is the empty string, or for an offset past the pool.
@@ -127,10 +158,13 @@ namespace assetlib
 		const CancelToken&           cancel     = {});
 
 	/**
-	 * Bakes an import to disk under `outDir`: writes `<name>.bmesh` and one `texN.ktx2` per texture.
+	 * Bakes an import to disk under `outDir`: writes `<name>.bmesh`, one `texN.ktx2` per texture, and
+	 * -- when the source carried a skin -- `<name>.bskel` and `<name>.banim`.
 	 *
 	 * No materials: the mesh lands with its submeshes unassigned, and the textures land beside it for a
-	 * material to be authored against (see toBMesh).
+	 * material to be authored against (see toBMesh). The rig is the exception, because unlike a material
+	 * it is not an authoring choice: joint indices are meaningless without the skeleton they were
+	 * remapped into, so the two are written together or the mesh is not skinned at all.
 	 *
 	 * @throws std::runtime_error if `outDir` cannot be created or a file cannot be written.
 	 * @throws Cancelled if `cancel` is signalled, in which case `outDir` holds a partial bake.

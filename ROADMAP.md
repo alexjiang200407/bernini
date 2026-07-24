@@ -87,13 +87,17 @@ and portability.
     - [ ] Hashed (dithered) alpha — stochastic alpha test resolved by TAA
 - [ ] Animation
   - [ ] Animation Asset Import (clips, skeleton, etc)
-    - [ ] Resample all clips to a fixed rate (30/60 Hz) — no runtime keyframe search.
-    - [ ] Topological bone sort (`parent(i) < i`), validated at import.
-    - [ ] Per-clip metadata: authored locomotion speed, root motion delta, duration, loop flag.
+    - [x] `.bskel` / `.banim` containers, and skin binding (`JOINTS_0` / `WEIGHTS_0`) on the `.bmesh`.
+    - [x] Resample all clips to a fixed rate (30/60 Hz) — no runtime keyframe search.
+    - [x] Topological bone sort (`parent(i) < i`), validated at import.
+    - [x] Per-clip metadata: authored locomotion speed, root motion delta, duration, loop flag.
+    - [x] Skeleton signature, so a clip set cooked against a since-reordered rig is caught.
     - [ ] Rotation compression (quat+translation, 16 B/bone) — matters most for permanent corpse palettes.
     - [ ] Per-LOD bone sets as index-compatible subsets, with weight-collapse validation.
     - [ ] State machine authoring → flat table export, rejecting graph features the GPU path lacks.
-    - [ ] Separate humanoid and equine skeletons and clip sets, both exporting to the same table format.
+    - [x] Separate humanoid and equine skeletons and clip sets, both exporting to the same table format
+      — one file is one rig, and a glTF with two skins is rejected rather than half-imported.
+    - [ ] Editor import: the *Import animations* checkbox is inert; the CLI is the only way in.
   - [ ] Vertex Animation Textures (VAT)
     - [ ] Bake pipeline: resampled clip → position texture (+ normal/tangent), unorm-packed in the
       mesh bounding box.
