@@ -59,12 +59,12 @@ namespace bgl
 		 * a depth-only pre-pass over the self-occluding partition, then both partitions' blended
 		 * draws back-to-front. The pre-pass has to share this pass's depth attachment and sit between
 		 * the colour draws, which is why it is a sub-draw here rather than a pass of its own.
+		 *
+		 * Binds its own framebuffers rather than reusing the opaque one: a blend PSO declares no
+		 * velocity render target, and an attachment count that outruns the PSO's is invalid.
 		 */
 		void
-		DrawTransparent(
-			const DrawData&    draw,
-			const PassContext& resources,
-			MeshletState       colorState);
+		DrawTransparent(const DrawData& draw, const PassContext& resources);
 
 		std::array<MeshletKernel, c_PsoCount> m_Kernels;
 

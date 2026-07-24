@@ -347,6 +347,7 @@ namespace bgl
 
 		m_FrameGraph.Reset();
 		m_DrawCount = 0;
+		++m_FrameId;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
@@ -391,6 +392,15 @@ namespace bgl
 		const auto viewport = job.viewport;
 		const auto viewProj = job.camera.GetViewProjection();
 
+		glm::mat4 viewNoTranslation = job.camera.GetView();
+		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+		auto camera                 = ViewMatrices();
+		camera.viewProj             = viewProj;
+		camera.rotationOnlyViewProj = job.camera.GetProjection() * viewNoTranslation;
+
+		const ViewMatrices prevCamera = view_->AdvanceCamera(m_FrameId, camera);
+
 		const uint32_t drawIdx = m_DrawCount++;
 
 		m_FrameGraph.SetResourceNamespace(view_->ResourceNamespace());
@@ -403,6 +413,7 @@ namespace bgl
 		draw.view               = job.view;
 		draw.viewport           = viewport;
 		draw.viewProj           = viewProj;
+		draw.prevViewProj       = prevCamera.viewProj;
 		draw.cullView           = BuildCullView(viewProj);
 		draw.backBufferHandle   = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
 		draw.depthBufferHandle  = m_ActiveTarget->DepthDsv();
@@ -419,9 +430,7 @@ namespace bgl
 		draw.exposure = view_->GetExposure();
 		draw.skybox   = view_->GetSkybox();
 
-		glm::mat4 viewNoTranslation = job.camera.GetView();
-		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		glm::mat4 clipToWorld       = glm::inverse(job.camera.GetProjection() * viewNoTranslation);
+		glm::mat4 clipToWorld = glm::inverse(camera.rotationOnlyViewProj);
 
 		if (draw.skybox.has_value())
 		{

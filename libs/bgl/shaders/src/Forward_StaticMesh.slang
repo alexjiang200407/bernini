@@ -28,8 +28,12 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 
     float4 worldPos = mul(mesh.transform, float4(vertex.position, 1.0));
 
+    // The mesh transform is fixed for an instance's lifetime, so the same world position reprojects
+    // through both cameras; a movable instance would carry its own previous transform here.
     ForwardVSOut vertexOut;
     vertexOut.position = mul(forwardData.viewProj, worldPos);
+    vertexOut.clip = vertexOut.position;
+    vertexOut.prevClip = mul(forwardData.prevViewProj, worldPos);
     vertexOut.worldPos = worldPos.xyz;
     vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
     vertexOut.uv = vertex.uv;

@@ -4,7 +4,10 @@ import idl.LoosePbrMaterial;
 
 // unbaked, per-channel "loose" PBR material.
 [shader("pixel")]
-float4 PSMain(ForwardVSOut input) : SV_Target
+ForwardPSOut PSMain(ForwardVSOut input)
 {
-    return Shade<LoosePbrMaterial>(input);
+    ForwardPSOut output;
+    output.color = Shade<LoosePbrMaterial>(input);
+    output.motion = ComputeMotionVector(input);
+    return output;
 }

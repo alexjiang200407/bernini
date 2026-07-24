@@ -4,7 +4,10 @@ import idl.PbrMaterial;
 
 // Baked triplet PBR material, cutout: base-color alpha below the material's cutoff is discarded.
 [shader("pixel")]
-float4 PSMain(ForwardVSOut input) : SV_Target
+ForwardPSOut PSMain(ForwardVSOut input)
 {
-    return ShadeAlphaTested<PbrMaterial>(input);
+    ForwardPSOut output;
+    output.color = ShadeAlphaTested<PbrMaterial>(input);
+    output.motion = ComputeMotionVector(input);
+    return output;
 }

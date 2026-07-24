@@ -100,6 +100,8 @@ namespace bgl
 		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
 		constexpr auto c_TransparentArgsBuffer   = "transparentSort.partitionDispatchArgs"sv;
 
+		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
+
 		constexpr auto c_GeomSrc               = "Forward_StaticMesh"sv;
 		constexpr auto c_PbrPixelSrc           = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc         = "Forward_PBR_Loose"sv;
@@ -190,6 +192,13 @@ namespace bgl
 			if (!cfg.depthOnly)
 			{
 				pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+
+				// The rtvFormats count is what the bound framebuffer must match, so a blend PSO
+				// omitting this is also what keeps the velocity buffer out of its attachments.
+				if (!cfg.blend)
+				{
+					pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
+				}
 			}
 			pipelineDesc.SetDsvFormat(Format::D24S8);
 
@@ -256,6 +265,11 @@ namespace bgl
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget })
+			.AddTextureArg(
+				TextureArg{ draw.motionVectorName,
+		                    BarrierSyncFlag::kRenderTarget,
+		                    BarrierAccessFlag::kRenderTarget,
+		                    BarrierLayout::kRenderTarget })
 			.AddBufferArg(
 				BufferArg{ std::string(c_DispatchArgsBuffer),
 		                   BarrierSyncFlag::kIndirectArgument,
@@ -311,7 +325,8 @@ namespace bgl
 				}
 			}
 
-			forwardData["viewProj"] = draw.viewProj;
+			forwardData["viewProj"]     = draw.viewProj;
+			forwardData["prevViewProj"] = draw.prevViewProj;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -373,10 +388,12 @@ namespace bgl
 			return;
 		}
 
+		// Colour + velocity, matching the two rtvFormats every non-blend PSO declares.
 		auto gfxState = MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		gfxState.frameBuffer = FrameBuffer()
 		                           .AddColorAttachment(draw.backBufferHandle)
+		                           .AddColorAttachment(draw.motionVectorHandle)
 		                           .SetDepthAttachment(draw.depthBufferHandle);
 
 		const auto dispatchArgs = resources.GetBuffer(c_DispatchArgsBuffer);
@@ -406,14 +423,11 @@ namespace bgl
 			cmd->DispatchMeshIndirect(pso);
 		}
 
-		DrawTransparent(draw, resources, gfxState);
+		DrawTransparent(draw, resources);
 	}
 
 	void
-	ForwardPass::DrawTransparent(
-		const DrawData&    draw,
-		const PassContext& resources,
-		MeshletState       colorState)
+	ForwardPass::DrawTransparent(const DrawData& draw, const PassContext& resources)
 	{
 		ICommandList* cmd             = resources.GetCommandList();
 		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
@@ -439,6 +453,14 @@ namespace bgl
 				cmd->SetMeshletState(state);
 				cmd->DispatchMeshIndirect(partition);
 			};
+
+		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be
+		// attached here -- a blended surface has no single depth to reproject.
+		auto colorState = MeshletState();
+		colorState.viewportState.AddViewportAndScissorRect(draw.viewport);
+		colorState.frameBuffer = FrameBuffer()
+		                             .AddColorAttachment(draw.backBufferHandle)
+		                             .SetDepthAttachment(draw.depthBufferHandle);
 
 		// Depth-only: the self-occluding partition writes its front layer's depth with no colour
 		// target, so its Equal-tested colour draw below blends that layer once.

@@ -4,7 +4,10 @@ import idl.PbrMaterial;
 
 // baked triplet PBR material.
 [shader("pixel")]
-float4 PSMain(ForwardVSOut input) : SV_Target
+ForwardPSOut PSMain(ForwardVSOut input)
 {
-    return Shade<PbrMaterial>(input);
+    ForwardPSOut output;
+    output.color = Shade<PbrMaterial>(input);
+    output.motion = ComputeMotionVector(input);
+    return output;
 }
