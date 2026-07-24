@@ -4,6 +4,10 @@ The Render Hardware Interface (RHI) is `bgl`'s API-agnostic graphics abstraction
 pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. The
 concrete backend (`bgl_d3d12`) is linked at runtime and is never visible to callers.
 
+This is the layer bgl is built *on*. For the surface an application links against — `IGraphics`,
+`IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
+[bgl Public API](docs/bgl_api.md).
+
 **This document is a map, not a mirror.** It captures the design choices, the object topology,
 the synchronization model, and the *non-obvious* method contracts. It deliberately does **not**
 reproduce full signatures — the header at each linked path is the source of truth. When this
@@ -67,8 +71,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
 * **Barriers are owned by the FrameGraph, not pass code.** `ICommandList::Barrier(...)` exists
   but the FrameGraph computes and inserts all resource-state transitions. Pass code should
-  never call `Barrier` directly. See [Frame Graph](docs/framegraph.md) and
-  [Pipeline State](docs/pipeline_state.md).
+  never call `Barrier` directly. See [Frame Graph](docs/framegraph.md).
 
 * **Context affinity, with a thread-safe resource-manager core.** Methods are `noexcept`. Each
   submission context (queue + list + frame state) is single-thread-affine: one thread drives it,
@@ -94,7 +97,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [libs/bgl/include/libs/bgl/IGraphics.h](libs/bgl/include/libs/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. |
+| `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
 | `IDevice` | [libs/bgl/src/device/Device.h](libs/bgl/src/device/Device.h) | Root factory for every RHI object. |
 | `IResourceManager` | [libs/bgl/src/resource/ResourceManager.h](libs/bgl/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
 | `ICommandQueue` | [libs/bgl/src/cmd/CommandQueue.h](libs/bgl/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |

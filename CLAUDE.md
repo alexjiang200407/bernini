@@ -41,13 +41,18 @@ no idea a change ever happened.
 
 Read through these documents if you deem them necessary to your given task. If you modify something that is touched on in these docs, you need to modify the docs as well.
 
+**[bgl Public API](./docs/bgl_api.md)**
+
+What a client links against: `IGraphics`, `IScene`, `ISceneView`, `IRenderTarget`, the handle and
+descriptor types, and the lifetime/threading rules that govern them. Start here to *use* bgl.
+
 **[Geometry Layout](./docs/geometry_layout.md)**
 
 Describes the collection of structures, descriptors, and resources that are bound to the GPU for Geometry Passes.
 
 **[Render Hardware Interface](./docs/rhi.md)**
 
-RHI usage.
+RHI usage — the internal abstraction bgl is built *on*, one layer below the public API.
 
 **[Graphics Debug](./docs/gfx_debug.md)**
 
