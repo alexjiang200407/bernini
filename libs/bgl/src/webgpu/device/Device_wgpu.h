@@ -1,69 +1,110 @@
 #pragma once
 
-namespace bgl::wgpu
-{
-	struct AdapterInfo
-	{
-		std::string     vendor;
-		std::string     architecture;
-		std::string     device;
-		std::string     description;
-		WGPUBackendType backendType = WGPUBackendType_Undefined;
-		WGPUAdapterType adapterType = WGPUAdapterType_Unknown;
-	};
+#include "device/Device.h"
 
-	struct DeviceDesc
+namespace bgl
+{
+	namespace wgpu
 	{
-		WGPUPowerPreference powerPreference = WGPUPowerPreference_HighPerformance;
-	};
+		struct AdapterInfo
+		{
+			std::string     vendor;
+			std::string     architecture;
+			std::string     device;
+			std::string     description;
+			WGPUBackendType backendType = WGPUBackendType_Undefined;
+			WGPUAdapterType adapterType = WGPUAdapterType_Unknown;
+		};
+
+		struct DeviceDesc
+		{
+			WGPUPowerPreference powerPreference = WGPUPowerPreference_HighPerformance;
+		};
+	}
 
 	/**
-	 * Owns the WebGPU object stack -- instance, adapter, device and its default queue -- and
-	 * routes the device's uncaptured errors and lost-device notification into the bgl log.
+	 * The RHI device, and the owner of the WebGPU object stack it is built on -- instance,
+	 * adapter, device and its default queue. Uncaptured errors and device loss are routed into
+	 * the bgl log.
 	 *
 	 * Adapter and device requests are asynchronous in WebGPU. Natively they are resolved here by
 	 * blocking on the returned future, which is what wgpuInstanceWaitAny permits and the browser
 	 * does not; a browser build must drive these off the event loop instead.
+	 *
+	 * The factories that need a shader compiler, a mesh shader or a swapchain are not implemented
+	 * yet and fail loudly rather than returning something unusable.
 	 */
-	class Device
+	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
 		/** @throws GraphicsError if no adapter or device could be acquired. */
-		explicit Device(const DeviceDesc& desc);
+		explicit Device(const wgpu::DeviceDesc& desc);
 
-		~Device();
+		~Device() noexcept override;
 
-		Device(const Device&) = delete;
-		Device&
-		operator=(const Device&) = delete;
-		Device(Device&&)         = delete;
-		Device&
-		operator=(Device&&) = delete;
-
-		const AdapterInfo&
+		[[nodiscard]] const wgpu::AdapterInfo&
 		GetAdapterInfo() const noexcept
 		{
 			return m_AdapterInfo;
 		}
 
-		WGPUDevice
+		[[nodiscard]] WGPUDevice
 		GetHandle() const noexcept
 		{
 			return m_Device;
 		}
 
-		WGPUQueue
+		[[nodiscard]] WGPUQueue
 		GetQueue() const noexcept
 		{
 			return m_Queue;
 		}
 
 		// Awaiting a future needs the instance: it is what runs the callbacks.
-		WGPUInstance
+		[[nodiscard]] WGPUInstance
 		GetInstance() const noexcept
 		{
 			return m_Instance;
 		}
+
+		[[nodiscard]] core::SharedRef<IShader>
+		CreateShader(ShaderDesc desc) const noexcept override;
+
+		[[nodiscard]] core::SharedRef<IComputePipeline>
+		CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept override;
+
+		[[nodiscard]] core::SharedRef<IMeshletPipeline>
+		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;
+
+		core::SharedRef<ICommandList>
+		CreateCommandList(
+			const CommandListDesc&             desc,
+			core::SharedRef<ICommandAllocator> commandAllocator,
+			core::SharedRef<IResourceManager>  resourceManager) const noexcept override;
+
+		[[nodiscard]] core::SharedRef<ICommandAllocator>
+		CreateCommandAllocator(QueueType type) const noexcept override;
+
+		[[nodiscard]] core::SharedRef<ICommandQueue>
+		CreateCommandQueue(QueueType type) const noexcept override;
+
+		[[nodiscard]] core::SharedRef<IResourceManager>
+		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept override;
+
+		[[nodiscard]] RenderTargetRef
+		CreateRenderTarget(
+			const RenderTargetDesc&           desc,
+			core::SharedRef<ICommandQueue>    queue,
+			core::SharedRef<IResourceManager> resourceManager,
+			bool                              enableDebug) const override;
+
+		[[nodiscard]] Uniforms
+		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept override;
+
+		[[nodiscard]] Uniforms
+		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
+			const noexcept override;
 
 	private:
 		WGPUInstance m_Instance = nullptr;
@@ -71,6 +112,6 @@ namespace bgl::wgpu
 		WGPUDevice   m_Device   = nullptr;
 		WGPUQueue    m_Queue    = nullptr;
 
-		AdapterInfo m_AdapterInfo;
+		wgpu::AdapterInfo m_AdapterInfo;
 	};
 }

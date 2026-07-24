@@ -83,7 +83,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 	// Renders the triangle into a fresh texture and returns its pixels, row-major from the top.
 	std::vector<Rgba>
-	RenderTriangle(wgpu::Device& device)
+	RenderTriangle(Device& device)
 	{
 		WGPUDevice   handle   = device.GetHandle();
 		WGPUQueue    queue    = device.GetQueue();
@@ -187,9 +187,9 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 TEST_CASE("A triangle rasterizes offscreen and reads back", "[wgpu][render]")
 {
-	auto device = wgpu::Device(wgpu::DeviceDesc{});
+	auto device = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
 
-	const auto pixels = RenderTriangle(device);
+	const auto pixels = RenderTriangle(*device);
 
 	REQUIRE(pixels.size() == c_Size * c_Size);
 
