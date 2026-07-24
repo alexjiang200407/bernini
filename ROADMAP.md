@@ -77,9 +77,7 @@ and portability.
   - [ ] Per-view culling — camera and each shadow cascade get their own pass and indirect args.
   - [ ] Culling verification — CPU reference cull, diff the visible sets, assert.
 - [ ] Motion Vectors
-  - [x] Static geometry — an `RG16_FLOAT` velocity buffer written as MRT slot 1 by the forward and
-    skybox passes. Instance transforms are immutable, so this is camera motion only; the mesh shader
-    hands the pixel stage both clip positions, which is the seam the skinned and VAT paths extend.
+  - [x] Static geometry
   - [ ] Skinned motion vectors (needs double-buffered bone palette) — hero and near tiers only.
   - [ ] VAT motion vectors — sample previous frame's VAT UV; not optional since VAT is the majority path.
   - [ ] Corpses use the static MV path — the palette is unique but constant, so camera motion only.
