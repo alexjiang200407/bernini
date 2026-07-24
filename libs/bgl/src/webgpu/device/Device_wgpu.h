@@ -42,6 +42,15 @@ namespace bgl
 
 		~Device() noexcept override;
 
+		Device(const Device&) noexcept = delete;
+		Device(Device&&) noexcept      = delete;
+
+		Device&
+		operator=(const Device&) noexcept = delete;
+
+		Device&
+		operator=(Device&&) noexcept = delete;
+
 		[[nodiscard]] const wgpu::AdapterInfo&
 		GetAdapterInfo() const noexcept
 		{

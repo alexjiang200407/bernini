@@ -13,6 +13,15 @@ namespace bgl
 	public:
 		CommandAllocator() noexcept = default;
 
+		CommandAllocator(const CommandAllocator&) noexcept = delete;
+		CommandAllocator(CommandAllocator&&) noexcept      = delete;
+
+		CommandAllocator&
+		operator=(const CommandAllocator&) noexcept = delete;
+
+		CommandAllocator&
+		operator=(CommandAllocator&&) noexcept = delete;
+
 		void
 		ResetAllocator() noexcept override
 		{}

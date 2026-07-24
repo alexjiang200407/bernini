@@ -23,6 +23,15 @@ namespace bgl
 
 		~CommandQueue() noexcept override;
 
+		CommandQueue(const CommandQueue&) noexcept = delete;
+		CommandQueue(CommandQueue&&) noexcept      = delete;
+
+		CommandQueue&
+		operator=(const CommandQueue&) noexcept = delete;
+
+		CommandQueue&
+		operator=(CommandQueue&&) noexcept = delete;
+
 		uint64_t
 		ExecuteCommandList(ICommandList* commandList) noexcept override;
 

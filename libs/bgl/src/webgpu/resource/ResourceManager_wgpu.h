@@ -27,6 +27,15 @@ namespace bgl
 
 		~ResourceManager() noexcept override;
 
+		ResourceManager(const ResourceManager&) noexcept = delete;
+		ResourceManager(ResourceManager&&) noexcept      = delete;
+
+		ResourceManager&
+		operator=(const ResourceManager&) noexcept = delete;
+
+		ResourceManager&
+		operator=(ResourceManager&&) noexcept = delete;
+
 		BufferHandle
 		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
 
