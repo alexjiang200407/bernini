@@ -63,6 +63,15 @@ The engine is built on exactly the four D3D12 features browser WebGPU lacks:
   and the Metal branches have already generalized it once
   (`.*/src/(d3d12|metal)/.*` filters, `bgl_metal` object lib, per-backend test wiring).
 
+  Portable at the *algorithm* level, that is — compiling the kernels as-written with
+  `slangc -target wgsl` (2026.14) surfaces two mechanical migrations WGSL forces: every
+  `InterlockedAdd` on a plain `uint` field must move to Slang's typed `Atomic<T>` (WGSL has no
+  free-standing atomics on ordinary memory; only `PrefixSumInstances`, which has no atomics,
+  compiles today), and the IDL's `uint16_t` fields (`Meshlet`, `VertexLayout`, `ChannelSource`,
+  the `PsoType` underlying type) have no WGSL representation — the IDL codegen needs a WGSL
+  lowering that packs 16-bit pairs into `u32` words behind accessors, without disturbing the
+  D3D12/C++ byte layout. Both fixes are shared-source, not forks (§ shaders, W2).
+
 ## 2. Native first, or browser first?
 
 **Build against `webgpu.h` with native Dawn first, on macOS; treat the browser as a link target of
@@ -148,7 +157,12 @@ specializes both per target rather than touching every shader:
   The smart-buffer structs get a WGSL-target variant where the `.Handle` member is replaced by an
   actual buffer binding; Slang reflection then reports real `(group, binding)` slots, which
   `ReflectedLayout` carries instead of D3D12 root-param/register data. `Uniforms` assignment of a
-  `BufferHandle` records a bind-group entry instead of writing an index. The ~12 distinct buffers
+  `BufferHandle` records a bind-group entry instead of writing an index. The explicit variant is
+  mandatory, not a nicety: left to itself, slangc (verified on the pinned 2026.7.1) lowers a
+  `.Handle` field to an emulated descriptor heap — `@group(1) var _slang_resource_heap_0 :
+  array<array<u32>>`, a runtime-sized *binding array* that core browser WGSL does not have. A
+  kernel can therefore "compile to WGSL" and still be unloadable in a browser, which is why every
+  cooked program must pass a real WGSL validator (Tint/naga), not just slangc. The ~12 distinct buffers
   a forward draw touches fit comfortably in WebGPU's per-stage storage-buffer limits
   (Tier-1 limit is 8 storage buffers per stage — the forward data may need packing into fewer,
   wider buffers or a second bind group; audit in W1).
@@ -386,16 +400,20 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   the native WebGPU preset — exact survivor counts from the readback tests, not just "runs".
 * **W2 — shader pipeline.** Slang session targeting WGSL in the native backend;
   `ReflectedLayout` extended with `(group, binding)`; WGSL-target variants of the `types.*Buffer`
-  primitives; `compile_shader(... TARGET wgsl)` validation entries for every compute kernel.
-  *Gate:* all five culling/sort kernels compile from their real Slang sources and the W1 tests
-  pass against them (byte-identical results vs. the WGSL fixtures); WGSL validation runs in the
-  build for every entry.
+  primitives; the two migrations the slangc probe proved necessary — `InterlockedAdd` on plain
+  fields → typed `Atomic<T>` (shared-source; D3D12 is unaffected), and a WGSL lowering in the IDL
+  codegen for the `uint16_t` fields (pack pairs into `u32` behind accessors, C++/DXIL byte layout
+  untouched); `compile_shader(... TARGET wgsl)` validation entries for every compute kernel.
+  *Gate:* all five culling/sort kernels compile from their real Slang sources **and validate
+  under Tint** (slangc acceptance alone is not the bar — see § binding), and the W1 tests pass
+  against them (byte-identical results vs. the WGSL fixtures).
 * **W3 — raster path.** Textures/RTV/DSV (depth is `depth32float` — the D24S8 remap decision is
   already made for Metal), render pipelines, the meshlet-expansion kernel + vertex-pulling
   forward path, SDL3 surface/swapchain, skybox as a plain draw.
   *Gate:* golden-image tests pass under the native WebGPU preset; a cube/sphere/textured-mesh
   scene is pixel-compared against the D3D12 goldens within tolerance. Frustum culling goldens
-  prove the indirect chain (culling is image-invariant — same gate as the culling plan).
+  prove the indirect chain (culling is image-invariant, so goldens are the gate — the same
+  property [passes.md](../passes.md)'s compaction pipeline is tested by today).
 * **W4 — materials.** Texture-array material atlas + cook-side size classing, IBL bindings,
   transparent path (sort compute is already ported; the three partition draws become
   `drawIndirect`).
