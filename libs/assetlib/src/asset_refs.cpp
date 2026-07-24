@@ -1,5 +1,6 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
@@ -18,6 +19,8 @@ namespace assetlib
 		constexpr std::string_view c_EnvironmentExtension = ".benv";
 		constexpr std::string_view c_SkyExtension         = ".bsky";
 		constexpr std::string_view c_EnvLightingExtension = ".benvl";
+		constexpr std::string_view c_SkeletonExtension    = ".bskel";
+		constexpr std::string_view c_AnimationExtension   = ".banim";
 
 		/**
 		 * The one form every path in the graph is keyed and stored in, so that the two sides of a reference
@@ -81,17 +84,17 @@ namespace assetlib
 			return out;
 		}
 
-		/** Every material a `.bmesh` names, in `mesh.materials` order. */
+		/** Every material a `.bmesh` names, in `mesh.materials` order, and the skeleton it skins to. */
 		void
 		collectMeshEdges(
 			std::vector<AssetRef>&       edges,
 			const std::filesystem::path& file,
 			const std::string&           referrer)
 		{
-			std::vector<std::string> materials;
+			MeshRefs refs;
 			try
 			{
-				materials = loadMaterialPaths(file);
+				refs = loadMeshRefs(file);
 			}
 			catch (const std::exception& e)
 			{
@@ -99,11 +102,35 @@ namespace assetlib
 				// see, and we would then delete one of them out from under it.
 				throw std::runtime_error(
 					"assetlib::AssetRefGraph: cannot read the mesh '" + file.string() +
-					"', so the materials it references cannot be known: " + e.what());
+					"', so the assets it references cannot be known: " + e.what());
 			}
 
-			for (const std::string& material : materials)
+			for (const std::string& material : refs.materials)
 				addEdge(edges, referrer, material, RefKind::kSubmeshMaterial);
+
+			addEdge(edges, referrer, refs.skeleton, RefKind::kMeshSkeleton);
+		}
+
+		/** The skeleton a `.banim`'s clips were resampled against. */
+		void
+		collectAnimationEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			std::string skeleton;
+			try
+			{
+				skeleton = loadAnimationSkeletonPath(file);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the clip set '" + file.string() +
+					"', so the skeleton it references cannot be known: " + e.what());
+			}
+
+			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
 		}
 
 		/** The baked triplet a `.bmaterial` names, and the sources its channels route from. */
@@ -237,6 +264,10 @@ namespace assetlib
 			return AssetType::kSky;
 		if (ext == c_EnvLightingExtension)
 			return AssetType::kEnvLighting;
+		if (ext == c_SkeletonExtension)
+			return AssetType::kSkeleton;
+		if (ext == c_AnimationExtension)
+			return AssetType::kAnimation;
 
 		return std::nullopt;
 	}
@@ -289,6 +320,11 @@ namespace assetlib
 			{
 				collectEnvironmentEdges(edges, file, referrer);
 				++graph.environmentsScanned;
+			}
+			else if (kind == c_AnimationExtension)
+			{
+				collectAnimationEdges(edges, file, referrer);
+				++graph.clipSetsScanned;
 			}
 		}
 
