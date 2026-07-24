@@ -52,14 +52,13 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
-		auto ctx      = graphics->CreateRenderContext();
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);
 		targetDesc.height   = static_cast<int>(height);
 		targetDesc.headless = false;
 		targetDesc.wnd      = wnd.NativeHandle();
-		auto target         = ctx->CreateRenderTarget(targetDesc);
+		auto target         = graphics->CreateRenderTarget(targetDesc);
 
 		auto sceneDesc                    = bgl::SceneDesc();
 		sceneDesc.maxIndices              = 10000;
@@ -122,7 +121,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				job.camera = camera;
 			}
 
-			ctx->DrawFrame(target, job);
+			graphics->DrawFrame(target, job);
 		}
 	}
 	catch (const std::runtime_error& e)

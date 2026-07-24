@@ -122,13 +122,10 @@ namespace bgl
 		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
 		m_EnableDebug(enableDebug)
 	{
-		// The context's own submission timeline, registered so a deferred destroy cannot reclaim a
-		// slot this queue may still be reading.
+		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 		m_ResourceManager->RegisterQueue(m_CommandQueue.Get());
 
-		// The list and its allocator are the context's own -- one recorder per context, so two
-		// contexts can record concurrently.
 		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
 
 		auto cmdListDesc = CommandListDesc();
@@ -556,7 +553,7 @@ namespace bgl
 				std::format(
 					"{}: all {} capture slots are in flight; resolve or discard one first",
 					caller,
-					c_MaxPendingCaptures));
+					IGraphics::c_MaxPendingCaptures));
 		}
 		CaptureSlot& slot = *free;
 

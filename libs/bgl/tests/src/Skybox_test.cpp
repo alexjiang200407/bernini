@@ -24,13 +24,11 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(kWidth);
 	targetDesc.height   = static_cast<int>(kHeight);
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -70,5 +68,5 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	job.camera   = camera;
 	job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-	REQUIRE_NOTHROW(ctx->DrawFrame(target, job));
+	REQUIRE_NOTHROW(gfx->DrawFrame(target, job));
 }

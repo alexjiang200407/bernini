@@ -13,25 +13,23 @@
 #include "passes/SkyboxPass.h"
 #include "passes/TransparentSortPass.h"
 #include "resource/ResourceManager.h"
-#include <bgl/IRenderContext.h>
-#include <core/ref/RefCounter.h>
+#include <bgl/IGraphics.h>
 
 namespace bgl
 {
 	/**
-	 * The IRenderContext implementation: the command list, frame graph, retained pass objects and
-	 * GPU-debug readback ring that turn a RenderJob into a submitted, presented frame.
+	 * The frame path behind IGraphics: the command queue, list, frame graph, retained pass objects
+	 * and GPU-debug readback ring that turn a RenderJob into a submitted, presented frame.
 	 *
 	 * Backend-agnostic by construction -- it reaches the GPU only through the RHI interfaces, so it
-	 * lives in core rather than a backend TU. The queue, list and allocator are the context's own
-	 * submission machinery; only the device and resource manager are shared across contexts.
+	 * lives in core rather than a backend TU, and a second backend reuses it as it stands.
 	 */
-	class RenderContext final : public core::RefCounter<IRenderContext>
+	class RenderContext final
 	{
 	public:
 		RenderContext(DeviceRef device, ResourceManagerRef resourceManager, bool enableDebug);
 
-		~RenderContext() noexcept override;
+		~RenderContext() noexcept;
 
 		RenderContext(const RenderContext&) noexcept = delete;
 		RenderContext(RenderContext&&) noexcept      = delete;
@@ -43,43 +41,43 @@ namespace bgl
 		operator=(RenderContext&&) noexcept = delete;
 
 		RenderTargetRef
-		CreateRenderTarget(const RenderTargetDesc& desc) override;
+		CreateRenderTarget(const RenderTargetDesc& desc);
 
 		void
-		BeginFrame(const RenderTargetRef& target) override;
+		BeginFrame(const RenderTargetRef& target);
 
 		void
-		Draw(const RenderJob& job) override;
+		Draw(const RenderJob& job);
 
 		void
-		EndFrame() override;
+		EndFrame();
 
 		void
-		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) override;
+		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height);
 
 		void
-		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) override;
+		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath);
 
 		assetlib::ImageData
-		ScreenshotToMemory(const RenderTargetRef& target) override;
+		ScreenshotToMemory(const RenderTargetRef& target);
 
 		CaptureTicket
-		SubmitCapture(const RenderTargetRef& target) override;
+		SubmitCapture(const RenderTargetRef& target);
 
 		std::optional<assetlib::ImageData>
-		TryResolveCapture(CaptureTicket ticket) override;
+		TryResolveCapture(CaptureTicket ticket);
 
 		void
-		DiscardCapture(CaptureTicket ticket) noexcept override;
+		DiscardCapture(CaptureTicket ticket) noexcept;
 
 		void
-		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept override
+		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept
 		{
 			m_GpuAssertionHandler = handler;
 		}
 
-		// The context's submission timeline. A render target presents on the queue its frames are
-		// recorded on, so targets driven by this context must be created against this queue.
+		// The submission timeline. A render target presents on the queue its frames are recorded
+		// on, so every target must be created against this queue.
 		[[nodiscard]] CommandQueueRef
 		GetCommandQueueCpy() const noexcept
 		{
@@ -93,7 +91,7 @@ namespace bgl
 		}
 
 		void
-		DiscardPendingGpuAssertions() noexcept override;
+		DiscardPendingGpuAssertions() noexcept;
 
 	private:
 #if defined(BERNINI_GPU_DEBUG)
@@ -133,9 +131,6 @@ namespace bgl
 		CaptureTicket
 		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
 
-		// The device and resource manager are shared across all contexts; the queue, command list
-		// and bootstrap allocator are the context's own -- one submission timeline and one recorder
-		// per context.
 		DeviceRef           m_Device;
 		CommandQueueRef     m_CommandQueue;
 		ResourceManagerRef  m_ResourceManager;
@@ -151,8 +146,8 @@ namespace bgl
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 
-		std::array<CaptureSlot, c_MaxPendingCaptures> m_Captures;
-		uint64_t                                      m_NextCaptureId = 1;
+		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
+		uint64_t                                                 m_NextCaptureId = 1;
 
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;

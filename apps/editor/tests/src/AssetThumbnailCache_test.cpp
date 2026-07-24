@@ -7,6 +7,7 @@
 
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <gamelib/AssetManager.h>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -40,11 +41,12 @@ namespace
 		return sceneDesc;
 	}
 
-	// Everything a cache needs to actually render: a renderer that owns the device, as MainWindow's
-	// does. The cache brings its own context, scene and asset manager.
+	// Everything a cache needs to actually render: a renderer (which owns the device and scene, as
+	// MainWindow's does) and the editor's shared asset manager over that scene.
 	struct Fixture
 	{
-		std::optional<Renderer> renderer;
+		std::optional<Renderer>           renderer;
+		std::optional<game::AssetManager> assets;
 
 		Fixture()
 		{
@@ -52,6 +54,10 @@ namespace
 			opts.enableDebugLayer = true;
 
 			renderer.emplace(opts, MakeSceneDesc());
+
+			// The editor shares one manager over its one scene, so a material loaded twice is one
+			// upload and one reference count however it is drawn.
+			assets.emplace(renderer->GetScene(), std::filesystem::path(c_DataRoot));
 		}
 
 		[[nodiscard]] AssetThumbnailDesc
@@ -59,7 +65,6 @@ namespace
 		{
 			auto desc       = AssetThumbnailDesc();
 			desc.renderer   = &*renderer;
-			desc.sceneDesc  = MakeSceneDesc();
 			desc.skybox     = "assets/skybox.ktx2";
 			desc.irradiance = "assets/iem.ktx2";
 			desc.prefilter  = "assets/pmrem.ktx2";
@@ -104,7 +109,7 @@ TEST_CASE("A .bmesh renders to a thumbnail wearing its own materials", "[thumbna
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
-	cache.SetDataRoot(c_DataRoot);
+	cache.SetAssets(&*fixture.assets);
 
 	// Nothing has been asked for yet, so nothing is cached.
 	REQUIRE(cache.Lookup(c_MeshPath).isNull());
@@ -136,7 +141,7 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
-	cache.SetDataRoot(c_DataRoot);
+	cache.SetAssets(&*fixture.assets);
 
 	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
 
@@ -155,8 +160,8 @@ TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][r
 {
 	Fixture fixture;
 
-	// A `.bmaterial` is nothing but references relative to the data root. Without one -- no project
-	// open -- there is nothing to draw.
+	// A `.bmaterial` is nothing but references relative to the data root, and the manager is the only
+	// thing that resolves them. Without one -- no project open -- there is nothing to draw.
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
@@ -165,8 +170,8 @@ TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][r
 	cache.Request(c_MaterialPath);
 	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 1000));
 
-	// And it draws once one arrives, so it was the data root that was missing and nothing else.
-	cache.SetDataRoot(c_DataRoot);
+	// And it draws once one arrives, so it was the manager that was missing and nothing else.
+	cache.SetAssets(&*fixture.assets);
 	cache.Request(c_MaterialPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
 }
@@ -177,7 +182,7 @@ TEST_CASE("A second request for an unchanged asset does not re-render", "[thumbn
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetDataRoot(c_DataRoot);
+	cache.SetAssets(&*fixture.assets);
 
 	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
 
@@ -196,7 +201,7 @@ TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][rend
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetDataRoot(c_DataRoot);
+	cache.SetAssets(&*fixture.assets);
 
 	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
 
@@ -214,7 +219,7 @@ TEST_CASE("Without a graphics device the cache stays inert", "[thumbnails]")
 
 	REQUIRE(!cache.IsReady());
 
-	cache.SetDataRoot({});
+	cache.SetAssets(nullptr);
 	cache.Request(c_MeshPath);
 	REQUIRE(cache.Lookup(c_MeshPath).isNull());
 }

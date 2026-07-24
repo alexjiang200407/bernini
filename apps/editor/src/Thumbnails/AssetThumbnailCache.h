@@ -10,34 +10,14 @@
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IRenderContext.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <gamelib/AssetManager.h>
 
-class ContextWorker;
 class QTimer;
 class Renderer;
-
-// A thumbnail scene holds one asset at a time -- but that one asset can be as large as anything
-// the level loads, so the size budgets must match the editor scene's or a mesh near its limits
-// loads in the level yet fails to thumbnail. MainWindow passes its own settings-driven SceneDesc;
-// these mirror its defaults.
-inline bgl::SceneDesc
-ThumbnailSceneDesc()
-{
-	auto desc                    = bgl::SceneDesc();
-	desc.maxGeom                 = 256;
-	desc.maxMeshlets             = 32768;
-	desc.maxSubmeshes            = 512;
-	desc.maxVertexBufferByteSize = 33'554'432;
-	desc.maxIndices              = 2'000'000;
-	desc.maxPbrMaterials         = 256;
-	desc.maxLoosePbrMaterials    = 256;
-	return desc;
-}
 
 struct AssetThumbnailDesc
 {
@@ -45,8 +25,6 @@ struct AssetThumbnailDesc
 
 	uint32_t dimension    = 256;
 	uint32_t maxInstances = 256;
-
-	bgl::SceneDesc sceneDesc = ThumbnailSceneDesc();
 
 	std::string skybox;
 	std::string irradiance;
@@ -60,16 +38,15 @@ struct AssetThumbnailDesc
  * `.bmaterial` on a sphere.
  *
  * The twin of TexturePreviewCache, and deliberately the same shape (Lookup / Request / a ready
- * signal, with an mtime stamp deciding staleness). It renders on a ContextWorker of its own -- its
- * own submission context, scene and thread -- so a folder populating its tiles neither stalls the
- * viewports' frame loop nor is stalled by it. The `.bmesh` read and texture decode run on the
- * pool; the render is drained from the UI thread one asset per event-loop turn, each handed to the
- * worker. The readback is split-phase -- submitted on one turn, resolved on a later one -- so no
- * turn blocks on the GPU.
+ * signal, with an mtime stamp deciding staleness), but it cannot render on a worker: bgl has no
+ * internal synchronization, so BeginFrame/Draw/EndFrame/Capture are render-thread-only. Only the
+ * `.bmesh` read and texture decode run on the pool; the render is drained from the UI thread one
+ * asset per event-loop turn, which keeps a folder from freezing the editor while it populates. The
+ * readback is split-phase -- submitted on one turn, resolved on a later one -- so no turn blocks
+ * the render thread on the GPU.
  *
- * The cache's scene is its own (contexts must not share one), so its assets are uploaded by its
- * own AssetManager, separately from the editor's -- the price of isolation until scenes can be
- * shared across contexts.
+ * Geometry is added to the shared scene and torn down again after each shot, so a thumbnail leaves
+ * nothing behind for the Level Editor's view to draw.
  */
 class AssetThumbnailCache : public QObject
 {
@@ -82,16 +59,19 @@ public:
 	~AssetThumbnailCache() override;
 
 	/**
-	 * Points the cache at a project's Data root, the only way from a `.bmaterial` to a scene
-	 * material. The cache builds its own AssetManager over its own scene from it. Empty (the
-	 * default, and what a closed project means) leaves materials unresolvable, so they get no
-	 * thumbnail and every mesh draws in the neutral default.
+	 * Points the cache at the editor's asset manager, which owns the project's Data root and is the
+	 * only route from a `.bmaterial` to a scene material. Null (the default, and what a closed project
+	 * means) leaves materials unresolvable, so they get no thumbnail and every mesh draws in the
+	 * neutral default.
+	 *
+	 * Borrowed, not owned: one manager is shared across the editor so that a material loaded twice is
+	 * one upload and one reference count. It must outlive this cache.
 	 *
 	 * Drops everything already rendered -- the same relative path means a different asset under a
 	 * different root.
 	 */
 	void
-	SetDataRoot(const std::filesystem::path& dataRoot);
+	SetAssets(game::AssetManager* assets);
 
 	// Whether `path` names an asset this cache knows how to draw.
 	[[nodiscard]] static bool
@@ -235,16 +215,11 @@ private:
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;
 
-	// The cache's own context, scene and thread. Null when there is no device.
-	std::unique_ptr<ContextWorker> m_Worker;
-
 	// Turns a `.bmaterial` into a scene material, and owns the textures it names. The editor's only
 	// route to that: the baked/loose branch lives in gamelib and nowhere else.
 	//
-	// The cache's own, over its own scene -- see SetDataRoot. Null until a project is open.
-	// Created and destroyed on the worker thread; DataRoot() reads an immutable member, so the UI
-	// thread may call it.
-	std::unique_ptr<game::AssetManager> m_Assets;
+	// Not owned -- see SetAssets. Null until a project is open.
+	game::AssetManager* m_Assets = nullptr;
 
 	// Live only for the duration of one render.
 	std::vector<bgl::GeomHandle>         m_Geoms;

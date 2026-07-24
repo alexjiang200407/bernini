@@ -47,6 +47,12 @@ namespace bgl
 			return m_ResourceManager.Get();
 		}
 
+		void
+		WaitIdle() noexcept override
+		{
+			m_Context->WaitIdle();
+		}
+
 		SceneRef
 		CreateScene(SceneDesc desc) override
 		{
@@ -59,13 +65,76 @@ namespace bgl
 			return core::SharedRef<SceneView>::Make(scene, maxInstances, m_ResourceManager);
 		}
 
-		RenderContextRef
-		CreateRenderContext() override
+		RenderTargetRef
+		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
-			return core::SharedRef<RenderContext>::Make(
-				m_Device,
-				m_ResourceManager,
-				m_Opts.enableDebugLayer);
+			return m_Context->CreateRenderTarget(desc);
+		}
+
+		void
+		BeginFrame(const RenderTargetRef& target) override
+		{
+			m_Context->BeginFrame(target);
+		}
+
+		void
+		Draw(const RenderJob& job) override
+		{
+			m_Context->Draw(job);
+		}
+
+		void
+		EndFrame() override
+		{
+			m_Context->EndFrame();
+		}
+
+		void
+		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) override
+		{
+			m_Context->Resize(target, width, height);
+		}
+
+		void
+		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) override
+		{
+			m_Context->ScreenshotPng(target, filepath);
+		}
+
+		assetlib::ImageData
+		ScreenshotToMemory(const RenderTargetRef& target) override
+		{
+			return m_Context->ScreenshotToMemory(target);
+		}
+
+		CaptureTicket
+		SubmitCapture(const RenderTargetRef& target) override
+		{
+			return m_Context->SubmitCapture(target);
+		}
+
+		std::optional<assetlib::ImageData>
+		TryResolveCapture(CaptureTicket ticket) override
+		{
+			return m_Context->TryResolveCapture(ticket);
+		}
+
+		void
+		DiscardCapture(CaptureTicket ticket) noexcept override
+		{
+			m_Context->DiscardCapture(ticket);
+		}
+
+		void
+		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept override
+		{
+			m_Context->SetGpuAssertionHandler(handler);
+		}
+
+		void
+		DiscardPendingGpuAssertions() noexcept override
+		{
+			m_Context->DiscardPendingGpuAssertions();
 		}
 
 	private:
@@ -91,6 +160,10 @@ namespace bgl
 		DWORD                         m_MessageCallbackCookie = 0;
 
 		ResourceManagerRef m_ResourceManager;
+
+		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
+		// debug resources through the members above, which must outlive it.
+		std::unique_ptr<RenderContext> m_Context;
 	};
 }
 
@@ -185,12 +258,16 @@ namespace bgl
 
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
+
+		m_Context =
+			std::make_unique<RenderContext>(m_Device, m_ResourceManager, m_Opts.enableDebugLayer);
 	}
 
 	Graphics::~Graphics() noexcept
 	{
 		logger::trace("~Graphics");
 
+		m_Context.reset();
 		m_ResourceManager.Reset();
 		m_Device.Reset();
 

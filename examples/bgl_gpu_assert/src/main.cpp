@@ -27,14 +27,13 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
-		auto ctx      = graphics->CreateRenderContext();
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;
 		targetDesc.height   = opts.height;
 		targetDesc.headless = false;
 		targetDesc.wnd      = wnd.NativeHandle();
-		auto target         = ctx->CreateRenderTarget(targetDesc);
+		auto target         = graphics->CreateRenderTarget(targetDesc);
 
 		auto sceneDesc                    = bgl::SceneDesc();
 		sceneDesc.maxIndices              = 10000;
@@ -71,7 +70,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 			// With BGL_PIXEL_ASSERT_DEMO enabled, the assertion fired here is read back
 			// and crashes a couple of frames later inside a later DrawFrame/BeginFrame.
-			ctx->DrawFrame(target, job);
+			graphics->DrawFrame(target, job);
 		}
 	}
 	catch (const std::runtime_error& e)
