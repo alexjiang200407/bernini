@@ -4,7 +4,7 @@ file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/d3d12/.*")
+list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|webgpu)/.*")
 
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
@@ -15,7 +15,7 @@ file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/d3d12/.*")
+list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|webgpu)/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
@@ -58,11 +58,15 @@ target_link_libraries(bgl_objects
 
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(src/d3d12)
+elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
+	add_subdirectory(src/webgpu)
 endif()
 
 add_dependencies(bgl_objects bgl_idl_generate)
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
+elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
+	add_dependencies(bgl_webgpu bgl_idl_generate)
 endif()
 
 enable_strict_compiler(bgl_objects)
@@ -78,6 +82,12 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_library(bgl SHARED
 		$<TARGET_OBJECTS:bgl_objects>
 		$<TARGET_OBJECTS:bgl_d3d12>
+		${BGL_SHARED_HEADERS}
+	)
+elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
+	add_library(bgl SHARED
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_webgpu>
 		${BGL_SHARED_HEADERS}
 	)
 else()
@@ -120,6 +130,12 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx12-agility CONFIG REQUIRED)
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
+elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
+	# No shaders yet: the backend has no pipelines to compile, and the WGSL cook is a later stage.
+	target_compile_definitions(bgl_webgpu PRIVATE BGL_EXPORTS)
+
+	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_WEBGPU)
+	target_link_libraries(bgl PRIVATE bgl_webgpu)
 endif()
 
 
