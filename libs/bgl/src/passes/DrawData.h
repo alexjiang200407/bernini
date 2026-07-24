@@ -16,12 +16,12 @@ namespace bgl
 		core::SharedRef<ISceneView> view    = nullptr;
 		Viewport                    viewport;
 		glm::mat4                   viewProj{ 1.0f };
+		glm::mat4                   prevViewProj{ 1.0f };
 		idl::CullView               cullView{};
 		glm::vec3                   cameraPos{ 0.0f };
 		RtvHandle                   backBufferHandle;
 		DsvHandle                   depthBufferHandle;
-		std::string                 backBufferName;
-		std::string                 depthBufferName;
+		RtvHandle                   motionVectorHandle;
 		SamplerHandle               anisoLinearWrapSampler;
 		SamplerHandle               linearClampSampler;
 		EnvironmentMap              env;
@@ -29,5 +29,6 @@ namespace bgl
 
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
+		glm::mat4                 skyboxPrevWorldToClip{ 1.0f };
 	};
 }

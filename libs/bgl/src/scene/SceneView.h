@@ -6,6 +6,7 @@
 #include "scene/PackedBuffer.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
+#include "types/ViewMatrices.h"
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
 #include <core/ref/RefCounter.h>
@@ -110,6 +111,17 @@ namespace bgl
 			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_CompactedInstances);
 		}
 
+		/**
+		 * Records `current` as this view's camera for frame `frameCounter` and returns the matrices it
+		 * was drawn with on the previous frame -- what motion vectors reproject through.
+		 *
+		 * Drawing a view twice in one frame reports the same previous-frame matrices to both, rather
+		 * than letting the second draw treat the first as history. The first draw a view ever takes
+		 * reports its own matrices, so nothing starts life with a velocity.
+		 */
+		[[nodiscard]] ViewMatrices
+		AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept;
+
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
@@ -176,5 +188,11 @@ namespace bgl
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
 		float                     m_Exposure = 1.0f;
+
+		// This view's camera now and on the frame before, plus the frame m_PrevCamera last rolled
+		// over on. See AdvanceCamera.
+		ViewMatrices            m_Camera;
+		ViewMatrices            m_PrevCamera;
+		std::optional<uint64_t> m_CameraFrame;
 	};
 }

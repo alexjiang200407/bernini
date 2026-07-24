@@ -146,6 +146,10 @@ namespace bgl
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 
+		// Frames begun by this context, counting up forever. Unrelated to a render target's
+		// FrameIndex, which cycles over the backbuffer ring.
+		uint64_t m_FrameCounter = 0;
+
 		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
 		uint64_t                                                 m_NextCaptureId = 1;
 

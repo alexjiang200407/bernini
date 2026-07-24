@@ -59,7 +59,7 @@ namespace bgl
 
 		// Capacities for the graphics-owned descriptor heaps / resource pools.
 		uint32_t maxCbvSrvUavs      = 1000;
-		uint32_t maxRtvs            = 5;
+		uint32_t maxRtvs            = 8;
 		uint32_t maxDsvs            = 5;
 		uint32_t maxTextures        = 1000;
 		uint32_t maxSamplers        = 128;

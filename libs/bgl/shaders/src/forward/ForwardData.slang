@@ -11,6 +11,10 @@ import types.RangeBuffer;
 public struct ForwardData
 {
     public float4x4 viewProj;
+
+    // Equal to viewProj on the first frame.
+    public float4x4 prevViewProj;
+
     public uint psoIndex;
 
     // Which GPU-side table holds this draw's base into the instance-index list: the opaque path is

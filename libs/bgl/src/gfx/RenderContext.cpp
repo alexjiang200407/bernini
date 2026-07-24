@@ -112,9 +112,6 @@ namespace bgl
 		}
 	}
 
-	// Graph resource name of the active target's backbuffer.
-	constexpr std::string_view c_BackbufferName = "backbuffer";
-
 	RenderContext::RenderContext(
 		DeviceRef          device,
 		ResourceManagerRef resourceManager,
@@ -346,6 +343,7 @@ namespace bgl
 
 		m_FrameGraph.Reset();
 		m_DrawCount = 0;
+		++m_FrameCounter;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
@@ -354,10 +352,17 @@ namespace bgl
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
-		const std::array<ClearPass::ColorTarget, 1> colorTargets{
+		// Resumes the state the graph tracked last frame; the target creates it in render-target.
+		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
+
+		// Zero motion is "this pixel did not move", which is what an untouched pixel should read as.
+		const std::array<ClearPass::ColorTarget, 2> colorTargets{
 			{ { std::string(c_BackbufferName),
 			    rt.BackbufferRtv(index),
-			    { 0.0f, 0.0f, 0.0f, 1.0f } } }
+			    { 0.0f, 0.0f, 0.0f, 1.0f } },
+			  { std::string(c_MotionVectorsName),
+			    rt.GetMotionVectorRtv(),
+			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
 		ClearPass()
 			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, rt.DepthDsv());
@@ -383,6 +388,15 @@ namespace bgl
 		const auto viewport = job.viewport;
 		const auto viewProj = job.camera.GetViewProjection();
 
+		glm::mat4 viewNoTranslation = job.camera.GetView();
+		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+		auto camera                 = ViewMatrices();
+		camera.viewProj             = viewProj;
+		camera.rotationOnlyViewProj = job.camera.GetProjection() * viewNoTranslation;
+
+		const ViewMatrices prevCamera = view_->AdvanceCamera(m_FrameCounter, camera);
+
 		const uint32_t drawIdx = m_DrawCount++;
 
 		m_FrameGraph.SetResourceNamespace(view_->ResourceNamespace());
@@ -390,15 +404,16 @@ namespace bgl
 		scene_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		view_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw              = DrawData();
-		draw.drawIdx           = drawIdx;
-		draw.view              = job.view;
-		draw.viewport          = viewport;
-		draw.viewProj          = viewProj;
-		draw.cullView          = BuildCullView(viewProj);
-		draw.backBufferHandle  = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
-		draw.depthBufferHandle = m_ActiveTarget->DepthDsv();
-		draw.backBufferName    = std::string(c_BackbufferName);
+		auto draw               = DrawData();
+		draw.drawIdx            = drawIdx;
+		draw.view               = job.view;
+		draw.viewport           = viewport;
+		draw.viewProj           = viewProj;
+		draw.prevViewProj       = prevCamera.viewProj;
+		draw.cullView           = BuildCullView(viewProj);
+		draw.backBufferHandle   = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
+		draw.depthBufferHandle  = m_ActiveTarget->DepthDsv();
+		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
 
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);
@@ -409,21 +424,25 @@ namespace bgl
 		draw.exposure = view_->GetExposure();
 		draw.skybox   = view_->GetSkybox();
 
-		glm::mat4 viewNoTranslation = job.camera.GetView();
-		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		glm::mat4 clipToWorld       = glm::inverse(job.camera.GetProjection() * viewNoTranslation);
-
 		if (draw.skybox.has_value())
 		{
+			auto skyRotation = glm::mat4(1.0f);
 			if (draw.skybox->rotationY != 0.0f)
 			{
-				clipToWorld = glm::rotate(
-								  glm::mat4(1.0f),
-								  draw.skybox->rotationY,
-								  glm::vec3(0.0f, 1.0f, 0.0f)) *
-				              clipToWorld;
+				skyRotation = glm::rotate(
+					glm::mat4(1.0f),
+					draw.skybox->rotationY,
+					glm::vec3(0.0f, 1.0f, 0.0f));
 			}
-			draw.skyboxClipToWorld = clipToWorld;
+
+			draw.skyboxClipToWorld = skyRotation * glm::inverse(camera.rotationOnlyViewProj);
+
+			// Undoes the spin the ray direction was baked with before reprojecting, so a rotated
+			// skybox reports the camera's motion and not its own offset. rotationY is authoring
+			// state rather than per-frame animation, so last frame's spin is taken to be this one's.
+			draw.skyboxPrevWorldToClip =
+				prevCamera.rotationOnlyViewProj * glm::inverse(skyRotation);
+
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
 

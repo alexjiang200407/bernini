@@ -23,7 +23,7 @@ in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (backbuffer + depth)"]
+    BF["BeginFrame"] --> CLR["Clear (backbuffer + motion vectors + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
@@ -35,17 +35,42 @@ flowchart TD
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
-`Clear`, `Skybox`, and `Forward` take the imported `backbuffer` texture as a render target;
-`PreparePresent` only transitions it to present; `Compact Instances` and `Transparent Sort` are
-pure compute passes that touch no textures at all. All three read the scene/view buffers imported
+`Clear`, `Skybox`, and `Forward` take the imported `backbuffer` and `motionVectors` textures as
+render targets; `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
+and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
 resource namespace (see [Frame Graph](docs/framegraph.md)).
 
 `DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
-handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection, camera
-position, back/depth handles and names, standard samplers, environment map, exposure, and the
-optional skybox.
+handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection
+(this frame's and the previous frame's), camera position, back/depth/motion-vector handles, standard
+samplers, environment map, exposure, and the optional skybox. The graph resource *names* are not in
+it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` in
+[constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
+passes name them by.
+
+---
+
+## Motion vectors
+
+The forward pass writes a screen-space velocity buffer alongside colour, as MRT slot 1: for each
+pixel, the UV displacement from where its surface sat last frame to where it sits now, so a consumer
+samples history at `uv - motion`. It is `RG16_FLOAT`, owned by the render target beside the depth
+buffer, and cleared to zero each frame — a pixel nothing drew reads as static.
+
+Every instance transform is fixed for its lifetime (there is no `SetTransform`), so the camera is
+the whole of the motion: the mesh shader reprojects one world position through `viewProj` and
+`prevViewProj` and hands the pixel stage both clip positions. A movable — or skinned — instance
+plugs in by substituting its own previous-frame position for the second of those, with no change to
+the pixel stage. `SceneView::AdvanceCamera` is what holds the previous frame's matrices; drawing one
+view twice in a frame reports the same history to both draws rather than letting the second treat
+the first as history.
+
+**The transparent phase writes no velocity** — a blended surface has no single depth to reproject —
+so its PSOs declare one render target and `DrawTransparent` binds a framebuffer without the velocity
+attachment. The skybox does write it, reprojecting the view ray through the previous frame's
+rotation-only view-projection; the sky is at infinity, so a camera translation displaces it nowhere.
 
 ---
 
@@ -70,10 +95,13 @@ culling, so it fills only where nothing has been drawn.
 
 * **No-op** when the view has no skybox (`DrawData::skybox` is empty) — `AttachToFrameGraph` adds
   nothing.
-* **In:** the backbuffer as a render target; samples the skybox cube texture through the view's
-  linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`, `cubeTex`, `sampler`,
-  `exposure`, and `mipLevel`; the constant-buffer name is matched against Slang reflection, so it
-  must track the declaration in `Skybox.slang`.
+* **In:** the backbuffer and the velocity buffer as render targets; samples the skybox cube texture
+  through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,
+  `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, and `mipLevel`; the constant-buffer name is
+  matched against Slang reflection, so it must track the declaration in `Skybox.slang`.
+* `prevWorldToClip` is last frame's rotation-only view-projection with the skybox's own `rotationY`
+  divided back out, so a rotated sky reports the camera's motion and not its own offset. `rotationY`
+  is authoring state, so last frame's spin is taken to be this frame's.
 * Attached per draw, before `Compact Instances` and `Forward`.
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)
@@ -160,8 +188,9 @@ self-occluding transparent PSOs. The amplification and mesh shaders are always t
 `static_assert` catches an empty row but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the `forwardData` and
-`materialData` cbuffers (scene buffers, view-proj, `psoIndex`, samplers, IBL maps, camera position,
-exposure), binds the meshlet state (viewport + color/depth framebuffer), and calls
+`materialData` cbuffers (scene buffers, this frame's and the previous frame's view-proj, `psoIndex`,
+samplers, IBL maps, camera position, exposure), binds the meshlet state (viewport +
+colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
 
@@ -182,11 +211,11 @@ its own.
 Both partitions read their base from `transparentSort.partitionBase`, indexed by `partitionIndex`;
 the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseSource` picks between the two.
 
-* **In:** the backbuffer as a render target; `compactDispatchArgs` and
+* **In:** the backbuffer and the velocity buffer as render targets; `compactDispatchArgs` and
   `transparentSort.partitionDispatchArgs` as indirect args; the ten `c_ForwardDataBuffers` scene
   buffers, `sortedTransparentInstances`, and the two `c_MaterialBuffers` (PBR + loose). Missing a `forwardData` key is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
-* **Out:** the backbuffer (rendered), depth.
+* **Out:** the backbuffer (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
 
 ### PreparePresent — [passes/PreparePresentPass.h](libs/bgl/src/passes/PreparePresentPass.h)
@@ -209,6 +238,12 @@ in `EndFrame`, after all draws.
   mandatory. Dropping it produces wrong prefix sums that surface only in scenes mixing PSO buckets —
   nondeterministic flicker. This is the bug precedent the [Frame Graph](docs/framegraph.md) barrier
   caveat is written from.
+* **A bound framebuffer's colour-attachment count must match the PSO's `rtvFormats` count.** The
+  forward pass now runs three shapes against one depth buffer — opaque (colour + velocity),
+  transparent (colour), and the transparent pre-pass (neither) — and each builds its own
+  `MeshletState`. Handing the opaque framebuffer to a blend PSO binds a render target it does not
+  declare; the reverse leaves a declared target unbound. `PsoConfig::blend` is what decides whether
+  `BuildForwardKernel` adds the velocity format, so the two sides move together.
 * **`c_Psos` (Forward) is coupled to `PsoType` by position.** The rows are ordered to match the
   enum and indexed by it; a reordering is not caught by the `static_assert`, which only rejects an
   empty pixel-shader row.

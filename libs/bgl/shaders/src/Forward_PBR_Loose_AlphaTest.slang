@@ -5,7 +5,10 @@ import idl.LoosePbrMaterial;
 // Unbaked, per-channel "loose" PBR material, cutout. A loose material routes its alpha explicitly
 // (baseColor[3]), so it can always sample a real alpha channel -- see ShadeAlphaTested.
 [shader("pixel")]
-float4 PSMain(ForwardVSOut input) : SV_Target
+ForwardPSOut PSMain(ForwardVSOut input)
 {
-    return ShadeAlphaTested<LoosePbrMaterial>(input);
+    ForwardPSOut output;
+    output.color = ShadeAlphaTested<LoosePbrMaterial>(input);
+    output.motion = ComputeMotionVector(input);
+    return output;
 }
