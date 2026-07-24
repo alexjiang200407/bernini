@@ -208,11 +208,13 @@ namespace bgl
 		return core::SharedRef<CommandAllocator>::Make();
 	}
 
+	// The allocator is unused: a WebGPU encoder owns its own memory, so CommandAllocator is an
+	// empty shell kept only for the RHI's shape.
 	core::SharedRef<ICommandList>
 	Device::CreateCommandList(
-		const CommandListDesc&             desc,
-		core::SharedRef<ICommandAllocator> commandAllocator,
-		core::SharedRef<IResourceManager>  resourceManager) const noexcept
+		const CommandListDesc& desc,
+		core::SharedRef<ICommandAllocator> /*commandAllocator*/,
+		core::SharedRef<IResourceManager> resourceManager) const noexcept
 	{
 		return core::SharedRef<CommandList>::Make(m_Device, desc, std::move(resourceManager));
 	}
