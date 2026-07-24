@@ -90,7 +90,7 @@ disagrees, trust the header, then fix this doc.
 | `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
 | `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
 | `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, and lighting (IBL, skybox, exposure). |
-| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth. |
+| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth and the screen-space velocity buffer. |
 | `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
 
 ### Supporting types
@@ -171,8 +171,8 @@ flowchart TD
   @post the job's scene and view are scheduled for GPU upload as part of *this* frame; content added
   since the last frame becomes visible only once this frame is submitted.
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
-  @throws `GraphicsError` otherwise. Recreates backbuffers and depth, invalidating anything that
-  cached them.
+  @throws `GraphicsError` otherwise. Recreates backbuffers, depth, and the velocity buffer,
+  invalidating anything that cached them.
 * **`SubmitCapture(target)`** — @pre not mid-frame; fewer than `c_MaxPendingCaptures` captures in
   flight. @post returns a ticket that **must** be spent by `TryResolveCapture` or `DiscardCapture`;
   leaking tickets exhausts the slots and the next submit throws. Captures the *last presented*

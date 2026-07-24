@@ -20,8 +20,10 @@ namespace bgl
 		glm::vec3                   cameraPos{ 0.0f };
 		RtvHandle                   backBufferHandle;
 		DsvHandle                   depthBufferHandle;
+		RtvHandle                   motionVectorHandle;
 		std::string                 backBufferName;
 		std::string                 depthBufferName;
+		std::string                 motionVectorName;
 		SamplerHandle               anisoLinearWrapSampler;
 		SamplerHandle               linearClampSampler;
 		EnvironmentMap              env;

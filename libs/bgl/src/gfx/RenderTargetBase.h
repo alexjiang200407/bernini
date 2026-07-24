@@ -65,6 +65,20 @@ namespace bgl
 		DepthDsv() const noexcept = 0;
 
 		/**
+		 * The screen-space velocity buffer the forward pass writes alongside colour: for each pixel,
+		 * the UV displacement from where its surface was last frame to where it is now, so history is
+		 * sampled at `uv - motion`. Cleared to zero, so a pixel nothing drew reads as static.
+		 *
+		 * One texture, not one per frame in flight: a consumer wants this frame's motion, and the
+		 * history it reprojects into is its own resource.
+		 */
+		[[nodiscard]] virtual TextureHandle
+		GetMotionVectorTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual RtvHandle
+		GetMotionVectorRtv() const noexcept = 0;
+
+		/**
 		 * Presents the frame just submitted, then advances to the index the next one records into.
 		 * A headless target presents nothing and advances round-robin; a windowed one takes the
 		 * index back from its swapchain.

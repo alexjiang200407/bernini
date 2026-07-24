@@ -112,8 +112,9 @@ namespace bgl
 		}
 	}
 
-	// Graph resource name of the active target's backbuffer.
-	constexpr std::string_view c_BackbufferName = "backbuffer";
+	// Graph resource names of the active target's backbuffer and velocity buffer.
+	constexpr std::string_view c_BackbufferName    = "backbuffer";
+	constexpr std::string_view c_MotionVectorsName = "motionVectors";
 
 	RenderContext::RenderContext(
 		DeviceRef          device,
@@ -354,10 +355,17 @@ namespace bgl
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
-		const std::array<ClearPass::ColorTarget, 1> colorTargets{
+		// Resumes the state the graph tracked last frame; the target creates it in render-target.
+		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
+
+		// Zero motion is "this pixel did not move", which is what an untouched pixel should read as.
+		const std::array<ClearPass::ColorTarget, 2> colorTargets{
 			{ { std::string(c_BackbufferName),
 			    rt.BackbufferRtv(index),
-			    { 0.0f, 0.0f, 0.0f, 1.0f } } }
+			    { 0.0f, 0.0f, 0.0f, 1.0f } },
+			  { std::string(c_MotionVectorsName),
+			    rt.GetMotionVectorRtv(),
+			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
 		ClearPass()
 			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, rt.DepthDsv());
@@ -390,15 +398,17 @@ namespace bgl
 		scene_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		view_->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw              = DrawData();
-		draw.drawIdx           = drawIdx;
-		draw.view              = job.view;
-		draw.viewport          = viewport;
-		draw.viewProj          = viewProj;
-		draw.cullView          = BuildCullView(viewProj);
-		draw.backBufferHandle  = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
-		draw.depthBufferHandle = m_ActiveTarget->DepthDsv();
-		draw.backBufferName    = std::string(c_BackbufferName);
+		auto draw               = DrawData();
+		draw.drawIdx            = drawIdx;
+		draw.view               = job.view;
+		draw.viewport           = viewport;
+		draw.viewProj           = viewProj;
+		draw.cullView           = BuildCullView(viewProj);
+		draw.backBufferHandle   = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
+		draw.depthBufferHandle  = m_ActiveTarget->DepthDsv();
+		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
+		draw.backBufferName     = std::string(c_BackbufferName);
+		draw.motionVectorName   = std::string(c_MotionVectorsName);
 
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);

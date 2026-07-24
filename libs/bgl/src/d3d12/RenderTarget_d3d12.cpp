@@ -122,27 +122,7 @@ namespace bgl
 			}
 		}
 
-		{
-			auto depthTextureDesc          = TextureDesc();
-			depthTextureDesc.format        = Format::D24S8;
-			depthTextureDesc.width         = static_cast<uint32_t>(m_Width);
-			depthTextureDesc.height        = static_cast<uint32_t>(m_Height);
-			depthTextureDesc.dimension     = TextureDimension::kTexture2D;
-			depthTextureDesc.debugName     = "Depth Buffer";
-			depthTextureDesc.usage         = TextureUsageFlag::kDepthStencil;
-			depthTextureDesc.initialLayout = BarrierLayout::kDepthWrite;
-
-			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
-
-			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
-
-			auto dsvDesc      = DsvDesc();
-			dsvDesc.format    = Format::D24S8;
-			dsvDesc.debugName = "Depth Buffer RTV";
-
-			m_DepthBuffer.dsvHandle =
-				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
-		}
+		CreateDepthAndMotionVectors();
 	}
 
 	void
@@ -171,6 +151,12 @@ namespace bgl
 			}
 		}
 
+		CreateDepthAndMotionVectors();
+	}
+
+	void
+	RenderTarget::CreateDepthAndMotionVectors()
+	{
 		{
 			auto depthTextureDesc          = TextureDesc();
 			depthTextureDesc.format        = Format::D24S8;
@@ -191,6 +177,30 @@ namespace bgl
 
 			m_DepthBuffer.dsvHandle =
 				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
+		}
+
+		{
+			// kSRV as well as kRenderTarget: the buffer exists to be resampled by a later pass.
+			auto motionTextureDesc      = TextureDesc();
+			motionTextureDesc.format    = Format::RG16_FLOAT;
+			motionTextureDesc.width     = static_cast<uint32_t>(m_Width);
+			motionTextureDesc.height    = static_cast<uint32_t>(m_Height);
+			motionTextureDesc.dimension = TextureDimension::kTexture2D;
+			motionTextureDesc.debugName = "Motion Vectors";
+			motionTextureDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			motionTextureDesc.initialLayout = BarrierLayout::kRenderTarget;
+
+			motionTextureDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+			m_MotionVectors.textureHandle = m_ResourceManager->CreateTexture(motionTextureDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = Format::RG16_FLOAT;
+			rtvDesc.debugName = "Motion Vectors RTV";
+
+			m_MotionVectors.rtvHandle =
+				m_ResourceManager->CreateRtv(m_MotionVectors.textureHandle, rtvDesc);
 		}
 	}
 
@@ -261,5 +271,8 @@ namespace bgl
 
 		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, false);
 		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
+
+		m_ResourceManager->DestroyRtv(m_MotionVectors.rtvHandle, false);
+		m_ResourceManager->DestroyTexture(m_MotionVectors.textureHandle, false);
 	}
 }

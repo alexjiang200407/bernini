@@ -121,6 +121,18 @@ namespace bgl
 			return m_DepthBuffer.dsvHandle;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetMotionVectorTexture() const noexcept override
+		{
+			return m_MotionVectors.textureHandle;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetMotionVectorRtv() const noexcept override
+		{
+			return m_MotionVectors.rtvHandle;
+		}
+
 		void
 		PresentAndAdvance() noexcept override;
 
@@ -136,6 +148,9 @@ namespace bgl
 
 		void
 		CreateOffscreenRenderTargets();
+
+		void
+		CreateDepthAndMotionVectors();
 
 		void
 		DestroyRenderTargets();
@@ -156,6 +171,7 @@ namespace bgl
 		UINT             m_LastPresentedIndex = 0;
 		TextureRtvHandle m_BackBuffers[c_SwapchainImageCount];
 		TextureDsvHandle m_DepthBuffer;
+		TextureRtvHandle m_MotionVectors;
 		UINT64           m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
 
 		CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
