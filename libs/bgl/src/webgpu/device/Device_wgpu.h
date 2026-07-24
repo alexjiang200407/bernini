@@ -58,6 +58,13 @@ namespace bgl::wgpu
 			return m_Queue;
 		}
 
+		// Awaiting a future needs the instance: it is what runs the callbacks.
+		WGPUInstance
+		GetInstance() const noexcept
+		{
+			return m_Instance;
+		}
+
 	private:
 		WGPUInstance m_Instance = nullptr;
 		WGPUAdapter  m_Adapter  = nullptr;
