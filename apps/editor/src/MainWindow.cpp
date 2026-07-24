@@ -92,13 +92,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
 		matDesc.previewEnv.exposure   = matSettings["exposure"].GetOrDefault(1.0f);
 
-		auto thumbSettings = settings["thumbnails"];
-		auto thumbDesc     = AssetThumbnailDesc();
-		thumbDesc.renderer = m_Renderer.get();
-
-		// The cache's scene must fit whatever the editor's scene fits -- a thumbnail holds one
-		// asset, but any asset the level can load must be renderable here too.
-		thumbDesc.sceneDesc    = sceneDesc;
+		auto thumbSettings     = settings["thumbnails"];
+		auto thumbDesc         = AssetThumbnailDesc();
+		thumbDesc.renderer     = m_Renderer.get();
 		thumbDesc.dimension    = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.maxInstances = thumbSettings["maxInstances"].GetOrDefault(256u);
 		thumbDesc.skybox       = thumbSettings["skybox"].GetOrDefault(std::string());
@@ -323,6 +319,11 @@ MainWindow::SetActiveProject(Project project)
 
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
+	// A manager resolves every path against one Data root, so a new project needs a new one. The
+	// consumers below borrow it, so it has to be replaced before any of them are told about it.
+	if (m_Thumbnails)
+		m_Thumbnails->SetAssets(nullptr);
+
 	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
 	// thread like any other scene mutation -- the viewports are still drawing at this point.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
@@ -333,11 +334,10 @@ MainWindow::SetActiveProject(Project project)
 	m_Assets =
 		std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetDataDirectory());
 
-	// Point the cache at the new root before the explorer is rooted: rooting it paints tiles, and
-	// each one that misses asks for a render straight away -- a material cannot be resolved
-	// without a data root.
+	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
+	// asks for a render straight away -- a material cannot be resolved without a manager.
 	if (m_Thumbnails)
-		m_Thumbnails->SetDataRoot(m_Project->GetDataDirectory());
+		m_Thumbnails->SetAssets(m_Assets.get());
 
 	m_ContentExplorer->SetRootPath(dataDir);
 

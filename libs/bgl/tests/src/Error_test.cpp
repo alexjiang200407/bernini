@@ -198,43 +198,40 @@ TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-	REQUIRE(ctx != nullptr);
-
-	auto target = ctx->CreateRenderTarget(HeadlessTargetDesc());
+	auto target = gfx->CreateRenderTarget(HeadlessTargetDesc());
 	REQUIRE(target != nullptr);
 
 	SECTION("BeginFrame while a frame is already active throws")
 	{
-		ctx->BeginFrame(target);
-		REQUIRE_THROWS_AS(ctx->BeginFrame(target), bgl::GraphicsError);
+		gfx->BeginFrame(target);
+		REQUIRE_THROWS_AS(gfx->BeginFrame(target), bgl::GraphicsError);
 	}
 
 	SECTION("Draw outside of a frame throws")
 	{
 		auto job = bgl::RenderJob();
 		job.view = nullptr;
-		REQUIRE_THROWS_AS(ctx->Draw(job), bgl::GraphicsError);
+		REQUIRE_THROWS_AS(gfx->Draw(job), bgl::GraphicsError);
 	}
 
 	SECTION("Draw with a null scene throws")
 	{
-		ctx->BeginFrame(target);
+		gfx->BeginFrame(target);
 		auto job = bgl::RenderJob();
 		job.view = nullptr;
-		REQUIRE_THROWS_AS(ctx->Draw(job), bgl::GraphicsError);
+		REQUIRE_THROWS_AS(gfx->Draw(job), bgl::GraphicsError);
 	}
 
 	SECTION("EndFrame without a matching BeginFrame throws")
 	{
-		REQUIRE_THROWS_AS(ctx->EndFrame(), bgl::GraphicsError);
+		REQUIRE_THROWS_AS(gfx->EndFrame(), bgl::GraphicsError);
 	}
 
 	SECTION("ScreenshotPng between BeginFrame and EndFrame throws")
 	{
-		ctx->BeginFrame(target);
+		gfx->BeginFrame(target);
 		REQUIRE_THROWS_AS(
-			ctx->ScreenshotPng(target, "assets/golden/should_not_exist.png"),
+			gfx->ScreenshotPng(target, "assets/golden/should_not_exist.png"),
 			bgl::GraphicsError);
 	}
 }

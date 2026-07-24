@@ -24,7 +24,6 @@ main()
 		gfxOpts.logLevel = bgl::GraphicsOptions::LogLevel::kInfo;
 
 		auto graphics = bgl::CreateGraphics(gfxOpts);
-		auto ctx      = graphics->CreateRenderContext();
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;
@@ -32,14 +31,14 @@ main()
 		targetDesc.headless = false;
 		targetDesc.wnd      = wnd.NativeHandle();
 
-		auto target = ctx->CreateRenderTarget(targetDesc);
+		auto target = graphics->CreateRenderTarget(targetDesc);
 
 		while (!wnd.ShouldClose())
 		{
 			demo::PumpEvents();
 
-			ctx->BeginFrame(target);
-			ctx->EndFrame();
+			graphics->BeginFrame(target);
+			graphics->EndFrame();
 		}
 
 		return 0;

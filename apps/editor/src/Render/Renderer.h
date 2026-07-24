@@ -1,14 +1,12 @@
 #pragma once
 
-#include "Render/invoke.h"
-
 #include <QObject>
+#include <QSemaphore>
+#include <QThread>
 
 #include <bgl/IGraphics.h>
-#include <bgl/IRenderContext.h>
 #include <bgl/IScene.h>
 
-class QThread;
 class QTimer;
 
 /**
@@ -79,14 +77,6 @@ public:
 		return m_Graphics;
 	}
 
-	// The primary submission context: the viewports' render targets are created on it and their
-	// frames recorded through it. Only valid to touch on the render thread.
-	[[nodiscard]] const bgl::RenderContextRef&
-	GetContext() const noexcept
-	{
-		return m_Context;
-	}
-
 	// The owned Scene. Only valid to touch on the render thread (inside a Post/Invoke closure).
 	[[nodiscard]] const bgl::SceneRef&
 	GetScene() const noexcept
@@ -117,14 +107,67 @@ private:
 	std::vector<Viewport> m_Viewports;
 	ViewportId            m_NextViewportId = 1;
 
-	bgl::GraphicsRef      m_Graphics;
-	bgl::RenderContextRef m_Context;
-	bgl::SceneRef         m_Scene;
+	bgl::GraphicsRef m_Graphics;
+	bgl::SceneRef    m_Scene;
 };
 
+/**
+ * A throw inside `fn` comes back to the caller rather than escaping into the render thread's event
+ * loop (where it would terminate) and leaving the semaphore unreleased (deadlocking this wait).
+ * Reference capture is safe: acquire() blocks here until the closure has released, so the captures
+ * outlive it.
+ */
 template <typename Fn>
 std::invoke_result_t<Fn>
 Renderer::Invoke(Fn&& fn)
 {
-	return render::Invoke(*this, std::forward<Fn>(fn));
+	using Result = std::invoke_result_t<Fn>;
+
+	if (OnRenderThread())
+		return std::invoke(std::forward<Fn>(fn));
+
+	QSemaphore         done;
+	std::exception_ptr error;
+	if constexpr (std::is_void_v<Result>)
+	{
+		QMetaObject::invokeMethod(
+			this,
+			[&] {
+				try
+				{
+					std::invoke(fn);
+				}
+				catch (...)
+				{
+					error = std::current_exception();
+				}
+				done.release();
+			},
+			Qt::QueuedConnection);
+		done.acquire();
+		if (error)
+			std::rethrow_exception(error);
+	}
+	else
+	{
+		Result result{};
+		QMetaObject::invokeMethod(
+			this,
+			[&] {
+				try
+				{
+					result = std::invoke(fn);
+				}
+				catch (...)
+				{
+					error = std::current_exception();
+				}
+				done.release();
+			},
+			Qt::QueuedConnection);
+		done.acquire();
+		if (error)
+			std::rethrow_exception(error);
+		return result;
+	}
 }

@@ -27,14 +27,11 @@ TEST_CASE("Geometry", "[geometry][render]")
 	auto resourceManager = gfxBase->GetResourceManagerCpy();
 	REQUIRE(resourceManager != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-	REQUIRE(ctx != nullptr);
-
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(kWidth);
 	targetDesc.height   = static_cast<int>(kHeight);
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto device       = gfxBase->GetDevice();
@@ -74,8 +71,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/cube.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/cube.got.png");
 
 		// Compare against the committed golden (deployed next to the exe under
 		// assets/golden/); on mismatch (or a missing golden) "assets/golden/cube.got.png" is left
@@ -106,8 +103,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/plane.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/plane.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden("assets/golden/plane.exp.png", "assets/golden/plane.got.png"));
@@ -142,11 +139,11 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		REQUIRE_NOTHROW(ctx->DrawFrame(target, job));
+		REQUIRE_NOTHROW(gfx->DrawFrame(target, job));
 
 		// A subdivided plane is the same surface as a flat one, so it must land on the same pixels --
 		// which is what catches a meshlet split that drops or duplicates a triangle.
-		ctx->ScreenshotPng(target, "assets/golden/plane_dense.got.png");
+		gfx->ScreenshotPng(target, "assets/golden/plane_dense.got.png");
 		CHECK(
 			bgl::test::MatchesGolden(
 				"assets/golden/plane.exp.png",
@@ -180,8 +177,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/plane_floor.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/plane_floor.got.png");
 
 		// Visible from above rather than back-face culled to an empty frame: the rotation took the
 		// front face with it, so the winding is right.
@@ -228,8 +225,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/sphere_cube.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/sphere_cube.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -273,12 +270,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 		sphereContext.camera   = camera;
 		sphereContext.viewport = viewport;
 
-		ctx->BeginFrame(target);
-		ctx->Draw(cubeContext);
-		ctx->Draw(sphereContext);
-		ctx->EndFrame();
+		gfx->BeginFrame(target);
+		gfx->Draw(cubeContext);
+		gfx->Draw(sphereContext);
+		gfx->EndFrame();
 
-		ctx->ScreenshotPng(target, "assets/golden/two_scenes_sphere_cube.got.png");
+		gfx->ScreenshotPng(target, "assets/golden/two_scenes_sphere_cube.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -314,8 +311,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/two_cubes.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/two_cubes.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -353,8 +350,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/delete_sphere_cube.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/delete_sphere_cube.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -390,8 +387,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, "assets/golden/delete_two_cubes.got.png");
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/delete_two_cubes.got.png");
 
 		CHECK(
 			bgl::test::MatchesGolden(
@@ -419,17 +416,14 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
 	REQUIRE(gfxBase != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-	REQUIRE(ctx != nullptr);
-
-	// One context driving two independent headless outputs.
+	// One device driving two independent headless outputs.
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(kWidth);
 	targetDesc.height   = static_cast<int>(kHeight);
 	targetDesc.headless = true;
 
-	auto targetA = ctx->CreateRenderTarget(targetDesc);
-	auto targetB = ctx->CreateRenderTarget(targetDesc);
+	auto targetA = gfx->CreateRenderTarget(targetDesc);
+	auto targetB = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(targetA != nullptr);
 	REQUIRE(targetB != nullptr);
 
@@ -478,11 +472,11 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	twoContext.viewport = viewport;
 
 	// Independent frames against each output from the one renderer.
-	ctx->DrawFrame(targetA, cubeContext);
-	ctx->DrawFrame(targetB, twoContext);
+	gfx->DrawFrame(targetA, cubeContext);
+	gfx->DrawFrame(targetB, twoContext);
 
-	ctx->ScreenshotPng(targetA, "assets/golden/two_targets_a.got.png");
-	ctx->ScreenshotPng(targetB, "assets/golden/two_targets_b.got.png");
+	gfx->ScreenshotPng(targetA, "assets/golden/two_targets_a.got.png");
+	gfx->ScreenshotPng(targetB, "assets/golden/two_targets_b.got.png");
 
 	CHECK(
 		bgl::test::MatchesGolden(

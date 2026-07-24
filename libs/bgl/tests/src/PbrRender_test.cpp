@@ -35,16 +35,14 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	DiagAssertionHandler handler;
-	ctx->SetGpuAssertionHandler(&handler);
+	gfx->SetGpuAssertionHandler(&handler);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = 400;
 	targetDesc.height   = 300;
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -86,10 +84,10 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 
 	for (int i = 0; i < 6; ++i)
 	{
-		ctx->DrawFrame(target, job);
+		gfx->DrawFrame(target, job);
 	}
 
-	ctx->ScreenshotPng(target, "assets/golden/pbr_ibl.got.png");
+	gfx->ScreenshotPng(target, "assets/golden/pbr_ibl.got.png");
 
 	CHECK(
 		bgl::test::MatchesGolden("assets/golden/pbr_ibl.exp.png", "assets/golden/pbr_ibl.got.png"));
@@ -116,16 +114,14 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	DiagAssertionHandler handler;
-	ctx->SetGpuAssertionHandler(&handler);
+	gfx->SetGpuAssertionHandler(&handler);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = 400;
 	targetDesc.height   = 300;
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -170,10 +166,10 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 
 	for (int i = 0; i < 6; ++i)
 	{
-		ctx->DrawFrame(target, job);
+		gfx->DrawFrame(target, job);
 	}
 
-	ctx->ScreenshotPng(target, "assets/golden/loose_pbr_ibl.got.png");
+	gfx->ScreenshotPng(target, "assets/golden/loose_pbr_ibl.got.png");
 
 	// Compares against the SAME golden as the PBR case: loose-with-defaults must match PBR-with-defaults.
 	CHECK(

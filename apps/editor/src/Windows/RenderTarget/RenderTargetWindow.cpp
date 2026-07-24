@@ -34,7 +34,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	rtvDesc.headless = false;
 
 	m_RenderTarget = m_Desc.renderer->Invoke(
-		[&] { return m_Desc.renderer->GetContext()->CreateRenderTarget(rtvDesc); });
+		[&] { return m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc); });
 	m_SceneView = m_Desc.renderer->Invoke([&] {
 		return m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
@@ -77,7 +77,7 @@ RenderTargetWindow::DrawFrame()
 	job.view     = m_SceneView;
 	job.viewport = bgl::Viewport(m_RenderWidth, m_RenderHeight);
 
-	m_Desc.renderer->GetContext()->DrawFrame(m_RenderTarget, job);
+	m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
 }
 
 void
@@ -208,7 +208,7 @@ RenderTargetWindow::SyncSize(int w, int h)
 
 	// Blocking, so the size the frame loop reads changes between frames and never mid-frame.
 	m_Desc.renderer->Invoke([&] {
-		m_Desc.renderer->GetContext()->Resize(m_RenderTarget, width, height);
+		m_Desc.renderer->GetGraphics()->Resize(m_RenderTarget, width, height);
 		m_RenderWidth  = width;
 		m_RenderHeight = height;
 	});

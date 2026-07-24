@@ -75,13 +75,11 @@ TEST_CASE(
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
 	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -139,8 +137,8 @@ TEST_CASE(
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, path);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
 	};
 
 	render(true, gotFar);
@@ -170,13 +168,11 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
 	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -219,8 +215,8 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, path);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
 
 		return bgl::test::MeanColor(path, 200, 300, 200, 200).b;
 	};
@@ -253,13 +249,11 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
 	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
-	auto target         = ctx->CreateRenderTarget(targetDesc);
+	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -313,8 +307,8 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, path);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
 	};
 
 	SECTION("plain blend")

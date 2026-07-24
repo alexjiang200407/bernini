@@ -1,5 +1,22 @@
 # Multi-context bgl — implementation plan
 
+> **Reverted (2026-07-24). Kept for the record; do not implement from it.** The plan is sound and
+> S1-S7a shipped, but its premise was not: it spent a large complexity budget to remove a ~700 ms
+> editor stall, and the editor is tooling rather than the product, so that stall is acceptable. Two
+> independent `IGraphics` devices would have isolated the thumbnail cache far more cheaply had the
+> isolation been worth buying at all. `IRenderContext`, `CreateRenderContext` and the thumbnail
+> cache's second context, scene and thread are gone; `IGraphics` drives one context again.
+>
+> **What was kept, because it stands on its own:** the `RenderTarget` frame-ring interface and the
+> RHI-complete frame path (S1's prerequisites, which ended `Graphics`'s `friend` reach into
+> `RenderTarget_d3d12`); the portable core `RenderContext` behind `IGraphics`; the
+> `ResourceManager`'s N-timeline deletion gate and allocation mutex (a background streaming thread
+> will want both); `Scene`-owned texture uploads flushed on the drawing context's list; and S6's
+> split-phase capture. The `RenderContext` → `RenderJob` rename stands too.
+>
+> **S5 is won't-do.** Sharing a `Scene` across contexts is not a question a single-context engine
+> asks.
+
 Implements [the multi-context spec](../specs/multi_context_bgl.md): give bgl N independent submission
 contexts over one device, so a client's blocking work stalls only that client.
 

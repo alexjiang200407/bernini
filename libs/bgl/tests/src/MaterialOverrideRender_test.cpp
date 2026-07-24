@@ -100,14 +100,12 @@ TEST_CASE(
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto ctx = gfx->CreateRenderContext();
-
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
 	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
 
-	auto target = ctx->CreateRenderTarget(targetDesc);
+	auto target = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
 	auto sceneDesc                    = bgl::SceneDesc();
@@ -148,8 +146,8 @@ TEST_CASE(
 		const auto path =
 			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
 
-		ctx->DrawFrame(target, job);
-		ctx->ScreenshotPng(target, path);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
 
 		return path;
 	};

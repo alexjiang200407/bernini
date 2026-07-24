@@ -41,8 +41,8 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 	auto  rm     = gfxBase->GetResourceManagerCpy();
 	auto* device = gfxBase->GetDevice();
 
-	// Two independent timelines registered with the manager. Nothing else registers a queue now
-	// that there is no implicit primary context, so these two are the whole gate.
+	// Two more timelines on top of the context's own, which Graphics registers at construction --
+	// so the gate spans three, and WaitIdle() below is what clears the third.
 	auto queueA = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 	auto queueB = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 	rm->RegisterQueue(queueA.Get());
@@ -59,15 +59,16 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 
 	SECTION("advancing only one queue does not reclaim the slot")
 	{
-		// queueA reaches its gate...
+		// queueA and the context's queue reach their gates...
 		queueA->Flush();
+		gfxBase->WaitIdle();
 		rm->CleanupExpiredResources();
 
 		// ...but queueB has not, so the slot is still gated: a new texture must land elsewhere.
 		const bgl::TextureHandle other = MakeTexture(rm);
 		CHECK(other.slot.index != slot);
 
-		// Now queueB reaches its gate too. Both cleared: the slot returns to the free list.
+		// Now queueB reaches its gate too. All cleared: the slot returns to the free list.
 		queueB->Flush();
 		rm->CleanupExpiredResources();
 
@@ -77,12 +78,13 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 
 	SECTION("a queue that unregisters stops gating the free")
 	{
-		// queueB reaches its gate, then leaves. Unregistering scrubs it from the gate, so the only
-		// remaining timeline is queueA.
+		// queueB reaches its gate, then leaves. Unregistering scrubs it from the gate, so the
+		// remaining timelines are queueA's and the context's.
 		queueB->Flush();
 		rm->UnregisterQueue(queueB.Get());
 
 		queueA->Flush();
+		gfxBase->WaitIdle();
 		rm->CleanupExpiredResources();
 
 		const bgl::TextureHandle recycled = MakeTexture(rm);
