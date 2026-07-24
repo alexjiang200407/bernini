@@ -111,7 +111,7 @@ just format <files...>            # clang-format in place (--check to verify onl
 just idl                          # regenerate the IDL C++ headers and Slang copies
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
-just count                        # count source files and lines by language
+just count                        # count source files and lines by language, tests counted separately
 ```
 
 `just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
