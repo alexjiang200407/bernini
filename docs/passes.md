@@ -44,8 +44,11 @@ resource namespace (see [Frame Graph](docs/framegraph.md)).
 
 `DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection
-(this frame's and the previous frame's), camera position, back/depth/motion-vector handles and names,
-standard samplers, environment map, exposure, and the optional skybox.
+(this frame's and the previous frame's), camera position, back/depth/motion-vector handles, standard
+samplers, environment map, exposure, and the optional skybox. The graph resource *names* are not in
+it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` in
+[constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
+passes name them by.
 
 ---
 

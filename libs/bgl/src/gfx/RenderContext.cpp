@@ -112,10 +112,6 @@ namespace bgl
 		}
 	}
 
-	// Graph resource names of the active target's backbuffer and velocity buffer.
-	constexpr std::string_view c_BackbufferName    = "backbuffer";
-	constexpr std::string_view c_MotionVectorsName = "motionVectors";
-
 	RenderContext::RenderContext(
 		DeviceRef          device,
 		ResourceManagerRef resourceManager,
@@ -418,8 +414,6 @@ namespace bgl
 		draw.backBufferHandle   = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
 		draw.depthBufferHandle  = m_ActiveTarget->DepthDsv();
 		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
-		draw.backBufferName     = std::string(c_BackbufferName);
-		draw.motionVectorName   = std::string(c_MotionVectorsName);
 
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);

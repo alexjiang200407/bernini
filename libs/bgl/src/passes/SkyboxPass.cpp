@@ -1,5 +1,6 @@
 #include "passes/SkyboxPass.h"
 #include "cmd/CommandList.h"
+#include "constants/constants.h"
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
@@ -60,12 +61,12 @@ namespace bgl
 
 		desc.SetName(std::format("Skybox {}", draw.drawIdx))
 			.AddTextureArg(
-				TextureArg{ draw.backBufferName,
+				TextureArg{ std::string(c_BackbufferName),
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget })
 			.AddTextureArg(
-				TextureArg{ draw.motionVectorName,
+				TextureArg{ std::string(c_MotionVectorsName),
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget });

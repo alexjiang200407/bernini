@@ -8,6 +8,11 @@ namespace bgl
 	// per-frame command allocators are all sized to this.
 	constexpr uint32_t c_SwapchainImageCount = 2;
 
+	// Frame Graph resource names for the active render target's own textures. Imported without a
+	// namespace prefix, so every view resolves them.
+	constexpr std::string_view c_BackbufferName    = "backbuffer"sv;
+	constexpr std::string_view c_MotionVectorsName = "motionVectors"sv;
+
 	// Constants shared with the GPU (meshlet caps, instance counting-sort group
 	// sizes, ...) now live in the IDL module bgl/idl/src/Constants.slang and are
 	// generated into idl::c... (see idl/Constants.h). Use those directly.
