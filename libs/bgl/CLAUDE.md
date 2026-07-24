@@ -35,8 +35,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - Implementation files (.h and .cpp) should have a `_wgpu` suffix, mirroring `_d3d12`.
 - Dawn is not built from source: `./src/webgpu/dawn.cmake` downloads its prebuilt per-platform
   release, which ships a CMake package config, and `find_package(Dawn)` yields
-  `dawn::webgpu_dawn`. Set `DAWN_ROOT` (CMake cache or environment variable) to a directory
-  containing `lib/cmake/Dawn` to use an existing install and download nothing.
+  `dawn::webgpu_dawn`.
 - The Dawn archive is chosen by `CMAKE_BUILD_TYPE`, so the backend needs a single-config
   generator. Only MSVC actually requires the match, because its debug and release runtime
   libraries cannot be mixed in one link.
