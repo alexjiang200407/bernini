@@ -126,18 +126,18 @@ namespace bgl
 	}
 
 	ViewMatrices
-	SceneView::AdvanceCamera(uint64_t frameId, const ViewMatrices& current) noexcept
+	SceneView::AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept
 	{
 		if (!m_CameraFrame.has_value())
 		{
 			m_PrevCamera = current;
 		}
-		else if (*m_CameraFrame != frameId)
+		else if (*m_CameraFrame != frameCounter)
 		{
 			m_PrevCamera = m_Camera;
 		}
 
-		m_CameraFrame = frameId;
+		m_CameraFrame = frameCounter;
 		m_Camera      = current;
 
 		return m_PrevCamera;

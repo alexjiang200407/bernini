@@ -347,7 +347,7 @@ namespace bgl
 
 		m_FrameGraph.Reset();
 		m_DrawCount = 0;
-		++m_FrameId;
+		++m_FrameCounter;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
@@ -399,7 +399,7 @@ namespace bgl
 		camera.viewProj             = viewProj;
 		camera.rotationOnlyViewProj = job.camera.GetProjection() * viewNoTranslation;
 
-		const ViewMatrices prevCamera = view_->AdvanceCamera(m_FrameId, camera);
+		const ViewMatrices prevCamera = view_->AdvanceCamera(m_FrameCounter, camera);
 
 		const uint32_t drawIdx = m_DrawCount++;
 

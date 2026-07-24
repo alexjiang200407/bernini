@@ -146,9 +146,9 @@ namespace bgl
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 
-		// Monotonic across every target this context drives; a SceneView uses it only to tell one
-		// frame from the next when rolling its previous-frame camera over.
-		uint64_t m_FrameId = 0;
+		// Frames begun by this context, counting up forever. Unrelated to a render target's
+		// FrameIndex, which cycles over the backbuffer ring.
+		uint64_t m_FrameCounter = 0;
 
 		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
 		uint64_t                                                 m_NextCaptureId = 1;

@@ -12,8 +12,7 @@ public struct ForwardData
 {
     public float4x4 viewProj;
 
-    // Last frame's viewProj for this view, equal to viewProj on the first frame so nothing starts
-    // with a bogus velocity. Geometry is static, so the camera is the whole of the motion.
+    // Equal to viewProj on the first frame.
     public float4x4 prevViewProj;
 
     public uint psoIndex;

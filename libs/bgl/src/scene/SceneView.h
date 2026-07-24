@@ -112,7 +112,7 @@ namespace bgl
 		}
 
 		/**
-		 * Records `current` as this view's camera for frame `frameId` and returns the matrices it
+		 * Records `current` as this view's camera for frame `frameCounter` and returns the matrices it
 		 * was drawn with on the previous frame -- what motion vectors reproject through.
 		 *
 		 * Drawing a view twice in one frame reports the same previous-frame matrices to both, rather
@@ -120,7 +120,7 @@ namespace bgl
 		 * reports its own matrices, so nothing starts life with a velocity.
 		 */
 		[[nodiscard]] ViewMatrices
-		AdvanceCamera(uint64_t frameId, const ViewMatrices& current) noexcept;
+		AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept;
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
