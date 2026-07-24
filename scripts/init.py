@@ -184,6 +184,30 @@ def ensure_just():
         print("note: `just` isn't on PATH in this shell yet -- open a new one.")
 
 
+def ensure_hooks_executable():
+    """Restore the exec bit on the hooks, which git silently skips without it.
+
+    The committed modes are 100755, so a clone gets this right; an archive export or
+    a copy across a filesystem that drops mode bits does not, and the only symptom is
+    a one-line "hook was ignored" hint. No-op on Windows, where chmod does nothing.
+    """
+    hooks_dir = os.path.join(ct.REPO_ROOT, ".githooks")
+    if sys.platform == "win32" or not os.path.isdir(hooks_dir):
+        return
+
+    for name in sorted(os.listdir(hooks_dir)):
+        path = os.path.join(hooks_dir, name)
+        if not os.path.isfile(path) or os.access(path, os.X_OK):
+            continue
+        mode = os.stat(path).st_mode
+        try:
+            os.chmod(path, mode | ((mode & 0o444) >> 2))
+        except OSError as exc:
+            print(f"warning: could not make {name} executable: {exc}", file=sys.stderr)
+        else:
+            print(f"git hooks: made {name} executable")
+
+
 def ensure_hooks():
     """Point git at the committed .githooks directory.
 
@@ -191,6 +215,8 @@ def ensure_hooks():
     opt in once. The prepare-commit-msg hook there attributes commits to the
     morgana-coding-agent bot; see docs/ai-coding.md.
     """
+    ensure_hooks_executable()
+
     hooks_dir = ".githooks"
     try:
         current = subprocess.run(
