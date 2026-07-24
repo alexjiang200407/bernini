@@ -13,7 +13,7 @@ file(GLOB_RECURSE CORE_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/core/*.h
 )
 
-list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/src/(win32|posix)/.*")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/src/(win32|posix|web)/.*")
 
 add_library(core STATIC ${CORE_SOURCES} ${CORE_HEADERS} ${CORE_INTERNAL_HEADERS})
 
@@ -75,8 +75,21 @@ elseif (PLATFORM STREQUAL "MACOS")
     target_sources(core PRIVATE ${POSIX_SOURCES})
 
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${POSIX_SOURCES})
+elseif (PLATFORM STREQUAL "WEB")
+    target_compile_definitions(core PRIVATE PLATFORM_WEB)
+
+    file(GLOB_RECURSE WEB_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/web/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/web/*.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/web/*.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/web/*.hpp
+    )
+
+    target_sources(core PRIVATE ${WEB_SOURCES})
+
+    source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${WEB_SOURCES})
 else()
-    message(FATAL_ERROR "PLATFORM must be WINDOWS or MACOS (got '${PLATFORM}'); core has no platform layer otherwise")
+    message(FATAL_ERROR "PLATFORM must be WINDOWS, MACOS or WEB (got '${PLATFORM}'); core has no platform layer otherwise")
 endif()
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${CORE_SOURCES} ${CORE_INTERNAL_HEADERS})

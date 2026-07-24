@@ -25,6 +25,25 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - CMake: `./src/d3d12/CMakeLists.txt`
 - Verification: Check logs, bgl_tests
 
+## bgl_webgpu
+
+- Backend library built on Dawn (`webgpu.h`). All code that uses the WebGPU API must be located in
+  this subsystem. It does not implement the RHI interfaces yet — today it owns the WebGPU object
+  stack (instance, adapter, device, queue).
+- PCH is `./libs/bgl/src/webgpu/pch.h`. Don't `#include` the headers in here.
+- Doesn't have an include directory, all headers are included.
+- Implementation files (.h and .cpp) should have a `_wgpu` suffix, mirroring `_d3d12`.
+- Dawn is not built from source: `./src/webgpu/dawn.cmake` downloads its prebuilt per-platform
+  release, which ships a CMake package config, and `find_package(Dawn)` yields
+  `dawn::webgpu_dawn`.
+- The Dawn archive is chosen by `CMAKE_BUILD_TYPE`, so the backend needs a single-config
+  generator. Only MSVC actually requires the match, because its debug and release runtime
+  libraries cannot be mixed in one link.
+- Adapter and device requests are asynchronous. Natively they are awaited with
+  `wgpuInstanceWaitAny`, which a browser build cannot do — it must drive them off the event loop.
+- CMake: `./src/webgpu/CMakeLists.txt`
+- Verification: Check logs, bgl_webgpu_tests
+
 ## bgl_tests
 
 - After running bgl_tests always check the log to see the warnings, errors and basic info.

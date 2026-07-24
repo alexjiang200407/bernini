@@ -47,3 +47,102 @@ jobs:
       # build.py locates vcvars via vswhere when config.json is absent, as it is here.
       - name: Build
         run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
+
+  webgpu-macos:
+    name: webgpu (macos-clang, Debug)
+    runs-on: macos-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+
+    steps:
+      # Unlike the compile-only jobs this one runs assetlib_tests, which loads the .glb
+      # meshes; without LFS those are pointer files and every load fails on "Invalid magic".
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ninja
+        run: brew install ninja
+
+      # As on Windows, the preset resolves its toolchain through $env{VCPKG_ROOT}. The macOS
+      # image is not guaranteed to ship vcpkg, so clone it when the runner exports nothing.
+      - name: Point VCPKG_ROOT at a vcpkg
+        run: |
+          set -euo pipefail
+          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "${VCPKG_INSTALLATION_ROOT}" ]; then
+            echo "VCPKG_ROOT=${VCPKG_INSTALLATION_ROOT}" >> "$GITHUB_ENV"
+          else
+            git clone --depth 1 https://github.com/microsoft/vcpkg "${{ github.workspace }}/vcpkg"
+            "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+            echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
+          fi
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-arm64-osx-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-arm64-osx-
+
+      # Restoring the populated tree lets FetchContent skip the download, which has already
+      # failed a run outright when GitHub's release CDN returned 504. dawn.cmake pins the
+      # release and its hashes, so hashing it keys the archive exactly.
+      - name: Cache the Dawn download
+        uses: actions/cache@v4
+        with:
+          path: build/macos-webgpu-debug/_deps
+          key: dawn-arm64-osx-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
+
+      - name: Build
+        run: python scripts/build.py --preset macos-clang-webgpu-debug
+
+      # Unlike the DX12 job this does run its suites: bgl_webgpu_tests brings up a real
+      # device, which is the only thing that proves the backend is wired up rather than
+      # merely compiling.
+      - name: Test
+        run: python scripts/run_tests.py --no-build
+
+  webgpu-windows:
+    name: webgpu (ninja-msvc, Debug)
+    runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Point VCPKG_ROOT at the preinstalled vcpkg
+        shell: pwsh
+        run: |
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-x64-windows-
+
+      # Worth more here than on macOS: MSVC's runtime split forces the debug archive, which is
+      # 202 MB against the 4 MB release one, and that download has already 504'd a run outright.
+      - name: Cache the Dawn download
+        uses: actions/cache@v4
+        with:
+          path: build/ninja-msvc-webgpu-debug/_deps
+          key: dawn-x64-windows-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
+
+      # Compile only, for the same reason as the DX12 job: no GPU on this runner. This
+      # exists to keep the Windows Dawn archive and the preset honest -- they are otherwise
+      # only exercised by hand.
+      - name: Build
+        run: python scripts/build.py --preset windows-ninja-msvc-webgpu-debug
