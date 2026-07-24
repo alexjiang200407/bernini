@@ -110,10 +110,23 @@ object/static lib, glob filters widened to `.*/src/(d3d12|metal|webgpu)/.*`,
 `RENDERER_BACKEND_WEBGPU` compile definition, `CreateGraphics` defined inside the backend.
 `webgpu.h` is the only graphics API included there.
 
-**Dawn is consumed via `FetchContent`, not vcpkg** (Dawn is not in vcpkg; it builds cleanly with
-CMake and `DAWN_FETCH_DEPENDENCIES=ON`), gated on `RENDERER_BACKEND=WEBGPU AND NOT EMSCRIPTEN`.
-Under Emscripten no Dawn build is needed — the backend links `--use-port=emdawnwebgpu`. Pin the
-Dawn revision; first build is heavy, so cache it in CI.
+**Dawn is consumed via `FetchContent`**, gated on `RENDERER_BACKEND=WEBGPU`, with the revision
+pinned in `libs/bgl/src/webgpu/CMakeLists.txt`.
+
+vcpkg *does* have a `dawn` port — this plan originally said it did not — and on paper it is the
+better fit: it would follow the repo's manifest convention, be binary-cached across build dirs,
+and cover Emscripten too (the port fetches the prebuilt `emdawnwebgpu_pkg` and wires
+`--use-port=`, behind the same `dawn::webgpu_dawn` target). **It does not work.** Its
+`001-fix-windows-build.patch` no longer applies to the Dawn tarball it downloads, so extraction
+fails before any compile; this was verified on macOS against every version in the version
+database, including the newest, so pinning cannot dodge it. Re-check the port periodically — if it
+is fixed upstream, switching is a one-line change plus a manifest feature (declare a `webgpu`
+feature depending on `dawn`, select it from the preset with `VCPKG_MANIFEST_FEATURES` so DX12
+builds never pay for it).
+
+The cost of FetchContent is real and worth planning around: Dawn plus its fetched dependencies is
+roughly 3 GB of source **per build directory**, and the first build is minutes of compiling.
+`FETCHCONTENT_SOURCE_DIR_DAWN` points several build dirs at one checkout, and CI should cache it.
 
 ### Geometry: keep meshlets, replace the mesh shader with compute expansion + vertex pulling
 
@@ -371,16 +384,18 @@ Matching `buildPresets` entries follow the existing pattern. Notes:
 
 * The `web-*` presets override `debug`'s `BUILD_TESTS=ON` — Catch2/`bgl_tests` run under the
   **native** WebGPU preset; there is no browser test runner in this plan.
-* `PLATFORM` gains a `WEB` value: `libs/core` currently fatals on anything but
-  `WINDOWS`/`MACOS`; web uses the posix file layer over MEMFS plus an `PLATFORM_WEB` define.
+* `PLATFORM` gains a `WEB` value: `libs/core` currently fatals on anything but `WINDOWS`/`MACOS`.
+  The posix layer turned out **not** to be reusable — `src/posix/` is a macOS layer by another
+  name (`_NSGetExecutablePath`, `dladdr`) — so web gets its own `src/web/`, where both entry
+  points degrade to constants: one wasm module has no library to locate and no executable path.
 * CMake-side, `libs/bgl/CMakeLists.txt` gains the `WEBGPU` arm of every `RENDERER_BACKEND`
   branch (subdirectory, object embedding, compile definition, per-backend tests), the glob
   filters widen to `(d3d12|metal|webgpu)`, and `bgl` becomes `STATIC` when `EMSCRIPTEN` is set.
-  Dawn `FetchContent` lives in the `src/webgpu/CMakeLists.txt` arm, native only.
+  `find_package(Dawn)` lives in the `src/webgpu/CMakeLists.txt` arm and covers both targets.
 * Emscripten's toolchain must be chainloaded *through* vcpkg (as shown) so manifest dependencies
   resolve for `wasm32-emscripten`; `EMSDK` must be exported — `just init` records it in
-  `scripts/config.json` like the other machine paths, and `scripts/build.py` learns to skip the
-  vswhere/vcvars logic for non-Windows presets (the Metal branch has already done this part).
+  `scripts/config.json` like the other machine paths. `scripts/build.py` needs no change:
+  `cmake_tools.needs_msvc_env` already returns false off Windows.
 
 ## 6. Staging and verification
 
