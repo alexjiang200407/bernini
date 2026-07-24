@@ -171,11 +171,11 @@ namespace
 		// screen centre from every camera these tests use, narrow enough to leave the corners empty.
 		// No material: the Null PSO shades flat white and needs no IBL, leaving the velocity output
 		// as the only thing under test.
-		void
+		bgl::MeshInstanceHandle
 		AddQuad()
 		{
 			auto plane = scene->AddPlaneGeom(1, 1, c_QuadExtent * 2.0f, c_QuadExtent * 2.0f);
-			view->CreateStaticMeshInstance(
+			return view->CreateStaticMeshInstance(
 				plane,
 				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }));
 		}
@@ -403,4 +403,76 @@ TEST_CASE("Pixels no geometry covered stay at zero motion", "[motionvectors][ren
 
 	// ...while the centre, which the quad does cover, moved.
 	CHECK(glm::length(centrePixel(motion)) > 1e-2f);
+}
+
+// A surface that was off-screen last frame still has a previous position -- it just is not one the
+// history buffer holds. The velocity must carry the pixel out past the frame edge, because that is
+// the only signal a consumer has that there is nothing to reproject into; a clamped or zeroed
+// vector would read as "this was here all along" and blend against whatever occupied that texel.
+TEST_CASE("Geometry entering the frame reprojects to outside it", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+
+	// Yawed well past the 30-degree half-angle, so the quad is outside the frustum entirely.
+	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(60.0f)));
+	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
+
+	const glm::vec2 motion = centrePixel(fixture.ReadMotionVectors());
+
+	// Where the consumer would go looking for this pixel's history.
+	const glm::vec2 previousUv = glm::vec2(0.5f, 0.5f) - motion;
+
+	INFO("motion = " << motion.x << ", " << motion.y);
+	INFO("previousUv = " << previousUv.x << ", " << previousUv.y);
+
+	CHECK((previousUv.x < 0.0f || previousUv.x > 1.0f));
+}
+
+// The velocity buffer is cleared every frame, so a frame that draws nothing reports nothing. Were
+// it not, the frame after geometry left would still be carrying that geometry's last velocity, and
+// a consumer would reproject the background through it.
+TEST_CASE("Geometry leaving the frame leaves no motion behind", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+
+	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	REQUIRE(glm::length(centrePixel(fixture.ReadMotionVectors())) < 1e-4f);
+
+	// Moving and then turning away: the frame before this one had motion everywhere the quad was.
+	fixture.RenderFrom(cameraAt({ 1.0f, 0.8f, c_CameraZ }));
+	REQUIRE(glm::length(centrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+
+	fixture.RenderFrom(cameraAt({ 1.0f, 0.8f, c_CameraZ }, glm::radians(60.0f)));
+
+	for (const glm::vec2& texel : fixture.ReadMotionVectors())
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// Same guarantee as leaving the frame, reached the other way: the instance is gone rather than
+// merely unseen, so this exercises the erase path instead of the cull. A velocity that outlived
+// its instance would be reprojecting pixels through geometry that no longer exists.
+TEST_CASE("A deleted instance stops contributing motion", "[motionvectors][render]")
+{
+	auto                          fixture = MotionFixture();
+	const bgl::MeshInstanceHandle quad    = fixture.AddQuad();
+
+	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(cameraAt({ 1.0f, 0.8f, c_CameraZ }));
+	REQUIRE(glm::length(centrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+
+	fixture.view->DeleteMeshInstance(quad);
+
+	// The camera keeps moving, so anything still drawing would still be writing velocity.
+	fixture.RenderFrom(cameraAt({ 2.0f, 1.6f, c_CameraZ }));
+
+	for (const glm::vec2& texel : fixture.ReadMotionVectors())
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
 }
