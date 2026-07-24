@@ -3,12 +3,14 @@
 
 namespace assetlib
 {
-	/** The three kinds of asset file a project holds, one file extension each. */
+	/** The kinds of asset file a project holds, one file extension each. */
 	enum class AssetType : uint32_t
 	{
-		kMesh,      // .bmesh
-		kMaterial,  // .bmaterial
-		kTexture,   // .ktx2
+		kMesh,       // .bmesh
+		kMaterial,   // .bmaterial
+		kTexture,    // .ktx2
+		kSkeleton,   // .bskel
+		kAnimation,  // .banim
 	};
 
 	/** Why one asset holds another alive. */
@@ -17,6 +19,8 @@ namespace assetlib
 		kSubmeshMaterial,  // a .bmesh names a .bmaterial
 		kBakedMap,         // a .bmaterial names a map its bake wrote
 		kChannelRoute,     // a .bmaterial routes a channel from a source texture
+		kMeshSkeleton,     // a .bmesh's joint indices address a .bskel
+		kClipSkeleton,     // a .banim's clips were resampled against a .bskel
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
@@ -48,8 +52,8 @@ namespace assetlib
 	assetTypeFromExtension(const std::filesystem::path& path);
 
 	/**
-	 * Who references what, across a whole project: one walk of the data root, reading each mesh's material
-	 * chunk (never its geometry -- see loadMaterialPaths) and each material whole.
+	 * Who references what, across a whole project: one walk of the data root, reading each mesh's and each
+	 * clip set's reference chunks (never their bulk -- see loadMeshRefs) and each material whole.
 	 *
 	 * A snapshot, not a live view. The data root is shared with the user's file manager, so it is rebuilt
 	 * at the point a question is asked rather than cached -- a cached graph would not merely go stale, it
@@ -111,6 +115,7 @@ namespace assetlib
 
 		size_t meshesScanned    = 0;
 		size_t materialsScanned = 0;
+		size_t clipSetsScanned  = 0;
 
 	private:
 		struct Range

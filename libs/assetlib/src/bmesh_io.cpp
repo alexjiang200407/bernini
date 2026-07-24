@@ -1,27 +1,29 @@
 #include <assetlib/bmesh_io.h>
 
+#include <assetlib/banim_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/image_io.h>
 
+#include "chunk_io.h"
 #include "fs_util.h"
 
 #include <core/file/file.h>
-#include <core/io/ByteReader.h>
-#include <core/io/ByteWriter.h>
 
 namespace assetlib
 {
-	using core::io::ByteReader;
-	using core::io::ByteWriter;
-
 	namespace
 	{
 		constexpr uint32_t c_Magic = 0x48534D42u;  // 'B','M','S','H' little-endian
 
 		constexpr uint16_t c_VersionMajor = 3;
-		constexpr uint16_t c_VersionMinor = 0;
-		constexpr size_t   c_ChunkAlign   = 16;
 
-		enum class ChunkId : uint32_t
+		// +1: kSkeletonPath. A chunk is addressed by id and an absent one is not an error, so a v3.0
+		// mesh still reads -- it simply names no skeleton, which is what a static mesh is.
+		constexpr uint16_t c_VersionMinor = 1;
+
+		constexpr std::string_view c_What = "bmesh";
+
+		enum ChunkId : uint32_t
 		{
 			kNodes = 1,
 			kRoots,
@@ -33,196 +35,74 @@ namespace assetlib
 			kVertexData,
 			kIndexData,
 			kStringPool,
-			kMaterialPaths
+			kMaterialPaths,
+			kSkeletonPath
 		};
 
-		struct FileHeader
+		/**
+		 * Joint indices address a bone array, so a mesh carrying them and naming no skeleton is a mesh
+		 * whose vertices point at nothing -- and nothing downstream can tell, because a joint index is
+		 * a bare number. Checked at both ends: at write, so the file is never produced, and at read,
+		 * because a file may not have come from here.
+		 *
+		 * Only one direction. Naming a skeleton without carrying joints is how a static attachment --
+		 * a scabbard, a saddle -- hangs off a bone.
+		 */
+		void
+		requireSkeletonIfSkinned(const BMesh& mesh)
 		{
-			uint32_t magic;
-			uint16_t versionMajor;
-			uint16_t versionMinor;
-			uint8_t  byteOrder;  // 0 == little-endian
-			uint8_t  pad[3];
-			uint32_t chunkCount;
-			uint32_t chunkTableOffset;
-			uint64_t fileSize;
-		};
-
-		static_assert(sizeof(FileHeader) == 32);
-
-		struct ChunkEntry
-		{
-			uint32_t id;
-			uint32_t elementSize;
-			uint64_t offset;
-			uint64_t byteSize;
-		};
-
-		static_assert(sizeof(ChunkEntry) == 24);
-
-		template <typename T>
-		ChunkEntry
-		appendChunk(ByteWriter& writer, ChunkId id, const std::vector<T>& values)
-		{
-			writer.alignTo(c_ChunkAlign);
-
-			ChunkEntry entry{};
-			entry.id          = static_cast<uint32_t>(id);
-			entry.elementSize = static_cast<uint32_t>(sizeof(T));
-			entry.offset      = writer.size();
-			entry.byteSize    = values.size() * sizeof(T);
-			writer.writePodArray(std::span<const T>(values));
-			return entry;
-		}
-
-		template <typename T>
-		std::vector<T>
-		readChunk(std::span<const std::byte> all, const ChunkEntry& entry)
-		{
-			if (entry.elementSize != sizeof(T))
-				throw std::runtime_error("bmesh: chunk element size mismatch");
-			if (entry.byteSize % sizeof(T) != 0)
+			if (isSkinned(mesh) && mesh.skeleton.empty())
 				throw std::runtime_error(
-					"bmesh: chunk byte size is not a multiple of the element size");
-			if (entry.offset + entry.byteSize > all.size())
-				throw std::runtime_error("bmesh: chunk extends past end of stream");
-
-			std::vector<T> out(entry.byteSize / sizeof(T));
-			std::copy_n(
-				all.data() + entry.offset,
-				entry.byteSize,
-				reinterpret_cast<std::byte*>(out.data()));
-			return out;
-		}
-
-		// Material paths are stored as one blob of NUL-terminated strings (one terminator per path).
-		std::vector<char>
-		packStrings(const std::vector<std::string>& strings)
-		{
-			std::vector<char> pool;
-			for (const auto& s : strings)
-			{
-				pool.insert(pool.end(), s.begin(), s.end());
-				pool.push_back('\0');
-			}
-			return pool;
-		}
-
-		std::vector<std::string>
-		unpackStrings(const std::vector<char>& pool)
-		{
-			std::vector<std::string> out;
-			std::string              current;
-			for (const char c : pool)
-			{
-				if (c == '\0')
-				{
-					out.push_back(current);
-					current.clear();
-				}
-				else
-				{
-					current.push_back(c);
-				}
-			}
-			return out;
+					"bmesh: carries joint indices but names no skeleton, so they resolve to nothing"
+					" (bake it with assetlib_cli, which writes the rig alongside the mesh)");
 		}
 	}
 
 	std::vector<std::byte>
 	serialize(const BMesh& mesh)
 	{
-		ByteWriter writer;
-		writer.writePod(FileHeader{});  // placeholder, patched below
+		requireSkeletonIfSkinned(mesh);
 
-		const auto materialPool = packStrings(mesh.materials);
-
-		std::array<ChunkEntry, 11> chunks = {
-			appendChunk(writer, ChunkId::kNodes, mesh.nodes),
-			appendChunk(writer, ChunkId::kRoots, mesh.roots),
-			appendChunk(writer, ChunkId::kMeshes, mesh.meshes),
-			appendChunk(writer, ChunkId::kSubmeshes, mesh.submeshes),
-			appendChunk(writer, ChunkId::kMeshlets, mesh.meshlets),
-			appendChunk(writer, ChunkId::kMeshletVertices, mesh.meshletVertices),
-			appendChunk(writer, ChunkId::kMeshletTriangles, mesh.meshletTriangles),
-			appendChunk(writer, ChunkId::kVertexData, mesh.vertexData),
-			appendChunk(writer, ChunkId::kIndexData, mesh.indexData),
-			appendChunk(writer, ChunkId::kStringPool, mesh.stringPool),
-			appendChunk(writer, ChunkId::kMaterialPaths, materialPool),
-		};
-
-		writer.alignTo(c_ChunkAlign);
-		const auto tableOffset = writer.size();
-		writer.writePodArray(std::span<const ChunkEntry>(chunks));
-
-		FileHeader header{};
-		header.magic            = c_Magic;
-		header.versionMajor     = c_VersionMajor;
-		header.versionMinor     = c_VersionMinor;
-		header.byteOrder        = 0;
-		header.chunkCount       = static_cast<uint32_t>(chunks.size());
-		header.chunkTableOffset = static_cast<uint32_t>(tableOffset);
-		header.fileSize         = writer.size();
-		writer.patchPod(0, header);
-
-		return writer.take();
+		chunk::Writer writer;
+		writer.Add(ChunkId::kNodes, mesh.nodes);
+		writer.Add(ChunkId::kRoots, mesh.roots);
+		writer.Add(ChunkId::kMeshes, mesh.meshes);
+		writer.Add(ChunkId::kSubmeshes, mesh.submeshes);
+		writer.Add(ChunkId::kMeshlets, mesh.meshlets);
+		writer.Add(ChunkId::kMeshletVertices, mesh.meshletVertices);
+		writer.Add(ChunkId::kMeshletTriangles, mesh.meshletTriangles);
+		writer.Add(ChunkId::kVertexData, mesh.vertexData);
+		writer.Add(ChunkId::kIndexData, mesh.indexData);
+		writer.Add(ChunkId::kStringPool, mesh.stringPool);
+		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
+		writer.Add(
+			ChunkId::kSkeletonPath,
+			std::vector<char>(mesh.skeleton.begin(), mesh.skeleton.end()));
+		return writer.Finish(c_Magic, c_VersionMajor, c_VersionMinor);
 	}
 
 	BMesh
 	deserialize(std::span<const std::byte> bytes)
 	{
-		ByteReader reader(bytes);
-		const auto header = reader.readPod<FileHeader>();
-
-		if (header.magic != c_Magic)
-			throw std::runtime_error("bmesh: bad magic");
-		if (header.versionMajor != c_VersionMajor)
-			throw std::runtime_error("bmesh: unsupported major version");
-		if (header.byteOrder != 0)
-			throw std::runtime_error("bmesh: unsupported byte order");
-		if (header.fileSize > bytes.size())
-			throw std::runtime_error("bmesh: stream shorter than declared file size");
-
-		const auto tableBytes = static_cast<size_t>(header.chunkCount) * sizeof(ChunkEntry);
-		if (header.chunkTableOffset + tableBytes > bytes.size())
-			throw std::runtime_error("bmesh: chunk table extends past end of stream");
-
-		reader.seek(header.chunkTableOffset);
-		std::unordered_map<uint32_t, ChunkEntry> table;
-		for (uint32_t i = 0; i < header.chunkCount; ++i)
-		{
-			const auto entry = reader.readPod<ChunkEntry>();
-			table.emplace(entry.id, entry);
-		}
-
-		const auto require = [&](ChunkId id) -> const ChunkEntry& {
-			const auto it = table.find(static_cast<uint32_t>(id));
-			if (it == table.end())
-				throw std::runtime_error("bmesh: missing required chunk");
-			return it->second;
-		};
-		const auto optional = [&](ChunkId id, const ChunkEntry& fallback) -> const ChunkEntry& {
-			const auto it = table.find(static_cast<uint32_t>(id));
-			return it == table.end() ? fallback : it->second;
-		};
-
-		const ChunkEntry empty{};
+		const chunk::Reader reader(bytes, c_Magic, c_VersionMajor, c_What);
 
 		BMesh mesh;
-		mesh.nodes     = readChunk<Node>(bytes, require(ChunkId::kNodes));
-		mesh.meshes    = readChunk<Mesh>(bytes, require(ChunkId::kMeshes));
-		mesh.roots     = readChunk<uint32_t>(bytes, optional(ChunkId::kRoots, empty));
-		mesh.submeshes = readChunk<Submesh>(bytes, optional(ChunkId::kSubmeshes, empty));
-		mesh.meshlets  = readChunk<Meshlet>(bytes, optional(ChunkId::kMeshlets, empty));
-		mesh.meshletVertices =
-			readChunk<uint32_t>(bytes, optional(ChunkId::kMeshletVertices, empty));
-		mesh.meshletTriangles =
-			readChunk<uint8_t>(bytes, optional(ChunkId::kMeshletTriangles, empty));
-		mesh.vertexData = readChunk<std::byte>(bytes, optional(ChunkId::kVertexData, empty));
-		mesh.indexData  = readChunk<std::byte>(bytes, optional(ChunkId::kIndexData, empty));
-		mesh.stringPool = readChunk<char>(bytes, optional(ChunkId::kStringPool, empty));
-		mesh.materials =
-			unpackStrings(readChunk<char>(bytes, optional(ChunkId::kMaterialPaths, empty)));
+		mesh.nodes            = reader.Require<Node>(ChunkId::kNodes);
+		mesh.meshes           = reader.Require<Mesh>(ChunkId::kMeshes);
+		mesh.roots            = reader.Read<uint32_t>(ChunkId::kRoots);
+		mesh.submeshes        = reader.Read<Submesh>(ChunkId::kSubmeshes);
+		mesh.meshlets         = reader.Read<Meshlet>(ChunkId::kMeshlets);
+		mesh.meshletVertices  = reader.Read<uint32_t>(ChunkId::kMeshletVertices);
+		mesh.meshletTriangles = reader.Read<uint8_t>(ChunkId::kMeshletTriangles);
+		mesh.vertexData       = reader.Read<std::byte>(ChunkId::kVertexData);
+		mesh.indexData        = reader.Read<std::byte>(ChunkId::kIndexData);
+		mesh.stringPool       = reader.Read<char>(ChunkId::kStringPool);
+		mesh.materials        = chunk::unpackStrings(reader.Read<char>(ChunkId::kMaterialPaths));
+
+		const auto skeleton = reader.Read<char>(ChunkId::kSkeletonPath);
+		mesh.skeleton.assign(skeleton.begin(), skeleton.end());
+
+		requireSkeletonIfSkinned(mesh);
 		return mesh;
 	}
 
@@ -251,64 +131,30 @@ namespace assetlib
 		return deserialize(bytes);
 	}
 
-	std::vector<std::string>
-	loadMaterialPaths(const std::filesystem::path& path)
+	MeshRefs
+	loadMeshRefs(const std::filesystem::path& path)
 	{
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ifstream in(path, std::ios::binary);
-		if (!in)
-			throw std::runtime_error(fileErrorMessage("bmesh: cannot open file for reading", path));
+		constexpr std::array<uint32_t, 2> c_Wanted = { { ChunkId::kMaterialPaths,
+			                                             ChunkId::kSkeletonPath } };
 
-		std::error_code ec;
-		const auto      fileSize = std::filesystem::file_size(path, ec);
-		if (ec)
-			throw std::runtime_error(fileErrorMessage("bmesh: cannot size file", path));
+		const auto chunks =
+			chunk::readChunksFromFile(path, c_Magic, c_VersionMajor, c_Wanted, c_What);
 
-		// Every offset below comes out of the file, so each is checked against its real size before it is
-		// seeked to: a corrupt chunkCount would otherwise size an allocation.
-		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
-			if (offset + bytes > fileSize)
-				throw std::runtime_error("bmesh: chunk extends past end of file");
+		// Absent, not malformed: both chunks are optional, and a mesh that names neither is exactly
+		// what a static import produces.
+		MeshRefs refs;
+		if (const auto it = chunks.find(ChunkId::kMaterialPaths); it != chunks.end())
+			refs.materials = chunk::unpackStrings(
+				std::span<const char>(
+					reinterpret_cast<const char*>(it->second.data()),
+					it->second.size()));
 
-			in.seekg(static_cast<std::streamoff>(offset));
-			in.read(static_cast<char*>(dst), static_cast<std::streamsize>(bytes));
-			if (!in)
-				throw std::runtime_error(fileErrorMessage("bmesh: failed to read file", path));
-		};
+		if (const auto it = chunks.find(ChunkId::kSkeletonPath); it != chunks.end())
+			refs.skeleton.assign(
+				reinterpret_cast<const char*>(it->second.data()),
+				it->second.size());
 
-		FileHeader header{};
-		readAt(&header, sizeof(header), 0);
-
-		if (header.magic != c_Magic)
-			throw std::runtime_error("bmesh: bad magic");
-		if (header.versionMajor != c_VersionMajor)
-			throw std::runtime_error("bmesh: unsupported major version");
-		if (header.byteOrder != 0)
-			throw std::runtime_error("bmesh: unsupported byte order");
-
-		std::vector<ChunkEntry> table(header.chunkCount);
-		if (!table.empty())
-			readAt(table.data(), table.size() * sizeof(ChunkEntry), header.chunkTableOffset);
-
-		for (const ChunkEntry& entry : table)
-		{
-			if (entry.id != static_cast<uint32_t>(ChunkId::kMaterialPaths))
-				continue;
-
-			if (entry.elementSize != sizeof(char))
-				throw std::runtime_error("bmesh: chunk element size mismatch");
-
-			std::vector<char> pool(entry.byteSize);
-			if (!pool.empty())
-				readAt(pool.data(), pool.size(), entry.offset);
-
-			return unpackStrings(pool);
-		}
-
-		// Absent, not malformed -- deserialize treats the chunk as optional, and a mesh that names no
-		// material is exactly what an import produces.
-		return {};
+		return refs;
 	}
 
 	BMesh
@@ -329,6 +175,18 @@ namespace assetlib
 		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
 
 		return out;
+	}
+
+	bool
+	isSkinned(const BMesh& mesh) noexcept
+	{
+		return std::ranges::any_of(mesh.submeshes, [](const Submesh& submesh) {
+			return std::ranges::any_of(
+				std::span(submesh.layout.attributes.data(), submesh.layout.attributeCount),
+				[](const VertexAttribute& attribute) {
+					return attribute.semantic == VertexSemantic::kJoints0;
+				});
+		});
 	}
 
 	bool
@@ -415,6 +273,18 @@ namespace assetlib
 		}
 	}
 
+	std::string
+	skeletonFileName(std::string_view name)
+	{
+		return std::string(name) + ".bskel";
+	}
+
+	std::string
+	animationFileName(std::string_view name)
+	{
+		return std::string(name) + ".banim";
+	}
+
 	void
 	bake(
 		const imp::BMeshImport&      mesh,
@@ -425,7 +295,25 @@ namespace assetlib
 		createDirectories(outDir);
 
 		writeTextures(mesh, outDir, {}, cancel);
-		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
+
+		BMesh baked = toBMesh(mesh);
+
+		// A baked directory is its own data root, so the rig is named the way a texture is: by file
+		// name alone, relative to the directory the three land in together.
+		if (!mesh.skeleton.bones.empty())
+		{
+			baked.skeleton = skeletonFileName(name);
+			saveSkeleton(mesh.skeleton, outDir / baked.skeleton);
+
+			if (!mesh.animations.clips.empty())
+			{
+				AnimationSet animations = mesh.animations;
+				animations.skeleton     = baked.skeleton;
+				saveAnimations(animations, outDir / animationFileName(name));
+			}
+		}
+
+		save(baked, outDir / (std::string(name) + ".bmesh"));
 	}
 
 	namespace

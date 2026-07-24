@@ -7,6 +7,14 @@
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include <tiny_gltf.h>
 
+// tiny_gltf.h and stb_image.h both put their implementation *outside* their include guard, so any
+// later include of either -- which the headers below make -- would emit a second copy of it.
+#undef TINYGLTF_IMPLEMENTATION
+#undef STB_IMAGE_IMPLEMENTATION
+
+#include "gltf_skin.h"
+#include "gltf_util.h"
+
 #include <meshoptimizer.h>
 
 namespace assetlib
@@ -68,6 +76,105 @@ namespace assetlib
 			             accessor.byteOffset;
 			out.stride = stride;
 			out.components = components;
+			return out;
+		}
+
+		/** A strided view over one vertex attribute of any component type -- JOINTS_0 is not float. */
+		struct RawView
+		{
+			const std::byte* base          = nullptr;
+			size_t           stride        = 0;
+			int              components    = 0;
+			int              componentType = 0;
+			bool             normalized    = false;
+
+			[[nodiscard]] bool
+			present() const noexcept
+			{
+				return base != nullptr;
+			}
+
+			[[nodiscard]] const std::byte*
+			componentAt(size_t index, int component) const noexcept
+			{
+				const auto size = static_cast<size_t>(
+					tinygltf::GetComponentSizeInBytes(static_cast<uint32_t>(componentType)));
+				return base + index * stride + static_cast<size_t>(component) * size;
+			}
+
+			[[nodiscard]] uint32_t
+			uintAt(size_t index, int component) const noexcept
+			{
+				const std::byte* ptr = componentAt(index, component);
+				switch (componentType)
+				{
+				case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+					return std::to_integer<uint8_t>(*ptr);
+				case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+				{
+					uint16_t value = 0;
+					std::memcpy(&value, ptr, sizeof(value));
+					return value;
+				}
+				default:
+				{
+					uint32_t value = 0;
+					std::memcpy(&value, ptr, sizeof(value));
+					return value;
+				}
+				}
+			}
+
+			[[nodiscard]] float
+			floatAt(size_t index, int component) const noexcept
+			{
+				if (componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
+				{
+					float value = 0.0f;
+					std::memcpy(&value, componentAt(index, component), sizeof(value));
+					return value;
+				}
+
+				const auto raw = static_cast<float>(uintAt(index, component));
+				if (!normalized)
+					return raw;
+
+				return componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE ? raw / 255.0f :
+				                                                                raw / 65535.0f;
+			}
+		};
+
+		RawView
+		makeRawView(
+			const tinygltf::Model&     model,
+			const tinygltf::Primitive& primitive,
+			const char*                semantic)
+		{
+			const auto it = primitive.attributes.find(semantic);
+			if (it == primitive.attributes.end())
+				return {};
+
+			const auto& accessor = model.accessors[static_cast<size_t>(it->second)];
+			if (accessor.sparse.isSparse)
+				throw std::runtime_error("bmesh: sparse accessors are not supported");
+			if (accessor.bufferView < 0)
+				return {};
+
+			const auto& view   = model.bufferViews[static_cast<size_t>(accessor.bufferView)];
+			const auto& buffer = model.buffers[static_cast<size_t>(view.buffer)];
+			const int   components =
+				tinygltf::GetNumComponentsInType(static_cast<uint32_t>(accessor.type));
+			const auto componentSize = static_cast<size_t>(
+				tinygltf::GetComponentSizeInBytes(static_cast<uint32_t>(accessor.componentType)));
+
+			RawView out;
+			out.base   = reinterpret_cast<const std::byte*>(buffer.data.data()) + view.byteOffset +
+			             accessor.byteOffset;
+			out.stride = view.byteStride != 0 ? view.byteStride :
+			                                    static_cast<size_t>(components) * componentSize;
+			out.components    = components;
+			out.componentType = accessor.componentType;
+			out.normalized    = accessor.normalized;
 			return out;
 		}
 
@@ -207,11 +314,71 @@ namespace assetlib
 			}
 		}
 
+		/**
+		 * A primitive's skin binding, remapped into bone order and quantized: four `uint16` bone
+		 * indices and four `unorm16` weights per vertex, or nothing at all.
+		 *
+		 * Both attributes or neither: a joint index with no weight skins nothing, and a weight with
+		 * no joint has nothing to skin to.
+		 */
+		void
+		readSkinAttributes(
+			const tinygltf::Model&     model,
+			const tinygltf::Primitive& primitive,
+			size_t                     vertexCount,
+			std::span<const uint32_t>  jointToBone,
+			std::vector<uint16_t>&     joints,
+			std::vector<uint16_t>&     weights)
+		{
+			const RawView jointView  = makeRawView(model, primitive, "JOINTS_0");
+			const RawView weightView = makeRawView(model, primitive, "WEIGHTS_0");
+
+			if (jointToBone.empty() || !jointView.present() || !weightView.present())
+				return;
+
+			if (jointToBone.size() > 0xFFFFu)
+				throw std::runtime_error(
+					"bmesh: a skin of more than 65535 joints is not supported");
+
+			joints.assign(vertexCount * 4, 0);
+			weights.assign(vertexCount * 4, 0);
+
+			for (size_t i = 0; i < vertexCount; ++i)
+			{
+				std::array<float, 4> weight{};
+				float                sum = 0.0f;
+				for (int c = 0; c < 4 && c < weightView.components; ++c)
+				{
+					weight[static_cast<size_t>(c)] = weightView.floatAt(i, c);
+					sum += weight[static_cast<size_t>(c)];
+				}
+
+				for (int c = 0; c < 4; ++c)
+				{
+					const uint32_t joint = c < jointView.components ? jointView.uintAt(i, c) : 0u;
+					if (joint >= jointToBone.size())
+						throw std::runtime_error(
+							"bmesh: a vertex names joint " + std::to_string(joint) +
+							", which the skin does not have");
+
+					joints[i * 4 + static_cast<size_t>(c)] =
+						static_cast<uint16_t>(jointToBone[joint]);
+
+					// Renormalized before quantizing: glTF requires the four to sum to 1 and exporters
+					// drift, which a unorm16 round-trip would then compound.
+					const float share = sum > 0.0f ? weight[static_cast<size_t>(c)] / sum : 0.0f;
+					weights[i * 4 + static_cast<size_t>(c)] = static_cast<uint16_t>(
+						std::lround(std::clamp(share, 0.0f, 1.0f) * 65535.0f));
+				}
+			}
+		}
+
 		void
 		buildSubmesh(
 			BMeshImport&               mesh,
 			const tinygltf::Model&     model,
-			const tinygltf::Primitive& primitive)
+			const tinygltf::Primitive& primitive,
+			std::span<const uint32_t>  jointToBone)
 		{
 			const auto posIt = primitive.attributes.find("POSITION");
 			if (posIt == primitive.attributes.end())
@@ -247,6 +414,10 @@ namespace assetlib
 				  4 },
 			};
 
+			std::vector<uint16_t> joints;
+			std::vector<uint16_t> weights;
+			readSkinAttributes(model, primitive, vertexCount, jointToBone, joints, weights);
+
 			// Build the interleaved layout from the present attributes only.
 			Submesh  submesh{};
 			uint16_t offset = 0;
@@ -259,6 +430,24 @@ namespace assetlib
 					                                                           offset };
 				offset += static_cast<uint16_t>(formatSize(attr.format));
 			}
+
+			if (!joints.empty())
+			{
+				submesh.layout.attributes[submesh.layout.attributeCount++] = {
+					VertexSemantic::kJoints0,
+					VertexFormat::kUint16x4,
+					offset
+				};
+				offset += static_cast<uint16_t>(formatSize(VertexFormat::kUint16x4));
+
+				submesh.layout.attributes[submesh.layout.attributeCount++] = {
+					VertexSemantic::kWeights0,
+					VertexFormat::kUnorm16x4,
+					offset
+				};
+				offset += static_cast<uint16_t>(formatSize(VertexFormat::kUnorm16x4));
+			}
+
 			submesh.layout.stride = offset;
 
 			submesh.vertexByteOffset = static_cast<uint32_t>(mesh.vertexData.size());
@@ -278,6 +467,12 @@ namespace assetlib
 						mesh.vertexData,
 						attr.view.at(i),
 						static_cast<size_t>(attr.components) * sizeof(float));
+				}
+
+				if (!joints.empty())
+				{
+					appendBytes(mesh.vertexData, joints.data() + i * 4, 4 * sizeof(uint16_t));
+					appendBytes(mesh.vertexData, weights.data() + i * 4, 4 * sizeof(uint16_t));
 				}
 			}
 
@@ -340,50 +535,6 @@ namespace assetlib
 			return offset;
 		}
 
-		Transform
-		readTransform(const tinygltf::Node& node) noexcept
-		{
-			Transform transform{ glm::vec3(0.0f),
-				                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-				                 glm::vec3(1.0f) };
-
-			if (node.matrix.size() == 16)
-			{
-				glm::mat4 matrix(1.0f);
-				for (int column = 0; column < 4; ++column)
-					for (int row = 0; row < 4; ++row)
-						matrix[column][row] =
-							static_cast<float>(node.matrix[static_cast<size_t>(column * 4 + row)]);
-
-				transform.translation = glm::vec3(matrix[3]);
-				const glm::vec3 scale(
-					glm::length(glm::vec3(matrix[0])),
-					glm::length(glm::vec3(matrix[1])),
-					glm::length(glm::vec3(matrix[2])));
-				transform.scale = scale;
-
-				const glm::mat3 rotation(
-					glm::vec3(matrix[0]) / scale.x,
-					glm::vec3(matrix[1]) / scale.y,
-					glm::vec3(matrix[2]) / scale.z);
-				transform.rotation = glm::quat_cast(rotation);
-				return transform;
-			}
-
-			if (node.translation.size() == 3)
-				transform.translation =
-					glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-			if (node.rotation.size() == 4)
-				transform.rotation = glm::quat(
-					static_cast<float>(node.rotation[3]),
-					static_cast<float>(node.rotation[0]),
-					static_cast<float>(node.rotation[1]),
-					static_cast<float>(node.rotation[2]));
-			if (node.scale.size() == 3)
-				transform.scale = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-			return transform;
-		}
-
 		void
 		buildNodes(BMeshImport& mesh, const tinygltf::Model& model)
 		{
@@ -400,7 +551,7 @@ namespace assetlib
 			for (size_t i = 0; i < model.nodes.size(); ++i)
 			{
 				const auto& gltfNode         = model.nodes[i];
-				mesh.nodes[i].localTransform = readTransform(gltfNode);
+				mesh.nodes[i].localTransform = readNodeTransform(gltfNode);
 				mesh.nodes[i].nameOffset     = addName(mesh, gltfNode.name);
 				if (gltfNode.mesh >= 0)
 					mesh.nodes[i].mesh = static_cast<uint32_t>(gltfNode.mesh);
@@ -607,7 +758,7 @@ namespace assetlib
 	}
 
 	BMeshImport
-	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel)
+	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel, float sampleRate)
 	{
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;
@@ -618,6 +769,12 @@ namespace assetlib
 		mesh.stringPool.push_back('\0');  // offset 0 == empty string
 
 		buildNodes(mesh, model);
+
+		// Before the submeshes: their JOINTS_0 indices are the skin's joint order, and what they must
+		// come out as is the skeleton's bone order.
+		const SkinImport skin = importSkin(model);
+		mesh.skeleton         = skin.skeleton;
+		mesh.animations       = importAnimations(model, skin, sampleRate);
 
 		for (const auto& gltfMesh : model.meshes)
 		{
@@ -633,7 +790,7 @@ namespace assetlib
 					throw std::runtime_error("bmesh: only triangle primitives are supported");
 
 				const size_t before = mesh.submeshes.size();
-				buildSubmesh(mesh, model, primitive);
+				buildSubmesh(mesh, model, primitive, skin.jointToBone);
 				if (mesh.submeshes.size() == before)
 					continue;  // primitive was skipped (e.g. no positions)
 

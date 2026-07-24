@@ -28,5 +28,12 @@ namespace assetlib
 		std::vector<char>      stringPool;  // NUL-terminated names; offset 0 is the empty string
 
 		std::vector<std::string> materials;
+
+		/**
+		 * The `.bskel` the submeshes' joint indices address, relative to the data root. Empty for a
+		 * static mesh -- and a mesh whose layout carries joints must name one, or its indices mean
+		 * nothing.
+		 */
+		std::string skeleton;
 	};
 }

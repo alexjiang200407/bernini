@@ -1,8 +1,10 @@
 #pragma once
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
 
 namespace assetlib::imp
 {
@@ -29,5 +31,10 @@ namespace assetlib::imp
 		std::vector<char>      stringPool;  // NUL-terminated names; offset 0 is the empty string
 
 		std::vector<ImageData> textures;
+
+		// Empty unless the source carries a skin. The submeshes' joint indices are already expressed
+		// in this skeleton's bone order, which is not the source's joint order.
+		Skeleton     skeleton;
+		AnimationSet animations;
 	};
 }
