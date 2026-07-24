@@ -7,6 +7,14 @@
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include <tiny_gltf.h>
 
+// tiny_gltf.h and stb_image.h both put their implementation *outside* their include guard, so any
+// later include of either -- which the headers below make -- would emit a second copy of it.
+#undef TINYGLTF_IMPLEMENTATION
+#undef STB_IMAGE_IMPLEMENTATION
+
+#include "gltf_skin.h"
+#include "gltf_util.h"
+
 #include <meshoptimizer.h>
 
 namespace assetlib
@@ -259,6 +267,7 @@ namespace assetlib
 					                                                           offset };
 				offset += static_cast<uint16_t>(formatSize(attr.format));
 			}
+
 			submesh.layout.stride = offset;
 
 			submesh.vertexByteOffset = static_cast<uint32_t>(mesh.vertexData.size());
@@ -340,50 +349,6 @@ namespace assetlib
 			return offset;
 		}
 
-		Transform
-		readTransform(const tinygltf::Node& node) noexcept
-		{
-			Transform transform{ glm::vec3(0.0f),
-				                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-				                 glm::vec3(1.0f) };
-
-			if (node.matrix.size() == 16)
-			{
-				glm::mat4 matrix(1.0f);
-				for (int column = 0; column < 4; ++column)
-					for (int row = 0; row < 4; ++row)
-						matrix[column][row] =
-							static_cast<float>(node.matrix[static_cast<size_t>(column * 4 + row)]);
-
-				transform.translation = glm::vec3(matrix[3]);
-				const glm::vec3 scale(
-					glm::length(glm::vec3(matrix[0])),
-					glm::length(glm::vec3(matrix[1])),
-					glm::length(glm::vec3(matrix[2])));
-				transform.scale = scale;
-
-				const glm::mat3 rotation(
-					glm::vec3(matrix[0]) / scale.x,
-					glm::vec3(matrix[1]) / scale.y,
-					glm::vec3(matrix[2]) / scale.z);
-				transform.rotation = glm::quat_cast(rotation);
-				return transform;
-			}
-
-			if (node.translation.size() == 3)
-				transform.translation =
-					glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-			if (node.rotation.size() == 4)
-				transform.rotation = glm::quat(
-					static_cast<float>(node.rotation[3]),
-					static_cast<float>(node.rotation[0]),
-					static_cast<float>(node.rotation[1]),
-					static_cast<float>(node.rotation[2]));
-			if (node.scale.size() == 3)
-				transform.scale = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
-			return transform;
-		}
-
 		void
 		buildNodes(BMeshImport& mesh, const tinygltf::Model& model)
 		{
@@ -400,7 +365,7 @@ namespace assetlib
 			for (size_t i = 0; i < model.nodes.size(); ++i)
 			{
 				const auto& gltfNode         = model.nodes[i];
-				mesh.nodes[i].localTransform = readTransform(gltfNode);
+				mesh.nodes[i].localTransform = readNodeTransform(gltfNode);
 				mesh.nodes[i].nameOffset     = addName(mesh, gltfNode.name);
 				if (gltfNode.mesh >= 0)
 					mesh.nodes[i].mesh = static_cast<uint32_t>(gltfNode.mesh);
@@ -607,7 +572,7 @@ namespace assetlib
 	}
 
 	BMeshImport
-	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel)
+	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel, float sampleRate)
 	{
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;
@@ -618,6 +583,12 @@ namespace assetlib
 		mesh.stringPool.push_back('\0');  // offset 0 == empty string
 
 		buildNodes(mesh, model);
+
+		// Before the submeshes: their JOINTS_0 indices are the skin's joint order, and what they must
+		// come out as is the skeleton's bone order.
+		const SkinImport skin = importSkin(model);
+		mesh.skeleton         = skin.skeleton;
+		mesh.animations       = importAnimations(model, skin, sampleRate);
 
 		for (const auto& gltfMesh : model.meshes)
 		{
