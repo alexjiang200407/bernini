@@ -33,8 +33,13 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - PCH is `./libs/bgl/src/webgpu/pch.h`. Don't `#include` the headers in here.
 - Doesn't have an include directory, all headers are included.
 - Implementation files (.h and .cpp) should have a `_wgpu` suffix, mirroring `_d3d12`.
-- Dawn comes from vcpkg behind the `webgpu` manifest feature, so a DX12 build never builds it. One
-  `dawn::webgpu_dawn` target serves both the native build and the Emscripten one.
+- Dawn is not built from source: `./src/webgpu/dawn.cmake` downloads its prebuilt per-platform
+  release, which ships a CMake package config, and `find_package(Dawn)` yields
+  `dawn::webgpu_dawn`. Set `DAWN_ROOT` (CMake cache or environment variable) to a directory
+  containing `lib/cmake/Dawn` to use an existing install and download nothing.
+- The Dawn archive is chosen by `CMAKE_BUILD_TYPE`, so the backend needs a single-config
+  generator. Only MSVC actually requires the match, because its debug and release runtime
+  libraries cannot be mixed in one link.
 - Adapter and device requests are asynchronous. Natively they are awaited with
   `wgpuInstanceWaitAny`, which a browser build cannot do — it must drive them off the event loop.
 - CMake: `./src/webgpu/CMakeLists.txt`

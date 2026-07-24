@@ -5,6 +5,24 @@
 # costs minutes of compiling. vcpkg's `dawn` port is not an option either -- its
 # 001-fix-windows-build.patch no longer applies to the source it downloads, at every version in
 # the version database.
+#
+# Set DAWN_ROOT (CMake cache variable or environment variable) to the directory holding an existing
+# install -- the one containing lib/cmake/Dawn -- to use that instead and download nothing.
+
+set(DAWN_ROOT "$ENV{DAWN_ROOT}" CACHE PATH "Existing Dawn install to use instead of downloading one")
+
+if(DAWN_ROOT)
+    find_package(Threads REQUIRED)  # dawn::webgpu_dawn's interface links Threads::Threads
+
+    find_package(Dawn CONFIG REQUIRED
+        PATHS "${DAWN_ROOT}"
+        PATH_SUFFIXES lib/cmake/Dawn
+        NO_DEFAULT_PATH
+    )
+
+    message(STATUS "Dawn: using the install at ${DAWN_ROOT}")
+    return()
+endif()
 
 set(DAWN_RELEASE "v20260720.160313")
 set(DAWN_COMMIT  "0bc38adde72b79013536f8ce354b639ae19ae195")
