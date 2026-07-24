@@ -89,6 +89,15 @@ jobs:
           key: vcpkg-arm64-osx-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-arm64-osx-
 
+      # Restoring the populated tree lets FetchContent skip the download, which has already
+      # failed a run outright when GitHub's release CDN returned 504. dawn.cmake pins the
+      # release and its hashes, so hashing it keys the archive exactly.
+      - name: Cache the Dawn download
+        uses: actions/cache@v4
+        with:
+          path: build/macos-webgpu-debug/_deps
+          key: dawn-arm64-osx-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
+
       - name: Build
         run: python scripts/build.py --preset macos-clang-webgpu-debug
 
@@ -124,8 +133,16 @@ jobs:
           key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-x64-windows-
 
+      # Worth more here than on macOS: MSVC's runtime split forces the debug archive, which is
+      # 202 MB against the 4 MB release one, and that download has already 504'd a run outright.
+      - name: Cache the Dawn download
+        uses: actions/cache@v4
+        with:
+          path: build/ninja-msvc-webgpu-debug/_deps
+          key: dawn-x64-windows-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
+
       # Compile only, for the same reason as the DX12 job: no GPU on this runner. This
-      # exists to keep the Windows Dawn archive (the debug one, which MSVC's runtime split
-      # forces) and the preset honest -- they are otherwise only exercised by hand.
+      # exists to keep the Windows Dawn archive and the preset honest -- they are otherwise
+      # only exercised by hand.
       - name: Build
         run: python scripts/build.py --preset windows-ninja-msvc-webgpu-debug
