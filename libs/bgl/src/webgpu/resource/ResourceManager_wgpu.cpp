@@ -48,11 +48,13 @@ namespace bgl
 	BufferHandle
 	ResourceManager::CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept
 	{
-		return CreateStructBuffer(
-			StructBufferDesc{}
-				.SetElementCount(desc.maxCount)
-				.SetIsUav(true)
-				.SetDebugName(desc.debugName));
+		auto structDesc   = StructBufferDesc{}
+		                        .SetElementCount(desc.maxCount)
+		                        .SetIsUav(true)
+		                        .SetDebugName(desc.debugName);
+		structDesc.stride = desc.elementSize;
+
+		return CreateStructBuffer(structDesc);
 	}
 
 	ReadbackBufferHandle
@@ -79,8 +81,10 @@ namespace bgl
 
 		auto lock = std::scoped_lock(m_PoolMutex);
 
-		if (std::ranges::find(m_Queues, queue) == m_Queues.end())
-			m_Queues.push_back(queue);
+		gassert(
+			m_Queues.size() < c_MaxRegisteredQueues,
+			"More than c_MaxRegisteredQueues submission timelines registered");
+		m_Queues.push_back(queue);
 	}
 
 	void

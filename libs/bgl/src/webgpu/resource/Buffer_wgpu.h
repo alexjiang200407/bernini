@@ -38,7 +38,13 @@ namespace bgl
 		[[nodiscard]] uint64_t
 		GetByteSize() const noexcept
 		{
-			return m_ByteSize;
+			return m_Desc.byteSize;
+		}
+
+		[[nodiscard]] const BufferDesc&
+		GetDesc() const noexcept
+		{
+			return m_Desc;
 		}
 
 		[[nodiscard]] bool
@@ -48,7 +54,7 @@ namespace bgl
 		}
 
 	private:
-		WGPUBuffer m_Buffer   = nullptr;
-		uint64_t   m_ByteSize = 0;
+		WGPUBuffer m_Buffer = nullptr;
+		BufferDesc m_Desc;
 	};
 }

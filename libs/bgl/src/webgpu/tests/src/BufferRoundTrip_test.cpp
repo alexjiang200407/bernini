@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "device/Device_wgpu.h"
+#include "resource/Buffer_wgpu.h"
 #include "resource/ResourceManager.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -16,7 +17,7 @@ namespace
 {
 	struct Fixture
 	{
-		core::SharedRef<Device> device  = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
+		core::SharedRef<Device> device  = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 		ResourceManagerRef      manager = device->CreateResourceManager(ResourceManagerDesc{});
 		CommandQueueRef         queue   = device->CreateCommandQueue(QueueType::kGraphics);
 		core::SharedRef<ICommandAllocator> allocator =
@@ -106,4 +107,18 @@ TEST_CASE("A destroyed buffer's handle goes stale immediately", "[wgpu][buffer]"
 	fixture.manager->CleanupExpiredResources();
 
 	REQUIRE_FALSE(fixture.manager->ValidBufferHandle(buffer));
+}
+
+TEST_CASE("A compute buffer carries its element size into a real allocation", "[wgpu][buffer]")
+{
+	auto fixture = Fixture{};
+
+	// Regression guard: CreateComputeBuffer must map elementSize onto the struct buffer's stride,
+	// or byteSize computes to zero and the Buffer constructor trips its zero-size assert.
+	const auto buffer = fixture.manager->CreateComputeBuffer(
+		ComputeBufferDesc{}.SetElement<uint32_t>().SetMaxCount(16).SetDebugName("compute"));
+
+	REQUIRE_FALSE(buffer.IsNull());
+	REQUIRE(fixture.manager->ValidBufferHandle(buffer));
+	REQUIRE(fixture.manager->GetBuffer(buffer).GetByteSize() == 16 * sizeof(uint32_t));
 }

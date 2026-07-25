@@ -1,5 +1,7 @@
 #include "resource/ReadbackBuffer_wgpu.h"
 
+#include <core/math.h>
+
 namespace bgl
 {
 	ReadbackBuffer::ReadbackBuffer(
@@ -14,7 +16,7 @@ namespace bgl
 
 		auto wgpuDesc  = WGPUBufferDescriptor{};
 		wgpuDesc.label = wgpu::ToStringView(desc.debugName);
-		wgpuDesc.size  = (desc.byteSize + 3) & ~uint64_t{ 3 };
+		wgpuDesc.size  = core::align(desc.byteSize, 4);
 		wgpuDesc.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
 
 		m_Buffer = wgpuDeviceCreateBuffer(device, &wgpuDesc);

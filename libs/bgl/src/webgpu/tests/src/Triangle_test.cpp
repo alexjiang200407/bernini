@@ -187,7 +187,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 TEST_CASE("A triangle rasterizes offscreen and reads back", "[wgpu][render]")
 {
-	auto device = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
+	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 
 	const auto pixels = RenderTriangle(*device);
 

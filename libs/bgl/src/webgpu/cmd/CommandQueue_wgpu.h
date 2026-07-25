@@ -7,14 +7,14 @@ namespace bgl
 	/**
 	 * Emulates the RHI's fence timeline on WebGPU, which has no fence object.
 	 *
-	 * Each submission takes the next value off a monotonic counter and registers a
-	 * work-done callback that publishes it; the callbacks land in submission order, so the
-	 * highest published value is the completed one. Polling is not free-running -- WebGPU
-	 * only runs callbacks when the instance is pumped, which is why PollCurrentFenceValue
-	 * processes events rather than just reading the counter.
+	 * Each submission takes the next value off a monotonic counter and keeps the future that
+	 * `wgpuQueueOnSubmittedWorkDone` returns for it. The fence only advances when the CPU waits:
+	 * `wgpuInstanceWaitAny` reports which of those futures have completed, and because the queue
+	 * runs submissions in order, the highest completed value is the completed fence. There is no
+	 * work-done callback to publish it -- the wait's own result is read instead.
 	 *
-	 * WebGPU has one queue per device and orders submissions on it, so the cross-queue waits
-	 * are no-ops here rather than unimplemented: there is no second timeline to wait on.
+	 * WebGPU has one queue per device and orders submissions on it, so the cross-queue waits are
+	 * no-ops here rather than unimplemented: there is no second timeline to wait on.
 	 */
 	class CommandQueue final : public core::RefCounter<ICommandQueue>
 	{
@@ -75,18 +75,14 @@ namespace bgl
 			WGPUFuture future;
 		};
 
-		struct Completion
-		{
-			CommandQueue* queue;
-			uint64_t      value;
-		};
-
-		// Publishes `value` as completed, keeping the counter monotonic.
+		// Advances the completed fence to `value`, never backwards.
 		void
 		Publish(uint64_t value) noexcept;
 
-		[[nodiscard]] std::vector<WGPUFutureWaitInfo>
-		PendingUpTo(uint64_t fenceValue) const noexcept;
+		// Waits (up to `timeoutNs`) on every pending submission at or below `upTo`, publishes the
+		// ones that completed, drops them, and returns the completed fence. A zero timeout polls.
+		uint64_t
+		DrainCompleted(uint64_t upTo, uint64_t timeoutNs) noexcept;
 
 		WGPUInstance m_Instance = nullptr;
 		WGPUQueue    m_Queue    = nullptr;

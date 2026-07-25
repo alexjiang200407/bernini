@@ -7,7 +7,7 @@ using namespace bgl;
 
 TEST_CASE("A WebGPU device can be acquired and reports its adapter", "[wgpu][device]")
 {
-	auto device = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
+	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 
 	SECTION("the device and its queue are live")
 	{
@@ -28,8 +28,8 @@ TEST_CASE("A WebGPU device can be acquired and reports its adapter", "[wgpu][dev
 
 TEST_CASE("Two WebGPU devices can be alive at once", "[wgpu][device]")
 {
-	auto first  = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
-	auto second = core::SharedRef<Device>::Make(wgpu::DeviceDesc{});
+	auto first  = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+	auto second = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 
 	REQUIRE(first->GetHandle() != second->GetHandle());
 }

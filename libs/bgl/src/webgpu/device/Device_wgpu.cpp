@@ -25,7 +25,7 @@ namespace bgl
 		}
 
 		WGPUAdapter
-		RequestAdapter(WGPUInstance instance, const wgpu::DeviceDesc& desc)
+		RequestAdapter(WGPUInstance instance, const WgpuDeviceDesc& desc)
 		{
 			auto opts            = WGPURequestAdapterOptions{};
 			opts.powerPreference = desc.powerPreference;
@@ -59,14 +59,14 @@ namespace bgl
 			return result.adapter;
 		}
 
-		wgpu::AdapterInfo
+		WgpuAdapterInfo
 		ReadAdapterInfo(WGPUAdapter adapter)
 		{
 			auto raw = WGPUAdapterInfo{};
 			if (wgpuAdapterGetInfo(adapter, &raw) != WGPUStatus_Success)
 				throw GraphicsError("wgpu: could not read adapter info");
 
-			auto info         = wgpu::AdapterInfo{};
+			auto info         = WgpuAdapterInfo{};
 			info.vendor       = wgpu::ToString(raw.vendor);
 			info.architecture = wgpu::ToString(raw.architecture);
 			info.device       = wgpu::ToString(raw.device);
@@ -155,7 +155,7 @@ namespace bgl
 		}
 	}
 
-	Device::Device(const wgpu::DeviceDesc& desc)
+	Device::Device(const WgpuDeviceDesc& desc)
 	{
 		// Blocking on a future is opt-in: without TimedWaitAny, wgpuInstanceWaitAny rejects any
 		// non-zero timeout. A browser has no such feature and must poll instead.

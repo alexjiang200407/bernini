@@ -4,23 +4,23 @@
 
 namespace bgl
 {
-	namespace wgpu
+	struct WgpuAdapterInfo
 	{
-		struct AdapterInfo
-		{
-			std::string     vendor;
-			std::string     architecture;
-			std::string     device;
-			std::string     description;
-			WGPUBackendType backendType = WGPUBackendType_Undefined;
-			WGPUAdapterType adapterType = WGPUAdapterType_Unknown;
-		};
+		std::string     vendor;
+		std::string     architecture;
+		std::string     device;
+		std::string     description;
+		WGPUBackendType backendType = WGPUBackendType_Undefined;
+		WGPUAdapterType adapterType = WGPUAdapterType_Unknown;
+	};
 
-		struct DeviceDesc
-		{
-			WGPUPowerPreference powerPreference = WGPUPowerPreference_HighPerformance;
-		};
-	}
+	// The only adapter knob today. Once CreateGraphics drives device creation (W3), a
+	// user-facing power preference belongs in GraphicsOptions -- a cross-backend concept D3D12
+	// expresses through DXGI_GPU_PREFERENCE -- and this collapses into it.
+	struct WgpuDeviceDesc
+	{
+		WGPUPowerPreference powerPreference = WGPUPowerPreference_HighPerformance;
+	};
 
 	/**
 	 * The RHI device, and the owner of the WebGPU object stack it is built on -- instance,
@@ -38,7 +38,7 @@ namespace bgl
 	{
 	public:
 		/** @throws GraphicsError if no adapter or device could be acquired. */
-		explicit Device(const wgpu::DeviceDesc& desc);
+		explicit Device(const WgpuDeviceDesc& desc);
 
 		~Device() noexcept override;
 
@@ -51,7 +51,7 @@ namespace bgl
 		Device&
 		operator=(Device&&) noexcept = delete;
 
-		[[nodiscard]] const wgpu::AdapterInfo&
+		[[nodiscard]] const WgpuAdapterInfo&
 		GetAdapterInfo() const noexcept
 		{
 			return m_AdapterInfo;
@@ -121,6 +121,6 @@ namespace bgl
 		WGPUDevice   m_Device   = nullptr;
 		WGPUQueue    m_Queue    = nullptr;
 
-		wgpu::AdapterInfo m_AdapterInfo;
+		WgpuAdapterInfo m_AdapterInfo;
 	};
 }

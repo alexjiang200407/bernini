@@ -5,6 +5,8 @@
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
 
+#include <core/math.h>
+
 namespace bgl
 {
 	CommandList::CommandList(
@@ -89,7 +91,7 @@ namespace bgl
 
 		gassert(gpuBufferOffset % 4 == 0, "WriteBuffer: the destination offset must be 4-aligned");
 
-		auto padded = std::vector<std::byte>((byteSize + 3) & ~size_t{ 3 });
+		auto padded = std::vector<std::byte>(core::align(byteSize, 4));
 		std::memcpy(padded.data(), data, byteSize);
 
 		wgpuQueueWriteBuffer(

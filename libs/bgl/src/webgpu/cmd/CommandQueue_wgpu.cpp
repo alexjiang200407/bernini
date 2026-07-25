@@ -42,17 +42,11 @@ namespace bgl
 
 		const auto value = m_NextFenceValue.fetch_add(1, std::memory_order_relaxed);
 
-		// Outlives this call, and is freed by the callback.
-		auto* payload = new Completion{ this, value };
-
-		auto info      = WGPUQueueWorkDoneCallbackInfo{};
-		info.mode      = WGPUCallbackMode_WaitAnyOnly;
-		info.userdata1 = payload;
-		info.callback  = [](WGPUQueueWorkDoneStatus, WGPUStringView, void* userdata, void*) {
-			auto* completion = static_cast<Completion*>(userdata);
-			completion->queue->Publish(completion->value);
-			delete completion;
-		};
+		// A no-op callback: the completion is read from wgpuInstanceWaitAny's result, not from here.
+		// WaitAnyOnly is still required so the future is one WaitAny can report on.
+		auto info     = WGPUQueueWorkDoneCallbackInfo{};
+		info.mode     = WGPUCallbackMode_WaitAnyOnly;
+		info.callback = [](WGPUQueueWorkDoneStatus, WGPUStringView, void*, void*) {};
 
 		const auto future = wgpuQueueOnSubmittedWorkDone(m_Queue, info);
 
@@ -64,29 +58,35 @@ namespace bgl
 		return value;
 	}
 
-	std::vector<WGPUFutureWaitInfo>
-	CommandQueue::PendingUpTo(uint64_t fenceValue) const noexcept
+	uint64_t
+	CommandQueue::DrainCompleted(uint64_t upTo, uint64_t timeoutNs) noexcept
 	{
-		auto waits = std::vector<WGPUFutureWaitInfo>();
-		auto lock  = std::scoped_lock(m_PendingMutex);
+		auto values = std::vector<uint64_t>();
+		auto waits  = std::vector<WGPUFutureWaitInfo>();
 
-		for (const auto& submission : m_Pending)
 		{
-			if (submission.value <= fenceValue)
-				waits.push_back(WGPUFutureWaitInfo{ submission.future, 0 });
+			auto lock = std::scoped_lock(m_PendingMutex);
+			for (const Submission& submission : m_Pending)
+			{
+				if (submission.value <= upTo)
+				{
+					values.push_back(submission.value);
+					waits.push_back(WGPUFutureWaitInfo{ submission.future, 0 });
+				}
+			}
 		}
 
-		return waits;
-	}
-
-	uint64_t
-	CommandQueue::PollCurrentFenceValue() noexcept
-	{
-		// A WaitAnyOnly callback only runs inside WaitAny, so a zero timeout is how this
-		// timeline is polled: it retires whatever is already done and returns immediately.
-		auto waits = PendingUpTo(UINT64_MAX);
+		// WaitAny flips `completed` on each future that finished; a zero timeout makes this a poll.
 		if (!waits.empty())
-			wgpuInstanceWaitAny(m_Instance, waits.size(), waits.data(), 0);
+		{
+			wgpuInstanceWaitAny(m_Instance, waits.size(), waits.data(), timeoutNs);
+
+			for (size_t i = 0; i < waits.size(); ++i)
+			{
+				if (waits[i].completed)
+					Publish(values[i]);
+			}
+		}
 
 		const auto completed = m_LastCompletedFence.load(std::memory_order_relaxed);
 
@@ -96,13 +96,19 @@ namespace bgl
 		return completed;
 	}
 
+	uint64_t
+	CommandQueue::PollCurrentFenceValue() noexcept
+	{
+		return DrainCompleted(UINT64_MAX, 0);
+	}
+
 	bool
 	CommandQueue::IsFenceComplete(uint64_t fenceValue) noexcept
 	{
-		if (m_LastCompletedFence.load(std::memory_order_relaxed) >= fenceValue)
-			return true;
+		if (fenceValue > m_LastCompletedFence.load(std::memory_order_relaxed))
+			return fenceValue <= PollCurrentFenceValue();
 
-		return PollCurrentFenceValue() >= fenceValue;
+		return true;
 	}
 
 	uint64_t
@@ -120,35 +126,47 @@ namespace bgl
 	void
 	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept
 	{
-		while (m_LastCompletedFence.load(std::memory_order_relaxed) < fenceValue)
+		// D3D12 blocks on a fence event once; WebGPU has no such primitive, so this loops:
+		// wgpuInstanceWaitAny returns as soon as *any* future completes, so it may take several
+		// waits to reach the requested value.
+		while (fenceValue > m_LastCompletedFence.load(std::memory_order_relaxed))
 		{
-			auto waits = PendingUpTo(fenceValue);
-			if (waits.empty())
+			bool anyPending;
 			{
-				// Nothing outstanding at or below the value: it was either never submitted or
-				// its callback has already run. Blocking further would never return.
+				auto lock  = std::scoped_lock(m_PendingMutex);
+				anyPending = std::ranges::any_of(m_Pending, [fenceValue](const Submission& s) {
+					return s.value <= fenceValue;
+				});
+			}
+
+			// Nothing outstanding at or below the value: it was never submitted, or already drained.
+			// Blocking further would never return, so treat the value as reached.
+			if (!anyPending)
+			{
 				Publish(fenceValue);
 				return;
 			}
 
-			// Returns as soon as *one* future completes, so the loop is what drains the rest.
-			wgpuInstanceWaitAny(m_Instance, waits.size(), waits.data(), UINT64_MAX);
-
-			(void)PollCurrentFenceValue();
+			DrainCompleted(fenceValue, UINT64_MAX);
 		}
 	}
 
 	void
 	CommandQueue::Flush() noexcept
 	{
+		// D3D12 signals a fresh fence past all submitted work and waits for it. WebGPU has no
+		// standalone signal -- a future exists only per submission -- so this waits for the last
+		// value ExecuteCommandList handed out instead, which is the same "all submitted work done".
 		WaitForFenceCPUBlocking(m_NextFenceValue.load(std::memory_order_relaxed) - 1);
 	}
 
+	// The cross-queue waits stay no-ops rather than gfatal: WebGPU has a single ordered queue, so a
+	// GPU-side wait on this timeline is already satisfied, and there is no other timeline to wait on.
+	// A gfatal would turn a benign call from backend-agnostic scheduling code into a crash.
+
 	void
 	CommandQueue::InsertWait(uint64_t) noexcept
-	{
-		// One queue, and WebGPU orders submissions on it: there is no timeline to wait on.
-	}
+	{}
 
 	void
 	CommandQueue::InsertWaitForQueueFence(ICommandQueue*, uint64_t) const noexcept
