@@ -1,4 +1,5 @@
 #pragma once
+#include <core/err/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 
@@ -81,12 +82,6 @@ namespace assetlib::chunk
 			uint16_t                   versionMajor,
 			std::string_view           what);
 
-		[[nodiscard]] uint16_t
-		VersionMinor() const noexcept
-		{
-			return m_VersionMinor;
-		}
-
 		/** The chunk's elements, or an empty vector when the container does not carry it. */
 		template <typename T>
 		[[nodiscard]] std::vector<T>
@@ -103,7 +98,7 @@ namespace assetlib::chunk
 		{
 			const auto it = m_Table.find(id);
 			if (it == m_Table.end())
-				throw std::runtime_error(std::string(m_What) + ": missing required chunk");
+				core::throw_runtime_error("{}: missing required chunk", m_What);
 			return ReadEntry<T>(it->second);
 		}
 
@@ -128,7 +123,6 @@ namespace assetlib::chunk
 		std::span<const std::byte>          m_Bytes;
 		std::unordered_map<uint32_t, Entry> m_Table;
 		std::string_view                    m_What;
-		uint16_t                            m_VersionMinor = 0;
 	};
 
 	/**

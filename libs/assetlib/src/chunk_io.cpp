@@ -2,8 +2,11 @@
 
 #include "fs_util.h"
 
+#include <core/err/util.h>
+
 namespace assetlib::chunk
 {
+	using core::throw_runtime_error;
 	using core::io::ByteReader;
 
 	std::vector<std::byte>
@@ -35,14 +38,12 @@ namespace assetlib::chunk
 			uint16_t         versionMajor,
 			std::string_view what)
 		{
-			const std::string prefix(what);
-
 			if (header.magic != magic)
-				throw std::runtime_error(prefix + ": bad magic");
+				throw_runtime_error("{}: bad magic", what);
 			if (header.versionMajor != versionMajor)
-				throw std::runtime_error(prefix + ": unsupported major version");
+				throw_runtime_error("{}: unsupported major version", what);
 			if (header.byteOrder != 0)
-				throw std::runtime_error(prefix + ": unsupported byte order");
+				throw_runtime_error("{}: unsupported byte order", what);
 		}
 	}
 
@@ -57,13 +58,12 @@ namespace assetlib::chunk
 
 		checkHeader(header, magic, versionMajor, what);
 
-		const std::string prefix(what);
 		if (header.fileSize > bytes.size())
-			throw std::runtime_error(prefix + ": stream shorter than declared file size");
+			throw_runtime_error("{}: stream shorter than declared file size", what);
 
 		const auto tableBytes = static_cast<size_t>(header.chunkCount) * sizeof(Entry);
 		if (header.chunkTableOffset + tableBytes > bytes.size())
-			throw std::runtime_error(prefix + ": chunk table extends past end of stream");
+			throw_runtime_error("{}: chunk table extends past end of stream", what);
 
 		reader.Seek(header.chunkTableOffset);
 		for (uint32_t i = 0; i < header.chunkCount; ++i)
@@ -71,22 +71,19 @@ namespace assetlib::chunk
 			const auto entry = reader.ReadPod<Entry>();
 			m_Table.emplace(entry.id, entry);
 		}
-
-		m_VersionMinor = header.versionMinor;
 	}
 
 	void
 	Reader::CheckEntry(const Entry& entry, size_t elementSize) const
 	{
-		const std::string prefix(m_What);
-
 		if (entry.elementSize != elementSize)
-			throw std::runtime_error(prefix + ": chunk element size mismatch");
+			throw_runtime_error("{}: chunk element size mismatch", m_What);
 		if (entry.byteSize % elementSize != 0)
-			throw std::runtime_error(
-				prefix + ": chunk byte size is not a multiple of the element size");
+			throw_runtime_error(
+				"{}: chunk byte size is not a multiple of the element size",
+				m_What);
 		if (entry.offset + entry.byteSize > m_Bytes.size())
-			throw std::runtime_error(prefix + ": chunk extends past end of stream");
+			throw_runtime_error("{}: chunk extends past end of stream", m_What);
 	}
 
 	std::unordered_map<uint32_t, std::vector<std::byte>>
@@ -115,7 +112,7 @@ namespace assetlib::chunk
 		// seeked to: a corrupt chunkCount would otherwise size an allocation.
 		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
 			if (offset + bytes > fileSize)
-				throw std::runtime_error(prefix + ": chunk extends past end of file");
+				throw_runtime_error("{}: chunk extends past end of file", what);
 
 			in.seekg(static_cast<std::streamoff>(offset));
 			in.read(static_cast<char*>(dst), static_cast<std::streamsize>(bytes));

@@ -17,5 +17,7 @@ namespace assetlib
 		constexpr uint32_t c_BEnv      = 0x564E4542u;  // 'B','E','N','V'
 		constexpr uint32_t c_BSky      = 0x594B5342u;  // 'B','S','K','Y'
 		constexpr uint32_t c_BEnvL     = 0x4C4E4542u;  // 'B','E','N','L'
+		constexpr uint32_t c_BSkel     = 0x4C4B5342u;  // 'B','S','K','L'
+		constexpr uint32_t c_BAnim     = 0x4D4E4142u;  // 'B','A','N','M'
 	}
 }

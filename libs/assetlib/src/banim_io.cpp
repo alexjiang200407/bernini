@@ -5,13 +5,19 @@
 #include "chunk_io.h"
 #include "fs_util.h"
 
+#include <assetlib_structs/magic.h>
+#include <core/err/util.h>
+
 #include <core/file/file.h>
 
 namespace assetlib
 {
+	using core::throw_runtime_error;
+
 	namespace
 	{
-		constexpr uint32_t c_Magic = 0x4D4E4142u;  // 'B','A','N','M' little-endian
+
+		constexpr uint32_t c_Magic = magic::c_BAnim;
 
 		constexpr uint16_t c_VersionMajor = 1;
 		constexpr uint16_t c_VersionMinor = 0;
@@ -56,13 +62,13 @@ namespace assetlib
 				return;
 
 			if (bytes.size() < sizeof(SkeletonRef))
-				throw std::runtime_error("banim: the skeleton reference chunk is truncated");
+				throw_runtime_error("banim: the skeleton reference chunk is truncated");
 
 			SkeletonRef ref{};
 			std::memcpy(&ref, bytes.data(), sizeof(ref));
 
 			if (sizeof(ref) + ref.pathLength > bytes.size())
-				throw std::runtime_error("banim: the skeleton path runs past its chunk");
+				throw_runtime_error("banim: the skeleton path runs past its chunk");
 
 			animations.skeletonSignature = ref.signature;
 			animations.boneCount         = ref.boneCount;
