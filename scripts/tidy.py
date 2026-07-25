@@ -165,6 +165,28 @@ OBJECT_AND_SOURCE = [
 ]
 
 
+def macos_sysroot():
+    """`-isysroot <sdk>` for macOS, or "" everywhere else.
+
+    Apple's clang finds the SDK implicitly, so CMake's commands carry no -isysroot
+    and Homebrew's clang-tidy then cannot find <algorithm>. It does not fail
+    cleanly: the parse collapses and the naming check reports whatever survived, so
+    a free function comes back as a global variable wanting a g_ prefix. Passing
+    the SDK explicitly is what keeps that from depending on who exported SDKROOT --
+    Apple's /usr/bin/python3 does, a Homebrew one does not.
+    """
+    if sys.platform != "darwin":
+        return ""
+    sdk = os.environ.get("SDKROOT")
+    if not sdk or not os.path.isdir(sdk):
+        try:
+            sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True,
+                                 text=True, check=True).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    return f' -isysroot "{sdk}"' if sdk else ""
+
+
 def subsystem_of(path):
     """Nearest ancestor holding a CMakeLists.txt -- the target that would compile this."""
     directory = os.path.dirname(os.path.abspath(path))
@@ -270,6 +292,8 @@ def sanitized_db(build_dir, files):
     with open(os.path.join(build_dir, "compile_commands.json"), encoding="utf-8") as fh:
         entries = json.load(fh)
 
+    sysroot = macos_sysroot()
+
     usable = []
     for entry in entries:
         # The TU that exists only to produce the PCH has nothing of ours to check.
@@ -279,6 +303,8 @@ def sanitized_db(build_dir, files):
         if command:
             for pattern in PCH_FLAGS:
                 command = pattern.sub("", command)
+            if sysroot and "-isysroot" not in command:
+                command += sysroot
             entry = dict(entry, command=command)
         elif "arguments" in entry:
             entry = dict(entry, arguments=strip_pch_arguments(entry["arguments"]))
