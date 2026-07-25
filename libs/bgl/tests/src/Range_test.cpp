@@ -422,5 +422,67 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		cmdList->Open(cmdQueue, cmdAllocator);
 	}
 
+	// The forward copy on growth writes [0, oldBytes) of the new resource, and the same Update then
+	// uploads dirty ranges into it -- including data added below the old capacity but never flushed,
+	// so the old resource the copy reads is stale there. The two writes overlap; only a barrier
+	// between them makes the dirty upload win. Without it the copied (stale) bytes can survive.
+	SECTION("Dirty data below the old capacity survives a growth in the same Update")
+	{
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(uint32_t);
+		desc.debugName    = "RangeBuffer Grow Overlap";
+
+		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+
+		// Fits the initial capacity, dirties slots below it, and is NOT flushed -- so the original
+		// resource never receives these bytes.
+		const uint32_t low[]     = { 111, 222 };
+		auto           lowHandle = rb.Add(std::span<const uint32_t>(low, std::size(low)));
+
+		// Forces the growth while low[] is still pending. The forward copy's [0, 16B) region covers
+		// lowHandle's slots.
+		const uint32_t high[]     = { 333, 444, 555, 666 };
+		auto           highHandle = rb.Add(std::span<const uint32_t>(high, std::size(high)));
+		REQUIRE(rb.Capacity() >= 6);
+
+		rb.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
+		rbDesc.debugName = "RangeBuffer Grow Overlap Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(rb.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		CHECK(mapped[lowHandle.index + 0] == low[0]);
+		CHECK(mapped[lowHandle.index + 1] == low[1]);
+		for (uint32_t i = 0; i < std::size(high); ++i)
+		{
+			CHECK(mapped[highHandle.index + i] == high[i]);
+		}
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		rb.Release(false);
+
+		cmdAllocator->ResetAllocator();
+		cmdList->Open(cmdQueue, cmdAllocator);
+	}
+
 	cmdList->Close();
 }

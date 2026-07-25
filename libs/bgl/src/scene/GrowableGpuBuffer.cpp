@@ -131,6 +131,18 @@ namespace bgl
 
 			cmdList->Barrier(m_Superseded.front(), toCopySource);
 			cmdList->CopyBuffer(m_Handle, m_Superseded.front(), 0, 0, m_CopyBytes);
+
+			// The caller's dirty-region uploads write m_Handle right after this, as copy-dest, and
+			// a freshly-added range below the old capacity overlaps the bytes just copied. Two
+			// copy-dest writes to one buffer are unordered without a barrier between them, so the
+			// upload could land before this copy and be overwritten by stale source bytes.
+			BufferBarrierDesc orderWrites;
+			orderWrites.syncBefore   = BarrierSyncFlag::kCopy;
+			orderWrites.accessBefore = BarrierAccessFlag::kCopyDest;
+			orderWrites.syncAfter    = BarrierSyncFlag::kCopy;
+			orderWrites.accessAfter  = BarrierAccessFlag::kCopyDest;
+
+			cmdList->Barrier(m_Handle, orderWrites);
 		}
 
 		for (BufferHandle superseded : m_Superseded)

@@ -251,7 +251,7 @@ namespace bgl
 
 		try
 		{
-			InitArenas();
+			InitBuffers();
 		}
 		catch (const std::runtime_error& e)
 		{
@@ -276,7 +276,7 @@ namespace bgl
 	}
 
 	void
-	Scene::InitArenas()
+	Scene::InitBuffers()
 	{
 		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
 
