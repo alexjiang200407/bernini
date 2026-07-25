@@ -20,8 +20,6 @@ struct Uniforms
 ConstantBuffer<Uniforms> gUniforms;
 
 groupshared uint2 gItems[cTransparentSortCapacity];
-// Typed atomic, not a plain uint updated via InterlockedAdd: WGSL only permits atomic ops on an
-// `atomic<T>`, and Slang's Atomic<T> lowers to InterlockedAdd on the DXIL path unchanged.
 groupshared Atomic<uint> gOccludeCount;
 
 [shader("compute")]
