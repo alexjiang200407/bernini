@@ -79,6 +79,10 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
+- The Slang session is created on the first compile that reaches `Device` and dropped again once
+  `CreateGraphics` has built every renderer PSO, because its core module is a few hundred megabytes
+  resident. Nothing may retain a `slang::` object past pipeline construction, or the release
+  reclaims nothing — see the same doc.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`), which are
   staged into each target's output dir by the `bgl_copy_shader_src` / `bgl_copy_shader_tests`
   targets. A new `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its

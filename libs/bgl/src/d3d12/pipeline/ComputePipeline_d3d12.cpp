@@ -24,11 +24,9 @@ namespace bgl
 {
 	ComputePipeline::ComputePipeline(
 		ID3D12Device*              device,
-		slang::ISession*           session,
 		ShaderCache*               cache,
 		const ComputePipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(session != nullptr, "Session cannot be null");
 		gassert(device != nullptr, "Device pointer must not be null.");
 		gassert(desc.shader != nullptr, "Compute shader cannot be null");
 
@@ -36,7 +34,7 @@ namespace bgl
 		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
 
 		pipeline_util::PipelineLayout pipelineLayout =
-			pipeline_util::BuildPipelineLayout(device, session, cache, { desc.shader });
+			pipeline_util::BuildPipelineLayout(device, cache, { desc.shader });
 
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);

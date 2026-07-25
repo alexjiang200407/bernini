@@ -9,11 +9,7 @@ namespace bgl
 	class MeshletPipeline : public core::RefCounter<IMeshletPipeline>
 	{
 	public:
-		MeshletPipeline(
-			ID3D12Device*              device,
-			slang::ISession*           session,
-			ShaderCache*               cache,
-			const MeshletPipelineDesc& desc);
+		MeshletPipeline(ID3D12Device* device, ShaderCache* cache, const MeshletPipelineDesc& desc);
 
 		~MeshletPipeline() noexcept override;
 

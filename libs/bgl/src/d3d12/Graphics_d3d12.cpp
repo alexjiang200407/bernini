@@ -148,8 +148,6 @@ namespace bgl
 			void*                  context);
 
 	private:
-		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
-
 		GraphicsOptions m_Opts;
 
 		DeviceRef m_Device;
@@ -227,13 +225,11 @@ namespace bgl
 		D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_D3D12Device)) >>
 			d3d12ErrChecker;
 
-		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
-
-		m_Device = core::SharedRef<Device>::Make(
+		auto device = core::SharedRef<Device>::Make(
 			m_D3D12Device,
-			m_SlangGlobalSession,
 			m_Opts.shaderCacheDir,
 			m_Opts.enableGPUValidationLayer);
+		m_Device = device;
 
 		// Route debug-layer and GPU-based-validation messages (which otherwise only
 		// reach an attached debugger) into the spdlog log.
@@ -261,6 +257,11 @@ namespace bgl
 
 		m_Context =
 			std::make_unique<RenderContext>(m_Device, m_ResourceManager, m_Opts.enableDebugLayer);
+
+		// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
+		// past this point compiles a shader and the Slang core module can stop occupying a few
+		// hundred megabytes. A later CreatePipeline would silently recreate the session.
+		device->ReleaseSlangSession();
 	}
 
 	Graphics::~Graphics() noexcept
@@ -273,7 +274,6 @@ namespace bgl
 
 		m_DxgiInfoQueue.Reset();
 		m_DebugController.Reset();
-		m_SlangGlobalSession.setNull();
 
 		if (m_D3D12InfoQueue && m_MessageCallbackCookie != 0)
 		{

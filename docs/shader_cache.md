@@ -33,6 +33,17 @@ when this doc disagrees, trust the source, then fix this doc.
   program-cache miss. On a hit, `BuildPipelineLayout` rebuilds the root signature, reflection, and
   bytecode straight from the `.bsc` and never calls `GetSlangModule()`.
 
+* **The Slang session itself is lazy, and is dropped once the renderer is built.** Creating a
+  global session loads Slang's core module, which costs a few hundred megabytes that then stay
+  resident for the process — so `Device` creates one only when a compile actually reaches it, which
+  on a fully warm cache is never. `BuildPipelineLayout` therefore takes no session: it is reached
+  only through `Shader::GetSlangModule()`, down the miss path. Everything the renderer draws with
+  is built inside the `Graphics` constructor, which ends by calling `Device::ReleaseSlangSession()`;
+  a pipeline created later (every `bgl_tests` case that builds its own kernel) transparently gets a
+  new session. The salt reads the compiler version through the free `spGetBuildTagString()` rather
+  than `IGlobalSession::getBuildTagString()` — the two return the same string, and only the free
+  one avoids creating a session just to key the cache.
+
 * **Reflection is decoupled from the live Slang object.** A raw `slang::TypeLayoutReflection*` can't
   be serialized. So reflection is walked once, at pipeline build, into a serializable
   [ReflectedLayout](libs/bgl/src/uniforms/ReflectedLayout.h) POD, owned via `shared_ptr` in the
@@ -112,6 +123,12 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
 * **A corrupt or truncated `.bsc` is treated as a miss, not an error.** `TryLoad` deserializes
   through a bounds-checked reader that throws on truncation; the throw is caught and the entry is
   recompiled. Never assume a present file is valid.
+
+* **No Slang object may be held past pipeline construction.** A `slang::IModule` keeps its session
+  alive, so one cached ref re-pins the core module and `ReleaseSlangSession` reclaims nothing. This
+  is why `Shader` does *not* memoize its module and calls `loadModule` each time — the session
+  already caches modules by name, so the repeat call is a lookup. @pre anything new that stores a
+  `slang::` pointer must drop it before the `Graphics` constructor returns.
 
 * **Pipeline-library round-trip is the driver's prerogative.** Whether a given PSO reloads from the
   library is driver/environment-dependent (some PSOs miss and get re-stored). A miss only falls back

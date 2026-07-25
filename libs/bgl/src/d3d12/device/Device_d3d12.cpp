@@ -27,10 +27,13 @@ namespace bgl
 
 		// Compile options that change generated code, folded into every cache key so a
 		// compiler upgrade or a debug/release switch never reuses stale binaries.
+		//
+		// spGetBuildTagString is the free-function twin of IGlobalSession::getBuildTagString and
+		// returns the identical string, which is what keeps the salt off the session-creation path.
 		std::string
-		ShaderCacheSalt(slang::IGlobalSession* globalSession)
+		ShaderCacheSalt()
 		{
-			std::string salt = globalSession->getBuildTagString();
+			std::string salt = spGetBuildTagString();
 			salt += "|sm_6_6|column-major";
 #if defined(BERNINI_GPU_DEBUG)
 			salt += "|gpu-debug";
@@ -40,14 +43,33 @@ namespace bgl
 	}
 
 	Device::Device(
-		wrl::ComPtr<ID3D12Device>            device,
-		Slang::ComPtr<slang::IGlobalSession> globalSession,
-		const std::string&                   shaderCacheDir,
-		bool                                 gpuValidation) :
-		m_Device(std::move(device)), m_SlangGlobalSession(std::move(globalSession))
+		wrl::ComPtr<ID3D12Device> device,
+		const std::string&        shaderCacheDir,
+		bool                      gpuValidation) : m_Device(std::move(device))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
-		gassert(m_SlangGlobalSession != nullptr, "Slang global session cannot be null");
+
+		if (!shaderCacheDir.empty())
+		{
+			m_ShaderCache = std::make_unique<ShaderCache>(
+				m_Device.Get(),
+				shaderCacheDir,
+				ShaderCacheSalt(),
+				std::vector<std::string>(
+					std::begin(c_ShaderSearchPaths),
+					std::end(c_ShaderSearchPaths)),
+				!gpuValidation);
+		}
+	}
+
+	slang::ISession*
+	Device::GetSlangSession() const noexcept
+	{
+		if (m_SlangSession != nullptr)
+			return m_SlangSession.get();
+
+		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
+		gassert(m_SlangGlobalSession != nullptr, "Failed to create Slang global session");
 
 		slang::SessionDesc sessionDesc = {};
 		slang::TargetDesc  targetDesc  = {};
@@ -82,17 +104,14 @@ namespace bgl
 
 		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
 
-		if (!shaderCacheDir.empty())
-		{
-			m_ShaderCache = std::make_unique<ShaderCache>(
-				m_Device.Get(),
-				shaderCacheDir,
-				ShaderCacheSalt(m_SlangGlobalSession.get()),
-				std::vector<std::string>(
-					std::begin(c_ShaderSearchPaths),
-					std::end(c_ShaderSearchPaths)),
-				!gpuValidation);
-		}
+		return m_SlangSession.get();
+	}
+
+	void
+	Device::ReleaseSlangSession() noexcept
+	{
+		m_SlangSession.setNull();
+		m_SlangGlobalSession.setNull();
 	}
 
 	Device::~Device() noexcept { logger::trace("~Device"); }
@@ -133,27 +152,19 @@ namespace bgl
 	ShaderRef
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession);
+		return core::SharedRef<Shader>::Make(std::move(desc), this);
 	}
 
 	MeshletPipelineRef
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<MeshletPipeline>::Make(
-			m_Device.Get(),
-			m_SlangSession.get(),
-			m_ShaderCache.get(),
-			desc);
+		return core::SharedRef<MeshletPipeline>::Make(m_Device.Get(), m_ShaderCache.get(), desc);
 	}
 
 	ComputePipelineRef
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<ComputePipeline>::Make(
-			m_Device.Get(),
-			m_SlangSession.get(),
-			m_ShaderCache.get(),
-			desc);
+		return core::SharedRef<ComputePipeline>::Make(m_Device.Get(), m_ShaderCache.get(), desc);
 	}
 
 	CommandAllocatorRef

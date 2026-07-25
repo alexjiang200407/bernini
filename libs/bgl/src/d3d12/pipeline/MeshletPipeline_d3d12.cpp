@@ -36,11 +36,9 @@ namespace bgl
 {
 	MeshletPipeline::MeshletPipeline(
 		ID3D12Device*              device,
-		slang::ISession*           session,
 		ShaderCache*               cache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(session != nullptr, "Session cannot be null");
 		gassert(device != nullptr, "Device pointer must not be null.");
 
 		wrl::ComPtr<ID3D12Device2> device2;
@@ -50,7 +48,6 @@ namespace bgl
 
 		pipeline_util::PipelineLayout pipelineLayout = pipeline_util::BuildPipelineLayout(
 			device,
-			session,
 			cache,
 			{ desc.meshShader, desc.pixelShader, desc.ampShader });
 

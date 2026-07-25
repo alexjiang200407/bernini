@@ -18,11 +18,12 @@ namespace bgl
 			core::str::unordered_str_map<std::vector<std::byte>> entryPointCode;
 		};
 
-		// Builds a PSO's root signature, reflection, and DXIL.
+		// Builds a PSO's root signature, reflection, and DXIL. Takes no Slang session: on a cache
+		// hit nothing here may touch Slang, so the session is reached only through the shaders,
+		// and only down the compile path.
 		PipelineLayout
 		BuildPipelineLayout(
 			ID3D12Device*                   device,
-			slang::ISession*                session,
 			const ShaderCache*              cache,
 			std::initializer_list<IShader*> shaders);
 	}
