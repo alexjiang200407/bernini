@@ -36,7 +36,7 @@ namespace core::win32
 	{};
 
 	std::wstring
-	getErrorDescription(DWORD dw);
+	get_error_description(DWORD dw);
 
 	static const inline Win32ErrorChecker errorChecker;
 
@@ -55,7 +55,7 @@ namespace core::win32
 			{
 				DWORD err = GetLastError();
 				throw std::runtime_error(
-					"Win32 API Error" + core::str::wide_to_string(getErrorDescription(err)));
+					"Win32 API Error" + core::str::wide_to_string(get_error_description(err)));
 			}
 		}
 		else if constexpr (std::is_pointer_v<T>)
@@ -64,7 +64,7 @@ namespace core::win32
 			{
 				DWORD err = GetLastError();
 				throw std::runtime_error(
-					"Win32 API Error" + core::str::wide_to_string(getErrorDescription(err)));
+					"Win32 API Error" + core::str::wide_to_string(get_error_description(err)));
 			}
 		}
 		else

@@ -5,12 +5,12 @@
 namespace core::file
 {
 	std::filesystem::path
-	getLibraryPath()
+	get_library_path()
 	{
 		Dl_info info = {};
 
 		// Resolves to the image core was linked into, not the executable.
-		if (dladdr(reinterpret_cast<const void*>(&getLibraryPath), &info) == 0)
+		if (dladdr(reinterpret_cast<const void*>(&get_library_path), &info) == 0)
 			return {};
 
 		if (info.dli_fname == nullptr)

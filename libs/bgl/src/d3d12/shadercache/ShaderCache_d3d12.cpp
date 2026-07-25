@@ -68,7 +68,7 @@ namespace bgl
 				const std::string path = file.generic_string();
 				salt                   = HashString(path, salt);
 
-				const std::vector<std::byte> bytes = core::file::readFileBytes(path);
+				const std::vector<std::byte> bytes = core::file::read_file_bytes(path);
 				salt                               = HashBytes(bytes.data(), bytes.size(), salt);
 			}
 
@@ -284,7 +284,7 @@ namespace bgl
 		{
 			try
 			{
-				const std::vector<std::byte> bytes = core::file::readFileBytes(libPath.string());
+				const std::vector<std::byte> bytes = core::file::read_file_bytes(libPath.string());
 				m_PsoLibraryBlob.assign(bytes.begin(), bytes.end());
 			}
 			catch (const std::exception&)
@@ -376,7 +376,7 @@ namespace bgl
 
 		try
 		{
-			out = Deserialize(core::file::readFileBytes(path.string()));
+			out = Deserialize(core::file::read_file_bytes(path.string()));
 			return true;
 		}
 		catch (const std::exception& e)

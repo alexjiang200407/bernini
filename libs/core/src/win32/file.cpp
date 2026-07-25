@@ -4,13 +4,13 @@
 namespace core::file
 {
 	std::filesystem::path
-	getLibraryPath()
+	get_library_path()
 	{
 		HMODULE module = nullptr;
 
 		BOOL ok = GetModuleHandleExW(
 			GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-			reinterpret_cast<LPCWSTR>(&getLibraryPath),
+			reinterpret_cast<LPCWSTR>(&get_library_path),
 			&module);
 
 		if (!ok || module == nullptr)
