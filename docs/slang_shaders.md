@@ -42,6 +42,12 @@ WGSL forbids a plain read of an `atomic<u32>`, so **every** access to an atomic 
 `.load`/`.store`/`.add`, not just the atomic bump — the debug record buffer
 ([`debug/dbg.slang`](../libs/bgl/shaders/src/debug/dbg.slang)) is the worked example.
 
+When the atomic target is a **field of an IDL struct** (e.g. `DispatchArgs.threadCountX`,
+`CullStats.tested`), make that field `Atomic<uint>` in the IDL source. `bgl_idlgen` maps
+`Atomic<uint>` to a plain `uint32_t` in the C++ mirror — layout-identical, so `sizeof`/`offsetof`
+are unchanged and all CPU code is untouched. A non-atomic writer of the same struct writes the field
+through `.store` (a positional aggregate initializer cannot fill an atomic member).
+
 ## No 16-bit integers in WGSL
 
 Core WGSL has no `uint16_t`/`int16_t`. A 16-bit scalar in shared shader code — or reached through an

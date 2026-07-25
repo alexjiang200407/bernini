@@ -9,9 +9,6 @@ static const uint kDbgRecordWords = 4;
 
 struct DebugGlobals
 {
-    // Atomic-element: word 0 is bumped atomically to claim a record slot. WGSL then requires every
-    // access to the buffer to go through the atomic (no plain read of an atomic<u32>), so the
-    // header reads and record writes below use .load/.store -- all layout-identical to a uint.
     AtomicComputeBuffer<uint> buffer;
 };
 
