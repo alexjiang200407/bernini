@@ -126,29 +126,44 @@ namespace bgl
 	void
 	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept
 	{
-		// D3D12 blocks on a fence event once; WebGPU has no such primitive, so this loops:
-		// wgpuInstanceWaitAny returns as soon as *any* future completes, so it may take several
-		// waits to reach the requested value.
-		while (fenceValue > m_LastCompletedFence.load(std::memory_order_relaxed))
+		if (fenceValue <= m_LastCompletedFence.load(std::memory_order_relaxed))
+			return;
+
+		// The highest pending submission at or below the requested value. Fence values are unique
+		// and start at 1, so 0 means "none found".
+		WGPUFuture target  = {};
+		uint64_t   highest = 0;
 		{
-			bool anyPending;
+			auto lock = std::scoped_lock(m_PendingMutex);
+			for (const Submission& submission : m_Pending)
 			{
-				auto lock  = std::scoped_lock(m_PendingMutex);
-				anyPending = std::ranges::any_of(m_Pending, [fenceValue](const Submission& s) {
-					return s.value <= fenceValue;
-				});
+				if (submission.value <= fenceValue && submission.value > highest)
+				{
+					target  = submission.future;
+					highest = submission.value;
+				}
 			}
-
-			// Nothing outstanding at or below the value: it was never submitted, or already drained.
-			// Blocking further would never return, so treat the value as reached.
-			if (!anyPending)
-			{
-				Publish(fenceValue);
-				return;
-			}
-
-			DrainCompleted(fenceValue, UINT64_MAX);
 		}
+
+		// Nothing outstanding at or below the value: it completed already, or was never submitted.
+		if (highest == 0)
+		{
+			Publish(fenceValue);
+			return;
+		}
+
+		// One blocking wait on that single future. WaitAny returns when any of its futures
+		// completes, so with one future it returns exactly when that submission is done -- and
+		// because the queue runs submissions in order, every earlier one is done with it. No loop.
+		auto wait = WGPUFutureWaitInfo{ target, 0 };
+		wgpuInstanceWaitAny(m_Instance, 1, &wait, UINT64_MAX);
+
+		Publish(fenceValue);
+
+		auto lock = std::scoped_lock(m_PendingMutex);
+		std::erase_if(m_Pending, [fenceValue](const Submission& s) {
+			return s.value <= fenceValue;
+		});
 	}
 
 	void
