@@ -73,6 +73,12 @@ FrameGraph usage.
 
 Overview of all the Frame Graph Passes
 
+**[Slang Shaders](./docs/slang_shaders.md)**
+
+Guidelines for writing one Slang source that compiles to both DXIL (D3D12) and WGSL (WebGPU): the
+atomic (`Atomic<T>`), 16-bit-integer, and mesh/amplification-stage constraints WGSL imposes, and how
+the build enforces them.
+
 **[Shader Cache](./docs/shader_cache.md)**
 
 The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are cached to disk to skip shader compilation across runs, how it is invalidated, and why `.slang-module` IR is not used.

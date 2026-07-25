@@ -20,7 +20,7 @@ struct Uniforms
 ConstantBuffer<Uniforms> gUniforms;
 
 groupshared uint2 gItems[cTransparentSortCapacity];
-groupshared uint gOccludeCount;
+groupshared Atomic<uint> gOccludeCount;
 
 [shader("compute")]
 [numthreads(cTransparentSortGroupSize, 1, 1)]
@@ -30,7 +30,7 @@ void main(uint tid: SV_GroupThreadID)
 
     if (tid == 0u)
     {
-        gOccludeCount = 0u;
+        gOccludeCount.store(0u);
     }
 
     // Pad to the full power of two with the reserved key so the padding sorts to the tail and never
@@ -78,15 +78,14 @@ void main(uint tid: SV_GroupThreadID)
 
         if (gItems[i].x < 0x80000000u)
         {
-            uint unused;
-            InterlockedAdd(gOccludeCount, 1u, unused);
+            gOccludeCount.add(1u);
         }
     }
     GroupMemoryBarrierWithGroupSync();
 
     if (tid == 0u)
     {
-        const uint occludeCount = gOccludeCount;
+        const uint occludeCount = gOccludeCount.load();
 
         gUniforms.partitionBase[cOccludePartition] = 0u;
         gUniforms.partitionBase[cPlainPartition] = occludeCount;
