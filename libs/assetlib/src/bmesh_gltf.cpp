@@ -16,6 +16,8 @@
 #include "gltf_skin.h"
 #include "gltf_util.h"
 
+#include <core/type_traits.h>
+
 #include <meshoptimizer.h>
 
 namespace assetlib
@@ -30,8 +32,8 @@ namespace assetlib
 
 		/**
 		 * A strided view over one glTF vertex attribute. Component type is carried, so the same view
-		 * serves the float geometry attributes (fetched in bulk through `FloatPtr`) and the integer
-		 * skin attributes JOINTS_0 / WEIGHTS_0 (decoded per component through `UintAt` / `FloatAt`).
+		 * serves the float geometry attributes (read whole through `At`) and the integer skin
+		 * attributes JOINTS_0 / WEIGHTS_0 (decoded per component through `UintAt` / `FloatAt`).
 		 */
 		struct AttributeView
 		{
@@ -47,11 +49,20 @@ namespace assetlib
 				return base != nullptr;
 			}
 
-			// Valid only for a float attribute; the geometry interleave and AABB paths bulk-copy floats.
-			[[nodiscard]] const float*
-			FloatPtr(size_t index) const noexcept
+			/**
+			 * Attribute `index` read whole as a `T` -- e.g. a float `POSITION` as `glm::vec3`. `memcpy`
+			 * rather than a reinterpreting reference, because the interleaved buffer holds no `T`
+			 * object to alias and its offsets carry no alignment guarantee. Meaningful only where the
+			 * bytes already are a `T`; the integer skin attributes need `UintAt` / `FloatAt`, which
+			 * convert.
+			 */
+			template <core::type_traits::trivially_copyable T>
+			[[nodiscard]] T
+			At(size_t index) const noexcept
 			{
-				return reinterpret_cast<const float*>(base + index * stride);
+				T value;
+				std::memcpy(&value, base + index * stride, sizeof(T));
+				return value;
 			}
 
 			[[nodiscard]] const std::byte*
@@ -433,7 +444,7 @@ namespace assetlib
 						continue;
 					appendBytes(
 						mesh.vertexData,
-						attr.view.FloatPtr(i),
+						attr.view.ComponentAt(i, 0),
 						static_cast<size_t>(attr.components) * sizeof(float));
 				}
 
@@ -462,9 +473,9 @@ namespace assetlib
 			{
 				for (size_t i = 0; i < vertexCount; ++i)
 				{
-					const float* p = candidates[0].view.FloatPtr(i);
-					aabbMin        = glm::min(aabbMin, glm::vec3(p[0], p[1], p[2]));
-					aabbMax        = glm::max(aabbMax, glm::vec3(p[0], p[1], p[2]));
+					const glm::vec3 p = candidates[0].view.At<glm::vec3>(i);
+					aabbMin           = glm::min(aabbMin, p);
+					aabbMax           = glm::max(aabbMax, p);
 				}
 			}
 			submesh.aabbMin = aabbMin;
