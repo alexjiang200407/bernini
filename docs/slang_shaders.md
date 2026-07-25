@@ -27,9 +27,20 @@ groupshared uint gCount;
 InterlockedAdd(gCount, 1u, prev);
 ```
 
-`Atomic<T>` lowers to `InterlockedAdd` on DXIL unchanged, so the D3D12 path is unaffected. The
-same holds for a buffer element: the atomic target's element type carries the atomic, which is why
-the compute-buffer primitive needs a WGSL variant that exposes atomic access (see the port plan).
+`Atomic<T>` lowers to `InterlockedAdd` on DXIL unchanged, so the D3D12 path is unaffected. A buffer
+element works the same way — the element type carries the atomic — through `AtomicComputeBuffer<T>`
+(in [`types/ComputeBuffer.slang`](../libs/bgl/shaders/src/types/ComputeBuffer.slang)), the atomic
+counterpart of `ComputeBuffer<T>`:
+
+```hlsl
+AtomicComputeBuffer<uint> counts;   // array<atomic<u32>> in WGSL, RWStructuredBuffer<uint> on DXIL
+counts[i].add(1u);
+let n = counts[i].load();
+```
+
+WGSL forbids a plain read of an `atomic<u32>`, so **every** access to an atomic buffer goes through
+`.load`/`.store`/`.add`, not just the atomic bump — the debug record buffer
+([`debug/dbg.slang`](../libs/bgl/shaders/src/debug/dbg.slang)) is the worked example.
 
 ## No 16-bit integers in WGSL
 

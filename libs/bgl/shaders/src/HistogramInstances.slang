@@ -12,12 +12,12 @@ struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
     ComputeBuffer<InstanceVisibility> visibility;
-    ComputeBuffer<uint> outBuffer;
+    AtomicComputeBuffer<uint> outBuffer;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared uint gLocalHistogram[kPsoCount];
+groupshared Atomic<uint> gLocalHistogram[kPsoCount];
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
@@ -25,7 +25,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
     if (localIdx < kPsoCount)
     {
-        gLocalHistogram[localIdx] = 0u;
+        gLocalHistogram[localIdx].store(0u);
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -39,7 +39,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
         if (psoType < kPsoCount)
         {
-            InterlockedAdd(gLocalHistogram[psoType], 1u);
+            gLocalHistogram[psoType].add(1u);
         }
     }
 
@@ -47,6 +47,6 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     if (localIdx < kPsoCount)
     {
-        InterlockedAdd(gUniforms.outBuffer[localIdx], gLocalHistogram[localIdx]);
+        gUniforms.outBuffer[localIdx].add(gLocalHistogram[localIdx].load());
     }
 }

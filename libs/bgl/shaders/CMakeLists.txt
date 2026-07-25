@@ -20,7 +20,7 @@ set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 # Tint-level validation (constructs slangc emits but Dawn rejects) is a separate gate through
 # wgpuDeviceCreateShaderModule, not slangc, because this Slang build has no Tint linked.
 if(RENDERER_BACKEND STREQUAL "WEBGPU")
-    foreach(KERNEL PrefixSumInstances TransparentSort)
+    foreach(KERNEL PrefixSumInstances TransparentSort HistogramInstances)
         compile_shader(
             FILE     "${CMAKE_CURRENT_SOURCE_DIR}/src/${KERNEL}.slang"
             OUT_DIR  "${SHADER_OUT_DIR}"
