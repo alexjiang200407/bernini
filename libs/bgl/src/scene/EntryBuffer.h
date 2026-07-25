@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
 #include <core/containers/slot_vector.h>
 #include <core/type_traits.h>
@@ -10,8 +11,10 @@ namespace bgl
 {
 	struct EntryBufferDesc
 	{
-		uint32_t    maxCount  = 0;
-		uint32_t    blockSize = 65536;
+		// Where the arena starts, not where it ends: it grows on demand and is bounded only by
+		// device memory.
+		uint32_t    initialCount = 0;
+		uint32_t    blockSize    = 65536;
 		std::string debugName;
 	};
 
@@ -32,50 +35,52 @@ namespace bgl
 
 	public:
 		EntryBuffer() noexcept = default;
-		EntryBuffer(EntryBufferDesc desc, ResourceManagerRef resourceManager) noexcept
+		EntryBuffer(EntryBufferDesc desc, ResourceManagerRef resourceManager)
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
+		EntryBuffer(const EntryBuffer&)     = delete;
+		EntryBuffer(EntryBuffer&&) noexcept = default;
+
+		EntryBuffer&
+		operator=(const EntryBuffer&) = delete;
+
+		EntryBuffer&
+		operator=(EntryBuffer&&) noexcept = default;
+
 		void
-		Init(EntryBufferDesc desc, ResourceManagerRef resourceManager) noexcept
+		Init(EntryBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.maxCount > 0, "EntryBuffer must have a positive maxCount");
+			gassert(desc.initialCount > 0, "EntryBuffer must have a positive initial count");
 			gassert(desc.blockSize > 0, "Block size must be greater than zero");
 			gassert(resourceManager != nullptr, "EntryBuffer requires a valid ResourceManager");
 
-			m_Desc            = std::move(desc);
-			m_ResourceManager = std::move(resourceManager);
+			m_Desc = std::move(desc);
 
-			m_Entries.reset(m_Desc.maxCount);
+			m_Storage.Init(
+				std::move(resourceManager),
+				m_Desc.debugName,
+				sizeof(T),
+				m_Desc.initialCount,
+				false);
+
+			m_Entries.reset(m_Desc.initialCount);
 
 			if constexpr (c_HasMeta)
 			{
-				m_Metadata.assign(m_Desc.maxCount, Meta{});
+				m_Metadata.assign(m_Desc.initialCount, Meta{});
 			}
 
-			const uint32_t totalBytes = m_Desc.maxCount * sizeof(T);
-			const uint32_t numBlocks  = (totalBytes + m_Desc.blockSize - 1) / m_Desc.blockSize;
-
-			m_DirtyBlocks.assign(numBlocks, false);
+			ResizeDirtyBlocks(m_Desc.initialCount);
 			m_HasAnyDirtyBlocks = false;
-
-			{
-				StructBufferDesc bufDesc;
-				bufDesc.debugName    = m_Desc.debugName;
-				bufDesc.elementCount = m_Desc.maxCount;
-				bufDesc.stride       = sizeof(T);
-				bufDesc.isUav        = false;
-
-				m_BufferHandle = m_ResourceManager->CreateStructBuffer(bufDesc);
-			}
 		}
 
 		// True once Init() has created the GPU buffer and before Release().
 		[[nodiscard]] bool
 		IsInitialized() const noexcept
 		{
-			return !m_BufferHandle.IsNull();
+			return m_Storage.IsInitialized();
 		}
 
 		[[nodiscard]] bool
@@ -93,7 +98,7 @@ namespace bgl
 		[[nodiscard]] uint32_t
 		Capacity() const noexcept
 		{
-			return m_Desc.maxCount;
+			return m_Storage.GetCapacity();
 		}
 
 		template <typename... Args>
@@ -102,28 +107,31 @@ namespace bgl
 		{
 			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 
-			try
+			auto slot = m_Entries.try_allocate_and_emplace(std::forward<Args>(args)...);
+			if (slot.is_null())
 			{
-				auto slot = m_Entries.allocate_and_emplace(std::forward<Args>(args)...);
-				ResetMeta(slot.index);
-				MarkDirty(slot.index);
-				return slot;
+				Grow();
+				slot = m_Entries.try_allocate_and_emplace(std::forward<Args>(args)...);
+
+				if (slot.is_null())
+				{
+					core::throw_runtime_error(
+						"EntryBuffer '{}': no free slot even after growing to {}",
+						m_Desc.debugName,
+						Capacity());
+				}
 			}
-			catch (const std::runtime_error& e)
-			{
-				core::throw_runtime_error(
-					"EntryBuffer '{}' allocation failed: {}",
-					m_Desc.debugName,
-					e.what());
-			}
+
+			ResetMeta(slot.index);
+			MarkDirty(slot.index);
+			return slot;
 		}
 
 		core::slot_handle
 		Add(T value)
 		{
 			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			auto slot = m_Entries.allocate_slot();
-			ResetMeta(slot.index);
+			auto slot = EmplaceBack();
 			Set(slot, std::move(value));
 			return slot;
 		}
@@ -196,6 +204,9 @@ namespace bgl
 			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
 			gassert(cmdList->IsOpen(), "ICommandList must be open to update EntryBuffer");
 
+			// Before the dirty regions, never after: the forward copy would overwrite them.
+			m_Storage.FlushGrowth(cmdList);
+
 			if (!m_HasAnyDirtyBlocks)
 				return;
 
@@ -237,18 +248,20 @@ namespace bgl
 			m_HasAnyDirtyBlocks = false;
 		}
 
+		// Re-read every frame: growth mints a new handle and retires the old one (see
+		// GrowableGpuBuffer), so a cached descriptor index goes stale.
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
 			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			return DescriptorHandle(m_BufferHandle.slot);
+			return DescriptorHandle(m_Storage.GetHandle().slot);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			return m_BufferHandle;
+			return m_Storage.GetHandle();
 		}
 
 		[[nodiscard]] bool
@@ -267,10 +280,9 @@ namespace bgl
 		void
 		Release(bool deferred = true) noexcept
 		{
-			if (!m_BufferHandle.IsNull())
+			if (IsInitialized())
 			{
-				m_ResourceManager->DestroyBuffer(m_BufferHandle, deferred);
-				m_BufferHandle = {};
+				m_Storage.Release(deferred);
 				m_Entries.clear();
 				m_DirtyBlocks.clear();
 				if constexpr (c_HasMeta)
@@ -282,6 +294,34 @@ namespace bgl
 		}
 
 	private:
+		void
+		Grow()
+		{
+			const uint32_t grown = NextGpuBufferCapacity(Capacity(), Capacity() + 1, sizeof(T));
+
+			// GPU side first: it is the one that can fail, and it leaves nothing behind when it
+			// does, so the mirror and the buffer cannot end up disagreeing on capacity.
+			m_Storage.Grow(grown);
+			m_Entries.grow(grown);
+
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata.resize(grown, Meta{});
+			}
+
+			ResizeDirtyBlocks(grown);
+		}
+
+		void
+		ResizeDirtyBlocks(uint32_t capacity)
+		{
+			const uint64_t totalBytes = static_cast<uint64_t>(capacity) * sizeof(T);
+			const auto     numBlocks =
+				static_cast<size_t>((totalBytes + m_Desc.blockSize - 1) / m_Desc.blockSize);
+
+			m_DirtyBlocks.resize(numBlocks, false);
+		}
+
 		void
 		ResetMeta(uint32_t index) noexcept
 		{
@@ -315,7 +355,7 @@ namespace bgl
 			uint32_t      endBlk,
 			uint32_t      totalBytes) noexcept
 		{
-			gassert(!m_BufferHandle.IsNull(), "m_BufferHandle cannot be null");
+			gassert(IsInitialized(), "EntryBuffer storage cannot be null");
 
 			const uint32_t offset = startBlk * m_Desc.blockSize;
 			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
@@ -332,14 +372,13 @@ namespace bgl
 
 			if (size > 0)
 			{
-				cmdList->WriteBufferSlice(m_BufferHandle, m_Entries.data(), offset, size);
+				cmdList->WriteBufferSlice(m_Storage.GetHandle(), m_Entries.data(), offset, size);
 			}
 		}
 
 	private:
 		EntryBufferDesc      m_Desc;
-		ResourceManagerRef   m_ResourceManager;
-		BufferHandle         m_BufferHandle;
+		GrowableGpuBuffer    m_Storage;
 		core::slot_vector<T> m_Entries;
 
 		MetaStorage m_Metadata;

@@ -82,13 +82,13 @@ TEST_CASE(
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 8;
-	sceneDesc.maxMeshlets             = 512;
-	sceneDesc.maxSubmeshes            = 8;
-	sceneDesc.maxVertexBufferByteSize = 800000;
-	sceneDesc.maxIndices              = 20000;
-	sceneDesc.maxPbrMaterials         = 8;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 512;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 800000;
+	sceneDesc.initialIndices              = 20000;
+	sceneDesc.initialPbrMaterials         = 8;
 
 	auto scene = gfx->CreateScene(sceneDesc);
 
@@ -175,13 +175,13 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 8;
-	sceneDesc.maxMeshlets             = 512;
-	sceneDesc.maxSubmeshes            = 8;
-	sceneDesc.maxVertexBufferByteSize = 800000;
-	sceneDesc.maxIndices              = 20000;
-	sceneDesc.maxPbrMaterials         = 8;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 512;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 800000;
+	sceneDesc.initialIndices              = 20000;
+	sceneDesc.initialPbrMaterials         = 8;
 
 	auto scene = gfx->CreateScene(sceneDesc);
 
@@ -256,14 +256,14 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 16;
-	sceneDesc.maxMeshlets             = 1024;
-	sceneDesc.maxSubmeshes            = 16;
-	sceneDesc.maxVertexBufferByteSize = 800000;
-	sceneDesc.maxIndices              = 20000;
-	sceneDesc.maxPbrMaterials         = 8;
-	sceneDesc.maxLoosePbrMaterials    = 8;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 16;
+	sceneDesc.initialMeshlets             = 1024;
+	sceneDesc.initialSubmeshes            = 16;
+	sceneDesc.initialVertexBufferByteSize = 800000;
+	sceneDesc.initialIndices              = 20000;
+	sceneDesc.initialPbrMaterials         = 8;
+	sceneDesc.initialLoosePbrMaterials    = 8;
 
 	const glm::vec4 red{ 1.0f, 0.03f, 0.03f, 0.5f };
 	const glm::vec4 blue{ 0.03f, 0.03f, 1.0f, 0.5f };

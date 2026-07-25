@@ -66,9 +66,9 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = paddedCount;
-		desc.debugName = "Compact Instances";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = paddedCount;
+		desc.debugName    = "Compact Instances";
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
@@ -110,8 +110,8 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 		auto buffer = bgl::ComputeBuffer();
 		auto desc   = bgl::ComputeBufferDesc();
 		desc.SetElement<decltype(element)>();
-		desc.maxCount  = count;
-		desc.debugName = name;
+		desc.initialCount = count;
+		desc.debugName    = name;
 		buffer.Init(desc, resourceManager);
 		return buffer;
 	};

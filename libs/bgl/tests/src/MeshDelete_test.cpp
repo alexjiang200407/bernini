@@ -24,25 +24,25 @@ namespace
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 5;
-		desc.maxSubmeshes            = 5;
-		desc.maxMeshlets             = 100;
-		desc.maxVertexBufferByteSize = 40000;
-		desc.maxVertexBufferByteSize = 32000;
-		desc.maxIndices              = 1000;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 5;
+		desc.initialSubmeshes            = 5;
+		desc.initialMeshlets             = 100;
+		desc.initialVertexBufferByteSize = 40000;
+		desc.initialVertexBufferByteSize = 32000;
+		desc.initialIndices              = 1000;
 		return desc;
 	}
 
 	bgl::SceneDesc
 	MeshletSceneDesc()
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 4;
-		desc.maxSubmeshes            = 16;
-		desc.maxMeshlets             = 256;
-		desc.maxVertexBufferByteSize = 64000;
-		desc.maxIndices              = 4000;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 4;
+		desc.initialSubmeshes            = 16;
+		desc.initialMeshlets             = 256;
+		desc.initialVertexBufferByteSize = 64000;
+		desc.initialIndices              = 4000;
 		return desc;
 	}
 

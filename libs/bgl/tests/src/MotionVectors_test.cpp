@@ -145,12 +145,12 @@ namespace
 			targetBase = target->As<bgl::RenderTargetBase>();
 			REQUIRE(targetBase != nullptr);
 
-			auto sceneDesc                    = bgl::SceneDesc();
-			sceneDesc.maxGeom                 = 4;
-			sceneDesc.maxMeshlets             = 64;
-			sceneDesc.maxSubmeshes            = 4;
-			sceneDesc.maxVertexBufferByteSize = 8192;
-			sceneDesc.maxIndices              = 256;
+			auto sceneDesc                        = bgl::SceneDesc();
+			sceneDesc.initialGeom                 = 4;
+			sceneDesc.initialMeshlets             = 64;
+			sceneDesc.initialSubmeshes            = 4;
+			sceneDesc.initialVertexBufferByteSize = 8192;
+			sceneDesc.initialIndices              = 256;
 
 			scene = gfx->CreateScene(sceneDesc);
 			view  = gfx->CreateSceneView(scene, 4);

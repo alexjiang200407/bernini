@@ -60,9 +60,9 @@ namespace bgl
 		}
 
 		SceneViewRef
-		CreateSceneView(const SceneRef& scene, uint32_t maxInstances) override
+		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) override
 		{
-			return core::SharedRef<SceneView>::Make(scene, maxInstances, m_ResourceManager);
+			return core::SharedRef<SceneView>::Make(scene, initialInstances, m_ResourceManager);
 		}
 
 		RenderTargetRef

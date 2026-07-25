@@ -87,14 +87,14 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		targetDesc.wnd      = headless ? nullptr : wnd->NativeHandle();
 		auto target         = graphics->CreateRenderTarget(targetDesc);
 
-		auto sceneDesc                    = bgl::SceneDesc();
-		sceneDesc.maxIndices              = 200000;
-		sceneDesc.maxVertexBufferByteSize = 4000000;
-		sceneDesc.maxGeom                 = 100;
-		sceneDesc.maxMeshlets             = 8000;
-		sceneDesc.maxSubmeshes            = 100;
-		sceneDesc.maxPbrMaterials         = 100;
-		sceneDesc.maxLoosePbrMaterials    = 100;  // defaults to 1: an unbaked model needs more
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialIndices              = 200000;
+		sceneDesc.initialVertexBufferByteSize = 4000000;
+		sceneDesc.initialGeom                 = 100;
+		sceneDesc.initialMeshlets             = 8000;
+		sceneDesc.initialSubmeshes            = 100;
+		sceneDesc.initialPbrMaterials         = 100;
+		sceneDesc.initialLoosePbrMaterials    = 100;  // defaults to 1: an unbaked model needs more
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);

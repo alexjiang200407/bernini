@@ -41,7 +41,7 @@ namespace bgl
 
 		{
 			auto desc = ComputeBufferDesc();
-			desc.SetElement<uint32_t>().SetMaxCount(c_PsoCount).SetDebugName("Pso Prefix Sum");
+			desc.SetElement<uint32_t>().SetInitialCount(c_PsoCount).SetDebugName("Pso Prefix Sum");
 
 			m_PsoPrefixSumBuffer.Init(desc, resourceManager);
 		}
@@ -49,7 +49,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetMaxCount(c_PsoCount)
+				.SetInitialCount(c_PsoCount)
 				.SetDebugName("Compacted Dispatch Args");
 
 			m_CompactedDispatchArgs.Init(desc, resourceManager);
@@ -57,14 +57,14 @@ namespace bgl
 
 		{
 			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::CullView>().SetMaxCount(1).SetDebugName("Cull View");
+			desc.SetElement<idl::CullView>().SetInitialCount(1).SetDebugName("Cull View");
 
 			m_CullView.Init(desc, resourceManager);
 		}
 
 		{
 			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::CullStats>().SetMaxCount(1).SetDebugName("Cull Stats");
+			desc.SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName("Cull Stats");
 
 			m_CullStats.Init(desc, resourceManager);
 		}

@@ -20,14 +20,14 @@ namespace
 	AssetSceneDesc()
 	{
 		// Roomy enough for the procedural case: a cube plus an 8x8 sphere is a few thousand indices.
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 8;
-		desc.maxSubmeshes            = 32;
-		desc.maxMeshlets             = 256;
-		desc.maxVertexBufferByteSize = 65536;
-		desc.maxIndices              = 8192;
-		desc.maxPbrMaterials         = 8;
-		desc.maxLoosePbrMaterials    = 8;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 8;
+		desc.initialSubmeshes            = 32;
+		desc.initialMeshlets             = 256;
+		desc.initialVertexBufferByteSize = 65536;
+		desc.initialIndices              = 8192;
+		desc.initialPbrMaterials         = 8;
+		desc.initialLoosePbrMaterials    = 8;
 		return desc;
 	}
 

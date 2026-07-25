@@ -92,9 +92,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	// bound is that sphere pushed out by its mesh transform.
 	auto submeshBuffer = bgl::RangeBuffer<bgl::idl::Submesh>();
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 1;
-		desc.debugName = "Cull Submesh";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 1;
+		desc.debugName    = "Cull Submesh";
 		submeshBuffer.Init(desc, resourceManager);
 	}
 
@@ -105,17 +105,17 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = liveCount;
-		desc.debugName = "Cull Mesh";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = liveCount;
+		desc.debugName    = "Cull Mesh";
 		meshBuffer.Init(desc, resourceManager);
 	}
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = padded;
-		desc.debugName = "Cull Instances";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = padded;
+		desc.debugName    = "Cull Instances";
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
@@ -144,8 +144,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		auto buffer = bgl::ComputeBuffer();
 		auto desc   = bgl::ComputeBufferDesc();
 		desc.SetElement<decltype(element)>();
-		desc.maxCount  = count;
-		desc.debugName = name;
+		desc.initialCount = count;
+		desc.debugName    = name;
 		buffer.Init(desc, resourceManager);
 		return buffer;
 	};

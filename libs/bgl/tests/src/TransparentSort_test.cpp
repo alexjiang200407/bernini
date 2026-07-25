@@ -71,14 +71,14 @@ TEST_CASE(
 	auto entries = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<SortEntry>().SetMaxCount(c_SortCapacity).SetDebugName("Sort Entries");
+		desc.SetElement<SortEntry>().SetInitialCount(c_SortCapacity).SetDebugName("Sort Entries");
 		entries.Init(desc, resourceManager);
 	}
 
 	auto counter = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetMaxCount(1).SetDebugName("Sort Count");
+		desc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Sort Count");
 		counter.Init(desc, resourceManager);
 	}
 
@@ -87,7 +87,9 @@ TEST_CASE(
 	auto sortedInstances = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetMaxCount(c_SortCapacity).SetDebugName("Sorted Instances");
+		desc.SetElement<uint32_t>()
+			.SetInitialCount(c_SortCapacity)
+			.SetDebugName("Sorted Instances");
 		sortedInstances.Init(desc, resourceManager);
 	}
 
@@ -95,7 +97,7 @@ TEST_CASE(
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>()
-			.SetMaxCount(bgl::idl::cTransparentPartitionCount)
+			.SetInitialCount(bgl::idl::cTransparentPartitionCount)
 			.SetDebugName("Partition Base");
 		partitionBase.Init(desc, resourceManager);
 	}
@@ -104,7 +106,7 @@ TEST_CASE(
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::DispatchArgs>()
-			.SetMaxCount(bgl::idl::cTransparentPartitionCount)
+			.SetInitialCount(bgl::idl::cTransparentPartitionCount)
 			.SetDebugName("Partition Dispatch Args");
 		partitionArgs.Init(desc, resourceManager);
 	}

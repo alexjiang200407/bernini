@@ -86,17 +86,17 @@ TEST_CASE(
 
 	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = c_PaddedCount;
-		desc.debugName = "Keys Mesh Buffer";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = c_PaddedCount;
+		desc.debugName    = "Keys Mesh Buffer";
 		meshBuffer.Init(std::move(desc), resourceManager);
 	}
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = c_PaddedCount;
-		desc.debugName = "Keys Instance Buffer";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = c_PaddedCount;
+		desc.debugName    = "Keys Instance Buffer";
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
@@ -136,14 +136,14 @@ TEST_CASE(
 	auto entries = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<SortEntry>().SetMaxCount(c_PaddedCount).SetDebugName("Sort Entries");
+		desc.SetElement<SortEntry>().SetInitialCount(c_PaddedCount).SetDebugName("Sort Entries");
 		entries.Init(desc, resourceManager);
 	}
 
 	auto counter = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetMaxCount(1).SetDebugName("Sort Entry Count");
+		desc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Sort Entry Count");
 		counter.Init(desc, resourceManager);
 	}
 
@@ -153,7 +153,7 @@ TEST_CASE(
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::InstanceVisibility>()
-			.SetMaxCount(c_PaddedCount)
+			.SetInitialCount(c_PaddedCount)
 			.SetDebugName("Visibility");
 		visibility.Init(desc, resourceManager);
 	}

@@ -46,10 +46,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("EmplaceBack and access by handle")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer Emplace";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer Emplace";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -81,10 +81,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Set updates a value via its handle")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer Set";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer Set";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -100,10 +100,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erase keeps other handles valid despite the swap")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer Erase";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer Erase";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -132,10 +132,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erasing the last element moves nothing")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer EraseLast";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer EraseLast";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -157,10 +157,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erase re-dirties the swapped-in slot")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer EraseDirty";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer EraseDirty";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -182,10 +182,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erase down to empty then refill")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer Refill";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer Refill";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -209,10 +209,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Update clears dirty blocks and is a no-op when clean")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "PackedBuffer Update";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "PackedBuffer Update";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -230,10 +230,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Dirty tracking spans multiple blocks")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 2 blocks.
-		desc.debugName = "PackedBuffer Blocks";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
+		desc.debugName    = "PackedBuffer Blocks";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -257,10 +257,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Update skips a block left dirty above the shrunken size")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = 2 * sizeof(int);  // Two elements per block => 4 blocks.
-		desc.debugName = "PackedBuffer Underflow";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = 2 * sizeof(int);  // Two elements per block => 4 blocks.
+		desc.debugName    = "PackedBuffer Underflow";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -288,10 +288,10 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
 	SECTION("A dirty element past the first block uploads its own bytes")
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = 16;
-		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 4 blocks.
-		desc.debugName = "PackedBuffer Offset Upload";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = 16;
+		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 4 blocks.
+		desc.debugName    = "PackedBuffer Offset Upload";
 
 		auto pb = PackedInt(desc, resourceManager);
 
@@ -305,7 +305,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		pb.Update(cmdList);
 
 		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = desc.maxCount * sizeof(int);
+		rbDesc.byteSize  = desc.initialCount * sizeof(int);
 		rbDesc.debugName = "PackedBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 

@@ -115,9 +115,9 @@ namespace bgl
 
 	struct ComputeBufferDesc
 	{
-		uint32_t    maxCount    = 0;
-		uint32_t    elementSize = 0;
-		std::string debugName   = "Unnamed Compute Buffer";
+		uint32_t    initialCount = 0;
+		uint32_t    elementSize  = 0;
+		std::string debugName    = "Unnamed Compute Buffer";
 
 		template <core::type_traits::trivially_copyable T>
 		ComputeBufferDesc&
@@ -128,9 +128,9 @@ namespace bgl
 		}
 
 		ComputeBufferDesc&
-		SetMaxCount(uint32_t count) noexcept
+		SetInitialCount(uint32_t count) noexcept
 		{
-			maxCount = count;
+			initialCount = count;
 			return *this;
 		}
 

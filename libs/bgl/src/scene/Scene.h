@@ -191,12 +191,18 @@ namespace bgl
 			MaterialHandle             material);
 
 		/**
-		 * Rejects a mesh that could never fit in this scene, whatever else is loaded.
+		 * Sizes every GPU arena to its SceneDesc starting point.
 		 *
-		 * @throws SceneError naming the budget the mesh overruns and by how much.
+		 * @throws std::runtime_error if the device cannot allocate one; the constructor converts it
+		 *         to SceneError, so a caller only ever sees the documented type.
 		 */
 		void
-		RequireFitsBudget(const assetlib::BMesh& mesh, const assetlib::Mesh& meshEntry) const;
+		InitArenas();
+
+		// Claims a geom slot, growing the table when it is full. Unlike the GPU arenas this is a
+		// pure CPU side table, so it cannot fail on device memory.
+		[[nodiscard]] core::slot_handle
+		AllocateGeomSlot(const idl::RangeWithCount& submeshes);
 
 		// The desc -> GPU-struct conversion, shared by Create* and Update*, so a material built by
 		// either route is byte-identical (including the default-texture fallbacks for absent maps).

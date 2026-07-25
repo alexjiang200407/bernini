@@ -30,14 +30,14 @@ namespace
 	bgl::SceneDesc
 	MakeSceneDesc()
 	{
-		auto sceneDesc                    = bgl::SceneDesc();
-		sceneDesc.maxGeom                 = 32;
-		sceneDesc.maxMeshlets             = 8192;
-		sceneDesc.maxSubmeshes            = 64;
-		sceneDesc.maxVertexBufferByteSize = 8'000'000;
-		sceneDesc.maxIndices              = 500'000;
-		sceneDesc.maxPbrMaterials         = 32;
-		sceneDesc.maxLoosePbrMaterials    = 32;
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 32;
+		sceneDesc.initialMeshlets             = 8192;
+		sceneDesc.initialSubmeshes            = 64;
+		sceneDesc.initialVertexBufferByteSize = 8'000'000;
+		sceneDesc.initialIndices              = 500'000;
+		sceneDesc.initialPbrMaterials         = 32;
+		sceneDesc.initialLoosePbrMaterials    = 32;
 		return sceneDesc;
 	}
 

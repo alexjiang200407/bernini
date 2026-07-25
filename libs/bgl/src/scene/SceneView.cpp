@@ -33,44 +33,75 @@ namespace bgl
 
 	SceneView::SceneView(
 		const SceneRef&                   scene,
-		uint32_t                          maxInstances,
+		uint32_t                          initialInstances,
 		core::SharedRef<IResourceManager> resourceManager) :
-		m_Scene(scene), m_ResourceManager(std::move(resourceManager)), m_MaxInstances(maxInstances)
+		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
+		m_InitialInstances(initialInstances)
 	{
 		m_SceneRaw = m_Scene->As<Scene>();
 		gassert(m_SceneRaw != nullptr, "SceneView requires a valid Scene");
 
 		m_NamePrefix = std::format("v{}:", g_NextViewId.fetch_add(1));
 
+		try
+		{
+			InitBuffers();
+		}
+		catch (const std::runtime_error& e)
+		{
+			throw SceneError(e.what());
+		}
+	}
+
+	void
+	SceneView::InitBuffers()
+	{
+		const uint32_t paddedInstances =
+			core::round_up(m_InitialInstances, idl::cHistogramGroupSize);
+
 		{
 			auto instanceBufferDesc = PackedBufferDesc();
 			// Round up so the kInvalid tail padding (see Update) always fits: the
 			// counting sort dispatches whole groups, so it may read up to a group past
 			// the last instance.
-			instanceBufferDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
-			instanceBufferDesc.debugName = "Instance Buffer";
-			instanceBufferDesc.blockSize = sizeof(SubmeshInstance) * 256;
+			instanceBufferDesc.initialCount = paddedInstances;
+			instanceBufferDesc.debugName    = "Instance Buffer";
+			instanceBufferDesc.blockSize    = sizeof(SubmeshInstance) * 256;
 
 			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
 		}
 
 		{
-			auto meshBufferDesc      = EntryBufferDesc();
-			meshBufferDesc.maxCount  = m_MaxInstances;
-			meshBufferDesc.debugName = "Mesh Buffer";
-			meshBufferDesc.blockSize = sizeof(idl::Mesh) * 256;
+			auto meshBufferDesc         = EntryBufferDesc();
+			meshBufferDesc.initialCount = m_InitialInstances;
+			meshBufferDesc.debugName    = "Mesh Buffer";
+			meshBufferDesc.blockSize    = sizeof(idl::Mesh) * 256;
 
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
 
 		{
+			auto countDesc = ComputeBufferDesc();
+			countDesc.SetElement<uint32_t>();
+			countDesc.initialCount = 1;
+			countDesc.debugName    = "Transparent Sort Count";
+
+			m_TransparentSortCount.Init(std::move(countDesc), m_ResourceManager);
+		}
+
+		InitInstanceScratch(paddedInstances);
+	}
+
+	void
+	SceneView::InitInstanceScratch(uint32_t paddedInstances)
+	{
+		{
 			auto compactedInstancesDesc = ComputeBufferDesc();
 			compactedInstancesDesc.SetElement<uint32_t>();
 			// Match the instance buffer: the compact pass appends one entry per live instance, of
 			// which there can be as many as that (padded) buffer holds.
-			compactedInstancesDesc.maxCount =
-				core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
-			compactedInstancesDesc.debugName = "Compacted Instances";
+			compactedInstancesDesc.initialCount = paddedInstances;
+			compactedInstancesDesc.debugName    = "Compacted Instances";
 
 			m_CompactedInstances.Init(std::move(compactedInstancesDesc), m_ResourceManager);
 		}
@@ -80,18 +111,17 @@ namespace bgl
 			visibilityDesc.SetElement<idl::InstanceVisibility>();
 			// The cull pass writes one word per instance slot over the whole padded range, so match
 			// the instance buffer's padded size exactly.
-			visibilityDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
-			visibilityDesc.debugName = "Instance Visibility";
+			visibilityDesc.initialCount = paddedInstances;
+			visibilityDesc.debugName    = "Instance Visibility";
 
 			m_InstanceVisibility.Init(std::move(visibilityDesc), m_ResourceManager);
 		}
 
 		{
-			auto sortedTransparentDesc = ComputeBufferDesc();
+			auto sortedTransparentDesc         = ComputeBufferDesc();
+			sortedTransparentDesc.initialCount = paddedInstances;
+			sortedTransparentDesc.debugName    = "Sorted Transparent Instances";
 			sortedTransparentDesc.SetElement<uint32_t>();
-			sortedTransparentDesc.maxCount =
-				core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
-			sortedTransparentDesc.debugName = "Sorted Transparent Instances";
 
 			m_SortedTransparentInstances.Init(std::move(sortedTransparentDesc), m_ResourceManager);
 		}
@@ -102,20 +132,29 @@ namespace bgl
 			// instances are transparent, cannot run past the end -- only the sort itself is capped.
 			auto keysDesc = ComputeBufferDesc();
 			keysDesc.SetElement<glm::uvec2>();
-			keysDesc.maxCount  = core::round_up(m_MaxInstances, idl::cHistogramGroupSize);
-			keysDesc.debugName = "Transparent Sort Entries";
+			keysDesc.initialCount = paddedInstances;
+			keysDesc.debugName    = "Transparent Sort Entries";
 
 			m_TransparentSortEntries.Init(std::move(keysDesc), m_ResourceManager);
 		}
+	}
 
-		{
-			auto countDesc = ComputeBufferDesc();
-			countDesc.SetElement<uint32_t>();
-			countDesc.maxCount  = 1;
-			countDesc.debugName = "Transparent Sort Count";
+	void
+	SceneView::SyncInstanceScratch()
+	{
+		// These four are indexed by instance slot and written over the whole padded range, so they
+		// must track the instance buffer exactly -- resizing one without the others is an
+		// out-of-bounds UAV write, not a capacity shortfall.
+		const uint32_t padded =
+			core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize);
 
-			m_TransparentSortCount.Init(std::move(countDesc), m_ResourceManager);
-		}
+		if (padded <= m_CompactedInstances.GetDesc().initialCount)
+			return;
+
+		m_CompactedInstances.Resize(padded);
+		m_InstanceVisibility.Resize(padded);
+		m_SortedTransparentInstances.Resize(padded);
+		m_TransparentSortEntries.Resize(padded);
 	}
 
 	SceneView::~SceneView() noexcept
@@ -187,6 +226,8 @@ namespace bgl
 
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
+
+			SyncInstanceScratch();
 
 			// m_SceneEpoch is deliberately not advanced: these instances are current, but their
 			// siblings may not be, and marking the view clean would strand them on a stale material.
@@ -413,12 +454,19 @@ namespace bgl
 			m_SceneEpoch = epoch;
 		}
 
+		// Retires the resources a scratch resize superseded. These are not in GetInstanceBuffers, so
+		// nothing else would.
+		m_InstanceVisibility.Update(cmdList);
+		m_SortedTransparentInstances.Update(cmdList);
+		m_TransparentSortEntries.Update(cmdList);
+
 		auto buffers = GetInstanceBuffers();
 		std::apply(
 			[cmdList](auto&... buffer) {
 				(..., [&]() {
 					if constexpr (is_compute_buffer_v<decltype(buffer)>)
 					{
+						buffer.Update(cmdList);
 						buffer.Clear(cmdList);
 					}
 					else

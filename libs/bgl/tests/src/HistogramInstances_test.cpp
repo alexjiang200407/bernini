@@ -68,9 +68,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc      = bgl::PackedBufferDesc();
-		desc.maxCount  = paddedCount;
-		desc.debugName = "Histogram Instances";
+		auto desc         = bgl::PackedBufferDesc();
+		desc.initialCount = paddedCount;
+		desc.debugName    = "Histogram Instances";
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
@@ -112,8 +112,8 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
-		desc.maxCount  = bgl::c_PsoCount;
-		desc.debugName = "Histogram Output";
+		desc.initialCount = bgl::c_PsoCount;
+		desc.debugName    = "Histogram Output";
 		outBuffer.Init(desc, resourceManager);
 	}
 
@@ -124,8 +124,8 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::InstanceVisibility>();
-		desc.maxCount  = paddedCount;
-		desc.debugName = "Visibility";
+		desc.initialCount = paddedCount;
+		desc.debugName    = "Visibility";
 		visibility.Init(desc, resourceManager);
 	}
 

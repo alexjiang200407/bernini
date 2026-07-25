@@ -108,13 +108,13 @@ TEST_CASE(
 	auto target = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 4;
-	sceneDesc.maxMeshlets             = 128;
-	sceneDesc.maxSubmeshes            = 4;
-	sceneDesc.maxVertexBufferByteSize = 100000;
-	sceneDesc.maxIndices              = 4000;
-	sceneDesc.maxPbrMaterials         = 8;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 128;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 100000;
+	sceneDesc.initialIndices              = 4000;
+	sceneDesc.initialPbrMaterials         = 8;
 
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);

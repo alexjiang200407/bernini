@@ -41,10 +41,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("CRUD")
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 3;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "Test Entry Buffer";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 3;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "Test Entry Buffer";
 
 		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
 
@@ -91,10 +91,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("Add and Set")
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "EntryBuffer Add/Set";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "EntryBuffer Add/Set";
 
 		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
 
@@ -119,10 +119,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("Erase reuses the slot with a bumped generation")
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "EntryBuffer Erase";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "EntryBuffer Erase";
 
 		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
 
@@ -148,10 +148,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("Dirty block tracking across blocks")
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 2 blocks.
-		desc.debugName = "EntryBuffer Blocks";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
+		desc.debugName    = "EntryBuffer Blocks";
 
 		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
 
@@ -182,10 +182,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("IsValid detects use-after-free")
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "EntryBuffer IsValid";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "EntryBuffer IsValid";
 
 		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
 
@@ -215,10 +215,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 			uint32_t refCount = 0;
 		};
 
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 4;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "EntryBuffer Meta";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "EntryBuffer Meta";
 
 		auto entryBuffer = bgl::EntryBuffer<int, RefMeta>(desc, resourceManager);
 
@@ -239,10 +239,10 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
 	SECTION("A dirty slot past the first block uploads its own bytes")
 	{
-		auto desc      = bgl::EntryBufferDesc();
-		desc.maxCount  = 16;
-		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 4 blocks.
-		desc.debugName = "EntryBuffer Offset Upload";
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 16;
+		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 4 blocks.
+		desc.debugName    = "EntryBuffer Offset Upload";
 
 		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
 
@@ -256,7 +256,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		entryBuffer.Update(cmdList);
 
 		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = desc.maxCount * sizeof(int);
+		rbDesc.byteSize  = desc.initialCount * sizeof(int);
 		rbDesc.debugName = "EntryBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 

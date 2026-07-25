@@ -23,8 +23,8 @@ struct AssetThumbnailDesc
 {
 	Renderer* renderer = nullptr;
 
-	uint32_t dimension    = 256;
-	uint32_t maxInstances = 256;
+	uint32_t dimension        = 256;
+	uint32_t initialInstances = 256;
 
 	std::string skybox;
 	std::string irradiance;

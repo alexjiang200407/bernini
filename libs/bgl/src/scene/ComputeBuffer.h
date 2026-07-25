@@ -1,6 +1,7 @@
 #pragma once
 #include "cmd/CommandList.h"
 #include "resource/ResourceManager.h"
+#include "scene/GrowableGpuBuffer.h"
 
 namespace bgl
 {
@@ -12,19 +13,37 @@ namespace bgl
 	{
 	public:
 		ComputeBuffer() noexcept = default;
-		ComputeBuffer(ComputeBufferDesc desc, ResourceManagerRef resourceManager) noexcept
+		ComputeBuffer(ComputeBufferDesc desc, ResourceManagerRef resourceManager)
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
+		ComputeBuffer(const ComputeBuffer&)     = delete;
+		ComputeBuffer(ComputeBuffer&&) noexcept = default;
+
+		ComputeBuffer&
+		operator=(const ComputeBuffer&) = delete;
+
+		ComputeBuffer&
+		operator=(ComputeBuffer&&) noexcept = default;
+
 		void
-		Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager) noexcept;
+		Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager);
+
+		/**
+		 * Reallocates at `newCount` elements, discarding the contents: this is per-frame scratch
+		 * that its producing pass overwrites, so there is nothing to carry forward.
+		 *
+		 * @throws std::runtime_error if the device cannot allocate; the buffer is left intact.
+		 */
+		void
+		Resize(uint32_t newCount);
 
 		// True once Init() has created the GPU buffer and before Release().
 		[[nodiscard]] bool
 		IsInitialized() const noexcept
 		{
-			return !m_Handle.IsNull();
+			return m_Storage.IsInitialized();
 		}
 
 		[[nodiscard]] const ComputeBufferDesc&
@@ -34,18 +53,27 @@ namespace bgl
 			return m_Desc;
 		}
 
+		// Re-read every frame: Resize mints a new handle and retires the old one (see
+		// GrowableGpuBuffer), so a cached descriptor index goes stale.
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
-			return m_Handle;
+			return m_Storage.GetHandle();
+		}
+
+		// Retires the resources a Resize superseded. Nothing is copied forward.
+		void
+		Update(ICommandList* cmdList)
+		{
+			m_Storage.FlushGrowth(cmdList);
 		}
 
 		[[nodiscard]] uint64_t
 		ByteSize() const noexcept
 		{
 			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
-			return static_cast<uint64_t>(m_Desc.maxCount) * m_Desc.elementSize;
+			return static_cast<uint64_t>(m_Desc.initialCount) * m_Desc.elementSize;
 		}
 
 		void
@@ -55,25 +83,18 @@ namespace bgl
 			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 
 			const auto zeros = std::vector<std::byte>(ByteSize(), std::byte{ 0 });
-			cmd->WriteBuffer(m_Handle, zeros.data(), zeros.size());
+			cmd->WriteBuffer(m_Storage.GetHandle(), zeros.data(), zeros.size());
 		}
 
 		void
 		Release(bool deferred = true) noexcept
 		{
-			if (!m_Handle.IsNull())
-			{
-				m_ResourceManager->DestroyBuffer(m_Handle, deferred);
-				m_Handle = {};
-			}
-
-			m_ResourceManager.Reset();
+			m_Storage.Release(deferred);
 		}
 
 	private:
-		ComputeBufferDesc  m_Desc;
-		ResourceManagerRef m_ResourceManager;
-		BufferHandle       m_Handle;
+		ComputeBufferDesc m_Desc;
+		GrowableGpuBuffer m_Storage;
 	};
 
 	template <typename T>
