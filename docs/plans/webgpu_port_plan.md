@@ -108,7 +108,8 @@ The failure mode this avoids is real: debugging "black screen in Chrome" where t
 Mirror the Metal port exactly: `libs/bgl/src/webgpu/` with `_wgpu` file suffixes, a `bgl_webgpu`
 object/static lib, glob filters widened to `.*/src/(d3d12|metal|webgpu)/.*`,
 `RENDERER_BACKEND_WEBGPU` compile definition, `CreateGraphics` defined inside the backend.
-`webgpu.h` is the only graphics API included there.
+The Dawn WebGPU API is the only graphics API included there — the C `webgpu.h` through W1, then
+its header-only C++ RAII wrapper `webgpu_cpp.h` from W1.75 on (see the staging list).
 
 **Dawn is consumed via `FetchContent`**, gated on `RENDERER_BACKEND=WEBGPU`, with the revision
 pinned in `libs/bgl/src/webgpu/CMakeLists.txt`.
@@ -443,6 +444,25 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   therefore a W3 deliverable, not an early one — and if that ordering ever needs to change, the
   change is to make pass initialization lazy or capability-selected rather than eager, which is a
   `RenderContext` change and should be costed as one.
+* **W1.75 — convert the backend to the `webgpu_cpp` wrapper.** W1 is written against the C
+  `webgpu.h`, so every backend object carries a hand-written `wgpuXAddRef`/`wgpuXRelease` pair and
+  a leak-on-early-return hazard. Dawn ships `webgpu_cpp.h`, a header-only RAII wrapper (`namespace
+  wgpu`, ~10k lines, no library/exceptions/RTTI): `ObjectBase` add-refs on copy, releases on
+  destruct, moves, and offers `Acquire()`/`Get()` for the raw-handle seam. Converting replaces all
+  the manual lifetime code and swaps raw `WGPU*` constants for enum classes.
+
+  **Do it here — between W1 and W2 — not later.** The RAII payoff scales with object count, and
+  W2/W3 are where the objects multiply (pipelines, bind-group layouts, textures, views, samplers).
+  Convert the ~6 classes that exist now while it is cheap, so that surface is authored against the
+  C++ API from the start rather than written in C and migrated twice. One prerequisite: resolve the
+  name clash between Dawn's global `wgpu::` and this backend's `bgl::wgpu` helpers (rename the
+  latter) so `wgpu::` is unambiguous.
+  *Gate:* `bgl_webgpu_tests` stays green — a pure refactor, no behaviour change; its own reviewable
+  commit, kept out of the W1 PR so the mechanical rewrite does not bury the review.
+
+  Verified so this is not a leap: the wrapper is **header-only** (so no ABI/exception cost), and
+  the Emscripten `emdawnwebgpu` package ships `webgpu_cpp/include` too, so the C++ layer is
+  identical on native and browser — it does not fork the two targets.
 * **W2 — shader pipeline.** Slang session targeting WGSL in the native backend;
   `ReflectedLayout` extended with `(group, binding)`; WGSL-target variants of the `types.*Buffer`
   primitives; the two migrations the slangc probe proved necessary — `InterlockedAdd` on plain
