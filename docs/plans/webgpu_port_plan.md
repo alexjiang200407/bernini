@@ -470,9 +470,19 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   fields → typed `Atomic<T>` (shared-source; D3D12 is unaffected), and a WGSL lowering in the IDL
   codegen for the `uint16_t` fields (pack pairs into `u32` behind accessors, C++/DXIL byte layout
   untouched); `compile_shader(... TARGET wgsl)` validation entries for every compute kernel.
+* **W2 — program-cache generalization (native warm cache).** Lift the program cache off its
+  D3D12-private `.bsc` payload into a **target-tagged cooked program** — WGSL text (or a
+  Tint-validated blob) + `ReflectedLayout` + bind-group layout — keyed by the same content salt the
+  D3D12 cache uses, so the native WebGPU backend skips the Slang→WGSL compile across runs exactly as
+  D3D12 skips Slang→DXIL (see § *Shaders: cooked WGSL, same cache shape*). Scope is the **native**
+  backend only: the runtime Slang session stays, and the cooked set is a warm cache. Two things are
+  explicitly *not* here — the offline cook step that ships blobs and drops `slang::slang` from the
+  wasm link (that is W5, the browser build), and any driver-PSO layer (WebGPU has no
+  `ID3D12PipelineLibrary` analog; `createRenderPipelineAsync` and the platform own that half).
   *Gate:* all five culling/sort kernels compile from their real Slang sources **and validate
-  under Tint** (slangc acceptance alone is not the bar — see § binding), and the W1 tests pass
-  against them (byte-identical results vs. the WGSL fixtures).
+  under Tint** (slangc acceptance alone is not the bar — see § binding), the W1 tests pass against
+  them (byte-identical results vs. the WGSL fixtures), and a second run of the suite hits the cooked
+  program cache — no Slang invocation — with identical results.
 * **W3 — raster path, and the first pixels through the public API.** Textures/RTV/DSV (depth is
   `depth32float` — the D24S8 remap decision is already made for Metal), render pipelines, the
   meshlet-expansion kernel + vertex-pulling forward path, `IRenderTarget` over the W1.5 surface
