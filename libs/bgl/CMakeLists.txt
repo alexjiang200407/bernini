@@ -131,10 +131,16 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
 elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
-	# Build-time WGSL validation only -- no runtime cook yet. bgl_compile_shaders fails the build
-	# if a kernel stops compiling to WGSL; nothing is staged into the runtime layout.
+	# bgl_compile_shaders fails the build if a kernel stops compiling to WGSL; bgl_copy_shader_src
+	# stages the raw Slang sources so the runtime session can load and compile modules on device.
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
-	add_dependencies(bgl bgl_compile_shaders)
+	add_dependencies(bgl bgl_compile_shaders bgl_copy_shader_src)
+
+	# The suite links the backend objects rather than bgl, so it needs the shader targets directly
+	# -- otherwise building it alone (just run bgl_webgpu_tests) leaves the sources unstaged.
+	if(TARGET bgl_webgpu_tests)
+		add_dependencies(bgl_webgpu_tests bgl_compile_shaders bgl_copy_shader_src)
+	endif()
 
 	target_compile_definitions(bgl_webgpu PRIVATE BGL_EXPORTS)
 

@@ -72,6 +72,7 @@ if (BUILD_TESTS)
     target_link_libraries(bgl_webgpu_tests
         PRIVATE
             bgl_webgpu
+            bgl_objects
             Catch2::Catch2
             Catch2::Catch2WithMain
     )

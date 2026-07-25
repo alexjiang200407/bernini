@@ -76,6 +76,14 @@ namespace bgl
 			return m_Instance;
 		}
 
+		// The runtime Slang session, targeting WGSL. Shaders load their modules through it and
+		// pipelines link + emit WGSL from it.
+		[[nodiscard]] slang::ISession*
+		GetSlangSession() const noexcept
+		{
+			return m_SlangSession.get();
+		}
+
 		[[nodiscard]] core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;
 
@@ -120,6 +128,9 @@ namespace bgl
 		wgpu::Adapter  m_Adapter;
 		wgpu::Device   m_Device;
 		wgpu::Queue    m_Queue;
+
+		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+		Slang::ComPtr<slang::ISession>       m_SlangSession;
 
 		WgpuAdapterInfo m_AdapterInfo;
 	};

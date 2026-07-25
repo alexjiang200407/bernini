@@ -13,12 +13,11 @@ endif()
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-# The WebGPU backend compiles the compute kernels to WGSL as a build-time check only -- slangc
-# fails the build on any construct its WGSL target rejects (the migrations tracked in the port
-# plan's W2). The emitted .wgsl is not staged for runtime yet; that is the later cook step. Only
-# the kernels already free of the pending migrations are listed -- the rest join as they land.
-# Tint-level validation (constructs slangc emits but Dawn rejects) is a separate gate through
-# wgpuDeviceCreateShaderModule, not slangc, because this Slang build has no Tint linked.
+# The WebGPU backend compiles the compute kernels to WGSL as a build-time check -- slangc fails
+# the build on any construct its WGSL target rejects (the migrations tracked in the port plan's
+# W2). Tint-level validation (constructs slangc emits but Dawn rejects) is a separate gate through
+# wgpuDeviceCreateShaderModule, not slangc, because this Slang build has no Tint linked. The raw
+# Slang sources are staged so the runtime session can load and compile modules to WGSL on device.
 if(RENDERER_BACKEND STREQUAL "WEBGPU")
     foreach(KERNEL PrefixSumInstances TransparentSort HistogramInstances CompactInstances CullInstances)
         compile_shader(
@@ -32,6 +31,15 @@ if(RENDERER_BACKEND STREQUAL "WEBGPU")
 
     add_custom_target(bgl_compile_shaders ALL
         DEPENDS ${SLANG_COMPILE_OUTS}
+    )
+
+    add_custom_target(bgl_copy_shader_src ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
+        COMMENT "Copying raw Slang sources to the runtime output layout"
+        VERBATIM
     )
 
     return()

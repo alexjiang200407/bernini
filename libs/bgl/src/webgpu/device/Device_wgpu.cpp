@@ -4,6 +4,8 @@
 #include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue_wgpu.h"
 #include "resource/ResourceManager_wgpu.h"
+#include "resource/Shader_wgpu.h"
+#include "slang/SlangErrorChecker.h"
 
 #include <bgl/IGraphics.h>
 
@@ -90,6 +92,40 @@ namespace bgl
 				std::string_view(message));
 		}
 
+		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
+
+		Slang::ComPtr<slang::ISession>
+		CreateWgslSession(slang::IGlobalSession* globalSession)
+		{
+			auto targetDesc   = slang::TargetDesc{};
+			targetDesc.format = SLANG_WGSL;
+
+			// BGL_WGSL selects the plainly-bound (non-.Handle) buffer primitives, in lockstep with
+			// the offline -DBGL_WGSL in cmake/compile_shader.cmake; BERNINI_GPU_DEBUG enables the
+			// dbg_raise bodies, matching the offline compile.
+			auto macros = std::vector<slang::PreprocessorMacroDesc>{ { "BGL_WGSL", "1" } };
+#if defined(BERNINI_GPU_DEBUG)
+			macros.push_back({ "BERNINI_GPU_DEBUG", "1" });
+#endif
+
+			auto sessionDesc            = slang::SessionDesc{};
+			sessionDesc.targetCount     = 1;
+			sessionDesc.targets         = &targetDesc;
+			sessionDesc.searchPaths     = c_ShaderSearchPaths;
+			sessionDesc.searchPathCount = std::size(c_ShaderSearchPaths);
+			// Match the column-major matrices the CPU side uploads, as the D3D12 session does.
+			sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+			sessionDesc.preprocessorMacros      = macros.data();
+			sessionDesc.preprocessorMacroCount  = static_cast<SlangInt>(macros.size());
+
+			auto session = Slang::ComPtr<slang::ISession>();
+			globalSession->createSession(sessionDesc, session.writeRef());
+			if (session == nullptr)
+				throw GraphicsError("wgsl: failed to create the Slang session");
+
+			return session;
+		}
+
 		wgpu::Device
 		RequestDevice(const wgpu::Instance& instance, const wgpu::Adapter& adapter)
 		{
@@ -144,6 +180,12 @@ namespace bgl
 			m_AdapterInfo.device,
 			m_AdapterInfo.description,
 			static_cast<int>(m_AdapterInfo.backendType));
+
+		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
+		if (m_SlangGlobalSession == nullptr)
+			throw GraphicsError("wgsl: failed to create the Slang global session");
+
+		m_SlangSession = CreateWgslSession(m_SlangGlobalSession.get());
 	}
 
 	core::SharedRef<ICommandQueue>
@@ -192,9 +234,9 @@ namespace bgl
 	}
 
 	core::SharedRef<IShader>
-	Device::CreateShader(ShaderDesc) const noexcept
+	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		gfatal("CreateShader: the WebGPU backend has no Slang-to-WGSL path yet");
+		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession.get());
 	}
 
 	core::SharedRef<IComputePipeline>
