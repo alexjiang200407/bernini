@@ -34,7 +34,7 @@ namespace bgl::idl
 	{
 		VertexSemantic semantic;
 		VertexFormat format;
-		uint16_t byteOffset;
+		uint32_t byteOffset;
 	};
 
 	static_assert(sizeof(VertexAttribute) == 12);
@@ -45,13 +45,13 @@ namespace bgl::idl
 	struct VertexLayout
 	{
 		VertexAttribute attributes[8];
-		uint16_t attributeCount;
-		uint16_t stride;
+		uint32_t attributeCount;
+		uint32_t stride;
 	};
 
-	static_assert(sizeof(VertexLayout) == 100);
+	static_assert(sizeof(VertexLayout) == 104);
 	static_assert(offsetof(VertexLayout, attributes) == 0);
 	static_assert(offsetof(VertexLayout, attributeCount) == 96);
-	static_assert(offsetof(VertexLayout, stride) == 98);
+	static_assert(offsetof(VertexLayout, stride) == 100);
 
 }

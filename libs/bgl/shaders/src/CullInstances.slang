@@ -80,10 +80,10 @@ void main(uint globalIdx: SV_DispatchThreadID)
     gUniforms.visibility[globalIdx].visible = visible ? 1u : 0u;
 
 #if defined(BERNINI_GPU_DEBUG)
-    InterlockedAdd(gUniforms.stats[0].tested, 1u);
+    gUniforms.stats[0].tested.add(1u);
     if (!visible)
     {
-        InterlockedAdd(gUniforms.stats[0].frustumCulled, 1u);
+        gUniforms.stats[0].frustumCulled.add(1u);
     }
 #endif
 }

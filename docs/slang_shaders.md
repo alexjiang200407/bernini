@@ -45,9 +45,16 @@ WGSL forbids a plain read of an `atomic<u32>`, so **every** access to an atomic 
 ## No 16-bit integers in WGSL
 
 Core WGSL has no `uint16_t`/`int16_t`. A 16-bit scalar in shared shader code — or reached through an
-imported IDL struct — fails the WGSL compile. IDL fields that are 16-bit are packed into `u32` behind
-accessors by the codegen for the WGSL target; do not introduce a bare 16-bit scalar in a shader that
-must be portable.
+imported IDL struct a shader loads — fails the WGSL compile. Do not introduce a bare 16-bit scalar in
+a portable shader or in an IDL struct one loads. To remove an existing 16-bit field, the fix depends
+on whether the struct's byte layout is fixed:
+
+- **CPU-built, uploaded structs** (e.g. `idl::VertexLayout`, built field-by-field and written to a
+  buffer, never `memcpy`'d from disk): just **widen** the field to `uint`. The GPU struct grows a
+  little; nothing external constrains its size. The CPU mirror follows automatically.
+- **Structs `memcpy`'d from a fixed cooked format** (e.g. `Meshlet` from a baked mesh): the byte
+  width must be preserved, so **pack** two 16-bit values into one `uint` (hi/lo) behind accessors —
+  widening would break the on-disk layout.
 
 ## No mesh or amplification shaders in WGSL
 

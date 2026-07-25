@@ -27,12 +27,15 @@ public struct VertexAttribute
 {
     public VertexSemantic semantic;
     public VertexFormat format;
-    public uint16_t byteOffset;
+    // 32-bit, not uint16_t: WGSL has no 16-bit integers. This descriptor is built on the CPU and
+    // uploaded (never memcpy'd from a fixed on-disk layout), so widening it costs only buffer size,
+    // and the cook's own assetlib::VertexLayout is a separate 16-bit type left untouched.
+    public uint byteOffset;
 };
 
 public struct VertexLayout
 {
     public VertexAttribute attributes[8];
-    public uint16_t attributeCount;
-    public uint16_t stride;
+    public uint attributeCount;
+    public uint stride;
 };
