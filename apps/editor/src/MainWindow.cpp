@@ -55,7 +55,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		gfxOpts.maxDsvs       = gfxSettings["maxDsvs"].GetOrDefault(gfxOpts.maxDsvs);
 		gfxOpts.maxTextures   = gfxSettings["maxTextures"].GetOrDefault(gfxOpts.maxTextures);
 
-		if (gfxSettings["enableShaderCache"].GetOrDefault(false))
+		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
 		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
