@@ -66,6 +66,14 @@ namespace bgl
 			std::span<const TextureSubresourceData> subresources) noexcept override;
 
 		void
+		CopyBuffer(
+			BufferHandle dst,
+			BufferHandle src,
+			uint64_t     dstOffset,
+			uint64_t     srcOffset,
+			uint64_t     byteSize) noexcept override;
+
+		void
 		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept override;
 
 		void

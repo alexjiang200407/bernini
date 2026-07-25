@@ -80,7 +80,24 @@ namespace bgl
 		bufferDesc.isUav     = desc.isUav;
 		bufferDesc.debugName = desc.debugName;
 
-		Buffer buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), bufferSlotHandle.index, bufferDesc);
+		// Out of VRAM throws out of the Buffer ctor, and this is noexcept: catch it here or a
+		// recoverable allocation failure becomes a terminate.
+		Buffer buffer;
+		try
+		{
+			buffer =
+				Buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), bufferSlotHandle.index, bufferDesc);
+		}
+		catch (const std::exception& e)
+		{
+			logger::error(
+				"CreateStructBuffer '{}': allocating {} bytes of device memory failed: {}",
+				desc.debugName,
+				bufferDesc.byteSize,
+				e.what());
+			m_CbvSrvUavSlots.release_slot(bufferSlotHandle.index);
+			return BufferHandle{};
+		}
 
 		if (desc.isUav)
 		{
@@ -123,14 +140,14 @@ namespace bgl
 	BufferHandle
 	ResourceManager::CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept
 	{
-		gassert(desc.maxCount > 0, "ComputeBuffer requires a positive element count");
+		gassert(desc.initialCount > 0, "ComputeBuffer requires a positive element count");
 		gassert(desc.elementSize > 0, "ComputeBuffer requires a positive element size");
 
 		// A compute buffer is a GPU-only structured buffer with UAV access; reuse the
 		// structured-buffer path (default heap + UAV) to create it.
 		StructBufferDesc structDesc;
 		structDesc.stride       = desc.elementSize;
-		structDesc.elementCount = desc.maxCount;
+		structDesc.elementCount = desc.initialCount;
 		structDesc.isUav        = true;
 		structDesc.debugName    = desc.debugName;
 

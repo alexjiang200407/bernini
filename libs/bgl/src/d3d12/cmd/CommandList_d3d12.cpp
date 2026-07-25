@@ -186,6 +186,35 @@ namespace bgl
 	}
 
 	void
+	CommandList::CopyBuffer(
+		BufferHandle dst,
+		BufferHandle src,
+		uint64_t     dstOffset,
+		uint64_t     srcOffset,
+		uint64_t     byteSize) noexcept
+	{
+		if (byteSize == 0)
+			return;
+
+		const auto& dstBuffer = m_ResourceManager->GetBuffer(dst);
+		const auto& srcBuffer = m_ResourceManager->GetBuffer(src);
+
+		gassert(
+			dstOffset + byteSize <= dstBuffer.GetDesc().byteSize,
+			"CopyBuffer destination range exceeds the buffer");
+		gassert(
+			srcOffset + byteSize <= srcBuffer.GetDesc().byteSize,
+			"CopyBuffer source range exceeds the buffer");
+
+		m_CommandList->CopyBufferRegion(
+			dstBuffer.GetD3D12Resource(),
+			dstOffset,
+			srcBuffer.GetD3D12Resource(),
+			srcOffset,
+			byteSize);
+	}
+
+	void
 	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
 	{
 		auto&       srcBuffer = m_ResourceManager->GetBuffer(src);

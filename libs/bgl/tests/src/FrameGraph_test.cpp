@@ -60,6 +60,9 @@ namespace
 		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
 		{}
 		void
+		CopyBuffer(BufferHandle, BufferHandle, uint64_t, uint64_t, uint64_t) noexcept override
+		{}
+		void
 		CopyBufferToReadback(ReadbackBufferHandle, BufferHandle) noexcept override
 		{}
 		void

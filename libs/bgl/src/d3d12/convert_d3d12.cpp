@@ -654,6 +654,13 @@ namespace bgl
 			return D3D12_BARRIER_ACCESS_NO_ACCESS;
 		}
 
+		// COMMON is 0, so it must return early rather than fall through the |= chain, where any
+		// other flag set alongside it would win.
+		if (access & BarrierAccessFlag::kCommon)
+		{
+			return D3D12_BARRIER_ACCESS_COMMON;
+		}
+
 		uint32_t result = 0;
 
 		if (access & BarrierAccessFlag::kIndexBuffer)

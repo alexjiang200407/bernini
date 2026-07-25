@@ -83,6 +83,12 @@ doc and a header disagree, trust the header, then fix this doc.
   retirement of the slot it reads. Everything else (`IScene`, `ISceneView`, pipelines, uniforms)
   stays externally synchronized: one owner, one thread.
 
+  **The manager's pools must stay fixed-capacity for that to hold.** `core::slot_vector` gained a
+  `grow()`, which reallocates and so would invalidate a concurrent lock-free read. It is used by the
+  scene's CPU mirror buffers, which are single-owner; calling it on `m_CbvSrvUavSlots` or any other
+  manager pool would break this bullet. A `core_tests` case pins `data()` across a full
+  allocate/retire/reclaim cycle at capacity.
+
 * **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
   is **not** an `I*` interface — the only thing crossing the boundary is
   `GraphicsOptions::shaderCacheDir` (empty ⇒ disabled), like the descriptor-heap capacities. The
@@ -181,7 +187,10 @@ Everything else is self-explanatory from the header.
 ### IResourceManager
 
 * **`Create*` can return a null handle** on pool exhaustion (heap capacities come from
-  `ResourceManagerDesc`). Check `IsNull()` — do not assume success.
+  `ResourceManagerDesc`) **or when the device is out of memory**. Both are logged and both yield a
+  null handle rather than an exception — these methods are `noexcept`, so a throwing allocation
+  failure would terminate. Check `IsNull()`; do not assume success. On the OOM path the descriptor
+  slot is released again, so a failed create costs nothing.
 * **`CreateRtv` / `CreateDsv`** require the source texture to have been created with the
   matching usage flag (`TextureUsageFlag::kRenderTarget` / `kDepthStencil`).
 * **`CreateSampler` / `DestroySampler` / `GetSampler`** — samplers draw from their own
@@ -221,6 +230,13 @@ Everything else is self-explanatory from the header.
   buffer byte-for-byte, where `offset` applies to both sides. Prefer it over `WriteBuffer` for
   dirty-region flushes: passing a mirror's base to `WriteBuffer` uploads the mirror's *first*
   bytes into a later region, corrupting whatever range lives there.
+* **`CopyBuffer(dst, src, dstOffset, srcOffset, byteSize)`** — a GPU-timeline buffer-to-buffer copy;
+  nothing crosses PCIe, unlike `WriteBuffer`, which stages through the list's upload ring. `src` must
+  be in a copy-source state and `dst` in a copy-dest state, and the two ranges must not overlap when
+  the handles are the same. This is what makes a mirror buffer's growth cheap: re-uploading the CPU
+  mirror instead would cost a blocking `memcpy` plus a PCIe transfer, roughly an order of magnitude
+  more for the same result.
+
 * **`CopyBufferToReadback` / `CopyTextureToReadback`** — source must already be in a
   copy-source state/layout. Texture copy uses subresource 0's linear footprint
   (`GetTextureReadbackLayout`).
