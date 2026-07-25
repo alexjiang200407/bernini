@@ -39,6 +39,12 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - The Dawn archive is chosen by `CMAKE_BUILD_TYPE`, so the backend needs a single-config
   generator. Only MSVC actually requires the match, because its debug and release runtime
   libraries cannot be mixed in one link.
+- **On Windows the backend needs `dxcompiler.dll` and `dxil.dll` beside the executable.** Dawn
+  loads both with `LoadLibrary` to translate and sign its D3D12 shaders, so nothing imports them
+  and vcpkg's applocal deployment does not stage them; the Dawn archive ships neither. `bgl`
+  copies them from the `directx-dxc` port (`./CMakeLists.txt`), so a target that brings up a
+  device must depend on `bgl` even when it links only the backend's objects — `bgl_webgpu_tests`
+  does. Without them device creation fails reporting no adapter.
 - Adapter and device requests are asynchronous. Natively they are awaited with
   `wgpuInstanceWaitAny`, which a browser build cannot do — it must drive them off the event loop.
 - CMake: `./src/webgpu/CMakeLists.txt`

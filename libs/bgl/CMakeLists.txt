@@ -138,6 +138,33 @@ elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
 	target_link_libraries(bgl PRIVATE bgl_webgpu)
 endif()
 
+# Both backends reach DXC through GetProcAddress -- Dawn opens dxcompiler.dll to translate WGSL,
+# and dxil.dll signs the bytecode either backend produces -- so nothing imports either DLL, and
+# vcpkg's applocal deployment stages a DLL by walking the import table. Neither the Dawn archive
+# nor the Slang release carries them. Without dxcompiler.dll Dawn reports no adapter; without
+# dxil.dll the bytecode is unsigned, which D3D12 loads only in Developer Mode. Copied by hand for
+# the same reason as the Agility SDK above.
+#
+# dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
+# sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
+# both from one directory also keeps the compiler and its validator a matched pair, which they
+# have to be: a validator older than the compiler rejects the container.
+if(WIN32)
+	find_package(directx-dxc CONFIG REQUIRED)
+	copy_to_target(bgl ITEMS
+		"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
+		"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
+	)
+
+	# A suite links the backend's objects rather than bgl, so building one on its own -- which
+	# `just run bgl_webgpu_tests` does -- would otherwise leave the DLLs unstaged. Depending on
+	# bgl rather than copying again keeps one writer per file: two POST_BUILD steps copying the
+	# same DLL into the same directory can run at once.
+	if(TARGET bgl_webgpu_tests)
+		add_dependencies(bgl_webgpu_tests bgl)
+	endif()
+endif()
+
 
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     find_package(Catch2 CONFIG REQUIRED)
@@ -202,6 +229,11 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	# "assets/golden/<name>.png". copy_assets (root CMakeLists.txt) stages it once
 	# for every consumer.
 	add_dependencies(bgl_tests copy_assets)
+
+	# Compiles shaders at run time, so it needs the DLLs bgl stages -- see the DXC block above.
+	if(WIN32)
+		add_dependencies(bgl_tests bgl)
+	endif()
 
 	enable_strict_compiler(bgl_tests)
 endif()

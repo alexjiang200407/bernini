@@ -15,6 +15,7 @@
     "ktx",
     "sdl3",
     { "name": "directx-headers", "platform": "windows" },
+    { "name": "directx-dxc", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },
     { "name": "winpixevent", "platform": "windows" }
   ],
