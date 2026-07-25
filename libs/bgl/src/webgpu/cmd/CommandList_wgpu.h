@@ -20,11 +20,11 @@ namespace bgl
 	{
 	public:
 		CommandList(
-			WGPUDevice             device,
+			const wgpu::Device&    device,
 			const CommandListDesc& desc,
 			ResourceManagerRef     resourceManager) noexcept;
 
-		~CommandList() noexcept override;
+		~CommandList() noexcept override = default;
 
 		CommandList(const CommandList&) noexcept = delete;
 		CommandList(CommandList&&) noexcept      = delete;
@@ -123,17 +123,17 @@ namespace bgl
 		Dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept override;
 
 		/** Hands the finished command buffer to the queue, which owns it from then on. */
-		[[nodiscard]] WGPUCommandBuffer
+		[[nodiscard]] wgpu::CommandBuffer
 		TakeCommandBuffer() noexcept;
 
 	private:
-		WGPUDevice         m_Device = nullptr;
+		wgpu::Device       m_Device;
 		CommandListDesc    m_Desc;
 		ResourceManagerRef m_ResourceManager;
 
-		WGPUCommandEncoder m_Encoder       = nullptr;
-		WGPUCommandBuffer  m_CommandBuffer = nullptr;
-		WGPUQueue          m_BoundQueue    = nullptr;
+		wgpu::CommandEncoder m_Encoder;
+		wgpu::CommandBuffer  m_CommandBuffer;
+		wgpu::Queue          m_BoundQueue;
 
 		std::optional<ComputeState> m_CurrentComputeState;
 	};

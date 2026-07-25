@@ -23,9 +23,12 @@ namespace bgl
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
-		ResourceManager(WGPUDevice device, WGPUInstance instance, const ResourceManagerDesc& desc);
+		ResourceManager(
+			const wgpu::Device&        device,
+			const wgpu::Instance&      instance,
+			const ResourceManagerDesc& desc);
 
-		~ResourceManager() noexcept override;
+		~ResourceManager() noexcept override = default;
 
 		ResourceManager(const ResourceManager&) noexcept = delete;
 		ResourceManager(ResourceManager&&) noexcept      = delete;
@@ -186,8 +189,8 @@ namespace bgl
 		void
 		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
 
-		WGPUDevice   m_Device   = nullptr;
-		WGPUInstance m_Instance = nullptr;
+		wgpu::Device   m_Device;
+		wgpu::Instance m_Instance;
 
 		mutable std::mutex m_PoolMutex;
 

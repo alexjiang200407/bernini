@@ -12,186 +12,138 @@ namespace bgl
 	namespace
 	{
 		void
-		WaitFor(WGPUInstance instance, WGPUFuture future)
+		WaitFor(const wgpu::Instance& instance, wgpu::Future future)
 		{
-			auto wait   = WGPUFutureWaitInfo{};
-			wait.future = future;
-
-			const auto status = wgpuInstanceWaitAny(instance, 1, &wait, UINT64_MAX);
-			if (status != WGPUWaitStatus_Success)
+			const auto status = instance.WaitAny(future, UINT64_MAX);
+			if (status != wgpu::WaitStatus::Success)
 				throw GraphicsError(
 					"wgpu: waiting on a future failed with status " +
 					std::to_string(static_cast<int>(status)));
 		}
 
-		WGPUAdapter
-		RequestAdapter(WGPUInstance instance, const WgpuDeviceDesc& desc)
+		wgpu::Adapter
+		RequestAdapter(const wgpu::Instance& instance, const WgpuDeviceDesc& desc)
 		{
-			auto opts            = WGPURequestAdapterOptions{};
+			auto opts            = wgpu::RequestAdapterOptions{};
 			opts.powerPreference = desc.powerPreference;
 
-			struct Result
-			{
-				WGPUAdapter adapter = nullptr;
-				std::string message;
-			} result;
+			wgpu::Adapter adapter;
+			std::string   message;
 
-			auto info      = WGPURequestAdapterCallbackInfo{};
-			info.mode      = WGPUCallbackMode_WaitAnyOnly;
-			info.userdata1 = &result;
-			info.callback  = [](WGPURequestAdapterStatus status,
-			                    WGPUAdapter              adapter,
-			                    WGPUStringView           message,
-			                    void*                    userdata,
-			                    void*) {
-				auto& out = *static_cast<Result*>(userdata);
-				if (status == WGPURequestAdapterStatus_Success)
-					out.adapter = adapter;
-				else
-					out.message = wgpu::ToString(message);
-			};
+			WaitFor(
+				instance,
+				instance.RequestAdapter(
+					&opts,
+					wgpu::CallbackMode::WaitAnyOnly,
+					[&](wgpu::RequestAdapterStatus status,
+			            wgpu::Adapter              got,
+			            wgpu::StringView           msg) {
+						if (status == wgpu::RequestAdapterStatus::Success)
+							adapter = std::move(got);
+						else
+							message = std::string(std::string_view(msg));
+					}));
 
-			WaitFor(instance, wgpuInstanceRequestAdapter(instance, &opts, info));
+			if (adapter == nullptr)
+				throw GraphicsError("wgpu: no adapter available: " + message);
 
-			if (result.adapter == nullptr)
-				throw GraphicsError("wgpu: no adapter available: " + result.message);
-
-			return result.adapter;
+			return adapter;
 		}
 
 		WgpuAdapterInfo
-		ReadAdapterInfo(WGPUAdapter adapter)
+		ReadAdapterInfo(const wgpu::Adapter& adapter)
 		{
-			auto raw = WGPUAdapterInfo{};
-			if (wgpuAdapterGetInfo(adapter, &raw) != WGPUStatus_Success)
+			auto raw = wgpu::AdapterInfo{};
+			if (!adapter.GetInfo(&raw))
 				throw GraphicsError("wgpu: could not read adapter info");
 
 			auto info         = WgpuAdapterInfo{};
-			info.vendor       = wgpu::ToString(raw.vendor);
-			info.architecture = wgpu::ToString(raw.architecture);
-			info.device       = wgpu::ToString(raw.device);
-			info.description  = wgpu::ToString(raw.description);
+			info.vendor       = std::string(std::string_view(raw.vendor));
+			info.architecture = std::string(std::string_view(raw.architecture));
+			info.device       = std::string(std::string_view(raw.device));
+			info.description  = std::string(std::string_view(raw.description));
 			info.backendType  = raw.backendType;
 			info.adapterType  = raw.adapterType;
-
-			wgpuAdapterInfoFreeMembers(raw);
 
 			return info;
 		}
 
 		void
-		OnUncapturedError(
-			const WGPUDevice*,
-			WGPUErrorType  type,
-			WGPUStringView message,
-			void*,
-			void*)
+		OnUncapturedError(const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView message)
 		{
 			logger::error(
 				"[wgpu] uncaptured error ({}): {}",
 				static_cast<int>(type),
-				wgpu::ToString(message));
+				std::string_view(message));
 		}
 
 		void
-		OnDeviceLost(
-			const WGPUDevice*,
-			WGPUDeviceLostReason reason,
-			WGPUStringView       message,
-			void*,
-			void*)
+		OnDeviceLost(const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message)
 		{
 			// Destroying the device reports a loss through this same callback; that one is expected.
-			if (reason == WGPUDeviceLostReason_Destroyed)
+			if (reason == wgpu::DeviceLostReason::Destroyed)
 				return;
 
 			logger::error(
 				"[wgpu] device lost ({}): {}",
 				static_cast<int>(reason),
-				wgpu::ToString(message));
+				std::string_view(message));
 		}
 
-		WGPUDevice
-		RequestDevice(WGPUInstance instance, WGPUAdapter adapter)
+		wgpu::Device
+		RequestDevice(const wgpu::Instance& instance, const wgpu::Adapter& adapter)
 		{
-			auto deviceDesc                        = WGPUDeviceDescriptor{};
-			deviceDesc.uncapturedErrorCallbackInfo = { nullptr,
-				                                       OnUncapturedError,
-				                                       nullptr,
-				                                       nullptr };
-			deviceDesc.deviceLostCallbackInfo      = { nullptr,
-				                                       WGPUCallbackMode_AllowSpontaneous,
-				                                       OnDeviceLost,
-				                                       nullptr,
-				                                       nullptr };
+			auto deviceDesc = wgpu::DeviceDescriptor{};
+			deviceDesc.SetUncapturedErrorCallback(OnUncapturedError);
+			deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous, OnDeviceLost);
 
-			struct Result
-			{
-				WGPUDevice  device = nullptr;
-				std::string message;
-			} result;
+			wgpu::Device device;
+			std::string  message;
 
-			auto info      = WGPURequestDeviceCallbackInfo{};
-			info.mode      = WGPUCallbackMode_WaitAnyOnly;
-			info.userdata1 = &result;
-			info.callback  = [](WGPURequestDeviceStatus status,
-			                    WGPUDevice              device,
-			                    WGPUStringView          message,
-			                    void*                   userdata,
-			                    void*) {
-				auto& out = *static_cast<Result*>(userdata);
-				if (status == WGPURequestDeviceStatus_Success)
-					out.device = device;
-				else
-					out.message = wgpu::ToString(message);
-			};
+			WaitFor(
+				instance,
+				adapter.RequestDevice(
+					&deviceDesc,
+					wgpu::CallbackMode::WaitAnyOnly,
+					[&](wgpu::RequestDeviceStatus status, wgpu::Device got, wgpu::StringView msg) {
+						if (status == wgpu::RequestDeviceStatus::Success)
+							device = std::move(got);
+						else
+							message = std::string(std::string_view(msg));
+					}));
 
-			WaitFor(instance, wgpuAdapterRequestDevice(adapter, &deviceDesc, info));
+			if (device == nullptr)
+				throw GraphicsError("wgpu: could not create device: " + message);
 
-			if (result.device == nullptr)
-				throw GraphicsError("wgpu: could not create device: " + result.message);
-
-			return result.device;
+			return device;
 		}
 	}
 
 	Device::Device(const WgpuDeviceDesc& desc)
 	{
-		// Blocking on a future is opt-in: without TimedWaitAny, wgpuInstanceWaitAny rejects any
-		// non-zero timeout. A browser has no such feature and must poll instead.
+		// Blocking on a future is opt-in: without TimedWaitAny, WaitAny rejects any non-zero
+		// timeout. A browser has no such feature and must poll instead.
 		constexpr auto features =
-			std::array<WGPUInstanceFeatureName, 1>{ { WGPUInstanceFeatureName_TimedWaitAny } };
+			std::array<wgpu::InstanceFeatureName, 1>{ { wgpu::InstanceFeatureName::TimedWaitAny } };
 
-		auto instanceDesc                 = WGPUInstanceDescriptor{};
+		auto instanceDesc                 = wgpu::InstanceDescriptor{};
 		instanceDesc.requiredFeatureCount = features.size();
 		instanceDesc.requiredFeatures     = features.data();
 
-		m_Instance = wgpuCreateInstance(&instanceDesc);
+		m_Instance = wgpu::CreateInstance(&instanceDesc);
 		if (m_Instance == nullptr)
 			throw GraphicsError("wgpu: could not create instance");
 
 		m_Adapter     = RequestAdapter(m_Instance, desc);
 		m_AdapterInfo = ReadAdapterInfo(m_Adapter);
 		m_Device      = RequestDevice(m_Instance, m_Adapter);
-		m_Queue       = wgpuDeviceGetQueue(m_Device);
+		m_Queue       = m_Device.GetQueue();
 
 		logger::info(
 			"[wgpu] adapter '{}' ({}), backend {}",
 			m_AdapterInfo.device,
 			m_AdapterInfo.description,
 			static_cast<int>(m_AdapterInfo.backendType));
-	}
-
-	Device::~Device() noexcept
-	{
-		if (m_Queue != nullptr)
-			wgpuQueueRelease(m_Queue);
-		if (m_Device != nullptr)
-			wgpuDeviceRelease(m_Device);
-		if (m_Adapter != nullptr)
-			wgpuAdapterRelease(m_Adapter);
-		if (m_Instance != nullptr)
-			wgpuInstanceRelease(m_Instance);
 	}
 
 	core::SharedRef<ICommandQueue>

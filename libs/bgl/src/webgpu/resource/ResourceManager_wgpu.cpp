@@ -5,22 +5,13 @@
 namespace bgl
 {
 	ResourceManager::ResourceManager(
-		WGPUDevice                 device,
-		WGPUInstance               instance,
+		const wgpu::Device&        device,
+		const wgpu::Instance&      instance,
 		const ResourceManagerDesc& desc) :
 		m_Device(device), m_Instance(instance), m_Buffers(desc.maxCbvSrvUavs),
 		m_ReadbackBuffers(desc.maxReadbackBuffers)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");
-
-		wgpuDeviceAddRef(m_Device);
-		wgpuInstanceAddRef(m_Instance);
-	}
-
-	ResourceManager::~ResourceManager() noexcept
-	{
-		wgpuInstanceRelease(m_Instance);
-		wgpuDeviceRelease(m_Device);
 	}
 
 	BufferHandle

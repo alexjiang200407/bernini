@@ -21,7 +21,7 @@ TEST_CASE("A WebGPU device can be acquired and reports its adapter", "[wgpu][dev
 
 		// A conforming adapter always names a concrete backend; leaving it Undefined means the
 		// info struct was never populated, which a non-empty description would not reveal.
-		REQUIRE(info.backendType != WGPUBackendType_Undefined);
+		REQUIRE(info.backendType != wgpu::BackendType::Undefined);
 		REQUIRE_FALSE(info.device.empty());
 	}
 }
@@ -31,5 +31,5 @@ TEST_CASE("Two WebGPU devices can be alive at once", "[wgpu][device]")
 	auto first  = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 	auto second = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 
-	REQUIRE(first->GetHandle() != second->GetHandle());
+	REQUIRE(first->GetHandle().Get() != second->GetHandle().Get());
 }

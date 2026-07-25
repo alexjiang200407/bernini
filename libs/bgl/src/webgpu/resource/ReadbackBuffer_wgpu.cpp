@@ -5,60 +5,19 @@
 namespace bgl
 {
 	ReadbackBuffer::ReadbackBuffer(
-		WGPUDevice                device,
-		WGPUInstance              instance,
+		const wgpu::Device&       device,
+		const wgpu::Instance&     instance,
 		const ReadbackBufferDesc& desc) : m_Instance(instance), m_ByteSize(desc.byteSize)
 	{
 		gassert(device != nullptr, "ReadbackBuffer: null device");
 		gassert(desc.byteSize > 0, "ReadbackBuffer '{}': zero byte size", desc.debugName);
 
-		wgpuInstanceAddRef(m_Instance);
-
-		auto wgpuDesc  = WGPUBufferDescriptor{};
-		wgpuDesc.label = wgpu::ToStringView(desc.debugName);
+		auto wgpuDesc  = wgpu::BufferDescriptor{};
+		wgpuDesc.label = std::string_view(desc.debugName);
 		wgpuDesc.size  = core::align(desc.byteSize, 4);
-		wgpuDesc.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+		wgpuDesc.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst;
 
-		m_Buffer = wgpuDeviceCreateBuffer(device, &wgpuDesc);
-	}
-
-	ReadbackBuffer::~ReadbackBuffer() noexcept
-	{
-		Unmap();
-
-		if (m_Buffer != nullptr)
-			wgpuBufferRelease(m_Buffer);
-
-		if (m_Instance != nullptr)
-			wgpuInstanceRelease(m_Instance);
-	}
-
-	ReadbackBuffer::ReadbackBuffer(ReadbackBuffer&& other) noexcept :
-		m_Buffer(std::exchange(other.m_Buffer, nullptr)),
-		m_Instance(std::exchange(other.m_Instance, nullptr)),
-		m_ByteSize(std::exchange(other.m_ByteSize, 0)),
-		m_Mapped(std::exchange(other.m_Mapped, nullptr))
-	{}
-
-	ReadbackBuffer&
-	ReadbackBuffer::operator=(ReadbackBuffer&& other) noexcept
-	{
-		if (this != &other)
-		{
-			Unmap();
-
-			if (m_Buffer != nullptr)
-				wgpuBufferRelease(m_Buffer);
-			if (m_Instance != nullptr)
-				wgpuInstanceRelease(m_Instance);
-
-			m_Buffer   = std::exchange(other.m_Buffer, nullptr);
-			m_Instance = std::exchange(other.m_Instance, nullptr);
-			m_ByteSize = std::exchange(other.m_ByteSize, 0);
-			m_Mapped   = std::exchange(other.m_Mapped, nullptr);
-		}
-
-		return *this;
+		m_Buffer = device.CreateBuffer(&wgpuDesc);
 	}
 
 	const void*
@@ -70,26 +29,25 @@ namespace bgl
 		if (m_Buffer == nullptr)
 			return nullptr;
 
-		auto status = WGPUMapAsyncStatus_Error;
+		auto status = wgpu::MapAsyncStatus::Error;
 
-		auto info      = WGPUBufferMapCallbackInfo{};
-		info.mode      = WGPUCallbackMode_WaitAnyOnly;
-		info.userdata1 = &status;
-		info.callback  = [](WGPUMapAsyncStatus s, WGPUStringView message, void* userdata, void*) {
-			*static_cast<WGPUMapAsyncStatus*>(userdata) = s;
-			if (s != WGPUMapAsyncStatus_Success)
-				logger::error("[wgpu] readback map failed: {}", wgpu::ToString(message));
-		};
+		const auto future = m_Buffer.MapAsync(
+			wgpu::MapMode::Read,
+			0,
+			wgpu::kWholeMapSize,
+			wgpu::CallbackMode::WaitAnyOnly,
+			[&status](wgpu::MapAsyncStatus s, wgpu::StringView message) {
+				status = s;
+				if (s != wgpu::MapAsyncStatus::Success)
+					logger::error("[wgpu] readback map failed: {}", std::string_view(message));
+			});
 
-		auto wait   = WGPUFutureWaitInfo{};
-		wait.future = wgpuBufferMapAsync(m_Buffer, WGPUMapMode_Read, 0, WGPU_WHOLE_MAP_SIZE, info);
+		m_Instance.WaitAny(future, UINT64_MAX);
 
-		wgpuInstanceWaitAny(m_Instance, 1, &wait, UINT64_MAX);
-
-		if (status != WGPUMapAsyncStatus_Success)
+		if (status != wgpu::MapAsyncStatus::Success)
 			return nullptr;
 
-		m_Mapped = wgpuBufferGetConstMappedRange(m_Buffer, 0, WGPU_WHOLE_MAP_SIZE);
+		m_Mapped = m_Buffer.GetConstMappedRange(0, wgpu::kWholeMapSize);
 
 		return m_Mapped;
 	}
@@ -100,7 +58,7 @@ namespace bgl
 		if (m_Mapped == nullptr)
 			return;
 
-		wgpuBufferUnmap(m_Buffer);
+		m_Buffer.Unmap();
 		m_Mapped = nullptr;
 	}
 }

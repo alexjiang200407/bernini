@@ -454,9 +454,10 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   **Do it here — between W1 and W2 — not later.** The RAII payoff scales with object count, and
   W2/W3 are where the objects multiply (pipelines, bind-group layouts, textures, views, samplers).
   Convert the ~6 classes that exist now while it is cheap, so that surface is authored against the
-  C++ API from the start rather than written in C and migrated twice. One prerequisite: resolve the
-  name clash between Dawn's global `wgpu::` and this backend's `bgl::wgpu` helpers (rename the
-  latter) so `wgpu::` is unambiguous.
+  C++ API from the start rather than written in C and migrated twice. The one prerequisite — the
+  name clash between Dawn's global `wgpu::` and this backend's `bgl::wgpu` string helpers — is
+  resolved by deleting the helpers outright: `wgpu::StringView` subsumes both (it constructs from
+  `std::string_view`/`const char*` and converts back), so no `bgl::wgpu` namespace remains to clash.
   *Gate:* `bgl_webgpu_tests` stays green — a pure refactor, no behaviour change; its own reviewable
   commit, kept out of the W1 PR so the mechanical rewrite does not bury the review.
 
