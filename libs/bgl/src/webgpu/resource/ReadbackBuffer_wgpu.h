@@ -16,18 +16,17 @@ namespace bgl
 	public:
 		ReadbackBuffer() = default;
 
-		ReadbackBuffer(WGPUDevice device, WGPUInstance instance, const ReadbackBufferDesc& desc);
+		ReadbackBuffer(
+			const wgpu::Device&       device,
+			const wgpu::Instance&     instance,
+			const ReadbackBufferDesc& desc);
 
-		~ReadbackBuffer() noexcept;
-
-		ReadbackBuffer(const ReadbackBuffer&) = delete;
-		ReadbackBuffer(ReadbackBuffer&& other) noexcept;
-
+		ReadbackBuffer(const ReadbackBuffer&)     = delete;
+		ReadbackBuffer(ReadbackBuffer&&) noexcept = default;
 		ReadbackBuffer&
 		operator=(const ReadbackBuffer&) = delete;
-
 		ReadbackBuffer&
-		operator=(ReadbackBuffer&& other) noexcept;
+		operator=(ReadbackBuffer&&) noexcept = default;
 
 		/** Blocks until the mapping completes. Idempotent; null if the map failed. */
 		[[nodiscard]] const void*
@@ -36,7 +35,7 @@ namespace bgl
 		void
 		Unmap() noexcept;
 
-		[[nodiscard]] WGPUBuffer
+		[[nodiscard]] const wgpu::Buffer&
 		GetHandle() const noexcept
 		{
 			return m_Buffer;
@@ -49,9 +48,9 @@ namespace bgl
 		}
 
 	private:
-		WGPUBuffer   m_Buffer   = nullptr;
-		WGPUInstance m_Instance = nullptr;
-		uint64_t     m_ByteSize = 0;
-		const void*  m_Mapped   = nullptr;
+		wgpu::Buffer   m_Buffer;
+		wgpu::Instance m_Instance;
+		uint64_t       m_ByteSize = 0;
+		const void*    m_Mapped   = nullptr;
 	};
 }

@@ -10,25 +10,13 @@
 namespace bgl
 {
 	CommandList::CommandList(
-		WGPUDevice             device,
+		const wgpu::Device&    device,
 		const CommandListDesc& desc,
 		ResourceManagerRef     resourceManager) noexcept :
 		m_Device(device), m_Desc(desc), m_ResourceManager(std::move(resourceManager))
 	{
 		gassert(m_Device != nullptr, "CommandList: null device");
 		gassert(m_ResourceManager != nullptr, "CommandList: null resource manager");
-
-		wgpuDeviceAddRef(m_Device);
-	}
-
-	CommandList::~CommandList() noexcept
-	{
-		if (m_CommandBuffer != nullptr)
-			wgpuCommandBufferRelease(m_CommandBuffer);
-		if (m_Encoder != nullptr)
-			wgpuCommandEncoderRelease(m_Encoder);
-
-		wgpuDeviceRelease(m_Device);
 	}
 
 	void
@@ -38,15 +26,15 @@ namespace bgl
 		gassert(cmdQueue != nullptr, "Open: null queue");
 
 		// Same latching rule as D3D12: a list belongs to one queue for its whole life.
-		auto* queue = static_cast<CommandQueue*>(cmdQueue)->GetHandle();
+		const wgpu::Queue& queue = static_cast<CommandQueue*>(cmdQueue)->GetHandle();
 		gassert(
-			m_BoundQueue == nullptr || m_BoundQueue == queue,
+			m_BoundQueue == nullptr || m_BoundQueue.Get() == queue.Get(),
 			"Open: a command list may not move between queues");
 		m_BoundQueue = queue;
 
 		gassert(m_CommandBuffer == nullptr, "Open: the previous recording was never submitted");
 
-		m_Encoder = wgpuDeviceCreateCommandEncoder(m_Device, nullptr);
+		m_Encoder = m_Device.CreateCommandEncoder();
 	}
 
 	void
@@ -54,16 +42,14 @@ namespace bgl
 	{
 		gassert(IsOpen(), "Close: the list is not open");
 
-		m_CommandBuffer = wgpuCommandEncoderFinish(m_Encoder, nullptr);
-
-		wgpuCommandEncoderRelease(m_Encoder);
-		m_Encoder = nullptr;
+		m_CommandBuffer = m_Encoder.Finish();
+		m_Encoder       = nullptr;
 	}
 
-	WGPUCommandBuffer
+	wgpu::CommandBuffer
 	CommandList::TakeCommandBuffer() noexcept
 	{
-		return std::exchange(m_CommandBuffer, nullptr);
+		return std::move(m_CommandBuffer);
 	}
 
 	void
@@ -85,7 +71,7 @@ namespace bgl
 		// ragged tail cannot be written directly; the caller's data is padded into a staging copy.
 		if (byteSize % 4 == 0 && gpuBufferOffset % 4 == 0)
 		{
-			wgpuQueueWriteBuffer(m_BoundQueue, buffer.GetHandle(), gpuBufferOffset, data, byteSize);
+			m_BoundQueue.WriteBuffer(buffer.GetHandle(), gpuBufferOffset, data, byteSize);
 			return;
 		}
 
@@ -94,12 +80,7 @@ namespace bgl
 		auto padded = std::vector<std::byte>(core::align(byteSize, 4));
 		std::memcpy(padded.data(), data, byteSize);
 
-		wgpuQueueWriteBuffer(
-			m_BoundQueue,
-			buffer.GetHandle(),
-			gpuBufferOffset,
-			padded.data(),
-			padded.size());
+		m_BoundQueue.WriteBuffer(buffer.GetHandle(), gpuBufferOffset, padded.data(), padded.size());
 	}
 
 	void
@@ -129,8 +110,7 @@ namespace bgl
 			dstOffset + byteSize <= destination.GetByteSize(),
 			"CopyBuffer: the destination range does not fit the buffer");
 
-		wgpuCommandEncoderCopyBufferToBuffer(
-			m_Encoder,
+		m_Encoder.CopyBufferToBuffer(
 			source.GetHandle(),
 			srcOffset,
 			destination.GetHandle(),
@@ -156,8 +136,7 @@ namespace bgl
 			readback.GetByteSize() >= source.GetByteSize(),
 			"CopyBufferToReadback: the readback buffer is too small");
 
-		wgpuCommandEncoderCopyBufferToBuffer(
-			m_Encoder,
+		m_Encoder.CopyBufferToBuffer(
 			source.GetHandle(),
 			0,
 			readback.GetHandle(),
@@ -181,14 +160,14 @@ namespace bgl
 	CommandList::BeginEvent(std::string_view name) noexcept
 	{
 		if (IsOpen())
-			wgpuCommandEncoderPushDebugGroup(m_Encoder, wgpu::ToStringView(name));
+			m_Encoder.PushDebugGroup(name);
 	}
 
 	void
 	CommandList::EndEvent() noexcept
 	{
 		if (IsOpen())
-			wgpuCommandEncoderPopDebugGroup(m_Encoder);
+			m_Encoder.PopDebugGroup();
 	}
 
 	// WebGPU tracks resource usage and inserts its own transitions, so the FrameGraph's derived

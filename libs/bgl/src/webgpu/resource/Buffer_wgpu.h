@@ -16,20 +16,16 @@ namespace bgl
 	public:
 		Buffer() = default;
 
-		Buffer(WGPUDevice device, const BufferDesc& desc);
+		Buffer(const wgpu::Device& device, const BufferDesc& desc);
 
-		~Buffer() noexcept;
-
-		Buffer(const Buffer&) = delete;
-		Buffer(Buffer&& other) noexcept;
-
+		Buffer(const Buffer&)     = delete;
+		Buffer(Buffer&&) noexcept = default;
 		Buffer&
 		operator=(const Buffer&) = delete;
-
 		Buffer&
-		operator=(Buffer&& other) noexcept;
+		operator=(Buffer&&) noexcept = default;
 
-		[[nodiscard]] WGPUBuffer
+		[[nodiscard]] const wgpu::Buffer&
 		GetHandle() const noexcept
 		{
 			return m_Buffer;
@@ -54,7 +50,7 @@ namespace bgl
 		}
 
 	private:
-		WGPUBuffer m_Buffer = nullptr;
-		BufferDesc m_Desc;
+		wgpu::Buffer m_Buffer = nullptr;
+		BufferDesc   m_Desc;
 	};
 }

@@ -19,7 +19,7 @@ namespace bgl
 	class CommandQueue final : public core::RefCounter<ICommandQueue>
 	{
 	public:
-		CommandQueue(WGPUInstance instance, WGPUQueue queue) noexcept;
+		CommandQueue(const wgpu::Instance& instance, const wgpu::Queue& queue) noexcept;
 
 		~CommandQueue() noexcept override;
 
@@ -62,7 +62,7 @@ namespace bgl
 		void
 		Flush() noexcept override;
 
-		[[nodiscard]] WGPUQueue
+		[[nodiscard]] const wgpu::Queue&
 		GetHandle() const noexcept
 		{
 			return m_Queue;
@@ -71,8 +71,8 @@ namespace bgl
 	private:
 		struct Submission
 		{
-			uint64_t   value;
-			WGPUFuture future;
+			uint64_t     value;
+			wgpu::Future future;
 		};
 
 		// Advances the completed fence to `value`, never backwards.
@@ -84,8 +84,8 @@ namespace bgl
 		uint64_t
 		DrainCompleted(uint64_t upTo, uint64_t timeoutNs) noexcept;
 
-		WGPUInstance m_Instance = nullptr;
-		WGPUQueue    m_Queue    = nullptr;
+		wgpu::Instance m_Instance;
+		wgpu::Queue    m_Queue;
 
 		std::atomic<uint64_t> m_NextFenceValue     = 1;
 		std::atomic<uint64_t> m_LastCompletedFence = 0;

@@ -6,12 +6,12 @@ namespace bgl
 {
 	struct WgpuAdapterInfo
 	{
-		std::string     vendor;
-		std::string     architecture;
-		std::string     device;
-		std::string     description;
-		WGPUBackendType backendType = WGPUBackendType_Undefined;
-		WGPUAdapterType adapterType = WGPUAdapterType_Unknown;
+		std::string       vendor;
+		std::string       architecture;
+		std::string       device;
+		std::string       description;
+		wgpu::BackendType backendType = wgpu::BackendType::Undefined;
+		wgpu::AdapterType adapterType = wgpu::AdapterType::Unknown;
 	};
 
 	// The only adapter knob today. Once CreateGraphics drives device creation (W3), a
@@ -19,7 +19,7 @@ namespace bgl
 	// expresses through DXGI_GPU_PREFERENCE -- and this collapses into it.
 	struct WgpuDeviceDesc
 	{
-		WGPUPowerPreference powerPreference = WGPUPowerPreference_HighPerformance;
+		wgpu::PowerPreference powerPreference = wgpu::PowerPreference::HighPerformance;
 	};
 
 	/**
@@ -40,7 +40,7 @@ namespace bgl
 		/** @throws GraphicsError if no adapter or device could be acquired. */
 		explicit Device(const WgpuDeviceDesc& desc);
 
-		~Device() noexcept override;
+		~Device() noexcept override = default;
 
 		Device(const Device&) noexcept = delete;
 		Device(Device&&) noexcept      = delete;
@@ -57,20 +57,20 @@ namespace bgl
 			return m_AdapterInfo;
 		}
 
-		[[nodiscard]] WGPUDevice
+		[[nodiscard]] const wgpu::Device&
 		GetHandle() const noexcept
 		{
 			return m_Device;
 		}
 
-		[[nodiscard]] WGPUQueue
+		[[nodiscard]] const wgpu::Queue&
 		GetQueue() const noexcept
 		{
 			return m_Queue;
 		}
 
 		// Awaiting a future needs the instance: it is what runs the callbacks.
-		[[nodiscard]] WGPUInstance
+		[[nodiscard]] const wgpu::Instance&
 		GetInstance() const noexcept
 		{
 			return m_Instance;
@@ -116,10 +116,10 @@ namespace bgl
 			const noexcept override;
 
 	private:
-		WGPUInstance m_Instance = nullptr;
-		WGPUAdapter  m_Adapter  = nullptr;
-		WGPUDevice   m_Device   = nullptr;
-		WGPUQueue    m_Queue    = nullptr;
+		wgpu::Instance m_Instance;
+		wgpu::Adapter  m_Adapter;
+		wgpu::Device   m_Device;
+		wgpu::Queue    m_Queue;
 
 		WgpuAdapterInfo m_AdapterInfo;
 	};

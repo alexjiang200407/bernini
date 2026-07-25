@@ -27,9 +27,10 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 
 ## bgl_webgpu
 
-- Backend library built on Dawn (`webgpu.h`). All code that uses the WebGPU API must be located in
-  this subsystem. It does not implement the RHI interfaces yet — today it owns the WebGPU object
-  stack (instance, adapter, device, queue).
+- Backend library built on Dawn's C++ wrapper (`webgpu_cpp.h`, `namespace wgpu`) — the header-only
+  RAII layer over the C `webgpu.h`, so handles ref-count themselves and constants are enum classes.
+  All code that uses the WebGPU API must be located in this subsystem. It does not implement the RHI
+  interfaces yet — today it owns the WebGPU object stack (instance, adapter, device, queue).
 - PCH is `./libs/bgl/src/webgpu/pch.h`. Don't `#include` the headers in here.
 - Doesn't have an include directory, all headers are included.
 - Implementation files (.h and .cpp) should have a `_wgpu` suffix, mirroring `_d3d12`.
@@ -46,7 +47,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   device must depend on `bgl` even when it links only the backend's objects — `bgl_webgpu_tests`
   does. Without them device creation fails reporting no adapter.
 - Adapter and device requests are asynchronous. Natively they are awaited with
-  `wgpuInstanceWaitAny`, which a browser build cannot do — it must drive them off the event loop.
+  `wgpu::Instance::WaitAny`, which a browser build cannot do — it must drive them off the event loop.
 - CMake: `./src/webgpu/CMakeLists.txt`
 - Verification: Check logs, bgl_webgpu_tests
 

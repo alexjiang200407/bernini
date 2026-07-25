@@ -4,20 +4,11 @@
 
 namespace bgl
 {
-	CommandQueue::CommandQueue(WGPUInstance instance, WGPUQueue queue) noexcept :
+	CommandQueue::CommandQueue(const wgpu::Instance& instance, const wgpu::Queue& queue) noexcept :
 		m_Instance(instance), m_Queue(queue)
-	{
-		wgpuInstanceAddRef(m_Instance);
-		wgpuQueueAddRef(m_Queue);
-	}
+	{}
 
-	CommandQueue::~CommandQueue() noexcept
-	{
-		Flush();
-
-		wgpuQueueRelease(m_Queue);
-		wgpuInstanceRelease(m_Instance);
-	}
+	CommandQueue::~CommandQueue() noexcept { Flush(); }
 
 	void
 	CommandQueue::Publish(uint64_t value) noexcept
@@ -34,21 +25,18 @@ namespace bgl
 
 		auto* list = static_cast<CommandList*>(commandList);
 
-		WGPUCommandBuffer buffer = list->TakeCommandBuffer();
+		wgpu::CommandBuffer buffer = list->TakeCommandBuffer();
 		gassert(buffer != nullptr, "ExecuteCommandList: the list was never closed");
 
-		wgpuQueueSubmit(m_Queue, 1, &buffer);
-		wgpuCommandBufferRelease(buffer);
+		m_Queue.Submit(1, &buffer);
 
 		const auto value = m_NextFenceValue.fetch_add(1, std::memory_order_relaxed);
 
-		// A no-op callback: the completion is read from wgpuInstanceWaitAny's result, not from here.
-		// WaitAnyOnly is still required so the future is one WaitAny can report on.
-		auto info     = WGPUQueueWorkDoneCallbackInfo{};
-		info.mode     = WGPUCallbackMode_WaitAnyOnly;
-		info.callback = [](WGPUQueueWorkDoneStatus, WGPUStringView, void*, void*) {};
-
-		const auto future = wgpuQueueOnSubmittedWorkDone(m_Queue, info);
+		// A no-op callback: the completion is read from WaitAny's result, not from here. WaitAnyOnly
+		// is still required so the future is one WaitAny can report on.
+		const auto future = m_Queue.OnSubmittedWorkDone(
+			wgpu::CallbackMode::WaitAnyOnly,
+			[](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
 
 		{
 			auto lock = std::scoped_lock(m_PendingMutex);
@@ -62,7 +50,7 @@ namespace bgl
 	CommandQueue::DrainCompleted(uint64_t upTo, uint64_t timeoutNs) noexcept
 	{
 		auto values = std::vector<uint64_t>();
-		auto waits  = std::vector<WGPUFutureWaitInfo>();
+		auto waits  = std::vector<wgpu::FutureWaitInfo>();
 
 		{
 			auto lock = std::scoped_lock(m_PendingMutex);
@@ -71,7 +59,7 @@ namespace bgl
 				if (submission.value <= upTo)
 				{
 					values.push_back(submission.value);
-					waits.push_back(WGPUFutureWaitInfo{ submission.future, 0 });
+					waits.push_back(wgpu::FutureWaitInfo{ submission.future, false });
 				}
 			}
 		}
@@ -79,7 +67,7 @@ namespace bgl
 		// WaitAny flips `completed` on each future that finished; a zero timeout makes this a poll.
 		if (!waits.empty())
 		{
-			wgpuInstanceWaitAny(m_Instance, waits.size(), waits.data(), timeoutNs);
+			m_Instance.WaitAny(waits.size(), waits.data(), timeoutNs);
 
 			for (size_t i = 0; i < waits.size(); ++i)
 			{
@@ -131,8 +119,8 @@ namespace bgl
 
 		// The highest pending submission at or below the requested value. Fence values are unique
 		// and start at 1, so 0 means "none found".
-		WGPUFuture target  = {};
-		uint64_t   highest = 0;
+		wgpu::Future target  = {};
+		uint64_t     highest = 0;
 		{
 			auto lock = std::scoped_lock(m_PendingMutex);
 			for (const Submission& submission : m_Pending)
@@ -155,8 +143,7 @@ namespace bgl
 		// One blocking wait on that single future. WaitAny returns when any of its futures
 		// completes, so with one future it returns exactly when that submission is done -- and
 		// because the queue runs submissions in order, every earlier one is done with it. No loop.
-		auto wait = WGPUFutureWaitInfo{ target, 0 };
-		wgpuInstanceWaitAny(m_Instance, 1, &wait, UINT64_MAX);
+		m_Instance.WaitAny(target, UINT64_MAX);
 
 		Publish(fenceValue);
 

@@ -44,136 +44,123 @@ fn fs_main() -> @location(0) vec4<f32> {
 		operator==(const Rgba&) const = default;
 	};
 
-	WGPUShaderModule
-	MakeShaderModule(WGPUDevice device)
+	wgpu::ShaderModule
+	MakeShaderModule(const wgpu::Device& device)
 	{
-		auto wgsl        = WGPUShaderSourceWGSL{};
-		wgsl.chain.sType = WGPUSType_ShaderSourceWGSL;
-		wgsl.code        = wgpu::ToStringView(c_ShaderSource);
+		auto wgsl = wgpu::ShaderSourceWGSL{};
+		wgsl.code = c_ShaderSource;
 
-		auto desc        = WGPUShaderModuleDescriptor{};
-		desc.nextInChain = &wgsl.chain;
+		auto desc        = wgpu::ShaderModuleDescriptor{};
+		desc.nextInChain = &wgsl;
 
-		return wgpuDeviceCreateShaderModule(device, &desc);
+		return device.CreateShaderModule(&desc);
 	}
 
-	WGPURenderPipeline
-	MakePipeline(WGPUDevice device, WGPUShaderModule module)
+	wgpu::RenderPipeline
+	MakePipeline(const wgpu::Device& device, const wgpu::ShaderModule& module)
 	{
-		auto colorTarget      = WGPUColorTargetState{};
-		colorTarget.format    = WGPUTextureFormat_RGBA8Unorm;
-		colorTarget.writeMask = WGPUColorWriteMask_All;
+		auto colorTarget      = wgpu::ColorTargetState{};
+		colorTarget.format    = wgpu::TextureFormat::RGBA8Unorm;
+		colorTarget.writeMask = wgpu::ColorWriteMask::All;
 
-		auto fragment        = WGPUFragmentState{};
+		auto fragment        = wgpu::FragmentState{};
 		fragment.module      = module;
-		fragment.entryPoint  = wgpu::ToStringView("fs_main");
+		fragment.entryPoint  = "fs_main";
 		fragment.targetCount = 1;
 		fragment.targets     = &colorTarget;
 
-		auto desc               = WGPURenderPipelineDescriptor{};
+		auto desc               = wgpu::RenderPipelineDescriptor{};
 		desc.vertex.module      = module;
-		desc.vertex.entryPoint  = wgpu::ToStringView("vs_main");
-		desc.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+		desc.vertex.entryPoint  = "vs_main";
+		desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
 		desc.multisample.count  = 1;
 		desc.multisample.mask   = 0xFFFFFFFF;
 		desc.fragment           = &fragment;
 
-		return wgpuDeviceCreateRenderPipeline(device, &desc);
+		return device.CreateRenderPipeline(&desc);
 	}
 
 	// Renders the triangle into a fresh texture and returns its pixels, row-major from the top.
 	std::vector<Rgba>
 	RenderTriangle(Device& device)
 	{
-		WGPUDevice   handle   = device.GetHandle();
-		WGPUQueue    queue    = device.GetQueue();
-		WGPUInstance instance = device.GetInstance();
+		const wgpu::Device&   handle   = device.GetHandle();
+		const wgpu::Queue&    queue    = device.GetQueue();
+		const wgpu::Instance& instance = device.GetInstance();
 
-		auto textureDesc          = WGPUTextureDescriptor{};
-		textureDesc.dimension     = WGPUTextureDimension_2D;
+		auto textureDesc          = wgpu::TextureDescriptor{};
+		textureDesc.dimension     = wgpu::TextureDimension::e2D;
 		textureDesc.size          = { c_Size, c_Size, 1 };
-		textureDesc.format        = WGPUTextureFormat_RGBA8Unorm;
+		textureDesc.format        = wgpu::TextureFormat::RGBA8Unorm;
 		textureDesc.mipLevelCount = 1;
 		textureDesc.sampleCount   = 1;
-		textureDesc.usage         = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
+		textureDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
 
-		WGPUTexture     texture = wgpuDeviceCreateTexture(handle, &textureDesc);
-		WGPUTextureView view    = wgpuTextureCreateView(texture, nullptr);
+		wgpu::Texture     texture = handle.CreateTexture(&textureDesc);
+		wgpu::TextureView view    = texture.CreateView();
 
-		auto bufferDesc  = WGPUBufferDescriptor{};
+		auto bufferDesc  = wgpu::BufferDescriptor{};
 		bufferDesc.size  = uint64_t{ c_BytesPerRow } * c_Size;
-		bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
+		bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
 
-		WGPUBuffer readback = wgpuDeviceCreateBuffer(handle, &bufferDesc);
+		wgpu::Buffer readback = handle.CreateBuffer(&bufferDesc);
 
-		WGPUShaderModule   module   = MakeShaderModule(handle);
-		WGPURenderPipeline pipeline = MakePipeline(handle, module);
+		wgpu::ShaderModule   module   = MakeShaderModule(handle);
+		wgpu::RenderPipeline pipeline = MakePipeline(handle, module);
 
-		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(handle, nullptr);
+		wgpu::CommandEncoder encoder = handle.CreateCommandEncoder();
 
-		auto attachment       = WGPURenderPassColorAttachment{};
+		auto attachment       = wgpu::RenderPassColorAttachment{};
 		attachment.view       = view;
-		attachment.loadOp     = WGPULoadOp_Clear;
-		attachment.storeOp    = WGPUStoreOp_Store;
+		attachment.loadOp     = wgpu::LoadOp::Clear;
+		attachment.storeOp    = wgpu::StoreOp::Store;
 		attachment.clearValue = { 1.0, 0.0, 0.0, 1.0 };
-		attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
 
-		auto passDesc                 = WGPURenderPassDescriptor{};
+		auto passDesc                 = wgpu::RenderPassDescriptor{};
 		passDesc.colorAttachmentCount = 1;
 		passDesc.colorAttachments     = &attachment;
 
-		WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDesc);
-		wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-		wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
-		wgpuRenderPassEncoderEnd(pass);
-		wgpuRenderPassEncoderRelease(pass);
+		wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&passDesc);
+		pass.SetPipeline(pipeline);
+		pass.Draw(3);
+		pass.End();
 
-		auto source    = WGPUTexelCopyTextureInfo{};
+		auto source    = wgpu::TexelCopyTextureInfo{};
 		source.texture = texture;
-		source.aspect  = WGPUTextureAspect_All;
+		source.aspect  = wgpu::TextureAspect::All;
 
-		auto destination                = WGPUTexelCopyBufferInfo{};
+		auto destination                = wgpu::TexelCopyBufferInfo{};
 		destination.buffer              = readback;
 		destination.layout.bytesPerRow  = c_BytesPerRow;
 		destination.layout.rowsPerImage = c_Size;
 
-		const auto extent = WGPUExtent3D{ c_Size, c_Size, 1 };
-		wgpuCommandEncoderCopyTextureToBuffer(encoder, &source, &destination, &extent);
+		const auto extent = wgpu::Extent3D{ c_Size, c_Size, 1 };
+		encoder.CopyTextureToBuffer(&source, &destination, &extent);
 
-		WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
-		wgpuQueueSubmit(queue, 1, &commands);
+		wgpu::CommandBuffer commands = encoder.Finish();
+		queue.Submit(1, &commands);
 
-		auto mapStatus = WGPUMapAsyncStatus_Error;
+		auto status = wgpu::MapAsyncStatus::Error;
 
-		auto mapInfo      = WGPUBufferMapCallbackInfo{};
-		mapInfo.mode      = WGPUCallbackMode_WaitAnyOnly;
-		mapInfo.userdata1 = &mapStatus;
-		mapInfo.callback  = [](WGPUMapAsyncStatus status, WGPUStringView, void* userdata, void*) {
-			*static_cast<WGPUMapAsyncStatus*>(userdata) = status;
-		};
+		const auto future = readback.MapAsync(
+			wgpu::MapMode::Read,
+			0,
+			bufferDesc.size,
+			wgpu::CallbackMode::WaitAnyOnly,
+			[&status](wgpu::MapAsyncStatus s, wgpu::StringView) { status = s; });
 
-		auto wait   = WGPUFutureWaitInfo{};
-		wait.future = wgpuBufferMapAsync(readback, WGPUMapMode_Read, 0, bufferDesc.size, mapInfo);
-		wgpuInstanceWaitAny(instance, 1, &wait, UINT64_MAX);
+		instance.WaitAny(future, UINT64_MAX);
 
 		auto pixels = std::vector<Rgba>();
 
-		if (mapStatus == WGPUMapAsyncStatus_Success)
+		if (status == wgpu::MapAsyncStatus::Success)
 		{
-			const auto* mapped = static_cast<const Rgba*>(
-				wgpuBufferGetConstMappedRange(readback, 0, bufferDesc.size));
+			const auto* mapped =
+				static_cast<const Rgba*>(readback.GetConstMappedRange(0, bufferDesc.size));
 
 			pixels.assign(mapped, mapped + (c_Size * c_Size));
-			wgpuBufferUnmap(readback);
+			readback.Unmap();
 		}
-
-		wgpuCommandBufferRelease(commands);
-		wgpuCommandEncoderRelease(encoder);
-		wgpuRenderPipelineRelease(pipeline);
-		wgpuShaderModuleRelease(module);
-		wgpuBufferRelease(readback);
-		wgpuTextureViewRelease(view);
-		wgpuTextureRelease(texture);
 
 		return pixels;
 	}
