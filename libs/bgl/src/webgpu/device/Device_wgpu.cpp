@@ -92,7 +92,9 @@ namespace bgl
 				std::string_view(message));
 		}
 
-		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
+		// Only src is staged for this backend (bgl_copy_shader_src); there is no shaders/tests copy
+		// as on D3D12. Add both together if a webgpu test ever loads a module from tests/.
+		const char* const c_ShaderSearchPaths[] = { "./shaders/src" };
 
 		Slang::ComPtr<slang::ISession>
 		CreateWgslSession(slang::IGlobalSession* globalSession)
