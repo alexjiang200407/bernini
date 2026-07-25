@@ -355,15 +355,67 @@ def find_ninja(env=None):
     return None
 
 
-def find_clang_format():
-    """Locate clang-format on PATH, else the copy bundled with Visual Studio's LLVM."""
-    exe = shutil.which("clang-format")
+def llvm_bin_dirs():
+    """Directories LLVM installs into on this platform, most-preferred first.
+
+    None of them are on PATH by default, which is the reason to look at all:
+    Homebrew's llvm is keg-only and symlinks nothing into /opt/homebrew/bin, and
+    the Visual Studio LLVM component lives inside the VS install.
+    """
+    if sys.platform == "win32":
+        dirs = []
+        install = vs_install_path()
+        if install:
+            # Prefer the 64-bit hosted toolchain when both are present.
+            dirs.append(os.path.join(install, "VC", "Tools", "Llvm", "x64", "bin"))
+            dirs.append(os.path.join(install, "VC", "Tools", "Llvm", "bin"))
+        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+        dirs.append(os.path.join(program_files, "LLVM", "bin"))
+        return dirs
+    if sys.platform == "darwin":
+        return ["/opt/homebrew/opt/llvm/bin", "/usr/local/opt/llvm/bin"]
+    return sorted(glob.glob("/usr/lib/llvm-*/bin"), key=_llvm_dir_version, reverse=True)
+
+
+def _llvm_dir_version(path):
+    """Sort key for /usr/lib/llvm-<n>/bin. An unparseable name sorts oldest."""
+    _, _, version = os.path.basename(os.path.dirname(path)).partition("-")
+    return int(version) if version.isdigit() else -1
+
+
+def _versioned_on_path(name):
+    """Highest-numbered `<name>-<n>` on PATH, or None.
+
+    Debian and Ubuntu install clang-tidy as clang-tidy-18 and leave no unversioned
+    alias, so plain `which` finds nothing on a machine that has it.
+    """
+    best = None
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory:
+            continue
+        for path in glob.glob(os.path.join(glob.escape(directory), name + "-[0-9]*")):
+            _, _, suffix = os.path.splitext(os.path.basename(path))[0].rpartition("-")
+            if suffix.isdigit() and (best is None or int(suffix) > best[0]):
+                best = (int(suffix), path)
+    return best[1] if best else None
+
+
+def find_llvm_tool(name):
+    """Locate an LLVM tool: PATH, then a versioned alias, then a known LLVM tree."""
+    exe = shutil.which(name) or _versioned_on_path(name)
     if exe:
         return exe
-    install = vs_install_path()
-    if install:
-        for sub in (("VC", "Tools", "Llvm", "bin"), ("VC", "Tools", "Llvm", "x64", "bin")):
-            candidate = os.path.join(install, *sub, "clang-format.exe")
-            if os.path.isfile(candidate):
-                return candidate
+    suffix = ".exe" if sys.platform == "win32" else ""
+    for directory in llvm_bin_dirs():
+        candidate = os.path.join(directory, name + suffix)
+        if os.path.isfile(candidate):
+            return candidate
     return None
+
+
+def find_clang_format():
+    return find_llvm_tool("clang-format")
+
+
+def find_clang_tidy():
+    return find_llvm_tool("clang-tidy")

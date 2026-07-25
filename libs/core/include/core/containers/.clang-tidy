@@ -1,0 +1,26 @@
+# These substitute for the std containers they shadow, down to value_type,
+# push_back and the iterator typedefs, so the std spelling is the correct one --
+# a `static_vector` has to be usable everywhere a `std::vector` was.
+#
+# Only the surface a caller touches. Private members keep the engine's m_ and
+# template parameters keep PascalCase, which is what std spells them as anyway.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.ClassCase: lower_case
+  readability-identifier-naming.StructCase: lower_case
+  readability-identifier-naming.UnionCase: lower_case
+  readability-identifier-naming.MethodCase: lower_case
+  readability-identifier-naming.FunctionCase: lower_case
+  readability-identifier-naming.TypeAliasCase: lower_case
+  readability-identifier-naming.TypedefCase: lower_case
+  readability-identifier-naming.PublicMemberCase: lower_case
+  readability-identifier-naming.EnumCase: lower_case
+  readability-identifier-naming.EnumConstantCase: lower_case
+  readability-identifier-naming.EnumConstantPrefix: ''
+  readability-identifier-naming.ScopedEnumConstantCase: lower_case
+  readability-identifier-naming.ScopedEnumConstantPrefix: ''
+  readability-identifier-naming.ConstexprVariableCase: lower_case
+  readability-identifier-naming.ConstexprVariablePrefix: ''
+  readability-identifier-naming.StaticConstantCase: lower_case
+  readability-identifier-naming.StaticConstantPrefix: ''

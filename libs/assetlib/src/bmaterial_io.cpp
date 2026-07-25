@@ -182,7 +182,7 @@ namespace assetlib
 	BMaterial
 	loadMaterial(const std::filesystem::path& path)
 	{
-		const auto bytes = core::file::readFileBytes(path.string());
+		const auto bytes = core::file::read_file_bytes(path.string());
 		return deserializeMaterial(bytes);
 	}
 

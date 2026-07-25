@@ -11,7 +11,7 @@ namespace core::str
 	wide_to_string(std::wstring_view ws);
 #endif
 
-	size_t toUtf32(std::span<char16_t>, std::span<char32_t>);
+	size_t to_utf32(std::span<char16_t>, std::span<char32_t>);
 
 	struct string_view_hash
 	{

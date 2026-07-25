@@ -1,0 +1,76 @@
+# STYLE.md's naming rules, mechanically. See docs/naming.md.
+#
+# Only the naming check runs. Everything else clang-tidy offers is deliberately
+# off: this file exists to make STYLE.md checkable, not to lint.
+#
+# Headers are opted in per subsystem, never here. A check option is read once per
+# translation unit, from the .clang-tidy nearest that TU's .cpp -- so a header
+# diagnosed from another subsystem's TU would be judged by that subsystem's rules.
+# Each subsystem's .clang-tidy sets HeaderFilterRegex to its own tree, which keeps
+# every header judged by the config that sits above it.
+Checks: >
+  -*,
+  readability-identifier-naming
+
+HeaderFilterRegex: ''
+FormatStyle: file
+
+CheckOptions:
+  readability-identifier-naming.NamespaceCase: lower_case
+  readability-identifier-naming.InlineNamespaceCase: lower_case
+
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.UnionCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.TypeAliasCase: CamelCase
+  readability-identifier-naming.TypedefCase: CamelCase
+  readability-identifier-naming.ConceptCase: CamelCase
+  readability-identifier-naming.TemplateParameterCase: CamelCase
+
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.EnumConstantPrefix: k
+  readability-identifier-naming.ScopedEnumConstantCase: CamelCase
+  readability-identifier-naming.ScopedEnumConstantPrefix: k
+  # A constant naming a hardware format keeps the hardware's spelling: RGBA8_UNORM
+  # greps against DXGI_FORMAT_R8G8B8A8_UNORM and VK_FORMAT_R8G8B8A8_UNORM, kRgba8Unorm
+  # greps against nothing.
+  readability-identifier-naming.ScopedEnumConstantIgnoredRegexp: '^k?[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$'
+
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.MethodCase: CamelCase
+  # Catch2 names its registration after the macro, so the declaration clang-tidy sees
+  # is spelled TEST_CASE and nobody wrote it.
+  readability-identifier-naming.FunctionIgnoredRegexp: '^(TEST_CASE|TEST_CASE_METHOD|TEMPLATE_TEST_CASE|SCENARIO)$'
+
+  readability-identifier-naming.PrivateMemberCase: CamelCase
+  readability-identifier-naming.PrivateMemberPrefix: m_
+  readability-identifier-naming.ProtectedMemberCase: CamelCase
+  readability-identifier-naming.ProtectedMemberPrefix: m_
+  # A struct is POD and takes no prefix; only classes have m_ members.
+  readability-identifier-naming.PublicMemberCase: camelBack
+
+  readability-identifier-naming.ParameterCase: camelBack
+  readability-identifier-naming.LocalVariableCase: camelBack
+
+  readability-identifier-naming.GlobalVariableCase: CamelCase
+  readability-identifier-naming.GlobalVariablePrefix: g_
+  readability-identifier-naming.StaticVariableCase: CamelCase
+  readability-identifier-naming.StaticVariablePrefix: g_
+  # Macro-expanded declarations, reported under the macro's own name: Catch2's
+  # registration objects and the Win32 calling-convention macros.
+  readability-identifier-naming.GlobalVariableIgnoredRegexp: '^(TEST_CASE|TEST_CASE_METHOD|TEMPLATE_TEST_CASE|SCENARIO|APIENTRY|CALLBACK)$'
+
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+  readability-identifier-naming.GlobalConstantPrefix: c_
+  readability-identifier-naming.StaticConstantCase: CamelCase
+  readability-identifier-naming.StaticConstantPrefix: c_
+  readability-identifier-naming.ClassConstantCase: CamelCase
+  readability-identifier-naming.ClassConstantPrefix: c_
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+  readability-identifier-naming.ConstexprVariablePrefix: c_
+  # A variable template standing in for a std type trait keeps the std spelling, `_v`
+  # and all, so `is_packed_buffer_v` reads beside `std::is_trivially_copyable_v`.
+  readability-identifier-naming.ConstexprVariableIgnoredRegexp: '^([a-z][a-z0-9]*_)+v$|^always_false$'
+
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE

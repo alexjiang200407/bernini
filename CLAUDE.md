@@ -17,6 +17,8 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 - clang-format each .cpp .h and .slang file modified via `just format <files...>` (or `python scripts/format.py <files...>`; use `--check` to verify without editing). It finds clang-format via `scripts/config.json`, then PATH, then the Visual Studio LLVM component; if none exists it tells the user to install it.
 
+- `just tidy` checks identifier naming with clang-tidy, against the `.clang-tidy` files in the tree. `just tidy --changed` checks only the lines the current diff touches, which is what the pre-commit hook runs. It needs a build dir with `compile_commands.json`, so a Ninja preset — see [docs/naming.md](./docs/naming.md).
+
 The Style Guide is imported here, so it is in context from the start of every session and never has to be opened: @STYLE.md
 
 ## Comments: as few as possible, as short as possible
@@ -40,6 +42,11 @@ no idea a change ever happened.
 # Documentation Index
 
 Read through these documents if you deem them necessary to your given task. If you modify something that is touched on in these docs, you need to modify the docs as well.
+
+**[Naming](./docs/naming.md)**
+
+Which directories are `lower_case` and which are `PascalCase`, why the boundary is a directory
+rather than a judgement call, and how `just tidy` enforces it.
 
 **[bgl Public API](./docs/bgl_api.md)**
 
@@ -108,13 +115,14 @@ just build [target]               # build (default: all targets); configures fir
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
 just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build
 just format <files...>            # clang-format in place (--check to verify only)
+just tidy [paths...]              # clang-tidy the naming rules (--changed for a diff, --fix to apply)
 just idl                          # regenerate the IDL C++ headers and Slang copies
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language, tests counted separately
 ```
 
-`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `tidy` → `tidy.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
 
 ## Tests
 

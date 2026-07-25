@@ -1,0 +1,8 @@
+# core is the vocabulary layer. Its free functions sit beside <algorithm> in a
+# call, not beside the engine's, so they are lower_case -- `split_once`, not
+# `SplitOnce`. Types are still the engine's PascalCase unless they model a
+# standard-library concept, which is what containers/ and str/ hold.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.FunctionCase: lower_case

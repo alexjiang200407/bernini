@@ -5,7 +5,7 @@
 namespace core::win32
 {
 	std::wstring
-	getErrorDescription(DWORD dw)
+	get_error_description(DWORD dw)
 	{
 		wchar_t*   descriptionWinalloc = nullptr;
 		const auto result              = FormatMessageW(
@@ -38,7 +38,7 @@ namespace core::win32
 		{
 			throw std::runtime_error(
 				"Win32 API Error: " +
-				core::str::wide_to_string(getErrorDescription(static_cast<DWORD>(hr))));
+				core::str::wide_to_string(get_error_description(static_cast<DWORD>(hr))));
 		}
 	}
 }

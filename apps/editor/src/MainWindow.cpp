@@ -38,7 +38,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
 
 	{
-		const auto     configPath = core::file::getLibraryPath().parent_path() / "config.json";
+		const auto     configPath = core::file::get_library_path().parent_path() / "config.json";
 		core::Settings settings(configPath);
 		const auto     gfxSettings = settings["graphics"];
 

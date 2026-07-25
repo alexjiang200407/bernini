@@ -172,7 +172,7 @@ namespace bgl
 	Graphics::Graphics(const GraphicsOptions& opts) : m_Opts(opts)
 	{
 		{
-			auto     libraryPath = core::file::getLibraryPath();
+			auto     libraryPath = core::file::get_library_path();
 			fs::path logPath     = libraryPath.parent_path() / "bgl.log";
 
 			// Truncate once per process so a single run accumulates every device's

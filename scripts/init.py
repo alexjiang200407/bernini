@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate scripts/config.json, the machine-local settings the other scripts read.
 
-Detects the toolchain (cmake, ninja, clang, clang-format, vcvarsall) the same way
+Detects the toolchain (cmake, ninja, clang, clang-format, clang-tidy, vcvarsall) the same way
 the scripts do today, asks which CMake preset you want to work in, and writes the
 answers down so neither has to happen again on every invocation. Anything that
 can't be detected is prompted for; a blank answer leaves the key out, which just
@@ -377,6 +377,12 @@ def detect(preset, arch):
         clang_format = ask_path("clang-format", CLANG_FORMAT_HINT)
     if clang_format:
         tools["clang-format"] = clang_format
+
+    # clang-tidy is not prompted for: `just tidy` degrades to a message that says how to
+    # install it, and the pre-commit hook skips the naming check when it is absent.
+    clang_tidy = ct.find_clang_tidy()
+    if clang_tidy:
+        tools["clang-tidy"] = clang_tidy
 
     if tools:
         data["tools"] = tools

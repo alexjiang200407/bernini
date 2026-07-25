@@ -3,7 +3,7 @@
 namespace core::file
 {
 	std::vector<std::byte>
-	readFileBytes(const std::string& filePath)
+	read_file_bytes(const std::string& filePath)
 	{
 		std::ifstream fileStream{ filePath, std::ios::binary | std::ios::ate };
 		if (!fileStream)
@@ -21,8 +21,8 @@ namespace core::file
 	}
 
 	std::vector<std::byte>
-	readFileBytes(std::string_view filePath)
+	read_file_bytes(std::string_view filePath)
 	{
-		return readFileBytes(std::string{ filePath });
+		return read_file_bytes(std::string{ filePath });
 	}
 }

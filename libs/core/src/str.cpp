@@ -3,7 +3,7 @@
 namespace core::str
 {
 	size_t
-	toUtf32(std::span<char16_t> utf16, std::span<char32_t> utf32)
+	to_utf32(std::span<char16_t> utf16, std::span<char32_t> utf32)
 	{
 		size_t retCnt = 0;
 		size_t i      = 0;
