@@ -35,6 +35,38 @@ namespace core
 			}
 		}
 
+		/**
+		 * Raises the slot ceiling, keeping every live index, generation and element where it is.
+		 * The new indices join the free list above the existing ones, so allocation stays ascending.
+		 *
+		 * @return false if `newCapacity` would not raise the ceiling; the container is untouched.
+		 */
+		bool
+		grow(uint32_t newCapacity)
+		{
+			const auto oldCapacity = static_cast<uint32_t>(m_Data.size());
+			if (newCapacity <= oldCapacity)
+				return false;
+
+			m_Data.resize(newCapacity);
+			m_Meta.resize(newCapacity);
+			m_FreeIndices.reserve(m_FreeIndices.size() + (newCapacity - oldCapacity));
+
+			for (uint32_t i = newCapacity; i > oldCapacity; --i)
+			{
+				m_FreeIndices.push_back(i - 1);
+			}
+
+			m_MaxSlots = newCapacity;
+			return true;
+		}
+
+		[[nodiscard]] uint32_t
+		capacity() const noexcept
+		{
+			return static_cast<uint32_t>(m_Data.size());
+		}
+
 		[[nodiscard]] void*
 		data() const noexcept
 		{

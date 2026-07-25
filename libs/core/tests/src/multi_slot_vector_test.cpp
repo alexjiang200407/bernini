@@ -234,3 +234,56 @@ TEST_CASE("multi_slot_vector clear and reset release every element", "[multi_slo
 
 	REQUIRE(test::TrackingClean());
 }
+
+TEST_CASE("multi_slot_vector grow keeps live ranges where they are", "[multi_slot_vector][grow]")
+{
+	core::multi_slot_vector<int> slots(4);
+
+	auto first          = slots.allocate_slots(2u);
+	auto second         = slots.allocate_slots(2u);
+	slots[first.index]  = 11;
+	slots[second.index] = 22;
+
+	// Full: the next range is what forces the growth.
+	REQUIRE_THROWS_AS(slots.allocate_slots(1u), std::runtime_error);
+
+	REQUIRE(slots.grow(8u));
+	REQUIRE(slots.capacity() == 8u);
+
+	REQUIRE(slots.valid(first.index, first.generation));
+	REQUIRE(slots.valid(second.index, second.generation));
+	REQUIRE(slots[first.index] == 11);
+	REQUIRE(slots[second.index] == 22);
+
+	// The new tail is one contiguous segment, so a range as wide as it must fit.
+	auto third = slots.allocate_slots(4u);
+	REQUIRE(third.index == 4u);
+}
+
+TEST_CASE("multi_slot_vector grow merges into a trailing free segment", "[multi_slot_vector][grow]")
+{
+	core::multi_slot_vector<int> slots(4);
+
+	auto head = slots.allocate_slots(2u);
+	auto tail = slots.allocate_slots(2u);
+	slots.erase(tail);  // leaves a free segment at [2, 4) touching the new space
+
+	REQUIRE(slots.grow(6u));
+
+	// Only correct if the freed tail and the added space became one segment; two segments of 2
+	// would refuse this.
+	auto wide = slots.allocate_slots(4u);
+	REQUIRE(wide.index == 2u);
+	REQUIRE(slots.valid(head.index, head.generation));
+}
+
+TEST_CASE(
+	"multi_slot_vector grow to a smaller or equal capacity does nothing",
+	"[multi_slot_vector][grow]")
+{
+	core::multi_slot_vector<int> slots(4);
+
+	REQUIRE_FALSE(slots.grow(4u));
+	REQUIRE_FALSE(slots.grow(2u));
+	REQUIRE(slots.capacity() == 4u);
+}
