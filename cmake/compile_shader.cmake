@@ -43,6 +43,8 @@ function(compile_shader)
     
     if(SHADER_TARGET STREQUAL "spirv")
         set(EXT ".spv")
+    elseif(SHADER_TARGET STREQUAL "wgsl")
+        set(EXT ".wgsl")
     else()
         set(EXT ".dxil")
     endif()

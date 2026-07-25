@@ -13,6 +13,30 @@ endif()
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
+# The WebGPU backend compiles the compute kernels to WGSL as a build-time check only -- slangc
+# fails the build on any construct its WGSL target rejects (the migrations tracked in the port
+# plan's W2). The emitted .wgsl is not staged for runtime yet; that is the later cook step. Only
+# the kernels already free of the pending migrations are listed -- the rest join as they land.
+# Tint-level validation (constructs slangc emits but Dawn rejects) is a separate gate through
+# wgpuDeviceCreateShaderModule, not slangc, because this Slang build has no Tint linked.
+if(RENDERER_BACKEND STREQUAL "WEBGPU")
+    foreach(KERNEL PrefixSumInstances TransparentSort)
+        compile_shader(
+            FILE     "${CMAKE_CURRENT_SOURCE_DIR}/src/${KERNEL}.slang"
+            OUT_DIR  "${SHADER_OUT_DIR}"
+            TARGET   "wgsl"
+            STAGE    "cs_6_6"
+            INCLUDES ${SLANG_SOURCE_ROOT}
+        )
+    endforeach()
+
+    add_custom_target(bgl_compile_shaders ALL
+        DEPENDS ${SLANG_COMPILE_OUTS}
+    )
+
+    return()
+endif()
+
 compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
@@ -121,6 +145,14 @@ compile_shader(
 
 compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/CompactInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/TransparentSort.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "cs_6_6"

@@ -131,7 +131,11 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
 elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
-	# No shaders yet: the backend has no pipelines to compile, and the WGSL cook is a later stage.
+	# Build-time WGSL validation only -- no runtime cook yet. bgl_compile_shaders fails the build
+	# if a kernel stops compiling to WGSL; nothing is staged into the runtime layout.
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+	add_dependencies(bgl bgl_compile_shaders)
+
 	target_compile_definitions(bgl_webgpu PRIVATE BGL_EXPORTS)
 
 	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_WEBGPU)
