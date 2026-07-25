@@ -23,7 +23,7 @@ Schema:
                  get. Typically a quoted vcvarsall.bat plus its architecture.
     tools        Absolute paths to programs that aren't on PATH. Each may name
                  the executable itself or the directory holding it.
-                 Recognised: cmake, ninja, clang, clang-format.
+                 Recognised: cmake, ninja, clang, clang-format, clang-tidy.
                  clang++ is taken from clang's directory.
 """
 
@@ -42,7 +42,7 @@ DEFAULT_PRESET = "windows-vs2026-msvc-dx12-debug"
 
 DEFAULT_ARCH = "x64"
 
-TOOL_NAMES = ("cmake", "ninja", "clang", "clang-format")
+TOOL_NAMES = ("cmake", "ninja", "clang", "clang-format", "clang-tidy")
 
 _cache = None
 
@@ -183,6 +183,10 @@ def find_ninja(env=None):
 
 def find_clang_format():
     return tool("clang-format") or ct.find_clang_format()
+
+
+def find_clang_tidy():
+    return tool("clang-tidy") or ct.find_clang_tidy()
 
 
 def find_clang(env=None):
