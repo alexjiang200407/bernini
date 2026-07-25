@@ -486,10 +486,25 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
      `-DBGL_WGSL` is passed on the WGSL `compile_shader` arm and set on the runtime Slang session's
      preprocessor macros (Slang predefines no WGSL macro). *Gate:* the five kernels still compile to
      WGSL **and pass Tint** through `TintValidation_test`, not just slangc.
-  2. **`ReflectedLayout` carries `(group, binding)`.** Extend the `SlangReflection` walk so each
-     buffer parameter records the `(group, binding)` slot slangc assigns (in place of the D3D12
-     root-param/register data). The POD is already target-neutral; this adds the two fields and the
-     WGSL-target read path.
+
+     The resource stays a **member of the `Uniforms` struct in source** — the swap changes one member
+     type, not the shader's shape. Hoisting a `StructuredBuffer` out of the constant buffer is a
+     *codegen/layout* step, not a source one: Slang emits it as a top-level `@group @binding
+     var<storage>` and rewrites the access, but reflection still reports it as a **named field of the
+     `Uniforms` struct**, carrying a binding slot instead of a byte offset. Verified against slangc
+     `-reflection-json`: `gUniforms.outBuffer` reflects as a struct field with
+     `binding = {descriptorTableSlot, index 1}`, while a scalar sibling reflects as `{uniform, offset
+     0}`. So neither `gUniforms["outBuffer"]` name resolution nor the `ReflectedLayout` tree breaks —
+     the three layers (source membership / hoisted codegen / hierarchical reflection) are decoupled,
+     which is the whole reason the `Uniforms` seam survives the binding-model change.
+  2. **`ReflectedLayout` carries `(group, binding)`.** Extend the `SlangReflection` walk so a resource
+     leaf records the `(group, binding)` slot slangc assigns (read via `getBindingIndex` /
+     `getBindingSpace`) instead of a byte offset — today the walk only reads byte offsets and
+     `gfatal`s on `Kind::ShaderStorageBuffer`. The tree/names are unchanged (reflection preserves the
+     struct hierarchy, per step 1); this adds the two fields to the resource leaf and the WGSL-target
+     read path. On assignment, a resource leaf then records a bind-group entry rather than writing a
+     descriptor index at an offset — the same seam the Metal path uses for its `isResourceHandle`
+     gpuAddress translation.
   3. **Runtime Slang→WGSL session.** A Slang global + session targeting `SLANG_WGSL` on the WebGPU
      `Device` (mirrors `Device_d3d12`: column-major matrices, the `BERNINI_GPU_DEBUG` macro, plus
      `BGL_WGSL`). `CreateShader` loads a module; the compute-pipeline build links the entry point,
