@@ -146,7 +146,9 @@ flowchart TD
   are unsupported.
 * **No 8-bit fields in shader-imported structs.** @pre a field whose struct is `import`ed by a
   shader cannot be `uint8_t`/`int8_t` (DXC has no 8-bit scalar). Use `uint16_t`. See
-  [Geometry Layout](docs/geometry_layout.md).
+  [Geometry Layout](docs/geometry_layout.md). @pre a struct a **WGSL** shader loads cannot carry
+  `uint16_t` either — core WGSL has no 16-bit integers; see the widen/pack rule in
+  [Slang Shaders](docs/slang_shaders.md).
 
 ### Whole-module
 * **Empty modules emit no C++ header.** @post if a module has no structs, enums, or constants, the

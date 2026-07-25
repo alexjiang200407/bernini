@@ -29,12 +29,12 @@ public struct VertexAttribute
 {
     public VertexSemantic semantic;
     public VertexFormat format;
-    public uint16_t byteOffset;
+    public uint byteOffset;
 };
 
 public struct VertexLayout
 {
     public VertexAttribute attributes[8];
-    public uint16_t attributeCount;
-    public uint16_t stride;
+    public uint attributeCount;
+    public uint stride;
 };

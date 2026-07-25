@@ -27,16 +27,40 @@ groupshared uint gCount;
 InterlockedAdd(gCount, 1u, prev);
 ```
 
-`Atomic<T>` lowers to `InterlockedAdd` on DXIL unchanged, so the D3D12 path is unaffected. The
-same holds for a buffer element: the atomic target's element type carries the atomic, which is why
-the compute-buffer primitive needs a WGSL variant that exposes atomic access (see the port plan).
+`Atomic<T>` lowers to `InterlockedAdd` on DXIL unchanged, so the D3D12 path is unaffected. A buffer
+element works the same way — the element type carries the atomic — through `AtomicComputeBuffer<T>`
+(in [`types/ComputeBuffer.slang`](../libs/bgl/shaders/src/types/ComputeBuffer.slang)), the atomic
+counterpart of `ComputeBuffer<T>`:
+
+```hlsl
+AtomicComputeBuffer<uint> counts;   // array<atomic<u32>> in WGSL, RWStructuredBuffer<uint> on DXIL
+counts[i].add(1u);
+let n = counts[i].load();
+```
+
+WGSL forbids a plain read of an `atomic<u32>`, so **every** access to an atomic buffer goes through
+`.load`/`.store`/`.add`, not just the atomic bump — the debug record buffer
+([`debug/dbg.slang`](../libs/bgl/shaders/src/debug/dbg.slang)) is the worked example.
+
+When the atomic target is a **field of an IDL struct** (e.g. `DispatchArgs.threadCountX`,
+`CullStats.tested`), make that field `Atomic<uint>` in the IDL source. `bgl_idlgen` maps
+`Atomic<uint>` to a plain `uint32_t` in the C++ mirror — layout-identical, so `sizeof`/`offsetof`
+are unchanged and all CPU code is untouched. A non-atomic writer of the same struct writes the field
+through `.store` (a positional aggregate initializer cannot fill an atomic member).
 
 ## No 16-bit integers in WGSL
 
 Core WGSL has no `uint16_t`/`int16_t`. A 16-bit scalar in shared shader code — or reached through an
-imported IDL struct — fails the WGSL compile. IDL fields that are 16-bit are packed into `u32` behind
-accessors by the codegen for the WGSL target; do not introduce a bare 16-bit scalar in a shader that
-must be portable.
+imported IDL struct a shader loads — fails the WGSL compile. Do not introduce a bare 16-bit scalar in
+a portable shader or in an IDL struct one loads. To remove an existing 16-bit field, the fix depends
+on whether the struct's byte layout is fixed:
+
+- **CPU-built, uploaded structs** (e.g. `idl::VertexLayout`, built field-by-field and written to a
+  buffer, never `memcpy`'d from disk): just **widen** the field to `uint`. The GPU struct grows a
+  little; nothing external constrains its size. The CPU mirror follows automatically.
+- **Structs `memcpy`'d from a fixed cooked format** (e.g. `Meshlet` from a baked mesh): the byte
+  width must be preserved, so **pack** two 16-bit values into one `uint` (hi/lo) behind accessors —
+  widening would break the on-disk layout.
 
 ## No mesh or amplification shaders in WGSL
 

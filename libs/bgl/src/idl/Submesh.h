@@ -18,14 +18,14 @@ namespace bgl::idl
 		float boundingRadius;
 	};
 
-	static_assert(sizeof(Submesh) == 140);
+	static_assert(sizeof(Submesh) == 144);
 	static_assert(offsetof(Submesh, layout) == 0);
-	static_assert(offsetof(Submesh, meshlets) == 100);
-	static_assert(offsetof(Submesh, vertexMap) == 108);
-	static_assert(offsetof(Submesh, vertexData) == 112);
-	static_assert(offsetof(Submesh, indices) == 116);
-	static_assert(offsetof(Submesh, vertexCount) == 120);
-	static_assert(offsetof(Submesh, boundingCenter) == 124);
-	static_assert(offsetof(Submesh, boundingRadius) == 136);
+	static_assert(offsetof(Submesh, meshlets) == 104);
+	static_assert(offsetof(Submesh, vertexMap) == 112);
+	static_assert(offsetof(Submesh, vertexData) == 116);
+	static_assert(offsetof(Submesh, indices) == 120);
+	static_assert(offsetof(Submesh, vertexCount) == 124);
+	static_assert(offsetof(Submesh, boundingCenter) == 128);
+	static_assert(offsetof(Submesh, boundingRadius) == 140);
 
 }

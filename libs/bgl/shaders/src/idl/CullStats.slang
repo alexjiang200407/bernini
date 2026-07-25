@@ -2,6 +2,6 @@
 
 public struct CullStats
 {
-    public uint tested;
-    public uint frustumCulled;
+    public Atomic<uint> tested;
+    public Atomic<uint> frustumCulled;
 }

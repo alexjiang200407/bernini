@@ -2,7 +2,7 @@
 
 public struct DispatchArgs
 {
-    public uint threadCountX;
+    public Atomic<uint> threadCountX;
     public uint threadCountY;
     public uint threadCountZ;
 }
