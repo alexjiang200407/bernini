@@ -1,12 +1,15 @@
 #!/usr/bin/env sh
-# Format staged C++ and Slang sources with clang-format before they are committed, so nothing lands
-# unformatted. Runs scripts/format.py (which locates clang-format via scripts/config.json, then PATH,
-# then the Visual Studio LLVM component) on the staged .cpp/.slang files and re-stages them. Enabled
-# by `git config core.hooksPath .githooks` (set by `just init`).
+# Format staged C++ and Slang sources with clang-format, then check the staged lines against the
+# naming rules, so neither lands wrong. Both scripts locate their tool via scripts/config.json, then
+# PATH, then a known LLVM install. Enabled by `git config core.hooksPath .githooks` (set by
+# `just init`).
+#
+# The naming check needs a compile database, which only the Ninja and Makefile generators write; it
+# is skipped rather than failed when there isn't one, so a Visual Studio-generator checkout still
+# commits. `SKIP_TIDY=1 git commit` skips it outright.
 
 # Staged source files that still exist (Added/Copied/Modified/Renamed) -- .cpp and .slang only.
 files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cpp' '*.slang')
-[ -z "$files" ] && exit 0
 
 if command -v python3 >/dev/null 2>&1; then
 	py=python3
@@ -14,9 +17,17 @@ else
 	py=python
 fi
 
-# shellcheck disable=SC2086
-"$py" scripts/format.py $files || exit 1
+if [ -n "$files" ]; then
+	# shellcheck disable=SC2086
+	"$py" scripts/format.py $files || exit 1
 
-# Re-stage the (possibly reformatted) files so the formatting is part of this commit.
-# shellcheck disable=SC2086
-printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 git add
+	# Re-stage the (possibly reformatted) files so the formatting is part of this commit.
+	# shellcheck disable=SC2086
+	printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 git add
+fi
+
+# Staged lines only: an existing violation elsewhere in the file is not the problem of whoever
+# happens to edit it next.
+if [ -z "$SKIP_TIDY" ]; then
+	"$py" scripts/tidy.py --changed --if-configured || exit 1
+fi

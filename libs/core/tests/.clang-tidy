@@ -1,0 +1,6 @@
+# Test code is engine code. It is the library's published vocabulary that reads
+# beside std::, not the fixtures exercising it.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.FunctionCase: CamelCase

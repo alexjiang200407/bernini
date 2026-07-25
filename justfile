@@ -42,6 +42,10 @@ install *args:
 format *args:
     @{{ python }} scripts/format.py {{ args }}
 
+# Check identifier naming with clang-tidy (--changed for a diff, --fix to apply).
+tidy *args:
+    @{{ python }} scripts/tidy.py {{ args }}
+
 # Regenerate the IDL C++ headers and Slang copies.
 idl *args:
     @{{ python }} scripts/gen_idl.py {{ args }}

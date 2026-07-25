@@ -1,4 +1,18 @@
 
+# Naming domains
+
+Two styles, and the **directory decides** which one applies — never the author's read of what kind
+of thing they are writing.
+
+| Where | Style |
+|---|---|
+| `core/containers/`, `core/str/` | `lower_case` throughout: these stand in for standard-library types |
+| the rest of `libs/core/` | `lower_case` free functions, `PascalCase` types and methods |
+| everything else | `PascalCase` types and functions |
+
+`just tidy` checks this. The rules below are what it enforces; [docs/naming.md](docs/naming.md)
+covers the split, the exemptions, and how to run it.
+
 # Variables
 
 ```cpp

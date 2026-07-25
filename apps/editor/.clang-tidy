@@ -1,0 +1,7 @@
+# Qt names its own virtual hooks, and an override that renames them stops
+# overriding -- silently, since none of them are marked final. Add to the list when
+# you override one that isn't here yet.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint)$'
