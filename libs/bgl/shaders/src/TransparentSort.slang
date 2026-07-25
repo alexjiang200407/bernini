@@ -90,7 +90,14 @@ void main(uint tid: SV_GroupThreadID)
         gUniforms.partitionBase[cOccludePartition] = 0u;
         gUniforms.partitionBase[cPlainPartition] = occludeCount;
 
-        gUniforms.partitionDispatchArgs[cOccludePartition] = { occludeCount, 1u, 1u };
-        gUniforms.partitionDispatchArgs[cPlainPartition] = { n - occludeCount, 1u, 1u };
+        // Field-wise, not an aggregate: threadCountX is an Atomic<uint> now, so it is written
+        // through .store rather than positional initialization.
+        gUniforms.partitionDispatchArgs[cOccludePartition].threadCountX.store(occludeCount);
+        gUniforms.partitionDispatchArgs[cOccludePartition].threadCountY = 1u;
+        gUniforms.partitionDispatchArgs[cOccludePartition].threadCountZ = 1u;
+
+        gUniforms.partitionDispatchArgs[cPlainPartition].threadCountX.store(n - occludeCount);
+        gUniforms.partitionDispatchArgs[cPlainPartition].threadCountY = 1u;
+        gUniforms.partitionDispatchArgs[cPlainPartition].threadCountZ = 1u;
     }
 }

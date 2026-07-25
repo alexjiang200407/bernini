@@ -43,8 +43,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let base = (psoType == 0u) ? 0u : gUniforms.psoPrefixSum[psoType - 1u];
 
-    uint slot;
-    InterlockedAdd(gUniforms.dispatchArgs[psoType].threadCountX, 1u, slot);
+    let slot = gUniforms.dispatchArgs[psoType].threadCountX.add(1u);
 
     gUniforms.compactedInstances[base + slot] = globalIdx;
 }
