@@ -167,19 +167,25 @@ The seam is already narrow: shaders reach resources only through the `types.*Buf
 `*.Handle` IDL primitives, and the CPU writes only through `Uniforms`/`ReflectedLayout`. The port
 specializes both per target rather than touching every shader:
 
-* **Buffers.** Slang's WGSL target lowers `StructuredBuffer` members to storage-buffer bindings.
-  The smart-buffer structs get a WGSL-target variant where the `.Handle` member is replaced by an
-  actual buffer binding; Slang reflection then reports real `(group, binding)` slots, which
-  `ReflectedLayout` carries instead of D3D12 root-param/register data. `Uniforms` assignment of a
-  `BufferHandle` records a bind-group entry instead of writing an index. The explicit variant is
-  mandatory, not a nicety: left to itself, slangc (verified on the pinned 2026.7.1) lowers a
-  `.Handle` field to an emulated descriptor heap — `@group(1) var _slang_resource_heap_0 :
-  array<array<u32>>`, a runtime-sized *binding array* that core browser WGSL does not have. A
-  kernel can therefore "compile to WGSL" and still be unloadable in a browser, which is why every
-  cooked program must pass a real WGSL validator (Tint/naga), not just slangc. The ~12 distinct buffers
-  a forward draw touches fit comfortably in WebGPU's per-stage storage-buffer limits
-  (Tier-1 limit is 8 storage buffers per stage — the forward data may need packing into fewer,
-  wider buffers or a second bind group; audit in W1).
+* **Buffers.** The smart-buffer structs get a WGSL-target variant where the `.Handle` (bindless)
+  member is replaced by a plainly bound `RWStructuredBuffer<T>` / `StructuredBuffer<T>`. This is
+  **mandatory, not a nicety, and now confirmed on both ends** (pinned slangc 2026.7.1, Dawn's Tint,
+  via `TintValidation_test`): left to itself slangc lowers a `.Handle` field to an emulated
+  descriptor heap — `@group(1) var _slang_resource_heap_0 : array<array<u32>>` — and Tint **rejects
+  that outright** (*"an array element type cannot contain a runtime-sized array"*). So a kernel can
+  "compile to WGSL" under slangc and still be unloadable; every cooked program must pass a real WGSL
+  validator (Dawn/Tint), not just slangc.
+  The payoff of the plain form is that it is **shader-transparent**: slangc auto-hoists each plain
+  buffer member of a `ConstantBuffer<Uniforms>` — including one nested inside a `PackedBuffer`/`Entry`
+  wrapper — to its own top-level `@group(0) @binding(n) var<storage>`, while scalar members collapse
+  into a single `var<uniform>`. Shader bodies keep writing `gUniforms.outBuffer[i]` unchanged; only
+  the primitive's underlying member type flips per target. Reflection then reports the real
+  `(group, binding)` for each, which `ReflectedLayout` carries instead of D3D12 root-param/register
+  data, and `Uniforms` assignment of a `BufferHandle` records a bind-group entry instead of an index.
+  Storage-buffer count is the one limit to watch: WebGPU's Tier-1 floor is 8 storage buffers per
+  stage, and while the compute kernels sit under it (Histogram 3, Compact 5, Cull ~6), the ~12
+  buffers a forward draw touches exceed it — packing into fewer, wider buffers or a second bind group
+  is a W3 concern.
 * **Textures.** Arbitrary per-material texture indexing cannot survive (browser limit: 16 sampled
   textures per stage, no indexing). The replacement keeps the *index* model: all material textures
   of a format class live as **layers of shared `texture_2d_array`s** (one per format/usage class:
@@ -464,12 +470,55 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   Verified so this is not a leap: the wrapper is **header-only** (so no ABI/exception cost), and
   the Emscripten `emdawnwebgpu` package ships `webgpu_cpp/include` too, so the C++ layer is
   identical on native and browser — it does not fork the two targets.
-* **W2 — shader pipeline.** Slang session targeting WGSL in the native backend;
-  `ReflectedLayout` extended with `(group, binding)`; WGSL-target variants of the `types.*Buffer`
-  primitives; the two migrations the slangc probe proved necessary — `InterlockedAdd` on plain
-  fields → typed `Atomic<T>` (shared-source; D3D12 is unaffected), and a WGSL lowering in the IDL
-  codegen for the `uint16_t` fields (pack pairs into `u32` behind accessors, C++/DXIL byte layout
-  untouched); `compile_shader(... TARGET wgsl)` validation entries for every compute kernel.
+* **W2 — build-time WGSL validation + kernel migrations. _(landed: #115, #116, #117)_** The
+  `compile_shader(... TARGET wgsl)` harness, and the source migrations the slangc probe proved
+  necessary so all five culling/sort kernels compile to WGSL: `InterlockedAdd` on plain fields →
+  typed `Atomic<T>` (shared-source; D3D12 unaffected) via the new `AtomicComputeBuffer<T>` primitive
+  and `Atomic<uint>` IDL struct-fields (idlgen maps these to plain `uint32_t` on the CPU); and the
+  16-bit `VertexLayout` fields widened to `uint` (that struct is CPU-built and never `memcpy`'d — see
+  [Slang Shaders](../slang_shaders.md)). Plus the Tint-validation gate itself (`TintValidation_test`,
+  which confirmed the bindless-heap rejection that shapes the next slice).
+* **W2 — the WGSL binding model + runtime session.** The remaining W2 runtime work, and the
+  prerequisite for W3 (raster reuses this exact binding model). The pieces, in order:
+  1. **Per-target buffer primitives.** Each `types.*Buffer` primitive gets a `#if defined(BGL_WGSL)`
+     form whose `.Handle` member becomes a plainly bound `RWStructuredBuffer<T>` / `StructuredBuffer<T>`;
+     the subscript/`Get` API is byte-for-byte the same, so **shader bodies do not change**. Our own
+     `-DBGL_WGSL` is passed on the WGSL `compile_shader` arm and set on the runtime Slang session's
+     preprocessor macros (Slang predefines no WGSL macro). *Gate:* the five kernels still compile to
+     WGSL **and pass Tint** through `TintValidation_test`, not just slangc.
+
+     The resource stays a **member of the `Uniforms` struct in source** — the swap changes one member
+     type, not the shader's shape. Hoisting a `StructuredBuffer` out of the constant buffer is a
+     *codegen/layout* step, not a source one: Slang emits it as a top-level `@group @binding
+     var<storage>` and rewrites the access, but reflection still reports it as a **named field of the
+     `Uniforms` struct**, carrying a binding slot instead of a byte offset. Verified against slangc
+     `-reflection-json`: `gUniforms.outBuffer` reflects as a struct field with
+     `binding = {descriptorTableSlot, index 1}`, while a scalar sibling reflects as `{uniform, offset
+     0}`. So neither `gUniforms["outBuffer"]` name resolution nor the `ReflectedLayout` tree breaks —
+     the three layers (source membership / hoisted codegen / hierarchical reflection) are decoupled,
+     which is the whole reason the `Uniforms` seam survives the binding-model change.
+  2. **`ReflectedLayout` carries `(group, binding)`.** Extend the `SlangReflection` walk so a resource
+     leaf records the `(group, binding)` slot slangc assigns (read via `getBindingIndex` /
+     `getBindingSpace`) instead of a byte offset — today the walk only reads byte offsets and
+     `gfatal`s on `Kind::ShaderStorageBuffer`. The tree/names are unchanged (reflection preserves the
+     struct hierarchy, per step 1); this adds the two fields to the resource leaf and the WGSL-target
+     read path. On assignment, a resource leaf then records a bind-group entry rather than writing a
+     descriptor index at an offset — the same seam the Metal path uses for its `isResourceHandle`
+     gpuAddress translation.
+  3. **Runtime Slang→WGSL session.** A Slang global + session targeting `SLANG_WGSL` on the WebGPU
+     `Device` (mirrors `Device_d3d12`: column-major matrices, the `BERNINI_GPU_DEBUG` macro, plus
+     `BGL_WGSL`). `CreateShader` loads a module; the compute-pipeline build links the entry point,
+     pulls WGSL from `getEntryPointCode`, and creates a `wgpu::ShaderModule` — whose creation *is*
+     the Tint gate at runtime.
+  4. **CPU-side bind-group assembly.** `Uniforms` assignment of a `BufferHandle` records a
+     `(group, binding, buffer)` entry rather than a heap index. `CreateComputePipeline` builds a
+     `BindGroupLayout` + `PipelineLayout` from the reflected slots; scalar members become one uniform
+     buffer written per dispatch. At `Dispatch` the backend sets the pipeline, binds the group, and
+     dispatches.
+  *Gate:* each of the five kernels **runs end-to-end through the RHI** on the WebGPU backend and reads
+  back byte-identical results to a CPU reference (extend the W1 `BufferRoundTrip` fixture to actually
+  dispatch — e.g. PrefixSum over a known input) — closing the loop the W1 tests left open at
+  `Dispatch`/`CreateComputePipeline` (both `gfatal` today).
 * **W2 — program-cache generalization (native warm cache).** Lift the program cache off its
   D3D12-private `.bsc` payload into a **target-tagged cooked program** — WGSL text (or a
   Tint-validated blob) + `ReflectedLayout` + bind-group layout — keyed by the same content salt the
