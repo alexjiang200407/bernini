@@ -48,7 +48,12 @@ namespace bgl
 		kCopySource       = 0x00000200,  // Read-only copy cache
 		kCopyDest         = 0x00000400,  // Write-only copy cache
 		kAccelStructRead  = 0x00000800,  // Read-only raytracing AS cache
-		kAccelStructWrite = 0x00001000   // Write-only raytracing AS cache
+		kAccelStructWrite = 0x00001000,  // Write-only raytracing AS cache
+
+		// Compatible with any access. Only meaningful as an `accessBefore` for a resource whose
+		// prior access the caller cannot name -- a buffer the FrameGraph does not track. Combining
+		// it with another flag is meaningless: it already subsumes them.
+		kCommon = 0x00002000
 	};
 
 	constexpr inline BarrierAccessFlag

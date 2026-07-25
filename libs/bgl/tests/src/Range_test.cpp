@@ -52,10 +52,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("AllocateRange marks dirty blocks")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = sizeof(int);  // One element per block.
-		desc.debugName = "RangeBuffer Allocate";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = sizeof(int);  // One element per block.
+		desc.debugName    = "RangeBuffer Allocate";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
@@ -86,10 +86,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Add writes an element span and marks dirty")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "RangeBuffer Add";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "RangeBuffer Add";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
@@ -106,10 +106,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Set updates a single element and dirties one block")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "RangeBuffer Set";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "RangeBuffer Set";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
@@ -132,10 +132,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Erase frees the range and reallocation bumps generation")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "RangeBuffer Erase";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "RangeBuffer Erase";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
@@ -158,10 +158,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Dirty tracking spans multiple blocks")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = 4 * sizeof(int);  // Four elements per block => 2 blocks.
-		desc.debugName = "RangeBuffer Spanning";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
+		desc.debugName    = "RangeBuffer Spanning";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
@@ -175,10 +175,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("IsValid detects use-after-free and EraseByIndex frees ranges")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 8;
-		desc.blockSize = sizeof(int);
-		desc.debugName = "RangeBuffer IsValid";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 8;
+		desc.blockSize    = sizeof(int);
+		desc.debugName    = "RangeBuffer IsValid";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
@@ -209,10 +209,10 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 	// mesh -- whose GPU data then belonged to another range entirely.
 	SECTION("A dirty range past the first block uploads its own bytes")
 	{
-		auto desc      = bgl::RangeBufferDesc();
-		desc.maxCount  = 16;
-		desc.blockSize = 4 * sizeof(uint32_t);  // Four elements per block => 4 blocks.
-		desc.debugName = "RangeBuffer Offset Upload";
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 16;
+		desc.blockSize    = 4 * sizeof(uint32_t);  // Four elements per block => 4 blocks.
+		desc.debugName    = "RangeBuffer Offset Upload";
 
 		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
 
@@ -227,7 +227,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		rb.Update(cmdList);
 
 		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = desc.maxCount * sizeof(uint32_t);
+		rbDesc.byteSize  = desc.initialCount * sizeof(uint32_t);
 		rbDesc.debugName = "RangeBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -261,6 +261,226 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		rb.Release(false);
 
 		// The case-wide Close below expects an open list.
+		cmdList->Open(cmdQueue, cmdAllocator);
+	}
+
+	SECTION("A range that outgrows the buffer is served rather than refused")
+	{
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(uint32_t);
+		desc.debugName    = "RangeBuffer Grow";
+
+		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+		REQUIRE(rb.Capacity() == 4);
+
+		const uint32_t first[]     = { 10, 20, 30, 40 };
+		auto           firstHandle = rb.Add(std::span<const uint32_t>(first, std::size(first)));
+		REQUIRE(rb.Capacity() == 4);
+
+		// One past the initial ceiling: the old contract threw here.
+		const uint32_t second[]     = { 50, 60 };
+		auto           secondHandle = rb.Add(std::span<const uint32_t>(second, std::size(second)));
+
+		CHECK(rb.Capacity() >= 6);
+		CHECK(rb.IsValid(firstHandle));
+		CHECK(rb.IsValid(secondHandle));
+
+		// The pre-growth handle still addresses the same slots -- growth must not renumber.
+		CHECK(firstHandle.index == 0);
+
+		rb.Release(false);
+	}
+
+	// The whole point of copy-on-grow. The first range is uploaded into the original resource, which
+	// growth then replaces; only the forward copy recorded by the next Update carries it into the new
+	// one. Without that copy this reads back zeroes.
+	SECTION("Data uploaded before a growth survives it")
+	{
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(uint32_t);
+		desc.debugName    = "RangeBuffer Grow Preserve";
+
+		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+
+		const uint32_t before[]     = { 111, 222, 333, 444 };
+		auto           beforeHandle = rb.Add(std::span<const uint32_t>(before, std::size(before)));
+
+		// Flushed into the original resource, and the mirror is clean afterwards, so nothing would
+		// re-upload these words later.
+		rb.Update(cmdList);
+		cmdList->Close();
+		auto uploadFence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(uploadFence);
+		cmdAllocator->ResetAllocator();
+		cmdList->Open(cmdQueue, cmdAllocator);
+
+		const uint32_t after[]     = { 555, 666 };
+		auto           afterHandle = rb.Add(std::span<const uint32_t>(after, std::size(after)));
+		REQUIRE(rb.Capacity() >= 6);
+
+		rb.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
+		rbDesc.debugName = "RangeBuffer Grow Preserve Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(rb.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		for (uint32_t i = 0; i < std::size(before); ++i)
+		{
+			CHECK(mapped[beforeHandle.index + i] == before[i]);
+		}
+		for (uint32_t i = 0; i < std::size(after); ++i)
+		{
+			CHECK(mapped[afterHandle.index + i] == after[i]);
+		}
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		rb.Release(false);
+
+		cmdAllocator->ResetAllocator();
+		cmdList->Open(cmdQueue, cmdAllocator);
+	}
+
+	// Two growths with no Update between them: the middle resource never receives the forward copy,
+	// so a naive "copy from the one I just replaced" reads uninitialised memory.
+	SECTION("Data survives two growths with no flush between them")
+	{
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 2;
+		desc.blockSize    = sizeof(uint32_t);
+		desc.debugName    = "RangeBuffer Double Grow";
+
+		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+
+		const uint32_t seed[]     = { 7, 8 };
+		auto           seedHandle = rb.Add(std::span<const uint32_t>(seed, std::size(seed)));
+
+		rb.Update(cmdList);
+		cmdList->Close();
+		auto seedFence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(seedFence);
+		cmdAllocator->ResetAllocator();
+		cmdList->Open(cmdQueue, cmdAllocator);
+
+		const uint32_t more[]  = { 9 };
+		const uint32_t more2[] = { 11 };
+		rb.Add(std::span<const uint32_t>(more, std::size(more)));
+		rb.Add(std::span<const uint32_t>(more2, std::size(more2)));
+
+		rb.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
+		rbDesc.debugName = "RangeBuffer Double Grow Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(rb.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		for (uint32_t i = 0; i < std::size(seed); ++i)
+		{
+			CHECK(mapped[seedHandle.index + i] == seed[i]);
+		}
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		rb.Release(false);
+
+		cmdAllocator->ResetAllocator();
+		cmdList->Open(cmdQueue, cmdAllocator);
+	}
+
+	// The forward copy on growth writes [0, oldBytes) of the new resource, and the same Update then
+	// uploads dirty ranges into it -- including data added below the old capacity but never flushed,
+	// so the old resource the copy reads is stale there. The two writes overlap; only a barrier
+	// between them makes the dirty upload win. Without it the copied (stale) bytes can survive.
+	SECTION("Dirty data below the old capacity survives a growth in the same Update")
+	{
+		auto desc         = bgl::RangeBufferDesc();
+		desc.initialCount = 4;
+		desc.blockSize    = sizeof(uint32_t);
+		desc.debugName    = "RangeBuffer Grow Overlap";
+
+		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+
+		// Fits the initial capacity, dirties slots below it, and is NOT flushed -- so the original
+		// resource never receives these bytes.
+		const uint32_t low[]     = { 111, 222 };
+		auto           lowHandle = rb.Add(std::span<const uint32_t>(low, std::size(low)));
+
+		// Forces the growth while low[] is still pending. The forward copy's [0, 16B) region covers
+		// lowHandle's slots.
+		const uint32_t high[]     = { 333, 444, 555, 666 };
+		auto           highHandle = rb.Add(std::span<const uint32_t>(high, std::size(high)));
+		REQUIRE(rb.Capacity() >= 6);
+
+		rb.Update(cmdList);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
+		rbDesc.debugName = "RangeBuffer Grow Overlap Readback";
+		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		auto barrier = bgl::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(rb.GetBufferHandle(), barrier);
+
+		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(readback));
+		REQUIRE(mapped != nullptr);
+
+		CHECK(mapped[lowHandle.index + 0] == low[0]);
+		CHECK(mapped[lowHandle.index + 1] == low[1]);
+		for (uint32_t i = 0; i < std::size(high); ++i)
+		{
+			CHECK(mapped[highHandle.index + i] == high[i]);
+		}
+
+		resourceManager->UnmapReadback(readback);
+		resourceManager->DestroyReadbackBuffer(readback, false);
+		rb.Release(false);
+
+		cmdAllocator->ResetAllocator();
 		cmdList->Open(cmdQueue, cmdAllocator);
 	}
 

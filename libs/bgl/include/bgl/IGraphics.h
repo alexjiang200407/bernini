@@ -171,7 +171,7 @@ namespace bgl
 		CreateScene(SceneDesc desc) = 0;
 
 		virtual SceneViewRef
-		CreateSceneView(const SceneRef& scene, uint32_t maxInstances) = 0;
+		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) = 0;
 
 		/**
 		 * Registers a sink for GPU assertions (dbg_raise) the engine detects during

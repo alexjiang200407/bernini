@@ -30,8 +30,8 @@ namespace QtNodes
 
 struct MaterialEditorWindowDesc
 {
-	Renderer*          renderer            = nullptr;
-	uint32_t           maxPreviewInstances = 16;
+	Renderer*          renderer                = nullptr;
+	uint32_t           initialPreviewInstances = 16;
 	MaterialPreviewEnv previewEnv;
 };
 

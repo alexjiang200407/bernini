@@ -12,19 +12,19 @@
         "enableShaderCache": true
     },
     "scene": {
-        "maxGeom": 256,
-        "maxMeshlets": 32768,
-        "maxSubmeshes": 512,
-        "maxVertexBufferByteSize": 33554432,
-        "maxIndices": 2000000,
-        "maxPbrMaterials": 256,
-        "maxLoosePbrMaterials": 256
+        "initialGeom": 256,
+        "initialMeshlets": 32768,
+        "initialSubmeshes": 512,
+        "initialVertexBufferByteSize": 33554432,
+        "initialIndices": 2000000,
+        "initialPbrMaterials": 256,
+        "initialLoosePbrMaterials": 256
     },
     "levelEditor": {
-        "maxInstances": 1000
+        "initialInstances": 1000
     },
     "materialEditor": {
-        "maxPreviewInstances": 16,
+        "initialPreviewInstances": 16,
         "skybox": "assets/pmrem.ktx2",
         "irradiance": "assets/iem.ktx2",
         "prefilter": "assets/pmrem.ktx2",
@@ -33,7 +33,7 @@
     },
     "thumbnails": {
         "dimension": 256,
-        "maxInstances": 256,
+        "initialInstances": 256,
         "skybox": "assets/pmrem.ktx2",
         "irradiance": "assets/iem.ktx2",
         "prefilter": "assets/pmrem.ktx2",

@@ -35,6 +35,22 @@ namespace core
 			m_Data.resize(capacity);
 		}
 
+		/**
+		 * Raises the capacity, keeping every live element at its dense index.
+		 *
+		 * @return false if `newCapacity` would not raise it; the container is untouched.
+		 */
+		bool
+		grow(uint32_t newCapacity)
+		{
+			if (newCapacity <= m_Capacity)
+				return false;
+
+			m_Data.resize(newCapacity);
+			m_Capacity = newCapacity;
+			return true;
+		}
+
 		template <typename... Args>
 		uint32_t
 		emplace_back(Args&&... args)

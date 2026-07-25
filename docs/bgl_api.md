@@ -40,12 +40,25 @@ disagrees, trust the header, then fix this doc.
   content yields the old content — this is why callers that render one-shot images draw a warmup frame
   before capturing.
 
-* **Capacities are fixed at creation and never grow.** `SceneDesc` sizes every scene pool
-  (`maxGeom`, `maxMeshlets`, `maxIndices`, `maxSubmeshes`, `maxVertexBufferByteSize`,
-  `maxPbrMaterials`, `maxLoosePbrMaterials`); `GraphicsOptions` sizes the descriptor heaps and
-  resource pools (`maxCbvSrvUavs`, `maxRtvs`, `maxDsvs`, `maxTextures`, `maxSamplers`,
-  `maxReadbackBuffers`). Exhaustion throws `SceneError`; it is not a growth trigger. Size a scene for
-  the largest asset that will ever enter it, not the typical one.
+* **Scene capacities are a starting point; descriptor-heap capacities are not.** `SceneDesc` sizes
+  where every scene arena *starts* (`initialGeom`, `initialMeshlets`, `initialIndices`,
+  `initialSubmeshes`, `initialVertexBufferByteSize`, `initialPbrMaterials`,
+  `initialLoosePbrMaterials`), and `CreateSceneView(scene, initialInstances)` does the same for a
+  view. Each grows on demand, so an asset larger than the whole initial budget still loads; sizing
+  them near the steady state only avoids the growth events. `SceneError` on a load now means the
+  device could not allocate, not that a budget was hit.
+
+  `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxRtvs`, `maxDsvs`, `maxTextures`,
+  `maxSamplers` and `maxReadbackBuffers` size fixed pools that never grow, and exhausting one is
+  a hard failure. Note that growth *consumes* CBV/SRV/UAV slots — a grown buffer takes a new one and
+  gives the old one back only once the deferred destroy clears — so a scene that grows a lot needs
+  `maxCbvSrvUavs` headroom above its steady-state resource count.
+
+* **Never cache a buffer's descriptor index across frames.** Growth allocates a new resource and a
+  new descriptor slot rather than rewriting the existing one, because a descriptor is read by the GPU
+  when a shader runs, not when the command list is recorded. Re-read `GetBufferHandle()` each frame;
+  the superseded resource stays alive on the resource manager's fence until every in-flight frame
+  that referenced it has retired.
 
 * **Handles are trivially copyable values, but their shapes differ.** `GeomHandle`, `MaterialHandle`
   and `MeshInstanceHandle` each wrap a `core::slot_handle` reached as `.handle` and expose
@@ -124,7 +137,7 @@ flowchart TD
 
     IG -- "CreateRenderTarget(RenderTargetDesc)" --> RT["IRenderTarget (swapchain or headless)"]
     IG -- "CreateScene(SceneDesc)" --> SC[IScene]
-    IG -- "CreateSceneView(scene, maxInstances)" --> SV[ISceneView]
+    IG -- "CreateSceneView(scene, initialInstances)" --> SV[ISceneView]
 
     SV -- "keeps alive" --> SC
     SC -- "AddStaticMesh / AddSphereGeom / ..." --> GH[GeomHandle]
@@ -236,12 +249,12 @@ targetDesc.wnd      = nativeWindowHandle;
 auto target         = graphics->CreateRenderTarget(targetDesc);
 
 auto sceneDesc                    = bgl::SceneDesc();
-sceneDesc.maxGeom                 = 100;
-sceneDesc.maxMeshlets             = 1000;
-sceneDesc.maxSubmeshes            = 100;
-sceneDesc.maxIndices              = 10000;
-sceneDesc.maxVertexBufferByteSize = 100000;
-sceneDesc.maxPbrMaterials         = 100;
+sceneDesc.initialGeom                 = 100;
+sceneDesc.initialMeshlets             = 1000;
+sceneDesc.initialSubmeshes            = 100;
+sceneDesc.initialIndices              = 10000;
+sceneDesc.initialVertexBufferByteSize = 100000;
+sceneDesc.initialPbrMaterials         = 100;
 
 auto scene = graphics->CreateScene(std::move(sceneDesc));
 auto view  = graphics->CreateSceneView(scene, 100);

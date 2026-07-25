@@ -34,6 +34,44 @@ namespace core
 			m_FreeSegments.push_back({ 0, slotCount });
 		}
 
+		/**
+		 * Raises the slot ceiling, keeping every live range, index and generation where it is.
+		 * The new tail becomes one free segment, merged into the trailing one when they touch.
+		 *
+		 * @return false if `newCapacity` would not raise the ceiling; the container is untouched.
+		 */
+		bool
+		grow(uint32_t newCapacity)
+		{
+			const auto oldCapacity = static_cast<uint32_t>(m_Data.size());
+			if (newCapacity <= oldCapacity)
+				return false;
+
+			m_Data.resize(newCapacity);
+			m_Meta.resize(newCapacity);
+
+			const uint32_t addedCount = newCapacity - oldCapacity;
+
+			if (!m_FreeSegments.empty() &&
+			    m_FreeSegments.back().offset + m_FreeSegments.back().count == oldCapacity)
+			{
+				m_FreeSegments.back().count += addedCount;
+			}
+			else
+			{
+				m_FreeSegments.push_back({ oldCapacity, addedCount });
+			}
+
+			m_MaxSlots = newCapacity;
+			return true;
+		}
+
+		[[nodiscard]] uint32_t
+		capacity() const noexcept
+		{
+			return static_cast<uint32_t>(m_Data.size());
+		}
+
 		[[nodiscard]] void*
 		data() const noexcept
 		{

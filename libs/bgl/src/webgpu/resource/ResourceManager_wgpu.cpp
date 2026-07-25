@@ -49,7 +49,7 @@ namespace bgl
 	ResourceManager::CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept
 	{
 		auto structDesc   = StructBufferDesc{}
-		                        .SetElementCount(desc.maxCount)
+		                        .SetElementCount(desc.initialCount)
 		                        .SetIsUav(true)
 		                        .SetDebugName(desc.debugName);
 		structDesc.stride = desc.elementSize;

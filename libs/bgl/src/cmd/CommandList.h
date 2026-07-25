@@ -86,6 +86,19 @@ namespace bgl
 			std::span<const TextureSubresourceData> subresources) noexcept = 0;
 
 		/**
+		 * Copies `byteSize` bytes between two buffers on the GPU timeline, never touching the CPU.
+		 * `src` must be in a copy-source state and `dst` in a copy-dest state; the ranges must fit
+		 * and, if the buffers are the same, must not overlap.
+		 */
+		virtual void
+		CopyBuffer(
+			BufferHandle dst,
+			BufferHandle src,
+			uint64_t     dstOffset,
+			uint64_t     srcOffset,
+			uint64_t     byteSize) noexcept = 0;
+
+		/**
 		 * Copies an entire buffer into a readback buffer for CPU access.
 		 * The source buffer must already be in a copy-source state.
 		 */

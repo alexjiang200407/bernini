@@ -109,6 +109,21 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `Entry`. Writes are dirty-block tracked and flushed lazily by `Update(cmdList)`, so only touched
   regions are re-uploaded.
 
+* **The arenas grow, and growth preserves every index.** `initialCount` is where a mirror buffer
+  starts, not a ceiling: an allocation that does not fit enlarges the buffer instead of throwing.
+  Because every cross-reference in these structs is an absolute offset, growth copies the old
+  contents to offset 0 of the new storage, which keeps every `Range` already written into a `Mesh` or
+  `Submesh` valid. The corollary is that the arenas are **grow-only and never compacted** — moving a
+  live range would invalidate every offset that names it, and nothing back-references those offsets
+  to fix them up. A load/unload cycle therefore fragments rather than compacts.
+
+  Growth is a *new* GPU resource and a *new* descriptor slot, not a resized one (see
+  `GrowableGpuBuffer`), because a descriptor is read by the GPU when a shader runs rather than when
+  the command list records. The superseded resource is held by the resource manager's deferred
+  destroy until every in-flight frame that referenced it retires. Nothing may cache
+  `GetDescriptorHandle()` / `GetBufferHandle()` across frames; the FrameGraph re-imports them each
+  frame, which is what makes the swap invisible.
+
 ---
 
 ## Struct Index
@@ -148,6 +163,7 @@ store. All three dirty-track writes and flush via `Update(cmdList)`.
 | `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the vertex/index/meshlet/submesh buffers. |
 | `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
+| `GrowableGpuBuffer` | [GrowableGpuBuffer.h](libs/bgl/src/scene/GrowableGpuBuffer.h) | The GPU storage the three share: allocates the replacement resource, records the forward copy in `FlushGrowth`, and retires the old one on the manager's fence. |
 
 ---
 
@@ -256,6 +272,12 @@ green channel.
   allocated and freed with the geometry; `Scene::GetSubmeshDefaultMaterial` checks `IsIndexValid`
   before the `Meta` accessor, so a range that was freed and not reused resolves to a null material
   rather than tripping the accessor's `gassert`.
+* **`Update(cmdList)` must run the growth flush before the dirty-region uploads.** The forward copy
+  writes the whole old extent, so a dirty region flushed ahead of it is overwritten by stale bytes.
+  `RangeBuffer`/`EntryBuffer`/`PackedBuffer::Update` call `FlushGrowth` first for this reason.
+* **A buffer that grows twice between flushes must copy from the oldest superseded resource**, not
+  the one it just replaced: the intermediate never received a copy, so it holds uninitialised memory.
+  `GrowableGpuBuffer` keeps the whole superseded list and sources the copy from its front.
 * **Destroy every mesh instance placed from a geom before you `DeleteGeom` it.**
 * **A mirror-buffer handle is only valid while its range is live.** After `Erase`, the generation
   bumps and the stale handle reports invalid; the raw GPU-side offset carries no generation, so

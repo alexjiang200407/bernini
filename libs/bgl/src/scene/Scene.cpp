@@ -249,71 +249,13 @@ namespace bgl
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
-		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
-
-		const uint32_t maxSubmeshes =
-			m_Desc.maxSubmeshes != 0 ? m_Desc.maxSubmeshes : m_Desc.maxMeshlets;
-
-		// The vertex data buffer is a StructuredBuffer<uint>, so the byte budget is
-		// rounded up to whole 4-byte words.
-		const uint32_t maxVertexWords = (m_Desc.maxVertexBufferByteSize + 3u) / 4u;
-
-		m_GeomSubmeshes.reset(m_Desc.maxGeom);
-
+		try
 		{
-			auto submeshBufferDesc      = RangeBufferDesc();
-			submeshBufferDesc.maxCount  = atLeastOne(maxSubmeshes);
-			submeshBufferDesc.debugName = "Submesh Buffer";
-
-			m_SubmeshBuffer.Init(std::move(submeshBufferDesc), m_ResourceManager);
+			InitBuffers();
 		}
-
+		catch (const std::runtime_error& e)
 		{
-			auto meshletBufferDesc      = RangeBufferDesc();
-			meshletBufferDesc.maxCount  = atLeastOne(m_Desc.maxMeshlets);
-			meshletBufferDesc.debugName = "Meshlet Buffer";
-
-			m_MeshletBuffer.Init(std::move(meshletBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto vertexMapBufferDesc      = RangeBufferDesc();
-			vertexMapBufferDesc.maxCount  = atLeastOne(m_Desc.maxIndices);
-			vertexMapBufferDesc.debugName = "Vertex Map Buffer";
-
-			m_VertexMapBuffer.Init(std::move(vertexMapBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto vertexDataBufferDesc      = RangeBufferDesc();
-			vertexDataBufferDesc.maxCount  = atLeastOne(maxVertexWords);
-			vertexDataBufferDesc.debugName = "Vertex Data Buffer";
-
-			m_VertexDataBuffer.Init(std::move(vertexDataBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto indexBufferDesc      = RangeBufferDesc();
-			indexBufferDesc.maxCount  = atLeastOne(m_Desc.maxIndices);
-			indexBufferDesc.debugName = "Index Buffer";
-
-			m_IndexBuffer.Init(std::move(indexBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto pbrBufferDesc      = EntryBufferDesc();
-			pbrBufferDesc.maxCount  = atLeastOne(m_Desc.maxPbrMaterials);
-			pbrBufferDesc.debugName = "Pbr Material Buffer";
-
-			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto looseBufferDesc      = EntryBufferDesc();
-			looseBufferDesc.maxCount  = atLeastOne(m_Desc.maxLoosePbrMaterials);
-			looseBufferDesc.debugName = "Loose Pbr Material Buffer";
-
-			m_Loose.Init(std::move(looseBufferDesc), m_ResourceManager);
+			throw SceneError(e.what());
 		}
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
@@ -331,6 +273,90 @@ namespace bgl
 			CreateSolidTexture(255, 255, 255, 255);
 		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)] =
 			CreateSolidTexture(128, 128, 255, 255);
+	}
+
+	void
+	Scene::InitBuffers()
+	{
+		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
+
+		const uint32_t initialSubmeshes =
+			m_Desc.initialSubmeshes != 0 ? m_Desc.initialSubmeshes : m_Desc.initialMeshlets;
+
+		// The vertex data buffer is a StructuredBuffer<uint>, so the byte budget is
+		// rounded up to whole 4-byte words.
+		const uint32_t initialVertexWords = (m_Desc.initialVertexBufferByteSize + 3u) / 4u;
+
+		m_GeomSubmeshes.reset(atLeastOne(m_Desc.initialGeom));
+
+		{
+			auto submeshBufferDesc         = RangeBufferDesc();
+			submeshBufferDesc.initialCount = atLeastOne(initialSubmeshes);
+			submeshBufferDesc.debugName    = "Submesh Buffer";
+
+			m_SubmeshBuffer.Init(std::move(submeshBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto meshletBufferDesc         = RangeBufferDesc();
+			meshletBufferDesc.initialCount = atLeastOne(m_Desc.initialMeshlets);
+			meshletBufferDesc.debugName    = "Meshlet Buffer";
+
+			m_MeshletBuffer.Init(std::move(meshletBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto vertexMapBufferDesc         = RangeBufferDesc();
+			vertexMapBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
+			vertexMapBufferDesc.debugName    = "Vertex Map Buffer";
+
+			m_VertexMapBuffer.Init(std::move(vertexMapBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto vertexDataBufferDesc         = RangeBufferDesc();
+			vertexDataBufferDesc.initialCount = atLeastOne(initialVertexWords);
+			vertexDataBufferDesc.debugName    = "Vertex Data Buffer";
+
+			m_VertexDataBuffer.Init(std::move(vertexDataBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto indexBufferDesc         = RangeBufferDesc();
+			indexBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
+			indexBufferDesc.debugName    = "Index Buffer";
+
+			m_IndexBuffer.Init(std::move(indexBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto pbrBufferDesc         = EntryBufferDesc();
+			pbrBufferDesc.initialCount = atLeastOne(m_Desc.initialPbrMaterials);
+			pbrBufferDesc.debugName    = "Pbr Material Buffer";
+
+			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto looseBufferDesc         = EntryBufferDesc();
+			looseBufferDesc.initialCount = atLeastOne(m_Desc.initialLoosePbrMaterials);
+			looseBufferDesc.debugName    = "Loose Pbr Material Buffer";
+
+			m_Loose.Init(std::move(looseBufferDesc), m_ResourceManager);
+		}
+	}
+
+	core::slot_handle
+	Scene::AllocateGeomSlot(const idl::RangeWithCount& submeshes)
+	{
+		auto slot = m_GeomSubmeshes.try_allocate_and_emplace(submeshes);
+		if (slot.is_null())
+		{
+			m_GeomSubmeshes.grow(m_GeomSubmeshes.capacity() * 2);
+			slot = m_GeomSubmeshes.allocate_and_emplace(submeshes);
+		}
+
+		return slot;
 	}
 
 	void
@@ -497,7 +523,7 @@ namespace bgl
 			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
+			retVal.handle   = AllocateGeomSlot(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
@@ -685,67 +711,6 @@ namespace bgl
 		return AddProceduralGeom(planeVerts, planeIndices, material);
 	}
 
-	void
-	Scene::RequireFitsBudget(const assetlib::BMesh& mesh, const assetlib::Mesh& meshEntry) const
-	{
-		uint64_t vertexBytes = 0;
-		uint64_t meshlets    = 0;
-		uint64_t vertexMap   = 0;
-		uint64_t indices     = 0;
-
-		for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
-		{
-			const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
-
-			// Each submesh is allocated its own whole number of 4-byte words, so round up per submesh
-			// rather than over the total: that is what the allocator will actually be asked for.
-			const uint64_t bytes = static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
-			vertexBytes += (bytes + 3u) / 4u * 4u;
-
-			meshlets += src.meshletCount;
-
-			for (uint32_t m = 0; m < src.meshletCount; ++m)
-			{
-				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
-				vertexMap += ml.vertexCount;
-				indices += static_cast<uint64_t>(ml.triangleCount) * 3u;
-			}
-		}
-
-		const auto atLeastOne = [](uint32_t n) -> uint64_t { return n != 0 ? n : 1u; };
-
-		// Mirrors how the constructor sizes the arenas -- including that maxIndices budgets the vertex
-		// map and the index buffer separately, and that maxSubmeshes falls back to maxMeshlets.
-		const uint64_t maxVertexBytes = atLeastOne((m_Desc.maxVertexBufferByteSize + 3u) / 4u) * 4u;
-		const uint64_t maxMeshlets    = atLeastOne(m_Desc.maxMeshlets);
-		const uint64_t maxIndices     = atLeastOne(m_Desc.maxIndices);
-		const uint64_t maxSubmeshes =
-			atLeastOne(m_Desc.maxSubmeshes != 0 ? m_Desc.maxSubmeshes : m_Desc.maxMeshlets);
-
-		const auto require = [](uint64_t         needed,
-		                        uint64_t         budget,
-		                        std::string_view what,
-		                        std::string_view field) {
-			if (needed <= budget)
-				return;
-
-			throw SceneError(
-				std::format(
-					"AddStaticMesh: the mesh needs {} {}, more than the scene's entire budget of "
-					"{} (SceneDesc::{}); it cannot be loaded until that budget is raised",
-					needed,
-					what,
-					budget,
-					field));
-		};
-
-		require(vertexBytes, maxVertexBytes, "bytes of vertex data", "maxVertexBufferByteSize");
-		require(meshlets, maxMeshlets, "meshlets", "maxMeshlets");
-		require(vertexMap, maxIndices, "meshlet vertex indices", "maxIndices");
-		require(indices, maxIndices, "meshlet triangle indices", "maxIndices");
-		require(meshEntry.submeshCount, maxSubmeshes, "submeshes", "maxSubmeshes");
-	}
-
 	GeomHandle
 	Scene::AddStaticMesh(
 		const assetlib::BMesh&          mesh,
@@ -781,8 +746,6 @@ namespace bgl
 							c_MaxDispatchMeshGroups));
 				}
 			}
-
-			RequireFitsBudget(mesh, meshEntry);
 
 			// One GPU submesh per source submesh, in order: callers address geometry by source
 			// submesh index (that is what an asset's material slots are numbered by), so the two
@@ -889,7 +852,7 @@ namespace bgl
 			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = m_GeomSubmeshes.allocate_and_emplace(submeshRange);
+			retVal.handle   = AllocateGeomSlot(submeshRange);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.

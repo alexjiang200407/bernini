@@ -193,9 +193,9 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	QWidget* rightPanel = nullptr;
 	if (m_Desc.renderer != nullptr)
 	{
-		auto rtDesc         = RenderTargetWindowDesc();
-		rtDesc.renderer     = m_Desc.renderer;
-		rtDesc.maxInstances = m_Desc.maxPreviewInstances;
+		auto rtDesc             = RenderTargetWindowDesc();
+		rtDesc.renderer         = m_Desc.renderer;
+		rtDesc.initialInstances = m_Desc.initialPreviewInstances;
 
 		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
 		rightPanel = m_Preview;

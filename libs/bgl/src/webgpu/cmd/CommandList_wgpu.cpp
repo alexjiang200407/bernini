@@ -103,6 +103,42 @@ namespace bgl
 	}
 
 	void
+	CommandList::CopyBuffer(
+		BufferHandle dst,
+		BufferHandle src,
+		uint64_t     dstOffset,
+		uint64_t     srcOffset,
+		uint64_t     byteSize) noexcept
+	{
+		if (byteSize == 0)
+			return;
+
+		gassert(IsOpen(), "CopyBuffer: the list is not open");
+		gassert(
+			m_ResourceManager->ValidBufferHandle(dst),
+			"CopyBuffer: invalid destination handle");
+		gassert(m_ResourceManager->ValidBufferHandle(src), "CopyBuffer: invalid source handle");
+
+		const auto& source      = m_ResourceManager->GetBuffer(src);
+		const auto& destination = m_ResourceManager->GetBuffer(dst);
+
+		gassert(
+			srcOffset + byteSize <= source.GetByteSize(),
+			"CopyBuffer: the source range does not fit the buffer");
+		gassert(
+			dstOffset + byteSize <= destination.GetByteSize(),
+			"CopyBuffer: the destination range does not fit the buffer");
+
+		wgpuCommandEncoderCopyBufferToBuffer(
+			m_Encoder,
+			source.GetHandle(),
+			srcOffset,
+			destination.GetHandle(),
+			dstOffset,
+			byteSize);
+	}
+
+	void
 	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
 	{
 		gassert(IsOpen(), "CopyBufferToReadback: the list is not open");

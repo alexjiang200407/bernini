@@ -654,6 +654,12 @@ namespace bgl
 			return D3D12_BARRIER_ACCESS_NO_ACCESS;
 		}
 
+		// COMMON is 0; the |= chain below cannot express it.
+		if (access & BarrierAccessFlag::kCommon)
+		{
+			return D3D12_BARRIER_ACCESS_COMMON;
+		}
+
 		uint32_t result = 0;
 
 		if (access & BarrierAccessFlag::kIndexBuffer)

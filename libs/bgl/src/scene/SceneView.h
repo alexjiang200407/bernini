@@ -31,7 +31,7 @@ namespace bgl
 	public:
 		SceneView(
 			const SceneRef&                   scene,
-			uint32_t                          maxInstances,
+			uint32_t                          initialInstances,
 			core::SharedRef<IResourceManager> resourceManager);
 
 		~SceneView() noexcept override;
@@ -162,11 +162,30 @@ namespace bgl
 		[[nodiscard]] MeshMeta&
 		MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what);
 
+		/**
+		 * Sizes every per-view buffer to its starting point.
+		 *
+		 * @throws std::runtime_error if the device cannot allocate one; the constructor converts it
+		 *         to SceneError, so a caller only ever sees the documented type.
+		 */
+		void
+		InitBuffers();
+
+		void
+		InitInstanceScratch(uint32_t paddedInstances);
+
+		/**
+		 * Brings the per-instance-slot scratch buffers back in line with the instance buffer after
+		 * it has grown. A no-op when they already cover it.
+		 */
+		void
+		SyncInstanceScratch();
+
 		SceneRef                          m_Scene;
 		Scene*                            m_SceneRaw = nullptr;
 		core::SharedRef<IResourceManager> m_ResourceManager;
 		std::string                       m_NamePrefix;
-		uint32_t                          m_MaxInstances = 0;
+		uint32_t                          m_InitialInstances = 0;
 
 		// The Scene material epoch these instances were resolved against. See Scene::MaterialEpoch.
 		uint64_t m_SceneEpoch = 0;

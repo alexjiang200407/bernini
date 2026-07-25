@@ -88,12 +88,12 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 4;
-	sceneDesc.maxSubmeshes            = 8;
-	sceneDesc.maxMeshlets             = 16;
-	sceneDesc.maxVertexBufferByteSize = 32000;
-	sceneDesc.maxIndices              = 1000;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialMeshlets             = 16;
+	sceneDesc.initialVertexBufferByteSize = 32000;
+	sceneDesc.initialIndices              = 1000;
 
 	auto sceneHandle = gfx->CreateScene(sceneDesc);
 	REQUIRE(sceneHandle != nullptr);
@@ -144,8 +144,8 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize  = static_cast<uint64_t>(sceneDesc.maxSubmeshes) * sizeof(bgl::idl::Submesh);
+	auto rbDesc     = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize = static_cast<uint64_t>(sceneDesc.initialSubmeshes) * sizeof(bgl::idl::Submesh);
 	rbDesc.debugName = "Submesh Readback";
 	auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 

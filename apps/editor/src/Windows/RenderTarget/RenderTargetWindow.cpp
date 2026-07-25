@@ -38,7 +38,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_SceneView = m_Desc.renderer->Invoke([&] {
 		return m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
-			m_Desc.maxInstances);
+			m_Desc.initialInstances);
 	});
 
 	m_RenderWidth  = m_Width;

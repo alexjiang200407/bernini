@@ -66,12 +66,12 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		const auto viewport =
 			bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-		auto sceneDesc                    = bgl::SceneDesc();
-		sceneDesc.maxGeom                 = 8;
-		sceneDesc.maxMeshlets             = 512;
-		sceneDesc.maxSubmeshes            = 8;
-		sceneDesc.maxVertexBufferByteSize = 800000;
-		sceneDesc.maxIndices              = 20000;
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 8;
+		sceneDesc.initialMeshlets             = 512;
+		sceneDesc.initialSubmeshes            = 8;
+		sceneDesc.initialVertexBufferByteSize = 800000;
+		sceneDesc.initialIndices              = 20000;
 
 		auto cubeScene = gfx->CreateScene(sceneDesc);
 		auto cubeView  = gfx->CreateSceneView(cubeScene, 8);

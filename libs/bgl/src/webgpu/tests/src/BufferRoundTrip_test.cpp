@@ -116,7 +116,7 @@ TEST_CASE("A compute buffer carries its element size into a real allocation", "[
 	// Regression guard: CreateComputeBuffer must map elementSize onto the struct buffer's stride,
 	// or byteSize computes to zero and the Buffer constructor trips its zero-size assert.
 	const auto buffer = fixture.manager->CreateComputeBuffer(
-		ComputeBufferDesc{}.SetElement<uint32_t>().SetMaxCount(16).SetDebugName("compute"));
+		ComputeBufferDesc{}.SetElement<uint32_t>().SetInitialCount(16).SetDebugName("compute"));
 
 	REQUIRE_FALSE(buffer.IsNull());
 	REQUIRE(fixture.manager->ValidBufferHandle(buffer));

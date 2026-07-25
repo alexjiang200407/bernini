@@ -44,12 +44,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 	auto camera = bgl::Camera();
 	auto aspect = static_cast<float>(kWidth) / static_cast<float>(kHeight);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 8;
-	sceneDesc.maxMeshlets             = 512;
-	sceneDesc.maxSubmeshes            = 8;
-	sceneDesc.maxVertexBufferByteSize = 800000;
-	sceneDesc.maxIndices              = 20000;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 512;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 800000;
+	sceneDesc.initialIndices              = 20000;
 
 	SECTION("Draw Cube - cube.png")
 	{
@@ -114,11 +114,11 @@ TEST_CASE("Geometry", "[geometry][render]")
 	{
 		// 64 x 64 quads is 8192 triangles -- far past the 124-triangle / 64-vertex cap a single
 		// meshlet can hold, so unlike the flat 1x1 plane this actually exercises the meshlet split.
-		auto denseDesc                    = sceneDesc;
-		denseDesc.maxMeshlets             = 1024;
-		denseDesc.maxSubmeshes            = 8;
-		denseDesc.maxVertexBufferByteSize = 4u * 1024u * 1024u;
-		denseDesc.maxIndices              = 200000;
+		auto denseDesc                        = sceneDesc;
+		denseDesc.initialMeshlets             = 1024;
+		denseDesc.initialSubmeshes            = 8;
+		denseDesc.initialVertexBufferByteSize = 4u * 1024u * 1024u;
+		denseDesc.initialIndices              = 200000;
 
 		auto scene = gfxBase->CreateScene(denseDesc);
 		auto view  = gfxBase->CreateSceneView(scene, 8);
@@ -438,12 +438,12 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 
 	const auto viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 8;
-	sceneDesc.maxMeshlets             = 512;
-	sceneDesc.maxSubmeshes            = 8;
-	sceneDesc.maxVertexBufferByteSize = 800000;
-	sceneDesc.maxIndices              = 20000;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 512;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 800000;
+	sceneDesc.initialIndices              = 20000;
 
 	// Target A: a single cube at the origin (matches the lone-cube golden).
 	auto cubeScene = gfxBase->CreateScene(sceneDesc);

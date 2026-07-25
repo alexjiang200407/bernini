@@ -188,7 +188,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			m_RenderTarget = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtDesc);
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
 				m_Desc.renderer->GetScene(),
-				m_Desc.maxInstances);
+				m_Desc.initialInstances);
 		}
 		catch (const std::exception& e)
 		{

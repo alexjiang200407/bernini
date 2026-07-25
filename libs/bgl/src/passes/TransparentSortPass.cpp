@@ -43,7 +43,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
-				.SetMaxCount(idl::cTransparentPartitionCount)
+				.SetInitialCount(idl::cTransparentPartitionCount)
 				.SetDebugName("Transparent Partition Base");
 
 			m_PartitionBase.Init(desc, resourceManager);
@@ -52,7 +52,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetMaxCount(idl::cTransparentPartitionCount)
+				.SetInitialCount(idl::cTransparentPartitionCount)
 				.SetDebugName("Transparent Partition Dispatch Args");
 
 			m_PartitionDispatchArgs.Init(desc, resourceManager);

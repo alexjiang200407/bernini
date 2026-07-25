@@ -37,14 +37,23 @@ namespace bgl
 
 		DebugBuffer() noexcept = default;
 
+		DebugBuffer(const DebugBuffer&)     = delete;
+		DebugBuffer(DebugBuffer&&) noexcept = default;
+
+		DebugBuffer&
+		operator=(const DebugBuffer&) = delete;
+
+		DebugBuffer&
+		operator=(DebugBuffer&&) noexcept = default;
+
 		void
-		Init(uint32_t recordCapacity, ResourceManagerRef resourceManager) noexcept
+		Init(uint32_t recordCapacity, ResourceManagerRef resourceManager)
 		{
 			m_Capacity = recordCapacity;
 
 			auto desc = ComputeBufferDesc()
 			                .SetElement<uint32_t>()
-			                .SetMaxCount(kHeaderWords + recordCapacity * kRecordWords)
+			                .SetInitialCount(kHeaderWords + recordCapacity * kRecordWords)
 			                .SetDebugName("GPU Debug Buffer");
 
 			m_Buffer.Init(std::move(desc), std::move(resourceManager));

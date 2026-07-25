@@ -14,8 +14,8 @@ class QTimer;
 
 struct RenderTargetWindowDesc
 {
-	Renderer* renderer     = nullptr;
-	uint32_t  maxInstances = 0;
+	Renderer* renderer         = nullptr;
+	uint32_t  initialInstances = 0;
 };
 
 class RenderTargetWindow : public QWidget

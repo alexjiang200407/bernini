@@ -22,14 +22,14 @@ namespace
 	bgl::SceneDesc
 	MaterialSceneDesc()
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 2;
-		desc.maxSubmeshes            = 2;
-		desc.maxMeshlets             = 8;
-		desc.maxVertexBufferByteSize = 4096;
-		desc.maxIndices              = 128;
-		desc.maxPbrMaterials         = 4;
-		desc.maxLoosePbrMaterials    = 4;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 2;
+		desc.initialSubmeshes            = 2;
+		desc.initialMeshlets             = 8;
+		desc.initialVertexBufferByteSize = 4096;
+		desc.initialIndices              = 128;
+		desc.initialPbrMaterials         = 4;
+		desc.initialLoosePbrMaterials    = 4;
 		return desc;
 	}
 }

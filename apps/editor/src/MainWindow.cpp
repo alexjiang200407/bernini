@@ -61,47 +61,48 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
 		// preview) renders it through a SceneView of its own, so geometry, textures and materials
 		// are pooled here once and these budgets must cover all of them together.
-		auto sceneDesc         = bgl::SceneDesc();
-		auto sceneSettings     = settings["scene"];
-		sceneDesc.maxGeom      = sceneSettings["maxGeom"].GetOrDefault(256);
-		sceneDesc.maxMeshlets  = sceneSettings["maxMeshlets"].GetOrDefault(32768);
-		sceneDesc.maxSubmeshes = sceneSettings["maxSubmeshes"].GetOrDefault(512);
-		sceneDesc.maxVertexBufferByteSize =
-			sceneSettings["maxVertexBufferByteSize"].GetOrDefault(33554432);
-		sceneDesc.maxIndices           = sceneSettings["maxIndices"].GetOrDefault(2000000);
-		sceneDesc.maxPbrMaterials      = sceneSettings["maxPbrMaterials"].GetOrDefault(256);
-		sceneDesc.maxLoosePbrMaterials = sceneSettings["maxLoosePbrMaterials"].GetOrDefault(256);
+		auto sceneDesc             = bgl::SceneDesc();
+		auto sceneSettings         = settings["scene"];
+		sceneDesc.initialGeom      = sceneSettings["initialGeom"].GetOrDefault(256);
+		sceneDesc.initialMeshlets  = sceneSettings["initialMeshlets"].GetOrDefault(32768);
+		sceneDesc.initialSubmeshes = sceneSettings["initialSubmeshes"].GetOrDefault(512);
+		sceneDesc.initialVertexBufferByteSize =
+			sceneSettings["initialVertexBufferByteSize"].GetOrDefault(33554432);
+		sceneDesc.initialIndices      = sceneSettings["initialIndices"].GetOrDefault(2000000);
+		sceneDesc.initialPbrMaterials = sceneSettings["initialPbrMaterials"].GetOrDefault(256);
+		sceneDesc.initialLoosePbrMaterials =
+			sceneSettings["initialLoosePbrMaterials"].GetOrDefault(256);
 
 		// The renderer owns the Graphics and the Scene and, once threaded, is the only thing that
 		// touches them. Every viewport and the thumbnail cache render through it.
 		m_Renderer = std::make_unique<Renderer>(gfxOpts, sceneDesc);
 
-		auto levelDesc         = RenderTargetWindowDesc();
-		levelDesc.renderer     = m_Renderer.get();
-		levelDesc.maxInstances = settings["levelEditor"]["maxInstances"].GetOrDefault(1000);
+		auto levelDesc             = RenderTargetWindowDesc();
+		levelDesc.renderer         = m_Renderer.get();
+		levelDesc.initialInstances = settings["levelEditor"]["initialInstances"].GetOrDefault(1000);
 
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
 
-		auto matSettings              = settings["materialEditor"];
-		auto matDesc                  = MaterialEditorWindowDesc();
-		matDesc.renderer              = m_Renderer.get();
-		matDesc.maxPreviewInstances   = matSettings["maxPreviewInstances"].GetOrDefault(16u);
-		matDesc.previewEnv.skybox     = matSettings["skybox"].GetOrDefault(std::string());
-		matDesc.previewEnv.irradiance = matSettings["irradiance"].GetOrDefault(std::string());
-		matDesc.previewEnv.prefilter  = matSettings["prefilter"].GetOrDefault(std::string());
-		matDesc.previewEnv.brdfLut    = matSettings["brdfLut"].GetOrDefault(std::string());
-		matDesc.previewEnv.exposure   = matSettings["exposure"].GetOrDefault(1.0f);
+		auto matSettings                = settings["materialEditor"];
+		auto matDesc                    = MaterialEditorWindowDesc();
+		matDesc.renderer                = m_Renderer.get();
+		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
+		matDesc.previewEnv.skybox       = matSettings["skybox"].GetOrDefault(std::string());
+		matDesc.previewEnv.irradiance   = matSettings["irradiance"].GetOrDefault(std::string());
+		matDesc.previewEnv.prefilter    = matSettings["prefilter"].GetOrDefault(std::string());
+		matDesc.previewEnv.brdfLut      = matSettings["brdfLut"].GetOrDefault(std::string());
+		matDesc.previewEnv.exposure     = matSettings["exposure"].GetOrDefault(1.0f);
 
-		auto thumbSettings     = settings["thumbnails"];
-		auto thumbDesc         = AssetThumbnailDesc();
-		thumbDesc.renderer     = m_Renderer.get();
-		thumbDesc.dimension    = thumbSettings["dimension"].GetOrDefault(256u);
-		thumbDesc.maxInstances = thumbSettings["maxInstances"].GetOrDefault(256u);
-		thumbDesc.skybox       = thumbSettings["skybox"].GetOrDefault(std::string());
-		thumbDesc.irradiance   = thumbSettings["irradiance"].GetOrDefault(std::string());
-		thumbDesc.prefilter    = thumbSettings["prefilter"].GetOrDefault(std::string());
-		thumbDesc.brdfLut      = thumbSettings["brdfLut"].GetOrDefault(std::string());
-		thumbDesc.exposure     = thumbSettings["exposure"].GetOrDefault(1.0f);
+		auto thumbSettings         = settings["thumbnails"];
+		auto thumbDesc             = AssetThumbnailDesc();
+		thumbDesc.renderer         = m_Renderer.get();
+		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
+		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
+		thumbDesc.skybox           = thumbSettings["skybox"].GetOrDefault(std::string());
+		thumbDesc.irradiance       = thumbSettings["irradiance"].GetOrDefault(std::string());
+		thumbDesc.prefilter        = thumbSettings["prefilter"].GetOrDefault(std::string());
+		thumbDesc.brdfLut          = thumbSettings["brdfLut"].GetOrDefault(std::string());
+		thumbDesc.exposure         = thumbSettings["exposure"].GetOrDefault(1.0f);
 
 		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
 		m_Thumbnails     = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));

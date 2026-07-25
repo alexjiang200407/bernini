@@ -30,12 +30,12 @@ namespace
 	bgl::SceneDesc
 	CubeSceneDesc()
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 5;
-		desc.maxMeshlets             = 100;
-		desc.maxSubmeshes            = 5;
-		desc.maxVertexBufferByteSize = 40000;
-		desc.maxIndices              = 1000;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 5;
+		desc.initialMeshlets             = 100;
+		desc.initialSubmeshes            = 5;
+		desc.initialVertexBufferByteSize = 40000;
+		desc.initialIndices              = 1000;
 		return desc;
 	}
 }
@@ -155,41 +155,51 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 	}
 }
 
-TEST_CASE("SceneError on capacity exhaustion", "[error][scene][capacity]")
+TEST_CASE("Capacity is a starting point, not a limit", "[error][scene][capacity]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
-	SECTION("Exceeding maxInstances throws SceneError")
+	SECTION("A view placed past initialInstances grows instead of throwing")
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 1;
-		desc.maxMeshlets             = 8;
-		desc.maxSubmeshes            = 1;
-		desc.maxVertexBufferByteSize = 64 * 8 * 4;
-		desc.maxIndices              = 64;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 1;
+		desc.initialMeshlets             = 8;
+		desc.initialSubmeshes            = 1;
+		desc.initialVertexBufferByteSize = 64 * 8 * 4;
+		desc.initialIndices              = 64;
 
 		auto scene = gfx->CreateScene(desc);
 		auto view  = gfx->CreateSceneView(scene, 1);
 		auto geom  = scene->AddCubeGeom();
 
-		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
-		REQUIRE_THROWS_AS(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
+		// A cube is six submeshes, so even the first instance overruns a one-instance view.
+		for (int i = 0; i < 4; ++i)
+		{
+			REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		}
+
+		CHECK(view->GetInstanceCount() > 1);
 	}
 
-	SECTION("Exceeding maxGeom throws SceneError")
+	SECTION("A scene loaded past initialGeom grows instead of throwing")
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 1;
-		desc.maxMeshlets             = 100;
-		desc.maxSubmeshes            = 2;
-		desc.maxVertexBufferByteSize = 40000;
-		desc.maxIndices              = 1000;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 1;
+		desc.initialMeshlets             = 100;
+		desc.initialSubmeshes            = 2;
+		desc.initialVertexBufferByteSize = 40000;
+		desc.initialIndices              = 1000;
 
 		auto scene = gfx->CreateScene(desc);
 
-		REQUIRE_NOTHROW(scene->AddCubeGeom());
-		REQUIRE_THROWS_AS(scene->AddCubeGeom(), bgl::SceneError);
+		bgl::GeomHandle first;
+		bgl::GeomHandle second;
+		REQUIRE_NOTHROW(first = scene->AddCubeGeom());
+		REQUIRE_NOTHROW(second = scene->AddCubeGeom());
+
+		CHECK(scene->IsGeomAlive(first));
+		CHECK(scene->IsGeomAlive(second));
 	}
 }
 

@@ -75,31 +75,29 @@ namespace
 		return mesh;
 	}
 
-	// Room for the small mesh several times over, but only 900 bytes (225 words) of vertex data --
-	// less than the 1800 bytes the big mesh below needs. So the big one is rejected at the vertex
-	// buffer, *after* it has taken its meshlets and vertex map.
+	// Deliberately far too small for the meshes below: every arena has to grow to take them.
 	bgl::SceneDesc
-	TightVertexBudget()
+	TightInitialBudget()
 	{
-		auto desc                    = bgl::SceneDesc();
-		desc.maxGeom                 = 8;
-		desc.maxSubmeshes            = 8;
-		desc.maxMeshlets             = 60;
-		desc.maxVertexBufferByteSize = 900;
-		desc.maxIndices              = 1000;
+		auto desc                        = bgl::SceneDesc();
+		desc.initialGeom                 = 1;
+		desc.initialSubmeshes            = 1;
+		desc.initialMeshlets             = 1;
+		desc.initialVertexBufferByteSize = 64;
+		desc.initialIndices              = 1;
 		return desc;
 	}
 
-	constexpr uint32_t c_BigMeshlets   = 50;  // 1800 bytes of vertex data: over the budget
-	constexpr uint32_t c_SmallMeshlets = 20;  //  720 bytes, and 20 <= maxMeshlets: fits easily
+	constexpr uint32_t c_BigMeshlets   = 50;  // 1800 bytes of vertex data
+	constexpr uint32_t c_SmallMeshlets = 20;  //  720 bytes
 }
 
-TEST_CASE("A mesh too big for the scene's budgets is rejected", "[scene][capacity][overflow]")
+TEST_CASE("A mesh larger than the scene's initial arenas still loads", "[scene][capacity][growth]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
-	auto scene = gfx->CreateScene(TightVertexBudget());
+	auto scene = gfx->CreateScene(TightInitialBudget());
 	REQUIRE(scene != nullptr);
 
 	const std::array<uint32_t, 1> big   = { { c_BigMeshlets } };
@@ -108,115 +106,73 @@ TEST_CASE("A mesh too big for the scene's budgets is rejected", "[scene][capacit
 	const assetlib::BMesh bigMesh   = MakeMeshletMesh(big);
 	const assetlib::BMesh smallMesh = MakeMeshletMesh(small);
 
-	SECTION("it throws SceneError rather than silently succeeding")
+	SECTION("the initial sizes are a starting point, not a ceiling")
 	{
-		REQUIRE_THROWS_AS(scene->AddStaticMesh(bigMesh, 0, {}), bgl::SceneError);
-	}
-
-	SECTION("the rejected mesh leaves the scene exactly as it found it")
-	{
-		// The whole point: a mesh the scene refused must cost it nothing. Before the failed add, the
-		// small mesh fits; afterwards it must still fit, because the big one gave everything back.
-		REQUIRE_THROWS_AS(scene->AddStaticMesh(bigMesh, 0, {}), bgl::SceneError);
-
 		bgl::GeomHandle geom;
-		REQUIRE_NOTHROW(geom = scene->AddStaticMesh(smallMesh, 0, {}));
-		REQUIRE(scene->IsGeomAlive(geom));
-
-		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
+		REQUIRE_NOTHROW(geom = scene->AddStaticMesh(bigMesh, 0, {}));
+		CHECK(scene->IsGeomAlive(geom));
 	}
 
-	SECTION("retrying the oversized mesh keeps failing the same way, and costs nothing")
-	{
-		// This is the editor's actual usage: drop the mesh, get an error, drop it again. Every retry
-		// has to be as harmless as the first, or the scene bleeds capacity on every attempt.
-		for (int attempt = 0; attempt < 5; ++attempt)
-			REQUIRE_THROWS_AS(scene->AddStaticMesh(bigMesh, 0, {}), bgl::SceneError);
-
-		bgl::GeomHandle geom;
-		REQUIRE_NOTHROW(geom = scene->AddStaticMesh(smallMesh, 0, {}));
-		REQUIRE(scene->IsGeomAlive(geom));
-	}
-
-	SECTION("a rejected mesh does not disturb geometry that is already loaded")
+	SECTION("geometry loaded before a growth stays alive and addressable")
 	{
 		bgl::GeomHandle first;
 		REQUIRE_NOTHROW(first = scene->AddStaticMesh(smallMesh, 0, {}));
 
-		REQUIRE_THROWS_AS(scene->AddStaticMesh(bigMesh, 0, {}), bgl::SceneError);
+		// Forces every arena past the capacity `first` was allocated in.
+		bgl::GeomHandle second;
+		REQUIRE_NOTHROW(second = scene->AddStaticMesh(bigMesh, 0, {}));
 
-		REQUIRE(scene->IsGeomAlive(first));
+		CHECK(scene->IsGeomAlive(first));
+		CHECK(scene->IsGeomAlive(second));
+
+		// Growth must not renumber: the ranges `first` recorded before it must still resolve.
 		REQUIRE_NOTHROW(scene->DeleteGeom(first));
+		REQUIRE_NOTHROW(scene->DeleteGeom(second));
+	}
+
+	SECTION("repeated loads past the initial geom table keep working")
+	{
+		// initialGeom is 1, so every add after the first grows the geom table too.
+		std::vector<bgl::GeomHandle> geoms;
+		for (int i = 0; i < 8; ++i)
+		{
+			bgl::GeomHandle geom;
+			REQUIRE_NOTHROW(geom = scene->AddStaticMesh(smallMesh, 0, {}));
+			geoms.push_back(geom);
+		}
+
+		for (const bgl::GeomHandle geom : geoms)
+		{
+			CHECK(scene->IsGeomAlive(geom));
+		}
+	}
+
+	SECTION("procedural geometry grows the same arenas")
+	{
+		bgl::GeomHandle sphere;
+		REQUIRE_NOTHROW(sphere = scene->AddSphereGeom(32, 32, 1.0f));
+		CHECK(scene->IsGeomAlive(sphere));
+
+		bgl::GeomHandle mesh;
+		REQUIRE_NOTHROW(mesh = scene->AddStaticMesh(bigMesh, 0, {}));
+		CHECK(scene->IsGeomAlive(mesh));
+		CHECK(scene->IsGeomAlive(sphere));
 	}
 }
 
-TEST_CASE("The fallback sphere still fits after a mesh was rejected", "[scene][capacity][overflow]")
+TEST_CASE("A mesh past the DispatchMesh group cap is still refused", "[scene][capacity][growth]")
 {
-	// The editor's exact sequence: an oversized mesh is dropped onto the preview, the load fails, and
-	// the preview falls back to its default sphere -- from inside the handler for that very failure.
-	// A rejected mesh that kept what it had allocated would leave no room for the sphere that fit a
-	// moment earlier, so the error path would itself throw, out of the catch and into Qt's event loop.
+	// Growth removed the arena budgets, but this limit is the hardware's: one DispatchMesh can launch
+	// at most 65535 groups, so a submesh past that cannot be drawn however much memory there is.
+	// Nothing should have quietly turned it into an allocation that succeeds.
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
-	auto desc         = bgl::SceneDesc();
-	desc.maxGeom      = 8;
-	desc.maxSubmeshes = 64;
-	desc.maxMeshlets  = 4000;
-	desc.maxVertexBufferByteSize =
-		64000;  // the sphere needs ~52 KB of this; the mesh below needs 72
-	desc.maxIndices = 20000;
-
-	auto scene = gfx->CreateScene(desc);
+	auto scene = gfx->CreateScene(TightInitialBudget());
 	REQUIRE(scene != nullptr);
 
-	// 40 submeshes x 50 meshlets = 72000 bytes of vertex data, over the budget.
-	const std::vector<uint32_t> oversized(40, 50);
-	const assetlib::BMesh       bigMesh = MakeMeshletMesh(oversized);
+	const std::array<uint32_t, 1> overCap = { { 70000 } };
+	const assetlib::BMesh         mesh    = MakeMeshletMesh(overCap);
 
-	REQUIRE_THROWS_AS(scene->AddStaticMesh(bigMesh, 0, {}), bgl::SceneError);
-
-	bgl::GeomHandle sphere;
-	REQUIRE_NOTHROW(sphere = scene->AddSphereGeom(32, 32, 1.0f));
-	REQUIRE(scene->IsGeomAlive(sphere));
-}
-
-TEST_CASE("A geom rejected at the last hurdle gives back everything", "[scene][capacity][overflow]")
-{
-	// The budgets are only half the story. A mesh can fit the scene's totals and still not fit what is
-	// left of them, in which case it is the allocator that stops it -- part-way through, after some of
-	// its arenas have already been written. Here the mesh clears every arena and is turned away at the
-	// very last step, the geom slot, so it has the maximum amount to hand back.
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
-	REQUIRE(gfx != nullptr);
-
-	auto desc                    = bgl::SceneDesc();
-	desc.maxGeom                 = 1;  // the second add gets all the way here, then fails
-	desc.maxSubmeshes            = 8;
-	desc.maxMeshlets             = 45;
-	desc.maxVertexBufferByteSize = 3600;
-	desc.maxIndices              = 1000;
-
-	auto scene = gfx->CreateScene(desc);
-	REQUIRE(scene != nullptr);
-
-	const std::array<uint32_t, 1> twenty = { { 20 } };
-	const std::array<uint32_t, 1> forty  = { { 40 } };
-
-	const assetlib::BMesh mesh   = MakeMeshletMesh(twenty);
-	const assetlib::BMesh bigger = MakeMeshletMesh(forty);
-
-	bgl::GeomHandle first;
-	REQUIRE_NOTHROW(first = scene->AddStaticMesh(mesh, 0, {}));
-
-	// Fits every budget, so it is not turned away up front -- but there is only one geom slot.
 	REQUIRE_THROWS_AS(scene->AddStaticMesh(mesh, 0, {}), bgl::SceneError);
-
-	REQUIRE_NOTHROW(scene->DeleteGeom(first));
-
-	// The scene is empty again, so a mesh that needs most of the meshlet budget must fit. It only does
-	// if the rejected add gave back the 20 meshlets it had taken before the geom slot turned it away.
-	bgl::GeomHandle second;
-	REQUIRE_NOTHROW(second = scene->AddStaticMesh(bigger, 0, {}));
-	REQUIRE(scene->IsGeomAlive(second));
 }

@@ -45,7 +45,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 	constexpr uint32_t kCount = 8;
 
 	auto bufDesc = bgl::ComputeBufferDesc();
-	bufDesc.SetElement<uint32_t>().SetMaxCount(kCount).SetDebugName("Compute Out Buffer");
+	bufDesc.SetElement<uint32_t>().SetInitialCount(kCount).SetDebugName("Compute Out Buffer");
 
 	auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuf));
@@ -130,7 +130,7 @@ TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[c
 	constexpr uint32_t kCount = 8;
 
 	auto bufDesc = bgl::ComputeBufferDesc();
-	bufDesc.SetElement<uint32_t>().SetMaxCount(kCount).SetDebugName("Layout Out Buffer");
+	bufDesc.SetElement<uint32_t>().SetInitialCount(kCount).SetDebugName("Layout Out Buffer");
 
 	auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuf));

@@ -31,13 +31,13 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	auto sceneDesc                    = bgl::SceneDesc();
-	sceneDesc.maxGeom                 = 4;
-	sceneDesc.maxMeshlets             = 256;
-	sceneDesc.maxSubmeshes            = 4;
-	sceneDesc.maxVertexBufferByteSize = 400000;
-	sceneDesc.maxIndices              = 10000;
-	sceneDesc.maxPbrMaterials         = 4;
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 256;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 400000;
+	sceneDesc.initialIndices              = 10000;
+	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 4);

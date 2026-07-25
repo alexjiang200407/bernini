@@ -191,3 +191,56 @@ TEST_CASE("slot_vector at a fixed capacity never moves its storage", "[slot_vect
 		}
 	}
 }
+
+TEST_CASE("slot_vector grow keeps live slots and their generations", "[slot_vector][grow]")
+{
+	core::slot_vector<int> slots(2);
+
+	auto a = slots.allocate_slot();
+	auto b = slots.allocate_slot();
+
+	// Bump a generation so growth has something non-zero to preserve.
+	slots.release_slot(a);
+	auto reused = slots.allocate_slot();
+	REQUIRE(reused.index == a.index);
+	REQUIRE(reused.generation != a.generation);
+
+	slots[reused] = 42;
+	slots[b]      = 7;
+
+	REQUIRE(slots.grow(6u));
+	REQUIRE(slots.capacity() == 6u);
+
+	// The pre-growth handles still resolve, to the same elements.
+	REQUIRE(slots.valid(reused));
+	REQUIRE(slots.valid(b));
+	REQUIRE(slots[reused] == 42);
+	REQUIRE(slots[b] == 7);
+
+	// The stale handle from before the release is still stale -- growth is not a reset.
+	REQUIRE_FALSE(slots.valid(a));
+}
+
+TEST_CASE("slot_vector grow makes the new slots allocatable", "[slot_vector][grow]")
+{
+	core::slot_vector<int> slots(2);
+
+	(void)slots.allocate_slot();
+	(void)slots.allocate_slot();
+	REQUIRE_THROWS_AS(slots.allocate_slot(), std::runtime_error);
+
+	REQUIRE(slots.grow(4u));
+
+	REQUIRE(slots.allocate_slot().index == 2u);
+	REQUIRE(slots.allocate_slot().index == 3u);
+	REQUIRE_THROWS_AS(slots.allocate_slot(), std::runtime_error);
+}
+
+TEST_CASE("slot_vector grow to a smaller or equal capacity does nothing", "[slot_vector][grow]")
+{
+	core::slot_vector<int> slots(4);
+
+	REQUIRE_FALSE(slots.grow(4u));
+	REQUIRE_FALSE(slots.grow(1u));
+	REQUIRE(slots.capacity() == 4u);
+}
