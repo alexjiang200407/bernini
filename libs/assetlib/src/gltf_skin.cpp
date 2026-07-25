@@ -4,8 +4,12 @@
 
 #include "gltf_util.h"
 
+#include <core/err/util.h>
+
 namespace assetlib
 {
+	using core::throw_runtime_error;
+
 	namespace
 	{
 		uint32_t
@@ -70,7 +74,7 @@ namespace assetlib
 			}
 
 			if (order.size() != joints.size())
-				throw std::runtime_error(
+				throw_runtime_error(
 					"bskel: the skin's joints do not form a tree, so they cannot be sorted");
 
 			return order;
@@ -105,7 +109,7 @@ namespace assetlib
 			kCubicSpline
 		};
 
-		struct Sampler
+		struct KeyframeSampler
 		{
 			std::vector<float> times;
 			std::vector<float> values;
@@ -123,7 +127,7 @@ namespace assetlib
 			if (name.empty() || name == "LINEAR")
 				return Interpolation::kLinear;
 
-			throw std::runtime_error("banim: unknown sampler interpolation '" + name + "'");
+			throw_runtime_error("banim: unknown sampler interpolation '{}'", name);
 		}
 
 		/**
@@ -131,7 +135,7 @@ namespace assetlib
 		 * clamp to its ends, which is what glTF specifies.
 		 */
 		glm::vec4
-		evaluate(const Sampler& sampler, float time)
+		evaluate(const KeyframeSampler& sampler, float time)
 		{
 			const size_t keys = sampler.times.size();
 
@@ -248,9 +252,10 @@ namespace assetlib
 			return {};
 
 		if (model.skins.size() > 1)
-			throw std::runtime_error(
-				"bskel: the file holds " + std::to_string(model.skins.size()) +
-				" skins, and one file is one rig here -- export each rig separately");
+			throw_runtime_error(
+				"bskel: the file holds {} skins, and one file is one rig here -- export each rig "
+				"separately",
+				model.skins.size());
 
 		const tinygltf::Skin& skin = model.skins.front();
 
@@ -259,7 +264,7 @@ namespace assetlib
 		{
 			const int node = skin.joints[j];
 			if (node < 0 || static_cast<size_t>(node) >= model.nodes.size())
-				throw std::runtime_error("bskel: the skin names a joint node that does not exist");
+				throw_runtime_error("bskel: the skin names a joint node that does not exist");
 			nodeToJoint[static_cast<size_t>(node)] = static_cast<uint32_t>(j);
 		}
 
@@ -283,7 +288,7 @@ namespace assetlib
 		const auto inverseBinds =
 			readFloatAccessor(model, skin.inverseBindMatrices, inverseBindComponents);
 		if (!inverseBinds.empty() && inverseBindComponents != 16)
-			throw std::runtime_error("bskel: inverseBindMatrices is not a matrix accessor");
+			throw_runtime_error("bskel: inverseBindMatrices is not a matrix accessor");
 
 		out.skeleton.stringPool.push_back('\0');  // offset 0 == empty string
 		out.skeleton.bones.reserve(order.size());
@@ -325,7 +330,7 @@ namespace assetlib
 			return out;
 
 		if (sampleRate <= 0.0f)
-			throw std::runtime_error("banim: the sample rate must be positive");
+			throw_runtime_error("banim: the sample rate must be positive");
 
 		const auto boneCount = static_cast<uint32_t>(skin.skeleton.bones.size());
 
@@ -338,8 +343,8 @@ namespace assetlib
 
 		for (const tinygltf::Animation& animation : model.animations)
 		{
-			std::vector<BoneChannels>             channels(boneCount);
-			std::unordered_map<uint32_t, Sampler> samplers;
+			std::vector<BoneChannels>                     channels(boneCount);
+			std::unordered_map<uint32_t, KeyframeSampler> samplers;
 
 			float first = std::numeric_limits<float>::max();
 			float last  = std::numeric_limits<float>::lowest();
@@ -364,9 +369,9 @@ namespace assetlib
 					const tinygltf::AnimationSampler& source =
 						animation.samplers[static_cast<size_t>(channel.sampler)];
 
-					Sampler sampler;
-					int     timeComponents = 0;
-					sampler.times          = readFloatAccessor(model, source.input, timeComponents);
+					KeyframeSampler sampler;
+					int             timeComponents = 0;
+					sampler.times  = readFloatAccessor(model, source.input, timeComponents);
 					sampler.values = readFloatAccessor(model, source.output, sampler.components);
 					sampler.interpolation = toInterpolation(source.interpolation);
 

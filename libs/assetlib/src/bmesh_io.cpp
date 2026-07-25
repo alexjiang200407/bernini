@@ -3,6 +3,7 @@
 
 #include <assetlib/banim_io.h>
 #include <assetlib/bskel_io.h>
+
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>

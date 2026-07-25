@@ -2,8 +2,12 @@
 
 #include <assetlib/bmesh_io.h>
 
+#include <core/err/util.h>
+
 namespace assetlib
 {
+	using core::throw_runtime_error;
+
 	namespace
 	{
 		// FNV-1a, so the signature is stable across runs, builds and platforms -- it is written into a
@@ -44,15 +48,14 @@ namespace assetlib
 			const Bone& bone = skeleton.bones[i];
 
 			if (bone.parent != c_InvalidIndex && bone.parent >= i)
-				throw std::runtime_error(
-					"skeleton: bone " + std::to_string(i) + " has parent " +
-					std::to_string(bone.parent) +
-					", which is not before it -- the bones are not topologically sorted");
+				throw_runtime_error(
+					"skeleton: bone {} has parent {}, which is not before it -- the bones are not "
+					"topologically sorted",
+					i,
+					bone.parent);
 
 			if (bone.nameOffset != 0 && bone.nameOffset >= skeleton.stringPool.size())
-				throw std::runtime_error(
-					"skeleton: bone " + std::to_string(i) +
-					" names an offset past the string pool");
+				throw_runtime_error("skeleton: bone {} names an offset past the string pool", i);
 		}
 	}
 
@@ -62,25 +65,24 @@ namespace assetlib
 		if (animations.boneCount == 0)
 		{
 			if (!animations.samples.empty())
-				throw std::runtime_error("animation: samples with no bones to address them by");
+				throw_runtime_error("animation: samples with no bones to address them by");
 			return;
 		}
 
 		if (animations.samples.size() % animations.boneCount != 0)
-			throw std::runtime_error("animation: the sample pool is not a whole number of poses");
+			throw_runtime_error("animation: the sample pool is not a whole number of poses");
 
 		for (size_t i = 0; i < animations.clips.size(); ++i)
 		{
 			const AnimationClip& clip = animations.clips[i];
 
 			if (clip.frameCount == 0)
-				throw std::runtime_error("animation: clip " + std::to_string(i) + " has no frames");
+				throw_runtime_error("animation: clip {} has no frames", i);
 
 			const size_t end = static_cast<size_t>(clip.firstSample) +
 			                   static_cast<size_t>(clip.frameCount) * animations.boneCount;
 			if (end > animations.samples.size())
-				throw std::runtime_error(
-					"animation: clip " + std::to_string(i) + " samples past the end of the pool");
+				throw_runtime_error("animation: clip {} samples past the end of the pool", i);
 		}
 	}
 

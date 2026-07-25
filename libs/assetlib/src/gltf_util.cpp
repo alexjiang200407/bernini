@@ -1,7 +1,11 @@
 #include "gltf_util.h"
 
+#include <core/err/util.h>
+
 namespace assetlib
 {
+	using core::throw_runtime_error;
+
 	Transform
 	decomposeTransform(const glm::mat4& matrix) noexcept
 	{
@@ -64,9 +68,9 @@ namespace assetlib
 
 		const auto& accessor = model.accessors[static_cast<size_t>(accessorIndex)];
 		if (accessor.sparse.isSparse)
-			throw std::runtime_error("bmesh: sparse accessors are not supported");
+			throw_runtime_error("bmesh: sparse accessors are not supported");
 		if (accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
-			throw std::runtime_error("bmesh: only float accessors are supported here");
+			throw_runtime_error("bmesh: only float accessors are supported here");
 		if (accessor.bufferView < 0)
 			return {};
 

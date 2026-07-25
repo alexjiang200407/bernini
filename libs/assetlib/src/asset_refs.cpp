@@ -6,6 +6,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
@@ -13,15 +14,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_MeshExtension        = ".bmesh";
-		constexpr std::string_view c_MaterialExtension    = ".bmaterial";
-		constexpr std::string_view c_TextureExtension     = ".ktx2";
-		constexpr std::string_view c_EnvironmentExtension = ".benv";
-		constexpr std::string_view c_SkyExtension         = ".bsky";
-		constexpr std::string_view c_EnvLightingExtension = ".benvl";
-		constexpr std::string_view c_SkeletonExtension    = ".bskel";
-		constexpr std::string_view c_AnimationExtension   = ".banim";
-
 		/**
 		 * The one form every path in the graph is keyed and stored in, so that the two sides of a reference
 		 * -- one written by a bake, one clicked in a file browser -- meet. Identity in this project is the

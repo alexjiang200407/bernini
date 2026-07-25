@@ -5,13 +5,16 @@
 #include "chunk_io.h"
 #include "fs_util.h"
 
+#include <assetlib_structs/magic.h>
+
 #include <core/file/file.h>
 
 namespace assetlib
 {
 	namespace
 	{
-		constexpr uint32_t c_Magic = 0x4C4B5342u;  // 'B','S','K','L' little-endian
+
+		constexpr uint32_t c_Magic = magic::c_BSkel;
 
 		constexpr uint16_t c_VersionMajor = 1;
 		constexpr uint16_t c_VersionMinor = 0;

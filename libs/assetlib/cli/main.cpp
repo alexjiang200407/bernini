@@ -10,6 +10,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
@@ -21,6 +22,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/magic.h>
+#include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -98,13 +100,10 @@ namespace
 	ContainerType
 	sniff(const std::filesystem::path& path)
 	{
-		constexpr uint32_t c_SkeletonMagic  = 0x4C4B5342u;  // 'B','S','K','L'
-		constexpr uint32_t c_AnimationMagic = 0x4D4E4142u;  // 'B','A','N','M'
-
 		std::ifstream in(path, std::ios::binary);
 		uint32_t      magic = 0;
 		if (!in.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
-			throw std::runtime_error("cannot read the file header of " + path.string());
+			core::throw_runtime_error("cannot read the file header of {}", path.string());
 
 		switch (magic)
 		{
@@ -118,16 +117,16 @@ namespace
 			return ContainerType::kSky;
 		case assetlib::magic::c_BEnvL:
 			return ContainerType::kEnvLighting;
-		case c_SkeletonMagic:
+		case assetlib::magic::c_BSkel:
 			return ContainerType::kSkeleton;
-		case c_AnimationMagic:
+		case assetlib::magic::c_BAnim:
 			return ContainerType::kAnimation;
 		}
 
-		throw std::runtime_error(
-			path.string() +
-			" is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
-			".benvl, .bskel or .banim)");
+		core::throw_runtime_error(
+			"{} is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
+			".benvl, .bskel or .banim)",
+			path.string());
 	}
 
 	// A clip set's signature only means something next to the rig it names, so describe resolves it --

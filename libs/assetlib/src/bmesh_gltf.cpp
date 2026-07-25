@@ -28,75 +28,34 @@ namespace assetlib
 		constexpr size_t c_MeshletMaxTriangles = 124;
 		constexpr float  c_MeshletConeWeight   = 0.0f;
 
-		/** A strided view over one float vertex attribute in a glTF buffer. */
+		/**
+		 * A strided view over one glTF vertex attribute. Component type is carried, so the same view
+		 * serves the float geometry attributes (fetched in bulk through `FloatPtr`) and the integer
+		 * skin attributes JOINTS_0 / WEIGHTS_0 (decoded per component through `UintAt` / `FloatAt`).
+		 */
 		struct AttributeView
-		{
-			const std::byte* base       = nullptr;
-			size_t           stride     = 0;
-			int              components = 0;
-
-			[[nodiscard]] bool
-			present() const noexcept
-			{
-				return base != nullptr;
-			}
-
-			[[nodiscard]] const float*
-			at(size_t index) const noexcept
-			{
-				return reinterpret_cast<const float*>(base + index * stride);
-			}
-		};
-
-		AttributeView
-		makeView(
-			const tinygltf::Model&     model,
-			const tinygltf::Primitive& primitive,
-			const char*                semantic)
-		{
-			const auto it = primitive.attributes.find(semantic);
-			if (it == primitive.attributes.end())
-				return {};
-
-			const auto& accessor = model.accessors[static_cast<size_t>(it->second)];
-			if (accessor.sparse.isSparse)
-				throw std::runtime_error("bmesh: sparse accessors are not supported");
-			if (accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
-				throw std::runtime_error("bmesh: only float vertex attributes are supported");
-
-			const auto& view   = model.bufferViews[static_cast<size_t>(accessor.bufferView)];
-			const auto& buffer = model.buffers[static_cast<size_t>(view.buffer)];
-			const int   components =
-				tinygltf::GetNumComponentsInType(static_cast<uint32_t>(accessor.type));
-			const size_t stride = view.byteStride != 0 ?
-			                          view.byteStride :
-			                          static_cast<size_t>(components) * sizeof(float);
-
-			AttributeView out;
-			out.base   = reinterpret_cast<const std::byte*>(buffer.data.data()) + view.byteOffset +
-			             accessor.byteOffset;
-			out.stride = stride;
-			out.components = components;
-			return out;
-		}
-
-		/** A strided view over one vertex attribute of any component type -- JOINTS_0 is not float. */
-		struct RawView
 		{
 			const std::byte* base          = nullptr;
 			size_t           stride        = 0;
 			int              components    = 0;
-			int              componentType = 0;
+			int              componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
 			bool             normalized    = false;
 
 			[[nodiscard]] bool
-			present() const noexcept
+			Present() const noexcept
 			{
 				return base != nullptr;
 			}
 
+			// Valid only for a float attribute; the geometry interleave and AABB paths bulk-copy floats.
+			[[nodiscard]] const float*
+			FloatPtr(size_t index) const noexcept
+			{
+				return reinterpret_cast<const float*>(base + index * stride);
+			}
+
 			[[nodiscard]] const std::byte*
-			componentAt(size_t index, int component) const noexcept
+			ComponentAt(size_t index, int component) const noexcept
 			{
 				const auto size = static_cast<size_t>(
 					tinygltf::GetComponentSizeInBytes(static_cast<uint32_t>(componentType)));
@@ -104,9 +63,9 @@ namespace assetlib
 			}
 
 			[[nodiscard]] uint32_t
-			uintAt(size_t index, int component) const noexcept
+			UintAt(size_t index, int component) const noexcept
 			{
-				const std::byte* ptr = componentAt(index, component);
+				const std::byte* ptr = ComponentAt(index, component);
 				switch (componentType)
 				{
 				case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
@@ -127,16 +86,16 @@ namespace assetlib
 			}
 
 			[[nodiscard]] float
-			floatAt(size_t index, int component) const noexcept
+			FloatAt(size_t index, int component) const noexcept
 			{
 				if (componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
 				{
 					float value = 0.0f;
-					std::memcpy(&value, componentAt(index, component), sizeof(value));
+					std::memcpy(&value, ComponentAt(index, component), sizeof(value));
 					return value;
 				}
 
-				const auto raw = static_cast<float>(uintAt(index, component));
+				const auto raw = static_cast<float>(UintAt(index, component));
 				if (!normalized)
 					return raw;
 
@@ -145,11 +104,17 @@ namespace assetlib
 			}
 		};
 
-		RawView
-		makeRawView(
+		/**
+		 * @param allowInteger When false, a non-float attribute throws -- the geometry attributes must
+		 *        be float, and reading an integer POSITION as floats would silently produce garbage.
+		 *        The skin attributes pass true.
+		 */
+		AttributeView
+		makeView(
 			const tinygltf::Model&     model,
 			const tinygltf::Primitive& primitive,
-			const char*                semantic)
+			const char*                semantic,
+			bool                       allowInteger = false)
 		{
 			const auto it = primitive.attributes.find(semantic);
 			if (it == primitive.attributes.end())
@@ -158,6 +123,8 @@ namespace assetlib
 			const auto& accessor = model.accessors[static_cast<size_t>(it->second)];
 			if (accessor.sparse.isSparse)
 				throw std::runtime_error("bmesh: sparse accessors are not supported");
+			if (!allowInteger && accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
+				throw std::runtime_error("bmesh: only float vertex attributes are supported");
 			if (accessor.bufferView < 0)
 				return {};
 
@@ -168,7 +135,7 @@ namespace assetlib
 			const auto componentSize = static_cast<size_t>(
 				tinygltf::GetComponentSizeInBytes(static_cast<uint32_t>(accessor.componentType)));
 
-			RawView out;
+			AttributeView out;
 			out.base   = reinterpret_cast<const std::byte*>(buffer.data.data()) + view.byteOffset +
 			             accessor.byteOffset;
 			out.stride = view.byteStride != 0 ? view.byteStride :
@@ -331,10 +298,10 @@ namespace assetlib
 			std::vector<uint16_t>&     joints,
 			std::vector<uint16_t>&     weights)
 		{
-			const RawView jointView  = makeRawView(model, primitive, "JOINTS_0");
-			const RawView weightView = makeRawView(model, primitive, "WEIGHTS_0");
+			const AttributeView jointView  = makeView(model, primitive, "JOINTS_0", true);
+			const AttributeView weightView = makeView(model, primitive, "WEIGHTS_0", true);
 
-			if (jointToBone.empty() || !jointView.present() || !weightView.present())
+			if (jointToBone.empty() || !jointView.Present() || !weightView.Present())
 				return;
 
 			if (jointToBone.size() > 0xFFFFu)
@@ -350,13 +317,13 @@ namespace assetlib
 				float                sum = 0.0f;
 				for (int c = 0; c < 4 && c < weightView.components; ++c)
 				{
-					weight[static_cast<size_t>(c)] = weightView.floatAt(i, c);
+					weight[static_cast<size_t>(c)] = weightView.FloatAt(i, c);
 					sum += weight[static_cast<size_t>(c)];
 				}
 
 				for (int c = 0; c < 4; ++c)
 				{
-					const uint32_t joint = c < jointView.components ? jointView.uintAt(i, c) : 0u;
+					const uint32_t joint = c < jointView.components ? jointView.UintAt(i, c) : 0u;
 					if (joint >= jointToBone.size())
 						throw std::runtime_error(
 							"bmesh: a vertex names joint " + std::to_string(joint) +
@@ -424,7 +391,7 @@ namespace assetlib
 			uint16_t offset = 0;
 			for (const auto& attr : candidates)
 			{
-				if (!attr.view.present())
+				if (!attr.view.Present())
 					continue;
 				submesh.layout.attributes[submesh.layout.attributeCount++] = { attr.semantic,
 					                                                           attr.format,
@@ -462,11 +429,11 @@ namespace assetlib
 			{
 				for (const auto& attr : candidates)
 				{
-					if (!attr.view.present())
+					if (!attr.view.Present())
 						continue;
 					appendBytes(
 						mesh.vertexData,
-						attr.view.at(i),
+						attr.view.FloatPtr(i),
 						static_cast<size_t>(attr.components) * sizeof(float));
 				}
 
@@ -495,7 +462,7 @@ namespace assetlib
 			{
 				for (size_t i = 0; i < vertexCount; ++i)
 				{
-					const float* p = candidates[0].view.at(i);
+					const float* p = candidates[0].view.FloatPtr(i);
 					aabbMin        = glm::min(aabbMin, glm::vec3(p[0], p[1], p[2]));
 					aabbMax        = glm::max(aabbMax, glm::vec3(p[0], p[1], p[2]));
 				}
