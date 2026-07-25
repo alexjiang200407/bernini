@@ -3,11 +3,13 @@
 #include "cmd/CommandAllocator_wgpu.h"
 #include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue_wgpu.h"
+#include "pipeline/ComputePipeline_wgpu.h"
 #include "resource/ResourceManager_wgpu.h"
 #include "resource/Shader_wgpu.h"
 #include "slang/SlangErrorChecker.h"
 
 #include <bgl/IGraphics.h>
+#include <uniforms/Uniforms.h>
 
 namespace bgl
 {
@@ -131,7 +133,13 @@ namespace bgl
 		wgpu::Device
 		RequestDevice(const wgpu::Instance& instance, const wgpu::Adapter& adapter)
 		{
-			auto deviceDesc = wgpu::DeviceDescriptor{};
+			// Request the adapter's full limits: the default maxComputeWorkgroupSizeX is 256, but
+			// TransparentSort dispatches 512 threads (one per bitonic compare-exchange pair).
+			auto limits = wgpu::Limits{};
+			adapter.GetLimits(&limits);
+
+			auto deviceDesc           = wgpu::DeviceDescriptor{};
+			deviceDesc.requiredLimits = &limits;
 			deviceDesc.SetUncapturedErrorCallback(OnUncapturedError);
 			deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous, OnDeviceLost);
 
@@ -230,9 +238,11 @@ namespace bgl
 	}
 
 	Uniforms
-	Device::CreateUniforms(IComputePipeline const*, const std::string&) const noexcept
+	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
 	{
-		gfatal("CreateUniforms: compute pipelines are not implemented on the WebGPU backend yet");
+		gassert(pipeline != nullptr, "CreateUniforms: null pipeline");
+		return Uniforms(pipeline, cbufferName);
 	}
 
 	core::SharedRef<IShader>
@@ -242,9 +252,9 @@ namespace bgl
 	}
 
 	core::SharedRef<IComputePipeline>
-	Device::CreateComputePipeline(const ComputePipelineDesc&) const noexcept
+	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		gfatal("CreateComputePipeline: not implemented on the WebGPU backend yet");
+		return core::SharedRef<ComputePipeline>::Make(m_Device, m_SlangSession.get(), desc);
 	}
 
 	core::SharedRef<IMeshletPipeline>

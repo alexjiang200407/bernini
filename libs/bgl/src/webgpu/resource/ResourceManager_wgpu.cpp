@@ -212,6 +212,13 @@ namespace bgl
 		return m_Buffers[handle.slot.index];
 	}
 
+	const wgpu::Buffer&
+	ResourceManager::GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept
+	{
+		auto lock = std::scoped_lock(m_PoolMutex);
+		return m_Buffers[slotIndex].GetHandle();
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{

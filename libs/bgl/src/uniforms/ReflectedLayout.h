@@ -29,5 +29,11 @@ namespace bgl
 		std::string     name;
 		uint32_t        offset = 0;
 		ReflectedLayout layout;
+
+		// WGSL binding slot for a hoisted resource leaf (a plainly-bound buffer): where the WebGPU
+		// backend binds the handle written at `offset`. Unused (0xFFFFFFFF) on D3D12/Metal, which
+		// reach resources through the descriptor heap / argument buffer instead.
+		uint32_t group   = 0xFFFFFFFF;
+		uint32_t binding = 0xFFFFFFFF;
 	};
 }
