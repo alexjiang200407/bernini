@@ -1,5 +1,7 @@
 #include "device/Device_wgpu.h"
 
+#include <core/file/file.h>
+
 #include <catch2/catch_test_macros.hpp>
 
 using namespace bgl;
@@ -16,7 +18,7 @@ using namespace bgl;
 namespace
 {
 	std::string
-	ValidateWgsl(Device& device, const char* wgsl)
+	ValidateWgsl(Device& device, std::string_view wgsl)
 	{
 		const wgpu::Device&   handle   = device.GetHandle();
 		const wgpu::Instance& instance = device.GetInstance();
@@ -86,4 +88,32 @@ TEST_CASE("Tint rejects slangc's bindless descriptor heap", "[wgpu][tint]")
 	// WGSL path. If Dawn ever accepts this, revisit whether bindless is viable.
 	const auto error = ValidateWgsl(*device, c_BindlessHeap);
 	REQUIRE_FALSE(error.empty());
+}
+
+// The gate for the per-target buffer-primitive swap: with the plain (non-`.Handle`) WGSL primitives,
+// every compute kernel the build compiled to WGSL must also load on a Dawn device -- i.e. slangc no
+// longer emits the bindless heap and Tint accepts the result.
+TEST_CASE("Every compute kernel's WGSL loads on Dawn", "[wgpu][tint]")
+{
+	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+
+	// Written beside the executable by the WGSL compile_shader entries; the working directory is the
+	// runtime output dir (see just run).
+	for (const auto* kernel : { "PrefixSumInstances",
+	                            "HistogramInstances",
+	                            "CompactInstances",
+	                            "CullInstances",
+	                            "TransparentSort" })
+	{
+		const auto path  = std::string("shaders/") + kernel + ".wgsl";
+		const auto bytes = core::file::read_file_bytes(path);
+		REQUIRE_FALSE(bytes.empty());
+
+		const auto wgsl =
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+		const auto error = ValidateWgsl(*device, wgsl);
+
+		INFO(kernel << ": " << error);
+		REQUIRE(error.empty());
+	}
 }
