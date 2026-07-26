@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -116,10 +117,7 @@ TEST_CASE(
 
 	const auto render = [&](bool farFirst, const std::string& path) {
 		auto view = gfx->CreateSceneView(scene, 8);
-		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+		view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
 
 		if (farFirst)
 		{
@@ -202,10 +200,7 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 
 	const auto overlapBlue = [&](bool occlude, const std::string& path) {
 		auto view = gfx->CreateSceneView(scene, 8);
-		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+		view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
 
 		addPane(scene, view, blue, 0.0f, occlude);  // far
 		addPane(scene, view, red, 5.0f, occlude);   // near
@@ -286,10 +281,7 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 	const auto render = [&](bool loose, bool occlude, const std::string& path) {
 		auto scene = gfx->CreateScene(sceneDesc);
 		auto view  = gfx->CreateSceneView(scene, 8);
-		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+		view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
 
 		if (loose)
 		{

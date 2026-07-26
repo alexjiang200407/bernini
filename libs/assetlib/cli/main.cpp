@@ -116,6 +116,7 @@ main(int argc, char** argv)
 	std::string envCube;
 	std::string envIem;
 	std::string envBenv;
+	bool        envFloat   = false;
 	uint32_t    envIemSize = 128;
 	uint32_t    envSize    = 256;
 	uint32_t    envMips    = 7;
@@ -139,6 +140,10 @@ main(int argc, char** argv)
 		"-b,--benv",
 		envBenv,
 		"Write all three maps and the derived exposure as one .benv -- what the editor loads");
+	envmap->add_flag(
+		"--float",
+		envFloat,
+		"Keep the .benv's maps at RGBA32F instead of packing them to RGB9E5 (4x larger)");
 	envmap->add_option("-s,--size", envSize, "Base face size (default: 256)");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
@@ -295,10 +300,13 @@ main(int argc, char** argv)
 			{
 				const float exposure = assetlib::ExposureFor(iem);
 
+				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
+				// backend without an optional feature, so this is the shipping format rather than an
+				// intermediate needing a per-platform compile.
 				auto set       = assetlib::EnvMapSet();
-				set.prefilter  = std::move(out);
-				set.irradiance = std::move(iem);
-				set.skybox     = std::move(src);
+				set.prefilter  = envFloat ? std::move(out) : assetlib::PackRgb9e5(out);
+				set.irradiance = envFloat ? std::move(iem) : assetlib::PackRgb9e5(iem);
+				set.skybox     = envFloat ? std::move(src) : assetlib::PackRgb9e5(src);
 				set.exposure   = exposure;
 
 				auto provenance       = assetlib::EnvMapProvenance();

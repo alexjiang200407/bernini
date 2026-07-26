@@ -549,6 +549,92 @@ namespace assetlib
 		check(wc, "assetlib::writeKTX2: failed to write", path);
 	}
 
+	ImageData
+	PackRgb9e5(const ImageData& image)
+	{
+		if (image.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
+			throw std::runtime_error("assetlib::PackRgb9e5: source must be R32G32B32A32_SFLOAT");
+
+		// GL_EXT_texture_shared_exponent: 9 mantissa bits, exponent bias 15, 5-bit exponent.
+		constexpr int   c_Mantissa = 9;
+		constexpr int   c_Bias     = 15;
+		constexpr int   c_MaxExp   = 31;
+		constexpr float c_Max      = static_cast<float>((1 << c_Mantissa) - 1) /
+		                             static_cast<float>(1 << c_Mantissa) *
+		                             static_cast<float>(1 << (c_MaxExp - c_Bias));
+
+		ImageData out;
+		out.width     = image.width;
+		out.height    = image.height;
+		out.mipLevels = image.mipLevels;
+		out.arraySize = image.arraySize;
+		out.isCubemap = image.isCubemap;
+		out.vkFormat  = VkFormat::E5B9G9R9_UFLOAT_PACK32;
+
+		size_t texels = 0;
+		for (const ImageSubresource& sub : image.subresources)
+			texels += static_cast<size_t>(sub.slicePitch) / (sizeof(float) * 4);
+
+		out.pixels = core::fixed_buffer<std::byte>(texels * sizeof(uint32_t));
+
+		size_t dst = 0;
+		for (const ImageSubresource& sub : image.subresources)
+		{
+			const auto count = static_cast<size_t>(sub.slicePitch) / (sizeof(float) * 4);
+			const auto rows =
+				sub.rowPitch > 0 ? static_cast<size_t>(sub.slicePitch / sub.rowPitch) : 1u;
+			const size_t width = rows > 0 ? count / rows : count;
+
+			out.subresources.push_back(
+				{ dst * sizeof(uint32_t),
+			      static_cast<uint64_t>(width) * sizeof(uint32_t),
+			      static_cast<uint64_t>(count) * sizeof(uint32_t) });
+
+			const auto* src    = reinterpret_cast<const float*>(image.pixels.data() + sub.offset);
+			auto*       target = reinterpret_cast<uint32_t*>(out.pixels.data()) + dst;
+
+			for (size_t t = 0; t < count; ++t)
+			{
+				const float r = std::clamp(src[t * 4 + 0], 0.0f, c_Max);
+				const float g = std::clamp(src[t * 4 + 1], 0.0f, c_Max);
+				const float b = std::clamp(src[t * 4 + 2], 0.0f, c_Max);
+
+				const float maxc = std::max(std::max(r, g), b);
+
+				int exp = maxc > 0.0f ?
+				              std::max(-c_Bias - 1, static_cast<int>(std::floor(std::log2(maxc)))) +
+				                  1 + c_Bias :
+				              0;
+
+				const auto quantize = [&](float v, int e) {
+					return static_cast<int>(std::floor(
+						static_cast<double>(v) /
+							std::exp2(static_cast<double>(e - c_Bias - c_Mantissa)) +
+						0.5));
+				};
+
+				// Rounding the brightest channel can carry it into the next exponent.
+				if (quantize(maxc, exp) == (1 << c_Mantissa))
+					++exp;
+
+				exp = std::clamp(exp, 0, c_MaxExp);
+
+				const auto rs =
+					static_cast<uint32_t>(std::clamp(quantize(r, exp), 0, (1 << c_Mantissa) - 1));
+				const auto gs =
+					static_cast<uint32_t>(std::clamp(quantize(g, exp), 0, (1 << c_Mantissa) - 1));
+				const auto bs =
+					static_cast<uint32_t>(std::clamp(quantize(b, exp), 0, (1 << c_Mantissa) - 1));
+
+				target[t] = rs | (gs << 9) | (bs << 18) | (static_cast<uint32_t>(exp) << 27);
+			}
+
+			dst += count;
+		}
+
+		return out;
+	}
+
 	std::vector<std::byte>
 	EncodeKTX2(const ImageData& image, bool srgb, Ktx2Compression compression)
 	{

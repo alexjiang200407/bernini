@@ -259,11 +259,14 @@ sceneDesc.initialPbrMaterials         = 100;
 auto scene = graphics->CreateScene(std::move(sceneDesc));
 auto view  = graphics->CreateSceneView(scene, 100);
 
-auto prefilter = scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2"));
+// One .benv carries the prefilter, irradiance and skybox of an environment, plus its exposure;
+// the BRDF LUT belongs to the shading model and is shared by every environment.
+auto env = assetlib::loadBenv("assets/forest.benv");
 view->SetEnvironmentMap(
-    { scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-      prefilter,
+    { scene->AddTextureAsset(std::move(env.irradiance)),
+      scene->AddTextureAsset(std::move(env.prefilter)),
       scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+view->SetExposure(env.exposure);
 
 auto material = scene->CreatePbrMaterial(
     { .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.5f, .roughnessFactor = 0.5f });

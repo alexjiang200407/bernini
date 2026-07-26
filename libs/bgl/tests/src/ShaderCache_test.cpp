@@ -1,4 +1,5 @@
 #include "util/GoldenImage.h"
+#include "util/TestEnvironment.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -39,10 +40,7 @@ namespace
 		auto scene = gfx->CreateScene(sceneDesc);
 		auto view  = gfx->CreateSceneView(scene, 8);
 
-		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+		view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
 
 		auto metalMat = scene->CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
