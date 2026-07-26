@@ -4,6 +4,7 @@
 #include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue_wgpu.h"
 #include "pipeline/ComputePipeline_wgpu.h"
+#include "pipeline/MeshletPipeline_wgpu.h"
 #include "resource/ResourceManager_wgpu.h"
 #include "resource/Shader_wgpu.h"
 #include "slang/SlangErrorChecker.h"
@@ -229,12 +230,12 @@ namespace bgl
 		return core::SharedRef<ResourceManager>::Make(m_Device, m_Instance, desc);
 	}
 
-	// Unreachable until pipelines exist: there is no way to obtain the argument. The body is
-	// backend-agnostic (it reads reflection off the pipeline) and lands with them.
 	Uniforms
-	Device::CreateUniforms(IMeshletPipeline const*, const std::string&) const noexcept
+	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
 	{
-		gfatal("CreateUniforms: WebGPU has no mesh shaders");
+		gassert(pipeline != nullptr, "CreateUniforms: null pipeline");
+		return Uniforms(pipeline, cbufferName);
 	}
 
 	Uniforms
@@ -258,9 +259,9 @@ namespace bgl
 	}
 
 	core::SharedRef<IMeshletPipeline>
-	Device::CreateMeshletPipeline(const MeshletPipelineDesc&) const noexcept
+	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		gfatal("CreateMeshletPipeline: WebGPU has no mesh shaders");
+		return core::SharedRef<MeshletPipeline>::Make(m_Device, m_SlangSession.get(), desc);
 	}
 
 	RenderTargetRef

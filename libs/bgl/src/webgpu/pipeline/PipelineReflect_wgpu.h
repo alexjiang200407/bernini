@@ -14,19 +14,26 @@ namespace bgl
 		bool     readWrite;
 	};
 
+	/** One entry point to link: its module and its name. Two entries may share a module. */
+	struct WgslEntryPoint
+	{
+		slang::IModule* module;
+		std::string     name;
+	};
+
 	/**
-	 * Composes `module` with each named entry point, links the program, and keeps it alive on
-	 * `owner` so the returned layout pointer stays valid. Whole-program WGSL is read from `owner`
-	 * afterwards (getTargetCode for multi-stage, getEntryPointCode for a lone entry).
+	 * Composes the entry points -- each found in its own module, so a vertex and pixel stage may come
+	 * from different modules -- links the program, and keeps it alive on `owner` so the returned
+	 * layout pointer stays valid. Whole-program WGSL is read from `owner` afterwards (getTargetCode
+	 * for multi-stage, getEntryPointCode for a lone entry).
 	 *
 	 * @return the linked program layout, owned by `owner`.
-	 * @throws GraphicsError if a named entry point is not found in the module.
+	 * @throws GraphicsError if an entry point is not found in its module.
 	 */
 	slang::ProgramLayout*
 	LinkWgslProgram(
 		slang::ISession*                      session,
-		slang::IModule*                       module,
-		std::span<const std::string>          entryPointNames,
+		std::span<const WgslEntryPoint>       entryPoints,
 		Slang::ComPtr<slang::IComponentType>& owner);
 
 	/**
