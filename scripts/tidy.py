@@ -135,13 +135,39 @@ def changed(ref):
 
 # --- Running clang-tidy ----------------------------------------------------
 
-def compile_db_dir(build_dir):
-    """A build directory holding compile_commands.json, or None."""
+def compile_db_dir(build_dir, wanted=()):
+    """A build directory holding compile_commands.json, or None.
+
+    Several build dirs can have one -- a DX12 and a WebGPU Ninja preset, say -- and they
+    do not compile the same files. Prefer a database that actually covers `wanted`,
+    because clang-tidy given a file its database has never heard of does not fail: it
+    falls back to no flags at all, and then reports the whole translation unit as
+    incompatible with C++98 rather than saying it had no compile command.
+    """
     candidates = [build_dir] if build_dir else ct.find_build_dirs(cfg.build_dir())
+    candidates = [c for c in candidates
+                  if c and os.path.isfile(os.path.join(c, "compile_commands.json"))]
+    if not candidates or not wanted:
+        return candidates[0] if candidates else None
+
+    targets = {os.path.normcase(os.path.abspath(p)) for p in wanted}
+
+    best, best_hits = candidates[0], -1
     for candidate in candidates:
-        if candidate and os.path.isfile(os.path.join(candidate, "compile_commands.json")):
-            return candidate
-    return None
+        try:
+            with open(os.path.join(candidate, "compile_commands.json"), encoding="utf-8") as fh:
+                entries = json.load(fh)
+        except (OSError, ValueError):
+            continue
+
+        covered = {os.path.normcase(os.path.abspath(os.path.join(e.get("directory", ""),
+                                                                e.get("file", ""))))
+                   for e in entries}
+        hits = len(targets & covered)
+        if hits > best_hits:
+            best, best_hits = candidate, hits
+
+    return best
 
 
 # A quoted path or a bare run of non-space, so a PCH under "Program Files" is
@@ -207,8 +233,40 @@ def header_entry(entry, header):
         command = pattern.sub("", command)
     # Compiling a header as the main file means saying so: otherwise clang-cl parses
     # it as C, and clang objects to the `#pragma once` it is about to read.
-    language = "/TP" if re.match(r'\S*cl(\.exe)?"?\s', command) else "-x c++-header"
-    return dict(entry, file=header, command=f'{command} {language} "{header}"', output=None)
+    #
+    # Only when the borrowed command does not already say it. Repeating /TP is
+    # diagnosed as overriding-option, which /WX -- which this project builds with --
+    # turns into an error that aborts the parse, and the failure then presents as the
+    # whole translation unit being incompatible with C++98 rather than as a duplicate flag.
+    msvc     = re.match(r'\S*cl(\.exe)?"?\s', command) is not None
+    language = "/TP" if msvc else "-x c++-header"
+    if re.search(r"(^|\s)[/-]TP(\s|$)", command) or "-x c++-header" in command:
+        language = ""
+
+    return dict(
+        entry,
+        file=header,
+        command=re.sub(r"\s+", " ", f'{command} {language} "{header}"'),
+        output=None)
+
+
+def silence_warnings(command):
+    """The build's warning policy removed, so only real errors can abort a parse.
+
+    clang-cl reads /Wall as -Weverything, and this project also builds with /WX. Under
+    clang-tidy that combination makes pedantic diagnostics fatal -- c++98-compat fires on
+    any modern header, overriding-option on a duplicated /TP -- and the first one aborts
+    the translation unit, burying the naming findings that are the whole point.
+
+    It stayed hidden because --changed filters findings to the lines a diff touched, and a
+    small edit to an existing file filters them all out. A newly added file has no
+    unchanged lines to hide behind, so it was the first to fail.
+
+    Reproducing the build's warning policy buys nothing here: the compiler enforces it
+    during the build. Genuine errors still stop us; only warnings go quiet.
+    """
+    command = re.sub(r"(^|\s)[/-](WX|Wall)(\s|$)", r"\1\3", command)
+    return f"{command} -Wno-everything"
 
 
 def match_entries(files, entries):
@@ -305,7 +363,7 @@ def sanitized_db(build_dir, files):
                 command = pattern.sub("", command)
             if sysroot and "-isysroot" not in command:
                 command += sysroot
-            entry = dict(entry, command=command)
+            entry = dict(entry, command=silence_warnings(command))
         elif "arguments" in entry:
             entry = dict(entry, arguments=strip_pch_arguments(entry["arguments"]))
         usable.append(entry)
@@ -375,8 +433,16 @@ def main():
               "If it lives somewhere else, run `just init` to record its path.", file=sys.stderr)
         return 1
 
+    # The file list is worked out first, so the database can be chosen by which one covers it.
+    if args.changed is not None:
+        spans = changed(args.changed or None)
+        if spans is None:
+            return 1
+    else:
+        spans = {path: None for path in collect(args.paths)}
+
     build_dir = args.build_dir or (ct.binary_dir_of(args.preset) if args.preset else None)
-    build_dir = compile_db_dir(build_dir)
+    build_dir = compile_db_dir(build_dir, sorted(spans))
     if not build_dir:
         if args.if_configured:
             return 0
@@ -385,13 +451,6 @@ def main():
               "Visual Studio\ngenerator does not. Configure a Ninja preset first, e.g.\n"
               "    just build --preset windows-clang-dx12-debug", file=sys.stderr)
         return 1
-
-    if args.changed is not None:
-        spans = changed(args.changed or None)
-        if spans is None:
-            return 1
-    else:
-        spans = {path: None for path in collect(args.paths)}
 
     db_dir, files, skipped = sanitized_db(build_dir, sorted(spans))
     if skipped:
