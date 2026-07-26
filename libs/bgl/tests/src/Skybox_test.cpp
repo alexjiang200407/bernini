@@ -1,4 +1,5 @@
 #include "gfx/GraphicsBase.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -42,7 +43,7 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 4);
 
-	auto cubeTex = scene->AddTextureAsset(assetlib::loadKTX2("assets/skybox.ktx2"));
+	auto cubeTex = bgl_test::LoadSkybox(scene.Get());
 	REQUIRE(cubeTex.textureSlot);
 
 	view->SetSkyBox(bgl::SkyboxDesc{ cubeTex });

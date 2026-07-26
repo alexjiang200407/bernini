@@ -26,11 +26,10 @@ struct AssetThumbnailDesc
 	uint32_t dimension        = 256;
 	uint32_t initialInstances = 256;
 
-	std::string skybox;
-	std::string irradiance;
-	std::string prefilter;
-	std::string brdfLut;
-	float       exposure = 1.0f;
+	// One `.benv` rather than three loose maps, and the BRDF LUT separately; see MaterialPreviewEnv.
+	std::string          environment;
+	std::string          brdfLut;
+	std::optional<float> exposureOverride;
 };
 
 /**

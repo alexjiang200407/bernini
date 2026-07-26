@@ -3,6 +3,7 @@
 #include <CLI/CLI.hpp>
 #include <DemoWindow.h>
 #include <FlyCamera.h>
+#include <assetlib/benv_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
@@ -27,6 +28,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 		std::string dataRootPath  = "assets";
 		std::string modelPath     = "Meshes/apples.bmesh";
 		float       exposure      = 1.0f;
+		bool        exposureGiven = false;
 
 		{
 			CLI::App app{ "Bernini bgl_base example" };
@@ -41,13 +43,13 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				"The project's Data directory: every asset reference is relative to it");
 			app.add_option("--model", modelPath, "The .bmesh to render, relative to --data-root");
 			app.add_option("-s,--skybox", skyBoxEnabled, "Enable skybox rendering");
-			app.add_option(
-				   "-e,--exposure",
-				   exposure,
-				   "Camera exposure: scales radiance before the AgX tone map. The right value "
-				   "depends "
-				   "on the environment's absolute radiance scale, so it changes with the IBL maps")
-				->check(CLI::NonNegativeNumber);
+			auto* exposureOpt = app.add_option(
+									   "-e,--exposure",
+									   exposure,
+									   "Camera exposure: scales radiance before the AgX tone map. "
+									   "Defaults to the value the .benv derived for its own maps, "
+									   "which is the correct one for them")
+			                        ->check(CLI::NonNegativeNumber);
 			app.add_flag(
 				"--headless",
 				headless,
@@ -56,6 +58,9 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 				->check(CLI::PositiveNumber);
 
 			CLI11_PARSE(app, __argc, __wargv);
+
+			// Read before `app` goes out of scope; the option belongs to it.
+			exposureGiven = exposureOpt->count() > 0;
 		}
 
 		// The window is only created for the interactive path; headless renders to an offscreen target
@@ -98,18 +103,19 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
-		auto pmrem = scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2"));
+		auto env   = assetlib::loadBenv("assets/forest.benv");
 
 		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-		      pmrem,
+			{ scene->AddTextureAsset(std::move(env.irradiance)),
+		      scene->AddTextureAsset(std::move(env.prefilter)),
 		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
 
-		view->SetExposure(exposure);
+		// --exposure overrides what the .benv derived for these maps.
+		view->SetExposure(exposureGiven ? exposure : env.exposure);
 
 		if (skyBoxEnabled)
 		{
-			view->SetSkyBox({ scene->AddTextureAsset(assetlib::loadKTX2("assets/skybox.ktx2")) });
+			view->SetSkyBox({ scene->AddTextureAsset(std::move(env.skybox)) });
 		}
 
 		// Every asset reference is relative to the data root: the mesh itself, the materials the mesh

@@ -87,22 +87,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		auto matDesc                    = MaterialEditorWindowDesc();
 		matDesc.renderer                = m_Renderer.get();
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
-		matDesc.previewEnv.skybox       = matSettings["skybox"].GetOrDefault(std::string());
-		matDesc.previewEnv.irradiance   = matSettings["irradiance"].GetOrDefault(std::string());
-		matDesc.previewEnv.prefilter    = matSettings["prefilter"].GetOrDefault(std::string());
+		matDesc.previewEnv.environment  = matSettings["environment"].GetOrDefault(std::string());
 		matDesc.previewEnv.brdfLut      = matSettings["brdfLut"].GetOrDefault(std::string());
-		matDesc.previewEnv.exposure     = matSettings["exposure"].GetOrDefault(1.0f);
+
+		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
+		if (auto exposure = matSettings["exposure"])
+			matDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
 
 		auto thumbSettings         = settings["thumbnails"];
 		auto thumbDesc             = AssetThumbnailDesc();
 		thumbDesc.renderer         = m_Renderer.get();
 		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
-		thumbDesc.skybox           = thumbSettings["skybox"].GetOrDefault(std::string());
-		thumbDesc.irradiance       = thumbSettings["irradiance"].GetOrDefault(std::string());
-		thumbDesc.prefilter        = thumbSettings["prefilter"].GetOrDefault(std::string());
+		thumbDesc.environment      = thumbSettings["environment"].GetOrDefault(std::string());
 		thumbDesc.brdfLut          = thumbSettings["brdfLut"].GetOrDefault(std::string());
-		thumbDesc.exposure         = thumbSettings["exposure"].GetOrDefault(1.0f);
+
+		if (auto exposure = thumbSettings["exposure"])
+			thumbDesc.exposureOverride = exposure.GetOrDefault(1.0f);
 
 		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
 		m_Thumbnails     = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));

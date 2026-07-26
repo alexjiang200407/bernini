@@ -3,6 +3,7 @@
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
+#include "Render/environment.h"
 
 #include <QDebug>
 #include <QDragEnterEvent>
@@ -93,35 +94,13 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 		bgl::IScene*     scene = PreviewScene();
 		bgl::ISceneView* view  = PreviewView();
 
-		view->SetExposure(env.exposure);
-
-		// IBL needs all three maps to be valid; the skybox is independent of them.
-		const auto irradiance = TryLoadTexture(scene, env.irradiance);
-		const auto prefilter  = TryLoadTexture(scene, env.prefilter);
-		const auto brdfLut    = TryLoadTexture(scene, env.brdfLut);
-		if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
-		{
-			try
-			{
-				view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MaterialPreview: SetEnvironmentMap failed: %s", e.what());
-			}
-		}
-
-		if (const auto skybox = TryLoadTexture(scene, env.skybox); skybox.textureSlot)
-		{
-			try
-			{
-				view->SetSkyBox({ skybox });
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MaterialPreview: SetSkyBox failed: %s", e.what());
-			}
-		}
+		editor::ApplyEnvironment(
+			scene,
+			view,
+			env.environment,
+			env.brdfLut,
+			env.exposureOverride,
+			"MaterialPreview");
 
 		return scene->CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(1.0f),

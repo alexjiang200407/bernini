@@ -70,12 +70,10 @@ namespace
 		[[nodiscard]] AssetThumbnailDesc
 		Desc()
 		{
-			auto desc       = AssetThumbnailDesc();
-			desc.renderer   = &*renderer;
-			desc.skybox     = "assets/skybox.ktx2";
-			desc.irradiance = "assets/iem.ktx2";
-			desc.prefilter  = "assets/pmrem.ktx2";
-			desc.brdfLut    = "assets/brdf_lut.ktx2";
+			auto desc        = AssetThumbnailDesc();
+			desc.renderer    = &*renderer;
+			desc.environment = "assets/forest.benv";
+			desc.brdfLut     = "assets/brdf_lut.ktx2";
 			return desc;
 		}
 	};

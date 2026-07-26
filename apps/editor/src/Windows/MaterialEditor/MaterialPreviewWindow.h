@@ -16,11 +16,17 @@ class QWheelEvent;
 
 struct MaterialPreviewEnv
 {
-	std::string skybox;
-	std::string irradiance;
-	std::string prefilter;
+	// A `.benv`: the prefilter, irradiance and skybox of one environment, plus its exposure. One
+	// path rather than three because the maps are only valid together -- see assetlib/benv_io.h.
+	std::string environment;
+
+	// Not in the `.benv`: the split-sum BRDF integral belongs to the shading model, not to any
+	// environment, so every environment shares this one.
 	std::string brdfLut;
-	float       exposure = 1.0f;
+
+	// Absent means the exposure the `.benv` carries, which is the value derived from those maps.
+	// Set it only to overrule that deliberately.
+	std::optional<float> exposureOverride;
 };
 
 // The right-hand model preview: a lit sphere by default, or a `.bmesh` dropped onto it, shown

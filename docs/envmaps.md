@@ -1,23 +1,49 @@
-# How to generate Environment Maps using CMFT Studio
+# Environment Maps
 
-The renderer's image-based lighting takes four files, all consumed as **linear radiance**:
+One command turns a `.hdr` into everything the renderer needs:
 
-| File | What it is | Resolution | Sampled by |
+```bash
+assetlib_cli envmap forest.hdr --benv assets/forest.benv -s 256 -m 7 -n 2048
+```
+
+That takes about four seconds and replaces the CMFT procedure this document used to describe. What it
+writes is a single `.benv`, holding three maps — all **linear radiance**, all `E5B9G9R9_UFLOAT_PACK32`:
+
+| Chunk | What it is | Resolution | Sampled by |
 |---|---|---|---|
-| `pmrem.ktx2` | **P**refiltered **M**ip-mapped **R**adiance **E**nvironment **M**ap — one mip per roughness | 256², 7 mips | the specular lobe (`prefilterMap`) |
-| `iem.ktx2` | **I**rradiance **E**nvironment **M**ap — the cosine convolution | 128², 1 mip | the diffuse term (`irradianceMap`) |
-| `skybox.ktx2` | the environment itself, drawn as the background | 512², 1 mip | `SkyboxPass` (`cubeTex`) |
-| `brdf_lut.ktx2` | split-sum BRDF lookup table (not environment-specific; generate once) | 256², `RG16_SFLOAT` | both |
+| prefilter | the GGX split-sum chain — one mip per roughness | 256², 7 mips | the specular lobe (`prefilterMap`) |
+| irradiance | the clamped-cosine convolution, via order-3 spherical harmonics | 128², 1 mip | the diffuse term (`irradianceMap`) |
+| skybox | the environment itself, unfiltered | 256², 1 mip | `SkyboxPass` (`cubeTex`) |
 
-`pmrem` and `skybox` are deliberately **separate files**, because the two roles want opposite things:
-the prefilter is sampled through a roughness lobe and 256² is already generous, while the skybox is
-seen directly at viewport resolution. Pointing `skybox` at `pmrem` costs 16× the prefilter's memory to
-buy sharpness only the background can use.
+Plus the **exposure** those maps were measured at, in the header.
 
-`pmrem` and `iem` are two halves of **one** environment. They must be generated from the same source
-in the same units, or the diffuse and specular terms disagree about how bright the world is.
+`brdf_lut.ktx2` stays a separate file, and is the only other input. It is the split-sum BRDF integral
+— a property of the shading model, not of any environment — so every environment shares one.
+
+**One file rather than three, because the maps are only valid together.** The prefilter and the
+irradiance are the specular and diffuse convolutions of the *same* radiance in the same units; a pair
+from different sources disagrees about how bright the world is, and does so quietly, because each looks
+plausible alone. Exposure is in the header for the same reason: an HDR environment's absolute scale is
+arbitrary, so exposure belongs to the maps and has to change whenever they do. Three config keys and a
+fourth for exposure let all of that drift; one key cannot.
+
+Each chunk is a complete `.ktx2`, so `ktxinfo`, `ktx compare` and `ktx2check` still work on one carved
+out of the file. Those are the tools that diagnose a bad environment map, and they are worth more than
+the bytes a bespoke layout would save. It also leaves the stored format a per-chunk `vkFormat`, so a
+desktop-only BC6H bake (4× smaller again, unavailable on Apple GPUs) needs no container change.
 
 ---
+
+# Appendix: the CMFT procedure this replaced
+
+Everything below documents generating these maps by hand in CMFT Studio, which `assetlib_cli envmap`
+now does. It is kept because two of its warnings were expensive to find and still apply to any
+externally produced cube map you might be handed -- and because they explain what was wrong with the
+maps this engine shipped before.
+
+The baker makes most of it moot: it reads the `.hdr` directly, so there is no gamma field to set
+wrongly; it generates at the resolution you ask for, so nothing is resampled afterwards; and it emits
+the standard cube parameterisation, so there is no edge fixup to double-correct.
 
 ## Gamma: set every gamma field to 1.0
 
