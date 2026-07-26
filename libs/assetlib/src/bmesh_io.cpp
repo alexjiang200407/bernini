@@ -1,4 +1,5 @@
 #include <assetlib/bmesh_io.h>
+#include <assetlib_structs/magic.h>
 
 #include <assetlib/image_io.h>
 
@@ -15,7 +16,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint32_t c_Magic = 0x48534D42u;  // 'B','M','S','H' little-endian
+		constexpr uint32_t c_Magic = magic::c_BMesh;
 
 		constexpr uint16_t c_VersionMajor = 3;
 		constexpr uint16_t c_VersionMinor = 0;

@@ -7,6 +7,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "util/GpuValidation.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -183,9 +184,7 @@ namespace
 		void
 		AddSkybox()
 		{
-			view->SetSkyBox(
-				bgl::SkyboxDesc{
-					scene->AddTextureAsset(assetlib::loadKTX2("assets/skybox.ktx2")) });
+			view->SetSkyBox(bgl::SkyboxDesc{ bgl::test::LoadSkybox(scene.Get()) });
 		}
 
 		void

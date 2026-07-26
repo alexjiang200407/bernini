@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -83,10 +84,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	// PBR does not render without an environment; there is no default.
-	view->SetEnvironmentMap(
-		{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-	      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
-	      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	// Through the real encoder: RGBA8 -> UASTC -> BC7, exactly what bakeMaterial does for a cutout.
 	const auto encoded = std::filesystem::temp_directory_path() / "bernini_alphatest_mask.ktx2";
@@ -207,10 +205,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	// PBR does not render without an environment; there is no default.
-	view->SetEnvironmentMap(
-		{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-	      scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2")),
-	      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	assetlib::ImageData baseColor =
 		assetlib::loadKTX2("assets/Textures/basecolor_38b0077028376769.ktx2");

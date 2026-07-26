@@ -429,7 +429,7 @@ It is a **mark and sweep over the whole project**, and each half has a rule that
 * **Sweep** — only files matching the bake's own naming, `<group>_<16 hex>.ktx2`, are candidates.
   That test is `isBakedMapName`, deliberately kept in `material_bake.cpp` beside the `c_Groups` table
   that *writes* the names, so the two cannot drift. It is what keeps the hand-placed maps sharing the
-  directory — `skybox.ktx2`, `iem.ktx2`, `pmrem.ktx2`, `brdf_lut.ktx2`, which are named in config and
+  directory — `forest.benv` and `brdf_lut.ktx2`, which are named in config and
   by no material at all — from being swept as unreferenced.
 
 Because a baked name is a content hash, the live set is keyed by **file name**, not by the path a

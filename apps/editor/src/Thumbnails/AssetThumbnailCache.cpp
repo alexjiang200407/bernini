@@ -2,6 +2,7 @@
 
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
+#include "Render/environment.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -200,34 +201,15 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 
 		bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
 		bgl::ISceneView* view  = m_SceneView.Get();
-		view->SetExposure(m_Desc.exposure);
-
-		const auto irradiance = TryLoadTexture(scene, m_Desc.irradiance);
-		const auto prefilter  = TryLoadTexture(scene, m_Desc.prefilter);
-		const auto brdfLut    = TryLoadTexture(scene, m_Desc.brdfLut);
-		if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
-		{
-			try
-			{
-				view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("AssetThumbnail: SetEnvironmentMap failed: %s", e.what());
-			}
-		}
-
-		if (const auto skybox = TryLoadTexture(scene, m_Desc.skybox); skybox.textureSlot)
-		{
-			try
-			{
-				view->SetSkyBox({ skybox });
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("AssetThumbnail: SetSkyBox failed: %s", e.what());
-			}
-		}
+		// The same helper the material preview uses, so a thumbnail cannot be lit differently from
+		// the preview it was generated from.
+		editor::ApplyEnvironment(
+			scene,
+			view,
+			m_Desc.environmentMap,
+			m_Desc.brdfLut,
+			m_Desc.exposureOverride,
+			"AssetThumbnail");
 
 		// What a submesh gets when the mesh names no material, or names one that will not load. A
 		// fresh import names none at all: toBMesh drops the source's materials on purpose.

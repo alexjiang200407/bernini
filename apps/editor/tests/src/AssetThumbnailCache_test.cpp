@@ -7,6 +7,8 @@
 
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <core/file/file.h>
+#include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
 #include <catch2/catch_test_macros.hpp>
@@ -41,6 +43,17 @@ namespace
 		return sceneDesc;
 	}
 
+	// The lighting the editor itself renders thumbnails with, rather than a second copy of those paths
+	// here: config.json is deployed beside the test binary as it is beside editor.exe, and a config
+	// naming a different environment has to exercise that one.
+	[[nodiscard]] const core::Settings&
+	EditorConfig()
+	{
+		static auto g_Settings =
+			core::Settings(core::file::get_library_path().parent_path() / "config.json");
+		return g_Settings;
+	}
+
 	// Everything a cache needs to actually render: a renderer (which owns the device and scene, as
 	// MainWindow's does) and the editor's shared asset manager over that scene.
 	struct Fixture
@@ -70,12 +83,13 @@ namespace
 		[[nodiscard]] AssetThumbnailDesc
 		Desc()
 		{
-			auto desc       = AssetThumbnailDesc();
-			desc.renderer   = &*renderer;
-			desc.skybox     = "assets/skybox.ktx2";
-			desc.irradiance = "assets/iem.ktx2";
-			desc.prefilter  = "assets/pmrem.ktx2";
-			desc.brdfLut    = "assets/brdf_lut.ktx2";
+			auto thumbSettings  = EditorConfig()["thumbnails"];
+			auto desc           = AssetThumbnailDesc();
+			desc.renderer       = &*renderer;
+			desc.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
+			desc.brdfLut        = thumbSettings["brdfLut"].GetOrDefault(std::string());
+			REQUIRE_FALSE(desc.environmentMap.empty());
+			REQUIRE_FALSE(desc.brdfLut.empty());
 			return desc;
 		}
 	};

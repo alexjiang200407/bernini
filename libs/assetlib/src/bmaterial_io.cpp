@@ -1,4 +1,5 @@
 #include <assetlib/bmaterial_io.h>
+#include <assetlib_structs/magic.h>
 
 #include "fs_util.h"
 
@@ -13,7 +14,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint32_t c_Magic = 0x54414D42u;  // 'B','M','A','T' little-endian
+		constexpr uint32_t c_Magic = magic::c_BMaterial;
 
 		constexpr uint16_t c_VersionMajor = 6;
 		constexpr uint16_t c_VersionMinor = 1;  // +1: PbrParams::occlude

@@ -56,6 +56,8 @@ namespace bgl
 			return F::RGB10A2Unorm;
 		case Format::R11G11B10_FLOAT:
 			return F::RG11B10Ufloat;
+		case Format::RGB9E5_FLOAT:
+			return F::RGB9E5Ufloat;
 		case Format::RG16_UINT:
 			return F::RG16Uint;
 		case Format::RG16_SINT:

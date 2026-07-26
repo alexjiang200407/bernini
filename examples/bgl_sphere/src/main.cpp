@@ -1,6 +1,7 @@
 #include <CLI/CLI.hpp>
 #include <DemoWindow.h>
 #include <FlyCamera.h>
+#include <assetlib/benv_io.h>
 #include <assetlib/image_io.h>
 #include <bgl/bgl.h>
 #include <format>
@@ -70,16 +71,18 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
-		auto pmrem = scene->AddTextureAsset(assetlib::loadKTX2("assets/pmrem.ktx2"));
+		auto env   = assetlib::loadBenv("assets/forest.benv");
 
 		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(assetlib::loadKTX2("assets/iem.ktx2")),
-		      pmrem,
+			{ scene->AddTextureAsset(std::move(env.irradiance)),
+		      scene->AddTextureAsset(std::move(env.prefilter)),
 		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+
+		view->SetExposure(env.exposure);
 
 		if (skyBoxEnabled)
 		{
-			view->SetSkyBox({ pmrem });
+			view->SetSkyBox({ scene->AddTextureAsset(std::move(env.skybox)) });
 		}
 
 		auto metalMat = scene->CreatePbrMaterial(

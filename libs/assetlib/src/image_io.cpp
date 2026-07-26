@@ -52,6 +52,7 @@ namespace assetlib
 			case VkFormat::R16G16_UNORM:
 			case VkFormat::R16G16_SFLOAT:
 			case VkFormat::R32_SFLOAT:
+			case VkFormat::E5B9G9R9_UFLOAT_PACK32:
 				return { 1, 1, 4 };
 			case VkFormat::R16G16B16A16_UNORM:
 			case VkFormat::R16G16B16A16_SFLOAT:
@@ -142,39 +143,39 @@ namespace assetlib
 		std::mutex&
 		basisInitMutex()
 		{
-			static std::mutex mutex;
-			return mutex;
+			static std::mutex g_Mutex;
+			return g_Mutex;
 		}
 
 		ktx_error_code_e
 		transcodeBasis(ktxTexture2* texture, ktx_transcode_fmt_e format)
 		{
-			static std::atomic<bool> ready{ false };
+			static std::atomic<bool> g_Ready{ false };
 
-			if (ready.load(std::memory_order_acquire))
+			if (g_Ready.load(std::memory_order_acquire))
 				return ktxTexture2_TranscodeBasis(texture, format, 0);
 
 			const std::lock_guard<std::mutex> lock(basisInitMutex());
 
 			const ktx_error_code_e rc = ktxTexture2_TranscodeBasis(texture, format, 0);
 			if (rc == KTX_SUCCESS)
-				ready.store(true, std::memory_order_release);
+				g_Ready.store(true, std::memory_order_release);
 			return rc;
 		}
 
 		ktx_error_code_e
 		compressBasis(ktxTexture2* texture, ktxBasisParams* params)
 		{
-			static std::atomic<bool> ready{ false };
+			static std::atomic<bool> g_Ready{ false };
 
-			if (ready.load(std::memory_order_acquire))
+			if (g_Ready.load(std::memory_order_acquire))
 				return ktxTexture2_CompressBasisEx(texture, params);
 
 			const std::lock_guard<std::mutex> lock(basisInitMutex());
 
 			const ktx_error_code_e rc = ktxTexture2_CompressBasisEx(texture, params);
 			if (rc == KTX_SUCCESS)
-				ready.store(true, std::memory_order_release);
+				g_Ready.store(true, std::memory_order_release);
 			return rc;
 		}
 
@@ -220,18 +221,11 @@ namespace assetlib
 		};
 	}
 
-	ImageData
-	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode)
+	// Everything loadKTX2 and decodeKTX2 share once the container is open, so a file and an embedded
+	// blob cannot decode differently. `path` names the source for error messages only.
+	static ImageData
+	imageFromKtx(ktxTexture2* texture, Ktx2Decode decode, const std::filesystem::path& path)
 	{
-		ktxTexture2* texture = nullptr;
-
-		errno                     = 0;  // so check() reads this call's reason, not a stale one
-		const ktx_error_code_e rc = ktxTexture2_CreateFromNamedFile(
-			path.string().c_str(),
-			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-			&texture);
-		check(rc, "assetlib::loadKTX2: failed to load", path);
-
 		// Basis-supercompressed textures (LDR material maps) transcode on the way in. The GPU wants a
 		// block format; the material bake wants texels it can composite, so it asks for RGBA32 instead.
 		// HDR / IBL maps are stored uncompressed and skip this entirely.
@@ -313,6 +307,36 @@ namespace assetlib
 
 		ktxTexture_Destroy(base);
 		return image;
+	}
+
+	ImageData
+	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode)
+	{
+		ktxTexture2* texture = nullptr;
+
+		errno                     = 0;  // so check() reads this call's reason, not a stale one
+		const ktx_error_code_e rc = ktxTexture2_CreateFromNamedFile(
+			path.string().c_str(),
+			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+			&texture);
+		check(rc, "assetlib::loadKTX2: failed to load", path);
+
+		return imageFromKtx(texture, decode, path);
+	}
+
+	ImageData
+	decodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode)
+	{
+		ktxTexture2* texture = nullptr;
+
+		const ktx_error_code_e rc = ktxTexture2_CreateFromMemory(
+			reinterpret_cast<const ktx_uint8_t*>(bytes.data()),
+			bytes.size(),
+			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+			&texture);
+		check(rc, "assetlib::decodeKTX2: failed to read", "<memory>");
+
+		return imageFromKtx(texture, decode, "<memory>");
 	}
 
 	ImageData
@@ -401,8 +425,10 @@ namespace assetlib
 		return image;
 	}
 
-	void
-	writeKTX2(
+	// Everything writeKTX2 and encodeKTX2 share up to the point of emitting bytes. Returns an owned
+	// texture the caller must destroy; `path` names the destination for error messages only.
+	static ktxTexture2*
+	buildKtx(
 		const ImageData&             image,
 		const std::filesystem::path& path,
 		bool                         srgb,
@@ -501,6 +527,18 @@ namespace assetlib
 			}
 		}
 
+		return texture;
+	}
+
+	void
+	writeKTX2(
+		const ImageData&             image,
+		const std::filesystem::path& path,
+		bool                         srgb,
+		Ktx2Compression              compression)
+	{
+		ktxTexture* base = ktxTexture(buildKtx(image, path, srgb, compression));
+
 		errno                         = 0;
 		const ktx_error_code_e wc     = ktxTexture_WriteToNamedFile(base, path.string().c_str());
 		const int              reason = errno;
@@ -509,5 +547,142 @@ namespace assetlib
 
 		errno = reason;
 		check(wc, "assetlib::writeKTX2: failed to write", path);
+	}
+
+	ImageData
+	packRgb9e5(const ImageData& image)
+	{
+		if (image.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
+			throw std::runtime_error("assetlib::packRgb9e5: source must be R32G32B32A32_SFLOAT");
+
+		// GL_EXT_texture_shared_exponent: 9 mantissa bits, exponent bias 15, 5-bit exponent.
+		constexpr int   c_Mantissa = 9;
+		constexpr int   c_Bias     = 15;
+		constexpr int   c_MaxExp   = 31;
+		constexpr float c_Max      = static_cast<float>((1 << c_Mantissa) - 1) /
+		                             static_cast<float>(1 << c_Mantissa) *
+		                             static_cast<float>(1 << (c_MaxExp - c_Bias));
+
+		ImageData out;
+		out.width     = image.width;
+		out.height    = image.height;
+		out.mipLevels = image.mipLevels;
+		out.arraySize = image.arraySize;
+		out.isCubemap = image.isCubemap;
+		out.vkFormat  = VkFormat::E5B9G9R9_UFLOAT_PACK32;
+
+		size_t texels = 0;
+		for (const ImageSubresource& sub : image.subresources)
+			texels += static_cast<size_t>(sub.slicePitch) / (sizeof(float) * 4);
+
+		out.pixels = core::fixed_buffer<std::byte>(texels * sizeof(uint32_t));
+
+		size_t dst = 0;
+		for (const ImageSubresource& sub : image.subresources)
+		{
+			const auto count = static_cast<size_t>(sub.slicePitch) / (sizeof(float) * 4);
+			const auto rows =
+				sub.rowPitch > 0 ? static_cast<size_t>(sub.slicePitch / sub.rowPitch) : 1u;
+			const size_t width = rows > 0 ? count / rows : count;
+
+			out.subresources.push_back(
+				{ dst * sizeof(uint32_t),
+			      static_cast<uint64_t>(width) * sizeof(uint32_t),
+			      static_cast<uint64_t>(count) * sizeof(uint32_t) });
+
+			const auto* src    = reinterpret_cast<const float*>(image.pixels.data() + sub.offset);
+			auto*       target = reinterpret_cast<uint32_t*>(out.pixels.data()) + dst;
+
+			for (size_t t = 0; t < count; ++t)
+			{
+				const float r = std::clamp(src[t * 4 + 0], 0.0f, c_Max);
+				const float g = std::clamp(src[t * 4 + 1], 0.0f, c_Max);
+				const float b = std::clamp(src[t * 4 + 2], 0.0f, c_Max);
+
+				const float maxc = std::max(std::max(r, g), b);
+
+				int exp = maxc > 0.0f ?
+				              std::max(-c_Bias - 1, static_cast<int>(std::floor(std::log2(maxc)))) +
+				                  1 + c_Bias :
+				              0;
+
+				const auto quantize = [&](float v, int e) {
+					return static_cast<int>(std::floor(
+						static_cast<double>(v) /
+							std::exp2(static_cast<double>(e - c_Bias - c_Mantissa)) +
+						0.5));
+				};
+
+				// Rounding the brightest channel can carry it into the next exponent.
+				if (quantize(maxc, exp) == (1 << c_Mantissa))
+					++exp;
+
+				exp = std::clamp(exp, 0, c_MaxExp);
+
+				const auto rs =
+					static_cast<uint32_t>(std::clamp(quantize(r, exp), 0, (1 << c_Mantissa) - 1));
+				const auto gs =
+					static_cast<uint32_t>(std::clamp(quantize(g, exp), 0, (1 << c_Mantissa) - 1));
+				const auto bs =
+					static_cast<uint32_t>(std::clamp(quantize(b, exp), 0, (1 << c_Mantissa) - 1));
+
+				target[t] = rs | (gs << 9) | (bs << 18) | (static_cast<uint32_t>(exp) << 27);
+			}
+
+			dst += count;
+		}
+
+		return out;
+	}
+
+	std::vector<std::byte>
+	encodeKTX2(const ImageData& image, bool srgb, Ktx2Compression compression)
+	{
+		// Written through a stream backed by our own vector rather than through
+		// ktxTexture_WriteToMemory. That returns a buffer libktx allocated inside ktx.dll, and
+		// releasing it here would free a pointer belonging to another CRT's heap -- which trips
+		// _CrtIsValidHeapPointer on a debug build and corrupts the heap on a release one.
+		auto out = std::vector<std::byte>();
+
+		ktxStream stream{};
+		stream.type                    = eStreamTypeCustom;
+		stream.data.custom_ptr.address = &out;
+		stream.closeOnDestruct         = KTX_FALSE;
+
+		stream.write = [](ktxStream* str, const void* src, ktx_size_t size, ktx_size_t count) {
+			auto*        sink  = static_cast<std::vector<std::byte>*>(str->data.custom_ptr.address);
+			const size_t bytes = size * count;
+			const auto*  from  = static_cast<const std::byte*>(src);
+
+			const size_t at = static_cast<size_t>(str->readpos);
+			if (at + bytes > sink->size())
+				sink->resize(at + bytes);
+			std::memcpy(sink->data() + at, from, bytes);
+			str->readpos = static_cast<ktx_off_t>(at + bytes);
+			return KTX_SUCCESS;
+		};
+		stream.getpos = [](ktxStream* str, ktx_off_t* offset) {
+			*offset = str->readpos;
+			return KTX_SUCCESS;
+		};
+		stream.setpos = [](ktxStream* str, ktx_off_t offset) {
+			str->readpos = offset;
+			return KTX_SUCCESS;
+		};
+		stream.getsize = [](ktxStream* str, ktx_size_t* size) {
+			*size = static_cast<std::vector<std::byte>*>(str->data.custom_ptr.address)->size();
+			return KTX_SUCCESS;
+		};
+		stream.read     = [](ktxStream*, void*, ktx_size_t) { return KTX_INVALID_OPERATION; };
+		stream.skip     = [](ktxStream*, ktx_size_t) { return KTX_INVALID_OPERATION; };
+		stream.destruct = [](ktxStream*) {};
+
+		ktxTexture* base = ktxTexture(buildKtx(image, "<memory>", srgb, compression));
+
+		const ktx_error_code_e wc = ktxTexture_WriteToStream(base, &stream);
+		ktxTexture_Destroy(base);
+		check(wc, "assetlib::encodeKTX2: failed to encode", "<memory>");
+
+		return out;
 	}
 }

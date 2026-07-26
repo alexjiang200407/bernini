@@ -2,10 +2,14 @@
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
+#include <assetlib/benv_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/envmap_bake.h>
+#include <assetlib/image_io.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/magic.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -70,8 +74,8 @@ namespace
 	ContainerType
 	sniff(const std::filesystem::path& path)
 	{
-		constexpr uint32_t c_MeshMagic     = 0x48534D42u;  // 'BMSH'
-		constexpr uint32_t c_MaterialMagic = 0x54414D42u;  // 'BMAT'
+		constexpr uint32_t c_MeshMagic     = assetlib::magic::c_BMesh;
+		constexpr uint32_t c_MaterialMagic = assetlib::magic::c_BMaterial;
 
 		std::ifstream in(path, std::ios::binary);
 		uint32_t      magic = 0;
@@ -107,6 +111,62 @@ main(int argc, char** argv)
 		->check(CLI::ExistingFile);
 	bake->add_option("-o,--out", outDir, "Output directory")->required();
 	bake->add_option("-n,--name", name, "Base name for the .bmesh (default: mesh)");
+
+	std::string envInput;
+	std::string envOut;
+	std::string envCube;
+	std::string envIem;
+	std::string envBenv;
+	bool        envFloat      = false;
+	uint32_t    envIemSize    = 128;
+	uint32_t    envSkyboxSize = 512;
+	float       envSkyboxBlur = 0.0f;
+	uint32_t    envSize       = 256;
+	uint32_t    envMips       = 7;
+	uint32_t    envSamples    = 128;
+	uint32_t    envThreads    = 0;
+
+	auto* envmap = app.add_subcommand(
+		"envmap",
+		"Prefilter a radiance cube map into the GGX split-sum chain the shader samples");
+	envmap->add_option("input", envInput, "Source .hdr (equirectangular) or cube map .ktx2")
+		->required()
+		->check(CLI::ExistingFile);
+	envmap->add_option("-o,--out", envOut, "Write the prefilter chain here as a loose .ktx2");
+	envmap->add_option(
+		"-c,--cube",
+		envCube,
+		"Also write the unfiltered source cube here -- this is the skybox");
+	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
+	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
+	envmap->add_option(
+		"-b,--benv",
+		envBenv,
+		"Write all three maps and the derived exposure as one .benv -- what the editor loads");
+	envmap->add_flag(
+		"--float",
+		envFloat,
+		"Keep the .benv's maps at RGBA32F instead of packing them to RGB9E5 (4x larger)");
+	envmap->add_option(
+		"-s,--size",
+		envSize,
+		"Prefilter base face size (default: 256). The lobe blurs it, so this can be modest");
+	envmap->add_option(
+		"--skybox-size",
+		envSkyboxSize,
+		"Skybox face size (default: 512). Seen directly at viewport resolution, so it wants more "
+		"than the prefilter -- but no more than the source can supply, and less if it is blurred");
+	envmap->add_option(
+		"--skybox-blur",
+		envSkyboxBlur,
+		"GGX roughness to defocus the skybox by (0 = sharp). Reads as depth of field, and hides a "
+		"source that cannot fill the face");
+	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
+	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
+	envmap->add_option(
+		"-j,--threads",
+		envThreads,
+		"Worker threads (default: hardware concurrency)");
 
 	std::string objInput;
 	std::string objOut;
@@ -192,6 +252,111 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("bake failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*envmap)
+	{
+		try
+		{
+			if (envOut.empty() && envBenv.empty())
+				throw std::runtime_error("nothing to write: pass --out and/or --benv");
+
+			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
+
+			// Projected at the skybox's size, which is the largest of the three: the prefilter and
+			// the irradiance convolve it down anyway, and starting them from the finer cube costs
+			// only the projection.
+			assetlib::ImageData src = fromHdr ? assetlib::equirectToCube(
+													assetlib::loadRadianceHdr(envInput),
+													std::max(envSkyboxSize, envSize)) :
+			                                    assetlib::loadKTX2(envInput);
+
+			// Blurred, the skybox is a separate convolution of the same environment; sharp, it is
+			// the projection itself. Either way the prefilter and irradiance still read `src`, so a
+			// defocused background never reaches the lighting.
+			assetlib::ImageData sky =
+				envSkyboxBlur > 0.0f ?
+					assetlib::blurCube(src, envSkyboxSize, envSkyboxBlur, 256, envThreads) :
+					assetlib::ImageData();
+
+			if (!envCube.empty())
+			{
+				const assetlib::ImageData& cube = envSkyboxBlur > 0.0f ? sky : src;
+				assetlib::writeKTX2(cube, envCube, false, assetlib::Ktx2Compression::kNone);
+				spdlog::info("Wrote the skybox cube to '{}' ({}^2)", envCube, cube.width);
+			}
+
+			assetlib::ImageData iem = assetlib::irradianceSh(src, envIemSize);
+			if (!envIem.empty())
+			{
+				assetlib::writeKTX2(iem, envIem, false, assetlib::Ktx2Compression::kNone);
+				spdlog::info("Wrote the irradiance map to '{}' ({}^2)", envIem, envIemSize);
+			}
+
+			auto desc      = assetlib::PrefilterDesc();
+			desc.faceSize  = envSize;
+			desc.mipLevels = envMips;
+			desc.samples   = envSamples;
+			desc.threads   = envThreads;
+
+			auto                stats = assetlib::PrefilterStats();
+			assetlib::ImageData out   = assetlib::prefilterRadiance(src, desc, &stats);
+
+			if (!envOut.empty())
+				assetlib::writeKTX2(out, envOut, false, assetlib::Ktx2Compression::kNone);
+
+			spdlog::info(
+				"Prefiltered '{}' ({}^2) -> '{}' ({}^2 x {} mips) in {:.2f}s",
+				envInput,
+				src.width,
+				envOut,
+				desc.faceSize,
+				desc.mipLevels,
+				stats.seconds);
+			spdlog::info(
+				"  {} texels, {} GGX samples, {:.1f}M samples/s",
+				stats.texelsWritten,
+				stats.samplesTaken,
+				stats.seconds > 0.0 ?
+					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
+					0.0);
+
+			if (!envBenv.empty())
+			{
+				const float exposure = assetlib::exposureFor(iem);
+
+				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
+				// backend without an optional feature, so this is the shipping format rather than an
+				// intermediate needing a per-platform compile.
+				auto set                    = assetlib::EnvironmentMaps();
+				set.prefilter               = envFloat ? std::move(out) : assetlib::packRgb9e5(out);
+				set.irradiance              = envFloat ? std::move(iem) : assetlib::packRgb9e5(iem);
+				assetlib::ImageData& skyOut = envSkyboxBlur > 0.0f ? sky : src;
+				set.skybox   = envFloat ? std::move(skyOut) : assetlib::packRgb9e5(skyOut);
+				set.exposure = exposure;
+
+				auto provenance       = assetlib::EnvironmentProvenance();
+				provenance.samples    = desc.samples;
+				provenance.mipLevels  = desc.mipLevels;
+				provenance.sourceHash = assetlib::hashFile(envInput);
+
+				assetlib::writeBenv(set, envBenv, provenance);
+
+				spdlog::info(
+					"Wrote '{}': prefilter {}^2 x{}, irradiance {}^2, skybox {}^2, exposure {:.3f}",
+					envBenv,
+					set.prefilter.width,
+					set.prefilter.mipLevels,
+					set.irradiance.width,
+					set.skybox.width,
+					set.exposure);
+			}
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("envmap failed: {}", e.what());
 			return 1;
 		}
 	}

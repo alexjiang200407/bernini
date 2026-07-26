@@ -26,11 +26,9 @@ struct AssetThumbnailDesc
 	uint32_t dimension        = 256;
 	uint32_t initialInstances = 256;
 
-	std::string skybox;
-	std::string irradiance;
-	std::string prefilter;
-	std::string brdfLut;
-	float       exposure = 1.0f;
+	std::string          environmentMap;
+	std::string          brdfLut;
+	std::optional<float> exposureOverride;
 };
 
 /**

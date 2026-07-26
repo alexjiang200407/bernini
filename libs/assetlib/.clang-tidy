@@ -1,0 +1,13 @@
+# assetlib's free functions are camelBack, not PascalCase: `loadKTX2`, `bake`, `serialize`,
+# `deleteUnusedBakedTextures`. That is what the codec surface has always spelled, and a caller reads
+# `loadKTX2(path)` beside `load(path)` in the same expression.
+#
+# The root config said PascalCase and nothing enforced it, because `just tidy --changed` only judges
+# the lines a diff touches and none of these were being touched. The convention was therefore real
+# but unchecked, and the first change to add functions here added them in the other style.
+#
+# Types and methods keep the engine's PascalCase -- only free functions differ.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.FunctionCase: camelBack

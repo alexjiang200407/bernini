@@ -34,6 +34,43 @@ namespace assetlib
 	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode = Ktx2Decode::kGpu);
 
 	/**
+	 * loadKTX2 over a `.ktx2` already in memory, for a container that embeds one.
+	 *
+	 * @throws std::runtime_error if the bytes are not a decodable KTX2.
+	 */
+	[[nodiscard]] ImageData
+	decodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode = Ktx2Decode::kGpu);
+
+	/**
+	 * Repacks a float image as `E5B9G9R9_UFLOAT_PACK32`: a 5-bit exponent shared across a 9-bit
+	 * mantissa per channel, 4 bytes a texel instead of 16.
+	 *
+	 * This is the format HDR maps ship in. It is filterable on every backend without an optional
+	 * feature -- WebGPU core `rgb9e5ufloat`, D3D12 `R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float` -- which
+	 * is why it is preferred over BC6H, four times smaller again but unreachable on Apple GPUs, and
+	 * over `R11G11B10`, the same size but carrying only 5 mantissa bits on blue, which bands in a sky
+	 * gradient.
+	 *
+	 * Alpha is dropped: the format has no alpha, and radiance has no use for one.
+	 *
+	 * @param image A `R32G32B32A32_SFLOAT` image; geometry, mips and faces are preserved.
+	 * @throws std::runtime_error if `image` is not that format.
+	 */
+	[[nodiscard]] ImageData
+	packRgb9e5(const ImageData& image);
+
+	/**
+	 * writeKTX2 into a buffer instead of a file, for embedding in a container.
+	 *
+	 * @throws std::runtime_error if the image cannot be encoded.
+	 */
+	[[nodiscard]] std::vector<std::byte>
+	encodeKTX2(
+		const ImageData& image,
+		bool             srgb        = false,
+		Ktx2Compression  compression = Ktx2Compression::kNone);
+
+	/**
 	 * Decodes a `.ktx2` into a small uncompressed RGBA8 image for CPU display, e.g. an editor
 	 * thumbnail. Returns one tightly packed subresource: the first face of the mip closest to
 	 * `maxDim`, so `mipLevels` and `arraySize` are always 1 and `isCubemap` is always false.
