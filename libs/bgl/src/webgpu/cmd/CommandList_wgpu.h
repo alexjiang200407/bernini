@@ -130,6 +130,14 @@ namespace bgl
 		void
 		ClearRenderTarget(const wgpu::TextureView& view, const float clearColor[4]) noexcept;
 
+		/** Clears a depth-stencil view: a one-shot render pass clearing depth (and stencil). */
+		void
+		ClearDepthTarget(
+			const wgpu::TextureView& view,
+			float                    depth,
+			uint8_t                  stencil,
+			bool                     hasStencil) noexcept;
+
 	private:
 		wgpu::Device       m_Device;
 		CommandListDesc    m_Desc;

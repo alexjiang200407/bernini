@@ -1,6 +1,7 @@
 #pragma once
 
 #include "resource/Buffer_wgpu.h"
+#include "resource/Dsv_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_wgpu.h"
@@ -166,7 +167,8 @@ namespace bgl
 			kBuffer,
 			kReadback,
 			kTexture,
-			kRtv
+			kRtv,
+			kDsv
 		};
 
 		struct QueueGate
@@ -207,6 +209,7 @@ namespace bgl
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 		core::slot_vector<Texture>        m_Textures;
 		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
 
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_Queues;
 		std::vector<PendingBatch>                                  m_PendingBatches;

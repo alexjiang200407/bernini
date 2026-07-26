@@ -14,7 +14,7 @@ namespace bgl
 		const ResourceManagerDesc& desc) :
 		m_Device(device), m_Instance(instance), m_Buffers(desc.maxCbvSrvUavs),
 		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxCbvSrvUavs),
-		m_Rtvs(desc.maxRtvs)
+		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");
 	}
@@ -209,6 +209,9 @@ namespace bgl
 				case PendingType::kRtv:
 					m_Rtvs.reclaim_slot(deletion.slotIndex);
 					break;
+				case PendingType::kDsv:
+					m_Dsvs.reclaim_slot(deletion.slotIndex);
+					break;
 				}
 			}
 
@@ -320,9 +323,33 @@ namespace bgl
 	}
 
 	DsvHandle
-	ResourceManager::CreateDsv(TextureHandle, const DsvDesc&) noexcept
+	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
 	{
-		gfatal("CreateDsv: depth stencil views are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		gassert(m_Textures.valid(textureHandle.slot), "CreateDsv: invalid texture handle");
+
+		const auto slot = m_Dsvs.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateDsv: DSV pool exhausted creating '{}'", desc.debugName);
+			return DsvHandle{};
+		}
+
+		auto viewDesc            = wgpu::TextureViewDescriptor{};
+		viewDesc.label           = std::string_view(desc.debugName);
+		viewDesc.baseMipLevel    = desc.mipSlice;
+		viewDesc.mipLevelCount   = 1;
+		viewDesc.baseArrayLayer  = desc.firstArraySlice;
+		viewDesc.arrayLayerCount = desc.arraySize;
+
+		auto view = m_Textures[textureHandle.slot.index].GetHandle().CreateView(&viewDesc);
+
+		const bool hasStencil = GetFormatInfo(desc.format).hasStencil;
+
+		m_Dsvs[slot.index] = Dsv(std::move(view), textureHandle, hasStencil);
+
+		return DsvHandle{ slot.index, slot.generation };
 	}
 
 	void
@@ -369,9 +396,22 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyDsv(DsvHandle, bool) noexcept
+	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
-		gfatal("DestroyDsv: depth stencil views are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		const auto slot = core::slot_handle{ handle.idx, handle.generation };
+		if (!m_Dsvs.valid(slot))
+			return;
+
+		if (deferred)
+		{
+			m_Dsvs.retire_slot(slot);
+			RetireDeferred(PendingType::kDsv, slot.index);
+			return;
+		}
+
+		m_Dsvs.release_slot(slot);
 	}
 
 	const Rtv&
@@ -383,9 +423,11 @@ namespace bgl
 	}
 
 	const Dsv&
-	ResourceManager::GetDsv(DsvHandle) const noexcept
+	ResourceManager::GetDsv(DsvHandle handle) const noexcept
 	{
-		gfatal("GetDsv: depth stencil views are not implemented on the WebGPU backend yet");
+		const auto slot = core::slot_handle{ handle.idx, handle.generation };
+		gassert(m_Dsvs.valid(slot), "GetDsv: invalid handle");
+		return m_Dsvs[slot.index];
 	}
 
 	TextureHandle
@@ -395,9 +437,9 @@ namespace bgl
 	}
 
 	TextureHandle
-	ResourceManager::GetDsvTexture(DsvHandle) const noexcept
+	ResourceManager::GetDsvTexture(DsvHandle handle) const noexcept
 	{
-		gfatal("GetDsvTexture: depth stencil views are not implemented on the WebGPU backend yet");
+		return GetDsv(handle).GetTextureHandle();
 	}
 
 	const Texture&
@@ -463,9 +505,9 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidDsvHandle(const DsvHandle&) const noexcept
+	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const noexcept
 	{
-		return false;
+		return m_Dsvs.valid(core::slot_handle{ handle.idx, handle.generation });
 	}
 
 	void
@@ -476,8 +518,16 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::ClearDsv(ICommandList*, DsvHandle, float, uint8_t) noexcept
+	ResourceManager::ClearDsv(
+		ICommandList* cmdList,
+		DsvHandle     handle,
+		float         depth,
+		uint8_t       stencil) noexcept
 	{
-		gfatal("ClearDsv: depth stencil views are not implemented on the WebGPU backend yet");
+		gassert(cmdList != nullptr, "ClearDsv: null command list");
+
+		const Dsv& dsv = GetDsv(handle);
+		static_cast<CommandList*>(cmdList)
+			->ClearDepthTarget(dsv.GetView(), depth, stencil, dsv.HasStencil());
 	}
 }

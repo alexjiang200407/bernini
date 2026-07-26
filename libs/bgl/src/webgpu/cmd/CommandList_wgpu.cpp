@@ -78,6 +78,34 @@ namespace bgl
 	}
 
 	void
+	CommandList::ClearDepthTarget(
+		const wgpu::TextureView& view,
+		float                    depth,
+		uint8_t                  stencil,
+		bool                     hasStencil) noexcept
+	{
+		gassert(IsOpen(), "ClearDepthTarget: the list is not open");
+
+		auto attachment            = wgpu::RenderPassDepthStencilAttachment{};
+		attachment.view            = view;
+		attachment.depthLoadOp     = wgpu::LoadOp::Clear;
+		attachment.depthStoreOp    = wgpu::StoreOp::Store;
+		attachment.depthClearValue = depth;
+
+		if (hasStencil)
+		{
+			attachment.stencilLoadOp     = wgpu::LoadOp::Clear;
+			attachment.stencilStoreOp    = wgpu::StoreOp::Store;
+			attachment.stencilClearValue = stencil;
+		}
+
+		auto passDesc                   = wgpu::RenderPassDescriptor{};
+		passDesc.depthStencilAttachment = &attachment;
+
+		m_Encoder.BeginRenderPass(&passDesc).End();
+	}
+
+	void
 	CommandList::WriteBuffer(
 		BufferHandle handle,
 		const void*  data,

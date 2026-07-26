@@ -65,3 +65,58 @@ TEST_CASE("An RTV clears to a colour that reads back", "[wgpu][rtv]")
 	queue->Flush();
 	resources->UnregisterQueue(queue.Get());
 }
+
+// A depth target: make a Depth32Float texture and a DSV over it, and clear it through a depth
+// render pass. Depth can't be copied to a buffer as simply as colour (aspect rules), so this checks
+// the DSV/clear path is structurally valid -- Dawn raises a validation error on a bad depth
+// attachment -- rather than reading the depth values back.
+TEST_CASE("A DSV clears depth without a validation error", "[wgpu][dsv]")
+{
+	constexpr uint32_t c_Size = 64;
+
+	auto device    = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+	auto resources = device->CreateResourceManager(ResourceManagerDesc{});
+	auto queue     = device->CreateCommandQueue(QueueType::kGraphics);
+	auto allocator = device->CreateCommandAllocator(QueueType::kGraphics);
+	auto list      = device->CreateCommandList(CommandListDesc{}, allocator, resources);
+
+	resources->RegisterQueue(queue.Get());
+
+	auto texDesc      = TextureDesc{};
+	texDesc.width     = c_Size;
+	texDesc.height    = c_Size;
+	texDesc.format    = Format::D32;
+	texDesc.usage     = TextureUsage(TextureUsageFlag::kDepthStencil);
+	texDesc.debugName = "depth";
+
+	const auto texture = resources->CreateTexture(texDesc);
+	REQUIRE(resources->ValidTextureHandle(texture));
+
+	const auto dsv = resources->CreateDsv(texture, DsvDesc{ .format = Format::D32 });
+	REQUIRE(resources->ValidDsvHandle(dsv));
+	REQUIRE(resources->GetDsvTexture(dsv).slot == texture.slot);
+
+	const wgpu::Device& handle = device->GetHandle();
+	handle.PushErrorScope(wgpu::ErrorFilter::Validation);
+
+	list->Open(queue.Get(), allocator.Get());
+	resources->ClearDsv(list.Get(), dsv, 0.5f, 0);
+	list->Close();
+	const auto fence = queue->ExecuteCommandList(list.Get());
+	queue->WaitForFenceCPUBlocking(fence);
+
+	auto       error  = std::string();
+	const auto future = handle.PopErrorScope(
+		wgpu::CallbackMode::WaitAnyOnly,
+		[&error](wgpu::PopErrorScopeStatus, wgpu::ErrorType type, wgpu::StringView message) {
+			if (type != wgpu::ErrorType::NoError)
+				error = std::string(std::string_view(message));
+		});
+	device->GetInstance().WaitAny(future, UINT64_MAX);
+
+	INFO("Dawn: " << error);
+	REQUIRE(error.empty());
+
+	queue->Flush();
+	resources->UnregisterQueue(queue.Get());
+}
