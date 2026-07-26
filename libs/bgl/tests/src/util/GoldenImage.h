@@ -45,4 +45,16 @@ namespace bgl::test
 	 */
 	[[nodiscard]] Rgba
 	MeanColor(const std::string& path, int x, int y, int w, int h);
+
+	/**
+	 * Mean squared difference between horizontally adjacent pixels in a region -- a measure of how
+	 * grainy it is.
+	 *
+	 * Aliasing shows up as high-frequency energy: a reflection sampled from a mip finer than its
+	 * screen footprint speckles neighbouring pixels with unrelated parts of the environment, and this
+	 * is what that costs numerically. A smooth gradient scores near zero however bright it is, so the
+	 * measure is about detail and not about exposure.
+	 */
+	[[nodiscard]] float
+	AliasEnergy(const std::string& path, int x, int y, int w, int h);
 }

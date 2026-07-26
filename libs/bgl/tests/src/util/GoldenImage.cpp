@@ -129,4 +129,41 @@ namespace bgl::test
 			         static_cast<float>(sum[2] / texels),
 			         static_cast<float>(sum[3] / texels) };
 	}
+
+	float
+	AliasEnergy(const std::string& path, int x, int y, int w, int h)
+	{
+		int            width = 0, height = 0, channels = 0;
+		unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
+		if (pixels == nullptr)
+		{
+			logger::warn("AliasEnergy: failed to load '{}'", path);
+			return 0.0f;
+		}
+
+		const int x0 = std::clamp(x, 0, width - 1);
+		const int y0 = std::clamp(y, 0, height - 1);
+		const int x1 = std::clamp(x + w, x0 + 1, width);
+		const int y1 = std::clamp(y + h, y0 + 1, height);
+
+		double sum   = 0.0;
+		size_t count = 0;
+		for (int row = y0; row < y1; ++row)
+		{
+			for (int col = x0; col + 1 < x1; ++col)
+			{
+				const size_t a = (static_cast<size_t>(row) * width + col) * 4;
+				const size_t b = a + 4;
+				for (int c = 0; c < 3; ++c)
+				{
+					const double d = (static_cast<double>(pixels[a + c]) - pixels[b + c]) / 255.0;
+					sum += d * d;
+					++count;
+				}
+			}
+		}
+
+		stbi_image_free(pixels);
+		return count > 0 ? static_cast<float>(sum / static_cast<double>(count)) : 0.0f;
+	}
 }

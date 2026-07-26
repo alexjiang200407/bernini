@@ -73,7 +73,46 @@ public float4 ShadeSurface(
     let diffuse = irradiance * albedo;
 
     const float MAX_REFLECTION_LOD = 6.0f; // Highest mip index of the 7-level prefilter cube
-    let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, R, roughness * MAX_REFLECTION_LOD).rgb;
+
+    // Roughness alone is not enough to pick the mip. A mirror asks for mip 0 at every distance, so a
+    // sphere small on screen has each pixel covering a wide cone of the reflection while still
+    // fetching full resolution -- which aliases into grain. The chain's mips exist; an explicit
+    // SampleLevel just never consults the derivatives the way a plain Sample would.
+    //
+    // So floor the LOD by the reflection's screen-space footprint. |dR| is roughly the angle in
+    // radians that one pixel subtends in the reflection. max(), never a sum: roughness still sets the
+    // minimum blur and this only ever coarsens.
+    //
+    // Match the footprint to the mip's *lobe*, not to its texel size. This chain indexes roughness,
+    // so mip N is half-resolution AND convolved for roughness N/6 -- and that convolution is several
+    // times wider than the texel it sits on. Choosing the mip whose texels match the footprint
+    // over-blurs badly: a 1.8 degree footprint lands on mip 2.35, whose lobe is about 8.6 degrees, and
+    // a distant mirror turns into a featureless pearl. A GGX half-angle is roughly a = roughness^2, so
+    // roughness = sqrt(footprint) blurs by as much as the pixel covers and no more.
+    //
+    // And leave a dead zone, because mip 0 already blurs by its own texel. Correcting every footprint
+    // past a single texel touches even a mirror filling the screen -- at 450 px a sphere still spans
+    // 2.3 texels per pixel -- and trades sharpness for aliasing that nobody minds. A mirror is judged
+    // on being sharp, so bias toward that: below a few texels of footprint, do nothing at all.
+    // And cap it, because on this chain every mip of coarsening costs a whole roughness step of lobe
+    // and not merely half the resolution. Left unbounded the blur keeps compounding as the camera
+    // pulls back, which reads as a mirror dissolving rather than as a mirror seen from further away.
+    // Capped, the correction takes the worst of the grain off and then stops; the residue at extreme
+    // distance is grain on a handful of pixels, which is the cheaper of the two artefacts.
+    //
+    // Bounding it here rather than sampling correctly is a compromise. The principled fix is a
+    // resolution-only mip chain of the sharp environment to sample for the footprint, so that
+    // anti-aliasing costs resolution alone -- this chain cannot express that, because its mips are
+    // roughness.
+    const float c_AreaLodCap = 1.0f;
+
+    const float footprint = max(length(ddx(R)), length(ddy(R)));
+    const float texel0 = 1.5707963f / float(prefilterMap.CubeFaceTexels());
+    const float excess = max(footprint - texel0 * 3.0f, 0.0f);
+    const float areaLod = min(sqrt(excess) * MAX_REFLECTION_LOD, c_AreaLodCap);
+
+    const float lod = min(max(roughness * MAX_REFLECTION_LOD, areaLod), MAX_REFLECTION_LOD);
+    let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, R, lod).rgb;
     float2 envBRDF = brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 
     float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
