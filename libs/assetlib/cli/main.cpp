@@ -2,6 +2,7 @@
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
+#include <assetlib/benv_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
@@ -114,6 +115,7 @@ main(int argc, char** argv)
 	std::string envOut;
 	std::string envCube;
 	std::string envIem;
+	std::string envBenv;
 	uint32_t    envIemSize = 128;
 	uint32_t    envSize    = 256;
 	uint32_t    envMips    = 7;
@@ -126,13 +128,17 @@ main(int argc, char** argv)
 	envmap->add_option("input", envInput, "Source .hdr (equirectangular) or cube map .ktx2")
 		->required()
 		->check(CLI::ExistingFile);
-	envmap->add_option("-o,--out", envOut, "Output .ktx2")->required();
+	envmap->add_option("-o,--out", envOut, "Write the prefilter chain here as a loose .ktx2");
 	envmap->add_option(
 		"-c,--cube",
 		envCube,
 		"Also write the unfiltered source cube here -- this is the skybox");
 	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
 	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
+	envmap->add_option(
+		"-b,--benv",
+		envBenv,
+		"Write all three maps and the derived exposure as one .benv -- what the editor loads");
 	envmap->add_option("-s,--size", envSize, "Base face size (default: 256)");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
@@ -233,11 +239,14 @@ main(int argc, char** argv)
 	{
 		try
 		{
+			if (envOut.empty() && envBenv.empty())
+				throw std::runtime_error("nothing to write: pass --out and/or --benv");
+
 			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
 
 			// An equirect source is projected onto a cube whose faces match the output base, so
 			// the prefilter's own mip pyramid is built from it rather than from an upsample.
-			const assetlib::ImageData src =
+			assetlib::ImageData src =
 				fromHdr ? assetlib::EquirectToCube(assetlib::LoadRadianceHdr(envInput), envSize) :
 						  assetlib::loadKTX2(envInput);
 
@@ -247,9 +256,9 @@ main(int argc, char** argv)
 				spdlog::info("Wrote the unfiltered cube to '{}' ({}^2)", envCube, src.width);
 			}
 
+			assetlib::ImageData iem = assetlib::IrradianceSh(src, envIemSize);
 			if (!envIem.empty())
 			{
-				const assetlib::ImageData iem = assetlib::IrradianceSh(src, envIemSize);
 				assetlib::writeKTX2(iem, envIem, false, assetlib::Ktx2Compression::kNone);
 				spdlog::info("Wrote the irradiance map to '{}' ({}^2)", envIem, envIemSize);
 			}
@@ -260,10 +269,11 @@ main(int argc, char** argv)
 			desc.samples   = envSamples;
 			desc.threads   = envThreads;
 
-			auto       stats = assetlib::PrefilterStats();
-			const auto out   = assetlib::PrefilterRadiance(src, desc, &stats);
+			auto                stats = assetlib::PrefilterStats();
+			assetlib::ImageData out   = assetlib::PrefilterRadiance(src, desc, &stats);
 
-			assetlib::writeKTX2(out, envOut, false, assetlib::Ktx2Compression::kNone);
+			if (!envOut.empty())
+				assetlib::writeKTX2(out, envOut, false, assetlib::Ktx2Compression::kNone);
 
 			spdlog::info(
 				"Prefiltered '{}' ({}^2) -> '{}' ({}^2 x {} mips) in {:.2f}s",
@@ -280,6 +290,33 @@ main(int argc, char** argv)
 				stats.seconds > 0.0 ?
 					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
 					0.0);
+
+			if (!envBenv.empty())
+			{
+				const float exposure = assetlib::ExposureFor(iem);
+
+				auto set       = assetlib::EnvMapSet();
+				set.prefilter  = std::move(out);
+				set.irradiance = std::move(iem);
+				set.skybox     = std::move(src);
+				set.exposure   = exposure;
+
+				auto provenance       = assetlib::EnvMapProvenance();
+				provenance.samples    = desc.samples;
+				provenance.mipLevels  = desc.mipLevels;
+				provenance.sourceHash = assetlib::HashFile(envInput);
+
+				assetlib::writeBenv(set, envBenv, provenance);
+
+				spdlog::info(
+					"Wrote '{}': prefilter {}^2 x{}, irradiance {}^2, skybox {}^2, exposure {:.3f}",
+					envBenv,
+					set.prefilter.width,
+					set.prefilter.mipLevels,
+					set.irradiance.width,
+					set.skybox.width,
+					set.exposure);
+			}
 		}
 		catch (const std::exception& e)
 		{

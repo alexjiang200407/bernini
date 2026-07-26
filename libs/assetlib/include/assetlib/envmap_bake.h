@@ -49,6 +49,19 @@ namespace assetlib
 	IrradianceSh(const ImageData& source, uint32_t faceSize = 128);
 
 	/**
+	 * The exposure an environment should render at, from its irradiance map.
+	 *
+	 * An HDR environment's absolute scale is arbitrary, so exposure is a property of the maps and has
+	 * to be re-derived whenever they change. AgX places scene-linear 0.18 at middle grey, so this
+	 * returns `0.18 / L` for `L` the radiance an 18% grey surface reflects in the environment.
+	 *
+	 * @param irradiance A map from IrradianceSh -- the cosine-weighted average incident radiance.
+	 * @throws std::runtime_error if `irradiance` is not a float cube map.
+	 */
+	[[nodiscard]] float
+	ExposureFor(const ImageData& irradiance);
+
+	/**
 	 * Decodes a Radiance (`.hdr`) equirectangular image into linear float radiance.
 	 *
 	 * The result is a 2D `R32G32B32A32_SFLOAT` image, alpha 1. Radiance RGBE is already linear, so
