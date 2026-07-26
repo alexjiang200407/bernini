@@ -103,6 +103,11 @@ qt_add_executable(editor
 
 target_link_libraries(editor PRIVATE editor_lib)
 
+# The editor reads its IBL pair, BRDF LUT and skybox from the staged asset directory at startup, so it
+# must depend on the staging itself -- the Release presets configure away the test and example targets
+# that otherwise pull copy_assets in, and without them nothing stages assets at all.
+add_dependencies(editor copy_assets)
+
 # On the executable, NOT on editor_lib. The Agility SDK loader looks up D3D12SDKVersion /
 # D3D12SDKPath as exports of the .exe, and bgl_d3d12_agility is an OBJECT library -- CMake does not
 # carry one object library's object files through another, so linking it to editor_lib (also OBJECT)
