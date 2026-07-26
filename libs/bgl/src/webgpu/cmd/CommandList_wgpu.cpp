@@ -188,6 +188,18 @@ namespace bgl
 	}
 
 	void
+	CommandList::DrawIndirect(BufferHandle argsBuffer, uint64_t offset) noexcept
+	{
+		gassert(m_RenderPass != nullptr, "DrawIndirect: no render pass is open");
+		gassert(
+			m_ResourceManager->ValidBufferHandle(argsBuffer),
+			"DrawIndirect: invalid args buffer");
+
+		const wgpu::Buffer& buffer = m_ResourceManager->GetBuffer(argsBuffer).GetHandle();
+		m_RenderPass.DrawIndirect(buffer, offset);
+	}
+
+	void
 	CommandList::EndRenderPass() noexcept
 	{
 		gassert(m_RenderPass != nullptr, "EndRenderPass: no render pass is open");

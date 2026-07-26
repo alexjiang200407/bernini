@@ -162,6 +162,14 @@ namespace bgl
 			uint32_t firstVertex   = 0,
 			uint32_t firstInstance = 0) noexcept;
 
+		/**
+		 * Issues a non-indexed draw whose {vertexCount, instanceCount, firstVertex, firstInstance}
+		 * arguments are read from `argsBuffer` at `offset` -- the args a meshlet-expansion kernel
+		 * fills before the draw. The buffer must hold 16 bytes of draw args at that offset.
+		 */
+		void
+		DrawIndirect(BufferHandle argsBuffer, uint64_t offset = 0) noexcept;
+
 		/** Closes the render pass opened by BeginRenderPass. */
 		void
 		EndRenderPass() noexcept;
