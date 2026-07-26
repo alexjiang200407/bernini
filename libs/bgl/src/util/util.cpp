@@ -33,6 +33,7 @@ namespace bgl
         { Format::SBGRX8_UNORM,      "SBGRX8_UNORM",      4,   1, FormatKind::kNormalized,   true,  true,  true,  false, false, false, false, true  },
         { Format::R10G10B10A2_UNORM, "R10G10B10A2_UNORM", 4,   1, FormatKind::kNormalized,   true,  true,  true,  true,  false, false, false, false },
         { Format::R11G11B10_FLOAT,   "R11G11B10_FLOAT",   4,   1, FormatKind::kFloat,        true,  true,  true,  false, false, false, false, false },
+        { Format::RGB9E5_FLOAT,      "RGB9E5_FLOAT",      4,   1, FormatKind::kFloat,        true,  true,  true,  false, false, false, false, false },
         { Format::RG16_UINT,         "RG16_UINT",         4,   1, FormatKind::kInteger,      true,  true,  false, false, false, false, false, false },
         { Format::RG16_SINT,         "RG16_SINT",         4,   1, FormatKind::kInteger,      true,  true,  false, false, false, false, true,  false },
         { Format::RG16_UNORM,        "RG16_UNORM",        4,   1, FormatKind::kNormalized,   true,  true,  false, false, false, false, false, false },

@@ -34,6 +34,8 @@ namespace bgl
 			return Format::RG32_FLOAT;
 		case VkFormat::R32G32B32A32_SFLOAT:
 			return Format::RGBA32_FLOAT;
+		case VkFormat::E5B9G9R9_UFLOAT_PACK32:
+			return Format::RGB9E5_FLOAT;
 
 		// BC1 covers both Vulkan's BC1_RGB and BC1_RGBA.
 		case VkFormat::BC1_RGB_UNORM_BLOCK:
