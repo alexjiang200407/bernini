@@ -161,7 +161,11 @@ namespace bgl
 				vp.maxZ);
 
 			const Rect& sc = viewportState.scissorRects[0];
-			m_RenderPass.SetScissorRect(sc.minX, sc.minY, sc.maxX - sc.minX, sc.maxY - sc.minY);
+			m_RenderPass.SetScissorRect(
+				static_cast<uint32_t>(sc.minX),
+				static_cast<uint32_t>(sc.minY),
+				static_cast<uint32_t>(sc.maxX - sc.minX),
+				static_cast<uint32_t>(sc.maxY - sc.minY));
 		}
 	}
 
