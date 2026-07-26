@@ -1,12 +1,12 @@
 #include "device/Device_wgpu.h"
-#include "pipeline/RenderPipeline_wgpu.h"
+#include "pipeline/GraphicsPipeline_wgpu.h"
 
 #include <bgl/IGraphics.h>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace bgl;
 
-// The render pipeline built from a shared Slang source: VSMain/PSMain compile to one WGSL module,
+// The graphics pipeline built from a shared Slang source: VSMain/PSMain compile to one WGSL module,
 // reflect (no resources here), and build a wgpu::RenderPipeline over an RGBA8 target. The triangle
 // is drawn offscreen and read back, so the pipeline object is asserted on the pixels it produces --
 // not merely that CreateRenderPipeline returned. Complements Triangle_test, which drives raw WGSL.
@@ -28,7 +28,7 @@ namespace
 	};
 
 	std::vector<Rgba>
-	DrawTriangle(Device& device, const RenderPipeline& pipeline)
+	DrawTriangle(Device& device, const GraphicsPipeline& pipeline)
 	{
 		const wgpu::Device&   handle   = device.GetHandle();
 		const wgpu::Queue&    queue    = device.GetQueue();
@@ -109,10 +109,10 @@ namespace
 		return pixels[(y * c_Size) + x];
 	}
 
-	RenderPipelineDesc
+	GraphicsPipelineDesc
 	TriangleDesc(Device& device)
 	{
-		auto desc   = RenderPipelineDesc{};
+		auto desc   = GraphicsPipelineDesc{};
 		desc.shader = device.CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
 		desc.vertexEntry = "VSMain";
 		desc.pixelEntry  = "PSMain";
@@ -125,12 +125,12 @@ namespace
 	}
 }
 
-TEST_CASE("A render pipeline from Slang rasterizes a triangle", "[wgpu][render]")
+TEST_CASE("A graphics pipeline from Slang rasterizes a triangle", "[wgpu][render]")
 {
 	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 
 	auto pipeline =
-		RenderPipeline(device->GetHandle(), device->GetSlangSession(), TriangleDesc(*device));
+		GraphicsPipeline(device->GetHandle(), device->GetSlangSession(), TriangleDesc(*device));
 
 	const auto pixels = DrawTriangle(*device, pipeline);
 	REQUIRE(pixels.size() == c_Size * c_Size);
@@ -158,7 +158,7 @@ TEST_CASE("A render pipeline from Slang rasterizes a triangle", "[wgpu][render]"
 }
 
 TEST_CASE(
-	"A render pipeline with a depth target builds without a validation error",
+	"A graphics pipeline with a depth target builds without a validation error",
 	"[wgpu][render]")
 {
 	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
@@ -171,7 +171,7 @@ TEST_CASE(
 	desc.renderState.depthStencilState.EnableDepthTest().EnableDepthWrite().SetDepthFunc(
 		ComparisonFunc::kLessOrEqual);
 
-	auto pipeline = RenderPipeline(device->GetHandle(), device->GetSlangSession(), desc);
+	auto pipeline = GraphicsPipeline(device->GetHandle(), device->GetSlangSession(), desc);
 
 	auto       error  = std::string();
 	const auto future = handle.PopErrorScope(
@@ -185,4 +185,45 @@ TEST_CASE(
 	INFO("Dawn: " << error);
 	REQUIRE(error.empty());
 	REQUIRE(pipeline.GetPipeline() != nullptr);
+}
+
+// The forward shaders keep amp/mesh (D3D12) and compute/vertex (WebGPU) entry points in one module.
+// Slang validates every entry point against the target at module-load time -- not lazily per linked
+// entry -- so a [shader("mesh")] entry reaching a WGSL session is rejected even when nothing links
+// it. The mesh entries are therefore #ifdef'd out on BGL_WGSL (which the session defines). This
+// loads such a module -- its mesh entry guarded away for WGSL -- and confirms the vertex + pixel
+// pair still builds and draws; without the guard the module load would fail (E36107).
+TEST_CASE("A guarded mesh entry lets the WGSL vertex + pixel pair compile", "[wgpu][render]")
+{
+	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+
+	const wgpu::Device& handle = device->GetHandle();
+	handle.PushErrorScope(wgpu::ErrorFilter::Validation);
+
+	auto desc   = GraphicsPipelineDesc{};
+	desc.shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiStageModuleTest"));
+	desc.vertexEntry = "VSMain";
+	desc.pixelEntry  = "PSMain";
+	desc.rtvFormats.push_back(Format::RGBA8_UNORM);
+	desc.renderState.rasterState.SetCullNone();
+	desc.debugName = "multistage";
+
+	auto pipeline = GraphicsPipeline(device->GetHandle(), device->GetSlangSession(), desc);
+
+	auto       error  = std::string();
+	const auto future = handle.PopErrorScope(
+		wgpu::CallbackMode::WaitAnyOnly,
+		[&error](wgpu::PopErrorScopeStatus, wgpu::ErrorType type, wgpu::StringView message) {
+			if (type != wgpu::ErrorType::NoError)
+				error = std::string(std::string_view(message));
+		});
+	device->GetInstance().WaitAny(future, UINT64_MAX);
+
+	INFO("Dawn: " << error);
+	REQUIRE(error.empty());
+	REQUIRE(pipeline.GetPipeline() != nullptr);
+
+	const auto pixels = DrawTriangle(*device, pipeline);
+	REQUIRE(pixels.size() == c_Size * c_Size);
+	REQUIRE(At(pixels, c_Size / 2, c_Size / 2) == Rgba{ 0, 255, 0, 255 });
 }

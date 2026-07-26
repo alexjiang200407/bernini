@@ -1,4 +1,4 @@
-#include "pipeline/RenderPipeline_wgpu.h"
+#include "pipeline/GraphicsPipeline_wgpu.h"
 
 #include "convert_wgpu.h"
 #include "pipeline/PipelineReflect_wgpu.h"
@@ -40,13 +40,13 @@ namespace bgl
 		}
 	}
 
-	RenderPipeline::RenderPipeline(
-		const wgpu::Device&       device,
-		slang::ISession*          session,
-		const RenderPipelineDesc& desc) : m_Desc(desc)
+	GraphicsPipeline::GraphicsPipeline(
+		const wgpu::Device&         device,
+		slang::ISession*            session,
+		const GraphicsPipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(m_Desc.shader != nullptr, "RenderPipeline: null shader");
-		gassert(!m_Desc.rtvFormats.empty(), "RenderPipeline: needs at least one colour target");
+		gassert(m_Desc.shader != nullptr, "GraphicsPipeline: null shader");
+		gassert(!m_Desc.rtvFormats.empty(), "GraphicsPipeline: needs at least one colour target");
 
 		const std::string entries[] = { m_Desc.vertexEntry, m_Desc.pixelEntry };
 
@@ -145,7 +145,7 @@ namespace bgl
 	}
 
 	UniformLayoutEntry
-	RenderPipeline::GetUniformLayoutEntry(std::string_view name) const noexcept
+	GraphicsPipeline::GetUniformLayoutEntry(std::string_view name) const noexcept
 	{
 		auto it = m_UniformLayoutEntries.find(name);
 		if (it != m_UniformLayoutEntries.end())
