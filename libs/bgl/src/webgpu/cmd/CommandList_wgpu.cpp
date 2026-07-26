@@ -534,20 +534,52 @@ namespace bgl
 	}
 
 	void
-	CommandList::SetMeshletState(const MeshletState&) noexcept
+	CommandList::SetMeshletState(const MeshletState& gfxState) noexcept
 	{
-		gfatal("SetMeshletState: WebGPU has no mesh shaders");
+		m_CurrentMeshletState = gfxState;
 	}
 
 	void
-	CommandList::DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept
+	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
 	{
-		gfatal("DispatchMesh: WebGPU has no mesh shaders");
+		gassert(m_CurrentMeshletState.has_value(), "DispatchMesh: meshlet state must be set");
+
+		const MeshletState& state = *m_CurrentMeshletState;
+		gassert(
+			state.kernel != nullptr && state.kernel->pipeline.IsInitialized(),
+			"DispatchMesh: meshlet kernel must be set in meshlet state");
+
+		// WebGPU has no mesh stage, so this runs the vertex-pulling draw the mesh module's BGL_WGSL
+		// arm compiles to. Plain DispatchMesh drives the fullscreen/skybox shaders -- one triangle
+		// per thread group; the meshlet geometry path goes through DispatchMeshIndirect.
+		BeginRenderPass(state.frameBuffer, state.viewportState);
+		SetGraphicsKernel(*state.kernel);
+		Draw(x * y * z * 3);
+		EndRenderPass();
 	}
 
 	void
-	CommandList::DispatchMeshIndirect(uint32_t) noexcept
+	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
 	{
-		gfatal("DispatchMeshIndirect: WebGPU has no mesh shaders");
+		gassert(
+			m_CurrentMeshletState.has_value(),
+			"DispatchMeshIndirect: meshlet state must be set");
+
+		const MeshletState& state = *m_CurrentMeshletState;
+		gassert(
+			state.kernel != nullptr && state.kernel->pipeline.IsInitialized(),
+			"DispatchMeshIndirect: meshlet kernel must be set in meshlet state");
+		gassert(
+			!state.indirectArgs.IsNull(),
+			"DispatchMeshIndirect: MeshletState.indirectArgs must be set");
+
+		// The upstream meshlet-expansion compute pass wrote one 16-byte DrawIndirectArgs record per
+		// PSO bucket into indirectArgs; this draws bucket argIdx from its record.
+		constexpr uint64_t c_DrawArgsStride = 4 * sizeof(uint32_t);
+
+		BeginRenderPass(state.frameBuffer, state.viewportState);
+		SetGraphicsKernel(*state.kernel);
+		DrawIndirect(state.indirectArgs, static_cast<uint64_t>(argIdx) * c_DrawArgsStride);
+		EndRenderPass();
 	}
 }

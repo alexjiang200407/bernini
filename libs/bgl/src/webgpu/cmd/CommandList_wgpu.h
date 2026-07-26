@@ -2,6 +2,7 @@
 
 #include "cmd/CommandList.h"
 #include "resource/ResourceManager.h"
+#include "types/MeshletState.h"
 
 namespace bgl
 {
@@ -193,5 +194,6 @@ namespace bgl
 		wgpu::RenderPassEncoder m_RenderPass;
 
 		std::optional<ComputeState> m_CurrentComputeState;
+		std::optional<MeshletState> m_CurrentMeshletState;
 	};
 }
