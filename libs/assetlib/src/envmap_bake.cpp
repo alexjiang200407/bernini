@@ -120,6 +120,89 @@ namespace assetlib
 			return out;
 		}
 
+		struct CubeMip0
+		{
+			uint32_t          size = 0;
+			std::vector<Vec3> faces[6];
+		};
+
+		// Solid angle of one texel of an n-wide cube face at (u, v), both in [-1, 1]. Summed over
+		// every texel of all six faces this comes to 4*pi.
+		float
+		TexelSolidAngle(float u, float v, uint32_t size) noexcept
+		{
+			const float d = 1.0f + u * u + v * v;
+			return (4.0f / static_cast<float>(size * size)) / (d * std::sqrt(d));
+		}
+
+		CubeMip0
+		ReadCubeMip0(const ImageData& source, const char* who)
+		{
+			if (!source.isCubemap)
+				throw std::runtime_error(std::string(who) + ": source is not a cube map");
+			if (source.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
+				throw std::runtime_error(std::string(who) + ": source must be R32G32B32A32_SFLOAT");
+			if (source.width != source.height || source.width == 0)
+				throw std::runtime_error(std::string(who) + ": source faces must be square");
+
+			CubeMip0 out;
+			out.size = source.width;
+
+			for (uint32_t face = 0; face < 6; ++face)
+			{
+				// Subresources are face-major, mip-minor; only mip 0 of each face is read.
+				const size_t index = static_cast<size_t>(face) * source.mipLevels;
+				if (index >= source.subresources.size())
+					throw std::runtime_error(std::string(who) + ": source is missing cube faces");
+
+				const std::byte* src = source.pixels.data() + source.subresources[index].offset;
+
+				out.faces[face].resize(static_cast<size_t>(out.size) * out.size);
+				for (size_t t = 0; t < out.faces[face].size(); ++t)
+				{
+					float rgba[4] = {};
+					std::memcpy(rgba, src + t * sizeof(float) * 4, sizeof(rgba));
+					out.faces[face][t] = { rgba[0], rgba[1], rgba[2] };
+				}
+			}
+
+			return out;
+		}
+
+		ImageData
+		MakeCubeImage(uint32_t faceSize, uint32_t mipLevels)
+		{
+			ImageData out;
+			out.width     = faceSize;
+			out.height    = faceSize;
+			out.mipLevels = mipLevels;
+			out.arraySize = 6;
+			out.isCubemap = true;
+			out.vkFormat  = VkFormat::R32G32B32A32_SFLOAT;
+
+			size_t total = 0;
+			for (uint32_t mip = 0; mip < mipLevels; ++mip)
+			{
+				const uint32_t size = std::max(1u, faceSize >> mip);
+				total += static_cast<size_t>(size) * size * 6;
+			}
+			out.pixels = core::fixed_buffer<std::byte>(total * sizeof(float) * 4);
+
+			size_t offset = 0;
+			for (uint32_t face = 0; face < 6; ++face)
+			{
+				for (uint32_t mip = 0; mip < mipLevels; ++mip)
+				{
+					const uint32_t size  = std::max(1u, faceSize >> mip);
+					const auto     pitch = static_cast<uint64_t>(size) * sizeof(float) * 4;
+					out.subresources.push_back({ offset, pitch, pitch * size });
+					offset += static_cast<size_t>(pitch) * size;
+				}
+			}
+
+			return out;
+		}
+
 		/**
 		 * A float cube map and the mip pyramid built from it, addressed by direction.
 		 *
@@ -159,37 +242,12 @@ namespace assetlib
 
 		CubePyramid::CubePyramid(const ImageData& source)
 		{
-			if (!source.isCubemap)
-				throw std::runtime_error("assetlib::PrefilterRadiance: source is not a cube map");
-			if (source.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
-				throw std::runtime_error(
-					"assetlib::PrefilterRadiance: source must be R32G32B32A32_SFLOAT");
-			if (source.width != source.height || source.width == 0)
-				throw std::runtime_error(
-					"assetlib::PrefilterRadiance: source faces must be square");
-
-			const uint32_t size = source.width;
+			CubeMip0 mip0 = ReadCubeMip0(source, "assetlib::PrefilterRadiance");
 
 			Level base;
-			base.size = size;
+			base.size = mip0.size;
 			for (uint32_t face = 0; face < 6; ++face)
-			{
-				// Subresources are face-major, mip-minor; only mip 0 of each face is read.
-				const size_t index = static_cast<size_t>(face) * source.mipLevels;
-				if (index >= source.subresources.size())
-					throw std::runtime_error(
-						"assetlib::PrefilterRadiance: source is missing cube faces");
-
-				const std::byte* src = source.pixels.data() + source.subresources[index].offset;
-
-				base.faces[face].resize(static_cast<size_t>(size) * size);
-				for (size_t t = 0; t < base.faces[face].size(); ++t)
-				{
-					float rgba[4] = {};
-					std::memcpy(rgba, src + t * sizeof(float) * 4, sizeof(rgba));
-					base.faces[face][t] = { rgba[0], rgba[1], rgba[2] };
-				}
-			}
+				base.faces[face] = std::move(mip0.faces[face]);
 			m_Levels.push_back(std::move(base));
 
 			while (m_Levels.back().size > 1)
@@ -444,6 +502,101 @@ namespace assetlib
 	}
 
 	ImageData
+	IrradianceSh(const ImageData& source, uint32_t faceSize)
+	{
+		if (faceSize == 0)
+			throw std::runtime_error("assetlib::IrradianceSh: faceSize must be > 0");
+
+		const CubeMip0 src = ReadCubeMip0(source, "assetlib::IrradianceSh");
+
+		// L[i] are the projections of incident radiance onto the 9 real SH basis functions of
+		// order 3, ordered l=0; l=1 (m=-1,0,1); l=2 (m=-2,-1,0,1,2).
+		Vec3 coeff[9] = {};
+
+		for (uint32_t face = 0; face < 6; ++face)
+		{
+			for (uint32_t row = 0; row < src.size; ++row)
+			{
+				for (uint32_t col = 0; col < src.size; ++col)
+				{
+					const float u =
+						(static_cast<float>(col) + 0.5f) / static_cast<float>(src.size) * 2.0f -
+						1.0f;
+					const float v =
+						(static_cast<float>(row) + 0.5f) / static_cast<float>(src.size) * 2.0f -
+						1.0f;
+
+					const Vec3 d = FaceTexelDir(
+						face,
+						static_cast<float>(col),
+						static_cast<float>(row),
+						src.size);
+					const float dw = TexelSolidAngle(u, v, src.size);
+					const Vec3  l = src.faces[face][static_cast<size_t>(row) * src.size + col] * dw;
+
+					const float basis[9] = {
+						0.282095f,                              // Y00
+						0.488603f * d.y,                        // Y1-1
+						0.488603f * d.z,                        // Y10
+						0.488603f * d.x,                        // Y11
+						1.092548f * d.x * d.y,                  // Y2-2
+						1.092548f * d.y * d.z,                  // Y2-1
+						0.315392f * (3.0f * d.z * d.z - 1.0f),  // Y20
+						1.092548f * d.x * d.z,                  // Y21
+						0.546274f * (d.x * d.x - d.y * d.y),    // Y22
+					};
+
+					for (int i = 0; i < 9; ++i) coeff[i] = coeff[i] + l * basis[i];
+				}
+			}
+		}
+
+		// Ramamoorthi & Hanrahan's clamped-cosine convolution, then / pi: the raw form yields
+		// irradiance (pi for a unit-radiance environment) where the shader wants the average
+		// incident radiance, so that a constant environment round-trips to its own value.
+		constexpr float c1    = 0.429043f;
+		constexpr float c2    = 0.511664f;
+		constexpr float c3    = 0.743125f;
+		constexpr float c4    = 0.886227f;
+		constexpr float c5    = 0.247708f;
+		constexpr float invPi = 1.0f / c_Pi;
+
+		ImageData out = MakeCubeImage(faceSize, 1);
+
+		for (uint32_t face = 0; face < 6; ++face)
+		{
+			auto* dst = reinterpret_cast<float*>(out.pixels.data() + out.subresources[face].offset);
+
+			for (uint32_t row = 0; row < faceSize; ++row)
+			{
+				for (uint32_t col = 0; col < faceSize; ++col)
+				{
+					const Vec3 n = FaceTexelDir(
+						face,
+						static_cast<float>(col),
+						static_cast<float>(row),
+						faceSize);
+
+					const Vec3 e =
+						coeff[8] * (c1 * (n.x * n.x - n.y * n.y)) + coeff[6] * (c3 * n.z * n.z) +
+						coeff[0] * c4 + coeff[6] * -c5 + coeff[4] * (2.0f * c1 * n.x * n.y) +
+						coeff[7] * (2.0f * c1 * n.x * n.z) + coeff[5] * (2.0f * c1 * n.y * n.z) +
+						coeff[3] * (2.0f * c2 * n.x) + coeff[1] * (2.0f * c2 * n.y) +
+						coeff[2] * (2.0f * c2 * n.z);
+
+					const size_t t = (static_cast<size_t>(row) * faceSize + col) * 4;
+					dst[t + 0]     = std::max(0.0f, e.x * invPi);
+					dst[t + 1]     = std::max(0.0f, e.y * invPi);
+					dst[t + 2]     = std::max(0.0f, e.z * invPi);
+					dst[t + 3]     = 1.0f;
+				}
+			}
+		}
+
+		return out;
+	}
+
+	ImageData
 	PrefilterRadiance(const ImageData& source, const PrefilterDesc& desc, PrefilterStats* stats)
 	{
 		if (desc.faceSize == 0 || desc.mipLevels == 0)
@@ -459,33 +612,13 @@ namespace assetlib
 
 		const CubePyramid pyramid(source);
 
-		ImageData out;
-		out.width     = desc.faceSize;
-		out.height    = desc.faceSize;
-		out.mipLevels = desc.mipLevels;
-		out.arraySize = 6;
-		out.isCubemap = true;
-		out.vkFormat  = VkFormat::R32G32B32A32_SFLOAT;
+		ImageData out = MakeCubeImage(desc.faceSize, desc.mipLevels);
 
 		size_t total = 0;
 		for (uint32_t mip = 0; mip < desc.mipLevels; ++mip)
 		{
 			const uint32_t size = std::max(1u, desc.faceSize >> mip);
 			total += static_cast<size_t>(size) * size * 6;
-		}
-		out.pixels = core::fixed_buffer<std::byte>(total * sizeof(float) * 4);
-
-		// Face-major, mip-minor, matching what writeKTX2 and loadKTX2 expect.
-		size_t offset = 0;
-		for (uint32_t face = 0; face < 6; ++face)
-		{
-			for (uint32_t mip = 0; mip < desc.mipLevels; ++mip)
-			{
-				const uint32_t size  = std::max(1u, desc.faceSize >> mip);
-				const auto     pitch = static_cast<uint64_t>(size) * sizeof(float) * 4;
-				out.subresources.push_back({ offset, pitch, pitch * size });
-				offset += static_cast<size_t>(pitch) * size;
-			}
 		}
 
 		const uint32_t threadCount =
