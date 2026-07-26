@@ -27,12 +27,10 @@ namespace bgl
 
 		// Compile options that change generated code, folded into every cache key so a
 		// compiler upgrade or a debug/release switch never reuses stale binaries.
-		//
-		// spGetBuildTagString is the free-function twin of IGlobalSession::getBuildTagString and
-		// returns the identical string, which is what keeps the salt off the session-creation path.
 		std::string
 		ShaderCacheSalt()
 		{
+			// The free function, not IGlobalSession::getBuildTagString: same string, no session.
 			std::string salt = spGetBuildTagString();
 			salt += "|sm_6_6|column-major";
 #if defined(BERNINI_GPU_DEBUG)
