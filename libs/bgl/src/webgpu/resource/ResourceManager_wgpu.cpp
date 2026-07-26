@@ -1,6 +1,9 @@
 #include "resource/ResourceManager_wgpu.h"
 
 #include "cmd/CommandQueue.h"
+#include "util/util.h"
+
+#include <core/math.h>
 
 namespace bgl
 {
@@ -9,7 +12,7 @@ namespace bgl
 		const wgpu::Instance&      instance,
 		const ResourceManagerDesc& desc) :
 		m_Device(device), m_Instance(instance), m_Buffers(desc.maxCbvSrvUavs),
-		m_ReadbackBuffers(desc.maxReadbackBuffers)
+		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxCbvSrvUavs)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");
 	}
@@ -198,6 +201,9 @@ namespace bgl
 				case PendingType::kReadback:
 					m_ReadbackBuffers.reclaim_slot(deletion.slotIndex);
 					break;
+				case PendingType::kTexture:
+					m_Textures.reclaim_slot(deletion.slotIndex);
+					break;
 				}
 			}
 
@@ -258,9 +264,20 @@ namespace bgl
 	// a caller would go on to use.
 
 	TextureHandle
-	ResourceManager::CreateTexture(const TextureDesc&) noexcept
+	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
-		gfatal("CreateTexture: textures are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		const auto slot = m_Textures.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("ResourceManager: texture pool exhausted creating '{}'", desc.debugName);
+			return TextureHandle{ core::slot_handle{} };
+		}
+
+		m_Textures[slot.index] = Texture(m_Device, desc);
+
+		return TextureHandle{ slot, desc.usage };
 	}
 
 	SamplerHandle
@@ -282,9 +299,21 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyTexture(TextureHandle, bool) noexcept
+	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
-		gfatal("DestroyTexture: textures are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		if (!m_Textures.valid(handle.slot))
+			return;
+
+		if (deferred)
+		{
+			m_Textures.retire_slot(handle.slot);
+			RetireDeferred(PendingType::kTexture, handle.slot.index);
+			return;
+		}
+
+		m_Textures.release_slot(handle.slot);
 	}
 
 	void
@@ -330,15 +359,16 @@ namespace bgl
 	}
 
 	const Texture&
-	ResourceManager::GetTexture(TextureHandle) const noexcept
+	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
-		gfatal("GetTexture: textures are not implemented on the WebGPU backend yet");
+		gassert(m_Textures.valid(handle.slot), "GetTexture: invalid handle");
+		return m_Textures[handle.slot.index];
 	}
 
 	TextureDesc
-	ResourceManager::GetTextureDesc(TextureHandle) const noexcept
+	ResourceManager::GetTextureDesc(TextureHandle handle) const noexcept
 	{
-		gfatal("GetTextureDesc: textures are not implemented on the WebGPU backend yet");
+		return GetTexture(handle).GetDesc();
 	}
 
 	const Sampler&
@@ -348,15 +378,28 @@ namespace bgl
 	}
 
 	TextureReadbackLayout
-	ResourceManager::GetTextureReadbackLayout(TextureHandle) const noexcept
+	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const noexcept
 	{
-		gfatal("GetTextureReadbackLayout: textures are not implemented on the WebGPU backend yet");
+		const TextureDesc& desc = GetTexture(handle).GetDesc();
+		const FormatInfo&  info = GetFormatInfo(desc.format);
+
+		// WebGPU requires bytesPerRow of a texture->buffer copy to be a multiple of 256.
+		const uint64_t rowSize  = uint64_t{ desc.width } * info.bytesPerBlock;
+		const uint64_t rowPitch = core::align(rowSize, 256);
+
+		auto layout         = TextureReadbackLayout{};
+		layout.offset       = 0;
+		layout.rowPitch     = rowPitch;
+		layout.rowSizeBytes = rowSize;
+		layout.rowCount     = desc.height;
+		layout.totalBytes   = rowPitch * desc.height;
+		return layout;
 	}
 
 	bool
-	ResourceManager::ValidTextureHandle(const TextureHandle&) const noexcept
+	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
 	{
-		return false;
+		return m_Textures.valid(handle.slot);
 	}
 
 	bool

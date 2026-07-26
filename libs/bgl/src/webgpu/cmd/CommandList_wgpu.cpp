@@ -7,6 +7,7 @@
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
 #include "resource/ResourceManager_wgpu.h"
+#include "resource/Texture_wgpu.h"
 #include "uniforms/Uniforms.h"
 
 #include <core/math.h>
@@ -283,15 +284,69 @@ namespace bgl
 	}
 
 	void
-	CommandList::WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept
+	CommandList::WriteTexture(
+		TextureHandle                           handle,
+		std::span<const TextureSubresourceData> subresources) noexcept
 	{
-		gfatal("WriteTexture: textures are not implemented on the WebGPU backend yet");
+		gassert(m_ResourceManager->ValidTextureHandle(handle), "WriteTexture: invalid handle");
+		gassert(!subresources.empty(), "WriteTexture: no subresource data");
+
+		const auto& texture = m_ResourceManager->GetTexture(handle);
+		const auto& desc    = texture.GetDesc();
+
+		// Mip 0, array layer 0: the round-trip path uploads one subresource. Full mip/array upload
+		// lands with the material atlas (W4).
+		const TextureSubresourceData& sub = subresources.front();
+
+		auto dst    = wgpu::TexelCopyTextureInfo{};
+		dst.texture = texture.GetHandle();
+		dst.aspect  = wgpu::TextureAspect::All;
+
+		auto layout         = wgpu::TexelCopyBufferLayout{};
+		layout.bytesPerRow  = static_cast<uint32_t>(sub.rowPitch);
+		layout.rowsPerImage = desc.height;
+
+		const auto extent = wgpu::Extent3D{ desc.width, desc.height, 1 };
+
+		m_BoundQueue.WriteTexture(
+			&dst,
+			sub.data,
+			sub.slicePitch != 0 ? sub.slicePitch : sub.rowPitch * desc.height,
+			&layout,
+			&extent);
 	}
 
 	void
-	CommandList::CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept
+	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept
 	{
-		gfatal("CopyTextureToReadback: textures are not implemented on the WebGPU backend yet");
+		gassert(IsOpen(), "CopyTextureToReadback: the list is not open");
+		gassert(
+			m_ResourceManager->ValidReadbackBufferHandle(dst),
+			"CopyTextureToReadback: invalid readback handle");
+		gassert(
+			m_ResourceManager->ValidTextureHandle(src),
+			"CopyTextureToReadback: invalid texture handle");
+
+		const auto& texture  = m_ResourceManager->GetTexture(src);
+		const auto& desc     = texture.GetDesc();
+		const auto& readback = m_ResourceManager->GetReadbackBuffer(dst);
+		const auto  rb       = m_ResourceManager->GetTextureReadbackLayout(src);
+
+		gassert(
+			readback.GetByteSize() >= rb.totalBytes,
+			"CopyTextureToReadback: the readback buffer is too small");
+
+		auto source    = wgpu::TexelCopyTextureInfo{};
+		source.texture = texture.GetHandle();
+		source.aspect  = wgpu::TextureAspect::All;
+
+		auto destination                = wgpu::TexelCopyBufferInfo{};
+		destination.buffer              = readback.GetHandle();
+		destination.layout.bytesPerRow  = static_cast<uint32_t>(rb.rowPitch);
+		destination.layout.rowsPerImage = desc.height;
+
+		const auto extent = wgpu::Extent3D{ desc.width, desc.height, 1 };
+		m_Encoder.CopyTextureToBuffer(&source, &destination, &extent);
 	}
 
 	void
