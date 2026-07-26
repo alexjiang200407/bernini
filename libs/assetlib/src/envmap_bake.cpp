@@ -596,6 +596,129 @@ namespace assetlib
 		return out;
 	}
 
+	namespace
+	{
+		/**
+		 * Convolves one cube face with the GGX lobe at a fixed roughness, writing RGBA floats.
+		 *
+		 * Shared by the prefilter chain, which calls it once per mip with the roughness that mip
+		 * stands for, and by the skybox blur, which calls it once. Returns the samples taken.
+		 *
+		 * Roughness 0 is a delta lobe, so it degenerates to a resample rather than an integral.
+		 */
+		uint64_t
+		ConvolveFace(
+			const CubePyramid& pyramid,
+			uint32_t           face,
+			uint32_t           size,
+			float              roughness,
+			uint32_t           samples,
+			float              saTexel,
+			float*             dst)
+		{
+			const auto sampleCount = static_cast<float>(samples);
+			uint64_t   taken       = 0;
+
+			for (uint32_t row = 0; row < size; ++row)
+			{
+				for (uint32_t col = 0; col < size; ++col)
+				{
+					const Vec3 n =
+						FaceTexelDir(face, static_cast<float>(col), static_cast<float>(row), size);
+
+					Vec3 sum = {};
+
+					if (roughness <= 0.0f)
+					{
+						sum = pyramid.Sample(n, 0.0f);
+					}
+					else
+					{
+						float weight = 0.0f;
+						for (uint32_t i = 0; i < samples; ++i)
+						{
+							const float u1 = static_cast<float>(i) / sampleCount;
+							const float u2 = RadicalInverseBase2(i);
+
+							const Vec3  h     = ImportanceSampleGgx(u1, u2, n, roughness);
+							const float nDotH = Dot(n, h);
+							// V is taken as N, the standard split-sum prefilter assumption.
+							const Vec3  l     = Normalize(h * (2.0f * nDotH) + n * -1.0f);
+							const float nDotL = Dot(n, l);
+							if (nDotL <= 0.0f)
+								continue;
+
+							const float d   = DistributionGgx(nDotH, roughness);
+							const float pdf = d * nDotH / (4.0f * std::max(nDotH, 1e-4f)) + 1e-4f;
+							const float saSample = 1.0f / (sampleCount * pdf + 1e-4f);
+							const float mip      = 0.5f * std::log2(saSample / saTexel);
+
+							sum = sum + pyramid.Sample(l, mip) * nDotL;
+							weight += nDotL;
+							++taken;
+						}
+
+						// By the summed weight, never by the sample count -- see the header.
+						sum = weight > 0.0f ? sum * (1.0f / weight) : pyramid.Sample(n, 0.0f);
+					}
+
+					const size_t t = (static_cast<size_t>(row) * size + col) * 4;
+					dst[t + 0]     = sum.x;
+					dst[t + 1]     = sum.y;
+					dst[t + 2]     = sum.z;
+					dst[t + 3]     = 1.0f;
+				}
+			}
+
+			return taken;
+		}
+	}
+
+	ImageData
+	BlurCube(
+		const ImageData& source,
+		uint32_t         faceSize,
+		float            roughness,
+		uint32_t         samples,
+		uint32_t         threads)
+	{
+		if (faceSize == 0)
+			throw std::runtime_error("assetlib::BlurCube: faceSize must be > 0");
+		if (samples == 0)
+			throw std::runtime_error("assetlib::BlurCube: samples must be > 0");
+
+		const CubePyramid pyramid(source);
+		ImageData         out = MakeCubeImage(faceSize, 1);
+
+		const auto  srcSize = static_cast<float>(pyramid.BaseSize());
+		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
+
+		const uint32_t threadCount =
+			threads != 0 ? threads : std::max(1u, std::thread::hardware_concurrency());
+
+		std::atomic<uint32_t> nextFace{ 0 };
+
+		auto worker = [&]() {
+			for (;;)
+			{
+				const uint32_t face = nextFace.fetch_add(1);
+				if (face >= 6)
+					return;
+
+				auto* dst =
+					reinterpret_cast<float*>(out.pixels.data() + out.subresources[face].offset);
+				ConvolveFace(pyramid, face, faceSize, roughness, samples, saTexel, dst);
+			}
+		};
+
+		std::vector<std::thread> pool;
+		pool.reserve(threadCount);
+		for (uint32_t i = 0; i < threadCount; ++i) pool.emplace_back(worker);
+		for (std::thread& t : pool) t.join();
+
+		return out;
+	}
+
 	float
 	ExposureFor(const ImageData& irradiance)
 	{
@@ -674,9 +797,8 @@ namespace assetlib
 		for (uint32_t mip = 0; mip < desc.mipLevels; ++mip)
 			for (uint32_t face = 0; face < 6; ++face) jobs.push_back({ face, mip });
 
-		const float srcSize     = static_cast<float>(pyramid.BaseSize());
-		const float saTexel     = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
-		const auto  sampleCount = static_cast<float>(desc.samples);
+		const float srcSize = static_cast<float>(pyramid.BaseSize());
+		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
 
 		auto worker = [&]() {
 			for (;;)
@@ -696,66 +818,8 @@ namespace assetlib
 				auto*        dst =
 					reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
 
-				uint64_t localSamples = 0;
-
-				for (uint32_t row = 0; row < size; ++row)
-				{
-					for (uint32_t col = 0; col < size; ++col)
-					{
-						const Vec3 n = FaceTexelDir(
-							job.face,
-							static_cast<float>(col),
-							static_cast<float>(row),
-							size);
-
-						Vec3 sum = {};
-
-						if (roughness <= 0.0f)
-						{
-							// Roughness 0 is a mirror: the lobe is a delta, so convolving it is
-							// just a resample of the source.
-							sum = pyramid.Sample(n, 0.0f);
-						}
-						else
-						{
-							float weight = 0.0f;
-							for (uint32_t s = 0; s < desc.samples; ++s)
-							{
-								const float u1 = static_cast<float>(s) / sampleCount;
-								const float u2 = RadicalInverseBase2(s);
-
-								const Vec3  h     = ImportanceSampleGgx(u1, u2, n, roughness);
-								const float nDotH = Dot(n, h);
-								// V is taken as N, the standard split-sum prefilter assumption.
-								const Vec3  l     = Normalize(h * (2.0f * nDotH) + n * -1.0f);
-								const float nDotL = Dot(n, l);
-								if (nDotL <= 0.0f)
-									continue;
-
-								const float d = DistributionGgx(nDotH, roughness);
-								const float pdf =
-									d * nDotH / (4.0f * std::max(nDotH, 1e-4f)) + 1e-4f;
-								const float saSample = 1.0f / (sampleCount * pdf + 1e-4f);
-								const float mip      = 0.5f * std::log2(saSample / saTexel);
-
-								sum = sum + pyramid.Sample(l, mip) * nDotL;
-								weight += nDotL;
-								++localSamples;
-							}
-
-							// By the summed weight, never by the sample count -- see the header.
-							sum = weight > 0.0f ? sum * (1.0f / weight) : pyramid.Sample(n, 0.0f);
-						}
-
-						const size_t t = (static_cast<size_t>(row) * size + col) * 4;
-						dst[t + 0]     = sum.x;
-						dst[t + 1]     = sum.y;
-						dst[t + 2]     = sum.z;
-						dst[t + 3]     = 1.0f;
-					}
-				}
-
-				samplesTaken.fetch_add(localSamples);
+				samplesTaken.fetch_add(
+					ConvolveFace(pyramid, job.face, size, roughness, desc.samples, saTexel, dst));
 			}
 		};
 

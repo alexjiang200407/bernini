@@ -49,6 +49,31 @@ namespace assetlib
 	IrradianceSh(const ImageData& source, uint32_t faceSize = 128);
 
 	/**
+	 * Convolves a cube map with the GGX lobe at one fixed roughness -- a defocus blur with a
+	 * physically shaped kernel rather than a Gaussian.
+	 *
+	 * For the skybox this is a deliberate effect, not a compromise: a material editor wants the eye on
+	 * the material, and a blurred backdrop reads as depth of field where a sharp one competes for
+	 * attention. It also decouples the background from the source's resolution -- an equirectangular
+	 * `.hdr` only carries `width / 4` texels across a face's 90 degrees, and blurring past that makes
+	 * the limit invisible instead of pixelated.
+	 *
+	 * Because the result has no high angular frequencies left, `faceSize` can be small: storing detail
+	 * the kernel has already removed costs bytes and buys nothing.
+	 *
+	 * @param roughness GGX roughness of the kernel. Its half-angle is roughly `atan(roughness^2)`, so
+	 *        0.3 is a few degrees and 0.5 is around fourteen. 0 is a plain resample.
+	 * @throws std::runtime_error if `source` is not a float cube map, or `faceSize` is 0.
+	 */
+	[[nodiscard]] ImageData
+	BlurCube(
+		const ImageData& source,
+		uint32_t         faceSize,
+		float            roughness,
+		uint32_t         samples = 256,
+		uint32_t         threads = 0);
+
+	/**
 	 * The exposure an environment should render at, from its irradiance map.
 	 *
 	 * An HDR environment's absolute scale is arbitrary, so exposure is a property of the maps and has

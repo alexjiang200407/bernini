@@ -119,6 +119,7 @@ main(int argc, char** argv)
 	bool        envFloat      = false;
 	uint32_t    envIemSize    = 128;
 	uint32_t    envSkyboxSize = 512;
+	float       envSkyboxBlur = 0.0f;
 	uint32_t    envSize       = 256;
 	uint32_t    envMips       = 7;
 	uint32_t    envSamples    = 128;
@@ -153,7 +154,12 @@ main(int argc, char** argv)
 		"--skybox-size",
 		envSkyboxSize,
 		"Skybox face size (default: 512). Seen directly at viewport resolution, so it wants more "
-		"than the prefilter -- but no more than the source can supply");
+		"than the prefilter -- but no more than the source can supply, and less if it is blurred");
+	envmap->add_option(
+		"--skybox-blur",
+		envSkyboxBlur,
+		"GGX roughness to defocus the skybox by (0 = sharp). Reads as depth of field, and hides a "
+		"source that cannot fill the face");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
 	envmap->add_option(
@@ -266,10 +272,19 @@ main(int argc, char** argv)
 													std::max(envSkyboxSize, envSize)) :
 			                                    assetlib::loadKTX2(envInput);
 
+			// Blurred, the skybox is a separate convolution of the same environment; sharp, it is
+			// the projection itself. Either way the prefilter and irradiance still read `src`, so a
+			// defocused background never reaches the lighting.
+			assetlib::ImageData sky =
+				envSkyboxBlur > 0.0f ?
+					assetlib::BlurCube(src, envSkyboxSize, envSkyboxBlur, 256, envThreads) :
+					assetlib::ImageData();
+
 			if (!envCube.empty())
 			{
-				assetlib::writeKTX2(src, envCube, false, assetlib::Ktx2Compression::kNone);
-				spdlog::info("Wrote the unfiltered cube to '{}' ({}^2)", envCube, src.width);
+				const assetlib::ImageData& cube = envSkyboxBlur > 0.0f ? sky : src;
+				assetlib::writeKTX2(cube, envCube, false, assetlib::Ktx2Compression::kNone);
+				spdlog::info("Wrote the skybox cube to '{}' ({}^2)", envCube, cube.width);
 			}
 
 			assetlib::ImageData iem = assetlib::IrradianceSh(src, envIemSize);
@@ -314,11 +329,12 @@ main(int argc, char** argv)
 				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
 				// backend without an optional feature, so this is the shipping format rather than an
 				// intermediate needing a per-platform compile.
-				auto set       = assetlib::EnvMapSet();
-				set.prefilter  = envFloat ? std::move(out) : assetlib::PackRgb9e5(out);
-				set.irradiance = envFloat ? std::move(iem) : assetlib::PackRgb9e5(iem);
-				set.skybox     = envFloat ? std::move(src) : assetlib::PackRgb9e5(src);
-				set.exposure   = exposure;
+				auto set                    = assetlib::EnvMapSet();
+				set.prefilter               = envFloat ? std::move(out) : assetlib::PackRgb9e5(out);
+				set.irradiance              = envFloat ? std::move(iem) : assetlib::PackRgb9e5(iem);
+				assetlib::ImageData& skyOut = envSkyboxBlur > 0.0f ? sky : src;
+				set.skybox   = envFloat ? std::move(skyOut) : assetlib::PackRgb9e5(skyOut);
+				set.exposure = exposure;
 
 				auto provenance       = assetlib::EnvMapProvenance();
 				provenance.samples    = desc.samples;

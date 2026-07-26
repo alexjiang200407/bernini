@@ -3,7 +3,7 @@
 One command turns a `.hdr` into everything the renderer needs:
 
 ```bash
-assetlib_cli envmap forest.hdr --benv assets/forest.benv \n    --size 256 --skybox-size 512 --irradiance-size 128 --mips 7 --samples 2048
+assetlib_cli envmap forest.hdr --benv assets/forest.benv \n    --size 256 --skybox-size 256 --skybox-blur 0.15 --irradiance-size 128 \n    --mips 7 --samples 2048
 ```
 
 That takes about four seconds and replaces the CMFT procedure this document used to describe. What it
@@ -13,7 +13,7 @@ writes is a single `.benv`, holding three maps — all **linear radiance**, all 
 |---|---|---|---|
 | prefilter | the GGX split-sum chain — one mip per roughness | 256², 7 mips | the specular lobe (`prefilterMap`) |
 | irradiance | the clamped-cosine convolution, via order-3 spherical harmonics | 128², 1 mip | the diffuse term (`irradianceMap`) |
-| skybox | the environment itself, unfiltered | 512², 1 mip | `SkyboxPass` (`cubeTex`) |
+| skybox | the environment, defocused | 256², 1 mip | `SkyboxPass` (`cubeTex`) |
 
 Plus the **exposure** those maps were measured at, in the header.
 
@@ -26,6 +26,24 @@ But not more than the source can supply. An equirectangular `.hdr` gives `width 
 face's 90°, so `forest.hdr` at 1024×512 carries about 256 -- and a 512² face is already interpolating.
 Going further buys smoothness, not detail: raising the skybox from 256² to 512² did not move a single
 golden image. Size it from the source, not from the screen.
+
+### The skybox is deliberately defocused
+
+`--skybox-blur` convolves it with a GGX lobe; the shipped map uses 0.15. This is an effect, not a
+concession. A material editor wants the eye on the material, and a soft backdrop reads as depth of
+field where a sharp one competes for attention. It also decouples the background from the source's
+resolution, so the ceiling above stops showing up as pixelation.
+
+0.08 leaves the fence and path legible enough to distract. 0.35 flattens the environment to one wash.
+0.15 keeps the colour variation that makes it read as a real place, out of focus.
+
+**Only the skybox.** The prefilter and the irradiance are convolved from the sharp projection, so
+nothing about the background reaches the lighting: the shipped map keeps the source's full 1092 peak in
+prefilter mip 0, while the skybox's is crushed to 91. Blurring the maps that light the scene would be
+the gamma mistake in another costume.
+
+And because the blur removes everything above the face's Nyquist, the skybox wants *fewer* texels, not
+more -- 256² is indistinguishable from 512² here, at half the size.
 
 `brdf_lut.ktx2` stays a separate file, and is the only other input. It is the split-sum BRDF integral
 — a property of the shading model, not of any environment — so every environment shares one.
