@@ -112,7 +112,7 @@ namespace bgl
 		auto program = Slang::ComPtr<slang::IComponentType>();
 		session->createCompositeComponentType(
 			components.data(),
-			components.size(),
+			static_cast<SlangInt>(components.size()),
 			program.writeRef(),
 			errChecker.WriteDiagnosticBlob()) >>
 			errChecker;

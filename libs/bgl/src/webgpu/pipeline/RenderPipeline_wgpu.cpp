@@ -29,10 +29,12 @@ namespace bgl
 				return out;
 			};
 
-			result.stencilFront     = stencilFace(state.frontFaceStencil);
-			result.stencilBack      = stencilFace(state.backFaceStencil);
-			result.stencilReadMask  = state.stencilEnable ? state.stencilReadMask : 0;
-			result.stencilWriteMask = state.stencilEnable ? state.stencilWriteMask : 0;
+			result.stencilFront = stencilFace(state.frontFaceStencil);
+			result.stencilBack  = stencilFace(state.backFaceStencil);
+			result.stencilReadMask =
+				state.stencilEnable ? static_cast<uint32_t>(state.stencilReadMask) : 0u;
+			result.stencilWriteMask =
+				state.stencilEnable ? static_cast<uint32_t>(state.stencilWriteMask) : 0u;
 
 			return result;
 		}
