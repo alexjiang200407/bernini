@@ -4,15 +4,17 @@
 
 namespace bgl
 {
-	// A depth-stencil view: a WebGPU texture view over the depth attachment, plus the texture handle
-	// it was made from so GetDsvTexture can return it.
+	// A depth-stencil view: a WebGPU texture view over the depth attachment, the texture handle it
+	// was made from so GetDsvTexture can return it, and the descriptor it was built from so pipeline
+	// creation can read the depth format back -- the D3D12 Dsv keeps the same trio. Whether the
+	// format carries a stencil aspect is derived from GetDesc().format at clear time.
 	class Dsv final
 	{
 	public:
 		Dsv() = default;
 
-		Dsv(wgpu::TextureView view, TextureHandle textureHandle, bool hasStencil) :
-			m_View(std::move(view)), m_TextureHandle(textureHandle), m_HasStencil(hasStencil)
+		Dsv(wgpu::TextureView view, TextureHandle textureHandle, const DsvDesc& desc) :
+			m_View(std::move(view)), m_TextureHandle(textureHandle), m_Desc(desc)
 		{}
 
 		Dsv(const Dsv&)     = delete;
@@ -34,15 +36,15 @@ namespace bgl
 			return m_TextureHandle;
 		}
 
-		[[nodiscard]] bool
-		HasStencil() const noexcept
+		[[nodiscard]] const DsvDesc&
+		GetDesc() const noexcept
 		{
-			return m_HasStencil;
+			return m_Desc;
 		}
 
 	private:
 		wgpu::TextureView m_View;
 		TextureHandle     m_TextureHandle = {};
-		bool              m_HasStencil    = false;
+		DsvDesc           m_Desc;
 	};
 }

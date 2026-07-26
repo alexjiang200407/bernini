@@ -2,6 +2,7 @@
 
 #include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue.h"
+#include "convert_wgpu.h"
 #include "util/util.h"
 
 #include <core/math.h>
@@ -266,11 +267,6 @@ namespace bgl
 		return m_ReadbackBuffers.valid(handle.slot);
 	}
 
-	// --- not implemented yet -------------------------------------------------------------------
-	// Textures, samplers and views land with the raster path; the handle families exist so the
-	// interface is satisfied, and every entry point fails loudly rather than returning something
-	// a caller would go on to use.
-
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
@@ -310,6 +306,7 @@ namespace bgl
 
 		auto viewDesc            = wgpu::TextureViewDescriptor{};
 		viewDesc.label           = std::string_view(desc.debugName);
+		viewDesc.format          = ToWgpuTextureFormat(desc.format);
 		viewDesc.baseMipLevel    = desc.mipSlice;
 		viewDesc.mipLevelCount   = 1;
 		viewDesc.baseArrayLayer  = desc.firstArraySlice;
@@ -317,7 +314,7 @@ namespace bgl
 
 		auto view = m_Textures[textureHandle.slot.index].GetHandle().CreateView(&viewDesc);
 
-		m_Rtvs[slot.index] = Rtv(std::move(view), textureHandle);
+		m_Rtvs[slot.index] = Rtv(std::move(view), textureHandle, desc);
 
 		return RtvHandle{ slot.index, slot.generation };
 	}
@@ -338,6 +335,7 @@ namespace bgl
 
 		auto viewDesc            = wgpu::TextureViewDescriptor{};
 		viewDesc.label           = std::string_view(desc.debugName);
+		viewDesc.format          = ToWgpuTextureFormat(desc.format);
 		viewDesc.baseMipLevel    = desc.mipSlice;
 		viewDesc.mipLevelCount   = 1;
 		viewDesc.baseArrayLayer  = desc.firstArraySlice;
@@ -345,9 +343,7 @@ namespace bgl
 
 		auto view = m_Textures[textureHandle.slot.index].GetHandle().CreateView(&viewDesc);
 
-		const bool hasStencil = GetFormatInfo(desc.format).hasStencil;
-
-		m_Dsvs[slot.index] = Dsv(std::move(view), textureHandle, hasStencil);
+		m_Dsvs[slot.index] = Dsv(std::move(view), textureHandle, desc);
 
 		return DsvHandle{ slot.index, slot.generation };
 	}
@@ -526,8 +522,9 @@ namespace bgl
 	{
 		gassert(cmdList != nullptr, "ClearDsv: null command list");
 
-		const Dsv& dsv = GetDsv(handle);
+		const Dsv& dsv        = GetDsv(handle);
+		const bool hasStencil = GetFormatInfo(dsv.GetDesc().format).hasStencil;
 		static_cast<CommandList*>(cmdList)
-			->ClearDepthTarget(dsv.GetView(), depth, stencil, dsv.HasStencil());
+			->ClearDepthTarget(dsv.GetView(), depth, stencil, hasStencil);
 	}
 }

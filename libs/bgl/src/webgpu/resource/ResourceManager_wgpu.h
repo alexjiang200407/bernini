@@ -20,8 +20,8 @@ namespace bgl
 	 * registered queue was at, so the slot is reclaimed only once all of them pass it.
 	 *
 	 * Unlike D3D12 a slot index is *not* a descriptor index: WebGPU has no descriptor heap, so
-	 * bindings are resolved into bind groups at dispatch instead. Textures, samplers and views
-	 * are not implemented yet and fail loudly.
+	 * bindings are resolved into bind groups at dispatch instead. Samplers are not implemented yet
+	 * and fail loudly.
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
