@@ -542,6 +542,20 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   scene is pixel-compared against the D3D12 goldens within tolerance. Frustum culling goldens
   prove the indirect chain (culling is image-invariant, so goldens are the gate — the same
   property [passes.md](../passes.md)'s compaction pipeline is tested by today).
+
+  **How the two backends split a graphics pipeline.** The RHI seam stays `IMeshletPipeline` on both
+  backends. D3D12 links the module's amplification + mesh + pixel entries into one PSO; WebGPU has no
+  mesh stage, so its `IMeshletPipeline` is *emulated* by composing an internal `GraphicsPipeline`
+  (the vertex-pulling vertex + pixel draw — landed as its own backend object) with a `ComputePipeline`
+  (the meshlet-expansion kernel), and `DispatchMesh` becomes dispatch-expand then `drawIndirect`. The
+  amp/mesh (D3D12) and compute/vertex (WebGPU) entry points live **side by side in one Slang module**,
+  sharing the pixel shader and the transform/decode functions and filling one interpolant struct — but
+  the mesh/amplification entries **must** be `#ifdef`'d out on `BGL_WGSL` (which the runtime session
+  and the offline `compile_shader` arm both define). This is not optional: Slang validates *every*
+  entry point in a module against the compilation target at load time, not lazily per linked entry, so
+  an unguarded `[shader("mesh")]` entry reaching a WGSL session is rejected (`E36107`) even when
+  nothing links it — verified in `GraphicsPipeline_test`. The `.Handle` buffer-primitive swap already
+  needs `BGL_WGSL` (W2); this reuses the same seam for the geometry stage.
 * **W4 — materials.** Texture-array material atlas + cook-side size classing, IBL bindings,
   transparent path (sort compute is already ported; the three partition draws become
   `drawIndirect`).

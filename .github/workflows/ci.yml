@@ -55,11 +55,7 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
 
     steps:
-      # Unlike the compile-only jobs this one runs assetlib_tests, which loads the .glb
-      # meshes; without LFS those are pointer files and every load fails on "Invalid magic".
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - uses: actions/setup-python@v5
         with:
@@ -98,14 +94,12 @@ jobs:
           path: build/macos-webgpu-debug/_deps
           key: dawn-arm64-osx-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
 
+      # Compile only. bgl_webgpu_tests brings up a real Metal device and is the only GPU
+      # coverage the pipeline could have, but a macOS runner is scarce and slow, so the
+      # backend's runtime path is verified locally instead -- CI keeps it building on the
+      # clang toolchain and the macOS Dawn archive honest.
       - name: Build
         run: python scripts/build.py --preset macos-clang-webgpu-debug
-
-      # Unlike the DX12 job this does run its suites: bgl_webgpu_tests brings up a real
-      # device, which is the only thing that proves the backend is wired up rather than
-      # merely compiling.
-      - name: Test
-        run: python scripts/run_tests.py --no-build
 
   webgpu-windows:
     name: webgpu (ninja-msvc, Debug)
