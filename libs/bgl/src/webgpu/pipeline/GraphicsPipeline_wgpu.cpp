@@ -153,4 +153,13 @@ namespace bgl
 
 		gfatal("Uniform layout entry not found: {}", name);
 	}
+
+	std::vector<std::string>
+	GraphicsPipeline::GetUniformBufferNames() const noexcept
+	{
+		auto names = std::vector<std::string>();
+		names.reserve(m_UniformLayoutEntries.size());
+		for (const auto& [name, entry] : m_UniformLayoutEntries) names.push_back(name);
+		return names;
+	}
 }

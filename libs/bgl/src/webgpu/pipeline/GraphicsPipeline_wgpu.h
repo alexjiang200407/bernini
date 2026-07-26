@@ -57,6 +57,9 @@ namespace bgl
 		[[nodiscard]] UniformLayoutEntry
 		GetUniformLayoutEntry(std::string_view name) const noexcept;
 
+		[[nodiscard]] std::vector<std::string>
+		GetUniformBufferNames() const noexcept;
+
 		[[nodiscard]] const wgpu::RenderPipeline&
 		GetPipeline() const noexcept
 		{
