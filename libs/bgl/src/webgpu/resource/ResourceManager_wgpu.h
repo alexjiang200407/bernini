@@ -3,6 +3,7 @@
 #include "resource/Buffer_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv_wgpu.h"
 #include "resource/Texture_wgpu.h"
 
 #include <core/containers/slot_vector.h>
@@ -164,7 +165,8 @@ namespace bgl
 		{
 			kBuffer,
 			kReadback,
-			kTexture
+			kTexture,
+			kRtv
 		};
 
 		struct QueueGate
@@ -204,6 +206,7 @@ namespace bgl
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 		core::slot_vector<Texture>        m_Textures;
+		core::slot_vector<Rtv>            m_Rtvs;
 
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_Queues;
 		std::vector<PendingBatch>                                  m_PendingBatches;

@@ -126,6 +126,10 @@ namespace bgl
 		[[nodiscard]] wgpu::CommandBuffer
 		TakeCommandBuffer() noexcept;
 
+		/** Clears a render-target view: a one-shot render pass with a clear load op. */
+		void
+		ClearRenderTarget(const wgpu::TextureView& view, const float clearColor[4]) noexcept;
+
 	private:
 		wgpu::Device       m_Device;
 		CommandListDesc    m_Desc;

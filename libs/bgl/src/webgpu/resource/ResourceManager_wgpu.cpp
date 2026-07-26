@@ -1,5 +1,6 @@
 #include "resource/ResourceManager_wgpu.h"
 
+#include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue.h"
 #include "util/util.h"
 
@@ -12,7 +13,8 @@ namespace bgl
 		const wgpu::Instance&      instance,
 		const ResourceManagerDesc& desc) :
 		m_Device(device), m_Instance(instance), m_Buffers(desc.maxCbvSrvUavs),
-		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxCbvSrvUavs)
+		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxCbvSrvUavs),
+		m_Rtvs(desc.maxRtvs)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");
 	}
@@ -204,6 +206,9 @@ namespace bgl
 				case PendingType::kTexture:
 					m_Textures.reclaim_slot(deletion.slotIndex);
 					break;
+				case PendingType::kRtv:
+					m_Rtvs.reclaim_slot(deletion.slotIndex);
+					break;
 				}
 			}
 
@@ -287,9 +292,31 @@ namespace bgl
 	}
 
 	RtvHandle
-	ResourceManager::CreateRtv(TextureHandle, const RtvDesc&) noexcept
+	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
-		gfatal("CreateRtv: render target views are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		gassert(m_Textures.valid(textureHandle.slot), "CreateRtv: invalid texture handle");
+
+		const auto slot = m_Rtvs.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateRtv: RTV pool exhausted creating '{}'", desc.debugName);
+			return RtvHandle{};
+		}
+
+		auto viewDesc            = wgpu::TextureViewDescriptor{};
+		viewDesc.label           = std::string_view(desc.debugName);
+		viewDesc.baseMipLevel    = desc.mipSlice;
+		viewDesc.mipLevelCount   = 1;
+		viewDesc.baseArrayLayer  = desc.firstArraySlice;
+		viewDesc.arrayLayerCount = desc.arraySize;
+
+		auto view = m_Textures[textureHandle.slot.index].GetHandle().CreateView(&viewDesc);
+
+		m_Rtvs[slot.index] = Rtv(std::move(view), textureHandle);
+
+		return RtvHandle{ slot.index, slot.generation };
 	}
 
 	DsvHandle
@@ -323,9 +350,22 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyRtv(RtvHandle, bool) noexcept
+	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
-		gfatal("DestroyRtv: render target views are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		const auto slot = core::slot_handle{ handle.idx, handle.generation };
+		if (!m_Rtvs.valid(slot))
+			return;
+
+		if (deferred)
+		{
+			m_Rtvs.retire_slot(slot);
+			RetireDeferred(PendingType::kRtv, slot.index);
+			return;
+		}
+
+		m_Rtvs.release_slot(slot);
 	}
 
 	void
@@ -335,9 +375,11 @@ namespace bgl
 	}
 
 	const Rtv&
-	ResourceManager::GetRtv(RtvHandle) const noexcept
+	ResourceManager::GetRtv(RtvHandle handle) const noexcept
 	{
-		gfatal("GetRtv: render target views are not implemented on the WebGPU backend yet");
+		const auto slot = core::slot_handle{ handle.idx, handle.generation };
+		gassert(m_Rtvs.valid(slot), "GetRtv: invalid handle");
+		return m_Rtvs[slot.index];
 	}
 
 	const Dsv&
@@ -347,9 +389,9 @@ namespace bgl
 	}
 
 	TextureHandle
-	ResourceManager::GetRtvTexture(RtvHandle) const noexcept
+	ResourceManager::GetRtvTexture(RtvHandle handle) const noexcept
 	{
-		gfatal("GetRtvTexture: render target views are not implemented on the WebGPU backend yet");
+		return GetRtv(handle).GetTextureHandle();
 	}
 
 	TextureHandle
@@ -415,9 +457,9 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidRtvHandle(const RtvHandle&) const noexcept
+	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const noexcept
 	{
-		return false;
+		return m_Rtvs.valid(core::slot_handle{ handle.idx, handle.generation });
 	}
 
 	bool
@@ -427,9 +469,10 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::ClearRtv(ICommandList*, RtvHandle, float[4]) noexcept
+	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{
-		gfatal("ClearRtv: render target views are not implemented on the WebGPU backend yet");
+		gassert(cmdList != nullptr, "ClearRtv: null command list");
+		static_cast<CommandList*>(cmdList)->ClearRenderTarget(GetRtv(handle).GetView(), clearVal);
 	}
 
 	void

@@ -58,6 +58,26 @@ namespace bgl
 	}
 
 	void
+	CommandList::ClearRenderTarget(
+		const wgpu::TextureView& view,
+		const float              clearColor[4]) noexcept
+	{
+		gassert(IsOpen(), "ClearRenderTarget: the list is not open");
+
+		auto attachment       = wgpu::RenderPassColorAttachment{};
+		attachment.view       = view;
+		attachment.loadOp     = wgpu::LoadOp::Clear;
+		attachment.storeOp    = wgpu::StoreOp::Store;
+		attachment.clearValue = { clearColor[0], clearColor[1], clearColor[2], clearColor[3] };
+
+		auto passDesc                 = wgpu::RenderPassDescriptor{};
+		passDesc.colorAttachmentCount = 1;
+		passDesc.colorAttachments     = &attachment;
+
+		m_Encoder.BeginRenderPass(&passDesc).End();
+	}
+
+	void
 	CommandList::WriteBuffer(
 		BufferHandle handle,
 		const void*  data,
