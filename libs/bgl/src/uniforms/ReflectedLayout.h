@@ -17,8 +17,9 @@ namespace bgl
 		uint32_t         arrayCount  = 0;
 		uint32_t         arrayStride = 0;
 
-		// A bindless handle, not a plain uint2 (they share a valueType). Metal-only: it marks the
-		// fields the backend translates to a gpuAddress at dispatch. Always false on D3D12.
+		// A bindless handle, not a plain uint2 (they share a valueType). Marks a resource the backend
+		// resolves at dispatch: Metal to a gpuAddress, WebGPU to a bind-group entry (see `binding`).
+		// Always false on D3D12, which reaches resources through the descriptor heap.
 		bool                         isResourceHandle = false;
 		std::vector<ReflectedField>  fields;   // kStruct members
 		std::vector<ReflectedLayout> element;  // kArray element type (0 or 1 entry)
@@ -30,9 +31,7 @@ namespace bgl
 		uint32_t        offset = 0;
 		ReflectedLayout layout;
 
-		// WGSL binding slot for a hoisted resource leaf (a plainly-bound buffer): where the WebGPU
-		// backend binds the handle written at `offset`. Unused (0xFFFFFFFF) on D3D12/Metal, which
-		// reach resources through the descriptor heap / argument buffer instead.
+		// The WGSL (group, binding) a resource leaf binds to; used only by the WebGPU backend.
 		uint32_t group   = 0xFFFFFFFF;
 		uint32_t binding = 0xFFFFFFFF;
 	};

@@ -109,3 +109,71 @@ TEST_CASE("Every compute kernel builds a valid pipeline", "[wgpu][compute]")
 		REQUIRE(error.empty());
 	}
 }
+
+// CullInstances puts wrapper buffers (PackedBuffer/Entry/Range) *after* a direct one, so their
+// handles sit at non-zero cbuffer offsets -- the case where global-vs-struct-relative offset
+// bookkeeping diverges. Binding all of them and dispatching exercises that: a wrong wrapper size
+// makes the smart-buffer assignment throw, and a wrong offset makes Dispatch bind the wrong slot,
+// which Dawn rejects as a missing/mismatched binding.
+TEST_CASE("A kernel with non-first wrapper buffers binds and dispatches", "[wgpu][compute]")
+{
+	auto device    = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+	auto resources = device->CreateResourceManager(ResourceManagerDesc{});
+	auto queue     = device->CreateCommandQueue(QueueType::kGraphics);
+	auto allocator = device->CreateCommandAllocator(QueueType::kGraphics);
+	auto list      = device->CreateCommandList(CommandListDesc{}, allocator, resources);
+
+	resources->RegisterQueue(queue.Get());
+
+	auto kernel = device->CreateComputeKernel(
+		ComputePipelineDesc{}
+			.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("CullInstances")))
+			.SetDebugName("CullInstances"));
+
+	// A distinct backing buffer per binding; the shader reads garbage, but WebGPU bounds-checks
+	// storage access, so a bound-but-unmeaningful buffer is safe. This test is about binding, not
+	// cull semantics.
+	auto       buffers = std::vector<BufferHandle>();
+	const auto bind    = [&](Uniforms& uniforms, const char* field) {
+		const auto handle = resources->CreateComputeBuffer(
+			ComputeBufferDesc{}.SetElement<uint32_t>().SetInitialCount(256).SetDebugName(field));
+		buffers.push_back(handle);
+		uniforms[field] = handle;
+	};
+
+	bind(kernel["gUniforms"], "cullView");
+	bind(kernel["gUniforms"], "instanceBuffer");  // PackedBuffer, non-first
+	bind(kernel["gUniforms"], "meshBuffer");      // EntryBuffer, non-first
+	bind(kernel["gUniforms"], "submeshBuffer");   // RangeBuffer, non-first
+	bind(kernel["gUniforms"], "visibility");
+	bind(kernel["gUniforms"], "stats");
+	bind(kernel["gDebug"], "buffer");
+
+	auto state   = ComputeState{};
+	state.kernel = &kernel;
+
+	const wgpu::Device& handle = device->GetHandle();
+	handle.PushErrorScope(wgpu::ErrorFilter::Validation);
+
+	list->Open(queue.Get(), allocator.Get());
+	list->SetComputeState(state);
+	list->Dispatch(1, 1, 1);
+	list->Close();
+	const auto fence = queue->ExecuteCommandList(list.Get());
+	queue->WaitForFenceCPUBlocking(fence);
+
+	auto       error  = std::string();
+	const auto future = handle.PopErrorScope(
+		wgpu::CallbackMode::WaitAnyOnly,
+		[&error](wgpu::PopErrorScopeStatus, wgpu::ErrorType type, wgpu::StringView message) {
+			if (type != wgpu::ErrorType::NoError)
+				error = std::string(std::string_view(message));
+		});
+	device->GetInstance().WaitAny(future, UINT64_MAX);
+
+	INFO("Dawn: " << error);
+	REQUIRE(error.empty());
+
+	queue->Flush();
+	resources->UnregisterQueue(queue.Get());
+}

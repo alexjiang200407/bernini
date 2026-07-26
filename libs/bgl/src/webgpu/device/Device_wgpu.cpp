@@ -7,9 +7,9 @@
 #include "resource/ResourceManager_wgpu.h"
 #include "resource/Shader_wgpu.h"
 #include "slang/SlangErrorChecker.h"
+#include "uniforms/Uniforms.h"
 
 #include <bgl/IGraphics.h>
-#include <uniforms/Uniforms.h>
 
 namespace bgl
 {

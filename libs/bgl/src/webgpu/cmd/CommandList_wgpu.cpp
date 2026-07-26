@@ -1,15 +1,15 @@
 #include "cmd/CommandList_wgpu.h"
 
 #include "cmd/CommandQueue_wgpu.h"
+#include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_wgpu.h"
 #include "resource/Buffer_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
 #include "resource/ResourceManager_wgpu.h"
+#include "uniforms/Uniforms.h"
 
 #include <core/math.h>
-#include <pipeline/ComputeKernel.h>
-#include <uniforms/Uniforms.h>
 
 namespace bgl
 {
@@ -156,13 +156,14 @@ namespace bgl
 
 	namespace
 	{
-		// Walks a Uniforms' ReflectedLayout, and for each resource leaf reads the slot index the
-		// handle write stored at its offset, resolves it to a buffer, and emits a bind-group entry
-		// at the reflected (group, binding). Recurses through wrapper structs (PackedBuffer, ...).
+		// Reads each resource leaf's slot index out of the Uniforms bytes and emits its bind-group
+		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
+		// way Uniforms::Traverse does when the handle was written.
 		void
 		CollectBindings(
 			const ReflectedLayout&             layout,
 			const std::byte*                   data,
+			uint32_t                           baseOffset,
 			const ResourceManager&             resources,
 			std::vector<wgpu::BindGroupEntry>& entries)
 		{
@@ -171,7 +172,7 @@ namespace bgl
 				if (field.layout.isResourceHandle)
 				{
 					uint32_t slotIndex = 0;
-					std::memcpy(&slotIndex, data + field.offset, sizeof(uint32_t));
+					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
 
 					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
 
@@ -183,7 +184,12 @@ namespace bgl
 				}
 				else if (field.layout.kind == UniformType::kStruct)
 				{
-					CollectBindings(field.layout, data, resources, entries);
+					CollectBindings(
+						field.layout,
+						data,
+						baseOffset + field.offset,
+						resources,
+						entries);
 				}
 			}
 		}
@@ -210,6 +216,7 @@ namespace bgl
 			CollectBindings(
 				*entry.layout,
 				static_cast<const std::byte*>(uniforms.Data()),
+				0,
 				resources,
 				entries);
 		}

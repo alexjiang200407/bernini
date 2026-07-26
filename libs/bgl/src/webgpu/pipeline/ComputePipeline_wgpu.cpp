@@ -72,15 +72,14 @@ namespace bgl
 			return type->getResourceAccess() == SLANG_RESOURCE_ACCESS_READ_WRITE;
 		}
 
-		// Walks one constant-buffer element type into a ReflectedLayout, assigning each resource leaf
-		// a synthetic 8-byte slot (where its handle write lands) and its accumulated (group, binding).
-		// Scalars are unsupported for now: the compute kernels are buffer-only.
+		// Reflects a cbuffer element into a handle table: each resource leaf becomes an 8-byte
+		// kDescriptorHandle at a struct-relative offset, tagged with its (group, binding). Offsets
+		// must be struct-relative -- Uniforms::Traverse and Dispatch both accumulate down the tree.
 		ReflectedLayout
-		ReflectElement(
+		ReflectHandleLayout(
 			slang::TypeLayoutReflection* typeLayout,
 			uint32_t                     group,
 			uint32_t                     bindingBase,
-			uint32_t&                    handleOffset,
 			std::vector<BindGroupSlot>&  slots)
 		{
 			using Kind = slang::TypeReflection::Kind;
@@ -104,35 +103,34 @@ namespace bgl
 			{
 				result.kind = UniformType::kStruct;
 
+				uint32_t offset = 0;
+
 				const uint32_t fieldCount = typeLayout->getFieldCount();
 				for (uint32_t i = 0; i < fieldCount; ++i)
 				{
 					slang::VariableLayoutReflection* field = typeLayout->getFieldByIndex(i);
 
-					const uint32_t rel = static_cast<uint32_t>(
-						field->getOffset(SLANG_PARAMETER_CATEGORY_DESCRIPTOR_TABLE_SLOT));
+					const uint32_t binding =
+						bindingBase + static_cast<uint32_t>(field->getOffset(
+										  SLANG_PARAMETER_CATEGORY_DESCRIPTOR_TABLE_SLOT));
 
 					ReflectedField reflected;
 					reflected.name   = field->getName();
-					reflected.offset = handleOffset;
-					reflected.layout = ReflectElement(
-						field->getTypeLayout(),
-						group,
-						bindingBase + rel,
-						handleOffset,
-						slots);
+					reflected.offset = offset;
+					reflected.layout =
+						ReflectHandleLayout(field->getTypeLayout(), group, binding, slots);
 
 					if (reflected.layout.isResourceHandle)
 					{
 						reflected.group   = group;
-						reflected.binding = bindingBase + rel;
-						handleOffset += 8;
+						reflected.binding = binding;
 					}
 
+					offset += reflected.layout.size;
 					result.fields.push_back(std::move(reflected));
 				}
 
-				result.size = handleOffset;
+				result.size = offset;
 				return result;
 			}
 
@@ -164,17 +162,14 @@ namespace bgl
 			const uint32_t group   = static_cast<uint32_t>(param->getBindingSpace());
 			const uint32_t binding = static_cast<uint32_t>(param->getBindingIndex());
 
-			uint32_t handleOffset = 0;
-
-			auto layout = ReflectElement(
+			auto layout = ReflectHandleLayout(
 				param->getTypeLayout()->getElementTypeLayout(),
 				group,
 				binding,
-				handleOffset,
 				slots);
 
 			UniformLayoutEntry entry;
-			entry.size   = handleOffset;
+			entry.size   = layout.size;
 			entry.layout = std::make_shared<const ReflectedLayout>(std::move(layout));
 
 			m_UniformLayoutEntries[param->getName()] = std::move(entry);
