@@ -84,29 +84,35 @@ namespace bgl
 	slang::ProgramLayout*
 	LinkWgslProgram(
 		slang::ISession*                      session,
-		slang::IModule*                       module,
-		std::span<const std::string>          entryPointNames,
+		std::span<const WgslEntryPoint>       entryPoints,
 		Slang::ComPtr<slang::IComponentType>& owner)
 	{
 		SlangErrorChecker errChecker;
 
-		gassert(module != nullptr, "LinkWgslProgram: null shader module");
-
+		// A module is composed once even when it supplies several entry points; Slang rejects a
+		// duplicate component. Order does not matter, so a linear scan over the few modules is fine.
 		auto components = std::vector<slang::IComponentType*>();
-		components.push_back(module);
+		auto modules    = std::vector<slang::IModule*>();
+		auto handles    = std::vector<Slang::ComPtr<slang::IEntryPoint>>();
+		handles.reserve(entryPoints.size());
 
-		auto entryPoints = std::vector<Slang::ComPtr<slang::IEntryPoint>>();
-		entryPoints.reserve(entryPointNames.size());
-
-		for (const std::string& name : entryPointNames)
+		for (const WgslEntryPoint& entry : entryPoints)
 		{
-			auto entryPoint = Slang::ComPtr<slang::IEntryPoint>();
-			module->findEntryPointByName(name.c_str(), entryPoint.writeRef());
-			if (entryPoint == nullptr)
-				throw GraphicsError("wgsl: entry point not found: " + name);
+			gassert(entry.module != nullptr, "LinkWgslProgram: null shader module");
 
-			components.push_back(entryPoint.get());
-			entryPoints.push_back(std::move(entryPoint));
+			if (std::ranges::find(modules, entry.module) == modules.end())
+			{
+				modules.push_back(entry.module);
+				components.push_back(entry.module);
+			}
+
+			auto handle = Slang::ComPtr<slang::IEntryPoint>();
+			entry.module->findEntryPointByName(entry.name.c_str(), handle.writeRef());
+			if (handle == nullptr)
+				throw GraphicsError("wgsl: entry point not found: " + entry.name);
+
+			components.push_back(handle.get());
+			handles.push_back(std::move(handle));
 		}
 
 		auto program = Slang::ComPtr<slang::IComponentType>();

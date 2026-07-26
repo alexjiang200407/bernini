@@ -112,8 +112,9 @@ namespace
 	GraphicsPipelineDesc
 	TriangleDesc(Device& device)
 	{
-		auto desc   = GraphicsPipelineDesc{};
-		desc.shader = device.CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
+		auto desc         = GraphicsPipelineDesc{};
+		desc.vertexShader = desc.pixelShader =
+			device.CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
 		desc.vertexEntry = "VSMain";
 		desc.pixelEntry  = "PSMain";
 		desc.rtvFormats.push_back(Format::RGBA8_UNORM);
@@ -123,6 +124,29 @@ namespace
 		desc.debugName = "triangle";
 		return desc;
 	}
+}
+
+// The vertex and pixel stages come from two different Slang modules, linked into one WGSL program
+// -- the shape the forward shaders have (geometry stage and pixel stage in separate sources). A
+// green triangle proves the cross-module link, not just a single-module compile.
+TEST_CASE("A graphics pipeline links vertex and pixel from separate modules", "[wgpu][render]")
+{
+	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+
+	auto desc         = GraphicsPipelineDesc{};
+	desc.vertexShader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
+	desc.pixelShader  = device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiModulePixel"));
+	desc.vertexEntry  = "VSMain";
+	desc.pixelEntry   = "PSMain";
+	desc.rtvFormats.push_back(Format::RGBA8_UNORM);
+	desc.renderState.rasterState.SetCullNone();
+
+	auto pipeline = GraphicsPipeline(device->GetHandle(), device->GetSlangSession(), desc);
+
+	const auto pixels = DrawTriangle(*device, pipeline);
+	REQUIRE(pixels.size() == c_Size * c_Size);
+	REQUIRE(At(pixels, c_Size / 2, c_Size / 2) == Rgba{ 0, 255, 0, 255 });
+	REQUIRE(At(pixels, 0, 0) == Rgba{ 255, 0, 0, 255 });
 }
 
 TEST_CASE("A graphics pipeline from Slang rasterizes a triangle", "[wgpu][render]")
@@ -200,8 +224,9 @@ TEST_CASE("A guarded mesh entry lets the WGSL vertex + pixel pair compile", "[wg
 	const wgpu::Device& handle = device->GetHandle();
 	handle.PushErrorScope(wgpu::ErrorFilter::Validation);
 
-	auto desc   = GraphicsPipelineDesc{};
-	desc.shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiStageModuleTest"));
+	auto desc         = GraphicsPipelineDesc{};
+	desc.vertexShader = desc.pixelShader =
+		device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiStageModuleTest"));
 	desc.vertexEntry = "VSMain";
 	desc.pixelEntry  = "PSMain";
 	desc.rtvFormats.push_back(Format::RGBA8_UNORM);

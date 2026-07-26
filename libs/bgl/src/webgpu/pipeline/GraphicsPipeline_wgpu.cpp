@@ -45,17 +45,17 @@ namespace bgl
 		slang::ISession*            session,
 		const GraphicsPipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(m_Desc.shader != nullptr, "GraphicsPipeline: null shader");
+		gassert(m_Desc.vertexShader != nullptr, "GraphicsPipeline: null vertex shader");
+		gassert(m_Desc.pixelShader != nullptr, "GraphicsPipeline: null pixel shader");
 		gassert(!m_Desc.rtvFormats.empty(), "GraphicsPipeline: needs at least one colour target");
 
-		const std::string entries[] = { m_Desc.vertexEntry, m_Desc.pixelEntry };
+		const WgslEntryPoint entries[] = {
+			{ m_Desc.vertexShader->GetSlangModule(), m_Desc.vertexEntry },
+			{ m_Desc.pixelShader->GetSlangModule(), m_Desc.pixelEntry },
+		};
 
 		auto                  owner  = Slang::ComPtr<slang::IComponentType>();
-		slang::ProgramLayout* layout = LinkWgslProgram(
-			session,
-			m_Desc.shader->GetSlangModule(),
-			std::span<const std::string>(entries, std::size(entries)),
-			owner);
+		slang::ProgramLayout* layout = LinkWgslProgram(session, entries, owner);
 
 		SlangErrorChecker errChecker;
 		auto              code = Slang::ComPtr<slang::IBlob>();

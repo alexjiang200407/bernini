@@ -19,12 +19,10 @@ namespace bgl
 		                                  "main" :
 		                                  m_Desc.shader->GetDesc().entryPointName;
 
+		const WgslEntryPoint entries[] = { { m_Desc.shader->GetSlangModule(), entryName } };
+
 		auto                  owner  = Slang::ComPtr<slang::IComponentType>();
-		slang::ProgramLayout* layout = LinkWgslProgram(
-			session,
-			m_Desc.shader->GetSlangModule(),
-			std::span<const std::string>(&entryName, 1),
-			owner);
+		slang::ProgramLayout* layout = LinkWgslProgram(session, entries, owner);
 
 		SlangErrorChecker errChecker;
 		auto              code = Slang::ComPtr<slang::IBlob>();

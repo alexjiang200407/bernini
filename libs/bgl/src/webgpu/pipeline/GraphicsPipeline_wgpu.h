@@ -12,14 +12,15 @@ namespace bgl
 {
 	/**
 	 * The vertex + fragment stages, render state, and attachment formats a WebGPU graphics pipeline
-	 * is built from. Both entry points live in one Slang module -- the shared forward source declares
-	 * them side by side -- so the program links exactly the way a lone compute entry does.
+	 * is built from. The two stages may come from different Slang modules -- the forward shaders keep
+	 * the pixel stage separate from the geometry one -- and are linked into one WGSL program.
 	 */
 	struct GraphicsPipelineDesc
 	{
-		core::SharedRef<IShader>                        shader      = nullptr;
-		std::string                                     vertexEntry = "vs_main";
-		std::string                                     pixelEntry  = "fs_main";
+		core::SharedRef<IShader>                        vertexShader = nullptr;
+		core::SharedRef<IShader>                        pixelShader  = nullptr;
+		std::string                                     vertexEntry  = "vs_main";
+		std::string                                     pixelEntry   = "fs_main";
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;
