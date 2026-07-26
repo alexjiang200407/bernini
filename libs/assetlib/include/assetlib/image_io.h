@@ -34,6 +34,25 @@ namespace assetlib
 	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode = Ktx2Decode::kGpu);
 
 	/**
+	 * loadKTX2 over a `.ktx2` already in memory, for a container that embeds one.
+	 *
+	 * @throws std::runtime_error if the bytes are not a decodable KTX2.
+	 */
+	[[nodiscard]] ImageData
+	DecodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode = Ktx2Decode::kGpu);
+
+	/**
+	 * writeKTX2 into a buffer instead of a file, for embedding in a container.
+	 *
+	 * @throws std::runtime_error if the image cannot be encoded.
+	 */
+	[[nodiscard]] std::vector<std::byte>
+	EncodeKTX2(
+		const ImageData& image,
+		bool             srgb        = false,
+		Ktx2Compression  compression = Ktx2Compression::kNone);
+
+	/**
 	 * Decodes a `.ktx2` into a small uncompressed RGBA8 image for CPU display, e.g. an editor
 	 * thumbnail. Returns one tightly packed subresource: the first face of the mip closest to
 	 * `maxDim`, so `mipLevels` and `arraySize` are always 1 and `isCubemap` is always false.

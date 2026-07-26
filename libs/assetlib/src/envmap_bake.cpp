@@ -596,6 +596,43 @@ namespace assetlib
 		return out;
 	}
 
+	float
+	ExposureFor(const ImageData& irradiance)
+	{
+		const CubeMip0 map = ReadCubeMip0(irradiance, "assetlib::ExposureFor");
+
+		double sum  = 0.0;
+		double wsum = 0.0;
+		for (uint32_t face = 0; face < 6; ++face)
+		{
+			for (uint32_t row = 0; row < map.size; ++row)
+			{
+				for (uint32_t col = 0; col < map.size; ++col)
+				{
+					const float u =
+						(static_cast<float>(col) + 0.5f) / static_cast<float>(map.size) * 2.0f -
+						1.0f;
+					const float v =
+						(static_cast<float>(row) + 0.5f) / static_cast<float>(map.size) * 2.0f -
+						1.0f;
+
+					// Cube texels do not subtend equal solid angles, so an unweighted mean would
+					// over-count the corners and read the environment as brighter than it is.
+					const double w = TexelSolidAngle(u, v, map.size);
+					const Vec3&  c = map.faces[face][static_cast<size_t>(row) * map.size + col];
+					sum += static_cast<double>(c.x + c.y + c.z) / 3.0 * w;
+					wsum += w;
+				}
+			}
+		}
+
+		const double mean = wsum > 0.0 ? sum / wsum : 0.0;
+
+		// 0.96 is the reflectance of an 18% grey card under this convention; see docs/envmaps.md.
+		const double reflected = 0.96 * mean * 0.18;
+		return reflected > 1e-6 ? static_cast<float>(0.18 / reflected) : 1.0f;
+	}
+
 	ImageData
 	PrefilterRadiance(const ImageData& source, const PrefilterDesc& desc, PrefilterStats* stats)
 	{
