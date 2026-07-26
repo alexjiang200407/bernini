@@ -40,7 +40,7 @@ namespace
 		auto scene = gfx->CreateScene(sceneDesc);
 		auto view  = gfx->CreateSceneView(scene, 8);
 
-		bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 		auto metalMat = scene->CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });

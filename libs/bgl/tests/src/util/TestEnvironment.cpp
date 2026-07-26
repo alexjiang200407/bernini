@@ -3,12 +3,12 @@
 #include <assetlib/benv_io.h>
 #include <assetlib/image_io.h>
 
-namespace bgl_test
+namespace bgl::test
 {
 	void
 	ApplyEnvironment(bgl::IScene* scene, bgl::ISceneView* view)
 	{
-		auto env = assetlib::loadBenv("assets/studio_kominka_02.benv");
+		auto env = assetlib::loadBenv("assets/forest.benv");
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(std::move(env.irradiance)),
@@ -21,6 +21,6 @@ namespace bgl_test
 	bgl::TextureAssetHandle
 	LoadSkybox(bgl::IScene* scene)
 	{
-		return scene->AddTextureAsset(assetlib::loadBenv("assets/studio_kominka_02.benv").skybox);
+		return scene->AddTextureAsset(assetlib::loadBenv("assets/forest.benv").skybox);
 	}
 }

@@ -121,7 +121,7 @@ TEST_CASE(
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	// PBR does not render without an environment; there is no default.
-	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	auto camera = bgl::Camera();
 	camera

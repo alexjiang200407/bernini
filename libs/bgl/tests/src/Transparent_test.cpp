@@ -117,7 +117,7 @@ TEST_CASE(
 
 	const auto render = [&](bool farFirst, const std::string& path) {
 		auto view = gfx->CreateSceneView(scene, 8);
-		bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 		if (farFirst)
 		{
@@ -200,7 +200,7 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 
 	const auto overlapBlue = [&](bool occlude, const std::string& path) {
 		auto view = gfx->CreateSceneView(scene, 8);
-		bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 		addPane(scene, view, blue, 0.0f, occlude);  // far
 		addPane(scene, view, red, 5.0f, occlude);   // near
@@ -281,7 +281,7 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 	const auto render = [&](bool loose, bool occlude, const std::string& path) {
 		auto scene = gfx->CreateScene(sceneDesc);
 		auto view  = gfx->CreateSceneView(scene, 8);
-		bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 		if (loose)
 		{

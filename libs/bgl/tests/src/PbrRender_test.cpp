@@ -57,7 +57,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	auto metalMat = scene->CreatePbrMaterial(
 		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
@@ -143,7 +143,7 @@ TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]"
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	// A pure mirror: roughness 0 asks for mip 0, so nothing but the footprint term can save it.
 	auto mirror = scene->CreatePbrMaterial(
@@ -215,7 +215,7 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	auto looseDesc            = bgl::LoosePbrMaterialDesc();
 	looseDesc.baseColorFactor = glm::vec4(1.0f);

@@ -184,7 +184,7 @@ namespace
 		void
 		AddSkybox()
 		{
-			view->SetSkyBox(bgl::SkyboxDesc{ bgl_test::LoadSkybox(scene.Get()) });
+			view->SetSkyBox(bgl::SkyboxDesc{ bgl::test::LoadSkybox(scene.Get()) });
 		}
 
 		void

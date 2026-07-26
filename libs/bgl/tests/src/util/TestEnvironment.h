@@ -3,10 +3,10 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 
-namespace bgl_test
+namespace bgl::test
 {
 	/**
-	 * Puts `assets/studio_kominka_02.benv`'s lighting on a view: the IBL triplet plus the exposure the
+	 * Puts `assets/forest.benv`'s lighting on a view: the IBL triplet plus the exposure the
 	 * environment was measured at.
 	 *
 	 * PBR does not render without an environment -- there is no default -- so this exists to keep a

@@ -43,7 +43,7 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 4);
 
-	auto cubeTex = bgl_test::LoadSkybox(scene.Get());
+	auto cubeTex = bgl::test::LoadSkybox(scene.Get());
 	REQUIRE(cubeTex.textureSlot);
 
 	view->SetSkyBox(bgl::SkyboxDesc{ cubeTex });
