@@ -109,7 +109,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		if (skyBoxEnabled)
 		{
-			view->SetSkyBox({ pmrem });
+			view->SetSkyBox({ scene->AddTextureAsset(assetlib::loadKTX2("assets/skybox.ktx2")) });
 		}
 
 		// Every asset reference is relative to the data root: the mesh itself, the materials the mesh
