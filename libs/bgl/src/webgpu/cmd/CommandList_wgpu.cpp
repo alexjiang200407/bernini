@@ -1,9 +1,13 @@
 #include "cmd/CommandList_wgpu.h"
 
 #include "cmd/CommandQueue_wgpu.h"
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/ComputePipeline_wgpu.h"
 #include "resource/Buffer_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
+#include "resource/ResourceManager_wgpu.h"
+#include "uniforms/Uniforms.h"
 
 #include <core/math.h>
 
@@ -150,10 +154,84 @@ namespace bgl
 		m_CurrentComputeState = computeState;
 	}
 
-	void
-	CommandList::Dispatch(uint32_t, uint32_t, uint32_t) noexcept
+	namespace
 	{
-		gfatal("Dispatch: compute pipelines are not implemented on the WebGPU backend yet");
+		// Reads each resource leaf's slot index out of the Uniforms bytes and emits its bind-group
+		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
+		// way Uniforms::Traverse does when the handle was written.
+		void
+		CollectBindings(
+			const ReflectedLayout&             layout,
+			const std::byte*                   data,
+			uint32_t                           baseOffset,
+			const ResourceManager&             resources,
+			std::vector<wgpu::BindGroupEntry>& entries)
+		{
+			for (const ReflectedField& field : layout.fields)
+			{
+				if (field.layout.isResourceHandle)
+				{
+					uint32_t slotIndex = 0;
+					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
+
+					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
+
+					auto entry    = wgpu::BindGroupEntry{};
+					entry.binding = field.binding;
+					entry.buffer  = buffer;
+					entry.size    = buffer.GetSize();
+					entries.push_back(entry);
+				}
+				else if (field.layout.kind == UniformType::kStruct)
+				{
+					CollectBindings(
+						field.layout,
+						data,
+						baseOffset + field.offset,
+						resources,
+						entries);
+				}
+			}
+		}
+	}
+
+	void
+	CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept
+	{
+		gassert(IsOpen(), "Dispatch: the list is not open");
+		gassert(m_CurrentComputeState.has_value(), "Dispatch: compute state must be set");
+
+		const ComputeKernel* kernel = m_CurrentComputeState->kernel;
+		gassert(
+			kernel != nullptr && kernel->pipeline.IsInitialized(),
+			"Dispatch: compute kernel must be set in compute state");
+
+		auto*       pipeline  = kernel->pipeline->As<ComputePipeline>();
+		const auto& resources = *static_cast<ResourceManager*>(m_ResourceManager.Get());
+
+		auto entries = std::vector<wgpu::BindGroupEntry>();
+		for (const auto& [name, uniforms] : kernel->uniforms)
+		{
+			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
+			CollectBindings(
+				*entry.layout,
+				static_cast<const std::byte*>(uniforms.Data()),
+				0,
+				resources,
+				entries);
+		}
+
+		auto bgDesc       = wgpu::BindGroupDescriptor{};
+		bgDesc.layout     = pipeline->GetBindGroupLayout();
+		bgDesc.entryCount = entries.size();
+		bgDesc.entries    = entries.data();
+		auto bindGroup    = m_Device.CreateBindGroup(&bgDesc);
+
+		auto pass = m_Encoder.BeginComputePass();
+		pass.SetPipeline(pipeline->GetPipeline());
+		pass.SetBindGroup(0, bindGroup);
+		pass.DispatchWorkgroups(x, y, z);
+		pass.End();
 	}
 
 	void
