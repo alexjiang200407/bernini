@@ -116,12 +116,13 @@ main(int argc, char** argv)
 	std::string envCube;
 	std::string envIem;
 	std::string envBenv;
-	bool        envFloat   = false;
-	uint32_t    envIemSize = 128;
-	uint32_t    envSize    = 256;
-	uint32_t    envMips    = 7;
-	uint32_t    envSamples = 128;
-	uint32_t    envThreads = 0;
+	bool        envFloat      = false;
+	uint32_t    envIemSize    = 128;
+	uint32_t    envSkyboxSize = 512;
+	uint32_t    envSize       = 256;
+	uint32_t    envMips       = 7;
+	uint32_t    envSamples    = 128;
+	uint32_t    envThreads    = 0;
 
 	auto* envmap = app.add_subcommand(
 		"envmap",
@@ -144,7 +145,15 @@ main(int argc, char** argv)
 		"--float",
 		envFloat,
 		"Keep the .benv's maps at RGBA32F instead of packing them to RGB9E5 (4x larger)");
-	envmap->add_option("-s,--size", envSize, "Base face size (default: 256)");
+	envmap->add_option(
+		"-s,--size",
+		envSize,
+		"Prefilter base face size (default: 256). The lobe blurs it, so this can be modest");
+	envmap->add_option(
+		"--skybox-size",
+		envSkyboxSize,
+		"Skybox face size (default: 512). Seen directly at viewport resolution, so it wants more "
+		"than the prefilter -- but no more than the source can supply");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
 	envmap->add_option(
@@ -249,11 +258,13 @@ main(int argc, char** argv)
 
 			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
 
-			// An equirect source is projected onto a cube whose faces match the output base, so
-			// the prefilter's own mip pyramid is built from it rather than from an upsample.
-			assetlib::ImageData src =
-				fromHdr ? assetlib::EquirectToCube(assetlib::LoadRadianceHdr(envInput), envSize) :
-						  assetlib::loadKTX2(envInput);
+			// Projected at the skybox's size, which is the largest of the three: the prefilter and
+			// the irradiance convolve it down anyway, and starting them from the finer cube costs
+			// only the projection.
+			assetlib::ImageData src = fromHdr ? assetlib::EquirectToCube(
+													assetlib::LoadRadianceHdr(envInput),
+													std::max(envSkyboxSize, envSize)) :
+			                                    assetlib::loadKTX2(envInput);
 
 			if (!envCube.empty())
 			{

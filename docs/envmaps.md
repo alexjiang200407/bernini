@@ -3,7 +3,7 @@
 One command turns a `.hdr` into everything the renderer needs:
 
 ```bash
-assetlib_cli envmap forest.hdr --benv assets/forest.benv -s 256 -m 7 -n 2048
+assetlib_cli envmap forest.hdr --benv assets/forest.benv \n    --size 256 --skybox-size 512 --irradiance-size 128 --mips 7 --samples 2048
 ```
 
 That takes about four seconds and replaces the CMFT procedure this document used to describe. What it
@@ -13,9 +13,19 @@ writes is a single `.benv`, holding three maps — all **linear radiance**, all 
 |---|---|---|---|
 | prefilter | the GGX split-sum chain — one mip per roughness | 256², 7 mips | the specular lobe (`prefilterMap`) |
 | irradiance | the clamped-cosine convolution, via order-3 spherical harmonics | 128², 1 mip | the diffuse term (`irradianceMap`) |
-| skybox | the environment itself, unfiltered | 256², 1 mip | `SkyboxPass` (`cubeTex`) |
+| skybox | the environment itself, unfiltered | 512², 1 mip | `SkyboxPass` (`cubeTex`) |
 
 Plus the **exposure** those maps were measured at, in the header.
+
+**Each has its own size, because the three are looked at differently.** The prefilter is sampled
+through a roughness lobe that blurs it, so 256² is already generous; the irradiance is band-limited to
+`l = 2`, so 128² is more than the signal contains. The skybox is the one seen *directly*, at viewport
+resolution, and wants the most.
+
+But not more than the source can supply. An equirectangular `.hdr` gives `width / 4` texels across a
+face's 90°, so `forest.hdr` at 1024×512 carries about 256 -- and a 512² face is already interpolating.
+Going further buys smoothness, not detail: raising the skybox from 256² to 512² did not move a single
+golden image. Size it from the source, not from the screen.
 
 `brdf_lut.ktx2` stays a separate file, and is the only other input. It is the split-sum BRDF integral
 — a property of the shading model, not of any environment — so every environment shares one.
