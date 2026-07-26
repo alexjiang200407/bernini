@@ -4,6 +4,8 @@
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_wgpu.h"
 #include "pipeline/GraphicsPipeline_wgpu.h"
+#include "pipeline/MeshletKernel.h"
+#include "pipeline/MeshletPipeline_wgpu.h"
 #include "resource/Buffer_wgpu.h"
 #include "resource/Dsv_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
@@ -18,6 +20,47 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// Reads each resource leaf's slot index out of the Uniforms bytes and emits its bind-group
+		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
+		// way Uniforms::Traverse does when the handle was written.
+		void
+		CollectBindings(
+			const ReflectedLayout&             layout,
+			const std::byte*                   data,
+			uint32_t                           baseOffset,
+			const ResourceManager&             resources,
+			std::vector<wgpu::BindGroupEntry>& entries)
+		{
+			for (const ReflectedField& field : layout.fields)
+			{
+				if (field.layout.isResourceHandle)
+				{
+					uint32_t slotIndex = 0;
+					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
+
+					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
+
+					auto entry    = wgpu::BindGroupEntry{};
+					entry.binding = field.binding;
+					entry.buffer  = buffer;
+					entry.size    = buffer.GetSize();
+					entries.push_back(entry);
+				}
+				else if (field.layout.kind == UniformType::kStruct)
+				{
+					CollectBindings(
+						field.layout,
+						data,
+						baseOffset + field.offset,
+						resources,
+						entries);
+				}
+			}
+		}
+	}
+
 	CommandList::CommandList(
 		const wgpu::Device&    device,
 		const CommandListDesc& desc,
@@ -177,6 +220,38 @@ namespace bgl
 	}
 
 	void
+	CommandList::SetGraphicsKernel(const MeshletKernel& kernel) noexcept
+	{
+		gassert(m_RenderPass != nullptr, "SetGraphicsKernel: no render pass is open");
+		gassert(kernel.pipeline.IsInitialized(), "SetGraphicsKernel: kernel has no pipeline");
+
+		const GraphicsPipeline& pipeline =
+			static_cast<MeshletPipeline*>(kernel.pipeline.Get())->GetGraphicsPipeline();
+		const auto& resources = *static_cast<ResourceManager*>(m_ResourceManager.Get());
+
+		auto entries = std::vector<wgpu::BindGroupEntry>();
+		for (const auto& [name, uniforms] : kernel.uniforms)
+		{
+			const UniformLayoutEntry entry = pipeline.GetUniformLayoutEntry(name);
+			CollectBindings(
+				*entry.layout,
+				static_cast<const std::byte*>(uniforms.Data()),
+				0,
+				resources,
+				entries);
+		}
+
+		auto bgDesc       = wgpu::BindGroupDescriptor{};
+		bgDesc.layout     = pipeline.GetBindGroupLayout();
+		bgDesc.entryCount = entries.size();
+		bgDesc.entries    = entries.data();
+		auto bindGroup    = m_Device.CreateBindGroup(&bgDesc);
+
+		m_RenderPass.SetPipeline(pipeline.GetPipeline());
+		m_RenderPass.SetBindGroup(0, bindGroup);
+	}
+
+	void
 	CommandList::Draw(
 		uint32_t vertexCount,
 		uint32_t instanceCount,
@@ -303,47 +378,6 @@ namespace bgl
 	CommandList::SetComputeState(const ComputeState& computeState) noexcept
 	{
 		m_CurrentComputeState = computeState;
-	}
-
-	namespace
-	{
-		// Reads each resource leaf's slot index out of the Uniforms bytes and emits its bind-group
-		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
-		// way Uniforms::Traverse does when the handle was written.
-		void
-		CollectBindings(
-			const ReflectedLayout&             layout,
-			const std::byte*                   data,
-			uint32_t                           baseOffset,
-			const ResourceManager&             resources,
-			std::vector<wgpu::BindGroupEntry>& entries)
-		{
-			for (const ReflectedField& field : layout.fields)
-			{
-				if (field.layout.isResourceHandle)
-				{
-					uint32_t slotIndex = 0;
-					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
-
-					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
-
-					auto entry    = wgpu::BindGroupEntry{};
-					entry.binding = field.binding;
-					entry.buffer  = buffer;
-					entry.size    = buffer.GetSize();
-					entries.push_back(entry);
-				}
-				else if (field.layout.kind == UniformType::kStruct)
-				{
-					CollectBindings(
-						field.layout,
-						data,
-						baseOffset + field.offset,
-						resources,
-						entries);
-				}
-			}
-		}
 	}
 
 	void
