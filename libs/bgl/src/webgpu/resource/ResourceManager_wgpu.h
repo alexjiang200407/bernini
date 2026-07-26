@@ -3,6 +3,7 @@
 #include "resource/Buffer_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
+#include "resource/Texture_wgpu.h"
 
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
@@ -162,7 +163,8 @@ namespace bgl
 		enum class PendingType : uint8_t
 		{
 			kBuffer,
-			kReadback
+			kReadback,
+			kTexture
 		};
 
 		struct QueueGate
@@ -201,6 +203,7 @@ namespace bgl
 
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
+		core::slot_vector<Texture>        m_Textures;
 
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_Queues;
 		std::vector<PendingBatch>                                  m_PendingBatches;
