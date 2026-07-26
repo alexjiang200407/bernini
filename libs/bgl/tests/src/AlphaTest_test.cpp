@@ -84,7 +84,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	// PBR does not render without an environment; there is no default.
-	view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
+	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
 
 	// Through the real encoder: RGBA8 -> UASTC -> BC7, exactly what bakeMaterial does for a cutout.
 	const auto encoded = std::filesystem::temp_directory_path() / "bernini_alphatest_mask.ktx2";
@@ -205,7 +205,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 	auto view  = gfx->CreateSceneView(scene, 8);
 
 	// PBR does not render without an environment; there is no default.
-	view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
+	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
 
 	assetlib::ImageData baseColor =
 		assetlib::loadKTX2("assets/Textures/basecolor_38b0077028376769.ktx2");

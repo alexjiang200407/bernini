@@ -57,7 +57,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
+	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
 
 	auto metalMat = scene->CreatePbrMaterial(
 		{ .baseColorFactor = glm::vec4(1.0f), .metallicFactor = .6f, .roughnessFactor = .3f });
@@ -133,7 +133,7 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	view->SetEnvironmentMap(bgl_test::LoadEnvironment(scene.Get()));
+	bgl_test::ApplyEnvironment(scene.Get(), view.Get());
 
 	auto looseDesc            = bgl::LoosePbrMaterialDesc();
 	looseDesc.baseColorFactor = glm::vec4(1.0f);
