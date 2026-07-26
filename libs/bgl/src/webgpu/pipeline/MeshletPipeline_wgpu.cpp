@@ -10,7 +10,7 @@ namespace bgl
 		// keeps the descriptor's own name. The two may live in different modules -- the link handles
 		// that -- so the forward shaders' separate pixel module works.
 		GraphicsPipelineDesc
-		ToGraphicsDesc(const MeshletPipelineDesc& desc)
+		ToGraphicsPipelineDesc(const MeshletPipelineDesc& desc)
 		{
 			gassert(desc.meshShader != nullptr, "MeshletPipeline: null mesh shader");
 			gassert(desc.pixelShader != nullptr, "MeshletPipeline: null pixel shader");
@@ -35,6 +35,6 @@ namespace bgl
 		const wgpu::Device&        device,
 		slang::ISession*           session,
 		const MeshletPipelineDesc& desc) :
-		m_Desc(desc), m_Graphics(device, session, ToGraphicsDesc(desc))
+		m_Desc(desc), m_Graphics(device, session, ToGraphicsPipelineDesc(desc))
 	{}
 }

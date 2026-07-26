@@ -11,9 +11,8 @@ namespace bgl
 	 * dispatch-expand then drawIndirect once the expansion kernel is wired.
 	 *
 	 * The uniform reflection the kernel/binding machinery reads is the GraphicsPipeline's, so
-	 * CreateMeshletKernel and Uniforms work unchanged. The vertex and pixel entries must currently
-	 * live in one module (the mesh shader's); a pixel shader in a separate module needs a
-	 * multi-module link, which is a follow-up.
+	 * CreateMeshletKernel and Uniforms work unchanged. The vertex and pixel entries may come from
+	 * different modules -- the forward shaders keep the pixel stage separate from the geometry one.
 	 */
 	class MeshletPipeline final : public core::RefCounter<IMeshletPipeline>
 	{
