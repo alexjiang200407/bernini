@@ -39,7 +39,7 @@ namespace assetlib
 	 * @throws std::runtime_error if the bytes are not a decodable KTX2.
 	 */
 	[[nodiscard]] ImageData
-	DecodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode = Ktx2Decode::kGpu);
+	decodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode = Ktx2Decode::kGpu);
 
 	/**
 	 * Repacks a float image as `E5B9G9R9_UFLOAT_PACK32`: a 5-bit exponent shared across a 9-bit
@@ -57,7 +57,7 @@ namespace assetlib
 	 * @throws std::runtime_error if `image` is not that format.
 	 */
 	[[nodiscard]] ImageData
-	PackRgb9e5(const ImageData& image);
+	packRgb9e5(const ImageData& image);
 
 	/**
 	 * writeKTX2 into a buffer instead of a file, for embedding in a container.
@@ -65,7 +65,7 @@ namespace assetlib
 	 * @throws std::runtime_error if the image cannot be encoded.
 	 */
 	[[nodiscard]] std::vector<std::byte>
-	EncodeKTX2(
+	encodeKTX2(
 		const ImageData& image,
 		bool             srgb        = false,
 		Ktx2Compression  compression = Ktx2Compression::kNone);

@@ -9,6 +9,7 @@
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/magic.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -73,8 +74,8 @@ namespace
 	ContainerType
 	sniff(const std::filesystem::path& path)
 	{
-		constexpr uint32_t c_MeshMagic     = 0x48534D42u;  // 'BMSH'
-		constexpr uint32_t c_MaterialMagic = 0x54414D42u;  // 'BMAT'
+		constexpr uint32_t c_MeshMagic     = assetlib::magic::c_BMesh;
+		constexpr uint32_t c_MaterialMagic = assetlib::magic::c_BMaterial;
 
 		std::ifstream in(path, std::ios::binary);
 		uint32_t      magic = 0;
@@ -267,8 +268,8 @@ main(int argc, char** argv)
 			// Projected at the skybox's size, which is the largest of the three: the prefilter and
 			// the irradiance convolve it down anyway, and starting them from the finer cube costs
 			// only the projection.
-			assetlib::ImageData src = fromHdr ? assetlib::EquirectToCube(
-													assetlib::LoadRadianceHdr(envInput),
+			assetlib::ImageData src = fromHdr ? assetlib::equirectToCube(
+													assetlib::loadRadianceHdr(envInput),
 													std::max(envSkyboxSize, envSize)) :
 			                                    assetlib::loadKTX2(envInput);
 
@@ -277,7 +278,7 @@ main(int argc, char** argv)
 			// defocused background never reaches the lighting.
 			assetlib::ImageData sky =
 				envSkyboxBlur > 0.0f ?
-					assetlib::BlurCube(src, envSkyboxSize, envSkyboxBlur, 256, envThreads) :
+					assetlib::blurCube(src, envSkyboxSize, envSkyboxBlur, 256, envThreads) :
 					assetlib::ImageData();
 
 			if (!envCube.empty())
@@ -287,7 +288,7 @@ main(int argc, char** argv)
 				spdlog::info("Wrote the skybox cube to '{}' ({}^2)", envCube, cube.width);
 			}
 
-			assetlib::ImageData iem = assetlib::IrradianceSh(src, envIemSize);
+			assetlib::ImageData iem = assetlib::irradianceSh(src, envIemSize);
 			if (!envIem.empty())
 			{
 				assetlib::writeKTX2(iem, envIem, false, assetlib::Ktx2Compression::kNone);
@@ -301,7 +302,7 @@ main(int argc, char** argv)
 			desc.threads   = envThreads;
 
 			auto                stats = assetlib::PrefilterStats();
-			assetlib::ImageData out   = assetlib::PrefilterRadiance(src, desc, &stats);
+			assetlib::ImageData out   = assetlib::prefilterRadiance(src, desc, &stats);
 
 			if (!envOut.empty())
 				assetlib::writeKTX2(out, envOut, false, assetlib::Ktx2Compression::kNone);
@@ -324,22 +325,22 @@ main(int argc, char** argv)
 
 			if (!envBenv.empty())
 			{
-				const float exposure = assetlib::ExposureFor(iem);
+				const float exposure = assetlib::exposureFor(iem);
 
 				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
 				// backend without an optional feature, so this is the shipping format rather than an
 				// intermediate needing a per-platform compile.
-				auto set                    = assetlib::EnvMapSet();
-				set.prefilter               = envFloat ? std::move(out) : assetlib::PackRgb9e5(out);
-				set.irradiance              = envFloat ? std::move(iem) : assetlib::PackRgb9e5(iem);
+				auto set                    = assetlib::EnvironmentMaps();
+				set.prefilter               = envFloat ? std::move(out) : assetlib::packRgb9e5(out);
+				set.irradiance              = envFloat ? std::move(iem) : assetlib::packRgb9e5(iem);
 				assetlib::ImageData& skyOut = envSkyboxBlur > 0.0f ? sky : src;
-				set.skybox   = envFloat ? std::move(skyOut) : assetlib::PackRgb9e5(skyOut);
+				set.skybox   = envFloat ? std::move(skyOut) : assetlib::packRgb9e5(skyOut);
 				set.exposure = exposure;
 
-				auto provenance       = assetlib::EnvMapProvenance();
+				auto provenance       = assetlib::EnvironmentProvenance();
 				provenance.samples    = desc.samples;
 				provenance.mipLevels  = desc.mipLevels;
-				provenance.sourceHash = assetlib::HashFile(envInput);
+				provenance.sourceHash = assetlib::hashFile(envInput);
 
 				assetlib::writeBenv(set, envBenv, provenance);
 

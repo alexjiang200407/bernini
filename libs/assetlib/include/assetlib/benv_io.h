@@ -16,7 +16,7 @@ namespace assetlib
 	 * model rather than of any environment, so embedding it would duplicate it per environment and
 	 * re-couple what is meant to be shared.
 	 */
-	struct EnvMapSet
+	struct EnvironmentMaps
 	{
 		ImageData prefilter;   // GGX split-sum chain, one mip per roughness
 		ImageData irradiance;  // clamped-cosine convolution, one mip
@@ -30,17 +30,17 @@ namespace assetlib
 		float exposure = 1.0f;
 
 		// Move-only, following ImageData: the maps are megabytes each and nothing wants a silent copy.
-		EnvMapSet()                     = default;
-		EnvMapSet(EnvMapSet&&) noexcept = default;
-		EnvMapSet(const EnvMapSet&)     = delete;
-		EnvMapSet&
-		operator=(EnvMapSet&&) noexcept = default;
-		EnvMapSet&
-		operator=(const EnvMapSet&) = delete;
+		EnvironmentMaps()                           = default;
+		EnvironmentMaps(EnvironmentMaps&&) noexcept = default;
+		EnvironmentMaps(const EnvironmentMaps&)     = delete;
+		EnvironmentMaps&
+		operator=(EnvironmentMaps&&) noexcept = default;
+		EnvironmentMaps&
+		operator=(const EnvironmentMaps&) = delete;
 	};
 
 	/** What produced a `.benv`, so a stale bake can be spotted without re-deriving it. */
-	struct EnvMapProvenance
+	struct EnvironmentProvenance
 	{
 		uint64_t sourceHash = 0;  // of the source .hdr's bytes; 0 when unknown
 		uint32_t samples    = 0;  // GGX samples per texel the prefilter used
@@ -48,7 +48,7 @@ namespace assetlib
 	};
 
 	/**
-	 * Writes an `EnvMapSet` as a single `.benv`.
+	 * Writes an `EnvironmentMaps` as a single `.benv`.
 	 *
 	 * Each map is stored as a complete `.ktx2` blob rather than as raw texels, so `ktxinfo`,
 	 * `ktx compare` and `ktx2check` still work on a chunk carved out of the file -- the tools that
@@ -60,9 +60,9 @@ namespace assetlib
 	 */
 	void
 	writeBenv(
-		const EnvMapSet&             set,
+		const EnvironmentMaps&       maps,
 		const std::filesystem::path& path,
-		const EnvMapProvenance&      provenance = {});
+		const EnvironmentProvenance& provenance = {});
 
 	/**
 	 * Reads a `.benv` written by writeBenv.
@@ -71,10 +71,10 @@ namespace assetlib
 	 * @throws std::runtime_error if the file is missing, is not a `.benv`, carries a version this
 	 *         build does not know, or is missing one of the three maps.
 	 */
-	[[nodiscard]] EnvMapSet
-	loadBenv(const std::filesystem::path& path, EnvMapProvenance* provenance = nullptr);
+	[[nodiscard]] EnvironmentMaps
+	loadBenv(const std::filesystem::path& path, EnvironmentProvenance* provenance = nullptr);
 
-	/** FNV-1a over a file's bytes, for EnvMapProvenance::sourceHash. */
+	/** FNV-1a over a file's bytes, for EnvironmentProvenance::sourceHash. */
 	[[nodiscard]] uint64_t
-	HashFile(const std::filesystem::path& path);
+	hashFile(const std::filesystem::path& path);
 }

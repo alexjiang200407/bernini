@@ -247,7 +247,7 @@ TEST_CASE("cube texel solid angles converge to 4 pi", "[envmap]")
 TEST_CASE("SH irradiance round-trips a constant environment", "[envmap][irradiance]")
 {
 	constexpr float c_Radiance = 0.75f;
-	const ImageData iem        = IrradianceSh(ConstantCube(32, c_Radiance), 16);
+	const ImageData iem        = irradianceSh(ConstantCube(32, c_Radiance), 16);
 
 	REQUIRE(iem.isCubemap);
 	REQUIRE(iem.mipLevels == 1);
@@ -268,8 +268,8 @@ TEST_CASE("SH irradiance round-trips a constant environment", "[envmap][irradian
 TEST_CASE("SH irradiance preserves the environment's mean", "[envmap][irradiance]")
 {
 	const ImageData src  = EquirectWithSpot(64, 32, 0.5f, 0.5f, 400.0f);
-	const ImageData cube = EquirectToCube(src, 32);
-	const ImageData iem  = IrradianceSh(cube, 16);
+	const ImageData cube = equirectToCube(src, 32);
+	const ImageData iem  = irradianceSh(cube, 16);
 
 	CHECK(MeanRadiance(iem, 0) == Catch::Approx(MeanRadiance(cube, 0)).epsilon(0.05));
 }
@@ -297,7 +297,7 @@ TEST_CASE("equirect longitude maps to the expected cube direction", "[envmap][or
 	{
 		INFO(c.what);
 		// On the equator, so latitude cannot alias into the result.
-		const ImageData cube = EquirectToCube(EquirectWithSpot(128, 64, c.u, 0.5f, 500.0f), 64);
+		const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, c.u, 0.5f, 500.0f), 64);
 		CHECK(Angle(DominantDirection(cube), c.expected) < 5.0f);
 	}
 }
@@ -306,10 +306,10 @@ TEST_CASE("equirect longitude maps to the expected cube direction", "[envmap][or
 // would leave the ground lighting the sky.
 TEST_CASE("equirect latitude maps v=0 to +Y and v=1 to -Y", "[envmap][orientation]")
 {
-	const ImageData top = EquirectToCube(EquirectWithBand(128, 64, 0, 500.0f), 64);
+	const ImageData top = equirectToCube(EquirectWithBand(128, 64, 0, 500.0f), 64);
 	CHECK(Angle(DominantDirection(top), { 0.0f, 1.0f, 0.0f }) < 10.0f);
 
-	const ImageData bottom = EquirectToCube(EquirectWithBand(128, 64, 63, 500.0f), 64);
+	const ImageData bottom = equirectToCube(EquirectWithBand(128, 64, 63, 500.0f), 64);
 	CHECK(Angle(DominantDirection(bottom), { 0.0f, -1.0f, 0.0f }) < 10.0f);
 }
 
@@ -319,7 +319,7 @@ TEST_CASE("equirect latitude maps v=0 to +Y and v=1 to -Y", "[envmap][orientatio
 // roughness-1 specular -- is easy to mistake for an exposure problem.
 TEST_CASE("the prefilter chain does not gain energy with roughness", "[envmap][prefilter]")
 {
-	const ImageData cube = EquirectToCube(EquirectWithSpot(128, 64, 0.4f, 0.35f, 200.0f), 64);
+	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.4f, 0.35f, 200.0f), 64);
 
 	auto desc      = PrefilterDesc();
 	desc.faceSize  = 64;  // a 7-mip chain needs at least this: 32 >> 6 would be 0
@@ -327,7 +327,7 @@ TEST_CASE("the prefilter chain does not gain energy with roughness", "[envmap][p
 	desc.samples   = 256;
 
 	auto            stats = PrefilterStats();
-	const ImageData out   = PrefilterRadiance(cube, desc, &stats);
+	const ImageData out   = prefilterRadiance(cube, desc, &stats);
 
 	REQUIRE(out.mipLevels == 7);
 	REQUIRE(out.width == 64);
@@ -348,14 +348,14 @@ TEST_CASE("the prefilter chain does not gain energy with roughness", "[envmap][p
 // of it -- this is what keeps a mirror surface reflecting the world and not a blur of it.
 TEST_CASE("the prefilter's mip 0 reproduces the source", "[envmap][prefilter]")
 {
-	const ImageData cube = EquirectToCube(EquirectWithSpot(128, 64, 0.6f, 0.5f, 300.0f), 32);
+	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.6f, 0.5f, 300.0f), 32);
 
 	auto desc      = PrefilterDesc();
 	desc.faceSize  = 64;
 	desc.mipLevels = 7;
 	desc.samples   = 64;
 
-	const ImageData out = PrefilterRadiance(cube, desc, nullptr);
+	const ImageData out = prefilterRadiance(cube, desc, nullptr);
 
 	CHECK(MeanRadiance(out, 0) == Catch::Approx(MeanRadiance(cube, 0)).epsilon(0.02));
 	CHECK(Angle(DominantDirection(out, 0), DominantDirection(cube, 0)) < 2.0f);
@@ -374,7 +374,7 @@ TEST_CASE("the prefilter keeps a constant environment seamless", "[envmap][prefi
 	desc.mipLevels = 5;
 	desc.samples   = 64;
 
-	const ImageData out = PrefilterRadiance(ConstantCube(32, c_Radiance), desc, nullptr);
+	const ImageData out = prefilterRadiance(ConstantCube(32, c_Radiance), desc, nullptr);
 
 	for (uint32_t mip = 0; mip < desc.mipLevels; ++mip)
 	{
@@ -400,26 +400,26 @@ TEST_CASE("prefilter geometry is rejected when it cannot hold the chain", "[envm
 	auto desc      = PrefilterDesc();
 	desc.faceSize  = 4;
 	desc.mipLevels = 7;  // 4 >> 6 is 0
-	CHECK_THROWS_AS(PrefilterRadiance(cube, desc, nullptr), std::runtime_error);
+	CHECK_THROWS_AS(prefilterRadiance(cube, desc, nullptr), std::runtime_error);
 
 	desc.faceSize  = 32;
 	desc.mipLevels = 0;
-	CHECK_THROWS_AS(PrefilterRadiance(cube, desc, nullptr), std::runtime_error);
+	CHECK_THROWS_AS(prefilterRadiance(cube, desc, nullptr), std::runtime_error);
 
 	desc.mipLevels = 7;
 	desc.samples   = 0;
-	CHECK_THROWS_AS(PrefilterRadiance(cube, desc, nullptr), std::runtime_error);
+	CHECK_THROWS_AS(prefilterRadiance(cube, desc, nullptr), std::runtime_error);
 }
 
 TEST_CASE("a non-float or non-cube source is rejected", "[envmap]")
 {
 	ImageData notCube = ConstantCube(8, 1.0f);
 	notCube.isCubemap = false;
-	CHECK_THROWS_AS(IrradianceSh(notCube, 8), std::runtime_error);
+	CHECK_THROWS_AS(irradianceSh(notCube, 8), std::runtime_error);
 
 	ImageData wrongFormat = ConstantCube(8, 1.0f);
 	wrongFormat.vkFormat  = VkFormat::R8G8B8A8_UNORM;
-	CHECK_THROWS_AS(IrradianceSh(wrongFormat, 8), std::runtime_error);
+	CHECK_THROWS_AS(irradianceSh(wrongFormat, 8), std::runtime_error);
 
-	CHECK_THROWS_AS(EquirectToCube(ConstantCube(8, 1.0f), 8), std::runtime_error);
+	CHECK_THROWS_AS(equirectToCube(ConstantCube(8, 1.0f), 8), std::runtime_error);
 }

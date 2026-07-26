@@ -2,6 +2,9 @@
 
 namespace core
 {
+	// Long enough for a double; a float initialiser just truncates it.
+	inline constexpr double c_Pi = 3.14159265358979323846;
+
 	template <std::integral T, std::integral U>
 	[[nodiscard]] constexpr T
 	align(T value, U alignment) noexcept

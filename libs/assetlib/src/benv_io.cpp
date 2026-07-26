@@ -1,13 +1,14 @@
 #include "assetlib/benv_io.h"
 
 #include <assetlib/image_io.h>
+#include <assetlib_structs/magic.h>
+#include <core/err/util.h>
+#include <core/math.h>
 
 namespace assetlib
 {
 	namespace
 	{
-		constexpr uint32_t c_Magic = 0x564E4542u;  // 'B','E','N','V' little-endian
-
 		// Bumped whenever the layout changes. loadBenv refuses a major it does not know rather than
 		// guessing, because every misread here produces a plausible-looking environment.
 		constexpr uint16_t c_VersionMajor = 1;
@@ -51,27 +52,26 @@ namespace assetlib
 		static_assert(sizeof(ChunkEntry) == 24);
 
 		void
-		Pad(std::vector<std::byte>& out)
+		padToChunkAlignment(std::vector<std::byte>& out)
 		{
-			while (out.size() % c_ChunkAlign != 0) out.push_back(std::byte{ 0 });
+			out.resize(core::align(out.size(), c_ChunkAlign), std::byte{ 0 });
 		}
 
 		const ImageData&
-		Require(const ImageData& map, const char* which)
+		require(const ImageData& map, const char* which)
 		{
 			if (map.subresources.empty() || map.pixels.size() == 0)
-				throw std::runtime_error(
-					std::string("assetlib::writeBenv: the ") + which + " map is empty");
+				core::throw_runtime_error("assetlib::writeBenv: the {} map is empty", which);
 			return map;
 		}
 	}
 
 	uint64_t
-	HashFile(const std::filesystem::path& path)
+	hashFile(const std::filesystem::path& path)
 	{
 		std::ifstream in(path, std::ios::binary);
 		if (!in)
-			throw std::runtime_error("assetlib::HashFile: cannot open '" + path.string() + "'");
+			core::throw_runtime_error("assetlib::hashFile: cannot open '{}'", path.string());
 
 		uint64_t                    hash = 0xcbf29ce484222325ull;
 		std::array<char, 64 * 1024> buffer{};
@@ -90,42 +90,44 @@ namespace assetlib
 
 	void
 	writeBenv(
-		const EnvMapSet&             set,
+		const EnvironmentMaps&       maps,
 		const std::filesystem::path& path,
-		const EnvMapProvenance&      provenance)
+		const EnvironmentProvenance& provenance)
 	{
 		const std::vector<std::byte> blobs[3] = {
-			EncodeKTX2(Require(set.prefilter, "prefilter")),
-			EncodeKTX2(Require(set.irradiance, "irradiance")),
-			EncodeKTX2(Require(set.skybox, "skybox")),
+			encodeKTX2(require(maps.prefilter, "prefilter")),
+			encodeKTX2(require(maps.irradiance, "irradiance")),
+			encodeKTX2(require(maps.skybox, "skybox")),
 		};
-		constexpr ChunkId ids[3] = { ChunkId::kPrefilter, ChunkId::kIrradiance, ChunkId::kSkybox };
+		constexpr ChunkId c_Ids[3] = { ChunkId::kPrefilter,
+			                           ChunkId::kIrradiance,
+			                           ChunkId::kSkybox };
 
 		auto out = std::vector<std::byte>(sizeof(FileHeader));
 
 		ChunkEntry entries[3] = {};
 		for (int i = 0; i < 3; ++i)
 		{
-			Pad(out);
-			entries[i].id       = static_cast<uint32_t>(ids[i]);
+			padToChunkAlignment(out);
+			entries[i].id       = static_cast<uint32_t>(c_Ids[i]);
 			entries[i].offset   = out.size();
 			entries[i].byteSize = blobs[i].size();
 			out.insert(out.end(), blobs[i].begin(), blobs[i].end());
 		}
 
-		Pad(out);
+		padToChunkAlignment(out);
 		const size_t tableOffset = out.size();
 		out.resize(out.size() + sizeof(entries));
 		std::memcpy(out.data() + tableOffset, entries, sizeof(entries));
 
 		FileHeader header{};
-		header.magic            = c_Magic;
+		header.magic            = magic::c_BEnv;
 		header.versionMajor     = c_VersionMajor;
 		header.versionMinor     = c_VersionMinor;
 		header.byteOrder        = 0;
 		header.chunkCount       = 3;
 		header.chunkTableOffset = static_cast<uint32_t>(tableOffset);
-		header.exposure         = set.exposure;
+		header.exposure         = maps.exposure;
 		header.sourceHash       = provenance.sourceHash;
 		header.samples          = provenance.samples;
 		header.mipLevels        = provenance.mipLevels;
@@ -134,21 +136,21 @@ namespace assetlib
 
 		std::ofstream file(path, std::ios::binary | std::ios::trunc);
 		if (!file)
-			throw std::runtime_error("assetlib::writeBenv: cannot open '" + path.string() + "'");
+			core::throw_runtime_error("assetlib::writeBenv: cannot open '{}'", path.string());
 
 		file.write(
 			reinterpret_cast<const char*>(out.data()),
 			static_cast<std::streamsize>(out.size()));
 		if (!file)
-			throw std::runtime_error("assetlib::writeBenv: failed writing '" + path.string() + "'");
+			core::throw_runtime_error("assetlib::writeBenv: failed writing '{}'", path.string());
 	}
 
-	EnvMapSet
-	loadBenv(const std::filesystem::path& path, EnvMapProvenance* provenance)
+	EnvironmentMaps
+	loadBenv(const std::filesystem::path& path, EnvironmentProvenance* provenance)
 	{
 		std::ifstream in(path, std::ios::binary | std::ios::ate);
 		if (!in)
-			throw std::runtime_error("assetlib::loadBenv: cannot open '" + path.string() + "'");
+			core::throw_runtime_error("assetlib::loadBenv: cannot open '{}'", path.string());
 
 		const auto size = static_cast<size_t>(in.tellg());
 		in.seekg(0);
@@ -156,36 +158,43 @@ namespace assetlib
 		auto bytes = std::vector<std::byte>(size);
 		if (size < sizeof(FileHeader) ||
 		    !in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size)))
-			throw std::runtime_error("assetlib::loadBenv: '" + path.string() + "' is truncated");
+			core::throw_runtime_error("assetlib::loadBenv: '{}' is truncated", path.string());
 
 		FileHeader header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 
-		if (header.magic != c_Magic)
-			throw std::runtime_error(
-				"assetlib::loadBenv: '" + path.string() + "' is not a .benv (bad magic)");
+		if (header.magic != magic::c_BEnv)
+			core::throw_runtime_error(
+				"assetlib::loadBenv: '{}' is not a .benv (bad magic)",
+				path.string());
 		if (header.versionMajor != c_VersionMajor)
-			throw std::runtime_error(
-				"assetlib::loadBenv: '" + path.string() + "' is version " +
-				std::to_string(header.versionMajor) + ", this build reads " +
-				std::to_string(c_VersionMajor));
+			core::throw_runtime_error(
+				"assetlib::loadBenv: '{}' is version {}, this build reads {}",
+				path.string(),
+				header.versionMajor,
+				c_VersionMajor);
 		if (header.chunkCount != 3 ||
 		    header.chunkTableOffset + 3 * sizeof(ChunkEntry) > bytes.size())
-			throw std::runtime_error(
-				"assetlib::loadBenv: '" + path.string() + "' has a malformed chunk table");
+			core::throw_runtime_error(
+				"assetlib::loadBenv: '{}' has a malformed chunk table",
+				path.string());
 
 		ChunkEntry entries[3] = {};
 		std::memcpy(entries, bytes.data() + header.chunkTableOffset, sizeof(entries));
 
-		EnvMapSet set;
-		set.exposure = header.exposure;
+		EnvironmentMaps maps;
+		maps.exposure = header.exposure;
 
 		bool seen[3] = {};
 		for (const ChunkEntry& entry : entries)
 		{
-			if (entry.offset + entry.byteSize > bytes.size())
-				throw std::runtime_error(
-					"assetlib::loadBenv: a chunk of '" + path.string() + "' runs past the file");
+			// Subtract rather than add: both are uint64_t straight out of the file, so a corrupt
+			// table could wrap `offset + byteSize` back under the bound while still pointing past the
+			// buffer, which decodeKTX2 would then read out of range.
+			if (entry.offset > bytes.size() || entry.byteSize > bytes.size() - entry.offset)
+				core::throw_runtime_error(
+					"assetlib::loadBenv: a chunk of '{}' runs past the file",
+					path.string());
 
 			const auto blob =
 				std::span<const std::byte>(bytes.data() + entry.offset, entry.byteSize);
@@ -193,27 +202,29 @@ namespace assetlib
 			switch (static_cast<ChunkId>(entry.id))
 			{
 			case ChunkId::kPrefilter:
-				set.prefilter = DecodeKTX2(blob);
-				seen[0]       = true;
+				maps.prefilter = decodeKTX2(blob);
+				seen[0]        = true;
 				break;
 			case ChunkId::kIrradiance:
-				set.irradiance = DecodeKTX2(blob);
-				seen[1]        = true;
+				maps.irradiance = decodeKTX2(blob);
+				seen[1]         = true;
 				break;
 			case ChunkId::kSkybox:
-				set.skybox = DecodeKTX2(blob);
-				seen[2]    = true;
+				maps.skybox = decodeKTX2(blob);
+				seen[2]     = true;
 				break;
 			default:
-				throw std::runtime_error(
-					"assetlib::loadBenv: '" + path.string() + "' has an unknown chunk id " +
-					std::to_string(entry.id));
+				core::throw_runtime_error(
+					"assetlib::loadBenv: '{}' has an unknown chunk id {}",
+					path.string(),
+					entry.id);
 			}
 		}
 
 		if (!seen[0] || !seen[1] || !seen[2])
-			throw std::runtime_error(
-				"assetlib::loadBenv: '" + path.string() + "' is missing one of the three maps");
+			core::throw_runtime_error(
+				"assetlib::loadBenv: '{}' is missing one of the three maps",
+				path.string());
 
 		if (provenance != nullptr)
 		{
@@ -222,6 +233,6 @@ namespace assetlib
 			provenance->mipLevels  = header.mipLevels;
 		}
 
-		return set;
+		return maps;
 	}
 }

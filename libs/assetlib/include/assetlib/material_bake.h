@@ -41,7 +41,7 @@ namespace assetlib
 	 *
 	 * The counterpart of the bake's naming, and deliberately kept beside it so the two cannot drift. It
 	 * is what lets a prune tell a baked map apart from a hand-placed one sharing the directory
-	 * (`skybox.ktx2`, `brdf_lut.ktx2`), which must never be swept. Matching the pattern says the bake
+	 * (`brdf_lut.ktx2`), which must never be swept. Matching the pattern says the bake
 	 * *could* have written the file, not that it did, and never that anything still references it.
 	 */
 	[[nodiscard]] bool

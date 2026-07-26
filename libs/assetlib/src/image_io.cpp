@@ -143,39 +143,39 @@ namespace assetlib
 		std::mutex&
 		basisInitMutex()
 		{
-			static std::mutex mutex;
-			return mutex;
+			static std::mutex g_Mutex;
+			return g_Mutex;
 		}
 
 		ktx_error_code_e
 		transcodeBasis(ktxTexture2* texture, ktx_transcode_fmt_e format)
 		{
-			static std::atomic<bool> ready{ false };
+			static std::atomic<bool> g_Ready{ false };
 
-			if (ready.load(std::memory_order_acquire))
+			if (g_Ready.load(std::memory_order_acquire))
 				return ktxTexture2_TranscodeBasis(texture, format, 0);
 
 			const std::lock_guard<std::mutex> lock(basisInitMutex());
 
 			const ktx_error_code_e rc = ktxTexture2_TranscodeBasis(texture, format, 0);
 			if (rc == KTX_SUCCESS)
-				ready.store(true, std::memory_order_release);
+				g_Ready.store(true, std::memory_order_release);
 			return rc;
 		}
 
 		ktx_error_code_e
 		compressBasis(ktxTexture2* texture, ktxBasisParams* params)
 		{
-			static std::atomic<bool> ready{ false };
+			static std::atomic<bool> g_Ready{ false };
 
-			if (ready.load(std::memory_order_acquire))
+			if (g_Ready.load(std::memory_order_acquire))
 				return ktxTexture2_CompressBasisEx(texture, params);
 
 			const std::lock_guard<std::mutex> lock(basisInitMutex());
 
 			const ktx_error_code_e rc = ktxTexture2_CompressBasisEx(texture, params);
 			if (rc == KTX_SUCCESS)
-				ready.store(true, std::memory_order_release);
+				g_Ready.store(true, std::memory_order_release);
 			return rc;
 		}
 
@@ -221,10 +221,10 @@ namespace assetlib
 		};
 	}
 
-	// Everything loadKTX2 and DecodeKTX2 share once the container is open, so a file and an embedded
+	// Everything loadKTX2 and decodeKTX2 share once the container is open, so a file and an embedded
 	// blob cannot decode differently. `path` names the source for error messages only.
 	static ImageData
-	ImageFromKtx(ktxTexture2* texture, Ktx2Decode decode, const std::filesystem::path& path)
+	imageFromKtx(ktxTexture2* texture, Ktx2Decode decode, const std::filesystem::path& path)
 	{
 		// Basis-supercompressed textures (LDR material maps) transcode on the way in. The GPU wants a
 		// block format; the material bake wants texels it can composite, so it asks for RGBA32 instead.
@@ -321,11 +321,11 @@ namespace assetlib
 			&texture);
 		check(rc, "assetlib::loadKTX2: failed to load", path);
 
-		return ImageFromKtx(texture, decode, path);
+		return imageFromKtx(texture, decode, path);
 	}
 
 	ImageData
-	DecodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode)
+	decodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode)
 	{
 		ktxTexture2* texture = nullptr;
 
@@ -334,9 +334,9 @@ namespace assetlib
 			bytes.size(),
 			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
 			&texture);
-		check(rc, "assetlib::DecodeKTX2: failed to read", "<memory>");
+		check(rc, "assetlib::decodeKTX2: failed to read", "<memory>");
 
-		return ImageFromKtx(texture, decode, "<memory>");
+		return imageFromKtx(texture, decode, "<memory>");
 	}
 
 	ImageData
@@ -425,10 +425,10 @@ namespace assetlib
 		return image;
 	}
 
-	// Everything writeKTX2 and EncodeKTX2 share up to the point of emitting bytes. Returns an owned
+	// Everything writeKTX2 and encodeKTX2 share up to the point of emitting bytes. Returns an owned
 	// texture the caller must destroy; `path` names the destination for error messages only.
 	static ktxTexture2*
-	BuildKtx(
+	buildKtx(
 		const ImageData&             image,
 		const std::filesystem::path& path,
 		bool                         srgb,
@@ -537,7 +537,7 @@ namespace assetlib
 		bool                         srgb,
 		Ktx2Compression              compression)
 	{
-		ktxTexture* base = ktxTexture(BuildKtx(image, path, srgb, compression));
+		ktxTexture* base = ktxTexture(buildKtx(image, path, srgb, compression));
 
 		errno                         = 0;
 		const ktx_error_code_e wc     = ktxTexture_WriteToNamedFile(base, path.string().c_str());
@@ -550,10 +550,10 @@ namespace assetlib
 	}
 
 	ImageData
-	PackRgb9e5(const ImageData& image)
+	packRgb9e5(const ImageData& image)
 	{
 		if (image.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
-			throw std::runtime_error("assetlib::PackRgb9e5: source must be R32G32B32A32_SFLOAT");
+			throw std::runtime_error("assetlib::packRgb9e5: source must be R32G32B32A32_SFLOAT");
 
 		// GL_EXT_texture_shared_exponent: 9 mantissa bits, exponent bias 15, 5-bit exponent.
 		constexpr int   c_Mantissa = 9;
@@ -636,7 +636,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	EncodeKTX2(const ImageData& image, bool srgb, Ktx2Compression compression)
+	encodeKTX2(const ImageData& image, bool srgb, Ktx2Compression compression)
 	{
 		// Written through a stream backed by our own vector rather than through
 		// ktxTexture_WriteToMemory. That returns a buffer libktx allocated inside ktx.dll, and
@@ -677,11 +677,11 @@ namespace assetlib
 		stream.skip     = [](ktxStream*, ktx_size_t) { return KTX_INVALID_OPERATION; };
 		stream.destruct = [](ktxStream*) {};
 
-		ktxTexture* base = ktxTexture(BuildKtx(image, "<memory>", srgb, compression));
+		ktxTexture* base = ktxTexture(buildKtx(image, "<memory>", srgb, compression));
 
 		const ktx_error_code_e wc = ktxTexture_WriteToStream(base, &stream);
 		ktxTexture_Destroy(base);
-		check(wc, "assetlib::EncodeKTX2: failed to encode", "<memory>");
+		check(wc, "assetlib::encodeKTX2: failed to encode", "<memory>");
 
 		return out;
 	}

@@ -2,56 +2,21 @@
 
 #include <stb_image.h>
 
+#include <core/glm.h>
+#include <core/math.h>
+
 namespace assetlib
 {
 	namespace
 	{
-		constexpr float c_Pi = 3.14159265358979323846f;
-
-		struct Vec3
-		{
-			float x = 0.0f;
-			float y = 0.0f;
-			float z = 0.0f;
-		};
-
-		Vec3
-		operator+(Vec3 a, Vec3 b) noexcept
-		{
-			return { a.x + b.x, a.y + b.y, a.z + b.z };
-		}
-
-		Vec3
-		operator*(Vec3 a, float s) noexcept
-		{
-			return { a.x * s, a.y * s, a.z * s };
-		}
-
-		float
-		Dot(Vec3 a, Vec3 b) noexcept
-		{
-			return a.x * b.x + a.y * b.y + a.z * b.z;
-		}
-
-		Vec3
-		Cross(Vec3 a, Vec3 b) noexcept
-		{
-			return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x };
-		}
-
-		Vec3
-		Normalize(Vec3 v) noexcept
-		{
-			const float len = std::sqrt(Dot(v, v));
-			return len > 0.0f ? v * (1.0f / len) : v;
-		}
+		constexpr float c_Pi = static_cast<float>(core::c_Pi);
 
 		/**
 		 * Direction for the centre of texel (col, row) on `face`, in the D3D cube convention: u runs
 		 * left to right, v runs top to bottom, both mapped to [-1, 1].
 		 */
-		Vec3
-		FaceTexelDir(uint32_t face, float col, float row, uint32_t size) noexcept
+		glm::vec3
+		faceTexelDir(uint32_t face, float col, float row, uint32_t size) noexcept
 		{
 			const float u = (col + 0.5f) / static_cast<float>(size) * 2.0f - 1.0f;
 			const float v = (row + 0.5f) / static_cast<float>(size) * 2.0f - 1.0f;
@@ -59,17 +24,17 @@ namespace assetlib
 			switch (face)
 			{
 			case 0:
-				return Normalize({ 1.0f, -v, -u });
+				return glm::normalize(glm::vec3(1.0f, -v, -u));
 			case 1:
-				return Normalize({ -1.0f, -v, u });
+				return glm::normalize(glm::vec3(-1.0f, -v, u));
 			case 2:
-				return Normalize({ u, 1.0f, v });
+				return glm::normalize(glm::vec3(u, 1.0f, v));
 			case 3:
-				return Normalize({ u, -1.0f, -v });
+				return glm::normalize(glm::vec3(u, -1.0f, -v));
 			case 4:
-				return Normalize({ u, -v, 1.0f });
+				return glm::normalize(glm::vec3(u, -v, 1.0f));
 			default:
-				return Normalize({ -u, -v, -1.0f });
+				return glm::normalize(glm::vec3(-u, -v, -1.0f));
 			}
 		}
 
@@ -80,9 +45,9 @@ namespace assetlib
 			float    v    = 0.0f;  // [0, 1]
 		};
 
-		// Inverse of FaceTexelDir: picks the face whose axis dominates, then projects onto it.
+		// Inverse of faceTexelDir: picks the face whose axis dominates, then projects onto it.
 		FaceUv
-		DirToFaceUv(Vec3 d) noexcept
+		dirToFaceUv(glm::vec3 d) noexcept
 		{
 			const float ax = std::fabs(d.x);
 			const float ay = std::fabs(d.y);
@@ -122,21 +87,21 @@ namespace assetlib
 
 		struct CubeMip0
 		{
-			uint32_t          size = 0;
-			std::vector<Vec3> faces[6];
+			uint32_t               size = 0;
+			std::vector<glm::vec3> faces[6];
 		};
 
 		// Solid angle of one texel of an n-wide cube face at (u, v), both in [-1, 1]. Summed over
 		// every texel of all six faces this comes to 4*pi.
 		float
-		TexelSolidAngle(float u, float v, uint32_t size) noexcept
+		texelSolidAngle(float u, float v, uint32_t size) noexcept
 		{
 			const float d = 1.0f + u * u + v * v;
 			return (4.0f / static_cast<float>(size * size)) / (d * std::sqrt(d));
 		}
 
 		CubeMip0
-		ReadCubeMip0(const ImageData& source, const char* who)
+		readCubeMip0(const ImageData& source, const char* who)
 		{
 			if (!source.isCubemap)
 				throw std::runtime_error(std::string(who) + ": source is not a cube map");
@@ -170,7 +135,7 @@ namespace assetlib
 		}
 
 		ImageData
-		MakeCubeImage(uint32_t faceSize, uint32_t mipLevels)
+		makeCubeImage(uint32_t faceSize, uint32_t mipLevels)
 		{
 			ImageData out;
 			out.width     = faceSize;
@@ -221,28 +186,28 @@ namespace assetlib
 				return m_Levels.empty() ? 0u : m_Levels.front().size;
 			}
 
-			[[nodiscard]] Vec3
-			Sample(Vec3 dir, float mip) const noexcept;
+			[[nodiscard]] glm::vec3
+			Sample(glm::vec3 dir, float mip) const noexcept;
 
 		private:
 			struct Level
 			{
-				uint32_t          size = 0;
-				std::vector<Vec3> faces[6];
+				uint32_t               size = 0;
+				std::vector<glm::vec3> faces[6];
 			};
 
-			[[nodiscard]] Vec3
+			[[nodiscard]] glm::vec3
 			Texel(uint32_t level, uint32_t face, int32_t col, int32_t row) const noexcept;
 
-			[[nodiscard]] Vec3
-			SampleLevel(Vec3 dir, uint32_t level) const noexcept;
+			[[nodiscard]] glm::vec3
+			SampleLevel(glm::vec3 dir, uint32_t level) const noexcept;
 
 			std::vector<Level> m_Levels;
 		};
 
 		CubePyramid::CubePyramid(const ImageData& source)
 		{
-			CubeMip0 mip0 = ReadCubeMip0(source, "assetlib::PrefilterRadiance");
+			CubeMip0 mip0 = readCubeMip0(source, "assetlib::prefilterRadiance");
 
 			Level base;
 			base.size = mip0.size;
@@ -264,12 +229,12 @@ namespace assetlib
 					{
 						for (uint32_t col = 0; col < half; ++col)
 						{
-							const size_t s0  = static_cast<size_t>(row * 2) * prev.size + col * 2;
-							const size_t s1  = s0 + 1;
-							const size_t s2  = s0 + prev.size;
-							const size_t s3  = s2 + 1;
-							const Vec3   sum = prev.faces[face][s0] + prev.faces[face][s1] +
-							                   prev.faces[face][s2] + prev.faces[face][s3];
+							const size_t    s0 = static_cast<size_t>(row * 2) * prev.size + col * 2;
+							const size_t    s1 = s0 + 1;
+							const size_t    s2 = s0 + prev.size;
+							const size_t    s3 = s2 + 1;
+							const glm::vec3 sum = prev.faces[face][s0] + prev.faces[face][s1] +
+							                      prev.faces[face][s2] + prev.faces[face][s3];
 							next.faces[face][static_cast<size_t>(row) * half + col] = sum * 0.25f;
 						}
 					}
@@ -278,7 +243,7 @@ namespace assetlib
 			}
 		}
 
-		Vec3
+		glm::vec3
 		CubePyramid::Texel(uint32_t level, uint32_t face, int32_t col, int32_t row) const noexcept
 		{
 			const Level&  lvl  = m_Levels[level];
@@ -289,9 +254,9 @@ namespace assetlib
 			// the property a per-face clamp destroys.
 			if (col < 0 || row < 0 || col >= size || row >= size)
 			{
-				const Vec3 dir =
-					FaceTexelDir(face, static_cast<float>(col), static_cast<float>(row), lvl.size);
-				const FaceUv uv = DirToFaceUv(dir);
+				const glm::vec3 dir =
+					faceTexelDir(face, static_cast<float>(col), static_cast<float>(row), lvl.size);
+				const FaceUv uv = dirToFaceUv(dir);
 				const auto   c  = static_cast<int32_t>(uv.u * static_cast<float>(size));
 				const auto   r  = static_cast<int32_t>(uv.v * static_cast<float>(size));
 				return lvl.faces[uv.face]
@@ -302,11 +267,11 @@ namespace assetlib
 			return lvl.faces[face][static_cast<size_t>(row) * lvl.size + static_cast<size_t>(col)];
 		}
 
-		Vec3
-		CubePyramid::SampleLevel(Vec3 dir, uint32_t level) const noexcept
+		glm::vec3
+		CubePyramid::SampleLevel(glm::vec3 dir, uint32_t level) const noexcept
 		{
 			const Level& lvl  = m_Levels[level];
-			const FaceUv uv   = DirToFaceUv(dir);
+			const FaceUv uv   = dirToFaceUv(dir);
 			const float  size = static_cast<float>(lvl.size);
 
 			const float x  = uv.u * size - 0.5f;
@@ -318,18 +283,18 @@ namespace assetlib
 			const float tx = x - fx;
 			const float ty = y - fy;
 
-			const Vec3 c00 = Texel(level, uv.face, x0, y0);
-			const Vec3 c10 = Texel(level, uv.face, x0 + 1, y0);
-			const Vec3 c01 = Texel(level, uv.face, x0, y0 + 1);
-			const Vec3 c11 = Texel(level, uv.face, x0 + 1, y0 + 1);
+			const glm::vec3 c00 = Texel(level, uv.face, x0, y0);
+			const glm::vec3 c10 = Texel(level, uv.face, x0 + 1, y0);
+			const glm::vec3 c01 = Texel(level, uv.face, x0, y0 + 1);
+			const glm::vec3 c11 = Texel(level, uv.face, x0 + 1, y0 + 1);
 
-			const Vec3 top = c00 * (1.0f - tx) + c10 * tx;
-			const Vec3 bot = c01 * (1.0f - tx) + c11 * tx;
+			const glm::vec3 top = c00 * (1.0f - tx) + c10 * tx;
+			const glm::vec3 bot = c01 * (1.0f - tx) + c11 * tx;
 			return top * (1.0f - ty) + bot * ty;
 		}
 
-		Vec3
-		CubePyramid::Sample(Vec3 dir, float mip) const noexcept
+		glm::vec3
+		CubePyramid::Sample(glm::vec3 dir, float mip) const noexcept
 		{
 			const auto  maxLevel = static_cast<float>(m_Levels.size() - 1);
 			const float clamped  = std::clamp(mip, 0.0f, maxLevel);
@@ -337,7 +302,7 @@ namespace assetlib
 			const auto  hi       = static_cast<uint32_t>(std::min(clamped + 1.0f, maxLevel));
 			const float t        = clamped - static_cast<float>(lo);
 
-			const Vec3 a = SampleLevel(dir, lo);
+			const glm::vec3 a = SampleLevel(dir, lo);
 			if (lo == hi || t <= 0.0f)
 				return a;
 			return a * (1.0f - t) + SampleLevel(dir, hi) * t;
@@ -345,7 +310,7 @@ namespace assetlib
 
 		// Van der Corput radical inverse, base 2 -- the second dimension of a Hammersley set.
 		float
-		RadicalInverseBase2(uint32_t bits) noexcept
+		radicalInverseBase2(uint32_t bits) noexcept
 		{
 			bits = (bits << 16u) | (bits >> 16u);
 			bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
@@ -357,7 +322,7 @@ namespace assetlib
 
 		// GGX / Trowbridge-Reitz normal distribution.
 		float
-		DistributionGgx(float nDotH, float roughness) noexcept
+		distributionGgx(float nDotH, float roughness) noexcept
 		{
 			const float a  = roughness * roughness;
 			const float a2 = a * a;
@@ -366,8 +331,8 @@ namespace assetlib
 		}
 
 		// A half-vector drawn from the GGX lobe about `n`, distributed by the NDF.
-		Vec3
-		ImportanceSampleGgx(float u1, float u2, Vec3 n, float roughness) noexcept
+		glm::vec3
+		importanceSampleGgx(float u1, float u2, glm::vec3 n, float roughness) noexcept
 		{
 			const float a = roughness * roughness;
 
@@ -375,19 +340,19 @@ namespace assetlib
 			const float cosTheta = std::sqrt((1.0f - u2) / (1.0f + (a * a - 1.0f) * u2));
 			const float sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));
 
-			const Vec3 h = { sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta };
+			const glm::vec3 h = { sinTheta * std::cos(phi), sinTheta * std::sin(phi), cosTheta };
 
-			const Vec3 up =
-				std::fabs(n.z) < 0.999f ? Vec3{ 0.0f, 0.0f, 1.0f } : Vec3{ 1.0f, 0.0f, 0.0f };
-			const Vec3 tangent = Normalize(Cross(up, n));
-			const Vec3 bitan   = Cross(n, tangent);
+			const glm::vec3 up      = std::fabs(n.z) < 0.999f ? glm::vec3{ 0.0f, 0.0f, 1.0f } :
+			                                                    glm::vec3{ 1.0f, 0.0f, 0.0f };
+			const glm::vec3 tangent = glm::normalize(glm::cross(up, n));
+			const glm::vec3 bitan   = glm::cross(n, tangent);
 
-			return Normalize(tangent * h.x + bitan * h.y + n * h.z);
+			return glm::normalize(tangent * h.x + bitan * h.y + n * h.z);
 		}
 	}
 
 	ImageData
-	LoadRadianceHdr(const std::filesystem::path& path)
+	loadRadianceHdr(const std::filesystem::path& path)
 	{
 		int width    = 0;
 		int height   = 0;
@@ -396,7 +361,7 @@ namespace assetlib
 		float* data = stbi_loadf(path.string().c_str(), &width, &height, &channels, 4);
 		if (data == nullptr)
 			throw std::runtime_error(
-				"assetlib::LoadRadianceHdr: cannot decode '" + path.string() +
+				"assetlib::loadRadianceHdr: cannot decode '" + path.string() +
 				"': " + stbi_failure_reason());
 
 		ImageData out;
@@ -418,15 +383,15 @@ namespace assetlib
 	}
 
 	ImageData
-	EquirectToCube(const ImageData& equirect, uint32_t faceSize)
+	equirectToCube(const ImageData& equirect, uint32_t faceSize)
 	{
 		if (faceSize == 0)
-			throw std::runtime_error("assetlib::EquirectToCube: faceSize must be > 0");
+			throw std::runtime_error("assetlib::equirectToCube: faceSize must be > 0");
 		if (equirect.isCubemap || equirect.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
 			throw std::runtime_error(
-				"assetlib::EquirectToCube: source must be a 2D R32G32B32A32_SFLOAT image");
+				"assetlib::equirectToCube: source must be a 2D R32G32B32A32_SFLOAT image");
 		if (equirect.subresources.empty())
-			throw std::runtime_error("assetlib::EquirectToCube: source has no pixels");
+			throw std::runtime_error("assetlib::equirectToCube: source has no pixels");
 
 		const auto* src = reinterpret_cast<const float*>(
 			equirect.pixels.data() + equirect.subresources.front().offset);
@@ -434,7 +399,7 @@ namespace assetlib
 		const int32_t srcH = static_cast<int32_t>(equirect.height);
 
 		// Longitude wraps, latitude clamps.
-		auto fetch = [&](int32_t x, int32_t y) noexcept -> Vec3 {
+		auto fetch = [&](int32_t x, int32_t y) noexcept -> glm::vec3 {
 			const int32_t cx = ((x % srcW) + srcW) % srcW;
 			const int32_t cy = std::clamp(y, 0, srcH - 1);
 			const float*  p  = src + (static_cast<size_t>(cy) * srcW + cx) * 4;
@@ -465,7 +430,7 @@ namespace assetlib
 			{
 				for (uint32_t col = 0; col < faceSize; ++col)
 				{
-					const Vec3 d = FaceTexelDir(
+					const glm::vec3 d = faceTexelDir(
 						face,
 						static_cast<float>(col),
 						static_cast<float>(row),
@@ -485,9 +450,10 @@ namespace assetlib
 					const float tx = x - fx;
 					const float ty = y - fy;
 
-					const Vec3 top = fetch(x0, y0) * (1.0f - tx) + fetch(x0 + 1, y0) * tx;
-					const Vec3 bot = fetch(x0, y0 + 1) * (1.0f - tx) + fetch(x0 + 1, y0 + 1) * tx;
-					const Vec3 c   = top * (1.0f - ty) + bot * ty;
+					const glm::vec3 top = fetch(x0, y0) * (1.0f - tx) + fetch(x0 + 1, y0) * tx;
+					const glm::vec3 bot =
+						fetch(x0, y0 + 1) * (1.0f - tx) + fetch(x0 + 1, y0 + 1) * tx;
+					const glm::vec3 c = top * (1.0f - ty) + bot * ty;
 
 					const size_t t = (static_cast<size_t>(row) * faceSize + col) * 4;
 					dst[t + 0]     = c.x;
@@ -502,16 +468,16 @@ namespace assetlib
 	}
 
 	ImageData
-	IrradianceSh(const ImageData& source, uint32_t faceSize)
+	irradianceSh(const ImageData& source, uint32_t faceSize)
 	{
 		if (faceSize == 0)
-			throw std::runtime_error("assetlib::IrradianceSh: faceSize must be > 0");
+			throw std::runtime_error("assetlib::irradianceSh: faceSize must be > 0");
 
-		const CubeMip0 src = ReadCubeMip0(source, "assetlib::IrradianceSh");
+		const CubeMip0 src = readCubeMip0(source, "assetlib::irradianceSh");
 
 		// L[i] are the projections of incident radiance onto the 9 real SH basis functions of
 		// order 3, ordered l=0; l=1 (m=-1,0,1); l=2 (m=-2,-1,0,1,2).
-		Vec3 coeff[9] = {};
+		glm::vec3 coeff[9] = {};
 
 		for (uint32_t face = 0; face < 6; ++face)
 		{
@@ -526,13 +492,14 @@ namespace assetlib
 						(static_cast<float>(row) + 0.5f) / static_cast<float>(src.size) * 2.0f -
 						1.0f;
 
-					const Vec3 d = FaceTexelDir(
+					const glm::vec3 d = faceTexelDir(
 						face,
 						static_cast<float>(col),
 						static_cast<float>(row),
 						src.size);
-					const float dw = TexelSolidAngle(u, v, src.size);
-					const Vec3  l = src.faces[face][static_cast<size_t>(row) * src.size + col] * dw;
+					const float     dw = texelSolidAngle(u, v, src.size);
+					const glm::vec3 l =
+						src.faces[face][static_cast<size_t>(row) * src.size + col] * dw;
 
 					const float basis[9] = {
 						0.282095f,                              // Y00
@@ -554,14 +521,14 @@ namespace assetlib
 		// Ramamoorthi & Hanrahan's clamped-cosine convolution, then / pi: the raw form yields
 		// irradiance (pi for a unit-radiance environment) where the shader wants the average
 		// incident radiance, so that a constant environment round-trips to its own value.
-		constexpr float c1    = 0.429043f;
-		constexpr float c2    = 0.511664f;
-		constexpr float c3    = 0.743125f;
-		constexpr float c4    = 0.886227f;
-		constexpr float c5    = 0.247708f;
-		constexpr float invPi = 1.0f / c_Pi;
+		constexpr float c_C1    = 0.429043f;
+		constexpr float c_C2    = 0.511664f;
+		constexpr float c_C3    = 0.743125f;
+		constexpr float c_C4    = 0.886227f;
+		constexpr float c_C5    = 0.247708f;
+		constexpr float c_InvPi = 1.0f / c_Pi;
 
-		ImageData out = MakeCubeImage(faceSize, 1);
+		ImageData out = makeCubeImage(faceSize, 1);
 
 		for (uint32_t face = 0; face < 6; ++face)
 		{
@@ -571,23 +538,24 @@ namespace assetlib
 			{
 				for (uint32_t col = 0; col < faceSize; ++col)
 				{
-					const Vec3 n = FaceTexelDir(
+					const glm::vec3 n = faceTexelDir(
 						face,
 						static_cast<float>(col),
 						static_cast<float>(row),
 						faceSize);
 
-					const Vec3 e =
-						coeff[8] * (c1 * (n.x * n.x - n.y * n.y)) + coeff[6] * (c3 * n.z * n.z) +
-						coeff[0] * c4 + coeff[6] * -c5 + coeff[4] * (2.0f * c1 * n.x * n.y) +
-						coeff[7] * (2.0f * c1 * n.x * n.z) + coeff[5] * (2.0f * c1 * n.y * n.z) +
-						coeff[3] * (2.0f * c2 * n.x) + coeff[1] * (2.0f * c2 * n.y) +
-						coeff[2] * (2.0f * c2 * n.z);
+					const glm::vec3 e =
+						coeff[8] * (c_C1 * (n.x * n.x - n.y * n.y)) +
+						coeff[6] * (c_C3 * n.z * n.z) + coeff[0] * c_C4 + coeff[6] * -c_C5 +
+						coeff[4] * (2.0f * c_C1 * n.x * n.y) +
+						coeff[7] * (2.0f * c_C1 * n.x * n.z) +
+						coeff[5] * (2.0f * c_C1 * n.y * n.z) + coeff[3] * (2.0f * c_C2 * n.x) +
+						coeff[1] * (2.0f * c_C2 * n.y) + coeff[2] * (2.0f * c_C2 * n.z);
 
 					const size_t t = (static_cast<size_t>(row) * faceSize + col) * 4;
-					dst[t + 0]     = std::max(0.0f, e.x * invPi);
-					dst[t + 1]     = std::max(0.0f, e.y * invPi);
-					dst[t + 2]     = std::max(0.0f, e.z * invPi);
+					dst[t + 0]     = std::max(0.0f, e.x * c_InvPi);
+					dst[t + 1]     = std::max(0.0f, e.y * c_InvPi);
+					dst[t + 2]     = std::max(0.0f, e.z * c_InvPi);
 					dst[t + 3]     = 1.0f;
 				}
 			}
@@ -607,7 +575,7 @@ namespace assetlib
 		 * Roughness 0 is a delta lobe, so it degenerates to a resample rather than an integral.
 		 */
 		uint64_t
-		ConvolveFace(
+		convolveFace(
 			const CubePyramid& pyramid,
 			uint32_t           face,
 			uint32_t           size,
@@ -623,10 +591,10 @@ namespace assetlib
 			{
 				for (uint32_t col = 0; col < size; ++col)
 				{
-					const Vec3 n =
-						FaceTexelDir(face, static_cast<float>(col), static_cast<float>(row), size);
+					const glm::vec3 n =
+						faceTexelDir(face, static_cast<float>(col), static_cast<float>(row), size);
 
-					Vec3 sum = {};
+					auto sum = glm::vec3(0.0f);
 
 					if (roughness <= 0.0f)
 					{
@@ -638,17 +606,17 @@ namespace assetlib
 						for (uint32_t i = 0; i < samples; ++i)
 						{
 							const float u1 = static_cast<float>(i) / sampleCount;
-							const float u2 = RadicalInverseBase2(i);
+							const float u2 = radicalInverseBase2(i);
 
-							const Vec3  h     = ImportanceSampleGgx(u1, u2, n, roughness);
-							const float nDotH = Dot(n, h);
+							const glm::vec3 h     = importanceSampleGgx(u1, u2, n, roughness);
+							const float     nDotH = glm::dot(n, h);
 							// V is taken as N, the standard split-sum prefilter assumption.
-							const Vec3  l     = Normalize(h * (2.0f * nDotH) + n * -1.0f);
-							const float nDotL = Dot(n, l);
+							const glm::vec3 l     = glm::normalize(h * (2.0f * nDotH) + n * -1.0f);
+							const float     nDotL = glm::dot(n, l);
 							if (nDotL <= 0.0f)
 								continue;
 
-							const float d   = DistributionGgx(nDotH, roughness);
+							const float d   = distributionGgx(nDotH, roughness);
 							const float pdf = d * nDotH / (4.0f * std::max(nDotH, 1e-4f)) + 1e-4f;
 							const float saSample = 1.0f / (sampleCount * pdf + 1e-4f);
 							const float mip      = 0.5f * std::log2(saSample / saTexel);
@@ -675,7 +643,7 @@ namespace assetlib
 	}
 
 	ImageData
-	BlurCube(
+	blurCube(
 		const ImageData& source,
 		uint32_t         faceSize,
 		float            roughness,
@@ -683,12 +651,12 @@ namespace assetlib
 		uint32_t         threads)
 	{
 		if (faceSize == 0)
-			throw std::runtime_error("assetlib::BlurCube: faceSize must be > 0");
+			throw std::runtime_error("assetlib::blurCube: faceSize must be > 0");
 		if (samples == 0)
-			throw std::runtime_error("assetlib::BlurCube: samples must be > 0");
+			throw std::runtime_error("assetlib::blurCube: samples must be > 0");
 
 		const CubePyramid pyramid(source);
-		ImageData         out = MakeCubeImage(faceSize, 1);
+		ImageData         out = makeCubeImage(faceSize, 1);
 
 		const auto  srcSize = static_cast<float>(pyramid.BaseSize());
 		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
@@ -707,7 +675,7 @@ namespace assetlib
 
 				auto* dst =
 					reinterpret_cast<float*>(out.pixels.data() + out.subresources[face].offset);
-				ConvolveFace(pyramid, face, faceSize, roughness, samples, saTexel, dst);
+				convolveFace(pyramid, face, faceSize, roughness, samples, saTexel, dst);
 			}
 		};
 
@@ -720,9 +688,9 @@ namespace assetlib
 	}
 
 	float
-	ExposureFor(const ImageData& irradiance)
+	exposureFor(const ImageData& irradiance)
 	{
-		const CubeMip0 map = ReadCubeMip0(irradiance, "assetlib::ExposureFor");
+		const CubeMip0 map = readCubeMip0(irradiance, "assetlib::exposureFor");
 
 		double sum  = 0.0;
 		double wsum = 0.0;
@@ -741,8 +709,8 @@ namespace assetlib
 
 					// Cube texels do not subtend equal solid angles, so an unweighted mean would
 					// over-count the corners and read the environment as brighter than it is.
-					const double w = TexelSolidAngle(u, v, map.size);
-					const Vec3&  c = map.faces[face][static_cast<size_t>(row) * map.size + col];
+					const double     w = texelSolidAngle(u, v, map.size);
+					const glm::vec3& c = map.faces[face][static_cast<size_t>(row) * map.size + col];
 					sum += static_cast<double>(c.x + c.y + c.z) / 3.0 * w;
 					wsum += w;
 				}
@@ -757,22 +725,22 @@ namespace assetlib
 	}
 
 	ImageData
-	PrefilterRadiance(const ImageData& source, const PrefilterDesc& desc, PrefilterStats* stats)
+	prefilterRadiance(const ImageData& source, const PrefilterDesc& desc, PrefilterStats* stats)
 	{
 		if (desc.faceSize == 0 || desc.mipLevels == 0)
 			throw std::runtime_error(
-				"assetlib::PrefilterRadiance: faceSize and mipLevels must be > 0");
+				"assetlib::prefilterRadiance: faceSize and mipLevels must be > 0");
 		if (desc.samples == 0)
-			throw std::runtime_error("assetlib::PrefilterRadiance: samples must be > 0");
+			throw std::runtime_error("assetlib::prefilterRadiance: samples must be > 0");
 		if ((desc.faceSize >> (desc.mipLevels - 1)) == 0)
 			throw std::runtime_error(
-				"assetlib::PrefilterRadiance: faceSize is too small for that many mips");
+				"assetlib::prefilterRadiance: faceSize is too small for that many mips");
 
 		const auto start = std::chrono::steady_clock::now();
 
 		const CubePyramid pyramid(source);
 
-		ImageData out = MakeCubeImage(desc.faceSize, desc.mipLevels);
+		ImageData out = makeCubeImage(desc.faceSize, desc.mipLevels);
 
 		size_t total = 0;
 		for (uint32_t mip = 0; mip < desc.mipLevels; ++mip)
@@ -819,7 +787,7 @@ namespace assetlib
 					reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
 
 				samplesTaken.fetch_add(
-					ConvolveFace(pyramid, job.face, size, roughness, desc.samples, saTexel, dst));
+					convolveFace(pyramid, job.face, size, roughness, desc.samples, saTexel, dst));
 			}
 		};
 

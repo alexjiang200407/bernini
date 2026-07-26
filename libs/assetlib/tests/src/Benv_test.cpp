@@ -58,13 +58,13 @@ namespace
 // to preserve all three plus the exposure they were measured at -- geometry and pixels both.
 TEST_CASE("a .benv round-trips its three maps and exposure", "[benv][io]")
 {
-	auto set       = EnvMapSet();
+	auto set       = EnvironmentMaps();
 	set.prefilter  = ConstantCube(16, 5, 0.25f);
 	set.irradiance = ConstantCube(8, 1, 0.5f);
 	set.skybox     = ConstantCube(16, 1, 0.75f);
 	set.exposure   = 1.339f;
 
-	auto provenance       = EnvMapProvenance();
+	auto provenance       = EnvironmentProvenance();
 	provenance.samples    = 2048;
 	provenance.mipLevels  = 5;
 	provenance.sourceHash = 0xdeadbeefcafef00dull;
@@ -72,8 +72,8 @@ TEST_CASE("a .benv round-trips its three maps and exposure", "[benv][io]")
 	const auto path = TempBenv("roundtrip");
 	writeBenv(set, path, provenance);
 
-	auto            got      = EnvMapProvenance();
-	const EnvMapSet reloaded = loadBenv(path, &got);
+	auto                  got      = EnvironmentProvenance();
+	const EnvironmentMaps reloaded = loadBenv(path, &got);
 
 	CHECK(reloaded.exposure == Catch::Approx(1.339f));
 	CHECK(got.samples == 2048);
@@ -103,7 +103,7 @@ TEST_CASE("a .benv round-trips its three maps and exposure", "[benv][io]")
 // silently lose -- and the ktx tools are what diagnose a bad environment map.
 TEST_CASE("a .benv embeds each map as a readable .ktx2", "[benv][io]")
 {
-	auto set       = EnvMapSet();
+	auto set       = EnvironmentMaps();
 	set.prefilter  = ConstantCube(8, 4, 1.0f);
 	set.irradiance = ConstantCube(8, 1, 1.0f);
 	set.skybox     = ConstantCube(8, 1, 1.0f);
@@ -116,10 +116,10 @@ TEST_CASE("a .benv embeds each map as a readable .ktx2", "[benv][io]")
 	in.close();
 
 	// The KTX2 identifier, once per embedded map.
-	const char c_Id[] = { '\xAB', 'K', 'T', 'X', ' ', '2', '0', '\xBB' };
-	int        found  = 0;
-	for (size_t i = 0; i + sizeof(c_Id) <= bytes.size(); ++i)
-		if (std::memcmp(bytes.data() + i, c_Id, sizeof(c_Id)) == 0)
+	const char ktxId[] = { '\xAB', 'K', 'T', 'X', ' ', '2', '0', '\xBB' };
+	int        found   = 0;
+	for (size_t i = 0; i + sizeof(ktxId) <= bytes.size(); ++i)
+		if (std::memcmp(bytes.data() + i, ktxId, sizeof(ktxId)) == 0)
 			++found;
 
 	CHECK(found == 3);
@@ -130,7 +130,7 @@ TEST_CASE("a .benv embeds each map as a readable .ktx2", "[benv][io]")
 // guesses. A version bump in particular must not be interpreted by an older build.
 TEST_CASE("a .benv is rejected rather than misread", "[benv][io]")
 {
-	auto set       = EnvMapSet();
+	auto set       = EnvironmentMaps();
 	set.prefilter  = ConstantCube(8, 4, 1.0f);
 	set.irradiance = ConstantCube(8, 1, 1.0f);
 	set.skybox     = ConstantCube(8, 1, 1.0f);
@@ -183,7 +183,7 @@ TEST_CASE("a .benv is rejected rather than misread", "[benv][io]")
 
 TEST_CASE("writeBenv refuses an incomplete set", "[benv][io]")
 {
-	auto set      = EnvMapSet();
+	auto set      = EnvironmentMaps();
 	set.prefilter = ConstantCube(8, 4, 1.0f);
 	// irradiance and skybox left empty
 
@@ -196,9 +196,9 @@ TEST_CASE("exposure is derived from the irradiance map", "[envmap][irradiance]")
 {
 	// A constant environment of this radiance is what forest.hdr measures, so the documented
 	// arithmetic applies directly.
-	const float exposure = ExposureFor(ConstantCube(16, 1, 0.781f));
+	const float exposure = exposureFor(ConstantCube(16, 1, 0.781f));
 	CHECK(exposure == Catch::Approx(1.33f).epsilon(0.02));
 
 	// Twice as bright an environment needs half the exposure.
-	CHECK(ExposureFor(ConstantCube(16, 1, 1.562f)) == Catch::Approx(exposure * 0.5f).epsilon(0.02));
+	CHECK(exposureFor(ConstantCube(16, 1, 1.562f)) == Catch::Approx(exposure * 0.5f).epsilon(0.02));
 }

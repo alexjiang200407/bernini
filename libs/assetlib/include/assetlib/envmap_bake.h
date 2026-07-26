@@ -34,7 +34,7 @@ namespace assetlib
 	 * low-pass that everything above l = 2 is discarded by the convolution itself, so 9 coefficients
 	 * carry over 99% of the result. It is also cheaper than sampling -- one O(source) projection pass
 	 * and O(1) per output texel, against a hemisphere integral per texel -- and has no Monte Carlo
-	 * noise to trade against, unlike PrefilterRadiance.
+	 * noise to trade against, unlike prefilterRadiance.
 	 *
 	 * Stores **irradiance divided by pi**, i.e. the cosine-weighted average incident radiance, which
 	 * is what the shader's `irradiance * albedo` expects and what makes this map's mean comparable to
@@ -46,7 +46,7 @@ namespace assetlib
 	 * @throws std::runtime_error if `source` is not a float cube map, or `faceSize` is 0.
 	 */
 	[[nodiscard]] ImageData
-	IrradianceSh(const ImageData& source, uint32_t faceSize = 128);
+	irradianceSh(const ImageData& source, uint32_t faceSize = 128);
 
 	/**
 	 * Convolves a cube map with the GGX lobe at one fixed roughness -- a defocus blur with a
@@ -66,7 +66,7 @@ namespace assetlib
 	 * @throws std::runtime_error if `source` is not a float cube map, or `faceSize` is 0.
 	 */
 	[[nodiscard]] ImageData
-	BlurCube(
+	blurCube(
 		const ImageData& source,
 		uint32_t         faceSize,
 		float            roughness,
@@ -80,11 +80,11 @@ namespace assetlib
 	 * to be re-derived whenever they change. AgX places scene-linear 0.18 at middle grey, so this
 	 * returns `0.18 / L` for `L` the radiance an 18% grey surface reflects in the environment.
 	 *
-	 * @param irradiance A map from IrradianceSh -- the cosine-weighted average incident radiance.
+	 * @param irradiance A map from irradianceSh -- the cosine-weighted average incident radiance.
 	 * @throws std::runtime_error if `irradiance` is not a float cube map.
 	 */
 	[[nodiscard]] float
-	ExposureFor(const ImageData& irradiance);
+	exposureFor(const ImageData& irradiance);
 
 	/**
 	 * Decodes a Radiance (`.hdr`) equirectangular image into linear float radiance.
@@ -96,7 +96,7 @@ namespace assetlib
 	 * @throws std::runtime_error if the file cannot be read or is not an HDR image.
 	 */
 	[[nodiscard]] ImageData
-	LoadRadianceHdr(const std::filesystem::path& path);
+	loadRadianceHdr(const std::filesystem::path& path);
 
 	/**
 	 * Projects an equirectangular image onto a cube map with `faceSize` square faces, one mip.
@@ -106,7 +106,7 @@ namespace assetlib
 	 * @throws std::runtime_error if `equirect` is not a 2D float image, or `faceSize` is 0.
 	 */
 	[[nodiscard]] ImageData
-	EquirectToCube(const ImageData& equirect, uint32_t faceSize);
+	equirectToCube(const ImageData& equirect, uint32_t faceSize);
 
 	/**
 	 * Prefilters a radiance environment cube map into the GGX split-sum chain the forward shading
@@ -130,7 +130,7 @@ namespace assetlib
 	 * @throws std::runtime_error if `source` is not a float cube map, or `desc` is degenerate.
 	 */
 	[[nodiscard]] ImageData
-	PrefilterRadiance(
+	prefilterRadiance(
 		const ImageData&     source,
 		const PrefilterDesc& desc,
 		PrefilterStats*      stats = nullptr);

@@ -7,7 +7,9 @@ not by what the thing feels like. That is the whole rule; everything below is de
 |---|---|---|
 | `libs/core/include/core/containers/`, `libs/core/include/core/str/` | `lower_case` throughout | These substitute for standard-library types. `static_vector` has to be usable where a `std::vector` was, down to `value_type` and `push_back`. |
 | the rest of `libs/core/` | `lower_case` free functions, `PascalCase` types and methods | A `core` helper is read beside `std::` ones in the same expression — `split_once(str, "/")`, not `SplitOnce`. |
-| everything else | `PascalCase` types and functions | Engine code. `bgl`, `assetlib`, `gamelib`, `apps`, `examples`. |
+| `libs/assetlib/` | `camelBack` free functions, `PascalCase` types and methods | The codec surface has always spelled them this way -- `loadKTX2`, `bake`, `serialize` -- and a caller reads `loadKTX2(path)` beside `load(path)`. |
+| `libs/assetlib/tests/` | `PascalCase`, as everywhere else | A fixture is engine code. Only the published codec functions read beside `std::`. |
+| everything else | `PascalCase` types and functions | Engine code. `bgl`, `gamelib`, `apps`, `examples`. |
 
 The boundary is a directory because a directory is checkable and a judgement call is not. The
 earlier form of this rule — "snake_case for containers, camelCase *or* snake_case for utilities" —

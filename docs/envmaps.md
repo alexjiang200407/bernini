@@ -3,7 +3,9 @@
 One command turns a `.hdr` into everything the renderer needs:
 
 ```bash
-assetlib_cli envmap forest.hdr --benv assets/forest.benv \n    --size 256 --skybox-size 256 --skybox-blur 0.15 --irradiance-size 128 \n    --mips 7 --samples 2048
+assetlib_cli envmap forest.hdr --benv assets/forest.benv \
+    --size 256 --skybox-size 256 --skybox-blur 0.15 --irradiance-size 128 \
+    --mips 7 --samples 2048
 ```
 
 That takes about four seconds and replaces the CMFT procedure this document used to describe. What it
