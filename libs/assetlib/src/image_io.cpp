@@ -52,6 +52,7 @@ namespace assetlib
 			case VkFormat::R16G16_UNORM:
 			case VkFormat::R16G16_SFLOAT:
 			case VkFormat::R32_SFLOAT:
+			case VkFormat::E5B9G9R9_UFLOAT_PACK32:
 				return { 1, 1, 4 };
 			case VkFormat::R16G16B16A16_UNORM:
 			case VkFormat::R16G16B16A16_SFLOAT:
