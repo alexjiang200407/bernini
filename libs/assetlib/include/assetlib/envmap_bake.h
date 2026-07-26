@@ -27,6 +27,28 @@ namespace assetlib
 	};
 
 	/**
+	 * Convolves a radiance environment cube map with the clamped-cosine kernel, via a 9-coefficient
+	 * spherical-harmonic projection, into the `irradianceMap` the diffuse term samples.
+	 *
+	 * Order 3 is not an approximation worth apologising for: Lambertian diffuse is so aggressive a
+	 * low-pass that everything above l = 2 is discarded by the convolution itself, so 9 coefficients
+	 * carry over 99% of the result. It is also cheaper than sampling -- one O(source) projection pass
+	 * and O(1) per output texel, against a hemisphere integral per texel -- and has no Monte Carlo
+	 * noise to trade against, unlike PrefilterRadiance.
+	 *
+	 * Stores **irradiance divided by pi**, i.e. the cosine-weighted average incident radiance, which
+	 * is what the shader's `irradiance * albedo` expects and what makes this map's mean comparable to
+	 * the prefilter's. A constant environment therefore round-trips to its own radiance.
+	 *
+	 * @param source A cube map in `R32G32B32A32_SFLOAT`; only mip 0 is read.
+	 * @param faceSize Face size of the result. 128 is ample -- the signal is band-limited to l = 2.
+	 * @return A cube map in `R32G32B32A32_SFLOAT` with one mip level.
+	 * @throws std::runtime_error if `source` is not a float cube map, or `faceSize` is 0.
+	 */
+	[[nodiscard]] ImageData
+	IrradianceSh(const ImageData& source, uint32_t faceSize = 128);
+
+	/**
 	 * Decodes a Radiance (`.hdr`) equirectangular image into linear float radiance.
 	 *
 	 * The result is a 2D `R32G32B32A32_SFLOAT` image, alpha 1. Radiance RGBE is already linear, so

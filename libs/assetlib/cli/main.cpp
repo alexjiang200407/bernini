@@ -113,6 +113,8 @@ main(int argc, char** argv)
 	std::string envInput;
 	std::string envOut;
 	std::string envCube;
+	std::string envIem;
+	uint32_t    envIemSize = 128;
 	uint32_t    envSize    = 256;
 	uint32_t    envMips    = 7;
 	uint32_t    envSamples = 128;
@@ -129,6 +131,8 @@ main(int argc, char** argv)
 		"-c,--cube",
 		envCube,
 		"Also write the unfiltered source cube here -- this is the skybox");
+	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
+	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
 	envmap->add_option("-s,--size", envSize, "Base face size (default: 256)");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
@@ -241,6 +245,13 @@ main(int argc, char** argv)
 			{
 				assetlib::writeKTX2(src, envCube, false, assetlib::Ktx2Compression::kNone);
 				spdlog::info("Wrote the unfiltered cube to '{}' ({}^2)", envCube, src.width);
+			}
+
+			if (!envIem.empty())
+			{
+				const assetlib::ImageData iem = assetlib::IrradianceSh(src, envIemSize);
+				assetlib::writeKTX2(iem, envIem, false, assetlib::Ktx2Compression::kNone);
+				spdlog::info("Wrote the irradiance map to '{}' ({}^2)", envIem, envIemSize);
 			}
 
 			auto desc      = assetlib::PrefilterDesc();
