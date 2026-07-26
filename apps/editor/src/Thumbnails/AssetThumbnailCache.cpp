@@ -206,7 +206,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 		editor::ApplyEnvironment(
 			scene,
 			view,
-			m_Desc.environment,
+			m_Desc.environmentMap,
 			m_Desc.brdfLut,
 			m_Desc.exposureOverride,
 			"AssetThumbnail");

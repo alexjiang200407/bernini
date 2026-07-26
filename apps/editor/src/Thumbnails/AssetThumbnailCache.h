@@ -26,8 +26,7 @@ struct AssetThumbnailDesc
 	uint32_t dimension        = 256;
 	uint32_t initialInstances = 256;
 
-	// One `.benv` rather than three loose maps, and the BRDF LUT separately; see MaterialPreviewEnv.
-	std::string          environment;
+	std::string          environmentMap;
 	std::string          brdfLut;
 	std::optional<float> exposureOverride;
 };

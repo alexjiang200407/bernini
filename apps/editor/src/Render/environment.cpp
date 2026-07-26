@@ -20,10 +20,10 @@ namespace editor
 		if (benvPath.empty())
 			return;
 
-		auto set = assetlib::EnvMapSet();
+		auto maps = assetlib::EnvironmentMaps();
 		try
 		{
-			set = assetlib::loadBenv(benvPath);
+			maps = assetlib::loadBenv(benvPath);
 		}
 		catch (const std::exception& e)
 		{
@@ -33,7 +33,7 @@ namespace editor
 
 		// The .benv's own exposure is the value derived from these maps, so it is the right default;
 		// config only overrules it deliberately.
-		view->SetExposure(exposureOverride.value_or(set.exposure));
+		view->SetExposure(exposureOverride.value_or(maps.exposure));
 
 		auto brdfLut = bgl::TextureAssetHandle();
 		if (!brdfLutPath.empty())
@@ -50,8 +50,8 @@ namespace editor
 
 		try
 		{
-			const auto irradiance = scene->AddTextureAsset(std::move(set.irradiance));
-			const auto prefilter  = scene->AddTextureAsset(std::move(set.prefilter));
+			const auto irradiance = scene->AddTextureAsset(std::move(maps.irradiance));
+			const auto prefilter  = scene->AddTextureAsset(std::move(maps.prefilter));
 
 			// All three or none: the split-sum specular is the product of the prefilter and the LUT,
 			// so a missing LUT would leave the lobe unnormalised rather than merely dimmer.
@@ -65,7 +65,7 @@ namespace editor
 
 		try
 		{
-			if (const auto skybox = scene->AddTextureAsset(std::move(set.skybox));
+			if (const auto skybox = scene->AddTextureAsset(std::move(maps.skybox));
 			    skybox.textureSlot)
 				view->SetSkyBox({ skybox });
 		}

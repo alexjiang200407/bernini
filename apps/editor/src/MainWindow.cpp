@@ -87,8 +87,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		auto matDesc                    = MaterialEditorWindowDesc();
 		matDesc.renderer                = m_Renderer.get();
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
-		matDesc.previewEnv.environment  = matSettings["environment"].GetOrDefault(std::string());
-		matDesc.previewEnv.brdfLut      = matSettings["brdfLut"].GetOrDefault(std::string());
+		matDesc.previewEnv.environmentMap =
+			matSettings["environmentMap"].GetOrDefault(std::string());
+		matDesc.previewEnv.brdfLut = matSettings["brdfLut"].GetOrDefault(std::string());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
@@ -99,7 +100,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		thumbDesc.renderer         = m_Renderer.get();
 		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
-		thumbDesc.environment      = thumbSettings["environment"].GetOrDefault(std::string());
+		thumbDesc.environmentMap   = thumbSettings["environmentMap"].GetOrDefault(std::string());
 		thumbDesc.brdfLut          = thumbSettings["brdfLut"].GetOrDefault(std::string());
 
 		if (auto exposure = thumbSettings["exposure"])
