@@ -3,12 +3,16 @@
 #include "cmd/CommandQueue_wgpu.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_wgpu.h"
+#include "pipeline/GraphicsPipeline_wgpu.h"
 #include "resource/Buffer_wgpu.h"
+#include "resource/Dsv_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
 #include "resource/ResourceManager_wgpu.h"
+#include "resource/Rtv_wgpu.h"
 #include "resource/Texture_wgpu.h"
 #include "uniforms/Uniforms.h"
+#include "util/util.h"
 
 #include <core/math.h>
 
@@ -103,6 +107,104 @@ namespace bgl
 		passDesc.depthStencilAttachment = &attachment;
 
 		m_Encoder.BeginRenderPass(&passDesc).End();
+	}
+
+	void
+	CommandList::BeginRenderPass(
+		const FrameBuffer&   frameBuffer,
+		const ViewportState& viewportState) noexcept
+	{
+		gassert(IsOpen(), "BeginRenderPass: the list is not open");
+		gassert(m_RenderPass == nullptr, "BeginRenderPass: a render pass is already open");
+
+		auto colors = std::vector<wgpu::RenderPassColorAttachment>();
+		colors.reserve(frameBuffer.colorAttachments.size());
+		for (const RtvHandle& handle : frameBuffer.colorAttachments)
+		{
+			auto attachment    = wgpu::RenderPassColorAttachment{};
+			attachment.view    = m_ResourceManager->GetRtv(handle).GetView();
+			attachment.loadOp  = wgpu::LoadOp::Load;
+			attachment.storeOp = wgpu::StoreOp::Store;
+			colors.push_back(attachment);
+		}
+
+		auto passDesc                 = wgpu::RenderPassDescriptor{};
+		passDesc.colorAttachmentCount = colors.size();
+		passDesc.colorAttachments     = colors.data();
+
+		auto depth = wgpu::RenderPassDepthStencilAttachment{};
+		if (!frameBuffer.depthAttachment.IsNull())
+		{
+			const Dsv& dsv     = m_ResourceManager->GetDsv(frameBuffer.depthAttachment);
+			depth.view         = dsv.GetView();
+			depth.depthLoadOp  = wgpu::LoadOp::Load;
+			depth.depthStoreOp = wgpu::StoreOp::Store;
+			if (GetFormatInfo(dsv.GetDesc().format).hasStencil)
+			{
+				depth.stencilLoadOp  = wgpu::LoadOp::Load;
+				depth.stencilStoreOp = wgpu::StoreOp::Store;
+			}
+			passDesc.depthStencilAttachment = &depth;
+		}
+
+		m_RenderPass = m_Encoder.BeginRenderPass(&passDesc);
+
+		if (!viewportState.viewports.empty())
+		{
+			const Viewport& vp = viewportState.viewports[0];
+			m_RenderPass.SetViewport(
+				vp.minX,
+				vp.minY,
+				vp.maxX - vp.minX,
+				vp.maxY - vp.minY,
+				vp.minZ,
+				vp.maxZ);
+
+			const Rect& sc = viewportState.scissorRects[0];
+			m_RenderPass.SetScissorRect(
+				static_cast<uint32_t>(sc.minX),
+				static_cast<uint32_t>(sc.minY),
+				static_cast<uint32_t>(sc.maxX - sc.minX),
+				static_cast<uint32_t>(sc.maxY - sc.minY));
+		}
+	}
+
+	void
+	CommandList::SetGraphicsPipeline(const GraphicsPipeline& pipeline) noexcept
+	{
+		gassert(m_RenderPass != nullptr, "SetGraphicsPipeline: no render pass is open");
+		m_RenderPass.SetPipeline(pipeline.GetPipeline());
+	}
+
+	void
+	CommandList::Draw(
+		uint32_t vertexCount,
+		uint32_t instanceCount,
+		uint32_t firstVertex,
+		uint32_t firstInstance) noexcept
+	{
+		gassert(m_RenderPass != nullptr, "Draw: no render pass is open");
+		m_RenderPass.Draw(vertexCount, instanceCount, firstVertex, firstInstance);
+	}
+
+	void
+	CommandList::DrawIndirect(BufferHandle argsBuffer, uint64_t offset) noexcept
+	{
+		gassert(m_RenderPass != nullptr, "DrawIndirect: no render pass is open");
+		gassert(
+			m_ResourceManager->ValidBufferHandle(argsBuffer),
+			"DrawIndirect: invalid args buffer");
+
+		const wgpu::Buffer& buffer = m_ResourceManager->GetBuffer(argsBuffer).GetHandle();
+		m_RenderPass.DrawIndirect(buffer, offset);
+	}
+
+	void
+	CommandList::EndRenderPass() noexcept
+	{
+		gassert(m_RenderPass != nullptr, "EndRenderPass: no render pass is open");
+		m_RenderPass.End();
+		m_RenderPass = nullptr;
 	}
 
 	void

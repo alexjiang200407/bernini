@@ -5,6 +5,8 @@
 
 namespace bgl
 {
+	class GraphicsPipeline;
+
 	/**
 	 * Records into a WGPUCommandEncoder between Open and Close; Close finishes it into a
 	 * command buffer the queue takes at submit.
@@ -138,14 +140,49 @@ namespace bgl
 			uint8_t                  stencil,
 			bool                     hasStencil) noexcept;
 
+		/**
+		 * Opens a render pass over the framebuffer's colour and depth views, loading their existing
+		 * contents (clears are separate, via ClearRtv/ClearDsv). The first viewport/scissor is
+		 * applied. Must be paired with EndRenderPass; no other encoding may happen in between.
+		 */
+		void
+		BeginRenderPass(
+			const FrameBuffer&   frameBuffer,
+			const ViewportState& viewportState) noexcept;
+
+		/** Binds a graphics pipeline for subsequent draws in the open render pass. */
+		void
+		SetGraphicsPipeline(const GraphicsPipeline& pipeline) noexcept;
+
+		/** Issues a non-indexed draw in the open render pass. */
+		void
+		Draw(
+			uint32_t vertexCount,
+			uint32_t instanceCount = 1,
+			uint32_t firstVertex   = 0,
+			uint32_t firstInstance = 0) noexcept;
+
+		/**
+		 * Issues a non-indexed draw whose {vertexCount, instanceCount, firstVertex, firstInstance}
+		 * arguments are read from `argsBuffer` at `offset` -- the args a meshlet-expansion kernel
+		 * fills before the draw. The buffer must hold 16 bytes of draw args at that offset.
+		 */
+		void
+		DrawIndirect(BufferHandle argsBuffer, uint64_t offset = 0) noexcept;
+
+		/** Closes the render pass opened by BeginRenderPass. */
+		void
+		EndRenderPass() noexcept;
+
 	private:
 		wgpu::Device       m_Device;
 		CommandListDesc    m_Desc;
 		ResourceManagerRef m_ResourceManager;
 
-		wgpu::CommandEncoder m_Encoder;
-		wgpu::CommandBuffer  m_CommandBuffer;
-		wgpu::Queue          m_BoundQueue;
+		wgpu::CommandEncoder    m_Encoder;
+		wgpu::CommandBuffer     m_CommandBuffer;
+		wgpu::Queue             m_BoundQueue;
+		wgpu::RenderPassEncoder m_RenderPass;
 
 		std::optional<ComputeState> m_CurrentComputeState;
 	};
