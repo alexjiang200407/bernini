@@ -5,6 +5,8 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/envmap_bake.h>
+#include <assetlib/image_io.h>
 #include <assetlib/texture_prune.h>
 #include <spdlog/spdlog.h>
 
@@ -108,6 +110,33 @@ main(int argc, char** argv)
 	bake->add_option("-o,--out", outDir, "Output directory")->required();
 	bake->add_option("-n,--name", name, "Base name for the .bmesh (default: mesh)");
 
+	std::string envInput;
+	std::string envOut;
+	std::string envCube;
+	uint32_t    envSize    = 256;
+	uint32_t    envMips    = 7;
+	uint32_t    envSamples = 128;
+	uint32_t    envThreads = 0;
+
+	auto* envmap = app.add_subcommand(
+		"envmap",
+		"Prefilter a radiance cube map into the GGX split-sum chain the shader samples");
+	envmap->add_option("input", envInput, "Source .hdr (equirectangular) or cube map .ktx2")
+		->required()
+		->check(CLI::ExistingFile);
+	envmap->add_option("-o,--out", envOut, "Output .ktx2")->required();
+	envmap->add_option(
+		"-c,--cube",
+		envCube,
+		"Also write the unfiltered source cube here -- this is the skybox");
+	envmap->add_option("-s,--size", envSize, "Base face size (default: 256)");
+	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
+	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
+	envmap->add_option(
+		"-j,--threads",
+		envThreads,
+		"Worker threads (default: hardware concurrency)");
+
 	std::string objInput;
 	std::string objOut;
 	bool        objRaw = false;
@@ -192,6 +221,58 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("bake failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*envmap)
+	{
+		try
+		{
+			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
+
+			// An equirect source is projected onto a cube whose faces match the output base, so
+			// the prefilter's own mip pyramid is built from it rather than from an upsample.
+			const assetlib::ImageData src =
+				fromHdr ? assetlib::EquirectToCube(assetlib::LoadRadianceHdr(envInput), envSize) :
+						  assetlib::loadKTX2(envInput);
+
+			if (!envCube.empty())
+			{
+				assetlib::writeKTX2(src, envCube, false, assetlib::Ktx2Compression::kNone);
+				spdlog::info("Wrote the unfiltered cube to '{}' ({}^2)", envCube, src.width);
+			}
+
+			auto desc      = assetlib::PrefilterDesc();
+			desc.faceSize  = envSize;
+			desc.mipLevels = envMips;
+			desc.samples   = envSamples;
+			desc.threads   = envThreads;
+
+			auto       stats = assetlib::PrefilterStats();
+			const auto out   = assetlib::PrefilterRadiance(src, desc, &stats);
+
+			assetlib::writeKTX2(out, envOut, false, assetlib::Ktx2Compression::kNone);
+
+			spdlog::info(
+				"Prefiltered '{}' ({}^2) -> '{}' ({}^2 x {} mips) in {:.2f}s",
+				envInput,
+				src.width,
+				envOut,
+				desc.faceSize,
+				desc.mipLevels,
+				stats.seconds);
+			spdlog::info(
+				"  {} texels, {} GGX samples, {:.1f}M samples/s",
+				stats.texelsWritten,
+				stats.samplesTaken,
+				stats.seconds > 0.0 ?
+					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
+					0.0);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("envmap failed: {}", e.what());
 			return 1;
 		}
 	}
