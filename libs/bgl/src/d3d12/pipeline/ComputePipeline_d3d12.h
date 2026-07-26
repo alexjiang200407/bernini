@@ -10,11 +10,7 @@ namespace bgl
 	class ComputePipeline : public core::RefCounter<IComputePipeline>
 	{
 	public:
-		ComputePipeline(
-			ID3D12Device*              device,
-			slang::ISession*           session,
-			ShaderCache*               cache,
-			const ComputePipelineDesc& desc);
+		ComputePipeline(ID3D12Device* device, ShaderCache* cache, const ComputePipelineDesc& desc);
 
 		~ComputePipeline() noexcept override;
 

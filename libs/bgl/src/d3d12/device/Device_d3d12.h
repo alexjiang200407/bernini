@@ -10,10 +10,9 @@ namespace bgl
 	{
 	public:
 		Device(
-			wrl::ComPtr<ID3D12Device>            device,
-			Slang::ComPtr<slang::IGlobalSession> globalSession,
-			const std::string&                   shaderCacheDir,
-			bool                                 gpuValidation);
+			wrl::ComPtr<ID3D12Device> device,
+			const std::string&        shaderCacheDir,
+			bool                      gpuValidation);
 
 		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;
@@ -64,13 +63,32 @@ namespace bgl
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 
+		/**
+		 * The Slang session shaders are compiled through, created on first call.
+		 *
+		 * Creating it loads Slang's core module, which costs hundreds of megabytes that then stay
+		 * resident, so only a shader-cache miss should ever reach this.
+		 */
+		slang::ISession*
+		GetSlangSession() const noexcept;
+
+		/**
+		 * Releases the Slang sessions and every module they parsed. A later compile recreates
+		 * them, so this only reclaims memory -- it does not disable compilation.
+		 *
+		 * @pre no slang::IModule or IComponentType obtained from this device is still held: they
+		 *      keep the session alive, and any raw pointer to one dangles once it is dropped.
+		 */
+		void
+		ReleaseSlangSession() noexcept;
+
 	private:
 		wrl::ComPtr<ID3D12Device> m_Device;
 
 		// m_SlangGlobalSession must be declared before m_SlangSession so it is destroyed
 		// after it
-		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
-		Slang::ComPtr<slang::ISession>       m_SlangSession;
+		mutable Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+		mutable Slang::ComPtr<slang::ISession>       m_SlangSession;
 
 		std::unique_ptr<ShaderCache> m_ShaderCache;
 	};

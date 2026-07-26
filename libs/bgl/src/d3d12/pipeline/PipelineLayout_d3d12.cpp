@@ -23,9 +23,12 @@ namespace bgl::pipeline_util
 		// program, so the bytecode and the root signature always agree. This is the
 		// slow path: GetSlangModule() front-end-compiles the source here.
 		CachedProgram
-		CompileWithSlang(slang::ISession* session, const std::vector<IShader*>& shaders)
+		CompileWithSlang(const std::vector<IShader*>& shaders)
 		{
+			gassert(!shaders.empty(), "A PSO needs at least one shader to compile");
+
 			SlangErrorChecker                              errChecker;
+			slang::ISession*                               session = nullptr;
 			std::vector<slang::IComponentType*>            components;
 			std::unordered_set<slang::IModule*>            uniqueModules;
 			std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
@@ -34,6 +37,10 @@ namespace bgl::pipeline_util
 			{
 				slang::IModule* module = shader->GetSlangModule();
 				gassert(module != nullptr, "Shader module cannot be null");
+
+				// One device, one session -- read off the module so that reaching this function
+				// is what creates a session, and a cache hit never does.
+				session = module->getSession();
 
 				if (uniqueModules.insert(module).second)
 					components.emplace_back(module);
@@ -193,12 +200,10 @@ namespace bgl::pipeline_util
 	PipelineLayout
 	BuildPipelineLayout(
 		ID3D12Device*                   device,
-		slang::ISession*                session,
 		const ShaderCache*              cache,
 		std::initializer_list<IShader*> shaders)
 	{
 		gassert(device != nullptr, "Device pointer must not be null.");
-		gassert(session != nullptr, "Session cannot be null");
 
 		const std::vector<IShader*> ordered = OrderedShaders(shaders);
 
@@ -223,7 +228,7 @@ namespace bgl::pipeline_util
 
 		if (!haveProgram)
 		{
-			program = CompileWithSlang(session, ordered);
+			program = CompileWithSlang(ordered);
 			if (cache != nullptr)
 				cache->Store(key, program);
 		}
