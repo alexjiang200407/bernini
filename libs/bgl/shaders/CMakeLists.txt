@@ -42,6 +42,17 @@ if(RENDERER_BACKEND STREQUAL "WEBGPU")
         VERBATIM
     )
 
+    if(BUILD_TESTS)
+        add_custom_target(bgl_copy_shader_tests ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
+            COMMENT "Copying raw Slang test sources to the runtime output layout"
+            VERBATIM
+        )
+    endif()
+
     return()
 endif()
 

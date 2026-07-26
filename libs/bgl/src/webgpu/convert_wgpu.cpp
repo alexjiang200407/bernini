@@ -150,4 +150,160 @@ namespace bgl
 
 		gfatal("wgpu: unknown texture format {}", static_cast<int>(format));
 	}
+
+	wgpu::CullMode
+	ToWgpuCullMode(RasterCullMode mode) noexcept
+	{
+		switch (mode)
+		{
+		case RasterCullMode::kNone:
+			return wgpu::CullMode::None;
+		case RasterCullMode::kFront:
+			return wgpu::CullMode::Front;
+		case RasterCullMode::kBack:
+			return wgpu::CullMode::Back;
+		}
+
+		gfatal("wgpu: unknown cull mode {}", static_cast<int>(mode));
+	}
+
+	wgpu::FrontFace
+	ToWgpuFrontFace(bool frontCounterClockwise) noexcept
+	{
+		return frontCounterClockwise ? wgpu::FrontFace::CCW : wgpu::FrontFace::CW;
+	}
+
+	wgpu::CompareFunction
+	ToWgpuCompareFunction(ComparisonFunc func) noexcept
+	{
+		switch (func)
+		{
+		case ComparisonFunc::kNever:
+			return wgpu::CompareFunction::Never;
+		case ComparisonFunc::kLess:
+			return wgpu::CompareFunction::Less;
+		case ComparisonFunc::kEqual:
+			return wgpu::CompareFunction::Equal;
+		case ComparisonFunc::kLessOrEqual:
+			return wgpu::CompareFunction::LessEqual;
+		case ComparisonFunc::kGreater:
+			return wgpu::CompareFunction::Greater;
+		case ComparisonFunc::kNotEqual:
+			return wgpu::CompareFunction::NotEqual;
+		case ComparisonFunc::kGreaterOrEqual:
+			return wgpu::CompareFunction::GreaterEqual;
+		case ComparisonFunc::kAlways:
+			return wgpu::CompareFunction::Always;
+		}
+
+		gfatal("wgpu: unknown comparison func {}", static_cast<int>(func));
+	}
+
+	wgpu::StencilOperation
+	ToWgpuStencilOperation(StencilOp op) noexcept
+	{
+		switch (op)
+		{
+		case StencilOp::kKeep:
+			return wgpu::StencilOperation::Keep;
+		case StencilOp::kZero:
+			return wgpu::StencilOperation::Zero;
+		case StencilOp::kReplace:
+			return wgpu::StencilOperation::Replace;
+		case StencilOp::kIncrementAndClamp:
+			return wgpu::StencilOperation::IncrementClamp;
+		case StencilOp::kDecrementAndClamp:
+			return wgpu::StencilOperation::DecrementClamp;
+		case StencilOp::kInvert:
+			return wgpu::StencilOperation::Invert;
+		case StencilOp::kIncrementAndWrap:
+			return wgpu::StencilOperation::IncrementWrap;
+		case StencilOp::kDecrementAndWrap:
+			return wgpu::StencilOperation::DecrementWrap;
+		}
+
+		gfatal("wgpu: unknown stencil op {}", static_cast<int>(op));
+	}
+
+	wgpu::BlendFactor
+	ToWgpuBlendFactor(BlendFactor factor) noexcept
+	{
+		switch (factor)
+		{
+		case BlendFactor::kZero:
+			return wgpu::BlendFactor::Zero;
+		case BlendFactor::kOne:
+			return wgpu::BlendFactor::One;
+		case BlendFactor::kSrcColor:
+			return wgpu::BlendFactor::Src;
+		case BlendFactor::kInvSrcColor:
+			return wgpu::BlendFactor::OneMinusSrc;
+		case BlendFactor::kSrcAlpha:
+			return wgpu::BlendFactor::SrcAlpha;
+		case BlendFactor::kInvSrcAlpha:
+			return wgpu::BlendFactor::OneMinusSrcAlpha;
+		case BlendFactor::kDstAlpha:
+			return wgpu::BlendFactor::DstAlpha;
+		case BlendFactor::kInvDstAlpha:
+			return wgpu::BlendFactor::OneMinusDstAlpha;
+		case BlendFactor::kDstColor:
+			return wgpu::BlendFactor::Dst;
+		case BlendFactor::kInvDstColor:
+			return wgpu::BlendFactor::OneMinusDst;
+		case BlendFactor::kSrcAlphaSaturate:
+			return wgpu::BlendFactor::SrcAlphaSaturated;
+		case BlendFactor::kConstantColor:
+			return wgpu::BlendFactor::Constant;
+		case BlendFactor::kInvConstantColor:
+			return wgpu::BlendFactor::OneMinusConstant;
+		case BlendFactor::kSrc1Color:
+			return wgpu::BlendFactor::Src1;
+		case BlendFactor::kInvSrc1Color:
+			return wgpu::BlendFactor::OneMinusSrc1;
+		case BlendFactor::kSrc1Alpha:
+			return wgpu::BlendFactor::Src1Alpha;
+		case BlendFactor::kInvSrc1Alpha:
+			return wgpu::BlendFactor::OneMinusSrc1Alpha;
+		}
+
+		gfatal("wgpu: unknown blend factor {}", static_cast<int>(factor));
+	}
+
+	wgpu::BlendOperation
+	ToWgpuBlendOperation(BlendOp op) noexcept
+	{
+		switch (op)
+		{
+		case BlendOp::kAdd:
+			return wgpu::BlendOperation::Add;
+		case BlendOp::kSubtract:
+			return wgpu::BlendOperation::Subtract;
+		case BlendOp::kReverseSubtract:
+			return wgpu::BlendOperation::ReverseSubtract;
+		case BlendOp::kMin:
+			return wgpu::BlendOperation::Min;
+		case BlendOp::kMax:
+			return wgpu::BlendOperation::Max;
+		}
+
+		gfatal("wgpu: unknown blend op {}", static_cast<int>(op));
+	}
+
+	wgpu::ColorWriteMask
+	ToWgpuColorWriteMask(ColorMask mask) noexcept
+	{
+		const auto bits = static_cast<uint8_t>(mask);
+
+		auto result = wgpu::ColorWriteMask::None;
+		if (bits & static_cast<uint8_t>(ColorMask::kRed))
+			result = result | wgpu::ColorWriteMask::Red;
+		if (bits & static_cast<uint8_t>(ColorMask::kGreen))
+			result = result | wgpu::ColorWriteMask::Green;
+		if (bits & static_cast<uint8_t>(ColorMask::kBlue))
+			result = result | wgpu::ColorWriteMask::Blue;
+		if (bits & static_cast<uint8_t>(ColorMask::kAlpha))
+			result = result | wgpu::ColorWriteMask::Alpha;
+
+		return result;
+	}
 }
