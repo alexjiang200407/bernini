@@ -59,12 +59,11 @@ The engine is built on exactly the four D3D12 features browser WebGPU lacks:
   transparent bitonic sort) use only 32-bit `InterlockedAdd`, groupshared, and `[numthreads]` — no
   wave intrinsics, no 64-bit atomics anywhere in the shader tree.
 
-  **This survey undercounted: there are six.** `TransparentDepthKeys` was missed here and therefore
-  missed by the W2 `Atomic<T>` migration and by the `compile_shader(... TARGET wgsl)` list, so it
-  still calls raw `InterlockedAdd` and fails `E36107` on the WGSL target. Nothing catches it because
-  the kernel is not in the validation loop. So "the sort compute is already ported" (W4, below) is
-  not true — one of the transparent chain's three kernels does not compile. The fix is the same
-  `AtomicComputeBuffer<uint>` + `.add()` change the other five took, plus adding it to the loop. The FrameGraph derives barriers
+  **This survey undercounted: there are six.** `TransparentDepthKeys` was missed here, and therefore
+  by the W2 `Atomic<T>` migration and by the `compile_shader(... TARGET wgsl)` list — so it kept a
+  raw `InterlockedAdd` and failed `E36107`, with nothing to catch it because it was not in the
+  validation loop. Migrated to `AtomicComputeBuffer<uint>` and added to the loop; a kernel absent
+  from that list is unvalidated, which is how this survived three checkpoints. The FrameGraph derives barriers
   centrally (they become no-ops on WebGPU, which is implicit-barrier). The
   `bgl_objects`/`bgl_d3d12` split and `RENDERER_BACKEND` gating give the backend seam for free,
   and the Metal branches have already generalized it once
