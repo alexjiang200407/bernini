@@ -46,9 +46,10 @@ namespace bgl
 	 * kDescriptorHandles packed after that block, since only their slot index is ever read back.
 	 *
 	 * Offsets are struct-relative because Uniforms::Traverse and the dispatch/draw path both
-	 * accumulate down the tree. That is why a resource may only appear at a constant buffer's top
-	 * level: nested, its handle offset would be taken relative to the enclosing struct instead of
-	 * the block it was actually allocated from.
+	 * accumulate down the tree, so a field owning resources is placed where the handle allocation
+	 * has reached and its subtree hands out offsets relative to that. Nesting is therefore fine --
+	 * the buffer wrappers do keep their handle a level down -- but a struct below the top level may
+	 * not mix plain data with resources, having a single offset to place both regions at.
 	 */
 	void
 	ReflectWgslBindings(

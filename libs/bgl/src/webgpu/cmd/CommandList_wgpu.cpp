@@ -62,7 +62,7 @@ namespace bgl
 	}
 
 	wgpu::Buffer
-	CommandList::AcquireUniformBuffer(uint64_t byteSize) noexcept
+	CommandList::NextUniformBuffer(uint64_t byteSize) noexcept
 	{
 		if (m_UniformPoolCursor < m_UniformPool.size() &&
 		    m_UniformPool[m_UniformPoolCursor].GetSize() >= byteSize)
@@ -98,7 +98,7 @@ namespace bgl
 
 		if (entry.uniformBlockSize > 0)
 		{
-			const wgpu::Buffer block = AcquireUniformBuffer(entry.uniformBlockSize);
+			const wgpu::Buffer block = NextUniformBuffer(entry.uniformBlockSize);
 			m_BoundQueue.WriteBuffer(block, 0, data, entry.uniformBlockSize);
 
 			auto blockEntry    = wgpu::BindGroupEntry{};

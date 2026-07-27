@@ -203,7 +203,7 @@ namespace bgl
 		size_t                    m_UniformPoolCursor = 0;
 
 		[[nodiscard]] wgpu::Buffer
-		AcquireUniformBuffer(uint64_t byteSize) noexcept;
+		NextUniformBuffer(uint64_t byteSize) noexcept;
 
 		/** Resolves one constant buffer's handle writes and plain-data block to bind-group entries. */
 		[[nodiscard]] std::vector<wgpu::BindGroupEntry>

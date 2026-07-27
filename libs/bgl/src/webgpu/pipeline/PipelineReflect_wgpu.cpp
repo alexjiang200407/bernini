@@ -61,8 +61,8 @@ namespace bgl
 			{
 				result.kind = UniformType::kStruct;
 
-				const auto     blockSize  = static_cast<uint32_t>(typeLayout->getSize());
-				const uint32_t handleBase = handleCursor;
+				const auto     blockSize        = static_cast<uint32_t>(typeLayout->getSize());
+				const uint32_t structHandleBase = handleCursor;
 
 				const uint32_t fieldCount = typeLayout->getFieldCount();
 				for (uint32_t i = 0; i < fieldCount; ++i)
@@ -73,10 +73,8 @@ namespace bgl
 						bindingBase + static_cast<uint32_t>(field->getOffset(
 										  SLANG_PARAMETER_CATEGORY_DESCRIPTOR_TABLE_SLOT));
 
-					// A field owning handles is placed where the cursor stands, so the offsets its
-					// subtree hands out stay relative to it -- Traverse sums them back to the same
-					// absolute byte. Captured before recursing, since the subtree moves the cursor.
-					const uint32_t fieldStart = handleCursor;
+					// Read before recursing, which advances the cursor past this field's handles.
+					const uint32_t fieldHandleBase = handleCursor;
 
 					ReflectedField reflected;
 					reflected.name   = field->getName();
@@ -85,20 +83,23 @@ namespace bgl
 						group,
 						binding,
 						depth + 1,
-						fieldStart,
+						fieldHandleBase,
 						handleCursor,
 						slots);
 
+					// A field owning resources sits at the handle allocation instead of in the
+					// block, so its subtree's offsets stay relative to it and Traverse sums them
+					// back to the same absolute byte.
 					if (reflected.layout.isResourceHandle)
 					{
-						reflected.offset  = fieldStart - structOrigin;
+						reflected.offset  = fieldHandleBase - structOrigin;
 						reflected.group   = group;
 						reflected.binding = binding;
 						handleCursor += reflected.layout.size;
 					}
-					else if (handleCursor > fieldStart)
+					else if (handleCursor > fieldHandleBase)
 					{
-						reflected.offset = fieldStart - structOrigin;
+						reflected.offset = fieldHandleBase - structOrigin;
 					}
 					else
 					{
@@ -112,10 +113,10 @@ namespace bgl
 				// Only the root can hold both regions: its handles start past its block, while a
 				// nested struct would have to place its own block and its handles at one offset.
 				gassert(
-					depth == 0 || blockSize == 0 || handleCursor == handleBase,
+					depth == 0 || blockSize == 0 || handleCursor == structHandleBase,
 					"wgsl reflect: a nested struct may not mix plain data with resources");
 
-				result.size = blockSize + (handleCursor - handleBase);
+				result.size = blockSize + (handleCursor - structHandleBase);
 				return result;
 			}
 
