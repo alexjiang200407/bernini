@@ -20,7 +20,7 @@ public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint ver
     v.uv = float2(0.0, 0.0);
     v.tangent = float4(0.0, 0.0, 0.0, 0.0);
 
-#if defined(BERNINI_GPU_DEBUG)
+#if defined(BERNINI_GPU_DEBUG_ALL_STAGES)
     bool hasPosition = false;
 #endif
 
@@ -34,7 +34,7 @@ public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint ver
         {
         case VertexSemantic.kPosition:
             v.position = value.xyz;
-#if defined(BERNINI_GPU_DEBUG)
+#if defined(BERNINI_GPU_DEBUG_ALL_STAGES)
             hasPosition = true;
 #endif
             break;
@@ -52,7 +52,7 @@ public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint ver
         }
     }
 
-#if defined(BERNINI_GPU_DEBUG)
+#if defined(BERNINI_GPU_DEBUG_ALL_STAGES)
     // Position is the only attribute a mesh cannot render without; the rest use the defaults above.
     dbg_assert(hasPosition, ErrorCode.kInvalidVertexLayout);
 #endif

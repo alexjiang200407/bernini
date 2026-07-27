@@ -7,6 +7,13 @@ __exported import idl.ErrorCode;
 static const uint kDbgHeaderWords = 4;
 static const uint kDbgRecordWords = 4;
 
+// Narrower than BERNINI_GPU_DEBUG: the buffer below is an atomic append, so it is read-write, and a
+// WebGPU vertex stage may not bind one. Code that a vertex stage can reach gates its asserts on
+// this, so an assert compiles only where it could actually run.
+#if defined(BERNINI_GPU_DEBUG) && !defined(BGL_WGSL)
+#define BERNINI_GPU_DEBUG_ALL_STAGES 1
+#endif
+
 struct DebugGlobals
 {
     AtomicComputeBuffer<uint> buffer;

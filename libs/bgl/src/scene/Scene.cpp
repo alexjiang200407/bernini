@@ -155,8 +155,8 @@ namespace bgl
 					++trianglesDone;
 				}
 
-				meshlet.vertexCount   = static_cast<uint16_t>(localVertexCount);
-				meshlet.triangleCount = static_cast<uint16_t>(localTriangleCount);
+				meshlet.vertexCount   = localVertexCount;
+				meshlet.triangleCount = localTriangleCount;
 
 				auto minBound = glm::vec3(std::numeric_limits<float>::max());
 				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());

@@ -42,6 +42,31 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   is already copied verbatim, so a small deterministic text parser handles those. Struct fields —
   where exact offsets/sizes matter — go through reflection.
 
+  **An initializer therefore has to be valid C++ as well as Slang**, because it is copied across
+  unchanged — only the *declared* type is mapped. So write `uint32_t(-1)`, never `uint(-1)`: `uint`
+  is a Slang scalar with no C++ equivalent. This does not fail on a macOS or Linux build, where
+  `<sys/types.h>` defines `uint` as a POSIX typedef and clang accepts the generated header; MSVC
+  rejects it, and every other error in that build cascades from the one bad header.
+
+* **The Slang copy is verbatim apart from WGSL padding.** WGSL — alone among the targets — rounds a
+  struct's size up to its alignment, so `Mesh` (a `float4x4` plus a `RangeWithCount`) packs to 72
+  bytes under the C/C++ and DXIL rules but wants an 80-byte stride there. Left alone, element 1 of
+  the buffer is read from the wrong offset on that backend only, and silently. idlgen reflects a
+  third, WGSL session for exactly this and appends a `pad` member to **both** outputs — the
+  padding has to be a member of the shared struct, because padding either mirror alone would leave
+  the other target on the narrower stride.
+
+  A struct's padding depends on the final size of everything it embeds, so idlgen resolves imports
+  against the *generated* copies (which already carry theirs) and reports the module under its
+  output path, since Slang looks beside the importing file before consulting the search paths. The
+  CMake rules carry an edge per `import` so a module is generated after its dependencies.
+
+  **Trailing padding cannot fix an interior mismatch.** WGSL aligns a vector to its own width where
+  the scalar layout packs it tight, so a `float4` declared after three handles sits at a different
+  offset on each side, and no tail padding reconciles that. idlgen fails the build naming the field;
+  the fix is to order the struct's widest members first, which is why `PbrMaterial` and
+  `LoosePbrMaterial` lead with `baseColorFactor`.
+
 * **Type mapping is fixed.** Scalars map to `<cstdint>` (`uint`→`uint32_t`, …); vectors/matrices
   map to `glm` (`float3`→`glm::vec3`, `float4x4`→`glm::mat4`, glm being column-major); a struct/enum
   field keeps its *declared* type name (the host layout would otherwise lower an enum field to its

@@ -32,6 +32,7 @@ set(IDL_CPP_SOURCES
     TextureHandle.slang
     ErrorCode.slang
     DispatchArgs.slang
+    MeshletInstance.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public
@@ -70,6 +71,19 @@ foreach(src ${IDL_SOURCES})
         list(APPEND outputs "${IDL_CPP_OUT_DIR}/${rel_stem}.h")
     endif()
 
+    # A module's WGSL padding depends on the final size of every struct it embeds, so idlgen reflects
+    # it against the *generated* copies of its imports. Those have to exist first, which is what these
+    # edges buy: without them the padding would be computed against unpadded members.
+    set(import_deps "")
+    file(STRINGS "${src}" import_lines REGEX "^[ \t]*import[ \t]+[A-Za-z0-9_.]+[ \t]*;")
+    foreach(import_line IN LISTS import_lines)
+        string(REGEX REPLACE "^[ \t]*import[ \t]+([A-Za-z0-9_.]+)[ \t]*;.*$" "\\1" imported "${import_line}")
+        string(REPLACE "." "/" imported_path "${imported}")
+        if(NOT "${imported_path}" STREQUAL "${rel_stem}")
+            list(APPEND import_deps "${IDL_SLANG_OUT_DIR}/${imported_path}.slang")
+        endif()
+    endforeach()
+
     add_custom_command(
         OUTPUT  ${outputs}
         COMMAND bgl_idlgen
@@ -78,7 +92,7 @@ foreach(src ${IDL_SOURCES})
                 ${cpp_args}
                 -I "${IDL_SRC_ROOT}"
                 "${src}"
-        DEPENDS bgl_idlgen "${src}"
+        DEPENDS bgl_idlgen "${src}" ${import_deps}
         COMMENT "idlgen ${rel}"
         VERBATIM
     )

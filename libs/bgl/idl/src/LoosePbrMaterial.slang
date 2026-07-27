@@ -11,14 +11,15 @@ public enum PbrChannel
     kMetallic,
     kNormalX,
     kNormalY,
-};
+}
+;
 
 public static const uint cLooseChannelCount = 9;
 
 public struct LoosePbrMaterial
 {
-    public ChannelSource sources[9];
     public float4 baseColorFactor;
+    public ChannelSource sources[9];
     public float metallicFactor;
     public float roughnessFactor;
 
