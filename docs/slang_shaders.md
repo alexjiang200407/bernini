@@ -67,6 +67,11 @@ An `enum : uint16_t` is the same defect and easy to miss, because it fails where
 rather than where it is declared: a 16-bit enum passed by value reaches the WGSL backend as an empty
 parameter type (`fn IsLoosePso_0( pso_1 : )`), not as a diagnostic naming the enum.
 
+A 32-bit enum as a **constant-buffer field** is free, despite `SlangReflection.cpp` listing
+`Kind::Enum` as unsupported: Slang reflects such a field as its underlying scalar
+(`kind: scalar, scalarType: uint32`), so that case never fires, and WGSL emits a plain `u32` at the
+offset the `uint` had. `ExpansionData.baseTable` is the worked example.
+
 ## Struct size is rounded up to alignment in WGSL
 
 A WGSL struct's size is rounded up to its own alignment, which the CPU mirror does not do. So

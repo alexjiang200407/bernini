@@ -6,6 +6,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "idl/BaseTable.h"
 #include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
@@ -437,7 +438,7 @@ namespace bgl
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
 				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
-				(*expansionData)["baseTable"] = idl::cBaseTablePsoPrefixSum;
+				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -467,7 +468,7 @@ namespace bgl
 				if (auto expansionData = kernel.FindUniforms("expansionData"))
 				{
 					(*expansionData)["compactedInstances"] = sortedInstances;
-					(*expansionData)["baseTable"]          = idl::cBaseTableTransparentPartition;
+					(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
 					(*expansionData)["partitionIndex"]     = partition;
 				}
 
