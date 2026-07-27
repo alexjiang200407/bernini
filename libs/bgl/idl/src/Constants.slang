@@ -37,7 +37,3 @@ public static const uint cSortPadKey = 0xFFFFFFFF;
 public static const uint cTransparentPartitionCount = 2;
 public static const uint cOccludePartition = 0;
 public static const uint cPlainPartition = 1;
-
-// Which GPU table the amplification shader takes its base into the instance-index list from.
-public static const uint cBaseSourcePsoPrefixSum = 0;
-public static const uint cBaseSourceTransparentPartition = 1;

@@ -121,6 +121,8 @@ namespace bgl
 				return UniformValueType::kBool;
 			else if constexpr (std::is_same_v<T, glm::mat4>)
 				return UniformValueType::kMat4x4;
+			else if constexpr (std::is_enum_v<T>)
+				return ValueMap<std::underlying_type_t<T>>();
 			else
 				static_assert(always_false<T>, "Unsupported uniform type T");
 		}

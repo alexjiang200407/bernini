@@ -1,5 +1,6 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
+import forward.ViewData;
 import idl.Constants;
 import idl.Mesh;
 import idl.Meshlet;
@@ -11,9 +12,6 @@ import forward.common;
 import forward.vertexdecode;
 import debug.dbg;
 import idl.ErrorCode;
-
-// forwardData uniform
-import uniforms.ForwardData;
 
 // Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
 // any function that takes an OutputVertices/OutputIndices parameter, so only MSMain may index them.
@@ -33,9 +31,9 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     // The mesh transform is fixed for an instance's lifetime, so the same world position reprojects
     // through both cameras; a movable instance would carry its own previous transform here.
     ForwardVSOut vertexOut;
-    vertexOut.position = mul(forwardData.viewProj, worldPos);
+    vertexOut.position = mul(viewData.viewProj, worldPos);
     vertexOut.clip = vertexOut.position;
-    vertexOut.prevClip = mul(forwardData.prevViewProj, worldPos);
+    vertexOut.prevClip = mul(viewData.prevViewProj, worldPos);
     vertexOut.worldPos = worldPos.xyz;
     vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
     vertexOut.uv = vertex.uv;
@@ -100,7 +98,7 @@ void ASMain(
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
 {
-    ASBase(forwardData, gid, gtid);
+    ASBase(gid, gtid);
 }
 
 [shader("mesh")]
