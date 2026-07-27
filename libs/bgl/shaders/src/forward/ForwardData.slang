@@ -24,12 +24,13 @@ public struct ForwardData
     public ByteBuffer vertexDataBuffer;
     public RangeBuffer<uint> indexBuffer;
 
-#if defined(BGL_WGSL)
-    // The expansion pass resolved the amplification stage's work into these records, so the draw
-    // needs neither the bucket bases nor the compaction output -- all three are read-write, which a
-    // WebGPU vertex stage may not bind.
+    // What the expansion pass resolves the amplification stage's work into. The mesh path gets the
+    // same thing as a payload and leaves this unread.
     public PackedBuffer<MeshletInstance> meshletInstances;
-#else
+
+    // Only the amplification stage reads these, and all three are read-write -- which a WebGPU
+    // vertex stage may not bind, so the draw resolves its instance through a record instead.
+#if !defined(BGL_WGSL)
     public uint psoIndex;
 
     // Which GPU-side table holds this draw's base into the instance-index list: the opaque path is

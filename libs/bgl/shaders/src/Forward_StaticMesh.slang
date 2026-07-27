@@ -98,6 +98,8 @@ ForwardVSOut VSMain(uint vertexId: SV_VertexID)
 
 #else
 
+import forward.amplification;
+
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
 void ASMain(
