@@ -4,6 +4,8 @@
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_wgpu.h"
 #include "pipeline/GraphicsPipeline_wgpu.h"
+#include "pipeline/MeshletKernel.h"
+#include "pipeline/MeshletPipeline_wgpu.h"
 #include "resource/Buffer_wgpu.h"
 #include "resource/Dsv_wgpu.h"
 #include "resource/ReadbackBuffer_wgpu.h"
@@ -18,6 +20,47 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// Reads each resource leaf's slot index out of the Uniforms bytes and emits its bind-group
+		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
+		// way Uniforms::Traverse does when the handle was written.
+		void
+		CollectBindings(
+			const ReflectedLayout&             layout,
+			const std::byte*                   data,
+			uint32_t                           baseOffset,
+			const ResourceManager&             resources,
+			std::vector<wgpu::BindGroupEntry>& entries)
+		{
+			for (const ReflectedField& field : layout.fields)
+			{
+				if (field.layout.isResourceHandle)
+				{
+					uint32_t slotIndex = 0;
+					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
+
+					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
+
+					auto entry    = wgpu::BindGroupEntry{};
+					entry.binding = field.binding;
+					entry.buffer  = buffer;
+					entry.size    = buffer.GetSize();
+					entries.push_back(entry);
+				}
+				else if (field.layout.kind == UniformType::kStruct)
+				{
+					CollectBindings(
+						field.layout,
+						data,
+						baseOffset + field.offset,
+						resources,
+						entries);
+				}
+			}
+		}
+	}
+
 	CommandList::CommandList(
 		const wgpu::Device&    device,
 		const CommandListDesc& desc,
@@ -177,6 +220,38 @@ namespace bgl
 	}
 
 	void
+	CommandList::SetGraphicsKernel(const MeshletKernel& kernel) noexcept
+	{
+		gassert(m_RenderPass != nullptr, "SetGraphicsKernel: no render pass is open");
+		gassert(kernel.pipeline.IsInitialized(), "SetGraphicsKernel: kernel has no pipeline");
+
+		const GraphicsPipeline& pipeline =
+			kernel.pipeline->As<MeshletPipeline>()->GetGraphicsPipeline();
+		const auto& resources = *m_ResourceManager->As<ResourceManager>();
+
+		auto entries = std::vector<wgpu::BindGroupEntry>();
+		for (const auto& [name, uniforms] : kernel.uniforms)
+		{
+			const UniformLayoutEntry entry = pipeline.GetUniformLayoutEntry(name);
+			CollectBindings(
+				*entry.layout,
+				static_cast<const std::byte*>(uniforms.Data()),
+				0,
+				resources,
+				entries);
+		}
+
+		auto bgDesc       = wgpu::BindGroupDescriptor{};
+		bgDesc.layout     = pipeline.GetBindGroupLayout();
+		bgDesc.entryCount = entries.size();
+		bgDesc.entries    = entries.data();
+		auto bindGroup    = m_Device.CreateBindGroup(&bgDesc);
+
+		m_RenderPass.SetPipeline(pipeline.GetPipeline());
+		m_RenderPass.SetBindGroup(0, bindGroup);
+	}
+
+	void
 	CommandList::Draw(
 		uint32_t vertexCount,
 		uint32_t instanceCount,
@@ -305,47 +380,6 @@ namespace bgl
 		m_CurrentComputeState = computeState;
 	}
 
-	namespace
-	{
-		// Reads each resource leaf's slot index out of the Uniforms bytes and emits its bind-group
-		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
-		// way Uniforms::Traverse does when the handle was written.
-		void
-		CollectBindings(
-			const ReflectedLayout&             layout,
-			const std::byte*                   data,
-			uint32_t                           baseOffset,
-			const ResourceManager&             resources,
-			std::vector<wgpu::BindGroupEntry>& entries)
-		{
-			for (const ReflectedField& field : layout.fields)
-			{
-				if (field.layout.isResourceHandle)
-				{
-					uint32_t slotIndex = 0;
-					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
-
-					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
-
-					auto entry    = wgpu::BindGroupEntry{};
-					entry.binding = field.binding;
-					entry.buffer  = buffer;
-					entry.size    = buffer.GetSize();
-					entries.push_back(entry);
-				}
-				else if (field.layout.kind == UniformType::kStruct)
-				{
-					CollectBindings(
-						field.layout,
-						data,
-						baseOffset + field.offset,
-						resources,
-						entries);
-				}
-			}
-		}
-	}
-
 	void
 	CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept
 	{
@@ -358,7 +392,7 @@ namespace bgl
 			"Dispatch: compute kernel must be set in compute state");
 
 		auto*       pipeline  = kernel->pipeline->As<ComputePipeline>();
-		const auto& resources = *static_cast<ResourceManager*>(m_ResourceManager.Get());
+		const auto& resources = *m_ResourceManager->As<ResourceManager>();
 
 		auto entries = std::vector<wgpu::BindGroupEntry>();
 		for (const auto& [name, uniforms] : kernel->uniforms)
@@ -500,20 +534,54 @@ namespace bgl
 	}
 
 	void
-	CommandList::SetMeshletState(const MeshletState&) noexcept
+	CommandList::SetMeshletState(const MeshletState& gfxState) noexcept
 	{
-		gfatal("SetMeshletState: WebGPU has no mesh shaders");
+		m_CurrentMeshletState = gfxState;
 	}
 
 	void
-	CommandList::DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept
+	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
 	{
-		gfatal("DispatchMesh: WebGPU has no mesh shaders");
+		gassert(m_CurrentMeshletState.has_value(), "DispatchMesh: meshlet state must be set");
+
+		const MeshletState& state = *m_CurrentMeshletState;
+		gassert(
+			state.kernel != nullptr && state.kernel->pipeline.IsInitialized(),
+			"DispatchMesh: meshlet kernel must be set in meshlet state");
+
+		// WebGPU has no mesh stage, so this runs the vertex-pulling draw the mesh module's BGL_WGSL
+		// arm compiles to. Plain DispatchMesh drives the fullscreen/skybox shaders -- one triangle
+		// per thread group; the meshlet geometry path goes through DispatchMeshIndirect.
+		BeginRenderPass(state.frameBuffer, state.viewportState);
+		SetGraphicsKernel(*state.kernel);
+		Draw(x * y * z * 3);
+		EndRenderPass();
 	}
 
 	void
-	CommandList::DispatchMeshIndirect(uint32_t) noexcept
+	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
 	{
-		gfatal("DispatchMeshIndirect: WebGPU has no mesh shaders");
+		gassert(
+			m_CurrentMeshletState.has_value(),
+			"DispatchMeshIndirect: meshlet state must be set");
+
+		const MeshletState& state = *m_CurrentMeshletState;
+		gassert(
+			state.kernel != nullptr && state.kernel->pipeline.IsInitialized(),
+			"DispatchMeshIndirect: meshlet kernel must be set in meshlet state");
+		gassert(
+			!state.indirectArgs.IsNull(),
+			"DispatchMeshIndirect: MeshletState.indirectArgs must be set");
+
+		// indirectArgs must hold WebGPU draw records -- {vertexCount, instanceCount, firstVertex,
+		// firstInstance} per PSO bucket -- not the 12-byte idl::DispatchArgs the shared
+		// CompactInstances kernel writes for the D3D12 mesh path. The WebGPU expansion pass writes
+		// its own buffer and ForwardPass points indirectArgs at that one.
+		constexpr uint64_t c_DrawArgsStride = 4 * sizeof(uint32_t);
+
+		BeginRenderPass(state.frameBuffer, state.viewportState);
+		SetGraphicsKernel(*state.kernel);
+		DrawIndirect(state.indirectArgs, static_cast<uint64_t>(argIdx) * c_DrawArgsStride);
+		EndRenderPass();
 	}
 }

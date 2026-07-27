@@ -556,6 +556,17 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   an unguarded `[shader("mesh")]` entry reaching a WGSL session is rejected (`E36107`) even when
   nothing links it — verified in `GraphicsPipeline_test`. The `.Handle` buffer-primitive swap already
   needs `BGL_WGSL` (W2); this reuses the same seam for the geometry stage.
+
+  **`MeshletState::indirectArgs` carries a different record per backend.** D3D12 strides it by
+  `sizeof(D3D12_DISPATCH_MESH_ARGUMENTS)` (12 bytes, `{ThreadGroupCountX,Y,Z}`) — the layout of the
+  shared `idl::DispatchArgs` that `CompactInstances.slang` atomically increments. WebGPU's
+  `drawIndirect` consumes a 16-byte `{vertexCount, instanceCount, firstVertex, firstInstance}`
+  record instead, and the counts differ in meaning (thread groups vs.
+  `count * cMaxPrimsPerMeshlet * 3` vertices). The two cannot be one struct. So the WebGPU
+  meshlet-expansion pass writes its **own** draw-args buffer and `ForwardPass` points
+  `indirectArgs` at that buffer on the WebGPU path — `idl::DispatchArgs` stays 12 bytes and the
+  D3D12 path is untouched. Pointing the WebGPU backend at the existing
+  `compactedInstances.compactDispatchArgs` would read garbage.
 * **W4 — materials.** Texture-array material atlas + cook-side size classing, IBL bindings,
   transparent path (sort compute is already ported; the three partition draws become
   `drawIndirect`).

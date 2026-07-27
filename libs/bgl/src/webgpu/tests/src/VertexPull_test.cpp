@@ -3,7 +3,6 @@
 #include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue.h"
 #include "device/Device_wgpu.h"
-#include "pipeline/MeshletPipeline_wgpu.h"
 #include "resource/ResourceManager.h"
 
 #include <bgl/IGraphics.h>
@@ -11,12 +10,11 @@
 
 using namespace bgl;
 
-// The WebGPU IMeshletPipeline: CreateMeshletKernel composes a GraphicsPipeline out of the mesh
-// module's vertex + pixel entries, so the kernel/uniforms machinery works unchanged. Proven by
-// drawing the composed pipeline through a command-list render pass -- the path DispatchMesh will
-// drive once the meshlet-expansion kernel lands. RasterTriangleTest has no constant buffers, so the
-// kernel carries no uniforms here.
-TEST_CASE("A meshlet kernel composes a drawable graphics pipeline", "[wgpu][render]")
+// Vertex pulling through the RHI: the vertex shader reads its positions from a storage buffer bound
+// by the meshlet kernel's uniforms -- the same handle-write-to-bind-group path Dispatch uses for
+// compute -- not from a vertex buffer, which is the shape the forward path draws with. The buffer is
+// filled with a triangle; a green centre over a red corner proves the VS read the bound buffer.
+TEST_CASE("A vertex shader pulls positions from a bound buffer", "[wgpu][render]")
 {
 	constexpr uint32_t c_Size = 64;
 
@@ -28,18 +26,25 @@ TEST_CASE("A meshlet kernel composes a drawable graphics pipeline", "[wgpu][rend
 
 	resources->RegisterQueue(queue.Get());
 
-	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
+	struct Float2
+	{
+		float x;
+		float y;
+	};
+	const Float2 positions[3] = { { 0.0f, 0.8f }, { -0.8f, -0.8f }, { 0.8f, -0.8f } };
+
+	const auto posBuffer = resources->CreateComputeBuffer(
+		ComputeBufferDesc{}.SetElement<Float2>().SetInitialCount(3).SetDebugName("positions"));
+
+	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("VertexPullTest"));
 
 	auto desc = MeshletPipelineDesc{};
 	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel = device->CreateMeshletKernel(desc);
-	REQUIRE(kernel.pipeline != nullptr);
-	REQUIRE(kernel.pipeline->GetUniformBufferNames().empty());
-
-	const GraphicsPipeline& pipeline =
-		kernel.pipeline->As<MeshletPipeline>()->GetGraphicsPipeline();
+	REQUIRE(kernel.ContainsUniforms("gPull"));
+	kernel["gPull"]["positions"] = posBuffer;
 
 	auto texDesc      = TextureDesc{};
 	texDesc.width     = c_Size;
@@ -66,9 +71,10 @@ TEST_CASE("A meshlet kernel composes a drawable graphics pipeline", "[wgpu][rend
 	auto* wgpuList = static_cast<CommandList*>(list.Get());
 
 	list->Open(queue.Get(), allocator.Get());
+	list->WriteBuffer(posBuffer, positions, 0, sizeof(positions));
 	resources->ClearRtv(list.Get(), rtv, clear);
 	wgpuList->BeginRenderPass(fb, viewport);
-	wgpuList->SetGraphicsPipeline(pipeline);
+	wgpuList->SetGraphicsKernel(kernel);
 	wgpuList->Draw(3);
 	wgpuList->EndRenderPass();
 	list->CopyTextureToReadback(readback, texture);

@@ -2,6 +2,7 @@
 
 #include "cmd/CommandList.h"
 #include "resource/ResourceManager.h"
+#include "types/MeshletState.h"
 
 namespace bgl
 {
@@ -154,6 +155,14 @@ namespace bgl
 		void
 		SetGraphicsPipeline(const GraphicsPipeline& pipeline) noexcept;
 
+		/**
+		 * Binds a meshlet kernel's graphics pipeline and its bind group -- the kernel's uniform
+		 * handle-writes resolved to buffer bindings, the same way Dispatch binds a compute kernel --
+		 * for subsequent draws in the open render pass.
+		 */
+		void
+		SetGraphicsKernel(const MeshletKernel& kernel) noexcept;
+
 		/** Issues a non-indexed draw in the open render pass. */
 		void
 		Draw(
@@ -185,5 +194,6 @@ namespace bgl
 		wgpu::RenderPassEncoder m_RenderPass;
 
 		std::optional<ComputeState> m_CurrentComputeState;
+		std::optional<MeshletState> m_CurrentMeshletState;
 	};
 }
