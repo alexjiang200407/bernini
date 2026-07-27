@@ -28,7 +28,9 @@
 // one the two dispatches overlap and the compaction scatters against a pre-scan prefix sum. Only a
 // bucket whose base is non-zero can detect that -- a lone bucket's base is the sum of empty buckets
 // before it, which is 0 either way -- so the instances below span three buckets.
-TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[compute][compact]")
+TEST_CASE(
+	"Compact instances: every instance lands in its own PSO bucket exactly once",
+	"[compute][compact]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -363,6 +365,33 @@ TEST_CASE("Compact instances: every instance lands in its own PSO bucket", "[com
 		}
 	}
 	CHECK(misfiled == 0);
+
+	// The compaction reserves one contiguous run per bucket per thread group, so an error in that
+	// arithmetic overlaps two groups' runs: one instance gets written twice and another is dropped.
+	// Both sit in the right bucket, so the misfiled count above cannot see it. 4000 instances is 32
+	// groups of 128, the last one partial, so the runs actually have to abut.
+	std::vector<uint32_t> occurrences(activeCount, 0u);
+	for (uint32_t p = 0; p < bgl::c_PsoCount; ++p)
+	{
+		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
+		{
+			const uint32_t instanceIdx = compactedOut[slot];
+			if (instanceIdx < activeCount)
+			{
+				++occurrences[instanceIdx];
+			}
+		}
+	}
+
+	uint32_t notWrittenExactlyOnce = 0;
+	for (const uint32_t seen : occurrences)
+	{
+		if (seen != 1u)
+		{
+			++notWrittenExactlyOnce;
+		}
+	}
+	CHECK(notWrittenExactlyOnce == 0);
 
 	resourceManager->UnmapReadback(rbCompacted);
 
