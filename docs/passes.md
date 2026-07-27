@@ -210,7 +210,7 @@ attachment and sit between the colour draws, which is why it is a sub-draw here 
 its own.
 
 Both partitions read their base from `transparentSort.partitionBase`, indexed by `partitionIndex`;
-the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseSource` picks between the two.
+the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks between the two.
 
 * **In:** the backbuffer and the velocity buffer as render targets; `compactDispatchArgs` and
   `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene

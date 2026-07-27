@@ -1,4 +1,4 @@
-// A uniform struct mixing plain data with resource handles -- the shape ForwardData has. The plain
+// A uniform struct mixing plain data with resource handles -- the shape ExpansionData has. The plain
 // members must reach the shader through a uniform buffer while each handle stays its own binding.
 
 import types.ComputeBuffer;

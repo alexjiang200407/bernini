@@ -102,6 +102,16 @@ as `MixedUniform_test` pins. Because those offsets are struct-relative and summe
 a struct may not mix plain data with resources *below* the top level; the reflection asserts rather
 than binding the wrong slot.
 
+## One `public` in a module makes everything else internal
+
+Slang's default visibility is per *module*, not per declaration: a module with no `public` at all
+exports everything, but the first `public` declaration switches that module to explicit visibility
+and every unmarked declaration becomes internal. So adding `public struct Foo` to a module that also
+declares `ConstantBuffer<Foo> gFoo;` breaks every importer of `gFoo` with `E30600: 'gFoo' is not
+accessible from the current context` — at the *use* site, in a file nobody edited. Mark the global
+`public` too. This is why `forward/{ForwardData,ViewData,ExpansionData}.slang` declare both the
+struct and its `ConstantBuffer` global `public`.
+
 ## No mesh or amplification shaders in WGSL
 
 WebGPU has neither stage. The D3D12 geometry path is amplification + mesh (`ASMain`/`MSMain`); the

@@ -1,18 +1,21 @@
 import types.ComputeBuffer;
 
-// Which slice of the compacted instance list one dispatch covers. Read only by whatever expands
-// instances into meshlet work -- the amplification stage on the mesh path -- so the vertex-pulling
-// path, which a WebGPU vertex stage forbids these read-write buffers in, never binds it.
+// Which slice of the compacted instance list one dispatch covers.
 public struct ExpansionData
 {
     public uint psoIndex;
 
-    // Which GPU-side table holds this draw's base into the instance-index list: the opaque path is
-    // bucketed by PSO, the transparent path by occlude partition. Neither base is a CPU value.
-    public uint baseSource;
+    // Where in `compactedInstances` this dispatch's instances start is a GPU value, so what the CPU
+    // supplies is which table to read it out of -- the opaque path is bucketed by PSO, the
+    // transparent path by occlude partition.
+    public uint baseTable;
+
+    // Which half of the depth-sorted transparent list: [self-occluding][plain].
     public uint partitionIndex;
 
     public ComputeBuffer<uint> compactedInstances;
     public ComputeBuffer<uint> psoPrefixSum;
     public ComputeBuffer<uint> transparentPartitionBase;
 };
+
+public ConstantBuffer<ExpansionData> expansionData;

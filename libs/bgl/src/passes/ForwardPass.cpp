@@ -436,8 +436,8 @@ namespace bgl
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
-				(*expansionData)["psoIndex"]   = static_cast<uint32_t>(pso);
-				(*expansionData)["baseSource"] = idl::cBaseSourcePsoPrefixSum;
+				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
+				(*expansionData)["baseTable"] = idl::cBaseTablePsoPrefixSum;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -467,7 +467,7 @@ namespace bgl
 				if (auto expansionData = kernel.FindUniforms("expansionData"))
 				{
 					(*expansionData)["compactedInstances"] = sortedInstances;
-					(*expansionData)["baseSource"]         = idl::cBaseSourceTransparentPartition;
+					(*expansionData)["baseTable"]          = idl::cBaseTableTransparentPartition;
 					(*expansionData)["partitionIndex"]     = partition;
 				}
 

@@ -7,31 +7,28 @@ import idl.Mesh;
 import idl.Submesh;
 
 public void ASBase(
-    ConstantBuffer<ForwardData> sceneData,
-    ConstantBuffer<ExpansionData> expansion,
     uint gid: SV_GroupID,       // Instance number
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
 {
-    // The opaque path is bucketed by PSO, so its base is the exclusive prefix sum of prior PSO
-    // counts. The transparent path is a separate depth-sorted list split by occlude class, so its
-    // base is the partition's start. Both are GPU values the CPU cannot know at record time.
+    // The opaque base is the exclusive prefix sum of the prior PSOs' counts; the transparent one is
+    // the partition's start in the depth-sorted list.
     uint base;
-    if (expansion.baseSource == cBaseSourceTransparentPartition)
+    if (expansionData.baseTable == cBaseTableTransparentPartition)
     {
-        base = expansion.transparentPartitionBase[expansion.partitionIndex];
+        base = expansionData.transparentPartitionBase[expansionData.partitionIndex];
     }
     else
     {
-        base = (expansion.psoIndex == 0u) ? 0u : expansion.psoPrefixSum[expansion.psoIndex - 1u];
+        base = (expansionData.psoIndex == 0u) ? 0u : expansionData.psoPrefixSum[expansionData.psoIndex - 1u];
     }
 
-    uint drawInstanceIdx = expansion.compactedInstances[base + gid];
-    let instance = sceneData.instanceBuffer.Get(drawInstanceIdx);
-    let mesh = sceneData.meshBuffer.Get(instance.meshInstance);
+    uint drawInstanceIdx = expansionData.compactedInstances[base + gid];
+    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
 
     // Each instance is one submesh; dispatch only that submesh's meshlets.
-    let submesh = sceneData.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
+    let submesh = forwardData.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
 
     InstancedPayload payload;
     payload.instance = instance;

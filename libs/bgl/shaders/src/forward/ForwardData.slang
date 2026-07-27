@@ -22,3 +22,5 @@ public struct ForwardData
     // same thing as a payload and leaves this unread.
     public PackedBuffer<MeshletInstance> meshletInstances;
 };
+
+public ConstantBuffer<ForwardData> forwardData;

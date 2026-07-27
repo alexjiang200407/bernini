@@ -1,5 +1,6 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
+import forward.ViewData;
 import idl.Constants;
 import idl.Mesh;
 import idl.Meshlet;
@@ -11,10 +12,6 @@ import forward.common;
 import forward.vertexdecode;
 import debug.dbg;
 import idl.ErrorCode;
-
-// The `uniforms.` modules are what declare the globals; the `forward.` ones only the struct.
-import uniforms.ForwardData;
-import uniforms.ViewData;
 
 // Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
 // any function that takes an OutputVertices/OutputIndices parameter, so only MSMain may index them.
@@ -93,7 +90,6 @@ ForwardVSOut VSMain(uint vertexId: SV_VertexID)
 #else
 
 import forward.amplification;
-import uniforms.ExpansionData;
 
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
@@ -102,7 +98,7 @@ void ASMain(
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
 {
-    ASBase(forwardData, expansionData, gid, gtid);
+    ASBase(gid, gtid);
 }
 
 [shader("mesh")]
