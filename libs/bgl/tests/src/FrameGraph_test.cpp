@@ -103,6 +103,15 @@ namespace
 		SetMeshletState(const MeshletState&) noexcept override
 		{}
 		void
+		SetGraphicsState(const GraphicsState&) noexcept override
+		{}
+		void
+		Draw(uint32_t, uint32_t, uint32_t, uint32_t) noexcept override
+		{}
+		void
+		EndRenderPass() noexcept override
+		{}
+		void
 		SetComputeState(const ComputeState&) noexcept override
 		{}
 		void
