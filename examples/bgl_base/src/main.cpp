@@ -109,8 +109,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(std::move(env.irradiance)),
-		      scene->AddTextureAsset(std::move(env.prefilter)),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+		      scene->AddTextureAsset(std::move(env.prefilter)) });
 
 		// --exposure overrides what the .benv derived for these maps.
 		view->SetExposure(exposureGiven ? exposure : env.exposure);

@@ -6,6 +6,7 @@
 #include "debug/DebugBuffer.h"
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
+#include "gfx/BrdfLut.h"
 #include "gfx/RenderTargetBase.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
@@ -153,6 +154,7 @@ namespace bgl
 		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
 		uint64_t                                                 m_NextCaptureId = 1;
 
+		BrdfLut              m_BrdfLut;
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;

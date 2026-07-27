@@ -112,6 +112,24 @@ compile_shader(
 )
 
 compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/BrdfLut.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/BrdfLut.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    ENTRY_POINTS "PSMain"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"

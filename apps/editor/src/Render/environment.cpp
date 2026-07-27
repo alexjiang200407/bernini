@@ -3,7 +3,6 @@
 #include <QLoggingCategory>
 
 #include <assetlib/benv_io.h>
-#include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
 
@@ -14,7 +13,6 @@ namespace editor
 		bgl::IScene*         scene,
 		bgl::ISceneView*     view,
 		const std::string&   benvPath,
-		const std::string&   brdfLutPath,
 		std::optional<float> exposureOverride,
 		const char*          who)
 	{
@@ -36,28 +34,15 @@ namespace editor
 		// config only overrules it deliberately.
 		view->SetExposure(exposureOverride.value_or(maps.exposure));
 
-		auto brdfLut = bgl::TextureAssetHandle();
-		if (!brdfLutPath.empty())
-		{
-			try
-			{
-				brdfLut = scene->AddTextureAsset(assetlib::loadKTX2(brdfLutPath));
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("%s: cannot load '%s': %s", who, brdfLutPath.c_str(), e.what());
-			}
-		}
-
 		try
 		{
 			const auto irradiance = scene->AddTextureAsset(std::move(maps.irradiance));
 			const auto prefilter  = scene->AddTextureAsset(std::move(maps.prefilter));
 
-			// All three or none: the split-sum specular is the product of the prefilter and the LUT,
-			// so a missing LUT would leave the lobe unnormalised rather than merely dimmer.
-			if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
-				view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
+			// Both or neither: they are the diffuse and specular convolutions of one radiance, so a
+			// view holding one of them would light the scene from half an environment.
+			if (irradiance.textureSlot && prefilter.textureSlot)
+				view->SetEnvironmentMap({ irradiance, prefilter });
 		}
 		catch (const std::exception& e)
 		{

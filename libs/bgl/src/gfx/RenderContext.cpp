@@ -134,6 +134,15 @@ namespace bgl
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
+		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
+
+		// Integrated here rather than on the first frame so that every view samples a table that is
+		// already written: the wait is a few microseconds and happens once, where a lazy build would
+		// have to be ordered against each render target's own timeline.
+		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
+		m_BrdfLut.Generate(m_CommandList.Get());
+		m_CommandList->Close();
+		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
 
 #if defined(BERNINI_GPU_DEBUG)
 		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
@@ -167,6 +176,7 @@ namespace bgl
 		}
 		m_Forward.Release();
 		m_Skybox.Release();
+		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
 		m_TransparentSort.Release(false);
 
@@ -420,9 +430,10 @@ namespace bgl
 
 		draw.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
 
-		draw.env      = view_->GetEnvironmentMap();
-		draw.exposure = view_->GetExposure();
-		draw.skybox   = view_->GetSkybox();
+		draw.env         = view_->GetEnvironmentMap();
+		draw.env.brdfLut = m_BrdfLut.Texture();
+		draw.exposure    = view_->GetExposure();
+		draw.skybox      = view_->GetSkybox();
 
 		if (draw.skybox.has_value())
 		{
