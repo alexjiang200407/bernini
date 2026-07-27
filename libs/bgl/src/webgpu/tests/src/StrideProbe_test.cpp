@@ -105,13 +105,6 @@ TEST_CASE("Every IDL struct has the same stride on both sides", "[wgpu][idl]")
 		{ "gDebugRecord", sizeof(idl::DebugRecord) },
 	};
 
-	// PbrMaterial and LoosePbrMaterial round up under WGSL but not on the CPU or DXIL. Nothing
-	// portable loads them yet -- the material atlas is W4 -- so they are listed rather than fixed
-	// here, and W4 must pad them in the IDL source before a WGSL shader reads a material array.
-	const auto knownWgslDivergent = [](std::string_view name) {
-		return name == "gPbrMaterial" || name == "gLoosePbrMaterial";
-	};
-
 	for (const auto& [name, cpu] : cpuSizes)
 	{
 		if (const auto d = dxil.find(name); d != dxil.end())
@@ -121,7 +114,7 @@ TEST_CASE("Every IDL struct has the same stride on both sides", "[wgpu][idl]")
 		}
 
 		const auto w = wgsl.find(name);
-		if (w == wgsl.end() || knownWgslDivergent(name))
+		if (w == wgsl.end())
 			continue;
 
 		INFO(name << ": cpu " << cpu << " vs wgsl " << w->second);
