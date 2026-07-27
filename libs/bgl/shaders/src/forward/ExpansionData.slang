@@ -19,3 +19,15 @@ public struct ExpansionData
 };
 
 public ConstantBuffer<ExpansionData> expansionData;
+
+// The opaque base is the exclusive prefix sum of the prior PSOs' counts; the depth-sorted one is the
+// partition's start. Shared so the two stages that expand instances cannot disagree.
+public uint ResolveInstanceBase()
+{
+    if (expansionData.baseTable == BaseTable::kDepthSorted)
+    {
+        return expansionData.transparentPartitionBase[expansionData.partitionIndex];
+    }
+
+    return (expansionData.psoIndex == 0u) ? 0u : expansionData.psoPrefixSum[expansionData.psoIndex - 1u];
+}

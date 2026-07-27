@@ -137,9 +137,12 @@ hop changes — per frame, per view:
 1. **Meshlet-instance expansion (compute).** A new kernel expands each *visible* instance
    (from `scene.instanceVisibility`) into `(instanceIndex, meshletIndex)` records appended to a
    per-PSO-bucketed `meshletInstanceBuffer` via `InterlockedAdd` — this absorbs the amplification
-   shader's job (per-meshlet frustum/cone culling happens here). The finalize step converts each
-   bucket's record count into `DrawIndirectArgs { vertexCount = count * cMaxPrimsPerMeshlet * 3,
-   instanceCount = 1, … }`.
+   shader's job (per-meshlet frustum/cone culling happens here). **There is no finalize step:**
+   `DrawIndirectArgs.vertexCount` is itself the allocator, so a thread reserves records by adding
+   their `cVerticesPerMeshletRecord` vertices to it and divides the returned offset back down to a
+   record slot. The number the draw consumes is therefore the same number that placed the records.
+   `firstVertex` doubles as the bucket's record base, since `drawIndirect` adds it to `SV_VertexID`
+   and the vertex shader's `vertexId / cVerticesPerMeshletRecord` then lands on the right record.
 2. **Vertex-pulling draw.** One `drawIndirect` per PSO bucket (same fixed `c_PsoCount` loop
    `ForwardPass` runs today). The vertex shader derives
    `record = vertex_index / (cMaxPrimsPerMeshlet*3)`, `prim = (vertex_index % …) / 3`,
