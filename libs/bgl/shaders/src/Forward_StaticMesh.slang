@@ -74,20 +74,13 @@ ForwardVSOut VSMain(uint vertexId: SV_VertexID)
     let meshlet = forwardData.meshletBuffer.Get(submesh.meshlets, meshletInstance.meshletIndex);
 
     // The draw is sized for a full meshlet, so the tail of a partial one has no triangle to emit.
-    // Collapsing the primitive to a point leaves it zero-area rather than relying on a NaN position,
-    // which WGSL will not const-fold.
+    // All three corners of a primitive share this branch, so collapsing them to one point leaves it
+    // zero-area and it rasterizes nothing -- a NaN position would do as well, but WGSL will not
+    // const-fold one. The interpolants are never read, so they keep their defaults.
     if (prim >= meshlet.triangleCount)
     {
-        ForwardVSOut degenerate;
+        ForwardVSOut degenerate = {};
         degenerate.position = float4(0.0, 0.0, 0.0, 1.0);
-        degenerate.clip = degenerate.position;
-        degenerate.prevClip = degenerate.position;
-        degenerate.worldPos = float3(0.0, 0.0, 0.0);
-        degenerate.normal = float3(0.0, 0.0, 1.0);
-        degenerate.uv = float2(0.0, 0.0);
-        degenerate.tangent = float4(0.0, 0.0, 0.0, 0.0);
-        degenerate.materialIndex = 0u;
-        degenerate.materialIsLoose = 0u;
         return degenerate;
     }
 

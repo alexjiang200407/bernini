@@ -13,7 +13,8 @@ public enum PbrChannel
     kMetallic,
     kNormalX,
     kNormalY,
-};
+}
+;
 
 public static const uint cLooseChannelCount = 9;
 
