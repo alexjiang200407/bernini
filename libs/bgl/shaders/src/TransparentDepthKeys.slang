@@ -31,7 +31,7 @@ struct Uniforms
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.
     ComputeBuffer<uint2> outEntries;
-    ComputeBuffer<uint> outCount;
+    AtomicComputeBuffer<uint> outCount;
 
     float3 cameraPos;
 };
@@ -84,8 +84,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
     // exactly all-ones. The lost precision is one distance step at zero range.
     uint key = min((IsOccludePso(pso) ? 0u : 0x80000000u) | (depth >> 1u), cSortPadKey - 1u);
 
-    uint slot;
-    InterlockedAdd(gUniforms.outCount[0], 1u, slot);
+    let slot = gUniforms.outCount[0].add(1u);
 
     gUniforms.outEntries[slot] = uint2(key, globalIdx);
 }

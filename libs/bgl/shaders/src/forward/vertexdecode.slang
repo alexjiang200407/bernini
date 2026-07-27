@@ -1,7 +1,6 @@
 import idl.VertexLayout;
 import types.ByteBuffer;
 import debug.dbg;
-import idl.ErrorCode;
 import util.Vertex;
 
 public struct DecodedVertex

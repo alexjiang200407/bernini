@@ -1,6 +1,5 @@
 import forward.common;
 import debug.dbg;
-import idl.ErrorCode;
 
 [shader("pixel")]
 ForwardPSOut PSMain(ForwardVSOut input)
