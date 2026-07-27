@@ -26,7 +26,7 @@ namespace bgl
 		// entry. Offsets are struct-relative, so baseOffset accumulates down wrapper structs the same
 		// way Uniforms::Traverse does when the handle was written.
 		void
-		CollectBindings(
+		CollectHandleBindings(
 			const ReflectedLayout&             layout,
 			const std::byte*                   data,
 			uint32_t                           baseOffset,
@@ -50,7 +50,7 @@ namespace bgl
 				}
 				else if (field.layout.kind == UniformType::kStruct)
 				{
-					CollectBindings(
+					CollectHandleBindings(
 						field.layout,
 						data,
 						baseOffset + field.offset,
@@ -59,6 +59,56 @@ namespace bgl
 				}
 			}
 		}
+	}
+
+	wgpu::Buffer
+	CommandList::AcquireUniformBuffer(uint64_t byteSize) noexcept
+	{
+		if (m_UniformPoolCursor < m_UniformPool.size() &&
+		    m_UniformPool[m_UniformPoolCursor].GetSize() >= byteSize)
+		{
+			return m_UniformPool[m_UniformPoolCursor++];
+		}
+
+		auto desc  = wgpu::BufferDescriptor{};
+		desc.size  = byteSize;
+		desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
+
+		auto buffer = m_Device.CreateBuffer(&desc);
+
+		if (m_UniformPoolCursor < m_UniformPool.size())
+			m_UniformPool[m_UniformPoolCursor] = buffer;
+		else
+			m_UniformPool.push_back(buffer);
+
+		++m_UniformPoolCursor;
+		return buffer;
+	}
+
+	std::vector<wgpu::BindGroupEntry>
+	CommandList::BuildBindGroupEntries(
+		const Uniforms&           uniforms,
+		const UniformLayoutEntry& entry) noexcept
+	{
+		const auto& resources = *m_ResourceManager->As<ResourceManager>();
+		const auto* data      = static_cast<const std::byte*>(uniforms.Data());
+
+		auto entries = std::vector<wgpu::BindGroupEntry>();
+		CollectHandleBindings(*entry.layout, data, 0, resources, entries);
+
+		if (entry.uniformBlockSize > 0)
+		{
+			const wgpu::Buffer block = AcquireUniformBuffer(entry.uniformBlockSize);
+			m_BoundQueue.WriteBuffer(block, 0, data, entry.uniformBlockSize);
+
+			auto blockEntry    = wgpu::BindGroupEntry{};
+			blockEntry.binding = entry.uniformBinding;
+			blockEntry.buffer  = block;
+			blockEntry.size    = entry.uniformBlockSize;
+			entries.push_back(blockEntry);
+		}
+
+		return entries;
 	}
 
 	CommandList::CommandList(
@@ -86,7 +136,8 @@ namespace bgl
 
 		gassert(m_CommandBuffer == nullptr, "Open: the previous recording was never submitted");
 
-		m_Encoder = m_Device.CreateCommandEncoder();
+		m_UniformPoolCursor = 0;
+		m_Encoder           = m_Device.CreateCommandEncoder();
 	}
 
 	void
@@ -227,18 +278,13 @@ namespace bgl
 
 		const GraphicsPipeline& pipeline =
 			kernel.pipeline->As<MeshletPipeline>()->GetGraphicsPipeline();
-		const auto& resources = *m_ResourceManager->As<ResourceManager>();
 
 		auto entries = std::vector<wgpu::BindGroupEntry>();
 		for (const auto& [name, uniforms] : kernel.uniforms)
 		{
-			const UniformLayoutEntry entry = pipeline.GetUniformLayoutEntry(name);
-			CollectBindings(
-				*entry.layout,
-				static_cast<const std::byte*>(uniforms.Data()),
-				0,
-				resources,
-				entries);
+			const auto built =
+				BuildBindGroupEntries(uniforms, pipeline.GetUniformLayoutEntry(name));
+			entries.insert(entries.end(), built.begin(), built.end());
 		}
 
 		auto bgDesc       = wgpu::BindGroupDescriptor{};
@@ -391,19 +437,14 @@ namespace bgl
 			kernel != nullptr && kernel->pipeline.IsInitialized(),
 			"Dispatch: compute kernel must be set in compute state");
 
-		auto*       pipeline  = kernel->pipeline->As<ComputePipeline>();
-		const auto& resources = *m_ResourceManager->As<ResourceManager>();
+		auto* pipeline = kernel->pipeline->As<ComputePipeline>();
 
 		auto entries = std::vector<wgpu::BindGroupEntry>();
 		for (const auto& [name, uniforms] : kernel->uniforms)
 		{
-			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
-			CollectBindings(
-				*entry.layout,
-				static_cast<const std::byte*>(uniforms.Data()),
-				0,
-				resources,
-				entries);
+			const auto built =
+				BuildBindGroupEntries(uniforms, pipeline->GetUniformLayoutEntry(name));
+			entries.insert(entries.end(), built.begin(), built.end());
 		}
 
 		auto bgDesc       = wgpu::BindGroupDescriptor{};

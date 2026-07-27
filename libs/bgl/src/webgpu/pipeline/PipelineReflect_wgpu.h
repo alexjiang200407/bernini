@@ -4,14 +4,15 @@
 namespace bgl
 {
 	/**
-	 * The WGSL binding a resource leaf was assigned. WGSL has no bindless, so every plainly-bound
-	 * buffer becomes an explicit (group, binding) slot; readWrite picks storage vs. read-only storage.
+	 * A WGSL binding the reflection assigned. WGSL has no bindless, so every plainly-bound buffer
+	 * becomes an explicit (group, binding) slot, and a constant buffer's plain-data members are
+	 * gathered into one further Uniform slot at the constant buffer's own binding.
 	 */
 	struct BindGroupSlot
 	{
-		uint32_t group;
-		uint32_t binding;
-		bool     readWrite;
+		uint32_t                group;
+		uint32_t                binding;
+		wgpu::BufferBindingType type;
 	};
 
 	/** One entry point to link: its module and its name. Two entries may share a module. */
@@ -37,10 +38,17 @@ namespace bgl
 		Slang::ComPtr<slang::IComponentType>& owner);
 
 	/**
-	 * Walks the program's constant buffers into `entries` -- each resource leaf becomes an 8-byte
-	 * kDescriptorHandle at a struct-relative offset -- and appends every leaf's (group, binding) to
-	 * `slots`. Offsets are struct-relative because Uniforms::Traverse and the dispatch/draw path both
-	 * accumulate down the tree.
+	 * Walks the program's constant buffers into `entries` and appends every binding to `slots`.
+	 *
+	 * A constant buffer's Uniforms bytes are laid out in two regions. Plain-data leaves keep the
+	 * std140 offsets Slang assigned them, so `[0, uniformBlockSize)` is a byte-exact image of the
+	 * WGSL uniform buffer and uploads with one memcpy. Resource leaves become 8-byte
+	 * kDescriptorHandles packed after that block, since only their slot index is ever read back.
+	 *
+	 * Offsets are struct-relative because Uniforms::Traverse and the dispatch/draw path both
+	 * accumulate down the tree. That is why a resource may only appear at a constant buffer's top
+	 * level: nested, its handle offset would be taken relative to the enclosing struct instead of
+	 * the block it was actually allocated from.
 	 */
 	void
 	ReflectWgslBindings(

@@ -195,5 +195,18 @@ namespace bgl
 
 		std::optional<ComputeState> m_CurrentComputeState;
 		std::optional<MeshletState> m_CurrentMeshletState;
+
+		// One buffer per bind, never recycled within a recording: queue writes are ordered against
+		// submission rather than against the encoder, so two writes to one buffer would both land
+		// before the command buffer ran and every draw would read the last one.
+		std::vector<wgpu::Buffer> m_UniformPool;
+		size_t                    m_UniformPoolCursor = 0;
+
+		[[nodiscard]] wgpu::Buffer
+		AcquireUniformBuffer(uint64_t byteSize) noexcept;
+
+		/** Resolves one constant buffer's handle writes and plain-data block to bind-group entries. */
+		[[nodiscard]] std::vector<wgpu::BindGroupEntry>
+		BuildBindGroupEntries(const Uniforms& uniforms, const UniformLayoutEntry& entry) noexcept;
 	};
 }
