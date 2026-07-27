@@ -59,6 +59,10 @@ public bool IsLoosePso(PsoType pso)
            pso == PsoType::kTransparent_StaticMesh_LoosePbr || pso == PsoType::kTransparentOcclude_StaticMesh_LoosePbr;
 }
 
+// Reads the bucket bases and the compaction output, which ForwardData carries only for the
+// amplification stage -- the WebGPU expansion pass resolves the same work into records instead.
+#if !defined(BGL_WGSL)
+
 public void ASBase(
     ConstantBuffer<ForwardData> sceneData,
     uint gid: SV_GroupID,       // Instance number
@@ -90,3 +94,5 @@ public void ASBase(
 
     DispatchMesh(submesh.GetMeshletCount(), 1, 1, payload);
 }
+
+#endif

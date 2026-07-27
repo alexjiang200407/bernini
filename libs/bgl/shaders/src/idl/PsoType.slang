@@ -1,8 +1,10 @@
 // THIS IS A FILE GENERATED FROM PsoType.slang. DO NOT EDIT MANUALLY
 
-public enum PsoType : uint16_t
+// uint, not uint16_t: core WGSL has no 16-bit scalar, and a 16-bit enum reaches the WGSL backend as
+// an empty type -- the shaders pass PsoType by value. Nothing stores it at a fixed width.
+public enum PsoType : uint
 {
-    kInvalid = uint16_t(-1),
+    kInvalid = uint(-1),
     kOpaque_StaticMesh_Null = 0,
     kOpaque_StaticMesh_PBR,
     kOpaque_StaticMesh_LoosePbr,
@@ -17,4 +19,4 @@ public enum PsoType : uint16_t
 }
 ;
 
-public static const uint16_t c_PsoCount = uint16_t(PsoType::kCount);
+public static const uint c_PsoCount = uint(PsoType::kCount);

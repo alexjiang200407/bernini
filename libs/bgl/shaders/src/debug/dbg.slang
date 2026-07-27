@@ -7,6 +7,13 @@ __exported import idl.ErrorCode;
 static const uint kDbgHeaderWords = 4;
 static const uint kDbgRecordWords = 4;
 
+// The debug buffer is an atomic append, so it is read-write -- which a WebGPU vertex stage may not
+// bind, and the geometry decode chain runs there. Code shared between the geometry stages gates its
+// asserts on this rather than on BERNINI_GPU_DEBUG, so one compiles only where it can run.
+#if defined(BERNINI_GPU_DEBUG) && !defined(BGL_WGSL)
+#define BGL_DBG_VERTEX_SAFE 1
+#endif
+
 struct DebugGlobals
 {
     AtomicComputeBuffer<uint> buffer;

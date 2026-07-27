@@ -21,7 +21,9 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 {
     uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
+#if defined(BGL_DBG_VERTEX_SAFE)
     dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
+#endif
 
     uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
     DecodedVertex vertex = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);
@@ -49,6 +51,52 @@ uint3 EvaluatePrimitive(Submesh submesh, Meshlet meshlet, uint t)
 {
     return forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + t * 3);
 }
+
+#if defined(BGL_WGSL)
+
+// WebGPU has no mesh stage, so the meshlet is walked one output vertex at a time: the expansion pass
+// wrote one record per (instance, meshlet), and the draw covers each record with a fixed
+// cMaxPrimsPerMeshlet * 3 vertices. Everything below the index lookup is the shared code MSMain
+// runs -- only the addressing differs.
+[shader("vertex")]
+ForwardVSOut VSMain(uint vertexId: SV_VertexID)
+{
+    const uint cVerticesPerRecord = cMaxPrimsPerMeshlet * 3;
+
+    uint record = vertexId / cVerticesPerRecord;
+    uint corner = vertexId % 3;
+    uint prim = (vertexId % cVerticesPerRecord) / 3;
+
+    let meshletInstance = forwardData.meshletInstances[record];
+    let instance = forwardData.instanceBuffer.Get(meshletInstance.instanceIndex);
+    let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
+    let submesh = forwardData.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
+    let meshlet = forwardData.meshletBuffer.Get(submesh.meshlets, meshletInstance.meshletIndex);
+
+    // The draw is sized for a full meshlet, so the tail of a partial one has no triangle to emit.
+    // Collapsing the primitive to a point leaves it zero-area rather than relying on a NaN position,
+    // which WGSL will not const-fold.
+    if (prim >= meshlet.triangleCount)
+    {
+        ForwardVSOut degenerate;
+        degenerate.position = float4(0.0, 0.0, 0.0, 1.0);
+        degenerate.clip = degenerate.position;
+        degenerate.prevClip = degenerate.position;
+        degenerate.worldPos = float3(0.0, 0.0, 0.0);
+        degenerate.normal = float3(0.0, 0.0, 1.0);
+        degenerate.uv = float2(0.0, 0.0);
+        degenerate.tangent = float4(0.0, 0.0, 0.0, 0.0);
+        degenerate.materialIndex = 0u;
+        degenerate.materialIsLoose = 0u;
+        return degenerate;
+    }
+
+    uint localVertex = forwardData.indexBuffer.Get(submesh.indices, meshlet.relativeIndexOffset + prim * 3 + corner);
+
+    return EvaluateVertex(mesh, submesh, instance, meshlet, localVertex);
+}
+
+#else
 
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
@@ -113,3 +161,5 @@ void MSMain(
         tris[t] = EvaluatePrimitive(submesh, meshlet, t);
     }
 }
+
+#endif

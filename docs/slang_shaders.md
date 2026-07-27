@@ -55,12 +55,25 @@ imported IDL struct a shader loads — fails the WGSL compile. Do not introduce 
 a portable shader or in an IDL struct one loads. To remove an existing 16-bit field, the fix depends
 on whether the struct's byte layout is fixed:
 
-- **CPU-built, uploaded structs** (e.g. `idl::VertexLayout`, built field-by-field and written to a
-  buffer, never `memcpy`'d from disk): just **widen** the field to `uint`. The GPU struct grows a
-  little; nothing external constrains its size. The CPU mirror follows automatically.
-- **Structs `memcpy`'d from a fixed cooked format** (e.g. `Meshlet` from a baked mesh): the byte
-  width must be preserved, so **pack** two 16-bit values into one `uint` (hi/lo) behind accessors —
-  widening would break the on-disk layout.
+- **CPU-built, uploaded structs** (e.g. `idl::VertexLayout`, or `idl::Meshlet`, which `Scene`
+  meshletizes field-by-field at load — nothing in the cooked `.bmesh` carries a `Meshlet`): just
+  **widen** the field to `uint`. The GPU struct grows a little; nothing external constrains its
+  size. The CPU mirror follows automatically. `Meshlet` and `PsoType` were both widened this way.
+- **Structs `memcpy`'d from a fixed cooked format**: the byte width must be preserved, so **pack**
+  two 16-bit values into one `uint` (hi/lo) behind accessors — widening would break the on-disk
+  layout. No geometry struct is in this class today.
+
+An `enum : uint16_t` is the same defect and easy to miss, because it fails where the enum is *used*
+rather than where it is declared: a 16-bit enum passed by value reaches the WGSL backend as an empty
+parameter type (`fn IsLoosePso_0( pso_1 : )`), not as a diagnostic naming the enum.
+
+## Struct size is rounded up to alignment in WGSL
+
+A WGSL struct's size is rounded up to its own alignment, which the CPU mirror does not do. So
+`idl::Mesh` — a `float4x4` (align 16) plus a `RangeWithCount` — packs to 72 bytes on the CPU but has
+an **80-byte** stride on the GPU, and the second element of the buffer would be read from the wrong
+offset. `ScalarDataLayout` controls member offsets, not this rounding. Pad such a struct explicitly
+in the IDL source so both mirrors agree; `Mesh` carries a `pad` field for exactly this.
 
 ## No bindless on WGSL — bind each buffer explicitly
 

@@ -226,9 +226,17 @@ namespace bgl
 		{
 			gassert(slot.group == 0, "MakeWgslBindGroupLayout: only bind group 0 is supported");
 
+			// WebGPU forbids a read-write storage binding in the vertex stage outright, so such a
+			// slot is offered to the other stages only. A vertex shader that does reach one then
+			// fails pipeline creation naming the stage, rather than the whole layout being rejected
+			// because some other entry point declared the buffer.
+			auto stages = visibility;
+			if (slot.type == wgpu::BufferBindingType::Storage)
+				stages &= ~wgpu::ShaderStage::Vertex;
+
 			auto entry        = wgpu::BindGroupLayoutEntry{};
 			entry.binding     = slot.binding;
-			entry.visibility  = visibility;
+			entry.visibility  = stages;
 			entry.buffer.type = slot.type;
 			entries.push_back(entry);
 		}
