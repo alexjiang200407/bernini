@@ -14,6 +14,12 @@ namespace bgl
 		uint32_t                               size = 0;
 		std::shared_ptr<const ReflectedLayout> layout;
 		uint32_t                               rootParamIndex = 0xFFFFFFFF;
+
+		// WGSL only. The plain-data members occupy [0, uniformBlockSize) of the Uniforms bytes as a
+		// byte-exact image of the WGSL uniform buffer, which binds at uniformBinding; resource
+		// handles are packed after the block. Zero when the buffer declares only resources.
+		uint32_t uniformBlockSize = 0;
+		uint32_t uniformBinding   = 0xFFFFFFFF;
 	};
 
 	using UniformLayoutMap = core::str::unordered_str_map<UniformLayoutEntry>;

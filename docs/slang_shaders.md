@@ -77,6 +77,18 @@ So the WGSL backend cannot use the `.Handle` primitives: it binds each buffer to
 instead of indexing a heap. The D3D12 backend keeps the bindless heap. Buffer primitives therefore
 need a per-target form (bindless on DXIL, plainly bound on WGSL).
 
+A constant buffer's *plain* members go somewhere else again. Slang gathers them into a std140
+`var<uniform>` block at the constant buffer's own binding and starts the resource slots after it, so
+one `ConstantBuffer<T>` that mixes data with buffers — `ForwardData` is the case that matters —
+becomes a uniform binding plus one storage binding per buffer. The CPU-side `Uniforms` bytes mirror
+that split: plain members keep the std140 offsets Slang assigned, so `[0, uniformBlockSize)` uploads
+with one memcpy, and resource handles are packed after the block, where only their slot index is
+read back. `float4x4` lands as a column-major `array<vec4<f32>, 4>`, which is byte-identical to
+`glm::mat4` and to what the D3D12 constant buffer expects — so the same bytes serve both backends,
+as `MixedUniform_test` pins. Because those offsets are struct-relative and summed on the way down,
+a struct may not mix plain data with resources *below* the top level; the reflection asserts rather
+than binding the wrong slot.
+
 ## No mesh or amplification shaders in WGSL
 
 WebGPU has neither stage. The D3D12 geometry path is amplification + mesh (`ASMain`/`MSMain`); the
