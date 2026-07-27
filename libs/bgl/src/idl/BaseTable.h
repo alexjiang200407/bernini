@@ -5,8 +5,8 @@ namespace bgl::idl
 {
 	enum class BaseTable : uint32_t
 	{
-		kPsoBucketed = 0,
-		kDepthSorted = 1,
+		kOpaqueMasked = 0,
+		kAlphaBlend = 1,
 	};
 
 	static_assert(sizeof(BaseTable) == 4);

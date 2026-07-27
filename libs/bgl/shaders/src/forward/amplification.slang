@@ -15,7 +15,7 @@ public void ASBase(
     // The opaque base is the exclusive prefix sum of the prior PSOs' counts; the transparent one is
     // the partition's start in the depth-sorted list.
     uint base;
-    if (expansionData.baseTable == BaseTable::kDepthSorted)
+    if (expansionData.baseTable == BaseTable::kAlphaBlend)
     {
         base = expansionData.transparentPartitionBase[expansionData.partitionIndex];
     }
