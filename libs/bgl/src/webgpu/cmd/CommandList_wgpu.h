@@ -155,6 +155,9 @@ namespace bgl
 		void
 		SetGraphicsPipeline(const GraphicsPipeline& pipeline) noexcept;
 
+		void
+		SetGraphicsState(const GraphicsState& gfxState) noexcept override;
+
 		/**
 		 * Binds a meshlet kernel's graphics pipeline and its bind group -- the kernel's uniform
 		 * handle-writes resolved to buffer bindings, the same way Dispatch binds a compute kernel --
@@ -169,7 +172,7 @@ namespace bgl
 			uint32_t vertexCount,
 			uint32_t instanceCount = 1,
 			uint32_t firstVertex   = 0,
-			uint32_t firstInstance = 0) noexcept;
+			uint32_t firstInstance = 0) noexcept override;
 
 		/**
 		 * Issues a non-indexed draw whose {vertexCount, instanceCount, firstVertex, firstInstance}
@@ -181,7 +184,7 @@ namespace bgl
 
 		/** Closes the render pass opened by BeginRenderPass. */
 		void
-		EndRenderPass() noexcept;
+		EndRenderPass() noexcept override;
 
 	private:
 		wgpu::Device       m_Device;

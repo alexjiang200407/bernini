@@ -748,4 +748,21 @@ namespace bgl
 		m_RecordingVersion = 0;
 	}
 
+	void
+	CommandList::SetGraphicsState(const GraphicsState&) noexcept
+	{
+		gfatal("SetGraphicsState is not implemented on the D3D12 backend");
+	}
+
+	void
+	CommandList::Draw(uint32_t, uint32_t, uint32_t, uint32_t) noexcept
+	{
+		gfatal("Draw is not implemented on the D3D12 backend");
+	}
+
+	void
+	CommandList::EndRenderPass() noexcept
+	{
+		gfatal("EndRenderPass is not implemented on the D3D12 backend");
+	}
 }

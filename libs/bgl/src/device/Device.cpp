@@ -44,4 +44,16 @@ namespace bgl
 		}
 		return kernel;
 	}
+
+	GraphicsKernel
+	IDevice::CreateGraphicsKernel(const GraphicsPipelineDesc& desc) const noexcept
+	{
+		GraphicsKernel kernel;
+		kernel.pipeline = CreateGraphicsPipeline(desc);
+		for (const auto& name : kernel.pipeline->GetUniformBufferNames())
+		{
+			kernel.uniforms.try_emplace(name, CreateUniforms(kernel.pipeline.Get(), name));
+		}
+		return kernel;
+	}
 }

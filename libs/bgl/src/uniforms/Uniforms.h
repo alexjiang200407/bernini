@@ -12,6 +12,7 @@
 namespace bgl
 {
 	class IMeshletPipeline;
+	class IGraphicsPipeline;
 	class IComputePipeline;
 
 	namespace detail
@@ -319,6 +320,7 @@ namespace bgl
 		Uniforms() = default;
 		Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
 		Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
+		Uniforms(IGraphicsPipeline const* pipeline, std::string_view cbufferName);
 
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
