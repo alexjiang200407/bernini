@@ -67,11 +67,6 @@ An `enum : uint16_t` is the same defect and easy to miss, because it fails where
 rather than where it is declared: a 16-bit enum passed by value reaches the WGSL backend as an empty
 parameter type (`fn IsLoosePso_0( pso_1 : )`), not as a diagnostic naming the enum.
 
-A 32-bit enum as a **constant-buffer field** is free, despite `SlangReflection.cpp` listing
-`Kind::Enum` as unsupported: Slang reflects such a field as its underlying scalar
-(`kind: scalar, scalarType: uint32`), so that case never fires, and WGSL emits a plain `u32` at the
-offset the `uint` had. `ExpansionData.baseTable` is the worked example.
-
 ## Struct size is rounded up to alignment in WGSL
 
 A WGSL struct's size is rounded up to its own alignment, which the CPU mirror does not do. So
@@ -106,16 +101,6 @@ read back. `float4x4` lands as a column-major `array<vec4<f32>, 4>`, which is by
 as `MixedUniform_test` pins. Because those offsets are struct-relative and summed on the way down,
 a struct may not mix plain data with resources *below* the top level; the reflection asserts rather
 than binding the wrong slot.
-
-## One `public` in a module makes everything else internal
-
-Slang's default visibility is per *module*, not per declaration: a module with no `public` at all
-exports everything, but the first `public` declaration switches that module to explicit visibility
-and every unmarked declaration becomes internal. So adding `public struct Foo` to a module that also
-declares `ConstantBuffer<Foo> gFoo;` breaks every importer of `gFoo` with `E30600: 'gFoo' is not
-accessible from the current context` — at the *use* site, in a file nobody edited. Mark the global
-`public` too. This is why `forward/{ForwardData,ViewData,ExpansionData}.slang` declare both the
-struct and its `ConstantBuffer` global `public`.
 
 ## No mesh or amplification shaders in WGSL
 
