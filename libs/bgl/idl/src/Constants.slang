@@ -15,8 +15,10 @@ public static const uint cVerticesPerMeshletRecord = cMaxPrimsPerMeshlet * 3;
 // triangle counts both exceed this, so every emission loop must stride by it.
 public static const uint cMeshGroupSize = 64;
 
-// Threads per amplification-shader group: one group amplifies one submesh instance.
-public static const uint cThreadsPerInstance = 64;
+// Threads per amplification-shader group. One group amplifies one submesh instance, and DispatchMesh
+// takes group-uniform arguments and runs once per group, so a second lane has nothing of its own to
+// do -- it would re-read the same instance to agree on the same dispatch.
+public static const uint cThreadsPerInstance = 1;
 
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;

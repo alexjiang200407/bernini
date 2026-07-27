@@ -21,6 +21,11 @@ namespace bgl
 			{ "scene.compactedInstances" },
 		} };
 
+		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
+		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
+		// which both the histogram and the compaction skip.
+		constexpr std::array<SubmeshInstance, idl::cHistogramGroupSize> c_InstanceTailPadding{};
+
 		constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility";
 		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
 		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
@@ -100,6 +105,9 @@ namespace bgl
 			compactedInstancesDesc.SetElement<uint32_t>();
 			// Match the instance buffer: the compact pass appends one entry per live instance, of
 			// which there can be as many as that (padded) buffer holds.
+			//
+			// Never cleared between frames: a reader is bounded by the dispatch args the same
+			// compaction wrote, so it only ever touches slots this frame's scatter filled.
 			compactedInstancesDesc.initialCount = paddedInstances;
 			compactedInstancesDesc.debugName    = "Compacted Instances";
 
@@ -461,34 +469,17 @@ namespace bgl
 		m_TransparentSortEntries.Update(cmdList);
 
 		auto buffers = GetInstanceBuffers();
-		std::apply(
-			[cmdList](auto&... buffer) {
-				(..., [&]() {
-					if constexpr (is_compute_buffer_v<decltype(buffer)>)
-					{
-						buffer.Update(cmdList);
-						buffer.Clear(cmdList);
-					}
-					else
-					{
-						buffer.Update(cmdList);
-					}
-				}());
-			},
-			buffers);
+		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
 
 		const uint32_t count  = m_InstanceBuffer.Size();
 		const uint32_t padded = core::round_up(count, idl::cHistogramGroupSize);
 		if (padded > count)
 		{
-			// A default SubmeshInstance is skipped by the sort (Null meshInstance, pso kInvalid);
-			// upload it into the histogram-group tail so the padding never enters a real bucket.
-			const std::vector<SubmeshInstance> tail(padded - count);
 			cmdList->WriteBuffer(
 				m_InstanceBuffer.GetBufferHandle(),
-				tail.data(),
+				c_InstanceTailPadding.data(),
 				static_cast<size_t>(count) * sizeof(SubmeshInstance),
-				tail.size() * sizeof(SubmeshInstance));
+				static_cast<size_t>(padded - count) * sizeof(SubmeshInstance));
 		}
 	}
 

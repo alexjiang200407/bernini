@@ -91,12 +91,9 @@ import forward.amplification;
 
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
-void ASMain(
-    uint gid: SV_GroupID,       // Total Instances
-    uint gtid: SV_GroupThreadID // Local thread index within the group
-)
+void ASMain(uint gid: SV_GroupID) // Total Instances
 {
-    ASBase(gid, gtid);
+    ASBase(gid);
 }
 
 [shader("mesh")]

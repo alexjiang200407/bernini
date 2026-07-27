@@ -6,10 +6,7 @@ import idl.Constants;
 import idl.Mesh;
 import idl.Submesh;
 
-public void ASBase(
-    uint gid: SV_GroupID,       // Instance number
-    uint gtid: SV_GroupThreadID // Local thread index within the group
-)
+public void ASBase(uint gid: SV_GroupID) // Instance number
 {
     uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
     let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);

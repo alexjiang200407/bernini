@@ -96,15 +96,4 @@ namespace bgl
 		ComputeBufferDesc m_Desc;
 		GrowableGpuBuffer m_Storage;
 	};
-
-	template <typename T>
-	struct is_compute_buffer : std::false_type
-	{};
-
-	template <>
-	struct is_compute_buffer<ComputeBuffer> : std::true_type
-	{};
-
-	template <typename T>
-	inline constexpr bool is_compute_buffer_v = is_compute_buffer<std::decay_t<T>>::value;
 }
