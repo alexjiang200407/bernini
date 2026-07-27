@@ -13,7 +13,7 @@ namespace bgl::idl
 		float metallicFactor;
 		float roughnessFactor;
 		float alphaCutoff;
-		uint32_t _wgslPad[3];
+		uint32_t pad[3];
 	};
 
 	static_assert(sizeof(PbrMaterial) == 64);

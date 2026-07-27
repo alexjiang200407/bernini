@@ -8,7 +8,7 @@ namespace bgl::idl
 	{
 		TextureHandle texture;
 		uint32_t channel;
-		uint32_t _wgslPad[1];
+		uint32_t pad[1];
 	};
 
 	static_assert(sizeof(ChannelSource) == 16);

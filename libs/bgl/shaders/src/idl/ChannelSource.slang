@@ -7,5 +7,5 @@ public struct ChannelSource
     public TextureHandle texture;
     public uint channel;
 
-    public uint _wgslPad[1];
+    public uint pad[1];
 };

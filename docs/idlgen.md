@@ -52,7 +52,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   struct's size up to its alignment, so `Mesh` (a `float4x4` plus a `RangeWithCount`) packs to 72
   bytes under the C/C++ and DXIL rules but wants an 80-byte stride there. Left alone, element 1 of
   the buffer is read from the wrong offset on that backend only, and silently. idlgen reflects a
-  third, WGSL session for exactly this and appends a `_wgslPad` member to **both** outputs — the
+  third, WGSL session for exactly this and appends a `pad` member to **both** outputs — the
   padding has to be a member of the shared struct, because padding either mirror alone would leave
   the other target on the narrower stride.
 

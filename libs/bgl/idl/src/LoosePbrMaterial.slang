@@ -16,7 +16,6 @@ public enum PbrChannel
 
 public static const uint cLooseChannelCount = 9;
 
-// Widest member first, for the reason given in PbrMaterial.
 public struct LoosePbrMaterial
 {
     public float4 baseColorFactor;

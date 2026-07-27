@@ -18,7 +18,6 @@ public enum PbrChannel
 
 public static const uint cLooseChannelCount = 9;
 
-// Widest member first, for the reason given in PbrMaterial.
 public struct LoosePbrMaterial
 {
     public float4 baseColorFactor;
@@ -29,5 +28,5 @@ public struct LoosePbrMaterial
     // Cutout threshold. Only read by the alpha-test PSOs; an opaque material never samples it.
     public float alphaCutoff;
 
-    public uint _wgslPad[1];
+    public uint pad[1];
 };

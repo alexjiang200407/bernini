@@ -151,11 +151,11 @@ namespace
 		std::vector<FieldInfo> fields;
 
 		// Trailing bytes WGSL rounds the struct up by, which no other target adds. Emitted as a
-		// real member into both mirrors so every target agrees on the stride; see PadName.
+		// real member into both mirrors so every target agrees on the stride.
 		size_t padBytes = 0;
 	};
 
-	constexpr auto c_PadName = "_wgslPad";
+	constexpr auto c_PadName = "pad";
 
 	struct EnumInfo
 	{

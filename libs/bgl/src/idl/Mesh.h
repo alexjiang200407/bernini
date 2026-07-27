@@ -8,7 +8,7 @@ namespace bgl::idl
 	{
 		glm::mat4 transform;
 		RangeWithCount submeshes;
-		uint32_t _wgslPad[2];
+		uint32_t pad[2];
 	};
 
 	static_assert(sizeof(Mesh) == 80);
