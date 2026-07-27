@@ -187,9 +187,10 @@ self-occluding transparent PSOs. The amplification and mesh shaders are always t
 `Forward_Transparent_Prepass`, `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a
 `static_assert` catches an empty row but not a misordering.
 
-**Opaque and alpha-test** are PSO-bucketed: per bucket it populates the `forwardData` and
-`materialData` cbuffers (scene buffers, this frame's and the previous frame's view-proj, `psoIndex`,
-samplers, IBL maps, camera position, exposure), binds the meshlet state (viewport +
+**Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
+— `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
+view-proj), `expansionData` (`psoIndex` and the instance-list tables), and `materialData` (samplers,
+IBL maps, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
@@ -212,8 +213,11 @@ Both partitions read their base from `transparentSort.partitionBase`, indexed by
 the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseSource` picks between the two.
 
 * **In:** the backbuffer and the velocity buffer as render targets; `compactDispatchArgs` and
-  `transparentSort.partitionDispatchArgs` as indirect args; the ten `c_ForwardDataBuffers` scene
-  buffers, `sortedTransparentInstances`, and the two `c_MaterialBuffers` (PBR + loose). Missing a `forwardData` key is fatal (`gfatal`); a missing
+  `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
+  buffers, the three `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
+  `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped — that is how
+  the vertex-pulling backend, which has no amplification stage, drops `expansionData` — but a
+  scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
 * **Out:** the backbuffer (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.

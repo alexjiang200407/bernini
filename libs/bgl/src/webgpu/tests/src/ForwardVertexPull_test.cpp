@@ -112,10 +112,17 @@ TEST_CASE("The forward vertex shader pulls a meshlet through the decode chain", 
 
 	auto kernel = device->CreateMeshletKernel(desc);
 	REQUIRE(kernel.ContainsUniforms("forwardData"));
+	REQUIRE(kernel.ContainsUniforms("viewData"));
+
+	// The amplification stage is the only reader of expansionData, and this arm has no such stage,
+	// so its read-write buffers never reach a vertex-stage binding.
+	REQUIRE_FALSE(kernel.ContainsUniforms("expansionData"));
+
+	auto& viewData           = kernel["viewData"];
+	viewData["viewProj"]     = glm::mat4(1.0f);
+	viewData["prevViewProj"] = glm::mat4(1.0f);
 
 	auto& forwardData               = kernel["forwardData"];
-	forwardData["viewProj"]         = glm::mat4(1.0f);
-	forwardData["prevViewProj"]     = glm::mat4(1.0f);
 	forwardData["instanceBuffer"]   = instanceBuffer;
 	forwardData["meshBuffer"]       = meshBuffer;
 	forwardData["submeshBuffer"]    = submeshBuffer;

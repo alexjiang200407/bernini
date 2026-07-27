@@ -53,7 +53,7 @@ namespace bgl
 			},
 		} };
 
-		static constexpr std::array<SceneBuffer, 10> c_ForwardDataBuffers = {
+		static constexpr std::array<SceneBuffer, 7> c_ForwardDataBuffers = {
 			{ { "scene.instanceBuffer",
 			    "instanceBuffer",
 			    BarrierAccessFlag::kShaderResource,
@@ -81,8 +81,13 @@ namespace bgl
 			  { "scene.indexBuffer",
 			    "indexBuffer",
 			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { "scene.compactedInstances",
+			    BarrierSyncFlag::kVertexShader } }
+		};
+
+		// Absent on the vertex-pulling backend: WebGPU forbids a read-write storage binding in the
+		// vertex stage, so that path reads a record the expansion pass wrote instead.
+		static constexpr std::array<SceneBuffer, 3> c_ExpansionBuffers = {
+			{ { "scene.compactedInstances",
 			    "compactedInstances",
 			    BarrierAccessFlag::kUnorderedAccess,
 			    BarrierSyncFlag::kVertexShader },
@@ -95,6 +100,26 @@ namespace bgl
 			    BarrierAccessFlag::kUnorderedAccess,
 			    BarrierSyncFlag::kVertexShader } }
 		};
+
+		void
+		BindSceneBuffers(
+			Uniforms&                    uniforms,
+			std::span<const SceneBuffer> bindings,
+			const PassContext&           resources)
+		{
+			for (const SceneBuffer& binding : bindings)
+			{
+				auto uniform = uniforms[binding.uniformKey];
+				if (!uniform.IsValid())
+				{
+					gfatal(
+						"{} key doesn't exist in uniforms. Most likely an error",
+						binding.uniformKey);
+				}
+
+				uniform = resources.GetBuffer(binding.graphName);
+			}
+		}
 
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
@@ -289,6 +314,11 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		for (const auto& binding : c_ExpansionBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+
 		for (const auto& binding : c_MaterialBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -307,27 +337,19 @@ namespace bgl
 	{
 		if (auto foundForwardData = kernel.FindUniforms("forwardData"))
 		{
-			auto& forwardData = *foundForwardData;
+			BindSceneBuffers(*foundForwardData, c_ForwardDataBuffers, resources);
+		}
 
-			for (const SceneBuffer& binding : c_ForwardDataBuffers)
-			{
-				const auto handle = resources.GetBuffer(binding.graphName);
+		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
+		{
+			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
+		}
 
-				auto uniform = forwardData[binding.uniformKey];
-				if (uniform.IsValid())
-				{
-					uniform = handle;
-				}
-				else
-				{
-					gfatal(
-						"{} key doesn't exist in uniforms. Most likely an error",
-						binding.uniformKey);
-				}
-			}
-
-			forwardData["viewProj"]     = draw.viewProj;
-			forwardData["prevViewProj"] = draw.prevViewProj;
+		if (auto foundViewData = kernel.FindUniforms("viewData"))
+		{
+			auto& viewData           = *foundViewData;
+			viewData["viewProj"]     = draw.viewProj;
+			viewData["prevViewProj"] = draw.prevViewProj;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -412,10 +434,10 @@ namespace bgl
 			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
 			BindKernel(kernel, draw, resources);
-			if (auto forwardData = kernel.FindUniforms("forwardData"))
+			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
-				(*forwardData)["psoIndex"]   = static_cast<uint32_t>(pso);
-				(*forwardData)["baseSource"] = idl::cBaseSourcePsoPrefixSum;
+				(*expansionData)["psoIndex"]   = static_cast<uint32_t>(pso);
+				(*expansionData)["baseSource"] = idl::cBaseSourcePsoPrefixSum;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -442,11 +464,11 @@ namespace bgl
 				gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
 				BindKernel(kernel, draw, resources);
-				if (auto forwardData = kernel.FindUniforms("forwardData"))
+				if (auto expansionData = kernel.FindUniforms("expansionData"))
 				{
-					(*forwardData)["compactedInstances"] = sortedInstances;
-					(*forwardData)["baseSource"]         = idl::cBaseSourceTransparentPartition;
-					(*forwardData)["partitionIndex"]     = partition;
+					(*expansionData)["compactedInstances"] = sortedInstances;
+					(*expansionData)["baseSource"]         = idl::cBaseSourceTransparentPartition;
+					(*expansionData)["partitionIndex"]     = partition;
 				}
 
 				state.kernel       = &kernel;

@@ -1,4 +1,5 @@
 import types.SubmeshInstance;
+import forward.ExpansionData;
 import forward.ForwardData;
 import forward.common;
 import idl.Constants;
@@ -7,6 +8,7 @@ import idl.Submesh;
 
 public void ASBase(
     ConstantBuffer<ForwardData> sceneData,
+    ConstantBuffer<ExpansionData> expansion,
     uint gid: SV_GroupID,       // Instance number
     uint gtid: SV_GroupThreadID // Local thread index within the group
 )
@@ -15,16 +17,16 @@ public void ASBase(
     // counts. The transparent path is a separate depth-sorted list split by occlude class, so its
     // base is the partition's start. Both are GPU values the CPU cannot know at record time.
     uint base;
-    if (sceneData.baseSource == cBaseSourceTransparentPartition)
+    if (expansion.baseSource == cBaseSourceTransparentPartition)
     {
-        base = sceneData.transparentPartitionBase[sceneData.partitionIndex];
+        base = expansion.transparentPartitionBase[expansion.partitionIndex];
     }
     else
     {
-        base = (sceneData.psoIndex == 0u) ? 0u : sceneData.psoPrefixSum[sceneData.psoIndex - 1u];
+        base = (expansion.psoIndex == 0u) ? 0u : expansion.psoPrefixSum[expansion.psoIndex - 1u];
     }
 
-    uint drawInstanceIdx = sceneData.compactedInstances[base + gid];
+    uint drawInstanceIdx = expansion.compactedInstances[base + gid];
     let instance = sceneData.instanceBuffer.Get(drawInstanceIdx);
     let mesh = sceneData.meshBuffer.Get(instance.meshInstance);
 
