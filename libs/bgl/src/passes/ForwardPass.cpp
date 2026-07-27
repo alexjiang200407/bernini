@@ -438,7 +438,7 @@ namespace bgl
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
 				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
-				(*expansionData)["baseTable"] = idl::BaseTable::kOpaqueMasked;
+				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -468,7 +468,7 @@ namespace bgl
 				if (auto expansionData = kernel.FindUniforms("expansionData"))
 				{
 					(*expansionData)["compactedInstances"] = sortedInstances;
-					(*expansionData)["baseTable"]          = idl::BaseTable::kAlphaBlend;
+					(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
 					(*expansionData)["partitionIndex"]     = partition;
 				}
 
