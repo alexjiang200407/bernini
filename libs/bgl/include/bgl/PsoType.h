@@ -5,7 +5,7 @@ namespace bgl
 {
 	enum class PsoType : uint32_t
 	{
-		kInvalid = uint(-1),
+		kInvalid = uint32_t(-1),
 		kOpaque_StaticMesh_Null = 0,
 		kOpaque_StaticMesh_PBR = 1,
 		kOpaque_StaticMesh_LoosePbr = 2,
@@ -21,6 +21,6 @@ namespace bgl
 
 	static_assert(sizeof(PsoType) == 4);
 
-	constexpr uint32_t c_PsoCount = uint(PsoType::kCount);
+	constexpr uint32_t c_PsoCount = uint32_t(PsoType::kCount);
 
 }
