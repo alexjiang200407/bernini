@@ -21,7 +21,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 {
     uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
-#if defined(BGL_DBG_VERTEX_SAFE)
+#if defined(BERNINI_GPU_DEBUG_ALL_STAGES)
     dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
 #endif
 

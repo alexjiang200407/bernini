@@ -1,8 +1,3 @@
-// The amplification stage's body, in its own module because it reads the bucket bases and the
-// compaction output -- fields ForwardData carries only for that stage, since all three are
-// read-write and a WebGPU vertex stage may not bind one. Only the mesh-shader arm imports this, so
-// the WGSL target never loads it and needs no guard of its own.
-
 import types.SubmeshInstance;
 import forward.ForwardData;
 import forward.common;
