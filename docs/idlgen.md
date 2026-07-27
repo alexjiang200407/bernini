@@ -42,6 +42,12 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   is already copied verbatim, so a small deterministic text parser handles those. Struct fields —
   where exact offsets/sizes matter — go through reflection.
 
+  **An initializer therefore has to be valid C++ as well as Slang**, because it is copied across
+  unchanged — only the *declared* type is mapped. So write `uint32_t(-1)`, never `uint(-1)`: `uint`
+  is a Slang scalar with no C++ equivalent. This does not fail on a macOS or Linux build, where
+  `<sys/types.h>` defines `uint` as a POSIX typedef and clang accepts the generated header; MSVC
+  rejects it, and every other error in that build cascades from the one bad header.
+
 * **Type mapping is fixed.** Scalars map to `<cstdint>` (`uint`→`uint32_t`, …); vectors/matrices
   map to `glm` (`float3`→`glm::vec3`, `float4x4`→`glm::mat4`, glm being column-major); a struct/enum
   field keeps its *declared* type name (the host layout would otherwise lower an enum field to its
