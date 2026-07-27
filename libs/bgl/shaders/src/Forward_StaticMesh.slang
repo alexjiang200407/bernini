@@ -54,16 +54,14 @@ uint3 EvaluatePrimitive(Submesh submesh, Meshlet meshlet, uint t)
 
 // WebGPU has no mesh stage, so the meshlet is walked one output vertex at a time: the expansion pass
 // wrote one record per (instance, meshlet), and the draw covers each record with a fixed
-// cMaxPrimsPerMeshlet * 3 vertices. Everything below the index lookup is the shared code MSMain
+// cVerticesPerMeshletRecord vertices. Everything below the index lookup is the shared code MSMain
 // runs -- only the addressing differs.
 [shader("vertex")]
 ForwardVSOut VSMain(uint vertexId: SV_VertexID)
 {
-    const uint cVerticesPerRecord = cMaxPrimsPerMeshlet * 3;
-
-    uint record = vertexId / cVerticesPerRecord;
+    uint record = vertexId / cVerticesPerMeshletRecord;
     uint corner = vertexId % 3;
-    uint prim = (vertexId % cVerticesPerRecord) / 3;
+    uint prim = (vertexId % cVerticesPerMeshletRecord) / 3;
 
     let meshletInstance = forwardData.meshletInstances[record];
     let instance = forwardData.instanceBuffer.Get(meshletInstance.instanceIndex);

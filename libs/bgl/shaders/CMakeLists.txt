@@ -19,7 +19,7 @@ set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 # wgpuDeviceCreateShaderModule, not slangc, because this Slang build has no Tint linked. The raw
 # Slang sources are staged so the runtime session can load and compile modules to WGSL on device.
 if(RENDERER_BACKEND STREQUAL "WEBGPU")
-    foreach(KERNEL PrefixSumInstances TransparentSort HistogramInstances CompactInstances CullInstances)
+    foreach(KERNEL PrefixSumInstances TransparentSort HistogramInstances CompactInstances CullInstances ExpandMeshlets)
         compile_shader(
             FILE     "${CMAKE_CURRENT_SOURCE_DIR}/src/${KERNEL}.slang"
             OUT_DIR  "${SHADER_OUT_DIR}"
