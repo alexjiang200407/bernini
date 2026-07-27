@@ -67,6 +67,19 @@ An `enum : uint16_t` is the same defect and easy to miss, because it fails where
 rather than where it is declared: a 16-bit enum passed by value reaches the WGSL backend as an empty
 parameter type (`fn IsLoosePso_0( pso_1 : )`), not as a diagnostic naming the enum.
 
+## An out-of-range buffer read does not return zero in WGSL
+
+DXIL gives zeroes for a read past the end of a structured buffer; WGSL's bounds robustness **clamps
+to the last element** instead. So the usual padded-dispatch idiom — dispatch a whole number of
+groups and let the tail threads read a zeroed, and therefore ignored, element — silently processes a
+duplicate of the last element on WebGPU. A histogram written that way over-counts by however many
+threads the dispatch was padded with.
+
+Guard the tail on the real count, which `PackedBuffer::GetCount()` reads from the buffer itself
+(`GetDimensions`, `arrayLength` in WGSL) so no CPU value has to be plumbed in. Where the guard sits
+above a `GroupMemoryBarrierWithGroupSync()`, wrap the body rather than returning early: the barrier
+must stay in uniform control flow.
+
 ## Struct size is rounded up to alignment in WGSL
 
 A WGSL struct's size is rounded up to its own alignment, which the CPU mirror does not do. So
