@@ -39,7 +39,7 @@ TEST_CASE("A meshlet kernel composes a drawable graphics pipeline", "[wgpu][rend
 	REQUIRE(kernel.pipeline->GetUniformBufferNames().empty());
 
 	const GraphicsPipeline& pipeline =
-		static_cast<MeshletPipeline*>(kernel.pipeline.Get())->GetGraphicsPipeline();
+		kernel.pipeline->As<MeshletPipeline>()->GetGraphicsPipeline();
 
 	auto texDesc      = TextureDesc{};
 	texDesc.width     = c_Size;

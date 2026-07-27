@@ -226,8 +226,8 @@ namespace bgl
 		gassert(kernel.pipeline.IsInitialized(), "SetGraphicsKernel: kernel has no pipeline");
 
 		const GraphicsPipeline& pipeline =
-			static_cast<MeshletPipeline*>(kernel.pipeline.Get())->GetGraphicsPipeline();
-		const auto& resources = *static_cast<ResourceManager*>(m_ResourceManager.Get());
+			kernel.pipeline->As<MeshletPipeline>()->GetGraphicsPipeline();
+		const auto& resources = *m_ResourceManager->As<ResourceManager>();
 
 		auto entries = std::vector<wgpu::BindGroupEntry>();
 		for (const auto& [name, uniforms] : kernel.uniforms)
@@ -392,7 +392,7 @@ namespace bgl
 			"Dispatch: compute kernel must be set in compute state");
 
 		auto*       pipeline  = kernel->pipeline->As<ComputePipeline>();
-		const auto& resources = *static_cast<ResourceManager*>(m_ResourceManager.Get());
+		const auto& resources = *m_ResourceManager->As<ResourceManager>();
 
 		auto entries = std::vector<wgpu::BindGroupEntry>();
 		for (const auto& [name, uniforms] : kernel->uniforms)
@@ -573,8 +573,10 @@ namespace bgl
 			!state.indirectArgs.IsNull(),
 			"DispatchMeshIndirect: MeshletState.indirectArgs must be set");
 
-		// The upstream meshlet-expansion compute pass wrote one 16-byte DrawIndirectArgs record per
-		// PSO bucket into indirectArgs; this draws bucket argIdx from its record.
+		// indirectArgs must hold WebGPU draw records -- {vertexCount, instanceCount, firstVertex,
+		// firstInstance} per PSO bucket -- not the 12-byte idl::DispatchArgs the shared
+		// CompactInstances kernel writes for the D3D12 mesh path. The WebGPU expansion pass writes
+		// its own buffer and ForwardPass points indirectArgs at that one.
 		constexpr uint64_t c_DrawArgsStride = 4 * sizeof(uint32_t);
 
 		BeginRenderPass(state.frameBuffer, state.viewportState);
