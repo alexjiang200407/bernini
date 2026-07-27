@@ -1,9 +1,5 @@
 import types.SubmeshInstance;
-import forward.ForwardData;
-import idl.Constants;
 import idl.PsoType;
-import idl.Mesh;
-import idl.Submesh;
 
 public struct InstancedPayload
 {

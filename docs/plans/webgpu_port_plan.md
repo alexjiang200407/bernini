@@ -57,7 +57,14 @@ The engine is built on exactly the four D3D12 features browser WebGPU lacks:
   browser; a small viewer app does instead.
 * **What is already portable:** all five compute kernels (cull, histogram, prefix-sum, compact,
   transparent bitonic sort) use only 32-bit `InterlockedAdd`, groupshared, and `[numthreads]` — no
-  wave intrinsics, no 64-bit atomics anywhere in the shader tree. The FrameGraph derives barriers
+  wave intrinsics, no 64-bit atomics anywhere in the shader tree.
+
+  **This survey undercounted: there are six.** `TransparentDepthKeys` was missed here and therefore
+  missed by the W2 `Atomic<T>` migration and by the `compile_shader(... TARGET wgsl)` list, so it
+  still calls raw `InterlockedAdd` and fails `E36107` on the WGSL target. Nothing catches it because
+  the kernel is not in the validation loop. So "the sort compute is already ported" (W4, below) is
+  not true — one of the transparent chain's three kernels does not compile. The fix is the same
+  `AtomicComputeBuffer<uint>` + `.add()` change the other five took, plus adding it to the loop. The FrameGraph derives barriers
   centrally (they become no-ops on WebGPU, which is implicit-barrier). The
   `bgl_objects`/`bgl_d3d12` split and `RENDERER_BACKEND` gating give the backend seam for free,
   and the Metal branches have already generalized it once
@@ -158,11 +165,40 @@ accepted price; a compacted-index-buffer variant (compute writes a real index bu
 `drawIndexedIndirect`) is the optimization if profiling demands it — the buffer contract would not
 change. The skybox/fullscreen mesh shaders become trivial 3-vertex `draw` calls.
 
-The RHI grows `Draw`/`DrawIndirect` plus a `RenderPipeline` (vertex+pixel) alongside
-`MeshletPipeline`; on the WebGPU backend `MeshletKernel` creation is refused
-(`GraphicsError`) — passes select the path per backend capability, they do not emulate mesh
-shaders behind the old entry point. That keeps the emulation visible in pass code
-(`ForwardPass` gains a second attach path) instead of hidden in the backend.
+### The RHI carries both a meshlet and a traditional pipeline
+
+Two raster seams, chosen by *what is being drawn*, not by backend:
+
+* **`IMeshletPipeline`** — the geometry path. Both backends implement it, D3D12 natively and
+  WebGPU by emulation (amplification+mesh vs. expansion-compute + vertex-pulling draw; see W3).
+  An earlier draft of this plan had WebGPU *refuse* `MeshletKernel` creation and had `ForwardPass`
+  select a path per backend. That is not what shipped in #126 and it is not what we want: the
+  emulation lives behind the seam, and `ForwardPass` stays single-path.
+* **`IGraphicsPipeline`** — a plain vertex→pixel pipeline, plus `Draw` / `DrawIndexed` /
+  `DrawIndirect` and vertex/index buffer binding on `ICommandList`. **Both backends implement it
+  natively**; nothing is emulated. `Skybox` and `FullscreenRect` move onto it and stop being mesh
+  shaders *on D3D12 as well* — using a mesh shader to emit one covering triangle bought the native
+  path nothing.
+
+**This is what unblocks `CreateGraphics`.** `Forward_StaticMesh`, `Skybox` and `FullscreenRect` are
+the only three modules with mesh entries, and the first already has its `BGL_WGSL` arm. Slang
+validates every entry point in a module at load, so `Skybox`'s unguarded `[shader("mesh")]` is what
+makes `SkyboxPass::Init` fail on a WGSL session — and `RenderContext` initializes every pass
+eagerly, so that one failure is what stops the public API returning at all. Porting those two
+modules removes the last unguarded mesh entry from the WGSL session.
+
+Most of the WebGPU half already exists: `GraphicsPipeline_wgpu` was built in #123/#126 to compose
+the emulated `IMeshletPipeline`, and `CommandList_wgpu` already has concrete `Draw`/`DrawIndirect`.
+The work is promoting those to the RHI and writing the D3D12 counterpart.
+
+**Deliberately not done: a second, vertex-shader PBR path running on both backends.** It would
+delete the `#ifdef BGL_WGSL` from the forward shader and — the larger prize — make the portable
+geometry path testable under `bgl_tests` on Windows, which the vertex-pulling arm is not today. It
+is declined because it is a second geometry path to carry through every future feature (skinning,
+VAT, LOD, per-instance variation), and because it only pays off in the stronger form (instanced
+indexed draws rather than vertex pulling), which needs a submesh-global index buffer the cook does
+not produce. Revisit if the vertex-pulling path's cost or its untestability becomes the binding
+constraint.
 
 ### Binding: descriptor indices become bind groups + array layers
 
@@ -538,9 +574,14 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
 * **W3 — raster path, and the first pixels through the public API.** Textures/RTV/DSV (depth is
   `depth32float` — the D24S8 remap decision is already made for Metal), render pipelines, the
   meshlet-expansion kernel + vertex-pulling forward path, `IRenderTarget` over the W1.5 surface
-  code, skybox as a plain draw. This is where `CreateGraphics` first returns successfully, for
-  the reason given under W1.5, and therefore where `examples/bgl_window` first runs on this
-  backend.
+  code, and `IGraphicsPipeline` — the traditional vertex→pixel seam — with `Skybox` and
+  `FullscreenRect` moved onto it **on both backends**. This is where `CreateGraphics` first returns
+  successfully, for the reason given under *The RHI carries both a meshlet and a traditional
+  pipeline*, and therefore where `examples/bgl_window` first runs on this backend.
+
+  Remaining at the time of writing: `ForwardPass` dispatching the expansion chain (the kernels exist
+  but only tests drive them), the two mesh-shader modules above, `IRenderTarget`, and the
+  golden-image runner — `bgl_tests` needs a D3D12 device today, so nothing runs the raster gate.
   *Gate:* golden-image tests pass under the native WebGPU preset; a cube/sphere/textured-mesh
   scene is pixel-compared against the D3D12 goldens within tolerance. Frustum culling goldens
   prove the indirect chain (culling is image-invariant, so goldens are the gate — the same

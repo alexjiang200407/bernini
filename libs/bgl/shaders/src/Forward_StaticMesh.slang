@@ -6,12 +6,12 @@ import idl.Mesh;
 import idl.Meshlet;
 import idl.PsoType;
 import idl.Submesh;
-import idl.VertexLayout;
-import types.ByteBuffer;
 import forward.common;
 import forward.vertexdecode;
 import debug.dbg;
-import idl.ErrorCode;
+
+ConstantBuffer<ForwardData> forwardData;
+ConstantBuffer<ViewData> viewData;
 
 // Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
 // any function that takes an OutputVertices/OutputIndices parameter, so only MSMain may index them.
@@ -87,13 +87,25 @@ ForwardVSOut VSMain(uint vertexId: SV_VertexID)
 
 #else
 
-import forward.amplification;
+import forward.ExpansionData;
 
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
 void ASMain(uint gid: SV_GroupID) // Total Instances
 {
-    ASBase(gid);
+    // The opaque base is the exclusive prefix sum of the prior PSOs' counts; the depth-sorted one is
+    // the partition's start.
+    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
+
+    // Each instance is one submesh; dispatch only that submesh's meshlets.
+    let submesh = forwardData.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
+
+    InstancedPayload payload;
+    payload.instance = instance;
+
+    DispatchMesh(submesh.GetMeshletCount(), 1, 1, payload);
 }
 
 [shader("mesh")]
