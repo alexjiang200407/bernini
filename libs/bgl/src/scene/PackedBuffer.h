@@ -6,6 +6,7 @@
 #include "uniforms/DescriptorHandle.h"
 #include <core/containers/packed_vector.h>
 #include <core/containers/slot_vector.h>
+#include <core/math.h>
 #include <core/type_traits.h>
 
 namespace bgl
@@ -14,8 +15,14 @@ namespace bgl
 	{
 		// Where the arena starts, not where it ends: it grows on demand and is bounded only by
 		// device memory.
-		uint32_t    initialCount = 0;
-		uint32_t    blockSize    = 65536;
+		uint32_t initialCount = 0;
+		uint32_t blockSize    = 65536;
+
+		// Every capacity, grown ones included, is a multiple of this. Set it when a consumer
+		// dispatches whole groups over the buffer and so addresses past the live count: the growth
+		// curve tapers off powers of two past 64 MiB, and an unaligned capacity there leaves the
+		// tail it addresses outside the allocation.
+		uint32_t    capacityAlignment = 1;
 		std::string debugName;
 	};
 
@@ -50,9 +57,11 @@ namespace bgl
 		{
 			gassert(desc.initialCount > 0, "PackedBuffer must have a positive initial count");
 			gassert(desc.blockSize > 0, "Block size must be greater than zero");
+			gassert(desc.capacityAlignment > 0, "Capacity alignment must be greater than zero");
 			gassert(resourceManager != nullptr, "PackedBuffer requires a valid ResourceManager");
 
-			m_Desc = std::move(desc);
+			m_Desc              = std::move(desc);
+			m_Desc.initialCount = core::round_up(m_Desc.initialCount, m_Desc.capacityAlignment);
 
 			m_Storage.Init(
 				std::move(resourceManager),
@@ -281,7 +290,9 @@ namespace bgl
 		void
 		Grow()
 		{
-			const uint32_t grown = NextGpuBufferCapacity(Capacity(), Capacity() + 1, sizeof(T));
+			const uint32_t grown = core::round_up(
+				NextGpuBufferCapacity(Capacity(), Capacity() + 1, sizeof(T)),
+				m_Desc.capacityAlignment);
 
 			// GPU side first: it is the one that can fail, and it leaves nothing behind when it
 			// does, so the mirror and the buffer cannot end up disagreeing on capacity.

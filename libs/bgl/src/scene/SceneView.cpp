@@ -66,12 +66,13 @@ namespace bgl
 
 		{
 			auto instanceBufferDesc = PackedBufferDesc();
-			// Round up so the kInvalid tail padding (see Update) always fits: the
-			// counting sort dispatches whole groups, so it may read up to a group past
-			// the last instance.
-			instanceBufferDesc.initialCount = paddedInstances;
-			instanceBufferDesc.debugName    = "Instance Buffer";
-			instanceBufferDesc.blockSize    = sizeof(SubmeshInstance) * 256;
+			// Aligned so the kInvalid tail padding (see Update) always fits: the counting sort
+			// dispatches whole groups, so it may read up to a group past the last instance. The
+			// alignment must hold for grown capacities too, not just this one.
+			instanceBufferDesc.initialCount      = paddedInstances;
+			instanceBufferDesc.capacityAlignment = idl::cHistogramGroupSize;
+			instanceBufferDesc.debugName         = "Instance Buffer";
+			instanceBufferDesc.blockSize         = sizeof(SubmeshInstance) * 256;
 
 			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
 		}
