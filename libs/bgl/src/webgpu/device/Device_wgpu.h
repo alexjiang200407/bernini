@@ -84,6 +84,8 @@ namespace bgl
 			return m_SlangSession.get();
 		}
 
+		using IDevice::CreateShader;
+
 		[[nodiscard]] core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;
 

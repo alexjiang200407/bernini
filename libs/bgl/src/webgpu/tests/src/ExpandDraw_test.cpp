@@ -49,9 +49,10 @@ TEST_CASE("A compute kernel expands geometry a draw pulls and draws indirectly",
 	auto computeState   = ComputeState{};
 	computeState.kernel = &expand;
 
-	const auto gfxShader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("VertexPullTest"));
-	auto       gfxDesc   = MeshletPipelineDesc{};
-	gfxDesc.SetMeshShader(gfxShader).SetPixelShader(gfxShader).AddRtvFormat(Format::RGBA8_UNORM);
+	auto gfxDesc = MeshletPipelineDesc{};
+	gfxDesc.SetMeshShader(device->CreateShader("VertexPullTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("VertexPullTest", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	gfxDesc.renderState.rasterState.SetCullNone();
 
 	auto gfx                  = device->CreateMeshletKernel(gfxDesc);

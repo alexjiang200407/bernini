@@ -106,10 +106,10 @@ TEST_CASE("A vertex shader reads a matrix and vector from a uniform block", "[wg
 	const auto posBuffer = resources->CreateComputeBuffer(
 		ComputeBufferDesc{}.SetElement<Float2>().SetInitialCount(3).SetDebugName("positions"));
 
-	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("UniformDrawTest"));
-
 	auto desc = MeshletPipelineDesc{};
-	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
+	desc.SetMeshShader(device->CreateShader("UniformDrawTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("UniformDrawTest", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel = device->CreateMeshletKernel(desc);

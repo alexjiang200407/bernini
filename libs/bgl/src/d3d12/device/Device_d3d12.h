@@ -40,6 +40,8 @@ namespace bgl
 			core::SharedRef<IResourceManager> resourceManager,
 			bool                              enableDebug) const override;
 
+		using IDevice::CreateShader;
+
 		core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;
 

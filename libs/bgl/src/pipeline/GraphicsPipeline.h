@@ -22,8 +22,6 @@ namespace bgl
 	{
 		core::SharedRef<IShader>                        vertexShader = nullptr;
 		core::SharedRef<IShader>                        pixelShader  = nullptr;
-		std::string                                     vertexEntry  = "vs_main";
-		std::string                                     pixelEntry   = "fs_main";
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;

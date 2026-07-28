@@ -101,10 +101,8 @@ TEST_CASE("The forward vertex shader pulls a meshlet through the decode chain", 
 	const auto indexBuffer      = make(sizeof(indices), "indices");
 	const auto recordBuffer     = make(sizeof(record), "meshletInstances");
 
-	const auto meshShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("Forward_StaticMesh"));
-	const auto pixelShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiModulePixel"));
+	const auto meshShader  = device->CreateShader("Forward_StaticMesh", "MSMain");
+	const auto pixelShader = device->CreateShader("MultiModulePixel", "PSMain");
 
 	auto desc = MeshletPipelineDesc{};
 	desc.SetMeshShader(meshShader).SetPixelShader(pixelShader).AddRtvFormat(Format::RGBA8_UNORM);
