@@ -4,6 +4,7 @@
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include "types/ComputeState.h"
+#include "types/GraphicsState.h"
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 
@@ -170,6 +171,26 @@ namespace bgl
 
 		virtual void
 		SetMeshletState(const MeshletState& gfxState) noexcept = 0;
+
+		/**
+		 * Binds a traditional vertex->pixel pipeline, its bind group, and the render pass the state
+		 * names, for subsequent Draw calls. The meshlet seam's counterpart for geometry that is not
+		 * meshlet-partitioned.
+		 */
+		virtual void
+		SetGraphicsState(const GraphicsState& gfxState) noexcept = 0;
+
+		/** Issues a non-indexed draw against the state set by SetGraphicsState. */
+		virtual void
+		Draw(
+			uint32_t vertexCount,
+			uint32_t instanceCount = 1,
+			uint32_t firstVertex   = 0,
+			uint32_t firstInstance = 0) noexcept = 0;
+
+		/** Closes the render pass SetGraphicsState opened. */
+		virtual void
+		EndRenderPass() noexcept = 0;
 
 		virtual void
 		DispatchMesh(

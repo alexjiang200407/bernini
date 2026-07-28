@@ -35,6 +35,8 @@ namespace bgl
 		const wgpu::Device&        device,
 		slang::ISession*           session,
 		const MeshletPipelineDesc& desc) :
-		m_Desc(desc), m_Graphics(device, session, ToGraphicsPipelineDesc(desc))
+		m_Desc(desc),
+		m_Graphics(
+			core::SharedRef<GraphicsPipeline>::Make(device, session, ToGraphicsPipelineDesc(desc)))
 	{}
 }

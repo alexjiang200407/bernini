@@ -93,6 +93,9 @@ namespace bgl
 		[[nodiscard]] core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;
 
+		[[nodiscard]] core::SharedRef<IGraphicsPipeline>
+		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const noexcept override;
+
 		core::SharedRef<ICommandList>
 		CreateCommandList(
 			const CommandListDesc&             desc,
@@ -117,6 +120,10 @@ namespace bgl
 
 		[[nodiscard]] Uniforms
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
+			const noexcept override;
+
+		[[nodiscard]] Uniforms
+		CreateUniforms(IGraphicsPipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 
 		[[nodiscard]] Uniforms
