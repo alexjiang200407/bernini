@@ -1,6 +1,6 @@
 ---
 name: bcp-feature
-description: Use when a change is too large to land on master as one PR — takes a feature branch name and a prompt, breaks the work into reviewable slices, and lands them one at a time as small PRs into feature/<name>, so review happens continuously instead of at the end. Also resumes an existing feature, reports its state, and opens the final PR to master. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
+description: Use when a change is too large to land on master as one PR — takes a feature branch name and a prompt, breaks the work into reviewable slices, and lands them one at a time as small PRs into feature/<name>, so review happens continuously instead of at the end. Tracks the whole feature in one draft PR to master from the start. Also resumes an existing feature, reports its state, and marks that PR ready when the feature is done. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
 ---
 
 # Running a Bernini feature branch
@@ -21,7 +21,7 @@ call stays with the user, at every step.
 | `bcp-feature <name> <prompt>` | start or resume `feature/<name>`, plan the work, begin landing slices |
 | `bcp-feature <name>` | resume: report state, then continue with the next slice |
 | `bcp-feature` | status only, for the active feature |
-| `bcp-feature --land` | rebase, verify the whole feature, open the PR to `master` |
+| `bcp-feature --land` | rebase, verify the whole feature, mark its tracking PR ready |
 
 ## State
 
@@ -39,6 +39,7 @@ resumable across sessions:
 ```markdown
 # feature/culling — <one line: what the feature delivers>
 base: master
+tracking: #119
 
 - [x] frustum planes on the camera — #112, merged
 - [>] per-instance cull compute pass — #118, in review
@@ -77,6 +78,32 @@ git config --local bernini.feature feature/<name>
 
 **Nothing is ever committed on `feature/<name>` itself.** It starts exactly equal to `master` and
 only changes when a slice PR merges.
+
+### The tracking PR
+
+The feature also gets its own PR to `master`, opened **now** rather than at the end, as a **draft**:
+
+```bash
+gh pr create --base master --head feature/<name> --draft \
+  --title "<what the feature delivers>" --body "..."
+```
+
+Empty at first — that is fine and it is the point. It accumulates every slice as they merge, so one
+page shows the whole feature: the combined diff, the slice list, CI over the integration branch. The
+alternative is a feature nobody can see until the last slice lands.
+
+Draft matters. An ordinary PR sitting on a half-finished feature is one mis-click from merging a
+partial port into `master`, and § 6 is what marks it ready.
+
+**On resume, check it still exists and open it if not** — the feature may have been started before
+this was the rule, or the PR may have been closed:
+
+```bash
+gh pr list --head feature/<name> --base master --state open --json number,isDraft
+```
+
+Record its number at the top of the plan file (`tracking: #NNN`) so the next session does not have to
+go looking.
 
 ### Naming
 
@@ -196,21 +223,23 @@ With PRs open, merge them first, or merge `master` in instead of rebasing and sa
 
 ## 6. Land the feature
 
-When the plan file is all `[x]`, the feature becomes one ordinary PR into `master`:
+When the plan file is all `[x]`, the tracking PR from § 1 becomes the real thing:
 
 ```bash
 git fetch origin && git switch feature/<name> && git rebase origin/master
 just build && just test                      # the whole feature at once
 just run bgl_tests -- --gpu-validation       # if any slice touched shaders, barriers or descriptors
 git push --force-with-lease
-gh pr create --base master --title "..." --body "..."
+gh pr edit <tracking> --title "..." --body "..."
+gh pr ready <tracking>
 ```
 
 This full run matters more than any single slice's did: each slice was verified against the feature
 branch as it stood at the time, and this is the first time all of them exist together.
 
-The body is the feature's story — what it adds, why, how it was verified as a whole, what was
-deliberately left out. Link the slice PRs; do not restate them. After it merges:
+Rewrite the body — it has been accumulating since the branch was cut, and what it says now is the
+feature's story: what it adds, why, how it was verified as a whole, what was deliberately left out.
+Link the slice PRs; do not restate them. After it merges:
 
 ```bash
 git config --local --unset bernini.feature
@@ -220,8 +249,10 @@ rm .claude/features/<name>.md
 
 ## Rules
 
-- **Never merge a PR.** Not the slice PRs, not the feature PR. Continuous review is the entire point
+- **Never merge a PR.** Not the slice PRs, not the tracking PR. Continuous review is the entire point
   of this branch, and it only works if a human is the one approving.
+- **Never take the tracking PR out of draft** before § 6. It is open from the start precisely so the
+  feature is visible while it is still unfinished.
 - **Never commit directly onto `feature/<name>` or `master`.** Everything arrives by slice PR.
 - **Never open a PR without `--base`.** The default branch is `master` and it will be wrong.
 - **Never let a slice land broken.** "Fixed in the next PR" defeats bisecting and wastes the review.
