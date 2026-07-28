@@ -7,6 +7,8 @@
 #include "convert_d3d12.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/GraphicsKernel.h"
+#include "pipeline/GraphicsPipeline_d3d12.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
@@ -478,17 +480,13 @@ namespace bgl
 	}
 
 	void
-	CommandList::ApplyMeshletState() noexcept
+	CommandList::ApplyFrameBuffer(
+		const ViewportState& viewportState,
+		const FrameBuffer&   frameBuffer) noexcept
 	{
-		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
-		gassert(
-			m_CurrentMeshletState->kernel != nullptr &&
-				m_CurrentMeshletState->kernel->pipeline.IsInitialized(),
-			"Meshlet kernel must be set in graphics state");
-
 		// Viewport
 		{
-			const auto& viewports = m_CurrentMeshletState->viewportState.viewports;
+			const auto& viewports = viewportState.viewports;
 			std::array<D3D12_VIEWPORT, ViewportState::MaxViewports> d3d12Viewports = {};
 
 			for (size_t i = 0; i < viewports.size(); ++i)
@@ -510,7 +508,7 @@ namespace bgl
 
 		// Scissor rect
 		{
-			const auto& scissorRects = m_CurrentMeshletState->viewportState.scissorRects;
+			const auto& scissorRects = viewportState.scissorRects;
 			std::array<D3D12_RECT, ViewportState::MaxViewports> d3d12Rects = {};
 
 			for (size_t i = 0; i < scissorRects.size(); ++i)
@@ -530,7 +528,7 @@ namespace bgl
 
 		// Render targets
 		{
-			const auto& rtvs = m_CurrentMeshletState->frameBuffer.colorAttachments;
+			const auto& rtvs = frameBuffer.colorAttachments;
 			std::array<D3D12_CPU_DESCRIPTOR_HANDLE, c_MaxRenderTargets> d3d12RenderTargets = {};
 
 			for (size_t i = 0; i < rtvs.size(); ++i)
@@ -542,7 +540,7 @@ namespace bgl
 			D3D12_CPU_DESCRIPTOR_HANDLE  dsvCpuHandle  = {};
 			D3D12_CPU_DESCRIPTOR_HANDLE* pDsvCpuHandle = nullptr;
 
-			auto depthAttachment = m_CurrentMeshletState->frameBuffer.depthAttachment;
+			auto depthAttachment = frameBuffer.depthAttachment;
 			if (!depthAttachment.IsNull())
 			{
 				auto& dsv     = m_ResourceManager->GetDsv(depthAttachment);
@@ -556,36 +554,47 @@ namespace bgl
 				FALSE,
 				pDsvCpuHandle);
 		}
+	}
 
-		// Depth Stencil
+	void
+	CommandList::ApplyMeshletState() noexcept
+	{
+		gassert(m_CurrentMeshletState.has_value(), "Meshlet state must be set before drawing");
+		gassert(
+			m_CurrentMeshletState->kernel != nullptr &&
+				m_CurrentMeshletState->kernel->pipeline.IsInitialized(),
+			"Meshlet kernel must be set in meshlet state");
 
-		// Pipeline state
+		ApplyFrameBuffer(m_CurrentMeshletState->viewportState, m_CurrentMeshletState->frameBuffer);
+
+		auto* pipeline = m_CurrentMeshletState->kernel->pipeline->As<MeshletPipeline>();
+
+		m_CommandList->SetPipelineState(pipeline->GetPipelineState());
+		m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
+
+		BindKernelUniforms(m_CurrentMeshletState->kernel->uniforms);
+	}
+
+	void
+	CommandList::BindKernelUniforms(const core::str::unordered_str_map<Uniforms>& uniforms) noexcept
+	{
+		for (const auto& [name, values] : uniforms)
 		{
-			auto* pipeline = m_CurrentMeshletState->kernel->pipeline->As<MeshletPipeline>();
-
-			m_CommandList->SetPipelineState(pipeline->GetPipelineState());
-			m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
-
-			const MeshletKernel& kernel = *m_CurrentMeshletState->kernel;
-
-			for (const auto& [name, uniforms] : kernel.uniforms)
-			{
-				BindUniforms(uniforms, /*compute*/ false);
-			}
+			BindUniforms(values, /*compute*/ false);
+		}
 
 #if defined(BERNINI_GPU_DEBUG)
-			if (auto it = kernel.uniforms.find("gDebug");
-			    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
-			{
-				const DescriptorHandle handle(m_ActiveDebugBuffer.slot);
-				BindConstantData(
-					&handle,
-					sizeof(handle),
-					it->second.GetRootParamIndex(),
-					/*compute*/ false);
-			}
-#endif
+		if (auto it = uniforms.find("gDebug");
+		    it != uniforms.end() && !m_ActiveDebugBuffer.IsNull())
+		{
+			const DescriptorHandle handle(m_ActiveDebugBuffer.slot);
+			BindConstantData(
+				&handle,
+				sizeof(handle),
+				it->second.GetRootParamIndex(),
+				/*compute*/ false);
 		}
+#endif
 	}
 
 	void
@@ -749,20 +758,44 @@ namespace bgl
 	}
 
 	void
-	CommandList::SetGraphicsState(const GraphicsState&) noexcept
+	CommandList::SetGraphicsState(const GraphicsState& gfxState) noexcept
 	{
-		gfatal("SetGraphicsState is not implemented on the D3D12 backend");
+		m_CurrentGraphicsState = gfxState;
 	}
 
 	void
-	CommandList::Draw(uint32_t, uint32_t, uint32_t, uint32_t) noexcept
+	CommandList::Draw(
+		uint32_t vertexCount,
+		uint32_t instanceCount,
+		uint32_t firstVertex,
+		uint32_t firstInstance) noexcept
 	{
-		gfatal("Draw is not implemented on the D3D12 backend");
+		gassert(m_CurrentGraphicsState.has_value(), "Graphics state must be set before drawing");
+		gassert(
+			m_CurrentGraphicsState->kernel != nullptr &&
+				m_CurrentGraphicsState->kernel->pipeline.IsInitialized(),
+			"Graphics kernel must be set in graphics state");
+
+		ApplyFrameBuffer(
+			m_CurrentGraphicsState->viewportState,
+			m_CurrentGraphicsState->frameBuffer);
+
+		auto* pipeline = m_CurrentGraphicsState->kernel->pipeline->As<GraphicsPipeline>();
+
+		m_CommandList->SetPipelineState(pipeline->GetPipelineState());
+		m_CommandList->SetGraphicsRootSignature(pipeline->GetRootSignature());
+		m_CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		BindKernelUniforms(m_CurrentGraphicsState->kernel->uniforms);
+
+		m_CommandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
 	}
 
 	void
 	CommandList::EndRenderPass() noexcept
 	{
-		gfatal("EndRenderPass is not implemented on the D3D12 backend");
+		// D3D12 has no pass object to close -- OMSetRenderTargets is sticky. Clearing the state is
+		// what makes the RHI's "set state again after ending a pass" rule hold on this backend too.
+		m_CurrentGraphicsState.reset();
 	}
 }

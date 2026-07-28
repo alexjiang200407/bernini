@@ -66,8 +66,19 @@ namespace bgl
 		void
 		Store(uint64_t key, const CachedProgram& program) const;
 
+		// Seeds a PSO identity. A PSO's subobject stream is part of what it is, but none of it
+		// reaches CombineHash, so without this two kinds sharing one library name would each
+		// permanently miss the cache -- LoadPipeline validates the stream and StorePipeline
+		// rejects a duplicate name.
+		enum class PsoKind : uint64_t
+		{
+			kCompute  = 1,
+			kMeshlet  = 2,
+			kGraphics = 3,
+		};
+
 		// Rolling hash used by pipeline creation to derive a PSO's identity from its
-		// bytecode and render state. Seed the first call with 0.
+		// bytecode and render state. Seed the first call with the PsoKind.
 		[[nodiscard]] static uint64_t
 		CombineHash(uint64_t seed, std::span<const std::byte> bytes);
 

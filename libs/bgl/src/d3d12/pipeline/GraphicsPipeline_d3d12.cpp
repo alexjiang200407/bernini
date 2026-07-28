@@ -1,10 +1,9 @@
-#include "pipeline/MeshletPipeline_d3d12.h"
+#include "pipeline/GraphicsPipeline_d3d12.h"
 #include "constants/constants.h"
+#include "convert_d3d12.h"
 #include "pipeline/PipelineLayout_d3d12.h"
-#include "resource/Rtv_d3d12.h"
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
-#include <core/math.h>
 
 // clang-format off
 #pragma warning(push)
@@ -12,14 +11,13 @@
 #pragma warning(disable: 5029) // Allow __declspec(align) on non-class types
 namespace
 {
-        struct MeshletPsoStream
+        struct GraphicsPsoStream
         {
             typedef __declspec(align(sizeof(void*))) D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ALIGNED_TYPE;
 
             ALIGNED_TYPE RootSignature_Type;        ID3D12RootSignature* RootSignature;
             ALIGNED_TYPE PrimitiveTopology_Type;    D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
-            ALIGNED_TYPE AmplificationShader_Type;  D3D12_SHADER_BYTECODE AmplificationShader;
-            ALIGNED_TYPE MeshShader_Type;           D3D12_SHADER_BYTECODE MeshShader;
+            ALIGNED_TYPE VertexShader_Type;         D3D12_SHADER_BYTECODE VertexShader;
             ALIGNED_TYPE PixelShader_Type;          D3D12_SHADER_BYTECODE PixelShader;
             ALIGNED_TYPE RasterizerState_Type;      D3D12_RASTERIZER_DESC RasterizerState;
             ALIGNED_TYPE DepthStencilState_Type;    D3D12_DEPTH_STENCIL_DESC DepthStencilState;
@@ -35,32 +33,27 @@ namespace
 
 namespace bgl
 {
-	MeshletPipeline::MeshletPipeline(
-		ID3D12Device*              device,
-		ShaderCache*               cache,
-		const MeshletPipelineDesc& desc) : m_Desc(desc)
+	GraphicsPipeline::GraphicsPipeline(
+		ID3D12Device*               device,
+		ShaderCache*                cache,
+		const GraphicsPipelineDesc& desc) : m_Desc(desc)
 	{
 		gassert(device != nullptr, "Device pointer must not be null.");
+		gassert(desc.vertexShader != nullptr, "Vertex shader cannot be null");
+		gassert(desc.pixelShader != nullptr, "Pixel shader cannot be null");
 
 		wrl::ComPtr<ID3D12Device2> device2;
 		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
 
-		gassert(desc.meshShader != nullptr, "Mesh shader cannot be null");
-
 		pipeline_util::PipelineLayout pipelineLayout = pipeline_util::BuildPipelineLayout(
 			device,
 			cache,
-			{ desc.meshShader, desc.pixelShader, desc.ampShader });
+			{ desc.vertexShader, desc.pixelShader });
 
 		m_RootSignature        = std::move(pipelineLayout.rootSignature);
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
 		auto bytecodeOf = [&](const core::SharedRef<IShader>& shader) -> D3D12_SHADER_BYTECODE {
-			if (shader == nullptr)
-			{
-				return D3D12_SHADER_BYTECODE{ nullptr, 0 };
-			}
-
 			auto found = pipelineLayout.entryPointCode.find(shader->GetDesc().entryPointName);
 			gassert(
 				found != pipelineLayout.entryPointCode.end(),
@@ -69,7 +62,7 @@ namespace bgl
 			return D3D12_SHADER_BYTECODE{ found->second.data(), found->second.size() };
 		};
 
-		MeshletPsoStream psoDesc = {};
+		GraphicsPsoStream psoDesc = {};
 
 		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
 		psoDesc.RootSignature      = m_RootSignature.Get();
@@ -77,11 +70,8 @@ namespace bgl
 		psoDesc.PrimitiveTopology_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY;
 		psoDesc.PrimitiveTopologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-		psoDesc.AmplificationShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS;
-		psoDesc.AmplificationShader      = bytecodeOf(desc.ampShader);
-
-		psoDesc.MeshShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS;
-		psoDesc.MeshShader      = bytecodeOf(desc.meshShader);
+		psoDesc.VertexShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS;
+		psoDesc.VertexShader      = bytecodeOf(desc.vertexShader);
 
 		psoDesc.PixelShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS;
 		psoDesc.PixelShader      = bytecodeOf(desc.pixelShader);
@@ -120,18 +110,14 @@ namespace bgl
 		psoDesc.DSVFormat      = ConvertFormat(desc.dsvFormat);
 
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
-		streamDesc.SizeInBytes                   = sizeof(MeshletPsoStream);
+		streamDesc.SizeInBytes                   = sizeof(GraphicsPsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		uint64_t identity = static_cast<uint64_t>(ShaderCache::PsoKind::kMeshlet);
+		uint64_t identity = static_cast<uint64_t>(ShaderCache::PsoKind::kGraphics);
 		if (cache != nullptr)
 		{
-			for (const core::SharedRef<IShader>& shader :
-			     { desc.meshShader, desc.pixelShader, desc.ampShader })
+			for (const core::SharedRef<IShader>& shader : { desc.vertexShader, desc.pixelShader })
 			{
-				if (shader == nullptr)
-					continue;
-
 				identity = ShaderCache::CombineHash(
 					identity,
 					pipelineLayout.entryPointCode.at(shader->GetDesc().entryPointName));
@@ -158,18 +144,10 @@ namespace bgl
 		}
 	}
 
-	MeshletPipeline::~MeshletPipeline() noexcept
+	GraphicsPipeline::~GraphicsPipeline() noexcept
 	{
-		logger::trace("~MeshletPipeline");
+		logger::trace("~GraphicsPipeline");
 		m_PipelineState.Reset();
 		m_RootSignature.Reset();
-	}
-
-	MeshletPipelineDesc&
-	bgl::MeshletPipelineDesc::AddRtvFormat(const Rtv& rtv)
-	{
-		auto& desc = rtv.GetDesc();
-		rtvFormats.push_back(desc.format);
-		return *this;
 	}
 }

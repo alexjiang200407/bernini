@@ -8,6 +8,7 @@
 #include "cmd/CommandQueue_d3d12.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/GraphicsPipeline_d3d12.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager.h"
@@ -201,10 +202,9 @@ namespace bgl
 	}
 
 	core::SharedRef<IGraphicsPipeline>
-	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc&) const noexcept
+	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const noexcept
 	{
-		// The traditional raster seam is not implemented on D3D12 yet; nothing selects it here.
-		gfatal("CreateGraphicsPipeline is not implemented on the D3D12 backend");
+		return core::SharedRef<GraphicsPipeline>::Make(m_Device.Get(), m_ShaderCache.get(), desc);
 	}
 
 	Uniforms
