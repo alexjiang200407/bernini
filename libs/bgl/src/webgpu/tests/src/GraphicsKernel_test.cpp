@@ -30,13 +30,10 @@ TEST_CASE("A graphics kernel draws through the RHI", "[wgpu][render]")
 	resources->RegisterQueue(queue.Get());
 
 	auto desc = GraphicsPipelineDesc{};
-	desc.SetVertexShader(
-			device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest")))
-		.SetPixelShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiModulePixel")))
+	desc.SetVertexShader(device->CreateShader("RasterTriangleTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("MultiModulePixel", "PSMain"))
 		.AddRtvFormat(Format::RGBA8_UNORM)
 		.SetDebugName("rhi-graphics-kernel");
-	desc.vertexEntry = "VSMain";
-	desc.pixelEntry  = "PSMain";
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel = device->CreateGraphicsKernel(desc);
@@ -103,12 +100,10 @@ TEST_CASE("The fullscreen vertex shader covers the frame through the RHI", "[wgp
 
 	resources->RegisterQueue(queue.Get());
 
-	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("FullscreenRect"));
-
 	auto desc = GraphicsPipelineDesc{};
-	desc.SetVertexShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
-	desc.vertexEntry = "VSMain";
-	desc.pixelEntry  = "PSMain";
+	desc.SetVertexShader(device->CreateShader("FullscreenRect", "VSMain"))
+		.SetPixelShader(device->CreateShader("FullscreenRect", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel = device->CreateGraphicsKernel(desc);

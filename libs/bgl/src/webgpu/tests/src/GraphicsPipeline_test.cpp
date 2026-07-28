@@ -113,10 +113,8 @@ namespace
 	TriangleDesc(Device& device)
 	{
 		auto desc         = GraphicsPipelineDesc{};
-		desc.vertexShader = desc.pixelShader =
-			device.CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
-		desc.vertexEntry = "VSMain";
-		desc.pixelEntry  = "PSMain";
+		desc.vertexShader = device.CreateShader("RasterTriangleTest", "VSMain");
+		desc.pixelShader  = device.CreateShader("RasterTriangleTest", "PSMain");
 		desc.rtvFormats.push_back(Format::RGBA8_UNORM);
 		// The clip-space triangle is wound for neither convention in particular; culling is not what
 		// this exercises, so draw both faces.
@@ -134,10 +132,8 @@ TEST_CASE("A graphics pipeline links vertex and pixel from separate modules", "[
 	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
 
 	auto desc         = GraphicsPipelineDesc{};
-	desc.vertexShader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
-	desc.pixelShader  = device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiModulePixel"));
-	desc.vertexEntry  = "VSMain";
-	desc.pixelEntry   = "PSMain";
+	desc.vertexShader = device->CreateShader("RasterTriangleTest", "VSMain");
+	desc.pixelShader  = device->CreateShader("MultiModulePixel", "PSMain");
 	desc.rtvFormats.push_back(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
@@ -225,10 +221,8 @@ TEST_CASE("A guarded mesh entry lets the WGSL vertex + pixel pair compile", "[wg
 	handle.PushErrorScope(wgpu::ErrorFilter::Validation);
 
 	auto desc         = GraphicsPipelineDesc{};
-	desc.vertexShader = desc.pixelShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiStageModuleTest"));
-	desc.vertexEntry = "VSMain";
-	desc.pixelEntry  = "PSMain";
+	desc.vertexShader = device->CreateShader("MultiStageModuleTest", "VSMain");
+	desc.pixelShader  = device->CreateShader("MultiStageModuleTest", "PSMain");
 	desc.rtvFormats.push_back(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 	desc.debugName = "multistage";
