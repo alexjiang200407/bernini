@@ -30,6 +30,19 @@ if(RENDERER_BACKEND STREQUAL "WEBGPU")
         )
     endforeach()
 
+    # The raster modules validate their vertex arm: their mesh entries are #ifdef'd out on WGSL, so
+    # only this catches a break in the entry both backends will eventually share.
+    foreach(RASTER FullscreenRect Skybox)
+        compile_shader(
+            FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/${RASTER}.slang"
+            OUT_DIR      "${SHADER_OUT_DIR}"
+            TARGET       "wgsl"
+            STAGE        "vs_6_6"
+            INCLUDES     ${SLANG_SOURCE_ROOT}
+            ENTRY_POINTS "VSMain"
+        )
+    endforeach()
+
     add_custom_target(bgl_compile_shaders ALL
         DEPENDS ${SLANG_COMPILE_OUTS}
     )
