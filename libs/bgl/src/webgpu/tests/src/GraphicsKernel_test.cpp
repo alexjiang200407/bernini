@@ -86,3 +86,79 @@ TEST_CASE("A graphics kernel draws through the RHI", "[wgpu][render]")
 	queue->Flush();
 	resources->UnregisterQueue(queue.Get());
 }
+
+// The same seam driving a *production* shader rather than a test fixture: FullscreenRect's vertex
+// entry, which replaced its mesh entry so the skybox and fullscreen passes stop needing a mesh
+// stage. Its pixel shader writes white over a red clear, so a covered frame proves the covering
+// triangle came out of SV_VertexID correctly -- all three corners, in the right winding.
+TEST_CASE("The fullscreen vertex shader covers the frame through the RHI", "[wgpu][render]")
+{
+	constexpr uint32_t c_Size = 64;
+
+	auto device    = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+	auto resources = device->CreateResourceManager(ResourceManagerDesc{});
+	auto queue     = device->CreateCommandQueue(QueueType::kGraphics);
+	auto allocator = device->CreateCommandAllocator(QueueType::kGraphics);
+	auto list      = device->CreateCommandList(CommandListDesc{}, allocator, resources);
+
+	resources->RegisterQueue(queue.Get());
+
+	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("FullscreenRect"));
+
+	auto desc = GraphicsPipelineDesc{};
+	desc.SetVertexShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
+	desc.vertexEntry = "VSMain";
+	desc.pixelEntry  = "PSMain";
+	desc.renderState.rasterState.SetCullNone();
+
+	auto kernel = device->CreateGraphicsKernel(desc);
+	REQUIRE(kernel.pipeline.IsInitialized());
+
+	auto texDesc      = TextureDesc{};
+	texDesc.width     = c_Size;
+	texDesc.height    = c_Size;
+	texDesc.format    = Format::RGBA8_UNORM;
+	texDesc.usage     = TextureUsage(TextureUsageFlag::kRenderTarget);
+	texDesc.debugName = "rt";
+
+	const auto texture = resources->CreateTexture(texDesc);
+	const auto rtv     = resources->CreateRtv(texture, RtvDesc{ .format = Format::RGBA8_UNORM });
+
+	auto state        = GraphicsState{};
+	state.kernel      = &kernel;
+	state.frameBuffer = FrameBuffer().AddColorAttachment(rtv);
+	state.viewportState.AddViewportAndScissorRect(
+		Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size)));
+
+	const auto rbLayout = resources->GetTextureReadbackLayout(texture);
+	const auto readback = resources->CreateReadbackBuffer(
+		ReadbackBufferDesc{ .byteSize = rbLayout.totalBytes, .debugName = "rt-readback" });
+
+	float clear[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+
+	list->Open(queue.Get(), allocator.Get());
+	resources->ClearRtv(list.Get(), rtv, clear);
+	list->SetGraphicsState(state);
+	list->Draw(3);
+	list->EndRenderPass();
+	list->CopyTextureToReadback(readback, texture);
+	list->Close();
+
+	const auto fence = queue->ExecuteCommandList(list.Get());
+	queue->WaitForFenceCPUBlocking(fence);
+
+	const auto* mapped = static_cast<const uint32_t*>(resources->MapReadback(readback));
+	REQUIRE(mapped != nullptr);
+
+	// Every corner and the centre: a triangle that covered only part of the frame would leave red.
+	const auto at = [&](uint32_t x, uint32_t y) { return mapped[(y * c_Size) + x]; };
+	CHECK(at(0, 0) == 0xFFFFFFFFu);
+	CHECK(at(c_Size - 1, 0) == 0xFFFFFFFFu);
+	CHECK(at(0, c_Size - 1) == 0xFFFFFFFFu);
+	CHECK(at(c_Size - 1, c_Size - 1) == 0xFFFFFFFFu);
+	CHECK(at(c_Size / 2, c_Size / 2) == 0xFFFFFFFFu);
+
+	resources->UnmapReadback(readback);
+	queue->Flush();
+	resources->UnregisterQueue(queue.Get());
+}
