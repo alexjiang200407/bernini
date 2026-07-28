@@ -11,6 +11,12 @@ redundant.
 
 Work in the order below. Do not skip to coding — step 1 routinely changes the design.
 
+This is for a change that lands on `master` as **one** PR. If it is too large for that — or if
+`git config --local bernini.feature` is already set — use
+[bcp-feature](.claude/skills/bcp-feature/SKILL.md), which splits the work into slices and lands each
+as its own PR into a feature branch. Steps 1–7 below are the same either way; only the branch cut
+from and the PR base differ.
+
 ## 1. Read before writing
 
 Read the docs that touch the area **before** designing anything. The index is in

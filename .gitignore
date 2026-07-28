@@ -19,6 +19,9 @@ __pycache__
 # Local, developer-specific editor config (like .env); seeded from config.example.json
 apps/editor/config.json
 
+# `bcp-feature` keeps each in-progress feature's slice plan here. Working state for one clone.
+.claude/features/
+
 # `just install` stages the CLI tools here; this is the dir you put on PATH.
 dist/
 
