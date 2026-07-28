@@ -210,7 +210,6 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			scene,
 			view,
 			m_Desc.environmentMap,
-			m_Desc.brdfLut,
 			m_Desc.exposureOverride,
 			"AssetThumbnail");
 

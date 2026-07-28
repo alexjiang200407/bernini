@@ -17,7 +17,6 @@ class QWheelEvent;
 struct MaterialPreviewEnv
 {
 	std::string environmentMap;
-	std::string brdfLut;
 
 	// Absent means the exposure the `.benv` carries, which is the value derived from those maps.
 	// Set it only to overrule that deliberately.
