@@ -1,7 +1,6 @@
 #include "util/TestEnvironment.h"
 
 #include <assetlib/benv_io.h>
-#include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 
 namespace bgl::test
@@ -13,8 +12,7 @@ namespace bgl::test
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(std::move(env.irradiance)),
-		      scene->AddTextureAsset(std::move(env.prefilter)),
-		      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+		      scene->AddTextureAsset(std::move(env.prefilter)) });
 
 		view->SetExposure(env.exposure);
 	}

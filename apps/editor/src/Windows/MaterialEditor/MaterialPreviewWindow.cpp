@@ -100,7 +100,6 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 			scene,
 			view,
 			env.environmentMap,
-			env.brdfLut,
 			env.exposureOverride,
 			"MaterialPreview");
 

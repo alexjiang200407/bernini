@@ -259,13 +259,13 @@ sceneDesc.initialPbrMaterials         = 100;
 auto scene = graphics->CreateScene(std::move(sceneDesc));
 auto view  = graphics->CreateSceneView(scene, 100);
 
-// One .benv carries the prefilter, irradiance and skybox of an environment, plus its exposure;
-// the BRDF LUT belongs to the shading model and is shared by every environment.
+// One .benv carries the prefilter, irradiance and skybox of an environment, plus its exposure. The
+// split-sum BRDF table is not among them: it integrates a white environment, so it belongs to the
+// shading model, and bgl generates its own at device init.
 auto env = assetlib::loadBenv("assets/forest.benv");
 view->SetEnvironmentMap(
     { scene->AddTextureAsset(std::move(env.irradiance)),
-      scene->AddTextureAsset(std::move(env.prefilter)),
-      scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2")) });
+      scene->AddTextureAsset(std::move(env.prefilter)) });
 view->SetExposure(env.exposure);
 
 auto material = scene->CreatePbrMaterial(

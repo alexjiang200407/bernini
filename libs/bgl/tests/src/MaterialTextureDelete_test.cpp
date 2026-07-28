@@ -5,7 +5,6 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/Scene.h"
 #include "util/TestOptions.h"
-#include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
 
@@ -18,6 +17,20 @@ namespace
 		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.enableDebugLayer = false;
 		return opts;
+	}
+
+	// Synthesized rather than loaded: these cases are about descriptor-slot lifetime, so the pixels
+	// are irrelevant and a file dependency would only be one more thing to keep alive.
+	assetlib::ImageData
+	OneTexel()
+	{
+		auto img     = assetlib::ImageData();
+		img.width    = 1;
+		img.height   = 1;
+		img.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
+		img.pixels   = core::fixed_buffer<std::byte>(4);
+		img.subresources.push_back({ 0, 4, 4 });
+		return img;
 	}
 
 	bgl::SceneDesc
@@ -110,9 +123,8 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	const bgl::TextureAssetHandle texture =
-		scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
-	const bgl::TextureHandle gpuTexture = bgl::TextureHandle::From(texture);
+	const bgl::TextureAssetHandle texture    = scene->AddTextureAsset(OneTexel());
+	const bgl::TextureHandle      gpuTexture = bgl::TextureHandle::From(texture);
 	REQUIRE(resourceManager->ValidTextureHandle(gpuTexture));
 
 	SECTION("The handle dies at once; the descriptor slot outlives it, then is reclaimed")
@@ -124,8 +136,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 
 		// But frames already submitted may still sample it, so the descriptor index is *not* on the
 		// free list yet -- a texture created now must land somewhere else.
-		const bgl::TextureAssetHandle other =
-			scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
+		const bgl::TextureAssetHandle other = scene->AddTextureAsset(OneTexel());
 		CHECK(other.textureSlot.index != texture.textureSlot.index);
 
 		// Stand in for the GPU reaching the fence the release was scheduled against. Now the index
@@ -133,8 +144,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 		gfxBase->WaitIdle();
 		resourceManager->CleanupExpiredResources();
 
-		const bgl::TextureAssetHandle recycled =
-			scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
+		const bgl::TextureAssetHandle recycled = scene->AddTextureAsset(OneTexel());
 		CHECK(recycled.textureSlot.index == texture.textureSlot.index);
 
 		// ...and the original handle stays dead: its generation is behind the slot's.
@@ -179,10 +189,8 @@ TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][sc
 	REQUIRE(scene != nullptr);
 
 	// Two uploads queued, neither flushed. One texture dies before any frame runs.
-	const bgl::TextureAssetHandle doomed =
-		scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
-	const bgl::TextureAssetHandle kept =
-		scene->AddTextureAsset(assetlib::loadKTX2("assets/brdf_lut.ktx2"));
+	const bgl::TextureAssetHandle doomed = scene->AddTextureAsset(OneTexel());
+	const bgl::TextureAssetHandle kept   = scene->AddTextureAsset(OneTexel());
 	REQUIRE_NOTHROW(scene->DeleteTextureAsset(doomed));
 
 	// The flush the next frame would run. Before the fix this wrote through the stale handle and
