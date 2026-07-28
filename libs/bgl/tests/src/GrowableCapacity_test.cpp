@@ -2,6 +2,7 @@
 #include "scene/GrowableGpuBuffer.h"
 #include "types/SubmeshInstance.h"
 #include <catch2/catch_test_macros.hpp>
+#include <core/math.h>
 
 // The growth curve doubles until a buffer passes 64 MiB, then tapers to 1.5x + 1 so the transient
 // old+new residency of a doubling does not cost a second full copy. Doubling preserves any power-of-
@@ -47,11 +48,10 @@ TEST_CASE("Aligning a tapered capacity covers the padded range", "[scene][capaci
 		capacity =
 			core::round_up(bgl::NextGpuBufferCapacity(capacity, capacity + 1, c_Stride), c_Align);
 
+		// The live count can reach capacity, and Update pads from there up to the next group
+		// boundary -- which is capacity itself exactly when this holds.
 		INFO("step " << step << " capacity " << capacity);
 		REQUIRE(capacity % c_Align == 0);
-
-		// The live count can reach capacity, and Update pads from there to the next group boundary.
-		REQUIRE(core::round_up(capacity, c_Align) <= capacity);
 	}
 
 	// Far enough to have crossed the taper, or the loop proved nothing about it.
