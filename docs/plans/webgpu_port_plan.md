@@ -579,8 +579,9 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
   pipeline*, and therefore where `examples/bgl_window` first runs on this backend.
 
   Remaining at the time of writing: `ForwardPass` dispatching the expansion chain (the kernels exist
-  but only tests drive them), the two mesh-shader modules above, `IRenderTarget`, and the
-  golden-image runner — `bgl_tests` needs a D3D12 device today, so nothing runs the raster gate.
+  but only tests drive them), `IRenderTarget`, and the golden-image runner — `bgl_tests` needs a
+  D3D12 device today, so nothing runs the raster gate. `Forward_StaticMesh` is now the only module
+  left with a mesh entry, and it is guarded.
   *Gate:* golden-image tests pass under the native WebGPU preset; a cube/sphere/textured-mesh
   scene is pixel-compared against the D3D12 goldens within tolerance. Frustum culling goldens
   prove the indirect chain (culling is image-invariant, so goldens are the gate — the same

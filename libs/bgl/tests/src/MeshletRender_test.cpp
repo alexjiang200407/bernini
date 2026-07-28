@@ -15,9 +15,9 @@
 #include <bgl/Viewport.h>
 #include <catch2/catch_approx.hpp>
 
-// The first mesh-shader render test: a mesh pipeline (FullscreenRect: MSMain emits one full-screen
-// triangle, PSMain writes solid white) clears an offscreen RT to black, draws over it, reads it
-// back, and checks every texel is white. Exercises the meshlet pipeline, the render encoder, and
+// The first mesh-shader render test: a mesh pipeline (MeshFullscreenTest: MSMain emits one
+// full-screen triangle, PSMain writes solid white) clears an offscreen RT to black, draws over it,
+// reads it back, and checks every texel is white. Exercises the meshlet pipeline, the render encoder,
 TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 {
 	auto opts                     = bgl::GraphicsOptions();
@@ -66,8 +66,8 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 
 	auto kernel = device->CreateMeshletKernel(
 		bgl::MeshletPipelineDesc()
-			.SetMeshShader(device->CreateShader("FullscreenRect", "MSMain"))
-			.SetPixelShader(device->CreateShader("FullscreenRect", "PSMain"))
+			.SetMeshShader(device->CreateShader("MeshFullscreenTest", "MSMain"))
+			.SetPixelShader(device->CreateShader("MeshFullscreenTest", "PSMain"))
 			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
 
 	auto state   = bgl::MeshletState();

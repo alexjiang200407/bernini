@@ -1,5 +1,5 @@
 #pragma once
-#include "pipeline/MeshletKernel.h"
+#include "pipeline/GraphicsKernel.h"
 
 namespace bgl
 {
@@ -41,6 +41,6 @@ namespace bgl
 		Execute(const DrawData& draw, const PassContext& resources);
 
 	private:
-		MeshletKernel m_Kernel;
+		GraphicsKernel m_Kernel;
 	};
 }

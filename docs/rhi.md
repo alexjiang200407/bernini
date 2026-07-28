@@ -53,9 +53,16 @@ doc and a header disagree, trust the header, then fix this doc.
   non-owning `IDevice*`). `CreateRenderTarget` takes the queue the target will present on, which
   must be the queue of the context that drives it.
 
-* **Kernel = pipeline + reflected uniforms.** A `ComputeKernel` / `MeshletKernel` bundles a
-  pipeline with one `Uniforms` CPU-mirror per constant buffer the shader declares, keyed by
-  name. `CreateComputeKernel` / `CreateMeshletKernel` build this from slang reflection.
+* **Kernel = pipeline + reflected uniforms.** A `ComputeKernel` / `MeshletKernel` /
+  `GraphicsKernel` bundles a pipeline with one `Uniforms` CPU-mirror per constant buffer the shader
+  declares, keyed by name. `CreateComputeKernel` / `CreateMeshletKernel` / `CreateGraphicsKernel`
+  build this from slang reflection.
+
+* **Two raster seams, chosen by what is drawn.** `IMeshletPipeline` for meshlet-partitioned
+  geometry, driven by `DispatchMesh`; `IGraphicsPipeline` for geometry that draws from a vertex
+  count instead — the skybox and fullscreen passes — driven by `Draw` between `SetGraphicsState`
+  and `EndRenderPass`. Both backends implement the second natively, so a shader on it needs no
+  per-target arm.
 
 * **Uniforms are a reflection-driven CPU mirror, bound by name.** `Uniforms` lays out one
   constant buffer from the shader's slang reflection. Populate it with chained `operator[]`
@@ -118,8 +125,8 @@ doc and a header disagree, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `Uniforms` | [libs/bgl/src/uniforms/Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
-| `ComputeKernel` / `MeshletKernel` | [libs/bgl/src/pipeline/ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
-| `ComputeState` / `MeshletState` | [libs/bgl/src/types/ComputeState.h](libs/bgl/src/types/ComputeState.h), [MeshletState.h](libs/bgl/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
+| `ComputeKernel` / `MeshletKernel` / `GraphicsKernel` | [libs/bgl/src/pipeline/ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h), [GraphicsKernel.h](libs/bgl/src/pipeline/GraphicsKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
+| `ComputeState` / `MeshletState` / `GraphicsState` | [libs/bgl/src/types/ComputeState.h](libs/bgl/src/types/ComputeState.h), [MeshletState.h](libs/bgl/src/types/MeshletState.h), [GraphicsState.h](libs/bgl/src/types/GraphicsState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
 | Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
 | Texture descriptors & `TextureHandle` | [libs/bgl/src/resource/Texture.h](libs/bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
 | Views | [libs/bgl/src/resource/Rtv.h](libs/bgl/src/resource/Rtv.h), [Dsv.h](libs/bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |

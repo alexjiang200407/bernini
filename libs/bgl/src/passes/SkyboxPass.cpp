@@ -5,9 +5,10 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "passes/DrawData.h"
-#include "pipeline/MeshletPipeline.h"
+#include "pipeline/GraphicsPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
+#include "types/GraphicsState.h"
 #include "types/RenderState.h"
 #include <bgl/ISceneView.h>
 
@@ -23,10 +24,10 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = GraphicsPipelineDesc();
 
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.vertexShader = device->CreateShader(std::string(c_Src), "VSMain");
+		pipelineDesc.pixelShader  = device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
 		pipelineDesc.AddRtvFormat(Format::RG16_FLOAT);
@@ -46,7 +47,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+		m_Kernel = device->CreateGraphicsKernel(pipelineDesc);
 	}
 
 	void
@@ -116,7 +117,7 @@ namespace bgl
 			gfatal("Skybox shader is missing its 'gSkyboxData' constant buffer");
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = GraphicsState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		gfxState.frameBuffer = FrameBuffer()
@@ -124,9 +125,10 @@ namespace bgl
 		                           .AddColorAttachment(draw.motionVectorHandle)
 		                           .SetDepthAttachment(draw.depthBufferHandle);
 
-		cmd->SetMeshletState(gfxState);
+		cmd->SetGraphicsState(gfxState);
 
-		// One thread group -> one triangle covering the screen.
-		cmd->DispatchMesh(1, 1, 1);
+		// Three vertices -> one triangle covering the screen.
+		cmd->Draw(3);
+		cmd->EndRenderPass();
 	}
 }

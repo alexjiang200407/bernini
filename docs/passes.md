@@ -88,10 +88,14 @@ each frame. It is the first pass of the frame, added in `BeginFrame`.
 
 ### Skybox — [passes/SkyboxPass.{h,cpp}](libs/bgl/src/passes/SkyboxPass.cpp)
 
-Draws the environment cube behind the scene as a single full-screen triangle. Its `MeshletKernel`
-is mesh + pixel only (no amplification shader), built from the `Skybox` module; `DispatchMesh(1, 1,
-1)` emits the one covering triangle. Depth test is `LessOrEqual` with **depth-write off** and no
+Draws the environment cube behind the scene as a single full-screen triangle. Its `GraphicsKernel`
+is vertex + pixel, built from the `Skybox` module; `Draw(3)` emits the one covering triangle from
+`SV_VertexID`, with no vertex buffer. Depth test is `LessOrEqual` with **depth-write off** and no
 culling, so it fills only where nothing has been drawn.
+
+This is the traditional raster seam rather than the meshlet one, because a covering triangle has no
+meshlet partition to cull — and both backends implement it natively, so the module needs no
+per-target arm.
 
 * **No-op** when the view has no skybox (`DrawData::skybox` is empty) — `AttachToFrameGraph` adds
   nothing.
