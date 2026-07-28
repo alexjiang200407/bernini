@@ -39,10 +39,8 @@ TEST_CASE("A graphics pipeline draws through a command-list render pass", "[wgpu
 	const auto rtv     = resources->CreateRtv(texture, RtvDesc{ .format = Format::RGBA8_UNORM });
 
 	auto desc         = GraphicsPipelineDesc{};
-	desc.vertexShader = desc.pixelShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
-	desc.vertexEntry = "VSMain";
-	desc.pixelEntry  = "PSMain";
+	desc.vertexShader = device->CreateShader("RasterTriangleTest", "VSMain");
+	desc.pixelShader  = device->CreateShader("RasterTriangleTest", "PSMain");
 	desc.rtvFormats.push_back(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
@@ -116,10 +114,8 @@ TEST_CASE("A graphics pipeline draws indirectly from an args buffer", "[wgpu][re
 	const auto rtv     = resources->CreateRtv(texture, RtvDesc{ .format = Format::RGBA8_UNORM });
 
 	auto desc         = GraphicsPipelineDesc{};
-	desc.vertexShader = desc.pixelShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
-	desc.vertexEntry = "VSMain";
-	desc.pixelEntry  = "PSMain";
+	desc.vertexShader = device->CreateShader("RasterTriangleTest", "VSMain");
+	desc.pixelShader  = device->CreateShader("RasterTriangleTest", "PSMain");
 	desc.rtvFormats.push_back(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 

@@ -49,9 +49,12 @@ namespace bgl
 		gassert(m_Desc.pixelShader != nullptr, "GraphicsPipeline: null pixel shader");
 		gassert(!m_Desc.rtvFormats.empty(), "GraphicsPipeline: needs at least one colour target");
 
+		const std::string& vertexEntry = m_Desc.vertexShader->GetDesc().entryPointName;
+		const std::string& pixelEntry  = m_Desc.pixelShader->GetDesc().entryPointName;
+
 		const WgslEntryPoint entries[] = {
-			{ m_Desc.vertexShader->GetSlangModule(), m_Desc.vertexEntry },
-			{ m_Desc.pixelShader->GetSlangModule(), m_Desc.pixelEntry },
+			{ m_Desc.vertexShader->GetSlangModule(), vertexEntry },
+			{ m_Desc.pixelShader->GetSlangModule(), pixelEntry },
 		};
 
 		auto                  owner  = Slang::ComPtr<slang::IComponentType>();
@@ -117,7 +120,7 @@ namespace bgl
 
 		auto fragment        = wgpu::FragmentState{};
 		fragment.module      = shaderModule;
-		fragment.entryPoint  = std::string_view(m_Desc.pixelEntry);
+		fragment.entryPoint  = std::string_view(pixelEntry);
 		fragment.targetCount = targets.size();
 		fragment.targets     = targets.data();
 
@@ -125,7 +128,7 @@ namespace bgl
 		rpDesc.label               = std::string_view(m_Desc.debugName);
 		rpDesc.layout              = pipelineLayout;
 		rpDesc.vertex.module       = shaderModule;
-		rpDesc.vertex.entryPoint   = std::string_view(m_Desc.vertexEntry);
+		rpDesc.vertex.entryPoint   = std::string_view(vertexEntry);
 		rpDesc.primitive.topology  = wgpu::PrimitiveTopology::TriangleList;
 		rpDesc.primitive.cullMode  = ToWgpuCullMode(raster.cullMode);
 		rpDesc.primitive.frontFace = ToWgpuFrontFace(raster.frontCounterClockwise);

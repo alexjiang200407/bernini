@@ -28,10 +28,12 @@ TEST_CASE("A meshlet kernel composes a drawable graphics pipeline", "[wgpu][rend
 
 	resources->RegisterQueue(queue.Get());
 
-	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("RasterTriangleTest"));
-
+	// RasterTriangleTest has no mesh entry; the emulation only needs the mesh shader's module, out of
+	// which it names VSMain itself.
 	auto desc = MeshletPipelineDesc{};
-	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
+	desc.SetMeshShader(device->CreateShader("RasterTriangleTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("RasterTriangleTest", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel = device->CreateMeshletKernel(desc);

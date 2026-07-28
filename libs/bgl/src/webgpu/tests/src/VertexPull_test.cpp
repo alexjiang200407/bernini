@@ -36,10 +36,10 @@ TEST_CASE("A vertex shader pulls positions from a bound buffer", "[wgpu][render]
 	const auto posBuffer = resources->CreateComputeBuffer(
 		ComputeBufferDesc{}.SetElement<Float2>().SetInitialCount(3).SetDebugName("positions"));
 
-	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("VertexPullTest"));
-
 	auto desc = MeshletPipelineDesc{};
-	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
+	desc.SetMeshShader(device->CreateShader("VertexPullTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("VertexPullTest", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel = device->CreateMeshletKernel(desc);
