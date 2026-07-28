@@ -17,7 +17,7 @@
 
 // The first mesh-shader render test: a mesh pipeline (MeshFullscreenTest: MSMain emits one
 // full-screen triangle, PSMain writes solid white) clears an offscreen RT to black, draws over it,
-// reads it back, and checks every texel is white. Exercises the meshlet pipeline, the render encoder,
+// reads it back, and checks every texel is white.
 TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 {
 	auto opts                     = bgl::GraphicsOptions();
