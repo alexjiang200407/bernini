@@ -161,10 +161,8 @@ TEST_CASE("The expansion kernel drives a vertex-pulling indirect draw", "[wgpu][
 	auto computeState   = ComputeState{};
 	computeState.kernel = &expand;
 
-	const auto meshShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("Forward_StaticMesh"));
-	const auto pixelShader =
-		device->CreateShader(ShaderDesc{}.SetSlangModuleName("MultiModulePixel"));
+	const auto meshShader  = device->CreateShader("Forward_StaticMesh", "MSMain");
+	const auto pixelShader = device->CreateShader("MultiModulePixel", "PSMain");
 
 	auto gfxDesc = MeshletPipelineDesc{};
 	gfxDesc.SetMeshShader(meshShader).SetPixelShader(pixelShader).AddRtvFormat(Format::RGBA8_UNORM);

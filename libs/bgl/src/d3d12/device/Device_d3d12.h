@@ -40,6 +40,10 @@ namespace bgl
 			core::SharedRef<IResourceManager> resourceManager,
 			bool                              enableDebug) const override;
 
+		// Without this the override hides IDevice's (module, entry) overload from callers holding a
+		// concrete Device rather than an IDevice.
+		using IDevice::CreateShader;
+
 		core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;
 

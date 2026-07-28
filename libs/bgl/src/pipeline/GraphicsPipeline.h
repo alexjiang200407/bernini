@@ -17,13 +17,14 @@ namespace bgl
 	 * The vertex + pixel stages, render state, and attachment formats of a traditional graphics
 	 * pipeline. The two stages may come from different Slang modules, which are linked into one
 	 * program.
+	 *
+	 * Each stage's entry point is the one its `IShader` names, so two entries of the same module
+	 * need two shaders -- as `MeshletPipelineDesc` already requires.
 	 */
 	struct GraphicsPipelineDesc
 	{
 		core::SharedRef<IShader>                        vertexShader = nullptr;
 		core::SharedRef<IShader>                        pixelShader  = nullptr;
-		std::string                                     vertexEntry  = "vs_main";
-		std::string                                     pixelEntry   = "fs_main";
 		RenderState                                     renderState;
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;

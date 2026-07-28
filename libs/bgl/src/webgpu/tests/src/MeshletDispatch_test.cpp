@@ -57,9 +57,10 @@ TEST_CASE(
 	auto computeState   = ComputeState{};
 	computeState.kernel = &expand;
 
-	const auto gfxShader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("VertexPullTest"));
-	auto       gfxDesc   = MeshletPipelineDesc{};
-	gfxDesc.SetMeshShader(gfxShader).SetPixelShader(gfxShader).AddRtvFormat(Format::RGBA8_UNORM);
+	auto gfxDesc = MeshletPipelineDesc{};
+	gfxDesc.SetMeshShader(device->CreateShader("VertexPullTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("VertexPullTest", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	gfxDesc.renderState.rasterState.SetCullNone();
 
 	auto gfx                  = device->CreateMeshletKernel(gfxDesc);
@@ -130,10 +131,10 @@ TEST_CASE("SetMeshletState then DispatchMesh draws one triangle per thread group
 	const auto posBuffer = resources->CreateComputeBuffer(
 		ComputeBufferDesc{}.SetElement<Float2>().SetInitialCount(3).SetDebugName("positions"));
 
-	const auto shader = device->CreateShader(ShaderDesc{}.SetSlangModuleName("VertexPullTest"));
-
 	auto desc = MeshletPipelineDesc{};
-	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
+	desc.SetMeshShader(device->CreateShader("VertexPullTest", "VSMain"))
+		.SetPixelShader(device->CreateShader("VertexPullTest", "PSMain"))
+		.AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
 	auto kernel                  = device->CreateMeshletKernel(desc);

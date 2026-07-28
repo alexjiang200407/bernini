@@ -84,6 +84,10 @@ namespace bgl
 			return m_SlangSession.get();
 		}
 
+		// Without this the override hides IDevice's (module, entry) overload from callers holding a
+		// concrete Device rather than an IDevice.
+		using IDevice::CreateShader;
+
 		[[nodiscard]] core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;
 
