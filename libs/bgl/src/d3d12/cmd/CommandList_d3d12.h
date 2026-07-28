@@ -1,12 +1,14 @@
 #pragma once
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/GraphicsPipeline_d3d12.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "resource/UploadManager.h"
 #include "types/ComputeState.h"
+#include "types/GraphicsState.h"
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 #include <core/ref/RefCounter.h>
@@ -171,6 +173,15 @@ namespace bgl
 		void
 		ApplyMeshletState() noexcept;
 
+		// The half of a raster state that does not depend on which pipeline kind is bound.
+		void
+		ApplyFrameBuffer(
+			const ViewportState& viewportState,
+			const FrameBuffer&   frameBuffer) noexcept;
+
+		void
+		BindKernelUniforms(const core::str::unordered_str_map<Uniforms>& uniforms) noexcept;
+
 		CommandListDesc    m_Desc;
 		ResourceManagerRef m_ResourceManager;
 
@@ -181,6 +192,7 @@ namespace bgl
 		wrl::ComPtr<ID3D12GraphicsCommandList7> m_CommandList;
 		wrl::ComPtr<ID3D12CommandSignature>     m_MeshDispatchSig;
 		std::optional<MeshletState>             m_CurrentMeshletState;
+		std::optional<GraphicsState>            m_CurrentGraphicsState;
 		std::optional<ComputeState>             m_CurrentComputeState;
 #if defined(BERNINI_GPU_DEBUG)
 		// GPU-assertion buffer auto-bound into a kernel's implicit gDebug cbuffer.
