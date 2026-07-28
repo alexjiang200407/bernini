@@ -1,10 +1,15 @@
 #pragma once
 #include <assetlib/cancel.h>
-#include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BMeshImport.h>
 
 namespace assetlib
 {
+	struct BMesh;
+
+	namespace imp
+	{
+		struct BMeshImport;
+	}
+
 	/** Serializes the geometry, hierarchy and material paths of `mesh` into the versioned container. */
 	[[nodiscard]] std::vector<std::byte>
 	serialize(const BMesh& mesh);

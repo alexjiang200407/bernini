@@ -1,8 +1,10 @@
 #pragma once
-#include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
 {
+	struct BMaterial;
+	struct SourceStamp;
+
 	/** Serializes a BMaterial (factors + texture file-path references + name) into a byte stream. */
 	[[nodiscard]] std::vector<std::byte>
 	serializeMaterial(const BMaterial& material);

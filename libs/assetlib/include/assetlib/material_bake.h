@@ -1,9 +1,10 @@
 #pragma once
 #include <assetlib/cancel.h>
-#include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
 {
+	struct BMaterial;
+
 	/**
 	 * Where a bake reads and writes.
 	 *

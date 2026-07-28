@@ -1,9 +1,13 @@
 #pragma once
 #include <assetlib/cancel.h>
-#include <assetlib_structs/BMeshImport.h>
 
 namespace assetlib
 {
+	namespace imp
+	{
+		struct BMeshImport;
+	}
+
 	/**
 	 * Loads a glTF (.gltf / .glb) file and converts its geometry, materials and node hierarchy into a
 	 * flattened imp::BMeshImport. Textures are decoded (detached) into `BMeshImport::textures`;
