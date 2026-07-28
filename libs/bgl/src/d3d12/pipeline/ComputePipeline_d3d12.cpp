@@ -57,9 +57,9 @@ namespace bgl
 		streamDesc.SizeInBytes                   = sizeof(ComputePsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		uint64_t identity = 0;
+		uint64_t identity = static_cast<uint64_t>(ShaderCache::PsoKind::kCompute);
 		if (cache != nullptr)
-			identity = ShaderCache::CombineHash(0, codeIt->second);
+			identity = ShaderCache::CombineHash(identity, codeIt->second);
 
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
 		{

@@ -1,4 +1,5 @@
 #include "pipeline/MeshletPipeline_d3d12.h"
+#include "constants/constants.h"
 #include "pipeline/PipelineLayout_d3d12.h"
 #include "resource/Rtv_d3d12.h"
 #include "resource/Shader.h"
@@ -99,11 +100,11 @@ namespace bgl
 		psoDesc.SampleDesc.Quality = 0;
 
 		psoDesc.SampleMask_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK;
-		psoDesc.SampleMask      = UINT_MAX;
+		psoDesc.SampleMask      = std::numeric_limits<UINT>::max();
 
 		psoDesc.RenderTargets_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS;
 		psoDesc.RenderTargets.NumRenderTargets = static_cast<UINT>(desc.rtvFormats.size());
-		for (size_t i = 0; i < 8; ++i)
+		for (size_t i = 0; i < c_MaxRenderTargets; ++i)
 		{
 			if (i < desc.rtvFormats.size())
 			{
@@ -122,7 +123,7 @@ namespace bgl
 		streamDesc.SizeInBytes                   = sizeof(MeshletPsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		uint64_t identity = 0;
+		uint64_t identity = static_cast<uint64_t>(ShaderCache::PsoKind::kMeshlet);
 		if (cache != nullptr)
 		{
 			for (const core::SharedRef<IShader>& shader :
