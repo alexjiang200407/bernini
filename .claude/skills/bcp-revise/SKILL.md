@@ -96,8 +96,9 @@ about this run. Never report green without having looked.
 Format first (`just format <files...>`), then commit.
 
 **Prefer new commits over amending.** A reviewer needs to see what changed *since* they looked; a
-force-pushed rewrite destroys that. Only rebase if the branch has genuinely fallen behind `master`
-and you say so.
+force-pushed rewrite destroys that. Only rebase if the branch has genuinely fallen behind, and say
+so — onto the PR's **own base** (`gh pr view {n} --json baseRefName --jq .baseRefName`), which is a
+`feature/...` branch for work inside a feature and not always `master`.
 
 ```bash
 git push
