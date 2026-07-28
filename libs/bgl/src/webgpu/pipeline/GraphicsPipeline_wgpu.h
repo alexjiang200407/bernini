@@ -1,5 +1,6 @@
 #pragma once
 #include "constants/constants.h"
+#include "pipeline/GraphicsPipeline.h"
 #include "resource/Shader.h"
 #include "types/Format.h"
 #include "types/RenderState.h"
@@ -11,40 +12,23 @@
 namespace bgl
 {
 	/**
-	 * The vertex + fragment stages, render state, and attachment formats a WebGPU graphics pipeline
-	 * is built from. The two stages may come from different Slang modules -- the forward shaders keep
-	 * the pixel stage separate from the geometry one -- and are linked into one WGSL program.
-	 */
-	struct GraphicsPipelineDesc
-	{
-		core::SharedRef<IShader>                        vertexShader = nullptr;
-		core::SharedRef<IShader>                        pixelShader  = nullptr;
-		std::string                                     vertexEntry  = "vs_main";
-		std::string                                     pixelEntry   = "fs_main";
-		RenderState                                     renderState;
-		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
-		Format                                          dsvFormat = Format::UNKNOWN;
-		std::string                                     debugName;
-	};
-
-	/**
 	 * A WebGPU graphics pipeline: the vertex and fragment entry points compiled to one WGSL module,
 	 * reflected into a bind group layout (the same binding model the compute path uses), and built
 	 * into a wgpu::RenderPipeline over the descriptor's colour and depth formats.
 	 *
-	 * This is a backend-internal building block, not an RHI IMeshletPipeline. The engine's raster
-	 * seam stays IMeshletPipeline on both backends; because WebGPU has no mesh stage, its
-	 * IMeshletPipeline is emulated by composing this GraphicsPipeline (the vertex-pulling draw) with
-	 * a compute ComputePipeline (the meshlet-expansion kernel). That composition lands with the
-	 * forward path.
+	 * Serves two roles: the RHI's IGraphicsPipeline for geometry drawn from a vertex count, and the
+	 * raster half of the emulated IMeshletPipeline, which composes it with the meshlet-expansion
+	 * compute kernel because WebGPU has no mesh stage.
 	 */
-	class GraphicsPipeline final
+	class GraphicsPipeline final : public core::RefCounter<IGraphicsPipeline>
 	{
 	public:
 		GraphicsPipeline(
 			const wgpu::Device&         device,
 			slang::ISession*            session,
 			const GraphicsPipelineDesc& desc);
+
+		~GraphicsPipeline() noexcept override = default;
 
 		GraphicsPipeline(const GraphicsPipeline&)     = delete;
 		GraphicsPipeline(GraphicsPipeline&&) noexcept = delete;
@@ -55,11 +39,17 @@ namespace bgl
 		GraphicsPipeline&
 		operator=(GraphicsPipeline&&) noexcept = delete;
 
-		[[nodiscard]] UniformLayoutEntry
-		GetUniformLayoutEntry(std::string_view name) const noexcept;
+		const GraphicsPipelineDesc&
+		GetDesc() const noexcept override
+		{
+			return m_Desc;
+		}
 
-		[[nodiscard]] std::vector<std::string>
-		GetUniformBufferNames() const noexcept;
+		UniformLayoutEntry
+		GetUniformLayoutEntry(std::string_view name) const noexcept override;
+
+		std::vector<std::string>
+		GetUniformBufferNames() const noexcept override;
 
 		[[nodiscard]] const wgpu::RenderPipeline&
 		GetPipeline() const noexcept
