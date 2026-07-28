@@ -26,6 +26,33 @@ struct SkyboxPSOut
     float2 motion : SV_Target1;
 };
 
+// The covering triangle's corner, shared by both entry points so they cannot drift. Depth is 1.0 --
+// the sky sits at the far plane -- and w = 1 makes ndc interpolate exactly.
+VSOut EvaluateCorner(uint corner)
+{
+    float2 uv = float2((corner << 1) & 2, corner & 2);
+    float2 ndc = uv * float2(2.0, -2.0) + float2(-1.0, 1.0);
+
+    VSOut vout;
+    vout.position = float4(ndc, 1.0, 1.0);
+    vout.ndc = ndc;
+
+    float4 world = mul(gSkyboxData.clipToWorld, float4(ndc, 1.0, 1.0));
+    vout.dir = world.xyz / world.w;
+
+    return vout;
+}
+
+[shader("vertex")]
+VSOut VSMain(uint vertexId: SV_VertexID)
+{
+    return EvaluateCorner(vertexId);
+}
+
+// Retained until the D3D12 backend implements IGraphicsPipeline; the vertex entry above is what
+// both backends will use. Absent on WGSL, which has no mesh stage and rejects the entry at load.
+#if !defined(BGL_WGSL)
+
 [shader("mesh")]
 [numthreads(3, 1, 1)]
 [outputtopology("triangle")]
@@ -34,17 +61,7 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
     SetMeshOutputCounts(3, 1);
     if (gtid < 3)
     {
-        float2 uv = float2((gtid << 1) & 2, gtid & 2);
-        float2 ndc = uv * float2(2.0, -2.0) + float2(-1.0, 1.0);
-
-        VSOut vout;
-        vout.position = float4(ndc, 1.0, 1.0);
-        vout.ndc = ndc;
-
-        float4 world = mul(gSkyboxData.clipToWorld, float4(ndc, 1.0, 1.0));
-        vout.dir = world.xyz / world.w;
-
-        verts[gtid] = vout;
+        verts[gtid] = EvaluateCorner(gtid);
     }
 
     if (gtid == 0)
@@ -52,6 +69,8 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
         tris[0] = uint3(0, 1, 2);
     }
 }
+
+#endif
 
 [shader("pixel")]
 SkyboxPSOut PSMain(VSOut input)

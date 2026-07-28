@@ -298,6 +298,35 @@ namespace bgl
 	}
 
 	void
+	CommandList::SetGraphicsState(const GraphicsState& gfxState) noexcept
+	{
+		gassert(gfxState.kernel != nullptr, "SetGraphicsState: null kernel");
+		gassert(
+			gfxState.kernel->pipeline.IsInitialized(),
+			"SetGraphicsState: kernel has no pipeline");
+
+		BeginRenderPass(gfxState.frameBuffer, gfxState.viewportState);
+
+		const auto& pipeline = *gfxState.kernel->pipeline->As<GraphicsPipeline>();
+
+		auto entries = std::vector<wgpu::BindGroupEntry>();
+		for (const auto& [name, uniforms] : gfxState.kernel->uniforms)
+		{
+			const auto built =
+				BuildBindGroupEntries(uniforms, pipeline.GetUniformLayoutEntry(name));
+			entries.insert(entries.end(), built.begin(), built.end());
+		}
+
+		auto bgDesc       = wgpu::BindGroupDescriptor{};
+		bgDesc.layout     = pipeline.GetBindGroupLayout();
+		bgDesc.entryCount = entries.size();
+		bgDesc.entries    = entries.data();
+
+		m_RenderPass.SetPipeline(pipeline.GetPipeline());
+		m_RenderPass.SetBindGroup(0, m_Device.CreateBindGroup(&bgDesc));
+	}
+
+	void
 	CommandList::Draw(
 		uint32_t vertexCount,
 		uint32_t instanceCount,

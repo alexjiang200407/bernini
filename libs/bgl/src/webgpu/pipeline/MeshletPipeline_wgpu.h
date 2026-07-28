@@ -42,23 +42,23 @@ namespace bgl
 		UniformLayoutEntry
 		GetUniformLayoutEntry(std::string_view name) const noexcept override
 		{
-			return m_Graphics.GetUniformLayoutEntry(name);
+			return m_Graphics->GetUniformLayoutEntry(name);
 		}
 
 		std::vector<std::string>
 		GetUniformBufferNames() const noexcept override
 		{
-			return m_Graphics.GetUniformBufferNames();
+			return m_Graphics->GetUniformBufferNames();
 		}
 
 		[[nodiscard]] const GraphicsPipeline&
 		GetGraphicsPipeline() const noexcept
 		{
-			return m_Graphics;
+			return *m_Graphics;
 		}
 
 	private:
-		MeshletPipelineDesc m_Desc;
-		GraphicsPipeline    m_Graphics;
+		MeshletPipelineDesc               m_Desc;
+		core::SharedRef<GraphicsPipeline> m_Graphics;
 	};
 }

@@ -199,4 +199,19 @@ namespace bgl
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline, cbufferName);
 	}
+
+	core::SharedRef<IGraphicsPipeline>
+	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc&) const noexcept
+	{
+		// The traditional raster seam is not implemented on D3D12 yet; nothing selects it here.
+		gfatal("CreateGraphicsPipeline is not implemented on the D3D12 backend");
+	}
+
+	Uniforms
+	Device::CreateUniforms(IGraphicsPipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
+	{
+		gassert(pipeline != nullptr, "CreateUniforms: null pipeline");
+		return Uniforms(pipeline, cbufferName);
+	}
 }

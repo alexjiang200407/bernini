@@ -1,5 +1,6 @@
 #pragma once
 #include "pipeline/ComputeKernel.h"
+#include "pipeline/GraphicsKernel.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
@@ -52,11 +53,18 @@ namespace bgl
 		virtual core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
 
+		[[nodiscard]]
+		virtual core::SharedRef<IGraphicsPipeline>
+		CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const noexcept = 0;
+
 		[[nodiscard]] ComputeKernel
 		CreateComputeKernel(const ComputePipelineDesc& desc) const noexcept;
 
 		[[nodiscard]] MeshletKernel
 		CreateMeshletKernel(const MeshletPipelineDesc& desc) const noexcept;
+
+		[[nodiscard]] GraphicsKernel
+		CreateGraphicsKernel(const GraphicsPipelineDesc& desc) const noexcept;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
@@ -102,6 +110,11 @@ namespace bgl
 		[[nodiscard]]
 		virtual Uniforms
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
+			const noexcept = 0;
+
+		[[nodiscard]]
+		virtual Uniforms
+		CreateUniforms(IGraphicsPipeline const* pipeline, const std::string& cbufferName)
 			const noexcept = 0;
 	};
 

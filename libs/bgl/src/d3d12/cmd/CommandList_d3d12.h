@@ -98,6 +98,19 @@ namespace bgl
 		SetMeshletState(const MeshletState& gfxState) noexcept override;
 
 		void
+		SetGraphicsState(const GraphicsState& gfxState) noexcept override;
+
+		void
+		EndRenderPass() noexcept override;
+
+		void
+		Draw(
+			uint32_t vertexCount,
+			uint32_t instanceCount,
+			uint32_t firstVertex,
+			uint32_t firstInstance) noexcept override;
+
+		void
 		DispatchMesh(
 			uint32_t threadGroupCountX,
 			uint32_t threadGroupCountY,

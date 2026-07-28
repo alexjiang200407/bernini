@@ -246,6 +246,14 @@ namespace bgl
 		return Uniforms(pipeline, cbufferName);
 	}
 
+	Uniforms
+	Device::CreateUniforms(IGraphicsPipeline const* pipeline, const std::string& cbufferName)
+		const noexcept
+	{
+		gassert(pipeline != nullptr, "CreateUniforms: null pipeline");
+		return Uniforms(pipeline, cbufferName);
+	}
+
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
@@ -262,6 +270,12 @@ namespace bgl
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
 		return core::SharedRef<MeshletPipeline>::Make(m_Device, m_SlangSession.get(), desc);
+	}
+
+	core::SharedRef<IGraphicsPipeline>
+	Device::CreateGraphicsPipeline(const GraphicsPipelineDesc& desc) const noexcept
+	{
+		return core::SharedRef<GraphicsPipeline>::Make(m_Device, m_SlangSession.get(), desc);
 	}
 
 	RenderTargetRef
