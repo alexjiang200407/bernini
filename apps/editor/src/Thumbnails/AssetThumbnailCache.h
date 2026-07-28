@@ -27,7 +27,6 @@ struct AssetThumbnailDesc
 	uint32_t initialInstances = 256;
 
 	std::string          environmentMap;
-	std::string          brdfLut;
 	std::optional<float> exposureOverride;
 };
 

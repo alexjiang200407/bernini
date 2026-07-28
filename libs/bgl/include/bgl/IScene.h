@@ -41,15 +41,19 @@ namespace bgl
 		uint32_t initialLoosePbrMaterials    = 1;
 	};
 
-	// Decoded IBL images (two cube maps + the 2D BRDF LUT).
+	/**
+	 * The decoded IBL cube maps: the diffuse and specular convolutions of one environment.
+	 *
+	 * The split-sum BRDF table that completes the specular term is not here. It integrates a white
+	 * environment, so it belongs to the shading model rather than to any environment, and bgl
+	 * generates its own at device init -- there is nothing for a caller to supply or to mismatch.
+	 */
 	struct EnvironmentMapDesc
 	{
 		EnvironmentMapDesc() = default;
 
-		EnvironmentMapDesc(
-			TextureAssetHandle irr,
-			TextureAssetHandle pre,
-			TextureAssetHandle brdf) : irradiance(irr), prefilter(pre), brdfLut(brdf)
+		EnvironmentMapDesc(TextureAssetHandle irr, TextureAssetHandle pre) :
+			irradiance(irr), prefilter(pre)
 		{}
 
 		EnvironmentMapDesc(EnvironmentMapDesc&&) noexcept = default;
@@ -63,7 +67,6 @@ namespace bgl
 
 		TextureAssetHandle irradiance;
 		TextureAssetHandle prefilter;
-		TextureAssetHandle brdfLut;
 	};
 
 	struct PbrMaterialDesc

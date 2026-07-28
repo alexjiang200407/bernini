@@ -47,8 +47,11 @@ the gamma mistake in another costume.
 And because the blur removes everything above the face's Nyquist, the skybox wants *fewer* texels, not
 more -- 256² is indistinguishable from 512² here, at half the size.
 
-`brdf_lut.ktx2` stays a separate file, and is the only other input. It is the split-sum BRDF integral
-— a property of the shading model, not of any environment — so every environment shares one.
+The split-sum BRDF table is not among them and is not an asset at all. It is the same integral taken
+against a *white* environment, which leaves a function of only `dot(N,V)` and roughness — a property
+of the shading model rather than of any environment. bgl renders its own 256² `RG16_FLOAT` copy once
+at device init (`libs/bgl/src/gfx/BrdfLut.cpp`), so there is no file to ship, to configure, or to get
+out of step with the shader that samples it.
 
 **One file rather than three, because the maps are only valid together.** The prefilter and the
 irradiance are the specular and diffuse convolutions of the *same* radiance in the same units; a pair

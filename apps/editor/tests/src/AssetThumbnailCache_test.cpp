@@ -87,9 +87,7 @@ namespace
 			auto desc           = AssetThumbnailDesc();
 			desc.renderer       = &*renderer;
 			desc.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
-			desc.brdfLut        = thumbSettings["brdfLut"].GetOrDefault(std::string());
 			REQUIRE_FALSE(desc.environmentMap.empty());
-			REQUIRE_FALSE(desc.brdfLut.empty());
 			return desc;
 		}
 	};
