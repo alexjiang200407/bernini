@@ -2,6 +2,7 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/material_bake.h>
+#include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
 {

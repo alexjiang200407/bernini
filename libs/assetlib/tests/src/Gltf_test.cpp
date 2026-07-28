@@ -1,5 +1,7 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BMeshImport.h>
 
 #include <catch2/catch_approx.hpp>
 

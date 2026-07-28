@@ -2,6 +2,8 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
 #include "fs_util.h"

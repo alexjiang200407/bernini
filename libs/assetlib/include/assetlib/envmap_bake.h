@@ -1,8 +1,9 @@
 #pragma once
-#include <assetlib_structs/ImageData.h>
 
 namespace assetlib
 {
+	struct ImageData;
+
 	struct PrefilterDesc
 	{
 		// Base face size of the output. Every mip halves from here.

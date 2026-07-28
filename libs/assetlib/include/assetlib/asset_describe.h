@@ -1,9 +1,10 @@
 #pragma once
-#include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/BMesh.h>
 
 namespace assetlib
 {
+	struct BMaterial;
+	struct BMesh;
+
 	/**
 	 * Renders the contents of an asset as human-readable text -- the counterpart of writeObj for the
 	 * non-geometric properties. Both formats are opaque binary containers, so without this the only

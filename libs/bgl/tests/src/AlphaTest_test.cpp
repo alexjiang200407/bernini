@@ -3,6 +3,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>

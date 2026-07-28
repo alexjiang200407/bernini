@@ -7,6 +7,7 @@
 #include <QRunnable>
 
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 
 namespace
 {

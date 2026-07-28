@@ -1,8 +1,9 @@
 #pragma once
-#include <assetlib_structs/ImageData.h>
 
 namespace assetlib
 {
+	struct ImageData;
+
 	enum class Ktx2Compression : uint32_t
 	{
 		kNone,

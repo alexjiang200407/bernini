@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
 {

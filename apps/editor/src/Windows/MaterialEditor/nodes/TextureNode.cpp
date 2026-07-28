@@ -6,6 +6,7 @@
 #include <QLabel>
 
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 
 #include "Render/Renderer.h"
