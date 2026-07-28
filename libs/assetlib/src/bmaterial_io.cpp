@@ -3,6 +3,7 @@
 #include <assetlib_structs/magic.h>
 
 #include "fs_util.h"
+#include "string_io.h"
 
 #include <core/file/file.h>
 #include <core/io/ByteReader.h>
@@ -19,22 +20,6 @@ namespace assetlib
 
 		constexpr uint16_t c_VersionMajor = 6;
 		constexpr uint16_t c_VersionMinor = 1;  // +1: PbrParams::occlude
-
-		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
-		void
-		writeString(ByteWriter& writer, const std::string& value)
-		{
-			writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
-			writer.writeBytes(std::as_bytes(std::span<const char>(value)));
-		}
-
-		std::string
-		readString(ByteReader& reader)
-		{
-			const auto length = reader.readPod<uint32_t>();
-			const auto bytes  = reader.readBytes(length);
-			return std::string(reinterpret_cast<const char*>(bytes.data()), length);
-		}
 
 		void
 		writePbr(ByteWriter& writer, const PbrParams& pbr)
