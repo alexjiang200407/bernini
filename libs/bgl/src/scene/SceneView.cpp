@@ -339,10 +339,8 @@ namespace bgl
 			return texHandle;
 		};
 
-		// irradiance and prefilter are cubemaps; the BRDF LUT is a 2D texture.
 		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance", true);
 		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter", true);
-		m_EnvironmentMap.brdfLut    = resolve(desc.brdfLut, "brdfLut", false);
 	}
 
 	void

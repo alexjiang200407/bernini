@@ -71,13 +71,11 @@ TEST_CASE("isBakedMapName recognizes only what the bake writes", "[texture_prune
 	CHECK(isBakedMapName("orm_fdc537ad982f59e7.ktx2"));
 	CHECK(isBakedMapName("normal_3fd6ecf5f0d1476c.ktx2"));
 
-	// The maps the repo keeps loose in the same directory. Deleting one of these would break the
-	// renderer, and nothing references them from a material -- so the name is the only thing standing
-	// between them and the sweep.
+	// A texture the material bake did not write. Nothing references one of these from a material, so
+	// the name is the only thing standing between it and the sweep.
 	CHECK_FALSE(isBakedMapName("skybox.ktx2"));
 	CHECK_FALSE(isBakedMapName("iem.ktx2"));
 	CHECK_FALSE(isBakedMapName("pmrem.ktx2"));
-	CHECK_FALSE(isBakedMapName("brdf_lut.ktx2"));
 
 	SECTION("a near-miss is not a match")
 	{
@@ -196,15 +194,15 @@ TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[te
 
 TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_prune]")
 {
-	// The IBL set and the skybox live in the same directory and are named in config, not in any
-	// material. Nothing marks them, so only their names keep them alive.
+	// A texture that shares the directory but that no material names. Nothing marks it, so only its
+	// name keeps it alive.
 	const DataRoot root("bernini_prune_handplaced");
 
 	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
 	bakeAndSave(root, "mat.bmaterial", "a.ktx2");
 
 	writeSource(root.textures() / "skybox.ktx2", 8, { { 1, 2, 3, 255 } });
-	writeSource(root.textures() / "brdf_lut.ktx2", 8, { { 4, 5, 6, 255 } });
+	writeSource(root.textures() / "logo.ktx2", 8, { { 4, 5, 6, 255 } });
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
 
@@ -214,7 +212,7 @@ TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_pr
 	deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
 
 	CHECK(std::filesystem::exists(root.textures() / "skybox.ktx2"));
-	CHECK(std::filesystem::exists(root.textures() / "brdf_lut.ktx2"));
+	CHECK(std::filesystem::exists(root.textures() / "logo.ktx2"));
 }
 
 TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[texture_prune]")
