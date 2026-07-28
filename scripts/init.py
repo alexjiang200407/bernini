@@ -11,6 +11,10 @@ config.json is git-ignored. It describes a machine, not the project -- see
 scripts/config.example.json for the shape and scripts/util/config.py for the
 schema.
 
+Points git at the committed .githooks, and configures Git LFS -- whose filters are
+machine-local config a clone cannot inherit, so without this the assets check out as
+pointer text and the tests fail on them.
+
 Also offers to install `just` (the task runner behind the root justfile) and the
 GitHub CLI `gh` (which bcp-revise uses for PR reviews). Both are optional -- every
 recipe is a one-line call into these scripts, so `python scripts/build.py ...`
@@ -30,6 +34,7 @@ Usage:
     just init --force                               # overwrite without confirming
     just init --no-just                             # skip the `just` check
     just init --no-gh                               # skip the GitHub CLI check
+    just init --no-lfs                              # skip the Git LFS setup
     just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
@@ -53,12 +58,17 @@ BOT_DIR = os.path.join(os.path.expanduser("~"), ".claude")
 BOT_KEY = os.path.join(BOT_DIR, "morgana-coding-agent.private-key.pem")
 BOT_ENV = os.path.join(BOT_DIR, "morgana-coding-agent.env")
 
+# First bytes of a Git LFS pointer file -- what a clone with no smudge filter leaves
+# in the working tree in place of the asset.
+LFS_POINTER_MAGIC = b"version https://git-lfs.github.com/spec/v1"
+
 
 if sys.platform == "darwin":
     CLANG_HINT = "Install the Xcode Command Line Tools (xcode-select --install), or `brew install llvm`."
     CLANG_FORMAT_HINT = "It ships with LLVM: `brew install clang-format`, or `brew install llvm`."
     CMAKE_HINT = "Install CMake: `brew install cmake`."
     NINJA_HINT = "This preset's generator is Ninja: `brew install ninja`."
+    GIT_LFS_HINT = "Install it with `brew install git-lfs`."
 else:
     CLANG_HINT = (
         'Install the "C++ Clang tools for Windows" (LLVM) component from the Visual Studio '
@@ -69,6 +79,7 @@ else:
     )
     CMAKE_HINT = "Install CMake, or point at the copy inside Visual Studio."
     NINJA_HINT = "This preset's generator is Ninja, so a ninja binary is required."
+    GIT_LFS_HINT = "It ships with Git for Windows; otherwise install it from https://git-lfs.com."
 
 
 def selectable_presets():
@@ -236,6 +247,77 @@ def ensure_hooks():
     print(f"git hooks: set core.hooksPath to {hooks_dir}")
 
 
+def lfs_pointer_files():
+    """Tracked LFS paths whose working-tree copy is still the pointer text, not the asset."""
+    listed = subprocess.run(
+        ["git", "lfs", "ls-files", "-n"],
+        cwd=ct.REPO_ROOT, capture_output=True, text=True,
+    )
+    if listed.returncode:
+        return []
+
+    stale = []
+    for rel in listed.stdout.splitlines():
+        try:
+            with open(os.path.join(ct.REPO_ROOT, rel), "rb") as fh:
+                if fh.read(len(LFS_POINTER_MAGIC)) == LFS_POINTER_MAGIC:
+                    stale.append(rel)
+        except OSError:
+            pass  # Absent or unreadable is not this function's problem; git will say so.
+    return stale
+
+
+def ensure_lfs():
+    """Configure Git LFS for this clone, and fetch anything still left as a pointer.
+
+    The `filter.lfs.*` entries live in machine-local git config, which cannot be
+    committed, so a fresh clone has no smudge filter and writes 130-byte pointer text
+    into the working tree instead of the asset. The committed .githooks do call
+    `git lfs post-checkout`, but git-lfs declines to check anything out until those
+    filters exist -- so the hooks cannot cover for this, and `git lfs pull` reports
+    success while doing nothing.
+
+    Nothing surfaces that as a setup problem: the tests read assets/ and fail as a
+    corrupt .glb ("Invalid magic") instead.
+
+    Installed with --local, so a machine that keeps per-repo git identities keeps them.
+    """
+    if not shutil.which("git-lfs"):
+        print(f"\ngit-lfs was not found. The assets under assets/ are stored with Git LFS, and\n"
+              f"without it they check out as text pointers and the tests fail on them.\n"
+              f"{GIT_LFS_HINT}")
+        return
+
+    configured = subprocess.run(
+        ["git", "config", "--get", "filter.lfs.process"],
+        cwd=ct.REPO_ROOT, capture_output=True, text=True,
+    ).stdout.strip()
+
+    if configured:
+        print("git lfs: filters configured")
+    elif subprocess.run(["git", "lfs", "install", "--local"], cwd=ct.REPO_ROOT).returncode:
+        print("warning: `git lfs install --local` failed; run it by hand.", file=sys.stderr)
+        return
+    else:
+        print("git lfs: installed the filters for this clone")
+
+    stale = lfs_pointer_files()
+    if not stale:
+        return
+
+    print(f"git lfs: {len(stale)} file(s) are still pointers; fetching...")
+    if subprocess.run(["git", "lfs", "pull"], cwd=ct.REPO_ROOT).returncode:
+        print("warning: `git lfs pull` failed; run it by hand.", file=sys.stderr)
+        return
+
+    remaining = lfs_pointer_files()
+    if remaining:
+        print(f"warning: {len(remaining)} file(s) are still pointers, e.g. {remaining[0]}. "
+              f"Run `git lfs pull` by hand.", file=sys.stderr)
+    else:
+        print(f"git lfs: fetched {len(stale)} file(s)")
+
+
 def find_gh():
     """Path to the GitHub CLI, or None. Checks PATH, then the standard install dir.
 
@@ -399,6 +481,7 @@ def main():
     parser.add_argument("--show", action="store_true", help="Print the config that would be written; write nothing.")
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
+    parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
@@ -433,6 +516,8 @@ def main():
     if not args.no_gh:
         ensure_gh()
     ensure_hooks()
+    if not args.no_lfs:
+        ensure_lfs()
     if not args.no_bot:
         ensure_bot_key()
     return 0

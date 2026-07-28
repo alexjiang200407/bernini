@@ -42,6 +42,23 @@ clone that hasn't installed it. Or use Visual Studio.
 1. Clone [repo](https://github.com/microsoft/vcpkg) and set **VCPKG_ROOT** environment variable to install location
 
 
+### Git LFS
+
+The assets under `assets/` — meshes, textures, environment maps, the golden images the
+render tests compare against — are stored with [Git LFS](https://git-lfs.com). Install it
+(`brew install git-lfs`; on Windows it ships with Git for Windows), then let
+`python scripts/init.py` configure it for the clone.
+
+It has to be configured **per clone**: the `filter.lfs.*` entries live in local git config,
+which no repository can carry. Without them a clone checks out 130-byte pointer files in
+place of the assets, and the failure never mentions LFS — the tests report a corrupt
+`.glb` ("Invalid magic"), and `git lfs pull` exits 0 having done nothing. To fix an
+existing clone by hand:
+
+```bash
+git lfs install --local && git lfs pull
+```
+
 ### python3
 
 1. Download [here](https://www.python.org/downloads/). Ensure **python3** is discoverable.
