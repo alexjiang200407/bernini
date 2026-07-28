@@ -6,6 +6,7 @@
 #include "scene/Scene.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
 
 namespace

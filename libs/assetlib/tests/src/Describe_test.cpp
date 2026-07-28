@@ -1,6 +1,8 @@
 #include <assetlib/asset_describe.h>
 
 #include <assetlib/bmaterial_io.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
 
 using namespace assetlib;
 

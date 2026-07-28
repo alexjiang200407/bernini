@@ -1,4 +1,5 @@
 #include <assetlib/bmesh_gltf.h>
+#include <assetlib_structs/BMeshImport.h>
 
 #include "bmesh_texture.h"
 

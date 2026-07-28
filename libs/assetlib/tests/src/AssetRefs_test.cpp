@@ -5,6 +5,9 @@
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
 

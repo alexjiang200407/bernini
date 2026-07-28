@@ -1,4 +1,5 @@
 #include <assetlib/bmesh_io.h>
+#include <assetlib_structs/BMesh.h>
 
 using namespace assetlib;
 

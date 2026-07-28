@@ -1,4 +1,5 @@
 #include "bmesh_texture.h"
+#include <assetlib_structs/ImageData.h>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb_image_resize2.h>

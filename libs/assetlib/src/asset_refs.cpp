@@ -2,6 +2,7 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
 {

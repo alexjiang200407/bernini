@@ -2,6 +2,8 @@
 #include <assetlib_structs/magic.h>
 
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BMeshImport.h>
 
 #include "fs_util.h"
 

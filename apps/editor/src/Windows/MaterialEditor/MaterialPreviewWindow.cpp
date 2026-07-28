@@ -17,6 +17,8 @@
 
 #include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>

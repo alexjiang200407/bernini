@@ -1,6 +1,7 @@
 #include "assetlib/benv_io.h"
 
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/math.h>

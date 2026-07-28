@@ -3,6 +3,8 @@
 #include <assetlib/cancel.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BMeshImport.h>
 
 #include "bmesh_texture.h"
 #include "fs_util.h"

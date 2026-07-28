@@ -1,4 +1,5 @@
 #include <assetlib/bmaterial_io.h>
+#include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/magic.h>
 
 #include "fs_util.h"

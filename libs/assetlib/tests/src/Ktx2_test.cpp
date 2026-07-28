@@ -1,4 +1,5 @@
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
 

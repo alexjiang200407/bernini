@@ -7,6 +7,8 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/bgl.h>
 #include <format>
 #include <gamelib/AssetManager.h>

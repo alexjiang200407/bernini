@@ -3,6 +3,7 @@
 #include <FlyCamera.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/bgl.h>
 #include <format>
 #include <stdexcept>

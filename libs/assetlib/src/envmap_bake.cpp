@@ -1,4 +1,5 @@
 #include "assetlib/envmap_bake.h"
+#include <assetlib_structs/ImageData.h>
 
 #include <stb_image.h>
 
