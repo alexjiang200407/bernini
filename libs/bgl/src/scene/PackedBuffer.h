@@ -18,10 +18,7 @@ namespace bgl
 		uint32_t initialCount = 0;
 		uint32_t blockSize    = 65536;
 
-		// Every capacity, grown ones included, is a multiple of this. Set it when a consumer
-		// dispatches whole groups over the buffer and so addresses past the live count: the growth
-		// curve tapers off powers of two past 64 MiB, and an unaligned capacity there leaves the
-		// tail it addresses outside the allocation.
+		// Every capacity, grown ones included, is rounded up to this.
 		uint32_t    capacityAlignment = 1;
 		std::string debugName;
 	};

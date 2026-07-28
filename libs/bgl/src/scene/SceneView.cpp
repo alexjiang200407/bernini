@@ -65,10 +65,7 @@ namespace bgl
 			core::round_up(m_InitialInstances, idl::cHistogramGroupSize);
 
 		{
-			auto instanceBufferDesc = PackedBufferDesc();
-			// Aligned so the kInvalid tail padding (see Update) always fits: the counting sort
-			// dispatches whole groups, so it may read up to a group past the last instance. The
-			// alignment must hold for grown capacities too, not just this one.
+			auto instanceBufferDesc              = PackedBufferDesc();
 			instanceBufferDesc.initialCount      = paddedInstances;
 			instanceBufferDesc.capacityAlignment = idl::cHistogramGroupSize;
 			instanceBufferDesc.debugName         = "Instance Buffer";
