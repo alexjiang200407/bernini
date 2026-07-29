@@ -2,7 +2,7 @@
 
 #include <QLoggingCategory>
 
-#include <assetlib/benv_io.h>
+#include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
 
@@ -19,10 +19,11 @@ namespace editor
 		if (benvPath.empty())
 			return;
 
-		auto maps = assetlib::EnvironmentMaps();
+		auto env = assetlib::ResolvedEnvironment();
 		try
 		{
-			maps = assetlib::loadBenv(benvPath);
+			const auto path = std::filesystem::path(benvPath);
+			env             = assetlib::resolveEnvironment(path, path.parent_path());
 		}
 		catch (const std::exception& e)
 		{
@@ -30,14 +31,14 @@ namespace editor
 			return;
 		}
 
-		// The .benv's own exposure is the value derived from these maps, so it is the right default;
-		// config only overrules it deliberately.
-		view->SetExposure(exposureOverride.value_or(maps.exposure));
+		// The lighting's own exposure is the value derived from these maps, so it is the right
+		// default; config only overrules it deliberately.
+		view->SetExposure(exposureOverride.value_or(env.maps.exposure));
 
 		try
 		{
-			const auto irradiance = scene->AddTextureAsset(std::move(maps.irradiance));
-			const auto prefilter  = scene->AddTextureAsset(std::move(maps.prefilter));
+			const auto irradiance = scene->AddTextureAsset(std::move(env.maps.irradiance));
+			const auto prefilter  = scene->AddTextureAsset(std::move(env.maps.prefilter));
 
 			// Both or neither: they are the diffuse and specular convolutions of one radiance, so a
 			// view holding one of them would light the scene from half an environment.
@@ -51,9 +52,9 @@ namespace editor
 
 		try
 		{
-			if (const auto skybox = scene->AddTextureAsset(std::move(maps.skybox));
+			if (const auto skybox = scene->AddTextureAsset(std::move(env.maps.skybox));
 			    skybox.textureSlot)
-				view->SetSkyBox({ skybox });
+				view->SetSkyBox({ skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
 		}
 		catch (const std::exception& e)
 		{

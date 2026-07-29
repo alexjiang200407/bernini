@@ -1,6 +1,6 @@
 #include "util/TestEnvironment.h"
 
-#include <assetlib/benv_io.h>
+#include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 
 namespace bgl::test
@@ -8,18 +8,19 @@ namespace bgl::test
 	void
 	ApplyEnvironment(bgl::IScene* scene, bgl::ISceneView* view)
 	{
-		auto env = assetlib::loadBenv("assets/forest.benv");
+		auto env = assetlib::resolveEnvironment("assets/forest.benv", "assets");
 
 		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(std::move(env.irradiance)),
-		      scene->AddTextureAsset(std::move(env.prefilter)) });
+			{ scene->AddTextureAsset(std::move(env.maps.irradiance)),
+		      scene->AddTextureAsset(std::move(env.maps.prefilter)) });
 
-		view->SetExposure(env.exposure);
+		view->SetExposure(env.maps.exposure);
 	}
 
 	bgl::TextureAssetHandle
 	LoadSkybox(bgl::IScene* scene)
 	{
-		return scene->AddTextureAsset(assetlib::loadBenv("assets/forest.benv").skybox);
+		return scene->AddTextureAsset(
+			assetlib::resolveEnvironment("assets/forest.benv", "assets").maps.skybox);
 	}
 }

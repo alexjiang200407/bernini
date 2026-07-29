@@ -2,10 +2,9 @@
 #include <assetlib/benvl_io.h>
 #include <assetlib/bsky_io.h>
 #include <assetlib/env_resolve.h>
+#include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
-
-#include <core/file/file.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -44,17 +43,17 @@ namespace
 		return out;
 	}
 
-	struct SplitDir
+	struct DataRoot
 	{
 		std::filesystem::path path;
 
-		explicit SplitDir(const char* name) : path(std::filesystem::temp_directory_path() / name)
+		explicit DataRoot(const char* name) : path(std::filesystem::temp_directory_path() / name)
 		{
 			std::filesystem::remove_all(path);
 			std::filesystem::create_directories(path);
 		}
 
-		~SplitDir() { std::filesystem::remove_all(path); }
+		~DataRoot() { std::filesystem::remove_all(path); }
 	};
 
 	bool
@@ -64,69 +63,61 @@ namespace
 		       a.isCubemap == b.isCubemap && a.pixels.size() == b.pixels.size() &&
 		       std::memcmp(a.pixels.data(), b.pixels.data(), a.pixels.size()) == 0;
 	}
+
+	/** Writes a complete authored set under `root` and returns the .benv's path. */
+	std::filesystem::path
+	AuthoredSet(const DataRoot& root)
+	{
+		writeKTX2(GradientCube(16, 2.0f), root.path / "sky.ktx2", false, Ktx2Compression::kNone);
+		writeKTX2(GradientCube(8, 1.0f), root.path / "pre.ktx2", false, Ktx2Compression::kNone);
+		writeKTX2(GradientCube(4, 0.25f), root.path / "irr.ktx2", false, Ktx2Compression::kNone);
+
+		BSky sky;
+		sky.name      = "set";
+		sky.sky.baked = "sky.ktx2";
+		sky.mipLevel  = 2;
+		sky.rotationY = 0.5f;
+		saveSky(sky, root.path / "set.bsky");
+
+		BEnvLighting lighting;
+		lighting.name             = "set";
+		lighting.prefilter.baked  = "pre.ktx2";
+		lighting.irradiance.baked = "irr.ktx2";
+		lighting.exposure         = 1.375f;
+		saveEnvLighting(lighting, root.path / "set.benvl");
+
+		const auto envPath = root.path / "set.benv";
+		saveEnv(BEnv{ .name = "set", .sky = "set.bsky", .lighting = "set.benvl" }, envPath);
+		return envPath;
+	}
 }
 
-// The reason the split exists: the source .hdr of an existing .benv may be long gone, so the
-// migration must reproduce, to the byte, what the v1 loader produced -- or every golden image
-// derived from that environment moves.
-TEST_CASE(
-	"a v1 .benv splits into a reference set that resolves to the same pixels",
-	"[benv][split]")
+TEST_CASE("resolving an environment loads the baked maps its chain names", "[benv][resolve]")
 {
-	const SplitDir dir("bernini_benv_split");
+	const DataRoot root("bernini_env_resolve_full");
 
-	EnvironmentMaps maps;
-	maps.prefilter  = GradientCube(8, 1.0f);
-	maps.irradiance = GradientCube(4, 0.25f);
-	maps.skybox     = GradientCube(16, 2.0f);
-	maps.exposure   = 1.375f;
+	const ResolvedEnvironment resolved = resolveEnvironment(AuthoredSet(root), root.path);
 
-	const auto v1Path = dir.path / "old.benv";
-	writeBenv(maps, v1Path);
+	CHECK(SamePixels(resolved.maps.skybox, GradientCube(16, 2.0f)));
+	CHECK(SamePixels(resolved.maps.prefilter, GradientCube(8, 1.0f)));
+	CHECK(SamePixels(resolved.maps.irradiance, GradientCube(4, 0.25f)));
+	CHECK(resolved.maps.exposure == Catch::Approx(1.375f));
 
-	const auto envPath = splitBenv(v1Path, dir.path / "out", "forest");
-
-	const EnvironmentMaps     v1 = loadBenv(v1Path);
-	const ResolvedEnvironment v2 = resolveEnvironment(envPath, dir.path / "out");
-
-	CHECK(SamePixels(v2.maps.skybox, v1.skybox));
-	CHECK(SamePixels(v2.maps.prefilter, v1.prefilter));
-	CHECK(SamePixels(v2.maps.irradiance, v1.irradiance));
-	CHECK(v2.maps.exposure == Catch::Approx(v1.exposure));
-	CHECK(v2.skyMipLevel == 0);
-	CHECK(v2.skyRotationY == 0.0f);
-
-	SECTION("the split assets carry no sources, so they are never stale")
+	SECTION("the sky's presentation travels with it")
 	{
-		const BSky sky = loadSky(dir.path / "out" / "forest.bsky");
-		CHECK(sky.sky.source.empty());
-		CHECK(!sky.sky.baked.empty());
-
-		const BEnvLighting lighting = loadEnvLighting(dir.path / "out" / "forest.benvl");
-		CHECK(lighting.prefilter.source.empty());
-		CHECK(lighting.exposure == Catch::Approx(1.375f));
-	}
-
-	SECTION("the split maps are the v1 blobs, byte for byte")
-	{
-		// Stronger than pixel equality: the KTX2 container itself must be untouched, or external
-		// tools would see a different file than the v1 embedded.
-		const auto blob =
-			core::file::read_file_bytes((dir.path / "out" / "forest_sky.ktx2").string());
-		CHECK(blob.size() > 0);
-		const auto whole = core::file::read_file_bytes(v1Path.string());
-		CHECK(std::search(whole.begin(), whole.end(), blob.begin(), blob.end()) != whole.end());
+		CHECK(resolved.skyMipLevel == 2);
+		CHECK(resolved.skyRotationY == Catch::Approx(0.5f));
 	}
 }
 
 TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 {
-	const SplitDir dir("bernini_env_resolve");
+	const DataRoot root("bernini_env_resolve");
 
 	SECTION("an empty .benv resolves to an empty environment")
 	{
-		saveEnv(BEnv{ .name = "none" }, dir.path / "none.benv");
-		const ResolvedEnvironment resolved = resolveEnvironment(dir.path / "none.benv", dir.path);
+		saveEnv(BEnv{ .name = "none" }, root.path / "none.benv");
+		const ResolvedEnvironment resolved = resolveEnvironment(root.path / "none.benv", root.path);
 		CHECK(resolved.maps.skybox.pixels.size() == 0);
 		CHECK(resolved.maps.prefilter.pixels.size() == 0);
 		CHECK(resolved.maps.exposure == Catch::Approx(1.0f));
@@ -137,37 +128,17 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 		BSky sky;
 		sky.name       = "raw";
 		sky.sky.source = "textures_src/raw.ktx2";
-		saveSky(sky, dir.path / "raw.bsky");
-		saveEnv(BEnv{ .name = "raw", .sky = "raw.bsky" }, dir.path / "raw.benv");
+		saveSky(sky, root.path / "raw.bsky");
+		saveEnv(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
 
 		CHECK_THROWS_WITH(
-			resolveEnvironment(dir.path / "raw.benv", dir.path),
+			resolveEnvironment(root.path / "raw.benv", root.path),
 			Catch::Matchers::ContainsSubstring("never been baked"));
 	}
 
 	SECTION("a dangling reference throws")
 	{
-		saveEnv(BEnv{ .name = "gone", .sky = "nowhere.bsky" }, dir.path / "gone.benv");
-		CHECK_THROWS_AS(resolveEnvironment(dir.path / "gone.benv", dir.path), std::runtime_error);
-	}
-
-	SECTION("the sky's presentation travels with it")
-	{
-		const SplitDir  src("bernini_env_resolve_src");
-		EnvironmentMaps maps;
-		maps.prefilter  = GradientCube(4, 1.0f);
-		maps.irradiance = GradientCube(4, 0.25f);
-		maps.skybox     = GradientCube(4, 2.0f);
-		writeBenv(maps, src.path / "p.benv");
-		const auto envPath = splitBenv(src.path / "p.benv", dir.path, "p");
-
-		BSky sky      = loadSky(dir.path / "p.bsky");
-		sky.mipLevel  = 2;
-		sky.rotationY = 0.5f;
-		saveSky(sky, dir.path / "p.bsky");
-
-		const ResolvedEnvironment resolved = resolveEnvironment(envPath, dir.path);
-		CHECK(resolved.skyMipLevel == 2);
-		CHECK(resolved.skyRotationY == Catch::Approx(0.5f));
+		saveEnv(BEnv{ .name = "gone", .sky = "nowhere.bsky" }, root.path / "gone.benv");
+		CHECK_THROWS_AS(resolveEnvironment(root.path / "gone.benv", root.path), std::runtime_error);
 	}
 }

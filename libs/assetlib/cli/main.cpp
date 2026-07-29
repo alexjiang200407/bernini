@@ -122,8 +122,6 @@ main(int argc, char** argv)
 	std::string envOut;
 	std::string envCube;
 	std::string envIem;
-	std::string envBenv;
-	bool        envFloat      = false;
 	uint32_t    envIemSize    = 128;
 	uint32_t    envSkyboxSize = 512;
 	float       envSkyboxBlur = 0.0f;
@@ -145,14 +143,6 @@ main(int argc, char** argv)
 		"Also write the unfiltered source cube here -- this is the skybox");
 	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
 	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
-	envmap->add_option(
-		"-b,--benv",
-		envBenv,
-		"Write all three maps and the derived exposure as one .benv -- what the editor loads");
-	envmap->add_flag(
-		"--float",
-		envFloat,
-		"Keep the .benv's maps at RGBA32F instead of packing them to RGB9E5 (4x larger)");
 	envmap->add_option(
 		"-s,--size",
 		envSize,
@@ -183,21 +173,6 @@ main(int argc, char** argv)
 		"textures_src/, a baked Sky/<name>.bsky and EnvLighting/<name>.benvl, and an "
 		"Environments/<name>.benv composing the pair");
 	envmap->add_option("--name", envName, "Asset name for --project outputs (default: env)");
-
-	std::string splitInput;
-	std::string splitOut;
-	std::string splitName;
-
-	auto* split = app.add_subcommand(
-		"split",
-		"Split a v1 .benv (three embedded maps) into the reference set: baked .ktx2 maps, a .bsky, "
-		"a .benvl, and a v2 .benv naming the pair. Byte-exact -- no decode, no re-bake");
-	split->add_option("input", splitInput, "Source v1 .benv")->required()->check(CLI::ExistingFile);
-	split->add_option("-o,--out", splitOut, "Output directory (default: beside the input)");
-	split->add_option(
-		"--name",
-		splitName,
-		"Stem for the files written (default: the input's stem)");
 
 	std::string objInput;
 	std::string objOut;
@@ -291,8 +266,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			if (envOut.empty() && envBenv.empty() && envProject.empty())
-				throw std::runtime_error("nothing to write: pass --out, --benv and/or --project");
+			if (envOut.empty() && envProject.empty())
+				throw std::runtime_error("nothing to write: pass --out and/or --project");
 
 			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
 
@@ -418,64 +393,10 @@ main(int argc, char** argv)
 					iem.width,
 					lighting.exposure);
 			}
-
-			if (!envBenv.empty())
-			{
-				const float exposure = assetlib::exposureFor(iem);
-
-				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
-				// backend without an optional feature, so this is the shipping format rather than an
-				// intermediate needing a per-platform compile.
-				auto set                    = assetlib::EnvironmentMaps();
-				set.prefilter               = envFloat ? std::move(out) : assetlib::packRgb9e5(out);
-				set.irradiance              = envFloat ? std::move(iem) : assetlib::packRgb9e5(iem);
-				assetlib::ImageData& skyOut = envSkyboxBlur > 0.0f ? sky : src;
-				set.skybox   = envFloat ? std::move(skyOut) : assetlib::packRgb9e5(skyOut);
-				set.exposure = exposure;
-
-				auto provenance       = assetlib::EnvironmentProvenance();
-				provenance.samples    = desc.samples;
-				provenance.mipLevels  = desc.mipLevels;
-				provenance.sourceHash = assetlib::hashFile(envInput);
-
-				assetlib::writeBenv(set, envBenv, provenance);
-
-				spdlog::info(
-					"Wrote '{}': prefilter {}^2 x{}, irradiance {}^2, skybox {}^2, exposure {:.3f}",
-					envBenv,
-					set.prefilter.width,
-					set.prefilter.mipLevels,
-					set.irradiance.width,
-					set.skybox.width,
-					set.exposure);
-			}
 		}
 		catch (const std::exception& e)
 		{
 			spdlog::error("envmap failed: {}", e.what());
-			return 1;
-		}
-	}
-
-	if (*split)
-	{
-		try
-		{
-			const auto inputPath = std::filesystem::path(splitInput);
-			const auto outDirPath =
-				splitOut.empty() ? inputPath.parent_path() : std::filesystem::path(splitOut);
-			const auto stem = splitName.empty() ? inputPath.stem().string() : splitName;
-
-			const auto written = assetlib::splitBenv(inputPath, outDirPath, stem);
-			spdlog::info(
-				"Split '{}' -> '{}', plus '{}'.bsky/.benvl and their three .ktx2 maps",
-				splitInput,
-				written.string(),
-				stem);
-		}
-		catch (const std::exception& e)
-		{
-			spdlog::error("split failed: {}", e.what());
 			return 1;
 		}
 	}

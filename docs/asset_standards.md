@@ -346,10 +346,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
   * Either path may be empty — the import's checkboxes write whichever pieces were asked for; what a
     `.benv` must reference is its consumer's rule, not the container's.
-  * **v1 is the old three-blob format** (prefilter + irradiance + skybox as embedded KTX2). It opens
-    with the same magic and version-field layout, so the v2 reader refuses it *by number* with a
-    message that says to re-import — reading on would take KTX2 bytes as string lengths. The v1
-    reader/writer survive in `benv_io` only until their consumers and `assets/forest.benv` migrate.
+  * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
+    ([libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h))
+    follows the chain and loads the **baked** maps — never the float sources, which would light the
+    scene subtly differently from the shipped build; referenced-but-never-baked throws.
+  * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
+    no migration path. It opened with the same magic and version-field layout, so the reader refuses
+    it *by number* with a message that says to re-import — reading on would take KTX2 bytes as
+    string lengths.
 
 ---
 
@@ -605,9 +609,6 @@ assetlib_cli obj assets/model/model.bmesh -o model.obj
 # Convolve an HDRI into a project's split environment set: float sources into textures_src/, a
 # baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
 assetlib_cli envmap forest.hdr -p Data --name forest
-
-# Migrate a v1 .benv (three embedded maps) to that set, byte-exactly -- no source .hdr needed
-assetlib_cli split assets/forest.benv --name forest
 
 # Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
 assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
