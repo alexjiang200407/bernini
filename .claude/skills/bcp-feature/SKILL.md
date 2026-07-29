@@ -262,6 +262,18 @@ no session re-derives it from ad-hoc `gh` calls. React by event:
 Only *submitted* reviews trigger it; a reviewer's pending draft stays invisible until they send it.
 Do not poll `gh` yourself while the watcher runs — it is the wait, not a hint.
 
+**After responding, restart the watcher with `--since`** set to the newest `submittedAt`/`createdAt`
+you acted on:
+
+```bash
+just watch-pr <n> --since 2026-07-29T13:13:22Z
+```
+
+Nothing watches the PR while you revise, and a plain restart would fold anything that arrived in
+the meantime into its baseline — never reported, never acted on. `--since` keeps everything after
+that timestamp out of the baseline and fires immediately if something is already waiting, so a
+comment landing mid-revision costs one extra revise round instead of vanishing.
+
 If the user would rather not wait, the next slice **stacks** on the open one instead of on the
 feature branch:
 

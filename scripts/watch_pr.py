@@ -26,6 +26,13 @@ review thread does not reliably surface as a new review.
 (merge state plus every submitted review and comment), for reconciling a
 resumed feature against reality.
 
+`--since <ISO-8601>` closes the hand-off race: activity is normally baselined
+at startup, so a comment that arrives after the caller gathered the feedback it
+is responding to but before the next watch starts would vanish into the new
+baseline. Passing the timestamp of the newest item already handled keeps
+everything after it out of the baseline, and the first check fires immediately
+if anything is waiting.
+
 Uses the `gh` CLI, found on PATH or in its default Windows install location.
 Transient `gh` failures are tolerated up to 5 in a row before erroring (exit 1).
 
@@ -94,8 +101,11 @@ def key(item):
     if ident is not None:
         return str(ident)
     author = (item.get("author") or {}).get("login") or item.get("user", {}).get("login")
-    stamp = item.get("submittedAt") or item.get("createdAt") or item.get("created_at")
-    return f"{author}@{stamp}"
+    return f"{author}@{stamp(item)}"
+
+
+def stamp(item):
+    return item.get("submittedAt") or item.get("createdAt") or item.get("created_at") or ""
 
 
 def summarize_review(r):
@@ -129,6 +139,10 @@ def main():
         "--timeout", type=float, default=3600,
         help="give up after this many seconds; 0 waits forever (default 3600)")
     parser.add_argument("--once", action="store_true", help="print a snapshot and exit")
+    parser.add_argument(
+        "--since",
+        help="ISO-8601 UTC time (2026-07-29T13:13:22Z); only activity at or before it joins the "
+        "baseline, and anything already waiting fires immediately")
     args = parser.parse_args()
 
     gh = find_gh()
@@ -155,11 +169,49 @@ def main():
         emit({"event": view["state"].lower(), "pr": args.pr, "url": view["url"]})
         return
 
-    seen = {key(r) for r in reviews} | {key(c) for c in comments} | {key(c) for c in inline}
+    # GitHub stamps are Z-suffixed UTC, so string comparison is chronological.
+    def baselined(item):
+        return args.since is None or stamp(item) <= args.since
+
+    seen = {key(x) for x in reviews + comments + inline if baselined(x)}
     print(
         f"watching PR #{args.pr} ({view['title']}) every {args.interval:g}s; "
-        f"baseline: {len(reviews)} reviews, {len(comments) + len(inline)} comments",
+        f"baseline: {len(seen)} of {len(reviews) + len(comments) + len(inline)} items",
         file=sys.stderr, flush=True)
+
+    def actionable(view, reviews, comments, inline):
+        """Emits and reports True when the poll holds an event; the caller then exits."""
+        if view["state"] == "MERGED":
+            emit({"event": "merged", "pr": args.pr, "url": view["url"]})
+            return True
+        if view["state"] == "CLOSED":
+            emit({"event": "closed", "pr": args.pr, "url": view["url"]})
+            return True
+
+        new_reviews = [r for r in reviews if key(r) not in seen]
+        new_comments = [c for c in comments + inline if key(c) not in seen]
+        if new_reviews:
+            emit({
+                "event": "review",
+                "pr": args.pr,
+                "url": view["url"],
+                "reviews": [summarize_review(r) for r in new_reviews],
+                "comments": [summarize_comment(c) for c in new_comments],
+            })
+            return True
+        if new_comments:
+            emit({
+                "event": "comment",
+                "pr": args.pr,
+                "url": view["url"],
+                "comments": [summarize_comment(c) for c in new_comments],
+            })
+            return True
+        return False
+
+    # With --since, the race-window items are already in hand -- fire before sleeping.
+    if actionable(view, reviews, comments, inline):
+        return
 
     start = time.monotonic()
     failures = 0
@@ -182,31 +234,7 @@ def main():
                 sys.exit(f"error: {MAX_CONSECUTIVE_FAILURES} consecutive poll failures")
             continue
 
-        if view["state"] == "MERGED":
-            emit({"event": "merged", "pr": args.pr, "url": view["url"]})
-            return
-        if view["state"] == "CLOSED":
-            emit({"event": "closed", "pr": args.pr, "url": view["url"]})
-            return
-
-        new_reviews = [r for r in reviews if key(r) not in seen]
-        new_comments = [c for c in comments + inline if key(c) not in seen]
-        if new_reviews:
-            emit({
-                "event": "review",
-                "pr": args.pr,
-                "url": view["url"],
-                "reviews": [summarize_review(r) for r in new_reviews],
-                "comments": [summarize_comment(c) for c in new_comments],
-            })
-            return
-        if new_comments:
-            emit({
-                "event": "comment",
-                "pr": args.pr,
-                "url": view["url"],
-                "comments": [summarize_comment(c) for c in new_comments],
-            })
+        if actionable(view, reviews, comments, inline):
             return
 
 
