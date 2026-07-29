@@ -51,6 +51,31 @@ if(RENDERER_BACKEND STREQUAL "WEBGPU")
         )
     endforeach()
 
+    # The forward pixel modules ForwardPass builds a kernel from per PSO. On WGSL the materials
+    # shade from factors (see forward/MaterialData.slang), and this is what proves every bucket's
+    # pixel shader still compiles there -- CreateGraphics builds all of them eagerly.
+    foreach(FWDPIXEL Forward_Null Forward_PBR Forward_PBR_Loose Forward_PBR_AlphaTest
+                     Forward_PBR_Loose_AlphaTest Forward_Transparent Forward_Transparent_Prepass
+                     Forward_Assert)
+        compile_shader(
+            FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/${FWDPIXEL}.slang"
+            OUT_DIR      "${SHADER_OUT_DIR}"
+            TARGET       "wgsl"
+            STAGE        "ps_6_6"
+            INCLUDES     ${SLANG_SOURCE_ROOT}
+            ENTRY_POINTS "PSMain"
+        )
+    endforeach()
+
+    compile_shader(
+        FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
+        OUT_DIR      "${SHADER_OUT_DIR}"
+        TARGET       "wgsl"
+        STAGE        "vs_6_6"
+        INCLUDES     ${SLANG_SOURCE_ROOT}
+        ENTRY_POINTS "VSMain"
+    )
+
     add_custom_target(bgl_compile_shaders ALL
         DEPENDS ${SLANG_COMPILE_OUTS}
     )

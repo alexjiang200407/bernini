@@ -9,6 +9,15 @@ import idl.TextureHandle;
 import forward.common;
 import forward.PbrShading;
 
+// The material reads fork by target -- sampled on DXIL, factor-only where the material tables'
+// textures cannot be dereferenced (see the arms themselves) -- and the two files export identical
+// signatures, so everything below is target-blind.
+#if defined(BGL_WGSL)
+import forward.MaterialFactors;
+#else
+import forward.MaterialSampled;
+#endif
+
 struct MaterialData
 {
     float3 cameraPos;
@@ -19,7 +28,7 @@ struct MaterialData
 
     TextureCubeHandle irradianceMap;
     TextureCubeHandle prefilterMap;
-    TextureHandle brdfLUT;
+    Texture2DHandle brdfLUT;
 
     SamplerHandle anisoLinearWrapSampler;
     SamplerHandle linearClampSampler;
@@ -36,45 +45,23 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetBaseColor(SamplerHandle s, float2 uv)
     {
-        return baseColorTexture.Sample(s, uv) * baseColorFactor;
+        return MaterialBaseColor(this, s, uv);
     }
 
     float3 GetORM(SamplerHandle s, float2 uv)
     {
-        return ormTexture.Sample(s, uv).rgb * float3(1.0, roughnessFactor, metallicFactor);
+        return MaterialOrm(this, s, uv);
     }
 
     float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
-        return normalTexture.Sample(s, uv).xy;
+        return MaterialNormalXY(this, s, uv);
     }
 
     float GetAlphaCutoff()
     {
         return alphaCutoff;
     }
-}
-
-// Selects one component of `v`. Indexing a vector with a runtime value (`v[c]`) makes DXC spill it
-// to an indexable temp; an explicit switch lowers to a select chain instead, with no scratch memory.
-float SelectComponent(float4 v, uint c)
-{
-    switch (c)
-    {
-    case 0:
-        return v.x;
-    case 1:
-        return v.y;
-    case 2:
-        return v.z;
-    default:
-        return v.w;
-    }
-}
-
-float SampleLooseChannel(ChannelSource cs, SamplerHandle s, float2 uv)
-{
-    return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
 }
 
 extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
@@ -86,29 +73,17 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetBaseColor(SamplerHandle s, float2 uv)
     {
-        float4 c = float4(
-            SampleLooseChannel(sources[0], s, uv), // R
-            SampleLooseChannel(sources[1], s, uv), // G
-            SampleLooseChannel(sources[2], s, uv), // B
-            SampleLooseChannel(sources[3], s, uv)
-        ); // A
-        return c * baseColorFactor;
+        return MaterialBaseColor(this, s, uv);
     }
 
     float3 GetORM(SamplerHandle s, float2 uv)
     {
-        float ao = SampleLooseChannel(sources[4], s, uv);
-        float roughness = SampleLooseChannel(sources[5], s, uv) * roughnessFactor;
-        float metallic = SampleLooseChannel(sources[6], s, uv) * metallicFactor;
-        return float3(ao, roughness, metallic);
+        return MaterialOrm(this, s, uv);
     }
 
     float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
-        return float2(
-            SampleLooseChannel(sources[7], s, uv), // X
-            SampleLooseChannel(sources[8], s, uv)
-        ); // Y
+        return MaterialNormalXY(this, s, uv);
     }
 
     float GetAlphaCutoff()
@@ -154,13 +129,68 @@ public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
 
     let baseColor = material.GetBaseColor(wrapSampler, input.uv);
 
+#if defined(BGL_WGSL)
+    // Shade first, discard after: Tint requires textureSample in uniform control flow and treats
+    // everything after a discard as non-uniform, so the IBL samples may not follow it.
+    let shaded = ShadeWithBaseColor(input, material, baseColor);
+
+    if (baseColor.a < material.GetAlphaCutoff())
+    {
+        discard;
+    }
+
+    return shaded;
+#else
     if (baseColor.a < material.GetAlphaCutoff())
     {
         discard;
     }
 
     return ShadeWithBaseColor(input, material, baseColor);
+#endif
 }
+
+#if defined(BGL_WGSL)
+// The transparent pass branches on materialIsLoose, which varies per fragment -- and Tint requires
+// textureSample in uniform control flow. On this target the material reads are sample-free
+// (factors only), so they gather under the branch and the IBL samples run once, outside it.
+public float4 ShadeEitherMaterial(ForwardVSOut input)
+{
+    let wrapSampler = materialData.anisoLinearWrapSampler;
+
+    float4 baseColor;
+    float3 orm;
+    float2 normalXY;
+
+    if (input.materialIsLoose != 0u)
+    {
+        let material = LoosePbrMaterial.Load(input.materialIndex);
+        baseColor = material.GetBaseColor(wrapSampler, input.uv);
+        orm = material.GetORM(wrapSampler, input.uv);
+        normalXY = material.GetNormalXY(wrapSampler, input.uv);
+    }
+    else
+    {
+        let material = PbrMaterial.Load(input.materialIndex);
+        baseColor = material.GetBaseColor(wrapSampler, input.uv);
+        orm = material.GetORM(wrapSampler, input.uv);
+        normalXY = material.GetNormalXY(wrapSampler, input.uv);
+    }
+
+    return ShadeSurface(
+        input,
+        baseColor,
+        orm,
+        normalXY,
+        materialData.cameraPos,
+        materialData.irradianceMap,
+        materialData.prefilterMap,
+        materialData.brdfLUT,
+        materialData.linearClampSampler,
+        materialData.exposure
+    );
+}
+#endif
 
 // Depth-only pre-pass for a self-occluding blend material: keep only the fragments whose base-color
 // alpha clears the cutoff, so the front layer's depth is what the Equal-tested colour pass matches.

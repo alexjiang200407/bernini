@@ -72,4 +72,28 @@ namespace bgl
 		const wgpu::Device&            device,
 		std::span<const BindGroupSlot> slots,
 		wgpu::ShaderStage              visibility);
+
+	/**
+	 * Narrows each *storage-buffer* slot's visibility to the stages whose compiled code actually
+	 * reads it, queried from the linked program's per-entry-point metadata; every other slot keeps
+	 * `allStages`. WebGPU counts a storage buffer against a stage's per-stage limit by declared
+	 * visibility, not by use, so a layout that offers the whole geometry table set to the fragment
+	 * stage blows the limit the fragment shader never came near. A slot no stage reads keeps
+	 * visibility None -- legal, uncounted, and still bindable.
+	 *
+	 * `entryPointStages[i]` is the stage of the i-th entry point composed into `program`.
+	 */
+	std::vector<wgpu::ShaderStage>
+	ResolveStorageSlotVisibility(
+		slang::IComponentType*             program,
+		std::span<const wgpu::ShaderStage> entryPointStages,
+		std::span<const BindGroupSlot>     slots,
+		wgpu::ShaderStage                  allStages);
+
+	/** As above, with per-slot visibility (aligned with `slots`). */
+	wgpu::BindGroupLayout
+	MakeWgslBindGroupLayout(
+		const wgpu::Device&                device,
+		std::span<const BindGroupSlot>     slots,
+		std::span<const wgpu::ShaderStage> slotVisibility);
 }
