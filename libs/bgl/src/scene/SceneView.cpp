@@ -153,7 +153,7 @@ namespace bgl
 			auto recordsDesc = ComputeBufferDesc();
 			recordsDesc.SetElement<idl::MeshletInstance>();
 			recordsDesc.initialCount = idl::cHistogramGroupSize;
-			recordsDesc.debugName    = "Meshlet Records";
+			recordsDesc.debugName    = "Meshlet Instances";
 
 			m_MeshletInstances.Init(std::move(recordsDesc), m_ResourceManager);
 		}
