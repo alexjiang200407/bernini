@@ -21,8 +21,6 @@ public struct TextureHandle
 #endif
 };
 
-// Constant-buffer-resident like TextureCubeHandle below (the BRDF LUT), so it stays a real,
-// sampleable texture on every target -- what the buffer-resident TextureHandle above cannot be.
 public struct Texture2DHandle
 {
 #if defined(BGL_WGSL)
