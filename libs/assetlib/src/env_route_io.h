@@ -1,10 +1,15 @@
 #pragma once
-#include <assetlib_structs/BEnv.h>
 
-#include "string_io.h"
+namespace core::io
+{
+	class ByteReader;
+	class ByteWriter;
+}
 
 namespace assetlib
 {
+	struct EnvMapRoute;
+
 	/**
 	 * An EnvMapRoute's encoding, shared by every container that stores one.
 	 *
@@ -12,23 +17,9 @@ namespace assetlib
 	 * two containers that drifted by a field would each still load their own files and fail only when
 	 * one was handed the other's.
 	 */
-	inline void
-	writeRoute(core::io::ByteWriter& writer, const EnvMapRoute& route)
-	{
-		writeString(writer, route.source);
-		writeString(writer, route.baked);
-		writer.writePod(route.stamp.size);
-		writer.writePod(route.stamp.mtime);
-	}
+	void
+	writeRoute(core::io::ByteWriter& writer, const EnvMapRoute& route);
 
-	[[nodiscard]] inline EnvMapRoute
-	readRoute(core::io::ByteReader& reader)
-	{
-		EnvMapRoute route;
-		route.source      = readString(reader);
-		route.baked       = readString(reader);
-		route.stamp.size  = reader.readPod<uint64_t>();
-		route.stamp.mtime = reader.readPod<int64_t>();
-		return route;
-	}
+	[[nodiscard]] EnvMapRoute
+	readRoute(core::io::ByteReader& reader);
 }

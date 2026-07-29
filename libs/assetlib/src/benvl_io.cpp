@@ -4,6 +4,7 @@
 
 #include "env_route_io.h"
 #include "fs_util.h"
+#include "string_io.h"
 
 #include <core/file/file.h>
 #include <core/io/ByteReader.h>
