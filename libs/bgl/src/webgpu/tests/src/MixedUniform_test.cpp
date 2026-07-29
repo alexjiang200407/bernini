@@ -42,7 +42,8 @@ TEST_CASE("A compute kernel reads scalars and a matrix from a uniform block", "[
 	auto kernel = device->CreateComputeKernel(
 		ComputePipelineDesc{}
 			.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("MixedUniformTest")))
-			.SetDebugName("mixed"));
+			.SetDebugName("mixed"),
+		resources);
 
 	auto transform  = glm::mat4(1.0f);
 	transform[3][0] = 7.0f;  // column 3, row 0
@@ -112,7 +113,7 @@ TEST_CASE("A vertex shader reads a matrix and vector from a uniform block", "[wg
 	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
-	auto kernel = device->CreateMeshletKernel(desc);
+	auto kernel = device->CreateMeshletKernel(desc, resources);
 
 	// offset moves the triangle to (-1..) and the translation puts it back around the origin.
 	auto transform  = glm::mat4(1.0f);

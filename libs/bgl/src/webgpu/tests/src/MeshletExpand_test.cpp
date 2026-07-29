@@ -137,7 +137,8 @@ TEST_CASE("The expansion kernel drives a vertex-pulling indirect draw", "[wgpu][
 	auto expand = device->CreateComputeKernel(
 		ComputePipelineDesc{}
 			.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("ExpandMeshlets")))
-			.SetDebugName("expand-meshlets"));
+			.SetDebugName("expand-meshlets"),
+		resources);
 
 	REQUIRE(expand.uniforms.contains("gExpand"));
 	REQUIRE(expand.uniforms.contains("expansionData"));
@@ -170,7 +171,7 @@ TEST_CASE("The expansion kernel drives a vertex-pulling indirect draw", "[wgpu][
 	gfxDesc.SetMeshShader(meshShader).SetPixelShader(pixelShader).AddRtvFormat(Format::RGBA8_UNORM);
 	gfxDesc.renderState.rasterState.SetCullNone();
 
-	auto gfx = device->CreateMeshletKernel(gfxDesc);
+	auto gfx = device->CreateMeshletKernel(gfxDesc, resources);
 
 	auto& viewData           = gfx["viewData"];
 	viewData["viewProj"]     = glm::mat4(1.0f);

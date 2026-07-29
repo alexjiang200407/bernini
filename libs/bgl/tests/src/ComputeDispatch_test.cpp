@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "resource/Buffer.h"
@@ -53,7 +54,8 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSComputeBufferTest"))
-			.SetDebugName("CSComputeBufferTest"));
+			.SetDebugName("CSComputeBufferTest"),
+		resourceManager);
 
 	kernel["gUniforms"]["outBuffer"] = outBuf;
 
@@ -138,7 +140,8 @@ TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[c
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSComputeLayoutTest"))
-			.SetDebugName("CSComputeLayoutTest"));
+			.SetDebugName("CSComputeLayoutTest"),
+		resourceManager);
 
 	kernel["gUniforms"]["tint"]      = glm::vec3(2.0f, 0.0f, 0.0f);
 	kernel["gUniforms"]["seed"]      = 5u;

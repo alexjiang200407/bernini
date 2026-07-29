@@ -34,7 +34,7 @@ TEST_CASE("A meshlet kernel composes a drawable graphics pipeline", "[wgpu][rend
 	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
-	auto kernel = device->CreateMeshletKernel(desc);
+	auto kernel = device->CreateMeshletKernel(desc, resources);
 	REQUIRE(kernel.pipeline != nullptr);
 	REQUIRE(kernel.pipeline->GetUniformBufferNames().empty());
 

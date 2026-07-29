@@ -116,12 +116,16 @@ namespace bgl
 			bool                              enableDebug) const override;
 
 		[[nodiscard]] Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
-			const noexcept override;
+		CreateUniforms(
+			IMeshletPipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept override;
 
 		[[nodiscard]] Uniforms
-		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
-			const noexcept override;
+		CreateUniforms(
+			IComputePipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept override;
 
 	private:
 		wgpu::Instance m_Instance;

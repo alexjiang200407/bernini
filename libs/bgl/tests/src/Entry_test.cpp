@@ -1,5 +1,6 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "resource/Readback.h"
 #include "scene/EntryBuffer.h"

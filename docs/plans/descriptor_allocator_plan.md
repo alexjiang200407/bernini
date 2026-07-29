@@ -52,6 +52,15 @@ is supposed to be backend-agnostic:
 None of them asks a backend anything. They assume D3D12's addressing scheme and write it into a
 constant buffer.
 
+**This survey undercounted: there were twelve.** The two `gDebug` auto-binds in
+`CommandList_d3d12.cpp` construct via declaration syntax (`DescriptorHandle handle(slot)`), which
+the expression-grep above missed — legitimate uses of the identity inside the backend, but still
+call sites the D3 migration had to move. Worse, deleting `DescriptorHandle(slot_handle)` did *not*
+surface them as compile errors: `slot_handle`'s implicit `operator bool` bound them to the
+`uint32_t` overload, silently pointing every kernel's GPU-assert buffer at descriptor 1. The
+`[gpu-assert]` suite caught it at runtime. `operator bool` is `explicit` now (D3), so the
+delete-and-recompile check is airtight for anything that comes later.
+
 ### What that assumption already costs
 
 **A second texture pool exists only to protect the heap.** A texture no shader samples must not

@@ -38,7 +38,8 @@ TEST_CASE("A compute kernel dispatches through the RHI and writes correct data",
 	auto kernel = device->CreateComputeKernel(
 		ComputePipelineDesc{}
 			.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("PrefixSumInstances")))
-			.SetDebugName("PrefixSumInstances"));
+			.SetDebugName("PrefixSumInstances"),
+		resources);
 
 	kernel["gUniforms"]["inOutBuffer"] = buffer;
 
@@ -77,7 +78,8 @@ TEST_CASE("A compute kernel dispatches through the RHI and writes correct data",
 // creation, so a mismatch here surfaces as a validation error rather than silently.
 TEST_CASE("Every compute kernel builds a valid pipeline", "[wgpu][compute]")
 {
-	auto device = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+	auto device    = core::SharedRef<Device>::Make(WgpuDeviceDesc{});
+	auto resources = device->CreateResourceManager(ResourceManagerDesc{});
 
 	const wgpu::Device&   handle   = device->GetHandle();
 	const wgpu::Instance& instance = device->GetInstance();
@@ -93,7 +95,8 @@ TEST_CASE("Every compute kernel builds a valid pipeline", "[wgpu][compute]")
 		auto kernel = device->CreateComputeKernel(
 			ComputePipelineDesc{}
 				.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName(module)))
-				.SetDebugName(module));
+				.SetDebugName(module),
+			resources);
 		REQUIRE(kernel.pipeline.IsInitialized());
 
 		auto       error  = std::string();
@@ -128,7 +131,8 @@ TEST_CASE("A kernel with non-first wrapper buffers binds and dispatches", "[wgpu
 	auto kernel = device->CreateComputeKernel(
 		ComputePipelineDesc{}
 			.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("CullInstances")))
-			.SetDebugName("CullInstances"));
+			.SetDebugName("CullInstances"),
+		resources);
 
 	// A distinct backing buffer per binding; the shader reads garbage, but WebGPU bounds-checks
 	// storage access, so a bound-but-unmeaningful buffer is safe. This test is about binding, not

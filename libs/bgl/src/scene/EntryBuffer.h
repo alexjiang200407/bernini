@@ -248,15 +248,6 @@ namespace bgl
 			m_HasAnyDirtyBlocks = false;
 		}
 
-		// Re-read every frame: growth mints a new handle and retires the old one (see
-		// GrowableGpuBuffer), so a cached descriptor index goes stale.
-		DescriptorHandle
-		GetDescriptorHandle() const noexcept
-		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			return DescriptorHandle(m_Storage.GetHandle().slot);
-		}
-
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{

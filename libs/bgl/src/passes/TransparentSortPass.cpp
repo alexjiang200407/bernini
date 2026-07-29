@@ -1,4 +1,5 @@
 #include "passes/TransparentSortPass.h"
+#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "idl/DispatchArgs.h"
@@ -33,12 +34,14 @@ namespace bgl
 		m_DepthKeys = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("TransparentDepthKeys"))
-				.SetDebugName("Transparent Depth Keys"));
+				.SetDebugName("Transparent Depth Keys"),
+			resourceManager);
 
 		m_Sort = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("TransparentSort"))
-				.SetDebugName("Transparent Sort"));
+				.SetDebugName("Transparent Sort"),
+			resourceManager);
 
 		{
 			auto desc = ComputeBufferDesc();

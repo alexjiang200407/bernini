@@ -160,7 +160,8 @@ TEST_CASE("Per-bucket meshlet regions come out of the scan", "[wgpu][render]")
 		return device->CreateComputeKernel(
 			ComputePipelineDesc{}
 				.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName(module)))
-				.SetDebugName(name));
+				.SetDebugName(name),
+			resources);
 	};
 
 	// An unbound handle reads descriptor slot zero, which is the first buffer created -- Dawn
@@ -219,7 +220,7 @@ TEST_CASE("Per-bucket meshlet regions come out of the scan", "[wgpu][render]")
 	gfxDesc.SetMeshShader(meshShader).SetPixelShader(pixelShader).AddRtvFormat(Format::RGBA8_UNORM);
 	gfxDesc.renderState.rasterState.SetCullNone();
 
-	auto gfx = device->CreateMeshletKernel(gfxDesc);
+	auto gfx = device->CreateMeshletKernel(gfxDesc, resources);
 
 	auto& viewData           = gfx["viewData"];
 	viewData["viewProj"]     = glm::mat4(1.0f);

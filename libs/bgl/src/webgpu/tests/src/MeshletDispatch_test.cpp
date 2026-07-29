@@ -50,7 +50,8 @@ TEST_CASE(
 	auto expand = device->CreateComputeKernel(
 		ComputePipelineDesc{}
 			.SetShader(device->CreateShader(ShaderDesc{}.SetSlangModuleName("ExpandTest")))
-			.SetDebugName("expand"));
+			.SetDebugName("expand"),
+		resources);
 	expand["gExpand"]["positions"] = posBuffer;
 	expand["gExpand"]["drawArgs"]  = argsBuffer;
 
@@ -62,7 +63,7 @@ TEST_CASE(
 	gfxDesc.SetMeshShader(gfxShader).SetPixelShader(gfxShader).AddRtvFormat(Format::RGBA8_UNORM);
 	gfxDesc.renderState.rasterState.SetCullNone();
 
-	auto gfx                  = device->CreateMeshletKernel(gfxDesc);
+	auto gfx                  = device->CreateMeshletKernel(gfxDesc, resources);
 	gfx["gPull"]["positions"] = posBuffer;
 
 	auto texDesc      = TextureDesc{};
@@ -136,7 +137,7 @@ TEST_CASE("SetMeshletState then DispatchMesh draws one triangle per thread group
 	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
-	auto kernel                  = device->CreateMeshletKernel(desc);
+	auto kernel                  = device->CreateMeshletKernel(desc, resources);
 	kernel["gPull"]["positions"] = posBuffer;
 
 	auto texDesc      = TextureDesc{};

@@ -132,8 +132,8 @@ namespace bgl
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
-		m_Forward.Init(m_Device);
-		m_Skybox.Init(m_Device);
+		m_Forward.Init(m_Device, m_ResourceManager);
+		m_Skybox.Init(m_Device, m_ResourceManager);
 
 #if defined(BERNINI_GPU_DEBUG)
 		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
