@@ -4,6 +4,7 @@ import idl.LoosePbrMaterial;
 import idl.ChannelSource;
 import idl.IPbrMaterial;
 import idl.IAlphaTestMaterial;
+import idl.SamplerHandle;
 import idl.TextureHandle;
 import forward.common;
 import forward.PbrShading;

@@ -1,14 +1,11 @@
-// On WGSL the bindless .Handle forms do not exist; what replaces them depends on where the struct
-// lives. idlgen never defines BGL_WGSL, so the generated C++ mirrors always carry the uint2 handle.
-#if defined(BGL_WGSL)
-public typealias SamplerHandle = SamplerState;
-#else
-public typealias SamplerHandle = SamplerState.Handle;
-#endif
+import SamplerHandle;
 
-// Buffer-resident (the material tables), so the WGSL form must keep the uint2 footprint the CPU
-// writes -- a storage buffer cannot hold a texture there. The sample methods are absent on WGSL so
-// a use fails at compile time; sampling materials on WebGPU is the W4 atlas redesign.
+// Lives inside structs the CPU uploads into GPU buffers (the material tables), where each texture
+// is an 8-byte descriptor handle -- the same bytes on every backend, which StrideProbe_test pins.
+// WGSL has no bindless and a storage buffer cannot contain a texture object, so there the field
+// stays a uint2: the handle data still round-trips, it just cannot be dereferenced. The sample
+// methods are omitted on that target so a use is a compile error rather than a wrong bind; the W4
+// material atlas is what makes materials sampleable on WebGPU.
 public struct TextureHandle
 {
 #if defined(BGL_WGSL)

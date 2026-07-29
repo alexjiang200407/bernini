@@ -1,4 +1,4 @@
-import TextureHandle;
+import SamplerHandle;
 
 public interface IPbrMaterial
 {

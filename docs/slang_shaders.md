@@ -103,8 +103,8 @@ So the WGSL backend cannot use the `.Handle` primitives: it binds each buffer to
 instead of indexing a heap. The D3D12 backend keeps the bindless heap. Buffer primitives therefore
 need a per-target form (bindless on DXIL, plainly bound on WGSL).
 
-Textures and samplers follow the same seam, with one split that buffers do not have. `SamplerHandle`
-and `idl.TextureCubeHandle` are only ever *constant-buffer-resident*, where Slang hoists the plain
+Textures and samplers follow the same seam, with one split that buffers do not have.
+`idl.SamplerHandle` and `idl.TextureCubeHandle` are only ever *constant-buffer-resident*, where Slang hoists the plain
 WGSL form to its own binding — so on WGSL they simply become `SamplerState` / `TextureCube`. But
 `idl.TextureHandle` lives inside **buffer-resident** structs (the material tables), and a storage
 buffer cannot hold a texture on any target: its WGSL form keeps the `uint2` footprint the CPU

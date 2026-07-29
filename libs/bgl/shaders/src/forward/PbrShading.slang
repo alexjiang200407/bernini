@@ -1,4 +1,5 @@
 import forward.common;
+import idl.SamplerHandle;
 import idl.TextureHandle;
 import util.Tonemap;
 

@@ -1,6 +1,6 @@
 // THIS IS A FILE GENERATED FROM IPbrMaterial.slang. DO NOT EDIT MANUALLY
 
-import TextureHandle;
+import SamplerHandle;
 
 public interface IPbrMaterial
 {
