@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib_structs/SourceStamp.h>
 #include <core/glm.h>
 
 namespace assetlib
@@ -20,15 +21,6 @@ namespace assetlib
 	{
 		std::string texture;      // path to the source texture file (empty when unrouted)
 		uint16_t    channel = 0;  // 0 = R, 1 = G, 2 = B, 3 = A
-	};
-
-	struct SourceStamp
-	{
-		uint64_t size  = 0;
-		int64_t  mtime = 0;  // seconds since the filesystem clock's epoch
-
-		friend bool
-		operator==(const SourceStamp&, const SourceStamp&) = default;
 	};
 
 	enum class PbrChannel : size_t
