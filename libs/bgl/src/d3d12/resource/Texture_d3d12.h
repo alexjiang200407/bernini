@@ -63,6 +63,14 @@ namespace bgl
 			return m_CpuHandle;
 		}
 
+		// 0xFFFFFFFF for RTV/DSV-only textures, which hold no shader-visible descriptor.
+		[[nodiscard]]
+		uint32_t
+		GetDescriptorIndex() const noexcept
+		{
+			return m_DescriptorIndex;
+		}
+
 		[[nodiscard]]
 		bool
 		IsNull() const noexcept
@@ -72,7 +80,8 @@ namespace bgl
 
 	private:
 		TextureDesc                 m_Desc;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
+		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
 		wrl::ComPtr<ID3D12Resource> m_Texture;
 	};
 }

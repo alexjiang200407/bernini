@@ -83,6 +83,48 @@ TEST_CASE("A resource's bindless index is stable for its lifetime", "[descriptor
 	CHECK(manager.GetBindlessIndex(buffer) == index);
 }
 
+TEST_CASE("A deferred-destroyed descriptor returns only after the sweep", "[descriptor]")
+{
+	auto device  = CreateTestDevice();
+	auto manager = bgl::ResourceManager(device, bgl::ResourceManagerDesc());
+
+	const auto doomed = manager.CreateStructBuffer(SmallBuffer("doomed"));
+	REQUIRE(!doomed.IsNull());
+	const auto freedIndex = manager.GetBindlessIndex(doomed);
+
+	// No queues are registered, so the gate is trivially clear -- but reclamation still only
+	// happens in the sweep. Until it runs, the descriptor must stay off the free list.
+	manager.DestroyBuffer(doomed, true);
+	const auto before = manager.CreateStructBuffer(SmallBuffer("before sweep"));
+	REQUIRE(!before.IsNull());
+	CHECK(manager.GetBindlessIndex(before) != freedIndex);
+
+	manager.CleanupExpiredResources();
+	const auto after = manager.CreateStructBuffer(SmallBuffer("after sweep"));
+	REQUIRE(!after.IsNull());
+	CHECK(manager.GetBindlessIndex(after) == freedIndex);
+}
+
+TEST_CASE("An RTV-only texture holds no shader-visible descriptor", "[descriptor]")
+{
+	auto device  = CreateTestDevice();
+	auto manager = bgl::ResourceManager(device, bgl::ResourceManagerDesc());
+
+	const auto first = manager.CreateStructBuffer(SmallBuffer("first"));
+	REQUIRE(!first.IsNull());
+
+	auto rtvDesc  = SmallTexture("render target");
+	rtvDesc.usage = bgl::TextureUsageFlag::kRenderTarget;
+	const auto rt = manager.CreateTexture(rtvDesc);
+	REQUIRE(!rt.IsNull());
+	CHECK(manager.GetBindlessIndex(rt) == 0xFFFFFFFF);
+
+	// It must not have consumed a heap index either: the next buffer packs right after the first.
+	const auto second = manager.CreateStructBuffer(SmallBuffer("second"));
+	REQUIRE(!second.IsNull());
+	CHECK(manager.GetBindlessIndex(second) == manager.GetBindlessIndex(first) + 1);
+}
+
 TEST_CASE("Live samplers never alias a bindless index", "[descriptor]")
 {
 	auto device  = CreateTestDevice();

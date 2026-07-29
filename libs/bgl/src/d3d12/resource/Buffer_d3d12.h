@@ -55,6 +55,13 @@ namespace bgl
 		}
 
 		[[nodiscard]]
+		uint32_t
+		GetDescriptorIndex() const noexcept
+		{
+			return m_DescriptorIndex;
+		}
+
+		[[nodiscard]]
 		bool
 		IsNull() const noexcept
 		{
@@ -63,7 +70,8 @@ namespace bgl
 
 	private:
 		BufferDesc                  m_Desc;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
+		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
 		wrl::ComPtr<ID3D12Resource> m_Buffer;
 	};
 }

@@ -21,6 +21,7 @@ namespace bgl
 				device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
 			m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
 			m_CpuHandle.ptr += static_cast<uint64_t>(descriptorIndex) * descriptorSize;
+			m_DescriptorIndex = descriptorIndex;
 		}
 
 		D3D12_RESOURCE_DESC1 textureDesc = {};
@@ -108,6 +109,7 @@ namespace bgl
 				device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
 			m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
 			m_CpuHandle.ptr += static_cast<uint64_t>(descriptorIndex) * descriptorSize;
+			m_DescriptorIndex = descriptorIndex;
 		}
 	}
 }

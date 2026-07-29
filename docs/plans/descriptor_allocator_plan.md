@@ -203,8 +203,11 @@ half-migrated at a commit boundary.
   bug); `bgl_webgpu_tests` green.
 * **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` take an index
   from the allocator instead of using the slot index; destruction frees it on the deferred gate.
-  This is the step where the two numbers actually diverge.
-  *Gate:* golden images within tolerance; `just run bgl_tests -- --gpu-validation`, because a
+  This is the step where the identity stops being enforced — though the *values* coincide until D5:
+  pool and allocator both allocate ascending with LIFO reuse and free on the same gate, so while
+  they stay 1:1 they run in lockstep. The gate is therefore goldens *identical*, not merely within
+  tolerance; observable divergence is a D5 deliverable.
+  *Gate:* golden images identical; `just run bgl_tests -- --gpu-validation`, because a
   mis-freed descriptor is exactly what GPU-based validation catches and nothing else does.
 * **D5 — collapse the pools.** `m_Textures` merges into the texture pool, the variant goes,
   `TextureHandle::usage` stops selecting an index space, and `maxCbvSrvUavs` splits into a resource
@@ -240,6 +243,7 @@ something plausible rather than crashing. That is why D4's gate is GPU validatio
 goldens: a wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer
 alone does not see it.
 
-The cheap mitigation, worth doing in D4 rather than after: have the debug build write a known
-sentinel into every freed descriptor, so a stale read lands on something visibly wrong instead of on
-whatever took the slot.
+The cheap mitigation considered — a debug-build sentinel written into every freed descriptor —
+was built in D4 (freed descriptors retargeted at a 0xDEADBEEF poison buffer) and then **removed in
+its review**: a debug-only aid was judged not worth the carried machinery. Stale-descriptor bugs
+are instead caught by `--gpu-validation` when it is explicitly run.

@@ -312,7 +312,8 @@ rm->RegisterQueue(queue.Get());                             // gate deferred fre
 ComputeKernel kernel = device->CreateComputeKernel(
     ComputePipelineDesc()
         .SetShader(device->CreateShader("Histogram"))
-        .SetDebugName("Histogram"));
+        .SetDebugName("Histogram"),
+    rm);
 
 // Per dispatch
 kernel["gUniforms"]["instanceBuffer"] = someBufferHandle;   // bind resource by descriptor index

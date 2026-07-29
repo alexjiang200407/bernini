@@ -1,6 +1,7 @@
 #pragma once
 #include "cmd/CommandQueue.h"
 #include "resource/Buffer_d3d12.h"
+#include "resource/DescriptorAllocator_d3d12.h"
 #include "resource/Dsv_d3d12.h"
 #include "resource/ReadbackBuffer_d3d12.h"
 #include "resource/ResourceManager.h"
@@ -12,9 +13,9 @@
 
 namespace bgl
 {
-	// Buffers and textures share the one shader-visible CBV_SRV_UAV heap: a slot's
-	// index is the bindless descriptor index the shader uses. RT/DS-only textures
-	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
+	// Buffers and textures share the one shader-visible CBV_SRV_UAV heap. Which
+	// descriptor a resource occupies comes from the heap's DescriptorAllocator and
+	// rides on the resource; a pool slot only names the resource.
 	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
 
 	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
@@ -47,6 +48,10 @@ namespace bgl
 	{
 		PendingType type      = PendingType::kCbvSrvUav;
 		uint32_t    slotIndex = 0xFFFFFFFF;
+
+		// Captured at destroy time: the retired slot is unreadable by the sweep, and the
+		// descriptor must be freed on the same gate that reclaims the slot.
+		uint32_t descriptorIndex = 0xFFFFFFFF;
 	};
 
 	// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
@@ -212,7 +217,7 @@ namespace bgl
 		ID3D12DescriptorHeap*
 		GetCbvSrvUavHeap() const noexcept
 		{
-			return m_CbvSrvUavHeap.Get();
+			return m_CbvSrvUavAllocator.GetHeap();
 		}
 
 		ID3D12DescriptorHeap*
@@ -258,10 +263,16 @@ namespace bgl
 		// Records a retired slot for deferred reclamation, appending it to the batch that shares the
 		// current gate (or opening a new batch when the gate has advanced).
 		void
-		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
+		RetireDeferred(
+			PendingType type,
+			uint32_t    slotIndex,
+			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
+
+		void
+		FreeCbvSrvUavDescriptor(uint32_t descriptorIndex) noexcept;
 
 		wrl::ComPtr<ID3D12Device>         m_Device;
-		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
+		DescriptorAllocator               m_CbvSrvUavAllocator;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
