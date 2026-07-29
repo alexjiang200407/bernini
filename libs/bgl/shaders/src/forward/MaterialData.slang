@@ -20,8 +20,8 @@ struct MaterialData
     TextureCubeHandle prefilterMap;
     TextureHandle brdfLUT;
 
-    SamplerState.Handle anisoLinearWrapSampler;
-    SamplerState.Handle linearClampSampler;
+    SamplerHandle anisoLinearWrapSampler;
+    SamplerHandle linearClampSampler;
 };
 
 ConstantBuffer<MaterialData> materialData;
@@ -33,17 +33,17 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return materialData.pbrMaterials[index];
     }
 
-    float4 GetBaseColor(SamplerState.Handle s, float2 uv)
+    float4 GetBaseColor(SamplerHandle s, float2 uv)
     {
         return baseColorTexture.Sample(s, uv) * baseColorFactor;
     }
 
-    float3 GetORM(SamplerState.Handle s, float2 uv)
+    float3 GetORM(SamplerHandle s, float2 uv)
     {
         return ormTexture.Sample(s, uv).rgb * float3(1.0, roughnessFactor, metallicFactor);
     }
 
-    float2 GetNormalXY(SamplerState.Handle s, float2 uv)
+    float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
         return normalTexture.Sample(s, uv).xy;
     }
@@ -71,7 +71,7 @@ float SelectComponent(float4 v, uint c)
     }
 }
 
-float SampleLooseChannel(ChannelSource cs, SamplerState.Handle s, float2 uv)
+float SampleLooseChannel(ChannelSource cs, SamplerHandle s, float2 uv)
 {
     return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
 }
@@ -83,7 +83,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return materialData.looseMaterials[index];
     }
 
-    float4 GetBaseColor(SamplerState.Handle s, float2 uv)
+    float4 GetBaseColor(SamplerHandle s, float2 uv)
     {
         float4 c = float4(
             SampleLooseChannel(sources[0], s, uv), // R
@@ -94,7 +94,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return c * baseColorFactor;
     }
 
-    float3 GetORM(SamplerState.Handle s, float2 uv)
+    float3 GetORM(SamplerHandle s, float2 uv)
     {
         float ao = SampleLooseChannel(sources[4], s, uv);
         float roughness = SampleLooseChannel(sources[5], s, uv) * roughnessFactor;
@@ -102,7 +102,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return float3(ao, roughness, metallic);
     }
 
-    float2 GetNormalXY(SamplerState.Handle s, float2 uv)
+    float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
         return float2(
             SampleLooseChannel(sources[7], s, uv), // X

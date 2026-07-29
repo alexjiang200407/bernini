@@ -1,10 +1,12 @@
 // THIS IS A FILE GENERATED FROM IPbrMaterial.slang. DO NOT EDIT MANUALLY
 
+import TextureHandle;
+
 public interface IPbrMaterial
 {
     static This Load(uint index);
 
-    float4 GetBaseColor(SamplerState.Handle s, float2 uv);
-    float3 GetORM(SamplerState.Handle s, float2 uv);
-    float2 GetNormalXY(SamplerState.Handle s, float2 uv);
+    float4 GetBaseColor(SamplerHandle s, float2 uv);
+    float3 GetORM(SamplerHandle s, float2 uv);
+    float2 GetNormalXY(SamplerHandle s, float2 uv);
 };

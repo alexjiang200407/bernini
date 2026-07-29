@@ -44,7 +44,7 @@ public float4 ShadeSurface(
     TextureCubeHandle irradianceMap,
     TextureCubeHandle prefilterMap,
     TextureHandle brdfLUT,
-    SamplerState.Handle clampSampler,
+    SamplerHandle clampSampler,
     float exposure
 )
 {
