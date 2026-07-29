@@ -299,6 +299,24 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   `shadingModel` with no `default`, so the compiler names every one of them.
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture, all in one directory.
+* **`.bsky`** (v1) — the sky: one radiance cube map, the mip the backdrop samples, and its Y rotation.
+  **`.benvl`** (v1) — the lighting derived from that sky: the GGX prefilter chain, the irradiance
+  convolution, and the exposure they were measured at. Both structs:
+  [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h);
+  I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
+  [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
+
+  * **Authoring containers, shaped like `.bmaterial`.** Every map is an `EnvMapRoute`: the `source`
+    under `textures_src/`, the machine-ready `baked` `.ktx2` under `Textures/`, and the `SourceStamp`
+    the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
+  * **Sky and lighting are separate files because their lifetimes are.** Rotating a sky or sampling a
+    blurrier mip is immediate; re-convolving the lighting it implies is minutes of work that the same
+    edit need not trigger.
+  * No bake step writes them yet: the routes and stamps round-trip, and nothing fills `baked`.
+  * **A bake that fills them must teach `texture_prune.cpp` to mark them first.** Its sweep only
+    considers names `isBakedMapName` recognises, and that is a closed list of the *material* groups —
+    so env maps are invisible to it today, and would go from never-swept to swept-as-garbage the
+    moment a group name of theirs joined that list without a matching mark phase.
 
 ---
 
