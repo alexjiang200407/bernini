@@ -266,14 +266,28 @@ namespace bgl
 				return TextureHandle{};
 			}
 
-			const auto descriptorIndex = m_CbvSrvUavAllocator.Allocate();
-
-			Texture texture(
-				m_Device.Get(),
-				m_CbvSrvUavAllocator.GetHeap(),
-				descriptorIndex,
-				std::move(d3d12Texture),
-				desc);
+			uint32_t descriptorIndex = 0xFFFFFFFF;
+			Texture  texture;
+			try
+			{
+				descriptorIndex = m_CbvSrvUavAllocator.Allocate();
+				texture         = Texture(
+					m_Device.Get(),
+					m_CbvSrvUavAllocator.GetHeap(),
+					descriptorIndex,
+					std::move(d3d12Texture),
+					desc);
+			}
+			catch (const std::exception& e)
+			{
+				logger::error("CreateTexture '{}': {}", desc.debugName, e.what());
+				m_CbvSrvUavSlots.release_slot(slot.index);
+				if (descriptorIndex != 0xFFFFFFFF)
+				{
+					m_CbvSrvUavAllocator.Free(descriptorIndex);
+				}
+				return TextureHandle{};
+			}
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
 			m_Device->CreateShaderResourceView(
