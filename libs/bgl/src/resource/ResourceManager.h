@@ -19,7 +19,11 @@ namespace bgl
 
 	struct ResourceManagerDesc
 	{
-		uint32_t maxCbvSrvUavs      = 1024;
+		// Shader-visible descriptors, not resources: creating a bindless-visible resource can
+		// fail on this budget even when its pool still has room.
+		uint32_t maxCbvSrvUavs = 2048;
+
+		uint32_t maxBuffers         = 1024;
 		uint32_t maxRtvs            = 128;
 		uint32_t maxDsvs            = 128;
 		uint32_t maxTextures        = 1024;

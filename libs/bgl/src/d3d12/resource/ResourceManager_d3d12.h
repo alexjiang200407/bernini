@@ -13,11 +13,6 @@
 
 namespace bgl
 {
-	// Buffers and textures share the one shader-visible CBV_SRV_UAV heap. Which
-	// descriptor a resource occupies comes from the heap's DescriptorAllocator and
-	// rides on the resource; a pool slot only names the resource.
-	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
-
 	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
 	// expected over one device. Exceeding it asserts; it is not a hard device limit.
 	constexpr uint32_t c_MaxRegisteredQueues = 8;
@@ -36,7 +31,7 @@ namespace bgl
 
 	enum class PendingType
 	{
-		kCbvSrvUav,
+		kBuffer,
 		kRtv,
 		kDsv,
 		kTexture,
@@ -46,7 +41,7 @@ namespace bgl
 
 	struct PendingDeletion
 	{
-		PendingType type      = PendingType::kCbvSrvUav;
+		PendingType type      = PendingType::kBuffer;
 		uint32_t    slotIndex = 0xFFFFFFFF;
 
 		// Captured at destroy time: the retired slot is unreadable by the sweep, and the
@@ -276,12 +271,11 @@ namespace bgl
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
-		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
+		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<Sampler>        m_Samplers;
 
-		// RTV/DSV-only textures (no SRV): kept out of the shader-visible pool so they
-		// never consume a bindless descriptor slot. SRV textures live in
-		// m_CbvSrvUavSlots instead, where their slot index is the bindless index.
+		// Every texture, sampled or not: which descriptor an SRV texture holds rides on the
+		// Texture itself, so nothing about the pool depends on the heap.
 		core::slot_vector<Texture> m_Textures;
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;

@@ -125,6 +125,41 @@ TEST_CASE("An RTV-only texture holds no shader-visible descriptor", "[descriptor
 	CHECK(manager.GetBindlessIndex(second) == manager.GetBindlessIndex(first) + 1);
 }
 
+TEST_CASE("Equal slot indices in split pools never alias a descriptor", "[descriptor]")
+{
+	auto device  = CreateTestDevice();
+	auto manager = bgl::ResourceManager(device, bgl::ResourceManagerDesc());
+
+	// On a fresh manager the first buffer and the first texture both take slot 0 of their
+	// pools. The old shared pool made this collision impossible structurally; the split
+	// pools must prevent it deliberately, through the descriptor allocator.
+	const auto buffer = manager.CreateStructBuffer(SmallBuffer("slot zero buffer"));
+	REQUIRE(!buffer.IsNull());
+	const auto texture = manager.CreateTexture(SmallTexture("slot zero texture"));
+	REQUIRE(!texture.IsNull());
+
+	REQUIRE(buffer.slot.index == texture.slot.index);
+	CHECK(manager.GetBindlessIndex(buffer) != manager.GetBindlessIndex(texture));
+}
+
+TEST_CASE("Usage bits no longer select an index space", "[descriptor]")
+{
+	auto device  = CreateTestDevice();
+	auto manager = bgl::ResourceManager(device, bgl::ResourceManagerDesc());
+
+	const auto texture = manager.CreateTexture(SmallTexture("srv texture"));
+	REQUIRE(!texture.IsNull());
+
+	// A handle whose usage bits are wrong used to read a *different pool* at the same index,
+	// silently naming another texture. Now usage is descriptive: the same slot resolves to
+	// the same resource and the same descriptor no matter what the bits claim.
+	auto wrongBits  = texture;
+	wrongBits.usage = bgl::TextureUsageFlag::kRenderTarget;
+
+	CHECK(manager.ValidTextureHandle(wrongBits));
+	CHECK(manager.GetBindlessIndex(wrongBits) == manager.GetBindlessIndex(texture));
+}
+
 TEST_CASE("Live samplers never alias a bindless index", "[descriptor]")
 {
 	auto device  = CreateTestDevice();
