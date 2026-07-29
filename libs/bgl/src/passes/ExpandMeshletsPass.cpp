@@ -146,7 +146,7 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
-						"scene.meshletRecords",
+						"scene.meshletInstances",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
@@ -235,7 +235,7 @@ namespace bgl
 		expand["instanceBuffer"]   = ctx.GetBuffer("scene.instanceBuffer");
 		expand["meshBuffer"]       = ctx.GetBuffer("scene.meshInstanceBuffer");
 		expand["submeshBuffer"]    = ctx.GetBuffer("scene.submeshBuffer");
-		expand["meshletInstances"] = ctx.GetBuffer("scene.meshletRecords");
+		expand["meshletInstances"] = ctx.GetBuffer("scene.meshletInstances");
 		expand["drawArgs"]         = ctx.GetBuffer("expand.drawArgs");
 		expand["dispatchArgs"]     = ctx.GetBuffer("compactedInstances.compactDispatchArgs");
 

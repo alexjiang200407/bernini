@@ -74,11 +74,11 @@ namespace bgl
 			return m_GeomSubmeshes[index];
 		}
 
-		/** The meshlet count of the submesh at absolute index `submeshIndex` in the submesh table. */
+		/** The meshlet count of submesh `submeshIndex` of the geom whose range starts at `submeshRoot`. */
 		[[nodiscard]] uint32_t
-		GetSubmeshMeshletCount(uint32_t submeshIndex) const noexcept
+		GetSubmeshMeshletCount(uint32_t submeshRoot, uint32_t submeshIndex) const noexcept
 		{
-			return m_SubmeshBuffer.AtIndex(submeshIndex).meshlets.count;
+			return m_SubmeshBuffer.AtIndex(submeshRoot + submeshIndex).meshlets.count;
 		}
 
 		/**

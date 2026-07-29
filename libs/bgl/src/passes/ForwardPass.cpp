@@ -280,7 +280,7 @@ namespace bgl
 				BuildForwardKernel(device, entry.config);
 		}
 
-		m_UsesExpansion = !device->SupportsMeshShaders();
+		m_ExpandsMeshlets = !device->SupportsMeshShaders();
 	}
 
 	void
@@ -327,10 +327,10 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
-		if (m_UsesExpansion)
+		if (m_ExpandsMeshlets)
 		{
 			desc.AddBufferArg(
-					"scene.meshletRecords",
+					"scene.meshletInstances",
 					BarrierSyncFlag::kVertexShader,
 					BarrierAccessFlag::kUnorderedAccess)
 				.AddBufferArg(
@@ -356,10 +356,10 @@ namespace bgl
 
 			// meshletInstances reflects on both backends -- the mesh path takes the same data as a
 			// payload and leaves it unread -- but only the emulation imports the records buffer.
-			if (m_UsesExpansion)
+			if (m_ExpandsMeshlets)
 			{
 				(*foundForwardData)["meshletInstances"] =
-					resources.GetBuffer("scene.meshletRecords");
+					resources.GetBuffer("scene.meshletInstances");
 			}
 		}
 
@@ -444,8 +444,8 @@ namespace bgl
 
 		// The emulation draws indirect from the args the expansion chain wrote -- 16-byte draw
 		// records, not the 12-byte mesh-dispatch args the compact kernel fills.
-		const auto dispatchArgs = m_UsesExpansion ? resources.GetBuffer("expand.drawArgs") :
-		                                            resources.GetBuffer(c_DispatchArgsBuffer);
+		const auto dispatchArgs = m_ExpandsMeshlets ? resources.GetBuffer("expand.drawArgs") :
+		                                              resources.GetBuffer(c_DispatchArgsBuffer);
 
 		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
 		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
@@ -474,7 +474,7 @@ namespace bgl
 
 		// The depth-sorted draws still read the mesh-path partition args; expanding them is part
 		// of the W4 transparent work, so until then the emulation draws opaque and alpha-test only.
-		if (!m_UsesExpansion)
+		if (!m_ExpandsMeshlets)
 		{
 			DrawTransparent(draw, resources);
 		}

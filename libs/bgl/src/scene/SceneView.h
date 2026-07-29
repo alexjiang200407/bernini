@@ -221,10 +221,7 @@ namespace bgl
 		ComputeBuffer m_TransparentSortEntries;
 		ComputeBuffer m_TransparentSortCount;
 
-		// One MeshletInstance record per visible meshlet, written by ExpandMeshletsPass and read by
-		// the vertex-pulling draw. Only the mesh-emulation backend touches it, but it is sized here
-		// because only the view knows its meshlet total.
-		ComputeBuffer m_MeshletRecords;
+		ComputeBuffer m_MeshletInstances;
 		uint32_t      m_TotalMeshlets = 0;
 
 		EnvironmentMap            m_EnvironmentMap;

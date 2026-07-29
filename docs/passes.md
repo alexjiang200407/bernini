@@ -190,7 +190,7 @@ path. Runs after `Compact Instances` and before `Forward`, in three sub-passes:
    `cVerticesPerMeshletRecord`, `vertexCount` returns to zero because the expansion uses it as the
    allocator that fills the region.
 3. **Expand** (`ExpandMeshlets`, one dispatch per opaque/alpha-test bucket) — each visible instance
-   appends one `MeshletInstance` record per meshlet into `scene.meshletRecords`, reserving space by
+   appends one `MeshletInstance` record per meshlet into `scene.meshletInstances`, reserving space by
    atomically growing its bucket's `vertexCount` — so the count the draw consumes is the same number
    that placed the records. Each dispatch covers the full instance count and the kernel exits past
    its bucket's own; the CPU-sized over-dispatch trades wasted threads for an indirect-dispatch seam
@@ -202,7 +202,7 @@ skips its depth-sorted draws on this path until it does.
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`,
   `scene.instanceVisibility`, `scene.compactedInstances`, `compactedInstances.psoPrefixSumBuffer`,
   `compactedInstances.compactDispatchArgs`, `transparentSort.partitionBase`.
-* **Out:** `scene.meshletRecords` (owned by the view, which sizes it from its meshlet total),
+* **Out:** `scene.meshletInstances` (owned by the view, which sizes it from its meshlet total),
   `expand.drawArgs` and `expand.meshletPrefixSum` (owned by the pass) — the first two consumed by
   `Forward`'s vertex-pulling draw.
 * **Skipped** when the view's instance count is 0.
@@ -233,11 +233,12 @@ is partitioned `[self-occluding][plain]` and both occlude PSOs share one pipelin
 transparent phase is **three fixed `DispatchMeshIndirect` calls** — occluder pre-pass, occluder
 colour, plain colour — whose grids and base offsets are GPU values the CPU never sees.
 
-**On the mesh-emulation path** (`m_UsesExpansion`, read from the kernel's own reflection at `Init`:
-the geometry module's `BGL_WGSL` arm declares `meshletInstances`, the mesh arm does not), the same
-per-bucket loop draws indirect from `expand.drawArgs` — the 16-byte records
+**On the mesh-emulation path** (`m_ExpandsMeshlets`, set at `Init` from
+`IDevice::SupportsMeshShaders()` — reflection cannot carry this, because `forwardData` declares
+`meshletInstances` on both backends and the mesh path just leaves it unread), the same per-bucket
+loop draws indirect from `expand.drawArgs` — the 16-byte records
 [Expand Meshlets](#expand-meshlets) wrote — instead of `compactDispatchArgs`, binds
-`scene.meshletRecords` into `forwardData`, and skips the transparent phase entirely until the W4
+`scene.meshletInstances` into `forwardData`, and skips the transparent phase entirely until the W4
 transparent work expands those buckets too.
 
 The self-occluding partition (`occlude` materials, the `kTransparentOcclude_*` buckets) is drawn

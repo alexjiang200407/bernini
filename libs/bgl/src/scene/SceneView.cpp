@@ -31,7 +31,7 @@ namespace bgl
 		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
 		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
 		constexpr std::string_view c_TransparentCountName   = "scene.transparentSortCount";
-		constexpr std::string_view c_MeshletRecordsName     = "scene.meshletRecords";
+		constexpr std::string_view c_MeshletInstancesName   = "scene.meshletInstances";
 
 		// Each SceneView gets a process-unique namespace so views sharing one Scene
 		// don't collide in the frame graph.
@@ -155,7 +155,7 @@ namespace bgl
 			recordsDesc.initialCount = idl::cHistogramGroupSize;
 			recordsDesc.debugName    = "Meshlet Records";
 
-			m_MeshletRecords.Init(std::move(recordsDesc), m_ResourceManager);
+			m_MeshletInstances.Init(std::move(recordsDesc), m_ResourceManager);
 		}
 	}
 
@@ -183,10 +183,10 @@ namespace bgl
 		const uint32_t padded =
 			core::round_up(std::max(m_TotalMeshlets, 1u), idl::cHistogramGroupSize);
 
-		if (padded <= m_MeshletRecords.GetDesc().initialCount)
+		if (padded <= m_MeshletInstances.GetDesc().initialCount)
 			return;
 
-		m_MeshletRecords.Resize(padded);
+		m_MeshletInstances.Resize(padded);
 	}
 
 	SceneView::~SceneView() noexcept
@@ -259,7 +259,7 @@ namespace bgl
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 
 				meta.meshletCount +=
-					m_SceneRaw->GetSubmeshMeshletCount(submeshes.range.offsetStart + s);
+					m_SceneRaw->GetSubmeshMeshletCount(submeshes.range.offsetStart, s);
 			}
 
 			m_TotalMeshlets += meta.meshletCount;
@@ -569,8 +569,8 @@ namespace bgl
 		fg.ImportBuffer(countName, m_TransparentSortCount.GetBufferHandle());
 		resourceNames.push_back(std::move(countName));
 
-		std::string recordsName(c_MeshletRecordsName);
-		fg.ImportBuffer(recordsName, m_MeshletRecords.GetBufferHandle());
+		std::string recordsName(c_MeshletInstancesName);
+		fg.ImportBuffer(recordsName, m_MeshletInstances.GetBufferHandle());
 		resourceNames.push_back(std::move(recordsName));
 	}
 }
