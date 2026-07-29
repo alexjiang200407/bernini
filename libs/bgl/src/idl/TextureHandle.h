@@ -11,6 +11,14 @@ namespace bgl::idl
 	static_assert(sizeof(TextureHandle) == 8);
 	static_assert(offsetof(TextureHandle, texture) == 0);
 
+	struct Texture2DHandle
+	{
+		DescriptorHandle texture;
+	};
+
+	static_assert(sizeof(Texture2DHandle) == 8);
+	static_assert(offsetof(Texture2DHandle, texture) == 0);
+
 	struct TextureCubeHandle
 	{
 		DescriptorHandle texture;

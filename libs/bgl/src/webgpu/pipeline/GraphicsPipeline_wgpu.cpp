@@ -47,7 +47,11 @@ namespace bgl
 	{
 		gassert(m_Desc.vertexShader != nullptr, "GraphicsPipeline: null vertex shader");
 		gassert(m_Desc.pixelShader != nullptr, "GraphicsPipeline: null pixel shader");
-		gassert(!m_Desc.rtvFormats.empty(), "GraphicsPipeline: needs at least one colour target");
+		// Zero colour targets is a depth-only pipeline (the transparent pre-pass); it still needs
+		// somewhere to raster to.
+		gassert(
+			!m_Desc.rtvFormats.empty() || m_Desc.dsvFormat != Format::UNKNOWN,
+			"GraphicsPipeline: needs a colour or depth target");
 
 		const std::string& vertexEntry = m_Desc.vertexShader->GetDesc().entryPointName;
 		const std::string& pixelEntry  = m_Desc.pixelShader->GetDesc().entryPointName;
@@ -69,10 +73,16 @@ namespace bgl
 		auto slots = std::vector<BindGroupSlot>();
 		ReflectWgslBindings(layout, m_UniformLayoutEntries, slots);
 
-		m_BindGroupLayout = MakeWgslBindGroupLayout(
-			device,
+		constexpr wgpu::ShaderStage c_EntryStages[] = { wgpu::ShaderStage::Vertex,
+			                                            wgpu::ShaderStage::Fragment };
+
+		const auto slotVisibility = ResolveStorageSlotVisibility(
+			owner,
+			c_EntryStages,
 			slots,
 			wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
+
+		m_BindGroupLayout = MakeWgslBindGroupLayout(device, slots, slotVisibility);
 
 		auto plDesc                  = wgpu::PipelineLayoutDescriptor{};
 		plDesc.bindGroupLayoutCount  = 1;

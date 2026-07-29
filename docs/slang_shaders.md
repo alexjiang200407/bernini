@@ -104,12 +104,31 @@ instead of indexing a heap. The D3D12 backend keeps the bindless heap. Buffer pr
 need a per-target form (bindless on DXIL, plainly bound on WGSL).
 
 Textures and samplers follow the same seam, with one split that buffers do not have.
-`idl.SamplerHandle` and `idl.TextureCubeHandle` are only ever *constant-buffer-resident*, where Slang hoists the plain
-WGSL form to its own binding — so on WGSL they simply become `SamplerState` / `TextureCube`. But
-`idl.TextureHandle` lives inside **buffer-resident** structs (the material tables), and a storage
-buffer cannot hold a texture on any target: its WGSL form keeps the `uint2` footprint the CPU
-writes, with the sample methods absent so a use fails at compile time. Sampling a material texture
-on WebGPU is the W4 atlas redesign; `StrideProbe_test` pins the footprint.
+`idl.SamplerHandle`, `idl.Texture2DHandle` and `idl.TextureCubeHandle` are only ever
+*constant-buffer-resident* (samplers, the BRDF LUT, the IBL and skybox cubes), where Slang hoists
+the plain WGSL form to its own binding — so on WGSL they simply become real
+`SamplerState` / `Texture2D` / `TextureCube`. But `idl.TextureHandle` lives inside
+**buffer-resident** structs (the material tables), and a storage buffer cannot hold a texture on any
+target: its WGSL form keeps the `uint2` footprint the CPU writes, with the sample methods absent so
+a use fails at compile time. Until the W4 atlas makes material textures addressable again, the
+material `Get*` methods shade from factors alone on `BGL_WGSL` (see `forward/MaterialData.slang`);
+`StrideProbe_test` pins the footprint.
+
+## Two Tint rules DXIL never enforced
+
+- **`textureSample` requires uniform control flow.** Tint rejects an implicit-LOD sample under a
+  branch on a per-fragment value *and* anywhere after a `discard`. Two shader idioms had to
+  restructure for it: `ShadeAlphaTested` shades first and discards after on `BGL_WGSL`, and the
+  transparent pass gathers its per-material-type surface inputs under the `materialIsLoose` branch
+  (sample-free there — factors only) and runs the IBL samples once outside it
+  (`ShadeEitherMaterial`).
+- **Storage buffers count against a per-stage limit by declared visibility, not by use** — 10 per
+  stage on this device, adapter limits already requested. A layout offering the whole geometry
+  table set to the fragment stage blows the limit the fragment shader never came near. The backend
+  narrows each storage slot's visibility to the stages whose compiled code actually reads it,
+  via the linked program's `IMetadata::isParameterLocationUsed`
+  (`ResolveStorageSlotVisibility`); a slot no stage reads keeps visibility `None`, which is legal,
+  uncounted, and still bindable.
 
 A constant buffer's *plain* members go somewhere else again. Slang gathers them into a std140
 `var<uniform>` block at the constant buffer's own binding and starts the resource slots after it, so

@@ -21,6 +21,21 @@ public struct TextureHandle
 #endif
 };
 
+// Constant-buffer-resident like TextureCubeHandle below (the BRDF LUT), so it stays a real,
+// sampleable texture on every target -- what the buffer-resident TextureHandle above cannot be.
+public struct Texture2DHandle
+{
+#if defined(BGL_WGSL)
+    public Texture2D texture;
+#else
+    public Texture2D.Handle texture;
+#endif
+
+    public float4 Sample(SamplerHandle s, float2 uv) { return texture.Sample(s, uv); }
+
+    public float4 SampleLevel(SamplerHandle s, float2 uv, float level) { return texture.SampleLevel(s, uv, level); }
+};
+
 // Only ever constant-buffer-resident (skybox, IBL maps), where Slang hoists the WGSL form to its
 // own binding -- so unlike TextureHandle this stays a real texture on every target.
 public struct TextureCubeHandle

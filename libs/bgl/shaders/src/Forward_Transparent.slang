@@ -9,9 +9,13 @@ import idl.LoosePbrMaterial;
 [shader("pixel")]
 float4 PSMain(ForwardVSOut input) : SV_Target
 {
+#if defined(BGL_WGSL)
+    return ShadeEitherMaterial(input);
+#else
     if (input.materialIsLoose != 0u)
     {
         return Shade<LoosePbrMaterial>(input);
     }
     return Shade<PbrMaterial>(input);
+#endif
 }

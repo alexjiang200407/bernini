@@ -260,18 +260,78 @@ namespace bgl
 		std::span<const BindGroupSlot> slots,
 		wgpu::ShaderStage              visibility)
 	{
+		const auto uniform = std::vector<wgpu::ShaderStage>(slots.size(), visibility);
+		return MakeWgslBindGroupLayout(device, slots, uniform);
+	}
+
+	std::vector<wgpu::ShaderStage>
+	ResolveStorageSlotVisibility(
+		slang::IComponentType*             program,
+		std::span<const wgpu::ShaderStage> entryPointStages,
+		std::span<const BindGroupSlot>     slots,
+		wgpu::ShaderStage                  allStages)
+	{
+		auto result = std::vector<wgpu::ShaderStage>(slots.size(), allStages);
+
+		auto metadata = std::vector<Slang::ComPtr<slang::IMetadata>>(entryPointStages.size());
+		for (size_t e = 0; e < entryPointStages.size(); ++e)
+		{
+			SlangErrorChecker errChecker;
+			program->getEntryPointMetadata(
+				static_cast<SlangInt>(e),
+				0,
+				metadata[e].writeRef(),
+				errChecker.WriteDiagnosticBlob()) >>
+				errChecker;
+		}
+
+		for (size_t i = 0; i < slots.size(); ++i)
+		{
+			if (slots[i].type != ResourceBinding::kBuffer ||
+			    slots[i].bufferType == wgpu::BufferBindingType::Uniform)
+				continue;
+
+			auto stages = wgpu::ShaderStage::None;
+			for (size_t e = 0; e < entryPointStages.size(); ++e)
+			{
+				bool used = false;
+				metadata[e]->isParameterLocationUsed(
+					SLANG_PARAMETER_CATEGORY_DESCRIPTOR_TABLE_SLOT,
+					slots[i].group,
+					slots[i].binding,
+					used);
+
+				if (used)
+					stages |= entryPointStages[e];
+			}
+
+			result[i] = stages;
+		}
+
+		return result;
+	}
+
+	wgpu::BindGroupLayout
+	MakeWgslBindGroupLayout(
+		const wgpu::Device&                device,
+		std::span<const BindGroupSlot>     slots,
+		std::span<const wgpu::ShaderStage> slotVisibility)
+	{
+		gassert(slots.size() == slotVisibility.size(), "One visibility per slot");
+
 		auto entries = std::vector<wgpu::BindGroupLayoutEntry>();
 		entries.reserve(slots.size());
 
-		for (const BindGroupSlot& slot : slots)
+		for (size_t i = 0; i < slots.size(); ++i)
 		{
+			const BindGroupSlot& slot = slots[i];
 			gassert(slot.group == 0, "MakeWgslBindGroupLayout: only bind group 0 is supported");
 
 			// WebGPU forbids a read-write storage binding in the vertex stage outright, so such a
 			// slot is offered to the other stages only. A vertex shader that does reach one then
 			// fails pipeline creation naming the stage, rather than the whole layout being rejected
 			// because some other entry point declared the buffer.
-			auto stages = visibility;
+			auto stages = slotVisibility[i];
 			if (slot.type == ResourceBinding::kBuffer &&
 			    slot.bufferType == wgpu::BufferBindingType::Storage)
 				stages &= ~wgpu::ShaderStage::Vertex;
