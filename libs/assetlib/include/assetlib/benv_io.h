@@ -115,4 +115,27 @@ namespace assetlib
 	 */
 	[[nodiscard]] BEnv
 	loadEnv(const std::filesystem::path& path);
+
+	/**
+	 * Splits a v1 `.benv` into the reference set: the three baked `.ktx2` maps, a `.bsky`, a
+	 * `.benvl`, and a v2 `.benv` naming the pair -- all written flat into `outDir`, with the paths
+	 * they store relative to it.
+	 *
+	 * **Lossless by construction.** A v1 file embeds each map as a complete KTX2 blob, so the split
+	 * copies those bytes out verbatim -- no decode, no re-encode. That is the whole reason this
+	 * exists as a migration rather than a re-import: the source `.hdr` of an existing `.benv` may be
+	 * long gone, and a re-bake would move every golden image derived from it.
+	 *
+	 * The split assets carry empty sources and zeroed stamps -- there is nothing to re-bake them
+	 * from, so they are never stale.
+	 *
+	 * @param name Stem for every file written: `<name>.benv`, `<name>.bsky`, `<name>_sky.ktx2`, ...
+	 * @return The path of the v2 `.benv` written.
+	 * @throws std::runtime_error if `v1Path` is not a v1 `.benv` or a file cannot be written.
+	 */
+	std::filesystem::path
+	splitBenv(
+		const std::filesystem::path& v1Path,
+		const std::filesystem::path& outDir,
+		const std::string&           name);
 }

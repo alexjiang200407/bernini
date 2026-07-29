@@ -3,12 +3,16 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
+#include <assetlib/env_bake.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/magic.h>
@@ -170,6 +174,31 @@ main(int argc, char** argv)
 		envThreads,
 		"Worker threads (default: hardware concurrency)");
 
+	std::string envProject;
+	std::string envName = "env";
+	envmap->add_option(
+		"-p,--project",
+		envProject,
+		"Write the split formats into this project data root instead: float sources into "
+		"textures_src/, a baked Sky/<name>.bsky and EnvLighting/<name>.benvl, and an "
+		"Environments/<name>.benv composing the pair");
+	envmap->add_option("--name", envName, "Asset name for --project outputs (default: env)");
+
+	std::string splitInput;
+	std::string splitOut;
+	std::string splitName;
+
+	auto* split = app.add_subcommand(
+		"split",
+		"Split a v1 .benv (three embedded maps) into the reference set: baked .ktx2 maps, a .bsky, "
+		"a .benvl, and a v2 .benv naming the pair. Byte-exact -- no decode, no re-bake");
+	split->add_option("input", splitInput, "Source v1 .benv")->required()->check(CLI::ExistingFile);
+	split->add_option("-o,--out", splitOut, "Output directory (default: beside the input)");
+	split->add_option(
+		"--name",
+		splitName,
+		"Stem for the files written (default: the input's stem)");
+
 	std::string objInput;
 	std::string objOut;
 	bool        objRaw = false;
@@ -262,8 +291,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			if (envOut.empty() && envBenv.empty())
-				throw std::runtime_error("nothing to write: pass --out and/or --benv");
+			if (envOut.empty() && envBenv.empty() && envProject.empty())
+				throw std::runtime_error("nothing to write: pass --out, --benv and/or --project");
 
 			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
 
@@ -325,6 +354,71 @@ main(int argc, char** argv)
 					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
 					0.0);
 
+			if (!envProject.empty())
+			{
+				const auto dataRoot = std::filesystem::path(envProject);
+				const auto sources  = dataRoot / "textures_src";
+				std::filesystem::create_directories(sources);
+				std::filesystem::create_directories(dataRoot / "Sky");
+				std::filesystem::create_directories(dataRoot / "EnvLighting");
+				std::filesystem::create_directories(dataRoot / "Environments");
+
+				// The float intermediates are the routed sources; the bake packs them RGB9E5 into
+				// Textures/ and stamps the routes, exactly as it will for an editor re-bake later.
+				const assetlib::ImageData& skySrc = envSkyboxBlur > 0.0f ? sky : src;
+				const auto                 srcRel = [&](const char* suffix) {
+					return (std::filesystem::path("textures_src") / (envName + suffix))
+					    .generic_string();
+				};
+				assetlib::writeKTX2(
+					skySrc,
+					dataRoot / srcRel("_sky.ktx2"),
+					false,
+					assetlib::Ktx2Compression::kNone);
+				assetlib::writeKTX2(
+					out,
+					dataRoot / srcRel("_prefilter.ktx2"),
+					false,
+					assetlib::Ktx2Compression::kNone);
+				assetlib::writeKTX2(
+					iem,
+					dataRoot / srcRel("_irradiance.ktx2"),
+					false,
+					assetlib::Ktx2Compression::kNone);
+
+				auto bsky       = assetlib::BSky();
+				bsky.name       = envName;
+				bsky.sky.source = srcRel("_sky.ktx2");
+				assetlib::bakeSky(bsky, { dataRoot });
+				assetlib::saveSky(bsky, dataRoot / "Sky" / (envName + ".bsky"));
+
+				auto lighting              = assetlib::BEnvLighting();
+				lighting.name              = envName;
+				lighting.prefilter.source  = srcRel("_prefilter.ktx2");
+				lighting.irradiance.source = srcRel("_irradiance.ktx2");
+				assetlib::bakeEnvLighting(lighting, { dataRoot });
+				assetlib::saveEnvLighting(
+					lighting,
+					dataRoot / "EnvLighting" / (envName + ".benvl"));
+
+				auto env     = assetlib::BEnv();
+				env.name     = envName;
+				env.sky      = "Sky/" + envName + ".bsky";
+				env.lighting = "EnvLighting/" + envName + ".benvl";
+				assetlib::saveEnv(env, dataRoot / "Environments" / (envName + ".benv"));
+
+				spdlog::info(
+					"Wrote '{}' into '{}': sky {}^2, prefilter {}^2 x{}, irradiance {}^2, exposure "
+					"{:.3f}",
+					envName,
+					envProject,
+					skySrc.width,
+					out.width,
+					out.mipLevels,
+					iem.width,
+					lighting.exposure);
+			}
+
 			if (!envBenv.empty())
 			{
 				const float exposure = assetlib::exposureFor(iem);
@@ -359,6 +453,29 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("envmap failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*split)
+	{
+		try
+		{
+			const auto inputPath = std::filesystem::path(splitInput);
+			const auto outDirPath =
+				splitOut.empty() ? inputPath.parent_path() : std::filesystem::path(splitOut);
+			const auto stem = splitName.empty() ? inputPath.stem().string() : splitName;
+
+			const auto written = assetlib::splitBenv(inputPath, outDirPath, stem);
+			spdlog::info(
+				"Split '{}' -> '{}', plus '{}'.bsky/.benvl and their three .ktx2 maps",
+				splitInput,
+				written.string(),
+				stem);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("split failed: {}", e.what());
 			return 1;
 		}
 	}

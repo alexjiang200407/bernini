@@ -602,6 +602,13 @@ assetlib_cli bake model.glb -o assets/model -n model
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
 assetlib_cli obj assets/model/model.bmesh -o model.obj
 
+# Convolve an HDRI into a project's split environment set: float sources into textures_src/, a
+# baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
+assetlib_cli envmap forest.hdr -p Data --name forest
+
+# Migrate a v1 .benv (three embedded maps) to that set, byte-exactly -- no source .hdr needed
+assetlib_cli split assets/forest.benv --name forest
+
 # Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
 assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
 assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
