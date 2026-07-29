@@ -11,7 +11,9 @@ This is a *plan*, not a mirror of code. When the work lands the durable parts be
 
 **The load-bearing property: no shader changes and no public API changes.** A shader still reads a
 `uint` out of a constant buffer and indexes a heap with it; `IGraphics`/`IScene` are untouched. What
-changes is *who computes that uint*.
+changes is *who computes that uint*. (Relaxed once, by review, in D5: `GraphicsOptions` gained
+`maxBuffers` and its `maxCbvSrvUavs` now counts descriptors, so the pool/heap split is a knob
+rather than a hidden mapping.)
 
 ---
 

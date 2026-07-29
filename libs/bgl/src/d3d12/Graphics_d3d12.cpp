@@ -244,12 +244,9 @@ namespace bgl
 		}
 
 		{
-			auto resourceManagerDesc = ResourceManagerDesc();
-			// The public options predate the pool/heap split: maxCbvSrvUavs sizes the buffer pool
-			// and maxTextures the texture pool, and the heap covers both so anything the pools
-			// admit can hold a descriptor.
-			resourceManagerDesc.maxBuffers         = m_Opts.maxCbvSrvUavs;
-			resourceManagerDesc.maxCbvSrvUavs      = m_Opts.maxCbvSrvUavs + m_Opts.maxTextures;
+			auto resourceManagerDesc               = ResourceManagerDesc();
+			resourceManagerDesc.maxBuffers         = m_Opts.maxBuffers;
+			resourceManagerDesc.maxCbvSrvUavs      = m_Opts.maxCbvSrvUavs;
 			resourceManagerDesc.maxDsvs            = m_Opts.maxDsvs;
 			resourceManagerDesc.maxRtvs            = m_Opts.maxRtvs;
 			resourceManagerDesc.maxTextures        = m_Opts.maxTextures;

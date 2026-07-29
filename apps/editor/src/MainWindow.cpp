@@ -51,6 +51,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		gfxOpts.logLevel       = static_cast<bgl::GraphicsOptions::LogLevel>(
 			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(gfxOpts.logLevel)));
 		gfxOpts.maxCbvSrvUavs = gfxSettings["maxCbvSrvUavs"].GetOrDefault(gfxOpts.maxCbvSrvUavs);
+		gfxOpts.maxBuffers    = gfxSettings["maxBuffers"].GetOrDefault(gfxOpts.maxBuffers);
 		gfxOpts.maxRtvs       = gfxSettings["maxRtvs"].GetOrDefault(gfxOpts.maxRtvs);
 		gfxOpts.maxDsvs       = gfxSettings["maxDsvs"].GetOrDefault(gfxOpts.maxDsvs);
 		gfxOpts.maxTextures   = gfxSettings["maxTextures"].GetOrDefault(gfxOpts.maxTextures);

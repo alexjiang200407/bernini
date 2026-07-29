@@ -48,11 +48,12 @@ disagrees, trust the header, then fix this doc.
   them near the steady state only avoids the growth events. `SceneError` on a load now means the
   device could not allocate, not that a budget was hit.
 
-  `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxRtvs`, `maxDsvs`, `maxTextures`,
-  `maxSamplers` and `maxReadbackBuffers` size fixed pools that never grow, and exhausting one is
-  a hard failure. Note that growth *consumes* CBV/SRV/UAV slots — a grown buffer takes a new one and
-  gives the old one back only once the deferred destroy clears — so a scene that grows a lot needs
-  `maxCbvSrvUavs` headroom above its steady-state resource count.
+  `GraphicsOptions` is the opposite: `maxBuffers`, `maxRtvs`, `maxDsvs`, `maxTextures`,
+  `maxSamplers` and `maxReadbackBuffers` size fixed pools that never grow, and `maxCbvSrvUavs`
+  sizes the shader-visible descriptor heap that buffers and sampled textures share; exhausting
+  any of them is a hard failure. Note that growth *consumes* descriptors — a grown buffer takes a
+  new one and gives the old one back only once the deferred destroy clears — so a scene that grows
+  a lot needs `maxCbvSrvUavs` headroom above its steady-state resource count.
 
 * **Never cache a buffer's descriptor index across frames.** Growth allocates a new resource and a
   new descriptor slot rather than rewriting the existing one, because a descriptor is read by the GPU
