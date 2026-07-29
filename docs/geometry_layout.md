@@ -121,8 +121,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `GrowableGpuBuffer`), because a descriptor is read by the GPU when a shader runs rather than when
   the command list records. The superseded resource is held by the resource manager's deferred
   destroy until every in-flight frame that referenced it retires. Nothing may cache
-  `GetDescriptorHandle()` / `GetBufferHandle()` across frames; the FrameGraph re-imports them each
-  frame, which is what makes the swap invisible.
+  `GetBufferHandle()` across frames; the FrameGraph re-imports it each frame, which is what makes
+  the swap invisible.
 
 ---
 

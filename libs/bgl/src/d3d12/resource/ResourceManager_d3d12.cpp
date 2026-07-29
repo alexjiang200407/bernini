@@ -8,9 +8,14 @@ namespace bgl
 	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device>  device,
 		const ResourceManagerDesc& desc) :
-		m_Device(std::move(device)), m_CbvSrvUavSlots(desc.maxCbvSrvUavs),
-		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures),
-		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
+		m_Device(std::move(device)), m_CbvSrvUavAllocator(
+										 m_Device.Get(),
+										 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+										 desc.maxCbvSrvUavs,
+										 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE),
+		m_CbvSrvUavSlots(desc.maxCbvSrvUavs), m_Samplers(desc.maxSamplers),
+		m_Textures(desc.maxTextures), m_ReadbackBuffers(desc.maxReadbackBuffers),
+		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
@@ -21,17 +26,6 @@ namespace bgl
 		gassert(
 			desc.maxSamplers > 0 && desc.maxSamplers <= 2048,
 			"maxSamplers must be in (0, 2048]");
-
-		// Create descriptor heap
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-			heapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			heapDesc.NumDescriptors             = desc.maxCbvSrvUavs;
-			heapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-			m_Device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_CbvSrvUavHeap)) >>
-				d3d12ErrChecker;
-		}
 
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
@@ -80,13 +74,16 @@ namespace bgl
 		bufferDesc.isUav     = desc.isUav;
 		bufferDesc.debugName = desc.debugName;
 
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+
 		// Out of VRAM throws out of the Buffer ctor, and this is noexcept: catch it here or a
 		// recoverable allocation failure becomes a terminate.
 		Buffer buffer;
 		try
 		{
+			descriptorIndex = m_CbvSrvUavAllocator.Allocate();
 			buffer =
-				Buffer(m_Device.Get(), m_CbvSrvUavHeap.Get(), bufferSlotHandle.index, bufferDesc);
+				Buffer(m_Device.Get(), m_CbvSrvUavAllocator.GetHeap(), descriptorIndex, bufferDesc);
 		}
 		catch (const std::exception& e)
 		{
@@ -96,6 +93,10 @@ namespace bgl
 				bufferDesc.byteSize,
 				e.what());
 			m_CbvSrvUavSlots.release_slot(bufferSlotHandle.index);
+			if (descriptorIndex != 0xFFFFFFFF)
+			{
+				m_CbvSrvUavAllocator.Free(descriptorIndex);
+			}
 			return BufferHandle{};
 		}
 
@@ -170,7 +171,24 @@ namespace bgl
 				return TextureHandle{};
 			}
 
-			Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slot.index, desc);
+			uint32_t descriptorIndex = 0xFFFFFFFF;
+			Texture  texture;
+			try
+			{
+				descriptorIndex = m_CbvSrvUavAllocator.Allocate();
+				texture =
+					Texture(m_Device.Get(), m_CbvSrvUavAllocator.GetHeap(), descriptorIndex, desc);
+			}
+			catch (const std::exception& e)
+			{
+				logger::error("CreateTexture '{}': {}", desc.debugName, e.what());
+				m_CbvSrvUavSlots.release_slot(slot.index);
+				if (descriptorIndex != 0xFFFFFFFF)
+				{
+					m_CbvSrvUavAllocator.Free(descriptorIndex);
+				}
+				return TextureHandle{};
+			}
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
 			m_Device->CreateShaderResourceView(
@@ -248,10 +266,12 @@ namespace bgl
 				return TextureHandle{};
 			}
 
+			const auto descriptorIndex = m_CbvSrvUavAllocator.Allocate();
+
 			Texture texture(
 				m_Device.Get(),
-				m_CbvSrvUavHeap.Get(),
-				slot.index,
+				m_CbvSrvUavAllocator.GetHeap(),
+				descriptorIndex,
 				std::move(d3d12Texture),
 				desc);
 
@@ -369,14 +389,18 @@ namespace bgl
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
+		const auto descriptorIndex =
+			std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex();
+
 		if (deferred)
 		{
 			m_CbvSrvUavSlots.retire_slot(handle.slot);
-			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index);
+			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index, descriptorIndex);
 		}
 		else
 		{
 			m_CbvSrvUavSlots.release_slot(handle.slot);
+			FreeCbvSrvUavDescriptor(descriptorIndex);
 		}
 	}
 
@@ -388,11 +412,15 @@ namespace bgl
 
 		const bool isSrv = handle.usage.any(TextureUsageFlag::kSRV);
 
+		const auto descriptorIndex =
+			isSrv ? std::get<Texture>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex() :
+					0xFFFFFFFF;
+
 		if (deferred)
 		{
 			// SRV textures live in the CBV_SRV_UAV pool; RTV/DSV-only in m_Textures. Retiring now
-			// stales every handle immediately; the resource and its descriptor index survive until
-			// the sweep reclaims them.
+			// stales every handle immediately; the resource and its descriptor survive until the
+			// sweep reclaims them.
 			if (isSrv)
 			{
 				m_CbvSrvUavSlots.retire_slot(handle.slot);
@@ -404,11 +432,13 @@ namespace bgl
 
 			RetireDeferred(
 				isSrv ? PendingType::kCbvSrvUav : PendingType::kTexture,
-				handle.slot.index);
+				handle.slot.index,
+				descriptorIndex);
 		}
 		else if (isSrv)
 		{
 			m_CbvSrvUavSlots.release_slot(handle.slot);
+			FreeCbvSrvUavDescriptor(descriptorIndex);
 		}
 		else
 		{
@@ -506,7 +536,10 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::RetireDeferred(PendingType type, uint32_t slotIndex) noexcept
+	ResourceManager::RetireDeferred(
+		PendingType type,
+		uint32_t    slotIndex,
+		uint32_t    descriptorIndex) noexcept
 	{
 		const DeletionGate gate = CaptureGate();
 
@@ -516,7 +549,32 @@ namespace bgl
 		{
 			m_PendingBatches.push_back({ gate, {} });
 		}
-		m_PendingBatches.back().deletions.push_back({ type, slotIndex });
+		m_PendingBatches.back().deletions.push_back({ type, slotIndex, descriptorIndex });
+	}
+
+	void
+	ResourceManager::FreeCbvSrvUavDescriptor(uint32_t descriptorIndex) noexcept
+	{
+		if (descriptorIndex == 0xFFFFFFFF)
+		{
+			return;
+		}
+
+#if defined(BERNINI_GPU_DEBUG)
+		// A stale index in a uniform block reads a *valid* descriptor for whatever resource takes
+		// this slot next -- plausible pixels, no fault. A null SRV makes the read return zeros.
+		D3D12_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
+		nullDesc.Format                          = DXGI_FORMAT_R32_UINT;
+		nullDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+		nullDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		nullDesc.Buffer.NumElements              = 1;
+		m_Device->CreateShaderResourceView(
+			nullptr,
+			&nullDesc,
+			m_CbvSrvUavAllocator.GetCpuHandle(descriptorIndex));
+#endif
+
+		m_CbvSrvUavAllocator.Free(descriptorIndex);
 	}
 
 	void
@@ -548,6 +606,7 @@ namespace bgl
 			{
 			case PendingType::kCbvSrvUav:
 				m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
+				FreeCbvSrvUavDescriptor(pending.descriptorIndex);
 				break;
 			case PendingType::kRtv:
 				m_Rtvs.reclaim_slot(pending.slotIndex);
@@ -665,7 +724,7 @@ namespace bgl
 	ResourceManager::SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList) noexcept
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
-		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavHeap.Get(), m_SamplerHeap.Get() };
+		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavAllocator.GetHeap(), m_SamplerHeap.Get() };
 		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 	}
 
@@ -703,13 +762,21 @@ namespace bgl
 	uint32_t
 	ResourceManager::GetBindlessIndex(BufferHandle handle) const noexcept
 	{
-		return handle.slot.index;
+		if (!ValidBufferHandle(handle))
+		{
+			return 0xFFFFFFFF;
+		}
+		return std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex();
 	}
 
 	uint32_t
 	ResourceManager::GetBindlessIndex(TextureHandle handle) const noexcept
 	{
-		return handle.slot.index;
+		if (!handle.usage.any(TextureUsageFlag::kSRV) || !ValidTextureHandle(handle))
+		{
+			return 0xFFFFFFFF;
+		}
+		return std::get<Texture>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex();
 	}
 
 	uint32_t
