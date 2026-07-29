@@ -79,8 +79,8 @@ namespace assetlib
 	{
 		// The reference layout. 1 is the blob format above; refusing it by number is what turns a
 		// stale file into "re-import" rather than a misread.
-		constexpr uint16_t c_RefVersionMajor = 2;
-		constexpr uint16_t c_RefVersionMinor = 0;
+		constexpr uint16_t c_EnvVersionMajor = 2;
+		constexpr uint16_t c_EnvVersionMinor = 0;
 	}
 
 	std::vector<std::byte>
@@ -88,8 +88,8 @@ namespace assetlib
 	{
 		core::io::ByteWriter writer;
 		writer.writePod(magic::c_BEnv);
-		writer.writePod(c_RefVersionMajor);
-		writer.writePod(c_RefVersionMinor);
+		writer.writePod(c_EnvVersionMajor);
+		writer.writePod(c_EnvVersionMinor);
 
 		writeString(writer, env.name);
 		writeString(writer, env.sky);
@@ -111,10 +111,10 @@ namespace assetlib
 		// The minor version is additive within a major, and nothing here is optional yet.
 		static_cast<void>(reader.readPod<uint16_t>());
 
-		if (versionMajor != c_RefVersionMajor)
+		if (versionMajor != c_EnvVersionMajor)
 			throw std::runtime_error(
 				"benv: unsupported version " + std::to_string(versionMajor) + " (expected " +
-				std::to_string(c_RefVersionMajor) +
+				std::to_string(c_EnvVersionMajor) +
 				"); a v1 .benv holds baked maps and must be re-imported as .bsky + .benvl");
 
 		BEnv env;
