@@ -134,6 +134,15 @@ namespace bgl
 		[[nodiscard]] const Sampler&
 		GetSampler(SamplerHandle handle) const noexcept override;
 
+		[[nodiscard]] uint32_t
+		GetBindlessIndex(BufferHandle handle) const noexcept override;
+
+		[[nodiscard]] uint32_t
+		GetBindlessIndex(TextureHandle handle) const noexcept override;
+
+		[[nodiscard]] uint32_t
+		GetBindlessIndex(SamplerHandle handle) const noexcept override;
+
 		[[nodiscard]] TextureReadbackLayout
 		GetTextureReadbackLayout(TextureHandle handle) const noexcept override;
 
