@@ -77,4 +77,42 @@ namespace assetlib
 	/** FNV-1a over a file's bytes, for EnvironmentProvenance::sourceHash. */
 	[[nodiscard]] uint64_t
 	hashFile(const std::filesystem::path& path);
+
+	struct BEnv;
+
+	/**
+	 * The v2 `.benv`: a reference container, `BEnv { name, sky, lighting }`, in the byte-stream
+	 * conventions the other authoring containers share. Everything above this line is the v1 blob
+	 * format, kept only until its consumers and `assets/forest.benv` migrate off it.
+	 */
+
+	/** Serializes a BEnv -- its name and the two paths it composes -- into a byte stream. */
+	[[nodiscard]] std::vector<std::byte>
+	serializeEnv(const BEnv& env);
+
+	/**
+	 * Reconstructs a BEnv from a v2 `.benv` byte stream.
+	 *
+	 * @throws std::runtime_error on bad magic, a truncated stream, or an unsupported version --
+	 *         including 1, the blob format, which names maps this container no longer carries.
+	 */
+	[[nodiscard]] BEnv
+	deserializeEnv(std::span<const std::byte> bytes);
+
+	/**
+	 * Writes `env` to `path` as a v2 `.benv`. The paths it stores are relative to the data
+	 * directory, not to this file.
+	 *
+	 * @throws std::runtime_error if the file cannot be written.
+	 */
+	void
+	saveEnv(const BEnv& env, const std::filesystem::path& path);
+
+	/**
+	 * Loads a v2 `.benv` previously written by saveEnv.
+	 *
+	 * @throws std::runtime_error if the file cannot be read or is malformed.
+	 */
+	[[nodiscard]] BEnv
+	loadEnv(const std::filesystem::path& path);
 }
