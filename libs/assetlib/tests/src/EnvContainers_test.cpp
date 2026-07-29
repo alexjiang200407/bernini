@@ -1,9 +1,13 @@
+#include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bsky_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
+#include <core/io/ByteWriter.h>
+
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
 
@@ -125,6 +129,63 @@ TEST_CASE(
 	CHECK_THROWS_AS(deserializeEnvLighting(lightingBytes), std::runtime_error);
 
 	CHECK_THROWS_AS(deserializeSky({}), std::runtime_error);
+}
+
+TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
+{
+	BEnv env;
+	env.name     = "forest";
+	env.sky      = "Sky/forest.bsky";
+	env.lighting = "EnvLighting/forest.benvl";
+
+	const BEnv restored = deserializeEnv(serializeEnv(env));
+	CHECK(restored.name == env.name);
+	CHECK(restored.sky == env.sky);
+	CHECK(restored.lighting == env.lighting);
+
+	// Half-composed is a legal file: the import's checkboxes write whichever pieces were asked for,
+	// and what a .benv must reference is its consumer's rule, not the container's.
+	const BEnv empty = deserializeEnv(serializeEnv(BEnv{}));
+	CHECK(empty.name.empty());
+	CHECK(empty.sky.empty());
+	CHECK(empty.lighting.empty());
+}
+
+TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
+{
+	const auto path = TempFile("env_container.benv");
+
+	BEnv env;
+	env.name     = "forest";
+	env.sky      = "Sky/forest.bsky";
+	env.lighting = "EnvLighting/forest.benvl";
+	saveEnv(env, path);
+
+	const BEnv restored = loadEnv(path);
+	CHECK(restored.sky == env.sky);
+	CHECK(restored.lighting == env.lighting);
+
+	std::filesystem::remove(path);
+}
+
+// A v1 .benv opens with the same magic and the same version-field layout, so the reference reader
+// sees exactly "version 1" -- and must refuse it by number, because what follows is KTX2 blobs that
+// would otherwise be read as string lengths.
+TEST_CASE("the reference reader refuses a v1 .benv and the other containers' files", "[benv][io]")
+{
+	core::io::ByteWriter v1;
+	v1.writePod(magic::c_BEnv);
+	v1.writePod<uint16_t>(1);
+	v1.writePod<uint16_t>(0);
+	v1.writePod<uint64_t>(0);  // the v1 header continues; the reader must not get that far
+	CHECK_THROWS_WITH(deserializeEnv(v1.take()), Catch::Matchers::ContainsSubstring("re-imported"));
+
+	CHECK_THROWS_AS(deserializeEnv(serializeSky(SampleSky())), std::runtime_error);
+	CHECK_THROWS_AS(deserializeEnv(serializeEnvLighting(SampleLighting())), std::runtime_error);
+
+	auto truncated = serializeEnv(BEnv{ .name = "forest", .sky = "Sky/forest.bsky" });
+	truncated.resize(truncated.size() / 2);
+	CHECK_THROWS_AS(deserializeEnv(truncated), std::runtime_error);
 }
 
 // A major-version bump means the layout moved, so an old file must be refused rather than read as
