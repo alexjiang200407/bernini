@@ -5,6 +5,7 @@
 #include "resource/ReadbackBuffer_wgpu.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_wgpu.h"
+#include "resource/Sampler_wgpu.h"
 #include "resource/Texture_wgpu.h"
 
 #include <core/containers/slot_vector.h>
@@ -20,8 +21,7 @@ namespace bgl
 	 * registered queue was at, so the slot is reclaimed only once all of them pass it.
 	 *
 	 * Unlike D3D12 a slot index is *not* a descriptor index: WebGPU has no descriptor heap, so
-	 * bindings are resolved into bind groups at dispatch instead. Samplers are not implemented yet
-	 * and fail loudly.
+	 * bindings are resolved into bind groups at dispatch instead.
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
@@ -167,6 +167,7 @@ namespace bgl
 			kBuffer,
 			kReadback,
 			kTexture,
+			kSampler,
 			kRtv,
 			kDsv
 		};
@@ -208,6 +209,7 @@ namespace bgl
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 		core::slot_vector<Texture>        m_Textures;
+		core::slot_vector<Sampler>        m_Samplers;
 		core::slot_vector<Rtv>            m_Rtvs;
 		core::slot_vector<Dsv>            m_Dsvs;
 
