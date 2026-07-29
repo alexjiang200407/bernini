@@ -5,6 +5,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
 
+#include "baked_name.h"
 #include "bmesh_texture.h"
 #include "fs_util.h"
 
@@ -246,37 +247,6 @@ namespace assetlib
 			return key;
 		}
 
-		// FNV-1a. Not cryptographic: a collision would only alias two baked maps, and the inputs are
-		// short, structured strings rather than adversarial ones.
-		uint64_t
-		hash64(std::string_view text)
-		{
-			uint64_t hash = 1469598103934665603ull;
-			for (const char c : text)
-			{
-				hash ^= static_cast<uint64_t>(static_cast<unsigned char>(c));
-				hash *= 1099511628211ull;
-			}
-			return hash;
-		}
-
-		// Hex digits of the content hash in a baked map's name -- a uint64 printed as %016llx.
-		constexpr size_t c_HashDigits = 16;
-
-		constexpr std::string_view c_MapExtension = ".ktx2";
-
-		std::string
-		bakeFileName(const std::string& key, const Group& group)
-		{
-			char hex[c_HashDigits + 1] = {};
-			std::snprintf(
-				hex,
-				sizeof(hex),
-				"%016llx",
-				static_cast<unsigned long long>(hash64(key)));
-			return std::string(group.name) + '_' + hex + std::string(c_MapExtension);
-		}
-
 		/**
 		 * Gathers a group's channels into a packed RGBA8 map at `width` x `height`. Destination
 		 * component i takes its routed source's channel; an unrouted one takes the group's fallback, the
@@ -397,8 +367,9 @@ namespace assetlib
 			const std::optional<float> mipCutoff =
 				groupIsCutout(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
 
-			const std::string name =
-				bakeFileName(bakeKey(pbr, group, width, height, compression, mipCutoff), group);
+			const std::string name = bakedMapFileName(
+				group.name,
+				bakeKey(pbr, group, width, height, compression, mipCutoff));
 			const auto target = outDir / name;
 
 			if (!isUpToDate(target, pbr, group, desc.dataRoot))
@@ -440,28 +411,12 @@ namespace assetlib
 	bool
 	isBakedMapName(std::string_view fileName) noexcept
 	{
-		if (!fileName.ends_with(c_MapExtension))
-			return false;
-		fileName.remove_suffix(c_MapExtension.size());
-
-		// The group name is itself allowed no underscore, so the last one is the hash separator.
-		const size_t separator = fileName.rfind('_');
-		if (separator == std::string_view::npos)
-			return false;
-
-		const std::string_view prefix = fileName.substr(0, separator);
-		const std::string_view digits = fileName.substr(separator + 1);
-
-		const auto isHex = [](char c) noexcept {
-			return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-		};
-
-		if (digits.size() != c_HashDigits || !std::ranges::all_of(digits, isHex))
-			return false;
-
-		return std::ranges::any_of(c_Groups, [prefix](const Group& group) noexcept {
-			return prefix == group.name;
-		});
+		static constexpr std::array<std::string_view, c_Groups.size()> c_Names = { {
+			c_Groups[0].name,
+			c_Groups[1].name,
+			c_Groups[2].name,
+		} };
+		return isBakedNameAmong(fileName, c_Names);
 	}
 
 	void

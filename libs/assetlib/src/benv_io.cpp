@@ -4,6 +4,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
+#include <core/hash.h>
 #include <core/math.h>
 
 namespace assetlib
@@ -74,17 +75,13 @@ namespace assetlib
 		if (!in)
 			core::throw_runtime_error("assetlib::hashFile: cannot open '{}'", path.string());
 
-		uint64_t                    hash = 0xcbf29ce484222325ull;
+		uint64_t                    hash = core::hash_seed();
 		std::array<char, 64 * 1024> buffer{};
 		while (in.read(buffer.data(), static_cast<std::streamsize>(buffer.size())) ||
 		       in.gcount() > 0)
 		{
 			const auto got = static_cast<size_t>(in.gcount());
-			for (size_t i = 0; i < got; ++i)
-			{
-				hash ^= static_cast<uint8_t>(buffer[i]);
-				hash *= 0x100000001b3ull;
-			}
+			hash           = core::hash_bytes(buffer.data(), got, hash);
 		}
 		return hash;
 	}

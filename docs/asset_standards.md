@@ -325,11 +325,19 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   * **Sky and lighting are separate files because their lifetimes are.** Rotating a sky or sampling a
     blurrier mip is immediate; re-convolving the lighting it implies is minutes of work that the same
     edit need not trigger.
-  * No bake step writes them yet: the routes and stamps round-trip, and nothing fills `baked`.
-  * **A bake that fills them must teach `texture_prune.cpp` to mark them first.** Its sweep only
-    considers names `isBakedMapName` recognises, and that is a closed list of the *material* groups —
-    so env maps are invisible to it today, and would go from never-swept to swept-as-garbage the
-    moment a group name of theirs joined that list without a matching mark phase.
+  * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
+    ([libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h)) take the
+    routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
+    `Textures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
+    themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
+  * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
+    maps, so it must move whenever they do.
+  * `skyBakeIsStale`/`envLightingBakeIsStale` mirror `bakeIsStale`: unrouted is never stale; a
+    changed, missing or never-baked source is.
+  * **The texture prune knows these assets.** Its mark phase reads every `.bsky`/`.benvl` below the
+    data root (unreadable ones are fatal, same as materials), and its sweep recognises
+    `isBakedEnvMapName` — `sky_`/`prefilter_`/`irradiance_` + 16 hex — disjoint from the material
+    groups by prefix. An orphaned env map is collected; a referenced one never is.
 
 ---
 
