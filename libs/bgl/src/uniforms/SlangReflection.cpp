@@ -3,6 +3,34 @@
 
 namespace bgl
 {
+	ResourceBinding
+	ResolveSlangResourceBinding(slang::TypeReflection* type)
+	{
+		using Kind = slang::TypeReflection::Kind;
+
+		if (type->getKind() == Kind::SamplerState)
+			return ResourceBinding::kSampler;
+
+		// A ShaderStorageBuffer reports no shape at all; a Resource carries one, with the array /
+		// multisample / shadow flags above the base-shape bits.
+		if (type->getKind() == Kind::ShaderStorageBuffer)
+			return ResourceBinding::kBuffer;
+
+		switch (type->getResourceShape() & SLANG_RESOURCE_BASE_SHAPE_MASK)
+		{
+		case SLANG_TEXTURE_1D:
+		case SLANG_TEXTURE_2D:
+		case SLANG_TEXTURE_3D:
+		case SLANG_TEXTURE_CUBE:
+			return ResourceBinding::kTexture;
+		case SLANG_STRUCTURED_BUFFER:
+		case SLANG_BYTE_ADDRESS_BUFFER:
+			return ResourceBinding::kBuffer;
+		default:
+			gfatal("Unsupported resource shape {}", static_cast<int>(type->getResourceShape()));
+		}
+	}
+
 	UniformValueType
 	ResolveSlangValueType(slang::TypeReflection* type)
 	{
@@ -142,10 +170,10 @@ namespace bgl
 		{
 			// Metal reflects a bindless handle as a Resource/SamplerState (D3D12 emits a uint2). Lower
 			// it to the same 8-byte kDescriptorHandle either backend writes. DXIL never reaches here.
-			result.kind             = UniformType::kValue;
-			result.valueType        = UniformValueType::kDescriptorHandle;
-			result.size             = 8;  // two uint32 -- a resource id / device pointer
-			result.isResourceHandle = true;
+			result.kind            = UniformType::kValue;
+			result.valueType       = UniformValueType::kDescriptorHandle;
+			result.size            = 8;  // two uint32 -- a resource id / device pointer
+			result.resourceBinding = ResolveSlangResourceBinding(typeLayout->getType());
 			return result;
 		}
 

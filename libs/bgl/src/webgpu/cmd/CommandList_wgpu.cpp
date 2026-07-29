@@ -35,17 +35,34 @@ namespace bgl
 		{
 			for (const ReflectedField& field : layout.fields)
 			{
-				if (field.layout.isResourceHandle)
+				if (field.layout.resourceBinding != ResourceBinding::kNone)
 				{
 					uint32_t slotIndex = 0;
 					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
 
-					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
-
 					auto entry    = wgpu::BindGroupEntry{};
 					entry.binding = field.binding;
-					entry.buffer  = buffer;
-					entry.size    = buffer.GetSize();
+
+					switch (field.layout.resourceBinding)
+					{
+					case ResourceBinding::kBuffer:
+					{
+						const wgpu::Buffer& buffer =
+							resources.GetBufferBindingBySlotIndex(slotIndex);
+						entry.buffer = buffer;
+						entry.size   = buffer.GetSize();
+						break;
+					}
+					case ResourceBinding::kTexture:
+						entry.textureView = resources.GetTextureBindingBySlotIndex(slotIndex);
+						break;
+					case ResourceBinding::kSampler:
+						entry.sampler = resources.GetSamplerBindingBySlotIndex(slotIndex);
+						break;
+					case ResourceBinding::kNone:
+						break;
+					}
+
 					entries.push_back(entry);
 				}
 				else if (field.layout.kind == UniformType::kStruct)

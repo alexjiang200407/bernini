@@ -139,7 +139,7 @@ elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
 	# The suite links the backend objects rather than bgl, so it needs the shader targets directly
 	# -- otherwise building it alone (just run bgl_webgpu_tests) leaves the sources unstaged.
 	if(TARGET bgl_webgpu_tests)
-		add_dependencies(bgl_webgpu_tests bgl_compile_shaders bgl_copy_shader_src)
+		add_dependencies(bgl_webgpu_tests bgl_compile_shaders bgl_copy_shader_src bgl_copy_shader_tests)
 	endif()
 
 	target_compile_definitions(bgl_webgpu PRIVATE BGL_EXPORTS)

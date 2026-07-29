@@ -93,10 +93,17 @@ namespace bgl
 		[[nodiscard]] const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept override;
 
-		// Resolves the raw slot index a Uniforms handle write records (DescriptorHandle stores the
-		// index alone, without a generation) to its buffer, for bind-group assembly at dispatch.
+		// Resolve the raw slot index a Uniforms handle write records (DescriptorHandle stores the
+		// index alone, without a generation) to its resource, for bind-group assembly at dispatch.
+		// Which one to call comes from the leaf's ReflectedLayout::resourceBinding.
 		[[nodiscard]] const wgpu::Buffer&
 		GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept;
+
+		[[nodiscard]] const wgpu::TextureView&
+		GetTextureBindingBySlotIndex(uint32_t slotIndex) const noexcept;
+
+		[[nodiscard]] const wgpu::Sampler&
+		GetSamplerBindingBySlotIndex(uint32_t slotIndex) const noexcept;
 
 		[[nodiscard]] const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept override;

@@ -309,6 +309,36 @@ namespace bgl
 		return result;
 	}
 
+	wgpu::TextureViewDimension
+	ToWgpuViewDimension(TextureDimension dimension) noexcept
+	{
+		using D = wgpu::TextureViewDimension;
+
+		switch (dimension)
+		{
+		case TextureDimension::kTexture1D:
+			return D::e1D;
+		case TextureDimension::kTexture2D:
+		case TextureDimension::kTexture2DMS:
+			return D::e2D;
+		case TextureDimension::kTexture1DArray:
+		case TextureDimension::kTexture2DArray:
+		case TextureDimension::kTexture2DMSArray:
+			return D::e2DArray;
+		case TextureDimension::kTextureCube:
+			return D::Cube;
+		case TextureDimension::kTextureCubeArray:
+			return D::CubeArray;
+		case TextureDimension::kTexture3D:
+			return D::e3D;
+
+		case TextureDimension::kUnknown:
+			gfatal("wgpu: no view dimension for an unknown texture dimension");
+		}
+
+		gfatal("wgpu: unknown texture dimension {}", static_cast<int>(dimension));
+	}
+
 	wgpu::AddressMode
 	ToWgpuAddressMode(SamplerAddressMode mode) noexcept
 	{
