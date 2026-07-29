@@ -5,6 +5,17 @@ namespace bgl
 {
 	struct ReflectedField;
 
+	// What a resource leaf binds to on a backend without bindless: WebGPU turns it into a bind-group
+	// entry of the matching kind (see ReflectedField::binding), Metal into a gpuAddress. kNone on
+	// D3D12, which reaches every resource through the descriptor heap, and on any plain-data leaf.
+	enum class ResourceBinding : uint8_t
+	{
+		kNone,
+		kBuffer,
+		kTexture,
+		kSampler
+	};
+
 	// Serializable mirror of one constant-buffer member tree, decoupled from any
 	// graphics API's live reflection object. It carries exactly what Uniforms needs to
 	// lay out the CPU buffer, so it can be built once from shader reflection and then
@@ -17,10 +28,8 @@ namespace bgl
 		uint32_t         arrayCount  = 0;
 		uint32_t         arrayStride = 0;
 
-		// A bindless handle, not a plain uint2 (they share a valueType). Marks a resource the backend
-		// resolves at dispatch: Metal to a gpuAddress, WebGPU to a bind-group entry (see `binding`).
-		// Always false on D3D12, which reaches resources through the descriptor heap.
-		bool                         isResourceHandle = false;
+		// Non-kNone marks a bindless handle rather than a plain uint2 -- they share a valueType.
+		ResourceBinding              resourceBinding = ResourceBinding::kNone;
 		std::vector<ReflectedField>  fields;   // kStruct members
 		std::vector<ReflectedLayout> element;  // kArray element type (0 or 1 entry)
 	};

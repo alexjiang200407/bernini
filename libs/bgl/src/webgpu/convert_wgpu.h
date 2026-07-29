@@ -4,6 +4,7 @@
 #include "types/DepthStencilState.h"
 #include "types/Format.h"
 #include "types/RasterState.h"
+#include "types/TextureDimension.h"
 
 namespace bgl
 {
@@ -38,6 +39,14 @@ namespace bgl
 	/** Maps a bgl colour-write mask (a bitfield) to the WebGPU flags. */
 	wgpu::ColorWriteMask
 	ToWgpuColorWriteMask(ColorMask mask) noexcept;
+
+	/**
+	 * Maps a bgl texture dimension to the WebGPU dimension a *view* over it takes. WebGPU has no
+	 * cube or array texture dimension -- both are 2D textures with layers, and only the view says so
+	 * -- which is why this has no texture-side counterpart.
+	 */
+	wgpu::TextureViewDimension
+	ToWgpuViewDimension(TextureDimension dimension) noexcept;
 
 	/** Maps a bgl sampler address mode to its WebGPU equivalent. gfatals on one WebGPU lacks. */
 	wgpu::AddressMode

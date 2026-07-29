@@ -237,6 +237,23 @@ namespace bgl
 		return m_Buffers[slotIndex].GetHandle();
 	}
 
+	const wgpu::TextureView&
+	ResourceManager::GetTextureBindingBySlotIndex(uint32_t slotIndex) const noexcept
+	{
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		const wgpu::TextureView& view = m_Textures[slotIndex].GetSampledView();
+		gassert(view != nullptr, "Texture at slot {} was not created sampleable", slotIndex);
+		return view;
+	}
+
+	const wgpu::Sampler&
+	ResourceManager::GetSamplerBindingBySlotIndex(uint32_t slotIndex) const noexcept
+	{
+		auto lock = std::scoped_lock(m_PoolMutex);
+		return m_Samplers[slotIndex].GetHandle();
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
@@ -512,9 +529,13 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::IsTextureCube(const TextureHandle&) const noexcept
+	ResourceManager::IsTextureCube(const TextureHandle& handle) const noexcept
 	{
-		return false;
+		if (!ValidTextureHandle(handle))
+			return false;
+
+		const TextureDimension dim = GetTexture(handle).GetDesc().dimension;
+		return dim == TextureDimension::kTextureCube || dim == TextureDimension::kTextureCubeArray;
 	}
 
 	bool

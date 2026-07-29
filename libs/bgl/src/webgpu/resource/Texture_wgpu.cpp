@@ -36,5 +36,17 @@ namespace bgl
 		wgpuDesc.usage         = ToWgpuUsage(desc.usage);
 
 		m_Texture = device.CreateTexture(&wgpuDesc);
+
+		if (desc.usage.any(TextureUsageFlag::kSRV))
+		{
+			auto viewDesc            = wgpu::TextureViewDescriptor{};
+			viewDesc.label           = std::string_view(desc.debugName);
+			viewDesc.format          = wgpuDesc.format;
+			viewDesc.dimension       = ToWgpuViewDimension(desc.dimension);
+			viewDesc.mipLevelCount   = desc.mipLevels;
+			viewDesc.arrayLayerCount = desc.arraySize;
+
+			m_SampledView = m_Texture.CreateView(&viewDesc);
+		}
 	}
 }

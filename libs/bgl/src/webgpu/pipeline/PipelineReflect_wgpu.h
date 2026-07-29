@@ -4,15 +4,22 @@
 namespace bgl
 {
 	/**
-	 * A WGSL binding the reflection assigned. WGSL has no bindless, so every plainly-bound buffer
+	 * A WGSL binding the reflection assigned. WGSL has no bindless, so every plainly-bound resource
 	 * becomes an explicit (group, binding) slot, and a constant buffer's plain-data members are
 	 * gathered into one further Uniform slot at the constant buffer's own binding.
+	 *
+	 * `binding` alone does not say what to bind: WebGPU's layout entry carries a different sub-struct
+	 * per resource class, so the kind travels with the slot. Only the fields its kind selects are
+	 * meaningful.
 	 */
 	struct BindGroupSlot
 	{
-		uint32_t                group;
-		uint32_t                binding;
-		wgpu::BufferBindingType type;
+		uint32_t        group;
+		uint32_t        binding;
+		ResourceBinding kind = ResourceBinding::kBuffer;
+
+		wgpu::BufferBindingType    bufferType    = wgpu::BufferBindingType::Uniform;
+		wgpu::TextureViewDimension viewDimension = wgpu::TextureViewDimension::e2D;
 	};
 
 	/** One entry point to link: its module and its name. Two entries may share a module. */

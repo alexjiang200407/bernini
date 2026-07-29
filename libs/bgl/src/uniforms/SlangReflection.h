@@ -13,4 +13,9 @@ namespace bgl
 	// plain-data leaves identically.
 	UniformValueType
 	ResolveSlangValueType(slang::TypeReflection* type);
+
+	// Classifies a resource or sampler leaf by what a bindless-free backend must bind it as. Shared
+	// with the WGSL reflection path, which needs the same split to pick a bind-group entry kind.
+	ResourceBinding
+	ResolveSlangResourceBinding(slang::TypeReflection* type);
 }
