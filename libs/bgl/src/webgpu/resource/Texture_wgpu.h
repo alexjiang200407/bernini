@@ -23,6 +23,15 @@ namespace bgl
 			return m_Texture;
 		}
 
+		// The whole-resource view a shader binds, null unless the texture was created kSRV. Its
+		// dimension comes from the desc, which is the only place a cube is distinguishable: WebGPU
+		// stores one as a 2D texture with six layers.
+		[[nodiscard]] const wgpu::TextureView&
+		GetSampledView() const noexcept
+		{
+			return m_SampledView;
+		}
+
 		[[nodiscard]] const TextureDesc&
 		GetDesc() const noexcept
 		{
@@ -36,7 +45,8 @@ namespace bgl
 		}
 
 	private:
-		wgpu::Texture m_Texture;
-		TextureDesc   m_Desc;
+		wgpu::Texture     m_Texture;
+		wgpu::TextureView m_SampledView;
+		TextureDesc       m_Desc;
 	};
 }

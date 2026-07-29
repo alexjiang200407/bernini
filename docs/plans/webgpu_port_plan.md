@@ -541,7 +541,7 @@ the port's definition of done at every raster stage. Expect per-backend toleranc
      `gfatal`s on `Kind::ShaderStorageBuffer`. The tree/names are unchanged (reflection preserves the
      struct hierarchy, per step 1); this adds the two fields to the resource leaf and the WGSL-target
      read path. On assignment, a resource leaf then records a bind-group entry rather than writing a
-     descriptor index at an offset — the same seam the Metal path uses for its `isResourceHandle`
+     descriptor index at an offset — the same seam the Metal path uses for its `resourceBinding`
      gpuAddress translation.
   3. **Runtime Slang→WGSL session.** A Slang global + session targeting `SLANG_WGSL` on the WebGPU
      `Device` (mirrors `Device_d3d12`: column-major matrices, the `BERNINI_GPU_DEBUG` macro, plus

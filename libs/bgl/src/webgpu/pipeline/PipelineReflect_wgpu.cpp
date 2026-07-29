@@ -15,6 +15,31 @@ namespace bgl
 			return type->getResourceAccess() == SLANG_RESOURCE_ACCESS_READ_WRITE;
 		}
 
+		wgpu::TextureViewDimension
+		ViewDimensionForShape(slang::TypeReflection* type) noexcept
+		{
+			const auto shape = type->getResourceShape();
+			const bool array = (shape & SLANG_TEXTURE_ARRAY_FLAG) != 0;
+
+			switch (shape & SLANG_RESOURCE_BASE_SHAPE_MASK)
+			{
+			case SLANG_TEXTURE_1D:
+				return wgpu::TextureViewDimension::e1D;
+			case SLANG_TEXTURE_2D:
+				return array ? wgpu::TextureViewDimension::e2DArray :
+				               wgpu::TextureViewDimension::e2D;
+			case SLANG_TEXTURE_3D:
+				return wgpu::TextureViewDimension::e3D;
+			case SLANG_TEXTURE_CUBE:
+				return array ? wgpu::TextureViewDimension::CubeArray :
+				               wgpu::TextureViewDimension::Cube;
+			default:
+				gfatal(
+					"wgsl reflect: no view dimension for resource shape {}",
+					static_cast<int>(shape));
+			}
+		}
+
 		// Reflects a cbuffer element. Plain-data leaves keep Slang's std140 offsets so the block
 		// uploads verbatim; resource leaves become 8-byte kDescriptorHandles drawn from
 		// handleCursor, which starts past the block. Both are struct-relative, which
@@ -35,17 +60,29 @@ namespace bgl
 
 			const Kind kind = typeLayout->getKind();
 
-			if (kind == Kind::Resource || kind == Kind::ShaderStorageBuffer)
+			if (kind == Kind::Resource || kind == Kind::ShaderStorageBuffer ||
+			    kind == Kind::SamplerState)
 			{
-				result.kind             = UniformType::kValue;
-				result.valueType        = UniformValueType::kDescriptorHandle;
-				result.size             = 8;
-				result.isResourceHandle = true;
+				result.kind            = UniformType::kValue;
+				result.valueType       = UniformValueType::kDescriptorHandle;
+				result.size            = 8;
+				result.resourceBinding = ResolveSlangResourceBinding(typeLayout->getType());
 
-				const auto type = IsReadWrite(typeLayout->getType()) ?
-				                      wgpu::BufferBindingType::Storage :
-				                      wgpu::BufferBindingType::ReadOnlyStorage;
-				slots.push_back({ group, bindingBase, type });
+				auto slot = BindGroupSlot{ group, bindingBase };
+				slot.type = result.resourceBinding;
+
+				if (slot.type == ResourceBinding::kBuffer)
+				{
+					slot.bufferType = IsReadWrite(typeLayout->getType()) ?
+					                      wgpu::BufferBindingType::Storage :
+					                      wgpu::BufferBindingType::ReadOnlyStorage;
+				}
+				else if (slot.type == ResourceBinding::kTexture)
+				{
+					slot.viewDimension = ViewDimensionForShape(typeLayout->getType());
+				}
+
+				slots.push_back(slot);
 				return result;
 			}
 
@@ -90,7 +127,7 @@ namespace bgl
 					// A field owning resources sits at the handle allocation instead of in the
 					// block, so its subtree's offsets stay relative to it and Traverse sums them
 					// back to the same absolute byte.
-					if (reflected.layout.isResourceHandle)
+					if (reflected.layout.resourceBinding != ResourceBinding::kNone)
 					{
 						reflected.offset  = fieldHandleBase - structOrigin;
 						reflected.group   = group;
@@ -196,7 +233,11 @@ namespace bgl
 			// that block ends. A resource-only buffer has no block and no uniform slot.
 			const auto blockSize = static_cast<uint32_t>(element->getSize());
 			if (blockSize > 0)
-				slots.push_back({ group, binding, wgpu::BufferBindingType::Uniform });
+			{
+				auto uniformSlot       = BindGroupSlot{ group, binding };
+				uniformSlot.bufferType = wgpu::BufferBindingType::Uniform;
+				slots.push_back(uniformSlot);
+			}
 
 			uint32_t handleCursor = blockSize;
 
@@ -231,13 +272,32 @@ namespace bgl
 			// fails pipeline creation naming the stage, rather than the whole layout being rejected
 			// because some other entry point declared the buffer.
 			auto stages = visibility;
-			if (slot.type == wgpu::BufferBindingType::Storage)
+			if (slot.type == ResourceBinding::kBuffer &&
+			    slot.bufferType == wgpu::BufferBindingType::Storage)
 				stages &= ~wgpu::ShaderStage::Vertex;
 
-			auto entry        = wgpu::BindGroupLayoutEntry{};
-			entry.binding     = slot.binding;
-			entry.visibility  = stages;
-			entry.buffer.type = slot.type;
+			auto entry       = wgpu::BindGroupLayoutEntry{};
+			entry.binding    = slot.binding;
+			entry.visibility = stages;
+
+			switch (slot.type)
+			{
+			case ResourceBinding::kBuffer:
+				entry.buffer.type = slot.bufferType;
+				break;
+			case ResourceBinding::kTexture:
+				// Float rather than UnfilterableFloat: a texture reached this way is one a shader
+				// samples, and an unfilterable binding rejects the linear samplers Scene creates.
+				entry.texture.sampleType    = wgpu::TextureSampleType::Float;
+				entry.texture.viewDimension = slot.viewDimension;
+				break;
+			case ResourceBinding::kSampler:
+				entry.sampler.type = wgpu::SamplerBindingType::Filtering;
+				break;
+			case ResourceBinding::kNone:
+				gfatal("MakeWgslBindGroupLayout: slot at binding {} has no kind", slot.binding);
+			}
+
 			entries.push_back(entry);
 		}
 
