@@ -41,6 +41,21 @@ namespace assetlib
 	};
 
 	/**
+	 * One environment, by reference: the sky it draws and the lighting derived from that sky.
+	 *
+	 * A `.benv` holds no pixels. Composing by path is what lets a sky be re-authored without
+	 * touching the lighting minutes of convolution produced, and what lets two environments share
+	 * one sky. Weather joins later through the container's minor version, which is why this exists
+	 * at all rather than the editor naming the pair itself.
+	 */
+	struct BEnv
+	{
+		std::string name;
+		std::string sky;       // path to a `.bsky`, relative to the data root; empty when unset
+		std::string lighting;  // path to a `.benvl`, relative to the data root; empty when unset
+	};
+
+	/**
 	 * The image-based lighting derived from one environment: the specular and diffuse convolutions of
 	 * its radiance, plus the exposure they were measured at.
 	 *
