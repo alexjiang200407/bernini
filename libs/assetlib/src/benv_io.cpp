@@ -1,11 +1,18 @@
 #include "assetlib/benv_io.h"
 
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
+#include <core/file/file.h>
 #include <core/hash.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 #include <core/math.h>
+
+#include "fs_util.h"
+#include "string_io.h"
 
 namespace assetlib
 {
@@ -66,6 +73,80 @@ namespace assetlib
 				core::throw_runtime_error("assetlib::writeBenv: the {} map is empty", which);
 			return map;
 		}
+	}
+
+	namespace
+	{
+		// The reference layout. 1 is the blob format above; refusing it by number is what turns a
+		// stale file into "re-import" rather than a misread.
+		constexpr uint16_t c_EnvVersionMajor = 2;
+		constexpr uint16_t c_EnvVersionMinor = 0;
+	}
+
+	std::vector<std::byte>
+	serializeEnv(const BEnv& env)
+	{
+		core::io::ByteWriter writer;
+		writer.writePod(magic::c_BEnv);
+		writer.writePod(c_EnvVersionMajor);
+		writer.writePod(c_EnvVersionMinor);
+
+		writeString(writer, env.name);
+		writeString(writer, env.sky);
+		writeString(writer, env.lighting);
+
+		return writer.take();
+	}
+
+	BEnv
+	deserializeEnv(std::span<const std::byte> bytes)
+	{
+		core::io::ByteReader reader(bytes);
+
+		if (reader.readPod<uint32_t>() != magic::c_BEnv)
+			throw std::runtime_error("benv: bad magic");
+
+		const auto versionMajor = reader.readPod<uint16_t>();
+
+		// The minor version is additive within a major, and nothing here is optional yet.
+		static_cast<void>(reader.readPod<uint16_t>());
+
+		if (versionMajor != c_EnvVersionMajor)
+			throw std::runtime_error(
+				"benv: unsupported version " + std::to_string(versionMajor) + " (expected " +
+				std::to_string(c_EnvVersionMajor) +
+				"); a v1 .benv holds baked maps and must be re-imported as .bsky + .benvl");
+
+		BEnv env;
+		env.name     = readString(reader);
+		env.sky      = readString(reader);
+		env.lighting = readString(reader);
+		return env;
+	}
+
+	void
+	saveEnv(const BEnv& env, const std::filesystem::path& path)
+	{
+		const auto bytes = serializeEnv(env);
+
+		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
+		errno = 0;
+		std::ofstream out(path, std::ios::binary);
+		if (!out)
+			throw std::runtime_error(fileErrorMessage("benv: cannot open file for writing", path));
+
+		out.write(
+			reinterpret_cast<const char*>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size()));
+		if (!out)
+			throw std::runtime_error(fileErrorMessage("benv: failed to write file", path));
+	}
+
+	BEnv
+	loadEnv(const std::filesystem::path& path)
+	{
+		const auto bytes = core::file::read_file_bytes(path.string());
+		return deserializeEnv(bytes);
 	}
 
 	uint64_t

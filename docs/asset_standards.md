@@ -325,6 +325,18 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     data root (unreadable ones are fatal, same as materials), and its sweep recognises
     `isBakedEnvMapName` — `sky_`/`prefilter_`/`irradiance_` + 16 hex — disjoint from the material
     groups by prefix. An orphaned env map is collected; a referenced one never is.
+* **`.benv`** (v2) — **an environment by reference**: `BEnv { name, sky, lighting }`, two data-root
+  relative paths to a `.bsky` and a `.benvl`, no pixels. Composing by path lets a sky be re-authored
+  without touching the lighting minutes of convolution produced, and lets two environments share one
+  sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
+  [libs/assetlib/include/assetlib/benv_io.h](libs/assetlib/include/assetlib/benv_io.h).
+
+  * Either path may be empty — the import's checkboxes write whichever pieces were asked for; what a
+    `.benv` must reference is its consumer's rule, not the container's.
+  * **v1 is the old three-blob format** (prefilter + irradiance + skybox as embedded KTX2). It opens
+    with the same magic and version-field layout, so the v2 reader refuses it *by number* with a
+    message that says to re-import — reading on would take KTX2 bytes as string lengths. The v1
+    reader/writer survive in `benv_io` only until their consumers and `assets/forest.benv` migrate.
 
 ---
 
