@@ -9,6 +9,15 @@ import idl.TextureHandle;
 import forward.common;
 import forward.PbrShading;
 
+// The material reads fork by target -- sampled on DXIL, factor-only where the material tables'
+// textures cannot be dereferenced (see the arms themselves) -- and the two files export identical
+// signatures, so everything below is target-blind.
+#if defined(BGL_WGSL)
+import forward.MaterialFactors;
+#else
+import forward.MaterialSampled;
+#endif
+
 struct MaterialData
 {
     float3 cameraPos;
@@ -34,66 +43,25 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return materialData.pbrMaterials[index];
     }
 
-    // The BGL_WGSL arms shade from factors alone: a material-table texture is a uint2 there, with
-    // nothing to dereference it against until the W4 atlas. (0.5, 0.5) decodes to the flat normal.
     float4 GetBaseColor(SamplerHandle s, float2 uv)
     {
-#if defined(BGL_WGSL)
-        return baseColorFactor;
-#else
-        return baseColorTexture.Sample(s, uv) * baseColorFactor;
-#endif
+        return MaterialBaseColor(this, s, uv);
     }
 
     float3 GetORM(SamplerHandle s, float2 uv)
     {
-#if defined(BGL_WGSL)
-        return float3(1.0, roughnessFactor, metallicFactor);
-#else
-        return ormTexture.Sample(s, uv).rgb * float3(1.0, roughnessFactor, metallicFactor);
-#endif
+        return MaterialOrm(this, s, uv);
     }
 
     float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
-#if defined(BGL_WGSL)
-        return float2(0.5, 0.5);
-#else
-        return normalTexture.Sample(s, uv).xy;
-#endif
+        return MaterialNormalXY(this, s, uv);
     }
 
     float GetAlphaCutoff()
     {
         return alphaCutoff;
     }
-}
-
-// Selects one component of `v`. Indexing a vector with a runtime value (`v[c]`) makes DXC spill it
-// to an indexable temp; an explicit switch lowers to a select chain instead, with no scratch memory.
-float SelectComponent(float4 v, uint c)
-{
-    switch (c)
-    {
-    case 0:
-        return v.x;
-    case 1:
-        return v.y;
-    case 2:
-        return v.z;
-    default:
-        return v.w;
-    }
-}
-
-float SampleLooseChannel(ChannelSource cs, SamplerHandle s, float2 uv)
-{
-#if defined(BGL_WGSL)
-    // No texture to sample (see the PbrMaterial arms); 1.0 leaves the caller's factor as the value.
-    return 1.0;
-#else
-    return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
-#endif
 }
 
 extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
@@ -105,34 +73,17 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetBaseColor(SamplerHandle s, float2 uv)
     {
-        float4 c = float4(
-            SampleLooseChannel(sources[0], s, uv), // R
-            SampleLooseChannel(sources[1], s, uv), // G
-            SampleLooseChannel(sources[2], s, uv), // B
-            SampleLooseChannel(sources[3], s, uv)
-        ); // A
-        return c * baseColorFactor;
+        return MaterialBaseColor(this, s, uv);
     }
 
     float3 GetORM(SamplerHandle s, float2 uv)
     {
-        float ao = SampleLooseChannel(sources[4], s, uv);
-        float roughness = SampleLooseChannel(sources[5], s, uv) * roughnessFactor;
-        float metallic = SampleLooseChannel(sources[6], s, uv) * metallicFactor;
-        return float3(ao, roughness, metallic);
+        return MaterialOrm(this, s, uv);
     }
 
     float2 GetNormalXY(SamplerHandle s, float2 uv)
     {
-#if defined(BGL_WGSL)
-        // Not through SampleLooseChannel: its 1.0 decodes to a degenerate tangent normal, not flat.
-        return float2(0.5, 0.5);
-#else
-        return float2(
-            SampleLooseChannel(sources[7], s, uv), // X
-            SampleLooseChannel(sources[8], s, uv)
-        ); // Y
-#endif
+        return MaterialNormalXY(this, s, uv);
     }
 
     float GetAlphaCutoff()

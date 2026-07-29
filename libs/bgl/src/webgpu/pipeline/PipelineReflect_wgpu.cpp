@@ -299,7 +299,8 @@ namespace bgl
 					SLANG_PARAMETER_CATEGORY_DESCRIPTOR_TABLE_SLOT,
 					slots[i].group,
 					slots[i].binding,
-					used);
+					used) >>
+					SlangErrorChecker();
 
 				if (used)
 					stages |= entryPointStages[e];

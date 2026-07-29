@@ -111,7 +111,8 @@ the plain WGSL form to its own binding — so on WGSL they simply become real
 **buffer-resident** structs (the material tables), and a storage buffer cannot hold a texture on any
 target: its WGSL form keeps the `uint2` footprint the CPU writes, with the sample methods absent so
 a use fails at compile time. Until the W4 atlas makes material textures addressable again, the
-material `Get*` methods shade from factors alone on `BGL_WGSL` (see `forward/MaterialData.slang`);
+material reads fork by file — `forward/MaterialSampled.slang` on DXIL, `forward/MaterialFactors.slang`
+(factors alone) on `BGL_WGSL` — behind one conditional import in `forward/MaterialData.slang`;
 `StrideProbe_test` pins the footprint.
 
 ## Two Tint rules DXIL never enforced
