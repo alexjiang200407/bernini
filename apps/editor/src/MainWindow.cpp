@@ -260,10 +260,11 @@ MainWindow::CleanUnusedTextures()
 			"Clean Unused Textures",
 			QString(
 				"No unused baked textures.\n\n%1 of the %2 baked textures are referenced by the "
-				"project's %3 materials.")
+				"project's %3 materials and %4 environment assets.")
 				.arg(scan.liveMaps)
 				.arg(scan.candidates)
-				.arg(scan.materialsScanned));
+				.arg(scan.materialsScanned)
+				.arg(scan.environmentsScanned));
 		return;
 	}
 

@@ -1,7 +1,11 @@
 #include <assetlib/texture_prune.h>
 
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
+#include <assetlib/bsky_io.h>
+#include <assetlib/env_bake.h>
 #include <assetlib/material_bake.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
@@ -9,16 +13,27 @@ namespace assetlib
 	namespace
 	{
 		constexpr std::string_view c_MaterialExtension = ".bmaterial";
+		constexpr std::string_view c_SkyExtension      = ".bsky";
+		constexpr std::string_view c_LightingExtension = ".benvl";
 
 		struct LiveSet
 		{
 			std::unordered_set<std::string> maps;
-			size_t                          materials = 0;
+			size_t                          materials    = 0;
+			size_t                          environments = 0;
 		};
 
+		void
+		markMap(LiveSet& live, const std::string& map)
+		{
+			if (!map.empty())
+				live.maps.insert(std::filesystem::path(map).filename().string());
+		}
+
 		/**
-		 * The mark phase: the name of every baked map that some material below `dataRoot` still points
-		 * at.
+		 * The mark phase: the name of every baked map that some material, sky or lighting asset below
+		 * `dataRoot` still points at. An unreadable asset is fatal, and deliberately so -- its maps
+		 * cannot be marked, and they would then be swept as garbage.
 		 */
 		LiveSet
 		markLiveMaps(const std::filesystem::path& dataRoot)
@@ -27,44 +42,71 @@ namespace assetlib
 
 			for (const auto& entry : std::filesystem::recursive_directory_iterator(dataRoot))
 			{
-				if (!entry.is_regular_file() || entry.path().extension() != c_MaterialExtension)
+				if (!entry.is_regular_file())
 					continue;
 
-				auto material = BMaterial();
-				try
-				{
-					material = loadMaterial(entry.path());
-				}
-				catch (const std::exception& e)
-				{
-					// Fatal, and deliberately so: a material we cannot read is a material whose maps we
-					// cannot mark, and they would then be swept as garbage.
-					throw std::runtime_error(
-						"assetlib::findUnusedBakedTextures: cannot read the material '" +
-						entry.path().string() +
+				const auto unreadable = [&entry](const char* what, const std::exception& e) {
+					return std::runtime_error(
+						"assetlib::findUnusedBakedTextures: cannot read the " + std::string(what) +
+						" '" + entry.path().string() +
 						"', so the baked maps it references cannot be known: " + e.what());
-				}
-
-				++live.materials;
-
-				const auto mark = [&live](const std::string& map) {
-					if (!map.empty())
-						live.maps.insert(std::filesystem::path(map).filename().string());
 				};
 
-				switch (material.shadingModel)
+				const auto extension = entry.path().extension();
+				if (extension == c_MaterialExtension)
 				{
-				case ShadingModel::kPbr:
-					mark(material.pbr.baseColorTexture);
-					mark(material.pbr.normalTexture);
-					mark(material.pbr.ormTexture);
-					break;
+					auto material = BMaterial();
+					try
+					{
+						material = loadMaterial(entry.path());
+					}
+					catch (const std::exception& e)
+					{
+						throw unreadable("material", e);
+					}
 
-				case ShadingModel::kCount:
-					throw std::runtime_error(
-						"assetlib::findUnusedBakedTextures: the material '" +
-						entry.path().string() +
-						"' names an unknown shading model, so its baked maps cannot be known");
+					++live.materials;
+
+					switch (material.shadingModel)
+					{
+					case ShadingModel::kPbr:
+						markMap(live, material.pbr.baseColorTexture);
+						markMap(live, material.pbr.normalTexture);
+						markMap(live, material.pbr.ormTexture);
+						break;
+
+					case ShadingModel::kCount:
+						throw std::runtime_error(
+							"assetlib::findUnusedBakedTextures: the material '" +
+							entry.path().string() +
+							"' names an unknown shading model, so its baked maps cannot be known");
+					}
+				}
+				else if (extension == c_SkyExtension)
+				{
+					try
+					{
+						markMap(live, loadSky(entry.path()).sky.baked);
+					}
+					catch (const std::exception& e)
+					{
+						throw unreadable("sky", e);
+					}
+					++live.environments;
+				}
+				else if (extension == c_LightingExtension)
+				{
+					try
+					{
+						const BEnvLighting lighting = loadEnvLighting(entry.path());
+						markMap(live, lighting.prefilter.baked);
+						markMap(live, lighting.irradiance.baked);
+					}
+					catch (const std::exception& e)
+					{
+						throw unreadable("env lighting", e);
+					}
+					++live.environments;
 				}
 			}
 
@@ -82,9 +124,10 @@ namespace assetlib
 
 		auto scan = TexturePruneScan();
 
-		const LiveSet live    = markLiveMaps(desc.dataRoot);
-		scan.materialsScanned = live.materials;
-		scan.liveMaps         = live.maps.size();
+		const LiveSet live       = markLiveMaps(desc.dataRoot);
+		scan.materialsScanned    = live.materials;
+		scan.environmentsScanned = live.environments;
+		scan.liveMaps            = live.maps.size();
 
 		// Nothing has ever been baked here, so nothing can have been orphaned.
 		const std::filesystem::path textureDir = desc.dataRoot / desc.textureDir;
@@ -98,7 +141,7 @@ namespace assetlib
 
 			const std::string name = entry.path().filename().string();
 
-			if (!isBakedMapName(name))
+			if (!isBakedMapName(name) && !isBakedEnvMapName(name))
 				continue;
 
 			++scan.candidates;
