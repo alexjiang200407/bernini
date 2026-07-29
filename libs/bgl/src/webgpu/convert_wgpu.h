@@ -1,4 +1,5 @@
 #pragma once
+#include "resource/Sampler.h"
 #include "types/BlendState.h"
 #include "types/DepthStencilState.h"
 #include "types/Format.h"
@@ -37,4 +38,18 @@ namespace bgl
 	/** Maps a bgl colour-write mask (a bitfield) to the WebGPU flags. */
 	wgpu::ColorWriteMask
 	ToWgpuColorWriteMask(ColorMask mask) noexcept;
+
+	/** Maps a bgl sampler address mode to its WebGPU equivalent. gfatals on one WebGPU lacks. */
+	wgpu::AddressMode
+	ToWgpuAddressMode(SamplerAddressMode mode) noexcept;
+
+	/**
+	 * Builds the WebGPU sampler descriptor for a bgl SamplerDesc.
+	 *
+	 * gfatals rather than degrading on anything WebGPU cannot express -- a border colour, a
+	 * mirror-once address mode, a min/max reduction, or a LOD bias -- because silently dropping one
+	 * would only show up as a golden-image difference against D3D12.
+	 */
+	wgpu::SamplerDescriptor
+	ToWgpuSamplerDescriptor(const SamplerDesc& desc) noexcept;
 }
