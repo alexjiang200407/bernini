@@ -1,4 +1,5 @@
 import forward.common;
+import idl.SamplerHandle;
 import idl.TextureHandle;
 import util.Tonemap;
 
@@ -44,7 +45,7 @@ public float4 ShadeSurface(
     TextureCubeHandle irradianceMap,
     TextureCubeHandle prefilterMap,
     TextureHandle brdfLUT,
-    SamplerState.Handle clampSampler,
+    SamplerHandle clampSampler,
     float exposure
 )
 {

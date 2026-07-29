@@ -103,6 +103,14 @@ So the WGSL backend cannot use the `.Handle` primitives: it binds each buffer to
 instead of indexing a heap. The D3D12 backend keeps the bindless heap. Buffer primitives therefore
 need a per-target form (bindless on DXIL, plainly bound on WGSL).
 
+Textures and samplers follow the same seam, with one split that buffers do not have.
+`idl.SamplerHandle` and `idl.TextureCubeHandle` are only ever *constant-buffer-resident*, where Slang hoists the plain
+WGSL form to its own binding — so on WGSL they simply become `SamplerState` / `TextureCube`. But
+`idl.TextureHandle` lives inside **buffer-resident** structs (the material tables), and a storage
+buffer cannot hold a texture on any target: its WGSL form keeps the `uint2` footprint the CPU
+writes, with the sample methods absent so a use fails at compile time. Sampling a material texture
+on WebGPU is the W4 atlas redesign; `StrideProbe_test` pins the footprint.
+
 A constant buffer's *plain* members go somewhere else again. Slang gathers them into a std140
 `var<uniform>` block at the constant buffer's own binding and starts the resource slots after it, so
 one `ConstantBuffer<T>` that mixes data with buffers — `ExpansionData` is the case that matters —
