@@ -6,7 +6,6 @@
 #include <SDL3/SDL.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
-#include <assetlib/env_resolve.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
@@ -103,26 +102,10 @@ main(int argc, char** argv)
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
-		auto env   = assetlib::resolveEnvironment("assets/Environments/forest.benv", "assets");
 
-		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(std::move(env.maps.irradiance)),
-		      scene->AddTextureAsset(std::move(env.maps.prefilter)) });
-
-		// --exposure overrides what the .benv derived for these maps.
-		view->SetExposure(exposureGiven ? exposure : env.maps.exposure);
-
-		if (skyBoxEnabled)
-		{
-			view->SetSkyBox(
-				{ scene->AddTextureAsset(std::move(env.maps.skybox)),
-			      env.skyMipLevel,
-			      1.0f,
-			      env.skyRotationY });
-		}
-
-		// Every asset reference is relative to the data root: the mesh itself, the materials the mesh
-		// names, and the textures those materials name. `operator/` leaves an absolute --model alone.
+		// Every asset reference is relative to the data root: the environment, the mesh itself, the
+		// materials the mesh names, and the textures those materials name. `operator/` leaves an
+		// absolute --model alone.
 		const auto dataRoot = std::filesystem::path(dataRootPath);
 		const auto model    = assetlib::load(dataRoot / modelPath);
 
@@ -133,6 +116,17 @@ main(int argc, char** argv)
 		// samples its optimized triplet, a loose one samples the source routes the material editor
 		// authored.
 		auto assets = game::AssetManager(scene, dataRoot);
+
+		const auto env = assets.AcquireEnvironment("Environments/forest.benv");
+		view->SetEnvironmentMap({ env.irradiance, env.prefilter });
+
+		// --exposure overrides what the environment's lighting derived for these maps.
+		view->SetExposure(exposureGiven ? exposure : env.exposure);
+
+		if (skyBoxEnabled)
+		{
+			view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
+		}
 
 		auto geoms = std::vector<bgl::GeomHandle>();
 		geoms.reserve(model.meshes.size());
