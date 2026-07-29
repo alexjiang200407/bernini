@@ -74,6 +74,7 @@ doing anything else — a slice marked `[>]` may have merged since the last sess
 
 ```bash
 gh pr list --base feature/<name> --state all --json number,title,state
+just watch-pr <n> --once      # per open slice PR: merge state + every submitted review and comment
 ```
 
 Otherwise cut the branch from `origin/master` and publish it, so PRs have something to target:
@@ -241,7 +242,37 @@ After the PR is open, **stop and report**: the PR, what it contains, what the ne
 reviews and merges. Review comments are [bcp-revise](.claude/skills/bcp-revise/SKILL.md), which
 pushes to the slice branch and leaves the base alone.
 
-When they merge, `bcp-feature <name>` picks up the next slice from the tracker.
+Then **start the watcher in the background** and hand off:
+
+```bash
+just watch-pr <n>        # python scripts/watch_pr.py <n>
+```
+
+It snapshots the PR's current activity as a baseline, polls, and blocks until something actionable
+happens, printing one JSON event — the deterministic version of "did the reviewer move yet?", so
+no session re-derives it from ad-hoc `gh` calls. React by event:
+
+| event | means | do |
+|---|---|---|
+| `merged` | the slice landed | mark it `[x]` in the tracker, continue with the next slice (§ 3) |
+| `review` / `comment` | submitted feedback (the payload carries it) | [bcp-revise](.claude/skills/bcp-revise/SKILL.md) on the slice branch |
+| `closed` | closed without merging | stop and ask — the user rejected something |
+| `timeout` (exit 3) | an hour of silence | report you are still waiting and restart the watcher |
+
+Only *submitted* reviews trigger it; a reviewer's pending draft stays invisible until they send it.
+Do not poll `gh` yourself while the watcher runs — it is the wait, not a hint.
+
+**After responding, restart the watcher with `--since`** set to the newest `submittedAt`/`createdAt`
+you acted on:
+
+```bash
+just watch-pr <n> --since 2026-07-29T13:13:22Z
+```
+
+Nothing watches the PR while you revise, and a plain restart would fold anything that arrived in
+the meantime into its baseline — never reported, never acted on. `--since` keeps everything after
+that timestamp out of the baseline and fires immediately if something is already waiting, so a
+comment landing mid-revision costs one extra revise round instead of vanishing.
 
 If the user would rather not wait, the next slice **stacks** on the open one instead of on the
 feature branch:
