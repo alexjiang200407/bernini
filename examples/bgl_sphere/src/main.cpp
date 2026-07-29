@@ -70,7 +70,7 @@ main(int argc, char** argv)
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
-		auto env   = assetlib::resolveEnvironment("assets/forest.benv", "assets");
+		auto env   = assetlib::resolveEnvironment("assets/Environments/forest.benv", "assets");
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(std::move(env.maps.irradiance)),

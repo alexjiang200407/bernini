@@ -22,8 +22,9 @@ namespace editor
 		auto env = assetlib::ResolvedEnvironment();
 		try
 		{
+			// A .benv lives in <dataRoot>/Environments, so the data root is two levels up.
 			const auto path = std::filesystem::path(benvPath);
-			env             = assetlib::resolveEnvironment(path, path.parent_path());
+			env             = assetlib::resolveEnvironment(path, path.parent_path().parent_path());
 		}
 		catch (const std::exception& e)
 		{
