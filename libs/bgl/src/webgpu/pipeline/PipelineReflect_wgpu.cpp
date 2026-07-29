@@ -69,15 +69,15 @@ namespace bgl
 				result.resourceBinding = ResolveSlangResourceBinding(typeLayout->getType());
 
 				auto slot = BindGroupSlot{ group, bindingBase };
-				slot.kind = result.resourceBinding;
+				slot.type = result.resourceBinding;
 
-				if (slot.kind == ResourceBinding::kBuffer)
+				if (slot.type == ResourceBinding::kBuffer)
 				{
 					slot.bufferType = IsReadWrite(typeLayout->getType()) ?
 					                      wgpu::BufferBindingType::Storage :
 					                      wgpu::BufferBindingType::ReadOnlyStorage;
 				}
-				else if (slot.kind == ResourceBinding::kTexture)
+				else if (slot.type == ResourceBinding::kTexture)
 				{
 					slot.viewDimension = ViewDimensionForShape(typeLayout->getType());
 				}
@@ -272,7 +272,7 @@ namespace bgl
 			// fails pipeline creation naming the stage, rather than the whole layout being rejected
 			// because some other entry point declared the buffer.
 			auto stages = visibility;
-			if (slot.kind == ResourceBinding::kBuffer &&
+			if (slot.type == ResourceBinding::kBuffer &&
 			    slot.bufferType == wgpu::BufferBindingType::Storage)
 				stages &= ~wgpu::ShaderStage::Vertex;
 
@@ -280,7 +280,7 @@ namespace bgl
 			entry.binding    = slot.binding;
 			entry.visibility = stages;
 
-			switch (slot.kind)
+			switch (slot.type)
 			{
 			case ResourceBinding::kBuffer:
 				entry.buffer.type = slot.bufferType;

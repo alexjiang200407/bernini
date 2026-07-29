@@ -16,7 +16,7 @@ namespace bgl
 	{
 		uint32_t        group;
 		uint32_t        binding;
-		ResourceBinding kind = ResourceBinding::kBuffer;
+		ResourceBinding type = ResourceBinding::kBuffer;
 
 		wgpu::BufferBindingType    bufferType    = wgpu::BufferBindingType::Uniform;
 		wgpu::TextureViewDimension viewDimension = wgpu::TextureViewDimension::e2D;

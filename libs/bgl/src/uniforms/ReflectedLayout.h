@@ -28,7 +28,6 @@ namespace bgl
 		uint32_t         arrayCount  = 0;
 		uint32_t         arrayStride = 0;
 
-		// Non-kNone marks a bindless handle rather than a plain uint2 -- they share a valueType.
 		ResourceBinding              resourceBinding = ResourceBinding::kNone;
 		std::vector<ReflectedField>  fields;   // kStruct members
 		std::vector<ReflectedLayout> element;  // kArray element type (0 or 1 entry)
