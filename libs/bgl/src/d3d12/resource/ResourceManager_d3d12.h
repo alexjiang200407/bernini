@@ -273,8 +273,14 @@ namespace bgl
 		void
 		FreeCbvSrvUavDescriptor(uint32_t descriptorIndex) noexcept;
 
-		wrl::ComPtr<ID3D12Device>         m_Device;
-		DescriptorAllocator               m_CbvSrvUavAllocator;
+		wrl::ComPtr<ID3D12Device> m_Device;
+		DescriptorAllocator       m_CbvSrvUavAllocator;
+
+#if defined(BERNINI_GPU_DEBUG)
+		// Upload-heap buffer filled with 0xDEADBEEF; every freed descriptor is retargeted at it,
+		// so a stale bindless read returns the pattern instead of silently reading zeros.
+		wrl::ComPtr<ID3D12Resource> m_DescriptorPoison;
+#endif
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
