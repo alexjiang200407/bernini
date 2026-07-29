@@ -70,5 +70,9 @@ namespace bgl
 
 		// Depth-only pre-pass kernels; only the self-occluding transparent PSO slots are built.
 		std::array<MeshletKernel, c_PsoCount> m_PrepassKernels;
+
+		// True on a device without mesh shaders: the geometry stage is the vertex-pulling arm, which
+		// reads the records ExpandMeshletsPass wrote and draws indirect from its args.
+		bool m_UsesExpansion = false;
 	};
 }

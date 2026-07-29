@@ -271,6 +271,10 @@ Everything else is self-explanatory from the header.
 
 ### IDevice
 
+* **`SupportsMeshShaders()`** — whether the device runs mesh/amplification stages natively. When
+  false (WebGPU), `IMeshletPipeline` is the compute-expansion + vertex-pulling emulation and the
+  renderer attaches `ExpandMeshletsPass` ahead of the forward draws; see
+  [passes.md](./passes.md#expand-meshlets).
 * **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
   defaults to `"main"`. No source is read here: the Slang module is **loaded lazily** on the first
   `GetSlangModule()`, which only happens when a PSO must actually compile (a shader-cache miss). The

@@ -279,6 +279,8 @@ namespace bgl
 			m_PrepassKernels[static_cast<size_t>(entry.pso)] =
 				BuildForwardKernel(device, entry.config);
 		}
+
+		m_UsesExpansion = !device->SupportsMeshShaders();
 	}
 
 	void
@@ -325,6 +327,18 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		if (m_UsesExpansion)
+		{
+			desc.AddBufferArg(
+					"scene.meshletRecords",
+					BarrierSyncFlag::kVertexShader,
+					BarrierAccessFlag::kUnorderedAccess)
+				.AddBufferArg(
+					"expand.drawArgs",
+					BarrierSyncFlag::kIndirectArgument,
+					BarrierAccessFlag::kIndirectArgument);
+		}
+
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -339,6 +353,14 @@ namespace bgl
 		if (auto foundForwardData = kernel.FindUniforms("forwardData"))
 		{
 			BindSceneBuffers(*foundForwardData, c_ForwardDataBuffers, resources);
+
+			// meshletInstances reflects on both backends -- the mesh path takes the same data as a
+			// payload and leaves it unread -- but only the emulation imports the records buffer.
+			if (m_UsesExpansion)
+			{
+				(*foundForwardData)["meshletInstances"] =
+					resources.GetBuffer("scene.meshletRecords");
+			}
 		}
 
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
@@ -420,7 +442,10 @@ namespace bgl
 		                           .AddColorAttachment(draw.motionVectorHandle)
 		                           .SetDepthAttachment(draw.depthBufferHandle);
 
-		const auto dispatchArgs = resources.GetBuffer(c_DispatchArgsBuffer);
+		// The emulation draws indirect from the args the expansion chain wrote -- 16-byte draw
+		// records, not the 12-byte mesh-dispatch args the compact kernel fills.
+		const auto dispatchArgs = m_UsesExpansion ? resources.GetBuffer("expand.drawArgs") :
+		                                            resources.GetBuffer(c_DispatchArgsBuffer);
 
 		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
 		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
@@ -447,7 +472,12 @@ namespace bgl
 			cmd->DispatchMeshIndirect(pso);
 		}
 
-		DrawTransparent(draw, resources);
+		// The depth-sorted draws still read the mesh-path partition args; expanding them is part
+		// of the W4 transparent work, so until then the emulation draws opaque and alpha-test only.
+		if (!m_UsesExpansion)
+		{
+			DrawTransparent(draw, resources);
+		}
 	}
 
 	void

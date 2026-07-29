@@ -176,6 +176,37 @@ many instances turn out to be transparent; only the sort itself is bounded.
   `transparentSort.partitionDispatchArgs` (all consumed by `Forward`).
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
+### Expand Meshlets — [passes/ExpandMeshletsPass.{h,cpp}](libs/bgl/src/passes/ExpandMeshletsPass.cpp)
+
+The mesh-emulation half of the geometry path, attached only when
+`IDevice::SupportsMeshShaders()` is false (WebGPU): what the amplification stage does on the D3D12
+path. Runs after `Compact Instances` and before `Forward`, in three sub-passes:
+
+1. **Histogram + Scan** (`HistogramMeshlets`, then `PrefixSumInstances` over the result) — counts
+   visible *meshlets* per PSO bucket (the instance histogram counts instances; record regions need
+   meshlets) and scans the counts into per-bucket region bases.
+2. **Draw Args** (`MeshletDrawArgs`, one thread per bucket) — turns the scan into a 16-byte
+   `DrawIndirectArgs` per bucket: `firstVertex` is where the bucket's records begin ×
+   `cVerticesPerMeshletRecord`, `vertexCount` returns to zero because the expansion uses it as the
+   allocator that fills the region.
+3. **Expand** (`ExpandMeshlets`, one dispatch per opaque/alpha-test bucket) — each visible instance
+   appends one `MeshletInstance` record per meshlet into `scene.meshletRecords`, reserving space by
+   atomically growing its bucket's `vertexCount` — so the count the draw consumes is the same number
+   that placed the records. Each dispatch covers the full instance count and the kernel exits past
+   its bucket's own; the CPU-sized over-dispatch trades wasted threads for an indirect-dispatch seam
+   the RHI does not have.
+
+The transparent buckets are not expanded — that lands with the W4 transparent work, and `Forward`
+skips its depth-sorted draws on this path until it does.
+
+* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`,
+  `scene.instanceVisibility`, `scene.compactedInstances`, `compactedInstances.psoPrefixSumBuffer`,
+  `compactedInstances.compactDispatchArgs`, `transparentSort.partitionBase`.
+* **Out:** `scene.meshletRecords` (owned by the view, which sizes it from its meshlet total),
+  `expand.drawArgs` and `expand.meshletPrefixSum` (owned by the pass) — the first two consumed by
+  `Forward`'s vertex-pulling draw.
+* **Skipped** when the view's instance count is 0.
+
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
@@ -201,6 +232,13 @@ afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
 is partitioned `[self-occluding][plain]` and both occlude PSOs share one pipeline, the whole
 transparent phase is **three fixed `DispatchMeshIndirect` calls** — occluder pre-pass, occluder
 colour, plain colour — whose grids and base offsets are GPU values the CPU never sees.
+
+**On the mesh-emulation path** (`m_UsesExpansion`, read from the kernel's own reflection at `Init`:
+the geometry module's `BGL_WGSL` arm declares `meshletInstances`, the mesh arm does not), the same
+per-bucket loop draws indirect from `expand.drawArgs` — the 16-byte records
+[Expand Meshlets](#expand-meshlets) wrote — instead of `compactDispatchArgs`, binds
+`scene.meshletRecords` into `forwardData`, and skips the transparent phase entirely until the W4
+transparent work expands those buckets too.
 
 The self-occluding partition (`occlude` materials, the `kTransparentOcclude_*` buckets) is drawn
 **twice**: first a depth-only pre-pass — a **0-RTV pipeline** bound to a depth-only framebuffer,
