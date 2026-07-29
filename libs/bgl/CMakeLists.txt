@@ -194,6 +194,7 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
             ${Stb_INCLUDE_DIR}
     )

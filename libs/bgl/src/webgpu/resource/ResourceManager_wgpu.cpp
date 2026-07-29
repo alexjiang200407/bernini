@@ -234,6 +234,26 @@ namespace bgl
 		return m_Buffers[slotIndex].GetHandle();
 	}
 
+	// No heap on this backend: the slot index itself is the number bind-group assembly
+	// resolves at dispatch.
+	uint32_t
+	ResourceManager::GetBindlessIndex(BufferHandle handle) const noexcept
+	{
+		return handle.slot.index;
+	}
+
+	uint32_t
+	ResourceManager::GetBindlessIndex(TextureHandle handle) const noexcept
+	{
+		return handle.slot.index;
+	}
+
+	uint32_t
+	ResourceManager::GetBindlessIndex(SamplerHandle handle) const noexcept
+	{
+		return handle.idx;
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
