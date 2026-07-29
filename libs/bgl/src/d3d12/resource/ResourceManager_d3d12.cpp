@@ -5,12 +5,6 @@
 
 namespace bgl
 {
-	namespace
-	{
-		constexpr uint32_t c_PoisonPattern  = 0xDEADBEEF;
-		constexpr uint32_t c_PoisonElements = 16 * 1024;
-	}
-
 	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device>  device,
 		const ResourceManagerDesc& desc) :
@@ -59,36 +53,6 @@ namespace bgl
 			m_Device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&m_SamplerHeap)) >>
 				d3d12ErrChecker;
 		}
-
-#if defined(BERNINI_GPU_DEBUG)
-		{
-			D3D12_HEAP_PROPERTIES heapProps = {};
-			heapProps.Type                  = D3D12_HEAP_TYPE_UPLOAD;
-
-			D3D12_RESOURCE_DESC poisonDesc = {};
-			poisonDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
-			poisonDesc.Width               = c_PoisonElements * sizeof(uint32_t);
-			poisonDesc.Height              = 1;
-			poisonDesc.DepthOrArraySize    = 1;
-			poisonDesc.MipLevels           = 1;
-			poisonDesc.SampleDesc.Count    = 1;
-			poisonDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-			m_Device->CreateCommittedResource(
-				&heapProps,
-				D3D12_HEAP_FLAG_NONE,
-				&poisonDesc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(&m_DescriptorPoison)) >>
-				d3d12ErrChecker;
-
-			void* mapped = nullptr;
-			m_DescriptorPoison->Map(0, nullptr, &mapped) >> d3d12ErrChecker;
-			std::fill_n(static_cast<uint32_t*>(mapped), c_PoisonElements, c_PoisonPattern);
-			m_DescriptorPoison->Unmap(0, nullptr);
-		}
-#endif
 	}
 
 	BufferHandle
@@ -611,24 +575,6 @@ namespace bgl
 		{
 			return;
 		}
-
-#if defined(BERNINI_GPU_DEBUG)
-		// A stale index in a uniform block reads a *valid* descriptor for whatever resource takes
-		// this slot next -- plausible pixels, no fault. Retargeting the freed descriptor at the
-		// poison buffer makes the read return 0xDEADBEEF, which zeros (a null SRV, or a fresh
-		// zero-filled buffer) would not distinguish from correct data.
-		// Debug-only because the write is a per-free CPU cost that buys nothing but diagnosis.
-		D3D12_SHADER_RESOURCE_VIEW_DESC poisonSrv = {};
-		poisonSrv.Format                          = DXGI_FORMAT_UNKNOWN;
-		poisonSrv.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
-		poisonSrv.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		poisonSrv.Buffer.NumElements              = c_PoisonElements;
-		poisonSrv.Buffer.StructureByteStride      = sizeof(uint32_t);
-		m_Device->CreateShaderResourceView(
-			m_DescriptorPoison.Get(),
-			&poisonSrv,
-			m_CbvSrvUavAllocator.GetCpuHandle(descriptorIndex));
-#endif
 
 		m_CbvSrvUavAllocator.Free(descriptorIndex);
 	}

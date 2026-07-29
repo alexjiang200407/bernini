@@ -243,6 +243,7 @@ something plausible rather than crashing. That is why D4's gate is GPU validatio
 goldens: a wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer
 alone does not see it.
 
-The cheap mitigation, worth doing in D4 rather than after: have the debug build write a known
-sentinel into every freed descriptor, so a stale read lands on something visibly wrong instead of on
-whatever took the slot.
+The cheap mitigation considered — a debug-build sentinel written into every freed descriptor —
+was built in D4 (freed descriptors retargeted at a 0xDEADBEEF poison buffer) and then **removed in
+its review**: a debug-only aid was judged not worth the carried machinery. Stale-descriptor bugs
+are instead caught by `--gpu-validation` when it is explicitly run.
