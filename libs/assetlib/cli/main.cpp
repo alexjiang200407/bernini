@@ -534,8 +534,10 @@ main(int argc, char** argv)
 			const auto scan = assetlib::findUnusedBakedTextures(desc);
 
 			spdlog::info(
-				"Scanned {} materials: {} baked maps still referenced, {} present in '{}'",
+				"Scanned {} materials and {} environment assets: {} baked maps still referenced, "
+				"{} present in '{}'",
 				scan.materialsScanned,
+				scan.environmentsScanned,
 				scan.liveMaps,
 				scan.candidates,
 				pruneTextureDir);
