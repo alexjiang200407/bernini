@@ -24,22 +24,25 @@ namespace assetlib
 	{
 		std::vector<UnusedTexture> unused;
 
-		size_t   materialsScanned = 0;
-		size_t   liveMaps         = 0;  // distinct baked maps some material still names
-		size_t   candidates       = 0;  // baked maps present in the texture directory
-		uint64_t bytes            = 0;  // total size of `unused`
+		size_t   materialsScanned    = 0;
+		size_t   environmentsScanned = 0;  // `.bsky` + `.benvl` assets read by the mark phase
+		size_t   liveMaps            = 0;  // distinct baked maps some asset still names
+		size_t   candidates          = 0;  // baked maps present in the texture directory
+		uint64_t bytes               = 0;  // total size of `unused`
 	};
 
 	/**
-	 * Finds the baked maps under `desc.textureDir` that no material references any more, without
-	 * deleting anything. A re-bake whose routes changed writes a new content-hashed file and leaves the
-	 * old one behind, so these accumulate; this is how they are found.
-     *
+	 * Finds the baked maps under `desc.textureDir` that no material, sky or env lighting asset
+	 * references any more, without deleting anything. A re-bake whose routes changed writes a new
+	 * content-hashed file and leaves the old one behind, so these accumulate; this is how they are
+	 * found.
+	 *
 	 * A missing texture directory is not an error -- nothing has been baked, so nothing is unused.
 	 *
-	 * @throws std::runtime_error if `dataRoot` does not exist, or if any `.bmaterial` below it cannot be
-	 *         read. An unreadable material is fatal on purpose: its references would silently go
-	 *         unmarked, and the maps it alone keeps alive would be swept as garbage.
+	 * @throws std::runtime_error if `dataRoot` does not exist, or if any `.bmaterial`, `.bsky` or
+	 *         `.benvl` below it cannot be read. An unreadable asset is fatal on purpose: its
+	 *         references would silently go unmarked, and the maps it alone keeps alive would be swept
+	 *         as garbage.
 	 */
 	[[nodiscard]] TexturePruneScan
 	findUnusedBakedTextures(const TexturePruneDesc& desc);
