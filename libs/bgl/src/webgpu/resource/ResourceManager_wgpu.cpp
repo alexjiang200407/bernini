@@ -15,7 +15,7 @@ namespace bgl
 		const ResourceManagerDesc& desc) :
 		m_Device(device), m_Instance(instance), m_Buffers(desc.maxCbvSrvUavs),
 		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxCbvSrvUavs),
-		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
+		m_Samplers(desc.maxSamplers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");
 	}
@@ -207,6 +207,9 @@ namespace bgl
 				case PendingType::kTexture:
 					m_Textures.reclaim_slot(deletion.slotIndex);
 					break;
+				case PendingType::kSampler:
+					m_Samplers.reclaim_slot(deletion.slotIndex);
+					break;
 				case PendingType::kRtv:
 					m_Rtvs.reclaim_slot(deletion.slotIndex);
 					break;
@@ -285,9 +288,20 @@ namespace bgl
 	}
 
 	SamplerHandle
-	ResourceManager::CreateSampler(const SamplerDesc&) noexcept
+	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
-		gfatal("CreateSampler: samplers are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		const auto slot = m_Samplers.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateSampler: sampler pool exhausted");
+			return SamplerHandle{};
+		}
+
+		m_Samplers[slot.index] = Sampler(m_Device, desc);
+
+		return SamplerHandle{ slot.index, slot.generation };
 	}
 
 	RtvHandle
@@ -367,9 +381,22 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroySampler(SamplerHandle, bool) noexcept
+	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
-		gfatal("DestroySampler: samplers are not implemented on the WebGPU backend yet");
+		auto lock = std::scoped_lock(m_PoolMutex);
+
+		const auto slot = core::slot_handle{ handle.idx, handle.generation };
+		if (!m_Samplers.valid(slot))
+			return;
+
+		if (deferred)
+		{
+			m_Samplers.retire_slot(slot);
+			RetireDeferred(PendingType::kSampler, slot.index);
+			return;
+		}
+
+		m_Samplers.release_slot(slot);
 	}
 
 	void
@@ -452,9 +479,11 @@ namespace bgl
 	}
 
 	const Sampler&
-	ResourceManager::GetSampler(SamplerHandle) const noexcept
+	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
 	{
-		gfatal("GetSampler: samplers are not implemented on the WebGPU backend yet");
+		const auto slot = core::slot_handle{ handle.idx, handle.generation };
+		gassert(m_Samplers.valid(slot), "GetSampler: invalid handle");
+		return m_Samplers[slot.index];
 	}
 
 	TextureReadbackLayout
@@ -489,9 +518,9 @@ namespace bgl
 	}
 
 	bool
-	ResourceManager::ValidSamplerHandle(const SamplerHandle&) const noexcept
+	ResourceManager::ValidSamplerHandle(const SamplerHandle& handle) const noexcept
 	{
-		return false;
+		return m_Samplers.valid(core::slot_handle{ handle.idx, handle.generation });
 	}
 
 	bool

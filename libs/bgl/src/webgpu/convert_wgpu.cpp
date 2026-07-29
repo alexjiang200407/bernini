@@ -308,4 +308,71 @@ namespace bgl
 
 		return result;
 	}
+
+	wgpu::AddressMode
+	ToWgpuAddressMode(SamplerAddressMode mode) noexcept
+	{
+		switch (mode)
+		{
+		case SamplerAddressMode::kClamp:
+			return wgpu::AddressMode::ClampToEdge;
+		case SamplerAddressMode::kWrap:
+			return wgpu::AddressMode::Repeat;
+		case SamplerAddressMode::kMirror:
+			return wgpu::AddressMode::MirrorRepeat;
+
+		// No WebGPU address mode equivalent.
+		case SamplerAddressMode::kBorder:
+		case SamplerAddressMode::kMirrorOnce:
+			gfatal("wgpu: no address mode for {}", static_cast<int>(mode));
+		}
+
+		gfatal("wgpu: unknown address mode {}", static_cast<int>(mode));
+	}
+
+	wgpu::SamplerDescriptor
+	ToWgpuSamplerDescriptor(const SamplerDesc& desc) noexcept
+	{
+		if (desc.mipBias != 0.f)
+			gfatal(
+				"wgpu: a sampler has no LOD bias, so mipBias {} cannot be honoured",
+				desc.mipBias);
+
+		auto out         = wgpu::SamplerDescriptor{};
+		out.addressModeU = ToWgpuAddressMode(desc.addressU);
+		out.addressModeV = ToWgpuAddressMode(desc.addressV);
+		out.addressModeW = ToWgpuAddressMode(desc.addressW);
+		out.minFilter    = desc.minFilter ? wgpu::FilterMode::Linear : wgpu::FilterMode::Nearest;
+		out.magFilter    = desc.magFilter ? wgpu::FilterMode::Linear : wgpu::FilterMode::Nearest;
+		out.mipmapFilter =
+			desc.mipFilter ? wgpu::MipmapFilterMode::Linear : wgpu::MipmapFilterMode::Nearest;
+		out.maxAnisotropy = static_cast<uint16_t>(desc.maxAnisotropy);
+
+		switch (desc.reductionType)
+		{
+		case SamplerReductionType::kStandard:
+			break;
+		case SamplerReductionType::kComparison:
+			// SamplerDesc carries no comparison function; D3D12 hardcodes the same one.
+			out.compare = wgpu::CompareFunction::Less;
+			break;
+
+		// No WebGPU reduction equivalent.
+		case SamplerReductionType::kMinimum:
+		case SamplerReductionType::kMaximum:
+			gfatal("wgpu: no reduction type for {}", static_cast<int>(desc.reductionType));
+		}
+
+		// D3D12 encodes an anisotropic filter and ignores the three filter flags; WebGPU rejects the
+		// sampler unless all three are linear.
+		gassert(
+			out.maxAnisotropy <= 1 || (desc.minFilter && desc.magFilter && desc.mipFilter),
+			"An anisotropic sampler must filter linearly on all three axes");
+
+		// D3D12 clamps to FLT_MAX; 32 is the WebGPU default and covers any mip chain it can build.
+		out.lodMinClamp = 0.f;
+		out.lodMaxClamp = 32.f;
+
+		return out;
+	}
 }
