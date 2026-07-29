@@ -126,6 +126,7 @@ just idl                          # regenerate the IDL C++ headers and Slang cop
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language, tests counted separately
+just watch-pr <pr>                # block until the PR gets a submitted review, new comments, or merges; prints one JSON event. --interval, --timeout, --once
 ```
 
 `just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `tidy` → `tidy.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).

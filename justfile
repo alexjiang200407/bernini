@@ -61,3 +61,7 @@ exes *args:
 # Count source files and lines by language.
 count:
     @{{ python }} scripts/count_source.py
+
+# Block until a PR gets a submitted review, new comments, or merges; prints one JSON event.
+watch-pr *args:
+    @{{ python }} scripts/watch_pr.py {{ args }}
