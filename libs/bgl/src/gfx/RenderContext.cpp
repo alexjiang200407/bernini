@@ -132,6 +132,12 @@ namespace bgl
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
+
+		if (!m_Device->SupportsMeshShaders())
+		{
+			m_ExpandMeshlets.Init(m_Device, m_ResourceManager);
+		}
+
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
 
@@ -169,6 +175,7 @@ namespace bgl
 		m_Skybox.Release();
 		m_CompactInstances.Release(false);
 		m_TransparentSort.Release(false);
+		m_ExpandMeshlets.Release(false);
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The GPU is idle, so assertions from the final frames whose slot was never reused by a later
@@ -450,6 +457,12 @@ namespace bgl
 		// sort, which reads it.
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
+
+		if (!m_Device->SupportsMeshShaders())
+		{
+			m_ExpandMeshlets.AttachToFrameGraph(m_FrameGraph, draw);
+		}
+
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 	}
 

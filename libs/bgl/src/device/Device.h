@@ -89,6 +89,15 @@ namespace bgl
 		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept = 0;
 
 		/**
+		 * Whether the device runs mesh/amplification stages natively. When false, the meshlet path
+		 * is the compute-expansion + vertex-pulling emulation, and the renderer must run the
+		 * expansion chain (see ExpandMeshletsPass) before the forward draws.
+		 */
+		[[nodiscard]]
+		virtual bool
+		SupportsMeshShaders() const noexcept = 0;
+
+		/**
 		 * The target presents on `queue`, so it must be the queue of the context that will drive
 		 * the target.
 		 *

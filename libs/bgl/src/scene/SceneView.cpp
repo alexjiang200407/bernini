@@ -1,6 +1,7 @@
 #include "scene/SceneView.h"
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
+#include "idl/MeshletInstance.h"
 #include "scene/Scene.h"
 #include "types/SubmeshInstance.h"
 #include "util/util.h"
@@ -30,6 +31,7 @@ namespace bgl
 		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
 		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
 		constexpr std::string_view c_TransparentCountName   = "scene.transparentSortCount";
+		constexpr std::string_view c_MeshletInstancesName   = "scene.meshletInstances";
 
 		// Each SceneView gets a process-unique namespace so views sharing one Scene
 		// don't collide in the frame graph.
@@ -143,6 +145,18 @@ namespace bgl
 
 			m_TransparentSortEntries.Init(std::move(keysDesc), m_ResourceManager);
 		}
+
+		{
+			// Starts at one group's worth; SyncMeshletScratch grows it as instances arrive. Only the
+			// mesh-emulation backend reads it, but sizing needs the view's meshlet total, so it
+			// lives here with the other scratch.
+			auto recordsDesc = ComputeBufferDesc();
+			recordsDesc.SetElement<idl::MeshletInstance>();
+			recordsDesc.initialCount = idl::cHistogramGroupSize;
+			recordsDesc.debugName    = "Meshlet Instances";
+
+			m_MeshletInstances.Init(std::move(recordsDesc), m_ResourceManager);
+		}
 	}
 
 	void
@@ -161,6 +175,18 @@ namespace bgl
 		m_InstanceVisibility.Resize(padded);
 		m_SortedTransparentInstances.Resize(padded);
 		m_TransparentSortEntries.Resize(padded);
+	}
+
+	void
+	SceneView::SyncMeshletScratch()
+	{
+		const uint32_t padded =
+			core::round_up(std::max(m_TotalMeshlets, 1u), idl::cHistogramGroupSize);
+
+		if (padded <= m_MeshletInstances.GetDesc().initialCount)
+			return;
+
+		m_MeshletInstances.Resize(padded);
 	}
 
 	SceneView::~SceneView() noexcept
@@ -231,9 +257,15 @@ namespace bgl
 				ResolveShading(instance, submeshes.range.offsetStart, MaterialHandle{});
 
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
+
+				meta.meshletCount +=
+					m_SceneRaw->GetSubmeshMeshletCount(submeshes.range.offsetStart, s);
 			}
 
+			m_TotalMeshlets += meta.meshletCount;
+
 			SyncInstanceScratch();
+			SyncMeshletScratch();
 
 			// m_SceneEpoch is deliberately not advanced: these instances are current, but their
 			// siblings may not be, and marking the view clean would strand them on a stale material.
@@ -269,6 +301,9 @@ namespace bgl
 				m_InstanceBuffer.Erase(submeshInstance);
 			}
 		}
+
+		gassert(meta.meshletCount <= m_TotalMeshlets, "Meshlet accounting went negative");
+		m_TotalMeshlets -= meta.meshletCount;
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
 	}
@@ -533,5 +568,9 @@ namespace bgl
 		std::string countName(c_TransparentCountName);
 		fg.ImportBuffer(countName, m_TransparentSortCount.GetBufferHandle());
 		resourceNames.push_back(std::move(countName));
+
+		std::string recordsName(c_MeshletInstancesName);
+		fg.ImportBuffer(recordsName, m_MeshletInstances.GetBufferHandle());
+		resourceNames.push_back(std::move(recordsName));
 	}
 }

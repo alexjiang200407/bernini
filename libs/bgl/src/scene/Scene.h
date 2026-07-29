@@ -74,6 +74,13 @@ namespace bgl
 			return m_GeomSubmeshes[index];
 		}
 
+		/** The meshlet count of submesh `submeshIndex` of the geom whose range starts at `submeshRoot`. */
+		[[nodiscard]] uint32_t
+		GetSubmeshMeshletCount(uint32_t submeshRoot, uint32_t submeshIndex) const noexcept
+		{
+			return m_SubmeshBuffer.AtIndex(submeshRoot + submeshIndex).meshlets.count;
+		}
+
 		/**
 		 * The default material of submesh `submeshIndex` of the geom whose range starts at
 		 * `submeshRoot`. A SceneView resolves a SubmeshInstance from this when it has no override.

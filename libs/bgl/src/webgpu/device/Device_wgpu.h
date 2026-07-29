@@ -113,6 +113,12 @@ namespace bgl
 		[[nodiscard]] core::SharedRef<IResourceManager>
 		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept override;
 
+		[[nodiscard]] bool
+		SupportsMeshShaders() const noexcept override
+		{
+			return false;
+		}
+
 		[[nodiscard]] RenderTargetRef
 		CreateRenderTarget(
 			const RenderTargetDesc&           desc,

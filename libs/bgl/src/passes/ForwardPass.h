@@ -70,5 +70,8 @@ namespace bgl
 
 		// Depth-only pre-pass kernels; only the self-occluding transparent PSO slots are built.
 		std::array<MeshletKernel, c_PsoCount> m_PrepassKernels;
+
+		// True if no mesh shaders.
+		bool m_ExpandsMeshlets = false;
 	};
 }

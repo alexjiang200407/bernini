@@ -8,6 +8,7 @@
 #include "fg/FrameGraph.h"
 #include "gfx/RenderTargetBase.h"
 #include "passes/CompactInstancesPass.h"
+#include "passes/ExpandMeshletsPass.h"
 #include "passes/ForwardPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/SkyboxPass.h"
@@ -158,6 +159,9 @@ namespace bgl
 		SkyboxPass           m_Skybox;
 		CompactInstancesPass m_CompactInstances;
 		TransparentSortPass  m_TransparentSort;
+
+		// Only initialized and attached when the device lacks mesh shaders; empty otherwise.
+		ExpandMeshletsPass m_ExpandMeshlets;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 

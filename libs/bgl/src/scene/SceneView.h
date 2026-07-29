@@ -21,6 +21,10 @@ namespace bgl
 	{
 		std::vector<core::slot_handle> submeshInstances;
 		std::vector<MaterialHandle>    overrides;
+
+		// Total across this mesh's submeshes, remembered so DeleteMeshInstance can subtract it
+		// without the geom -- an instance may outlive its geometry.
+		uint32_t meshletCount = 0;
 	};
 
 	/**
@@ -97,6 +101,12 @@ namespace bgl
 		GetInstanceCount() const noexcept override
 		{
 			return m_InstanceBuffer.Size();
+		}
+
+		[[nodiscard]] uint32_t
+		GetMeshletCount() const noexcept override
+		{
+			return m_TotalMeshlets;
 		}
 
 		[[nodiscard]] const std::string&
@@ -181,6 +191,13 @@ namespace bgl
 		void
 		SyncInstanceScratch();
 
+		/**
+		 * Grows the meshlet-record scratch to cover the view's meshlet total. A no-op when it
+		 * already does; like the other scratch it never shrinks.
+		 */
+		void
+		SyncMeshletScratch();
+
 		SceneRef                          m_Scene;
 		Scene*                            m_SceneRaw = nullptr;
 		core::SharedRef<IResourceManager> m_ResourceManager;
@@ -203,6 +220,9 @@ namespace bgl
 		ComputeBuffer m_SortedTransparentInstances;
 		ComputeBuffer m_TransparentSortEntries;
 		ComputeBuffer m_TransparentSortCount;
+
+		ComputeBuffer m_MeshletInstances;
+		uint32_t      m_TotalMeshlets = 0;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;

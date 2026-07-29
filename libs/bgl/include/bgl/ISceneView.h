@@ -82,6 +82,13 @@ namespace bgl
 		GetInstanceCount() const noexcept = 0;
 
 		/**
+		 * Total meshlets across this view's instances -- what a full expansion of every instance
+		 * would produce. Visibility does not enter it: culling only shrinks the visible subset.
+		 */
+		virtual uint32_t
+		GetMeshletCount() const noexcept = 0;
+
+		/**
 		 * Binds the three precomputed IBL maps (two cubemaps + a 2D BRDF LUT) as this
 		 * view's environment for the PBR pass. Replaces any previously set environment.
 		 * Lighting is a per-view concern, so it lives here rather than on the shared Scene.
