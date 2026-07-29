@@ -700,6 +700,24 @@ namespace bgl
 		return std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]);
 	}
 
+	uint32_t
+	ResourceManager::GetBindlessIndex(BufferHandle handle) const noexcept
+	{
+		return handle.slot.index;
+	}
+
+	uint32_t
+	ResourceManager::GetBindlessIndex(TextureHandle handle) const noexcept
+	{
+		return handle.slot.index;
+	}
+
+	uint32_t
+	ResourceManager::GetBindlessIndex(SamplerHandle handle) const noexcept
+	{
+		return handle.idx;
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{

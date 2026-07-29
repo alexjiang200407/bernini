@@ -527,6 +527,24 @@ namespace bgl
 			m_Textures[handle.slot].GetMTLResource()->gpuResourceID()._impl);
 	}
 
+	uint32_t
+	ResourceManager::GetBindlessIndex(BufferHandle handle) const noexcept
+	{
+		return handle.slot.index;
+	}
+
+	uint32_t
+	ResourceManager::GetBindlessIndex(TextureHandle handle) const noexcept
+	{
+		return handle.slot.index;
+	}
+
+	uint32_t
+	ResourceManager::GetBindlessIndex(SamplerHandle handle) const noexcept
+	{
+		return handle.idx;
+	}
+
 	std::span<MTL::Resource* const>
 	ResourceManager::GetLiveTextureResources() noexcept
 	{

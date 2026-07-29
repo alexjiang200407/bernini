@@ -186,6 +186,22 @@ namespace bgl
 		[[nodiscard]] DescriptorHandle
 		ResolveDescriptor(const TextureHandle& handle) const noexcept override;
 
+		// The slot index, not a native id: a handle bound through a constant buffer is rewritten to
+		// its gpuAddress/MTLResourceID at dispatch, and MapUniformHandlesToGpuAddresses needs the
+		// slot to look the resource up. ResolveDescriptor above answers the other question -- what a
+		// handle *stored in GPU memory* must hold, which nothing gets to patch later.
+		[[nodiscard]]
+		uint32_t
+		GetBindlessIndex(BufferHandle handle) const noexcept override;
+
+		[[nodiscard]]
+		uint32_t
+		GetBindlessIndex(TextureHandle handle) const noexcept override;
+
+		[[nodiscard]]
+		uint32_t
+		GetBindlessIndex(SamplerHandle handle) const noexcept override;
+
 		// Every live texture, for an encoder to declare resident. See the definition for why all of
 		// them rather than the ones a draw names.
 		[[nodiscard]] std::span<MTL::Resource* const>

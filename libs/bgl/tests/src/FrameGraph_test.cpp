@@ -309,6 +309,24 @@ namespace
 			std::abort();
 		}
 
+		uint32_t
+		GetBindlessIndex(BufferHandle) const noexcept override
+		{
+			std::abort();
+		}
+
+		uint32_t
+		GetBindlessIndex(TextureHandle) const noexcept override
+		{
+			std::abort();
+		}
+
+		uint32_t
+		GetBindlessIndex(SamplerHandle) const noexcept override
+		{
+			std::abort();
+		}
+
 		const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle) const noexcept override
 		{

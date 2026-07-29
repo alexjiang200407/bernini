@@ -153,6 +153,23 @@ namespace bgl
 		virtual const Sampler&
 		GetSampler(SamplerHandle handle) const noexcept = 0;
 
+		/**
+		 * The shader-visible index for a live resource: the number written into a uniform block for
+		 * a shader to reach it. This is the only place that number may come from -- nothing else may
+		 * derive one from a handle's slot.
+		 */
+		[[nodiscard]]
+		virtual uint32_t
+		GetBindlessIndex(BufferHandle handle) const noexcept = 0;
+
+		[[nodiscard]]
+		virtual uint32_t
+		GetBindlessIndex(TextureHandle handle) const noexcept = 0;
+
+		[[nodiscard]]
+		virtual uint32_t
+		GetBindlessIndex(SamplerHandle handle) const noexcept = 0;
+
 		[[nodiscard]]
 		virtual const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept = 0;
