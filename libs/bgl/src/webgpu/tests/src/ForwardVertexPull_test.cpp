@@ -110,7 +110,7 @@ TEST_CASE("The forward vertex shader pulls a meshlet through the decode chain", 
 	desc.SetMeshShader(meshShader).SetPixelShader(pixelShader).AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
-	auto kernel = device->CreateMeshletKernel(desc);
+	auto kernel = device->CreateMeshletKernel(desc, resources);
 	REQUIRE(kernel.ContainsUniforms("forwardData"));
 	REQUIRE(kernel.ContainsUniforms("viewData"));
 

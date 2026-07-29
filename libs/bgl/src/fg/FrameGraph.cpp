@@ -1,5 +1,6 @@
 #include "fg/FrameGraph.h"
 #include "resource/ResourceManager.h"
+#include <core/err/util.h>
 
 #include <stack>
 

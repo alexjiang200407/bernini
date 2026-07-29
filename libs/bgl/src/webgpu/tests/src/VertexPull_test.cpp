@@ -42,7 +42,7 @@ TEST_CASE("A vertex shader pulls positions from a bound buffer", "[wgpu][render]
 	desc.SetMeshShader(shader).SetPixelShader(shader).AddRtvFormat(Format::RGBA8_UNORM);
 	desc.renderState.rasterState.SetCullNone();
 
-	auto kernel = device->CreateMeshletKernel(desc);
+	auto kernel = device->CreateMeshletKernel(desc, resources);
 	REQUIRE(kernel.ContainsUniforms("gPull"));
 	kernel["gPull"]["positions"] = posBuffer;
 

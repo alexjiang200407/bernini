@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "resource/Buffer.h"
@@ -69,7 +70,8 @@ TEST_CASE("A compute kernel built after device creation recreates the Slang sess
 		auto kernel = device->CreateComputeKernel(
 			bgl::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSComputeBufferTest"))
-				.SetDebugName("CSComputeBufferTest"));
+				.SetDebugName("CSComputeBufferTest"),
+			resourceManager);
 
 		kernel["gUniforms"]["outBuffer"] = outBuf;
 

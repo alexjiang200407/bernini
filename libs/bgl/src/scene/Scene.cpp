@@ -875,9 +875,11 @@ namespace bgl
 
 		// A caller-supplied texture resolves to its bindless index; an invalid
 		// (default-constructed) handle falls back to the given default texture.
-		const auto resolve = [](TextureAssetHandle tex, core::slot_handle fallback) {
-			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ DescriptorHandle(slot) };
+		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
+			const core::slot_handle slot  = tex.textureSlot ? tex.textureSlot : fallback;
+			const auto              index = m_ResourceManager->GetBindlessIndex(
+				TextureHandle::From(TextureAssetHandle{ slot }));
+			return idl::TextureHandle{ DescriptorHandle(index) };
 		};
 
 		idl::PbrMaterial material{};
@@ -930,18 +932,25 @@ namespace bgl
 		// channel falls back to a default texture + channel chosen so the sampled value matches the
 		// PbrMaterial default for that output: white (1.0) for base color / ORM, and the flat-normal
 		// texture (R,G = 0.5) for normal X / Y.
-		const auto resolve = [](const ChannelRouteDesc& route,
-		                        core::slot_handle       fallbackTex,
-		                        uint16_t                fallbackChannel) {
+		const auto resolve = [this](
+								 const ChannelRouteDesc& route,
+								 core::slot_handle       fallbackTex,
+								 uint16_t                fallbackChannel) {
+			const auto index = [this](core::slot_handle slot) {
+				return m_ResourceManager->GetBindlessIndex(
+					TextureHandle::From(TextureAssetHandle{ slot }));
+			};
+
 			idl::ChannelSource cs{};
 			if (route.texture.textureSlot)
 			{
-				cs.texture = idl::TextureHandle{ DescriptorHandle(route.texture.textureSlot) };
+				cs.texture =
+					idl::TextureHandle{ DescriptorHandle(index(route.texture.textureSlot)) };
 				cs.channel = route.channel;
 			}
 			else
 			{
-				cs.texture = idl::TextureHandle{ DescriptorHandle(fallbackTex) };
+				cs.texture = idl::TextureHandle{ DescriptorHandle(index(fallbackTex)) };
 				cs.channel = fallbackChannel;
 			}
 			return cs;

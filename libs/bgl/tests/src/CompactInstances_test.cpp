@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/DispatchArgs.h"
@@ -132,7 +133,8 @@ TEST_CASE(
 		auto kernel = device->CreateComputeKernel(
 			bgl::ComputePipelineDesc()
 				.SetShader(device->CreateShader(module))
-				.SetDebugName(debugName));
+				.SetDebugName(debugName),
+			resourceManager);
 		REQUIRE(kernel.pipeline != nullptr);
 		return kernel;
 	};

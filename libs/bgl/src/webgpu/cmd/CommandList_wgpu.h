@@ -3,6 +3,8 @@
 #include "cmd/CommandList.h"
 #include "resource/ResourceManager.h"
 #include "types/MeshletState.h"
+#include "uniforms/UniformLayoutEntry.h"
+#include "uniforms/Uniforms.h"
 
 namespace bgl
 {

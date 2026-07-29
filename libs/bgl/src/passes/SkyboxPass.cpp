@@ -19,7 +19,7 @@ namespace bgl
 	}
 
 	void
-	SkyboxPass::Init(IDevice* device)
+	SkyboxPass::Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -46,7 +46,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+		m_Kernel = device->CreateMeshletKernel(pipelineDesc, std::move(resourceManager));
 	}
 
 	void

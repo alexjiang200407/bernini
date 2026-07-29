@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "debug/DebugBuffer.h"
 #include "debug/DebugReadback.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/ErrorCode.h"
 #include "pipeline/ComputeKernel.h"
@@ -77,7 +78,8 @@ TEST_CASE(
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSTextureSampleTest"))
-			.SetDebugName("Texture Sample Test"));
+			.SetDebugName("Texture Sample Test"),
+		resourceManager);
 	REQUIRE(kernel.pipeline != nullptr);
 	REQUIRE(kernel.uniforms.contains("gUniforms"));
 	REQUIRE(kernel.uniforms.contains("gDebug"));

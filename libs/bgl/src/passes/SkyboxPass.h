@@ -4,6 +4,7 @@
 namespace bgl
 {
 	class IDevice;
+	class IResourceManager;
 	class FrameGraph;
 	class PassContext;
 	struct DrawData;
@@ -13,7 +14,10 @@ namespace bgl
 	public:
 		SkyboxPass() = default;
 		~SkyboxPass() noexcept { logger::trace("~SkyboxPass"); }
-		SkyboxPass(IDevice* device) { Init(device); }
+		SkyboxPass(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
+		{
+			Init(device, std::move(resourceManager));
+		}
 
 		SkyboxPass(const SkyboxPass&) noexcept = delete;
 		SkyboxPass(SkyboxPass&&) noexcept      = delete;
@@ -31,7 +35,7 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager);
 
 		// No-op when the view has no skybox bound (draw.skybox.valid == false).
 		void
