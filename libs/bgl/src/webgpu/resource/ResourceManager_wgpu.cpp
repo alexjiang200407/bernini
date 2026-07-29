@@ -18,6 +18,32 @@ namespace bgl
 		m_Samplers(desc.maxSamplers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");
+
+		{
+			auto nullBufferDesc      = BufferDesc{};
+			nullBufferDesc.byteSize  = 4;
+			nullBufferDesc.isUav     = true;
+			nullBufferDesc.debugName = "Null Binding Buffer";
+
+			m_NullBuffer = Buffer(m_Device, nullBufferDesc);
+		}
+
+		{
+			auto nullTexDesc      = TextureDesc{};
+			nullTexDesc.format    = Format::RGBA8_UNORM;
+			nullTexDesc.usage     = TextureUsageFlag::kSRV;
+			nullTexDesc.debugName = "Null Binding Texture";
+
+			m_NullTexture = Texture(m_Device, nullTexDesc);
+
+			nullTexDesc.arraySize = 6;
+			nullTexDesc.dimension = TextureDimension::kTextureCube;
+			nullTexDesc.debugName = "Null Binding Cube";
+
+			m_NullCube = Texture(m_Device, nullTexDesc);
+		}
+
+		m_NullSampler = Sampler(m_Device, SamplerDesc());
 	}
 
 	BufferHandle
@@ -233,13 +259,25 @@ namespace bgl
 	const wgpu::Buffer&
 	ResourceManager::GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept
 	{
+		if (slotIndex == core::slot_handle::invalid_index)
+		{
+			return m_NullBuffer.GetHandle();
+		}
+
 		auto lock = std::scoped_lock(m_PoolMutex);
 		return m_Buffers[slotIndex].GetHandle();
 	}
 
 	const wgpu::TextureView&
-	ResourceManager::GetTextureBindingBySlotIndex(uint32_t slotIndex) const noexcept
+	ResourceManager::GetTextureBindingBySlotIndex(uint32_t slotIndex, TextureDimension dimension)
+		const noexcept
 	{
+		if (slotIndex == core::slot_handle::invalid_index)
+		{
+			return dimension == TextureDimension::kTextureCube ? m_NullCube.GetSampledView() :
+			                                                     m_NullTexture.GetSampledView();
+		}
+
 		auto lock = std::scoped_lock(m_PoolMutex);
 
 		const wgpu::TextureView& view = m_Textures[slotIndex].GetSampledView();
@@ -250,6 +288,11 @@ namespace bgl
 	const wgpu::Sampler&
 	ResourceManager::GetSamplerBindingBySlotIndex(uint32_t slotIndex) const noexcept
 	{
+		if (slotIndex == core::slot_handle::invalid_index)
+		{
+			return m_NullSampler.GetHandle();
+		}
+
 		auto lock = std::scoped_lock(m_PoolMutex);
 		return m_Samplers[slotIndex].GetHandle();
 	}

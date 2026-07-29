@@ -96,11 +96,15 @@ namespace bgl
 		// Resolve the raw slot index a Uniforms handle write records (DescriptorHandle stores the
 		// index alone, without a generation) to its resource, for bind-group assembly at dispatch.
 		// Which one to call comes from the leaf's ReflectedLayout::resourceBinding.
+		//
+		// A null index (an unset uniform) resolves to a 1x1 fallback of the right shape, because a
+		// bind group must supply every declared binding -- the same tolerance D3D12 gets by writing
+		// the null index into the cbuffer and never dereferencing it.
 		[[nodiscard]] const wgpu::Buffer&
 		GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept;
 
 		[[nodiscard]] const wgpu::TextureView&
-		GetTextureBindingBySlotIndex(uint32_t slotIndex) const noexcept;
+		GetTextureBindingBySlotIndex(uint32_t slotIndex, TextureDimension dimension) const noexcept;
 
 		[[nodiscard]] const wgpu::Sampler&
 		GetSamplerBindingBySlotIndex(uint32_t slotIndex) const noexcept;
@@ -219,6 +223,12 @@ namespace bgl
 		core::slot_vector<Sampler>        m_Samplers;
 		core::slot_vector<Rtv>            m_Rtvs;
 		core::slot_vector<Dsv>            m_Dsvs;
+
+		// The null-binding fallbacks (see GetBufferBindingBySlotIndex).
+		Buffer  m_NullBuffer;
+		Texture m_NullTexture;
+		Texture m_NullCube;
+		Sampler m_NullSampler;
 
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_Queues;
 		std::vector<PendingBatch>                                  m_PendingBatches;

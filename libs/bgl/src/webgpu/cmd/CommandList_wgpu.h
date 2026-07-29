@@ -205,11 +205,23 @@ namespace bgl
 		std::vector<wgpu::Buffer> m_UniformPool;
 		size_t                    m_UniformPoolCursor = 0;
 
+		BufferHandle m_ActiveDebugBuffer;
+
 		[[nodiscard]] wgpu::Buffer
 		NextUniformBuffer(uint64_t byteSize) noexcept;
 
 		/** Resolves one constant buffer's handle writes and plain-data block to bind-group entries. */
 		[[nodiscard]] std::vector<wgpu::BindGroupEntry>
-		BuildBindGroupEntries(const Uniforms& uniforms, const UniformLayoutEntry& entry) noexcept;
+		BuildBindGroupEntries(
+			std::string_view          name,
+			const Uniforms&           uniforms,
+			const UniformLayoutEntry& entry) noexcept;
+
+	public:
+		void
+		SetActiveDebugBuffer(BufferHandle handle) noexcept override
+		{
+			m_ActiveDebugBuffer = handle;
+		}
 	};
 }

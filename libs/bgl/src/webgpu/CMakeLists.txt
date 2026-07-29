@@ -49,17 +49,28 @@ enable_strict_compiler(bgl_webgpu)
 if (BUILD_TESTS)
     find_package(Catch2 CONFIG REQUIRED)
 
+    find_package(Stb REQUIRED)  # stb_image, for the golden-image comparison
+
     file(GLOB_RECURSE BGL_WEBGPU_TESTS_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/*.cpp
     )
 
-    add_executable(bgl_webgpu_tests ${BGL_WEBGPU_TESTS_SOURCES})
+    # The golden-image runner is shared with bgl_tests: same compare, same committed goldens, so
+    # the two backends are held to one reference.
+    add_executable(bgl_webgpu_tests
+        ${BGL_WEBGPU_TESTS_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/src/util/GoldenImage.cpp
+    )
 
     target_include_directories(bgl_webgpu_tests
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
                 ${CMAKE_CURRENT_SOURCE_DIR}/..
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/src
+                ${Stb_INCLUDE_DIR}
     )
+
+    add_dependencies(bgl_webgpu_tests copy_assets)
 
     target_precompile_headers(bgl_webgpu_tests
         PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h

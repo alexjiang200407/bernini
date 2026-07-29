@@ -80,6 +80,13 @@ namespace bgl
 				else if (slot.type == ResourceBinding::kTexture)
 				{
 					slot.viewDimension = ViewDimensionForShape(typeLayout->getType());
+
+					// Carried on the leaf so bind-group assembly can pick a null fallback of the
+					// right shape when the handle written at draw time is null.
+					result.textureDimension =
+						slot.viewDimension == wgpu::TextureViewDimension::Cube ?
+							TextureDimension::kTextureCube :
+							TextureDimension::kTexture2D;
 				}
 
 				slots.push_back(slot);

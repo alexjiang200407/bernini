@@ -1,4 +1,5 @@
 #pragma once
+#include "types/TextureDimension.h"
 #include "uniforms/UniformValueType.h"
 
 namespace bgl
@@ -28,8 +29,9 @@ namespace bgl
 		uint32_t         arrayCount  = 0;
 		uint32_t         arrayStride = 0;
 
-		ResourceBinding              resourceBinding = ResourceBinding::kNone;
-		std::vector<ReflectedField>  fields;   // kStruct members
+		ResourceBinding  resourceBinding  = ResourceBinding::kNone;
+		TextureDimension textureDimension = TextureDimension::kTexture2D;  // kTexture leaves only
+		std::vector<ReflectedField>  fields;                               // kStruct members
 		std::vector<ReflectedLayout> element;  // kArray element type (0 or 1 entry)
 	};
 

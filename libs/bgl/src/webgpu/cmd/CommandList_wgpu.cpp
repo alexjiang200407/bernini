@@ -54,7 +54,9 @@ namespace bgl
 						break;
 					}
 					case ResourceBinding::kTexture:
-						entry.textureView = resources.GetTextureBindingBySlotIndex(slotIndex);
+						entry.textureView = resources.GetTextureBindingBySlotIndex(
+							slotIndex,
+							field.layout.textureDimension);
 						break;
 					case ResourceBinding::kSampler:
 						entry.sampler = resources.GetSamplerBindingBySlotIndex(slotIndex);
@@ -104,11 +106,29 @@ namespace bgl
 
 	std::vector<wgpu::BindGroupEntry>
 	CommandList::BuildBindGroupEntries(
+		std::string_view          name,
 		const Uniforms&           uniforms,
 		const UniformLayoutEntry& entry) noexcept
 	{
 		const auto& resources = *m_ResourceManager->As<ResourceManager>();
-		const auto* data      = static_cast<const std::byte*>(uniforms.Data());
+
+		// gDebug is never written through Uniforms -- the frame's debug buffer is injected here,
+		// mirroring the D3D12 root-constant injection. Left to the generic path its zero-initialized
+		// bytes would read as slot 0 and alias whatever buffer lives there. A list that never set
+		// one binds the null fallback; the layout still declares the slot.
+		if (name == "gDebug")
+		{
+			const wgpu::Buffer& buffer =
+				resources.GetBufferBindingBySlotIndex(m_ActiveDebugBuffer.slot.index);
+
+			auto debugEntry    = wgpu::BindGroupEntry{};
+			debugEntry.binding = entry.layout->fields[0].binding;
+			debugEntry.buffer  = buffer;
+			debugEntry.size    = buffer.GetSize();
+			return { debugEntry };
+		}
+
+		const auto* data = static_cast<const std::byte*>(uniforms.Data());
 
 		auto entries = std::vector<wgpu::BindGroupEntry>();
 		CollectHandleBindings(*entry.layout, data, 0, resources, entries);
@@ -300,7 +320,7 @@ namespace bgl
 		for (const auto& [name, uniforms] : kernel.uniforms)
 		{
 			const auto built =
-				BuildBindGroupEntries(uniforms, pipeline.GetUniformLayoutEntry(name));
+				BuildBindGroupEntries(name, uniforms, pipeline.GetUniformLayoutEntry(name));
 			entries.insert(entries.end(), built.begin(), built.end());
 		}
 
@@ -330,7 +350,7 @@ namespace bgl
 		for (const auto& [name, uniforms] : gfxState.kernel->uniforms)
 		{
 			const auto built =
-				BuildBindGroupEntries(uniforms, pipeline.GetUniformLayoutEntry(name));
+				BuildBindGroupEntries(name, uniforms, pipeline.GetUniformLayoutEntry(name));
 			entries.insert(entries.end(), built.begin(), built.end());
 		}
 
@@ -489,7 +509,7 @@ namespace bgl
 		for (const auto& [name, uniforms] : kernel->uniforms)
 		{
 			const auto built =
-				BuildBindGroupEntries(uniforms, pipeline->GetUniformLayoutEntry(name));
+				BuildBindGroupEntries(name, uniforms, pipeline->GetUniformLayoutEntry(name));
 			entries.insert(entries.end(), built.begin(), built.end());
 		}
 

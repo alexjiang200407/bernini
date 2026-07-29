@@ -1,5 +1,6 @@
 #include "device/Device_wgpu.h"
 
+#include "RenderTarget_wgpu.h"
 #include "cmd/CommandAllocator_wgpu.h"
 #include "cmd/CommandList_wgpu.h"
 #include "cmd/CommandQueue_wgpu.h"
@@ -280,11 +281,15 @@ namespace bgl
 
 	RenderTargetRef
 	Device::CreateRenderTarget(
-		const RenderTargetDesc&,
-		core::SharedRef<ICommandQueue>,
-		core::SharedRef<IResourceManager>,
-		bool) const
+		const RenderTargetDesc&           desc,
+		core::SharedRef<ICommandQueue>    queue,
+		core::SharedRef<IResourceManager> resourceManager,
+		bool /*enableDebug*/) const
 	{
-		throw GraphicsError("CreateRenderTarget: not implemented on the WebGPU backend yet");
+		return core::SharedRef<RenderTarget>::Make(
+			desc,
+			DeviceRef(const_cast<Device*>(this)),
+			std::move(queue),
+			std::move(resourceManager));
 	}
 }
