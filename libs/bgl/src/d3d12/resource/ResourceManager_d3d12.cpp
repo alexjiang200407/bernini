@@ -412,9 +412,11 @@ namespace bgl
 
 		const bool isSrv = handle.usage.any(TextureUsageFlag::kSRV);
 
-		const auto descriptorIndex =
-			isSrv ? std::get<Texture>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex() :
-					0xFFFFFFFF;
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+		if (isSrv)
+		{
+			descriptorIndex = std::get<Texture>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex();
+		}
 
 		if (deferred)
 		{
@@ -563,6 +565,7 @@ namespace bgl
 #if defined(BERNINI_GPU_DEBUG)
 		// A stale index in a uniform block reads a *valid* descriptor for whatever resource takes
 		// this slot next -- plausible pixels, no fault. A null SRV makes the read return zeros.
+		// Debug-only because the write is a per-free CPU cost that buys nothing but diagnosis.
 		D3D12_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
 		nullDesc.Format                          = DXGI_FORMAT_R32_UINT;
 		nullDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;

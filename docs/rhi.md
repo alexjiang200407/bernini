@@ -313,7 +313,7 @@ ComputeKernel kernel = device->CreateComputeKernel(
     ComputePipelineDesc()
         .SetShader(device->CreateShader("Histogram"))
         .SetDebugName("Histogram"),
-    rm);                                                    // resolves handle assignments to bindless indices
+    rm);
 
 // Per dispatch
 kernel["gUniforms"]["instanceBuffer"] = someBufferHandle;   // bind resource by descriptor index
