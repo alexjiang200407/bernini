@@ -137,9 +137,13 @@ def build_dir(override=None):
     used, so `just run` and friends look at the build you actually build -- but only
     once it has been configured, since before that there's no codemodel there to
     read. Falling back to None lets the caller scan build/* as it always has.
+
+    A relative override resolves against the repo root, not the caller's cwd: the paths
+    read out of it are used verbatim, and a test runner chdirs to a suite's own directory
+    before launching it.
     """
     if override:
-        return override
+        return override if os.path.isabs(override) else os.path.join(ct.REPO_ROOT, override)
     path = ct.binary_dir_of(preset())
     return path if path and ct.has_reply(path) else None
 
