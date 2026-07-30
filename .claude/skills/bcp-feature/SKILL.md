@@ -257,8 +257,10 @@ just watch-pr <n>        # python scripts/watch_pr.py <n>
 draft for the length of the feature and every slice merge is activity on it, so watching it reports
 the work you just did back to you.
 
-Post your own PR comments **before** starting it, not after. The watcher baselines activity when it
-starts, so a comment written later fires it immediately with your own text as the event.
+**Start it last** — after every write to the PR, as the final action of the turn. The watcher
+baselines activity when it starts, so anything you post afterwards fires it immediately with your own
+text as the event. Self-filtering cannot save you here: without the bot token, comments post as the
+user's own account and are indistinguishable from theirs.
 
 It snapshots the PR's current activity as a baseline, polls, and blocks until something actionable
 happens, printing one JSON event — the deterministic version of "did the reviewer move yet?", so
