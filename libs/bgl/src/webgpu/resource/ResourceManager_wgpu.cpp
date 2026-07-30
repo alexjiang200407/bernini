@@ -13,8 +13,8 @@ namespace bgl
 		const wgpu::Device&        device,
 		const wgpu::Instance&      instance,
 		const ResourceManagerDesc& desc) :
-		m_Device(device), m_Instance(instance), m_Buffers(desc.maxCbvSrvUavs),
-		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxCbvSrvUavs),
+		m_Device(device), m_Instance(instance), m_Buffers(desc.maxBuffers),
+		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Textures(desc.maxTextures),
 		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		gassert(m_Device != nullptr, "ResourceManager: null device");

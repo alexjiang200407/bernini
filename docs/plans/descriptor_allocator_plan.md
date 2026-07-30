@@ -11,7 +11,9 @@ This is a *plan*, not a mirror of code. When the work lands the durable parts be
 
 **The load-bearing property: no shader changes and no public API changes.** A shader still reads a
 `uint` out of a constant buffer and indexes a heap with it; `IGraphics`/`IScene` are untouched. What
-changes is *who computes that uint*.
+changes is *who computes that uint*. (Relaxed once, by review, in D5: `GraphicsOptions` gained
+`maxBuffers` and its `maxCbvSrvUavs` now counts descriptors, so the pool/heap split is a knob
+rather than a hidden mapping.)
 
 ---
 
@@ -212,9 +214,11 @@ half-migrated at a commit boundary.
 * **D5 — collapse the pools.** `m_Textures` merges into the texture pool, the variant goes,
   `TextureHandle::usage` stops selecting an index space, and `maxCbvSrvUavs` splits into a resource
   count and a descriptor count.
-  *Gate:* as D4, plus a test that an RTV-only texture and an SRV texture can hold the same slot index
-  without colliding — the failure the old design prevented structurally and this one must prevent
-  deliberately.
+  *Gate:* as D4, plus a test that a Buffer and a Texture holding the same slot index in their split
+  pools never alias a descriptor — the collision the old shared pool prevented structurally and this
+  design must prevent deliberately. (This bullet originally said "an RTV-only and an SRV texture",
+  written before the design settled on one texture pool, where that pair cannot share a slot at all;
+  the cross-pool case is the real hazard.)
 * **D6 — WebGPU drops the reversal.** `GetBufferBindingBySlotIndex` is deleted;
   `CollectHandleBindings` resolves through the seam.
   *Gate:* `bgl_webgpu_tests` green.
