@@ -37,10 +37,10 @@ namespace bgl
 			{
 				if (field.layout.isResourceHandle)
 				{
-					uint32_t slotIndex = 0;
-					std::memcpy(&slotIndex, data + baseOffset + field.offset, sizeof(uint32_t));
+					uint32_t bindlessIndex = 0;
+					std::memcpy(&bindlessIndex, data + baseOffset + field.offset, sizeof(uint32_t));
 
-					const wgpu::Buffer& buffer = resources.GetBufferBindingBySlotIndex(slotIndex);
+					const wgpu::Buffer& buffer = resources.GetBufferByBindlessIndex(bindlessIndex);
 
 					auto entry    = wgpu::BindGroupEntry{};
 					entry.binding = field.binding;

@@ -93,10 +93,11 @@ namespace bgl
 		[[nodiscard]] const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept override;
 
-		// Resolves the raw slot index a Uniforms handle write records (DescriptorHandle stores the
-		// index alone, without a generation) to its buffer, for bind-group assembly at dispatch.
+		// Resolves an index this manager's GetBindlessIndex(BufferHandle) produced back to its
+		// buffer, for bind-group assembly at dispatch. The index scheme is this backend's own
+		// (the buffer pool slot), not a reading of another backend's heap addressing.
 		[[nodiscard]] const wgpu::Buffer&
-		GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept;
+		GetBufferByBindlessIndex(uint32_t bindlessIndex) const noexcept;
 
 		[[nodiscard]] const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept override;

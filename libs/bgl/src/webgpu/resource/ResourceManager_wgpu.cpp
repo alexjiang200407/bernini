@@ -228,23 +228,31 @@ namespace bgl
 	}
 
 	const wgpu::Buffer&
-	ResourceManager::GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept
+	ResourceManager::GetBufferByBindlessIndex(uint32_t bindlessIndex) const noexcept
 	{
 		auto lock = std::scoped_lock(m_PoolMutex);
-		return m_Buffers[slotIndex].GetHandle();
+		return m_Buffers[bindlessIndex].GetHandle();
 	}
 
 	// No heap on this backend: the slot index itself is the number bind-group assembly
-	// resolves at dispatch.
+	// resolves at dispatch. Invalid handles resolve to 0xFFFFFFFF, matching the D3D12 seam.
 	uint32_t
 	ResourceManager::GetBindlessIndex(BufferHandle handle) const noexcept
 	{
+		if (!ValidBufferHandle(handle))
+		{
+			return 0xFFFFFFFF;
+		}
 		return handle.slot.index;
 	}
 
 	uint32_t
 	ResourceManager::GetBindlessIndex(TextureHandle handle) const noexcept
 	{
+		if (!ValidTextureHandle(handle))
+		{
+			return 0xFFFFFFFF;
+		}
 		return handle.slot.index;
 	}
 
