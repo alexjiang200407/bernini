@@ -140,12 +140,11 @@ namespace bgl
 		case Kind::Resource:
 		case Kind::SamplerState:
 		{
-			// Metal reflects a bindless handle as a Resource/SamplerState (D3D12 emits a uint2). Lower
-			// it to the same 8-byte kDescriptorHandle either backend writes. DXIL never reaches here.
-			result.kind             = UniformType::kValue;
-			result.valueType        = UniformValueType::kDescriptorHandle;
-			result.size             = 8;  // two uint32 -- a resource id / device pointer
-			result.isResourceHandle = true;
+			// Metal reflects a bindless handle as a Resource/SamplerState, where D3D12 emits a uint2.
+			// Lower it to the same 8-byte kDescriptorHandle. DXIL never reaches here.
+			result.kind      = UniformType::kValue;
+			result.valueType = UniformValueType::kDescriptorHandle;
+			result.size      = 8;  // two uint32 -- a resource id / device pointer
 			return result;
 		}
 
