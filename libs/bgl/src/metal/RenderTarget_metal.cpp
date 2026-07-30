@@ -1,0 +1,30 @@
+#include "RenderTarget_metal.h"
+
+namespace bgl
+{
+	RenderTarget::RenderTarget(const RenderTargetDesc& desc, MTL::Device* device) :
+		m_Width(static_cast<uint32_t>(desc.width)), m_Height(static_cast<uint32_t>(desc.height))
+	{
+		if (desc.headless || desc.wnd == nullptr)
+		{
+			core::throw_runtime_error(
+				"Metal RenderTarget requires a CA::MetalLayer (headless not yet supported)");
+		}
+
+		m_Layer = reinterpret_cast<CA::MetalLayer*>(desc.wnd);
+		m_Layer->setDevice(device);
+		m_Layer->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+		m_Layer->setFramebufferOnly(true);
+		m_Layer->setDrawableSize(
+			CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
+	}
+
+	void
+	RenderTarget::Resize(uint32_t width, uint32_t height) noexcept
+	{
+		m_Width  = width;
+		m_Height = height;
+		m_Layer->setDrawableSize(
+			CGSize{ static_cast<CGFloat>(width), static_cast<CGFloat>(height) });
+	}
+}

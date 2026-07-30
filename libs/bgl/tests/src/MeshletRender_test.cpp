@@ -18,7 +18,8 @@
 // The first mesh-shader render test: a mesh pipeline (FullscreenRect: MSMain emits one full-screen
 // triangle, PSMain writes solid white) clears an offscreen RT to black, draws over it, reads it
 // back, and checks every texel is white. Exercises the meshlet pipeline, the render encoder, and
-TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
+// drawMeshThreadgroups. Backend-agnostic; runs on D3D12 and (tagged [metal]) on Metal.
+TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet][metal]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -134,7 +135,7 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 
 // The mesh shader reads a uniform and passes it to the fragment, which reads another -- so a wrong
 // binding in either stage shows up as a wrong output channel. Verifies mesh-shader uniform binding.
-TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[meshlet]")
+TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[meshlet][metal]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -250,7 +251,7 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 // binding-index invariant the pipeline relies on -- a cbuffer's reflected index equals the
 // [[buffer(N)]] each per-stage MSL places it at. A mismatch would read the wrong cbuffer and
 // corrupt a channel.
-TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[meshlet]")
+TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[meshlet][metal]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();

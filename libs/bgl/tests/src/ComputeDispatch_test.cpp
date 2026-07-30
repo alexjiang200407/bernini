@@ -16,7 +16,7 @@
 // RWStructuredBuffer, read back and checked exactly. Unlike the buffer-copy readback test, this
 // exercises Slang->target codegen and bindless handle resolution (on Metal, the slot-index ->
 // gpuAddress translation at dispatch). Backend-agnostic -- runs on D3D12 and Metal.
-TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
+TEST_CASE("Compute dispatch writes a bindless buffer", "[compute][metal]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -101,7 +101,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 
 // A mixed cbuffer (float3 + scalar + handle) puts the bindless handle at a non-zero,
 // alignment-dependent offset, exercising the layout recompute a single-field cbuffer does not.
-TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[compute]")
+TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[compute][metal]")
 {
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
