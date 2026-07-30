@@ -122,7 +122,7 @@ jobs:
         run: python scripts/build.py --preset macos-clang-metal-debug
 
       # bgl_tests only: core and assetlib are the same sources the backend-free build above already
-      # ran. run_tests.py runs this suite through libs/bgl/tests/metal_expected.txt, less the mesh
+      # ran. run_tests.py skips what libs/bgl/tests/metal_unsupported.txt names, plus the mesh
       # -shader tests the runner's paravirtualised GPU cannot encode -- see the exclude file. It
       # prints what it dropped.
       - name: Test (Metal)

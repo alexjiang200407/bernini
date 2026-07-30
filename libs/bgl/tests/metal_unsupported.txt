@@ -1,0 +1,57 @@
+# Tests the Metal backend cannot pass yet, and which a Metal build therefore does not run.
+# Everything else in bgl_tests runs -- so a test added tomorrow is covered on Metal by default, and
+# only a deliberate entry here opts it out.
+#
+# This list shrinks. Each task removes what it makes pass, and the file is deleted when it empties.
+# A name here says nothing about the test: all of them are backend-agnostic, and every one passes on
+# D3D12 today. What it records is how far this backend has got.
+A baked cutout material cuts its silhouette out of a plane
+A camera yaw displaces the skybox horizontally
+A deferred free waits for every registered queue
+A deleted instance stops contributing motion
+A distant mirror does not alias its reflection
+A live instance re-resolves its PSO after SetSubmeshMaterial
+A loose blend material renders the same as the baked one
+A material override changes one instance and not its siblings
+A material override paints one instance and not its sibling
+A mesh larger than the scene's initial arenas still loads
+A mesh past the DispatchMesh group cap is still refused
+A self-occluding blend material hides the layers behind it
+A split-phase capture resolves to the frame a blocking screenshot returns
+A still camera leaves static geometry with no motion
+A submesh maps 1:1 to a GPU submesh whatever its meshlet count
+A submesh's cooked AABB lands on the GPU as its bounding sphere
+An alpha-tested material cuts a hole in a plane
+Buffer contents around mesh deletion
+Camera motion reprojects static geometry to its previous screen position
+Capacity is a starting point, not a limit
+Capture tickets are bounded, single-spend, and discardable
+DeleteMaterial frees a material slot for reuse
+DeleteTextureAsset defers the release to the GPU
+Deleting a texture cancels its pending upload
+GPU assertion handler replaces the crash
+Geometry
+Geometry entering the frame reprojects to outside it
+Geometry leaving the frame leaves no motion behind
+GraphicsError on frame protocol misuse
+Instances outside the frustum are culled, those inside survive
+Loose PBR material renders equivalently to PBR
+PBR instances render headlessly
+Pixels no geometry covered stay at zero motion
+Render to two targets
+Resize after drawing a frame
+Resize edge cases
+Resize recreates the backbuffers
+Resize with an existing static mesh instance
+Scene geometry and instance deletion
+SceneError on misuse
+SetSubmeshMaterial addresses submeshes by source index
+SetSubmeshMaterial re-selects a submesh's PSO
+Shader cache is populated cold and reused warm without recompiling
+Skybox renders headlessly
+The first frame a view is drawn has no motion
+Translucent panes composite back-to-front regardless of creation order
+Transparent instances are keyed back-to-front and compacted
+Uniforms
+bindless texture sample uploads and resolves end-to-end
+dbg_raise records a GPU assertion end-to-end

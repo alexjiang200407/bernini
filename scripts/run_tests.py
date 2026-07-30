@@ -50,11 +50,11 @@ import util.config as cfg
 # What makes a target a test suite.
 SUITE_SUFFIX = "_tests"
 
-# The tests a Metal build is expected to pass, and the suite it applies to. The Metal backend does
-# not implement the whole RHI yet, so running everything would report failures that are the
-# backend's remaining scope rather than a regression. Deleted once the suite passes whole.
-METAL_EXPECTED = os.path.join(ct.REPO_ROOT, "libs", "bgl", "tests", "metal_expected.txt")
-METAL_EXPECTED_SUITE = "bgl_tests"
+# The tests a Metal build skips, and the suite they belong to. The backend does not implement the
+# whole RHI yet, so these would report its remaining scope as failures. Everything not named here
+# runs, which is what keeps a newly added test covered on Metal by default. Deleted once it empties.
+METAL_UNSUPPORTED = os.path.join(ct.REPO_ROOT, "libs", "bgl", "tests", "metal_unsupported.txt")
+METAL_SUITE = "bgl_tests"
 
 
 def metal_build(build_dir):
@@ -67,11 +67,32 @@ def metal_build(build_dir):
                    for line in f)
 
 
+def show_path(path):
+    """`path` relative to the repo when it is inside it, else as given."""
+    rel = os.path.relpath(path, ct.REPO_ROOT)
+    return path if rel.startswith(os.pardir) else rel
+
+
 def read_test_names(path):
     """The test names in a Catch2 --input-file, without its `#` comments or blank lines."""
     with open(path, encoding="utf-8") as f:
         return [line.rstrip("\n") for line in f
                 if line.strip() and not line.lstrip().startswith("#")]
+
+
+def list_test_names(exe):
+    """Every test case name `exe` defines, or None if they cannot be read."""
+    try:
+        out = subprocess.run(
+            [exe, "--list-tests", "--verbosity", "quiet"], cwd=os.path.dirname(exe),
+            capture_output=True, text=True, timeout=120).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    # --verbosity quiet prints bare names, one per line. The default listing wraps a long name to
+    # the terminal width, which silently splits it into two entries that match no test.
+    names = [line for line in out.splitlines() if line.strip()]
+    return names or None
 
 
 def write_filtered_list(build_dir, names):
@@ -80,7 +101,7 @@ def write_filtered_list(build_dir, names):
     A file rather than argv: a name is a Catch2 test *spec* on the command line, so one containing
     a comma or a bracket would be parsed as two specs or as a tag. --input-file takes them literally.
     """
-    path = os.path.join(build_dir, "metal_expected_filtered.txt")
+    path = os.path.join(build_dir, "metal_selected.txt")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(names) + "\n")
     return path
@@ -208,8 +229,8 @@ def main():
                         help="Don't build first; run the binaries that are already there.")
     parser.add_argument("--list", action="store_true", help="Name the suites without running them.")
     parser.add_argument("--exclude-file",
-                        help="A file of test names to drop from the expected-pass list, in the same "
-                             "format. For a host whose GPU cannot run some of them.")
+                        help="A file of further test names to skip, in the same format as "
+                             "metal_unsupported.txt. For a host whose GPU cannot run some of them.")
     parser.add_argument("-j", "--jobs", type=int, default=DEFAULT_JOBS,
                         help="Split each suite across this many concurrent processes "
                              f"(default: {DEFAULT_JOBS}). 1 runs a single process and streams "
@@ -259,31 +280,48 @@ def main():
             print(name)
         return 0
 
-    # A forwarded filter is the caller naming what to run, so it wins over the expected-pass list.
+    # A forwarded filter is the caller naming what to run, so it wins over the skip list.
     metal_list = None
     if (not forward
-            and os.path.isfile(METAL_EXPECTED)
-            and any(metal_build(d) for d in build_dirs)):
-        names = read_test_names(METAL_EXPECTED)
-        metal_list = METAL_EXPECTED
-        source = os.path.relpath(METAL_EXPECTED, ct.REPO_ROOT)
+            and os.path.isfile(METAL_UNSUPPORTED)
+            and any(metal_build(d) for d in build_dirs)
+            and METAL_SUITE in chosen):
+        sources = {METAL_UNSUPPORTED: set(read_test_names(METAL_UNSUPPORTED))}
+        source = show_path(METAL_UNSUPPORTED)
 
         if args.exclude_file:
-            excluded = set(read_test_names(args.exclude_file))
-            unknown = excluded - set(names)
-            if unknown:
-                print(f"error: {args.exclude_file} names tests that are not in {source}: "
-                      + ", ".join(sorted(unknown)), file=sys.stderr)
-                return 1
-            names = [n for n in names if n not in excluded]
-            metal_list = write_filtered_list(build_dirs[0], names)
+            extra = set(read_test_names(args.exclude_file))
+            sources[args.exclude_file] = extra
             # Never silent: a dropped test is coverage this run does not have.
-            print(f"excluding {len(excluded)} test(s) per "
-                  f"{os.path.relpath(args.exclude_file, ct.REPO_ROOT)}:")
-            for name in sorted(excluded):
+            print(f"also skipping {len(extra)} test(s) per "
+                  f"{show_path(args.exclude_file)}:")
+            for name in sorted(extra):
                 print(f"  - {name}")
 
-        print(f"Metal build: running {METAL_EXPECTED_SUITE} from {source} ({len(names)} tests)")
+        all_names = list_test_names(chosen[METAL_SUITE])
+        if all_names is None:
+            print(f"error: could not list the tests in {chosen[METAL_SUITE]}", file=sys.stderr)
+            return 1
+
+        # A name that matches nothing is a typo or a rename, and would otherwise silently stop
+        # skipping what it was written for.
+        known = set(all_names)
+        failed = False
+        for path, names in sources.items():
+            unknown = names - known
+            if unknown:
+                print(f"error: named in {show_path(path)} but not in "
+                      f"{METAL_SUITE}: " + ", ".join(sorted(unknown)), file=sys.stderr)
+                failed = True
+        if failed:
+            return 1
+
+        skip = set().union(*sources.values())
+
+        selected = [n for n in all_names if n not in skip]
+        metal_list = write_filtered_list(build_dirs[0], selected)
+        print(f"Metal build: skipping {len(skip)} of {len(all_names)} tests in {METAL_SUITE} "
+              f"({source}); running {len(selected)}")
 
     results = []
     for name, exe in chosen.items():
@@ -295,7 +333,7 @@ def main():
             continue
 
         suite_forward = forward
-        if metal_list and name == METAL_EXPECTED_SUITE:
+        if metal_list and name == METAL_SUITE:
             suite_forward = ["--input-file", metal_list]
 
         jobs = max(1, args.jobs)

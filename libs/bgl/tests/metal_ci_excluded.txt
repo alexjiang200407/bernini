@@ -1,5 +1,5 @@
-# Tests from metal_expected.txt that a GitHub macOS runner cannot run. Passed to run_tests.py as
-# --exclude-file from the CI job only; a local run uses the full list.
+# Tests a GitHub macOS runner cannot run, on top of metal_unsupported.txt. Passed to
+# run_tests.py as --exclude-file from the CI job only; a local run skips only that list.
 #
 # The runner's GPU is paravirtualised, and its encoder does not implement the mesh-shader entry
 # points -- the failure is an unrecognized selector, not a wrong result:

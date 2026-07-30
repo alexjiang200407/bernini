@@ -257,13 +257,15 @@ may ignore it. `MTLBinaryArchive` is the analogue and is worth having, but it is
 a path that must first be correct. `ShaderCache_test` is skipped on Metal and the skip is named in
 the test, not hidden in a filter.
 
-**D14. Each task's gate is a named list of tests, which grows.**
-`bgl_tests` cannot pass on the first slice and must not be landed failing. So the Metal build runs
-the suite through `libs/bgl/tests/metal_expected.txt` — the tests a Metal build is expected to pass —
-and every task appends the ones it makes pass. The file is a ratchet: a reviewer reads the diff and
-sees exactly what the slice bought. The last task deletes it once the whole suite passes. *Rejected:*
-the old `[metal]` tags — they marked a test as being *about* Metal, which was never true, and a
-reader could not tell coverage from intent.
+**D14. Each task's gate is a named list of tests, which shrinks.**
+`bgl_tests` cannot pass on the first slice and must not be landed failing. So a Metal build skips
+what `libs/bgl/tests/metal_unsupported.txt` names and runs everything else, and every task removes
+the ones it makes pass. The last task deletes the file. *Rejected:* the old `[metal]` tags — they
+marked a test as being *about* Metal, which was never true, and a reader could not tell coverage
+from intent. *Also rejected:* the inverse, a list of tests expected to **pass**. It reads more
+naturally and it was what task 1 first shipped, but its default is wrong: a test added later is
+silently not run on Metal until somebody remembers the file, and a regression in one outside the
+list is invisible. A skip list makes coverage the default and opting out the deliberate act.
 
 ## The tasks, in order, and the gate for each
 
@@ -272,7 +274,7 @@ before there is a resource, nothing drawn before there is a pipeline.
 
 | | Task | Gate |
 |---|---|---|
-| 1 | **Revert 576ccee** and repair the 41 drift errors, minus the four hunks listed above. New `macos-clang-metal-debug/release` presets; widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`; CI gains a build-only Metal leg. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_expected.txt` holds what genuinely passes |
+| 1 | **Revert 576ccee** and repair the 41 drift errors, minus the four hunks listed above. New `macos-clang-metal-debug/release` presets; widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`; CI gains a build-only Metal leg. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_unsupported.txt` names what does not yet pass |
 | 2 | Submission brought up to today's RHI: `MTLSharedEvent` as the timeline (D5), `Flush`, and the encoder state machine (D8) the restored `CommandList` predates. | a fence-ordering test: submit, CPU wait, cross-queue GPU wait, poll |
 | 3 | `IResourceManager` buffers: `WriteBufferSlice`, `CopyBuffer`, deferred destruction against N registered timelines, `RegisterQueue`/`UnregisterQueue`, and the residency set (D7). Creation and readback are restored, not written. | `Readback_test`, `GrowableCapacity_test`, `MultiQueueDeletion_test`, `MeshDelete_test` |
 | 4 | `IShader` + `IComputePipeline`: the restored `MetalPipelineReflection` reconciled with today's `ReflectedLayout`, and the `Kind::Resource` arm in `SlangReflection.cpp`. Finding 3 is already handled by the restored `MetalizeLayout`; this task verifies it still is. | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
@@ -282,7 +284,7 @@ before there is a resource, nothing drawn before there is a pipeline.
 | 8 | `IMeshletPipeline` and the render encoder: the restored per-stage MSL compilation carried to the engine's real forward shaders, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
 | 9 | The headless render target: frame ring, backbuffers, depth, motion vectors, `PresentAndAdvance`, `ResizeBackbuffers`, screenshot. | `PbrRender_test`, `Skybox_test`, `AlphaTest_test`, `Transparent_test`, `MotionVectors_test`, `Resize_test`, `Capture_test`, `MaterialOverrideRender_test` |
 | 10 | The windowed target: `CAMetalLayer` swapchain, drawable acquisition, resize on layer bounds change. | `examples/bgl_window`, `bgl_sphere` and `bgl_two_windows` render live; screenshots in the PR |
-| 11 | The remainder: `DispatchMeshIndirect`, the GPU debug buffer and assertion path, `SceneOverflow`, `TransparentDepthKeys`, `FrameGraph_test`. Delete `metal_expected.txt`; CI's Metal leg runs the suite. | `just test bgl_tests` fully green on Metal, with `--gpu-validation`'s Metal equivalent (API validation + shader validation) enabled |
+| 11 | The remainder: `DispatchMeshIndirect`, the GPU debug buffer and assertion path, `SceneOverflow`, `TransparentDepthKeys`, `FrameGraph_test`. Delete `metal_unsupported.txt`; CI's Metal leg runs the suite. | `just test bgl_tests` fully green on Metal, with `--gpu-validation`'s Metal equivalent (API validation + shader validation) enabled |
 | 12 | `gamelib` on macOS: widen its test guard, fix what a non-MSVC compiler and a case-sensitive path resolution turn up. | `just test gamelib` |
 | 13 | The editor on macOS: Qt6, the layer-backed render widget (D11), the render thread, the thumbnail contexts. | `just test editor`, and the editor launches, loads a project and renders a scene — screenshot in the PR |
 
@@ -320,8 +322,8 @@ handler, file paths and threading get their first real use in this branch.
 **A revert carries its assumptions back in with it.** Task 1 restores code written against an RHI with
 one submission timeline, no residency sets and no `CopyBuffer`, and it will compile before it is
 correct — a `Destroy*` given a `deferred` argument it ignores builds fine and frees a resource the GPU
-is still reading. Tasks 2 and 3 exist to close that, and the reason `metal_expected.txt` (D14) starts
-almost empty rather than optimistically is that a compiling revert is not a passing one.
+is still reading. Tasks 2 and 3 exist to close that, and the reason `metal_unsupported.txt` (D14) starts
+long rather than optimistically short is that a compiling revert is not a passing one.
 
 ## The prior work
 
