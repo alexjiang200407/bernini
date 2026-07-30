@@ -32,9 +32,7 @@ set(IDL_CPP_SOURCES
     TextureHandle.slang
     ErrorCode.slang
     DispatchArgs.slang
-    MeshletInstance.slang
     BaseTable.slang
-    DrawIndirectArgs.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public
