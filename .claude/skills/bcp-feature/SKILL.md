@@ -258,9 +258,14 @@ draft for the length of the feature and every slice merge is activity on it, so 
 the work you just did back to you.
 
 **Start it last** — after every write to the PR, as the final action of the turn. The watcher
-baselines activity when it starts, so anything you post afterwards fires it immediately with your own
-text as the event. Self-filtering cannot save you here: without the bot token, comments post as the
-user's own account and are indistinguishable from theirs.
+baselines activity when it starts, so anything posted afterwards fires it immediately.
+
+Better still, do not post at all. §4 reports to the user in chat; a PR gets written to only when
+there is review feedback to answer ([bcp-revise](.claude/skills/bcp-revise/SKILL.md) § 8), and a
+description of your own change belongs in the PR **body**, not a comment. Self-narration on an
+unreviewed PR is noise on the surface the reviewer has to read — and posted without
+`GH_TOKEN` from `mint-bot-token.sh` it arrives under the user's own name, so it also reads as
+though they wrote it.
 
 It snapshots the PR's current activity as a baseline, polls, and blocks until something actionable
 happens, printing one JSON event — the deterministic version of "did the reviewer move yet?", so
