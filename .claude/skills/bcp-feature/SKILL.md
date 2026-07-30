@@ -242,11 +242,16 @@ After the PR is open, **stop and report**: the PR, what it contains, what the ne
 reviews and merges. Review comments are [bcp-revise](.claude/skills/bcp-revise/SKILL.md), which
 pushes to the slice branch and leaves the base alone.
 
-Then **start the watcher in the background** and hand off:
+Then **start the watcher in the background** and hand off. This is not optional and does not wait to
+be asked — every slice PR gets one the moment it opens:
 
 ```bash
 just watch-pr <n>        # python scripts/watch_pr.py <n>
 ```
+
+**Slice PRs only** — the ones based on `feature/<name>`. Never the tracking PR from § 1: it sits in
+draft for the length of the feature and every slice merge is activity on it, so watching it reports
+the work you just did back to you.
 
 It snapshots the PR's current activity as a baseline, polls, and blocks until something actionable
 happens, printing one JSON event — the deterministic version of "did the reviewer move yet?", so
