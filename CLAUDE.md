@@ -75,9 +75,8 @@ Overview of all the Frame Graph Passes
 
 **[Slang Shaders](./docs/slang_shaders.md)**
 
-Guidelines for writing one Slang source that compiles to both DXIL (D3D12) and WGSL (WebGPU): the
-atomic (`Atomic<T>`), 16-bit-integer, and mesh/amplification-stage constraints WGSL imposes, and how
-the build enforces them.
+The conventions a shader source follows: `Atomic<T>` and its accessors, the bindless buffer
+primitives, where a constant buffer may hold a resource, and how the build enforces them.
 
 **[Shader Cache](./docs/shader_cache.md)**
 
