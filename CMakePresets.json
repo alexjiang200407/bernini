@@ -21,18 +21,6 @@
       }
     },
     {
-      "name": "macos",
-      "hidden": true,
-      "cacheVariables": {
-        "PLATFORM": "MACOS"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
-    },
-    {
       "name": "metal",
       "hidden": true,
       "cacheVariables": {
@@ -240,8 +228,37 @@
     },
     {
       "name": "macos-clang-debug",
+      "displayName": "macOS Clang Debug ninja - no backend (core + assetlib)",
+      "binaryDir": "${sourceDir}/build/macos-debug",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "debug"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BERNINI_BUILD_EXAMPLES": "OFF"
+      }
+    },
+    {
+      "name": "macos-clang-release",
+      "displayName": "macOS Clang Release ninja - no backend (core + assetlib)",
+      "binaryDir": "${sourceDir}/build/macos-release",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "release"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "macos-clang-metal-debug",
       "displayName": "macOS Clang Debug ninja - Metal",
-      "binaryDir": "${sourceDir}/build/macos-clang-debug",
+      "binaryDir": "${sourceDir}/build/macos-metal-debug",
       "inherits": [
         "vcpkg",
         "macos",
@@ -254,9 +271,9 @@
       }
     },
     {
-      "name": "macos-clang-release",
+      "name": "macos-clang-metal-release",
       "displayName": "macOS Clang Release ninja - Metal",
-      "binaryDir": "${sourceDir}/build/macos-clang-release",
+      "binaryDir": "${sourceDir}/build/macos-metal-release",
       "inherits": [
         "vcpkg",
         "macos",
@@ -268,7 +285,6 @@
         "CMAKE_BUILD_TYPE": "Release"
       }
     }
-
   ],
   "buildPresets": [
     {
@@ -316,6 +332,16 @@
     {
       "name": "macos-clang-release",
       "configurePreset": "macos-clang-release"
+    },
+    {
+      "name": "macos-clang-metal-debug",
+      "configurePreset": "macos-clang-metal-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-clang-metal-release",
+      "configurePreset": "macos-clang-metal-release",
+      "configuration": "Release"
     }
   ]
 }

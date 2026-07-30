@@ -116,8 +116,8 @@ target_compile_definitions(bgl_objects PRIVATE
 	BGL_EXPORTS
 )
 
-# The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal skeleton
-# compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step yet.
+# The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal backend
+# compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 	add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src)
@@ -159,9 +159,8 @@ endif()
 
 
 # The suite's sources are backend-agnostic (RHI interfaces + CreateGraphics), so it builds on either
-# backend from one glob. What differs is the backend objects it embeds. On Metal only the tests
-# tagged [metal] run today -- the runner defaults to that tag (tests/src/main.cpp) while the render
-# path is still being ported; the rest are selected explicitly by tag.
+# backend from one glob. What differs is the backend objects it embeds. A Metal build cannot pass
+# the whole suite yet, so `just test` runs it through tests/metal_expected.txt.
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     find_package(Catch2 CONFIG REQUIRED)
 	find_package(Stb REQUIRED)  # stb_image for golden-image comparison

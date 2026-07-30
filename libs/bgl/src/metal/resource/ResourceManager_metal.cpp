@@ -36,7 +36,7 @@ namespace bgl
 		// structured-buffer path to create it.
 		StructBufferDesc sbDesc;
 		sbDesc.stride       = desc.elementSize;
-		sbDesc.elementCount = desc.maxCount;
+		sbDesc.elementCount = desc.initialCount;
 		sbDesc.isUav        = true;
 		sbDesc.debugName    = desc.debugName;
 		return CreateStructBuffer(sbDesc);
@@ -55,26 +55,45 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyBuffer(BufferHandle handle, uint64_t, bool) noexcept
+	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
+	{
+		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
+		if (std::ranges::find(m_Queues, queue) == m_Queues.end())
+			m_Queues.push_back(queue);
+	}
+
+	void
+	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
+	{
+		std::erase(m_Queues, queue);
+	}
+
+	void
+	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
-		// The Metal buffer's storage is released by the slot's SharedPtr; a caller only reaches here
-		// after WaitForFenceCPUBlocking, so an immediate free is safe.
+		if (deferred)
+			m_Retired.push_back(
+				NS::RetainPtr<MTL::Resource>(m_Buffers[handle.slot].GetMTLResource()));
 		m_Buffers.release_slot(handle.slot);
 	}
 
 	void
-	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, uint64_t, bool) noexcept
+	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback handle");
+		if (deferred)
+			m_Retired.push_back(
+				NS::RetainPtr<MTL::Resource>(m_Readbacks[handle.slot].GetMTLResource()));
 		m_Readbacks.release_slot(handle.slot);
 	}
 
 	void
-	ResourceManager::CleanupExpiredResources(uint64_t) noexcept
+	ResourceManager::CleanupExpiredResources() noexcept
 	{
-		// Destruction is immediate in this slice (callers wait on the fence first), so nothing is
-		// pending; the deferred-by-fence path lands with the render loop.
+		// Nothing is reclaimed yet: a deferred destroy keeps the Metal object alive for the manager's
+		// lifetime rather than gate it on the registered timelines, so no resource can be freed under
+		// a GPU still reading it. The fence gate that makes this reclaim replaces it.
 	}
 
 	const Buffer&
@@ -139,20 +158,17 @@ namespace bgl
 	}
 
 	void
-	ResourceManager::DestroyTexture(TextureHandle handle, uint64_t, bool) noexcept
+	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
+		if (deferred)
+			m_Retired.push_back(
+				NS::RetainPtr<MTL::Resource>(m_Textures[handle.slot].GetMTLResource()));
 		m_Textures.release_slot(handle.slot);
 	}
 
 	void
-	ResourceManager::DestroyTexture(TextureHandle handle) noexcept
-	{
-		DestroyTexture(handle, 0, false);
-	}
-
-	void
-	ResourceManager::DestroyRtv(RtvHandle handle, uint64_t, bool) noexcept
+	ResourceManager::DestroyRtv(RtvHandle handle, bool) noexcept
 	{
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 		m_Rtvs.release_slot(handle.idx);
@@ -162,6 +178,13 @@ namespace bgl
 	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
 		return m_Textures[handle.slot];
+	}
+
+	TextureDesc
+	ResourceManager::GetTextureDesc(TextureHandle handle) const noexcept
+	{
+		gassert(ValidTextureHandle(handle), "GetTextureDesc on an invalid texture handle");
+		return m_Textures[handle.slot].GetDesc();
 	}
 
 	const Rtv&

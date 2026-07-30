@@ -68,10 +68,19 @@ namespace bgl
 	}
 
 	core::SharedRef<IResourceManager>
-	Device::CreateResourceManager(const ResourceManagerDesc& desc, core::SharedRef<ICommandQueue>)
-		const noexcept
+	Device::CreateResourceManager(const ResourceManagerDesc& desc) const noexcept
 	{
 		return core::SharedRef<ResourceManager>::Make(m_Device.get(), desc);
+	}
+
+	RenderTargetRef
+	Device::CreateRenderTarget(
+		const RenderTargetDesc&,
+		core::SharedRef<ICommandQueue>,
+		core::SharedRef<IResourceManager>,
+		bool) const
+	{
+		gunimplemented("Metal backend: CreateRenderTarget not implemented yet");
 	}
 
 	core::SharedRef<IShader>

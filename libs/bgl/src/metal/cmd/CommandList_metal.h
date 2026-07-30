@@ -33,6 +33,14 @@ namespace bgl
 			size_t       byteSize) noexcept override;
 
 		void
+		CopyBuffer(
+			BufferHandle dst,
+			BufferHandle src,
+			uint64_t     dstOffset,
+			uint64_t     srcOffset,
+			uint64_t     byteSize) noexcept override;
+
+		void
 		CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept override;
 
 		void
@@ -101,12 +109,12 @@ namespace bgl
 		void
 		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		void
 		DispatchMeshIndirect(uint32_t) noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 
 		void
@@ -128,7 +136,7 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 	private:
-		static constexpr const char* k =
+		static constexpr const char* c_Unimplemented =
 			"Metal CommandList: not implemented yet (render/scene slice)";
 
 		CommandListDesc    m_Desc;

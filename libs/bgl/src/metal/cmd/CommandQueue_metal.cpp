@@ -54,6 +54,17 @@ namespace bgl
 		}
 	}
 
+	void
+	CommandQueue::Flush() noexcept
+	{
+		// An empty command buffer signals past everything already committed: Metal keeps submission
+		// order on a queue, so it cannot run before them.
+		auto* cmdBuffer = m_Queue->commandBuffer();
+		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
+		cmdBuffer->commit();
+		WaitForFenceCPUBlocking(m_NextFenceValue++);
+	}
+
 	// Cross-queue GPU synchronization is unused while there is a single queue; these land with the
 	// second queue.
 	void

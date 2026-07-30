@@ -35,9 +35,10 @@ import util.cmake_tools as ct
 
 PATH = os.path.join(ct.REPO_ROOT, "scripts", "config.json")
 
-# Used when neither the command line nor config.json names a preset.
+# Used when neither the command line nor config.json names a preset. A host only has presets
+# for the backend it can run, so the default follows the platform.
 DEFAULT_PRESET = (
-    "macos-clang-debug" if sys.platform == "darwin" else "windows-vs2026-msvc-dx12-debug"
+    "macos-clang-metal-debug" if sys.platform == "darwin" else "windows-vs2026-msvc-dx12-debug"
 )
 
 DEFAULT_ARCH = "x64"

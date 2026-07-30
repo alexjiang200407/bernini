@@ -142,9 +142,10 @@ namespace bgl
 		{
 			// Metal reflects a bindless handle as a Resource/SamplerState, where D3D12 emits a uint2.
 			// Lower it to the same 8-byte kDescriptorHandle. DXIL never reaches here.
-			result.kind      = UniformType::kValue;
-			result.valueType = UniformValueType::kDescriptorHandle;
-			result.size      = 8;  // two uint32 -- a resource id / device pointer
+			result.kind             = UniformType::kValue;
+			result.valueType        = UniformValueType::kDescriptorHandle;
+			result.size             = 8;  // two uint32 -- a resource id / device pointer
+			result.isResourceHandle = true;
 			return result;
 		}
 

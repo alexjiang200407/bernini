@@ -48,17 +48,19 @@ namespace bgl
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
 
 		void
-		DestroyBuffer(BufferHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		RegisterQueue(ICommandQueue* queue) noexcept override;
 
 		void
-		DestroyReadbackBuffer(
-			ReadbackBufferHandle handle,
-			uint64_t             currentFenceValue,
-			bool                 deferred) noexcept override;
+		UnregisterQueue(ICommandQueue* queue) noexcept override;
 
 		void
-		CleanupExpiredResources(uint64_t completedFenceValue) noexcept override;
+		DestroyBuffer(BufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		CleanupExpiredResources() noexcept override;
 
 		const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept override;
@@ -87,17 +89,16 @@ namespace bgl
 		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
 
 		void
-		DestroyTexture(TextureHandle handle, uint64_t currentFenceValue, bool deferred) noexcept
-			override;
+		DestroyTexture(TextureHandle handle, bool deferred = true) noexcept override;
 
 		void
-		DestroyTexture(TextureHandle handle) noexcept override;
-
-		void
-		DestroyRtv(RtvHandle handle, uint64_t currentFenceValue, bool deferred) noexcept override;
+		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
 
 		const Texture&
 		GetTexture(TextureHandle handle) const noexcept override;
+
+		TextureDesc
+		GetTextureDesc(TextureHandle handle) const noexcept override;
 
 		const Rtv&
 		GetRtv(RtvHandle handle) const noexcept override;
@@ -119,89 +120,76 @@ namespace bgl
 
 		// ---- not yet implemented (scene slice: SRV textures, samplers, depth) ----
 
-		TextureHandle
-		CreateTexture(const TextureDesc&, std::span<const TextureSubresourceData>) noexcept override
-		{
-			gunimplemented(k);
-		}
-		TextureHandle
-		CreateTexture(const assetlib::ImageData&, std::string) noexcept override
-		{
-			gunimplemented(k);
-		}
-		TextureHandle
-		CreateSolidTexture(uint8_t, uint8_t, uint8_t, uint8_t) noexcept override
-		{
-			gunimplemented(k);
-		}
 		SamplerHandle
 		CreateSampler(const SamplerDesc&) noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		void
-		FlushPendingTextureUploads(ICommandList*) noexcept override
+		DestroySampler(SamplerHandle, bool) noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		void
-		DestroySampler(SamplerHandle, uint64_t, bool) noexcept override
+		DestroyDsv(DsvHandle, bool) noexcept override
 		{
-			gunimplemented(k);
-		}
-		void
-		DestroyDsv(DsvHandle, uint64_t, bool) noexcept override
-		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		DsvHandle
 		CreateDsv(TextureHandle, const DsvDesc&) noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		const Dsv&
 		GetDsv(DsvHandle) const noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		TextureHandle
 		GetDsvTexture(DsvHandle) const noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		const Sampler&
 		GetSampler(SamplerHandle) const noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		bool
 		IsTextureCube(const TextureHandle&) const noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		bool
 		ValidSamplerHandle(const SamplerHandle&) const noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		bool
 		ValidDsvHandle(const DsvHandle&) const noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 		void
 		ClearDsv(ICommandList*, DsvHandle, float, uint8_t) noexcept override
 		{
-			gunimplemented(k);
+			gunimplemented(c_Unimplemented);
 		}
 
 	private:
-		static constexpr const char* k = "Metal ResourceManager: not implemented yet (scene slice)";
+		static constexpr const char* c_Unimplemented =
+			"Metal ResourceManager: not implemented yet (scene slice)";
 
 		MTL::Device*                      m_Device = nullptr;
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_Readbacks;
 		core::slot_vector<Texture>        m_Textures;
 		core::slot_vector<Rtv>            m_Rtvs;
+		std::vector<ICommandQueue*>       m_Queues;
+
+		// Deferred-destroyed resources, held to the manager's lifetime because nothing gates their
+		// reclamation on the registered timelines yet. Freeing them here instead would free under a
+		// GPU still reading them; growing is the safe half of that trade.
+		std::vector<NS::SharedPtr<MTL::Resource>> m_Retired;
 	};
 }

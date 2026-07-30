@@ -47,6 +47,9 @@ namespace bgl
 		void
 		WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept override;
 
+		void
+		Flush() noexcept override;
+
 		[[nodiscard]] MTL::CommandQueue*
 		GetMTLCommandQueue() const noexcept
 		{

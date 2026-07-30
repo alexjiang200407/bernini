@@ -22,7 +22,10 @@ namespace bgl
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
 		gassert(m_Desc.meshShader != nullptr, "Meshlet pipeline requires a mesh shader");
-		gassert(m_Desc.pixelShader != nullptr, "Meshlet pipeline requires a pixel shader");
+
+		// The RHI allows a mesh-only pipeline (D3D12 builds one for reflection); Metal would need a
+		// rasterization-disabled descriptor, which is not implemented.
+		gassert(m_Desc.pixelShader != nullptr, "Metal meshlet pipeline needs a pixel shader");
 
 		SlangErrorChecker errChecker;
 

@@ -103,6 +103,26 @@ namespace bgl
 	}
 
 	void
+	CommandList::CopyBuffer(
+		BufferHandle dst,
+		BufferHandle src,
+		uint64_t     dstOffset,
+		uint64_t     srcOffset,
+		uint64_t     byteSize) noexcept
+	{
+		gassert(m_Open, "CopyBuffer on a closed command list");
+		gassert(m_ResourceManager->ValidBufferHandle(src), "CopyBuffer: invalid source");
+		gassert(m_ResourceManager->ValidBufferHandle(dst), "CopyBuffer: invalid destination");
+
+		auto* srcBuffer = m_ResourceManager->GetBuffer(src).GetMTLResource();
+		auto* dstBuffer = m_ResourceManager->GetBuffer(dst).GetMTLResource();
+
+		auto* blit = m_CmdBuffer->blitCommandEncoder();
+		blit->copyFromBuffer(srcBuffer, srcOffset, dstBuffer, dstOffset, byteSize);
+		blit->endEncoding();
+	}
+
+	void
 	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
 	{
 		gassert(m_Open, "CopyBufferToReadback on a closed command list");

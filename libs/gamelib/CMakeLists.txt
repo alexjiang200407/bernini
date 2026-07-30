@@ -38,8 +38,7 @@ target_link_libraries(gamelib
 
 enable_strict_compiler(gamelib)
 
-# The suite drives a real scene through IGraphics; only the D3D12 backend implements CreateScene so
-# far. Re-enable for Metal once the scene/resource objects land (a later slice).
+# The suite drives a real scene through IGraphics, which needs a backend.
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	find_package(Catch2 CONFIG REQUIRED)
 
