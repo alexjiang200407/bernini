@@ -50,6 +50,11 @@ namespace bgl
 		void
 		CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept override;
 
+		// Clears a texture by running an empty render pass with a clear load action. Not on the RHI
+		// interface -- ResourceManager::ClearRtv drives it (Metal has no free-standing clear).
+		void
+		ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept;
+
 		void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept override;
 
@@ -72,6 +77,13 @@ namespace bgl
 		GetType() const noexcept override
 		{
 			return m_Desc.type;
+		}
+
+		// Consumed by CommandQueue::ExecuteCommandList to signal the fence and commit.
+		[[nodiscard]] MTL::CommandBuffer*
+		GetCommandBuffer() const noexcept
+		{
+			return m_CmdBuffer.get();
 		}
 
 		// ---- barriers: handled implicitly by Metal within a command buffer ----
@@ -128,20 +140,6 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 	private:
-		// Neither is on the RHI: the queue needs the built command buffer to signal and commit, and
-		// ClearRtv needs a clear pass because Metal has no free-standing clear.
-		friend class CommandQueue;
-		friend class ResourceManager;
-
-		[[nodiscard]] MTL::CommandBuffer*
-		GetCommandBuffer() const noexcept
-		{
-			return m_CmdBuffer.get();
-		}
-
-		void
-		ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept;
-
 		enum class EncoderKind
 		{
 			kNone,
