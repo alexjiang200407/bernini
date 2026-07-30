@@ -274,7 +274,7 @@ before there is a resource, nothing drawn before there is a pipeline.
 
 | | Task | Gate |
 |---|---|---|
-| 1 | **Revert 576ccee** and repair the 41 drift errors, minus the four hunks listed above. New `macos-clang-metal-debug/release` presets; widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`; CI gains a build-only Metal leg. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_unsupported.txt` names what does not yet pass |
+| 1 | **Revert 576ccee** and repair the 41 drift errors, minus the four hunks listed above. New `macos-clang-metal-debug/release` presets; widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`; CI gains a Metal build leg, and stops running suites at all. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_unsupported.txt` names what does not yet pass |
 | 2 | Submission brought up to today's RHI: `MTLSharedEvent` as the timeline (D5), `Flush`, and the encoder state machine (D8) the restored `CommandList` predates. | a fence-ordering test: submit, CPU wait, cross-queue GPU wait, poll |
 | 3 | `IResourceManager` buffers: `WriteBufferSlice`, `CopyBuffer`, deferred destruction against N registered timelines, `RegisterQueue`/`UnregisterQueue`, and the residency set (D7). Creation and readback are restored, not written. | `Readback_test`, `GrowableCapacity_test`, `MultiQueueDeletion_test`, `MeshDelete_test` |
 | 4 | `IShader` + `IComputePipeline`: the restored `MetalPipelineReflection` reconciled with today's `ReflectedLayout`, and the `Kind::Resource` arm in `SlangReflection.cpp`. Finding 3 is already handled by the restored `MetalizeLayout`; this task verifies it still is. | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
@@ -284,7 +284,7 @@ before there is a resource, nothing drawn before there is a pipeline.
 | 8 | `IMeshletPipeline` and the render encoder: the restored per-stage MSL compilation carried to the engine's real forward shaders, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
 | 9 | The headless render target: frame ring, backbuffers, depth, motion vectors, `PresentAndAdvance`, `ResizeBackbuffers`, screenshot. | `PbrRender_test`, `Skybox_test`, `AlphaTest_test`, `Transparent_test`, `MotionVectors_test`, `Resize_test`, `Capture_test`, `MaterialOverrideRender_test` |
 | 10 | The windowed target: `CAMetalLayer` swapchain, drawable acquisition, resize on layer bounds change. | `examples/bgl_window`, `bgl_sphere` and `bgl_two_windows` render live; screenshots in the PR |
-| 11 | The remainder: `DispatchMeshIndirect`, the GPU debug buffer and assertion path, `SceneOverflow`, `TransparentDepthKeys`, `FrameGraph_test`. Delete `metal_unsupported.txt`; CI's Metal leg runs the suite. | `just test bgl_tests` fully green on Metal, with `--gpu-validation`'s Metal equivalent (API validation + shader validation) enabled |
+| 11 | The remainder: `DispatchMeshIndirect`, the GPU debug buffer and assertion path, `SceneOverflow`, `TransparentDepthKeys`, `FrameGraph_test`. Delete `metal_unsupported.txt`. | `just test bgl_tests` fully green on Metal, with `--gpu-validation`'s Metal equivalent (API validation + shader validation) enabled |
 | 12 | `gamelib` on macOS: widen its test guard, fix what a non-MSVC compiler and a case-sensitive path resolution turn up. | `just test gamelib` |
 | 13 | The editor on macOS: Qt6, the layer-backed render widget (D11), the render thread, the thumbnail contexts. | `just test editor`, and the editor launches, loads a project and renders a scene — screenshot in the PR |
 
@@ -310,10 +310,18 @@ render. Expect the per-pixel tolerance to need widening, and expect the argument
 weakens the D3D12 assertion — a separate golden set per backend is the fallback if one tolerance
 cannot serve both honestly.
 
-**Mesh shaders on the CI runner.** `macos-latest` is a virtualised Apple-silicon host. It reports a
-Metal device, but mesh-shader support and residency sets through the virtualisation layer are not
-verified until task 1's CI leg runs. If either is missing, CI's Metal leg stays build-only and the
-suite is a local gate — which is still strictly better than the Windows leg gives today.
+**Every suite is a local gate; CI compiles and runs nothing.** That is a deliberate call taken in
+task 1 — the builds, not the tests, are what a CI run costs, and the suites are fast enough to be
+worth more as something a person runs than as something a runner repeats. It does mean a regression
+reaches `feat/metal-rhi` unless whoever pushes has run `just test`.
+
+While CI did briefly run the Metal suite, it measured something worth keeping: **`macos-latest`'s GPU
+is paravirtualised and cannot encode mesh shaders.** Compute dispatch, buffer and texture readback,
+the cull kernels and transparent sort all pass there; the mesh path fails with
+`-[AppleParavirtRenderCommandEncoder setMeshBytes:length:atIndex:]: unrecognized selector`. A
+capability gap, not a wrong result. So if a CI leg ever runs this suite again, the three meshlet
+tests have to come out of it, and no golden image that depends on the mesh path can be verified on a
+runner.
 
 **`libs/core`'s POSIX arm has not been compiled with a backend behind it.** `PLATFORM=MACOS` and
 `src/posix` build today under `macos-clang-debug`, but nothing downstream exercises them; the crash

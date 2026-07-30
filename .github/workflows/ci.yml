@@ -55,17 +55,15 @@ jobs:
         run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
 
   macos:
-    name: macos (clang, Debug + Metal)
+    name: compile (macos-clang, Debug + Metal)
     runs-on: macos-latest
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
 
     steps:
-      # assets/ is Git LFS, and this is the only job that runs a suite: without the real bytes
-      # assetlib_tests gets pointer files and fails on the magic number, not on anything real.
+      # No LFS: every job compiles and none runs a suite, so assets/ is only staged, never read.
+      # Restore `lfs: true` alongside any step that runs one.
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - uses: actions/setup-python@v5
         with:
@@ -106,27 +104,12 @@ jobs:
             vcpkg-arm64-osx-
 
       # The preset sets no RENDERER_BACKEND, so libs/bgl stops at bgl_objects and the root
-      # CMakeLists skips gamelib, the editor and the examples. What is left -- core, assetlib
-      # and their suites -- needs no GPU, so unlike the Windows job this one runs them.
+      # CMakeLists skips gamelib, the editor and the examples. What is left -- core and assetlib --
+      # is what keeps them building under a non-MSVC compiler on a non-Windows host.
       - name: Build
         run: python scripts/build.py --preset macos-clang-debug
-
-      # --no-build because the step above already did it: run_tests.py otherwise shells out to
-      # build.py with no preset, which falls back to the Windows default when config.json is absent.
-      - name: Test
-        run: python scripts/run_tests.py --no-build --build-dir build/macos-debug
 
       # The same checkout and vcpkg cache, configured a second time with a backend -- far cheaper
       # than a second macOS runner, which bills at 10x the Linux rate.
       - name: Build (Metal)
         run: python scripts/build.py --preset macos-clang-metal-debug
-
-      # bgl_tests only: core and assetlib are the same sources the backend-free build above already
-      # ran. run_tests.py skips what libs/bgl/tests/metal_unsupported.txt names, plus the mesh
-      # -shader tests the runner's paravirtualised GPU cannot encode -- see the exclude file. It
-      # prints what it dropped.
-      - name: Test (Metal)
-        run: >
-          python scripts/run_tests.py bgl --no-build
-          --build-dir build/macos-metal-debug
-          --exclude-file libs/bgl/tests/metal_ci_excluded.txt

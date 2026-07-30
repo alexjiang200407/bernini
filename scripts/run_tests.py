@@ -228,9 +228,6 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="Don't build first; run the binaries that are already there.")
     parser.add_argument("--list", action="store_true", help="Name the suites without running them.")
-    parser.add_argument("--exclude-file",
-                        help="A file of further test names to skip, in the same format as "
-                             "metal_unsupported.txt. For a host whose GPU cannot run some of them.")
     parser.add_argument("-j", "--jobs", type=int, default=DEFAULT_JOBS,
                         help="Split each suite across this many concurrent processes "
                              f"(default: {DEFAULT_JOBS}). 1 runs a single process and streams "
@@ -286,17 +283,8 @@ def main():
             and os.path.isfile(METAL_UNSUPPORTED)
             and any(metal_build(d) for d in build_dirs)
             and METAL_SUITE in chosen):
-        sources = {METAL_UNSUPPORTED: set(read_test_names(METAL_UNSUPPORTED))}
+        skip = set(read_test_names(METAL_UNSUPPORTED))
         source = show_path(METAL_UNSUPPORTED)
-
-        if args.exclude_file:
-            extra = set(read_test_names(args.exclude_file))
-            sources[args.exclude_file] = extra
-            # Never silent: a dropped test is coverage this run does not have.
-            print(f"also skipping {len(extra)} test(s) per "
-                  f"{show_path(args.exclude_file)}:")
-            for name in sorted(extra):
-                print(f"  - {name}")
 
         all_names = list_test_names(chosen[METAL_SUITE])
         if all_names is None:
@@ -305,18 +293,11 @@ def main():
 
         # A name that matches nothing is a typo or a rename, and would otherwise silently stop
         # skipping what it was written for.
-        known = set(all_names)
-        failed = False
-        for path, names in sources.items():
-            unknown = names - known
-            if unknown:
-                print(f"error: named in {show_path(path)} but not in "
-                      f"{METAL_SUITE}: " + ", ".join(sorted(unknown)), file=sys.stderr)
-                failed = True
-        if failed:
+        unknown = skip - set(all_names)
+        if unknown:
+            print(f"error: named in {source} but not in {METAL_SUITE}: "
+                  + ", ".join(sorted(unknown)), file=sys.stderr)
             return 1
-
-        skip = set().union(*sources.values())
 
         selected = [n for n in all_names if n not in skip]
         metal_list = write_filtered_list(build_dirs[0], selected)
