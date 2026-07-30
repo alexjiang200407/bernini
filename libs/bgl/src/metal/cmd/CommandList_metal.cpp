@@ -150,7 +150,7 @@ namespace bgl
 		m_CmdBuffer = NS::RetainPtr(queue->GetMTLCommandQueue()->commandBuffer());
 
 		// Before any encoder: a wait encoded after them would sit past the work it must gate.
-		queue->EncodePendingWaits(m_CmdBuffer.get());
+		queue->BeginCommandBuffer(m_CmdBuffer.get());
 
 		m_Encoder     = nullptr;
 		m_EncoderKind = EncoderKind::kNone;
