@@ -1,15 +1,11 @@
 public struct PackedBuffer<T>
 {
-#if defined(BGL_WGSL)
-    StructuredBuffer<T> packedBuffer;
-#else
     StructuredBuffer<T>.Handle packedBuffer;
-#endif
 
     public T Get(uint index) { return packedBuffer[index]; }
 
-    // A padded dispatch cannot rely on an out-of-range read returning zero: DXIL gives zeroes, but
-    // WGSL's bounds robustness clamps to the last element, so the tail threads would re-read it.
+    // Read from the buffer itself, so a padded dispatch can bound its tail without a count
+    // plumbed in from the CPU.
     public uint GetCount()
     {
         uint count;

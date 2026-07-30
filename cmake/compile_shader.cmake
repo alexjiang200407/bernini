@@ -43,8 +43,6 @@ function(compile_shader)
     
     if(SHADER_TARGET STREQUAL "spirv")
         set(EXT ".spv")
-    elseif(SHADER_TARGET STREQUAL "wgsl")
-        set(EXT ".wgsl")
     else()
         set(EXT ".dxil")
     endif()
@@ -87,12 +85,6 @@ function(compile_shader)
             # shaders; kept in lockstep with the C++/runtime-session define so the
             # feature is fully stripped from Release shaders.
             set(OTHER_FLAGS -g2 -DBERNINI_GPU_DEBUG=1)
-        endif()
-
-        # Selects the plainly-bound buffer primitives; WGSL has no bindless. The runtime WGSL Slang
-        # session must set the same macro so its reflection and codegen match these build outputs.
-        if(SHADER_TARGET STREQUAL "wgsl")
-            list(APPEND OTHER_FLAGS -DBGL_WGSL=1)
         endif()
 
         # Register the compilation command target
