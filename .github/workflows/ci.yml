@@ -55,7 +55,11 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
 
     steps:
+      # assets/ is Git LFS, and this is the only job that runs a suite: without the real bytes
+      # assetlib_tests gets pointer files and fails on the magic number, not on anything real.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: actions/setup-python@v5
         with:
