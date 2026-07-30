@@ -335,6 +335,10 @@ and portability.
 - [ ] Forward++ Shading
 - [ ] Screen space reflections
 - [ ] Gpu Virtual Memory
+- [ ] Browser target — **not** an RHI backend. Tried once as one and abandoned: WebGPU has no bindless
+  heap, no descriptor indexing and no mesh stage, so the whole port went on emulating what the renderer
+  already had. Anything here sits above the RHI, where the engine's binding model is not the thing being
+  translated.
 - [ ] Texture-space decals - Render decals into the mesh's UV/texture space, not screen space for heroes
 - [ ] Analytic heightfield occlusion — march the height texture from camera to unit, useful only if
   occlusion is needed before the depth prepass or on a separate timeline.
