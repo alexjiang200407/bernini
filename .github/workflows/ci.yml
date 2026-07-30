@@ -55,7 +55,7 @@ jobs:
         run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
 
   macos:
-    name: macos (clang, Debug)
+    name: macos (clang, Debug + Metal)
     runs-on: macos-latest
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
@@ -115,3 +115,13 @@ jobs:
       # build.py with no preset, which falls back to the Windows default when config.json is absent.
       - name: Test
         run: python scripts/run_tests.py --no-build --build-dir build/macos-debug
+
+      # The same checkout and vcpkg cache, configured a second time with a backend -- far cheaper
+      # than a second macOS runner, which bills at 10x the Linux rate.
+      - name: Build (Metal)
+        run: python scripts/build.py --preset macos-clang-metal-debug
+
+      # bgl_tests only: core and assetlib are the same sources the backend-free build above already
+      # ran. run_tests.py runs this suite through libs/bgl/tests/metal_expected.txt.
+      - name: Test (Metal)
+        run: python scripts/run_tests.py bgl --no-build --build-dir build/macos-metal-debug

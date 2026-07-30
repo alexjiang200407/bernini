@@ -1,0 +1,44 @@
+# Tests a Metal build is expected to pass. `run_tests.py` runs exactly these on a Metal build,
+# because the backend does not implement the whole RHI yet and a suite that cannot pass is not a
+# gate. Every task appends what it makes pass; the file is deleted once the suite passes whole.
+#
+# A test's presence here says nothing about the test -- only about how far the backend has got.
+A compute kernel built after device creation recreates the Slang session
+A default-constructed offset primitive is null
+A degenerate view-projection culls nothing instead of faulting
+Aligning a tapered capacity covers the padded range
+An errcode reports by name
+Bucket instances: histogram then prefix sum
+Buffer readback
+BuildCullView mirrors the matrix and its extracted planes
+Compact instances: every instance lands in its own PSO bucket exactly once
+Compute dispatch resolves a handle at a non-zero cbuffer offset
+Compute dispatch writes a bindless buffer
+EntryBuffer
+FrameGraph: Execute before Compile throws
+FrameGraph: GetBuffer on a transient (unimported) buffer throws
+FrameGraph: GetBuffer on an undeclared buffer throws
+FrameGraph: SetSideEffect pins an otherwise-dead pass
+FrameGraph: a consumed producer survives culling
+FrameGraph: a duplicate pass name throws
+FrameGraph: a same-state UAV access still gets a barrier
+FrameGraph: a texture that is both an attachment and an import throws
+FrameGraph: accessing an imported buffer as a texture throws at Compile
+FrameGraph: an attachment-only texture transitions to render target
+FrameGraph: culls a pass whose outputs are never used
+FrameGraph: derives producer -> consumer barriers
+FrameGraph: emits no barrier when the state is unchanged
+FrameGraph: transitively culls a dead producer chain
+Frustum planes classify points around a perspective camera
+Growable capacities taper past 64 MiB
+InspectDebugReadback decodes debug-buffer records
+Meshlet pipeline binds disjoint per-stage cbuffers correctly
+Meshlet pipeline binds uniforms to the mesh and fragment stages
+Meshlet pipeline renders a fullscreen triangle
+Orthographic planes come out normalized with exact distances
+PackedBuffer
+RangeBuffer
+Spheres straddling or tangent to a plane survive; fully outside ones do not
+Texture readback
+The free Slang build tag matches the global session's
+Transparent sort orders entries by key and carries the payload
