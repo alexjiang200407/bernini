@@ -33,13 +33,19 @@ jobs:
           New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
 
       # Without this every run rebuilds slang, ktx, sdl3 and the rest from source.
-      # vcpkg.json carries the builtin-baseline, so hashing it keys the whole dep set.
+      # vcpkg.json carries the builtin-baseline, so hashing it keys the whole dep set --
+      # but a package's vcpkg ABI also covers the compiler, so ImageVersion has to be in
+      # the key too. Left out, a runner-image bump keeps hitting the old key: vcpkg finds
+      # no usable ABI inside and rebuilds everything, and actions/cache skips the save
+      # because the key was a hit, so the rebuild repeats on every run from then on.
       - name: Cache vcpkg binaries
         uses: actions/cache@v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-x64-windows-
+          key: vcpkg-x64-windows-${{ env.ImageVersion }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-x64-windows-${{ env.ImageVersion }}-
+            vcpkg-x64-windows-
 
       # Compile only: the ninja-msvc-debug preset has BUILD_TESTS=ON, so the suites are
       # built but never run -- they need a GPU and a machine this runner isn't. Qt is
@@ -65,18 +71,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install ninja
-        run: brew install ninja
+      # vcpkg's catch2 port calls vcpkg_fixup_pkgconfig on Unix, which fails outright without
+      # pkg-config. Probed by binary rather than by formula name: `brew install pkg-config`
+      # installs the `pkgconf` formula, so a formula-name check would miss it.
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          command -v ninja      >/dev/null || brew install ninja
+          command -v pkg-config >/dev/null || brew install pkg-config
 
       # As on Windows, the preset resolves its toolchain through $env{VCPKG_ROOT}. The macOS
       # image is not guaranteed to ship vcpkg, so clone it when the runner exports nothing.
+      # The clone must NOT be shallow: vcpkg.json pins builtin-baseline, and a --depth 1 clone
+      # would not contain that commit for vcpkg to resolve.
       - name: Point VCPKG_ROOT at a vcpkg
         run: |
           set -euo pipefail
           if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "${VCPKG_INSTALLATION_ROOT}" ]; then
             echo "VCPKG_ROOT=${VCPKG_INSTALLATION_ROOT}" >> "$GITHUB_ENV"
           else
-            git clone --depth 1 https://github.com/microsoft/vcpkg "${{ github.workspace }}/vcpkg"
+            git clone https://github.com/microsoft/vcpkg "${{ github.workspace }}/vcpkg"
             "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
             echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
           fi
@@ -86,8 +100,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-arm64-osx-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-arm64-osx-
+          key: vcpkg-arm64-osx-${{ env.ImageVersion }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-arm64-osx-${{ env.ImageVersion }}-
+            vcpkg-arm64-osx-
 
       # The preset sets no RENDERER_BACKEND, so libs/bgl stops at bgl_objects and the root
       # CMakeLists skips gamelib, the editor and the examples. What is left -- core, assetlib
