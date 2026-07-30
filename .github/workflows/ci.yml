@@ -48,8 +48,8 @@ jobs:
       - name: Build
         run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
 
-  webgpu-macos:
-    name: webgpu (macos-clang, Debug)
+  macos:
+    name: macos (clang, Debug)
     runs-on: macos-latest
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
@@ -85,58 +85,13 @@ jobs:
           key: vcpkg-arm64-osx-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-arm64-osx-
 
-      # Restoring the populated tree lets FetchContent skip the download, which has already
-      # failed a run outright when GitHub's release CDN returned 504. dawn.cmake pins the
-      # release and its hashes, so hashing it keys the archive exactly.
-      - name: Cache the Dawn download
-        uses: actions/cache@v4
-        with:
-          path: build/macos-webgpu-debug/_deps
-          key: dawn-arm64-osx-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
-
-      # Compile only. bgl_webgpu_tests brings up a real Metal device and is the only GPU
-      # coverage the pipeline could have, but a macOS runner is scarce and slow, so the
-      # backend's runtime path is verified locally instead -- CI keeps it building on the
-      # clang toolchain and the macOS Dawn archive honest.
+      # The preset sets no RENDERER_BACKEND, so libs/bgl stops at bgl_objects and the root
+      # CMakeLists skips gamelib, the editor and the examples. What is left -- core, assetlib
+      # and their suites -- needs no GPU, so unlike the Windows job this one runs them.
       - name: Build
-        run: python scripts/build.py --preset macos-clang-webgpu-debug
+        run: python scripts/build.py --preset macos-clang-debug
 
-  webgpu-windows:
-    name: webgpu (ninja-msvc, Debug)
-    runs-on: windows-latest
-    env:
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Point VCPKG_ROOT at the preinstalled vcpkg
-        shell: pwsh
-        run: |
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-
-      - name: Cache vcpkg binaries
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-x64-windows-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-x64-windows-
-
-      # Worth more here than on macOS: MSVC's runtime split forces the debug archive, which is
-      # 202 MB against the 4 MB release one, and that download has already 504'd a run outright.
-      - name: Cache the Dawn download
-        uses: actions/cache@v4
-        with:
-          path: build/ninja-msvc-webgpu-debug/_deps
-          key: dawn-x64-windows-${{ hashFiles('libs/bgl/src/webgpu/dawn.cmake') }}
-
-      # Compile only, for the same reason as the DX12 job: no GPU on this runner. This
-      # exists to keep the Windows Dawn archive and the preset honest -- they are otherwise
-      # only exercised by hand.
-      - name: Build
-        run: python scripts/build.py --preset windows-ninja-msvc-webgpu-debug
+      # --no-build because the step above already did it: run_tests.py otherwise shells out to
+      # build.py with no preset, which falls back to the Windows default when config.json is absent.
+      - name: Test
+        run: python scripts/run_tests.py --no-build --build-dir build/macos-debug
