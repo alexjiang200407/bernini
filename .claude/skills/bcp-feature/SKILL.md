@@ -180,11 +180,15 @@ Record its number in the tracker (`tracking: #NNN`) so the next session does not
 A resumed feature with no plan document gets one written and committed the same way, before the next
 slice.
 
-### Then start
+### Then stop, and wait for the plan to be reviewed
 
-Write the tracker, **show the user the slice list in one short block and start on the first one**.
-Do not wait for approval unless plan mode is on or the prompt asked for a plan — but do stop and ask
-if the decomposition turned out to be a design question you cannot settle from the code.
+Write the tracker, **show the user the slice list in one short block, and stop there.** The plan is
+reviewed before any slice branch is cut — it decides what every later PR is measured against, and a
+decomposition reviewed after three slices have landed is reviewed too late to change anything cheaply.
+
+Waiting costs one round trip. Not waiting costs the slices that were built on the wrong split.
+
+Cut the first slice branch only once the user has responded to the plan.
 
 The plan is a hypothesis. When a slice proves it wrong, rewrite the affected part of
 `docs/plans/<name>_plan.md` **in that slice's PR**, so the correction is reviewed beside the code
@@ -252,6 +256,9 @@ just watch-pr <n>        # python scripts/watch_pr.py <n>
 **Slice PRs only** — the ones based on `feature/<name>`. Never the tracking PR from § 1: it sits in
 draft for the length of the feature and every slice merge is activity on it, so watching it reports
 the work you just did back to you.
+
+Post your own PR comments **before** starting it, not after. The watcher baselines activity when it
+starts, so a comment written later fires it immediately with your own text as the event.
 
 It snapshots the PR's current activity as a baseline, polls, and blocks until something actionable
 happens, printing one JSON event — the deterministic version of "did the reviewer move yet?", so
