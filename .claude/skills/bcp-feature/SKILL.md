@@ -122,7 +122,7 @@ interface nothing calls yet, provided the tests call it. Say so in the PR body.
 ### Write the plan document
 
 The plan is a real document, committed at `docs/plans/<name>_plan.md` — snake_case, so
-`feature/webgpu-port` writes `docs/plans/webgpu_port_plan.md`. It is the
+`feature/drop-webgpu` writes `docs/plans/drop_webgpu_plan.md`. It is the
 [bcp-implement § 2](.claude/skills/bcp-implement/SKILL.md) plan — what changes per file, what could
 break, the trade-off chosen and the one rejected — written for work that will take weeks rather than
 an afternoon, and therefore outlive the session that designed it:
@@ -138,7 +138,6 @@ an afternoon, and therefore outlive the session that designed it:
 A plan records reasons, constraints, and the shape of what does not exist yet; it is not a mirror of
 the code, which is what the source and `docs/` are for. Follow
 [bcp-docs](.claude/skills/bcp-docs/SKILL.md) for prose and headings.
-[docs/plans/webgpu_port_plan.md](docs/plans/webgpu_port_plan.md) is the worked example.
 
 ### Commit it, then open the tracking PR
 
