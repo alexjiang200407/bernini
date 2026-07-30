@@ -9,6 +9,7 @@ import idl.Submesh;
 import forward.common;
 import forward.vertexdecode;
 import debug.dbg;
+import forward.ExpansionData;
 
 ConstantBuffer<ForwardData> forwardData;
 ConstantBuffer<ViewData> viewData;
@@ -19,7 +20,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 {
     uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
-#if defined(BERNINI_GPU_DEBUG_ALL_STAGES)
+#if defined(BERNINI_GPU_DEBUG)
     dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
 #endif
 
@@ -49,45 +50,6 @@ uint3 EvaluatePrimitive(Submesh submesh, Meshlet meshlet, uint t)
 {
     return forwardData.indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + t * 3);
 }
-
-#if defined(BGL_WGSL)
-
-// WebGPU has no mesh stage, so the meshlet is walked one output vertex at a time: the expansion pass
-// wrote one record per (instance, meshlet), and the draw covers each record with a fixed
-// cVerticesPerMeshletRecord vertices. Everything below the index lookup is the shared code MSMain
-// runs -- only the addressing differs.
-[shader("vertex")]
-ForwardVSOut VSMain(uint vertexId: SV_VertexID)
-{
-    uint record = vertexId / cVerticesPerMeshletRecord;
-    uint corner = vertexId % 3;
-    uint prim = (vertexId % cVerticesPerMeshletRecord) / 3;
-
-    let meshletInstance = forwardData.meshletInstances[record];
-    let instance = forwardData.instanceBuffer.Get(meshletInstance.instanceIndex);
-    let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
-    let submesh = forwardData.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
-    let meshlet = forwardData.meshletBuffer.Get(submesh.meshlets, meshletInstance.meshletIndex);
-
-    // The draw is sized for a full meshlet, so the tail of a partial one has no triangle to emit.
-    // All three corners of a primitive share this branch, so collapsing them to one point leaves it
-    // zero-area and it rasterizes nothing -- a NaN position would do as well, but WGSL will not
-    // const-fold one. The interpolants are never read, so they keep their defaults.
-    if (prim >= meshlet.triangleCount)
-    {
-        ForwardVSOut degenerate = {};
-        degenerate.position = float4(0.0, 0.0, 0.0, 1.0);
-        return degenerate;
-    }
-
-    uint localVertex = forwardData.indexBuffer.Get(submesh.indices, meshlet.relativeIndexOffset + prim * 3 + corner);
-
-    return EvaluateVertex(mesh, submesh, instance, meshlet, localVertex);
-}
-
-#else
-
-import forward.ExpansionData;
 
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
@@ -161,5 +123,3 @@ void MSMain(
         tris[t] = EvaluatePrimitive(submesh, meshlet, t);
     }
 }
-
-#endif

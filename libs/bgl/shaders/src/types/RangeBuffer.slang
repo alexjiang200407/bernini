@@ -2,11 +2,7 @@ import idl.Range;
 
 public struct RangeBuffer<T>
 {
-#if defined(BGL_WGSL)
-    StructuredBuffer<T> rangeBuffer;
-#else
     StructuredBuffer<T>.Handle rangeBuffer;
-#endif
 
     public T Get(IRange entry, uint index) { return rangeBuffer[entry.GetStart() + index]; }
 
