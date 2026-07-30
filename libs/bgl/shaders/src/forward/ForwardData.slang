@@ -1,7 +1,6 @@
 import types.SubmeshInstance;
 import idl.Mesh;
 import idl.Meshlet;
-import idl.MeshletInstance;
 import idl.Submesh;
 import types.ByteBuffer;
 import types.EntryBuffer;
@@ -17,8 +16,4 @@ public struct ForwardData
     public RangeBuffer<uint> vertexMapBuffer;
     public ByteBuffer vertexDataBuffer;
     public RangeBuffer<uint> indexBuffer;
-
-    // What the expansion pass resolves the amplification stage's work into. The mesh path gets the
-    // same thing as a payload and leaves this unread.
-    public PackedBuffer<MeshletInstance> meshletInstances;
 };

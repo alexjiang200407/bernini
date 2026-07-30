@@ -85,8 +85,6 @@ namespace bgl
 			    BarrierSyncFlag::kVertexShader } }
 		};
 
-		// Absent on the vertex-pulling backend: WebGPU forbids a read-write storage binding in the
-		// vertex stage, so that path reads a record the expansion pass wrote instead.
 		static constexpr std::array<SceneBuffer, 3> c_ExpansionBuffers = {
 			{ { "scene.compactedInstances",
 			    "compactedInstances",

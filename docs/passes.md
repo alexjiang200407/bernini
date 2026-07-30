@@ -215,8 +215,7 @@ the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks be
 * **In:** the backbuffer and the velocity buffer as render targets; `compactDispatchArgs` and
   `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
   buffers, the three `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
-  `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped — that is how
-  the vertex-pulling backend, which has no amplification stage, drops `expansionData` — but a
+  `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
 * **Out:** the backbuffer (rendered), the velocity buffer (opaque and alpha-test only), depth.

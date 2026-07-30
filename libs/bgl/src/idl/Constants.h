@@ -5,7 +5,6 @@ namespace bgl::idl
 {
 	constexpr uint32_t cMaxPrimsPerMeshlet = 124;
 	constexpr uint32_t cMaxVerticesPerMeshlet = 64;
-	constexpr uint32_t cVerticesPerMeshletRecord = cMaxPrimsPerMeshlet * 3;
 	constexpr uint32_t cMeshGroupSize = 64;
 	constexpr uint32_t cThreadsPerInstance = 1;
 	constexpr uint32_t cHistogramGroupSize = 256;
