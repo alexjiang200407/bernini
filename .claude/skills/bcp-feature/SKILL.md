@@ -1,372 +1,271 @@
 ---
 name: bcp-feature
-description: Use when a change is too large to land on master as one PR — takes a feature branch name and a prompt, writes the plan to docs/plans/ as the branch's first commit, breaks the work into reviewable slices, and lands them one at a time as small PRs into feature/<name>, so review happens continuously instead of at the end. Tracks the whole feature in one draft PR to master from the start. Also resumes an existing feature, reports its state, and marks that PR ready when the feature is done. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
+description: Use when a change is too large to land on master as one PR — cuts an empty integration branch feat/<name>, gets the plan reviewed as its own PR, then lands the work one task at a time as small PRs into that branch, watching each one and revising until the user merges it. Only the finished feature is proposed to master. Also resumes an existing feature and reports its state. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
 ---
 
 # Running a Bernini feature branch
 
-Small changes go straight to `master`. Anything large enough that master would be broken, half-done
-or unreviewable in the middle of it gets an **integration branch**: `feature/<name>`. The work is cut
-into slices, each slice becomes its own small PR into that branch, and the reviewer sees the feature
-arrive continuously rather than as one wall of diff at the end. Only the finished feature is proposed
-to `master`.
+Small changes go straight to `master`. Anything large enough that master would be broken or
+unreviewable in the middle of it gets an **integration branch**, `feat/<name>`, and arrives in it one
+PR at a time. Only the finished feature is proposed to `master`.
 
-This skill runs that whole loop. It plans, implements and opens PRs; it never merges them — that
-call stays with the user, at every step.
+## The loop
 
-## Invocation
+Everything is a PR into `feat/<name>` — the plan included. Every PR is watched. The user merges every
+one.
+
+```
+bcp-feature <name> <prompt>
+  │
+  ├─ § 1  cut feat/<name> from origin/master, empty, and publish it
+  ├─ § 2  plan PR      → watch → revise → user merges
+  ├─ § 3  task 1 PR    → watch → revise → user merges
+  │       task 2 PR    → watch → revise → user merges       (one at a time)
+  │       …
+  └─ § 5  the whole feature → PR to master
+```
 
 | | |
 |---|---|
-| `bcp-feature <name> <prompt>` | start or resume `feature/<name>`, plan the work, begin landing slices |
-| `bcp-feature <name>` | resume: report state, then continue with the next slice |
-| `bcp-feature` | status only, for the active feature |
-| `bcp-feature --land` | rebase, verify the whole feature, mark its tracking PR ready |
+| `bcp-feature <name> <prompt>` | start or resume `feat/<name>` |
+| `bcp-feature <name>` | resume: report state, continue from where the tracker says |
+| `bcp-feature` | status only |
+| `bcp-feature --land` | § 5 |
 
 ## State
 
-Three pieces. Which feature is active, local to this clone and never committed:
+Which feature is active — local to this clone, never committed:
 
 ```bash
-git config --local bernini.feature feature/<name>   # which feature is active
+git config --local bernini.feature feat/<name>
 git config --local bernini.feature                  # read it; unset means "landing on master"
-git config --local --unset bernini.feature          # done with it
+git config --local --unset bernini.feature
 ```
 
-The **plan**, `docs/plans/<name>_plan.md` — committed, and the branch's first commit (§ 2). It holds
-why the feature is shaped the way it is: what the survey found, the design decisions and the
-alternatives rejected, the slices and the gate each one passes. It changes only when the design
-changes, and then inside the slice PR that disproved it.
-
-The **slice tracker**, `.claude/features/<name>.md` (git-ignored), which is what makes the loop
-resumable across sessions:
+The **tracker**, `.claude/features/<name>.md` (git-ignored). The only record that survives the
+session, so rewrite it after every state change — a stale one sends the next session to redo merged
+work:
 
 ```markdown
-# feature/culling — <one line: what the feature delivers>
-base: master
-plan: docs/plans/culling_plan.md
-tracking: #119
+# feat/culling — <one line: what the feature delivers>
+plan: docs/plans/culling.md
 
+- [x] the plan — #111, merged
 - [x] frustum planes on the camera — #112, merged
 - [>] per-instance cull compute pass — #118, in review
 - [ ] cull results feed the indirect draw
-- [ ] editor toggle + stats readout
 ```
 
-`[ ]` pending, `[>]` PR open, `[x]` merged. Rewrite it after every state change: it is the only
-record of where the feature is, and a stale one sends the next session to re-do merged work. PR
-numbers and checkboxes live here rather than in the plan, so tracking a slice never costs a commit
-on the feature branch.
+`[ ]` pending, `[>]` PR open, `[x]` merged.
 
-## 1. Set up or resume the branch
+## 1. Cut the branch
 
 ```bash
 export PATH="$PATH:/c/Program Files/GitHub CLI"   # gh is often not on PATH
 git fetch origin
 ```
 
-The tree must be clean first — a branch cut from a dirty tree drags unrelated work into every PR
-based on it. Stash or commit before switching.
-
-If `feature/<name>` already exists locally or on `origin`, this is a **resume**: check it out, fast
-forward it, record it, read the plan and the tracker, and reconcile the tracker with reality before
-doing anything else — a slice marked `[>]` may have merged since the last session.
+The tree must be clean — a branch cut from a dirty tree drags unrelated work into every PR based on
+it.
 
 ```bash
-gh pr list --base feature/<name> --state all --json number,title,state
-just watch-pr <n> --once      # per open slice PR: merge state + every submitted review and comment
+git switch -c feat/<name> origin/master
+git push -u origin feat/<name>
+git config --local bernini.feature feat/<name>
 ```
 
-Otherwise cut the branch from `origin/master` and publish it, so PRs have something to target:
+It starts **empty**, identical to `master`, and changes only when a PR merges. **Nothing is ever
+committed on it directly.**
+
+If it already exists, this is a **resume**: check it out, fast-forward, read the plan and the tracker,
+and reconcile the tracker with reality before anything else — a `[>]` may have merged since.
 
 ```bash
-git switch -c feature/<name> origin/master
-git push -u origin feature/<name>
-git config --local bernini.feature feature/<name>
+gh pr list --base feat/<name> --state all --json number,title,state
+just watch-pr <n> --once      # per open PR: merge state, plus every submitted review and comment
 ```
-
-**Exactly one commit is ever made on `feature/<name>` itself: the plan (§ 2).** After that the
-branch changes only when a slice PR merges.
 
 ### Naming
 
 | | |
 |---|---|
-| Feature branch | `feature/<name>` — `feature/culling`, `feature/webgpu-port` |
-| Slice branch | `<type>/<name>-<slug>` — `feat/culling-frustum-pass`, `fix/culling-aabb-sign` |
+| Feature branch | `feat/<name>` — `feat/culling`, `feat/drop-webgpu` |
+| Plan branch | `docs/<name>-plan` |
+| Task branch | `<type>/<name>-<slug>` — `feat/culling-frustum-pass`, `fix/culling-aabb-sign` |
 
-Slice branches are **siblings** of the feature branch, not children. Git stores refs as paths, so
-once `feature/culling` exists no ref may begin `feature/culling/` — the push fails with
+Task branches are **siblings** of the feature branch, never children: git stores refs as paths, so
+once `feat/culling` exists no ref may begin `feat/culling/`. The push fails with
 `cannot lock ref ... exists; cannot create`, which does not explain itself.
 
-## 2. Plan the feature
+## 2. The plan, as its own PR
 
-Do this **after** reading the code, not from the prompt alone — read the docs the change touches
-(the index is in [CLAUDE.md](CLAUDE.md)) and the real source first. A decomposition invented from
-the prompt text splits along the words rather than the seams, and every slice then fights the last.
+Read the code first — the docs the change touches (index in [CLAUDE.md](CLAUDE.md)) and the real
+source. A decomposition invented from the prompt text splits along the words rather than the seams,
+and every task then fights the last.
 
-### What a slice is
+Write `docs/plans/<name>.md`:
 
-A slice is one PR. It must:
-
-- **build and pass on its own.** Never "part 1 of 2, compiles after part 2". A reviewer bisects these.
-- **be reviewable in one sitting.** If it cannot be described in one sentence without "and", it is two.
-- **rest on what came before.** The natural order is bottom-up by layer — `bgl`, then `assetlib`,
-  then `gamelib`, then `apps/editor` — because that is the direction the dependencies point. A
-  refactor that enables the feature is its own slice, ahead of the feature.
-- **be worth reviewing alone.** Do not split a 20-line change into three PRs to look incremental.
-
-Dead scaffolding is the one thing that justifies a slice landing unused: a `bgl` slice can add an
-interface nothing calls yet, provided the tests call it. Say so in the PR body.
-
-### Write the plan document
-
-The plan is a real document, committed at `docs/plans/<name>_plan.md` — snake_case, so
-`feature/webgpu-port` writes `docs/plans/webgpu_port_plan.md`. It is the
-[bcp-implement § 2](.claude/skills/bcp-implement/SKILL.md) plan — what changes per file, what could
-break, the trade-off chosen and the one rejected — written for work that will take weeks rather than
-an afternoon, and therefore outlive the session that designed it:
-
-- **What the survey found.** The state of the code the feature has to work with, as facts with file
-  references. This is the part that stops the next session re-reading the same forty files.
-- **The design decisions, each with its reason and the alternative that was rejected.** A decision
-  with no rejected alternative recorded is one the next reader re-litigates.
-- **What changes**, per file or per subsystem, and what could break.
-- **The slices in order, each with the gate that proves it** — the suite, the golden image, the
+- **What the survey found** — the state of the code the feature must work with, as facts with file
+  references. This is what stops the next session re-reading the same forty files.
+- **Each design decision, with its reason and the alternative rejected.** A decision with no rejected
+  alternative recorded is one the next reader re-litigates.
+- **What changes**, per file or subsystem, and what could break.
+- **The tasks in order, each with the gate that proves it** — the suite, the golden image, the
   assertion. "It builds" is not a gate.
 
-A plan records reasons, constraints, and the shape of what does not exist yet; it is not a mirror of
-the code, which is what the source and `docs/` are for. Follow
-[bcp-docs](.claude/skills/bcp-docs/SKILL.md) for prose and headings.
-[docs/plans/webgpu_port_plan.md](docs/plans/webgpu_port_plan.md) is the worked example.
-
-### Commit it, then open the tracking PR
-
-The plan is the branch's first commit, pushed straight onto `feature/<name>` before any slice
-branch is cut:
+It records reasoning and the shape of what does not exist yet — not a mirror of the code, which is
+what the source and `docs/` are for. Follow [bcp-docs](.claude/skills/bcp-docs/SKILL.md) for prose.
 
 ```bash
-git add docs/plans/<name>_plan.md
-git commit -m "docs(plans): plan <what the feature delivers>"    # + the Co-Authored-By trailer
-git push
+git switch -c docs/<name>-plan feat/<name>
+git add docs/plans/<name>.md
+git commit -m "docs(plans): plan <what the feature delivers>"   # + the Co-Authored-By trailer
+git push -u origin HEAD
+gh pr create --base feat/<name> --title "docs(plans): ..." --body "..."
 ```
 
-So the branch opens with the reason for everything that follows, and a reviewer reading slice #1 can
-see what it is a slice *of*. It is also the last commit made this way — § 3 onward is slice PRs only.
+Then § 4. **No task branch is cut until this PR merges** — the plan fixes what every later PR is
+measured against, and a decomposition reviewed after three tasks have landed is reviewed too late to
+change anything cheaply.
 
-Then the feature gets its own PR to `master`, opened **now** rather than at the end, as a **draft**:
+### What a task is
 
-```bash
-gh pr create --base master --head feature/<name> --draft \
-  --title "<what the feature delivers>" --body "..."
-```
+One PR. It must:
 
-It opens showing the plan and nothing else, and accumulates every slice as they merge, so one page
-shows the whole feature: the combined diff, the slice list, CI over the integration branch. The
-alternative is a feature nobody can see until the last slice lands. Point the body at the plan
-rather than restating it.
+- **build and pass on its own.** Never "part 1 of 2, compiles after part 2" — a reviewer bisects these.
+- **be reviewable in one sitting.** If it needs an "and" to describe, it is two.
+- **rest on what came before.** Bottom-up by layer: `bgl`, then `assetlib`, then `gamelib`, then
+  `apps/editor`, because that is the direction the dependencies point. A refactor that enables the
+  feature is its own task, ahead of the feature.
+- **be worth reviewing alone.** Do not split a 20-line change into three PRs to look incremental.
 
-Draft matters. An ordinary PR sitting on a half-finished feature is one mis-click from merging a
-partial port into `master`, and § 6 is what marks it ready.
+Dead scaffolding is the one thing that justifies a task landing unused: a `bgl` task may add an
+interface nothing calls yet, provided the tests call it. Say so in the PR body.
 
-**On resume, check the tracking PR still exists and open it if not** — the feature may have been
-started before this was the rule, or the PR may have been closed:
+## 3. One task
 
-```bash
-gh pr list --head feature/<name> --base master --state open --json number,isDraft
-```
-
-Record its number in the tracker (`tracking: #NNN`) so the next session does not have to go looking.
-A resumed feature with no plan document gets one written and committed the same way, before the next
-slice.
-
-### Then stop, and wait for the plan to be reviewed
-
-Write the tracker, **show the user the slice list in one short block, and stop there.** The plan is
-reviewed before any slice branch is cut — it decides what every later PR is measured against, and a
-decomposition reviewed after three slices have landed is reviewed too late to change anything cheaply.
-
-Waiting costs one round trip. Not waiting costs the slices that were built on the wrong split.
-
-Cut the first slice branch only once the user has responded to the plan.
-
-The plan is a hypothesis. When a slice proves it wrong, rewrite the affected part of
-`docs/plans/<name>_plan.md` **in that slice's PR**, so the correction is reviewed beside the code
-that forced it, and say what changed and why — that is the loop working, not a failure.
-
-## 3. Land one slice
-
-Repeat this per slice. Only one is in flight at a time unless the user asks otherwise (§ 4).
+One at a time. Always branch from `origin/feat/<name>` — never the local branch (stale), never
+whatever is checked out (drags in unrelated work):
 
 ```bash
 git fetch origin
-git switch -c <type>/<name>-<slug> origin/feature/<name>
+git switch -c <type>/<name>-<slug> origin/feat/<name>
 ```
 
-Always from `origin/feature/<name>` — never the local branch (stale), never whatever is checked out
-(drags in unrelated work).
-
-Then follow [bcp-implement](.claude/skills/bcp-implement/SKILL.md) §1–§7 exactly as written: read
-first, commit boundaries decided before coding, STYLE.md (comments are a last resort, a better name
-beats a comment), tests that pin behaviour, build, **read the logs**, update the docs in the same
-commit. Nothing in that loop changes here.
+Then follow [bcp-implement](.claude/skills/bcp-implement/SKILL.md) §1–§7 as written: read first,
+commit boundaries decided before coding, STYLE.md (a better name beats a comment), tests that pin
+behaviour, build, **read the logs**, docs updated in the same commit.
 
 Two things apply only inside a feature:
 
-- **Depend on what already landed on the feature branch, not on master.** The helper an earlier
-  slice added is in `origin/feature/<name>`. Do not write a second one.
-- **Hold the slice boundary.** Work that belongs to a later slice goes in that slice, even when it
-  is three lines and right there. Scope creep is what turns the last PR into the wall of diff this
-  branch exists to avoid.
+- **Depend on what already landed on `feat/<name>`, not on master.** The helper an earlier task added
+  is in `origin/feat/<name>`. Do not write a second one.
+- **Hold the task boundary.** Work belonging to a later task goes in that task, even when it is three
+  lines and right there. Scope creep is what recreates the wall of diff this branch exists to avoid.
 
-Verify, format, then open the PR:
+Verify, format, open the PR:
 
 ```bash
 just build && just test                      # or the suites the change touches
 just run bgl_tests -- --gpu-validation       # if it touches shaders, barriers or descriptors
 just format <files...>
-git fetch origin && git rebase origin/feature/<name>   # the base moved if a sibling merged
-just build && just test                                 # again — a rebase is a real merge
+git fetch origin && git rebase origin/feat/<name>   # the base moved if a sibling merged
+just build && just test                             # again — a rebase is a real merge
 git push -u origin HEAD
-gh pr create --base feature/<name> --title "..." --body "..."
+gh pr create --base feat/<name> --title "..." --body "..."
 ```
 
-`--base` is not optional. Without it `gh` targets the repo's default branch and the PR silently
-proposes the work to `master`.
+`--base` is not optional: without it `gh` targets `master` and the PR silently proposes the work
+there.
 
 The body says what changed, **why**, how it was verified (name the suites; say whether GPU validation
-ran), and — because this is a partial change — which slice of the plan it is and what still has to
-land. A reviewer must be able to tell a deliberate gap from an oversight.
+ran), which task of the plan it is, and what still has to land. A reviewer must be able to tell a
+deliberate gap from an oversight.
 
-Update the tracker with the PR number and `[>]`.
+The plan is a hypothesis. When a task disproves it, correct `docs/plans/<name>.md` **in that task's
+PR**, so the correction is reviewed beside the code that forced it.
 
-## 4. Stop for review
+## 4. Watch, revise, wait for the merge
 
-After the PR is open, **stop and report**: the PR, what it contains, what the next slice is. The user
-reviews and merges. Review comments are [bcp-revise](.claude/skills/bcp-revise/SKILL.md), which
-pushes to the slice branch and leaves the base alone.
+Applies to every PR this skill opens, the plan's included.
 
-Then **start the watcher in the background** and hand off. This is not optional and does not wait to
-be asked — every slice PR gets one the moment it opens:
+**Report to the user in chat** — the PR, what it contains, what is next. Then start the watcher, as
+the **last action of the turn**:
 
 ```bash
 just watch-pr <n>        # python scripts/watch_pr.py <n>
 ```
 
-**Slice PRs only** — the ones based on `feature/<name>`. Never the tracking PR from § 1: it sits in
-draft for the length of the feature and every slice merge is activity on it, so watching it reports
-the work you just did back to you.
+It baselines the PR's current activity, polls, and blocks until something actionable happens, printing
+one JSON event. Do not poll `gh` yourself while it runs — it is the wait, not a hint. Only *submitted*
+reviews fire it; a reviewer's pending draft stays invisible until they send it.
 
-**Start it last** — after every write to the PR, as the final action of the turn. The watcher
-baselines activity when it starts, so anything posted afterwards fires it immediately.
+| event | do |
+|---|---|
+| `merged` | mark `[x]` in the tracker; next task (§ 3), or § 5 if that was the last |
+| `review` / `comment` | [bcp-revise](.claude/skills/bcp-revise/SKILL.md) on the same branch, push more commits, restart the watcher |
+| `closed` | stop and ask — the user rejected something |
+| `timeout` (exit 3) | say you are still waiting, restart the watcher |
 
-Better still, do not post at all. §4 reports to the user in chat; a PR gets written to only when
-there is review feedback to answer ([bcp-revise](.claude/skills/bcp-revise/SKILL.md) § 8), and a
-description of your own change belongs in the PR **body**, not a comment. Self-narration on an
-unreviewed PR is noise on the surface the reviewer has to read — and posted without
-`GH_TOKEN` from `mint-bot-token.sh` it arrives under the user's own name, so it also reads as
-though they wrote it.
-
-It snapshots the PR's current activity as a baseline, polls, and blocks until something actionable
-happens, printing one JSON event — the deterministic version of "did the reviewer move yet?", so
-no session re-derives it from ad-hoc `gh` calls. React by event:
-
-| event | means | do |
-|---|---|---|
-| `merged` | the slice landed | mark it `[x]` in the tracker, continue with the next slice (§ 3) |
-| `review` / `comment` | submitted feedback (the payload carries it) | [bcp-revise](.claude/skills/bcp-revise/SKILL.md) on the slice branch |
-| `closed` | closed without merging | stop and ask — the user rejected something |
-| `timeout` (exit 3) | an hour of silence | report you are still waiting and restart the watcher |
-
-Only *submitted* reviews trigger it; a reviewer's pending draft stays invisible until they send it.
-Do not poll `gh` yourself while the watcher runs — it is the wait, not a hint.
-
-**After responding, restart the watcher with `--since`** set to the newest `submittedAt`/`createdAt`
-you acted on:
+**Restart with `--since`** set to the newest `submittedAt`/`createdAt` you acted on:
 
 ```bash
 just watch-pr <n> --since 2026-07-29T13:13:22Z
 ```
 
-Nothing watches the PR while you revise, and a plain restart would fold anything that arrived in
-the meantime into its baseline — never reported, never acted on. `--since` keeps everything after
-that timestamp out of the baseline and fires immediately if something is already waiting, so a
-comment landing mid-revision costs one extra revise round instead of vanishing.
+Nothing watches the PR while you revise, and a plain restart folds anything that arrived meanwhile
+into its baseline — never reported, never acted on.
 
-If the user would rather not wait, the next slice **stacks** on the open one instead of on the
-feature branch:
+**Do not write to a PR that has no review on it.** Reporting goes to the user in chat; a description
+of your own change belongs in the PR **body**, not a comment. Comments answer review feedback, and
+then as the bot — export `GH_TOKEN` from
+[`mint-bot-token.sh`](.claude/skills/bcp-revise/mint-bot-token.sh), or the comment arrives under the
+user's own name.
 
-```bash
-git switch -c <type>/<name>-<slug2> origin/<type>/<name>-<slug>
-gh pr create --base <type>/<name>-<slug> --body "Stacked on #<n>."
-```
+## 5. Land the feature
 
-GitHub re-targets a stacked PR onto the parent's base when the parent merges, but the branch still
-needs `git rebase origin/feature/<name>` and a `--force-with-lease` push, or the PR shows the
-parent's commits as if they were new. Only stack when asked: a stack that grows faster than the
-reviewer merges it recreates the big-bang review one level down.
-
-## 5. Keep the feature fresh
-
-`master` moves. Rebase the feature branch onto it when it drifts, and only when **no slice PR is
-open** — a rebase rewrites the commits those PRs are based on, and each one then shows a diff nobody
-wrote:
+When the tracker is all `[x]`:
 
 ```bash
-git switch feature/<name> && git fetch origin && git rebase origin/master
-git push --force-with-lease
-```
-
-With PRs open, merge them first, or merge `master` in instead of rebasing and say why.
-
-## 6. Land the feature
-
-When the tracker is all `[x]`, the tracking PR from § 2 becomes the real thing:
-
-```bash
-git fetch origin && git switch feature/<name> && git rebase origin/master
+git fetch origin && git switch feat/<name> && git rebase origin/master
 just build && just test                      # the whole feature at once
-just run bgl_tests -- --gpu-validation       # if any slice touched shaders, barriers or descriptors
+just run bgl_tests -- --gpu-validation       # if any task touched shaders, barriers or descriptors
 git push --force-with-lease
-gh pr edit <tracking> --title "..." --body "..."
-gh pr ready <tracking>
+gh pr create --base master --head feat/<name> --title "..." --body "..."
 ```
 
-This full run matters more than any single slice's did: each slice was verified against the feature
-branch as it stood at the time, and this is the first time all of them exist together.
+This run matters more than any single task's did: each was verified against the branch as it stood at
+the time, and this is the first time all of them exist together.
 
-Rewrite the body — it has been accumulating since the branch was cut, and what it says now is the
-feature's story: what it adds, why, how it was verified as a whole, what was deliberately left out.
-Link the slice PRs; do not restate them.
+The body is the feature's story — what it adds, why, how it was verified as a whole, what was
+deliberately left out. Link the task PRs; do not restate them. Then § 4 again.
 
-The plan document merges to `master` with the feature and stays as the record of why it is shaped
-this way. Before marking the PR ready, read it against what actually shipped — anything it still
-promises that the feature did not do is a correction for the last slice PR, not for later. Whatever
-in it describes how the code now *behaves* belongs in a subsystem page under `docs/` instead; move
-it there with [bcp-docs](.claude/skills/bcp-docs/SKILL.md) and leave the plan holding the reasoning.
+Read the plan against what actually shipped first: anything it still promises that the feature did not
+do is a correction for the last task PR. Whatever in it describes how the code now *behaves* belongs
+in a subsystem page under `docs/` — move it there with
+[bcp-docs](.claude/skills/bcp-docs/SKILL.md) and leave the plan holding the reasoning.
 
-After it merges:
+`master` moves under a long feature. Rebase onto it when it drifts, and only when **no PR is open** —
+a rebase rewrites the commits those PRs are based on, and each then shows a diff nobody wrote. With
+PRs open, merge them first.
+
+After the feature merges:
 
 ```bash
 git config --local --unset bernini.feature
-git switch master && git pull && git branch -d feature/<name>
+git switch master && git pull && git branch -d feat/<name>
 rm .claude/features/<name>.md          # the tracker only; the plan lives on in docs/plans/
 ```
 
 ## Rules
 
-- **Never merge a PR.** Not the slice PRs, not the tracking PR. Continuous review is the entire point
-  of this branch, and it only works if a human is the one approving.
-- **Never take the tracking PR out of draft** before § 6. It is open from the start precisely so the
-  feature is visible while it is still unfinished.
-- **Never commit directly onto `feature/<name>` or `master`.** The plan commit that opens the branch
-  (§ 2) is the single exception; everything after it arrives by slice PR.
-- **Never open a PR without `--base`.** The default branch is `master` and it will be wrong.
-- **Never let a slice land broken.** "Fixed in the next PR" defeats bisecting and wastes the review.
+- **Never merge a PR.** Continuous review is the entire point, and it only works if a human approves.
+- **Never commit directly onto `feat/<name>` or `master`.** Everything arrives by PR.
+- **Never cut a task branch before the plan PR has merged.**
+- **Never open a PR without `--base`.** The default is `master` and it will be wrong.
+- **Never let a task land broken.** "Fixed in the next PR" defeats bisecting and wastes the review.
 - **Never claim a test passed without running it.** If a step was skipped, say so.
-- **Keep the tracker true.** It is the only record of where the feature is that survives the session.
-- **Never start slicing without the plan committed.** A feature branch whose first commit is code is
-  one whose design was never written down.
+- **Keep the tracker true.**
 - **Push back** — if the work does not need a feature branch, say so; one PR to `master` is cheaper.
-  If a slice is too big to review, split it. If the prompt asks for something that breaks a layering
-  rule or a documented invariant, argue rather than comply.
+  If a task is too big to review, split it. If the prompt breaks a layering rule or a documented
+  invariant, argue rather than comply.
