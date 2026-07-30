@@ -1,0 +1,14 @@
+# Tests from metal_expected.txt that a GitHub macOS runner cannot run. Passed to run_tests.py as
+# --exclude-file from the CI job only; a local run uses the full list.
+#
+# The runner's GPU is paravirtualised, and its encoder does not implement the mesh-shader entry
+# points -- the failure is an unrecognized selector, not a wrong result:
+#
+#   -[AppleParavirtRenderCommandEncoder setMeshBytes:length:atIndex:]: unrecognized selector
+#
+# Everything else the backend does today works there, including compute dispatch and readback, so
+# this is three tests rather than the whole leg. They stay covered on any real device.
+
+Meshlet pipeline renders a fullscreen triangle
+Meshlet pipeline binds uniforms to the mesh and fragment stages
+Meshlet pipeline binds disjoint per-stage cbuffers correctly

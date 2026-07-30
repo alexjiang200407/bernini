@@ -67,6 +67,25 @@ def metal_build(build_dir):
                    for line in f)
 
 
+def read_test_names(path):
+    """The test names in a Catch2 --input-file, without its `#` comments or blank lines."""
+    with open(path, encoding="utf-8") as f:
+        return [line.rstrip("\n") for line in f
+                if line.strip() and not line.lstrip().startswith("#")]
+
+
+def write_filtered_list(build_dir, names):
+    """Write `names` as a Catch2 --input-file under `build_dir`, and return its path.
+
+    A file rather than argv: a name is a Catch2 test *spec* on the command line, so one containing
+    a comma or a bracket would be parsed as two specs or as a tag. --input-file takes them literally.
+    """
+    path = os.path.join(build_dir, "metal_expected_filtered.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(names) + "\n")
+    return path
+
+
 # Shards per suite. Each one is a process holding a graphics device of its own, so this trades
 # memory for wall-clock; past a handful the suites stop scaling and start contending.
 DEFAULT_JOBS = min(4, os.cpu_count() or 1)
@@ -188,6 +207,9 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="Don't build first; run the binaries that are already there.")
     parser.add_argument("--list", action="store_true", help="Name the suites without running them.")
+    parser.add_argument("--exclude-file",
+                        help="A file of test names to drop from the expected-pass list, in the same "
+                             "format. For a host whose GPU cannot run some of them.")
     parser.add_argument("-j", "--jobs", type=int, default=DEFAULT_JOBS,
                         help="Split each suite across this many concurrent processes "
                              f"(default: {DEFAULT_JOBS}). 1 runs a single process and streams "
@@ -238,14 +260,30 @@ def main():
         return 0
 
     # A forwarded filter is the caller naming what to run, so it wins over the expected-pass list.
-    metal_expected = (
-        not forward
-        and os.path.isfile(METAL_EXPECTED)
-        and any(metal_build(d) for d in build_dirs)
-    )
-    if metal_expected:
-        print(f"Metal build: running {METAL_EXPECTED_SUITE} from "
-              f"{os.path.relpath(METAL_EXPECTED, ct.REPO_ROOT)}")
+    metal_list = None
+    if (not forward
+            and os.path.isfile(METAL_EXPECTED)
+            and any(metal_build(d) for d in build_dirs)):
+        names = read_test_names(METAL_EXPECTED)
+        metal_list = METAL_EXPECTED
+        source = os.path.relpath(METAL_EXPECTED, ct.REPO_ROOT)
+
+        if args.exclude_file:
+            excluded = set(read_test_names(args.exclude_file))
+            unknown = excluded - set(names)
+            if unknown:
+                print(f"error: {args.exclude_file} names tests that are not in {source}: "
+                      + ", ".join(sorted(unknown)), file=sys.stderr)
+                return 1
+            names = [n for n in names if n not in excluded]
+            metal_list = write_filtered_list(build_dirs[0], names)
+            # Never silent: a dropped test is coverage this run does not have.
+            print(f"excluding {len(excluded)} test(s) per "
+                  f"{os.path.relpath(args.exclude_file, ct.REPO_ROOT)}:")
+            for name in sorted(excluded):
+                print(f"  - {name}")
+
+        print(f"Metal build: running {METAL_EXPECTED_SUITE} from {source} ({len(names)} tests)")
 
     results = []
     for name, exe in chosen.items():
@@ -257,8 +295,8 @@ def main():
             continue
 
         suite_forward = forward
-        if metal_expected and name == METAL_EXPECTED_SUITE:
-            suite_forward = ["--input-file", METAL_EXPECTED]
+        if metal_list and name == METAL_EXPECTED_SUITE:
+            suite_forward = ["--input-file", metal_list]
 
         jobs = max(1, args.jobs)
         if jobs > 1 and not supports_sharding(exe):
