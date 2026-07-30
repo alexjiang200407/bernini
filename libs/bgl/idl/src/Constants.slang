@@ -6,11 +6,6 @@
 public static const uint cMaxPrimsPerMeshlet = 124;
 public static const uint cMaxVerticesPerMeshlet = 64;
 
-// Vertices a vertex-pulling draw spends on one meshlet record. Fixed rather than the meshlet's own
-// triangle count, so a record's slot is derivable from SV_VertexID alone; the tail of a partial
-// meshlet takes the degenerate path. The expansion kernel and the vertex shader must agree on it.
-public static const uint cVerticesPerMeshletRecord = cMaxPrimsPerMeshlet * 3;
-
 // Threads per mesh-shader group. A group cooperatively emits one meshlet, whose vertex and
 // triangle counts both exceed this, so every emission loop must stride by it.
 public static const uint cMeshGroupSize = 64;
