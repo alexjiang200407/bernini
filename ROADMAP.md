@@ -37,7 +37,6 @@ and portability.
 
 - [ ] RHI
   - [x] DirectX 12
-  - [ ] WebGPU
   - [ ] Vulkan
   - [ ] Metal
   - [x] GPU Ring Buffer

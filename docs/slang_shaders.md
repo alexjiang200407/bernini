@@ -120,8 +120,7 @@ than binding the wrong slot.
 WebGPU has neither stage. The D3D12 geometry path is amplification + mesh (`ASMain`/`MSMain`); the
 portable path replaces them with a compute expansion kernel plus a vertex-pulling draw. New geometry
 logic belongs in that shared, stage-agnostic form — the buffer-walking and vertex-decode code — not
-in a mesh-stage entry point that only DXIL can build. See
-[the WebGPU port plan](./plans/webgpu_port_plan.md) for the expansion/vertex-pulling design.
+in a mesh-stage entry point that only DXIL can build.
 
 ## Enforcement
 
