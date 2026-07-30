@@ -4,7 +4,7 @@ file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|webgpu)/.*")
+list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/d3d12/.*")
 
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
@@ -15,7 +15,7 @@ file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|webgpu)/.*")
+list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/d3d12/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
@@ -58,15 +58,11 @@ target_link_libraries(bgl_objects
 
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(src/d3d12)
-elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
-	add_subdirectory(src/webgpu)
 endif()
 
 add_dependencies(bgl_objects bgl_idl_generate)
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
-elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
-	add_dependencies(bgl_webgpu bgl_idl_generate)
 endif()
 
 enable_strict_compiler(bgl_objects)
@@ -82,12 +78,6 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_library(bgl SHARED
 		$<TARGET_OBJECTS:bgl_objects>
 		$<TARGET_OBJECTS:bgl_d3d12>
-		${BGL_SHARED_HEADERS}
-	)
-elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
-	add_library(bgl SHARED
-		$<TARGET_OBJECTS:bgl_objects>
-		$<TARGET_OBJECTS:bgl_webgpu>
 		${BGL_SHARED_HEADERS}
 	)
 else()
@@ -130,30 +120,12 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx12-agility CONFIG REQUIRED)
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
-elseif(RENDERER_BACKEND STREQUAL "WEBGPU")
-	# bgl_compile_shaders fails the build if a kernel stops compiling to WGSL; bgl_copy_shader_src
-	# stages the raw Slang sources so the runtime session can load and compile modules on device.
-	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
-	add_dependencies(bgl bgl_compile_shaders bgl_copy_shader_src)
-
-	# The suite links the backend objects rather than bgl, so it needs the shader targets directly
-	# -- otherwise building it alone (just run bgl_webgpu_tests) leaves the sources unstaged.
-	if(TARGET bgl_webgpu_tests)
-		add_dependencies(bgl_webgpu_tests bgl_compile_shaders bgl_copy_shader_src)
-	endif()
-
-	target_compile_definitions(bgl_webgpu PRIVATE BGL_EXPORTS)
-
-	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_WEBGPU)
-	target_link_libraries(bgl PRIVATE bgl_webgpu)
 endif()
 
-# Both backends reach DXC through GetProcAddress -- Dawn opens dxcompiler.dll to translate WGSL,
-# and dxil.dll signs the bytecode either backend produces -- so nothing imports either DLL, and
-# vcpkg's applocal deployment stages a DLL by walking the import table. Neither the Dawn archive
-# nor the Slang release carries them. Without dxcompiler.dll Dawn reports no adapter; without
-# dxil.dll the bytecode is unsigned, which D3D12 loads only in Developer Mode. Copied by hand for
-# the same reason as the Agility SDK above.
+# Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
+# so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
+# table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so
+# both are copied by hand, for the same reason as the Agility SDK above.
 #
 # dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
 # sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
@@ -165,14 +137,6 @@ if(WIN32)
 		"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
 		"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
 	)
-
-	# A suite links the backend's objects rather than bgl, so building one on its own -- which
-	# `just run bgl_webgpu_tests` does -- would otherwise leave the DLLs unstaged. Depending on
-	# bgl rather than copying again keeps one writer per file: two POST_BUILD steps copying the
-	# same DLL into the same directory can run at once.
-	if(TARGET bgl_webgpu_tests)
-		add_dependencies(bgl_webgpu_tests bgl)
-	endif()
 endif()
 
 
@@ -212,7 +176,11 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 			core
 	)
 
-	add_dependencies(bgl_tests bgl_copy_shaders bgl_copy_shader_src bgl_copy_shader_tests bgl_idl_generate)
+	# bgl is a dependency for what it stages beside the executable, not for linking: the suite links
+	# the backend's objects directly, so building it alone would otherwise leave dxcompiler.dll and
+	# dxil.dll unstaged. Depending on bgl rather than copying again keeps one writer per file --
+	# two POST_BUILD steps copying the same DLL into the same directory can run at once.
+	add_dependencies(bgl_tests bgl bgl_copy_shaders bgl_copy_shader_src bgl_copy_shader_tests bgl_idl_generate)
 
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
