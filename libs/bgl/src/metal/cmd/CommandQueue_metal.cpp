@@ -65,23 +65,32 @@ namespace bgl
 		WaitForFenceCPUBlocking(m_NextFenceValue++);
 	}
 
-	// Cross-queue GPU synchronization is unused while there is a single queue; these land with the
-	// second queue.
 	void
-	CommandQueue::InsertWait(uint64_t) noexcept
+	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
-		gunimplemented("Metal backend: InsertWait not implemented yet");
+		m_PendingWaits.push_back({ m_Event, fenceValue });
 	}
 
 	void
-	CommandQueue::InsertWaitForQueueFence(ICommandQueue*, uint64_t) const noexcept
+	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
-		gunimplemented("Metal backend: InsertWaitForQueueFence not implemented yet");
+		gassert(cq != nullptr, "InsertWaitForQueueFence requires a non-null queue");
+		m_PendingWaits.push_back({ cq->As<CommandQueue>()->m_Event, fenceValue });
 	}
 
 	void
-	CommandQueue::InsertWaitForQueue(ICommandQueue*) const noexcept
+	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept
 	{
-		gunimplemented("Metal backend: InsertWaitForQueue not implemented yet");
+		gassert(otherQueue != nullptr, "InsertWaitForQueue requires a non-null queue");
+		// Everything submitted so far: the next value has not been signalled yet.
+		InsertWaitForQueueFence(otherQueue, otherQueue->GetNextFenceValue() - 1);
+	}
+
+	void
+	CommandQueue::EncodePendingWaits(MTL::CommandBuffer* cmdBuffer) const noexcept
+	{
+		for (const PendingWait& wait : m_PendingWaits)
+			cmdBuffer->encodeWait(wait.event.get(), wait.value);
+		m_PendingWaits.clear();
 	}
 }

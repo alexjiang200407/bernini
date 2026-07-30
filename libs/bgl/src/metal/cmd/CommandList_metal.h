@@ -10,9 +10,13 @@
 namespace bgl
 {
 	/**
-	 * The Metal command list. This slice records only buffer uploads and buffer->readback copies onto
-	 * a single MTL::CommandBuffer built per Open(); the compute/mesh/texture path lands with the
-	 * render slices and is gunimplemented for now.
+	 * The Metal command list: one MTL::CommandBuffer per Open(), recorded through encoders.
+	 *
+	 * Metal has no free-form recording. A blit, a compute dispatch and a draw each need their own
+	 * encoder and only one may be open, so the list opens an encoder on demand and ends it when a
+	 * command needs a different kind -- or, for a draw, a different FrameBuffer. Consecutive draws to
+	 * one target therefore share a render pass, which on a tile GPU is the difference between one
+	 * load/store cycle and one per draw.
 	 *
 	 * Barriers are no-ops: Metal hazard-tracks resources referenced within one command buffer, so the
 	 * FrameGraph's upload->copy ordering holds without explicit fences.
@@ -136,6 +140,30 @@ namespace bgl
 			uint32_t threadGroupCountZ) noexcept override;
 
 	private:
+		enum class EncoderKind
+		{
+			kNone,
+			kBlit,
+			kCompute,
+			kRender,
+		};
+
+		// Ends whatever encoder is open. Every path that needs a different one goes through here, so
+		// the "only one open at a time" rule holds without each call site remembering it.
+		void
+		EndEncoder() noexcept;
+
+		[[nodiscard]] MTL::BlitCommandEncoder*
+		BlitEncoder() noexcept;
+
+		[[nodiscard]] MTL::ComputeCommandEncoder*
+		ComputeEncoder() noexcept;
+
+		// Reopens when `fb` differs from the pass in flight: a render encoder is bound to its
+		// attachments, so a draw to a different target cannot share it.
+		[[nodiscard]] MTL::RenderCommandEncoder*
+		RenderEncoder(const FrameBuffer& fb) noexcept;
+
 		static constexpr const char* c_Unimplemented =
 			"Metal CommandList: not implemented yet (render/scene slice)";
 
@@ -144,6 +172,11 @@ namespace bgl
 		MTL::Device*       m_Device = nullptr;
 
 		NS::SharedPtr<MTL::CommandBuffer> m_CmdBuffer;
+
+		// Autoreleased into m_ScopePool, so borrowed rather than owned.
+		MTL::CommandEncoder* m_Encoder     = nullptr;
+		EncoderKind          m_EncoderKind = EncoderKind::kNone;
+		FrameBuffer          m_EncoderFrameBuffer;
 		NS::SharedPtr<NS::AutoreleasePool>
 					 m_ScopePool;  // drains at Close; scopes Open..Close temporaries
 		ComputeState m_ComputeState;

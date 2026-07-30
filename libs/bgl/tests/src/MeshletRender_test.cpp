@@ -246,6 +246,120 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 	resourceManager->DestroyTexture(tex, false);
 }
 
+// Two draws to one target in one command list. The second must see the first's attachment contents
+// and its own uniforms -- which is what a backend reusing an open render encoder across draws has to
+// get right, and what reopening a pass per draw would hide. Backend-agnostic.
+TEST_CASE("Two meshlet draws to one target share a pass and rebind their uniforms", "[meshlet]")
+{
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto  resourceManager = gfxBase->GetResourceManagerCpy();
+	auto* device          = gfxBase->GetDevice();
+
+	auto cmdListDesc = bgl::CommandListDesc();
+	cmdListDesc.type = bgl::QueueType::kGraphics;
+
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	const uint32_t width  = 4;
+	const uint32_t height = 4;
+
+	auto texDesc          = bgl::TextureDesc();
+	texDesc.width         = width;
+	texDesc.height        = height;
+	texDesc.format        = bgl::Format::RGBA32_FLOAT;
+	texDesc.usage         = bgl::TextureUsageFlag::kRenderTarget;
+	texDesc.initialLayout = bgl::BarrierLayout::kRenderTarget;
+	texDesc.debugName     = "Two Draw Target";
+	texDesc.clearValue.SetColor(bgl::Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+	auto tex = resourceManager->CreateTexture(texDesc);
+
+	auto rtvDesc   = bgl::RtvDesc();
+	rtvDesc.format = bgl::Format::RGBA32_FLOAT;
+	auto rtv       = resourceManager->CreateRtv(tex, rtvDesc);
+
+	auto kernel = device->CreateMeshletKernel(
+		bgl::MeshletPipelineDesc()
+			.SetMeshShader(device->CreateShader("MeshUniformTest", "MSMain"))
+			.SetPixelShader(device->CreateShader("MeshUniformTest", "PSMain"))
+			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+
+	auto state   = bgl::MeshletState();
+	state.kernel = &kernel;
+	state.viewportState.AddViewportAndScissorRect(
+		bgl::Viewport(static_cast<float>(width), static_cast<float>(height)));
+	state.frameBuffer.AddColorAttachment(rtv);
+
+	auto layout      = resourceManager->GetTextureReadbackLayout(tex);
+	auto rbDesc      = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize  = layout.totalBytes;
+	rbDesc.debugName = "Two Draw Readback";
+	auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	cmdList->Open(cmdQueue, cmdAllocator);
+
+	// Both draws cover the target, so the second's colour is what must survive. A backend that
+	// bound the first draw's uniforms and never rebound would leave the first's.
+	kernel["gUniforms"]["meshValue"] = 0.25f;
+	kernel["gUniforms"]["fragColor"] = glm::vec4(0.0f, 0.5f, 0.75f, 0.0f);
+	cmdList->SetMeshletState(state);
+	cmdList->DispatchMesh(1, 1, 1);
+
+	kernel["gUniforms"]["meshValue"] = 1.0f;
+	kernel["gUniforms"]["fragColor"] = glm::vec4(0.0f, 0.125f, 0.375f, 0.0f);
+	cmdList->SetMeshletState(state);
+	cmdList->DispatchMesh(1, 1, 1);
+
+	auto barrier = bgl::TextureBarrierDesc();
+	barrier.AddSyncBefore(bgl::BarrierSyncFlag::kRenderTarget)
+		.AddAccessBefore(bgl::BarrierAccessFlag::kRenderTarget)
+		.SetLayoutBefore(bgl::BarrierLayout::kRenderTarget)
+		.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+		.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource)
+		.SetLayoutAfter(bgl::BarrierLayout::kCopySource);
+	cmdList->Barrier(tex, barrier);
+
+	cmdList->CopyTextureToReadback(rb, tex);
+	cmdList->Close();
+
+	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+
+	const auto* base = static_cast<const uint8_t*>(resourceManager->MapReadback(rb));
+	REQUIRE(base != nullptr);
+
+	for (uint32_t y = 0; y < height; ++y)
+	{
+		const auto* row =
+			reinterpret_cast<const float*>(base + layout.offset + y * layout.rowPitch);
+
+		for (uint32_t x = 0; x < width; ++x)
+		{
+			CHECK(row[x * 4 + 0] == Catch::Approx(1.0f));
+			CHECK(row[x * 4 + 1] == Catch::Approx(0.125f));
+			CHECK(row[x * 4 + 2] == Catch::Approx(0.375f));
+			CHECK(row[x * 4 + 3] == Catch::Approx(1.0f));
+		}
+	}
+
+	resourceManager->UnmapReadback(rb);
+
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyRtv(rtv, false);
+	resourceManager->DestroyTexture(tex, false);
+}
+
 // Two cbuffers with disjoint stage usage (gMesh: mesh only, gFrag: fragment only) confirm the
 // binding-index invariant the pipeline relies on -- a cbuffer's reflected index equals the
 // [[buffer(N)]] each per-stage MSL places it at. A mismatch would read the wrong cbuffer and
