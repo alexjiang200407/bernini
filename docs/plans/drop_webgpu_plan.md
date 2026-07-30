@@ -88,6 +88,9 @@ CI legs must stop building a preset before the preset goes.
 | 4 | the mesh-shader emulation | `bgl_tests` green; no `.slang` names a deleted module |
 | 5 | the WGSL reflection fields | `bgl_tests` green — `MixedUniform`-equivalent D3D12 coverage is what proves no uniform offset moved |
 | 6 | the idlgen WGSL session and its padding | `bgl_tests` green **and the cube golden matches** — four GPU struct strides change, so this is the one task whose gate is a picture rather than a build |
+| 7 | the macOS leg's cache key, `pkg-config` and shallow clone | the **second** CI run after it merges restores its vcpkg binaries instead of building them |
+
+Task 7 was not in the original decomposition. It came out of asking why the macOS leg takes six minutes: the vcpkg cache key omits the toolchain, so a runner-image bump changes every package's ABI, the old key still hits, vcpkg finds nothing usable and rebuilds all 19 packages — and `actions/cache` skips the save because the key was a hit, so the rebuild repeats forever. Comparing against the leg this one replaced (#47) also turned up two guards the WebGPU-era job had dropped.
 
 Tasks 3 and 6 can break a picture; task 5 can break one silently. All three change code the D3D12 path
 executes, in service of deleting code it does not. Task 6 goes last and alone because it is the only one
