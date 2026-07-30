@@ -8,9 +8,7 @@ namespace bgl
 	ReflectedLayout
 	ReflectLayoutFromSlang(slang::TypeLayoutReflection* typeLayout);
 
-	// Maps a scalar, vector, or 4x4 matrix type to its UniformValueType. Shared with the WGSL
-	// reflection path, which builds its own tree (bindings, not a descriptor heap) but classifies
-	// plain-data leaves identically.
+	// Maps a scalar, vector, or 4x4 matrix type to its UniformValueType.
 	UniformValueType
 	ResolveSlangValueType(slang::TypeReflection* type);
 }
