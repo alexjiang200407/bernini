@@ -85,9 +85,19 @@ public:
 	}
 
 private:
-	// Draws every registered viewport, in registration order.
+	// Draws every registered viewport, in registration order. A draw that throws is dropped from
+	// the loop, so no exception can escape into the event loop and end the thread.
 	void
 	Frame();
+
+	/**
+	 * Blocks until a queued closure releases `done`, or until the render thread is found dead with
+	 * the closure unrun -- a plain acquire() would then wait forever.
+	 *
+	 * @return Whether the closure ran.
+	 */
+	[[nodiscard]] bool
+	AwaitClosure(QSemaphore& done) const;
 
 	void
 	StopThread();
@@ -114,8 +124,13 @@ private:
 /**
  * A throw inside `fn` comes back to the caller rather than escaping into the render thread's event
  * loop (where it would terminate) and leaving the semaphore unreleased (deadlocking this wait).
- * Reference capture is safe: acquire() blocks here until the closure has released, so the captures
- * outlive it.
+ * Reference capture is safe: AwaitClosure blocks here until the closure has released, so the
+ * captures outlive it -- and a closure abandoned on a dead thread is destroyed unrun, so it never
+ * touches them late.
+ *
+ * If the render thread is found dead with the closure unrun, this logs, gives up the wait, and
+ * returns a default-constructed result: nothing on the render thread can be reached anyway, and
+ * blocking forever would take the window close with it.
  */
 template <typename Fn>
 std::invoke_result_t<Fn>
@@ -144,7 +159,8 @@ Renderer::Invoke(Fn&& fn)
 				done.release();
 			},
 			Qt::QueuedConnection);
-		done.acquire();
+		if (!AwaitClosure(done))
+			return;
 		if (error)
 			std::rethrow_exception(error);
 	}
@@ -165,7 +181,8 @@ Renderer::Invoke(Fn&& fn)
 				done.release();
 			},
 			Qt::QueuedConnection);
-		done.acquire();
+		if (!AwaitClosure(done))
+			return result;
 		if (error)
 			std::rethrow_exception(error);
 		return result;

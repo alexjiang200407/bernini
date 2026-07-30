@@ -96,8 +96,10 @@ namespace core
 
 			write_crash_log(std::format("structured exception 0x{:08X}", code));
 
-			// Not SEARCH_HANDLERS: nothing above us handles these, and CONTINUE would loop.
-			return EXCEPTION_EXECUTE_HANDLER;
+			// Not EXECUTE_HANDLER: the default handler it would run can end just the faulting
+			// thread, leaving a zombie process whose UI is up but whose worker is gone -- observed
+			// as a window that no longer closes. Crash means exit.
+			std::_Exit(3);
 		}
 
 #	if defined(_DEBUG)
