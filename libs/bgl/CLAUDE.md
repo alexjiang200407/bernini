@@ -24,32 +24,11 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
     e.g. We have IDevice class for API agnostic device, the Device_d3d12.cpp will be the class representing the d3d12 device class.
 - CMake: `./src/d3d12/CMakeLists.txt`
 - Verification: Check logs, bgl_tests
-
-## bgl_webgpu
-
-- Backend library built on Dawn's C++ wrapper (`webgpu_cpp.h`, `namespace wgpu`) — the header-only
-  RAII layer over the C `webgpu.h`, so handles ref-count themselves and constants are enum classes.
-  All code that uses the WebGPU API must be located in this subsystem. It does not implement the RHI
-  interfaces yet — today it owns the WebGPU object stack (instance, adapter, device, queue).
-- PCH is `./libs/bgl/src/webgpu/pch.h`. Don't `#include` the headers in here.
-- Doesn't have an include directory, all headers are included.
-- Implementation files (.h and .cpp) should have a `_wgpu` suffix, mirroring `_d3d12`.
-- Dawn is not built from source: `./src/webgpu/dawn.cmake` downloads its prebuilt per-platform
-  release, which ships a CMake package config, and `find_package(Dawn)` yields
-  `dawn::webgpu_dawn`.
-- The Dawn archive is chosen by `CMAKE_BUILD_TYPE`, so the backend needs a single-config
-  generator. Only MSVC actually requires the match, because its debug and release runtime
-  libraries cannot be mixed in one link.
-- **On Windows the backend needs `dxcompiler.dll` and `dxil.dll` beside the executable.** Dawn
-  loads both with `LoadLibrary` to translate and sign its D3D12 shaders, so nothing imports them
-  and vcpkg's applocal deployment does not stage them; the Dawn archive ships neither. `bgl`
-  copies them from the `directx-dxc` port (`./CMakeLists.txt`), so a target that brings up a
-  device must depend on `bgl` even when it links only the backend's objects — `bgl_webgpu_tests`
-  does. Without them device creation fails reporting no adapter.
-- Adapter and device requests are asynchronous. Natively they are awaited with
-  `wgpu::Instance::WaitAny`, which a browser build cannot do — it must drive them off the event loop.
-- CMake: `./src/webgpu/CMakeLists.txt`
-- Verification: Check logs, bgl_webgpu_tests
+- **On Windows a target that compiles shaders needs `dxcompiler.dll` and `dxil.dll` beside the
+  executable.** Slang loads both with `GetProcAddress` to emit and sign DXIL, so nothing imports them
+  and vcpkg's applocal deployment does not stage them. `bgl` copies them from the `directx-dxc` port
+  (`./CMakeLists.txt`), so a target that brings up a device must depend on `bgl` even when it links
+  only the backend's objects — `bgl_tests` does.
 
 ## bgl_tests
 
