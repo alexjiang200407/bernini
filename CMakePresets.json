@@ -21,6 +21,13 @@
       }
     },
     {
+      "name": "metal",
+      "hidden": true,
+      "cacheVariables": {
+        "RENDERER_BACKEND": "METAL"
+      }
+    },
+    {
       "name": "ninja",
       "hidden": true,
       "generator": "Ninja",
@@ -247,6 +254,36 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "macos-clang-metal-debug",
+      "displayName": "macOS Clang Debug ninja - Metal",
+      "binaryDir": "${sourceDir}/build/macos-metal-debug",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "metal",
+        "debug"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-clang-metal-release",
+      "displayName": "macOS Clang Release ninja - Metal",
+      "binaryDir": "${sourceDir}/build/macos-metal-release",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "metal",
+        "release"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -295,6 +332,16 @@
     {
       "name": "macos-clang-release",
       "configurePreset": "macos-clang-release"
+    },
+    {
+      "name": "macos-clang-metal-debug",
+      "configurePreset": "macos-clang-metal-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-clang-metal-release",
+      "configurePreset": "macos-clang-metal-release",
+      "configuration": "Release"
     }
   ]
 }
