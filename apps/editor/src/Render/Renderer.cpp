@@ -77,6 +77,27 @@ Renderer::StopThread()
 	m_Thread = nullptr;
 }
 
+bool
+Renderer::AwaitClosure(QSemaphore& done) const
+{
+	for (;;)
+	{
+		if (done.tryAcquire())
+			return true;
+
+		// A dead render thread can never release the semaphore, and a plain acquire() would turn
+		// the caller -- window close among them -- into a permanent hang.
+		if (m_Thread == nullptr || m_Thread->isFinished())
+		{
+			qCritical("Renderer: the render thread is gone; a queued closure will never run");
+			return false;
+		}
+
+		if (done.tryAcquire(1, 1000))
+			return true;
+	}
+}
+
 void
 Renderer::Post(std::function<void()> fn)
 {
@@ -117,5 +138,26 @@ Renderer::RemoveViewport(ViewportId id)
 void
 Renderer::Frame()
 {
-	for (const Viewport& viewport : m_Viewports) viewport.draw();
+	for (auto it = m_Viewports.begin(); it != m_Viewports.end();)
+	{
+		// An exception escaping into this thread's event loop ends the thread, after which every
+		// Invoke -- the window close among them -- blocks forever. Drop the viewport instead: it
+		// stops drawing, and the rest of the editor keeps working.
+		try
+		{
+			it->draw();
+			++it;
+		}
+		catch (const std::exception& e)
+		{
+			qCritical(
+				"Renderer: dropping viewport %llu, its draw threw: %s",
+				static_cast<unsigned long long>(it->id),
+				e.what());
+			it = m_Viewports.erase(it);
+		}
+	}
+
+	if (m_Viewports.empty())
+		m_FrameTimer->stop();
 }

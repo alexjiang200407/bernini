@@ -98,8 +98,48 @@ namespace bgl
 		{
 			std::lock_guard<std::mutex> lockGuard(m_EventMutex);
 
-			m_Fence->SetEventOnCompletion(fenceValue, m_FenceEvent);
-			WaitForSingleObjectEx(m_FenceEvent, INFINITE, false);
+			// The event is only a wake-up hint: completion is decided by polling the fence, so a
+			// failed registration (device removal) or a stale signal costs one slice rather than an
+			// unwoken infinite wait.
+			const HRESULT hr = m_Fence->SetEventOnCompletion(fenceValue, m_FenceEvent);
+			if (FAILED(hr))
+			{
+				logger::error(
+					"CommandQueue: SetEventOnCompletion failed (0x{:08X}); polling fence {}",
+					static_cast<uint32_t>(hr),
+					fenceValue);
+			}
+
+			constexpr DWORD c_SliceMs       = 1000;
+			DWORD           waitedMs        = 0;
+			DWORD           nextComplaintMs = 2000;
+			while (!IsFenceComplete(fenceValue))
+			{
+				const DWORD result = WaitForSingleObjectEx(m_FenceEvent, c_SliceMs, false);
+				if (result == WAIT_OBJECT_0)
+				{
+					continue;
+				}
+
+				// A failed wait (bad event handle) returns immediately; sleep the slice out so the
+				// fallback stays a poll, not a hot spin.
+				if (result != WAIT_TIMEOUT)
+				{
+					Sleep(c_SliceMs);
+				}
+
+				waitedMs += c_SliceMs;
+				if (waitedMs >= nextComplaintMs)
+				{
+					logger::error(
+						"CommandQueue: waited {}s for fence value {} (completed {}); the queue "
+						"looks wedged",
+						waitedMs / 1000,
+						fenceValue,
+						PollCurrentFenceValue());
+					nextComplaintMs *= 2;
+				}
+			}
 
 			uint64_t previous = m_LastCompletedFenceValue.load(std::memory_order_relaxed);
 			while (previous < fenceValue && !m_LastCompletedFenceValue.compare_exchange_weak(
