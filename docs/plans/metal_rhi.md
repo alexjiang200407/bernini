@@ -4,9 +4,9 @@
 adds `bgl_metal` behind the same `RENDERER_BACKEND` seam, far enough that `bgl_tests` passes, the SDL
 examples render in a window, and the Qt editor runs — all on the macOS machine the work is done on.
 
-A Metal backend was on master once (PRs #56–#72) and was removed in 576ccee. This is not a revert:
-the RHI moved underneath it, and the parts that were hard are hard for reasons the old code never
-reached. What survives is the measurement, cited below.
+A Metal backend was on master once (PRs #56–#72) and was removed in 576ccee. **The first task reverts
+that removal**, because measuring the drift showed the old code is far closer to the current RHI than
+the removal commit's summary suggests — see below.
 
 ## Why now
 
@@ -24,6 +24,45 @@ The removal commit gave three reasons. Two have expired and one has inverted.
   that can be run, debugged and golden-imaged on the machine holding the keyboard.
 
 ## What the survey found
+
+### The revert applies, and the drift is 41 errors
+
+Measured, not estimated. `git revert --no-commit 576ccee` onto `feat/metal-rhi` restores all 29 backend
+files with **no conflict** — they are pure additions, so nothing can conflict — and conflicts only in
+`CMakePresets.json` and `.github/workflows/ci.yml`. With those resolved the preset configures and
+`bgl_metal` compiles to 41 errors, in four headers:
+
+| file | errors |
+|---|---|
+| `ResourceManager_metal.h` | 26 |
+| `Device_metal.h` | 4 |
+| `CommandQueue_metal.h` | 4 |
+| `CommandList_metal.h` | 3 |
+| `Graphics_metal.cpp` | 1 stale include (`bgl/RenderContext.h`) |
+
+Five of the nine `.cpp` files compile untouched. Every error is mechanical interface drift, and it is
+the same three changes over and over: `Destroy*` and `CleanupExpiredResources` gained the N-timeline
+parameters, `RegisterQueue`/`UnregisterQueue`/`CopyBuffer`/`Flush`/`GetTextureDesc`/`CreateRenderTarget`
+are new pure virtuals, and `CreateResourceManager` lost its queue parameter.
+
+The removal commit summarised the old backend as stubbing "CreateScene, CreateSceneView and both
+screenshot paths". True, and misleading about the RHI layer: `ResourceManager_metal` already covered
+buffers, textures, samplers, RTVs, DSVs, clears, readback and validity checks, with 16
+`gunimplemented`s left. Retyping that would be redoing work that was written, reviewed and tested.
+
+**So task 1 is the revert plus the drift repair, and the later tasks make the restored code correct
+against today's semantics rather than write it from nothing.** Four hunks of the revert are
+deliberately *not* taken:
+
+- the `[metal]` tags on three test files and the `RENDERER_BACKEND_METAL` filter block in
+  `tests/src/main.cpp`. The removal commit's criticism of them was right, and D14 replaces them.
+- repurposing `macos-clang-debug` as the Metal preset. #170 made it the deliberately backend-free
+  preset that keeps `core` and `assetlib` honest under a non-MSVC compiler; Metal gets new
+  `macos-clang-metal-debug/release` presets beside it.
+- the duplicate hidden `macos` preset fragment the revert reintroduces (CMake refuses to read the
+  file until one is removed) — #170's version, which carries the `arm64-osx` triplet, is the one to keep.
+- the old macOS CI job verbatim. A Metal leg is wanted, written against the current `ci.yml` so it
+  keeps #179's toolchain-keyed vcpkg cache rather than reinstating the bug that fix removed.
 
 ### The backend surface is much smaller than it was
 
@@ -233,14 +272,14 @@ before there is a resource, nothing drawn before there is a pipeline.
 
 | | Task | Gate |
 |---|---|---|
-| 1 | The `metal` preset fragment, `macos-clang-metal-debug/release`, `bgl_metal` skeleton, `Device_metal` over a real `MTL::Device`, `Graphics_metal`, and every other override `gunimplemented`. Widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`. CI gains a build-only Metal leg. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_expected.txt` holds one entry |
-| 2 | `ICommandQueue` over `MTLCommandQueue` + `MTLSharedEvent`, `ICommandAllocator` as the empty shell Metal makes it, `ICommandList` `Open`/`Close`/`BeginEvent`/`EndEvent` and the encoder state machine (D8). | a fence-ordering test: submit, CPU wait, cross-queue GPU wait, poll |
-| 3 | `IResourceManager` buffers: create, `WriteBuffer`, `WriteBufferSlice`, `CopyBuffer`, readback, `Map`/`Unmap`, deferred destruction against N registered timelines, and the residency set (D7). | `Readback_test`, `GrowableCapacity_test`, `MultiQueueDeletion_test`, `MeshDelete_test` |
-| 4 | `IShader` + `IComputePipeline`: the `SLANG_METAL` session, per-entry-point compilation, the `Kind::Resource` arm in `SlangReflection.cpp`, and layout recomputed from field types rather than from Metal's reflection (finding 3). | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
+| 1 | **Revert 576ccee** and repair the 41 drift errors, minus the four hunks listed above. New `macos-clang-metal-debug/release` presets; widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`; CI gains a build-only Metal leg. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_expected.txt` holds what genuinely passes |
+| 2 | Submission brought up to today's RHI: `MTLSharedEvent` as the timeline (D5), `Flush`, and the encoder state machine (D8) the restored `CommandList` predates. | a fence-ordering test: submit, CPU wait, cross-queue GPU wait, poll |
+| 3 | `IResourceManager` buffers: `WriteBufferSlice`, `CopyBuffer`, deferred destruction against N registered timelines, `RegisterQueue`/`UnregisterQueue`, and the residency set (D7). Creation and readback are restored, not written. | `Readback_test`, `GrowableCapacity_test`, `MultiQueueDeletion_test`, `MeshDelete_test` |
+| 4 | `IShader` + `IComputePipeline`: the restored `MetalPipelineReflection` reconciled with today's `ReflectedLayout`, and the `Kind::Resource` arm in `SlangReflection.cpp`. Finding 3 is already handled by the restored `MetalizeLayout`; this task verifies it still is. | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
 | 5 | idlgen's padding session, retargeted at Metal (D4). Four struct strides change on **both** backends. | generated `static_assert`s regenerate and compile on both presets; `assetlib_tests`; Windows CI compiles |
 | 6 | `ResolveDescriptor` on `IResourceManager` and its six call sites (D3), plus the assertion pinning the no-caching invariant. | the engine's own kernels: `HistogramInstances_test`, `CompactInstances_test`, `CullInstances_test`, `TransparentSort_test`, `Frustum_test` |
-| 7 | Textures and samplers: create, `WriteTexture`, texture readback, RTV/DSV, deferred clears (D9), `D24S8` remap (D10). | `TextureSample_test`, `MaterialTextureDelete_test` |
-| 8 | `IMeshletPipeline` and the render encoder: per-stage MSL, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
+| 7 | Textures and samplers: `WriteTexture` (the one `gunimplemented` left in the restored list), `GetTextureDesc`, deferred clears (D9) replacing the restored empty-pass clear, `D24S8` remap (D10). | `TextureSample_test`, `MaterialTextureDelete_test` |
+| 8 | `IMeshletPipeline` and the render encoder: the restored per-stage MSL compilation carried to the engine's real forward shaders, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
 | 9 | The headless render target: frame ring, backbuffers, depth, motion vectors, `PresentAndAdvance`, `ResizeBackbuffers`, screenshot. | `PbrRender_test`, `Skybox_test`, `AlphaTest_test`, `Transparent_test`, `MotionVectors_test`, `Resize_test`, `Capture_test`, `MaterialOverrideRender_test` |
 | 10 | The windowed target: `CAMetalLayer` swapchain, drawable acquisition, resize on layer bounds change. | `examples/bgl_window`, `bgl_sphere` and `bgl_two_windows` render live; screenshots in the PR |
 | 11 | The remainder: `DispatchMeshIndirect`, the GPU debug buffer and assertion path, `SceneOverflow`, `TransparentDepthKeys`, `FrameGraph_test`. Delete `metal_expected.txt`; CI's Metal leg runs the suite. | `just test bgl_tests` fully green on Metal, with `--gpu-validation`'s Metal equivalent (API validation + shader validation) enabled |
@@ -278,10 +317,18 @@ suite is a local gate — which is still strictly better than the Windows leg gi
 `src/posix` build today under `macos-clang-debug`, but nothing downstream exercises them; the crash
 handler, file paths and threading get their first real use in this branch.
 
-## Recovering the prior work
+**A revert carries its assumptions back in with it.** Task 1 restores code written against an RHI with
+one submission timeline, no residency sets and no `CopyBuffer`, and it will compile before it is
+correct — a `Destroy*` given a `deferred` argument it ignores builds fine and frees a resource the GPU
+is still reading. Tasks 2 and 3 exist to close that, and the reason `metal_expected.txt` (D14) starts
+almost empty rather than optimistically is that a compiling revert is not a passing one.
 
-The removed backend is at `576ccee7b57dec18b5f4539380eac593490dc7ed^` and its slice PRs (#56, #59,
-#60, #64, #66, #68, #70) hold the review history. It is a reference, not a base: `IDevice`,
-`IResourceManager` and `ICommandList` have all changed signature since. The parts worth reading before
-writing the equivalent are `util_metal.cpp` (format conversion), `MetalPipelineReflection.cpp` (the
-layout recomputation of finding 3) and `MeshletPipeline_metal.cpp` (per-stage compilation).
+## The prior work
+
+The removed backend is at `576ccee7b57dec18b5f4539380eac593490dc7ed^`; its slice PRs (#56, #59, #60,
+#64, #66, #68, #70) hold the review history, and the branch `backup/metal-backend` named in the
+removal commit no longer exists on the remote — `git revert` against master's history is the recovery
+path. The parts that carry the most value forward are `util_metal.cpp` (format conversion),
+`MetalPipelineReflection.cpp` (the layout recomputation finding 3 demands) and
+`MeshletPipeline_metal.cpp` (per-stage compilation, which is the fix for the mesh-shader linkage bug
+in D12).
