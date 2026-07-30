@@ -15,6 +15,4 @@ public struct PbrMaterial
 
     // Only read by the alpha-test PSOs
     public float alphaCutoff;
-
-    public uint pad[3];
 };

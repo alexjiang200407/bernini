@@ -71,9 +71,9 @@ foreach(src ${IDL_SOURCES})
         list(APPEND outputs "${IDL_CPP_OUT_DIR}/${rel_stem}.h")
     endif()
 
-    # A module's WGSL padding depends on the final size of every struct it embeds, so idlgen reflects
-    # it against the *generated* copies of its imports. Those have to exist first, which is what these
-    # edges buy: without them the padding would be computed against unpadded members.
+    # A module's layout depends on the final size of every struct it embeds, so idlgen reflects it
+    # against the *generated* copies of its imports. Those have to exist first, which is what these
+    # edges buy.
     set(import_deps "")
     file(STRINGS "${src}" import_lines REGEX "^[ \t]*import[ \t]+[A-Za-z0-9_.]+[ \t]*;")
     foreach(import_line IN LISTS import_lines)

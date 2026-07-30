@@ -13,10 +13,9 @@ namespace bgl::idl
 		float metallicFactor;
 		float roughnessFactor;
 		float alphaCutoff;
-		uint32_t pad[3];
 	};
 
-	static_assert(sizeof(PbrMaterial) == 64);
+	static_assert(sizeof(PbrMaterial) == 52);
 	static_assert(offsetof(PbrMaterial, baseColorFactor) == 0);
 	static_assert(offsetof(PbrMaterial, baseColorTexture) == 16);
 	static_assert(offsetof(PbrMaterial, normalTexture) == 24);

@@ -149,13 +149,7 @@ namespace
 		std::string            name;
 		size_t                 size;
 		std::vector<FieldInfo> fields;
-
-		// Trailing bytes WGSL rounds the struct up by, which no other target adds. Emitted as a
-		// real member into both mirrors so every target agrees on the stride.
-		size_t padBytes = 0;
 	};
-
-	constexpr auto c_PadName = "pad";
 
 	struct EnumInfo
 	{
@@ -271,29 +265,11 @@ namespace
 		return false;
 	}
 
-	// The element stride a WGSL storage buffer gives this struct, or 0 if it cannot be instantiated
-	// there. ScalarDataLayout makes no difference on this target -- WGSL applies its own alignment
-	// rules either way -- so one measurement covers every buffer primitive that reads the struct.
-	slang::TypeLayoutReflection*
-	WgslElementLayout(slang::ProgramLayout* wgslLayout, const char* typeName)
-	{
-		const std::string      sbName = std::format("StructuredBuffer<{}>", typeName);
-		slang::TypeReflection* sbType = wgslLayout->findTypeByName(sbName.c_str());
-		if (sbType == nullptr)
-		{
-			return nullptr;
-		}
-
-		slang::TypeLayoutReflection* bufferLayout = wgslLayout->getTypeLayout(sbType);
-		return bufferLayout != nullptr ? bufferLayout->getElementTypeLayout() : nullptr;
-	}
-
 	StructInfo
 	ReflectStruct(
 		slang::DeclReflection*         decl,
 		slang::ProgramLayout*          layout,
 		slang::ProgramLayout*          scalarLayout,
-		slang::ProgramLayout*          wgslLayout,
 		std::set<std::string>&         referenced,
 		std::map<std::string, size_t>& enumSizes)
 	{
@@ -329,48 +305,6 @@ namespace
 		// array element / buffer stride), whereas getSize() is the unpadded tail. They differ for a
 		// struct whose last member is smaller than its alignment (e.g. a uint16 after a handle).
 		info.size = tlayout->getStride();
-
-		// WGSL alone rounds a struct's size up to its alignment, so it can want a wider stride than
-		// the C/C++ rules give. Left alone, element N of a buffer would be read from the wrong
-		// offset on that backend only, and silently -- nothing round-trips a second element.
-		slang::TypeLayoutReflection* wgsl = WgslElementLayout(wgslLayout, type->getName());
-		if (wgsl != nullptr && wgsl->getStride() > info.size)
-		{
-			// Trailing padding can only close a gap at the end. If WGSL also places a *member*
-			// somewhere the C/C++ rules do not -- it aligns a vector to its own width, where scalar
-			// layout packs it tight -- no amount of tail padding reconciles the two, and the struct
-			// has to be laid out so both agree (usually by ordering the widest members first).
-			for (unsigned i = 0; i < wgsl->getFieldCount() && i < tlayout->getFieldCount(); ++i)
-			{
-				const size_t gpuOffset = wgsl->getFieldByIndex(i)->getOffset();
-				const size_t cpuOffset = tlayout->getFieldByIndex(i)->getOffset();
-				if (gpuOffset != cpuOffset)
-				{
-					std::cerr << std::format(
-						"error: '{}::{}' sits at {} under WGSL but {} under the C/C++ rules; "
-						"trailing padding cannot fix an interior mismatch -- reorder the struct so "
-						"its widest members come first\n",
-						type->getName(),
-						wgsl->getFieldByIndex(i)->getName(),
-						gpuOffset,
-						cpuOffset);
-					std::exit(1);
-				}
-			}
-
-			info.padBytes = wgsl->getStride() - info.size;
-			info.size     = wgsl->getStride();
-
-			if (info.padBytes % 4 != 0)
-			{
-				std::cerr << std::format(
-					"error: '{}' needs {} bytes of WGSL padding, which is not a whole number of "
-					"words\n",
-					type->getName(),
-					info.padBytes);
-				std::exit(1);
-			}
-		}
 
 		const unsigned fieldCount = tlayout->getFieldCount();
 		for (unsigned i = 0; i < fieldCount; ++i)
@@ -830,10 +764,6 @@ namespace
 			{
 				out += std::format("\t\t{} {}{};\n", f.type, f.name, f.arraySuffix);
 			}
-			if (s.padBytes > 0)
-			{
-				out += std::format("\t\tuint32_t {}[{}];\n", c_PadName, s.padBytes / 4);
-			}
 			out += "\t};\n\n";
 
 			out += std::format("\tstatic_assert(sizeof({}) == {});\n", s.name, s.size);
@@ -849,63 +779,6 @@ namespace
 		}
 
 		out += "}\n";
-		return out;
-	}
-
-	// Adds each struct's WGSL padding to the Slang copy the shaders import. The padding has to be a
-	// real member of the shared struct rather than of either mirror alone: DXIL agrees with the C++
-	// rules, so padding only the C++ side would leave that target reading the narrower stride.
-	std::string
-	InjectWgslPadding(const std::string& source, const std::vector<StructInfo>& structs)
-	{
-		std::string out = source;
-
-		for (const StructInfo& s : structs)
-		{
-			if (s.padBytes == 0)
-			{
-				continue;
-			}
-
-			const std::string decl = std::format("struct {}", s.name);
-
-			size_t pos = out.find(decl);
-			while (pos != std::string::npos)
-			{
-				const size_t end   = pos + decl.size();
-				const char   after = end < out.size() ? out[end] : '\0';
-				if (std::isalnum(static_cast<unsigned char>(after)) == 0 && after != '_')
-				{
-					break;
-				}
-				pos = out.find(decl, pos + 1);
-			}
-
-			const size_t open = pos != std::string::npos ? out.find('{', pos) : std::string::npos;
-			if (open == std::string::npos)
-			{
-				std::cerr << std::format(
-					"error: cannot find the body of '{}' to pad in the Slang copy\n",
-					s.name);
-				std::exit(1);
-			}
-
-			size_t close = open + 1;
-			for (int depth = 1; depth > 0; ++close)
-			{
-				if (close >= out.size())
-				{
-					std::cerr << std::format("error: unterminated body for '{}'\n", s.name);
-					std::exit(1);
-				}
-				depth += out[close] == '{' ? 1 : (out[close] == '}' ? -1 : 0);
-			}
-
-			out.insert(
-				close - 1,
-				std::format("\n    public uint {}[{}];\n", c_PadName, s.padBytes / 4));
-		}
-
 		return out;
 	}
 
@@ -1044,10 +917,8 @@ main(int argc, char** argv)
 		target.format = SLANG_HOST_HOST_CALLABLE;  // C/C++ (scalar) layout rules
 
 		std::vector<std::string> searchPaths;
-		// The generated copies come first so an import resolves to a module that already carries its
-		// WGSL padding. A struct's own padding depends on its members' final sizes, so reflecting
-		// against the unpadded sources would undercount it for anything that embeds another struct.
-		// This module itself is loaded from its source text, never from its own generated copy.
+		// The generated copies come first, so an import resolves to the same module text the shaders
+		// see. This module itself is loaded from its source text, never from its own generated copy.
 		if (!slangOutDir.empty())
 		{
 			searchPaths.push_back(fs::absolute(slangOutDir).string());
@@ -1132,37 +1003,6 @@ main(int argc, char** argv)
 			return 1;
 		}
 
-		// A third session, on WGSL, for the one layout rule that target does not share: it rounds a
-		// struct's size up to its alignment. Reflected here so the padding lands in both mirrors.
-		slang::TargetDesc wgslTarget{};
-		wgslTarget.format                  = SLANG_WGSL;
-		slang::SessionDesc wgslSessionDesc = session;
-		wgslSessionDesc.targets            = &wgslTarget;
-		wgslSessionDesc.targetCount        = 1;
-
-		ComPtr<slang::ISession> wgslSlangSession;
-		diagnostics.setNull();
-		if (SLANG_FAILED(
-				globalSession->createSession(wgslSessionDesc, wgslSlangSession.writeRef())))
-		{
-			std::cerr << "error: failed to create WGSL-layout Slang session\n";
-			return 1;
-		}
-		slang::IModule* wgslModule = wgslSlangSession->loadModuleFromSourceString(
-			moduleLoadName.c_str(),
-			selfPath.string().c_str(),
-			source.c_str(),
-			diagnostics.writeRef());
-		ReportDiagnostics(diagnostics.get());
-		diagnostics.setNull();
-		slang::ProgramLayout* wgslLayout =
-			wgslModule ? wgslModule->getLayout(0, diagnostics.writeRef()) : nullptr;
-		if (!wgslLayout)
-		{
-			std::cerr << "error: failed to get WGSL program layout\n";
-			return 1;
-		}
-
 		std::vector<slang::DeclReflection*> decls;
 		CollectStructDecls(module->getModuleReflection(), decls);
 
@@ -1171,8 +1011,7 @@ main(int argc, char** argv)
 		std::vector<StructInfo>       structs;
 		for (slang::DeclReflection* decl : decls)
 		{
-			structs.push_back(
-				ReflectStruct(decl, layout, scalarLayout, wgslLayout, referenced, enumSizes));
+			structs.push_back(ReflectStruct(decl, layout, scalarLayout, referenced, enumSizes));
 		}
 
 		std::vector<EnumInfo> enums = ParseEnums(source);
@@ -1202,9 +1041,7 @@ main(int argc, char** argv)
 		if (!slangOutDir.empty())
 		{
 			const fs::path slangOut = fs::path(slangOutDir) / rel;
-			WriteFile(
-				slangOut,
-				Banner(rel.generic_string()) + "\n" + InjectWgslPadding(source, structs));
+			WriteFile(slangOut, Banner(rel.generic_string()) + "\n" + source);
 		}
 
 		if (structs.empty() && enums.empty() && constants.empty())
