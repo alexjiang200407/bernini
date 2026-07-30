@@ -118,10 +118,23 @@ def summarize_review(r):
 
 
 def summarize_comment(c):
+    """One comment, flattened.
+
+    `path` is set only on an inline comment, and is what tells them apart: an inline one belongs to
+    a review thread and must be answered in it, which needs `replyTo` --
+
+        gh api repos/{owner}/{repo}/pulls/{n}/comments/{replyTo}/replies -f body="..."
+
+    A `gh pr comment` answer to an inline comment leaves its thread unresolved and the answer
+    detached from the question, so the id is carried here rather than left to a second lookup.
+    """
     return {
         "author": (c.get("author") or {}).get("login") or (c.get("user") or {}).get("login"),
         "createdAt": c.get("createdAt") or c.get("created_at"),
         "path": c.get("path"),  # inline comments only; None for issue comments
+        "line": c.get("line") or c.get("original_line"),
+        "replyTo": c.get("id"),  # inline only; the id to reply under
+        "url": c.get("html_url") or c.get("url"),
         "body": c.get("body", ""),
     }
 

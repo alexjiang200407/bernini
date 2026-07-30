@@ -216,6 +216,22 @@ just watch-pr <n> --since 2026-07-29T13:13:22Z
 Nothing watches the PR while you revise, and a plain restart folds anything that arrived meanwhile
 into its baseline — never reported, never acted on.
 
+`--since` sets the *baseline* only: anything that arrives after the watcher starts is new, including
+your own reply. Post the reply first and start the watcher after it, or the watcher fires on it and
+the turn is spent reading yourself.
+
+**Answer an inline comment inside its thread.** An event whose `path` is set came from a review
+thread anchored to a file and line, and it carries the `replyTo` id to answer under:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{n}/comments/{replyTo}/replies -f body="..."
+```
+
+`gh pr comment` is for an event with `path: null` — a top-level comment — and for the summary that
+follows a batch of replies. Using it for an inline comment leaves the reviewer's thread unresolved
+and puts the answer where the question is not, so they have to hunt for it. The `path` field is the
+routing decision, not decoration.
+
 **Do not write to a PR that has no review on it.** Reporting goes to the user in chat; a description
 of your own change belongs in the PR **body**, not a comment. Comments answer review feedback, and
 then as the bot — export `GH_TOKEN` from
