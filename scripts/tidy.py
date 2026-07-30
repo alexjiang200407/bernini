@@ -138,8 +138,8 @@ def changed(ref):
 def compile_db_dir(build_dir, wanted=()):
     """A build directory holding compile_commands.json, or None.
 
-    Several build dirs can have one -- a DX12 and a WebGPU Ninja preset, say -- and they
-    do not compile the same files. Prefer a database that actually covers `wanted`,
+    Several build dirs can have one -- a Windows DX12 and a backend-less macOS preset, say --
+    and they do not compile the same files. Prefer a database that actually covers `wanted`,
     because clang-tidy given a file its database has never heard of does not fail: it
     falls back to no flags at all, and then reports the whole translation unit as
     incompatible with C++98 rather than saying it had no compile command.

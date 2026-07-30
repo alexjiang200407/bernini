@@ -80,13 +80,6 @@
       }
     },
     {
-      "name": "webgpu",
-      "hidden": true,
-      "cacheVariables": {
-        "RENDERER_BACKEND": "WEBGPU"
-      }
-    },
-    {
       "name": "msvc",
       "hidden": true,
       "cacheVariables": {
@@ -227,14 +220,13 @@
       }
     },
     {
-      "name": "macos-clang-webgpu-debug",
-      "displayName": "macOS Clang Debug ninja - WebGPU (Dawn native)",
-      "binaryDir": "${sourceDir}/build/macos-webgpu-debug",
+      "name": "macos-clang-debug",
+      "displayName": "macOS Clang Debug ninja - no backend (core + assetlib)",
+      "binaryDir": "${sourceDir}/build/macos-debug",
       "inherits": [
         "vcpkg",
         "macos",
         "clang",
-        "webgpu",
         "debug"
       ],
       "cacheVariables": {
@@ -243,47 +235,13 @@
       }
     },
     {
-      "name": "macos-clang-webgpu-release",
-      "displayName": "macOS Clang Release ninja - WebGPU (Dawn native)",
-      "binaryDir": "${sourceDir}/build/macos-webgpu-release",
+      "name": "macos-clang-release",
+      "displayName": "macOS Clang Release ninja - no backend (core + assetlib)",
+      "binaryDir": "${sourceDir}/build/macos-release",
       "inherits": [
         "vcpkg",
         "macos",
         "clang",
-        "webgpu",
-        "release"
-      ],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-ninja-msvc-webgpu-debug",
-      "displayName": "Windows MSVC Debug ninja - WebGPU (Dawn native)",
-      "binaryDir": "${sourceDir}/build/ninja-msvc-webgpu-debug",
-      "inherits": [
-        "vcpkg",
-        "windows",
-        "ninja",
-        "msvc",
-        "webgpu",
-        "debug"
-      ],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "BERNINI_BUILD_EXAMPLES": "OFF"
-      }
-    },
-    {
-      "name": "windows-ninja-msvc-webgpu-release",
-      "displayName": "Windows MSVC Release ninja - WebGPU (Dawn native)",
-      "binaryDir": "${sourceDir}/build/ninja-msvc-webgpu-release",
-      "inherits": [
-        "vcpkg",
-        "windows",
-        "ninja",
-        "msvc",
-        "webgpu",
         "release"
       ],
       "cacheVariables": {
@@ -331,22 +289,12 @@
       "configurePreset": "windows-clang-dx12-release"
     },
     {
-      "name": "macos-clang-webgpu-debug",
-      "configurePreset": "macos-clang-webgpu-debug"
+      "name": "macos-clang-debug",
+      "configurePreset": "macos-clang-debug"
     },
     {
-      "name": "macos-clang-webgpu-release",
-      "configurePreset": "macos-clang-webgpu-release"
-    },
-    {
-      "name": "windows-ninja-msvc-webgpu-debug",
-      "configurePreset": "windows-ninja-msvc-webgpu-debug",
-      "configuration": "Debug"
-    },
-    {
-      "name": "windows-ninja-msvc-webgpu-release",
-      "configurePreset": "windows-ninja-msvc-webgpu-release",
-      "configuration": "Release"
+      "name": "macos-clang-release",
+      "configurePreset": "macos-clang-release"
     }
   ]
 }
