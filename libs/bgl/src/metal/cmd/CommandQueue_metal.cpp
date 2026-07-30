@@ -103,7 +103,7 @@ namespace bgl
 	CommandQueue::BeginCommandBuffer(MTL::CommandBuffer* cmdBuffer) noexcept
 	{
 		for (const PendingWait& wait : m_PendingWaits)
-			cmdBuffer->encodeWait(wait.event.get(), wait.value);
+			cmdBuffer->encodeWait(wait.event.get(), wait.fenceValue);
 		m_PendingWaits.clear();
 		++m_ListsBuilding;
 	}

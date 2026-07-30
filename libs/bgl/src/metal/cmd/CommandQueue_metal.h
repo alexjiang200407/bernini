@@ -79,7 +79,7 @@ namespace bgl
 		struct PendingWait
 		{
 			NS::SharedPtr<MTL::SharedEvent> event;
-			uint64_t                        value = 0;
+			uint64_t                        fenceValue = 0;
 		};
 
 		NS::SharedPtr<MTL::CommandQueue> m_Queue;
