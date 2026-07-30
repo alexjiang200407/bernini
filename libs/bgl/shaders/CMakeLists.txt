@@ -13,49 +13,6 @@ endif()
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-# The WebGPU backend compiles the compute kernels to WGSL as a build-time check -- slangc fails
-# the build on any construct its WGSL target rejects (the migrations tracked in the port plan's
-# W2). Tint-level validation (constructs slangc emits but Dawn rejects) is a separate gate through
-# wgpuDeviceCreateShaderModule, not slangc, because this Slang build has no Tint linked. The raw
-# Slang sources are staged so the runtime session can load and compile modules to WGSL on device.
-if(RENDERER_BACKEND STREQUAL "WEBGPU")
-    foreach(KERNEL PrefixSumInstances TransparentSort TransparentDepthKeys HistogramInstances
-                   CompactInstances CullInstances ExpandMeshlets HistogramMeshlets MeshletDrawArgs)
-        compile_shader(
-            FILE     "${CMAKE_CURRENT_SOURCE_DIR}/src/${KERNEL}.slang"
-            OUT_DIR  "${SHADER_OUT_DIR}"
-            TARGET   "wgsl"
-            STAGE    "cs_6_6"
-            INCLUDES ${SLANG_SOURCE_ROOT}
-        )
-    endforeach()
-
-    add_custom_target(bgl_compile_shaders ALL
-        DEPENDS ${SLANG_COMPILE_OUTS}
-    )
-
-    add_custom_target(bgl_copy_shader_src ALL
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/src"
-                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
-        COMMENT "Copying raw Slang sources to the runtime output layout"
-        VERBATIM
-    )
-
-    if(BUILD_TESTS)
-        add_custom_target(bgl_copy_shader_tests ALL
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${CMAKE_CURRENT_SOURCE_DIR}/tests"
-                    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
-            COMMENT "Copying raw Slang test sources to the runtime output layout"
-            VERBATIM
-        )
-    endif()
-
-    return()
-endif()
 
 compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
