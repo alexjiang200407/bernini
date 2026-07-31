@@ -3,10 +3,15 @@
 
 namespace bgl
 {
-	// A GPU descriptor handle is a uint2. Under the ScalarDataLayout an EntryBuffer<T> uses, it is
-	// 4-aligned, matching two bare uint32_t here; idlgen reflects that same layout, so the generated
-	// offsetof/sizeof asserts pin the two together.
+	// A GPU descriptor handle is a uint2. D3D12 reads it as ordinary data under the ScalarDataLayout
+	// an EntryBuffer<T> uses, so it is 4-aligned there, matching two bare uint32_t. Metal reads the
+	// same eight bytes as a device pointer or an MTLResourceID, which MSL aligns to 8 -- so the
+	// mirror has to as well, or every member after one in a GPU struct lands somewhere else.
+#if defined(RENDERER_BACKEND_METAL)
+	class alignas(8) DescriptorHandle
+#else
 	class DescriptorHandle
+#endif
 	{
 	public:
 		DescriptorHandle() = default;
