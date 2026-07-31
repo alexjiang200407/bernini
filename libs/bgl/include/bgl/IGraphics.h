@@ -57,6 +57,11 @@ namespace bgl
 		// Directory for the persistent shader cache. Empty disables caching.
 		std::string shaderCacheDir;
 
+		// Writes the first frame to a .gputrace bundle at this path. Metal only; empty disables it.
+		// Needs MTL_CAPTURE_ENABLED=1 in the environment -- Metal refuses to capture without it, and
+		// the process must set it before it creates its device, so bgl cannot set it for you.
+		std::string gpuCapturePath;
+
 		// Capacities for the graphics-owned descriptor heaps / resource pools.
 		uint32_t maxCbvSrvUavs      = 1000;
 		uint32_t maxRtvs            = 8;
