@@ -14,12 +14,86 @@ namespace fs = std::filesystem;
 
 namespace bgl
 {
+	namespace
+	{
+		/**
+		 * Writes one frame to a .gputrace bundle, which Xcode's Metal debugger opens. Capturing
+		 * needs no Xcode; only reading the result does, so a machine with Command Line Tools alone
+		 * can still produce the trace.
+		 */
+		class FrameCapture
+		{
+		public:
+			// @pre MTL_CAPTURE_ENABLED=1 was set before the process created its device; Metal
+			//      otherwise refuses, and this throws rather than leave the caller with no trace and
+			//      no reason.
+			void
+			Begin(MTL::Device* device, const std::string& path)
+			{
+				MTL::CaptureManager* manager = MTL::CaptureManager::sharedCaptureManager();
+				if (!manager->supportsDestination(MTL::CaptureDestinationGPUTraceDocument))
+				{
+					// Metal reports the destination as unsupported rather than naming the reason,
+					// and by far the usual one is the environment, not the device.
+					core::throw_runtime_error(
+						"gpuCapturePath is set but Metal will not write a .gputrace. Set "
+						"MTL_CAPTURE_ENABLED=1 in the environment before running.");
+				}
+
+				std::error_code ec;
+				fs::remove_all(path, ec);
+
+				NS::SharedPtr<MTL::CaptureDescriptor> desc =
+					NS::TransferPtr(MTL::CaptureDescriptor::alloc()->init());
+				desc->setCaptureObject(device);
+				desc->setDestination(MTL::CaptureDestinationGPUTraceDocument);
+				desc->setOutputURL(
+					NS::URL::fileURLWithPath(
+						NS::String::string(path.c_str(), NS::UTF8StringEncoding)));
+
+				NS::Error* error = nullptr;
+				if (!manager->startCapture(desc.get(), &error))
+				{
+					core::throw_runtime_error(
+						"Metal frame capture failed to start: {}",
+						error != nullptr ? error->localizedDescription()->utf8String() :
+										   "no reason given");
+				}
+				m_Active = true;
+			}
+
+			void
+			End(const std::string& path) noexcept
+			{
+				if (!m_Active)
+					return;
+				MTL::CaptureManager::sharedCaptureManager()->stopCapture();
+				m_Active = false;
+				m_Done   = true;
+				logger::info("Metal frame capture written to {}", path);
+			}
+
+			[[nodiscard]] bool
+			Wanted() const noexcept
+			{
+				return !m_Done && !m_Active;
+			}
+
+			[[nodiscard]] bool
+			Active() const noexcept
+			{
+				return m_Active;
+			}
+
+		private:
+			bool m_Active = false;
+			bool m_Done   = false;
+		};
+	}
+
 	/**
-	 * The Metal façade. Owns the device, the resource manager and the submission queue.
-	 *
-	 * The frame path is not wired: RenderContext builds every renderer PSO in its constructor, which
-	 * needs the meshlet pipelines, so it cannot be constructed until those land. Everything below
-	 * GetDevice/GetResourceManagerCpy therefore throws.
+	 * The Metal façade. Owns the device, the resource manager and the submission queue, and forwards
+	 * the frame path to a RenderContext.
 	 */
 	class Graphics final : public core::RefCounter<GraphicsBase>
 	{
@@ -108,6 +182,9 @@ namespace bgl
 		void
 		BeginFrame(const RenderTargetRef& target) override
 		{
+			if (!m_Opts.gpuCapturePath.empty() && m_Capture.Wanted())
+				m_Capture.Begin(m_Device->As<Device>()->GetMTLDevice(), m_Opts.gpuCapturePath);
+
 			m_Context->BeginFrame(target);
 		}
 
@@ -121,6 +198,10 @@ namespace bgl
 		EndFrame() override
 		{
 			m_Context->EndFrame();
+
+			// After EndFrame, so the trace holds a submitted frame rather than a half-recorded one.
+			if (m_Capture.Active())
+				m_Capture.End(m_Opts.gpuCapturePath);
 		}
 
 		void
@@ -176,6 +257,7 @@ namespace bgl
 			"Metal backend: the frame path is not implemented yet";
 
 		GraphicsOptions                    m_Opts;
+		FrameCapture                       m_Capture;
 		NS::SharedPtr<NS::AutoreleasePool> m_Pool;
 		DeviceRef                          m_Device;
 		ResourceManagerRef                 m_ResourceManager;
