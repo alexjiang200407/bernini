@@ -149,6 +149,13 @@ namespace bgl
 		bool
 		IsTextureCube(const TextureHandle& handle) const noexcept override;
 
+		[[nodiscard]] DescriptorHandle
+		ResolveDescriptor(const TextureHandle& handle) const noexcept override
+		{
+			// The shader indexes the descriptor heap with it, so the slot is already the descriptor.
+			return DescriptorHandle(handle.slot);
+		}
+
 		[[nodiscard]]
 		bool
 		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;

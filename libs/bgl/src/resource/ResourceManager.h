@@ -181,6 +181,19 @@ namespace bgl
 		[[nodiscard]] virtual bool
 		IsTextureCube(const TextureHandle& handle) const noexcept = 0;
 
+		/**
+		 * The descriptor a GPU struct must carry for a shader to reach this texture.
+		 *
+		 * A handle bound through a constant buffer is rewritten per dispatch, but one *stored inside*
+		 * GPU memory -- a material's texture, say -- is only ever written once, by the CPU, and the
+		 * shader dereferences whatever it finds. What that has to be is the backend's business: a
+		 * descriptor-heap index on D3D12, the native resource id on Metal.
+		 *
+		 * @param handle a valid texture handle; a null one resolves to a null descriptor.
+		 */
+		[[nodiscard]] virtual DescriptorHandle
+		ResolveDescriptor(const TextureHandle& handle) const noexcept = 0;
+
 		[[nodiscard]] virtual bool
 		ValidSamplerHandle(const SamplerHandle& handle) const noexcept = 0;
 

@@ -272,6 +272,7 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
+		m_LiveTexturesDirty = true;
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
 		const auto slot = m_Textures.try_allocate_and_emplace(m_Device, desc);
@@ -301,6 +302,7 @@ namespace bgl
 	void
 	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
+		m_LiveTexturesDirty = true;
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
@@ -516,6 +518,34 @@ namespace bgl
 
 		MTL::Texture* texture = m_Textures[GetDsvTexture(handle).slot].GetMTLResource();
 		cmdList->As<CommandList>()->ClearDepthStencil(texture, depth, stencil);
+	}
+
+	DescriptorHandle
+	ResourceManager::ResolveDescriptor(const TextureHandle& handle) const noexcept
+	{
+		if (!ValidTextureHandle(handle))
+			return {};
+
+		return DescriptorHandle::FromNative(
+			m_Textures[handle.slot].GetMTLResource()->gpuResourceID()._impl);
+	}
+
+	std::span<MTL::Resource* const>
+	ResourceManager::GetLiveTextureResources() noexcept
+	{
+		// A texture whose id a shader reads out of GPU memory is invisible to the encoder, so the
+		// encoder is told about all of them. Rebuilt only when the pool changes, not per draw.
+		if (m_LiveTexturesDirty)
+		{
+			m_LiveTextures.clear();
+			for (uint32_t i = 0; i < m_Textures.capacity(); ++i)
+			{
+				if (m_Textures.allocated(i) && !m_Textures[i].IsNull())
+					m_LiveTextures.push_back(m_Textures[i].GetMTLResource());
+			}
+			m_LiveTexturesDirty = false;
+		}
+		return m_LiveTextures;
 	}
 
 	bool
