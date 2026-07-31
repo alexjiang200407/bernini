@@ -493,6 +493,21 @@ namespace bgl
 				enc->setObjectBytes(bytes, size, entry.rootParamIndex);
 		}
 
+		if (auto it = m_MeshletState.kernel->uniforms.find("gDebug");
+		    it != m_MeshletState.kernel->uniforms.end())
+		{
+			uint64_t     address = 0;
+			MTL::Buffer* debug   = ActiveDebugBuffer(address);
+			if (debug != nullptr)
+				enc->useResource(debug, MTL::ResourceUsageRead | MTL::ResourceUsageWrite, stages);
+
+			const uint32_t index = pipeline->GetUniformLayoutEntry("gDebug").rootParamIndex;
+			enc->setMeshBytes(&address, sizeof(address), index);
+			enc->setFragmentBytes(&address, sizeof(address), index);
+			if (hasObject)
+				enc->setObjectBytes(&address, sizeof(address), index);
+		}
+
 		// Single viewport/scissor only; multi-viewport (setViewports + a viewport-index shader) lands
 		// if a pass ever needs it.
 		const auto& viewports = m_MeshletState.viewportState.viewports;
@@ -550,6 +565,23 @@ namespace bgl
 			draw.pipeline->GetThreadsPerMeshThreadgroup());
 	}
 
+	MTL::Buffer*
+	CommandList::ActiveDebugBuffer(uint64_t& outAddress) const noexcept
+	{
+		outAddress = 0;
+#if defined(BERNINI_GPU_DEBUG)
+		if (m_ActiveDebugBuffer.IsNull())
+			return nullptr;
+
+		auto*        rm     = m_ResourceManager->As<ResourceManager>();
+		MTL::Buffer* buffer = rm->GetBuffer(m_ActiveDebugBuffer).GetMTLResource();
+		outAddress          = buffer->gpuAddress();
+		return buffer;
+#else
+		return nullptr;
+#endif
+	}
+
 	void
 	CommandList::SetComputeState(const ComputeState& computeState) noexcept
 	{
@@ -578,6 +610,19 @@ namespace bgl
 				enc->useResource(resource, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
 
 			enc->setBytes(mapped.bytes.data(), mapped.bytes.size(), entry.rootParamIndex);
+		}
+
+		if (auto it = m_ComputeState.kernel->uniforms.find("gDebug");
+		    it != m_ComputeState.kernel->uniforms.end())
+		{
+			uint64_t     address = 0;
+			MTL::Buffer* debug   = ActiveDebugBuffer(address);
+			if (debug != nullptr)
+				enc->useResource(debug, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
+			enc->setBytes(
+				&address,
+				sizeof(address),
+				pipeline->GetUniformLayoutEntry("gDebug").rootParamIndex);
 		}
 
 		enc->dispatchThreadgroups(MTL::Size(x, y, z), pipeline->GetThreadsPerThreadgroup());
