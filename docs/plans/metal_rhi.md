@@ -181,16 +181,44 @@ on every bind, but never into a struct buffer that outlives a frame.** Today onl
 written into GPU-resident structs (`Scene.cpp`, into the material buffer) and textures are never
 recreated in place, so the rule holds; the task that lands the seam adds an assertion that pins it.
 
-**D4. Reinstate idlgen's padding session, retargeted at Metal.**
-Finding 4 means the four generated structs must grow again. 3b4ecc1 removed the third Slang session
-and `InjectWgslPadding` cleanly and recently, so the mechanism is recoverable with
-`SLANG_WGSL` → `SLANG_METAL` and a rename — the machinery was never WGSL-specific, only its target
-was. *Rejected:* hand-writing `pad` members into the `.slang` IDL sources. It needs no third session,
-but it makes every future IDL struct's correctness a thing an author has to remember, and gets it
-wrong silently; a session that computes the stride cannot. *Also rejected:* a Metal-only struct
-layout — the CPU writes these structs, so both mirrors must agree with the shader on all backends.
+**D4. Each backend keeps its own struct layout; nothing is padded to a common one.**
+*Rewritten in task 5, twice, by measurement.* The plan first said to reinstate idlgen's padding
+session against `SLANG_METAL`. That fails twice over: Slang's Metal reflection reports a resource
+handle as **zero** ordinary-data bytes (finding 3 again — its categories count bindings, not bytes),
+so the padding never fires for the structs that need it; and padding at all forces D3D12 onto Metal's
+wider layout, making the shipping backend pay a ~30% wider `LoosePbrMaterial` for nothing it uses.
 
-This task changes the bytes D3D12 shaders read. See "What could break".
+Instead the generated C++ headers are a **build artifact**, one per build directory, each carrying
+the layout of the backend it was configured for. Then no padding is needed anywhere:
+
+- `alignas(8)` on `DescriptorHandle` under Metal makes the C++ mirror match MSL by itself —
+  `ChannelSource` 16, `PbrMaterial` 64, `LoosePbrMaterial` 176.
+- `alignas(16)` emitted on `Mesh` gives `sizeof` 80 with no member added.
+- Nothing else diverges: every `float2` in the IDL is a function parameter, never a member, so no
+  interior offset moves.
+
+idlgen keeps a computed MSL layout (`MslLayoutOf`) — Slang cannot supply one — but only to choose a
+struct's alignment and its `static_assert` values for the target being built. It never invents a
+member, so a wrong computation fails the build loudly instead of silently mislaying bytes.
+
+*Rejected:* hand-written `pad` members in the `.slang` sources — correctness every future author has
+to remember, and wrong silently. *Rejected:* one header carrying both layouts under `#if` — needs no
+per-build generation, but puts two ABIs in one file for a problem the build directory already solves.
+
+**The public headers are the exception, and the one place this can still go wrong.**
+`IDL_PUBLIC_CPP_SOURCES` (`MaterialType`, `PsoType`) is emitted into `libs/bgl/include/bgl` and stays
+**committed**, because a consumer includes `<bgl/...>` without building bgl. That is only safe while
+those modules stay backend-identical, and today they are — both are enums with an explicit underlying
+type, plus one constant, which no target lays out differently.
+
+Nothing enforced it, and the failure would be silent in a particular way: a generated header's
+`static_assert`s are derived from the same layout as its struct, so they agree with themselves. A
+D3D12 build compiling against a committed Metal-layout public header would pass its own asserts and
+read at the wrong offsets. So **idlgen refuses to emit a public header for a struct whose Metal
+layout differs from its C/C++ one** — comparing size, alignment and every field offset. *Rejected:*
+barring structs from public modules outright; simpler, and enforceable without the computation, but
+it would also forbid a genuinely identical one such as `struct Range { uint32_t offset, count; }`.
+The check is the only thing that would ever report this, because the header cannot contradict itself.
 
 **D5. `MTLSharedEvent` is the fence.**
 It is monotonic, signalable from a command buffer, waitable from the CPU and from another queue's
@@ -287,7 +315,7 @@ before there is a resource, nothing drawn before there is a pipeline.
 | 2 | Submission brought up to today's RHI: `MTLSharedEvent` as the timeline (D5), `Flush`, and the encoder state machine (D8) the restored `CommandList` predates. | a fence-ordering test: submit, CPU wait, cross-queue GPU wait, poll |
 | 3 | Deferred destruction against N registered timelines, replacing task 1's never-reclaim placeholder. `WriteBufferSlice` and `CopyBuffer` needed nothing: the first is a non-virtual helper over `WriteBuffer`, the second landed in task 1. | `MultiQueueDeletion_test` — `MeshDelete_test` needs `Scene`, so it moves to task 6 |
 | 4 | `IShader` + `IComputePipeline`: the restored `MetalPipelineReflection` reconciled with today's `ReflectedLayout`, and the `Kind::Resource` arm in `SlangReflection.cpp`. Finding 3 is already handled by the restored `MetalizeLayout`; this task verifies it still is. | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
-| 5 | idlgen's padding session, retargeted at Metal (D4). Four struct strides change on **both** backends. | generated `static_assert`s regenerate and compile on both presets; `assetlib_tests`; Windows CI compiles |
+| 5 | Each backend's own layout. **5a** `float4` bounding sphere + an idlgen check refusing 3-component members (#188). **5b-i** generated C++ headers move to the build tree (#190). **5b-ii** `alignas` on `DescriptorHandle` and on the structs that need it, plus the public-header guard (D4). | Both presets build and pass; a public module gaining a divergent struct fails generation |
 | 6 | `ResolveDescriptor` on `IResourceManager` and its six call sites (D3), plus the assertion pinning the no-caching invariant. Brings the residency set (D7) and real `memoryBarrier`s (D6) with it, because a handle inside a struct buffer is exactly what `useResource` cannot reach. | `MeshDelete_test`, and the engine's kernels still green: `HistogramInstances_test`, `CompactInstances_test`, `TransparentSort_test` |
 | 7 | Textures and samplers: `WriteTexture` (the one `gunimplemented` left in the restored list), `GetTextureDesc`, deferred clears (D9) replacing the restored empty-pass clear, `D24S8` remap (D10). | `TextureSample_test`, `MaterialTextureDelete_test` |
 | 8 | `IMeshletPipeline` and the render encoder: the restored per-stage MSL compilation carried to the engine's real forward shaders, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
@@ -302,16 +330,20 @@ are the ones a reviewer should read hardest.
 
 ## What could break
 
-**The D3D12 render path, in task 5, unverifiably.** Four GPU struct strides move. The generated
-`static_assert`s move with them, so they agree by construction and prove nothing; a shader still
-addressing a 52-byte `PbrMaterial` would compile, run, and draw the wrong thing. There is no D3D12
-device on this machine and the Windows CI leg builds without running.
+**The D3D12 render path — much less than this plan first said.** The original fear was task 5 moving
+four GPU struct strides on both backends, unverifiably: the generated `static_assert`s move with the
+layout, so they agree by construction and prove nothing, and a shader still addressing a 52-byte
+`PbrMaterial` would compile, run and draw the wrong thing.
 
-This was raised and the decision is to accept it: compile-only is the gate, and the D3D12 render path
-carries unverified layout changes until someone runs `just test bgl_tests` on Windows. Recording it
-here so that a later D3D12 rendering bug has an obvious first suspect. Two things make it cheaper than
-it sounds — the same change was already made once in the opposite direction (#180) and reviewed, and
-`git show 3b4ecc1` is the diff to invert.
+D4's rewrite removes that. Each backend now generates its own layout into its own build directory, so
+**task 5 changes no D3D12 byte at all** — `ChannelSource` stays 12 there, `LoosePbrMaterial` 136.
+What D3D12 does carry from this branch is smaller and enumerable: the `float4 boundingSphere` merge
+(#188, same offsets, two lines of `CullInstances.slang` re-spelled), the un-numbered interpolant
+semantics that task 8 needs, and the per-target pad in `Uniforms_test` (zero on that path).
+
+Still unverified, because there is no D3D12 device here and the Windows CI leg compiles without
+running. But the exposure is now a short list of deliberate edits rather than a silent layout shift,
+and the generated asserts are no longer the thing being asked to prove it.
 
 **Golden images on a second backend.** Metal's rasterisation rules, blend precision and depth
 resolution are not D3D12's, and task 8 is the first time a golden PNG is compared against a Metal
