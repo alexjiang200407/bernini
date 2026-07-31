@@ -306,6 +306,11 @@ list is invisible. A skip list makes coverage the default and opting out the del
 
 ## The tasks, in order, and the gate for each
 
+*Tasks 6 and 7 were swapped during task 6.* The descriptor seam has no live consumer until `Scene`
+runs on Metal — `GetDescriptorHandle()` has no callers at all, and the three texture sites are
+reachable only through `Scene`, which needs `CreateSampler` and `WriteTexture`. Building the seam
+first would have been a mechanism nothing could exercise.
+
 Order follows the dependency direction: nothing may be recorded before there is a list, nothing bound
 before there is a resource, nothing drawn before there is a pipeline.
 
@@ -316,8 +321,8 @@ before there is a resource, nothing drawn before there is a pipeline.
 | 3 | Deferred destruction against N registered timelines, replacing task 1's never-reclaim placeholder. `WriteBufferSlice` and `CopyBuffer` needed nothing: the first is a non-virtual helper over `WriteBuffer`, the second landed in task 1. | `MultiQueueDeletion_test` — `MeshDelete_test` needs `Scene`, so it moves to task 6 |
 | 4 | `IShader` + `IComputePipeline`: the restored `MetalPipelineReflection` reconciled with today's `ReflectedLayout`, and the `Kind::Resource` arm in `SlangReflection.cpp`. Finding 3 is already handled by the restored `MetalizeLayout`; this task verifies it still is. | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
 | 5 | Each backend's own layout. **5a** `float4` bounding sphere + an idlgen check refusing 3-component members (#188). **5b-i** generated C++ headers move to the build tree (#190). **5b-ii** `alignas` on `DescriptorHandle` and on the structs that need it, plus the public-header guard (D4). | Both presets build and pass; a public module gaining a divergent struct fails generation |
-| 6 | `ResolveDescriptor` on `IResourceManager` and its six call sites (D3), plus the assertion pinning the no-caching invariant. Brings the residency set (D7) and real `memoryBarrier`s (D6) with it, because a handle inside a struct buffer is exactly what `useResource` cannot reach. | `MeshDelete_test`, and the engine's kernels still green: `HistogramInstances_test`, `CompactInstances_test`, `TransparentSort_test` |
-| 7 | Textures and samplers: `WriteTexture` (the one `gunimplemented` left in the restored list), `GetTextureDesc`, deferred clears (D9) replacing the restored empty-pass clear, `D24S8` remap (D10). | `TextureSample_test`, `MaterialTextureDelete_test` |
+| 6 | Textures and samplers: `WriteTexture` (the one `gunimplemented` left in the restored list), `GetTextureDesc`, deferred clears (D9) replacing the restored empty-pass clear, `D24S8` remap (D10). | `TextureSample_test`, `MaterialTextureDelete_test` |
+| 7 | `ResolveDescriptor` on `IResourceManager` and its six call sites (D3), plus the assertion pinning the no-caching invariant. Brings the residency set (D7) and real `memoryBarrier`s (D6) with it, because a handle inside a struct buffer is exactly what `useResource` cannot reach. | `MeshDelete_test`, and the engine's kernels still green: `HistogramInstances_test`, `CompactInstances_test`, `TransparentSort_test` |
 | 8 | `IMeshletPipeline` and the render encoder: the restored per-stage MSL compilation carried to the engine's real forward shaders, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
 | 9 | The headless render target: frame ring, backbuffers, depth, motion vectors, `PresentAndAdvance`, `ResizeBackbuffers`, screenshot. | `PbrRender_test`, `Skybox_test`, `AlphaTest_test`, `Transparent_test`, `MotionVectors_test`, `Resize_test`, `Capture_test`, `MaterialOverrideRender_test` |
 | 10 | The windowed target: `CAMetalLayer` swapchain, drawable acquisition, resize on layer bounds change. | `examples/bgl_window`, `bgl_sphere` and `bgl_two_windows` render live; screenshots in the PR |

@@ -50,6 +50,5 @@ Shader cache is populated cold and reused warm without recompiling
 Skybox renders headlessly
 The first frame a view is drawn has no motion
 Translucent panes composite back-to-front regardless of creation order
-Transparent instances are keyed back-to-front and compacted
 bindless texture sample uploads and resolves end-to-end
 dbg_raise records a GPU assertion end-to-end

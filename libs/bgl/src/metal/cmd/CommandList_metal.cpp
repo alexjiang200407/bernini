@@ -272,6 +272,81 @@ namespace bgl
 	}
 
 	void
+	CommandList::ClearDepthStencil(MTL::Texture* texture, float depth, uint8_t stencil) noexcept
+	{
+		gassert(m_Open, "ClearDepthStencil on a closed command list");
+		EndEncoder();
+
+		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+
+		MTL::RenderPassDepthAttachmentDescriptor* d = pass->depthAttachment();
+		d->setTexture(texture);
+		d->setLoadAction(MTL::LoadActionClear);
+		d->setStoreAction(MTL::StoreActionStore);
+		d->setClearDepth(depth);
+
+		// Only a combined format carries stencil; attaching it to a depth-only texture is an error.
+		if (texture->pixelFormat() == MTL::PixelFormatDepth32Float_Stencil8)
+		{
+			MTL::RenderPassStencilAttachmentDescriptor* st = pass->stencilAttachment();
+			st->setTexture(texture);
+			st->setLoadAction(MTL::LoadActionClear);
+			st->setStoreAction(MTL::StoreActionStore);
+			st->setClearStencil(stencil);
+		}
+
+		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
+	}
+
+	void
+	CommandList::WriteTexture(
+		TextureHandle                           handle,
+		std::span<const TextureSubresourceData> subresources) noexcept
+	{
+		gassert(m_Open, "WriteTexture on a closed command list");
+		gassert(m_ResourceManager->ValidTextureHandle(handle), "WriteTexture on an invalid handle");
+
+		const Texture&     texture = m_ResourceManager->GetTexture(handle);
+		const TextureDesc& desc    = texture.GetDesc();
+		MTL::Texture*      dst     = texture.GetMTLResource();
+
+		const uint32_t bytesPerPixel = FormatBytesPerPixel(desc.format);
+
+		// One staging buffer per subresource, blitted on the GPU timeline so the upload orders ahead
+		// of whatever samples it. The command buffer retains each until it completes.
+		auto* blit = BlitEncoder();
+		for (size_t i = 0; i < subresources.size(); ++i)
+		{
+			const TextureSubresourceData& sub = subresources[i];
+			if (sub.data == nullptr)
+				continue;
+
+			const uint32_t mip    = static_cast<uint32_t>(i % desc.mipLevels);
+			const uint32_t slice  = static_cast<uint32_t>(i / desc.mipLevels);
+			const uint32_t width  = std::max(1u, desc.width >> mip);
+			const uint32_t height = std::max(1u, desc.height >> mip);
+
+			const uint64_t rowPitch =
+				sub.rowPitch != 0 ? sub.rowPitch : static_cast<uint64_t>(width) * bytesPerPixel;
+			const uint64_t byteSize = rowPitch * height;
+
+			auto staging = NS::TransferPtr(
+				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));
+
+			blit->copyFromBuffer(
+				staging.get(),
+				0,
+				rowPitch,
+				byteSize,
+				MTL::Size(width, height, 1),
+				dst,
+				slice,
+				mip,
+				MTL::Origin(0, 0, 0));
+		}
+	}
+
+	void
 	CommandList::BeginEvent(std::string_view name) noexcept
 	{
 		m_CmdBuffer->pushDebugGroup(

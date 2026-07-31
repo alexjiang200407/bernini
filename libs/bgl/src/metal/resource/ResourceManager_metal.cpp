@@ -8,7 +8,8 @@ namespace bgl
 {
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc) :
 		m_Device(device), m_Buffers(desc.maxCbvSrvUavs), m_Readbacks(desc.maxReadbackBuffers),
-		m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs)
+		m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs),
+		m_Samplers(desc.maxSamplers)
 	{
 		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
 		// built with no capacity grows by emplace_back, which moves its storage out from under a
@@ -17,6 +18,8 @@ namespace bgl
 		gassert(desc.maxTextures > 0, "maxTextures must be greater than zero");
 		gassert(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
+		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
+		gassert(desc.maxSamplers > 0, "maxSamplers must be greater than zero");
 	}
 
 	BufferHandle
@@ -202,6 +205,12 @@ namespace bgl
 			case PendingType::kRtv:
 				m_Rtvs.reclaim_slot(pending.slotIndex);
 				break;
+			case PendingType::kDsv:
+				m_Dsvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kSampler:
+				m_Samplers.reclaim_slot(pending.slotIndex);
+				break;
 			}
 		};
 
@@ -380,5 +389,128 @@ namespace bgl
 
 		MTL::Texture* texture = GetTexture(GetRtv(handle).GetTextureHandle()).GetMTLResource();
 		cmdList->As<CommandList>()->ClearRenderTarget(texture, clearVal);
+	}
+}
+
+namespace bgl
+{
+	SamplerHandle
+	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
+		const auto slot = m_Samplers.try_allocate_and_emplace(m_Device, desc);
+		if (slot.is_null())
+		{
+			logger::error("CreateSampler: sampler pool exhausted");
+			return SamplerHandle{};
+		}
+		return SamplerHandle{ slot.index, slot.generation };
+	}
+
+	void
+	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
+
+		if (deferred)
+		{
+			m_Samplers.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kSampler, handle.idx);
+		}
+		else
+		{
+			m_Samplers.release_slot(handle.idx);
+		}
+	}
+
+	const Sampler&
+	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
+	{
+		gassert(ValidSamplerHandle(handle), "Invalid sampler handle");
+		return m_Samplers[handle.idx];
+	}
+
+	bool
+	ResourceManager::ValidSamplerHandle(const SamplerHandle& handle) const noexcept
+	{
+		return !handle.IsNull() && m_Samplers.valid(handle.idx, handle.generation) &&
+		       !m_Samplers[handle.idx].IsNull();
+	}
+
+	DsvHandle
+	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
+	{
+		gassert(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		const auto                  slot = m_Dsvs.try_allocate_and_emplace(desc, textureHandle);
+		if (slot.is_null())
+		{
+			logger::error("CreateDsv '{}': DSV pool exhausted", desc.debugName);
+			return DsvHandle{};
+		}
+		return DsvHandle{ slot.index, slot.generation };
+	}
+
+	void
+	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(ValidDsvHandle(handle), "Cannot destroy invalid DSV handle");
+
+		// Like an RTV, a DSV owns no allocation -- it names a texture -- so only its slot is gated.
+		if (deferred)
+		{
+			m_Dsvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kDsv, handle.idx);
+		}
+		else
+		{
+			m_Dsvs.release_slot(handle.idx);
+		}
+	}
+
+	const Dsv&
+	ResourceManager::GetDsv(DsvHandle handle) const noexcept
+	{
+		gassert(ValidDsvHandle(handle), "Invalid DSV handle");
+		return m_Dsvs[handle.idx];
+	}
+
+	TextureHandle
+	ResourceManager::GetDsvTexture(DsvHandle handle) const noexcept
+	{
+		return GetDsv(handle).GetTextureHandle();
+	}
+
+	bool
+	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const noexcept
+	{
+		return !handle.IsNull() && m_Dsvs.valid(handle.idx, handle.generation) &&
+		       !m_Dsvs[handle.idx].IsNull();
+	}
+
+	void
+	ResourceManager::ClearDsv(
+		ICommandList* cmdList,
+		DsvHandle     handle,
+		float         depth,
+		uint8_t       stencil) noexcept
+	{
+		gassert(ValidDsvHandle(handle), "ClearDsv on an invalid DSV handle");
+		gassert(cmdList != nullptr && cmdList->IsOpen(), "ClearDsv needs an open command list");
+
+		MTL::Texture* texture = m_Textures[GetDsvTexture(handle).slot].GetMTLResource();
+		cmdList->As<CommandList>()->ClearDepthStencil(texture, depth, stencil);
+	}
+
+	bool
+	ResourceManager::IsTextureCube(const TextureHandle& handle) const noexcept
+	{
+		gassert(ValidTextureHandle(handle), "IsTextureCube on an invalid texture handle");
+		const MTL::TextureType type = m_Textures[handle.slot].GetMTLResource()->textureType();
+		return type == MTL::TextureTypeCube || type == MTL::TextureTypeCubeArray;
 	}
 }

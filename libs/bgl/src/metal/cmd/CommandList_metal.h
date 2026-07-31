@@ -55,6 +55,11 @@ namespace bgl
 		void
 		ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept;
 
+		// As ClearRenderTarget, for depth: Metal has no free-standing clear, so an empty pass with a
+		// Clear load action is the clear. Driven by ResourceManager::ClearDsv.
+		void
+		ClearDepthStencil(MTL::Texture* texture, float depth, uint8_t stencil) noexcept;
+
 		void
 		Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept override;
 
@@ -111,10 +116,9 @@ namespace bgl
 		// ---- not yet implemented (render + scene slices) ----
 
 		void
-		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
+		WriteTexture(
+			TextureHandle                           handle,
+			std::span<const TextureSubresourceData> subresources) noexcept override;
 		void
 		DispatchMeshIndirect(uint32_t) noexcept override
 		{
