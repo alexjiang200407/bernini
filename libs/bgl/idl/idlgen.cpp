@@ -149,7 +149,13 @@ namespace
 		std::string            name;
 		size_t                 size;
 		std::vector<FieldInfo> fields;
+
+		// Trailing bytes MSL rounds the struct up by, which the C/C++ rules do not. Emitted as a
+		// real member into both mirrors so every target agrees on the stride.
+		size_t padBytes = 0;
 	};
+
+	constexpr auto c_PadName = "pad";
 
 	struct EnumInfo
 	{
@@ -265,6 +271,125 @@ namespace
 		return false;
 	}
 
+	// What MSL makes of a type. Computed rather than reflected: Slang's Metal reflection omits a
+	// resource handle from the ordinary-data layout entirely -- TextureHandle comes back as 0 bytes,
+	// ChannelSource as 4 instead of 16 -- so asking it would under-report every struct that carries
+	// one, which is every material. The backend recomputes constant-buffer layouts for the same
+	// reason (see MetalizeLayout); these are MSL's rules, stated once here for buffer elements.
+	struct MslLayout
+	{
+		size_t size  = 0;
+		size_t align = 1;
+	};
+
+	size_t
+	RoundUp(size_t value, size_t align)
+	{
+		return (value + align - 1) / align * align;
+	}
+
+	size_t
+	MslScalarSize(slang::TypeReflection::ScalarType scalar)
+	{
+		using ST = slang::TypeReflection::ScalarType;
+		switch (scalar)
+		{
+		case ST::Bool:
+		case ST::Int8:
+		case ST::UInt8:
+			return 1;
+		case ST::Int16:
+		case ST::UInt16:
+		case ST::Float16:
+			return 2;
+		case ST::Int32:
+		case ST::UInt32:
+		case ST::Float32:
+			return 4;
+		case ST::Int64:
+		case ST::UInt64:
+		case ST::Float64:
+			return 8;
+		default:
+			std::cerr << "error: no MSL size known for scalar type " << int(scalar) << "\n";
+			std::exit(1);
+		}
+	}
+
+	MslLayout
+	MslLayoutOf(slang::TypeReflection* type)
+	{
+		switch (type->getKind())
+		{
+		case TypeKind::Scalar:
+		{
+			const size_t size = MslScalarSize(type->getScalarType());
+			return { size, size };
+		}
+		case TypeKind::Vector:
+		{
+			// MSL aligns a vector to its own width, and rounds a 3-component one up to 4.
+			const size_t elem  = MslScalarSize(type->getElementType()->getScalarType());
+			const size_t lanes = type->getElementCount() == 3 ? 4 : type->getElementCount();
+			return { lanes * elem, lanes * elem };
+		}
+		case TypeKind::Matrix:
+		{
+			// Column-major, one padded vector per column.
+			const size_t elem  = MslScalarSize(type->getScalarType());
+			const size_t lanes = type->getRowCount() == 3 ? 4 : type->getRowCount();
+			return { type->getColumnCount() * lanes * elem, lanes * elem };
+		}
+		case TypeKind::Array:
+		{
+			const MslLayout elem = MslLayoutOf(type->getElementType());
+			return { elem.size * type->getElementCount(), elem.align };
+		}
+		case TypeKind::Enum:
+			return MslLayoutOf(type->getElementType());
+		case TypeKind::Struct:
+		{
+			// A bindless handle is a device pointer or an MTLResourceID: 8 bytes, 8-aligned,
+			// whatever it points at.
+			if (StripName(type->getName()) == "DescriptorHandle")
+			{
+				return { 8, 8 };
+			}
+
+			MslLayout out;
+			for (unsigned i = 0; i < type->getFieldCount(); ++i)
+			{
+				const MslLayout field = MslLayoutOf(type->getFieldByIndex(i)->getType());
+				out.align             = std::max(out.align, field.align);
+				out.size              = RoundUp(out.size, field.align) + field.size;
+			}
+			out.size = RoundUp(out.size, out.align);
+			return out;
+		}
+		default:
+			std::cerr << std::format(
+				"error: no MSL layout known for type kind {}\n",
+				int(type->getKind()));
+			std::exit(1);
+		}
+	}
+
+	// Where MSL places each member of `type`, in declaration order.
+	std::vector<size_t>
+	MslFieldOffsets(slang::TypeReflection* type)
+	{
+		std::vector<size_t> offsets;
+		size_t              cursor = 0;
+		for (unsigned i = 0; i < type->getFieldCount(); ++i)
+		{
+			const MslLayout field = MslLayoutOf(type->getFieldByIndex(i)->getType());
+			cursor                = RoundUp(cursor, field.align);
+			offsets.push_back(cursor);
+			cursor += field.size;
+		}
+		return offsets;
+	}
+
 	StructInfo
 	ReflectStruct(
 		slang::DeclReflection*         decl,
@@ -305,6 +430,48 @@ namespace
 		// array element / buffer stride), whereas getSize() is the unpadded tail. They differ for a
 		// struct whose last member is smaller than its alignment (e.g. a uint16 after a handle).
 		info.size = tlayout->getStride();
+
+		// MSL rounds a struct's size up to its alignment, so it can want a wider stride than
+		// the C/C++ rules give. Left alone, element N of a buffer would be read from the wrong
+		// offset on that backend only, and silently -- nothing round-trips a second element.
+		const MslLayout mslLayout = MslLayoutOf(type);
+		if (mslLayout.size > info.size)
+		{
+			// Trailing padding can only close a gap at the end. If MSL also places a *member*
+			// somewhere the C/C++ rules do not -- it aligns a vector to its own width, where scalar
+			// layout packs it tight -- no amount of tail padding reconciles the two, and the struct
+			// has to be laid out so both agree (usually by ordering the widest members first).
+			const std::vector<size_t> mslOffsets = MslFieldOffsets(type);
+			for (unsigned i = 0; i < mslOffsets.size() && i < tlayout->getFieldCount(); ++i)
+			{
+				const size_t cpuOffset = tlayout->getFieldByIndex(i)->getOffset();
+				if (mslOffsets[i] != cpuOffset)
+				{
+					std::cerr << std::format(
+						"error: '{}::{}' sits at {} under MSL but {} under the C/C++ rules; "
+						"trailing padding cannot fix an interior mismatch -- reorder the struct so "
+						"its widest members come first\n",
+						type->getName(),
+						tlayout->getFieldByIndex(i)->getName(),
+						mslOffsets[i],
+						cpuOffset);
+					std::exit(1);
+				}
+			}
+
+			info.padBytes = mslLayout.size - info.size;
+			info.size     = mslLayout.size;
+
+			if (info.padBytes % 4 != 0)
+			{
+				std::cerr << std::format(
+					"error: '{}' needs {} bytes of MSL padding, which is not a whole number of "
+					"words\n",
+					type->getName(),
+					info.padBytes);
+				std::exit(1);
+			}
+		}
 
 		const unsigned fieldCount = tlayout->getFieldCount();
 		for (unsigned i = 0; i < fieldCount; ++i)
@@ -779,6 +946,10 @@ namespace
 			{
 				out += std::format("\t\t{} {}{};\n", f.type, f.name, f.arraySuffix);
 			}
+			if (s.padBytes > 0)
+			{
+				out += std::format("\t\tuint32_t {}[{}];\n", c_PadName, s.padBytes / 4);
+			}
 			out += "\t};\n\n";
 
 			out += std::format("\tstatic_assert(sizeof({}) == {});\n", s.name, s.size);
@@ -794,6 +965,63 @@ namespace
 		}
 
 		out += "}\n";
+		return out;
+	}
+
+	// Adds each struct's MSL padding to the Slang copy the shaders import. The padding has to be a
+	// real member of the shared struct rather than of either mirror alone: DXIL agrees with the C++
+	// rules, so padding only the C++ side would leave that target reading the narrower stride.
+	std::string
+	InjectMetalPadding(const std::string& source, const std::vector<StructInfo>& structs)
+	{
+		std::string out = source;
+
+		for (const StructInfo& s : structs)
+		{
+			if (s.padBytes == 0)
+			{
+				continue;
+			}
+
+			const std::string decl = std::format("struct {}", s.name);
+
+			size_t pos = out.find(decl);
+			while (pos != std::string::npos)
+			{
+				const size_t end   = pos + decl.size();
+				const char   after = end < out.size() ? out[end] : '\0';
+				if (std::isalnum(static_cast<unsigned char>(after)) == 0 && after != '_')
+				{
+					break;
+				}
+				pos = out.find(decl, pos + 1);
+			}
+
+			const size_t open = pos != std::string::npos ? out.find('{', pos) : std::string::npos;
+			if (open == std::string::npos)
+			{
+				std::cerr << std::format(
+					"error: cannot find the body of '{}' to pad in the Slang copy\n",
+					s.name);
+				std::exit(1);
+			}
+
+			size_t close = open + 1;
+			for (int depth = 1; depth > 0; ++close)
+			{
+				if (close >= out.size())
+				{
+					std::cerr << std::format("error: unterminated body for '{}'\n", s.name);
+					std::exit(1);
+				}
+				depth += out[close] == '{' ? 1 : (out[close] == '}' ? -1 : 0);
+			}
+
+			out.insert(
+				close - 1,
+				std::format("\n    public uint {}[{}];\n", c_PadName, s.padBytes / 4));
+		}
+
 		return out;
 	}
 
@@ -932,8 +1160,10 @@ main(int argc, char** argv)
 		target.format = SLANG_HOST_HOST_CALLABLE;  // C/C++ (scalar) layout rules
 
 		std::vector<std::string> searchPaths;
-		// The generated copies come first, so an import resolves to the same module text the shaders
-		// see. This module itself is loaded from its source text, never from its own generated copy.
+		// The generated copies come first so an import resolves to a module that already carries its
+		// Metal padding. A struct's own padding depends on its members' final sizes, so reflecting
+		// against the unpadded sources would undercount it for anything that embeds another struct.
+		// This module itself is loaded from its source text, never from its own generated copy.
 		if (!slangOutDir.empty())
 		{
 			searchPaths.push_back(fs::absolute(slangOutDir).string());
@@ -1056,7 +1286,9 @@ main(int argc, char** argv)
 		if (!slangOutDir.empty())
 		{
 			const fs::path slangOut = fs::path(slangOutDir) / rel;
-			WriteFile(slangOut, Banner(rel.generic_string()) + "\n" + source);
+			WriteFile(
+				slangOut,
+				Banner(rel.generic_string()) + "\n" + InjectMetalPadding(source, structs));
 		}
 
 		if (structs.empty() && enums.empty() && constants.empty())

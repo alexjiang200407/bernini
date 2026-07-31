@@ -27,4 +27,6 @@ public struct LoosePbrMaterial
 
     // Cutout threshold. Only read by the alpha-test PSOs; an opaque material never samples it.
     public float alphaCutoff;
+
+    public uint pad[1];
 };

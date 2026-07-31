@@ -7,4 +7,6 @@ public struct Mesh
 {
     public float4x4 transform;
     public RangeWithCount<Submesh> submeshes;
+
+    public uint pad[2];
 };
