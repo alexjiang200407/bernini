@@ -166,8 +166,7 @@ namespace bgl
 					maxBound = glm::max(maxBound, verts[geomVertexIdx].pos);
 				}
 				const glm::vec4 sphere = BoundingSphereOf(minBound, maxBound);
-				meshlet.boundingCenter = glm::vec3(sphere);
-				meshlet.boundingRadius = sphere.w;
+				meshlet.boundingSphere = sphere;
 
 				build.meshlets.push_back(meshlet);
 			}
@@ -509,8 +508,7 @@ namespace bgl
 				}
 
 				const glm::vec4 sphere = BoundingSphereOf(minBound, maxBound);
-				submesh.boundingCenter = glm::vec3(sphere);
-				submesh.boundingRadius = sphere.w;
+				submesh.boundingSphere = sphere;
 			}
 
 			const auto submeshSpan = std::span<const idl::Submesh>(&submesh, 1);
@@ -805,8 +803,7 @@ namespace bgl
 					out.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
 					out.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
 					out.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
-					out.boundingCenter       = ml.boundingCenter;
-					out.boundingRadius       = ml.boundingRadius;
+					out.boundingSphere       = glm::vec4(ml.boundingCenter, ml.boundingRadius);
 
 					for (uint32_t i = 0; i < ml.vertexCount; ++i)
 					{
@@ -833,8 +830,7 @@ namespace bgl
 				submesh.vertexCount = src.vertexCount;
 
 				const glm::vec4 sphere = BoundingSphereOf(src.aabbMin, src.aabbMax);
-				submesh.boundingCenter = glm::vec3(sphere);
-				submesh.boundingRadius = sphere.w;
+				submesh.boundingSphere = sphere;
 
 				submeshes.push_back(submesh);
 				defaults.push_back(material);

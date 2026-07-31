@@ -67,13 +67,13 @@ void main(uint globalIdx: SV_DispatchThreadID)
     // by the largest transformed basis length, which is the exact max axis scale for a
     // translation-rotation-scale transform; a sheared transform could under-scale it, but instance
     // transforms here are TRS.
-    let center = mul(mesh.transform, float4(submesh.boundingCenter, 1.0)).xyz;
+    let center = mul(mesh.transform, float4(submesh.boundingSphere.xyz, 1.0)).xyz;
 
     let ax = mul(mesh.transform, float4(1.0, 0.0, 0.0, 0.0)).xyz;
     let ay = mul(mesh.transform, float4(0.0, 1.0, 0.0, 0.0)).xyz;
     let az = mul(mesh.transform, float4(0.0, 0.0, 1.0, 0.0)).xyz;
     let maxScaleSq = max(dot(ax, ax), max(dot(ay, ay), dot(az, az)));
-    let radius = submesh.boundingRadius * sqrt(maxScaleSq);
+    let radius = submesh.boundingSphere.w * sqrt(maxScaleSq);
 
     let visible = SphereInFrustum(gUniforms.cullView[0].frustumPlanes, center, radius);
 

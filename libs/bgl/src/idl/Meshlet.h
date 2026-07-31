@@ -9,8 +9,7 @@ namespace bgl::idl
 		uint32_t relativeIndexOffset;
 		uint32_t vertexCount;
 		uint32_t triangleCount;
-		glm::vec3 boundingCenter;
-		float boundingRadius;
+		glm::vec4 boundingSphere;
 	};
 
 	static_assert(sizeof(Meshlet) == 32);
@@ -18,7 +17,6 @@ namespace bgl::idl
 	static_assert(offsetof(Meshlet, relativeIndexOffset) == 4);
 	static_assert(offsetof(Meshlet, vertexCount) == 8);
 	static_assert(offsetof(Meshlet, triangleCount) == 12);
-	static_assert(offsetof(Meshlet, boundingCenter) == 16);
-	static_assert(offsetof(Meshlet, boundingRadius) == 28);
+	static_assert(offsetof(Meshlet, boundingSphere) == 16);
 
 }

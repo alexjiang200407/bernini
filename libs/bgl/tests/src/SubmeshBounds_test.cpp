@@ -71,10 +71,10 @@ namespace
 	void
 	CheckSphere(const bgl::idl::Submesh& submesh, const glm::vec3& center, float radius)
 	{
-		CHECK(submesh.boundingCenter.x == Catch::Approx(center.x));
-		CHECK(submesh.boundingCenter.y == Catch::Approx(center.y));
-		CHECK(submesh.boundingCenter.z == Catch::Approx(center.z));
-		CHECK(submesh.boundingRadius == Catch::Approx(radius));
+		CHECK(submesh.boundingSphere.x == Catch::Approx(center.x));
+		CHECK(submesh.boundingSphere.y == Catch::Approx(center.y));
+		CHECK(submesh.boundingSphere.z == Catch::Approx(center.z));
+		CHECK(submesh.boundingSphere.w == Catch::Approx(radius));
 	}
 }
 
