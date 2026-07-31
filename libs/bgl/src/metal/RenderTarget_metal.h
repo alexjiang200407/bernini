@@ -1,65 +1,49 @@
 #pragma once
+#include "metal_cpp.h"
+
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandQueue.h"
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Dsv.h"
 #include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
+
 #include <core/ref/RefCounter.h>
 
 namespace bgl
 {
-	struct TextureRtvHandle
-	{
-		TextureHandle textureHandle;
-		RtvHandle     rtvHandle;
-	};
-
-	struct TextureDsvHandle
-	{
-		TextureHandle textureHandle;
-		DsvHandle     dsvHandle;
-	};
-
 	/**
-	 * A per-output swapchain (windowed) or offscreen backbuffer ring (headless) plus a
-	 * depth buffer, owned independently of Graphics so one renderer can drive many
-	 * outputs. The frame ring is reached through RenderTargetBase, so frame-driving code
-	 * needs neither this type nor D3D12.
+	 * A render output: a ring of offscreen backbuffers plus depth and motion vectors, owned
+	 * independently of Graphics so one renderer can drive many outputs. The frame ring is reached
+	 * through RenderTargetBase, so frame-driving code needs neither this type nor Metal.
+	 *
+	 * Headless only for now. A windowed target draws into a CAMetalLayer's drawable, which is a
+	 * different acquire/present shape than a ring the target owns outright, and it lands with the
+	 * SDL examples.
 	 */
-	class RenderTarget : public core::RefCounter<RenderTargetBase>
+	class RenderTarget final : public core::RefCounter<RenderTargetBase>
 	{
 	public:
+		// The queue is taken and dropped: a headless ring neither presents on it nor flushes it, and
+		// the windowed path that will can store it then. IDevice::CreateRenderTarget passes one.
 		RenderTarget(
 			const RenderTargetDesc& desc,
 			DeviceRef               device,
 			CommandQueueRef         queue,
-			ResourceManagerRef      resourceManager,
-			bool                    enableDebug);
+			ResourceManagerRef      resourceManager);
 
 		~RenderTarget() noexcept override;
-
-		RenderTarget(const RenderTarget&) noexcept = delete;
-		RenderTarget(RenderTarget&&) noexcept      = delete;
-
-		RenderTarget&
-		operator=(const RenderTarget&) noexcept = delete;
-
-		RenderTarget&
-		operator=(RenderTarget&&) noexcept = delete;
 
 		[[nodiscard]] uint32_t
 		GetWidth() const noexcept override
 		{
-			return static_cast<uint32_t>(m_Width);
+			return m_Width;
 		}
 
 		[[nodiscard]] uint32_t
 		GetHeight() const noexcept override
 		{
-			return static_cast<uint32_t>(m_Height);
+			return m_Height;
 		}
 
 		[[nodiscard]] uint32_t
@@ -77,60 +61,60 @@ namespace bgl
 		[[nodiscard]] bool
 		IsHeadless() const noexcept override
 		{
-			return m_Headless;
+			return true;
 		}
 
 		[[nodiscard]] uint64_t
 		GetFrameFence(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_FenceValues[frameIndex];
+			return m_FrameFences[frameIndex];
 		}
 
 		void
 		SetFrameFence(uint32_t frameIndex, uint64_t fenceValue) noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			m_FenceValues[frameIndex] = fenceValue;
+			m_FrameFences[frameIndex] = fenceValue;
 		}
 
 		[[nodiscard]] ICommandAllocator*
 		GetFrameAllocator(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_CommandAllocator[frameIndex].Get();
+			return m_FrameAllocators[frameIndex].Get();
 		}
 
 		[[nodiscard]] TextureHandle
 		GetBackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_BackBuffers[frameIndex].textureHandle;
+			return m_Backbuffers[frameIndex].texture;
 		}
 
 		[[nodiscard]] RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_BackBuffers[frameIndex].rtvHandle;
+			return m_Backbuffers[frameIndex].rtv;
 		}
 
 		[[nodiscard]] DsvHandle
 		GetDepthDsv() const noexcept override
 		{
-			return m_DepthBuffer.dsvHandle;
+			return m_DepthDsv;
 		}
 
 		[[nodiscard]] TextureHandle
 		GetMotionVectorTexture() const noexcept override
 		{
-			return m_MotionVectors.textureHandle;
+			return m_MotionTexture;
 		}
 
 		[[nodiscard]] RtvHandle
 		GetMotionVectorRtv() const noexcept override
 		{
-			return m_MotionVectors.rtvHandle;
+			return m_MotionRtv;
 		}
 
 		void
@@ -140,40 +124,36 @@ namespace bgl
 		ResizeBackbuffers(uint32_t width, uint32_t height) override;
 
 	private:
-		void
-		CreateSwapchain(HWND hWnd);
+		struct Backbuffer
+		{
+			TextureHandle texture;
+			RtvHandle     rtv;
+		};
 
 		void
-		CreateRenderTargets();
+		CreateAttachments();
 
+		// Frees every texture and view the ring owns. Immediate, not deferred: the caller has
+		// already idled the GPU for this target, which is the precondition ResizeBackbuffers states.
 		void
-		CreateOffscreenRenderTargets();
-
-		void
-		CreateDepthAndMotionVectors();
-
-		void
-		DestroyRenderTargets();
+		ReleaseAttachments() noexcept;
 
 		DeviceRef          m_Device;
-		CommandQueueRef    m_CommandQueue;
 		ResourceManagerRef m_ResourceManager;
 
-		bool  m_Headless    = false;
-		bool  m_EnableDebug = false;
-		void* m_Wnd         = nullptr;
-		int   m_Width       = 0;
-		int   m_Height      = 0;
+		uint32_t m_Width  = 0;
+		uint32_t m_Height = 0;
 
-		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
+		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
+		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};
+		std::array<CommandAllocatorRef, c_SwapchainImageCount> m_FrameAllocators;
 
-		UINT             m_FrameIndex         = 0;
-		UINT             m_LastPresentedIndex = 0;
-		TextureRtvHandle m_BackBuffers[c_SwapchainImageCount];
-		TextureDsvHandle m_DepthBuffer;
-		TextureRtvHandle m_MotionVectors;
-		UINT64           m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
+		TextureHandle m_DepthTexture;
+		DsvHandle     m_DepthDsv;
+		TextureHandle m_MotionTexture;
+		RtvHandle     m_MotionRtv;
 
-		CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
+		uint32_t m_FrameIndex         = 0;
+		uint32_t m_LastPresentedIndex = 0;
 	};
 }

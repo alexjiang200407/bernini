@@ -1,5 +1,7 @@
 #include "device/Device_metal.h"
 
+#include "RenderTarget_metal.h"
+
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
@@ -75,12 +77,16 @@ namespace bgl
 
 	RenderTargetRef
 	Device::CreateRenderTarget(
-		const RenderTargetDesc&,
-		core::SharedRef<ICommandQueue>,
-		core::SharedRef<IResourceManager>,
+		const RenderTargetDesc&           desc,
+		core::SharedRef<ICommandQueue>    queue,
+		core::SharedRef<IResourceManager> resourceManager,
 		bool) const
 	{
-		gunimplemented("Metal backend: CreateRenderTarget not implemented yet");
+		return core::SharedRef<RenderTarget>::Make(
+			desc,
+			core::SharedRef<IDevice>(const_cast<Device*>(this)),
+			std::move(queue),
+			std::move(resourceManager));
 	}
 
 	core::SharedRef<IShader>

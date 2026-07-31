@@ -2,6 +2,7 @@
 #include "device/Device_metal.h"
 
 #include "gfx/GraphicsBase.h"
+#include "gfx/RenderContext.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
@@ -62,6 +63,9 @@ namespace bgl
 			rmDesc.maxReadbackBuffers = opts.maxReadbackBuffers;
 			m_ResourceManager         = m_Device->CreateResourceManager(rmDesc);
 
+			m_Context =
+				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
+
 			logger::info("BGL initialized successfully.");
 		}
 
@@ -79,9 +83,9 @@ namespace bgl
 
 		void
 		WaitIdle() noexcept override
-		{}
-
-		// ---- the frame path, which arrives with the render target and the meshlet pipelines ----
+		{
+			m_Context->WaitIdle();
+		}
 
 		SceneRef
 		CreateScene(SceneDesc desc) override
@@ -96,70 +100,76 @@ namespace bgl
 		}
 
 		RenderTargetRef
-		CreateRenderTarget(const RenderTargetDesc&) override
+		CreateRenderTarget(const RenderTargetDesc& desc) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			return m_Context->CreateRenderTarget(desc);
 		}
 
 		void
-		BeginFrame(const RenderTargetRef&) override
+		BeginFrame(const RenderTargetRef& target) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			m_Context->BeginFrame(target);
 		}
 
 		void
-		Draw(const RenderJob&) override
+		Draw(const RenderJob& job) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			m_Context->Draw(job);
 		}
 
 		void
 		EndFrame() override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			m_Context->EndFrame();
 		}
 
 		void
-		Resize(const RenderTargetRef&, uint32_t, uint32_t) override
+		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			m_Context->Resize(target, width, height);
 		}
 
 		void
-		ScreenshotPng(const RenderTargetRef&, const std::string&) override
+		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			m_Context->ScreenshotPng(target, filepath);
 		}
 
 		assetlib::ImageData
-		ScreenshotToMemory(const RenderTargetRef&) override
+		ScreenshotToMemory(const RenderTargetRef& target) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			return m_Context->ScreenshotToMemory(target);
 		}
 
 		CaptureTicket
-		SubmitCapture(const RenderTargetRef&) override
+		SubmitCapture(const RenderTargetRef& target) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			return m_Context->SubmitCapture(target);
 		}
 
 		std::optional<assetlib::ImageData>
-		TryResolveCapture(CaptureTicket) override
+		TryResolveCapture(CaptureTicket ticket) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			return m_Context->TryResolveCapture(ticket);
 		}
 
 		void
-		DiscardCapture(CaptureTicket) noexcept override
-		{}
+		DiscardCapture(CaptureTicket ticket) noexcept override
+		{
+			m_Context->DiscardCapture(ticket);
+		}
 
 		void
-		SetGpuAssertionHandler(IGpuAssertionHandler*) noexcept override
-		{}
+		SetGpuAssertionHandler(IGpuAssertionHandler* handler) noexcept override
+		{
+			m_Context->SetGpuAssertionHandler(handler);
+		}
 
 		void
 		DiscardPendingGpuAssertions() noexcept override
-		{}
+		{
+			m_Context->DiscardPendingGpuAssertions();
+		}
 
 	private:
 		static constexpr const char* c_Unimplemented =
@@ -169,6 +179,10 @@ namespace bgl
 		NS::SharedPtr<NS::AutoreleasePool> m_Pool;
 		DeviceRef                          m_Device;
 		ResourceManagerRef                 m_ResourceManager;
+
+		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass
+		// resources through the members above, which must outlive it.
+		std::unique_ptr<RenderContext> m_Context;
 	};
 
 	BGL_API GraphicsRef

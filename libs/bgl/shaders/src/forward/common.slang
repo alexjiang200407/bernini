@@ -9,9 +9,12 @@ public struct InstancedPayload
 public struct ForwardVSOut
 {
     public float4 position : SV_Position;
-    public float3 worldPos : POSITION0;
+    // No semantic here may end in a digit: Slang's MSL emits a mesh output's verbatim but a
+    // fragment input's as NAME for index 0 and NAME_<n> otherwise, so the two agree only when
+    // there is no index. Metal's stage linkage rejects the mismatch; D3D12 is unaffected.
+    public float3 worldPos : POSITION;
     public float3 normal : NORMAL;
-    public float2 uv : TEXCOORD0;
+    public float2 uv : TEXCOORD;
     public float4 tangent : TANGENT;
     public nointerpolation uint materialIndex : MATERIAL;
 

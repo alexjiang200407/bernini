@@ -16,8 +16,8 @@ ConstantBuffer<SkyboxData> gSkyboxData;
 struct VSOut
 {
     float4 position : SV_Position;
-    float3 dir : TEXCOORD0; // world-space view direction (interpolated)
-    float2 ndc : TEXCOORD1; // where this pixel is now; the triangle is at w = 1, so it interpolates exactly
+    float3 dir : DIRECTION; // world-space view direction (interpolated)
+    float2 ndc : NDC;       // where this pixel is now; the triangle is at w = 1, so it interpolates exactly
 };
 
 struct SkyboxPSOut

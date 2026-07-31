@@ -35,34 +35,34 @@ namespace bgl
 
 		/** The frame-in-flight index the next frame records into. */
 		[[nodiscard]] virtual uint32_t
-		FrameIndex() const noexcept = 0;
+		GetFrameIndex() const noexcept = 0;
 
 		/** The index the last presented frame landed in; what a readback must sample. */
 		[[nodiscard]] virtual uint32_t
-		LastPresentedIndex() const noexcept = 0;
+		GetLastPresentedIndex() const noexcept = 0;
 
 		[[nodiscard]] virtual bool
 		IsHeadless() const noexcept = 0;
 
 		/** Zero when no frame has used the index yet, so nothing needs waiting on. */
 		[[nodiscard]] virtual uint64_t
-		FrameFence(uint32_t frameIndex) const noexcept = 0;
+		GetFrameFence(uint32_t frameIndex) const noexcept = 0;
 
 		virtual void
 		SetFrameFence(uint32_t frameIndex, uint64_t fenceValue) noexcept = 0;
 
 		/** Borrowed; the target owns it. Reset it before recording the frame. */
 		[[nodiscard]] virtual ICommandAllocator*
-		FrameAllocator(uint32_t frameIndex) const noexcept = 0;
+		GetFrameAllocator(uint32_t frameIndex) const noexcept = 0;
 
 		[[nodiscard]] virtual TextureHandle
-		BackbufferTexture(uint32_t frameIndex) const noexcept = 0;
+		GetBackbufferTexture(uint32_t frameIndex) const noexcept = 0;
 
 		[[nodiscard]] virtual RtvHandle
-		BackbufferRtv(uint32_t frameIndex) const noexcept = 0;
+		GetBackbufferRtv(uint32_t frameIndex) const noexcept = 0;
 
 		[[nodiscard]] virtual DsvHandle
-		DepthDsv() const noexcept = 0;
+		GetDepthDsv() const noexcept = 0;
 
 		/**
 		 * The screen-space velocity buffer the forward pass writes alongside colour: for each pixel,
