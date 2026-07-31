@@ -139,7 +139,10 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	enable_strict_compiler(bgl_d3d12)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	target_compile_definitions(bgl_metal PRIVATE BGL_EXPORTS)
+	# bgl_objects too, not just the backend: DescriptorHandle's alignment is per-backend, and
+	# bgl_objects is what compiles the scene code that puts one in a GPU struct.
 	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_METAL)
+	target_compile_definitions(bgl_objects PRIVATE RENDERER_BACKEND_METAL)
 	# bgl embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
 	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
 	enable_strict_compiler(bgl_metal)

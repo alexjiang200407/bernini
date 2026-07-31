@@ -10,7 +10,7 @@
  *
  * Usage:
  *   bgl_idlgen --src-root <dir> [--cpp-out-dir <dir>] [--slang-out-dir <dir>]
- *              [--namespace ns] [-I <search-dir>]... <input.slang>
+ *              [--namespace ns] [--metal-layout] [--public] [-I <search-dir>]... <input.slang>
  *
  * At least one of --cpp-out-dir / --slang-out-dir must be given.
  */
@@ -146,8 +146,10 @@ namespace
 
 	struct StructInfo
 	{
-		std::string            name;
-		size_t                 size;
+		std::string name;
+		size_t      size;
+		// 0 when the C/C++ rules already give the target's alignment, so no alignas is emitted.
+		size_t                 alignment = 0;
 		std::vector<FieldInfo> fields;
 	};
 
@@ -265,13 +267,138 @@ namespace
 		return false;
 	}
 
+	// What MSL makes of a type. Computed rather than reflected: Slang's Metal reflection reports a
+	// resource handle as zero ordinary-data bytes -- its categories count bindings, not bytes -- so
+	// TextureHandle comes back as 0 and ChannelSource as 4 instead of 16. Asking would under-report
+	// every struct carrying a handle, which is every material. The backend recomputes constant-buffer
+	// layouts for the same reason (see MetalizeLayout); these are MSL's rules for buffer elements.
+	struct MslLayout
+	{
+		size_t size  = 0;
+		size_t align = 1;
+	};
+
+	size_t
+	RoundUp(size_t value, size_t align)
+	{
+		return (value + align - 1) / align * align;
+	}
+
+	size_t
+	MslScalarSize(slang::TypeReflection::ScalarType scalar)
+	{
+		using ST = slang::TypeReflection::ScalarType;
+		switch (scalar)
+		{
+		case ST::Bool:
+		case ST::Int8:
+		case ST::UInt8:
+			return 1;
+		case ST::Int16:
+		case ST::UInt16:
+		case ST::Float16:
+			return 2;
+		case ST::Int32:
+		case ST::UInt32:
+		case ST::Float32:
+			return 4;
+		case ST::Int64:
+		case ST::UInt64:
+		case ST::Float64:
+			return 8;
+		default:
+			std::cerr << "error: no MSL size known for scalar type " << int(scalar) << "\n";
+			std::exit(1);
+		}
+	}
+
+	// `metalVectors` picks the rule set: MSL aligns a vector or matrix column to its own width,
+	// where glm leaves it at its scalar's. Both walks give a handle 8 bytes and 8 alignment, because
+	// DescriptorHandle carries alignas(8) on a Metal build -- so the C++ walk describes what the
+	// compiler will actually emit there, which the host reflection cannot know.
+	MslLayout
+	LayoutOf(slang::TypeReflection* type, bool metalVectors)
+	{
+		switch (type->getKind())
+		{
+		case TypeKind::Scalar:
+		{
+			const size_t size = MslScalarSize(type->getScalarType());
+			return { size, size };
+		}
+		case TypeKind::Vector:
+		{
+			// MSL aligns a vector to its own width, and rounds a 3-component one up to 4.
+			const size_t elem  = MslScalarSize(type->getElementType()->getScalarType());
+			const size_t lanes = type->getElementCount() == 3 ? 4 : type->getElementCount();
+			return { lanes * elem, metalVectors ? lanes * elem : elem };
+		}
+		case TypeKind::Matrix:
+		{
+			// Column-major, one padded vector per column.
+			const size_t elem  = MslScalarSize(type->getScalarType());
+			const size_t lanes = type->getRowCount() == 3 ? 4 : type->getRowCount();
+			return { type->getColumnCount() * lanes * elem, metalVectors ? lanes * elem : elem };
+		}
+		case TypeKind::Array:
+		{
+			const MslLayout elem = LayoutOf(type->getElementType(), metalVectors);
+			return { elem.size * type->getElementCount(), elem.align };
+		}
+		case TypeKind::Enum:
+			return LayoutOf(type->getElementType(), metalVectors);
+		case TypeKind::Struct:
+		{
+			// A bindless handle is a device pointer or an MTLResourceID: 8 bytes, 8-aligned,
+			// whatever it points at.
+			if (StripName(type->getName()) == "DescriptorHandle")
+			{
+				return { 8, 8 };
+			}
+
+			MslLayout out;
+			for (unsigned i = 0; i < type->getFieldCount(); ++i)
+			{
+				const MslLayout field = LayoutOf(type->getFieldByIndex(i)->getType(), metalVectors);
+				out.align             = std::max(out.align, field.align);
+				out.size              = RoundUp(out.size, field.align) + field.size;
+			}
+			out.size = RoundUp(out.size, out.align);
+			return out;
+		}
+		default:
+			std::cerr << std::format(
+				"error: no MSL layout known for type kind {}\n",
+				int(type->getKind()));
+			std::exit(1);
+		}
+	}
+
+	// Where each member of `type` lands, in declaration order, under the chosen rules.
+	std::vector<size_t>
+	FieldOffsets(slang::TypeReflection* type, bool metalVectors)
+	{
+		std::vector<size_t> offsets;
+		size_t              cursor = 0;
+		for (unsigned i = 0; i < type->getFieldCount(); ++i)
+		{
+			const MslLayout field = LayoutOf(type->getFieldByIndex(i)->getType(), metalVectors);
+			cursor                = RoundUp(cursor, field.align);
+			offsets.push_back(cursor);
+			cursor += field.size;
+		}
+		return offsets;
+	}
+
 	StructInfo
 	ReflectStruct(
 		slang::DeclReflection*         decl,
 		slang::ProgramLayout*          layout,
 		slang::ProgramLayout*          scalarLayout,
 		std::set<std::string>&         referenced,
-		std::map<std::string, size_t>& enumSizes)
+		std::map<std::string, size_t>& enumSizes,
+		bool                           metalLayout,
+		bool                           isPublic)
 	{
 		slang::TypeReflection* type = decl->getType();
 
@@ -305,6 +432,64 @@ namespace
 		// array element / buffer stride), whereas getSize() is the unpadded tail. They differ for a
 		// struct whose last member is smaller than its alignment (e.g. a uint16 after a handle).
 		info.size = tlayout->getStride();
+
+		// MSL diverges from the C/C++ scalar rules in two ways that matter here: it aligns a
+		// resource handle to 8, and it rounds a struct up to its own alignment. Where that lands a
+		// *member* somewhere else, no alignment can reconcile the two and the struct has to be
+		// written differently.
+		// Two walks: what MSL does, and what the C++ compiler will do on a Metal build (where
+		// DescriptorHandle is alignas(8)). The host reflection describes neither -- it lays handles
+		// out 4-aligned, which is the D3D12 truth only.
+		const MslLayout           msl        = LayoutOf(type, /*metalVectors*/ true);
+		const MslLayout           cpp        = LayoutOf(type, /*metalVectors*/ false);
+		const std::vector<size_t> mslOffsets = FieldOffsets(type, /*metalVectors*/ true);
+		const std::vector<size_t> cppOffsets = FieldOffsets(type, /*metalVectors*/ false);
+
+		// A struct alignment closes a gap at the end. Where MSL puts a *member* somewhere the C++
+		// rules will not, nothing closes it and the struct has to be written differently.
+		for (size_t i = 0; i < mslOffsets.size() && i < cppOffsets.size(); ++i)
+		{
+			if (mslOffsets[i] == cppOffsets[i])
+			{
+				continue;
+			}
+			std::cerr << std::format(
+				"error: '{}::{}' sits at {} under MSL but {} under the C++ rules; no struct "
+				"alignment can fix an interior mismatch -- reorder the struct so its widest "
+				"members come first\n",
+				type->getName(),
+				tlayout->getFieldByIndex(static_cast<unsigned>(i))->getName(),
+				mslOffsets[i],
+				cppOffsets[i]);
+			std::exit(1);
+		}
+
+		// A public header is committed and every backend compiles against that one copy, so it may
+		// only hold a struct that lays out identically on all of them. Nothing else would report
+		// this: a generated header's static_asserts come from the same layout as its struct, so
+		// they agree with themselves whichever target produced them.
+		if (isPublic && msl.size != info.size)
+		{
+			std::cerr << std::format(
+				"error: '{}' is {} bytes under MSL and {} under the C/C++ rules, so it cannot go "
+				"in a public header -- those are committed and shared by every backend. Move it to "
+				"IDL_CPP_SOURCES, or write it so both agree.\n",
+				type->getName(),
+				msl.size,
+				info.size);
+			std::exit(1);
+		}
+
+		if (metalLayout)
+		{
+			info.size = msl.size;
+			// Only where the target wants more than the members give on their own; otherwise sizeof
+			// already agrees and an alignas would be noise.
+			if (msl.align > cpp.align)
+			{
+				info.alignment = msl.align;
+			}
+		}
 
 		const unsigned fieldCount = tlayout->getFieldCount();
 		for (unsigned i = 0; i < fieldCount; ++i)
@@ -359,7 +544,9 @@ namespace
 			field.name        = var->getName();
 			field.type        = CppBaseType(ftype, referenced);
 			field.arraySuffix = arraySuffix;
-			field.offset      = var->getOffset();
+			// Under --metal-layout the host reflection is the wrong ruler: it lays a handle out
+			// 4-aligned, where the mirror this header describes has it at 8.
+			field.offset = metalLayout && i < mslOffsets.size() ? mslOffsets[i] : var->getOffset();
 			info.fields.push_back(std::move(field));
 		}
 
@@ -774,7 +961,16 @@ namespace
 
 		for (const StructInfo& s : structs)
 		{
-			out += std::format("\tstruct {}\n\t{{\n", s.name);
+			// alignas rather than a trailing pad member: it is what the target actually requires,
+			// and sizeof follows from it without inventing a field the shader would have to skip.
+			if (s.alignment > 0)
+			{
+				out += std::format("\tstruct alignas({}) {}\n\t{{\n", s.alignment, s.name);
+			}
+			else
+			{
+				out += std::format("\tstruct {}\n\t{{\n", s.name);
+			}
 			for (const FieldInfo& f : s.fields)
 			{
 				out += std::format("\t\t{} {}{};\n", f.type, f.name, f.arraySuffix);
@@ -858,6 +1054,8 @@ main(int argc, char** argv)
 	std::string              slangOutDir;
 	std::string              baseNs = "bgl::idl";
 	std::vector<std::string> includeDirs;
+	bool                     metalLayout = false;
+	bool                     isPublic    = false;
 
 	app.add_option("input", input, "Input .slang IDL file")->required();
 	app.add_option("--src-root", srcRoot, "Root the input's module path is relative to")
@@ -867,6 +1065,15 @@ main(int argc, char** argv)
 	app.add_option("--namespace", baseNs, "Base C++ namespace for the generated structs")
 		->capture_default_str();
 	app.add_option("-I,--include", includeDirs, "Search directory for imported Slang modules");
+	app.add_flag(
+		"--metal-layout",
+		metalLayout,
+		"Lay the C++ structs out by MSL's rules rather than the C/C++ scalar ones");
+	app.add_flag(
+		"--public",
+		isPublic,
+		"This header is committed and shared by every backend, so refuse a struct whose layout "
+		"is not the same on all of them");
 
 	CLI11_PARSE(app, argc, argv);
 
@@ -1026,7 +1233,14 @@ main(int argc, char** argv)
 		std::vector<StructInfo>       structs;
 		for (slang::DeclReflection* decl : decls)
 		{
-			structs.push_back(ReflectStruct(decl, layout, scalarLayout, referenced, enumSizes));
+			structs.push_back(ReflectStruct(
+				decl,
+				layout,
+				scalarLayout,
+				referenced,
+				enumSizes,
+				metalLayout,
+				isPublic));
 		}
 
 		std::vector<EnumInfo> enums = ParseEnums(source);
