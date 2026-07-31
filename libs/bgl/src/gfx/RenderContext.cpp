@@ -213,7 +213,7 @@ namespace bgl
 		}
 		m_DebugReadbackPending[index] = false;
 
-		// Not the caller's rt.FrameFence(index): that gates the caller's own last frame at this
+		// Not the caller's rt.GetFrameFence(index): that gates the caller's own last frame at this
 		// slot, which says nothing about a copy another target submitted into the same slot. A target
 		// that has never drawn here has no fence at all, so BeginFrame waits on nothing and would map
 		// a buffer the GPU is still writing.
@@ -305,9 +305,9 @@ namespace bgl
 		gassert(m_ActiveTarget != nullptr, "BeginFrame requires a valid RenderTarget");
 
 		RenderTargetBase& rt    = *m_ActiveTarget;
-		const uint32_t    index = rt.FrameIndex();
+		const uint32_t    index = rt.GetFrameIndex();
 
-		uint64_t fenceToWaitOn = rt.FrameFence(index);
+		uint64_t fenceToWaitOn = rt.GetFrameFence(index);
 		if (fenceToWaitOn != 0)
 		{
 			m_CommandQueue->WaitForFenceCPUBlocking(fenceToWaitOn);
@@ -319,9 +319,9 @@ namespace bgl
 		InspectDebugSlot(index);
 #endif
 
-		rt.FrameAllocator(index)->ResetAllocator();
+		rt.GetFrameAllocator(index)->ResetAllocator();
 
-		m_CommandList->Open(m_CommandQueue.Get(), rt.FrameAllocator(index));
+		m_CommandList->Open(m_CommandQueue.Get(), rt.GetFrameAllocator(index));
 
 #if defined(BERNINI_GPU_DEBUG)
 		// Zero the debug buffer's header for this frame, hand it to the shaders as a UAV,
@@ -347,7 +347,7 @@ namespace bgl
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			std::string(c_BackbufferName),
-			rt.BackbufferTexture(index),
+			rt.GetBackbufferTexture(index),
 			AccessState{ BarrierSyncFlag::kNone,
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
@@ -358,14 +358,17 @@ namespace bgl
 		// Zero motion is "this pixel did not move", which is what an untouched pixel should read as.
 		const std::array<ClearPass::ColorTarget, 2> colorTargets{
 			{ { std::string(c_BackbufferName),
-			    rt.BackbufferRtv(index),
+			    rt.GetBackbufferRtv(index),
 			    { 0.0f, 0.0f, 0.0f, 1.0f } },
 			  { std::string(c_MotionVectorsName),
 			    rt.GetMotionVectorRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
-		ClearPass()
-			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, rt.DepthDsv());
+		ClearPass().AttachToFrameGraph(
+			m_FrameGraph,
+			m_ResourceManager.Get(),
+			colorTargets,
+			rt.GetDepthDsv());
 
 		m_FrameActive = true;
 	}
@@ -411,8 +414,8 @@ namespace bgl
 		draw.viewProj           = viewProj;
 		draw.prevViewProj       = prevCamera.viewProj;
 		draw.cullView           = BuildCullView(viewProj);
-		draw.backBufferHandle   = m_ActiveTarget->BackbufferRtv(m_ActiveTarget->FrameIndex());
-		draw.depthBufferHandle  = m_ActiveTarget->DepthDsv();
+		draw.backBufferHandle   = m_ActiveTarget->GetBackbufferRtv(m_ActiveTarget->GetFrameIndex());
+		draw.depthBufferHandle  = m_ActiveTarget->GetDepthDsv();
 		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
 
 		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
@@ -462,7 +465,7 @@ namespace bgl
 		}
 
 		RenderTargetBase& rt    = *m_ActiveTarget;
-		const uint32_t    index = rt.FrameIndex();
+		const uint32_t    index = rt.GetFrameIndex();
 
 		m_FrameGraph.SetResourceNamespace("");
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
@@ -578,8 +581,8 @@ namespace bgl
 
 		RenderTargetBase& rt = *target->As<RenderTargetBase>();
 
-		const uint32_t index         = rt.LastPresentedIndex();
-		TextureHandle  textureHandle = rt.BackbufferTexture(index);
+		const uint32_t index         = rt.GetLastPresentedIndex();
+		TextureHandle  textureHandle = rt.GetBackbufferTexture(index);
 
 		// A discard frees the slot with its copy possibly still in flight; the allocator cannot
 		// be reset under it.
