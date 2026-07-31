@@ -23,10 +23,6 @@ namespace bgl
 	{
 		gassert(m_Desc.meshShader != nullptr, "Meshlet pipeline requires a mesh shader");
 
-		// The RHI allows a mesh-only pipeline (D3D12 builds one for reflection); Metal would need a
-		// rasterization-disabled descriptor, which is not implemented.
-		gassert(m_Desc.pixelShader != nullptr, "Metal meshlet pipeline needs a pixel shader");
-
 		SlangErrorChecker errChecker;
 
 		std::vector<slang::IComponentType*>            components;
@@ -134,6 +130,14 @@ namespace bgl
 			gassert(fn.get() != nullptr, "Meshlet stage library is missing its entry function");
 			return fn;
 		};
+
+		// A mesh-only pipeline exists for its reflection, not to draw -- CreateUniforms builds from
+		// one. It gets no MSL and no PSO: nothing can rasterize without a fragment function, and
+		// Slang's MSL backend segfaults generating code for a mesh entry with no mesh output, which
+		// is exactly the shape a reflection-only shader has. GetMTLPipelineState() is null, and
+		// DispatchMesh refuses it.
+		if (m_Desc.pixelShader == nullptr)
+			return;
 
 		NS::SharedPtr<MTL::Function> meshFn = compileFunction(m_Desc.meshShader.Get());
 		NS::SharedPtr<MTL::Function> fragFn = compileFunction(m_Desc.pixelShader.Get());

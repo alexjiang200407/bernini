@@ -297,7 +297,10 @@ namespace bgl
 		gassert(m_MeshletState.kernel != nullptr, "DispatchMesh without a meshlet state");
 
 		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
-		auto* rm       = m_ResourceManager->As<ResourceManager>();
+		gassert(
+			pipeline->GetMTLPipelineState() != nullptr,
+			"DispatchMesh on a mesh-only pipeline: it has no pixel shader, so it cannot draw");
+		auto* rm = m_ResourceManager->As<ResourceManager>();
 
 		MTL::RenderCommandEncoder* enc = RenderEncoder(m_MeshletState.frameBuffer);
 		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
