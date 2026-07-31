@@ -29,7 +29,12 @@ add_library(bgl_objects OBJECT
 
 target_include_directories(bgl_objects
 	PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+	PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+		${CMAKE_BINARY_DIR}/generated
+		# A generated header includes its imports as siblings, and Entry/Range/RangeWithCount are
+		# hand-written and still in the source tree, so both directories have to be reachable.
+		${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 )
 
 
@@ -180,6 +185,8 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+            ${CMAKE_BINARY_DIR}/generated
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/idl
             ${Stb_INCLUDE_DIR}
     )
 
@@ -257,6 +264,8 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 			${CMAKE_CURRENT_SOURCE_DIR}/include
 			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+			${CMAKE_BINARY_DIR}/generated
+			${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 			${Stb_INCLUDE_DIR}
 	)
 
