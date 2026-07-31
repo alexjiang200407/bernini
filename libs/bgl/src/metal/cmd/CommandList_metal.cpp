@@ -56,6 +56,86 @@ namespace bgl
 		m_Device = m_ResourceManager->As<ResourceManager>()->GetMTLDevice();
 	}
 
+	namespace
+	{
+		bool
+		SameAttachments(const FrameBuffer& a, const FrameBuffer& b) noexcept
+		{
+			if (a.colorAttachments.size() != b.colorAttachments.size())
+				return false;
+			for (size_t i = 0; i < a.colorAttachments.size(); ++i)
+			{
+				if (a.colorAttachments[i].idx != b.colorAttachments[i].idx ||
+				    a.colorAttachments[i].generation != b.colorAttachments[i].generation)
+					return false;
+			}
+			return a.depthAttachment.idx == b.depthAttachment.idx &&
+			       a.depthAttachment.generation == b.depthAttachment.generation;
+		}
+	}
+
+	void
+	CommandList::EndEncoder() noexcept
+	{
+		if (m_Encoder == nullptr)
+			return;
+		m_Encoder->endEncoding();
+		m_Encoder     = nullptr;
+		m_EncoderKind = EncoderKind::kNone;
+	}
+
+	MTL::BlitCommandEncoder*
+	CommandList::BlitEncoder() noexcept
+	{
+		if (m_EncoderKind != EncoderKind::kBlit)
+		{
+			EndEncoder();
+			m_Encoder     = m_CmdBuffer->blitCommandEncoder();
+			m_EncoderKind = EncoderKind::kBlit;
+		}
+		return static_cast<MTL::BlitCommandEncoder*>(m_Encoder);
+	}
+
+	MTL::ComputeCommandEncoder*
+	CommandList::ComputeEncoder() noexcept
+	{
+		if (m_EncoderKind != EncoderKind::kCompute)
+		{
+			EndEncoder();
+			m_Encoder     = m_CmdBuffer->computeCommandEncoder();
+			m_EncoderKind = EncoderKind::kCompute;
+		}
+		return static_cast<MTL::ComputeCommandEncoder*>(m_Encoder);
+	}
+
+	MTL::RenderCommandEncoder*
+	CommandList::RenderEncoder(const FrameBuffer& fb) noexcept
+	{
+		if (m_EncoderKind == EncoderKind::kRender && SameAttachments(m_EncoderFrameBuffer, fb))
+			return static_cast<MTL::RenderCommandEncoder*>(m_Encoder);
+
+		EndEncoder();
+
+		auto* rm = m_ResourceManager->As<ResourceManager>();
+
+		// Load-preserve: a clear is its own pass, so whatever it wrote survives into this one.
+		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+		for (size_t i = 0; i < fb.colorAttachments.size(); ++i)
+		{
+			MTL::Texture* texture =
+				rm->GetTexture(rm->GetRtvTexture(fb.colorAttachments[i])).GetMTLResource();
+			MTL::RenderPassColorAttachmentDescriptor* c = pass->colorAttachments()->object(i);
+			c->setTexture(texture);
+			c->setLoadAction(MTL::LoadActionLoad);
+			c->setStoreAction(MTL::StoreActionStore);
+		}
+
+		m_Encoder            = m_CmdBuffer->renderCommandEncoder(pass);
+		m_EncoderKind        = EncoderKind::kRender;
+		m_EncoderFrameBuffer = fb;
+		return static_cast<MTL::RenderCommandEncoder*>(m_Encoder);
+	}
+
 	void
 	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator*) noexcept
 	{
@@ -66,15 +146,22 @@ namespace bgl
 		// Close drains here. The command buffer outlives the drain via its own retain (RetainPtr).
 		m_ScopePool = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
-		auto* mtlQueue = cmdQueue->As<CommandQueue>()->GetMTLCommandQueue();
-		m_CmdBuffer    = NS::RetainPtr(mtlQueue->commandBuffer());
-		m_Open         = true;
+		auto* queue = cmdQueue->As<CommandQueue>();
+		m_CmdBuffer = NS::RetainPtr(queue->GetMTLCommandQueue()->commandBuffer());
+
+		// Before any encoder: a wait encoded after them would sit past the work it must gate.
+		queue->BeginCommandBuffer(m_CmdBuffer.get());
+
+		m_Encoder     = nullptr;
+		m_EncoderKind = EncoderKind::kNone;
+		m_Open        = true;
 	}
 
 	void
 	CommandList::Close() noexcept
 	{
 		gassert(m_Open, "Command list is not open");
+		EndEncoder();
 		m_Open = false;
 		m_ScopePool.reset();
 	}
@@ -97,9 +184,7 @@ namespace bgl
 		auto staging =
 			NS::TransferPtr(m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared));
 
-		auto* blit = m_CmdBuffer->blitCommandEncoder();
-		blit->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
-		blit->endEncoding();
+		BlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
 	}
 
 	void
@@ -117,9 +202,7 @@ namespace bgl
 		auto* srcBuffer = m_ResourceManager->GetBuffer(src).GetMTLResource();
 		auto* dstBuffer = m_ResourceManager->GetBuffer(dst).GetMTLResource();
 
-		auto* blit = m_CmdBuffer->blitCommandEncoder();
-		blit->copyFromBuffer(srcBuffer, srcOffset, dstBuffer, dstOffset, byteSize);
-		blit->endEncoding();
+		BlitEncoder()->copyFromBuffer(srcBuffer, srcOffset, dstBuffer, dstOffset, byteSize);
 	}
 
 	void
@@ -134,14 +217,12 @@ namespace bgl
 		const auto& srcBuffer = m_ResourceManager->GetBuffer(src);
 		auto*       dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMTLResource();
 
-		auto* blit = m_CmdBuffer->blitCommandEncoder();
-		blit->copyFromBuffer(
+		BlitEncoder()->copyFromBuffer(
 			srcBuffer.GetMTLResource(),
 			0,
 			dstBuffer,
 			0,
 			srcBuffer.GetDesc().byteSize);
-		blit->endEncoding();
 	}
 
 	void
@@ -160,8 +241,7 @@ namespace bgl
 		const TextureReadbackLayout layout = m_ResourceManager->GetTextureReadbackLayout(src);
 		MTL::Buffer* dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMTLResource();
 
-		auto* blit = m_CmdBuffer->blitCommandEncoder();
-		blit->copyFromTexture(
+		BlitEncoder()->copyFromTexture(
 			tex.GetMTLResource(),
 			0,
 			0,
@@ -171,13 +251,13 @@ namespace bgl
 			layout.offset,
 			layout.rowPitch,
 			layout.totalBytes);
-		blit->endEncoding();
 	}
 
 	void
 	CommandList::ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept
 	{
 		gassert(m_Open, "ClearRenderTarget on a closed command list");
+		EndEncoder();
 
 		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
 		MTL::RenderPassColorAttachmentDescriptor* color = pass->colorAttachments()->object(0);
@@ -219,21 +299,7 @@ namespace bgl
 		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
 		auto* rm       = m_ResourceManager->As<ResourceManager>();
 
-		// Describe the render pass from the framebuffer. Load-preserve: clears are their own pass, so
-		// prior contents (e.g. an earlier ClearRtv) survive into this draw.
-		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
-		const FrameBuffer&         fb   = m_MeshletState.frameBuffer;
-		for (size_t i = 0; i < fb.colorAttachments.size(); ++i)
-		{
-			MTL::Texture* texture =
-				rm->GetTexture(rm->GetRtvTexture(fb.colorAttachments[i])).GetMTLResource();
-			MTL::RenderPassColorAttachmentDescriptor* c = pass->colorAttachments()->object(i);
-			c->setTexture(texture);
-			c->setLoadAction(MTL::LoadActionLoad);
-			c->setStoreAction(MTL::StoreActionStore);
-		}
-
-		MTL::RenderCommandEncoder* enc = m_CmdBuffer->renderCommandEncoder(pass);
+		MTL::RenderCommandEncoder* enc = RenderEncoder(m_MeshletState.frameBuffer);
 		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
 
 		// A cbuffer reflects at one buffer index that every stage using it shares, so bind each to all
@@ -289,7 +355,6 @@ namespace bgl
 			MTL::Size(x, y, z),
 			pipeline->GetThreadsPerObjectThreadgroup(),
 			pipeline->GetThreadsPerMeshThreadgroup());
-		enc->endEncoding();
 	}
 
 	void
@@ -307,7 +372,7 @@ namespace bgl
 		auto* pipeline = m_ComputeState.kernel->pipeline->As<ComputePipeline>();
 		auto* rm       = m_ResourceManager->As<ResourceManager>();
 
-		auto* enc = m_CmdBuffer->computeCommandEncoder();
+		auto* enc = ComputeEncoder();
 		enc->setComputePipelineState(pipeline->GetMTLPipelineState());
 
 		for (const auto& [name, uniforms] : m_ComputeState.kernel->uniforms)
@@ -323,6 +388,5 @@ namespace bgl
 		}
 
 		enc->dispatchThreadgroups(MTL::Size(x, y, z), pipeline->GetThreadsPerThreadgroup());
-		enc->endEncoding();
 	}
 }

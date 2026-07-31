@@ -20,6 +20,9 @@ namespace bgl
 		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
 		cmdBuffer->commit();
 
+		if (m_ListsBuilding > 0)
+			--m_ListsBuilding;
+
 		return m_NextFenceValue++;
 	}
 
@@ -65,23 +68,43 @@ namespace bgl
 		WaitForFenceCPUBlocking(m_NextFenceValue++);
 	}
 
-	// Cross-queue GPU synchronization is unused while there is a single queue; these land with the
-	// second queue.
-	void
-	CommandQueue::InsertWait(uint64_t) noexcept
+	namespace
 	{
-		gunimplemented("Metal backend: InsertWait not implemented yet");
+		constexpr const char* c_WaitTooLate =
+			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
+			"already "
+			"building on this queue, and a wait cannot reach a command buffer already started";
 	}
 
 	void
-	CommandQueue::InsertWaitForQueueFence(ICommandQueue*, uint64_t) const noexcept
+	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
-		gunimplemented("Metal backend: InsertWaitForQueueFence not implemented yet");
+		gassert(m_ListsBuilding == 0, c_WaitTooLate, m_ListsBuilding);
+		m_PendingWaits.push_back({ m_Event, fenceValue });
 	}
 
 	void
-	CommandQueue::InsertWaitForQueue(ICommandQueue*) const noexcept
+	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
-		gunimplemented("Metal backend: InsertWaitForQueue not implemented yet");
+		gassert(cq != nullptr, "InsertWaitForQueueFence requires a non-null queue");
+		gassert(m_ListsBuilding == 0, c_WaitTooLate, m_ListsBuilding);
+		m_PendingWaits.push_back({ cq->As<CommandQueue>()->m_Event, fenceValue });
+	}
+
+	void
+	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept
+	{
+		gassert(otherQueue != nullptr, "InsertWaitForQueue requires a non-null queue");
+		// Everything submitted so far: the next value has not been signalled yet.
+		InsertWaitForQueueFence(otherQueue, otherQueue->GetNextFenceValue() - 1);
+	}
+
+	void
+	CommandQueue::BeginCommandBuffer(MTL::CommandBuffer* cmdBuffer) noexcept
+	{
+		for (const PendingWait& wait : m_PendingWaits)
+			cmdBuffer->encodeWait(wait.event.get(), wait.fenceValue);
+		m_PendingWaits.clear();
+		++m_ListsBuilding;
 	}
 }
