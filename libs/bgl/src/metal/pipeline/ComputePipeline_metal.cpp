@@ -49,6 +49,17 @@ namespace bgl
 		slang::ProgramLayout* layout = linkedProgram->getLayout();
 		ReflectCbuffers(layout, m_UniformLayoutEntries, m_HandleOffsets);
 
+		// One entry point, so this stage's [[buffer(N)]] indices are the whole pipeline's and the
+		// shared rootParamIndex can hold them. They still come from the per-stage reflection, so
+		// there is one answer to where a uniform binds rather than two that happen to agree.
+		MetalStageBindingMap bindings;
+		ReflectStageBindings(layout, bindings);
+		for (auto& [name, entry] : m_UniformLayoutEntries)
+		{
+			if (auto it = bindings.find(name); it != bindings.end())
+				entry.rootParamIndex = it->second;
+		}
+
 		SlangUInt threadGroup[3] = { 1, 1, 1 };
 		layout->getEntryPointByIndex(0)->getComputeThreadGroupSize(3, threadGroup);
 		m_ThreadsPerThreadgroup = MTL::Size(threadGroup[0], threadGroup[1], threadGroup[2]);

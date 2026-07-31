@@ -12,8 +12,10 @@ namespace bgl
 	/**
 	 * The Metal compute pipeline. Compiles its shader's entry point to MSL via the Slang session,
 	 * builds an MTL::ComputePipelineState, and reflects the constant buffers into the API-agnostic
-	 * UniformLayoutEntry map (shared with the D3D12 backend). The reflected `rootParamIndex` is the
-	 * Metal `[[buffer(N)]]` slot the kernel binds its uniforms at.
+	 * UniformLayoutEntry map (shared with the D3D12 backend). `rootParamIndex` holds the Metal
+	 * `[[buffer(N)]]` slot the kernel binds its uniforms at, which a compute pipeline may carry
+	 * because it has one entry point: its single stage's index space is the whole pipeline's. A
+	 * meshlet pipeline cannot, and keeps a map per stage instead.
 	 */
 	class ComputePipeline final : public core::RefCounter<IComputePipeline>
 	{

@@ -165,8 +165,9 @@ namespace bgl
 			UniformLayoutEntry entry{};
 			entry.size   = size;
 			entry.layout = std::make_shared<const ReflectedLayout>(std::move(reflected));
-			// On Metal the binding index is the [[buffer(N)]] slot the shader reads uniforms from.
-			entry.rootParamIndex         = static_cast<uint32_t>(param->getBindingIndex());
+			// rootParamIndex stays invalid. A [[buffer(N)]] index is per-stage on Metal, and this
+			// layout may span several -- ReflectStageBindings is the only thing that can answer it,
+			// and a pipeline whose stages share one index fills the field in from there.
 			outEntries[param->getName()] = std::move(entry);
 		}
 	}
