@@ -466,17 +466,27 @@ namespace bgl
 		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
 		ApplyRenderState(enc, pipeline);
 
-		// A cbuffer reflects at one buffer index that every stage using it shares, so bind each to all
-		// stages present (an unused bind is ignored). setBytes caps at 4KB, which cbuffers stay under.
+		// Each stage compiles as its own program, so a cbuffer's [[buffer(N)]] index is per-stage --
+		// two cbuffers can share an N across stages. Bind only to the stages whose program declares
+		// the cbuffer, at that stage's index. setBytes caps at 4KB, which cbuffers stay under.
 		const bool hasObject     = m_MeshletState.kernel->pipeline->GetDesc().ampShader != nullptr;
 		MTL::RenderStages stages = MTL::RenderStageMesh | MTL::RenderStageFragment;
 		if (hasObject)
 			stages |= MTL::RenderStageObject;
 
+		const auto bindToStages = [&](std::string_view name, const void* bytes, size_t size) {
+			if (const uint32_t* idx = pipeline->GetStageBinding(MeshletStage::kMesh, name))
+				enc->setMeshBytes(bytes, size, *idx);
+			if (const uint32_t* idx = pipeline->GetStageBinding(MeshletStage::kFragment, name))
+				enc->setFragmentBytes(bytes, size, *idx);
+			if (const uint32_t* idx = pipeline->GetStageBinding(MeshletStage::kObject, name);
+			    idx != nullptr && hasObject)
+				enc->setObjectBytes(bytes, size, *idx);
+		};
+
 		for (const auto& [name, uniforms] : m_MeshletState.kernel->uniforms)
 		{
-			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
-			const MappedUniform      mapped =
+			const MappedUniform mapped =
 				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
 
 			for (MTL::Resource* resource : mapped.resident)
@@ -485,12 +495,7 @@ namespace bgl
 					MTL::ResourceUsageRead | MTL::ResourceUsageWrite,
 					stages);
 
-			const void*  bytes = mapped.bytes.data();
-			const size_t size  = mapped.bytes.size();
-			enc->setMeshBytes(bytes, size, entry.rootParamIndex);
-			enc->setFragmentBytes(bytes, size, entry.rootParamIndex);
-			if (hasObject)
-				enc->setObjectBytes(bytes, size, entry.rootParamIndex);
+			bindToStages(name, mapped.bytes.data(), mapped.bytes.size());
 		}
 
 		// A material's texture id lives in GPU memory, so the encoder never sees the texture named.
@@ -506,11 +511,7 @@ namespace bgl
 			if (debug != nullptr)
 				enc->useResource(debug, MTL::ResourceUsageRead | MTL::ResourceUsageWrite, stages);
 
-			const uint32_t index = pipeline->GetUniformLayoutEntry("gDebug").rootParamIndex;
-			enc->setMeshBytes(&address, sizeof(address), index);
-			enc->setFragmentBytes(&address, sizeof(address), index);
-			if (hasObject)
-				enc->setObjectBytes(&address, sizeof(address), index);
+			bindToStages("gDebug", &address, sizeof(address));
 		}
 
 		// Single viewport/scissor only; multi-viewport (setViewports + a viewport-index shader) lands

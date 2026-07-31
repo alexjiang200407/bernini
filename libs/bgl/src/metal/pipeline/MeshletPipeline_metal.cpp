@@ -127,8 +127,11 @@ namespace bgl
 		// interpolant [[user]] attributes, so any mesh->fragment varying fails to link; per-stage
 		// compilation keeps them. (Numbered semantics like TEXCOORD0 still mismatch mesh vs fragment,
 		// so interpolant semantics must be un-numbered -- a Slang MSL quirk.) A returned MTL::Function
-		// retains its library, so the local Library ptr can drop.
-		const auto compileFunction = [&](IShader* shader) -> NS::SharedPtr<MTL::Function> {
+		// retains its library, so the local Library ptr can drop. Because each stage is its own
+		// program, its [[buffer(N)]] indices are its own too -- recorded per stage for the bind path.
+		const auto compileFunction =
+			[&](IShader*              shader,
+		        MetalStageBindingMap& outBindings) -> NS::SharedPtr<MTL::Function> {
 			slang::IModule*                   module = shader->GetSlangModule();
 			Slang::ComPtr<slang::IEntryPoint> entryPoint;
 			module->findEntryPointByName(
@@ -145,6 +148,8 @@ namespace bgl
 				errChecker;
 			Slang::ComPtr<slang::IComponentType> linked;
 			prog->link(linked.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
+
+			ReflectStageBindings(linked->getLayout(), outBindings);
 
 			Slang::ComPtr<slang::IBlob> blob;
 			linked->getEntryPointCode(0, 0, blob.writeRef(), errChecker.WriteDiagnosticBlob()) >>
@@ -177,11 +182,17 @@ namespace bgl
 		if (m_Desc.pixelShader == nullptr)
 			return;
 
-		NS::SharedPtr<MTL::Function> meshFn = compileFunction(m_Desc.meshShader.Get());
-		NS::SharedPtr<MTL::Function> fragFn = compileFunction(m_Desc.pixelShader.Get());
+		NS::SharedPtr<MTL::Function> meshFn = compileFunction(
+			m_Desc.meshShader.Get(),
+			m_StageBindings[static_cast<size_t>(MeshletStage::kMesh)]);
+		NS::SharedPtr<MTL::Function> fragFn = compileFunction(
+			m_Desc.pixelShader.Get(),
+			m_StageBindings[static_cast<size_t>(MeshletStage::kFragment)]);
 		NS::SharedPtr<MTL::Function> objFn;
 		if (m_Desc.ampShader != nullptr)
-			objFn = compileFunction(m_Desc.ampShader.Get());
+			objFn = compileFunction(
+				m_Desc.ampShader.Get(),
+				m_StageBindings[static_cast<size_t>(MeshletStage::kObject)]);
 
 		NS::Error*                                       error = nullptr;
 		NS::SharedPtr<MTL::MeshRenderPipelineDescriptor> pd =

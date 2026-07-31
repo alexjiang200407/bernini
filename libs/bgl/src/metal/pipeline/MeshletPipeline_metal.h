@@ -9,11 +9,19 @@
 
 namespace bgl
 {
+	enum class MeshletStage
+	{
+		kObject,
+		kMesh,
+		kFragment
+	};
+
 	/**
-	 * The Metal meshlet (mesh-shader) render pipeline. Links the amplification/mesh/pixel entry
-	 * points into one MSL library and builds an MTL::RenderPipelineState from a
-	 * MeshRenderPipelineDescriptor. The object/mesh threadgroup sizes come from the shaders'
-	 * [numthreads]; the render targets are described per dispatch, not baked into the PSO.
+	 * The Metal meshlet (mesh-shader) render pipeline. Each stage is compiled to its own MSL
+	 * library (a whole-program compile drops mesh interpolant attributes), then combined into an
+	 * MTL::RenderPipelineState via a MeshRenderPipelineDescriptor. The object/mesh threadgroup
+	 * sizes come from the shaders' [numthreads]; the render targets are described per dispatch, not
+	 * baked into the PSO.
 	 */
 	class MeshletPipeline final : public core::RefCounter<IMeshletPipeline>
 	{
@@ -79,6 +87,21 @@ namespace bgl
 			return it->second;
 		}
 
+		/**
+		 * The [[buffer(N)]] index `name` has in one stage's compiled MSL, or nullptr when that
+		 * stage's program does not declare it. Indices are per-stage (each stage compiles as its
+		 * own program), so a cbuffer must be bound at each stage's own index -- binding one index
+		 * to every stage lets two cbuffers collide on a slot.
+		 */
+		[[nodiscard]] const uint32_t*
+		GetStageBinding(MeshletStage stage, std::string_view name) const noexcept
+		{
+			const MetalStageBindingMap& bindings = m_StageBindings[static_cast<size_t>(stage)];
+
+			auto it = bindings.find(name);
+			return it != bindings.end() ? &it->second : nullptr;
+		}
+
 	private:
 		[[nodiscard]] NS::SharedPtr<MTL::DepthStencilState>
 		BuildDepthStencilState(MTL::Device* device) const;
@@ -88,6 +111,7 @@ namespace bgl
 		NS::SharedPtr<MTL::DepthStencilState>   m_DepthStencilState;
 		UniformLayoutMap                        m_UniformLayoutEntries;
 		MetalHandleOffsetMap                    m_HandleOffsets;
+		std::array<MetalStageBindingMap, 3>     m_StageBindings;
 		MTL::Size                               m_ThreadsPerObject = MTL::Size(1, 1, 1);
 		MTL::Size                               m_ThreadsPerMesh   = MTL::Size(1, 1, 1);
 	};
