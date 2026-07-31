@@ -4,6 +4,8 @@ namespace bgl
 {
 	constexpr uint32_t c_MaxRenderTargets = 8;
 
+	constexpr uint32_t c_CubeFaceCount = 6;
+
 	// Swapchain images, and with it the frame-in-flight depth: the debug-readback ring and the
 	// per-frame command allocators are all sized to this.
 	constexpr uint32_t c_SwapchainImageCount = 2;

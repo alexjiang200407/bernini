@@ -8,6 +8,8 @@
 #include "resource/ResourceManager_metal.h"
 #include "util/util.h"
 
+#include <idl/DispatchArgs.h>
+
 #include <core/math.h>
 
 namespace bgl
@@ -153,6 +155,26 @@ namespace bgl
 			c->setTexture(texture);
 			c->setLoadAction(MTL::LoadActionLoad);
 			c->setStoreAction(MTL::StoreActionStore);
+		}
+
+		if (!fb.depthAttachment.IsNull())
+		{
+			const TextureHandle texHandle = rm->GetDsvTexture(fb.depthAttachment);
+			MTL::Texture*       texture   = rm->GetTexture(texHandle).GetMTLResource();
+
+			MTL::RenderPassDepthAttachmentDescriptor* d = pass->depthAttachment();
+			d->setTexture(texture);
+			d->setLoadAction(MTL::LoadActionLoad);
+			d->setStoreAction(MTL::StoreActionStore);
+
+			// One texture, two attachments: Metal binds the stencil plane separately from depth.
+			if (FormatHasStencil(rm->GetTexture(texHandle).GetDesc().format))
+			{
+				MTL::RenderPassStencilAttachmentDescriptor* s = pass->stencilAttachment();
+				s->setTexture(texture);
+				s->setLoadAction(MTL::LoadActionLoad);
+				s->setStoreAction(MTL::StoreActionStore);
+			}
 		}
 
 		m_Encoder            = m_CmdBuffer->renderCommandEncoder(pass);
@@ -396,19 +418,43 @@ namespace bgl
 	}
 
 	void
-	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
+	CommandList::ApplyRenderState(MTL::RenderCommandEncoder* enc, const MeshletPipeline* pipeline)
+		const noexcept
 	{
-		gassert(m_Open, "DispatchMesh on a closed command list");
-		gassert(m_MeshletState.kernel != nullptr, "DispatchMesh without a meshlet state");
+		enc->setDepthStencilState(pipeline->GetMTLDepthStencilState());
+
+		const RenderState& state = pipeline->GetDesc().renderState;
+		enc->setCullMode(ConvertCullMode(state.rasterState.cullMode));
+		enc->setFrontFacingWinding(
+			state.rasterState.frontCounterClockwise ? MTL::WindingCounterClockwise :
+													  MTL::WindingClockwise);
+		enc->setTriangleFillMode(ConvertFillMode(state.rasterState.fillMode));
+		enc->setDepthClipMode(
+			state.rasterState.depthClipEnable ? MTL::DepthClipModeClip : MTL::DepthClipModeClamp);
+		enc->setDepthBias(
+			static_cast<float>(state.rasterState.depthBias),
+			state.rasterState.slopeScaledDepthBias,
+			state.rasterState.depthBiasClamp);
+
+		if (state.depthStencilState.stencilEnable)
+			enc->setStencilReferenceValue(state.depthStencilState.stencilRefValue);
+	}
+
+	CommandList::MeshletDraw
+	CommandList::BindMeshletDraw() noexcept
+	{
+		gassert(m_Open, "A meshlet draw needs an open command list");
+		gassert(m_MeshletState.kernel != nullptr, "A meshlet draw needs a meshlet state");
 
 		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
 		gassert(
 			pipeline->GetMTLPipelineState() != nullptr,
-			"DispatchMesh on a mesh-only pipeline: it has no pixel shader, so it cannot draw");
+			"A mesh-only pipeline has no pixel shader, so it cannot draw");
 		auto* rm = m_ResourceManager->As<ResourceManager>();
 
 		MTL::RenderCommandEncoder* enc = RenderEncoder(m_MeshletState.frameBuffer);
 		enc->setRenderPipelineState(pipeline->GetMTLPipelineState());
+		ApplyRenderState(enc, pipeline);
 
 		// A cbuffer reflects at one buffer index that every stage using it shares, so bind each to all
 		// stages present (an unused bind is ignored). setBytes caps at 4KB, which cbuffers stay under.
@@ -462,10 +508,36 @@ namespace bgl
 			                      static_cast<NS::UInteger>(r.maxY - r.minY) });
 		}
 
-		enc->drawMeshThreadgroups(
+		return { enc, pipeline };
+	}
+
+	void
+	CommandList::DispatchMesh(uint32_t x, uint32_t y, uint32_t z) noexcept
+	{
+		const MeshletDraw draw = BindMeshletDraw();
+		draw.encoder->drawMeshThreadgroups(
 			MTL::Size(x, y, z),
-			pipeline->GetThreadsPerObjectThreadgroup(),
-			pipeline->GetThreadsPerMeshThreadgroup());
+			draw.pipeline->GetThreadsPerObjectThreadgroup(),
+			draw.pipeline->GetThreadsPerMeshThreadgroup());
+	}
+
+	void
+	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
+	{
+		gassert(
+			!m_MeshletState.indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
+
+		const MeshletDraw draw = BindMeshletDraw();
+		auto*             rm   = m_ResourceManager->As<ResourceManager>();
+
+		// MTLDispatchThreadgroupsIndirectArguments is the same three uint32s idl::DispatchArgs holds,
+		// which is also D3D12's DISPATCH_MESH_ARGUMENTS, so one buffer feeds both backends unchanged.
+		draw.encoder->drawMeshThreadgroups(
+			rm->GetBuffer(m_MeshletState.indirectArgs).GetMTLResource(),
+			static_cast<NS::UInteger>(argIdx) * sizeof(idl::DispatchArgs),
+			draw.pipeline->GetThreadsPerObjectThreadgroup(),
+			draw.pipeline->GetThreadsPerMeshThreadgroup());
 	}
 
 	void
