@@ -25,7 +25,13 @@ find_package(slang CONFIG REQUIRED)
 
 target_include_directories(bgl_metal
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        # The generated IDL headers are a build artifact, and a generated one includes its
+        # hand-written imports as siblings -- so both roots, as bgl_objects has them.
+        ${CMAKE_BINARY_DIR}/generated
+        ${CMAKE_CURRENT_SOURCE_DIR}/../idl
     SYSTEM PRIVATE ${metalcpp_SOURCE_DIR}
 )
 
