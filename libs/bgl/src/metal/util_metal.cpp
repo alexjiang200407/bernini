@@ -97,68 +97,12 @@ namespace bgl
 			return MTL::PixelFormatDepth32Float;
 		case Format::D32S8:
 			return MTL::PixelFormatDepth32Float_Stencil8;
+		// Apple silicon has no Depth24Unorm_Stencil8.
+		case Format::D24S8:
+			return MTL::PixelFormatDepth32Float_Stencil8;
 		default:
 			gfatal("Metal backend: unsupported Format {}", static_cast<int>(format));
 		}
 	}
 
-	uint32_t
-	FormatBytesPerPixel(Format format) noexcept
-	{
-		switch (format)
-		{
-		case Format::R8_UINT:
-		case Format::R8_SINT:
-		case Format::R8_UNORM:
-		case Format::R8_SNORM:
-			return 1;
-		case Format::RG8_UINT:
-		case Format::RG8_SINT:
-		case Format::RG8_UNORM:
-		case Format::RG8_SNORM:
-		case Format::R16_UINT:
-		case Format::R16_SINT:
-		case Format::R16_UNORM:
-		case Format::R16_SNORM:
-		case Format::R16_FLOAT:
-		case Format::D16:
-			return 2;
-		case Format::RGBA8_UINT:
-		case Format::RGBA8_SINT:
-		case Format::RGBA8_UNORM:
-		case Format::RGBA8_SNORM:
-		case Format::SRGBA8_UNORM:
-		case Format::BGRA8_UNORM:
-		case Format::BGRX8_UNORM:
-		case Format::SBGRA8_UNORM:
-		case Format::SBGRX8_UNORM:
-		case Format::R10G10B10A2_UNORM:
-		case Format::R11G11B10_FLOAT:
-		case Format::RG16_UINT:
-		case Format::RG16_SINT:
-		case Format::RG16_UNORM:
-		case Format::RG16_SNORM:
-		case Format::RG16_FLOAT:
-		case Format::R32_UINT:
-		case Format::R32_SINT:
-		case Format::R32_FLOAT:
-		case Format::D32:
-			return 4;
-		case Format::RGBA16_UINT:
-		case Format::RGBA16_SINT:
-		case Format::RGBA16_UNORM:
-		case Format::RGBA16_SNORM:
-		case Format::RGBA16_FLOAT:
-		case Format::RG32_UINT:
-		case Format::RG32_SINT:
-		case Format::RG32_FLOAT:
-			return 8;
-		case Format::RGBA32_UINT:
-		case Format::RGBA32_SINT:
-		case Format::RGBA32_FLOAT:
-			return 16;
-		default:
-			gfatal("Metal backend: no byte-per-pixel size for Format {}", static_cast<int>(format));
-		}
-	}
 }

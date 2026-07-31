@@ -6,6 +6,9 @@
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
+#include "util/util.h"
+
+#include <core/math.h>
 
 namespace bgl
 {
@@ -269,6 +272,86 @@ namespace bgl
 
 		// An empty pass: the Clear load action writes the color and Store keeps it.
 		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
+	}
+
+	void
+	CommandList::ClearDepthStencil(MTL::Texture* texture, float depth, uint8_t stencil) noexcept
+	{
+		gassert(m_Open, "ClearDepthStencil on a closed command list");
+		EndEncoder();
+
+		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
+
+		MTL::RenderPassDepthAttachmentDescriptor* d = pass->depthAttachment();
+		d->setTexture(texture);
+		d->setLoadAction(MTL::LoadActionClear);
+		d->setStoreAction(MTL::StoreActionStore);
+		d->setClearDepth(depth);
+
+		// Only a combined format carries stencil; attaching it to a depth-only texture is an error.
+		if (texture->pixelFormat() == MTL::PixelFormatDepth32Float_Stencil8)
+		{
+			MTL::RenderPassStencilAttachmentDescriptor* st = pass->stencilAttachment();
+			st->setTexture(texture);
+			st->setLoadAction(MTL::LoadActionClear);
+			st->setStoreAction(MTL::StoreActionStore);
+			st->setClearStencil(stencil);
+		}
+
+		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
+	}
+
+	void
+	CommandList::WriteTexture(
+		TextureHandle                           handle,
+		std::span<const TextureSubresourceData> subresources) noexcept
+	{
+		gassert(m_Open, "WriteTexture on a closed command list");
+		gassert(m_ResourceManager->ValidTextureHandle(handle), "WriteTexture on an invalid handle");
+
+		const Texture&     texture = m_ResourceManager->GetTexture(handle);
+		const TextureDesc& desc    = texture.GetDesc();
+		MTL::Texture*      dst     = texture.GetMTLResource();
+
+		// Block-aware, not per-pixel: BC5 and BC7 carry 16 bytes per 4x4 block, so a row is
+		// ceil(width/4) blocks and a "row" of the source covers four texel rows.
+		const FormatInfo format = GetFormatInfo(desc.format);
+
+		// One staging buffer per subresource, blitted on the GPU timeline so the upload orders ahead
+		// of whatever samples it. The command buffer retains each until it completes.
+		auto* blit = BlitEncoder();
+		for (size_t i = 0; i < subresources.size(); ++i)
+		{
+			const TextureSubresourceData& sub = subresources[i];
+			if (sub.data == nullptr)
+				continue;
+
+			const uint32_t mip    = static_cast<uint32_t>(i % desc.mipLevels);
+			const uint32_t slice  = static_cast<uint32_t>(i / desc.mipLevels);
+			const uint32_t width  = std::max(1u, desc.width >> mip);
+			const uint32_t height = std::max(1u, desc.height >> mip);
+
+			const uint64_t rowBlocks = core::div_ceil<uint64_t>(width, format.blockEdgeTexels);
+			const uint64_t colBlocks = core::div_ceil<uint64_t>(height, format.blockEdgeTexels);
+
+			const uint64_t rowPitch =
+				sub.rowPitch != 0 ? sub.rowPitch : rowBlocks * format.bytesPerBlock;
+			const uint64_t byteSize = rowPitch * colBlocks;
+
+			auto staging = NS::TransferPtr(
+				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));
+
+			blit->copyFromBuffer(
+				staging.get(),
+				0,
+				rowPitch,
+				byteSize,
+				MTL::Size(width, height, 1),
+				dst,
+				slice,
+				mip,
+				MTL::Origin(0, 0, 0));
+		}
 	}
 
 	void

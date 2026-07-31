@@ -2,8 +2,10 @@
 #include "metal_cpp.h"
 
 #include "resource/Buffer_metal.h"
+#include "resource/Dsv_metal.h"
 #include "resource/ReadbackBuffer_metal.h"
 #include "resource/Rtv_metal.h"
+#include "resource/Sampler_metal.h"
 #include "resource/Texture_metal.h"
 
 #include "resource/ResourceManager.h"
@@ -31,9 +33,8 @@ namespace bgl
 	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
 
 	/**
-	 * The Metal resource manager. Owns buffers, readback buffers, render-target textures and RTVs.
-	 * SRV/sampler textures with uploads and depth (DSV) arrive with the texture slice; those
-	 * factories are gunimplemented for now.
+	 * The Metal resource manager. Owns every GPU resource behind an index handle: buffers, readback
+	 * buffers, textures, samplers, and the RTV/DSV records that name which texture a pass attaches.
 	 *
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
@@ -136,63 +137,39 @@ namespace bgl
 		void
 		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept override;
 
-		// ---- not yet implemented (scene slice: SRV textures, samplers, depth) ----
+		[[nodiscard]] SamplerHandle
+		CreateSampler(const SamplerDesc& desc) noexcept override;
 
-		SamplerHandle
-		CreateSampler(const SamplerDesc&) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
 		void
-		DestroySampler(SamplerHandle, bool) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		void
-		DestroyDsv(DsvHandle, bool) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		DsvHandle
-		CreateDsv(TextureHandle, const DsvDesc&) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		const Dsv&
-		GetDsv(DsvHandle) const noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		TextureHandle
-		GetDsvTexture(DsvHandle) const noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
+		DestroySampler(SamplerHandle handle, bool deferred = true) noexcept override;
+
 		const Sampler&
-		GetSampler(SamplerHandle) const noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		bool
-		IsTextureCube(const TextureHandle&) const noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		bool
-		ValidSamplerHandle(const SamplerHandle&) const noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
-		bool
-		ValidDsvHandle(const DsvHandle&) const noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
+		GetSampler(SamplerHandle handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;
+
+		[[nodiscard]] DsvHandle
+		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept override;
+
 		void
-		ClearDsv(ICommandList*, DsvHandle, float, uint8_t) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
+		DestroyDsv(DsvHandle handle, bool deferred = true) noexcept override;
+
+		const Dsv&
+		GetDsv(DsvHandle handle) const noexcept override;
+
+		TextureHandle
+		GetDsvTexture(DsvHandle handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidDsvHandle(const DsvHandle& handle) const noexcept override;
+
+		void
+		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
+			override;
+
+		[[nodiscard]] bool
+		IsTextureCube(const TextureHandle& handle) const noexcept override;
 
 	private:
 		enum class PendingType
@@ -201,6 +178,8 @@ namespace bgl
 			kReadback,
 			kTexture,
 			kRtv,
+			kDsv,
+			kSampler,
 		};
 
 		struct PendingDeletion
@@ -226,14 +205,13 @@ namespace bgl
 		void
 		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
 
-		static constexpr const char* c_Unimplemented =
-			"Metal ResourceManager: not implemented yet (scene slice)";
-
 		MTL::Device*                      m_Device = nullptr;
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_Readbacks;
 		core::slot_vector<Texture>        m_Textures;
 		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
+		core::slot_vector<Sampler>        m_Samplers;
 
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
 		std::vector<PendingDeletionBatch>                          m_PendingBatches;
