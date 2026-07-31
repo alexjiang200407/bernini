@@ -6,9 +6,18 @@
 
 namespace bgl
 {
-	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc&) :
-		m_Device(device)
-	{}
+	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc) :
+		m_Device(device), m_Buffers(desc.maxCbvSrvUavs), m_Readbacks(desc.maxReadbackBuffers),
+		m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs)
+	{
+		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
+		// built with no capacity grows by emplace_back, which moves its storage out from under a
+		// concurrent reader. Exhaustion returns a null handle instead, which every Create* reports.
+		gassert(desc.maxCbvSrvUavs > 0, "maxCbvSrvUavs must be greater than zero");
+		gassert(desc.maxTextures > 0, "maxTextures must be greater than zero");
+		gassert(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
+		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
+	}
 
 	BufferHandle
 	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept

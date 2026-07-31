@@ -5,6 +5,8 @@
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Texture.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
@@ -223,4 +225,49 @@ TEST_CASE_METHOD(
 
 	resourceManager->DestroyReadbackBuffer(readback);
 	resourceManager->DestroyBuffer(source);
+}
+
+// The pools must be fixed-capacity, because the lock-free Get*/Valid* reads the RHI promises are
+// sound only while slot storage never moves. Exhaustion is the observable half of that: a pool
+// built with no capacity would grow instead, reallocating under any concurrent reader. Sized from
+// ResourceManagerDesc, so a small limit here is the whole test.
+TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = false;
+	opts.maxRtvs          = 4;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+	auto rm = gfxBase->GetResourceManagerCpy();
+
+	auto texDesc                 = bgl::TextureDesc();
+	texDesc.width                = 4;
+	texDesc.height               = 4;
+	texDesc.format               = bgl::Format::RGBA8_UNORM;
+	texDesc.usage                = bgl::TextureUsageFlag::kRenderTarget;
+	texDesc.debugName            = "Pool Bound";
+	const bgl::TextureHandle tex = rm->CreateTexture(texDesc);
+	REQUIRE(rm->ValidTextureHandle(tex));
+
+	auto rtvDesc   = bgl::RtvDesc();
+	rtvDesc.format = bgl::Format::RGBA8_UNORM;
+
+	std::vector<bgl::RtvHandle> rtvs;
+	for (uint32_t i = 0; i < opts.maxRtvs; ++i)
+	{
+		const bgl::RtvHandle rtv = rm->CreateRtv(tex, rtvDesc);
+		CHECK_FALSE(rtv.IsNull());
+		rtvs.push_back(rtv);
+	}
+
+	// One past the limit: a null handle, not a grown pool.
+	CHECK(rm->CreateRtv(tex, rtvDesc).IsNull());
+
+	for (const bgl::RtvHandle& rtv : rtvs) rm->DestroyRtv(rtv, false);
+	rm->DestroyTexture(tex, false);
 }
