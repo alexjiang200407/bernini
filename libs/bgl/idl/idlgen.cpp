@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <slang-com-ptr.h>
 #include <slang.h>
 
@@ -279,12 +280,6 @@ namespace
 	};
 
 	size_t
-	RoundUp(size_t value, size_t align)
-	{
-		return (value + align - 1) / align * align;
-	}
-
-	size_t
 	MslScalarSize(slang::TypeReflection::ScalarType scalar)
 	{
 		using ST = slang::TypeReflection::ScalarType;
@@ -361,9 +356,9 @@ namespace
 			{
 				const MslLayout field = LayoutOf(type->getFieldByIndex(i)->getType(), metalVectors);
 				out.align             = std::max(out.align, field.align);
-				out.size              = RoundUp(out.size, field.align) + field.size;
+				out.size              = core::round_up(out.size, field.align) + field.size;
 			}
-			out.size = RoundUp(out.size, out.align);
+			out.size = core::round_up(out.size, out.align);
 			return out;
 		}
 		default:
@@ -383,7 +378,7 @@ namespace
 		for (unsigned i = 0; i < type->getFieldCount(); ++i)
 		{
 			const MslLayout field = LayoutOf(type->getFieldByIndex(i)->getType(), metalVectors);
-			cursor                = RoundUp(cursor, field.align);
+			cursor                = core::round_up(cursor, field.align);
 			offsets.push_back(cursor);
 			cursor += field.size;
 		}
