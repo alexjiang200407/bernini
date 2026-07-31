@@ -9,9 +9,12 @@ public struct InstancedPayload
 public struct ForwardVSOut
 {
     public float4 position : SV_Position;
-    public float3 worldPos : POSITION0;
+    // Un-numbered deliberately: Slang's MSL emits [[user(POSITION0)]] on a mesh output but
+    // [[user(POSITION)]] on the matching fragment input, and Metal's stage linkage rejects the
+    // mismatch. Nothing to D3D12, which binds an interpolant by its position in the struct.
+    public float3 worldPos : POSITION;
     public float3 normal : NORMAL;
-    public float2 uv : TEXCOORD0;
+    public float2 uv : TEXCOORD;
     public float4 tangent : TANGENT;
     public nointerpolation uint materialIndex : MATERIAL;
 

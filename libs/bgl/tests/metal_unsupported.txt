@@ -30,7 +30,6 @@ Pixels no geometry covered stay at zero motion
 Render to two targets
 Resize after drawing a frame
 Resize edge cases
-Resize recreates the backbuffers
 Resize with an existing static mesh instance
 Shader cache is populated cold and reused warm without recompiling
 Skybox renders headlessly
