@@ -13,6 +13,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_approx.hpp>
 
 #if defined(BERNINI_GPU_DEBUG)
 
@@ -153,3 +154,120 @@ TEST_CASE(
 }
 
 #endif  // BERNINI_GPU_DEBUG
+
+// Reports the sampled texel through a buffer rather than a GPU assertion, so it gates the bindless
+// texture and sampler resolution alone: no debug-buffer support needed, and it checks the value that
+// came back rather than only that an assertion fired.
+TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture][compute]")
+{
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto  resourceManager = gfxBase->GetResourceManagerCpy();
+	auto* device          = gfxBase->GetDevice();
+
+	auto cmdListDesc  = bgl::CommandListDesc();
+	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	auto texDesc          = bgl::TextureDesc();
+	texDesc.width         = 1;
+	texDesc.height        = 1;
+	texDesc.format        = bgl::Format::RGBA8_UNORM;
+	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.debugName     = "Texture Readback Source";
+
+	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
+	REQUIRE(resourceManager->ValidTextureHandle(texture));
+
+	// Deliberately not grey: a wrong channel order or a zeroed sample is visible in the result.
+	const uint8_t               texel[4] = { 255, 128, 0, 255 };
+	bgl::TextureSubresourceData sub{};
+	sub.data       = texel;
+	sub.rowPitch   = sizeof(texel);
+	sub.slicePitch = sizeof(texel);
+	std::array<bgl::TextureSubresourceData, 1> subresources{ sub };
+
+	const bgl::SamplerHandle sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
+	REQUIRE(resourceManager->ValidSamplerHandle(sampler));
+
+	auto outDesc         = bgl::ComputeBufferDesc();
+	outDesc.initialCount = 1;
+	outDesc.debugName    = "Sampled Colour";
+	outDesc.SetElement<glm::vec4>();
+	const bgl::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
+	REQUIRE(resourceManager->ValidBufferHandle(outBuffer));
+
+	auto rbDesc                        = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize                    = sizeof(glm::vec4);
+	rbDesc.debugName                   = "Sampled Colour Readback";
+	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	auto kernel = device->CreateComputeKernel(
+		bgl::ComputePipelineDesc()
+			.SetShader(device->CreateShader("CSTextureSampleReadback"))
+			.SetDebugName("Texture Sample Readback"));
+	REQUIRE(kernel.pipeline != nullptr);
+	REQUIRE(kernel.uniforms.contains("gUniforms"));
+
+	kernel["gUniforms"]["texture"]  = texture;
+	kernel["gUniforms"]["sampler"]  = sampler;
+	kernel["gUniforms"]["outColor"] = outBuffer;
+
+	cmdList->Open(cmdQueue, cmdAllocator);
+
+	cmdList->WriteTexture(texture, subresources);
+	cmdList->Barrier(
+		texture,
+		bgl::TextureBarrierDesc()
+			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.SetLayoutBefore(bgl::BarrierLayout::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource)
+			.SetLayoutAfter(bgl::BarrierLayout::kShaderResource));
+
+	auto state   = bgl::ComputeState();
+	state.kernel = &kernel;
+	cmdList->SetComputeState(state);
+	cmdList->Dispatch(1, 1, 1);
+
+	cmdList->Barrier(
+		outBuffer,
+		bgl::BufferBarrierDesc()
+			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+
+	cmdList->CopyBufferToReadback(rb, outBuffer);
+	cmdList->Close();
+
+	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+
+	const auto* sampled = static_cast<const glm::vec4*>(resourceManager->MapReadback(rb));
+	REQUIRE(sampled != nullptr);
+
+	CHECK(sampled->r == Catch::Approx(1.0f).margin(0.01));
+	CHECK(sampled->g == Catch::Approx(128.0f / 255.0f).margin(0.01));
+	CHECK(sampled->b == Catch::Approx(0.0f).margin(0.01));
+	CHECK(sampled->a == Catch::Approx(1.0f).margin(0.01));
+
+	resourceManager->UnmapReadback(rb);
+
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(outBuffer, false);
+	resourceManager->DestroySampler(sampler, false);
+	resourceManager->DestroyTexture(texture, false);
+}

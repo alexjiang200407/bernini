@@ -57,6 +57,18 @@ namespace bgl
 			return m_Buffers[index].GetMTLResource();
 		}
 
+		[[nodiscard]] MTL::Texture*
+		GetTextureBySlotIndex(uint32_t index) const noexcept
+		{
+			return m_Textures[index].GetMTLResource();
+		}
+
+		[[nodiscard]] MTL::SamplerState*
+		GetSamplerBySlotIndex(uint32_t index) const noexcept
+		{
+			return m_Samplers[index].GetMTLResource();
+		}
+
 		BufferHandle
 		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
 

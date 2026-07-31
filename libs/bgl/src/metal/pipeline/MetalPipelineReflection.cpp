@@ -10,7 +10,7 @@ namespace bgl
 		uint32_t
 		MetalAlign(const ReflectedLayout& layout)
 		{
-			if (layout.isResourceHandle)
+			if (layout.handleKind != HandleKind::kNone)
 				return 8;  // a device pointer / resource id
 
 			switch (layout.kind)
@@ -56,15 +56,15 @@ namespace bgl
 		// Byte offset of every bindless handle field within the cbuffer.
 		void
 		CollectHandleOffsets(
-			const ReflectedLayout& layout,
-			uint32_t               base,
-			std::vector<uint32_t>& out)
+			const ReflectedLayout&   layout,
+			uint32_t                 base,
+			std::vector<HandleSlot>& out)
 		{
 			switch (layout.kind)
 			{
 			case UniformType::kValue:
-				if (layout.isResourceHandle)
-					out.push_back(base);
+				if (layout.handleKind != HandleKind::kNone)
+					out.push_back({ base, layout.handleKind });
 				break;
 			case UniformType::kStruct:
 				for (const ReflectedField& field : layout.fields)
@@ -95,7 +95,7 @@ namespace bgl
 			switch (layout.kind)
 			{
 			case UniformType::kValue:
-				layout.size = layout.isResourceHandle ?
+				layout.size = layout.handleKind != HandleKind::kNone ?
 				                  8u :
 				                  static_cast<uint32_t>(detail::ValueTypeSize(layout.valueType));
 				return AlignUp(layout.size, MetalAlign(layout));
@@ -140,8 +140,17 @@ namespace bgl
 		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
 		{
 			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
-			if (param->getCategory() != slang::ParameterCategory::ConstantBuffer)
+
+			// Mixed as well as ConstantBuffer: a cbuffer whose members are all handles consumes
+			// texture and sampler slots on top of its buffer slot, and Slang reports a parameter
+			// spanning several categories as Mixed. Skipping those dropped every uniform block that
+			// carries only bindless handles.
+			const slang::ParameterCategory category = param->getCategory();
+			if (category != slang::ParameterCategory::ConstantBuffer &&
+			    category != slang::ParameterCategory::Mixed)
+			{
 				continue;
+			}
 
 			slang::TypeLayoutReflection* elementLayout =
 				param->getTypeLayout()->getElementTypeLayout();
@@ -149,7 +158,7 @@ namespace bgl
 			ReflectedLayout reflected = ReflectLayoutFromSlang(elementLayout);
 			const uint32_t  size      = MetalizeLayout(reflected);
 
-			std::vector<uint32_t> handleOffsets;
+			std::vector<HandleSlot> handleOffsets;
 			CollectHandleOffsets(reflected, 0, handleOffsets);
 			outHandleOffsets[param->getName()] = std::move(handleOffsets);
 

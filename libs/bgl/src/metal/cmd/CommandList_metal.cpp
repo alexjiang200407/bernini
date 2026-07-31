@@ -16,34 +16,56 @@ namespace bgl
 	{
 		struct MappedUniform
 		{
-			std::vector<std::byte>    bytes;
-			std::vector<MTL::Buffer*> resident;  // buffers the encoder must make resident
+			std::vector<std::byte>      bytes;
+			std::vector<MTL::Resource*> resident;  // resources the encoder must declare
 		};
 
 		// D3D12 writes a bindless handle's slot index into the cbuffer and a directly-indexed heap
 		// resolves it in-shader; Metal has no such heap, so at dispatch each handle field is rewritten
-		// from its slot index to the buffer's gpuAddress (what the emitted MSL dereferences). Copies
-		// the mirror, does that rewrite, and returns the buffers to make resident. Compute and mesh.
+		// to the native value the emitted MSL dereferences -- a device address for a buffer, an
+		// MTLResourceID for a texture or sampler. They come from different pools, which is why the
+		// kind travels alongside the offset. Returns the resources to declare. Compute and mesh.
 		MappedUniform
 		MapUniformHandlesToGpuAddresses(
-			const Uniforms&              uniforms,
-			const std::vector<uint32_t>& handleOffsets,
-			ResourceManager*             rm)
+			const Uniforms&                uniforms,
+			const std::vector<HandleSlot>& handles,
+			ResourceManager*               rm)
 		{
 			MappedUniform result;
 			const size_t  size = uniforms.GetSize();
 			result.bytes.resize(size);
 			std::memcpy(result.bytes.data(), uniforms.Data(), size);
 
-			for (uint32_t offset : handleOffsets)
+			for (const HandleSlot& handle : handles)
 			{
 				uint32_t slotIndex = 0;
-				std::memcpy(&slotIndex, result.bytes.data() + offset, sizeof(uint32_t));
+				std::memcpy(&slotIndex, result.bytes.data() + handle.offset, sizeof(uint32_t));
 
-				MTL::Buffer*   buffer = rm->GetBufferBySlotIndex(slotIndex);
-				const uint64_t addr   = buffer->gpuAddress();
-				std::memcpy(result.bytes.data() + offset, &addr, sizeof(uint64_t));
-				result.resident.push_back(buffer);
+				uint64_t native = 0;
+				switch (handle.kind)
+				{
+				case HandleKind::kBuffer:
+				{
+					MTL::Buffer* buffer = rm->GetBufferBySlotIndex(slotIndex);
+					native              = buffer->gpuAddress();
+					result.resident.push_back(buffer);
+					break;
+				}
+				case HandleKind::kTexture:
+				{
+					MTL::Texture* texture = rm->GetTextureBySlotIndex(slotIndex);
+					native                = texture->gpuResourceID()._impl;
+					result.resident.push_back(texture);
+					break;
+				}
+				case HandleKind::kSampler:
+					// A sampler is not a MTL::Resource and needs no residency.
+					native = rm->GetSamplerBySlotIndex(slotIndex)->gpuResourceID()._impl;
+					break;
+				case HandleKind::kNone:
+					gfatal("A collected handle slot carries no kind");
+				}
+				std::memcpy(result.bytes.data() + handle.offset, &native, sizeof(uint64_t));
 			}
 			return result;
 		}
@@ -401,8 +423,11 @@ namespace bgl
 			const MappedUniform      mapped =
 				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
 
-			for (MTL::Buffer* buffer : mapped.resident)
-				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite, stages);
+			for (MTL::Resource* resource : mapped.resident)
+				enc->useResource(
+					resource,
+					MTL::ResourceUsageRead | MTL::ResourceUsageWrite,
+					stages);
 
 			const void*  bytes = mapped.bytes.data();
 			const size_t size  = mapped.bytes.size();
@@ -467,8 +492,8 @@ namespace bgl
 			const MappedUniform      mapped =
 				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
 
-			for (MTL::Buffer* buffer : mapped.resident)
-				enc->useResource(buffer, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
+			for (MTL::Resource* resource : mapped.resident)
+				enc->useResource(resource, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);
 
 			enc->setBytes(mapped.bytes.data(), mapped.bytes.size(), entry.rootParamIndex);
 		}

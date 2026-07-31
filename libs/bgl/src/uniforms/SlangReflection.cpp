@@ -142,10 +142,25 @@ namespace bgl
 		{
 			// Metal reflects a bindless handle as a Resource/SamplerState, where D3D12 emits a uint2.
 			// Lower it to the same 8-byte kDescriptorHandle. DXIL never reaches here.
-			result.kind             = UniformType::kValue;
-			result.valueType        = UniformValueType::kDescriptorHandle;
-			result.size             = 8;  // two uint32 -- a resource id / device pointer
-			result.isResourceHandle = true;
+			result.kind      = UniformType::kValue;
+			result.valueType = UniformValueType::kDescriptorHandle;
+			result.size      = 8;  // two uint32 -- a resource id / device pointer
+
+			if (typeLayout->getKind() == Kind::SamplerState)
+			{
+				result.handleKind = HandleKind::kSampler;
+			}
+			else
+			{
+				// A texture resolves to an MTLResourceID and a buffer to a device address, from
+				// different pools, so the shape is what a backend needs rather than "resource".
+				const SlangResourceShape shape = static_cast<SlangResourceShape>(
+					typeLayout->getType()->getResourceShape() & SLANG_RESOURCE_BASE_SHAPE_MASK);
+				result.handleKind =
+					shape == SLANG_STRUCTURED_BUFFER || shape == SLANG_BYTE_ADDRESS_BUFFER ?
+						HandleKind::kBuffer :
+						HandleKind::kTexture;
+			}
 			return result;
 		}
 
