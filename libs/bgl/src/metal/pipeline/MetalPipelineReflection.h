@@ -13,6 +13,7 @@ namespace bgl
 	};
 
 	using MetalHandleOffsetMap = core::str::unordered_str_map<std::vector<HandleSlot>>;
+	using MetalStageBindingMap = core::str::unordered_str_map<uint32_t>;
 
 	// Reflects a linked program's constant buffers into the API-agnostic UniformLayoutMap plus a
 	// side table of each cbuffer's bindless-handle offsets. Recomputes the byte layout itself, since
@@ -23,4 +24,11 @@ namespace bgl
 		slang::ProgramLayout* layout,
 		UniformLayoutMap&     outEntries,
 		MetalHandleOffsetMap& outHandleOffsets);
+
+	// The [[buffer(N)]] index of each cbuffer in one compiled stage. Each stage is compiled as its
+	// own program (see MeshletPipeline_metal), so indices are per-stage: the same cbuffer can sit at
+	// different N in two stages, and two different cbuffers can share an N across stages. A cbuffer
+	// must therefore be bound per stage at that stage's index, never at one shared index.
+	void
+	ReflectStageBindings(slang::ProgramLayout* layout, MetalStageBindingMap& outBindings);
 }

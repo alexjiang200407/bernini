@@ -170,4 +170,22 @@ namespace bgl
 			outEntries[param->getName()] = std::move(entry);
 		}
 	}
+
+	void
+	ReflectStageBindings(slang::ProgramLayout* layout, MetalStageBindingMap& outBindings)
+	{
+		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
+		{
+			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
+
+			const slang::ParameterCategory category = param->getCategory();
+			if (category != slang::ParameterCategory::ConstantBuffer &&
+			    category != slang::ParameterCategory::Mixed)
+			{
+				continue;
+			}
+
+			outBindings[param->getName()] = static_cast<uint32_t>(param->getBindingIndex());
+		}
+	}
 }
