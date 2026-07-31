@@ -493,6 +493,11 @@ namespace bgl
 				enc->setObjectBytes(bytes, size, entry.rootParamIndex);
 		}
 
+		// A material's texture id lives in GPU memory, so the encoder never sees the texture named.
+		const std::span<MTL::Resource* const> textures = rm->GetLiveTextureResources();
+		if (!textures.empty())
+			enc->useResources(textures.data(), textures.size(), MTL::ResourceUsageRead, stages);
+
 		if (auto it = m_MeshletState.kernel->uniforms.find("gDebug");
 		    it != m_MeshletState.kernel->uniforms.end())
 		{

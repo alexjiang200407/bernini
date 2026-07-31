@@ -869,11 +869,14 @@ namespace bgl
 		const auto flatNormal =
 			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
 
-		// A caller-supplied texture resolves to its bindless index; an invalid
-		// (default-constructed) handle falls back to the given default texture.
-		const auto resolve = [](TextureAssetHandle tex, core::slot_handle fallback) {
+		// A caller-supplied texture resolves to its bindless descriptor; an invalid
+		// (default-constructed) handle falls back to the given default texture. The descriptor comes
+		// from the resource manager, not the slot: this one is read straight out of GPU memory, so it
+		// has to be whatever the backend's shader can dereference.
+		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
 			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ DescriptorHandle(slot) };
+			return idl::TextureHandle{ m_ResourceManager->ResolveDescriptor(
+				TextureHandle{ slot, TextureUsageFlag::kSRV }) };
 		};
 
 		idl::PbrMaterial material{};
@@ -926,20 +929,17 @@ namespace bgl
 		// channel falls back to a default texture + channel chosen so the sampled value matches the
 		// PbrMaterial default for that output: white (1.0) for base color / ORM, and the flat-normal
 		// texture (R,G = 0.5) for normal X / Y.
-		const auto resolve = [](const ChannelRouteDesc& route,
-		                        core::slot_handle       fallbackTex,
-		                        uint16_t                fallbackChannel) {
+		const auto resolve = [this](
+								 const ChannelRouteDesc& route,
+								 core::slot_handle       fallbackTex,
+								 uint16_t                fallbackChannel) {
+			const bool              routed = route.texture.textureSlot;
+			const core::slot_handle slot   = routed ? route.texture.textureSlot : fallbackTex;
+
 			idl::ChannelSource cs{};
-			if (route.texture.textureSlot)
-			{
-				cs.texture = idl::TextureHandle{ DescriptorHandle(route.texture.textureSlot) };
-				cs.channel = route.channel;
-			}
-			else
-			{
-				cs.texture = idl::TextureHandle{ DescriptorHandle(fallbackTex) };
-				cs.channel = fallbackChannel;
-			}
+			cs.texture = idl::TextureHandle{ m_ResourceManager->ResolveDescriptor(
+				TextureHandle{ slot, TextureUsageFlag::kSRV }) };
+			cs.channel = routed ? route.channel : fallbackChannel;
 			return cs;
 		};
 

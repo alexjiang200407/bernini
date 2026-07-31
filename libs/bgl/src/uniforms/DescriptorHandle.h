@@ -19,6 +19,17 @@ namespace bgl
 		explicit DescriptorHandle(uint32_t hi) : m_Hi(hi) {}
 		explicit DescriptorHandle(core::slot_handle slot) : DescriptorHandle(slot.index) {}
 
+		// The eight bytes verbatim, for a backend whose shader reads them as one 64-bit value rather
+		// than as a pair. Byte order is the machine's, which is the only order the GPU reads them in;
+		// the hi/lo member names describe the D3D12 pair and do not survive this view.
+		[[nodiscard]] static DescriptorHandle
+		FromNative(uint64_t native) noexcept
+		{
+			DescriptorHandle handle;
+			std::memcpy(&handle, &native, sizeof(native));
+			return handle;
+		}
+
 	private:
 		uint32_t m_Hi = 0;
 		uint32_t m_Lo = 0;

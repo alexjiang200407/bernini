@@ -183,6 +183,14 @@ namespace bgl
 		[[nodiscard]] bool
 		IsTextureCube(const TextureHandle& handle) const noexcept override;
 
+		[[nodiscard]] DescriptorHandle
+		ResolveDescriptor(const TextureHandle& handle) const noexcept override;
+
+		// Every live texture, for an encoder to declare resident. See the definition for why all of
+		// them rather than the ones a draw names.
+		[[nodiscard]] std::span<MTL::Resource* const>
+		GetLiveTextureResources() noexcept;
+
 	private:
 		enum class PendingType
 		{
@@ -221,6 +229,8 @@ namespace bgl
 		core::slot_vector<Buffer>         m_Buffers;
 		core::slot_vector<ReadbackBuffer> m_Readbacks;
 		core::slot_vector<Texture>        m_Textures;
+		std::vector<MTL::Resource*>       m_LiveTextures;
+		bool                              m_LiveTexturesDirty = true;
 		core::slot_vector<Rtv>            m_Rtvs;
 		core::slot_vector<Dsv>            m_Dsvs;
 		core::slot_vector<Sampler>        m_Samplers;
