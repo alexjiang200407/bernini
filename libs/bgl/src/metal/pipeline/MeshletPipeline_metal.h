@@ -64,7 +64,7 @@ namespace bgl
 			return m_ThreadsPerMesh;
 		}
 
-		[[nodiscard]] const std::vector<uint32_t>&
+		[[nodiscard]] const std::vector<HandleSlot>&
 		GetHandleOffsets(std::string_view name) const noexcept
 		{
 			auto it = m_HandleOffsets.find(name);

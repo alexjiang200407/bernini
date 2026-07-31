@@ -2,6 +2,7 @@
 #include "metal_cpp.h"
 
 #include "pipeline/ComputePipeline.h"
+#include "pipeline/MetalPipelineReflection.h"
 #include "uniforms/UniformLayoutEntry.h"
 
 #include <core/ref/RefCounter.h>
@@ -59,7 +60,7 @@ namespace bgl
 
 		// Byte offsets of the cbuffer's bindless handle fields, for the dispatch-time gpuAddress
 		// translation. Precomputed at build so Dispatch never re-walks the layout.
-		[[nodiscard]] const std::vector<uint32_t>&
+		[[nodiscard]] const std::vector<HandleSlot>&
 		GetHandleOffsets(std::string_view name) const noexcept
 		{
 			auto it = m_HandleOffsets.find(name);
@@ -68,10 +69,10 @@ namespace bgl
 		}
 
 	private:
-		ComputePipelineDesc                                 m_Desc;
-		NS::SharedPtr<MTL::ComputePipelineState>            m_PipelineState;
-		UniformLayoutMap                                    m_UniformLayoutEntries;
-		core::str::unordered_str_map<std::vector<uint32_t>> m_HandleOffsets;
+		ComputePipelineDesc                                   m_Desc;
+		NS::SharedPtr<MTL::ComputePipelineState>              m_PipelineState;
+		UniformLayoutMap                                      m_UniformLayoutEntries;
+		core::str::unordered_str_map<std::vector<HandleSlot>> m_HandleOffsets;
 		MTL::Size m_ThreadsPerThreadgroup = MTL::Size(1, 1, 1);
 	};
 }
