@@ -24,6 +24,8 @@ namespace bgl
 	class RenderTarget final : public core::RefCounter<RenderTargetBase>
 	{
 	public:
+		// The queue is taken and dropped: a headless ring neither presents on it nor flushes it, and
+		// the windowed path that will can store it then. IDevice::CreateRenderTarget passes one.
 		RenderTarget(
 			const RenderTargetDesc& desc,
 			DeviceRef               device,
@@ -137,7 +139,6 @@ namespace bgl
 		ReleaseAttachments() noexcept;
 
 		DeviceRef          m_Device;
-		CommandQueueRef    m_Queue;
 		ResourceManagerRef m_ResourceManager;
 
 		uint32_t m_Width  = 0;

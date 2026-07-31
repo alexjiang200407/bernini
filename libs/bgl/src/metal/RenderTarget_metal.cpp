@@ -12,11 +12,10 @@ namespace bgl
 	RenderTarget::RenderTarget(
 		const RenderTargetDesc& desc,
 		DeviceRef               device,
-		CommandQueueRef         queue,
-		ResourceManagerRef      resourceManager) :
-		m_Device(std::move(device)), m_Queue(std::move(queue)),
-		m_ResourceManager(std::move(resourceManager)), m_Width(static_cast<uint32_t>(desc.width)),
-		m_Height(static_cast<uint32_t>(desc.height))
+		CommandQueueRef,
+		ResourceManagerRef resourceManager) :
+		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
+		m_Width(static_cast<uint32_t>(desc.width)), m_Height(static_cast<uint32_t>(desc.height))
 	{
 		if (!desc.headless)
 		{
@@ -79,11 +78,13 @@ namespace bgl
 
 		m_DepthDsv = m_ResourceManager->CreateDsv(m_DepthTexture, dsvDesc);
 
-		auto motionDesc          = TextureDesc();
-		motionDesc.width         = m_Width;
-		motionDesc.height        = m_Height;
-		motionDesc.format        = c_MotionFormat;
-		motionDesc.usage         = TextureUsageFlag::kRenderTarget;
+		auto motionDesc   = TextureDesc();
+		motionDesc.width  = m_Width;
+		motionDesc.height = m_Height;
+		motionDesc.format = c_MotionFormat;
+		// kSRV as well: the buffer exists to be resampled by a later pass, and Metal bakes the usage
+		// into the texture at creation rather than deriving it from how it is bound.
+		motionDesc.usage = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
 		motionDesc.initialLayout = BarrierLayout::kRenderTarget;
 		motionDesc.debugName     = "Motion Vectors";
 		motionDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
