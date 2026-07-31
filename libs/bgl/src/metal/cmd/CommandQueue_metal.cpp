@@ -4,6 +4,26 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// A command buffer that faults reports it here and nowhere else: the signal it carries is its
+		// status, and the fence it encoded still advances, so an unchecked failure reads downstream as
+		// a frame that simply drew nothing.
+		void
+		LogOnFailure(MTL::CommandBuffer* cmdBuffer)
+		{
+			cmdBuffer->addCompletedHandler([](MTL::CommandBuffer* completed) {
+				if (completed->status() != MTL::CommandBufferStatusError)
+					return;
+
+				NS::Error* error = completed->error();
+				gerror(
+					"Metal command buffer failed: {}",
+					error != nullptr ? error->localizedDescription()->utf8String() : "no error");
+			});
+		}
+	}
+
 	CommandQueue::CommandQueue(MTL::Device* device) :
 		m_Queue(NS::TransferPtr(device->newCommandQueue())),
 		m_Event(NS::TransferPtr(device->newSharedEvent()))
@@ -18,6 +38,7 @@ namespace bgl
 		gassert(cmdBuffer != nullptr, "Command list was not opened before execution");
 
 		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
+		LogOnFailure(cmdBuffer);
 		cmdBuffer->commit();
 
 		if (m_ListsBuilding > 0)
@@ -64,6 +85,7 @@ namespace bgl
 		// order on a queue, so it cannot run before them.
 		auto* cmdBuffer = m_Queue->commandBuffer();
 		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
+		LogOnFailure(cmdBuffer);
 		cmdBuffer->commit();
 		WaitForFenceCPUBlocking(m_NextFenceValue++);
 	}

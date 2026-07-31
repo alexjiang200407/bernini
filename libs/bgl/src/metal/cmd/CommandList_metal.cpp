@@ -8,6 +8,8 @@
 #include "resource/ResourceManager_metal.h"
 #include "util/util.h"
 
+#include <idl/DispatchArgs.h>
+
 #include <core/math.h>
 
 namespace bgl
@@ -529,13 +531,11 @@ namespace bgl
 		const MeshletDraw draw = BindMeshletDraw();
 		auto*             rm   = m_ResourceManager->As<ResourceManager>();
 
-		// MTLDispatchThreadgroupsIndirectArguments is three uint32s, the same triple D3D12's
-		// DISPATCH_MESH_ARGUMENTS holds, so one buffer feeds both backends unchanged.
-		constexpr size_t c_ArgStride = 3 * sizeof(uint32_t);
-
+		// MTLDispatchThreadgroupsIndirectArguments is the same three uint32s idl::DispatchArgs holds,
+		// which is also D3D12's DISPATCH_MESH_ARGUMENTS, so one buffer feeds both backends unchanged.
 		draw.encoder->drawMeshThreadgroups(
 			rm->GetBuffer(m_MeshletState.indirectArgs).GetMTLResource(),
-			static_cast<NS::UInteger>(argIdx) * c_ArgStride,
+			static_cast<NS::UInteger>(argIdx) * sizeof(idl::DispatchArgs),
 			draw.pipeline->GetThreadsPerObjectThreadgroup(),
 			draw.pipeline->GetThreadsPerMeshThreadgroup());
 	}

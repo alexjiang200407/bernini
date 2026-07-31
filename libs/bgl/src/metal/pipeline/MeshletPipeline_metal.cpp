@@ -25,11 +25,14 @@ namespace bgl
 		NS::SharedPtr<MTL::DepthStencilDescriptor> dsd =
 			NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
 
-		// Metal rejects a depth write with no depth attachment, where D3D12 ignores the state.
+		// depthTestEnable gates the write as well: it maps to D3D12's DepthEnable, which turns the
+		// whole depth stage off whatever DepthWriteMask says. Metal would otherwise write depth for
+		// the default state (test off, write on), which D3D12 leaves untouched. Writing with no depth
+		// attachment is separately rejected by Metal, where D3D12 ignores it.
+		const bool depthOn = hasDepth && ds.depthTestEnable;
 		dsd->setDepthCompareFunction(
-			hasDepth && ds.depthTestEnable ? ConvertComparisonFunc(ds.depthFunc) :
-											 MTL::CompareFunctionAlways);
-		dsd->setDepthWriteEnabled(hasDepth && ds.depthWriteEnable);
+			depthOn ? ConvertComparisonFunc(ds.depthFunc) : MTL::CompareFunctionAlways);
+		dsd->setDepthWriteEnabled(depthOn && ds.depthWriteEnable);
 
 		if (ds.stencilEnable && FormatHasStencil(m_Desc.dsvFormat))
 		{
