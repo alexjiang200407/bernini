@@ -7,7 +7,6 @@
 # D3D12 today. What it records is how far this backend has got.
 A baked cutout material cuts its silhouette out of a plane
 A camera yaw displaces the skybox horizontally
-A deferred free waits for every registered queue
 A deleted instance stops contributing motion
 A distant mirror does not alias its reflection
 A live instance re-resolves its PSO after SetSubmeshMaterial
