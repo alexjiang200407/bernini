@@ -98,12 +98,14 @@ def list_test_names(exe):
 def write_filtered_list(build_dir, names):
     """Write `names` as a Catch2 --input-file under `build_dir`, and return its path.
 
-    A file rather than argv: a name is a Catch2 test *spec* on the command line, so one containing
-    a comma or a bracket would be parsed as two specs or as a tag. --input-file takes them literally.
+    A file rather than argv, because the shell would split on the spaces every test name has. The
+    file's lines are still test *specs*, not literals -- Catch2 parses `,` as a spec separator and
+    `[` as a tag, and rejects the result as an invalid filter -- so both are backslash-escaped.
     """
     path = os.path.join(build_dir, "metal_selected.txt")
+    escaped = [re.sub(r"([\\,\[\]])", r"\\\1", name) for name in names]
     with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(names) + "\n")
+        f.write("\n".join(escaped) + "\n")
     return path
 
 
