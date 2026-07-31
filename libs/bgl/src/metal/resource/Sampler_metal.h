@@ -34,6 +34,8 @@ namespace bgl
 
 			sd->setMaxAnisotropy(static_cast<NS::UInteger>(std::max(1.0f, desc.maxAnisotropy)));
 			sd->setBorderColor(ConvertBorderColor(desc.borderColor));
+			sd->setLodBias(desc.mipBias);
+			sd->setCompareFunction(ConvertReduction(desc.reductionType));
 
 			// Without this the sampler has no gpuResourceID, and every bindless bind reads garbage.
 			sd->setSupportArgumentBuffers(true);
@@ -60,6 +62,28 @@ namespace bgl
 		}
 
 	private:
+		// D3D12 encodes minimum/maximum as a filter reduction; Metal has no equivalent, so a sampler
+		// asking for one would come out as a plain average and misbehave quietly. Refused instead.
+		// Comparison matches D3D12's mapping of the same field, which is LESS (convert_d3d12.cpp).
+		static MTL::CompareFunction
+		ConvertReduction(SamplerReductionType reduction) noexcept
+		{
+			switch (reduction)
+			{
+			case SamplerReductionType::kStandard:
+				return MTL::CompareFunctionNever;
+			case SamplerReductionType::kComparison:
+				return MTL::CompareFunctionLess;
+			case SamplerReductionType::kMinimum:
+			case SamplerReductionType::kMaximum:
+				gfatal(
+					"Metal has no sampler filter reduction, so SamplerReductionType::k{} cannot "
+					"be expressed",
+					reduction == SamplerReductionType::kMinimum ? "Minimum" : "Maximum");
+			}
+			gfatal("Unhandled SamplerReductionType");
+		}
+
 		static MTL::SamplerAddressMode
 		ConvertAddressMode(SamplerAddressMode mode) noexcept
 		{
