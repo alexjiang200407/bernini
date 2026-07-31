@@ -6,6 +6,9 @@
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
+#include "util/util.h"
+
+#include <core/math.h>
 
 namespace bgl
 {
@@ -310,7 +313,9 @@ namespace bgl
 		const TextureDesc& desc    = texture.GetDesc();
 		MTL::Texture*      dst     = texture.GetMTLResource();
 
-		const uint32_t bytesPerPixel = FormatBytesPerPixel(desc.format);
+		// Block-aware, not per-pixel: BC5 and BC7 carry 16 bytes per 4x4 block, so a row is
+		// ceil(width/4) blocks and a "row" of the source covers four texel rows.
+		const FormatInfo format = GetFormatInfo(desc.format);
 
 		// One staging buffer per subresource, blitted on the GPU timeline so the upload orders ahead
 		// of whatever samples it. The command buffer retains each until it completes.
@@ -326,9 +331,12 @@ namespace bgl
 			const uint32_t width  = std::max(1u, desc.width >> mip);
 			const uint32_t height = std::max(1u, desc.height >> mip);
 
+			const uint64_t rowBlocks = core::div_ceil<uint64_t>(width, format.blockEdgeTexels);
+			const uint64_t colBlocks = core::div_ceil<uint64_t>(height, format.blockEdgeTexels);
+
 			const uint64_t rowPitch =
-				sub.rowPitch != 0 ? sub.rowPitch : static_cast<uint64_t>(width) * bytesPerPixel;
-			const uint64_t byteSize = rowPitch * height;
+				sub.rowPitch != 0 ? sub.rowPitch : rowBlocks * format.bytesPerBlock;
+			const uint64_t byteSize = rowPitch * colBlocks;
 
 			auto staging = NS::TransferPtr(
 				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));

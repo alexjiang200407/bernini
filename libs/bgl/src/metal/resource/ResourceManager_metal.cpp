@@ -1,8 +1,17 @@
 #include "resource/ResourceManager_metal.h"
+#include "util/util.h"
+
+#include <core/math.h>
 
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue.h"
+#include "util/util.h"
+
+#include "util/util.h"
 #include "util_metal.h"
+#include <core/math.h>
+
+#include <core/math.h>
 
 namespace bgl
 {
@@ -359,11 +368,14 @@ namespace bgl
 
 		// Metal has no 256-byte row-pitch rule (unlike D3D12), so the rows pack tight.
 		TextureReadbackLayout layout;
-		layout.rowSizeBytes = static_cast<uint64_t>(desc.width) * FormatBytesPerPixel(desc.format);
-		layout.rowPitch     = layout.rowSizeBytes;
-		layout.rowCount     = desc.height;
-		layout.offset       = 0;
-		layout.totalBytes   = layout.rowPitch * desc.height;
+		const FormatInfo      format = GetFormatInfo(desc.format);
+
+		layout.rowSizeBytes =
+			core::div_ceil<uint64_t>(desc.width, format.blockEdgeTexels) * format.bytesPerBlock;
+		layout.rowPitch   = layout.rowSizeBytes;
+		layout.rowCount   = core::div_ceil<uint64_t>(desc.height, format.blockEdgeTexels);
+		layout.offset     = 0;
+		layout.totalBytes = layout.rowPitch * layout.rowCount;
 		return layout;
 	}
 
