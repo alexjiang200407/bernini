@@ -136,6 +136,14 @@ namespace bgl
 		void
 		SetComputeState(const ComputeState& computeState) noexcept override;
 
+#if defined(BERNINI_GPU_DEBUG)
+		void
+		SetActiveDebugBuffer(BufferHandle handle) noexcept override
+		{
+			m_ActiveDebugBuffer = handle;
+		}
+#endif
+
 		void
 		Dispatch(
 			uint32_t threadGroupCountX,
@@ -182,6 +190,13 @@ namespace bgl
 		ApplyRenderState(MTL::RenderCommandEncoder* enc, const MeshletPipeline* pipeline)
 			const noexcept;
 
+		// The buffer a shader's dbg_raise writes, and the device address to bind for it. Null when
+		// GPU debug is off or none is active -- and then `gDebug` must be bound as a null address
+		// rather than left as reflected, because the CPU never fills that handle field and an unset
+		// one reads as slot 0, resolving to whatever buffer the pool happens to hold there.
+		[[nodiscard]] MTL::Buffer*
+		ActiveDebugBuffer(uint64_t& outAddress) const noexcept;
+
 		static constexpr const char* c_Unimplemented =
 			"Metal CommandList: not implemented yet (render/scene slice)";
 
@@ -198,6 +213,9 @@ namespace bgl
 					 m_ScopePool;  // drains at Close; scopes Open..Close temporaries
 		ComputeState m_ComputeState;
 		MeshletState m_MeshletState;
-		bool         m_Open = false;
+#if defined(BERNINI_GPU_DEBUG)
+		BufferHandle m_ActiveDebugBuffer;
+#endif
+		bool m_Open = false;
 	};
 }
