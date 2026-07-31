@@ -9,6 +9,8 @@
 
 namespace bgl
 {
+	class MeshletPipeline;
+
 	/**
 	 * The Metal command list: one MTL::CommandBuffer per Open(), recorded through encoders.
 	 *
@@ -120,10 +122,7 @@ namespace bgl
 			TextureHandle                           handle,
 			std::span<const TextureSubresourceData> subresources) noexcept override;
 		void
-		DispatchMeshIndirect(uint32_t) noexcept override
-		{
-			gunimplemented(c_Unimplemented);
-		}
+		DispatchMeshIndirect(uint32_t argIdx) noexcept override;
 
 		void
 		SetMeshletState(const MeshletState& gfxState) noexcept override;
@@ -167,6 +166,21 @@ namespace bgl
 		// attachments, so a draw to a different target cannot share it.
 		[[nodiscard]] MTL::RenderCommandEncoder*
 		RenderEncoder(const FrameBuffer& fb) noexcept;
+
+		struct MeshletDraw
+		{
+			MTL::RenderCommandEncoder* encoder;
+			const MeshletPipeline*     pipeline;
+		};
+
+		// Opens the render encoder for the current meshlet state and binds everything a draw needs
+		// but the threadgroup count: pipeline, render state, uniforms, viewport and scissor.
+		[[nodiscard]] MeshletDraw
+		BindMeshletDraw() noexcept;
+
+		void
+		ApplyRenderState(MTL::RenderCommandEncoder* enc, const MeshletPipeline* pipeline)
+			const noexcept;
 
 		static constexpr const char* c_Unimplemented =
 			"Metal CommandList: not implemented yet (render/scene slice)";

@@ -16,6 +16,41 @@ namespace bgl
 		}
 	}
 
+	NS::SharedPtr<MTL::DepthStencilState>
+	MeshletPipeline::BuildDepthStencilState(MTL::Device* device) const
+	{
+		const DepthStencilState& ds       = m_Desc.renderState.depthStencilState;
+		const bool               hasDepth = m_Desc.dsvFormat != Format::UNKNOWN;
+
+		NS::SharedPtr<MTL::DepthStencilDescriptor> dsd =
+			NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
+
+		// Metal rejects a depth write with no depth attachment, where D3D12 ignores the state.
+		dsd->setDepthCompareFunction(
+			hasDepth && ds.depthTestEnable ? ConvertComparisonFunc(ds.depthFunc) :
+											 MTL::CompareFunctionAlways);
+		dsd->setDepthWriteEnabled(hasDepth && ds.depthWriteEnable);
+
+		if (ds.stencilEnable && FormatHasStencil(m_Desc.dsvFormat))
+		{
+			const auto face = [&](const DepthStencilState::StencilOpDesc& src) {
+				NS::SharedPtr<MTL::StencilDescriptor> sd =
+					NS::TransferPtr(MTL::StencilDescriptor::alloc()->init());
+				sd->setStencilFailureOperation(ConvertStencilOp(src.failOp));
+				sd->setDepthFailureOperation(ConvertStencilOp(src.depthFailOp));
+				sd->setDepthStencilPassOperation(ConvertStencilOp(src.passOp));
+				sd->setStencilCompareFunction(ConvertComparisonFunc(src.stencilFunc));
+				sd->setReadMask(ds.stencilReadMask);
+				sd->setWriteMask(ds.stencilWriteMask);
+				return sd;
+			};
+			dsd->setFrontFaceStencil(face(ds.frontFaceStencil).get());
+			dsd->setBackFaceStencil(face(ds.backFaceStencil).get());
+		}
+
+		return NS::TransferPtr(device->newDepthStencilState(dsd.get()));
+	}
+
 	MeshletPipeline::MeshletPipeline(
 		MTL::Device*               device,
 		slang::ISession*           session,
@@ -153,10 +188,35 @@ namespace bgl
 		if (objFn)
 			pd->setObjectFunction(objFn.get());
 
+		const BlendState& blend = m_Desc.renderState.blendState;
 		for (size_t i = 0; i < m_Desc.rtvFormats.size(); ++i)
-			pd->colorAttachments()->object(i)->setPixelFormat(ConvertFormat(m_Desc.rtvFormats[i]));
+		{
+			MTL::RenderPipelineColorAttachmentDescriptor* c = pd->colorAttachments()->object(i);
+			c->setPixelFormat(ConvertFormat(m_Desc.rtvFormats[i]));
+
+			const BlendState::RenderTarget& t = blend.targets[i];
+			c->setWriteMask(ConvertColorWriteMask(t.colorWriteMask));
+			c->setBlendingEnabled(t.blendEnable);
+			if (!t.blendEnable)
+				continue;
+
+			c->setSourceRGBBlendFactor(ConvertBlendFactor(t.srcBlend));
+			c->setDestinationRGBBlendFactor(ConvertBlendFactor(t.destBlend));
+			c->setRgbBlendOperation(ConvertBlendOp(t.blendOp));
+			c->setSourceAlphaBlendFactor(ConvertBlendFactor(t.srcBlendAlpha));
+			c->setDestinationAlphaBlendFactor(ConvertBlendFactor(t.destBlendAlpha));
+			c->setAlphaBlendOperation(ConvertBlendOp(t.blendOpAlpha));
+		}
+		pd->setAlphaToCoverageEnabled(blend.alphaToCoverageEnable);
+
 		if (m_Desc.dsvFormat != Format::UNKNOWN)
+		{
 			pd->setDepthAttachmentPixelFormat(ConvertFormat(m_Desc.dsvFormat));
+			if (FormatHasStencil(m_Desc.dsvFormat))
+				pd->setStencilAttachmentPixelFormat(ConvertFormat(m_Desc.dsvFormat));
+		}
+
+		m_DepthStencilState = BuildDepthStencilState(device);
 
 		m_PipelineState = NS::TransferPtr(
 			device->newRenderPipelineState(pd.get(), MTL::PipelineOptionNone, nullptr, &error));

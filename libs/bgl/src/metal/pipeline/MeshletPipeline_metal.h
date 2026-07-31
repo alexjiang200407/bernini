@@ -52,6 +52,13 @@ namespace bgl
 			return m_PipelineState.get();
 		}
 
+		// Null on a mesh-only pipeline, which never draws.
+		[[nodiscard]] MTL::DepthStencilState*
+		GetMTLDepthStencilState() const noexcept
+		{
+			return m_DepthStencilState.get();
+		}
+
 		[[nodiscard]] MTL::Size
 		GetThreadsPerObjectThreadgroup() const noexcept
 		{
@@ -73,8 +80,12 @@ namespace bgl
 		}
 
 	private:
+		[[nodiscard]] NS::SharedPtr<MTL::DepthStencilState>
+		BuildDepthStencilState(MTL::Device* device) const;
+
 		MeshletPipelineDesc                     m_Desc;
 		NS::SharedPtr<MTL::RenderPipelineState> m_PipelineState;
+		NS::SharedPtr<MTL::DepthStencilState>   m_DepthStencilState;
 		UniformLayoutMap                        m_UniformLayoutEntries;
 		MetalHandleOffsetMap                    m_HandleOffsets;
 		MTL::Size                               m_ThreadsPerObject = MTL::Size(1, 1, 1);
