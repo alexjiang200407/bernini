@@ -97,9 +97,7 @@ namespace bgl
 			return MTL::PixelFormatDepth32Float;
 		case Format::D32S8:
 			return MTL::PixelFormatDepth32Float_Stencil8;
-		// Apple silicon has no Depth24Unorm_Stencil8. The engine asks for D24S8 in three places, so
-		// remapping here keeps the DSV texture and the pipeline's dsvFormat agreeing by
-		// construction -- they both come through this function.
+		// Apple silicon has no Depth24Unorm_Stencil8.
 		case Format::D24S8:
 			return MTL::PixelFormatDepth32Float_Stencil8;
 		default:
