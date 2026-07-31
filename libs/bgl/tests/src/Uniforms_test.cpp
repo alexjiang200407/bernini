@@ -4,6 +4,18 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 
+namespace
+{
+	// A 2-component vector following a scalar sits at a different offset per target, and both are
+	// right: HLSL's scalar layout packs it at the next 4 bytes, MSL aligns it to its own size, 8.
+	// The reflection reports what the emitted shader actually does, so the expectation follows it.
+#if defined(RENDERER_BACKEND_METAL)
+	constexpr uint32_t c_Vec2AlignPad = 4u;
+#else
+	constexpr uint32_t c_Vec2AlignPad = 0u;
+#endif
+}
+
 TEST_CASE("Uniforms", "[uniforms]")
 {
 	auto opts                     = bgl::GraphicsOptions();
@@ -84,7 +96,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 		{
 			CHECK(uniforms["f2"].GetType() == bgl::UniformType::kValue);
 			CHECK(uniforms["f2"].GetValueType() == bgl::UniformValueType::kFloat2);
-			CHECK(uniforms["f2"].GetOffset() == 4u);  // Offset: f1 (0) + 4 bytes
+			CHECK(uniforms["f2"].GetOffset() == 4u + c_Vec2AlignPad);  // f1 (0) + 4 bytes
 
 			CHECK(uniforms["f2"][0].IsNull());
 			CHECK(uniforms["f2"]["a"s].IsNull());
@@ -145,7 +157,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 		{
 			CHECK(uniforms["i2"].GetType() == bgl::UniformType::kValue);
 			CHECK(uniforms["i2"].GetValueType() == bgl::UniformValueType::kInt2);
-			CHECK(uniforms["i2"].GetOffset() == 52u);
+			CHECK(uniforms["i2"].GetOffset() == 52u + c_Vec2AlignPad);
 
 			CHECK_THROWS(static_cast<int32_t>(uniforms["i2"]));
 			CHECK_THROWS(uniforms["i2"] = 1);
@@ -197,7 +209,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 		{
 			CHECK(uniforms["u2"].GetType() == bgl::UniformType::kValue);
 			CHECK(uniforms["u2"].GetValueType() == bgl::UniformValueType::kUInt2);
-			CHECK(uniforms["u2"].GetOffset() == 100u);
+			CHECK(uniforms["u2"].GetOffset() == 100u + c_Vec2AlignPad);
 
 			CHECK_THROWS(static_cast<uint32_t>(uniforms["u2"]));
 			CHECK_THROWS(uniforms["u2"] = 1u);
