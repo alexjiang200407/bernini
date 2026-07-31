@@ -9,14 +9,32 @@
 #include "resource/ResourceManager.h"
 
 #include <core/containers/slot_vector.h>
+#include <core/containers/static_vector.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
 {
+	// The most submission timelines that can gate one deferred free. Exceeding it asserts; it is not
+	// a device limit.
+	constexpr uint32_t c_MaxRegisteredQueues = 8;
+
+	// One registered queue and the fence value it was at when a resource was retired against it.
+	struct QueueGate
+	{
+		ICommandQueue* queue      = nullptr;
+		uint64_t       fenceValue = 0;
+
+		bool
+		operator==(const QueueGate&) const noexcept = default;
+	};
+
+	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
+
 	/**
 	 * The Metal resource manager. Owns buffers, readback buffers, render-target textures and RTVs.
-	 * SRV/sampler textures with uploads, depth (DSV) and the bindless argument buffer arrive with the
-	 * scene slice; those factories are gunimplemented for now.
+	 * SRV/sampler textures with uploads and depth (DSV) arrive with the texture slice; those
+	 * factories are gunimplemented for now.
+	 *
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
@@ -177,6 +195,37 @@ namespace bgl
 		}
 
 	private:
+		enum class PendingType
+		{
+			kBuffer,
+			kReadback,
+			kTexture,
+			kRtv,
+		};
+
+		struct PendingDeletion
+		{
+			PendingType type      = PendingType::kBuffer;
+			uint32_t    slotIndex = 0xFFFFFFFF;
+		};
+
+		// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
+		// snapshot the same registered-queue fences, so they batch under one gate rather than each
+		// carrying its own copy. Freed as a group once every queue in `gate` passes.
+		struct PendingDeletionBatch
+		{
+			DeletionGate                 gate;
+			std::vector<PendingDeletion> deletions;
+		};
+
+		// Snapshots every registered queue's next fence value -- the gate a deferred destroy records.
+		[[nodiscard]] DeletionGate
+		CaptureGate() const noexcept;
+
+		// Adds a retired slot to the current gate's batch, opening a new one when the gate has moved.
+		void
+		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
+
 		static constexpr const char* c_Unimplemented =
 			"Metal ResourceManager: not implemented yet (scene slice)";
 
@@ -185,11 +234,13 @@ namespace bgl
 		core::slot_vector<ReadbackBuffer> m_Readbacks;
 		core::slot_vector<Texture>        m_Textures;
 		core::slot_vector<Rtv>            m_Rtvs;
-		std::vector<ICommandQueue*>       m_Queues;
 
-		// Deferred-destroyed resources, held to the manager's lifetime because nothing gates their
-		// reclamation on the registered timelines yet. Freeing them here instead would free under a
-		// GPU still reading them; growing is the safe half of that trade.
-		std::vector<NS::SharedPtr<MTL::Resource>> m_Retired;
+		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
+		std::vector<PendingDeletionBatch>                          m_PendingBatches;
+
+		// Serializes creation, destruction and the cleanup sweep, as the RHI promises. Get*/Valid*
+		// stay lock-free: the pools are fixed-capacity so their storage never moves, and only a
+		// handle's owner may destroy it.
+		mutable std::mutex m_PoolMutex;
 	};
 }

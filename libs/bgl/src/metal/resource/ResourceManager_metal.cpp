@@ -1,6 +1,7 @@
 #include "resource/ResourceManager_metal.h"
 
 #include "cmd/CommandList_metal.h"
+#include "cmd/CommandQueue.h"
 #include "util_metal.h"
 
 namespace bgl
@@ -19,6 +20,8 @@ namespace bgl
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
 		bufferDesc.isUav     = desc.isUav;
 		bufferDesc.debugName = desc.debugName;
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
 		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, bufferDesc);
 		if (slot.is_null())
@@ -45,6 +48,8 @@ namespace bgl
 	ReadbackBufferHandle
 	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
 		const auto slot = m_Readbacks.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
@@ -57,43 +62,148 @@ namespace bgl
 	void
 	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
-		if (std::ranges::find(m_Queues, queue) == m_Queues.end())
-			m_Queues.push_back(queue);
+		gassert(
+			m_RegisteredQueues.size() < c_MaxRegisteredQueues,
+			"More than c_MaxRegisteredQueues submission timelines registered");
+		m_RegisteredQueues.push_back(queue);
 	}
 
 	void
 	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
 	{
-		std::erase(m_Queues, queue);
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		for (uint32_t i = 0; i < m_RegisteredQueues.size(); ++i)
+		{
+			if (m_RegisteredQueues[i] == queue)
+			{
+				m_RegisteredQueues[i] = m_RegisteredQueues.back();
+				m_RegisteredQueues.pop_back();
+				break;
+			}
+		}
+
+		// The queue has drained (its owner flushes before unregistering), so it no longer gates any
+		// pending free. Drop it from every batch's gate, or a freed queue's pointer would linger and,
+		// if a later queue reused the address, alias it. An emptied gate is reclaimed next sweep.
+		for (PendingDeletionBatch& batch : m_PendingBatches)
+		{
+			for (uint32_t i = 0; i < batch.gate.size(); ++i)
+			{
+				if (batch.gate[i].queue == queue)
+				{
+					batch.gate[i] = batch.gate.back();
+					batch.gate.pop_back();
+					break;
+				}
+			}
+		}
+	}
+
+	DeletionGate
+	ResourceManager::CaptureGate() const noexcept
+	{
+		auto gate = DeletionGate();
+		for (ICommandQueue* queue : m_RegisteredQueues)
+			gate.push_back({ queue, queue->GetNextFenceValue() });
+		return gate;
+	}
+
+	void
+	ResourceManager::RetireDeferred(PendingType type, uint32_t slotIndex) noexcept
+	{
+		const DeletionGate gate = CaptureGate();
+
+		// Coalesce with the most recent batch when the gate has not moved -- fences only advance, so
+		// consecutive destroys within a frame share one gate rather than each storing a copy.
+		if (m_PendingBatches.empty() || !std::ranges::equal(m_PendingBatches.back().gate, gate))
+			m_PendingBatches.push_back({ gate, {} });
+
+		m_PendingBatches.back().deletions.push_back({ type, slotIndex });
 	}
 
 	void
 	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
+
 		if (deferred)
-			m_Retired.push_back(
-				NS::RetainPtr<MTL::Resource>(m_Buffers[handle.slot].GetMTLResource()));
-		m_Buffers.release_slot(handle.slot);
+		{
+			m_Buffers.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kBuffer, handle.slot.index);
+		}
+		else
+		{
+			m_Buffers.release_slot(handle.slot);
+		}
 	}
 
 	void
 	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback handle");
+
 		if (deferred)
-			m_Retired.push_back(
-				NS::RetainPtr<MTL::Resource>(m_Readbacks[handle.slot].GetMTLResource()));
-		m_Readbacks.release_slot(handle.slot);
+		{
+			m_Readbacks.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kReadback, handle.slot.index);
+		}
+		else
+		{
+			m_Readbacks.release_slot(handle.slot);
+		}
 	}
 
 	void
 	ResourceManager::CleanupExpiredResources() noexcept
 	{
-		// Nothing is reclaimed yet: a deferred destroy keeps the Metal object alive for the manager's
-		// lifetime rather than gate it on the registered timelines, so no resource can be freed under
-		// a GPU still reading it. The fence gate that makes this reclaim replaces it.
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
+		// Poll each queue once, not per pending deletion.
+		auto completed = core::static_vector<QueueGate, c_MaxRegisteredQueues>();
+		for (ICommandQueue* queue : m_RegisteredQueues)
+			completed.push_back({ queue, queue->PollCurrentFenceValue() });
+
+		const auto isCleared = [&](const QueueGate& entry) {
+			for (const auto& [queue, value] : completed)
+			{
+				if (queue == entry.queue)
+					return value >= entry.fenceValue;
+			}
+			// The gated queue is no longer registered: its context flushed and went away, so the
+			// work that could have referenced this resource has completed.
+			return true;
+		};
+
+		const auto reclaim = [&](const PendingDeletion& pending) {
+			switch (pending.type)
+			{
+			case PendingType::kBuffer:
+				m_Buffers.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kReadback:
+				m_Readbacks.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kTexture:
+				m_Textures.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kRtv:
+				m_Rtvs.reclaim_slot(pending.slotIndex);
+				break;
+			}
+		};
+
+		// A batch's slots were retired when they were recorded, so their handles have been stale
+		// since then. Freeing the batch reclaims each index into its pool's free list.
+		std::erase_if(m_PendingBatches, [&](const PendingDeletionBatch& batch) {
+			if (!std::ranges::all_of(batch.gate, isCleared))
+				return false;
+			for (const PendingDeletion& pending : batch.deletions) reclaim(pending);
+			return true;
+		});
 	}
 
 	const Buffer&
@@ -135,6 +245,8 @@ namespace bgl
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
 		const auto slot = m_Textures.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
@@ -148,7 +260,9 @@ namespace bgl
 	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
 		gassert(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
-		const auto slot = m_Rtvs.try_allocate_and_emplace(desc, textureHandle);
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		const auto                  slot = m_Rtvs.try_allocate_and_emplace(desc, textureHandle);
 		if (slot.is_null())
 		{
 			logger::error("CreateRtv '{}': RTV pool exhausted", desc.debugName);
@@ -160,18 +274,36 @@ namespace bgl
 	void
 	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
+
 		if (deferred)
-			m_Retired.push_back(
-				NS::RetainPtr<MTL::Resource>(m_Textures[handle.slot].GetMTLResource()));
-		m_Textures.release_slot(handle.slot);
+		{
+			m_Textures.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kTexture, handle.slot.index);
+		}
+		else
+		{
+			m_Textures.release_slot(handle.slot);
+		}
 	}
 
 	void
-	ResourceManager::DestroyRtv(RtvHandle handle, bool) noexcept
+	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
-		m_Rtvs.release_slot(handle.idx);
+
+		// An RTV owns no allocation -- it is a view onto a texture -- so only its slot is gated.
+		if (deferred)
+		{
+			m_Rtvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kRtv, handle.idx);
+		}
+		else
+		{
+			m_Rtvs.release_slot(handle.idx);
+		}
 	}
 
 	const Texture&

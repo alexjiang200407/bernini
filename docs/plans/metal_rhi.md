@@ -198,21 +198,30 @@ command buffer — the four things `ICommandQueue` expresses. *Rejected:* `MTLFe
 buffer only, no value) and `MTLCommandBuffer` completion handlers (no cross-queue GPU wait, and it
 would put the fence timeline behind a callback the RHI's `PollCurrentFenceValue` cannot poll).
 
-**D6. Barriers stay no-ops; the FrameGraph's ordering is enough.**
-Metal hazard-tracks tracked resources within and across command buffers on a queue, so
-`ICommandList::Barrier` has nothing to do. This is what the old backend did, and it is right for the
-same reason the FrameGraph owns transitions in the first place. The exception is bindless: a resource
-reached through a raw `gpuAddress` is untracked, which is what D7 is for.
+**D6. Barriers stay no-ops for as long as every resource is declared with `useResource`.**
+Metal hazard-tracks a resource it can see declared on an encoder, so `ICommandList::Barrier` has
+nothing to do -- *provided* the declaration happens. Task 3 established that it is `useResource` that
+makes this true, not the command buffer boundary: with `useResource` removed, two dispatches sharing
+a compute encoder raced despite the FrameGraph's barriers, because the barriers were no-ops. The
+no-op is therefore conditional, and it stops holding for a handle read out of a struct buffer, which
+no `useResource` call covers. Task 6 has to make `Barrier` emit a real `memoryBarrier` at the same
+time it introduces those handles.
 
-**D7. One `MTLResidencySet` per queue, not `useResource` per dispatch.**
-Every buffer and texture the manager owns joins the queue's residency set at creation and leaves it at
-reclamation. Because the shader reaches resources through raw addresses, Metal cannot know what a
-dispatch touches; a residency set says "all of it, always", which is exactly the guarantee a bindless
-heap gives on D3D12. *Rejected:* `useResource` per bound handle per dispatch — it is the pre-macOS-15
-answer, it costs a call per resource per encoder, and it cannot see through a handle stored in a
-struct buffer, which is precisely where the engine keeps them. Residency sets need macOS 15; the
-machine and the CI runner both have it, and the deployment floor moves to macOS 15 for the Metal
-backend.
+**D7. `useResource` per bound handle, with a residency set later for the handles it cannot see.**
+*Corrected in task 3, by measurement.* The plan first said a `MTLResidencySet` would **replace**
+`useResource`. It does not: a residency set makes an allocation resident, and `useResource`
+additionally declares the access, which is what Metal's hazard tracking orders dependent dispatches
+by. Removing `useResource` in favour of a committed, per-command-buffer residency set left
+`HistogramInstances` reading back zeros and `TransparentSort` unsorted — restoring `useResource`
+alone fixed both, with the residency set still in place. Residency and usage are different guarantees
+and Metal wants both.
+
+So the command list keeps calling `useResource` for every handle it can enumerate, which is every
+handle arriving through a `Uniforms` mirror. The residency set is still needed, but only for the
+handles the list *cannot* enumerate — a `TextureHandle` sitting inside a `PbrMaterial` in a struct
+buffer, which nothing on the CPU walks at bind time. It therefore lands with the descriptor seam in
+task 6, where a test can show it is load-bearing; landing it here would have been a mechanism nothing
+exercised. Residency sets need macOS 15, which the machine and the runner both have.
 
 **D8. The command list opens encoders lazily and ends one when an incompatible command arrives.**
 Metal has no free-form recording: a blit, a compute dispatch and a draw each need their own encoder,
@@ -276,10 +285,10 @@ before there is a resource, nothing drawn before there is a pipeline.
 |---|---|---|
 | 1 | **Revert 576ccee** and repair the 41 drift errors, minus the four hunks listed above. New `macos-clang-metal-debug/release` presets; widen the `RENDERER_BACKEND STREQUAL "DX12"` guards in `libs/bgl/CMakeLists.txt` and `libs/gamelib/CMakeLists.txt`; CI gains a Metal build leg, and stops running suites at all. | `libbgl.dylib` links; `Entry_test` creates a device; `metal_unsupported.txt` names what does not yet pass |
 | 2 | Submission brought up to today's RHI: `MTLSharedEvent` as the timeline (D5), `Flush`, and the encoder state machine (D8) the restored `CommandList` predates. | a fence-ordering test: submit, CPU wait, cross-queue GPU wait, poll |
-| 3 | `IResourceManager` buffers: `WriteBufferSlice`, `CopyBuffer`, deferred destruction against N registered timelines, `RegisterQueue`/`UnregisterQueue`, and the residency set (D7). Creation and readback are restored, not written. | `Readback_test`, `GrowableCapacity_test`, `MultiQueueDeletion_test`, `MeshDelete_test` |
+| 3 | Deferred destruction against N registered timelines, replacing task 1's never-reclaim placeholder. `WriteBufferSlice` and `CopyBuffer` needed nothing: the first is a non-virtual helper over `WriteBuffer`, the second landed in task 1. | `MultiQueueDeletion_test` — `MeshDelete_test` needs `Scene`, so it moves to task 6 |
 | 4 | `IShader` + `IComputePipeline`: the restored `MetalPipelineReflection` reconciled with today's `ReflectedLayout`, and the `Kind::Resource` arm in `SlangReflection.cpp`. Finding 3 is already handled by the restored `MetalizeLayout`; this task verifies it still is. | `Uniforms_test`, `SlangSession_test`, and a hand-written `RWStructuredBuffer<uint>` dispatch read back texel-exact |
 | 5 | idlgen's padding session, retargeted at Metal (D4). Four struct strides change on **both** backends. | generated `static_assert`s regenerate and compile on both presets; `assetlib_tests`; Windows CI compiles |
-| 6 | `ResolveDescriptor` on `IResourceManager` and its six call sites (D3), plus the assertion pinning the no-caching invariant. | the engine's own kernels: `HistogramInstances_test`, `CompactInstances_test`, `CullInstances_test`, `TransparentSort_test`, `Frustum_test` |
+| 6 | `ResolveDescriptor` on `IResourceManager` and its six call sites (D3), plus the assertion pinning the no-caching invariant. Brings the residency set (D7) and real `memoryBarrier`s (D6) with it, because a handle inside a struct buffer is exactly what `useResource` cannot reach. | `MeshDelete_test`, and the engine's kernels still green: `HistogramInstances_test`, `CompactInstances_test`, `TransparentSort_test` |
 | 7 | Textures and samplers: `WriteTexture` (the one `gunimplemented` left in the restored list), `GetTextureDesc`, deferred clears (D9) replacing the restored empty-pass clear, `D24S8` remap (D10). | `TextureSample_test`, `MaterialTextureDelete_test` |
 | 8 | `IMeshletPipeline` and the render encoder: the restored per-stage MSL compilation carried to the engine's real forward shaders, render state, viewport/scissor, `DispatchMesh`. Un-numbered interpolants in the shared shaders (D12). | `MeshletRender_test`, `RenderGeometry` — the first golden image on Metal |
 | 9 | The headless render target: frame ring, backbuffers, depth, motion vectors, `PresentAndAdvance`, `ResizeBackbuffers`, screenshot. | `PbrRender_test`, `Skybox_test`, `AlphaTest_test`, `Transparent_test`, `MotionVectors_test`, `Resize_test`, `Capture_test`, `MaterialOverrideRender_test` |
