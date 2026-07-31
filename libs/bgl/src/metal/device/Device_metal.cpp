@@ -41,6 +41,15 @@ namespace bgl
 		// Match the column-major convention the CPU side uploads matrices in (see Device_d3d12).
 		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
 
+#if defined(BERNINI_GPU_DEBUG)
+		// Enables dbg_raise() and the cull-stats counters in runtime-compiled shaders, as
+		// Device_d3d12 does. Without it every guarded block compiles out and the counters read
+		// zero while everything around them works.
+		const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
+		sessionDesc.preprocessorMacros                = &debugMacro;
+		sessionDesc.preprocessorMacroCount            = 1;
+#endif
+
 		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef());
 		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
 	}

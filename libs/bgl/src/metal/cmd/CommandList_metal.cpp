@@ -43,6 +43,16 @@ namespace bgl
 				uint32_t slotIndex = 0;
 				std::memcpy(&slotIndex, result.bytes.data() + handle.offset, sizeof(uint32_t));
 
+				// An optional binding the CPU left unset. D3D12 writes the null index into the
+				// cbuffer and the shader never indexes the heap with it; here the rewrite would
+				// dereference a pool slot that does not exist, so it stays a null id instead.
+				if (slotIndex == core::slot_handle::invalid_index)
+				{
+					constexpr uint64_t c_NullId = 0;
+					std::memcpy(result.bytes.data() + handle.offset, &c_NullId, sizeof(uint64_t));
+					continue;
+				}
+
 				uint64_t native = 0;
 				switch (handle.kind)
 				{

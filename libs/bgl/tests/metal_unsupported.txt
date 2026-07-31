@@ -8,31 +8,19 @@
 A baked cutout material cuts its silhouette out of a plane
 A camera yaw displaces the skybox horizontally
 A deleted instance stops contributing motion
-A distant mirror does not alias its reflection
-A loose blend material renders the same as the baked one
 A material override paints one instance and not its sibling
 A self-occluding blend material hides the layers behind it
-A split-phase capture resolves to the frame a blocking screenshot returns
 A still camera leaves static geometry with no motion
 An alpha-tested material cuts a hole in a plane
 Camera motion reprojects static geometry to its previous screen position
-Capacity is a starting point, not a limit
-Capture tickets are bounded, single-spend, and discardable
 GPU assertion handler replaces the crash
-Geometry
 Geometry entering the frame reprojects to outside it
 Geometry leaving the frame leaves no motion behind
 GraphicsError on frame protocol misuse
-Instances outside the frustum are culled, those inside survive
 Loose PBR material renders equivalently to PBR
 PBR instances render headlessly
 Pixels no geometry covered stay at zero motion
-Render to two targets
-Resize after drawing a frame
-Resize edge cases
-Resize with an existing static mesh instance
 Shader cache is populated cold and reused warm without recompiling
-Skybox renders headlessly
 The first frame a view is drawn has no motion
 Translucent panes composite back-to-front regardless of creation order
 bindless texture sample uploads and resolves end-to-end
