@@ -3,6 +3,8 @@
 
 #include "gfx/GraphicsBase.h"
 #include "resource/ResourceManager.h"
+#include "scene/Scene.h"
+#include "scene/SceneView.h"
 
 #include <core/file/file.h>
 #include <core/ref/RefCounter.h>
@@ -82,15 +84,15 @@ namespace bgl
 		// ---- the frame path, which arrives with the render target and the meshlet pipelines ----
 
 		SceneRef
-		CreateScene(SceneDesc) override
+		CreateScene(SceneDesc desc) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
 		}
 
 		SceneViewRef
-		CreateSceneView(const SceneRef&, uint32_t) override
+		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) override
 		{
-			core::throw_runtime_error(c_Unimplemented);
+			return core::SharedRef<SceneView>::Make(scene, initialInstances, m_ResourceManager);
 		}
 
 		RenderTargetRef
