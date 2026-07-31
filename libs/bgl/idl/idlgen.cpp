@@ -340,6 +340,21 @@ namespace
 				}
 			}
 
+			// A 3-component vector is 12 bytes to the C/C++ mirror and 16 to MSL, so every member
+			// after one sits at a different offset on Metal -- an interior mismatch no trailing
+			// padding can close. Refused here rather than left for a shader to read wrong, because
+			// the author of the next struct has no reason to know it.
+			if (ftype->getKind() == TypeKind::Vector && ftype->getElementCount() == 3)
+			{
+				std::cerr << std::format(
+					"error: '{}::{}' is a 3-component vector, which the C/C++ rules size at 12 "
+					"bytes and MSL at 16; use a 4-component one (a bounding sphere packs as "
+					"xyz + w) so both agree\n",
+					info.name,
+					var->getName());
+				std::exit(1);
+			}
+
 			FieldInfo field;
 			field.name        = var->getName();
 			field.type        = CppBaseType(ftype, referenced);

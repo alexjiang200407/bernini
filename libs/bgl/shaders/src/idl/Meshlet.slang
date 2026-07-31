@@ -8,6 +8,6 @@ public struct Meshlet
     public uint vertexCount;
     public uint triangleCount;
 
-    public float3 boundingCenter;
-    public float boundingRadius;
+    // xyz is the centre, w the radius.
+    public float4 boundingSphere;
 };

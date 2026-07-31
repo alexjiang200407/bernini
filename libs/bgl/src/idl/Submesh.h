@@ -14,8 +14,7 @@ namespace bgl::idl
 		Range vertexData;
 		Range indices;
 		uint32_t vertexCount;
-		glm::vec3 boundingCenter;
-		float boundingRadius;
+		glm::vec4 boundingSphere;
 	};
 
 	static_assert(sizeof(Submesh) == 144);
@@ -25,7 +24,6 @@ namespace bgl::idl
 	static_assert(offsetof(Submesh, vertexData) == 116);
 	static_assert(offsetof(Submesh, indices) == 120);
 	static_assert(offsetof(Submesh, vertexCount) == 124);
-	static_assert(offsetof(Submesh, boundingCenter) == 128);
-	static_assert(offsetof(Submesh, boundingRadius) == 140);
+	static_assert(offsetof(Submesh, boundingSphere) == 128);
 
 }
