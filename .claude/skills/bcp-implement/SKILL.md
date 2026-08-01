@@ -131,21 +131,23 @@ just format --check <files...>  # verify only
 ```
 
 Commit each slice with a message that says **why**, not what — the diff already says what. Subject
-line `type(scope): imperative summary`. End every commit message with:
+line `type(scope): imperative summary`. Attribution is not your job: `.githooks/prepare-commit-msg`
+co-authors every commit made from a Claude session to the morgana-coding-agent bot, so write no
+`Co-authored-by` line yourself and never pass `--no-verify`.
 
-```
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
-```
-
-Then rebase onto `origin/master` (it moves), rebuild, re-test, and open the PR:
+Then rebase onto `origin/master` (it moves), rebuild, re-test, and open the PR. Write the body to a
+file first — it is prose, and `--body-file` keeps it out of shell quoting:
 
 ```bash
 git fetch origin && git rebase origin/master
-gh pr create --base master --title "..." --body "..."
+git push -u origin HEAD
+just pr create --base master --title "..." --body-file <file>
 ```
 
-`gh` may not be on `PATH`; it installs to `/c/Program Files/GitHub CLI`. Prefix with
-`export PATH="$PATH:/c/Program Files/GitHub CLI"` if `gh` is not found.
+`just pr` posts as the bot, so the description is the agent's rather than the user's; raw
+`gh pr create` is blocked. It prints the PR number and arms the watch — go straight to
+[bcp-feature § 4](.claude/skills/bcp-feature/SKILL.md) and start `just watch-pr <n>` as the last
+action of the turn. The turn cannot end until you do.
 
 The PR body should say what changed, **why**, how it was verified (name the suites, and say if GPU
 validation ran), and what was deliberately left out. Known follow-ups belong there too — a reviewer
