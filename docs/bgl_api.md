@@ -186,6 +186,11 @@ flowchart TD
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
   @throws `GraphicsError` otherwise. Recreates backbuffers, depth, and the velocity buffer,
   invalidating anything that cached them.
+* **`WaitIdle()`** — @pre not between `BeginFrame`/`EndFrame`. Blocks until every submitted frame,
+  queued presents included, has drained from the GPU. Call it *before* hiding the last window being
+  presented to (the editor does, in `MainWindow::closeEvent`): a present left pending across the hide
+  is never consumed, and every later fence wait on the queue — the teardown flushes among them —
+  blocks behind it forever.
 * **`SubmitCapture(target)`** — @pre not mid-frame; fewer than `c_MaxPendingCaptures` captures in
   flight. @post returns a ticket that **must** be spent by `TryResolveCapture` or `DiscardCapture`;
   leaking tickets exhausts the slots and the next submit throws. Captures the *last presented*

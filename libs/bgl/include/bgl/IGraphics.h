@@ -132,6 +132,17 @@ namespace bgl
 		virtual void
 		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) = 0;
 
+		/**
+		 * Blocks until every submitted frame -- queued presents included -- has drained from the
+		 * GPU. A client that is about to hide the last window it presents to should call this while
+		 * the window is still on screen: a present left pending across the hide is never consumed,
+		 * and every later fence wait on the queue sits behind it.
+		 *
+		 * Must not be called between BeginFrame and EndFrame.
+		 */
+		virtual void
+		WaitIdle() noexcept = 0;
+
 		virtual void
 		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) = 0;
 

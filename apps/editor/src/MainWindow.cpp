@@ -173,6 +173,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		ShowEmptyState();
 }
 
+void
+MainWindow::closeEvent(QCloseEvent* event)
+{
+	// Cut first so a dock hiding below cannot put a viewport back into the loop.
+	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
+	m_TabVisibility.clear();
+
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		view->SetRenderingEnabled(false);
+
+	m_Renderer->Invoke([&] { m_Renderer->GetGraphics()->WaitIdle(); });
+
+	QMainWindow::closeEvent(event);
+}
+
 MainWindow::~MainWindow()
 {
 	// Cut before anything below is destroyed. Taking a widget out of a dock makes the dock report a

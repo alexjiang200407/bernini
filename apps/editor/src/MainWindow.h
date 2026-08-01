@@ -23,6 +23,13 @@ public:
 	explicit MainWindow(QWidget* parent = nullptr);
 	~MainWindow();
 
+protected:
+	// Stops the viewports and drains the GPU while every window is still on screen. A present left
+	// pending when its window hides is never consumed, and it wedges every later fence wait on the
+	// queue -- the shutdown flushes among them.
+	void
+	closeEvent(QCloseEvent* event) override;
+
 private:
 	void
 	NewProject();
