@@ -5,13 +5,5 @@
 # This list shrinks. Each task removes what it makes pass, and the file is deleted when it empties.
 # A name here says nothing about the test: all of them are backend-agnostic, and every one passes on
 # D3D12 today. What it records is how far this backend has got.
-A camera yaw displaces the skybox horizontally
-A deleted instance stops contributing motion
-A still camera leaves static geometry with no motion
-Camera motion reprojects static geometry to its previous screen position
-Geometry entering the frame reprojects to outside it
-Geometry leaving the frame leaves no motion behind
 GraphicsError on frame protocol misuse
-Pixels no geometry covered stay at zero motion
 Shader cache is populated cold and reused warm without recompiling
-The first frame a view is drawn has no motion

@@ -212,6 +212,10 @@ namespace
 
 			auto readback = resourceManager->CreateReadbackBuffer(rbDesc);
 
+			// This copy rides its own queue, which nothing orders against the renderer's. Without the
+			// drain it reads the texture as it stood before the frame it is meant to measure.
+			gfx->As<bgl::GraphicsBase>()->WaitIdle();
+
 			cmdAllocator->ResetAllocator();
 			cmdList->Open(cmdQueue, cmdAllocator);
 
