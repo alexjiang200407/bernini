@@ -87,7 +87,6 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	writeSource(dir.path / "packed.ktx2", 16, { { 10, 60, 90, 255 } });
 
 	BMaterial mat;
-	mat.mode          = MaterialMode::kLoose;
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };  // base R
 	mat.pbr.routes[1] = { "albedo.ktx2", 1 };  // base G
 	mat.pbr.routes[2] = { "albedo.ktx2", 2 };  // base B
@@ -96,9 +95,9 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
-	SECTION("it fills the triplet and switches to the baked representation")
+	SECTION("it fills the triplet, and the bake it wrote reads as current")
 	{
-		REQUIRE(mat.mode == MaterialMode::kBaked);
+		REQUIRE_FALSE(bakeIsStale(mat, dir.path));
 		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.baseColorTexture));
 		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.ormTexture));
 	}
@@ -161,7 +160,6 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 
 	const auto bakeBaseColor = [&](AlphaMode mode) {
 		BMaterial mat;
-		mat.mode          = MaterialMode::kLoose;
 		mat.pbr.routes[0] = { "albedo.ktx2", 0 };
 		mat.pbr.routes[1] = { "albedo.ktx2", 1 };
 		mat.pbr.routes[2] = { "albedo.ktx2", 2 };
@@ -474,7 +472,6 @@ TEST_CASE("bakeMaterial rejects an already-baked source", "[bmaterial][bake]")
 TEST_CASE("stripAuthoringData leaves only the shippable form", "[bmaterial][bake]")
 {
 	BMaterial mat;
-	mat.mode                 = MaterialMode::kBaked;
 	mat.pbr.baseColorTexture = "m_basecolor.ktx2";
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
 	mat.pbr.routeStamps[0]   = { 12, 34 };
@@ -486,7 +483,6 @@ TEST_CASE("stripAuthoringData leaves only the shippable form", "[bmaterial][bake
 	REQUIRE(mat.editorGraph.empty());
 	REQUIRE(mat.pbr.routes[0].texture.empty());
 	REQUIRE(mat.pbr.routeStamps[0] == SourceStamp{});
-	REQUIRE(mat.mode == MaterialMode::kBaked);
 
 	// What the runtime actually needs is untouched.
 	REQUIRE(mat.pbr.baseColorTexture == "m_basecolor.ktx2");
@@ -497,7 +493,6 @@ TEST_CASE("stripAuthoringData refuses to strip an unbaked material", "[bmaterial
 {
 	// Its routes are the only description of it; dropping them would render it undrawable.
 	BMaterial mat;
-	mat.mode          = MaterialMode::kLoose;
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };
 
 	REQUIRE_THROWS_AS(stripAuthoringData(mat), std::runtime_error);

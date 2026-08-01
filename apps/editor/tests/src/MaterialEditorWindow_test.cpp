@@ -113,7 +113,6 @@ TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
 	// so the artist can see what the mesh actually samples without opening the files.
 	auto material                 = assetlib::BMaterial();
 	material.shadingModel         = assetlib::ShadingModel::kPbr;
-	material.mode                 = assetlib::MaterialMode::kBaked;
 	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
 	material.pbr.normalTexture    = "Textures/normal_c3d4.ktx2";
 	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
@@ -131,7 +130,6 @@ TEST_CASE("A material with no baked triplet lists nothing", "[materialeditor]")
 	// show, and the empty string is what keeps the label hidden.
 	auto material                  = assetlib::BMaterial();
 	material.shadingModel          = assetlib::ShadingModel::kPbr;
-	material.mode                  = assetlib::MaterialMode::kLoose;
 	material.pbr.routes[0].texture = "textures_src/albedo.ktx2";  // a source route, not a baked map
 
 	CHECK(MaterialEditorWindow::BakedTexturesSummary(material).isEmpty());
@@ -145,7 +143,6 @@ TEST_CASE(
 	// that looks like a bug, and the listing still shows because something is baked.
 	auto material                 = assetlib::BMaterial();
 	material.shadingModel         = assetlib::ShadingModel::kPbr;
-	material.mode                 = assetlib::MaterialMode::kBaked;
 	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
 	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
 

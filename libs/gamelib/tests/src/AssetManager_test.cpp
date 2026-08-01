@@ -74,7 +74,6 @@ namespace
 		bool                         occlude   = false)
 	{
 		auto material                 = assetlib::BMaterial();
-		material.mode                 = assetlib::MaterialMode::kBaked;
 		material.pbr.baseColorTexture = baseColor;
 		material.pbr.alphaMode        = alphaMode;
 		material.pbr.occlude          = occlude;
@@ -644,25 +643,23 @@ TEST_CASE("AssetManager resolves paths against its data root", "[gamelib][assets
 	CHECK((*fx).AcquireTexture("nested/deep/tex.ktx2").textureSlot);
 }
 
-TEST_CASE("materialTextures names a material's textures in slot order", "[gamelib][assets]")
+TEST_CASE("MaterialTextures names a material's textures in slot order", "[gamelib][assets]")
 {
 	// The order the record's texture handles parallel. A caller decoding them ahead of time reads it
 	// to know what to decode, so it is public and it is pinned here.
 	auto baked                 = assetlib::BMaterial();
-	baked.mode                 = assetlib::MaterialMode::kBaked;
 	baked.pbr.baseColorTexture = "Textures/base.ktx2";
 	baked.pbr.normalTexture    = "Textures/nrm.ktx2";
 	baked.pbr.ormTexture       = "Textures/orm.ktx2";
 
 	CHECK(
-		game::materialTextures(baked) ==
+		game::MaterialTextures(baked, false) ==
 		std::vector<std::string>{ "Textures/base.ktx2", "Textures/nrm.ktx2", "Textures/orm.ktx2" });
 
 	// A loose material is its authoring routes instead, one slot per channel, unrouted ones empty.
 	auto loose                        = assetlib::BMaterial();
-	loose.mode                        = assetlib::MaterialMode::kLoose;
 	loose.pbr.routes[0].texture       = "Textures/albedo.ktx2";
-	const std::vector<std::string> ch = game::materialTextures(loose);
+	const std::vector<std::string> ch = game::MaterialTextures(loose, true);
 
 	REQUIRE(ch.size() == assetlib::c_LooseChannelCount);
 	CHECK(ch[0] == "Textures/albedo.ktx2");

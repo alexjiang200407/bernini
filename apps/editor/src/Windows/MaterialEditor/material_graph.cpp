@@ -93,8 +93,6 @@ CompileMaterial(
 
 	material.shadingModel = assetlib::ShadingModel::kPbr;
 
-	// The graph authors per-channel routes, so a material that has never been baked is loose.
-	material.mode = assetlib::MaterialMode::kLoose;
 	material.name = name.toStdString();
 
 	if (const MaterialOutputNode* output = model.OutputNode())

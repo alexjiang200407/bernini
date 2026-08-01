@@ -123,7 +123,7 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	// And what landed is a material the renderer can draw, routed at this import's own textures.
 	const assetlib::BMaterial material = assetlib::loadMaterial(file);
 	CHECK(material.name == "Rust");
-	CHECK(material.mode == assetlib::MaterialMode::kLoose);
+	CHECK(material.pbr.baseColorTexture.empty());  // no bake has run, so it draws from its routes
 	CHECK(
 		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorR)].texture ==
 		"textures_src/hydrant/tex0.ktx2");

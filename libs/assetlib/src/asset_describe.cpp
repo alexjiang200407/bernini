@@ -25,12 +25,6 @@ namespace assetlib
 		constexpr std::array<const char*, 4> c_ChannelSwizzle = { { "r", "g", "b", "a" } };
 
 		const char*
-		modeName(MaterialMode mode)
-		{
-			return mode == MaterialMode::kLoose ? "loose" : "baked";
-		}
-
-		const char*
 		shadingModelName(ShadingModel model)
 		{
 			switch (model)
@@ -288,7 +282,6 @@ namespace assetlib
 
 		out += std::format("bmaterial '{}'\n", material.name);
 		out += std::format("  shadingModel      {}\n", shadingModelName(material.shadingModel));
-		out += std::format("  mode              {}\n", modeName(material.mode));
 
 		switch (material.shadingModel)
 		{
@@ -302,9 +295,13 @@ namespace assetlib
 		}
 
 		if (!dataRoot.empty())
+		{
+			const bool stale = bakeIsStale(material, dataRoot);
 			out += std::format(
-				"\n  bake              {}\n",
-				bakeIsStale(material, dataRoot) ? "STALE" : "up to date");
+				"\n  bake              {}\n  draws from        {}\n",
+				stale ? "STALE" : "up to date",
+				stale ? "routes (loose)" : "baked triplet");
+		}
 
 		out += std::format(
 			"  editorGraph       {}\n",

@@ -32,10 +32,9 @@ TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
 	REQUIRE(restored.pbr.roughnessFactor == Catch::Approx(0.25f));
 }
 
-TEST_CASE("a Loose BMaterial round-trips its mode and routes", "[bmaterial][io]")
+TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 {
 	BMaterial mat;
-	mat.mode                = MaterialMode::kLoose;
 	mat.name                = "packed";
 	mat.pbr.metallicFactor  = 0.5f;
 	mat.pbr.roughnessFactor = 0.4f;
@@ -46,7 +45,6 @@ TEST_CASE("a Loose BMaterial round-trips its mode and routes", "[bmaterial][io]"
 
 	const auto restored = deserializeMaterial(serializeMaterial(mat));
 
-	REQUIRE(restored.mode == MaterialMode::kLoose);
 	REQUIRE(restored.pbr.routes.size() == c_LooseChannelCount);
 	REQUIRE(restored.pbr.routes[0].texture == "albedo.ktx2");
 	REQUIRE(restored.pbr.routes[0].channel == 0);
@@ -63,7 +61,6 @@ TEST_CASE("a BMaterial round-trips its editor graph", "[bmaterial][io]")
 	// The graph is an opaque blob to assetlib: it must survive byte-for-byte, embedded quotes,
 	// braces, newlines and all.
 	BMaterial mat;
-	mat.mode        = MaterialMode::kLoose;
 	mat.name        = "graphed";
 	mat.editorGraph = R"({"nodes":[{"id":0,"internal-data":{"model-name":"Texture"}}],"c":[]})"
 					  "\n{\"trailing\":\"line\"}";
@@ -71,7 +68,6 @@ TEST_CASE("a BMaterial round-trips its editor graph", "[bmaterial][io]")
 	const auto restored = deserializeMaterial(serializeMaterial(mat));
 
 	REQUIRE(restored.editorGraph == mat.editorGraph);
-	REQUIRE(restored.mode == MaterialMode::kLoose);
 	REQUIRE(restored.name == "graphed");
 }
 
@@ -79,7 +75,6 @@ TEST_CASE("a BMaterial with no editor graph round-trips an empty one", "[bmateri
 {
 	// The exported/baked form: the authoring graph has been stripped.
 	BMaterial mat;
-	mat.mode                 = MaterialMode::kBaked;
 	mat.pbr.baseColorTexture = "baked_basecolor.ktx2";
 
 	const auto restored = deserializeMaterial(serializeMaterial(mat));
@@ -108,7 +103,6 @@ TEST_CASE("a BMaterial carries both its sources and its baked triplet", "[bmater
 	// The coexistence the format exists for: the bake fills the triplet without discarding the
 	// routes that produced it, so the material can still be reopened and re-baked.
 	BMaterial mat;
-	mat.mode                 = MaterialMode::kBaked;
 	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
 	mat.pbr.ormTexture       = "mat_orm.ktx2";
 	mat.pbr.routes[0]        = { "src/albedo.ktx2", 0 };
@@ -116,7 +110,6 @@ TEST_CASE("a BMaterial carries both its sources and its baked triplet", "[bmater
 
 	const auto restored = deserializeMaterial(serializeMaterial(mat));
 
-	REQUIRE(restored.mode == MaterialMode::kBaked);
 	REQUIRE(restored.pbr.baseColorTexture == "mat_basecolor.ktx2");
 	REQUIRE(restored.pbr.routes[0].texture == "src/albedo.ktx2");
 	REQUIRE(restored.pbr.routeStamps[0].size == 64);
@@ -150,14 +143,17 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
+	const auto write = [](const std::filesystem::path& path, std::string_view bytes) {
+		std::ofstream out(path, std::ios::binary);
+		out << bytes;
+	};
+
 	const auto source = dir / "albedo.ktx2";
-	{
-		std::ofstream out(source, std::ios::binary);
-		out << "aaaa";
-	}
+	const auto baked  = dir / "mat_basecolor.ktx2";
+	write(source, "aaaa");
+	write(baked, "bbbb");
 
 	BMaterial mat;
-	mat.mode                 = MaterialMode::kBaked;
 	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
 
@@ -179,10 +175,17 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 	SECTION("a source that changed size is stale")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
-		{
-			std::ofstream out(source, std::ios::binary);
-			out << "aaaaaaaa";  // different size
-		}
+		write(source, "aaaaaaaa");  // different size
+		REQUIRE(bakeIsStale(mat, dir));
+	}
+
+	SECTION("a deleted baked map is stale, however fresh the sources are")
+	{
+		// The reason the draw-from choice is derived rather than stored: a material that claimed its
+		// triplet here would bind the default white 1x1 instead, which on a cutout is a solid
+		// silhouette rather than a visible error.
+		mat.pbr.routeStamps[0] = stampOf(source);
+		std::filesystem::remove(baked);
 		REQUIRE(bakeIsStale(mat, dir));
 	}
 
@@ -341,4 +344,46 @@ TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bma
 	// Attaching the same material again is a no-op, not a duplicate slot.
 	REQUIRE_FALSE(attachMaterial(mesh, 0, "Materials/suzanne.bmaterial"));
 	REQUIRE(mesh.materials.size() == 1);
+}
+
+TEST_CASE("a version 6 BMaterial still loads", "[bmaterial][io]")
+{
+	// 6 differs from 7 only by the MaterialMode it stored after the shading model. Rather than hand-
+	// author a whole v6 stream, splice one out of a v7: rewind the major version and put the field
+	// back, so this stays honest about the layout even as the payload after it grows.
+	BMaterial mat;
+	mat.name                 = "legacy";
+	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
+	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
+	mat.pbr.metallicFactor   = 0.25f;
+
+	auto bytes = serializeMaterial(mat);
+
+	constexpr std::ptrdiff_t c_MajorOffset = 4;              // after the magic
+	constexpr std::ptrdiff_t c_ModeOffset  = 4 + 2 + 2 + 4;  // after magic, version, shadingModel
+
+	const auto six = uint16_t{ 6 };
+	std::memcpy(bytes.data() + c_MajorOffset, &six, sizeof(six));
+
+	const auto loose = uint32_t{ 1 };  // MaterialMode::kLoose, a value 7 has no field for
+	std::byte  field[sizeof(loose)];
+	std::memcpy(field, &loose, sizeof(loose));
+	bytes.insert(bytes.begin() + c_ModeOffset, std::begin(field), std::end(field));
+
+	const auto restored = deserializeMaterial(bytes);
+
+	REQUIRE(restored.name == "legacy");
+	REQUIRE(restored.pbr.baseColorTexture == "mat_basecolor.ktx2");
+	REQUIRE(restored.pbr.routes[0].texture == "albedo.ktx2");
+	REQUIRE(restored.pbr.metallicFactor == Catch::Approx(0.25f));
+}
+
+TEST_CASE("an unreadable BMaterial version is refused", "[bmaterial][io]")
+{
+	auto bytes = serializeMaterial(BMaterial());
+
+	const auto five = uint16_t{ 5 };
+	std::memcpy(bytes.data() + 4, &five, sizeof(five));
+
+	REQUIRE_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
 }

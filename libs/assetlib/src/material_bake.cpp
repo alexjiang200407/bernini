@@ -434,8 +434,7 @@ namespace assetlib
 			                         stampOf(desc.dataRoot / pbr.routes[i].texture);
 		}
 
-		// The triplet now exists, so draw from it. The routes stay: they are how it gets re-baked.
-		material.mode = MaterialMode::kBaked;
+		// The routes stay: they are how it gets re-baked, and what it draws from until then.
 	}
 
 	bool
@@ -499,6 +498,5 @@ namespace assetlib
 		}
 
 		material.editorGraph.clear();
-		material.mode = MaterialMode::kBaked;
 	}
 }

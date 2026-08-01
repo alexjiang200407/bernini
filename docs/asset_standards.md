@@ -260,9 +260,12 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     in `Data/Materials/` names `textures_src/tex1.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
     lives. A standalone baked model directory is its own data root, which is how a `matN.bmaterial`
     beside its `texN.ktx2` still resolves.
-  * `mode` (`kBaked` / `kLoose`) says which representation **the renderer should draw from**. It is *not*
-    a statement about which fields are filled, and it is on the material rather than in the payload
-    because it is a property of the asset, not of the shading system.
+  * **Which representation the renderer draws from is derived, never stored.** `bakeIsStale` measures the
+    material against the disk: a triplet that is present and still matches the sources its routes name is
+    sampled as the optimized triplet, and anything else falls back to the routes. A stored flag could
+    claim a triplet that had been deleted, and the renderer would then bind the default white 1×1 — which
+    on a cutout material means alpha = 1 everywhere, i.e. a solid white silhouette rather than a visible
+    error.
   * `editorGraph` — the node graph, as an opaque JSON blob. Nothing outside the editor reads it and it
     never affects rendering; it exists so reopening a material restores the board that produced the
     routes, node positions and unwired nodes included.
@@ -285,12 +288,16 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     rejects any other model, and `bakeIsStale` reports one as never-stale, because it has no bake step to
     have drifted from.
   * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
-    `editorGraph` and forces `kBaked`, leaving the triplet + factors + name. A shipping build carries no
-    source-texture references. It refuses to strip a material that was never baked, which would leave
+    `editorGraph`, leaving the triplet + factors + name. A shipping build carries no source-texture
+    references — and with no routes there is nothing for the triplet to be stale against, so a stripped
+    material always draws from it. It refuses to strip a material that was never baked, which would leave
     nothing to render — and it refuses *before* clearing anything, so a rejected material comes out
     untouched rather than half-stripped.
 
-  **There is exactly one readable version, and no migration path.** `deserializeMaterial`
+  **Two readable major versions: 7, and the 6 it replaced.** 6 stored the draw-from choice as a
+  `MaterialMode` field; 7 derives it, so reading a 6 means discarding that one `uint32` and nothing else.
+  `deserializeMaterial` rejects anything outside that range rather than guessing at a layout it does not
+  know. A minor version is additive within a major, and a reader honours it field by field.
 
   **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a `write*`/`read*`
   pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
@@ -406,8 +413,8 @@ Five rules, each of which is a way to get this wrong:
 * **Every `.bmaterial` is written before any submesh names one.** A failure part-way through therefore
   leaves a mesh naming only materials that exist, and the rollback takes the whole folder.
 
-The result is `kLoose`: the import runs no bake, so there is no triplet, and the maps are sampled
-straight from the routes until someone bakes it.
+The import runs no bake, so there is no triplet, and the maps are sampled straight from the routes until
+someone bakes it.
 
 ## Pruning unused baked maps
 
@@ -421,9 +428,9 @@ a confirmation first.
 It is a **mark and sweep over the whole project**, and each half has a rule that is easy to get wrong:
 
 * **Mark** — every `.bmaterial` below the data root is loaded and its baked triplet marked live,
-  **whatever its `mode` says**. A `kLoose` material still carries the triplet of its last bake, and
-  that bake is a valid thing to switch back to; deleting its maps because the renderer happens to be
-  drawing from the routes today would destroy it. A material that fails to load **aborts the scan**
+  **whether or not the renderer is drawing from it**. A material whose bake has gone stale still names the
+  triplet that bake wrote, and re-stamping the sources is a valid thing to do; deleting its maps because
+  the renderer happens to be drawing from the routes today would destroy it. A material that fails to load **aborts the scan**
   rather than being skipped — an unread material is one whose references cannot be known, and the maps
   it alone keeps alive would otherwise be swept as garbage.
 * **Sweep** — only files matching the bake's own naming, `<group>_<16 hex>.ktx2`, are candidates.
@@ -555,7 +562,7 @@ assetlib_cli obj assets/model/model.bmesh -o model.obj
 # Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
 assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
 assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
-assetlib_cli describe Data/Materials/skin.bmaterial      # mode, factors, triplet, routing table
+assetlib_cli describe Data/Materials/skin.bmaterial      # factors, triplet, routing table, bake state
 
 # ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
 assetlib_cli describe Data/Materials/skin.bmaterial -d Data
