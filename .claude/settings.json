@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [".claude/hooks/gh_guard.py"],
+            "statusMessage": "Checking the PR rules"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [".claude/hooks/pr_watch_guard.py"],
+            "statusMessage": "Checking for an unwatched PR"
+          }
+        ]
+      }
+    ]
+  }
+}
