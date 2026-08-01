@@ -55,6 +55,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from util import watchlist  # noqa: E402
+from util.gh import BOT_LOGIN  # noqa: E402
 
 MAX_CONSECUTIVE_FAILURES = 5
 
@@ -117,6 +118,20 @@ def key(item):
 
 def stamp(item):
     return item.get("submittedAt") or item.get("createdAt") or item.get("created_at") or ""
+
+
+def by_the_agent(item):
+    """Did the bot write this? Waking for it would be reading yourself.
+
+    A baseline time cannot decide this: a watch running in the background is
+    still running when the agent posts its replies, so its own words arrive
+    after any startup baseline no matter how the baseline was chosen. The author
+    is the durable answer. GraphQL spells the login `morgana-coding-agent` and
+    REST spells it `morgana-coding-agent[bot]`, hence the suffix strip.
+    """
+    login = ((item.get("author") or {}).get("login")
+             or (item.get("user") or {}).get("login") or "")
+    return login.lower().removesuffix("[bot]") == BOT_LOGIN.lower().removesuffix("[bot]")
 
 
 def summarize_review(r):
@@ -248,8 +263,9 @@ def main():
             emit({"event": "closed", "pr": args.pr, "url": view["url"]})
             return True
 
-        new_reviews = [r for r in reviews if key(r) not in seen]
-        new_comments = [c for c in comments + inline if key(c) not in seen]
+        new_reviews = [r for r in reviews if key(r) not in seen and not by_the_agent(r)]
+        new_comments = [c for c in comments + inline
+                        if key(c) not in seen and not by_the_agent(c)]
         if new_reviews:
             emit({
                 "event": "review",
