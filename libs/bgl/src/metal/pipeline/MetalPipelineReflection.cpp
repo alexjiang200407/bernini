@@ -165,9 +165,8 @@ namespace bgl
 			UniformLayoutEntry entry{};
 			entry.size   = size;
 			entry.layout = std::make_shared<const ReflectedLayout>(std::move(reflected));
-			// rootParamIndex stays invalid. A [[buffer(N)]] index is per-stage on Metal, and this
-			// layout may span several -- ReflectStageBindings is the only thing that can answer it,
-			// and a pipeline whose stages share one index fills the field in from there.
+			// rootParamIndex stays invalid: a [[buffer(N)]] index is per-stage, and this layout may
+			// span several. Only ReflectStageBindings can answer it.
 			outEntries[param->getName()] = std::move(entry);
 		}
 	}
