@@ -169,10 +169,10 @@ namespace bgl
 		EndEncoder() noexcept;
 
 		[[nodiscard]] MTL::BlitCommandEncoder*
-		BlitEncoder() noexcept;
+		GetBlitEncoder() noexcept;
 
 		[[nodiscard]] MTL::ComputeCommandEncoder*
-		ComputeEncoder() noexcept;
+		GetComputeEncoder() noexcept;
 
 		// Reopens when `fb` differs from the pass in flight: a render encoder is bound to its
 		// attachments, so a draw to a different target cannot share it.

@@ -38,7 +38,13 @@ target_include_directories(bgl_metal
 target_precompile_headers(bgl_metal
     PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h
             ${CMAKE_CURRENT_SOURCE_DIR}/../pch.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/pch.h
 )
+
+# metal-cpp emits its selector and class symbols in whichever TU defines the *_PRIVATE_IMPLEMENTATION
+# macros before including the headers. A PCH would include them first and the definitions would be
+# skipped, so this one file compiles without it.
+set_source_files_properties(MetalImpl.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 target_compile_definitions(bgl_metal PRIVATE RENDERER_BACKEND_METAL)
 

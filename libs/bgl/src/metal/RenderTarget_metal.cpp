@@ -1,9 +1,9 @@
 #include "RenderTarget_metal.h"
 
 #include "cmd/CommandQueue_metal.h"
+#include "convert_metal.h"
 #include "device/Device_metal.h"
 #include "resource/ResourceManager_metal.h"
-#include "util_metal.h"
 
 namespace bgl
 {

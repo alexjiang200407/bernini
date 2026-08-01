@@ -1,7 +1,9 @@
 #include "pipeline/MetalPipelineReflection.h"
 
 #include "uniforms/SlangReflection.h"
+
 #include "uniforms/Uniforms.h"  // detail::ValueTypeSize
+#include <core/math.h>
 
 namespace bgl
 {
@@ -45,12 +47,6 @@ namespace bgl
 			default:
 				return 1;
 			}
-		}
-
-		uint32_t
-		AlignUp(uint32_t offset, uint32_t align)
-		{
-			return (offset + align - 1) & ~(align - 1);
 		}
 
 		// Byte offset of every bindless handle field within the cbuffer.
@@ -98,7 +94,7 @@ namespace bgl
 				layout.size = layout.handleKind != HandleKind::kNone ?
 				                  8u :
 				                  static_cast<uint32_t>(detail::ValueTypeSize(layout.valueType));
-				return AlignUp(layout.size, MetalAlign(layout));
+				return core::align(layout.size, MetalAlign(layout));
 
 			case UniformType::kArray:
 			{
@@ -116,11 +112,11 @@ namespace bgl
 				for (ReflectedField& field : layout.fields)
 				{
 					const uint32_t footprint = MetalizeLayout(field.layout);
-					offset                   = AlignUp(offset, MetalAlign(field.layout));
+					offset                   = core::align(offset, MetalAlign(field.layout));
 					field.offset             = offset;
 					offset += footprint;
 				}
-				layout.size = AlignUp(offset, MetalAlign(layout));
+				layout.size = core::align(offset, MetalAlign(layout));
 				return layout.size;
 			}
 

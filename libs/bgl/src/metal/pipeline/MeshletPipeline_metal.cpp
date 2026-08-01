@@ -1,9 +1,10 @@
 #include "pipeline/MeshletPipeline_metal.h"
 #include "MetalErrorChecker.h"
 
+#include "convert_metal.h"
 #include "shadercache/ShaderCache_metal.h"
 #include "slang/SlangErrorChecker.h"
-#include "util_metal.h"
+#include "util/util.h"
 
 #include <core/err/util.h>
 
@@ -28,7 +29,7 @@ namespace bgl
 			depthOn ? ConvertComparisonFunc(ds.depthFunc) : MTL::CompareFunctionAlways);
 		dsd->setDepthWriteEnabled(depthOn && ds.depthWriteEnable);
 
-		if (ds.stencilEnable && FormatHasStencil(m_Desc.dsvFormat))
+		if (ds.stencilEnable && GetFormatInfo(m_Desc.dsvFormat).hasStencil)
 		{
 			const auto face = [&](const DepthStencilState::StencilOpDesc& src) {
 				NS::SharedPtr<MTL::StencilDescriptor> sd =
@@ -275,10 +276,10 @@ namespace bgl
 		const auto makeFunction = [&](const CachedStage& stage) -> NS::SharedPtr<MTL::Function> {
 			MetalErrorChecker           errChecker;
 			NS::SharedPtr<MTL::Library> lib = NS::TransferPtr(
-				device->newLibrary(Str(stage.msl), nullptr, errChecker.WriteError()));
+				device->newLibrary(ConvertString(stage.msl), nullptr, errChecker.WriteError()));
 			lib.get() >> errChecker;
 			NS::SharedPtr<MTL::Function> fn =
-				NS::TransferPtr(lib->newFunction(Str(stage.entryPoint)));
+				NS::TransferPtr(lib->newFunction(ConvertString(stage.entryPoint)));
 			gassert(fn.get() != nullptr, "Meshlet stage library is missing its entry function");
 			return fn;
 		};
@@ -338,7 +339,7 @@ namespace bgl
 		if (m_Desc.dsvFormat != Format::UNKNOWN)
 		{
 			pd->setDepthAttachmentPixelFormat(ConvertFormat(m_Desc.dsvFormat));
-			if (FormatHasStencil(m_Desc.dsvFormat))
+			if (GetFormatInfo(m_Desc.dsvFormat).hasStencil)
 				pd->setStencilAttachmentPixelFormat(ConvertFormat(m_Desc.dsvFormat));
 		}
 
