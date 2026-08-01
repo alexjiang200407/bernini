@@ -7,8 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python",
-            "args": [".claude/hooks/gh_guard.py"],
+            "command": "PY=$(command -v python3 || command -v python); exec \"$PY\" \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/hooks/gh_guard.py",
             "statusMessage": "Checking the PR rules"
           }
         ]
@@ -19,8 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python",
-            "args": [".claude/hooks/pr_watch_guard.py"],
+            "command": "PY=$(command -v python3 || command -v python); exec \"$PY\" \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/hooks/pr_watch_guard.py",
             "statusMessage": "Checking for an unwatched PR"
           }
         ]
