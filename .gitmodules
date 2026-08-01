@@ -1,0 +1,3 @@
+[submodule "extern/bernini-test-project"]
+	path = extern/bernini-test-project
+	url = git@github.com:alexjiang200407/bernini-test-project.git

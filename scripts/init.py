@@ -11,7 +11,8 @@ config.json is git-ignored. It describes a machine, not the project -- see
 scripts/config.example.json for the shape and scripts/util/config.py for the
 schema.
 
-Points git at the committed .githooks, and configures Git LFS -- whose filters are
+Checks out any declared-but-empty git submodule, and points git at the committed
+.githooks, and configures Git LFS -- whose filters are
 machine-local config a clone cannot inherit, so without this the assets check out as
 pointer text and the tests fail on them.
 
@@ -35,6 +36,7 @@ Usage:
     just init --no-just                             # skip the `just` check
     just init --no-gh                               # skip the GitHub CLI check
     just init --no-lfs                              # skip the Git LFS setup
+    just init --no-submodules                       # skip the submodule checkout
     just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
@@ -267,6 +269,55 @@ def lfs_pointer_files():
     return stale
 
 
+def submodule_paths():
+    """The paths .gitmodules declares, or [] when there are none."""
+    out = subprocess.run(
+        ["git", "config", "--file", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$"],
+        cwd=ct.REPO_ROOT, capture_output=True, text=True,
+    )
+    if out.returncode:
+        return []
+    return [line.split(" ", 1)[1] for line in out.stdout.splitlines() if " " in line]
+
+
+def ensure_submodules():
+    """Check out any submodule that is declared but not populated.
+
+    `git clone` leaves a submodule as an empty directory unless it was told
+    --recurse-submodules, and nothing later notices: the test project is simply
+    absent and whatever wanted it fails on a missing path rather than on setup.
+
+    Only the missing ones are initialised, so this never resets a submodule the
+    developer has moved to another commit on purpose.
+    """
+    declared = submodule_paths()
+    if not declared:
+        return
+
+    # An uninitialised submodule is an empty directory, not a missing one.
+    def populated(path):
+        full = os.path.join(ct.REPO_ROOT, path)
+        return os.path.isdir(full) and bool(os.listdir(full))
+
+    missing = [path for path in declared if not populated(path)]
+
+    if not missing:
+        print(f"submodules: {len(declared)} present")
+        return
+
+    print(f"submodules: checking out {len(missing)} of {len(declared)}...")
+    if subprocess.run(
+        ["git", "submodule", "update", "--init", "--recursive", *missing],
+        cwd=ct.REPO_ROOT,
+    ).returncode:
+        print("warning: `git submodule update --init` failed. It clones over SSH, so this\n"
+              "         needs a GitHub key; run it by hand once that is set up.",
+              file=sys.stderr)
+        return
+
+    print(f"submodules: checked out {len(missing)}")
+
+
 def ensure_lfs():
     """Configure Git LFS for this clone, and fetch anything still left as a pointer.
 
@@ -482,6 +533,7 @@ def main():
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
     parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
+    parser.add_argument("--no-submodules", action="store_true", help="Don't check out declared-but-empty submodules.")
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
@@ -516,6 +568,8 @@ def main():
     if not args.no_gh:
         ensure_gh()
     ensure_hooks()
+    if not args.no_submodules:
+        ensure_submodules()
     if not args.no_lfs:
         ensure_lfs()
     if not args.no_bot:
