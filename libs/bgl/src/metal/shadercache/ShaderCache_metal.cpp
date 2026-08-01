@@ -47,7 +47,7 @@ namespace bgl
 			writer.writePod<uint32_t>(static_cast<uint32_t>(program.stages.size()));
 			for (const CachedStage& stage : program.stages)
 			{
-				writer.writePod<uint32_t>(static_cast<uint32_t>(stage.kind));
+				writer.writePod<uint32_t>(static_cast<uint32_t>(stage.stage));
 				WriteString(writer, stage.entryPoint);
 				WriteString(writer, stage.msl);
 
@@ -97,7 +97,7 @@ namespace bgl
 			for (uint32_t i = 0; i < stageCount; ++i)
 			{
 				CachedStage stage;
-				stage.kind       = static_cast<CachedStageKind>(reader.readPod<uint32_t>());
+				stage.stage      = static_cast<ShaderStage>(reader.readPod<uint32_t>());
 				stage.entryPoint = ReadString(reader);
 				stage.msl        = ReadString(reader);
 

@@ -138,7 +138,7 @@ namespace bgl
 			if (desc.pixelShader == nullptr)
 			{
 				CachedStage stage;
-				stage.kind                  = CachedStageKind::kMesh;
+				stage.stage                 = ShaderStage::kMesh;
 				stage.entryPoint            = desc.meshShader->GetDesc().entryPointName;
 				stage.threadsPerThreadgroup = threadGroupOf(stage.entryPoint);
 				cached.stages.push_back(std::move(stage));
@@ -150,7 +150,7 @@ namespace bgl
 			// compilation keeps them. (Numbered semantics like TEXCOORD0 still mismatch mesh vs
 			// fragment, so interpolant semantics must be un-numbered -- a Slang MSL quirk.) Because
 			// each stage is its own program, its [[buffer(N)]] indices are its own too.
-			const auto compileStage = [&](IShader* shader, CachedStageKind kind) {
+			const auto compileStage = [&](IShader* shader, ShaderStage stageKind) {
 				slang::IModule*                   module = shader->GetSlangModule();
 				Slang::ComPtr<slang::IEntryPoint> entryPoint;
 				module->findEntryPointByName(
@@ -180,7 +180,7 @@ namespace bgl
 					errChecker;
 
 				CachedStage stage;
-				stage.kind       = kind;
+				stage.stage      = stageKind;
 				stage.entryPoint = shader->GetDesc().entryPointName;
 				stage.msl        = std::string(
 					static_cast<const char*>(blob->getBufferPointer()),
@@ -191,27 +191,14 @@ namespace bgl
 				cached.stages.push_back(std::move(stage));
 			};
 
-			compileStage(desc.meshShader.Get(), CachedStageKind::kMesh);
-			compileStage(desc.pixelShader.Get(), CachedStageKind::kFragment);
+			compileStage(desc.meshShader.Get(), ShaderStage::kMesh);
+			compileStage(desc.pixelShader.Get(), ShaderStage::kPixel);
 			if (desc.ampShader != nullptr)
-				compileStage(desc.ampShader.Get(), CachedStageKind::kObject);
+				compileStage(desc.ampShader.Get(), ShaderStage::kAmplification);
 
 			return cached;
 		}
 
-		constexpr MeshletStage
-		ToMeshletStage(CachedStageKind kind) noexcept
-		{
-			switch (kind)
-			{
-			case CachedStageKind::kObject:
-				return MeshletStage::kObject;
-			case CachedStageKind::kMesh:
-				return MeshletStage::kMesh;
-			default:
-				return MeshletStage::kFragment;
-			}
-		}
 	}
 
 	MeshletPipeline::MeshletPipeline(
@@ -260,24 +247,23 @@ namespace bgl
 
 		for (const CachedStage& stage : cached.stages)
 		{
-			MetalStageBindingMap& bindings =
-				m_StageBindings[static_cast<size_t>(ToMeshletStage(stage.kind))];
+			MetalStageBindingMap& bindings = m_StageBindings[static_cast<size_t>(stage.stage)];
 			for (const auto& [name, index] : stage.bindings) bindings[name] = index;
 
 			const MTL::Size threads = MTL::Size(
 				stage.threadsPerThreadgroup[0],
 				stage.threadsPerThreadgroup[1],
 				stage.threadsPerThreadgroup[2]);
-			if (stage.kind == CachedStageKind::kMesh)
+			if (stage.stage == ShaderStage::kMesh)
 				m_ThreadsPerMesh = threads;
-			else if (stage.kind == CachedStageKind::kObject)
+			else if (stage.stage == ShaderStage::kAmplification)
 				m_ThreadsPerObject = threads;
 		}
 
 		// A mesh-only pipeline carries no fragment stage, so there is nothing to rasterize with and
 		// no PSO to build -- see CompileProgram.
 		const bool hasFragment = std::ranges::any_of(cached.stages, [](const CachedStage& stage) {
-			return stage.kind == CachedStageKind::kFragment;
+			return stage.stage == ShaderStage::kPixel;
 		});
 		if (!hasFragment)
 			return;
@@ -302,18 +288,19 @@ namespace bgl
 		NS::SharedPtr<MTL::Function> objFn;
 		for (const CachedStage& stage : cached.stages)
 		{
-			switch (stage.kind)
+			switch (stage.stage)
 			{
-			case CachedStageKind::kMesh:
+			case ShaderStage::kMesh:
 				meshFn = makeFunction(stage);
 				break;
-			case CachedStageKind::kFragment:
+			case ShaderStage::kPixel:
 				fragFn = makeFunction(stage);
 				break;
-			case CachedStageKind::kObject:
+			case ShaderStage::kAmplification:
 				objFn = makeFunction(stage);
 				break;
-			case CachedStageKind::kCompute:
+			case ShaderStage::kCompute:
+			case ShaderStage::kCount:
 				gfatal("A meshlet program cannot carry a compute stage");
 			}
 		}

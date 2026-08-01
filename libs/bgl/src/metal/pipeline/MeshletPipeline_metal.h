@@ -1,5 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
+#include "types/ShaderStage.h"
 
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/MetalPipelineReflection.h"
@@ -10,13 +11,6 @@
 namespace bgl
 {
 	class ShaderCache;
-
-	enum class MeshletStage
-	{
-		kObject,
-		kMesh,
-		kFragment
-	};
 
 	/**
 	 * The Metal meshlet (mesh-shader) render pipeline. Each stage is compiled to its own MSL
@@ -97,7 +91,7 @@ namespace bgl
 		 * to every stage lets two cbuffers collide on a slot.
 		 */
 		[[nodiscard]] const uint32_t*
-		GetStageBinding(MeshletStage stage, std::string_view name) const noexcept
+		GetStageBinding(ShaderStage stage, std::string_view name) const noexcept
 		{
 			const MetalStageBindingMap& bindings = m_StageBindings[static_cast<size_t>(stage)];
 
@@ -109,13 +103,13 @@ namespace bgl
 		[[nodiscard]] NS::SharedPtr<MTL::DepthStencilState>
 		BuildDepthStencilState(MTL::Device* device) const;
 
-		MeshletPipelineDesc                     m_Desc;
-		NS::SharedPtr<MTL::RenderPipelineState> m_PipelineState;
-		NS::SharedPtr<MTL::DepthStencilState>   m_DepthStencilState;
-		UniformLayoutMap                        m_UniformLayoutEntries;
-		MetalHandleOffsetMap                    m_HandleOffsets;
-		std::array<MetalStageBindingMap, 3>     m_StageBindings;
-		MTL::Size                               m_ThreadsPerObject = MTL::Size(1, 1, 1);
-		MTL::Size                               m_ThreadsPerMesh   = MTL::Size(1, 1, 1);
+		MeshletPipelineDesc                                  m_Desc;
+		NS::SharedPtr<MTL::RenderPipelineState>              m_PipelineState;
+		NS::SharedPtr<MTL::DepthStencilState>                m_DepthStencilState;
+		UniformLayoutMap                                     m_UniformLayoutEntries;
+		MetalHandleOffsetMap                                 m_HandleOffsets;
+		std::array<MetalStageBindingMap, c_ShaderStageCount> m_StageBindings;
+		MTL::Size m_ThreadsPerObject = MTL::Size(1, 1, 1);
+		MTL::Size m_ThreadsPerMesh   = MTL::Size(1, 1, 1);
 	};
 }

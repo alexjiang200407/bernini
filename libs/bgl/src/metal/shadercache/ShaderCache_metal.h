@@ -1,5 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
+#include "types/ShaderStage.h"
 
 #include "pipeline/MetalPipelineReflection.h"
 #include "uniforms/ReflectedLayout.h"
@@ -16,20 +17,12 @@ namespace bgl
 		std::vector<HandleSlot> handles;
 	};
 
-	enum class CachedStageKind : uint32_t
-	{
-		kCompute,
-		kObject,
-		kMesh,
-		kFragment,
-	};
-
 	// One compiled stage. Metal compiles each meshlet stage as its own program, so the MSL and the
 	// [[buffer(N)]] indices both belong to the stage rather than the pipeline -- see
 	// MeshletPipeline_metal.
 	struct CachedStage
 	{
-		CachedStageKind                               kind = CachedStageKind::kCompute;
+		ShaderStage                                   stage = ShaderStage::kCompute;
 		std::string                                   entryPoint;
 		std::string                                   msl;
 		std::vector<std::pair<std::string, uint32_t>> bindings;
