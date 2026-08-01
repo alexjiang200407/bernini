@@ -294,10 +294,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     nothing to render — and it refuses *before* clearing anything, so a rejected material comes out
     untouched rather than half-stripped.
 
-  **Two readable major versions: 7, and the 6 it replaced.** 6 stored the draw-from choice as a
-  `MaterialMode` field; 7 derives it, so reading a 6 means discarding that one `uint32` and nothing else.
-  `deserializeMaterial` rejects anything outside that range rather than guessing at a layout it does not
-  know. A minor version is additive within a major, and a reader honours it field by field.
+  **There is exactly one readable version, and no migration path.** `deserializeMaterial` refuses any
+  other major rather than guessing at a layout it does not know — an older file is converted, not
+  tolerated, so there is one shape in the reader and no branch that can rot. A minor version is additive
+  within a major, and a reader honours it field by field.
 
   **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a `write*`/`read*`
   pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as

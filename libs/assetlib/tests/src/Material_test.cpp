@@ -346,44 +346,14 @@ TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bma
 	REQUIRE(mesh.materials.size() == 1);
 }
 
-TEST_CASE("a version 6 BMaterial still loads", "[bmaterial][io]")
+TEST_CASE("an older BMaterial version is refused rather than guessed at", "[bmaterial][io]")
 {
-	// 6 differs from 7 only by the MaterialMode it stored after the shading model. Rather than hand-
-	// author a whole v6 stream, splice one out of a v7: rewind the major version and put the field
-	// back, so this stays honest about the layout even as the payload after it grows.
-	BMaterial mat;
-	mat.name                 = "legacy";
-	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
-	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
-	mat.pbr.metallicFactor   = 0.25f;
-
-	auto bytes = serializeMaterial(mat);
-
-	constexpr std::ptrdiff_t c_MajorOffset = 4;              // after the magic
-	constexpr std::ptrdiff_t c_ModeOffset  = 4 + 2 + 2 + 4;  // after magic, version, shadingModel
-
-	const auto six = uint16_t{ 6 };
-	std::memcpy(bytes.data() + c_MajorOffset, &six, sizeof(six));
-
-	const auto loose = uint32_t{ 1 };  // MaterialMode::kLoose, a value 7 has no field for
-	std::byte  field[sizeof(loose)];
-	std::memcpy(field, &loose, sizeof(loose));
-	bytes.insert(bytes.begin() + c_ModeOffset, std::begin(field), std::end(field));
-
-	const auto restored = deserializeMaterial(bytes);
-
-	REQUIRE(restored.name == "legacy");
-	REQUIRE(restored.pbr.baseColorTexture == "mat_basecolor.ktx2");
-	REQUIRE(restored.pbr.routes[0].texture == "albedo.ktx2");
-	REQUIRE(restored.pbr.metallicFactor == Catch::Approx(0.25f));
-}
-
-TEST_CASE("an unreadable BMaterial version is refused", "[bmaterial][io]")
-{
+	// 6 stored a MaterialMode where 7 has none, so its payload is offset by four bytes from here on.
+	// Reading it as a 7 would silently mis-parse every field after the shading model.
 	auto bytes = serializeMaterial(BMaterial());
 
-	const auto five = uint16_t{ 5 };
-	std::memcpy(bytes.data() + 4, &five, sizeof(five));
+	const auto six = uint16_t{ 6 };
+	std::memcpy(bytes.data() + 4, &six, sizeof(six));
 
 	REQUIRE_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
 }

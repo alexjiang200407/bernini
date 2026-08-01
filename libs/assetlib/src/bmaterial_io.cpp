@@ -17,12 +17,8 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = magic::c_BMaterial;
 
-		constexpr uint16_t c_VersionMajor = 7;  // -MaterialMode: derived from the bake instead
-		constexpr uint16_t c_VersionMinor = 1;  // +1: PbrParams::occlude
-
-		// 6 is still read: it differs only by the MaterialMode this no longer stores, so dropping the
-		// field is enough to load one and every material already on disk keeps working.
-		constexpr uint16_t c_VersionMajorMin = 6;
+		constexpr uint16_t c_VersionMajor = 7;
+		constexpr uint16_t c_VersionMinor = 1;
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
 		void
@@ -133,11 +129,10 @@ namespace assetlib
 		const auto versionMajor = reader.readPod<uint16_t>();
 		const auto versionMinor = reader.readPod<uint16_t>();  // additive within a major
 
-		if (versionMajor < c_VersionMajorMin || versionMajor > c_VersionMajor)
+		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
 				"bmaterial: unsupported version " + std::to_string(versionMajor) + " (expected " +
-				std::to_string(c_VersionMajorMin) + ".." + std::to_string(c_VersionMajor) +
-				"); re-bake the material");
+				std::to_string(c_VersionMajor) + "); re-bake the material");
 
 		BMaterial  material;
 		const auto shadingModel = reader.readPod<uint32_t>();
@@ -147,12 +142,8 @@ namespace assetlib
 				"bmaterial: unknown shading model " + std::to_string(shadingModel));
 
 		material.shadingModel = static_cast<ShadingModel>(shadingModel);
-
-		if (versionMajor == 6)
-			std::ignore = reader.readPod<uint32_t>();  // MaterialMode, now derived from bakeIsStale
-
-		material.name        = readString(reader);
-		material.editorGraph = readString(reader);
+		material.name         = readString(reader);
+		material.editorGraph  = readString(reader);
 
 		switch (material.shadingModel)
 		{
