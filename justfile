@@ -62,6 +62,10 @@ exes *args:
 count:
     @{{ python }} scripts/count_source.py
 
+# Open, read, answer and check a pull request, as the morgana-coding-agent bot.
+pr *args:
+    @{{ python }} scripts/pr.py {{ args }}
+
 # Block until a PR gets a submitted review, new comments, or merges; prints one JSON event.
 watch-pr *args:
     @{{ python }} scripts/watch_pr.py {{ args }}

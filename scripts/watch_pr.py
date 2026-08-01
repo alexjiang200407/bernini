@@ -51,7 +51,15 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from util import watchlist  # noqa: E402
+
 MAX_CONSECUTIVE_FAILURES = 5
+
+# Events after which the PR is again waiting on nobody, so the Stop hook must ask
+# for another watch. `merged` and `closed` are the two that end the loop for good.
+REARMING = ("review", "comment", "timeout")
 
 # Fields per object as `gh pr view --json` spells them.
 PR_FIELDS = "state,mergedAt,reviews,comments,url,title"
@@ -140,6 +148,12 @@ def summarize_comment(c):
 
 
 def emit(payload):
+    """Prints the one event, and re-arms the watch if the PR still needs answering."""
+    event = payload.get("event")
+    if event in REARMING:
+        watchlist.arm(payload["pr"], payload.get("url", ""))
+    elif event in ("merged", "closed"):
+        watchlist.disarm(payload["pr"])
     print(json.dumps(payload, indent=2))
 
 
