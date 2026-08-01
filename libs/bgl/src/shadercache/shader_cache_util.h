@@ -21,10 +21,6 @@ namespace bgl::shader_cache
 	uint64_t
 	HashString(std::string_view str, uint64_t seed);
 
-	// The seed every other hash starts from.
-	[[nodiscard]] uint64_t
-	HashSeed() noexcept;
-
 	// One hash over the compile options and the content of every shader source file, so any edit to
 	// a shader -- or a change of compiler, options or format version -- moves every derived key and
 	// a stale entry is missed rather than misread.

@@ -28,12 +28,6 @@ namespace bgl::shader_cache
 	}
 
 	uint64_t
-	HashSeed() noexcept
-	{
-		return c_FnvOffset;
-	}
-
-	uint64_t
 	HashBytes(const void* data, size_t size, uint64_t seed)
 	{
 		const auto* bytes = static_cast<const uint8_t*>(data);
