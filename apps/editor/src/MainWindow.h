@@ -55,7 +55,7 @@ private:
 	ShowProjectState();
 
 	// Keeps every RenderTargetWindow under `dock` in the frame loop only while the dock is the
-	// selected tab. Every connection it makes must be cut before the windows are destroyed.
+	// selected tab.
 	void
 	DriveViewportsFromTab(QDockWidget* dock);
 

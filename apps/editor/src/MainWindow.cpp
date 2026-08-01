@@ -190,11 +190,6 @@ MainWindow::closeEvent(QCloseEvent* event)
 
 MainWindow::~MainWindow()
 {
-	// Cut before anything below is destroyed. Taking a widget out of a dock makes the dock report a
-	// visibility change, and a handler reached at that point would put a half-destroyed window back
-	// into the frame loop -- leaving the render thread drawing through a released render target.
-	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
-
 	// Everything that renders releases its bgl objects through the Renderer, so all of it has to be
 	// gone before the Renderer member is. Qt would otherwise destroy these as children of this window,
 	// which happens after the members -- with the render thread already stopped.
@@ -408,8 +403,8 @@ MainWindow::DriveViewportsFromTab(QDockWidget* dock)
 	// hidden -- so without this every viewport in the editor keeps drawing whatever tab is on top.
 	// visibilityChanged is the signal that follows the tab, which show/hideEvent do not.
 	//
-	// The views are resolved now rather than in the handler: a dock emits this while its widget is
-	// being destroyed, and a child part-way through ~QObject is still in the list findChildren walks.
+	// One connection per view, so each dies with the view it drives; closeEvent cuts them all before
+	// that, because a dock hiding would otherwise put a viewport back into the loop on the way out.
 	for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 	{
 		m_TabVisibility.push_back(
