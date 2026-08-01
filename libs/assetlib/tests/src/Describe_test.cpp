@@ -13,7 +13,6 @@ namespace
 	{
 		BMaterial material;
 		material.name                 = "skin";
-		material.mode                 = MaterialMode::kLoose;
 		material.pbr.metallicFactor   = 0.0f;
 		material.pbr.roughnessFactor  = 0.75f;
 		material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
@@ -27,13 +26,12 @@ namespace
 
 // The point of describe() is to answer "what is in this file" without hand-decoding it, so the
 // properties a reader actually goes looking for have to survive into the text: the routing table's
-// channel selectors, the unrouted channels, and the mode.
+// channel selectors and the unrouted channels.
 TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 {
 	const std::string text = describe(routedMaterial());
 
 	CHECK(text.find("skin") != std::string::npos);
-	CHECK(text.find("loose") != std::string::npos);
 
 	// A route names its source and the channel it draws from -- routes[5] is roughness <- mask.a, and
 	// a swizzle that silently printed the wrong letter would make the dump worse than useless.
@@ -75,9 +73,15 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 
 	SECTION("a source matching its stamp is up to date")
 	{
-		material.pbr.routeStamps[0] = stampOf(source);
-		material.pbr.baseColorTexture =
-			"Textures/baked.ktx2";  // a bake that actually produced a map
+		material.pbr.routeStamps[0]   = stampOf(source);
+		material.pbr.baseColorTexture = "Textures/baked.ktx2";
+
+		// The map has to be there as well as named: a triplet entry pointing at nothing is stale.
+		std::filesystem::create_directories(root / "Textures");
+		{
+			std::ofstream out(root / "Textures" / "baked.ktx2", std::ios::binary);
+			out << "baked bytes";
+		}
 
 		const std::string text = describe(material, root);
 		CHECK(text.find("up to date") != std::string::npos);

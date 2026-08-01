@@ -173,18 +173,19 @@ TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "
 	CHECK(std::filesystem::exists(root.path / keeper.pbr.baseColorTexture));
 }
 
-TEST_CASE("findUnusedBakedTextures keeps a loose material's baked triplet", "[texture_prune]")
+TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[texture_prune]")
 {
-	// A kLoose material renders from its routes, but it still carries the triplet its last bake wrote,
-	// and switching it back to kBaked must not find the maps gone. `mode` says what the renderer draws
-	// from -- it is not a claim that the triplet is dead.
+	// A material whose bake has gone stale renders from its routes, but it still carries the triplet
+	// that bake wrote, and re-stamping must not find the maps gone. Drawing from the routes today is
+	// not a claim that the triplet is dead.
 	const DataRoot root("bernini_prune_loose");
 
 	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
 
 	BMaterial material = bakeAndSave(root, "loose.bmaterial", "a.ktx2");
 
-	material.mode = MaterialMode::kLoose;
+	// Rewind a stamp so the bake reads stale without touching the maps it wrote.
+	material.pbr.routeStamps[0] = SourceStamp{ 1, 1 };
 	saveMaterial(material, root.path / "Materials" / "loose.bmaterial");
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });

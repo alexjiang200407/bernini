@@ -166,7 +166,6 @@ TEST_CASE("bakeMaterial stops on a signalled token and leaves the material alone
 	writeSource(dir.path / "albedo.ktx2", 16);
 
 	BMaterial mat;
-	mat.mode          = MaterialMode::kLoose;
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };
 	mat.pbr.routes[1] = { "albedo.ktx2", 1 };
 	mat.pbr.routes[2] = { "albedo.ktx2", 2 };
@@ -175,9 +174,8 @@ TEST_CASE("bakeMaterial stops on a signalled token and leaves the material alone
 		bakeMaterial(mat, MaterialBakeDesc{ dir.path }, signalledSource().get_token()),
 		Cancelled);
 
-	// A half-updated material is worse than an unbaked one: it would name maps that are not there and
-	// claim to be baked. So a cancelled bake must not have touched it.
-	REQUIRE(mat.mode == MaterialMode::kLoose);
+	// A half-updated material is worse than an unbaked one: it would name maps that are not there. So
+	// a cancelled bake must not have touched it.
 	REQUIRE(mat.pbr.baseColorTexture.empty());
 	REQUIRE(mat.pbr.ormTexture.empty());
 	REQUIRE(mat.pbr.normalTexture.empty());

@@ -624,8 +624,8 @@ MaterialEditorWindow::BuildMaterial(int graphIndex, const QString& materialPath)
 	assetlib::BMaterial material =
 		CompileMaterial(*entry.model, QFileInfo(materialPath).completeBaseName(), m_DataRoot);
 
-	// A material already on disk keeps whatever a previous bake produced: the triplet, its provenance
-	// and the mode. Rebuilding purely from the graph would throw the optimized textures away on every
+	// A material already on disk keeps whatever a previous bake produced: the triplet and its
+	// provenance. Rebuilding purely from the graph would throw the optimized textures away on every
 	// Save. If the routes have since changed, the stamps no longer match and the bake reports stale.
 	const auto file = std::filesystem::path(materialPath.toStdWString());
 	if (std::filesystem::exists(file))
@@ -633,7 +633,6 @@ MaterialEditorWindow::BuildMaterial(int graphIndex, const QString& materialPath)
 		try
 		{
 			const assetlib::BMaterial existing = assetlib::loadMaterial(file);
-			material.mode                      = existing.mode;
 			material.pbr.baseColorTexture      = existing.pbr.baseColorTexture;
 			material.pbr.normalTexture         = existing.pbr.normalTexture;
 			material.pbr.ormTexture            = existing.pbr.ormTexture;

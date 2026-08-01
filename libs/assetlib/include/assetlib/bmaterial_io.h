@@ -47,10 +47,15 @@ namespace assetlib
 	 * `dataRoot` is the project's Data directory: every texture path a material stores is relative to
 	 * it, not to the material file.
 	 *
+	 * This is also what decides how the material draws: a current bake is sampled as the optimized
+	 * triplet, a stale one falls back to the routes it was baked from. There is no stored mode -- a
+	 * material cannot claim a triplet it does not have.
+	 *
 	 * True when a routed source has changed, gone missing, or was never stamped (i.e. the material
-	 * has routes but has never been baked). False for a material with no routes at all -- an imported
-	 * triplet-only material has no sources to be stale against -- and false when every routed source
-	 * still measures exactly as it did at bake time.
+	 * has routes but has never been baked), or when a map the triplet names is no longer on disk.
+	 * False for a material with no routes at all -- an imported triplet-only material has no sources
+	 * to be stale against, and no routes to fall back to -- and false when every routed source still
+	 * measures exactly as it did at bake time and every baked map is present.
 	 */
 	[[nodiscard]] bool
 	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot);

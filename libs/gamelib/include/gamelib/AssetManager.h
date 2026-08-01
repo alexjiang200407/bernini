@@ -8,15 +8,20 @@
 namespace game
 {
 	/**
-	 * The texture files `material` names, relative to the data root: the baked triplet, or the nine
-	 * authoring routes. Unrouted slots come back as empty strings, so the result is positional.
+	 * The texture files `material` names, relative to the data root: the nine authoring routes when
+	 * `loose`, otherwise the baked triplet. Unrouted slots come back as empty strings, so the result
+	 * is positional.
+	 *
+	 * `loose` is `assetlib::bakeIsStale` against the data root -- the caller passes the verdict in
+	 * rather than it being taken here, so one material is measured against the disk once and every
+	 * derived thing agrees with it.
 	 *
 	 * Public because decoding a texture is expensive and pure CPU, while uploading it is neither --
 	 * it must happen on the render thread. A caller that wants the decode off that thread needs to
 	 * know what to decode before it acquires anything. See TexturePrefetch.
 	 */
 	[[nodiscard]] std::vector<std::string>
-	materialTextures(const assetlib::BMaterial& material);
+	MaterialTextures(const assetlib::BMaterial& material, bool loose);
 
 	/**
 	 * Textures decoded ahead of time, keyed by the data-root-relative path they will be asked for.
@@ -92,7 +97,7 @@ namespace game
 		 * previous call, acquiring a reference to every texture it names.
 		 *
 		 * @param prefetch Optional decoded images for the textures it names -- the way to keep their
-		 *        decode off the render thread. materialTextures() says what to put in one.
+		 *        decode off the render thread. MaterialTextures() says what to put in one.
 		 * @throws std::runtime_error if the file cannot be read, or the scene cannot allocate.
 		 */
 		bgl::MaterialHandle
@@ -177,7 +182,7 @@ namespace game
 		 */
 		void
 		SetInstanceSubmeshMaterial(
-			bgl::SceneViewRef    view,
+			bgl::SceneViewRef       view,
 			bgl::MeshInstanceHandle instance,
 			uint32_t                submeshIndex,
 			std::string_view        materialRelPath);
@@ -185,7 +190,7 @@ namespace game
 		/** Drops the override; the submesh returns to the geom's default and the material is released. */
 		void
 		ClearInstanceSubmeshMaterial(
-			bgl::SceneViewRef    view,
+			bgl::SceneViewRef       view,
 			bgl::MeshInstanceHandle instance,
 			uint32_t                submeshIndex);
 
@@ -244,6 +249,11 @@ namespace game
 			bgl::MaterialHandle                  handle;
 			assetlib::BMaterial                  source;
 			std::vector<bgl::TextureAssetHandle> textures;
+
+			// Whether it draws from its routes rather than its baked triplet, decided once when the
+			// material was created. A scene material's type is fixed for the life of its handle, so
+			// re-measuring the disk later could not act on a different answer anyway.
+			bool loose = false;
 
 			uint32_t refCount = 0;
 		};
@@ -305,10 +315,10 @@ namespace game
 			}
 		};
 
-		// Creates the scene material a BMaterial describes, honouring its `mode`, and acquiring a
-		// reference to every texture it names. kBaked samples the optimized triplet (three reads);
-		// kLoose samples the authoring routes directly (up to nine). The only place that branch lives,
-		// so a material renders the same however it was loaded.
+		// Creates the scene material a BMaterial describes, acquiring a reference to every texture it
+		// names. A current bake samples the optimized triplet (three reads); a stale one samples the
+		// authoring routes directly (up to nine). The only place that branch lives, so a material
+		// renders the same however it was loaded.
 		bgl::MaterialHandle
 		CreateMaterial(
 			const assetlib::BMaterial& material,

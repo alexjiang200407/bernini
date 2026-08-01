@@ -33,14 +33,14 @@ namespace game
 	}
 
 	// The order MaterialRecord::textures parallels: the baked triplet, or the nine authoring routes.
-	// One order per mode, in one place, so the record's texture references and the desc it rebuilds
+	// One order per case, in one place, so the record's texture references and the desc it rebuilds
 	// can never fall out of step.
 	std::vector<std::string>
-	materialTextures(const assetlib::BMaterial& material)
+	MaterialTextures(const assetlib::BMaterial& material, const bool loose)
 	{
 		const assetlib::PbrParams& pbr = material.pbr;
 
-		if (material.mode == assetlib::MaterialMode::kLoose)
+		if (loose)
 		{
 			auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
 			for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
@@ -169,8 +169,12 @@ namespace game
 				std::to_string(static_cast<uint32_t>(material.shadingModel)) +
 				" is not supported by the renderer");
 
+		// The disk decides: a triplet that is missing or older than the sources it was composited from
+		// cannot be sampled, so the material falls back to the routes that produced it.
+		const bool loose = assetlib::bakeIsStale(material, m_DataRoot);
+
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
-		const std::vector<std::string> paths = materialTextures(material);
+		const std::vector<std::string> paths = MaterialTextures(material, loose);
 
 		auto textures = std::vector<bgl::TextureAssetHandle>(paths.size());
 		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i], prefetch);
@@ -179,11 +183,11 @@ namespace game
 		record.key      = key;
 		record.source   = material;
 		record.textures = std::move(textures);
+		record.loose    = loose;
 		record.refCount = 1;
 
-		record.handle = material.mode == assetlib::MaterialMode::kLoose ?
-		                    m_Scene->CreateLoosePbrMaterial(LooseDesc(record)) :
-		                    m_Scene->CreatePbrMaterial(BakedDesc(record));
+		record.handle = loose ? m_Scene->CreateLoosePbrMaterial(LooseDesc(record)) :
+		                        m_Scene->CreatePbrMaterial(BakedDesc(record));
 
 		const uint64_t recordKey = MaterialKey(record.handle);
 		if (!key.empty())
@@ -553,7 +557,7 @@ namespace game
 				"MaterialHandle passed to SetMaterialTexture is not owned by this AssetManager");
 
 		MaterialRecord& record = it->second;
-		if (record.source.mode != assetlib::MaterialMode::kBaked)
+		if (record.loose)
 		{
 			throw bgl::SceneError(
 				"SetMaterialTexture expects a baked material; use SetMaterialRoute for a loose "
@@ -590,7 +594,7 @@ namespace game
 				"MaterialHandle passed to SetMaterialRoute is not owned by this AssetManager");
 
 		MaterialRecord& record = it->second;
-		if (record.source.mode != assetlib::MaterialMode::kLoose)
+		if (!record.loose)
 		{
 			throw bgl::SceneError(
 				"SetMaterialRoute expects a loose material; use SetMaterialTexture for a baked "
@@ -608,7 +612,7 @@ namespace game
 	void
 	AssetManager::RebuildMaterial(MaterialRecord& record)
 	{
-		const std::vector<std::string> paths = materialTextures(record.source);
+		const std::vector<std::string> paths = MaterialTextures(record.source, record.loose);
 
 		// Acquire the new set before releasing the old: a texture that survives the swap -- the two
 		// maps the edit did not touch, or the same path reassigned -- must not be deleted and
@@ -621,7 +625,7 @@ namespace game
 
 		// Rewritten in place, so the handle stays valid and every submesh bound to this material
 		// follows the change without being rebound.
-		if (record.source.mode == assetlib::MaterialMode::kLoose)
+		if (record.loose)
 			m_Scene->UpdateLoosePbrMaterial(record.handle, LooseDesc(record));
 		else
 			m_Scene->UpdatePbrMaterial(record.handle, BakedDesc(record));

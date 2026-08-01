@@ -51,7 +51,9 @@ TEST_CASE("An imported glTF material routes each map into its own channels", "[m
 	const assetlib::BMaterial material = Import(imported, AllMaps());
 
 	CHECK(material.shadingModel == assetlib::ShadingModel::kPbr);
-	CHECK(material.mode == assetlib::MaterialMode::kLoose);
+
+	// No bake has run, so there is no triplet and the material draws from its routes.
+	CHECK(material.pbr.baseColorTexture.empty());
 
 	// Relative to the data root, like every asset reference -- not to the material file.
 	CHECK(Route(material, PbrChannel::kBaseColorR).texture == "textures_src/hydrant/tex0.ktx2");

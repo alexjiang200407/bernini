@@ -50,9 +50,9 @@ MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews);
  * The routes are read back out of the graph rather than tracked beside it, so a material's routes and
  * the board that produced them cannot disagree.
  *
- * The result is always kLoose and carries no baked triplet: a graph authors routes, and nothing here
- * has run a bake. A caller rewriting a material that already exists on disk must carry the previous
- * bake's triplet, mode and stamps across itself.
+ * The result carries no baked triplet: a graph authors routes, and nothing here has run a bake, so it
+ * draws from those routes. A caller rewriting a material that already exists on disk must carry the
+ * previous bake's triplet and stamps across itself.
  */
 [[nodiscard]] assetlib::BMaterial
 CompileMaterial(

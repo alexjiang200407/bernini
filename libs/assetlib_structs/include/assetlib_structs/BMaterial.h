@@ -9,12 +9,6 @@ namespace assetlib
 		kCount,
 	};
 
-	enum class MaterialMode : uint32_t
-	{
-		kBaked = 0,
-		kLoose = 1,
-	};
-
 	enum class AlphaMode : uint32_t
 	{
 		kOpaque = 0,
@@ -111,8 +105,6 @@ namespace assetlib
 		std::string name;
 
 		ShadingModel shadingModel = ShadingModel::kPbr;
-
-		MaterialMode mode = MaterialMode::kBaked;
 
 		std::string editorGraph;
 

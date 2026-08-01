@@ -78,7 +78,8 @@ namespace
 
 		const assetlib::BMaterial material = assetlib::loadMaterial(dataRoot / relPath);
 
-		for (const std::string& texture : game::materialTextures(material))
+		for (const std::string& texture :
+		     game::MaterialTextures(material, assetlib::bakeIsStale(material, dataRoot)))
 		{
 			if (texture.empty() || out.contains(texture))
 				continue;

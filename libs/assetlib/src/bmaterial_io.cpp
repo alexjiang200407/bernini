@@ -17,8 +17,8 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = magic::c_BMaterial;
 
-		constexpr uint16_t c_VersionMajor = 6;
-		constexpr uint16_t c_VersionMinor = 1;  // +1: PbrParams::occlude
+		constexpr uint16_t c_VersionMajor = 7;
+		constexpr uint16_t c_VersionMinor = 1;
 
 		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
 		void
@@ -100,7 +100,6 @@ namespace assetlib
 		writer.writePod(c_VersionMinor);
 
 		writer.writePod(static_cast<uint32_t>(material.shadingModel));
-		writer.writePod(static_cast<uint32_t>(material.mode));
 		writeString(writer, material.name);
 		writeString(writer, material.editorGraph);
 
@@ -143,7 +142,6 @@ namespace assetlib
 				"bmaterial: unknown shading model " + std::to_string(shadingModel));
 
 		material.shadingModel = static_cast<ShadingModel>(shadingModel);
-		material.mode         = static_cast<MaterialMode>(reader.readPod<uint32_t>());
 		material.name         = readString(reader);
 		material.editorGraph  = readString(reader);
 
@@ -209,6 +207,23 @@ namespace assetlib
 		return SourceStamp{ static_cast<uint64_t>(size), static_cast<int64_t>(seconds) };
 	}
 
+	namespace
+	{
+		// Whether every map the triplet names is still on disk. An empty entry names no map: a group
+		// with nothing routed is never baked, and the runtime substitutes white / flat normal for it.
+		bool
+		tripletIsOnDisk(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		{
+			for (const std::string* map :
+			     { &pbr.baseColorTexture, &pbr.normalTexture, &pbr.ormTexture })
+			{
+				if (!map->empty() && stampOf(dataRoot / *map).size == 0)
+					return false;
+			}
+			return true;
+		}
+	}
+
 	bool
 	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot)
 	{
@@ -237,7 +252,8 @@ namespace assetlib
 		if (!hasRoutes)
 			return false;
 
-		// Routed and every source matches -- but a bake that produced no base colour never ran.
-		return pbr.baseColorTexture.empty();
+		// Routed and every source matches -- but a bake that produced no base colour never ran, and a
+		// map deleted since leaves the triplet naming a file that is not there to sample.
+		return pbr.baseColorTexture.empty() || !tripletIsOnDisk(pbr, dataRoot);
 	}
 }
