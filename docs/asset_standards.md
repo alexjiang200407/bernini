@@ -260,12 +260,18 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     in `Data/Materials/` names `textures_src/tex1.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
     lives. A standalone baked model directory is its own data root, which is how a `matN.bmaterial`
     beside its `texN.ktx2` still resolves.
-  * **Which representation the renderer draws from is derived, never stored.** `bakeIsStale` measures the
+  * **Which representation the renderer draws from is derived, never stored.** `drawsLoose` measures the
     material against the disk: a triplet that is present and still matches the sources its routes name is
     sampled as the optimized triplet, and anything else falls back to the routes. A stored flag could
     claim a triplet that had been deleted, and the renderer would then bind the default white 1×1 — which
     on a cutout material means alpha = 1 everywhere, i.e. a solid white silhouette rather than a visible
     error.
+
+    Falling back needs somewhere to fall back *to*. A material whose sources are no longer on disk —
+    a baked asset shipped without its `textures_src/`, which is the normal shape of a delivered
+    project — keeps its triplet, because loose would name files that are not there. That is why the
+    draw question is `drawsLoose` and the rebake question is `bakeIsStale`: the same material is both
+    stale and drawn from its triplet, and only the editor's stale marker should care.
   * `editorGraph` — the node graph, as an opaque JSON blob. Nothing outside the editor reads it and it
     never affects rendering; it exists so reopening a material restores the board that produced the
     routes, node positions and unwired nodes included.

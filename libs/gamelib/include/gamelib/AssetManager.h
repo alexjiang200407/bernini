@@ -12,7 +12,7 @@ namespace game
 	 * `loose`, otherwise the baked triplet. Unrouted slots come back as empty strings, so the result
 	 * is positional.
 	 *
-	 * `loose` is `assetlib::bakeIsStale` against the data root -- the caller passes the verdict in
+	 * `loose` is `assetlib::drawsLoose` against the data root -- the caller passes the verdict in
 	 * rather than it being taken here, so one material is measured against the disk once and every
 	 * derived thing agrees with it.
 	 *

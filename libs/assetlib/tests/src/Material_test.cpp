@@ -206,6 +206,73 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 	std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmaterial][bake]")
+{
+	const auto dir = std::filesystem::temp_directory_path() / "bernini_draws_loose_test";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+
+	const auto write = [](const std::filesystem::path& path, std::string_view bytes) {
+		std::ofstream out(path, std::ios::binary);
+		out << bytes;
+	};
+
+	const auto source = dir / "albedo.ktx2";
+	const auto baked  = dir / "mat_basecolor.ktx2";
+	write(source, "aaaa");
+	write(baked, "bbbb");
+
+	BMaterial mat;
+	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
+	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
+
+	SECTION("a current bake draws its triplet")
+	{
+		mat.pbr.routeStamps[0] = stampOf(source);
+		REQUIRE_FALSE(drawsLoose(mat, dir));
+	}
+
+	SECTION("an edited source draws the routes it drifted from")
+	{
+		mat.pbr.routeStamps[0] = stampOf(source);
+		write(source, "aaaaaaaa");
+		REQUIRE(drawsLoose(mat, dir));
+	}
+
+	SECTION("never baked draws its routes")
+	{
+		REQUIRE(drawsLoose(mat, dir));  // no stamp
+	}
+
+	// The regression: a shipped material keeps the routes it was composited from, but not the sources
+	// themselves. Stale is the right rebake verdict; loose is not a thing it could draw.
+	SECTION("a deleted source keeps the triplet rather than naming a file that is gone")
+	{
+		mat.pbr.routeStamps[0] = stampOf(source);
+		std::filesystem::remove(source);
+
+		REQUIRE(bakeIsStale(mat, dir));
+		REQUIRE_FALSE(drawsLoose(mat, dir));
+	}
+
+	SECTION("a deleted baked map still draws its routes while they are readable")
+	{
+		mat.pbr.routeStamps[0] = stampOf(source);
+		std::filesystem::remove(baked);
+		REQUIRE(drawsLoose(mat, dir));
+	}
+
+	SECTION("neither representation readable falls back to the triplet")
+	{
+		mat.pbr.routeStamps[0] = stampOf(source);
+		std::filesystem::remove(source);
+		std::filesystem::remove(baked);
+		REQUIRE_FALSE(drawsLoose(mat, dir));
+	}
+
+	std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("deserializeMaterial rejects every version but the current one", "[bmaterial][io]")
 {
 	// Exactly one version is readable, deliberately: nothing has shipped, so an out-of-date file is
