@@ -22,6 +22,9 @@ apps/editor/config.json
 # `bcp-feature` keeps each in-progress feature's slice plan here. Working state for one clone.
 .claude/features/
 
+# Per-developer Claude Code settings, layered over the committed .claude/settings.json.
+.claude/settings.local.json
+
 # `just install` stages the CLI tools here; this is the dir you put on PATH.
 dist/
 
