@@ -192,9 +192,9 @@ namespace bgl
 			};
 
 			compileStage(desc.meshShader.Get(), ShaderStage::kMesh);
-			compileStage(desc.pixelShader.Get(), ShaderStage::kFragment);
+			compileStage(desc.pixelShader.Get(), ShaderStage::kPixel);
 			if (desc.ampShader != nullptr)
-				compileStage(desc.ampShader.Get(), ShaderStage::kObject);
+				compileStage(desc.ampShader.Get(), ShaderStage::kAmplification);
 
 			return cached;
 		}
@@ -256,14 +256,14 @@ namespace bgl
 				stage.threadsPerThreadgroup[2]);
 			if (stage.stage == ShaderStage::kMesh)
 				m_ThreadsPerMesh = threads;
-			else if (stage.stage == ShaderStage::kObject)
+			else if (stage.stage == ShaderStage::kAmplification)
 				m_ThreadsPerObject = threads;
 		}
 
 		// A mesh-only pipeline carries no fragment stage, so there is nothing to rasterize with and
 		// no PSO to build -- see CompileProgram.
 		const bool hasFragment = std::ranges::any_of(cached.stages, [](const CachedStage& stage) {
-			return stage.stage == ShaderStage::kFragment;
+			return stage.stage == ShaderStage::kPixel;
 		});
 		if (!hasFragment)
 			return;
@@ -293,10 +293,10 @@ namespace bgl
 			case ShaderStage::kMesh:
 				meshFn = makeFunction(stage);
 				break;
-			case ShaderStage::kFragment:
+			case ShaderStage::kPixel:
 				fragFn = makeFunction(stage);
 				break;
-			case ShaderStage::kObject:
+			case ShaderStage::kAmplification:
 				objFn = makeFunction(stage);
 				break;
 			case ShaderStage::kCompute:

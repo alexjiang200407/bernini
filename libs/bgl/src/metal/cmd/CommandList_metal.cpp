@@ -481,9 +481,9 @@ namespace bgl
 		const auto bindToStages = [&](std::string_view name, const void* bytes, size_t size) {
 			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kMesh, name))
 				enc->setMeshBytes(bytes, size, *idx);
-			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kFragment, name))
+			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kPixel, name))
 				enc->setFragmentBytes(bytes, size, *idx);
-			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kObject, name);
+			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kAmplification, name);
 			    idx != nullptr && hasObject)
 				enc->setObjectBytes(bytes, size, *idx);
 		};
