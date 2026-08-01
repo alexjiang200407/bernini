@@ -22,11 +22,26 @@ when this doc disagrees, trust the source, then fix this doc.
   backend's private business.
 
 * **Two layers, each skipping a different compile stage.** The *program cache* (`<dir>/*.bsc`)
-  holds DXIL bytecode + serialized reflection for one PSO's shader composition, skipping the entire
-  Slang pipeline (front-end parse + DXIL codegen). The *pipeline library* (`<dir>/pipelines.psolib`,
-  an `ID3D12PipelineLibrary`) holds driver-compiled PSOs, skipping the driver's DXIL→GPU-ISA
-  compile. A warm launch that hits both touches neither Slang nor the driver compiler — except
-  under GPU-based validation, which drops the pipeline library entirely (see Risky Contracts).
+  holds generated code + serialized reflection for one PSO's shader composition, skipping the entire
+  Slang pipeline (front-end parse + codegen). The *pipeline library* (`<dir>/pipelines.psolib`)
+  holds driver-compiled pipelines, skipping the driver's bytecode→GPU-ISA compile. A warm launch
+  that hits both touches neither Slang nor the driver compiler — except under GPU-based validation,
+  which drops the pipeline library entirely (see Risky Contracts).
+
+* **Both backends implement it; the entry contents differ.** D3D12 stores DXIL and a root parameter
+  index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
+  *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
+  `MTL::BinaryArchive`. The split is why the shared code
+  ([shader_cache_util.h](libs/bgl/src/shadercache/shader_cache_util.h)) is only the salt, the key
+  hash, the `ReflectedLayout` encoding and the atomic write, while each backend owns a `ShaderCache`
+  of its own. A cache directory is written by one backend and is not portable between them — the
+  salt differs, so the other backend misses every key rather than misreading one.
+
+* **Metal caches per stage because it compiles per stage.** A meshlet PSO is three separate Slang
+  links (object/mesh/fragment), each with its own MSL and its own buffer-index space, so a cache
+  entry carries a `CachedStage` per stage rather than one blob. A mesh-only pipeline — reflection
+  with nothing to rasterize — caches its cbuffers and a mesh stage holding only the threadgroup
+  size, and builds no pipeline state.
 
 * **Module loading is lazy so a hit never parses source.** `IShader` no longer loads its Slang
   module in its constructor; `GetSlangModule()` compiles on first call, which only happens on a
@@ -44,6 +59,10 @@ when this doc disagrees, trust the source, then fix this doc.
   than `IGlobalSession::getBuildTagString()` — the two return the same string, and only the free
   one avoids creating a session just to key the cache.
 
+  **Not yet on Metal**: its `Device` creates the session in its constructor and holds it for the
+  device's life, so a fully warm run still pays the core module. Both cache layers work regardless;
+  what is unclaimed is the resident memory.
+
 * **Reflection is decoupled from the live Slang object.** A raw `slang::TypeLayoutReflection*` can't
   be serialized. So reflection is walked once, at pipeline build, into a serializable
   [ReflectedLayout](libs/bgl/src/uniforms/ReflectedLayout.h) POD, owned via `shared_ptr` in the
@@ -55,8 +74,8 @@ when this doc disagrees, trust the source, then fix this doc.
   hash of the content of *every* shader source file. It is combined with the PSO's (module,
   entry-point) pairs to form each program key. Any change to any of those flips every key, so a
   stale entry is **missed and recompiled, never misread**. The pipeline library additionally
-  self-invalidates against the driver and adapter — D3D12 rejects a foreign blob, and the cache
-  falls back to an empty library.
+  self-invalidates against the driver and adapter — D3D12 rejects a foreign blob and Metal refuses
+  an archive from another GPU, and both fall back to an empty library.
 
 * **Precompiled Slang IR modules (`.slang-module`) are deliberately not used.** They were the
   obvious tool for the reflection half but do not survive contact with this shader layer: Slang
@@ -64,7 +83,7 @@ when this doc disagrees, trust the source, then fix this doc.
   and generics are pervasive here (`idl.Entry`, `idl.Range`, the `types.*Buffer` bindless
   primitives). Worse, a `.slang-module` on the search path is preferred over source and hard-errors
   with no fallback, so one stale precompiled module poisons every consumer. The program cache
-  (our own DXIL + reflection blob) sidesteps this entirely.
+  (our own bytecode + reflection blob) sidesteps this entirely.
 
 ---
 
@@ -72,8 +91,11 @@ when this doc disagrees, trust the source, then fix this doc.
 
 | Piece | File | Role |
 |---|---|---|
-| `ShaderCache` | [libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.h) | Owns both layers; keying, load/store, PSO identity hashing. |
-| `BuildPipelineLayout` | [libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The hit/miss fork: load from cache, or compile with Slang and store. |
+| `shader_cache_util` | [libs/bgl/src/shadercache/shader_cache_util.h](libs/bgl/src/shadercache/shader_cache_util.h) | Backend-agnostic core: salt, key hash, `ReflectedLayout` encoding, atomic write. |
+| `ShaderCache` (D3D12) | [libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.h) | Owns both layers; keying, load/store, PSO identity hashing. |
+| `ShaderCache` (Metal) | [libs/bgl/src/metal/shadercache/ShaderCache_metal.h](libs/bgl/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
+| `BuildPipelineLayout` | [libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
+| `CompileProgram` | [libs/bgl/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgl/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
 | `ReflectedLayout` | [libs/bgl/src/uniforms/ReflectedLayout.h](libs/bgl/src/uniforms/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl/src/uniforms/SlangReflection.h](libs/bgl/src/uniforms/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |

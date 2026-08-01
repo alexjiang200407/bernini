@@ -126,7 +126,7 @@ namespace bgl
 
 			logger::info("Metal device: {}", mtlDevice->name()->utf8String());
 
-			m_Device = core::SharedRef<Device>::Make(mtlDevice.get());
+			m_Device = core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir);
 
 			auto rmDesc               = ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;

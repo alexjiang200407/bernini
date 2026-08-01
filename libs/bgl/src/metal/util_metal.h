@@ -9,6 +9,10 @@
 
 namespace bgl
 {
+	// An autoreleased NS::String over `s`, valid until the enclosing pool drains.
+	[[nodiscard]] NS::String*
+	Str(const std::string& s) noexcept;
+
 	// Maps an engine Format to its Metal pixel format. gfatals on formats with no Metal equivalent:
 	// 3-channel RGB32, and BGRA4, whose Metal counterpart orders its components differently.
 	[[nodiscard]] MTL::PixelFormat

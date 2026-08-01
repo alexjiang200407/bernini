@@ -9,6 +9,7 @@
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
 #include "resource/Shader_metal.h"
+#include "shadercache/ShaderCache_metal.h"
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
@@ -21,9 +22,26 @@ namespace bgl
 	namespace
 	{
 		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
+
+		// Compile options that change generated code, folded into every cache key so a compiler
+		// upgrade or a debug/release switch never reuses stale binaries.
+		std::string
+		ShaderCacheSalt()
+		{
+			// The free function, not IGlobalSession::getBuildTagString: same string, no session.
+			std::string salt = spGetBuildTagString();
+			salt += "|metal|sm_6_6|column-major";
+#if defined(BERNINI_GPU_DEBUG)
+			salt += "|gpu-debug";
+#endif
+			return salt;
+		}
 	}
 
-	Device::Device(MTL::Device* device) : m_Device(NS::RetainPtr(device))
+	Device::~Device() = default;
+
+	Device::Device(MTL::Device* device, const std::string& shaderCacheDir) :
+		m_Device(NS::RetainPtr(device))
 	{
 		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
 		gassert(m_SlangGlobalSession != nullptr, "Failed to create Slang global session");
@@ -52,6 +70,17 @@ namespace bgl
 
 		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef());
 		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
+
+		if (!shaderCacheDir.empty())
+		{
+			m_ShaderCache = std::make_unique<ShaderCache>(
+				m_Device.get(),
+				shaderCacheDir,
+				ShaderCacheSalt(),
+				std::vector<std::string>(
+					std::begin(c_ShaderSearchPaths),
+					std::end(c_ShaderSearchPaths)));
+		}
 	}
 
 	core::SharedRef<ICommandQueue>
@@ -107,13 +136,21 @@ namespace bgl
 	core::SharedRef<IComputePipeline>
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<ComputePipeline>::Make(m_Device.get(), m_SlangSession.get(), desc);
+		return core::SharedRef<ComputePipeline>::Make(
+			m_Device.get(),
+			m_SlangSession.get(),
+			m_ShaderCache.get(),
+			desc);
 	}
 
 	core::SharedRef<IMeshletPipeline>
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<MeshletPipeline>::Make(m_Device.get(), m_SlangSession.get(), desc);
+		return core::SharedRef<MeshletPipeline>::Make(
+			m_Device.get(),
+			m_SlangSession.get(),
+			m_ShaderCache.get(),
+			desc);
 	}
 
 	Uniforms

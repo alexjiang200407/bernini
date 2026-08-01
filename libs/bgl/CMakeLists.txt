@@ -167,8 +167,7 @@ endif()
 
 
 # The suite's sources are backend-agnostic (RHI interfaces + CreateGraphics), so it builds on either
-# backend from one glob. What differs is the backend objects it embeds. A Metal build cannot pass
-# the whole suite yet, so `just test` skips what tests/metal_unsupported.txt names.
+# backend from one glob. What differs is the backend objects it embeds.
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     find_package(Catch2 CONFIG REQUIRED)
 	find_package(Stb REQUIRED)  # stb_image for golden-image comparison

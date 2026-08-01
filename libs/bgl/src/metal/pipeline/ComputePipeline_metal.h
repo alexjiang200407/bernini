@@ -9,6 +9,8 @@
 
 namespace bgl
 {
+	class ShaderCache;
+
 	/**
 	 * The Metal compute pipeline. Compiles its shader's entry point to MSL via the Slang session,
 	 * builds an MTL::ComputePipelineState, and reflects the constant buffers into the API-agnostic
@@ -20,6 +22,7 @@ namespace bgl
 		ComputePipeline(
 			MTL::Device*               device,
 			slang::ISession*           session,
+			ShaderCache*               shaderCache,
 			const ComputePipelineDesc& desc);
 
 		const ComputePipelineDesc&
