@@ -1,4 +1,5 @@
 #include "pipeline/MeshletPipeline_metal.h"
+#include "MetalErrorChecker.h"
 
 #include "shadercache/ShaderCache_metal.h"
 #include "slang/SlangErrorChecker.h"
@@ -44,7 +45,8 @@ namespace bgl
 			dsd->setBackFaceStencil(face(ds.backFaceStencil).get());
 		}
 
-		return NS::TransferPtr(device->newDepthStencilState(dsd.get()));
+		return NS::TransferPtr(
+			MetalCheck(device->newDepthStencilState(dsd.get()), "depth-stencil state"));
 	}
 
 	namespace
@@ -292,7 +294,7 @@ namespace bgl
 				core::throw_runtime_error(
 					"Metal meshlet stage compile failed for '{}': {}",
 					stage.entryPoint,
-					err->localizedDescription()->utf8String());
+					GetErrorDescription(err));
 			}
 			NS::SharedPtr<MTL::Function> fn =
 				NS::TransferPtr(lib->newFunction(Str(stage.entryPoint)));
@@ -378,7 +380,7 @@ namespace bgl
 			core::throw_runtime_error(
 				"Metal meshlet pipeline failed for '{}': {}",
 				m_Desc.meshShader->GetDesc().debugName,
-				error->localizedDescription()->utf8String());
+				GetErrorDescription(error));
 		}
 
 		// Adding after creation: the descriptor only reads from an archive, and a pipeline the

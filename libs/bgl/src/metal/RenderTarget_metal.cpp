@@ -169,8 +169,7 @@ namespace bgl
 		MTL::Texture*       to   = drawable->texture();
 
 		// Encoded on the renderer's queue, so it is ordered after the frame that filled the ring.
-		MTL::CommandBuffer* cmd =
-			m_Queue->As<CommandQueue>()->GetMTLCommandQueue()->commandBuffer();
+		MTL::CommandBuffer*      cmd  = m_Queue->As<CommandQueue>()->NewCommandBuffer();
 		MTL::BlitCommandEncoder* blit = cmd->blitCommandEncoder();
 		blit->copyFromTexture(from, to);
 		blit->endEncoding();

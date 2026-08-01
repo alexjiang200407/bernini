@@ -1,4 +1,5 @@
 #pragma once
+#include "MetalErrorChecker.h"
 #include "metal_cpp.h"
 
 #include "resource/Readback.h"
@@ -16,8 +17,9 @@ namespace bgl
 
 		ReadbackBuffer(MTL::Device* device, const ReadbackBufferDesc& desc) : m_Desc(desc)
 		{
-			m_Buffer =
-				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModeShared));
+			m_Buffer = NS::TransferPtr(MetalCheck(
+				device->newBuffer(desc.byteSize, MTL::ResourceStorageModeShared),
+				"readback buffer allocation"));
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(

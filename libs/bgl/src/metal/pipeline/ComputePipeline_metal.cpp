@@ -1,4 +1,5 @@
 #include "pipeline/ComputePipeline_metal.h"
+#include "MetalErrorChecker.h"
 
 #include "pipeline/MetalPipelineReflection.h"
 #include "shadercache/ShaderCache_metal.h"
@@ -142,15 +143,16 @@ namespace bgl
 			core::throw_runtime_error(
 				"Metal library compile failed for '{}': {}",
 				m_Desc.debugName,
-				error->localizedDescription()->utf8String());
+				GetErrorDescription(error));
 		}
 
 		// Slang mangles the entry name in MSL (main -> main_0); a single-entry compute library exposes
 		// exactly one kernel function, so take it by name rather than guessing the mangled form.
 		NS::Array* names = library->functionNames();
 		gassert(names->count() == 1, "Compute library must expose exactly one kernel function");
-		NS::SharedPtr<MTL::Function> fn =
-			NS::TransferPtr(library->newFunction(static_cast<NS::String*>(names->object(0))));
+		NS::SharedPtr<MTL::Function> fn = NS::TransferPtr(MetalCheck(
+			library->newFunction(static_cast<NS::String*>(names->object(0))),
+			"compute kernel function"));
 
 		NS::SharedPtr<MTL::ComputePipelineDescriptor> pd =
 			NS::TransferPtr(MTL::ComputePipelineDescriptor::alloc()->init());
@@ -174,7 +176,7 @@ namespace bgl
 			core::throw_runtime_error(
 				"Metal compute pipeline failed for '{}': {}",
 				m_Desc.debugName,
-				error->localizedDescription()->utf8String());
+				GetErrorDescription(error));
 		}
 
 		// Adding after creation: the descriptor only reads from an archive, and a pipeline the

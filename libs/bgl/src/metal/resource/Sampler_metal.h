@@ -1,4 +1,5 @@
 #pragma once
+#include "MetalErrorChecker.h"
 #include "metal_cpp.h"
 
 #include "resource/Sampler.h"
@@ -40,7 +41,8 @@ namespace bgl
 			// Without this the sampler has no gpuResourceID, and every bindless bind reads garbage.
 			sd->setSupportArgumentBuffers(true);
 
-			m_Sampler = NS::TransferPtr(device->newSamplerState(sd.get()));
+			m_Sampler =
+				NS::TransferPtr(MetalCheck(device->newSamplerState(sd.get()), "sampler state"));
 		}
 
 		[[nodiscard]] MTL::SamplerState*

@@ -70,6 +70,16 @@ namespace bgl
 			return m_Event.get();
 		}
 
+		/**
+		 * An autoreleased command buffer on this queue, set up to report how it failed.
+		 *
+		 * Every command buffer goes through here rather than through `commandBuffer()` directly: a
+		 * buffer that faults reports it nowhere else -- the fence it encoded still advances, so an
+		 * unobserved failure reads downstream as a frame that simply drew nothing.
+		 */
+		[[nodiscard]] MTL::CommandBuffer*
+		NewCommandBuffer() const noexcept;
+
 		// Called by CommandList::Open before it records anything: drains the waits recorded since the
 		// last one onto `cmdBuffer`, and counts the list as building on this queue.
 		void

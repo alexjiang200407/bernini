@@ -1,4 +1,5 @@
 #include "cmd/CommandList_metal.h"
+#include "MetalErrorChecker.h"
 
 #include "cmd/CommandQueue_metal.h"
 #include "pipeline/ComputeKernel.h"
@@ -204,7 +205,7 @@ namespace bgl
 		m_ScopePool = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
 		auto* queue = cmdQueue->As<CommandQueue>();
-		m_CmdBuffer = NS::RetainPtr(queue->GetMTLCommandQueue()->commandBuffer());
+		m_CmdBuffer = NS::RetainPtr(queue->NewCommandBuffer());
 
 		// Before any encoder: a wait encoded after them would sit past the work it must gate.
 		queue->BeginCommandBuffer(m_CmdBuffer.get());
@@ -238,8 +239,9 @@ namespace bgl
 		// A private buffer cannot be written from the CPU; stage the bytes in a shared buffer and blit
 		// them across on the GPU timeline, so the write orders ahead of a later readback copy. The
 		// command buffer retains the staging buffer until it completes, so it needs no separate owner.
-		auto staging =
-			NS::TransferPtr(m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared));
+		auto staging = NS::TransferPtr(MetalCheck(
+			m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared),
+			"upload staging buffer"));
 
 		BlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
 	}
@@ -392,8 +394,9 @@ namespace bgl
 				sub.rowPitch != 0 ? sub.rowPitch : rowBlocks * format.bytesPerBlock;
 			const uint64_t byteSize = rowPitch * colBlocks;
 
-			auto staging = NS::TransferPtr(
-				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));
+			auto staging = NS::TransferPtr(MetalCheck(
+				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared),
+				"texture upload staging buffer"));
 
 			blit->copyFromBuffer(
 				staging.get(),

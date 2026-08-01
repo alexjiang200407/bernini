@@ -1,4 +1,5 @@
 #pragma once
+#include "MetalErrorChecker.h"
 #include "metal_cpp.h"
 
 namespace bgl
@@ -19,8 +20,9 @@ namespace bgl
 
 		Buffer(MTL::Device* device, const BufferDesc& desc) : m_Desc(desc)
 		{
-			m_Buffer =
-				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
+			m_Buffer = NS::TransferPtr(MetalCheck(
+				device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate),
+				"buffer allocation"));
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(
