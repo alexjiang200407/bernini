@@ -46,6 +46,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -125,23 +126,37 @@ def summarize_review(r):
     }
 
 
+def rest_id(c):
+    """The numeric comment id, which is the only form `pr.py reply` can use.
+
+    Inline comments arrive from the REST endpoint already numeric. Issue comments come from
+    `gh pr view --json comments`, which is GraphQL and returns a node id (`IC_kwDO...`) that no
+    REST route accepts, so the number is taken off the permalink instead.
+    """
+    ident = c.get("id")
+    if isinstance(ident, int) or (isinstance(ident, str) and ident.isdigit()):
+        return int(ident)
+    found = re.search(r"#issuecomment-(\d+)", c.get("url") or c.get("html_url") or "")
+    return int(found.group(1)) if found else ident
+
+
 def summarize_comment(c):
     """One comment, flattened.
 
     `path` is set only on an inline comment, and is what tells them apart: an inline one belongs to
-    a review thread and must be answered in it, which needs `replyTo` --
+    a review thread and must be answered in it. Either way the answer goes through
 
-        gh api repos/{owner}/{repo}/pulls/{n}/comments/{replyTo}/replies -f body="..."
+        just pr reply {replyTo} --body-file <file>
 
-    A `gh pr comment` answer to an inline comment leaves its thread unresolved and the answer
-    detached from the question, so the id is carried here rather than left to a second lookup.
+    which routes by looking the id up, so the id is carried here rather than left to a second
+    lookup.
     """
     return {
         "author": (c.get("author") or {}).get("login") or (c.get("user") or {}).get("login"),
         "createdAt": c.get("createdAt") or c.get("created_at"),
         "path": c.get("path"),  # inline comments only; None for issue comments
         "line": c.get("line") or c.get("original_line"),
-        "replyTo": c.get("id"),  # inline only; the id to reply under
+        "replyTo": rest_id(c),
         "url": c.get("html_url") or c.get("url"),
         "body": c.get("body", ""),
     }
