@@ -95,6 +95,16 @@ namespace bgl
 	}
 
 	void
+	BrdfLut::ReleaseTarget() noexcept
+	{
+		if (m_ResourceManager == nullptr || m_Rtv.IsNull())
+			return;
+
+		m_ResourceManager->DestroyRtv(m_Rtv, false);
+		m_Rtv = {};
+	}
+
+	void
 	BrdfLut::Release() noexcept
 	{
 		if (m_ResourceManager == nullptr)

@@ -144,6 +144,10 @@ namespace bgl
 		m_CommandList->Close();
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
 
+		// After the wait, so the view outlives the list that referenced it. The table is sampled from
+		// here on, never drawn into again, and a device must not spend one of the caller's RTVs on it.
+		m_BrdfLut.ReleaseTarget();
+
 #if defined(BERNINI_GPU_DEBUG)
 		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
 		for (auto& readback : m_DebugReadbacks)

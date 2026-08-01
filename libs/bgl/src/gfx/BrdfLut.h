@@ -44,6 +44,17 @@ namespace bgl
 		void
 		Generate(ICommandList* cmdList);
 
+		/**
+		 * Frees the render target the integration drew into. The table is written once and only
+		 * sampled afterwards, so holding the view would spend a slot of the caller's RTV budget for
+		 * the lifetime of the device.
+		 *
+		 * @pre the Generate submission has completed -- the free is immediate, and the view is still
+		 *      referenced by the command list until then.
+		 */
+		void
+		ReleaseTarget() noexcept;
+
 		/** Null until Init. Valid to sample only after the Generate submission has completed. */
 		[[nodiscard]] TextureHandle
 		Texture() const noexcept
