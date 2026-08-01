@@ -192,16 +192,21 @@ PR**, so the correction is reviewed beside the code that forced it.
 
 Applies to every PR this skill opens, the plan's included.
 
-**Report to the user in chat** — the PR, what it contains, what is next. Then start the watcher, as
-the **last action of the turn**:
+**Report to the user in chat** — the PR, what it contains, what is next. Then start the watcher **in
+the background**, as the last action of the turn:
 
 ```bash
-just watch-pr <n>        # python scripts/watch_pr.py <n>
+just watch-pr <n>        # python scripts/watch_pr.py <n>  -- run it in the background
 ```
 
+Run it in the foreground and the session is parked for up to an hour: the user cannot type, and
+reaching you means killing the wait. Backgrounded, the turn ends, they keep their session, and the
+event wakes you when it arrives. In Claude Code that is the Bash tool's `run_in_background`.
+
 This is not optional and not remembered: `just pr create` records the PR, and the `Stop` hook refuses
-to end the turn until the watcher has run on it. If the user has to decide something before it can be
-watched, say so and release it with `just pr unwatch <n>`.
+to end the turn until a watcher is running on it. The watcher claims the PR as it starts, so the hook
+is satisfied while it runs rather than only after it exits. If the user has to decide something
+before it can be watched, say so and release it with `just pr unwatch <n>`.
 
 It baselines the PR's current activity, polls, and blocks until something actionable happens, printing
 one JSON event. Do not poll `gh` yourself while it runs — it is the wait, not a hint. Only *submitted*

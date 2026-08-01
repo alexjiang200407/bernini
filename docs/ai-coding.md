@@ -115,8 +115,13 @@ Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) clo
   naming the `just pr` command to use instead. Reads — `gh pr view`, `gh api … --jq` — are untouched.
 - [`pr_watch_guard.py`](../.claude/hooks/pr_watch_guard.py) (`Stop`) refuses to end a turn while a PR
   this session wrote to has no watcher. `pr.py` arms the list; [`watch_pr.py`](../scripts/watch_pr.py)
-  clears it once the PR merges or closes, and re-arms it on a review or a comment — which is exactly
-  when the PR is waiting on a reply again. `just pr unwatch <n>` releases one deliberately.
+  claims the PR as it starts and re-arms it on a review or a comment — which is exactly when the PR
+  is waiting on a reply again — and drops it for good once the PR merges or closes.
+  `just pr unwatch <n>` releases one deliberately.
+
+The watcher claims the PR at startup rather than at exit so that it can run **in the background**: the
+hook is satisfied by a watch that is *running*, the turn ends, and the developer keeps their session
+instead of watching a blocked prompt for an hour.
 
 Each entry also carries the timestamp of the last thing posted, which is what `just watch-pr` uses as
 its baseline when `--since` is not given. A hand-written timestamp two seconds early makes the watcher

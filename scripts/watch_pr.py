@@ -198,6 +198,12 @@ def main():
 
     since = args.since or watchlist.since_for(args.pr)
 
+    # Claim the PR before the first poll, not after the last one: this process *is*
+    # the wait, so the Stop hook must see it as satisfied while it runs in the
+    # background. emit() re-arms when it exits with the PR still needing an answer.
+    if not args.once:
+        watchlist.disarm(args.pr)
+
     gh = find_gh()
     rest_repo = repo_path(gh, args.repo)
 

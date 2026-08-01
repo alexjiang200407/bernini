@@ -35,10 +35,12 @@ def main():
     lines = "\n".join(f"    just watch-pr {e['pr']}    # {e.get('url', '')}" for e in entries)
     print("Blocked by .claude/hooks/pr_watch_guard.py.\n\n"
           "A pull request you wrote to this turn has nothing waiting on it, so a review "
-          "would land in silence.\nStart the watcher as your last action:\n\n"
+          "would land in silence.\nStart the watcher -- in the BACKGROUND, so this turn ends "
+          "and the user gets their session back:\n\n"
           f"{lines}\n\n"
-          "It blocks until a review, a comment or the merge arrives. If the user has to "
-          "decide something first,\nrelease it with `just pr unwatch <n>` and say why.",
+          "It claims the PR as it starts, so this hook is satisfied the moment it is running, and "
+          "it wakes you\nwhen a review, a comment or the merge arrives. If the user has to decide "
+          "something first, release it\nwith `just pr unwatch <n>` and say why.",
           file=sys.stderr)
     return 2
 
