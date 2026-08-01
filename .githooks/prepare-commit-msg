@@ -1,17 +1,40 @@
 #!/usr/bin/env sh
-# Re-attribute AI-assisted commits to the morgana-coding-agent bot. The assistant
-# tool marks its work with a Claude co-author trailer; this swaps that trailer for
-# the bot. A purely human commit has no such trailer and is left untouched. GitHub
-# matches co-authors by the no-reply email below. Enabled by
+# Co-author AI-assisted commits to the morgana-coding-agent bot: the commit stays
+# authored by the developer who ran it, and the bot is credited for the work the
+# assistant did. CLAUDECODE=1 is exported into every command Claude Code runs,
+# which is what makes this fire whether or not the assistant remembered its own
+# trailer; a Claude trailer alone also counts, for tooling that does not set it.
+# A commit with neither is a human one and is left untouched. GitHub matches
+# co-authors by the no-reply email below. Enabled by
 # `git config core.hooksPath .githooks` (set by `just init`). See docs/ai-coding.md.
 msg="$1"
+source="$2"
 bot='Co-authored-by: morgana-coding-agent[bot] <305433938+morgana-coding-agent[bot]@users.noreply.github.com>'
 
-# No assistant trailer means a human commit -- nothing to re-attribute.
-grep -qi '^Co-authored-by: Claude' "$msg" || exit 0
+[ "$source" = "merge" ] && exit 0
 
-# Swap the Claude co-author line(s) for the bot, in place, without duplicating it.
+if [ "${CLAUDECODE:-}" != "1" ] && ! grep -qi '^Co-authored-by: Claude' "$msg"; then
+  exit 0
+fi
+
+# Swap any Claude co-author line for the bot's, and add the bot's when there was
+# none. It goes after the last real line, never inside the commented help text
+# git appends, where a trailer would be stripped.
 awk -v bot="$bot" '
-  tolower($0) ~ /^co-authored-by: claude/ { if (!done) { print bot; done = 1 } next }
-  { print }
+  tolower($0) ~ /^co-authored-by: claude/ { next }
+  tolower($0) == tolower(bot) { have = 1 }
+  { line[++n] = $0; if ($0 !~ /^#/ && $0 !~ /^[[:space:]]*$/) last = n }
+  END {
+    if (have || last == 0) {
+      for (i = 1; i <= n; i++) print line[i]
+      if (!have && last == 0) print bot
+      exit
+    }
+    for (i = 1; i <= last; i++) print line[i]
+    # A blank line, unless the message already ends in a trailer block. Line 1 is
+    # the subject, and "fix: thing" reads as a trailer, so it never counts as one.
+    if (last == 1 || line[last] !~ /^[A-Za-z][A-Za-z-]*:[[:space:]]/) print ""
+    print bot
+    for (i = last + 1; i <= n; i++) print line[i]
+  }
 ' "$msg" > "$msg.tmp" && mv "$msg.tmp" "$msg"

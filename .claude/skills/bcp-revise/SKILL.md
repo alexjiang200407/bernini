@@ -10,23 +10,16 @@ they are not. A review is a conversation, not a work order.
 
 ## 1. Fetch the comments
 
-Three different things get called "comments" and they live in separate places. Read all three; the
-inline ones matter most because they are anchored to code.
+Three different things get called "comments" and they live in separate places. One command returns
+all three:
 
 ```bash
-export PATH="$PATH:/c/Program Files/GitHub CLI"   # gh is often not on PATH
-
-# Inline review comments — the ones on a file and line. The important ones.
-gh api repos/{owner}/{repo}/pulls/{n}/comments \
-  --jq '.[] | "\(.path):\(.line // .original_line) [\(.user.login)] (id \(.id))\n  \(.body)\n"'
-
-# Review summaries: APPROVED / CHANGES_REQUESTED and the body.
-gh api repos/{owner}/{repo}/pulls/{n}/reviews \
-  --jq '.[] | "[\(.user.login)] \(.state): \(.body)"'
-
-# Top-level conversation, not attached to code.
-gh pr view {n} --comments
+just pr comments {n}
 ```
+
+It prints the submitted `reviews`, the inline `threads` — each with the `id` to answer, its
+`path:line`, and whether it has been `answered` — and the top-level `issue_comments`. The threads
+matter most: they are anchored to code, and `answered: false` is the checklist for step 8.
 
 Get the PR number from `gh pr view --json number` on the current branch if it was not given.
 
@@ -109,24 +102,23 @@ git push
 Close the loop **on GitHub**, not just in chat. The reviewer should not have to diff your push
 against their comments to find out what you did.
 
-Post as the **morgana-coding-agent bot** when it is set up, so review replies don't read as if the
-author wrote them by hand — see [docs/ai-coding.md](docs/ai-coding.md). Mint a token once and export
-it for the `gh` calls below; if the bot isn't configured the command fails quietly and `gh` uses the
-logged-in account instead.
+**Answer each comment where it was made.** A reply in the reviewer's thread sits under their
+question; a summary at the bottom of the conversation makes them hunt for it and leaves the thread
+open.
 
 ```bash
-GH_TOKEN=$(bash .claude/skills/bcp-revise/mint-bot-token.sh 2>/dev/null) && export GH_TOKEN
-
-# Reply in the thread of a specific inline comment (use its id from step 1).
-gh api repos/{owner}/{repo}/pulls/{n}/comments/{comment_id}/replies -f body="..."
-
-# Or a single summary comment covering everything.
-gh pr comment {n} --body "..."
+just pr reply {comment_id} --body-file <file>   # the id from step 1; goes into its thread
+just pr comment {n} --body-file <file>          # one summary, after every thread has a reply
 ```
 
-Reply to **every** comment — including the ones you declined, with the reason. Then summarise for
-the user: what you accepted, what you pushed back on and why, and anything still awaiting their
-decision.
+Both post as the **morgana-coding-agent bot**, so replies don't read as if the author wrote them by
+hand — see [docs/ai-coding.md](docs/ai-coding.md). `gh pr comment` and the raw replies endpoint are
+blocked; `just pr comment` refuses while any thread is unanswered, and `just pr check {n}` lists what
+is outstanding.
+
+Reply to **every** comment — including the ones you declined, with the reason. Then restart the
+watcher (the turn cannot end otherwise) and summarise for the user: what you accepted, what you
+pushed back on and why, and anything still awaiting their decision.
 
 ## Rules
 

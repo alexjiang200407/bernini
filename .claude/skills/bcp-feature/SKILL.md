@@ -119,9 +119,9 @@ what the source and `docs/` are for. Follow [bcp-docs](.claude/skills/bcp-docs/S
 ```bash
 git switch -c docs/<name>-plan feat/<name>
 git add docs/plans/<name>.md
-git commit -m "docs(plans): plan <what the feature delivers>"   # + the Co-Authored-By trailer
+git commit -m "docs(plans): plan <what the feature delivers>"   # the hook adds the bot co-author
 git push -u origin HEAD
-gh pr create --base feat/<name> --title "docs(plans): ..." --body "..."
+just pr create --base feat/<name> --body-file <file>
 ```
 
 Then § 4. **No task branch is cut until this PR merges** — the plan fixes what every later PR is
@@ -172,11 +172,14 @@ just format <files...>
 git fetch origin && git rebase origin/feat/<name>   # the base moved if a sibling merged
 just build && just test                             # again — a rebase is a real merge
 git push -u origin HEAD
-gh pr create --base feat/<name> --title "..." --body "..."
+just pr create --base feat/<name> --body-file <file>
 ```
 
-`--base` is not optional: without it `gh` targets `master` and the PR silently proposes the work
-there.
+`--base` is not optional, and it is not defaulted: name the feature branch or the PR proposes the
+work to `master`. The body goes in a file, headed by `# type(scope): the title` — the title is lifted
+from that line, since `just` joins a recipe's arguments on spaces. `just pr create` opens the PR as
+**you**, not as the bot -- a squash merge takes the commit's author from the PR's author, and a
+feature squashes twice -- and it arms the watch that § 4 must clear.
 
 The body says what changed, **why**, how it was verified (name the suites; say whether GPU validation
 ran), which task of the plan it is, and what still has to land. A reviewer must be able to tell a
@@ -189,12 +192,21 @@ PR**, so the correction is reviewed beside the code that forced it.
 
 Applies to every PR this skill opens, the plan's included.
 
-**Report to the user in chat** — the PR, what it contains, what is next. Then start the watcher, as
-the **last action of the turn**:
+**Report to the user in chat** — the PR, what it contains, what is next. Then start the watcher **in
+the background**, as the last action of the turn:
 
 ```bash
-just watch-pr <n>        # python scripts/watch_pr.py <n>
+just watch-pr <n>        # python scripts/watch_pr.py <n>  -- run it in the background
 ```
+
+Run it in the foreground and the session is parked for up to an hour: the user cannot type, and
+reaching you means killing the wait. Backgrounded, the turn ends, they keep their session, and the
+event wakes you when it arrives. In Claude Code that is the Bash tool's `run_in_background`.
+
+This is not optional and not remembered: `just pr create` records the PR, and the `Stop` hook refuses
+to end the turn until a watcher is running on it. The watcher claims the PR as it starts, so the hook
+is satisfied while it runs rather than only after it exits. If the user has to decide something
+before it can be watched, say so and release it with `just pr unwatch <n>`.
 
 It baselines the PR's current activity, polls, and blocks until something actionable happens, printing
 one JSON event. Do not poll `gh` yourself while it runs — it is the wait, not a hint. Only *submitted*
@@ -207,36 +219,33 @@ reviews fire it; a reviewer's pending draft stays invisible until they send it.
 | `closed` | stop and ask — the user rejected something |
 | `timeout` (exit 3) | say you are still waiting, restart the watcher |
 
-**Restart with `--since`** set to the newest `submittedAt`/`createdAt` you acted on:
+**Just restart it.** The baseline is not yours to compute:
 
 ```bash
-just watch-pr <n> --since 2026-07-29T13:13:22Z
+just watch-pr <n>
 ```
 
-Nothing watches the PR while you revise, and a plain restart folds anything that arrived meanwhile
-into its baseline — never reported, never acted on.
-
-`--since` sets the *baseline* only: anything that arrives after the watcher starts is new, including
-your own reply. Post the reply first and start the watcher after it, or the watcher fires on it and
-the turn is spent reading yourself.
+`just pr` records the timestamp GitHub returned for everything it posts, and the watcher starts from
+that, so your own reply is already behind the baseline and anything that arrived while you were
+revising is still ahead of it. `--since` remains for the rare case of overriding that by hand — a
+timestamp guessed a second early makes the watcher fire on your own reply and spends the turn
+reading yourself.
 
 **Answer an inline comment inside its thread.** An event whose `path` is set came from a review
 thread anchored to a file and line, and it carries the `replyTo` id to answer under:
 
 ```bash
-gh api repos/{owner}/{repo}/pulls/{n}/comments/{replyTo}/replies -f body="..."
+just pr reply {replyTo} --body-file <file>   # in-thread; the id decides, not you
+just pr comment {n} --body-file <file>       # the summary, once every thread is answered
 ```
 
-`gh pr comment` is for an event with `path: null` — a top-level comment — and for the summary that
-follows a batch of replies. Using it for an inline comment leaves the reviewer's thread unresolved
-and puts the answer where the question is not, so they have to hunt for it. The `path` field is the
-routing decision, not decoration.
+Both post as the bot. Answering an inline comment at the bottom of the conversation leaves the
+reviewer's thread unresolved and puts the answer where the question is not, so `just pr comment`
+refuses while any thread is unanswered, and raw `gh pr comment` is blocked outright.
 
 **Do not write to a PR that has no review on it.** Reporting goes to the user in chat; a description
-of your own change belongs in the PR **body**, not a comment. Comments answer review feedback, and
-then as the bot — export `GH_TOKEN` from
-[`mint-bot-token.sh`](.claude/skills/bcp-revise/mint-bot-token.sh), or the comment arrives under the
-user's own name.
+of your own change belongs in the PR **body** (`just pr edit {n} --body-file <file>`), not a comment.
+Comments answer review feedback.
 
 ## 5. Land the feature
 
@@ -247,7 +256,7 @@ git fetch origin && git switch feat/<name> && git rebase origin/master
 just build && just test                      # the whole feature at once
 just run bgl_tests -- --gpu-validation       # if any task touched shaders, barriers or descriptors
 git push --force-with-lease
-gh pr create --base master --head feat/<name> --title "..." --body "..."
+just pr create --base master --head feat/<name> --body-file <file>
 ```
 
 This run matters more than any single task's did: each was verified against the branch as it stood at

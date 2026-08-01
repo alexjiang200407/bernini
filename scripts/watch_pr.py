@@ -46,12 +46,22 @@ Usage:
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from util import watchlist  # noqa: E402
+from util.gh import BOT_LOGIN  # noqa: E402
+
 MAX_CONSECUTIVE_FAILURES = 5
+
+# Events after which the PR is again waiting on nobody, so the Stop hook must ask
+# for another watch. `merged` and `closed` are the two that end the loop for good.
+REARMING = ("review", "comment", "timeout")
 
 # Fields per object as `gh pr view --json` spells them.
 PR_FIELDS = "state,mergedAt,reviews,comments,url,title"
@@ -72,7 +82,9 @@ def run_gh(gh, args, repo):
     cmd = [gh] + args
     if repo:
         cmd += ["--repo", repo]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # gh emits UTF-8; text=True alone would decode it with the ANSI codepage.
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace")
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"gh exited {result.returncode}")
     return json.loads(result.stdout)
@@ -108,6 +120,20 @@ def stamp(item):
     return item.get("submittedAt") or item.get("createdAt") or item.get("created_at") or ""
 
 
+def by_the_agent(item):
+    """Did the bot write this? Waking for it would be reading yourself.
+
+    A baseline time cannot decide this: a watch running in the background is
+    still running when the agent posts its replies, so its own words arrive
+    after any startup baseline no matter how the baseline was chosen. The author
+    is the durable answer. GraphQL spells the login `morgana-coding-agent` and
+    REST spells it `morgana-coding-agent[bot]`, hence the suffix strip.
+    """
+    login = ((item.get("author") or {}).get("login")
+             or (item.get("user") or {}).get("login") or "")
+    return login.lower().removesuffix("[bot]") == BOT_LOGIN.lower().removesuffix("[bot]")
+
+
 def summarize_review(r):
     return {
         "author": (r.get("author") or {}).get("login"),
@@ -117,29 +143,55 @@ def summarize_review(r):
     }
 
 
+def rest_id(c):
+    """The numeric comment id, which is the only form `pr.py reply` can use.
+
+    Inline comments arrive from the REST endpoint already numeric. Issue comments come from
+    `gh pr view --json comments`, which is GraphQL and returns a node id (`IC_kwDO...`) that no
+    REST route accepts, so the number is taken off the permalink instead.
+    """
+    ident = c.get("id")
+    if isinstance(ident, int) or (isinstance(ident, str) and ident.isdigit()):
+        return int(ident)
+    found = re.search(r"#issuecomment-(\d+)", c.get("url") or c.get("html_url") or "")
+    return int(found.group(1)) if found else ident
+
+
 def summarize_comment(c):
     """One comment, flattened.
 
     `path` is set only on an inline comment, and is what tells them apart: an inline one belongs to
-    a review thread and must be answered in it, which needs `replyTo` --
+    a review thread and must be answered in it. Either way the answer goes through
 
-        gh api repos/{owner}/{repo}/pulls/{n}/comments/{replyTo}/replies -f body="..."
+        just pr reply {replyTo} --body-file <file>
 
-    A `gh pr comment` answer to an inline comment leaves its thread unresolved and the answer
-    detached from the question, so the id is carried here rather than left to a second lookup.
+    which routes by looking the id up, so the id is carried here rather than left to a second
+    lookup.
     """
     return {
         "author": (c.get("author") or {}).get("login") or (c.get("user") or {}).get("login"),
         "createdAt": c.get("createdAt") or c.get("created_at"),
         "path": c.get("path"),  # inline comments only; None for issue comments
         "line": c.get("line") or c.get("original_line"),
-        "replyTo": c.get("id"),  # inline only; the id to reply under
+        "replyTo": rest_id(c),
         "url": c.get("html_url") or c.get("url"),
         "body": c.get("body", ""),
     }
 
 
 def emit(payload):
+    """Prints the one event, and re-arms the watch if the PR still needs answering.
+
+    The baseline recorded is the newest item just reported, so a watch restarted
+    without an answer in between does not fire on the same feedback twice.
+    """
+    event = payload.get("event")
+    if event in REARMING:
+        reported = (payload.get("reviews") or []) + (payload.get("comments") or [])
+        newest = max((stamp(i) for i in reported), default="")
+        watchlist.arm(payload["pr"], payload.get("url", ""), newest or None)
+    elif event in ("merged", "closed"):
+        watchlist.disarm(payload["pr"])
     print(json.dumps(payload, indent=2))
 
 
@@ -155,8 +207,17 @@ def main():
     parser.add_argument(
         "--since",
         help="ISO-8601 UTC time (2026-07-29T13:13:22Z); only activity at or before it joins the "
-        "baseline, and anything already waiting fires immediately")
+        "baseline, and anything already waiting fires immediately. Defaults to the time pr.py last "
+        "posted to this PR, which is what keeps the watch from firing on its own reply")
     args = parser.parse_args()
+
+    since = args.since or watchlist.since_for(args.pr)
+
+    # Claim the PR before the first poll, not after the last one: this process *is*
+    # the wait, so the Stop hook must see it as satisfied while it runs in the
+    # background. emit() re-arms when it exits with the PR still needing an answer.
+    if not args.once:
+        watchlist.disarm(args.pr)
 
     gh = find_gh()
     rest_repo = repo_path(gh, args.repo)
@@ -184,12 +245,13 @@ def main():
 
     # GitHub stamps are Z-suffixed UTC, so string comparison is chronological.
     def baselined(item):
-        return args.since is None or stamp(item) <= args.since
+        return since is None or stamp(item) <= since
 
     seen = {key(x) for x in reviews + comments + inline if baselined(x)}
     print(
         f"watching PR #{args.pr} ({view['title']}) every {args.interval:g}s; "
-        f"baseline: {len(seen)} of {len(reviews) + len(comments) + len(inline)} items",
+        f"baseline: {len(seen)} of {len(reviews) + len(comments) + len(inline)} items"
+        + (f", since {since}" if since else ""),
         file=sys.stderr, flush=True)
 
     def actionable(view, reviews, comments, inline):
@@ -201,8 +263,9 @@ def main():
             emit({"event": "closed", "pr": args.pr, "url": view["url"]})
             return True
 
-        new_reviews = [r for r in reviews if key(r) not in seen]
-        new_comments = [c for c in comments + inline if key(c) not in seen]
+        new_reviews = [r for r in reviews if key(r) not in seen and not by_the_agent(r)]
+        new_comments = [c for c in comments + inline
+                        if key(c) not in seen and not by_the_agent(c)]
         if new_reviews:
             emit({
                 "event": "review",
@@ -222,7 +285,7 @@ def main():
             return True
         return False
 
-    # With --since, the race-window items are already in hand -- fire before sleeping.
+    # With a baseline time, the race-window items are already in hand -- fire before sleeping.
     if actionable(view, reviews, comments, inline):
         return
 

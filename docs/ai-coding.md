@@ -11,7 +11,7 @@ sidesteps the "one machine user per human" gray area of a second personal accoun
 | | Coding agent | Review agent |
 | --- | --- | --- |
 | App ID | `4304152` (`morgana-coding-agent`) | `4314134` |
-| Does | applies review feedback with [`bcp-revise`](../.claude/skills/bcp-revise/SKILL.md), replies to each comment, co-authors commits | reviews a pull request when tagged |
+| Does | opens pull requests, applies review feedback with [`bcp-revise`](../.claude/skills/bcp-revise/SKILL.md), replies to each comment, co-authors commits | reviews a pull request when tagged |
 | Runs | locally, on a developer's machine | on a GitHub Actions runner |
 | Triggered by | a developer running `bcp-revise` | commenting `/review` on a pull request |
 | Key lives in | `~/.claude/`, **one per developer** | the repository's Actions secrets, **one shared key** |
@@ -35,8 +35,8 @@ A GitHub App cannot post directly; it authenticates in two hops:
 The coding agent does both hops with
 [`mint-bot-token.sh`](../.claude/skills/bcp-revise/mint-bot-token.sh), which needs only `openssl` and
 `curl` — both ship in Git Bash, so there are no extra dependencies — and prints the token.
-`bcp-revise` exports it as `GH_TOKEN` for the reply step, and falls back to the logged-in account
-when the bot is not set up on this machine. The review agent does the same exchange with
+[`scripts/pr.py`](../scripts/pr.py) runs it for every write it makes, so nothing has to remember to
+export `GH_TOKEN`. The review agent does the same exchange with
 [`actions/create-github-app-token`](https://github.com/actions/create-github-app-token), which avoids
 writing a `.pem` to the runner's disk.
 
@@ -75,32 +75,97 @@ names, which on a fresh clone is `.git/hooks` — so pointing it at `.githooks` 
 whose objects were never uploaded. Committing them keeps the redirect and the hooks together. Do not
 delete them as regenerable cruft.
 
-A blank answer skips the key — do that if you never run `bcp-revise`; your replies just post as your
-own account. Re-run `just init` any time to set it up later.
+A blank answer skips the key — do that if you never run `bcp-revise`. Without it `just pr` refuses to
+post rather than quietly using your account; `--as-me` is the deliberate override. Re-run `just init`
+any time to set it up later.
 
 Verify it works:
 
 ```bash
-GH_TOKEN=$(bash .claude/skills/bcp-revise/mint-bot-token.sh) gh api user --jq .login
+GH_TOKEN=$(just pr token) gh api installation/repositories --jq '.repositories[].full_name'
 ```
 
-It should print `morgana-coding-agent[bot]`. If it prints your own login, the mint failed and `gh`
-fell back to your account — run `mint-bot-token.sh` alone to see the error on stderr.
+It should print `alexjiang200407/bernini`. An installation token authenticates as the App rather than
+as a person, so `gh api user` is *not* the check — it 403s even when everything is correct.
+
+## The enforced path: `just pr`
+
+Which account a comment lands under, and whether it lands in the reviewer's thread or at the bottom
+of the conversation, are decisions with one right answer every time. They are therefore not left to
+the agent. [`scripts/pr.py`](../scripts/pr.py) is the only way it writes to a pull request:
+
+| | | acts as |
+| --- | --- | --- |
+| `just pr create --base B --body-file F` | opens the PR and arms the pending-watch list | **you** |
+| `just pr edit <n> --body-file F` | rewrites the title or body | **you** |
+| `just pr comments <n>` | every review, thread and comment, each with the id to answer and whether it has been answered | — |
+| `just pr reply <comment-id> --body-file F` | answers **where the comment was made** — the id is looked up, and an inline comment gets a threaded reply | **the bot** |
+| `just pr comment <n> --body-file F` | a top-level summary; refuses while any thread is still unanswered | **the bot** |
+| `just pr check <n>` | author, and whether anything is unanswered; exits 2 on a problem | — |
+
+The title heads the body file as `# one-line title` and is lifted out of the body. It travels in the
+file because `just` joins a recipe's arguments on spaces, so a `--title` containing one cannot survive
+the trip; the flag still works when `scripts/pr.py` is called directly.
+
+### Why the bot comments but does not open
+
+A comment is the agent speaking, and it should not wear the developer's face. A **pull request is
+different**, because GitHub takes a squash-merged commit's author from the *pull request's* author —
+not from the commits on the branch, which it discards. So a bot-authored PR does not merely look
+machine-made: it signs every line it lands on `master` as the bot's, and `git blame`, `git shortlog`
+and the repository's contributor list all follow the author. `bcp-feature` squashes twice — task PR
+into `feat/<name>`, then the feature into `master` — so the identity is rewritten a level down, where
+no later rebase can recover it.
+
+`just pr check` therefore treats a bot-authored PR as a **problem**, and says to merge that one with
+rebase rather than squash. `--as-bot` and `--as-me` override either default when you mean to.
+
+The `Co-authored-by` trailer is what credits the bot instead, and it costs the developer nothing:
+GitHub's contributor statistics count a co-author's additions in full, alongside the author's, rather
+than splitting them.
+
+Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) close the gaps around it:
+
+- [`gh_guard.py`](../.claude/hooks/gh_guard.py) (`PreToolUse`) rejects `gh pr create`, `gh pr comment`,
+  `gh pr review`, `gh pr merge`, a `gh api` write to a comment endpoint, and `git commit --no-verify`,
+  naming the `just pr` command to use instead. Reads — `gh pr view`, `gh api … --jq` — are untouched.
+- [`pr_watch_guard.py`](../.claude/hooks/pr_watch_guard.py) (`Stop`) refuses to end a turn while a PR
+  this session wrote to has no watcher. `pr.py` arms the list; [`watch_pr.py`](../scripts/watch_pr.py)
+  claims the PR as it starts and re-arms it on a review or a comment — which is exactly when the PR
+  is waiting on a reply again — and drops it for good once the PR merges or closes.
+  `just pr unwatch <n>` releases one deliberately.
+
+The watcher claims the PR at startup rather than at exit so that it can run **in the background**: the
+hook is satisfied by a watch that is *running*, the turn ends, and the developer keeps their session
+instead of watching a blocked prompt for an hour.
+
+Each entry also carries the timestamp of the last thing posted, which is what `just watch-pr` uses as
+its baseline when `--since` is not given. A hand-written timestamp two seconds early makes the watcher
+fire on the agent's own reply and spend the turn reading itself, so the time comes from GitHub's
+response rather than from anyone's judgement.
+
+The list lives in `.git/bernini-pr-watch.json` and is keyed by session, so a later session never
+inherits a block for a PR it knows nothing about.
 
 ## Coding agent: commit attribution
 
-AI-assisted commits are co-authored by the bot rather than the assistant tool. The assistant already
-stamps its own `Co-authored-by: Claude …` trailer when it writes a commit; the committed hook
-[`.githooks/prepare-commit-msg`](../.githooks/prepare-commit-msg) swaps that line for the bot:
+An AI-assisted commit stays **authored by the developer who ran it** and is **co-authored by the
+bot** — the human is accountable for it, the bot is credited for the work. Claude Code exports
+`CLAUDECODE=1` into every command it runs, and the committed hook
+[`.githooks/prepare-commit-msg`](../.githooks/prepare-commit-msg) keys off that rather than off a
+trailer the assistant has to remember to write. It also replaces any `Co-authored-by: Claude …` line
+the assistant did stamp, so the credit is the bot's either way:
 
 ```
 Co-authored-by: morgana-coding-agent[bot] <305433938+morgana-coding-agent[bot]@users.noreply.github.com>
 ```
 
-A commit with no assistant trailer — a purely human one — is left untouched, so the bot is credited
-only where it actually did the work. GitHub matches co-authors by that no-reply email —
-`<user-id>+<login>@users.noreply.github.com`, where the user id (`305433938`) is stable across App
-renames. The hook is idempotent (an amend does not duplicate the trailer). It runs only because
+A commit made from your own shell has no `CLAUDECODE` and no trailer, so it is left untouched and the
+bot is credited only where it actually did the work. GitHub matches co-authors by that no-reply email
+— `<user-id>+<login>@users.noreply.github.com`, where the user id (`305433938`) is stable across App
+renames. The hook is idempotent (an amend does not duplicate the trailer), keeps the trailer out of
+the commented help text git appends, and skips merge commits. `git commit --no-verify` would skip it
+altogether, which is why `gh_guard.py` blocks that flag. It runs only because
 `just init` sets `core.hooksPath` to `.githooks`; that is machine-local config, not committed, so a
 fresh clone opts in through `just init` (or `git config core.hooksPath .githooks`).
 
