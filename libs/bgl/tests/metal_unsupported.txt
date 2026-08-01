@@ -5,5 +5,4 @@
 # This list shrinks. Each task removes what it makes pass, and the file is deleted when it empties.
 # A name here says nothing about the test: all of them are backend-agnostic, and every one passes on
 # D3D12 today. What it records is how far this backend has got.
-GraphicsError on frame protocol misuse
 Shader cache is populated cold and reused warm without recompiling

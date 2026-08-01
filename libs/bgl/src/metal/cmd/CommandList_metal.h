@@ -31,6 +31,10 @@ namespace bgl
 			ICommandAllocator*     commandAllocator,
 			ResourceManagerRef     resourceManager);
 
+		// Metal traps on an encoder released without endEncoding, which is what destroying a list
+		// still mid-recording would do -- an abandoned frame, say, whose buffer is never committed.
+		~CommandList() noexcept override { EndEncoder(); }
+
 		void
 		WriteBuffer(
 			BufferHandle handle,
