@@ -1,51 +1,11 @@
-#include "shadercache/shader_cache_util.h"
+#include "shadercache/util.h"
 
 #include <core/file/file.h>
-
-#if defined(_WIN32)
-#	include <process.h>
-#else
-#	include <unistd.h>
-#endif
+#include <core/hash.h>
+#include <core/platform/util.h>
 
 namespace bgl::shader_cache
 {
-	namespace
-	{
-		constexpr uint64_t c_FnvOffset = 14695981039346656037ull;
-		constexpr uint64_t c_FnvPrime  = 1099511628211ull;
-
-	}
-
-	uint32_t
-	ProcessId() noexcept
-	{
-#if defined(_WIN32)
-		return static_cast<uint32_t>(_getpid());
-#else
-		return static_cast<uint32_t>(::getpid());
-#endif
-	}
-
-	uint64_t
-	HashBytes(const void* data, size_t size, uint64_t seed)
-	{
-		const auto* bytes = static_cast<const uint8_t*>(data);
-		uint64_t    hash  = seed;
-		for (size_t i = 0; i < size; ++i)
-		{
-			hash ^= bytes[i];
-			hash *= c_FnvPrime;
-		}
-		return hash;
-	}
-
-	uint64_t
-	HashString(std::string_view str, uint64_t seed)
-	{
-		return HashBytes(str.data(), str.size(), seed);
-	}
-
 	uint64_t
 	ComputeSourceSalt(
 		std::string_view                optionsSalt,
@@ -54,8 +14,8 @@ namespace bgl::shader_cache
 	{
 		namespace fs = std::filesystem;
 
-		uint64_t salt = HashString(optionsSalt, c_FnvOffset);
-		salt          = HashBytes(&formatVersion, sizeof(formatVersion), salt);
+		uint64_t salt = core::hash_string(optionsSalt, core::hash_seed());
+		salt          = core::hash_pod(formatVersion, salt);
 
 		// Sort by path so the salt is order-independent across filesystem walks.
 		std::vector<fs::path> files;
@@ -79,10 +39,10 @@ namespace bgl::shader_cache
 		for (const fs::path& file : files)
 		{
 			const std::string path = file.generic_string();
-			salt                   = HashString(path, salt);
+			salt                   = core::hash_string(path, salt);
 
 			const std::vector<std::byte> bytes = core::file::read_file_bytes(path);
-			salt                               = HashBytes(bytes.data(), bytes.size(), salt);
+			salt                               = core::hash_bytes(bytes.data(), bytes.size(), salt);
 		}
 
 		return salt;
@@ -96,8 +56,8 @@ namespace bgl::shader_cache
 		uint64_t key = salt;
 		for (const auto& [module, entry] : moduleEntries)
 		{
-			key = HashString(module, key);
-			key = HashString(entry, key);
+			key = core::hash_string(module, key);
+			key = core::hash_string(entry, key);
 		}
 		return key;
 	}
@@ -116,7 +76,7 @@ namespace bgl::shader_cache
 		const std::filesystem::path tmp = std::format(
 			"{}.{}.{}.tmp",
 			path.string(),
-			ProcessId(),
+			core::process_id(),
 			counter.fetch_add(1, std::memory_order_relaxed));
 
 		std::ofstream out(tmp, std::ios::binary | std::ios::trunc);

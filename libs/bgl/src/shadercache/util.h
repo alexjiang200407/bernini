@@ -10,17 +10,6 @@
 // parameter index or a per-stage buffer index -- is its private business. See docs/shader_cache.md.
 namespace bgl::shader_cache
 {
-	// This process's id, for a temp filename that several processes sharing one cache directory
-	// cannot collide on.
-	[[nodiscard]] uint32_t
-	ProcessId() noexcept;
-
-	uint64_t
-	HashBytes(const void* data, size_t size, uint64_t seed);
-
-	uint64_t
-	HashString(std::string_view str, uint64_t seed);
-
 	// One hash over the compile options and the content of every shader source file, so any edit to
 	// a shader -- or a change of compiler, options or format version -- moves every derived key and
 	// a stale entry is missed rather than misread.

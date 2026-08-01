@@ -1,12 +1,15 @@
 #include "shadercache/ShaderCache_metal.h"
 
-#include "shadercache/shader_cache_util.h"
+#include "shadercache/util.h"
 #include "util_metal.h"
 
 #include <core/file/file.h>
+#include <core/platform/util.h>
 
 namespace bgl
 {
+	using namespace shader_cache;
+
 	namespace
 	{
 		// Bump when the on-disk format below changes; folded into every key so old files are missed
@@ -19,11 +22,6 @@ namespace bgl
 
 		using core::io::ByteReader;
 		using core::io::ByteWriter;
-
-		using shader_cache::ReadLayout;
-		using shader_cache::ReadString;
-		using shader_cache::WriteLayout;
-		using shader_cache::WriteString;
 
 		std::vector<std::byte>
 		Serialize(const CachedProgram& program)
@@ -133,7 +131,7 @@ namespace bgl
 		std::string_view                optionsSalt,
 		const std::vector<std::string>& searchPaths) :
 		m_CacheDir(std::move(cacheDir)),
-		m_SourceSalt(shader_cache::ComputeSourceSalt(optionsSalt, searchPaths, kCacheFormatVersion))
+		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, kCacheFormatVersion))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
@@ -180,7 +178,7 @@ namespace bgl
 		// test run does -- and a fixed name would let them serialize into each other's file.
 		const std::filesystem::path libPath = m_CacheDir / kPipelineLibraryFile;
 		const std::filesystem::path tmp =
-			std::format("{}.{}.tmp", libPath.string(), shader_cache::ProcessId());
+			std::format("{}.{}.tmp", libPath.string(), core::process_id());
 
 		std::error_code ec;
 		std::filesystem::remove(tmp, ec);
@@ -205,13 +203,14 @@ namespace bgl
 	uint64_t
 	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
 	{
+		// Qualified: the member of the same name would otherwise recurse.
 		return shader_cache::ComputeKey(m_SourceSalt, std::move(moduleEntries));
 	}
 
 	bool
 	ShaderCache::TryLoad(uint64_t key, CachedProgram& out) const
 	{
-		const std::filesystem::path path = shader_cache::KeyPath(m_CacheDir, key);
+		const std::filesystem::path path = KeyPath(m_CacheDir, key);
 
 		std::error_code ec;
 		if (!std::filesystem::exists(path, ec))
@@ -233,6 +232,6 @@ namespace bgl
 	ShaderCache::Store(uint64_t key, const CachedProgram& program) const
 	{
 		const std::vector<std::byte> bytes = Serialize(program);
-		shader_cache::WriteFileAtomic(shader_cache::KeyPath(m_CacheDir, key), bytes);
+		WriteFileAtomic(KeyPath(m_CacheDir, key), bytes);
 	}
 }

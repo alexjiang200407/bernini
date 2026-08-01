@@ -32,9 +32,9 @@ when this doc disagrees, trust the source, then fix this doc.
   index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
   *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
   `MTL::BinaryArchive`. The split is why the shared code
-  ([shader_cache_util.h](libs/bgl/src/shadercache/shader_cache_util.h)) is only the salt, the key
-  hash, the `ReflectedLayout` encoding and the atomic write, while each backend owns a `ShaderCache`
-  of its own. A cache directory is written by one backend and is not portable between them — the
+  ([shadercache/util.h](libs/bgl/src/shadercache/util.h)) is only the salt, the key, the
+  `ReflectedLayout` encoding and the atomic write, while each backend owns a `ShaderCache` of its
+  own. A cache directory is written by one backend and is not portable between them — the
   salt differs, so the other backend misses every key rather than misreading one.
 
 * **Metal caches per stage because it compiles per stage.** A meshlet PSO is three separate Slang
@@ -71,8 +71,8 @@ when this doc disagrees, trust the source, then fix this doc.
 
 * **Invalidation is coarse, content-based, and automatic.** A single salt folds the shader compiler
   version, the compile options (matrix layout, `BERNINI_GPU_DEBUG`), the cache format version, and a
-  hash of the content of *every* shader source file. It is combined with the PSO's (module,
-  entry-point) pairs to form each program key. Any change to any of those flips every key, so a
+  hash of the content of *every* shader source file, chained through `core::hash_bytes`. It is
+  combined with the PSO's (module, entry-point) pairs to form each program key. Any change to any of those flips every key, so a
   stale entry is **missed and recompiled, never misread**. The pipeline library additionally
   self-invalidates against the driver and adapter — D3D12 rejects a foreign blob and Metal refuses
   an archive from another GPU, and both fall back to an empty library.
@@ -91,7 +91,8 @@ when this doc disagrees, trust the source, then fix this doc.
 
 | Piece | File | Role |
 |---|---|---|
-| `shader_cache_util` | [libs/bgl/src/shadercache/shader_cache_util.h](libs/bgl/src/shadercache/shader_cache_util.h) | Backend-agnostic core: salt, key hash, `ReflectedLayout` encoding, atomic write. |
+| `shader_cache::` util | [libs/bgl/src/shadercache/util.h](libs/bgl/src/shadercache/util.h) | Backend-agnostic core: salt, key, `ReflectedLayout` encoding, atomic write. |
+| `core::hash_bytes` | [libs/core/include/core/hash.h](libs/core/include/core/hash.h) | The FNV-1a chain the salt and every key are built from. |
 | `ShaderCache` (D3D12) | [libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.h) | Owns both layers; keying, load/store, PSO identity hashing. |
 | `ShaderCache` (Metal) | [libs/bgl/src/metal/shadercache/ShaderCache_metal.h](libs/bgl/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
 | `BuildPipelineLayout` | [libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
