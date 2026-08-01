@@ -201,7 +201,10 @@ def cmd_reply(args):
     try:
         issue = gh.api(f"repos/{slug}/issues/comments/{args.id}")
     except gh.GhError:
-        sys.exit(f"error: no comment {args.id} on {slug}; list them with `just pr comments <n>`")
+        sys.exit(f"error: {args.id} is not a comment on {slug}. If it came from the `reviews` list,\n"
+                 "       it is a review summary -- GitHub gives those no thread to reply in, so the\n"
+                 "       conversation is the right place: `just pr comment <n> --body-file <file>`.\n"
+                 "       Otherwise list the ids again with `just pr comments <n>`.")
 
     pr = int(issue["issue_url"].rsplit("/", 1)[-1])
     posted = gh.api(f"repos/{slug}/issues/{pr}/comments", token=token, method="POST",
