@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Every write to a pull request, made the way the project requires.
 
-An agent asked to "open the PR as the bot and answer each comment in its thread"
-gets it right most of the time, which is not the same as always. This script is
-the rule made mechanical: it mints the morgana-coding-agent token itself, so a PR
-body is never posted under the developer's name, and it decides in-thread versus
-top-level by looking the comment up rather than by being told, so an inline
-review comment cannot be answered in the wrong place.
+An agent asked to "answer each comment in its thread, as the bot" gets it right
+most of the time, which is not the same as always. This script is the rule made
+mechanical: it decides in-thread versus top-level by looking the comment up
+rather than by being told, and it picks the actor by what is being written
+rather than by being reminded.
+
+The split is deliberate. A **comment** is the agent speaking, and goes up as the
+morgana-coding-agent bot. The **pull request** is opened by the developer,
+because GitHub rewrites a squash-merged commit's author to the pull request's
+author -- a bot-authored PR would sign every line of `master` as the bot's, and
+`bcp-feature` squashes a second time on the way in, so no later merge can undo
+it. `--as-bot` and `--as-me` override either default.
 
     pr.py create --base master --body-file body.md   # '# title' heads the file
     pr.py comments 184                     # every review, thread and comment, with ids
     pr.py reply 2154783 --body "..."       # routed by what the id turns out to be
     pr.py comment 184 --body-file s.md     # top-level summary; refuses while a thread is open
-    pr.py edit 184 --body-file body.md     # rewrite the body, still as the bot
+    pr.py edit 184 --body-file body.md     # rewrite the title or body
     pr.py check 184                        # author, and whether anything is unanswered
     pr.py unwatch 184                      # drop it from the pending-watch list
 
@@ -65,10 +71,19 @@ def add_body_args(parser, required=True):
     group.add_argument("--body-file", help="file holding the body ('-' for stdin)")
 
 
-def token_or_die(as_me):
-    """The bot token, or None with --as-me. Refuses to post as the developer by accident."""
-    if as_me:
-        print("posting as the logged-in account (--as-me)", file=sys.stderr)
+def actor(args, bot_by_default):
+    """The token to post with: the bot's, or None for the logged-in account.
+
+    The two halves of a pull request want different actors. A **comment** is the
+    agent talking, and posts as the bot. The **pull request itself** is authored
+    by the developer, because a squash merge rewrites the resulting commit's
+    author to the PR's author -- a bot-authored PR would put the bot's name on
+    every line of `master`, and `bcp-feature` squashes a second time on the way
+    in, so nothing downstream can recover the identity.
+    """
+    if args.as_bot and args.as_me:
+        sys.exit("error: --as-me and --as-bot contradict each other")
+    if args.as_me or (not bot_by_default and not args.as_bot):
         return None
     token = gh.bot_token()
     if not token:
@@ -99,16 +114,17 @@ def cmd_create(args):
                  "       or pass --title (which needs `python scripts/pr.py`, since `just`\n"
                  "       joins a recipe's arguments on spaces).")
 
-    token = token_or_die(args.as_me)
+    token = actor(args, bot_by_default=False)
     fields = {"title": title, "head": head, "base": args.base, "body": body}
     try:
         pr = gh.api(f"repos/{slug}/pulls", token=token, method="POST", fields=fields,
                     raw_fields={"draft": "true" if args.draft else "false"})
     except gh.GhError as e:
         if "403" in str(e) or "Resource not accessible" in str(e):
-            sys.exit(f"error: the bot may not create pull requests here ({e}).\n"
-                     "       Grant the App 'Pull requests: Read and write' and approve the\n"
-                     "       pending permission on its installation -- see docs/ai-coding.md.")
+            sys.exit(f"error: not allowed to open a pull request here ({e}).\n"
+                     "       With --as-bot, grant the App 'Pull requests: Read and write' and\n"
+                     "       approve the pending permission on its installation; otherwise check\n"
+                     "       `gh auth status` -- see docs/ai-coding.md.")
         sys.exit(f"error: {e}")
 
     watchlist.arm(pr["number"], pr["html_url"], pr.get("created_at"))
@@ -180,7 +196,7 @@ def cmd_comments(args):
 def cmd_reply(args):
     """Answers comment `id` wherever it lives -- the id decides, not the caller."""
     slug = gh.repo_slug(args.repo)
-    token = token_or_die(args.as_me)
+    token = actor(args, bot_by_default=True)
     body = read_body(args)
 
     try:
@@ -231,7 +247,7 @@ def cmd_comment(args):
                  f"       Answer each with `just pr reply <id> --body-file <f>` first "
                  f"(--force overrides).")
 
-    token = token_or_die(args.as_me)
+    token = actor(args, bot_by_default=True)
     posted = gh.api(f"repos/{slug}/issues/{args.pr}/comments", token=token, method="POST",
                     fields={"body": read_body(args)})
     watchlist.arm(args.pr, posted.get("html_url", ""), posted.get("created_at"))
@@ -240,7 +256,7 @@ def cmd_comment(args):
 
 def cmd_edit(args):
     slug = gh.repo_slug(args.repo)
-    token = token_or_die(args.as_me)
+    token = actor(args, bot_by_default=False)
     fields = {}
     if args.body or args.body_file:
         heading, body = split_title(read_body(args))
@@ -259,9 +275,10 @@ def cmd_check(args):
     slug = gh.repo_slug(args.repo)
     data = collect(slug, args.pr)
     problems = []
-    if (data["author"] or "").lower() != gh.BOT_LOGIN.lower():
-        problems.append(f"authored by {data['author']}, expected {gh.BOT_LOGIN} "
-                        f"(open it with `just pr create`)")
+    if (data["author"] or "").lower() == gh.BOT_LOGIN.lower():
+        problems.append(f"authored by {gh.BOT_LOGIN}: a squash merge would put the bot's name "
+                        f"on every line it lands. Merge this one with rebase, and open the "
+                        f"next with `just pr create` (which posts as you)")
     for t in unanswered(data):
         problems.append(f"thread {t['id']} ({t['path']}:{t['line']}, {t['author']}) has no reply")
 
@@ -270,7 +287,8 @@ def cmd_check(args):
     if problems:
         print(f"{len(problems)} problem(s)")
         sys.exit(2)
-    print(f"PR #{args.pr}: authored by the bot, {len(data['threads'])} thread(s) all answered")
+    print(f"PR #{args.pr}: authored by {data['author']}, "
+          f"{len(data['threads'])} thread(s) all answered")
 
 
 def cmd_unwatch(args):
@@ -288,12 +306,22 @@ def cmd_token(_args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo", help="owner/name (default: the repo of the cwd)")
-    parser.add_argument("--as-me", action="store_true",
-                        help="post as the logged-in account instead of the bot")
+
+    # On the subcommands rather than ahead of them: `just pr create ... --as-bot` is
+    # the order anyone writes, and argparse rejects a top-level flag placed there.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--repo", help="owner/name (default: the repo of the cwd)")
+    common.add_argument("--as-me", action="store_true",
+                        help="act as the logged-in account (the default for create/edit)")
+    common.add_argument("--as-bot", action="store_true",
+                        help="act as the bot (the default for reply/comment)")
+
     subs = parser.add_subparsers(dest="cmd", required=True)
 
-    p = subs.add_parser("create", help="open a PR, authored by the bot")
+    def add(name, **kw):
+        return subs.add_parser(name, parents=[common], **kw)
+
+    p = add("create", help="open a PR from the current branch, authored by you")
     p.add_argument("--base", required=True, help="branch to merge into")
     p.add_argument("--title", help="default: the body's leading '# title' heading")
     p.add_argument("--head", help="branch to merge from (default: the current one)")
@@ -301,36 +329,36 @@ def main():
     add_body_args(p)
     p.set_defaults(func=cmd_create)
 
-    p = subs.add_parser("comments", help="every review, thread and comment, with ids")
+    p = add("comments", help="every review, thread and comment, with ids")
     p.add_argument("pr", type=int)
     p.set_defaults(func=cmd_comments)
 
-    p = subs.add_parser("reply", help="answer a comment where it was made")
+    p = add("reply", help="answer a comment where it was made")
     p.add_argument("id", type=int, help="comment id from `pr.py comments`")
     add_body_args(p)
     p.set_defaults(func=cmd_reply)
 
-    p = subs.add_parser("comment", help="top-level summary, once every thread is answered")
+    p = add("comment", help="top-level summary, once every thread is answered")
     p.add_argument("pr", type=int)
     p.add_argument("--force", action="store_true", help="post with threads still unanswered")
     add_body_args(p)
     p.set_defaults(func=cmd_comment)
 
-    p = subs.add_parser("edit", help="rewrite the title or body")
+    p = add("edit", help="rewrite the title or body")
     p.add_argument("pr", type=int)
     p.add_argument("--title")
     add_body_args(p, required=False)
     p.set_defaults(func=cmd_edit)
 
-    p = subs.add_parser("check", help="author and unanswered threads; exits 2 on problems")
+    p = add("check", help="author and unanswered threads; exits 2 on problems")
     p.add_argument("pr", type=int)
     p.set_defaults(func=cmd_check)
 
-    p = subs.add_parser("unwatch", help="drop a PR from the pending-watch list")
+    p = add("unwatch", help="drop a PR from the pending-watch list")
     p.add_argument("pr", type=int)
     p.set_defaults(func=cmd_unwatch)
 
-    subs.add_parser("token", help="print a one-hour bot token").set_defaults(func=cmd_token)
+    add("token", help="print a one-hour bot token").set_defaults(func=cmd_token)
 
     args = parser.parse_args()
     try:

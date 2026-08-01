@@ -125,7 +125,7 @@ just idl                          # regenerate the IDL C++ headers and Slang cop
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language, tests counted separately
-just pr <cmd> ...                 # the only way to write to a PR: create/comments/reply/comment/edit/check. Posts as the bot, routes replies into their thread
+just pr <cmd> ...                 # the only way to write to a PR: create/comments/reply/comment/edit/check. Opens PRs as you, comments as the bot, routes replies into their thread
 just watch-pr <pr>                # block until the PR gets a submitted review, new comments, or merges; prints one JSON event. --interval, --timeout, --once, --since
 ```
 

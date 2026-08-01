@@ -20,10 +20,11 @@ import sys
 
 SEPARATORS = re.compile(r"&&|\|\||[;|\n]")
 
-USE_CREATE = ("A pull request is opened by the morgana-coding-agent bot, never under your own\n"
-              "account. Write the body to a file, then:\n"
-              "    just pr create --base <branch> --title \"...\" --body-file <file>\n"
-              "It mints the bot token, opens the PR, and arms the pending-watch list.")
+USE_CREATE = ("Open the pull request through the script, so the body's title is lifted from the\n"
+              "file and the watch is armed. Write the body to a file, headed by '# the title':\n"
+              "    just pr create --base <branch> --body-file <file>\n"
+              "It opens the PR as you, not as the bot -- a squash merge takes the commit's author\n"
+              "from the PR's author, so a bot-authored PR signs every line of master as the bot's.")
 
 USE_REPLY = ("Review feedback is answered where it was left. Get the ids with\n"
              "    just pr comments <n>\n"

@@ -177,9 +177,9 @@ just pr create --base feat/<name> --body-file <file>
 
 `--base` is not optional, and it is not defaulted: name the feature branch or the PR proposes the
 work to `master`. The body goes in a file, headed by `# type(scope): the title` — the title is lifted
-from that line, since `just` joins a recipe's arguments on spaces. `just pr create` opens it as the
-bot, so the description reads as the agent's rather than the user's, and it arms the watch that § 4
-must clear.
+from that line, since `just` joins a recipe's arguments on spaces. `just pr create` opens the PR as
+**you**, not as the bot -- a squash merge takes the commit's author from the PR's author, and a
+feature squashes twice -- and it arms the watch that § 4 must clear.
 
 The body says what changed, **why**, how it was verified (name the suites; say whether GPU validation
 ran), which task of the plan it is, and what still has to land. A reviewer must be able to tell a

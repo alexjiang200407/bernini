@@ -145,8 +145,10 @@ git push -u origin HEAD
 just pr create --base master --body-file <file>
 ```
 
-`just pr` posts as the bot, so the description is the agent's rather than the user's; raw
-`gh pr create` is blocked. It prints the PR number and arms the watch — go straight to
+`just pr create` opens the PR as **you**: GitHub takes a squash-merged commit's author from the
+PR's author, so a bot-authored PR would sign every line of `master` as the bot's. Comments are the
+bot's; the pull request is yours. Raw `gh pr create` is blocked. It prints the PR number and arms
+the watch — go straight to
 [bcp-feature § 4](.claude/skills/bcp-feature/SKILL.md) and start `just watch-pr <n>` as the last
 action of the turn. The turn cannot end until you do.
 

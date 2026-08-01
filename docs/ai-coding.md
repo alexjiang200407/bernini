@@ -94,19 +94,35 @@ Which account a comment lands under, and whether it lands in the reviewer's thre
 of the conversation, are decisions with one right answer every time. They are therefore not left to
 the agent. [`scripts/pr.py`](../scripts/pr.py) is the only way it writes to a pull request:
 
-| | |
-| --- | --- |
-| `just pr create --base B --body-file F` | opens the PR **as the bot**, so the description is the bot's; arms the pending-watch list |
-| `just pr comments <n>` | every review, thread and comment, each with the id to answer and whether it has been answered |
-| `just pr reply <comment-id> --body-file F` | answers **where the comment was made** — the id is looked up, and an inline comment gets a threaded reply |
-| `just pr comment <n> --body-file F` | a top-level summary; refuses while any thread is still unanswered |
-| `just pr edit <n> --body-file F` | rewrites the body, still as the bot |
-| `just pr check <n>` | is it bot-authored, is anything unanswered; exits 2 if not |
+| | | acts as |
+| --- | --- | --- |
+| `just pr create --base B --body-file F` | opens the PR and arms the pending-watch list | **you** |
+| `just pr edit <n> --body-file F` | rewrites the title or body | **you** |
+| `just pr comments <n>` | every review, thread and comment, each with the id to answer and whether it has been answered | — |
+| `just pr reply <comment-id> --body-file F` | answers **where the comment was made** — the id is looked up, and an inline comment gets a threaded reply | **the bot** |
+| `just pr comment <n> --body-file F` | a top-level summary; refuses while any thread is still unanswered | **the bot** |
+| `just pr check <n>` | author, and whether anything is unanswered; exits 2 on a problem | — |
 
 The title heads the body file as `# one-line title` and is lifted out of the body. It travels in the
 file because `just` joins a recipe's arguments on spaces, so a `--title` containing one cannot survive
-the trip; the flag still works when `scripts/pr.py` is called directly. Without a bot key, `just pr`
-**refuses** rather than quietly posting as the developer — `--as-me` is the deliberate override.
+the trip; the flag still works when `scripts/pr.py` is called directly.
+
+### Why the bot comments but does not open
+
+A comment is the agent speaking, and it should not wear the developer's face. A **pull request is
+different**, because GitHub takes a squash-merged commit's author from the *pull request's* author —
+not from the commits on the branch, which it discards. So a bot-authored PR does not merely look
+machine-made: it signs every line it lands on `master` as the bot's, and `git blame`, `git shortlog`
+and the repository's contributor list all follow the author. `bcp-feature` squashes twice — task PR
+into `feat/<name>`, then the feature into `master` — so the identity is rewritten a level down, where
+no later rebase can recover it.
+
+`just pr check` therefore treats a bot-authored PR as a **problem**, and says to merge that one with
+rebase rather than squash. `--as-bot` and `--as-me` override either default when you mean to.
+
+The `Co-authored-by` trailer is what credits the bot instead, and it costs the developer nothing:
+GitHub's contributor statistics count a co-author's additions in full, alongside the author's, rather
+than splitting them.
 
 Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) close the gaps around it:
 
