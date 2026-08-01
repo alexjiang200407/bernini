@@ -170,8 +170,9 @@ namespace game
 				" is not supported by the renderer");
 
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
-		// cannot be sampled, so the material falls back to the routes that produced it.
-		const bool loose = assetlib::bakeIsStale(material, m_DataRoot);
+		// cannot be sampled, so the material falls back to the routes that produced it -- when those
+		// are still there to fall back to.
+		const bool loose = assetlib::drawsLoose(material, m_DataRoot);
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
 		const std::vector<std::string> paths = MaterialTextures(material, loose);

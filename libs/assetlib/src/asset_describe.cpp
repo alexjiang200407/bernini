@@ -296,11 +296,10 @@ namespace assetlib
 
 		if (!dataRoot.empty())
 		{
-			const bool stale = bakeIsStale(material, dataRoot);
 			out += std::format(
 				"\n  bake              {}\n  draws from        {}\n",
-				stale ? "STALE" : "up to date",
-				stale ? "routes (loose)" : "baked triplet");
+				bakeIsStale(material, dataRoot) ? "STALE" : "up to date",
+				drawsLoose(material, dataRoot) ? "routes (loose)" : "baked triplet");
 		}
 
 		out += std::format(

@@ -222,6 +222,20 @@ namespace assetlib
 			}
 			return true;
 		}
+
+		// Whether every source the routes name is still on disk, i.e. whether loose is a representation
+		// this material could actually sample.
+		bool
+		routesAreOnDisk(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		{
+			for (size_t i = 0; i < c_LooseChannelCount; ++i)
+			{
+				const std::string& texture = pbr.routes[i].texture;
+				if (!texture.empty() && stampOf(dataRoot / texture).size == 0)
+					return false;
+			}
+			return true;
+		}
 	}
 
 	bool
@@ -255,5 +269,12 @@ namespace assetlib
 		// Routed and every source matches -- but a bake that produced no base colour never ran, and a
 		// map deleted since leaves the triplet naming a file that is not there to sample.
 		return pbr.baseColorTexture.empty() || !tripletIsOnDisk(pbr, dataRoot);
+	}
+
+	bool
+	drawsLoose(const BMaterial& material, const std::filesystem::path& dataRoot)
+	{
+		// bakeIsStale is false for every non-PBR model, so `pbr` is only read once it means something.
+		return bakeIsStale(material, dataRoot) && routesAreOnDisk(material.pbr, dataRoot);
 	}
 }
