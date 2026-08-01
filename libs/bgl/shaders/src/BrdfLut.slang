@@ -7,7 +7,7 @@
 struct VSOut
 {
     float4 position : SV_Position;
-    float2 uv : TEXCOORD0;
+    float2 uv : TEXCOORD;
 };
 
 // Enough that the estimate is converged at the resolution written; this runs once per device.
