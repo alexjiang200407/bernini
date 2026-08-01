@@ -227,35 +227,6 @@
       }
     },
     {
-      "name": "macos-clang-debug",
-      "displayName": "macOS Clang Debug ninja - no backend (core + assetlib)",
-      "binaryDir": "${sourceDir}/build/macos-debug",
-      "inherits": [
-        "vcpkg",
-        "macos",
-        "clang",
-        "debug"
-      ],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "BERNINI_BUILD_EXAMPLES": "OFF"
-      }
-    },
-    {
-      "name": "macos-clang-release",
-      "displayName": "macOS Clang Release ninja - no backend (core + assetlib)",
-      "binaryDir": "${sourceDir}/build/macos-release",
-      "inherits": [
-        "vcpkg",
-        "macos",
-        "clang",
-        "release"
-      ],
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
       "name": "macos-clang-metal-debug",
       "displayName": "macOS Clang Debug ninja - Metal",
       "binaryDir": "${sourceDir}/build/macos-metal-debug",
@@ -324,14 +295,6 @@
     {
       "name": "windows-clang-dx12-release",
       "configurePreset": "windows-clang-dx12-release"
-    },
-    {
-      "name": "macos-clang-debug",
-      "configurePreset": "macos-clang-debug"
-    },
-    {
-      "name": "macos-clang-release",
-      "configurePreset": "macos-clang-release"
     },
     {
       "name": "macos-clang-metal-debug",

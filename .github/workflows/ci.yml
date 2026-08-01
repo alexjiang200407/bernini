@@ -103,13 +103,8 @@ jobs:
             vcpkg-arm64-osx-${{ env.ImageVersion }}-
             vcpkg-arm64-osx-
 
-      # The preset sets no RENDERER_BACKEND, so libs/bgl stops at bgl_objects and the root
-      # CMakeLists skips gamelib, the editor and the examples. What is left -- core and assetlib --
-      # is what keeps them building under a non-MSVC compiler on a non-Windows host.
-      - name: Build
-        run: python scripts/build.py --preset macos-clang-debug
-
-      # The same checkout and vcpkg cache, configured a second time with a backend -- far cheaper
-      # than a second macOS runner, which bills at 10x the Linux rate.
+      # What keeps core and assetlib building under a non-MSVC compiler on a non-Windows host.
+      # It builds them with a backend rather than without one: the backend-free macOS preset this
+      # used to run first is gone.
       - name: Build (Metal)
         run: python scripts/build.py --preset macos-clang-metal-debug
