@@ -38,17 +38,15 @@ namespace
 		return MakeMaterialNodeRegistry(nullptr, nullptr);
 	}
 
-	// An absolute path spelled the way the host means it. QUrl::fromLocalFile round-trips through
-	// toLocalFile only for a path that is already absolute for the platform, so a Windows drive
-	// letter comes back with a leading slash everywhere else.
+	// QUrl::fromLocalFile round-trips through toLocalFile only for a path that is already absolute
+	// the way the host means it -- a Windows drive letter comes back with a leading slash anywhere
+	// else. Built from current_path() so it is absolute on either platform without naming one.
 	QString
 	DataPath(const QString& tail)
 	{
-#if defined(_WIN32)
-		return QStringLiteral("C:/Data/") + tail;
-#else
-		return QStringLiteral("/Data/") + tail;
-#endif
+		const std::filesystem::path path =
+			std::filesystem::current_path() / "Data" / tail.toStdString();
+		return QString::fromStdString(path.generic_string());
 	}
 
 	/** A drop payload carrying one local file, as the content explorer produces. */

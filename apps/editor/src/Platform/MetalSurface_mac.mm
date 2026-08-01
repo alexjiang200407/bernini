@@ -12,6 +12,8 @@ namespace platform
 		if (nsView == nil)
 			return nullptr;
 
+		// No ARC in this build, so the autoreleased layer would die at the next drain -- setLayer:
+		// retains it, which is what keeps the returned pointer good for as long as the view lives.
 		CAMetalLayer* layer = [CAMetalLayer layer];
 
 		// Without this the layer renders at point resolution and the drawable comes back smaller
