@@ -100,8 +100,7 @@ namespace bgl
 	public:
 		explicit Graphics(const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			auto     libraryPath = core::file::get_library_path();
-			fs::path logPath     = libraryPath.parent_path() / "bgl.log";
+			fs::path logPath = core::file::get_executable_path().parent_path() / "bgl.log";
 
 			static bool g_LogTruncated = false;
 			const bool  truncate       = !g_LogTruncated;

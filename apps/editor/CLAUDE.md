@@ -7,7 +7,7 @@ editor imports it (via assetlib) and converts it into the game-ready format.
 - CMake targets: `editor_lib` (everything), `editor` (just `main.cpp`), `editor_tests`.
   Built **automatically only when Qt6 is found** — the root `CMakeLists.txt` probes
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.
-- Windows-only for now.
+- Builds on Windows (D3D12) and macOS (Metal). macOS needs Qt on `CMAKE_PREFIX_PATH`.
 - CMake: `./CMakeLists.txt`
 - Links `gamelib` as well as `bgl` and `assetlib`. `gamelib` is the seam that owns "load this
   asset into a scene", and its `AssetManager` holds the **only** implementation of the

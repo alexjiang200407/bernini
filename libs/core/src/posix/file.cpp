@@ -1,6 +1,7 @@
 #include <core/file/file.h>
 
 #include <dlfcn.h>
+#include <mach-o/dyld.h>
 
 namespace core::file
 {
@@ -17,5 +18,18 @@ namespace core::file
 			return {};
 
 		return std::filesystem::path{ info.dli_fname };
+	}
+
+	std::filesystem::path
+	get_executable_path()
+	{
+		uint32_t size = 0;
+		_NSGetExecutablePath(nullptr, &size);
+
+		std::string buffer(size, '\0');
+		if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+			return {};
+
+		return std::filesystem::path{ buffer.c_str() };
 	}
 }
