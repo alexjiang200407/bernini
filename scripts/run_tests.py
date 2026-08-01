@@ -50,64 +50,6 @@ import util.config as cfg
 # What makes a target a test suite.
 SUITE_SUFFIX = "_tests"
 
-# The tests a Metal build skips, and the suite they belong to. The backend does not implement the
-# whole RHI yet, so these would report its remaining scope as failures. Everything not named here
-# runs, which is what keeps a newly added test covered on Metal by default. Deleted once it empties.
-METAL_UNSUPPORTED = os.path.join(ct.REPO_ROOT, "libs", "bgl", "tests", "metal_unsupported.txt")
-METAL_SUITE = "bgl_tests"
-
-
-def metal_build(build_dir):
-    """True when this build dir was configured with RENDERER_BACKEND=METAL."""
-    cache = os.path.join(build_dir, "CMakeCache.txt")
-    if not os.path.isfile(cache):
-        return False
-    with open(cache, encoding="utf-8", errors="replace") as f:
-        return any(line.startswith("RENDERER_BACKEND:") and line.rstrip().endswith("METAL")
-                   for line in f)
-
-
-def show_path(path):
-    """`path` relative to the repo when it is inside it, else as given."""
-    rel = os.path.relpath(path, ct.REPO_ROOT)
-    return path if rel.startswith(os.pardir) else rel
-
-
-def read_test_names(path):
-    """The test names in a Catch2 --input-file, without its `#` comments or blank lines."""
-    with open(path, encoding="utf-8") as f:
-        return [line.rstrip("\n") for line in f
-                if line.strip() and not line.lstrip().startswith("#")]
-
-
-def list_test_names(exe):
-    """Every test case name `exe` defines, or None if they cannot be read."""
-    try:
-        out = subprocess.run(
-            [exe, "--list-tests", "--verbosity", "quiet"], cwd=os.path.dirname(exe),
-            capture_output=True, text=True, timeout=120).stdout
-    except (OSError, subprocess.SubprocessError):
-        return None
-
-    # --verbosity quiet prints bare names, one per line. The default listing wraps a long name to
-    # the terminal width, which silently splits it into two entries that match no test.
-    names = [line for line in out.splitlines() if line.strip()]
-    return names or None
-
-
-def write_filtered_list(build_dir, names):
-    """Write `names` as a Catch2 --input-file under `build_dir`, and return its path.
-
-    A file rather than argv, because the shell would split on the spaces every test name has. The
-    file's lines are still test *specs*, not literals -- Catch2 parses `,` as a spec separator and
-    `[` as a tag, and rejects the result as an invalid filter -- so both are backslash-escaped.
-    """
-    path = os.path.join(build_dir, "metal_selected.txt")
-    escaped = [re.sub(r"([\\,\[\]])", r"\\\1", name) for name in names]
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(escaped) + "\n")
-    return path
-
 
 # Shards per suite. Each one is a process holding a graphics device of its own, so this trades
 # memory for wall-clock; past a handful the suites stop scaling and start contending.
@@ -279,33 +221,6 @@ def main():
             print(name)
         return 0
 
-    # A forwarded filter is the caller naming what to run, so it wins over the skip list.
-    metal_list = None
-    if (not forward
-            and os.path.isfile(METAL_UNSUPPORTED)
-            and any(metal_build(d) for d in build_dirs)
-            and METAL_SUITE in chosen):
-        skip = set(read_test_names(METAL_UNSUPPORTED))
-        source = show_path(METAL_UNSUPPORTED)
-
-        all_names = list_test_names(chosen[METAL_SUITE])
-        if all_names is None:
-            print(f"error: could not list the tests in {chosen[METAL_SUITE]}", file=sys.stderr)
-            return 1
-
-        # A name that matches nothing is a typo or a rename, and would otherwise silently stop
-        # skipping what it was written for.
-        unknown = skip - set(all_names)
-        if unknown:
-            print(f"error: named in {source} but not in {METAL_SUITE}: "
-                  + ", ".join(sorted(unknown)), file=sys.stderr)
-            return 1
-
-        selected = [n for n in all_names if n not in skip]
-        metal_list = write_filtered_list(build_dirs[0], selected)
-        print(f"Metal build: skipping {len(skip)} of {len(all_names)} tests in {METAL_SUITE} "
-              f"({source}); running {len(selected)}")
-
     results = []
     for name, exe in chosen.items():
         if not os.path.isfile(exe):
@@ -316,8 +231,6 @@ def main():
             continue
 
         suite_forward = forward
-        if metal_list and name == METAL_SUITE:
-            suite_forward = ["--input-file", metal_list]
 
         jobs = max(1, args.jobs)
         if jobs > 1 and not supports_sharding(exe):

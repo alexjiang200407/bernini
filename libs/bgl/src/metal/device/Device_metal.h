@@ -7,6 +7,8 @@
 
 namespace bgl
 {
+	class ShaderCache;
+
 	/**
 	 * The RHI device over an MTL::Device -- the sole factory for queues, allocators, and (later)
 	 * resources and pipelines. Only the command-submission factories are live in this slice; the
@@ -15,7 +17,10 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		explicit Device(MTL::Device* device);
+		Device(MTL::Device* device, const std::string& shaderCacheDir);
+
+		// Out of line: m_ShaderCache holds an incomplete type here.
+		~Device() override;
 
 		[[nodiscard]] MTL::Device*
 		GetMTLDevice() const noexcept
@@ -66,5 +71,6 @@ namespace bgl
 		NS::SharedPtr<MTL::Device>           m_Device;
 		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
 		Slang::ComPtr<slang::ISession>       m_SlangSession;
+		std::unique_ptr<ShaderCache>         m_ShaderCache;
 	};
 }

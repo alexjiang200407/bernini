@@ -2,6 +2,12 @@
 
 namespace bgl
 {
+	NS::String*
+	Str(const std::string& s) noexcept
+	{
+		return NS::String::string(s.c_str(), NS::UTF8StringEncoding);
+	}
+
 	MTL::PixelFormat
 	ConvertFormat(Format format) noexcept
 	{

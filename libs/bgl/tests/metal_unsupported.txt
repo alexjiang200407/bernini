@@ -1,9 +1,0 @@
-# Tests the Metal backend cannot pass yet, and which a Metal build therefore does not run.
-# Everything else in bgl_tests runs -- so a test added tomorrow is covered on Metal by default, and
-# only a deliberate entry here opts it out.
-#
-# This list shrinks. Each task removes what it makes pass, and the file is deleted when it empties.
-# A name here says nothing about the test: all of them are backend-agnostic, and every one passes on
-# D3D12 today. What it records is how far this backend has got.
-GraphicsError on frame protocol misuse
-Shader cache is populated cold and reused warm without recompiling

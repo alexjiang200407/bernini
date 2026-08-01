@@ -9,6 +9,8 @@
 
 namespace bgl
 {
+	class ShaderCache;
+
 	enum class MeshletStage
 	{
 		kObject,
@@ -29,6 +31,7 @@ namespace bgl
 		MeshletPipeline(
 			MTL::Device*               device,
 			slang::ISession*           session,
+			ShaderCache*               shaderCache,
 			const MeshletPipelineDesc& desc);
 
 		const MeshletPipelineDesc&
