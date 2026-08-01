@@ -479,11 +479,11 @@ namespace bgl
 			stages |= MTL::RenderStageObject;
 
 		const auto bindToStages = [&](std::string_view name, const void* bytes, size_t size) {
-			if (const uint32_t* idx = pipeline->GetStageBinding(MeshletStage::kMesh, name))
+			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kMesh, name))
 				enc->setMeshBytes(bytes, size, *idx);
-			if (const uint32_t* idx = pipeline->GetStageBinding(MeshletStage::kFragment, name))
+			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kFragment, name))
 				enc->setFragmentBytes(bytes, size, *idx);
-			if (const uint32_t* idx = pipeline->GetStageBinding(MeshletStage::kObject, name);
+			if (const uint32_t* idx = pipeline->GetStageBinding(ShaderStage::kObject, name);
 			    idx != nullptr && hasObject)
 				enc->setObjectBytes(bytes, size, *idx);
 		};
