@@ -214,18 +214,17 @@ reviews fire it; a reviewer's pending draft stays invisible until they send it.
 | `closed` | stop and ask — the user rejected something |
 | `timeout` (exit 3) | say you are still waiting, restart the watcher |
 
-**Restart with `--since`** set to the newest `submittedAt`/`createdAt` you acted on:
+**Just restart it.** The baseline is not yours to compute:
 
 ```bash
-just watch-pr <n> --since 2026-07-29T13:13:22Z
+just watch-pr <n>
 ```
 
-Nothing watches the PR while you revise, and a plain restart folds anything that arrived meanwhile
-into its baseline — never reported, never acted on.
-
-`--since` sets the *baseline* only: anything that arrives after the watcher starts is new, including
-your own reply. Post the reply first and start the watcher after it, or the watcher fires on it and
-the turn is spent reading yourself.
+`just pr` records the timestamp GitHub returned for everything it posts, and the watcher starts from
+that, so your own reply is already behind the baseline and anything that arrived while you were
+revising is still ahead of it. `--since` remains for the rare case of overriding that by hand — a
+timestamp guessed a second early makes the watcher fire on your own reply and spends the turn
+reading yourself.
 
 **Answer an inline comment inside its thread.** An event whose `path` is set came from a review
 thread anchored to a file and line, and it carries the `replyTo` id to answer under:

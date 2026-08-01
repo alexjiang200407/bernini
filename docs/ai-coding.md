@@ -118,6 +118,11 @@ Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) clo
   clears it once the PR merges or closes, and re-arms it on a review or a comment — which is exactly
   when the PR is waiting on a reply again. `just pr unwatch <n>` releases one deliberately.
 
+Each entry also carries the timestamp of the last thing posted, which is what `just watch-pr` uses as
+its baseline when `--since` is not given. A hand-written timestamp two seconds early makes the watcher
+fire on the agent's own reply and spend the turn reading itself, so the time comes from GitHub's
+response rather than from anyone's judgement.
+
 The list lives in `.git/bernini-pr-watch.json` and is keyed by session, so a later session never
 inherits a block for a PR it knows nothing about.
 
