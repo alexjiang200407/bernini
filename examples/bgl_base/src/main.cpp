@@ -3,6 +3,7 @@
 #include <CLI/CLI.hpp>
 #include <DemoWindow.h>
 #include <FlyCamera.h>
+#include <SDL3/SDL.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
@@ -14,11 +15,8 @@
 #include <gamelib/AssetManager.h>
 #include <stdexcept>
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
-int APIENTRY
-wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
+int
+main(int argc, char** argv)
 {
 	try
 	{
@@ -59,7 +57,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 			app.add_option("--frames", frames, "Frames to render in --headless mode")
 				->check(CLI::PositiveNumber);
 
-			CLI11_PARSE(app, __argc, __wargv);
+			CLI11_PARSE(app, argc, argv);
 
 			// Read before `app` goes out of scope; the option belongs to it.
 			exposureGiven = exposureOpt->count() > 0;
@@ -231,7 +229,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 	}
 	catch (const std::runtime_error& e)
 	{
-		MessageBoxA(nullptr, e.what(), "Unhandled Error", MB_OK | MB_ICONERROR);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Bernini - Fatal Error", e.what(), nullptr);
 	}
 
 	return 0;

@@ -8,7 +8,7 @@ file(GLOB_RECURSE BGL_TWO_WINDOWS_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
-add_executable(bgl_two_windows WIN32
+add_executable(bgl_two_windows
     ${BGL_TWO_WINDOWS_SOURCES}
     ${BGL_TWO_WINDOWS_HEADERS}
 )
