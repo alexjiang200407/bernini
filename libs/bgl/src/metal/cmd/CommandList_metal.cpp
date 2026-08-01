@@ -1,5 +1,4 @@
 #include "cmd/CommandList_metal.h"
-#include "MetalErrorChecker.h"
 
 #include "cmd/CommandQueue_metal.h"
 #include "pipeline/ComputeKernel.h"
@@ -239,9 +238,9 @@ namespace bgl
 		// A private buffer cannot be written from the CPU; stage the bytes in a shared buffer and blit
 		// them across on the GPU timeline, so the write orders ahead of a later readback copy. The
 		// command buffer retains the staging buffer until it completes, so it needs no separate owner.
-		auto staging = NS::TransferPtr(MetalCheck(
-			m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared),
-			"upload staging buffer"));
+		auto staging =
+			NS::TransferPtr(m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared));
+		gassert(staging.get() != nullptr, "Metal upload staging buffer allocation failed");
 
 		BlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
 	}
@@ -394,9 +393,11 @@ namespace bgl
 				sub.rowPitch != 0 ? sub.rowPitch : rowBlocks * format.bytesPerBlock;
 			const uint64_t byteSize = rowPitch * colBlocks;
 
-			auto staging = NS::TransferPtr(MetalCheck(
-				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared),
-				"texture upload staging buffer"));
+			auto staging = NS::TransferPtr(
+				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));
+			gassert(
+				staging.get() != nullptr,
+				"Metal texture upload staging buffer allocation failed");
 
 			blit->copyFromBuffer(
 				staging.get(),

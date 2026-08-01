@@ -13,27 +13,41 @@ namespace bgl
 	[[nodiscard]] std::string
 	GetErrorDescription(const NS::Error* error);
 
-	[[noreturn]] void
-	ReportMetalFailure(std::string_view what, const NS::Error* error);
-
 	/**
-	 * Returns `object`, or terminates naming `what` and whatever the error says.
+	 * Holds the NSError a Metal call writes, so a call site reads like its D3D12 and Slang
+	 * counterparts. Metal reports failure by returning nil, so the returned object is the status:
 	 *
-	 * The counterpart of `d3d12ErrChecker`, keyed on the returned pointer rather than on a status:
-	 * D3D12 hands back an HRESULT alongside the object, while a Metal creation call reports failure
-	 * by returning nil and most take no error out-param at all. So the null check *is* the whole
-	 * contract, and an unchecked one surfaces as a null dereference somewhere downstream instead.
+	 *     MetalErrorChecker errChecker;
+	 *     auto library = NS::TransferPtr(device->newLibrary(src, nullptr, errChecker.WriteError()));
+	 *     library.get() >> errChecker;
 	 *
-	 * For the failures a caller can act on -- a shader that will not compile -- throw with
-	 * GetErrorDescription instead; this is for the ones that mean the device is unusable.
+	 * For the calls that take no error out-param -- most of them -- there is nothing to hold and a
+	 * `gassert` on the returned pointer is the whole check.
 	 */
-	template <typename T>
-	[[nodiscard]] T*
-	MetalCheck(T* object, const std::string_view what, const NS::Error* error = nullptr)
+	class MetalErrorChecker
 	{
-		if (object == nullptr)
-			ReportMetalFailure(what, error);
+	public:
+		MetalErrorChecker() = default;
 
-		return object;
-	}
+		NS::Error**
+		WriteError() noexcept
+		{
+			return &m_Error;
+		}
+
+		[[nodiscard]] const NS::Error*
+		GetError() const noexcept
+		{
+			return m_Error;
+		}
+
+		bool
+		ReportError() const;
+
+	private:
+		NS::Error* m_Error = nullptr;
+	};
+
+	void
+	operator>>(const void* object, const MetalErrorChecker& checker);
 }

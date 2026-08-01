@@ -45,8 +45,9 @@ namespace bgl
 			dsd->setBackFaceStencil(face(ds.backFaceStencil).get());
 		}
 
-		return NS::TransferPtr(
-			MetalCheck(device->newDepthStencilState(dsd.get()), "depth-stencil state"));
+		auto state = NS::TransferPtr(device->newDepthStencilState(dsd.get()));
+		gassert(state.get() != nullptr, "Metal depth-stencil state creation failed");
+		return state;
 	}
 
 	namespace
@@ -286,16 +287,10 @@ namespace bgl
 
 		// A returned MTL::Function retains its library, so the local Library ptr can drop.
 		const auto makeFunction = [&](const CachedStage& stage) -> NS::SharedPtr<MTL::Function> {
-			NS::Error*                  err = nullptr;
-			NS::SharedPtr<MTL::Library> lib =
-				NS::TransferPtr(device->newLibrary(Str(stage.msl), nullptr, &err));
-			if (!lib)
-			{
-				core::throw_runtime_error(
-					"Metal meshlet stage compile failed for '{}': {}",
-					stage.entryPoint,
-					GetErrorDescription(err));
-			}
+			MetalErrorChecker           errChecker;
+			NS::SharedPtr<MTL::Library> lib = NS::TransferPtr(
+				device->newLibrary(Str(stage.msl), nullptr, errChecker.WriteError()));
+			lib.get() >> errChecker;
 			NS::SharedPtr<MTL::Function> fn =
 				NS::TransferPtr(lib->newFunction(Str(stage.entryPoint)));
 			gassert(fn.get() != nullptr, "Meshlet stage library is missing its entry function");
@@ -330,7 +325,7 @@ namespace bgl
 		if (objFn)
 			pd->setObjectFunction(objFn.get());
 
-		NS::Error* error = nullptr;
+		MetalErrorChecker errChecker;
 
 		const BlendState& blend = m_Desc.renderState.blendState;
 		for (size_t i = 0; i < m_Desc.rtvFormats.size(); ++i)
@@ -373,19 +368,16 @@ namespace bgl
 					std::size(archives)));
 		}
 
-		m_PipelineState = NS::TransferPtr(
-			device->newRenderPipelineState(pd.get(), MTL::PipelineOptionNone, nullptr, &error));
-		if (!m_PipelineState)
-		{
-			core::throw_runtime_error(
-				"Metal meshlet pipeline failed for '{}': {}",
-				m_Desc.meshShader->GetDesc().debugName,
-				GetErrorDescription(error));
-		}
+		m_PipelineState = NS::TransferPtr(device->newRenderPipelineState(
+			pd.get(),
+			MTL::PipelineOptionNone,
+			nullptr,
+			errChecker.WriteError()));
+		m_PipelineState.get() >> errChecker;
 
 		// Adding after creation: the descriptor only reads from an archive, and a pipeline the
 		// archive already holds is added again as a no-op rather than an error.
-		if (archive != nullptr && archive->addMeshRenderPipelineFunctions(pd.get(), &error))
+		if (archive != nullptr && archive->addMeshRenderPipelineFunctions(pd.get(), nullptr))
 			shaderCache->MarkArchiveDirty();
 	}
 }

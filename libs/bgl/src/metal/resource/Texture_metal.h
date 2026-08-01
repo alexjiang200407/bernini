@@ -1,5 +1,4 @@
 #pragma once
-#include "MetalErrorChecker.h"
 #include "metal_cpp.h"
 
 #include "constants/constants.h"
@@ -62,8 +61,8 @@ namespace bgl
 				usage |= MTL::TextureUsageRenderTarget;
 			td->setUsage(usage);
 
-			m_Texture =
-				NS::TransferPtr(MetalCheck(device->newTexture(td.get()), "texture allocation"));
+			m_Texture = NS::TransferPtr(device->newTexture(td.get()));
+			gassert(m_Texture.get() != nullptr, "Metal texture allocation failed");
 			if (!desc.debugName.empty())
 				m_Texture->setLabel(
 					NS::String::string(desc.debugName.c_str(), NS::UTF8StringEncoding));

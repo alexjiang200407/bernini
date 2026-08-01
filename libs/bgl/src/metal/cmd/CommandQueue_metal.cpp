@@ -79,19 +79,24 @@ namespace bgl
 			NS::TransferPtr(MTL::CommandBufferDescriptor::alloc()->init());
 		desc->setErrorOptions(MTL::CommandBufferErrorOptionEncoderExecutionStatus);
 
-		auto* cmdBuffer = MetalCheck(m_Queue->commandBuffer(desc.get()), "command buffer");
+		auto* cmdBuffer = m_Queue->commandBuffer(desc.get());
 #else
-		auto* cmdBuffer = MetalCheck(m_Queue->commandBuffer(), "command buffer");
+		auto* cmdBuffer = m_Queue->commandBuffer();
 #endif
+
+		gassert(cmdBuffer != nullptr, "Metal command buffer creation failed");
 
 		LogOnFailure(cmdBuffer);
 		return cmdBuffer;
 	}
 
 	CommandQueue::CommandQueue(MTL::Device* device) :
-		m_Queue(NS::TransferPtr(MetalCheck(device->newCommandQueue(), "command queue"))),
-		m_Event(NS::TransferPtr(MetalCheck(device->newSharedEvent(), "shared event")))
-	{}
+		m_Queue(NS::TransferPtr(device->newCommandQueue())),
+		m_Event(NS::TransferPtr(device->newSharedEvent()))
+	{
+		gassert(m_Queue.get() != nullptr, "Metal command queue creation failed");
+		gassert(m_Event.get() != nullptr, "Metal shared event creation failed");
+	}
 
 	uint64_t
 	CommandQueue::ExecuteCommandList(ICommandList* commandList) noexcept

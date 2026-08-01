@@ -135,24 +135,18 @@ namespace bgl
 		NS::SharedPtr<NS::AutoreleasePool> pool =
 			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
-		NS::Error*                  error = nullptr;
+		MetalErrorChecker           errChecker;
 		NS::SharedPtr<MTL::Library> library =
-			NS::TransferPtr(device->newLibrary(Str(stage.msl), nullptr, &error));
-		if (!library)
-		{
-			core::throw_runtime_error(
-				"Metal library compile failed for '{}': {}",
-				m_Desc.debugName,
-				GetErrorDescription(error));
-		}
+			NS::TransferPtr(device->newLibrary(Str(stage.msl), nullptr, errChecker.WriteError()));
+		library.get() >> errChecker;
 
 		// Slang mangles the entry name in MSL (main -> main_0); a single-entry compute library exposes
 		// exactly one kernel function, so take it by name rather than guessing the mangled form.
 		NS::Array* names = library->functionNames();
 		gassert(names->count() == 1, "Compute library must expose exactly one kernel function");
-		NS::SharedPtr<MTL::Function> fn = NS::TransferPtr(MetalCheck(
-			library->newFunction(static_cast<NS::String*>(names->object(0))),
-			"compute kernel function"));
+		NS::SharedPtr<MTL::Function> fn =
+			NS::TransferPtr(library->newFunction(static_cast<NS::String*>(names->object(0))));
+		gassert(fn.get() != nullptr, "Compute library is missing its kernel function");
 
 		NS::SharedPtr<MTL::ComputePipelineDescriptor> pd =
 			NS::TransferPtr(MTL::ComputePipelineDescriptor::alloc()->init());
@@ -169,19 +163,16 @@ namespace bgl
 					std::size(archives)));
 		}
 
-		m_PipelineState = NS::TransferPtr(
-			device->newComputePipelineState(pd.get(), MTL::PipelineOptionNone, nullptr, &error));
-		if (!m_PipelineState)
-		{
-			core::throw_runtime_error(
-				"Metal compute pipeline failed for '{}': {}",
-				m_Desc.debugName,
-				GetErrorDescription(error));
-		}
+		m_PipelineState = NS::TransferPtr(device->newComputePipelineState(
+			pd.get(),
+			MTL::PipelineOptionNone,
+			nullptr,
+			errChecker.WriteError()));
+		m_PipelineState.get() >> errChecker;
 
 		// Adding after creation: the descriptor only reads from an archive, and a pipeline the
 		// archive already holds is added again as a no-op rather than an error.
-		if (archive != nullptr && archive->addComputePipelineFunctions(pd.get(), &error))
+		if (archive != nullptr && archive->addComputePipelineFunctions(pd.get(), nullptr))
 			shaderCache->MarkArchiveDirty();
 	}
 }

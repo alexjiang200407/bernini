@@ -25,8 +25,25 @@ namespace bgl
 	}
 
 	void
-	ReportMetalFailure(const std::string_view what, const NS::Error* error)
+	operator>>(const void* object, const MetalErrorChecker& checker)
 	{
-		gfatal("Metal Error: {} failed: {}", what, GetErrorDescription(error));
+		if (object == nullptr)
+		{
+			if (!checker.ReportError())
+			{
+				gfatal("Metal operation failed with no diagnostics available.");
+			}
+		}
+	}
+
+	bool
+	MetalErrorChecker::ReportError() const
+	{
+		if (m_Error != nullptr)
+		{
+			gfatal("Metal operation failed with error: {}", GetErrorDescription(m_Error));
+		}
+
+		return false;
 	}
 }
