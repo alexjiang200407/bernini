@@ -81,7 +81,9 @@ def run_gh(gh, args, repo):
     cmd = [gh] + args
     if repo:
         cmd += ["--repo", repo]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # gh emits UTF-8; text=True alone would decode it with the ANSI codepage.
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                            errors="replace")
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"gh exited {result.returncode}")
     return json.loads(result.stdout)
@@ -163,10 +165,16 @@ def summarize_comment(c):
 
 
 def emit(payload):
-    """Prints the one event, and re-arms the watch if the PR still needs answering."""
+    """Prints the one event, and re-arms the watch if the PR still needs answering.
+
+    The baseline recorded is the newest item just reported, so a watch restarted
+    without an answer in between does not fire on the same feedback twice.
+    """
     event = payload.get("event")
     if event in REARMING:
-        watchlist.arm(payload["pr"], payload.get("url", ""))
+        reported = (payload.get("reviews") or []) + (payload.get("comments") or [])
+        newest = max((stamp(i) for i in reported), default="")
+        watchlist.arm(payload["pr"], payload.get("url", ""), newest or None)
     elif event in ("merged", "closed"):
         watchlist.disarm(payload["pr"])
     print(json.dumps(payload, indent=2))
@@ -184,8 +192,11 @@ def main():
     parser.add_argument(
         "--since",
         help="ISO-8601 UTC time (2026-07-29T13:13:22Z); only activity at or before it joins the "
-        "baseline, and anything already waiting fires immediately")
+        "baseline, and anything already waiting fires immediately. Defaults to the time pr.py last "
+        "posted to this PR, which is what keeps the watch from firing on its own reply")
     args = parser.parse_args()
+
+    since = args.since or watchlist.since_for(args.pr)
 
     gh = find_gh()
     rest_repo = repo_path(gh, args.repo)
@@ -213,12 +224,13 @@ def main():
 
     # GitHub stamps are Z-suffixed UTC, so string comparison is chronological.
     def baselined(item):
-        return args.since is None or stamp(item) <= args.since
+        return since is None or stamp(item) <= since
 
     seen = {key(x) for x in reviews + comments + inline if baselined(x)}
     print(
         f"watching PR #{args.pr} ({view['title']}) every {args.interval:g}s; "
-        f"baseline: {len(seen)} of {len(reviews) + len(comments) + len(inline)} items",
+        f"baseline: {len(seen)} of {len(reviews) + len(comments) + len(inline)} items"
+        + (f", since {since}" if since else ""),
         file=sys.stderr, flush=True)
 
     def actionable(view, reviews, comments, inline):
@@ -251,7 +263,7 @@ def main():
             return True
         return False
 
-    # With --since, the race-window items are already in hand -- fire before sleeping.
+    # With a baseline time, the race-window items are already in hand -- fire before sleeping.
     if actionable(view, reviews, comments, inline):
         return
 

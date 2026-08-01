@@ -81,8 +81,11 @@ def run_gh(args, token=None, check=True):
         # An inherited GH_TOKEN would silently outrank the logged-in account.
         env.pop("GH_TOKEN", None)
         env.pop("GITHUB_TOKEN", None)
+    # gh emits UTF-8; text=True alone would decode it with the ANSI codepage and
+    # mangle every em dash and accented name in a review comment.
     result = subprocess.run(
-        [find_gh()] + args, capture_output=True, text=True, env=env, cwd=ct.REPO_ROOT)
+        [find_gh()] + args, capture_output=True, text=True, encoding="utf-8",
+        errors="replace", env=env, cwd=ct.REPO_ROOT)
     if check and result.returncode != 0:
         raise GhError(result.stderr.strip() or f"gh exited {result.returncode}")
     return result.stdout
