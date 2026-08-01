@@ -27,7 +27,14 @@ find_package(Stb REQUIRED)  # stb_image_write for screenshot capture
 
 target_include_directories(bgl_d3d12
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${Stb_INCLUDE_DIR}
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        # The generated IDL headers are a build artifact, and a generated one includes its
+        # hand-written imports as siblings -- so both roots, as bgl_objects has them.
+        ${CMAKE_BINARY_DIR}/generated
+        ${CMAKE_CURRENT_SOURCE_DIR}/../idl
+        ${Stb_INCLUDE_DIR}
 )
 
 target_precompile_headers(bgl_d3d12

@@ -63,13 +63,13 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint32_t
-		FrameIndex() const noexcept override
+		GetFrameIndex() const noexcept override
 		{
 			return m_FrameIndex;
 		}
 
 		[[nodiscard]] uint32_t
-		LastPresentedIndex() const noexcept override
+		GetLastPresentedIndex() const noexcept override
 		{
 			return m_LastPresentedIndex;
 		}
@@ -81,7 +81,7 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint64_t
-		FrameFence(uint32_t frameIndex) const noexcept override
+		GetFrameFence(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_FenceValues[frameIndex];
@@ -95,28 +95,28 @@ namespace bgl
 		}
 
 		[[nodiscard]] ICommandAllocator*
-		FrameAllocator(uint32_t frameIndex) const noexcept override
+		GetFrameAllocator(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_CommandAllocator[frameIndex].Get();
 		}
 
 		[[nodiscard]] TextureHandle
-		BackbufferTexture(uint32_t frameIndex) const noexcept override
+		GetBackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].textureHandle;
 		}
 
 		[[nodiscard]] RtvHandle
-		BackbufferRtv(uint32_t frameIndex) const noexcept override
+		GetBackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
 			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].rtvHandle;
 		}
 
 		[[nodiscard]] DsvHandle
-		DepthDsv() const noexcept override
+		GetDepthDsv() const noexcept override
 		{
 			return m_DepthBuffer.dsvHandle;
 		}

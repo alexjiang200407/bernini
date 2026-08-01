@@ -1,6 +1,7 @@
 #include <core/platform/util.h>
 
 #include <mach-o/dyld.h>
+#include <unistd.h>
 
 namespace core
 {
@@ -15,5 +16,11 @@ namespace core
 			return {};
 
 		return std::filesystem::path(buffer.c_str()).stem().string();
+	}
+
+	uint32_t
+	process_id() noexcept
+	{
+		return static_cast<uint32_t>(::getpid());
 	}
 }

@@ -1,4 +1,5 @@
 {
+    "startupProject": "",
     "graphics": {
         "enableDebugLayer": true,
         "enableGPUBasedValidation": false,

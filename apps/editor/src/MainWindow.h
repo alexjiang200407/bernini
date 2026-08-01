@@ -30,6 +30,11 @@ private:
 	void
 	OpenProject();
 
+	// Opens `path`, reporting a failure to the user rather than throwing. False when it could not
+	// be opened, so a caller can fall back.
+	bool
+	OpenProjectAt(const std::filesystem::path& path);
+
 	void
 	CleanUnusedTextures();
 

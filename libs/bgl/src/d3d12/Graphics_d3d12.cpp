@@ -6,6 +6,7 @@
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include <core/log/log.h>
 
 namespace fs = std::filesystem;
 
@@ -170,25 +171,7 @@ namespace bgl
 	Graphics::Graphics(const GraphicsOptions& opts) : m_Opts(opts)
 	{
 		{
-			auto     libraryPath = core::file::get_library_path();
-			fs::path logPath     = libraryPath.parent_path() / "bgl.log";
-
-			// Truncate once per process so a single run accumulates every device's
-			// messages instead of each new Graphics clobbering the previous log.
-			static bool s_logTruncated = false;
-			const bool  truncate       = !s_logTruncated;
-			s_logTruncated             = true;
-
-			auto sink =
-				std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), truncate);
-
-			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
-
-			log->set_level(static_cast<logger::level::level_enum>(opts.logLevel));
-			log->flush_on(static_cast<logger::level::level_enum>(opts.logLevel));
-
-			spdlog::set_default_logger(std::move(log));
-			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v"s);
+			core::logging::init_file_logger("bgl.log", static_cast<int>(opts.logLevel));
 
 			logger::info("BGL initialized successfully.");
 		}

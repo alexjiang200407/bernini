@@ -342,6 +342,11 @@ namespace
 		{
 			return false;
 		}
+		DescriptorHandle
+		ResolveDescriptor(const TextureHandle&) const noexcept override
+		{
+			return {};
+		}
 		bool
 		ValidSamplerHandle(const SamplerHandle&) const noexcept override
 		{

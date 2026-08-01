@@ -1,0 +1,187 @@
+#include "pipeline/MetalPipelineReflection.h"
+
+#include "uniforms/SlangReflection.h"
+
+#include "uniforms/Uniforms.h"  // detail::ValueTypeSize
+#include <core/math.h>
+
+namespace bgl
+{
+	namespace
+	{
+		uint32_t
+		MetalAlign(const ReflectedLayout& layout)
+		{
+			if (layout.handleKind != HandleKind::kNone)
+				return 8;  // a device pointer / resource id
+
+			switch (layout.kind)
+			{
+			case UniformType::kStruct:
+			{
+				uint32_t align = 1;
+				for (const ReflectedField& field : layout.fields)
+					align = std::max(align, MetalAlign(field.layout));
+				return align;
+			}
+			case UniformType::kArray:
+				return layout.element.empty() ? 1 : MetalAlign(layout.element.front());
+			case UniformType::kValue:
+				switch (layout.valueType)
+				{
+				case UniformValueType::kFloat3:
+				case UniformValueType::kFloat4:
+				case UniformValueType::kInt3:
+				case UniformValueType::kInt4:
+				case UniformValueType::kUInt3:
+				case UniformValueType::kUInt4:
+				case UniformValueType::kMat4x4:
+					return 16;
+				case UniformValueType::kFloat2:
+				case UniformValueType::kInt2:
+				case UniformValueType::kUInt2:  // == kDescriptorHandle
+					return 8;
+				default:
+					return 4;
+				}
+			default:
+				return 1;
+			}
+		}
+
+		// Byte offset of every bindless handle field within the cbuffer.
+		void
+		CollectHandleOffsets(
+			const ReflectedLayout&   layout,
+			uint32_t                 base,
+			std::vector<HandleSlot>& out)
+		{
+			switch (layout.kind)
+			{
+			case UniformType::kValue:
+				if (layout.handleKind != HandleKind::kNone)
+					out.push_back({ base, layout.handleKind });
+				break;
+			case UniformType::kStruct:
+				for (const ReflectedField& field : layout.fields)
+					CollectHandleOffsets(field.layout, base + field.offset, out);
+				break;
+			case UniformType::kArray:
+				if (!layout.element.empty())
+					for (uint32_t i = 0; i < layout.arrayCount; ++i)
+						CollectHandleOffsets(
+							layout.element.front(),
+							base + i * layout.arrayStride,
+							out);
+				break;
+			default:
+				break;
+			}
+		}
+
+		// Recomputes the tree's field offsets, leaf data sizes and array strides under Metal's cbuffer
+		// layout, and returns the type's footprint (its slot size). Metal reflection can't supply
+		// these: a bindless handle is a resource, invisible to the ordinary-data category, so a
+		// handle-bearing cbuffer measures 0 there while the emitted MSL lays each handle out as an
+		// 8-byte device pointer. `size` on a leaf stays the data size the CPU writes (a cbuffer float3
+		// is 12 bytes of data), which is smaller than its 16-byte footprint.
+		uint32_t
+		MetalizeLayout(ReflectedLayout& layout)
+		{
+			switch (layout.kind)
+			{
+			case UniformType::kValue:
+				layout.size = layout.handleKind != HandleKind::kNone ?
+				                  8u :
+				                  static_cast<uint32_t>(detail::ValueTypeSize(layout.valueType));
+				return core::align(layout.size, MetalAlign(layout));
+
+			case UniformType::kArray:
+			{
+				if (layout.element.empty())
+					return 0;
+				const uint32_t elementFootprint = MetalizeLayout(layout.element.front());
+				layout.arrayStride              = elementFootprint;
+				layout.size                     = elementFootprint * layout.arrayCount;
+				return layout.size;
+			}
+
+			case UniformType::kStruct:
+			{
+				uint32_t offset = 0;
+				for (ReflectedField& field : layout.fields)
+				{
+					const uint32_t footprint = MetalizeLayout(field.layout);
+					offset                   = core::align(offset, MetalAlign(field.layout));
+					field.offset             = offset;
+					offset += footprint;
+				}
+				layout.size = core::align(offset, MetalAlign(layout));
+				return layout.size;
+			}
+
+			default:
+				layout.size = 0;
+				return 0;
+			}
+		}
+	}
+
+	void
+	ReflectCbuffers(
+		slang::ProgramLayout* layout,
+		UniformLayoutMap&     outEntries,
+		MetalHandleOffsetMap& outHandleOffsets)
+	{
+		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
+		{
+			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
+
+			// Mixed as well as ConstantBuffer: a cbuffer whose members are all handles consumes
+			// texture and sampler slots on top of its buffer slot, and Slang reports a parameter
+			// spanning several categories as Mixed. Skipping those dropped every uniform block that
+			// carries only bindless handles.
+			const slang::ParameterCategory category = param->getCategory();
+			if (category != slang::ParameterCategory::ConstantBuffer &&
+			    category != slang::ParameterCategory::Mixed)
+			{
+				continue;
+			}
+
+			slang::TypeLayoutReflection* elementLayout =
+				param->getTypeLayout()->getElementTypeLayout();
+
+			ReflectedLayout reflected = ReflectLayoutFromSlang(elementLayout);
+			const uint32_t  size      = MetalizeLayout(reflected);
+
+			std::vector<HandleSlot> handleOffsets;
+			CollectHandleOffsets(reflected, 0, handleOffsets);
+			outHandleOffsets[param->getName()] = std::move(handleOffsets);
+
+			UniformLayoutEntry entry{};
+			entry.size   = size;
+			entry.layout = std::make_shared<const ReflectedLayout>(std::move(reflected));
+			// rootParamIndex stays invalid: a [[buffer(N)]] index is per-stage, and this layout may
+			// span several. Only ReflectStageBindings can answer it.
+			outEntries[param->getName()] = std::move(entry);
+		}
+	}
+
+	void
+	ReflectStageBindings(slang::ProgramLayout* layout, MetalStageBindingMap& outBindings)
+	{
+		for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
+		{
+			slang::VariableLayoutReflection* param = layout->getParameterByIndex(i);
+
+			const slang::ParameterCategory category = param->getCategory();
+			if (category != slang::ParameterCategory::ConstantBuffer &&
+			    category != slang::ParameterCategory::Mixed)
+			{
+				continue;
+			}
+
+			outBindings[param->getName()] = static_cast<uint32_t>(param->getBindingIndex());
+		}
+	}
+}

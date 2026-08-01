@@ -53,4 +53,10 @@ namespace core
 
 		return std::filesystem::path(buffer).stem().string();
 	}
+
+	uint32_t
+	process_id() noexcept
+	{
+		return static_cast<uint32_t>(GetCurrentProcessId());
+	}
 }

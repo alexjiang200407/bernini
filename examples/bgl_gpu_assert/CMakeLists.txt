@@ -8,7 +8,7 @@ file(GLOB_RECURSE BGL_GPU_ASSERT_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
-add_executable(bgl_gpu_assert WIN32
+add_executable(bgl_gpu_assert
     ${BGL_GPU_ASSERT_SOURCES}
     ${BGL_GPU_ASSERT_HEADERS}
 )

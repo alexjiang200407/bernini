@@ -145,6 +145,22 @@ namespace bgl
 			result.kind      = UniformType::kValue;
 			result.valueType = UniformValueType::kDescriptorHandle;
 			result.size      = 8;  // two uint32 -- a resource id / device pointer
+
+			if (typeLayout->getKind() == Kind::SamplerState)
+			{
+				result.handleKind = HandleKind::kSampler;
+			}
+			else
+			{
+				// A texture resolves to an MTLResourceID and a buffer to a device address, from
+				// different pools, so the shape is what a backend needs rather than "resource".
+				const SlangResourceShape shape = static_cast<SlangResourceShape>(
+					typeLayout->getType()->getResourceShape() & SLANG_RESOURCE_BASE_SHAPE_MASK);
+				result.handleKind =
+					shape == SLANG_STRUCTURED_BUFFER || shape == SLANG_BYTE_ADDRESS_BUFFER ?
+						HandleKind::kBuffer :
+						HandleKind::kTexture;
+			}
 			return result;
 		}
 

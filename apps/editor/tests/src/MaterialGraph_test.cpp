@@ -38,6 +38,17 @@ namespace
 		return MakeMaterialNodeRegistry(nullptr, nullptr);
 	}
 
+	// QUrl::fromLocalFile round-trips through toLocalFile only for a path that is already absolute
+	// the way the host means it -- a Windows drive letter comes back with a leading slash anywhere
+	// else. Built from current_path() so it is absolute on either platform without naming one.
+	QString
+	DataPath(const QString& tail)
+	{
+		const std::filesystem::path path =
+			std::filesystem::current_path() / "Data" / tail.toStdString();
+		return QString::fromStdString(path.generic_string());
+	}
+
 	/** A drop payload carrying one local file, as the content explorer produces. */
 	std::unique_ptr<QMimeData>
 	UrlDrop(const QString& path)
@@ -272,7 +283,7 @@ TEST_CASE("A texture dragged onto the graph is accepted", "[materialgraph]")
 {
 	MaterialGraphView view;
 
-	REQUIRE(AcceptsDrag(view, *UrlDrop("C:/Data/Textures/albedo.ktx2")));
+	REQUIRE(AcceptsDrag(view, *UrlDrop(DataPath("Textures/albedo.ktx2"))));
 }
 
 TEST_CASE("Anything else dragged onto the graph is ignored", "[materialgraph]")
@@ -280,7 +291,7 @@ TEST_CASE("Anything else dragged onto the graph is ignored", "[materialgraph]")
 	MaterialGraphView view;
 
 	// A mesh is not a texture. The graph has no port to hang it on.
-	REQUIRE(!AcceptsDrag(view, *UrlDrop("C:/Data/Meshes/tree.bmesh")));
+	REQUIRE(!AcceptsDrag(view, *UrlDrop(DataPath("Meshes/tree.bmesh"))));
 }
 
 TEST_CASE("A dropped texture is announced with its path", "[materialgraph]")
@@ -290,13 +301,13 @@ TEST_CASE("A dropped texture is announced with its path", "[materialgraph]")
 
 	// Upper case on purpose: the suffix test is case-insensitive, because what a file is named has
 	// nothing to do with what it is.
-	const std::unique_ptr<QMimeData> mime = UrlDrop("C:/Data/Textures/Albedo.KTX2");
+	const std::unique_ptr<QMimeData> mime = UrlDrop(DataPath("Textures/Albedo.KTX2"));
 
 	QDropEvent drop = DropOf(*mime);
 	view.dropEvent(&drop);
 
 	REQUIRE(dropped.count() == 1);
-	REQUIRE(dropped.front().at(0).toString() == QString("C:/Data/Textures/Albedo.KTX2"));
+	REQUIRE(dropped.front().at(0).toString() == QString(DataPath("Textures/Albedo.KTX2")));
 	REQUIRE(drop.isAccepted());
 }
 
@@ -307,9 +318,9 @@ TEST_CASE("The first texture in a drop wins", "[materialgraph]")
 
 	QMimeData mime;
 	mime.setUrls(
-		{ QUrl::fromLocalFile("C:/Data/Meshes/tree.bmesh"),
-	      QUrl::fromLocalFile("C:/Data/Textures/bark.ktx2"),
-	      QUrl::fromLocalFile("C:/Data/Textures/leaf.ktx2") });
+		{ QUrl::fromLocalFile(DataPath("Meshes/tree.bmesh")),
+	      QUrl::fromLocalFile(DataPath("Textures/bark.ktx2")),
+	      QUrl::fromLocalFile(DataPath("Textures/leaf.ktx2")) });
 
 	QDropEvent drop = DropOf(mime);
 	view.dropEvent(&drop);
@@ -317,7 +328,7 @@ TEST_CASE("The first texture in a drop wins", "[materialgraph]")
 	// One drop makes one node, and the non-texture in the list is passed over rather than
 	// disqualifying the whole drop.
 	REQUIRE(dropped.count() == 1);
-	REQUIRE(dropped.front().at(0).toString() == QString("C:/Data/Textures/bark.ktx2"));
+	REQUIRE(dropped.front().at(0).toString() == QString(DataPath("Textures/bark.ktx2")));
 }
 
 //

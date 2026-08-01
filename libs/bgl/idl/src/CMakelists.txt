@@ -1,4 +1,9 @@
-set(IDL_CPP_OUT_DIR        "${CMAKE_SOURCE_DIR}/libs/bgl/src/idl")
+# Generated into the build tree, not the source tree: a struct's layout follows the backend it is
+# generated for, so a committed copy would be right for one and silently wrong for the other.
+set(IDL_CPP_OUT_DIR        "${CMAKE_BINARY_DIR}/generated/idl")
+# The public headers stay in the source tree, and stay committed: a consumer includes <bgl/...>
+# without building bgl. Safe because IDL_PUBLIC_CPP_SOURCES holds no structs -- only enums with an
+# explicit underlying type and a constant, which no backend lays out differently.
 set(IDL_PUBLIC_CPP_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl")
 set(IDL_SLANG_OUT_DIR      "${CMAKE_SOURCE_DIR}/libs/bgl/shaders/src/idl")
 set(IDL_SRC_ROOT           "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -44,6 +49,13 @@ set(IDL_PUBLIC_CPP_SOURCES
     PsoType.slang
 )
 
+# The C++ mirror follows the backend's own rules; see IDL_CPP_OUT_DIR above.
+if(RENDERER_BACKEND STREQUAL "METAL")
+    set(IDL_LAYOUT_ARGS --metal-layout)
+else()
+    set(IDL_LAYOUT_ARGS "")
+endif()
+
 set(IDL_GENERATED_OUTPUTS "")
 
 foreach(src ${IDL_SOURCES})
@@ -63,8 +75,10 @@ foreach(src ${IDL_SOURCES})
     set(cpp_args  "")
 
     if(file IN_LIST IDL_PUBLIC_CPP_SOURCES)
-        # Public engine header: namespace `bgl`, emitted into include/bgl.
-        set(cpp_args --cpp-out-dir "${IDL_PUBLIC_CPP_OUT_DIR}" --namespace "bgl")
+        # Public engine header: namespace `bgl`, emitted into include/bgl. --public makes idlgen
+        # refuse a struct that does not lay out the same on every backend, because this one is
+        # committed and they all compile against it.
+        set(cpp_args --cpp-out-dir "${IDL_PUBLIC_CPP_OUT_DIR}" --namespace "bgl" --public)
         list(APPEND outputs "${IDL_PUBLIC_CPP_OUT_DIR}/${rel_stem}.h")
     elseif(file IN_LIST IDL_CPP_SOURCES)
         set(cpp_args --cpp-out-dir "${IDL_CPP_OUT_DIR}")
@@ -89,6 +103,7 @@ foreach(src ${IDL_SOURCES})
         COMMAND bgl_idlgen
                 --src-root "${IDL_SRC_ROOT}"
                 --slang-out-dir "${IDL_SLANG_OUT_DIR}"
+                ${IDL_LAYOUT_ARGS}
                 ${cpp_args}
                 -I "${IDL_SRC_ROOT}"
                 "${src}"

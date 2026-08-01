@@ -51,12 +51,15 @@ TEST_CASE("A different material is not already default", "[materialeditor]")
 
 TEST_CASE("The same file spelled differently is still already default", "[materialeditor]")
 {
+#if defined(_WIN32)
 	// The .bmesh's path is resolved with std::filesystem (native separators); a file dialog hands back
-	// forward slashes. Same file.
+	// forward slashes. Same file. Windows only: elsewhere the native separator already is a forward
+	// slash, and a backslash is an ordinary character in a name rather than a separator at all.
 	CHECK(
 		MaterialEditorWindow::IsAlreadyDefault(
 			"C:\\Data\\Materials\\Leaf.bmaterial",
 			"C:/Data/Materials/Leaf.bmaterial"));
+#endif
 
 	// A data root that is not already normalised resolves through a parent segment.
 	CHECK(

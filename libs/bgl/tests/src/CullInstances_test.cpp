@@ -99,8 +99,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	}
 
 	auto submesh            = bgl::idl::Submesh();
-	submesh.boundingCenter  = glm::vec3(0.0f);
-	submesh.boundingRadius  = 1.0f;
+	submesh.boundingSphere  = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	const auto submeshRange = submeshBuffer.Add(std::span<const bgl::idl::Submesh>(&submesh, 1));
 
 	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();

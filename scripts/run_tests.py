@@ -50,6 +50,7 @@ import util.config as cfg
 # What makes a target a test suite.
 SUITE_SUFFIX = "_tests"
 
+
 # Shards per suite. Each one is a process holding a graphics device of its own, so this trades
 # memory for wall-clock; past a handful the suites stop scaling and start contending.
 DEFAULT_JOBS = min(4, os.cpu_count() or 1)
@@ -229,6 +230,8 @@ def main():
             results.append((name, 1, 0.0))
             continue
 
+        suite_forward = forward
+
         jobs = max(1, args.jobs)
         if jobs > 1 and not supports_sharding(exe):
             jobs = 1
@@ -239,7 +242,7 @@ def main():
         # the exit code: the suite exits as its single-process run would, only faster. A count
         # we cannot read (None) leaves jobs alone rather than serialising a large suite.
         if jobs > 1:
-            matching = count_tests(exe, forward)
+            matching = count_tests(exe, suite_forward)
             if matching is not None:
                 jobs = max(1, min(jobs, matching))
 
@@ -248,9 +251,9 @@ def main():
 
         started = time.monotonic()
         if jobs > 1:
-            rc = run_sharded(exe, forward, jobs)
+            rc = run_sharded(exe, suite_forward, jobs)
         else:
-            rc = subprocess.run([exe, *forward], cwd=os.path.dirname(exe)).returncode
+            rc = subprocess.run([exe, *suite_forward], cwd=os.path.dirname(exe)).returncode
         results.append((name, rc, time.monotonic() - started))
 
     # A failing suite does not stop the others: one full report beats finding out about the

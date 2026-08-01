@@ -92,9 +92,9 @@ include the standard library, so that force-include is what keeps them parsing.
 ## What it covers, and what it doesn't
 
 A sweep only reaches what the configured preset compiles, and no single preset compiles everything.
-On `macos-clang-debug` the D3D12 backend and `apps/editor` have no compile commands and are skipped,
-which the run says out loud — with a count — rather than counting them as passes. Checking a Windows
-preset as well as a macOS one is what covers the tree.
+On `macos-clang-metal-debug` the D3D12 backend has no compile commands and is skipped, which the run
+says out loud — with a count — rather than counting it as a pass. Checking a Windows preset as well
+as a macOS one is what covers the tree.
 
 Four headers do not parse standalone and report compiler errors rather than findings —
 `bgl/SkyboxDesc.h`, `bgl/error.h`, `bgl/src/scene/RangeBuffer.h`, `bgl/src/uniforms/DescriptorHandle.h`.

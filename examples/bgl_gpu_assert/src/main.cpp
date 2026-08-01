@@ -1,12 +1,10 @@
 #include <DemoWindow.h>
+#include <SDL3/SDL.h>
 #include <bgl/bgl.h>
 #include <core/err/util.h>
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
-int APIENTRY
-wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
+int
+main(int argc, char** argv)
 {
 	core::install_crash_handlers();
 
@@ -75,7 +73,7 @@ wWinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int)
 	}
 	catch (const std::runtime_error& e)
 	{
-		MessageBoxA(nullptr, e.what(), "Unhandled Error", MB_OK | MB_ICONERROR);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Bernini - Fatal Error", e.what(), nullptr);
 	}
 
 	return 0;

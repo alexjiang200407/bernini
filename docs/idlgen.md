@@ -26,7 +26,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 * **One IDL source, two generated targets, opt-in on the C++ side.** Every module always produces
   a banner-stamped Slang copy under [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) (a verbatim copy,
   so shaders `import idl.<Name>`). A module produces a C++ header under
-  [libs/bgl/src/idl/](libs/bgl/src/idl/) **only if it is listed in `IDL_CPP_SOURCES`**
+  `<build>/generated/idl/` **only if it is listed in `IDL_CPP_SOURCES`**
   ([libs/bgl/idl/src/CMakelists.txt](libs/bgl/idl/src/CMakelists.txt)); interface/generic-only modules carry
   no concrete layout and are skipped. The tool also self-skips the C++ header when a module has no
   structs, enums, or constants.
@@ -65,6 +65,20 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   underlying scalar and erase the name). An `import`ed type pulls in the corresponding generated
   `#include`.
 
+* **The C++ headers are generated into the build tree, and are not committed.** A struct's layout
+  follows the backend it was generated for — MSL aligns a resource handle to 8 where the C/C++ scalar
+  rules give it 4, and rounds a struct up to its alignment — so one committed copy would be right for
+  one backend and silently wrong for the other. Each build directory carries its own, and switching
+  backend needs no regeneration. Both `<build>/generated` and [libs/bgl/src/idl/](libs/bgl/src/idl/)
+  are on the include path, because a generated header includes its imports as siblings and three of
+  those (`Entry`, `Range`, `RangeWithCount`) are hand-written.
+
+  **The two public modules are the exception and stay committed**, under
+  [libs/bgl/include/bgl/](libs/bgl/include/bgl/): a consumer includes `<bgl/...>` without building
+  bgl. That is safe only while `IDL_PUBLIC_CPP_SOURCES` holds no structs — today it is `MaterialType`
+  and `PsoType`, both enums with an explicit underlying type plus one constant, which every backend
+  lays out identically.
+
 * **Generated files are write-only build artifacts.** Both the `.slang` copy and the `.h` carry a
   `// THIS IS A FILE GENERATED FROM ... DO NOT EDIT MANUALLY` banner. Edit the IDL source and
   regenerate; never hand-edit a generated copy.
@@ -100,7 +114,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | [libs/bgl/idl/src/CMakelists.txt](libs/bgl/idl/src/CMakelists.txt) | Per-module `add_custom_command`s + the `bgl_idl_generate` target; `IDL_CPP_SOURCES` gates C++ output. |
 | [scripts/gen_idl.py](scripts/gen_idl.py) | Standalone driver to regenerate on demand, via `just idl` (mirrors the CMake target; resolves the built tool via the CMake File API). |
 | [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) | Generated Slang copies (`import idl.<Name>`). |
-| [libs/bgl/src/idl/](libs/bgl/src/idl/) | Generated C++ headers (`bgl::idl::<Name>`), aggregated by the hand-written [libs/bgl/src/idl/idl.h](libs/bgl/src/idl/idl.h). |
+| `<build>/generated/idl/` | Generated C++ headers (`bgl::idl::<Name>`). A build artifact, not committed — see below. |
+| [libs/bgl/src/idl/](libs/bgl/src/idl/) | The **hand-written** headers only: `idl.h` (the aggregate), `Entry.h`, `Range.h`, `RangeWithCount.h`. |
 
 **Generated files are never clang-formatted.** `scripts/format.py` skips any file whose first line
 carries the generator's `DO NOT EDIT MANUALLY` banner, so what is committed is byte-for-byte what
@@ -116,7 +131,7 @@ flowchart TD
     IDL["libs/bgl/idl/src/&lt;rel&gt;.slang<br/>(one IDL module)"]
     TOOL["bgl_idlgen<br/>(host-target reflection + text parse)"]
     SLANG["libs/bgl/shaders/src/idl/&lt;rel&gt;.slang<br/>(banner copy, verbatim)"]
-    CPP["libs/bgl/src/idl/&lt;rel&gt;.h<br/>(bgl::idl::*, static_asserts)"]
+    CPP["&lt;build&gt;/generated/idl/&lt;rel&gt;.h<br/>(bgl::idl::*, static_asserts)"]
     SH["Shaders"]
     CX["CPU code (bgl)"]
 

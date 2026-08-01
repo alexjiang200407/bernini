@@ -130,7 +130,7 @@ flowchart TD
 * **A slot in the readback ring is context-wide, but every `RenderTarget` indexes it with a frame
   index of its own.** With more than one target (the editor has three) the target that inspects a
   slot need not be the one that filled it, so `InspectDebugSlot` waits on the fence recorded for the
-  copy rather than the caller's `rt.FrameFence(index)` — which gates a different frame entirely,
+  copy rather than the caller's `rt.GetFrameFence(index)` — which gates a different frame entirely,
   and is absent altogether for a target that has not yet drawn at that slot. Two consequences remain:
   a report can be attributed to the wrong target (read the record's `context`, not the stack), and a
   second target's copy can overwrite a slot before anyone inspects it, dropping those assertions.
@@ -234,6 +234,36 @@ This runtime layer is **independent** of the compile-time `BERNINI_GPU_DEBUG` GP
 system in §1: one is a D3D12 API validator, the other is your shaders reporting logic errors.
 Examples and tests typically enable both `enableDebugLayer` and `enableGPUValidationLayer`; the
 editor reads them from its config.
+
+---
+
+## 6. Metal validation & frame capture
+
+Metal's validators are environment variables, not `GraphicsOptions` flags, so they need no rebuild:
+
+```bash
+MTL_DEBUG_LAYER=1 MTL_DEBUG_LAYER_ERROR_MODE=assert MTL_SHADER_VALIDATION=1 ./bgl_tests "<name>"
+```
+
+`MTL_DEBUG_LAYER` is the API validator (the counterpart to `enableDebugLayer`);
+`MTL_SHADER_VALIDATION` is the GPU-side one (the counterpart to `enableGPUValidationLayer`).
+
+For a frame capture, set `GraphicsOptions::gpuCapturePath` to a `.gputrace` path. The **first**
+frame between `BeginFrame` and `EndFrame` is written there, and the capture stops after the frame
+is submitted so the trace holds a complete one.
+
+```bash
+MTL_CAPTURE_ENABLED=1 ./bgl_tests "PBR instances render headlessly"
+```
+
+`MTL_CAPTURE_ENABLED=1` is required. Metal reads it when the process starts its device, so bgl
+cannot set it on your behalf; without it `supportsDestination` reports the destination unsupported
+and bgl throws, naming the variable.
+
+**Capturing needs no Xcode — reading the result does.** A machine with only the Command Line Tools
+writes a valid `.gputrace`, which then opens in Xcode's Metal debugger anywhere. That split is the
+whole point of the flag: it is how a headless or CI macOS box hands a frame to someone who can look
+at it.
 
 ---
 

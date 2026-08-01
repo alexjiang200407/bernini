@@ -41,7 +41,26 @@ import util.config as cfg
 
 TOOL = "bgl_idlgen"
 SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "src")
-CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "src", "idl")
+# Mirrors libs/bgl/idl/src/CMakelists.txt: the private headers are a build artifact, because a
+# struct's layout follows the backend it was generated for. Resolved per build dir.
+def layout_args(build_dir):
+    """--metal-layout when this build dir was configured for Metal: the C++ mirror follows the
+    backend's own rules, so the header in a build dir is the layout that build reads."""
+    cache = os.path.join(build_dir, "CMakeCache.txt")
+    if not os.path.isfile(cache):
+        return []
+    with open(cache, encoding="utf-8", errors="replace") as handle:
+        metal = any(line.startswith("RENDERER_BACKEND:") and line.rstrip().endswith("METAL")
+                    for line in handle)
+    return ["--metal-layout"] if metal else []
+
+
+def cpp_out_dir(tool):
+    """<build>/generated/idl, derived from the tool so the headers land beside the binary that
+    wrote them -- one build dir per backend, each with its own layout."""
+    return os.path.join(os.path.dirname(os.path.dirname(tool)), "generated", "idl")
+
+
 PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "include", "bgl")
 SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "shaders", "src", "idl")
 IDL_CMAKE = os.path.join(SRC_ROOT, "CMakelists.txt")
@@ -80,14 +99,15 @@ def load_routing():
     return public, internal
 
 
-def cpp_args_for(module, public, internal):
+def cpp_args_for(module, public, internal, tool):
     """The --cpp-out-dir/--namespace flags for one module (empty = Slang copy only)."""
     name = os.path.basename(module)
 
     if name in public:
-        return ["--cpp-out-dir", PUBLIC_CPP_OUT_DIR, "--namespace", "bgl"]
+        # Committed and shared by every backend, so idlgen refuses a struct that differs on one.
+        return ["--cpp-out-dir", PUBLIC_CPP_OUT_DIR, "--namespace", "bgl", "--public"]
     if name in internal:
-        return ["--cpp-out-dir", CPP_OUT_DIR]
+        return ["--cpp-out-dir", cpp_out_dir(tool)]
     return []
 
 
@@ -167,7 +187,8 @@ def main():
             tool,
             "--src-root", SRC_ROOT,
             "--slang-out-dir", SLANG_OUT_DIR,
-            *cpp_args_for(module, public, internal),
+            *layout_args(os.path.dirname(os.path.dirname(tool))),
+            *cpp_args_for(module, public, internal, tool),
             "-I", SRC_ROOT,
             module,
         ]

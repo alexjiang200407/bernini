@@ -21,6 +21,7 @@
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
+#include <core/platform/util.h>
 #include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
@@ -37,10 +38,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		&MainWindow::CleanUnusedTextures);
 	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
 
+	std::string startupProject;
 	{
-		const auto     configPath = core::file::get_library_path().parent_path() / "config.json";
+		const auto     configPath = core::file::get_executable_path().parent_path() / "config.json";
 		core::Settings settings(configPath);
-		const auto     gfxSettings = settings["graphics"];
+
+		startupProject         = settings["startupProject"].GetOrDefault(std::string());
+		const auto gfxSettings = settings["graphics"];
 
 		auto gfxOpts             = bgl::GraphicsOptions();
 		gfxOpts.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
@@ -158,7 +162,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 	SetUpFrameStats();
 
-	ShowEmptyState();
+	// config.json may name a project to open on launch, so working on one does not mean reopening
+	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
+	// absolute path in it reasonable.
+	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
+		ShowEmptyState();
 }
 
 MainWindow::~MainWindow()
@@ -210,13 +218,21 @@ MainWindow::OpenProject()
 	if (file.isEmpty())
 		return;
 
+	OpenProjectAt(std::filesystem::path(file.toStdWString()));
+}
+
+bool
+MainWindow::OpenProjectAt(const std::filesystem::path& path)
+{
 	try
 	{
-		SetActiveProject(Project::Open(std::filesystem::path(file.toStdWString())));
+		SetActiveProject(Project::Open(path));
+		return true;
 	}
 	catch (const std::exception& e)
 	{
 		QMessageBox::warning(this, "Open Project", e.what());
+		return false;
 	}
 }
 

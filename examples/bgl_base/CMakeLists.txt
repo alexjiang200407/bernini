@@ -8,7 +8,7 @@ file(GLOB_RECURSE BGL_BASE_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
-add_executable(bgl_base WIN32
+add_executable(bgl_base
     ${BGL_BASE_SOURCES}
     ${BGL_BASE_HEADERS}
 )

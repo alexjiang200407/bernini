@@ -50,7 +50,7 @@ namespace
 	EditorConfig()
 	{
 		static auto g_Settings =
-			core::Settings(core::file::get_library_path().parent_path() / "config.json");
+			core::Settings(core::file::get_executable_path().parent_path() / "config.json");
 		return g_Settings;
 	}
 

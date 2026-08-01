@@ -8,7 +8,7 @@ file(GLOB_RECURSE BGL_SPHERE_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
-add_executable(bgl_sphere WIN32
+add_executable(bgl_sphere
     ${BGL_SPHERE_SOURCES}
     ${BGL_SPHERE_HEADERS}
 )
