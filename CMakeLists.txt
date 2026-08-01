@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 project(BerniniEngine)
 
 # Group targets into folders for IDE generators (Visual Studio / Xcode).
@@ -43,6 +43,19 @@ add_custom_command(
 
 add_custom_target(copy_assets DEPENDS "${ASSET_STAMP}")
 
+# --- Force the optimized (Release) libktx, even in Debug builds ---
+# Before any subdirectory, and GLOBAL: an imported target is directory-scoped by default, so
+# libs/assetlib's own find_package(ktx) would otherwise get a second KTX::ktx that this mapping
+# never reaches -- and link the debug encoder. Where ktx is a shared library the Release copy
+# deployed next to the executable hides that at runtime; where it is static (macOS) the debug
+# code is linked in, and a texture bake runs an order of magnitude slower.
+set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
+find_package(ktx CONFIG REQUIRED)
+set_target_properties(KTX::ktx PROPERTIES
+    MAP_IMPORTED_CONFIG_DEBUG          Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+    MAP_IMPORTED_CONFIG_MINSIZEREL     Release)
+
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
@@ -81,12 +94,6 @@ if (TARGET editor)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/apps/editor" "editor")
 endif()
 
-# --- Force the optimized (Release) libktx at runtime, even in Debug builds ---
-find_package(ktx CONFIG REQUIRED)
-set_target_properties(KTX::ktx PROPERTIES
-    MAP_IMPORTED_CONFIG_DEBUG          Release
-    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
-    MAP_IMPORTED_CONFIG_MINSIZEREL     Release)
 
 set(KTX_CONSUMER_TARGETS "")
 foreach(_ktx_consumer assetlib_cli assetlib_tests bgl_tests editor ${EXAMPLE_TARGETS})
