@@ -17,15 +17,16 @@ namespace bgl
 	 * independently of Graphics so one renderer can drive many outputs. The frame ring is reached
 	 * through RenderTargetBase, so frame-driving code needs neither this type nor Metal.
 	 *
-	 * Headless only for now. A windowed target draws into a CAMetalLayer's drawable, which is a
-	 * different acquire/present shape than a ring the target owns outright, and it lands with the
-	 * SDL examples.
+	 * A windowed target owns the same ring and blits the finished frame into the layer's drawable
+	 * at present. A drawable is transient -- it is acquired per frame and valid only until presented
+	 * -- so it cannot back a persistent indexed backbuffer, and the ring stays the renderer's target.
+	 * The cost is one full-screen copy per frame.
 	 */
 	class RenderTarget final : public core::RefCounter<RenderTargetBase>
 	{
 	public:
-		// The queue is taken and dropped: a headless ring neither presents on it nor flushes it, and
-		// the windowed path that will can store it then. IDevice::CreateRenderTarget passes one.
+		// `desc.wnd` is the CAMetalLayer to present into, and is read only when desc.headless is
+		// false. The queue is what the present blit is encoded on.
 		RenderTarget(
 			const RenderTargetDesc& desc,
 			DeviceRef               device,
@@ -61,7 +62,7 @@ namespace bgl
 		[[nodiscard]] bool
 		IsHeadless() const noexcept override
 		{
-			return true;
+			return m_Layer == nullptr;
 		}
 
 		[[nodiscard]] uint64_t
@@ -138,8 +139,17 @@ namespace bgl
 		void
 		ReleaseAttachments() noexcept;
 
+		// Blits the frame just recorded into the layer's next drawable and presents it. Null layer
+		// (headless) is a no-op.
+		void
+		PresentToLayer() noexcept;
+
 		DeviceRef          m_Device;
+		CommandQueueRef    m_Queue;
 		ResourceManagerRef m_ResourceManager;
+
+		// Borrowed: the window system owns the layer and outlives the target.
+		CA::MetalLayer* m_Layer = nullptr;
 
 		uint32_t m_Width  = 0;
 		uint32_t m_Height = 0;

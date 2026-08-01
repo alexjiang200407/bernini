@@ -1,5 +1,10 @@
 #include "RenderTarget_metal.h"
 
+#include "cmd/CommandQueue_metal.h"
+#include "device/Device_metal.h"
+#include "resource/ResourceManager_metal.h"
+#include "util_metal.h"
+
 namespace bgl
 {
 	namespace
@@ -12,15 +17,33 @@ namespace bgl
 	RenderTarget::RenderTarget(
 		const RenderTargetDesc& desc,
 		DeviceRef               device,
-		CommandQueueRef,
-		ResourceManagerRef resourceManager) :
-		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
-		m_Width(static_cast<uint32_t>(desc.width)), m_Height(static_cast<uint32_t>(desc.height))
+		CommandQueueRef         queue,
+		ResourceManagerRef      resourceManager) :
+		m_Device(std::move(device)), m_Queue(std::move(queue)),
+		m_ResourceManager(std::move(resourceManager)), m_Width(static_cast<uint32_t>(desc.width)),
+		m_Height(static_cast<uint32_t>(desc.height))
 	{
 		if (!desc.headless)
 		{
-			core::throw_runtime_error(
-				"Metal backend: a windowed render target is not implemented yet");
+			if (desc.wnd == nullptr)
+			{
+				core::throw_runtime_error(
+					"Metal backend: a windowed render target needs a CAMetalLayer in "
+					"RenderTargetDesc::wnd");
+			}
+
+			m_Layer = static_cast<CA::MetalLayer*>(desc.wnd);
+			m_Layer->setDevice(m_Device->As<Device>()->GetMTLDevice());
+
+			// Must match the ring's colour format: the present path is a blit, and Metal requires
+			// both sides of one to agree.
+			m_Layer->setPixelFormat(ConvertFormat(c_BackbufferFormat));
+
+			// A drawable is a blit destination here, not only an attachment, which framebufferOnly
+			// would forbid.
+			m_Layer->setFramebufferOnly(false);
+			m_Layer->setDrawableSize(
+				CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
 		}
 
 		for (CommandAllocatorRef& allocator : m_FrameAllocators)
@@ -126,10 +149,41 @@ namespace bgl
 	}
 
 	void
+	RenderTarget::PresentToLayer() noexcept
+	{
+		if (m_Layer == nullptr)
+			return;
+
+		NS::SharedPtr<NS::AutoreleasePool> pool =
+			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
+
+		// Null when the layer has no drawable free -- the display is holding them all. Dropping the
+		// frame is the right answer; the ring already holds it and the next present shows it.
+		CA::MetalDrawable* drawable = m_Layer->nextDrawable();
+		if (drawable == nullptr)
+			return;
+
+		auto*               rm   = m_ResourceManager->As<ResourceManager>();
+		const TextureHandle src  = m_Backbuffers[m_FrameIndex].texture;
+		MTL::Texture*       from = rm->GetTexture(src).GetMTLResource();
+		MTL::Texture*       to   = drawable->texture();
+
+		// Encoded on the renderer's queue, so it is ordered after the frame that filled the ring.
+		MTL::CommandBuffer* cmd =
+			m_Queue->As<CommandQueue>()->GetMTLCommandQueue()->commandBuffer();
+		MTL::BlitCommandEncoder* blit = cmd->blitCommandEncoder();
+		blit->copyFromTexture(from, to);
+		blit->endEncoding();
+
+		cmd->presentDrawable(drawable);
+		cmd->commit();
+	}
+
+	void
 	RenderTarget::PresentAndAdvance() noexcept
 	{
-		// Nothing to present: a headless target's backbuffer is read by a capture or a screenshot,
-		// so advancing round-robin is the whole of it.
+		PresentToLayer();
+
 		m_LastPresentedIndex = m_FrameIndex;
 		m_FrameIndex         = (m_FrameIndex + 1) % c_SwapchainImageCount;
 	}
@@ -141,6 +195,11 @@ namespace bgl
 
 		m_Width  = width;
 		m_Height = height;
+		if (m_Layer != nullptr)
+		{
+			m_Layer->setDrawableSize(
+				CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
+		}
 		CreateAttachments();
 
 		// The backbuffers those fences described are gone, so nothing is in flight against the ring.
