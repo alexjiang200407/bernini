@@ -48,7 +48,7 @@ private:
 	ShowProjectState();
 
 	// Keeps every RenderTargetWindow under `dock` in the frame loop only while the dock is the
-	// selected tab.
+	// selected tab. Every connection it makes must be cut before the windows are destroyed.
 	void
 	DriveViewportsFromTab(QDockWidget* dock);
 
@@ -66,6 +66,10 @@ private:
 	QDockWidget*              m_ContentExplorerDock = nullptr;
 	QLabel*                   m_FrameStats          = nullptr;
 	std::unique_ptr<Renderer> m_Renderer;
+
+	// The dock-visibility connections, held so the destructor can cut them before the windows they
+	// reach go away.
+	std::vector<QMetaObject::Connection> m_TabVisibility;
 
 	// The editor's one asset manager, over the Level Editor's view. Shared, so a material loaded by
 	// the thumbnails and by the level is one upload and one reference count. Rebuilt per project,
