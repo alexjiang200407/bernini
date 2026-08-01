@@ -96,12 +96,17 @@ the agent. [`scripts/pr.py`](../scripts/pr.py) is the only way it writes to a pu
 
 | | |
 | --- | --- |
-| `just pr create --base B --title T --body-file F` | opens the PR **as the bot**, so the description is the bot's; arms the pending-watch list |
+| `just pr create --base B --body-file F` | opens the PR **as the bot**, so the description is the bot's; arms the pending-watch list |
 | `just pr comments <n>` | every review, thread and comment, each with the id to answer and whether it has been answered |
 | `just pr reply <comment-id> --body-file F` | answers **where the comment was made** — the id is looked up, and an inline comment gets a threaded reply |
 | `just pr comment <n> --body-file F` | a top-level summary; refuses while any thread is still unanswered |
 | `just pr edit <n> --body-file F` | rewrites the body, still as the bot |
 | `just pr check <n>` | is it bot-authored, is anything unanswered; exits 2 if not |
+
+The title heads the body file as `# one-line title` and is lifted out of the body. It travels in the
+file because `just` joins a recipe's arguments on spaces, so a `--title` containing one cannot survive
+the trip; the flag still works when `scripts/pr.py` is called directly. Without a bot key, `just pr`
+**refuses** rather than quietly posting as the developer — `--as-me` is the deliberate override.
 
 Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) close the gaps around it:
 

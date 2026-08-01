@@ -136,12 +136,13 @@ co-authors every commit made from a Claude session to the morgana-coding-agent b
 `Co-authored-by` line yourself and never pass `--no-verify`.
 
 Then rebase onto `origin/master` (it moves), rebuild, re-test, and open the PR. Write the body to a
-file first — it is prose, and `--body-file` keeps it out of shell quoting:
+file first, headed by `# type(scope): the title` — the title is lifted from that line, because `just`
+joins a recipe's arguments on spaces and a quoted one would not survive:
 
 ```bash
 git fetch origin && git rebase origin/master
 git push -u origin HEAD
-just pr create --base master --title "..." --body-file <file>
+just pr create --base master --body-file <file>
 ```
 
 `just pr` posts as the bot, so the description is the agent's rather than the user's; raw

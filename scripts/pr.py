@@ -8,7 +8,7 @@ body is never posted under the developer's name, and it decides in-thread versus
 top-level by looking the comment up rather than by being told, so an inline
 review comment cannot be answered in the wrong place.
 
-    pr.py create --base master --title "..." --body-file body.md
+    pr.py create --base master --body-file body.md   # '# title' heads the file
     pr.py comments 184                     # every review, thread and comment, with ids
     pr.py reply 2154783 --body "..."       # routed by what the id turns out to be
     pr.py comment 184 --body-file s.md     # top-level summary; refuses while a thread is open
@@ -41,6 +41,22 @@ def read_body(args):
         return sys.stdin.read()
     with open(args.body_file, encoding="utf-8") as fh:
         return fh.read()
+
+
+def split_title(body):
+    """A leading '# title' line lifted out of `body`, as (title, rest).
+
+    `just` joins a recipe's arguments on spaces, so a --title that contains one
+    cannot survive the trip. The title therefore travels in the file with the
+    body, which needs no quoting at all.
+    """
+    lines = body.lstrip("\n").split("\n")
+    if not lines or not lines[0].startswith("# "):
+        return None, body
+    rest = lines[1:]
+    while rest and not rest[0].strip():
+        rest.pop(0)
+    return lines[0][2:].strip(), "\n".join(rest)
 
 
 def add_body_args(parser, required=True):
@@ -76,8 +92,15 @@ def cmd_create(args):
     if not git("ls-remote", "--heads", "origin", head):
         sys.exit(f"error: origin has no branch '{head}' -- push it first (git push -u origin HEAD)")
 
+    heading, body = split_title(read_body(args))
+    title = args.title or heading
+    if not title:
+        sys.exit("error: no title. Start the body file with a '# one-line title' heading,\n"
+                 "       or pass --title (which needs `python scripts/pr.py`, since `just`\n"
+                 "       joins a recipe's arguments on spaces).")
+
     token = token_or_die(args.as_me)
-    fields = {"title": args.title, "head": head, "base": args.base, "body": read_body(args)}
+    fields = {"title": title, "head": head, "base": args.base, "body": body}
     try:
         pr = gh.api(f"repos/{slug}/pulls", token=token, method="POST", fields=fields,
                     raw_fields={"draft": "true" if args.draft else "false"})
@@ -215,7 +238,12 @@ def cmd_comment(args):
 def cmd_edit(args):
     slug = gh.repo_slug(args.repo)
     token = token_or_die(args.as_me)
-    fields = {"body": read_body(args)} if (args.body or args.body_file) else {}
+    fields = {}
+    if args.body or args.body_file:
+        heading, body = split_title(read_body(args))
+        fields["body"] = body
+        if heading:
+            fields["title"] = heading
     if args.title:
         fields["title"] = args.title
     if not fields:
@@ -264,7 +292,7 @@ def main():
 
     p = subs.add_parser("create", help="open a PR, authored by the bot")
     p.add_argument("--base", required=True, help="branch to merge into")
-    p.add_argument("--title", required=True)
+    p.add_argument("--title", help="default: the body's leading '# title' heading")
     p.add_argument("--head", help="branch to merge from (default: the current one)")
     p.add_argument("--draft", action="store_true")
     add_body_args(p)

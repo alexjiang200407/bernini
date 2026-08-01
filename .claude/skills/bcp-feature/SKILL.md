@@ -121,7 +121,7 @@ git switch -c docs/<name>-plan feat/<name>
 git add docs/plans/<name>.md
 git commit -m "docs(plans): plan <what the feature delivers>"   # the hook adds the bot co-author
 git push -u origin HEAD
-just pr create --base feat/<name> --title "docs(plans): ..." --body-file <file>
+just pr create --base feat/<name> --body-file <file>
 ```
 
 Then § 4. **No task branch is cut until this PR merges** — the plan fixes what every later PR is
@@ -172,13 +172,14 @@ just format <files...>
 git fetch origin && git rebase origin/feat/<name>   # the base moved if a sibling merged
 just build && just test                             # again — a rebase is a real merge
 git push -u origin HEAD
-just pr create --base feat/<name> --title "..." --body-file <file>
+just pr create --base feat/<name> --body-file <file>
 ```
 
 `--base` is not optional, and it is not defaulted: name the feature branch or the PR proposes the
-work to `master`. The body goes in a file — it is prose, and `--body-file` keeps it out of shell
-quoting. `just pr create` opens it as the bot, so the description reads as the agent's rather than
-the user's, and it arms the watch that § 4 must clear.
+work to `master`. The body goes in a file, headed by `# type(scope): the title` — the title is lifted
+from that line, since `just` joins a recipe's arguments on spaces. `just pr create` opens it as the
+bot, so the description reads as the agent's rather than the user's, and it arms the watch that § 4
+must clear.
 
 The body says what changed, **why**, how it was verified (name the suites; say whether GPU validation
 ran), which task of the plan it is, and what still has to land. A reviewer must be able to tell a
@@ -251,7 +252,7 @@ git fetch origin && git switch feat/<name> && git rebase origin/master
 just build && just test                      # the whole feature at once
 just run bgl_tests -- --gpu-validation       # if any task touched shaders, barriers or descriptors
 git push --force-with-lease
-just pr create --base master --head feat/<name> --title "..." --body-file <file>
+just pr create --base master --head feat/<name> --body-file <file>
 ```
 
 This run matters more than any single task's did: each was verified against the branch as it stood at
