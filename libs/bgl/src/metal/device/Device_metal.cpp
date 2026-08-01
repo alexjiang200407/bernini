@@ -43,6 +43,24 @@ namespace bgl
 	Device::Device(MTL::Device* device, const std::string& shaderCacheDir) :
 		m_Device(NS::RetainPtr(device))
 	{
+		if (!shaderCacheDir.empty())
+		{
+			m_ShaderCache = std::make_unique<ShaderCache>(
+				m_Device.get(),
+				shaderCacheDir,
+				ShaderCacheSalt(),
+				std::vector<std::string>(
+					std::begin(c_ShaderSearchPaths),
+					std::end(c_ShaderSearchPaths)));
+		}
+	}
+
+	slang::ISession*
+	Device::GetSlangSession() const noexcept
+	{
+		if (m_SlangSession != nullptr)
+			return m_SlangSession.get();
+
 		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
 		gassert(m_SlangGlobalSession != nullptr, "Failed to create Slang global session");
 
@@ -71,16 +89,14 @@ namespace bgl
 		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef());
 		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
 
-		if (!shaderCacheDir.empty())
-		{
-			m_ShaderCache = std::make_unique<ShaderCache>(
-				m_Device.get(),
-				shaderCacheDir,
-				ShaderCacheSalt(),
-				std::vector<std::string>(
-					std::begin(c_ShaderSearchPaths),
-					std::end(c_ShaderSearchPaths)));
-		}
+		return m_SlangSession.get();
+	}
+
+	void
+	Device::ReleaseSlangSession() noexcept
+	{
+		m_SlangSession.setNull();
+		m_SlangGlobalSession.setNull();
 	}
 
 	core::SharedRef<ICommandQueue>
@@ -130,7 +146,7 @@ namespace bgl
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), m_SlangSession.get());
+		return core::SharedRef<Shader>::Make(std::move(desc), GetSlangSession());
 	}
 
 	core::SharedRef<IComputePipeline>
@@ -138,7 +154,7 @@ namespace bgl
 	{
 		return core::SharedRef<ComputePipeline>::Make(
 			m_Device.get(),
-			m_SlangSession.get(),
+			GetSlangSession(),
 			m_ShaderCache.get(),
 			desc);
 	}
@@ -148,7 +164,7 @@ namespace bgl
 	{
 		return core::SharedRef<MeshletPipeline>::Make(
 			m_Device.get(),
-			m_SlangSession.get(),
+			GetSlangSession(),
 			m_ShaderCache.get(),
 			desc);
 	}
