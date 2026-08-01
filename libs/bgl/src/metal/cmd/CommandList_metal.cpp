@@ -204,7 +204,7 @@ namespace bgl
 		m_ScopePool = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
 		auto* queue = cmdQueue->As<CommandQueue>();
-		m_CmdBuffer = NS::RetainPtr(queue->GetMTLCommandQueue()->commandBuffer());
+		m_CmdBuffer = NS::RetainPtr(queue->NewCommandBuffer());
 
 		// Before any encoder: a wait encoded after them would sit past the work it must gate.
 		queue->BeginCommandBuffer(m_CmdBuffer.get());
@@ -240,6 +240,7 @@ namespace bgl
 		// command buffer retains the staging buffer until it completes, so it needs no separate owner.
 		auto staging =
 			NS::TransferPtr(m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared));
+		gassert(staging.get() != nullptr, "Metal upload staging buffer allocation failed");
 
 		BlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
 	}
@@ -394,6 +395,9 @@ namespace bgl
 
 			auto staging = NS::TransferPtr(
 				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));
+			gassert(
+				staging.get() != nullptr,
+				"Metal texture upload staging buffer allocation failed");
 
 			blit->copyFromBuffer(
 				staging.get(),

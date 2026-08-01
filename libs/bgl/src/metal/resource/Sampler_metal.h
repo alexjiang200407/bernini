@@ -41,6 +41,7 @@ namespace bgl
 			sd->setSupportArgumentBuffers(true);
 
 			m_Sampler = NS::TransferPtr(device->newSamplerState(sd.get()));
+			gassert(m_Sampler.get() != nullptr, "Metal sampler state creation failed");
 		}
 
 		[[nodiscard]] MTL::SamplerState*

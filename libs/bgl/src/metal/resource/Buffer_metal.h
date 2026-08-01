@@ -21,6 +21,7 @@ namespace bgl
 		{
 			m_Buffer =
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
+			gassert(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(

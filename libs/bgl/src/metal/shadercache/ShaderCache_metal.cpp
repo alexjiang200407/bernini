@@ -1,4 +1,5 @@
 #include "shadercache/ShaderCache_metal.h"
+#include "MetalErrorChecker.h"
 
 #include "shadercache/util.h"
 #include "util_metal.h"
@@ -161,7 +162,7 @@ namespace bgl
 		{
 			logger::warn(
 				"Metal binary archive unavailable, driver pipelines will not be cached: {}",
-				error != nullptr ? error->localizedDescription()->utf8String() : "unknown");
+				GetErrorDescription(error));
 		}
 	}
 
@@ -188,7 +189,7 @@ namespace bgl
 		{
 			logger::warn(
 				"Could not serialize the Metal binary archive: {}",
-				error != nullptr ? error->localizedDescription()->utf8String() : "unknown");
+				GetErrorDescription(error));
 			return;
 		}
 

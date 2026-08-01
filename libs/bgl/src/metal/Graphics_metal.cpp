@@ -1,3 +1,4 @@
+#include "MetalErrorChecker.h"
 #include "cmd/CommandQueue_metal.h"
 #include "device/Device_metal.h"
 
@@ -56,8 +57,7 @@ namespace bgl
 				{
 					core::throw_runtime_error(
 						"Metal frame capture failed to start: {}",
-						error != nullptr ? error->localizedDescription()->utf8String() :
-										   "no reason given");
+						GetErrorDescription(error));
 				}
 				m_Active = true;
 			}

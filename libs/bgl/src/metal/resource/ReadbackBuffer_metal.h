@@ -18,6 +18,7 @@ namespace bgl
 		{
 			m_Buffer =
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModeShared));
+			gassert(m_Buffer.get() != nullptr, "Metal readback buffer allocation failed");
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(
