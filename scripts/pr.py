@@ -111,7 +111,7 @@ def cmd_create(args):
                      "       pending permission on its installation -- see docs/ai-coding.md.")
         sys.exit(f"error: {e}")
 
-    watchlist.arm(pr["number"], pr["html_url"])
+    watchlist.arm(pr["number"], pr["html_url"], pr.get("created_at"))
     print(json.dumps({
         "number": pr["number"],
         "url": pr["html_url"],
@@ -193,7 +193,7 @@ def cmd_reply(args):
         root = target.get("in_reply_to_id") or target["id"]
         posted = gh.api(f"repos/{slug}/pulls/{pr}/comments/{root}/replies",
                         token=token, method="POST", fields={"body": body})
-        watchlist.arm(pr, posted.get("html_url", ""))
+        watchlist.arm(pr, posted.get("html_url", ""), posted.get("created_at"))
         print(json.dumps({"kind": "thread-reply", "pr": pr, "thread": root,
                           "url": posted.get("html_url")}, indent=2))
         return
@@ -206,7 +206,7 @@ def cmd_reply(args):
     pr = int(issue["issue_url"].rsplit("/", 1)[-1])
     posted = gh.api(f"repos/{slug}/issues/{pr}/comments", token=token, method="POST",
                     fields={"body": body})
-    watchlist.arm(pr, posted.get("html_url", ""))
+    watchlist.arm(pr, posted.get("html_url", ""), posted.get("created_at"))
     print(json.dumps({"kind": "top-level", "pr": pr, "url": posted.get("html_url"),
                       "note": "that id is a conversation comment; GitHub has no thread to "
                               "reply in, so this went to the conversation"}, indent=2))
@@ -231,7 +231,7 @@ def cmd_comment(args):
     token = token_or_die(args.as_me)
     posted = gh.api(f"repos/{slug}/issues/{args.pr}/comments", token=token, method="POST",
                     fields={"body": read_body(args)})
-    watchlist.arm(args.pr, posted.get("html_url", ""))
+    watchlist.arm(args.pr, posted.get("html_url", ""), posted.get("created_at"))
     print(json.dumps({"kind": "top-level", "pr": args.pr, "url": posted.get("html_url")}, indent=2))
 
 

@@ -40,11 +40,22 @@ def _save(pending):
         pass
 
 
-def arm(pr, url=""):
-    """Record that PR `pr` needs a watcher before this turn may end."""
-    pending = [e for e in _load() if e.get("pr") != pr or e.get("session") != _session()]
-    pending.append({"pr": pr, "url": url, "session": _session()})
-    _save(pending)
+def arm(pr, url="", since=None):
+    """Record that PR `pr` needs a watcher before this turn may end.
+
+    `since` is the server timestamp of whatever was just posted. Carrying it here
+    is what stops the next watch from firing on the agent's own reply: the caller
+    would otherwise have to hand the watcher a timestamp it guessed.
+    """
+    kept, previous = [], None
+    for entry in _load():
+        if entry.get("pr") == pr:
+            previous = previous or entry.get("since")
+            if entry.get("session") == _session():
+                continue
+        kept.append(entry)
+    kept.append({"pr": pr, "url": url, "session": _session(), "since": since or previous})
+    _save(kept)
 
 
 def disarm(pr):
@@ -56,3 +67,9 @@ def pending(session=None):
     """Armed entries for `session` (the current one by default)."""
     want = _session() if session is None else session
     return [e for e in _load() if e.get("session") == want]
+
+
+def since_for(pr):
+    """The newest recorded post time for `pr`, whichever session posted it."""
+    stamps = [e.get("since") for e in _load() if e.get("pr") == pr and e.get("since")]
+    return max(stamps) if stamps else None
