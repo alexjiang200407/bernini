@@ -47,6 +47,11 @@ private:
 	void
 	ShowProjectState();
 
+	// Keeps every RenderTargetWindow under `dock` in the frame loop only while the dock is the
+	// selected tab.
+	void
+	DriveViewportsFromTab(QDockWidget* dock);
+
 	// Adds the viewport frame-time readout to the status bar and connects it to the level editor.
 	void
 	SetUpFrameStats();

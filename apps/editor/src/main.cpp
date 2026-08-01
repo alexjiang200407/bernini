@@ -6,6 +6,7 @@
 
 #include <core/err/util.h>
 
+#include "EditorStyle.h"
 #include "MainWindow.h"
 
 namespace
@@ -49,6 +50,7 @@ main(int argc, char* argv[])
 	core::install_crash_handlers();
 
 	QApplication app(argc, argv);
+	QApplication::setStyle(new EditorStyle);
 
 	qInstallMessageHandler(LogToFile);
 

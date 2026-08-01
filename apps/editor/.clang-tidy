@@ -4,4 +4,4 @@
 InheritParentConfig: true
 
 CheckOptions:
-  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint)$'
+  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint|styleHint|drawPrimitive)$'

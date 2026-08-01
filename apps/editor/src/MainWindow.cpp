@@ -18,6 +18,7 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
@@ -155,6 +156,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
+
+	DriveViewportsFromTab(m_LevelEditorDock);
+	DriveViewportsFromTab(m_MaterialEditorDock);
 
 	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
@@ -375,6 +379,18 @@ MainWindow::SetActiveProject(Project project)
 	statusBar()->showMessage(
 		QString("Project data: %1")
 			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
+}
+
+void
+MainWindow::DriveViewportsFromTab(QDockWidget* dock)
+{
+	// Tabifying leaves the unselected dock's widget visible to Qt -- it is stacked behind, not
+	// hidden -- so without this every viewport in the editor keeps drawing whatever tab is on top.
+	// visibilityChanged is the signal that follows the tab, which show/hideEvent do not.
+	connect(dock, &QDockWidget::visibilityChanged, dock, [dock](bool visible) {
+		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
+			view->SetRenderingEnabled(visible);
+	});
 }
 
 void
