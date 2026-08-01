@@ -21,6 +21,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(QtNodes)
 
+# Qt's FindWrapOpenGL adds AGL to everything linking Qt6::OpenGL, and finds it by searching the
+# running system rather than the SDK. AGL.framework still exists on disk but was dropped from the
+# SDK, so the path resolves at configure time and then fails at link under -isysroot. Nothing here
+# wants the Carbon-era API; OpenGL.framework is what a modern build links, so AGL is filtered out.
+if (APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_bernini_wrapgl_libs WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    if (_bernini_wrapgl_libs)
+        list(FILTER _bernini_wrapgl_libs EXCLUDE REGEX "AGL")
+        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${_bernini_wrapgl_libs}")
+    endif()
+endif()
+
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -74,6 +87,18 @@ else()
 endif()
 
 target_include_directories(editor_lib PUBLIC "${EDITOR_AUTOGEN_INCLUDE}")
+
+if (APPLE)
+	# Objective-C++ so the Qt view can be given a CAMetalLayer; globbed separately because the
+	# .cpp glob above must not pick it up on any other platform.
+	file(GLOB_RECURSE EDITOR_SOURCES_MAC CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/src/*.mm
+	)
+	target_sources(editor_lib PRIVATE ${EDITOR_SOURCES_MAC})
+	# The PCH is compiled as C++; Objective-C++ cannot consume it.
+	set_source_files_properties(${EDITOR_SOURCES_MAC} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+	target_link_libraries(editor_lib PRIVATE "-framework AppKit" "-framework QuartzCore")
+endif()
 
 target_link_libraries(editor_lib
 	PUBLIC

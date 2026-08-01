@@ -24,6 +24,25 @@
 #include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
+namespace
+{
+	// A leading ~ is what a person writes in a config file and what no filesystem API expands.
+	std::filesystem::path
+	ExpandHome(const std::string& value)
+	{
+		if (!value.starts_with("~/") && value != "~")
+			return std::filesystem::path(value);
+
+		const char* home = std::getenv("HOME");
+		if (home == nullptr)
+			home = std::getenv("USERPROFILE");
+		if (home == nullptr)
+			return std::filesystem::path(value);
+
+		return std::filesystem::path(home) / value.substr(value.size() > 1 ? 2 : 1);
+	}
+}
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
 	m_Ui.setupUi(this);
@@ -37,10 +56,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		&MainWindow::CleanUnusedTextures);
 	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
 
+	std::string startupProject;
 	{
-		const auto     configPath = core::file::get_library_path().parent_path() / "config.json";
+		const auto     configPath = core::file::get_executable_path().parent_path() / "config.json";
 		core::Settings settings(configPath);
-		const auto     gfxSettings = settings["graphics"];
+
+		startupProject         = settings["startupProject"].GetOrDefault(std::string());
+		const auto gfxSettings = settings["graphics"];
 
 		auto gfxOpts             = bgl::GraphicsOptions();
 		gfxOpts.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
@@ -158,7 +180,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 	SetUpFrameStats();
 
-	ShowEmptyState();
+	// config.json may name a project to open on launch, so working on one does not mean reopening
+	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
+	// absolute path in it reasonable.
+	if (startupProject.empty() || !OpenProjectAt(ExpandHome(startupProject)))
+		ShowEmptyState();
 }
 
 MainWindow::~MainWindow()
@@ -210,13 +236,21 @@ MainWindow::OpenProject()
 	if (file.isEmpty())
 		return;
 
+	OpenProjectAt(std::filesystem::path(file.toStdWString()));
+}
+
+bool
+MainWindow::OpenProjectAt(const std::filesystem::path& path)
+{
 	try
 	{
-		SetActiveProject(Project::Open(std::filesystem::path(file.toStdWString())));
+		SetActiveProject(Project::Open(path));
+		return true;
 	}
 	catch (const std::exception& e)
 	{
 		QMessageBox::warning(this, "Open Project", e.what());
+		return false;
 	}
 }
 

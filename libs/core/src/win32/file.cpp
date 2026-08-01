@@ -23,4 +23,15 @@ namespace core::file
 
 		return std::filesystem::path{ buffer };
 	}
+
+	std::filesystem::path
+	get_executable_path()
+	{
+		wchar_t buffer[MAX_PATH];
+		DWORD   len = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+		if (len == 0)
+			return {};
+
+		return std::filesystem::path{ buffer };
+	}
 }

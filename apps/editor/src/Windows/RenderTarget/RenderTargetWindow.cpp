@@ -2,6 +2,10 @@
 
 #include "Render/Renderer.h"
 
+#if defined(__APPLE__)
+#	include "Platform/MetalSurface.h"
+#endif
+
 #include <QDebug>
 #include <QHideEvent>
 #include <QResizeEvent>
@@ -29,8 +33,14 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	auto rtvDesc   = bgl::RenderTargetDesc();
 	rtvDesc.width  = m_Width;
 	rtvDesc.height = m_Height;
-	// winId() must be resolved here on the GUI thread; the render target is created from the value.
-	rtvDesc.wnd      = reinterpret_cast<void*>(winId());
+	// Resolved here on the GUI thread; the render target is created from the value on the render
+	// thread. macOS takes the widget's CAMetalLayer rather than its native view -- see
+	// platform::MetalLayerForView.
+#if defined(__APPLE__)
+	rtvDesc.wnd = platform::MetalLayerForView(winId());
+#else
+	rtvDesc.wnd = reinterpret_cast<void*>(winId());
+#endif
 	rtvDesc.headless = false;
 
 	m_RenderTarget = m_Desc.renderer->Invoke(
