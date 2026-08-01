@@ -1,10 +1,10 @@
 #include "pipeline/ComputePipeline_metal.h"
 #include "MetalErrorChecker.h"
 
+#include "convert_metal.h"
 #include "pipeline/MetalPipelineReflection.h"
 #include "shadercache/ShaderCache_metal.h"
 #include "slang/SlangErrorChecker.h"
-#include "util_metal.h"
 
 #include <core/err/util.h>
 
@@ -136,8 +136,8 @@ namespace bgl
 			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
 		MetalErrorChecker           errChecker;
-		NS::SharedPtr<MTL::Library> library =
-			NS::TransferPtr(device->newLibrary(Str(stage.msl), nullptr, errChecker.WriteError()));
+		NS::SharedPtr<MTL::Library> library = NS::TransferPtr(
+			device->newLibrary(ConvertString(stage.msl), nullptr, errChecker.WriteError()));
 		library.get() >> errChecker;
 
 		// Slang mangles the entry name in MSL (main -> main_0); a single-entry compute library exposes

@@ -1,6 +1,8 @@
 #pragma once
 #include "metal_cpp.h"
 
+#include "convert_metal.h"
+
 #include "resource/Sampler.h"
 
 namespace bgl
@@ -60,60 +62,6 @@ namespace bgl
 		IsNull() const noexcept
 		{
 			return m_Sampler.get() == nullptr;
-		}
-
-	private:
-		// D3D12 encodes minimum/maximum as a filter reduction; Metal has no equivalent, so a sampler
-		// asking for one would come out as a plain average and misbehave quietly. Refused instead.
-		// Comparison matches D3D12's mapping of the same field, which is LESS (convert_d3d12.cpp).
-		static MTL::CompareFunction
-		ConvertReduction(SamplerReductionType reduction) noexcept
-		{
-			switch (reduction)
-			{
-			case SamplerReductionType::kStandard:
-				return MTL::CompareFunctionNever;
-			case SamplerReductionType::kComparison:
-				return MTL::CompareFunctionLess;
-			case SamplerReductionType::kMinimum:
-			case SamplerReductionType::kMaximum:
-				gfatal(
-					"Metal has no sampler filter reduction, so SamplerReductionType::k{} cannot "
-					"be expressed",
-					reduction == SamplerReductionType::kMinimum ? "Minimum" : "Maximum");
-			}
-			gfatal("Unhandled SamplerReductionType");
-		}
-
-		static MTL::SamplerAddressMode
-		ConvertAddressMode(SamplerAddressMode mode) noexcept
-		{
-			switch (mode)
-			{
-			case SamplerAddressMode::kClamp:
-				return MTL::SamplerAddressModeClampToEdge;
-			case SamplerAddressMode::kWrap:
-				return MTL::SamplerAddressModeRepeat;
-			case SamplerAddressMode::kBorder:
-				return MTL::SamplerAddressModeClampToBorderColor;
-			case SamplerAddressMode::kMirror:
-				return MTL::SamplerAddressModeMirrorRepeat;
-			case SamplerAddressMode::kMirrorOnce:
-				return MTL::SamplerAddressModeMirrorClampToEdge;
-			}
-			gfatal("Unhandled SamplerAddressMode");
-		}
-
-		// Metal offers three fixed border colours rather than an arbitrary one, so the RHI's Color is
-		// matched to the nearest: transparent black, opaque black, or opaque white.
-		static MTL::SamplerBorderColor
-		ConvertBorderColor(const Color& color) noexcept
-		{
-			if (color.a < 0.5f)
-				return MTL::SamplerBorderColorTransparentBlack;
-			return (color.r + color.g + color.b) / 3.0f < 0.5f ?
-			           MTL::SamplerBorderColorOpaqueBlack :
-			           MTL::SamplerBorderColorOpaqueWhite;
 		}
 
 		SamplerDesc                      m_Desc;

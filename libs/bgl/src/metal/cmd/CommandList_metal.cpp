@@ -122,7 +122,7 @@ namespace bgl
 	}
 
 	MTL::BlitCommandEncoder*
-	CommandList::BlitEncoder() noexcept
+	CommandList::GetBlitEncoder() noexcept
 	{
 		if (m_EncoderKind != EncoderKind::kBlit)
 		{
@@ -134,7 +134,7 @@ namespace bgl
 	}
 
 	MTL::ComputeCommandEncoder*
-	CommandList::ComputeEncoder() noexcept
+	CommandList::GetComputeEncoder() noexcept
 	{
 		if (m_EncoderKind != EncoderKind::kCompute)
 		{
@@ -178,7 +178,7 @@ namespace bgl
 			d->setStoreAction(MTL::StoreActionStore);
 
 			// One texture, two attachments: Metal binds the stencil plane separately from depth.
-			if (FormatHasStencil(rm->GetTexture(texHandle).GetDesc().format))
+			if (GetFormatInfo(rm->GetTexture(texHandle).GetDesc().format).hasStencil)
 			{
 				MTL::RenderPassStencilAttachmentDescriptor* s = pass->stencilAttachment();
 				s->setTexture(texture);
@@ -242,7 +242,7 @@ namespace bgl
 			NS::TransferPtr(m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared));
 		gassert(staging.get() != nullptr, "Metal upload staging buffer allocation failed");
 
-		BlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
+		GetBlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
 	}
 
 	void
@@ -260,7 +260,7 @@ namespace bgl
 		auto* srcBuffer = m_ResourceManager->GetBuffer(src).GetMTLResource();
 		auto* dstBuffer = m_ResourceManager->GetBuffer(dst).GetMTLResource();
 
-		BlitEncoder()->copyFromBuffer(srcBuffer, srcOffset, dstBuffer, dstOffset, byteSize);
+		GetBlitEncoder()->copyFromBuffer(srcBuffer, srcOffset, dstBuffer, dstOffset, byteSize);
 	}
 
 	void
@@ -275,7 +275,7 @@ namespace bgl
 		const auto& srcBuffer = m_ResourceManager->GetBuffer(src);
 		auto*       dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMTLResource();
 
-		BlitEncoder()->copyFromBuffer(
+		GetBlitEncoder()->copyFromBuffer(
 			srcBuffer.GetMTLResource(),
 			0,
 			dstBuffer,
@@ -299,7 +299,7 @@ namespace bgl
 		const TextureReadbackLayout layout = m_ResourceManager->GetTextureReadbackLayout(src);
 		MTL::Buffer* dstBuffer = m_ResourceManager->GetReadbackBuffer(dst).GetMTLResource();
 
-		BlitEncoder()->copyFromTexture(
+		GetBlitEncoder()->copyFromTexture(
 			tex.GetMTLResource(),
 			0,
 			0,
@@ -374,7 +374,7 @@ namespace bgl
 
 		// One staging buffer per subresource, blitted on the GPU timeline so the upload orders ahead
 		// of whatever samples it. The command buffer retains each until it completes.
-		auto* blit = BlitEncoder();
+		auto* blit = GetBlitEncoder();
 		for (size_t i = 0; i < subresources.size(); ++i)
 		{
 			const TextureSubresourceData& sub = subresources[i];
@@ -446,7 +446,8 @@ namespace bgl
 		enc->setDepthClipMode(
 			state.rasterState.depthClipEnable ? MTL::DepthClipModeClip : MTL::DepthClipModeClamp);
 		enc->setDepthBias(
-			static_cast<float>(state.rasterState.depthBias),
+			static_cast<float>(state.rasterState.depthBias) *
+				DepthBiasUnit(pipeline->GetDesc().dsvFormat),
 			state.rasterState.slopeScaledDepthBias,
 			state.rasterState.depthBiasClamp);
 
@@ -607,7 +608,7 @@ namespace bgl
 		auto* pipeline = m_ComputeState.kernel->pipeline->As<ComputePipeline>();
 		auto* rm       = m_ResourceManager->As<ResourceManager>();
 
-		auto* enc = ComputeEncoder();
+		auto* enc = GetComputeEncoder();
 		enc->setComputePipelineState(pipeline->GetMTLPipelineState());
 
 		for (const auto& [name, uniforms] : m_ComputeState.kernel->uniforms)

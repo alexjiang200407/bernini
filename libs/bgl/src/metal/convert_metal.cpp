@@ -1,9 +1,9 @@
-#include "util_metal.h"
+#include "convert_metal.h"
 
 namespace bgl
 {
 	NS::String*
-	Str(const std::string& s) noexcept
+	ConvertString(const std::string& s) noexcept
 	{
 		return NS::String::string(s.c_str(), NS::UTF8StringEncoding);
 	}
@@ -176,10 +176,21 @@ namespace bgl
 		}
 	}
 
-	bool
-	FormatHasStencil(Format format) noexcept
+	float
+	DepthBiasUnit(Format format) noexcept
 	{
-		return format == Format::D24S8 || format == Format::D32S8;
+		switch (format)
+		{
+		case Format::D16:
+			return 1.0f / 65536.0f;  // 2^-16
+		case Format::D24S8:
+			return 1.0f / 16777216.0f;  // 2^-24
+		case Format::D32:
+		case Format::D32S8:
+			return 1.0f / 8388608.0f;  // 2^-23, the float mantissa step at z near 1
+		default:
+			return 0.0f;
+		}
 	}
 
 	MTL::BlendFactor
@@ -342,5 +353,57 @@ namespace bgl
 		default:
 			gfatal("Metal backend: unsupported RasterFillMode {}", static_cast<int>(mode));
 		}
+	}
+
+	// D3D12 encodes minimum/maximum as a filter reduction; Metal has no equivalent, so a sampler
+	// asking for one would come out as a plain average and misbehave quietly. Refused instead.
+	// Comparison matches D3D12's mapping of the same field, which is LESS (convert_d3d12.cpp).
+	MTL::CompareFunction
+	ConvertReduction(SamplerReductionType reduction) noexcept
+	{
+		switch (reduction)
+		{
+		case SamplerReductionType::kStandard:
+			return MTL::CompareFunctionNever;
+		case SamplerReductionType::kComparison:
+			return MTL::CompareFunctionLess;
+		case SamplerReductionType::kMinimum:
+		case SamplerReductionType::kMaximum:
+			gfatal(
+				"Metal has no sampler filter reduction, so SamplerReductionType::k{} cannot "
+				"be expressed",
+				reduction == SamplerReductionType::kMinimum ? "Minimum" : "Maximum");
+		}
+		gfatal("Unhandled SamplerReductionType");
+	}
+
+	MTL::SamplerAddressMode
+	ConvertAddressMode(SamplerAddressMode mode) noexcept
+	{
+		switch (mode)
+		{
+		case SamplerAddressMode::kClamp:
+			return MTL::SamplerAddressModeClampToEdge;
+		case SamplerAddressMode::kWrap:
+			return MTL::SamplerAddressModeRepeat;
+		case SamplerAddressMode::kBorder:
+			return MTL::SamplerAddressModeClampToBorderColor;
+		case SamplerAddressMode::kMirror:
+			return MTL::SamplerAddressModeMirrorRepeat;
+		case SamplerAddressMode::kMirrorOnce:
+			return MTL::SamplerAddressModeMirrorClampToEdge;
+		}
+		gfatal("Unhandled SamplerAddressMode");
+	}
+
+	// Metal offers three fixed border colours rather than an arbitrary one, so the RHI's Color is
+	// matched to the nearest: transparent black, opaque black, or opaque white.
+	MTL::SamplerBorderColor
+	ConvertBorderColor(const Color& color) noexcept
+	{
+		if (color.a < 0.5f)
+			return MTL::SamplerBorderColorTransparentBlack;
+		return (color.r + color.g + color.b) / 3.0f < 0.5f ? MTL::SamplerBorderColorOpaqueBlack :
+		                                                     MTL::SamplerBorderColorOpaqueWhite;
 	}
 }

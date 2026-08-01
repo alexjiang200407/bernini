@@ -2,8 +2,8 @@
 #include "metal_cpp.h"
 
 #include "constants/constants.h"
+#include "convert_metal.h"
 #include "resource/Texture.h"
-#include "util_metal.h"
 
 namespace bgl
 {

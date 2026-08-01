@@ -9,6 +9,7 @@
 #include "scene/SceneView.h"
 
 #include <core/file/file.h>
+#include <core/log/log.h>
 #include <core/ref/RefCounter.h>
 
 namespace fs = std::filesystem;
@@ -100,19 +101,7 @@ namespace bgl
 	public:
 		explicit Graphics(const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			fs::path logPath = core::file::get_executable_path().parent_path() / "bgl.log";
-
-			static bool g_LogTruncated = false;
-			const bool  truncate       = !g_LogTruncated;
-			g_LogTruncated             = true;
-
-			auto sink =
-				std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), truncate);
-			auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
-			log->set_level(static_cast<logger::level::level_enum>(opts.logLevel));
-			log->flush_on(static_cast<logger::level::level_enum>(opts.logLevel));
-			spdlog::set_default_logger(std::move(log));
-			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v"s);
+			core::logging::init_file_logger("bgl.log", static_cast<int>(opts.logLevel));
 
 			m_Pool = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
@@ -252,9 +241,6 @@ namespace bgl
 		}
 
 	private:
-		static constexpr const char* c_Unimplemented =
-			"Metal backend: the frame path is not implemented yet";
-
 		GraphicsOptions                    m_Opts;
 		FrameCapture                       m_Capture;
 		NS::SharedPtr<NS::AutoreleasePool> m_Pool;

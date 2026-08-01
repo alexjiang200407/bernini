@@ -157,18 +157,15 @@ namespace bgl
 		WaitForFenceCPUBlocking(m_NextFenceValue++);
 	}
 
-	namespace
-	{
-		constexpr const char* c_WaitTooLate =
-			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
-			"already "
-			"building on this queue, and a wait cannot reach a command buffer already started";
-	}
-
 	void
 	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
-		gassert(m_ListsBuilding == 0, c_WaitTooLate, m_ListsBuilding);
+		gassert(
+			m_ListsBuilding == 0,
+			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
+			"already building on this queue, and a wait cannot reach a command buffer already "
+			"started",
+			m_ListsBuilding);
 		m_PendingWaits.push_back({ m_Event, fenceValue });
 	}
 
@@ -176,7 +173,12 @@ namespace bgl
 	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
 		gassert(cq != nullptr, "InsertWaitForQueueFence requires a non-null queue");
-		gassert(m_ListsBuilding == 0, c_WaitTooLate, m_ListsBuilding);
+		gassert(
+			m_ListsBuilding == 0,
+			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
+			"already building on this queue, and a wait cannot reach a command buffer already "
+			"started",
+			m_ListsBuilding);
 		m_PendingWaits.push_back({ cq->As<CommandQueue>()->m_Event, fenceValue });
 	}
 

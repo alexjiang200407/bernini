@@ -1,8 +1,8 @@
 #include "shadercache/ShaderCache_metal.h"
 #include "MetalErrorChecker.h"
 
+#include "convert_metal.h"
 #include "shadercache/util.h"
-#include "util_metal.h"
 
 #include <core/file/file.h>
 #include <core/platform/util.h>
@@ -122,7 +122,7 @@ namespace bgl
 		NS::URL*
 		FileUrl(const std::filesystem::path& path)
 		{
-			return NS::URL::fileURLWithPath(Str(path.string()));
+			return NS::URL::fileURLWithPath(ConvertString(path.string()));
 		}
 	}
 
@@ -174,9 +174,10 @@ namespace bgl
 		NS::SharedPtr<NS::AutoreleasePool> pool =
 			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 
-		// serializeToURL refuses to overwrite, so it writes beside the target and renames. The temp
-		// name carries the process id: several processes may share one cache directory -- a sharded
-		// test run does -- and a fixed name would let them serialize into each other's file.
+		// An atomic replace, like shader_cache::WriteFileAtomic -- done by hand because serializeToURL
+		// owns the write and refuses an existing file. The temp name carries the process id: several
+		// processes may share one cache directory -- a sharded test run does -- and a fixed name
+		// would let them serialize into each other's file.
 		const std::filesystem::path libPath = m_CacheDir / kPipelineLibraryFile;
 		const std::filesystem::path tmp =
 			std::format("{}.{}.tmp", libPath.string(), core::process_id());

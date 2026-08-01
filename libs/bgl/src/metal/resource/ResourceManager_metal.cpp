@@ -7,8 +7,8 @@
 #include "cmd/CommandQueue.h"
 #include "util/util.h"
 
+#include "convert_metal.h"
 #include "util/util.h"
-#include "util_metal.h"
 #include <core/math.h>
 
 #include <core/math.h>
@@ -404,10 +404,7 @@ namespace bgl
 		MTL::Texture* texture = GetTexture(GetRtv(handle).GetTextureHandle()).GetMTLResource();
 		cmdList->As<CommandList>()->ClearRenderTarget(texture, clearVal);
 	}
-}
 
-namespace bgl
-{
 	SamplerHandle
 	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
