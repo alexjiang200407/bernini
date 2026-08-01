@@ -12,6 +12,10 @@ namespace bgl
 		constexpr Format c_BackbufferFormat = Format::SBGRA8_UNORM;
 		constexpr Format c_DepthFormat      = Format::D24S8;
 		constexpr Format c_MotionFormat     = Format::RG16_FLOAT;
+
+		// Holds a presented frame on screen for at least this long, which is what caps the loop at
+		// 60Hz: a plain present rides every refresh, and on a ProMotion panel that is 120.
+		constexpr CFTimeInterval c_MinPresentInterval = 1.0 / 60.0;
 	}
 
 	RenderTarget::RenderTarget(
@@ -174,7 +178,7 @@ namespace bgl
 		blit->copyFromTexture(from, to);
 		blit->endEncoding();
 
-		cmd->presentDrawable(drawable);
+		cmd->presentDrawableAfterMinimumDuration(drawable, c_MinPresentInterval);
 		cmd->commit();
 	}
 

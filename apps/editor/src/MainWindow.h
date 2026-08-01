@@ -23,6 +23,13 @@ public:
 	explicit MainWindow(QWidget* parent = nullptr);
 	~MainWindow();
 
+protected:
+	// Stops the viewports and drains the GPU while every window is still on screen. A present left
+	// pending when its window hides is never consumed, and it wedges every later fence wait on the
+	// queue -- the shutdown flushes among them.
+	void
+	closeEvent(QCloseEvent* event) override;
+
 private:
 	void
 	NewProject();
@@ -47,6 +54,11 @@ private:
 	void
 	ShowProjectState();
 
+	// Keeps every RenderTargetWindow under `dock` in the frame loop only while the dock is the
+	// selected tab.
+	void
+	DriveViewportsFromTab(QDockWidget* dock);
+
 	// Adds the viewport frame-time readout to the status bar and connects it to the level editor.
 	void
 	SetUpFrameStats();
@@ -61,6 +73,10 @@ private:
 	QDockWidget*              m_ContentExplorerDock = nullptr;
 	QLabel*                   m_FrameStats          = nullptr;
 	std::unique_ptr<Renderer> m_Renderer;
+
+	// The dock-visibility connections, held so the destructor can cut them before the windows they
+	// reach go away.
+	std::vector<QMetaObject::Connection> m_TabVisibility;
 
 	// The editor's one asset manager, over the Level Editor's view. Shared, so a material loaded by
 	// the thumbnails and by the level is one upload and one reference count. Rebuilt per project,

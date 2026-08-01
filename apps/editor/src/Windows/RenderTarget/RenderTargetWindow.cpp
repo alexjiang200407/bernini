@@ -151,7 +151,36 @@ RenderTargetWindow::showEvent(QShowEvent* event)
 	m_ResizeTimer->stop();
 	SyncSize(width(), height());
 
-	if (m_ViewportId == 0)
+	UpdateViewport();
+}
+
+void
+RenderTargetWindow::hideEvent(QHideEvent* event)
+{
+	UpdateViewport();
+
+	// Nothing is presenting while hidden, so a pending resize has nothing to serve; showEvent takes
+	// the size again anyway.
+	m_ResizeTimer->stop();
+
+	QWidget::hideEvent(event);
+}
+
+void
+RenderTargetWindow::SetRenderingEnabled(bool enabled)
+{
+	m_RenderingEnabled = enabled;
+	UpdateViewport();
+}
+
+void
+RenderTargetWindow::UpdateViewport()
+{
+	const bool render = m_RenderingEnabled && isVisible();
+	if (render == (m_ViewportId != 0))
+		return;
+
+	if (render)
 	{
 		m_ViewportId = m_Desc.renderer->AddViewport([this]() {
 			const qint64 startNs = m_FrameClock.nsecsElapsed();
@@ -160,29 +189,17 @@ RenderTargetWindow::showEvent(QShowEvent* event)
 
 			ReportFrameTiming(startNs, endNs);
 		});
+		return;
 	}
-}
 
-void
-RenderTargetWindow::hideEvent(QHideEvent* event)
-{
-	if (m_ViewportId != 0)
-	{
-		m_Desc.renderer->RemoveViewport(m_ViewportId);
-		m_ViewportId = 0;
-	}
+	m_Desc.renderer->RemoveViewport(m_ViewportId);
+	m_ViewportId = 0;
 
 	// RemoveViewport blocks until the frame loop has dropped this window, so no frame is in flight
 	// and the render thread cannot be mid-ReportFrameTiming. Clearing the timestamps keeps the time
-	// spent hidden from being measured as one enormous frame when the window comes back.
+	// spent out of the loop from being measured as one enormous frame when the window rejoins.
 	m_LastFrameStartNs = -1;
 	m_LastFrameEndNs   = -1;
-
-	// Nothing is presenting while hidden, so a pending resize has nothing to serve; showEvent takes
-	// the size again anyway.
-	m_ResizeTimer->stop();
-
-	QWidget::hideEvent(event);
 }
 
 void

@@ -26,6 +26,15 @@ public:
 	explicit RenderTargetWindow(QWidget* parent = nullptr, RenderTargetWindowDesc desc = {});
 	~RenderTargetWindow() override;
 
+	/**
+	 * Keeps this window out of the frame loop however visible Qt considers it. A tabified
+	 * QDockWidget does not hide the widget whose tab is unselected, so visibility alone would leave
+	 * an unseen viewport rendering every frame; MainWindow drives this from
+	 * QDockWidget::visibilityChanged.
+	 */
+	void
+	SetRenderingEnabled(bool enabled);
+
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
@@ -92,6 +101,11 @@ private:
 	void
 	SyncSize(int width, int height);
 
+	// Joins or leaves the frame loop so that membership matches SetRenderingEnabled and visibility.
+	// Idempotent, so every path that can change either may simply call it.
+	void
+	UpdateViewport();
+
 	void
 	ReportFrameTiming(qint64 startNs, qint64 endNs);
 
@@ -104,8 +118,11 @@ private:
 	bgl::RenderTargetRef   m_RenderTarget;
 	bgl::SceneViewRef      m_SceneView;
 
-	// Non-zero only while the window is showing, which is the only time it is in the frame loop.
+	// Non-zero only while this window is in the frame loop.
 	Renderer::ViewportId m_ViewportId = 0;
+
+	// Defaults to true so a window with no dock around it renders on visibility alone.
+	bool m_RenderingEnabled = true;
 
 	// The size the window last reported, compared against by SyncSize. GUI thread.
 	uint32_t m_Width  = 1;

@@ -18,6 +18,7 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
@@ -156,6 +157,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
 
+	DriveViewportsFromTab(m_LevelEditorDock);
+	DriveViewportsFromTab(m_MaterialEditorDock);
+
 	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
@@ -167,6 +171,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	// absolute path in it reasonable.
 	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
 		ShowEmptyState();
+}
+
+void
+MainWindow::closeEvent(QCloseEvent* event)
+{
+	// Cut first so a dock hiding below cannot put a viewport back into the loop.
+	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
+	m_TabVisibility.clear();
+
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		view->SetRenderingEnabled(false);
+
+	m_Renderer->Invoke([&] { m_Renderer->GetGraphics()->WaitIdle(); });
+
+	QMainWindow::closeEvent(event);
 }
 
 MainWindow::~MainWindow()
@@ -375,6 +394,24 @@ MainWindow::SetActiveProject(Project project)
 	statusBar()->showMessage(
 		QString("Project data: %1")
 			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
+}
+
+void
+MainWindow::DriveViewportsFromTab(QDockWidget* dock)
+{
+	// Tabifying leaves the unselected dock's widget visible to Qt -- it is stacked behind, not
+	// hidden -- so without this every viewport in the editor keeps drawing whatever tab is on top.
+	// visibilityChanged is the signal that follows the tab, which show/hideEvent do not.
+	//
+	// One connection per view, so each dies with the view it drives; closeEvent cuts them all before
+	// that, because a dock hiding would otherwise put a viewport back into the loop on the way out.
+	for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
+	{
+		m_TabVisibility.push_back(
+			connect(dock, &QDockWidget::visibilityChanged, view, [view](bool visible) {
+				view->SetRenderingEnabled(visible);
+			}));
+	}
 }
 
 void
