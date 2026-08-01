@@ -22,6 +22,23 @@ namespace bgl
 		// Out of line: m_ShaderCache holds an incomplete type here.
 		~Device() override;
 
+		/**
+		 * The Slang session, created on first use. Its core module is a few hundred megabytes
+		 * resident, so it is not stood up until something actually compiles.
+		 */
+		[[nodiscard]] slang::ISession*
+		GetSlangSession() const noexcept;
+
+		/**
+		 * Releases the Slang sessions and every module they parsed. A later compile recreates them,
+		 * so this only reclaims memory -- it does not disable compilation.
+		 *
+		 * @pre no slang::IModule or IComponentType obtained from this device is still held: they
+		 *      keep the session alive, and any raw pointer to one dangles once it is dropped.
+		 */
+		void
+		ReleaseSlangSession() noexcept;
+
 		[[nodiscard]] MTL::Device*
 		GetMTLDevice() const noexcept
 		{
@@ -68,9 +85,10 @@ namespace bgl
 			const noexcept override;
 
 	private:
-		NS::SharedPtr<MTL::Device>           m_Device;
-		Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
-		Slang::ComPtr<slang::ISession>       m_SlangSession;
-		std::unique_ptr<ShaderCache>         m_ShaderCache;
+		NS::SharedPtr<MTL::Device> m_Device;
+		// m_SlangGlobalSession is declared before m_SlangSession so it is destroyed after it.
+		mutable Slang::ComPtr<slang::IGlobalSession> m_SlangGlobalSession;
+		mutable Slang::ComPtr<slang::ISession>       m_SlangSession;
+		std::unique_ptr<ShaderCache>                 m_ShaderCache;
 	};
 }

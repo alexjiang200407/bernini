@@ -114,7 +114,9 @@ namespace bgl
 
 			logger::info("Metal device: {}", mtlDevice->name()->utf8String());
 
-			m_Device = core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir);
+			core::SharedRef<Device> device =
+				core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir);
+			m_Device = device;
 
 			auto rmDesc               = ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;
@@ -127,6 +129,11 @@ namespace bgl
 
 			m_Context =
 				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
+
+			// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
+			// past this point compiles a shader and the Slang core module can stop occupying a few
+			// hundred megabytes. A later CreatePipeline would silently recreate the session.
+			device->ReleaseSlangSession();
 
 			logger::info("BGL initialized successfully.");
 		}

@@ -59,9 +59,8 @@ when this doc disagrees, trust the source, then fix this doc.
   than `IGlobalSession::getBuildTagString()` — the two return the same string, and only the free
   one avoids creating a session just to key the cache.
 
-  **Not yet on Metal**: its `Device` creates the session in its constructor and holds it for the
-  device's life, so a fully warm run still pays the core module. Both cache layers work regardless;
-  what is unclaimed is the resident memory.
+  Metal does the same: its `Device` creates the session lazily on the first compile and
+  `Graphics` releases it once every renderer PSO is built.
 
 * **Reflection is decoupled from the live Slang object.** A raw `slang::TypeLayoutReflection*` can't
   be serialized. So reflection is walked once, at pipeline build, into a serializable
