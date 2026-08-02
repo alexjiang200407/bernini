@@ -229,6 +229,8 @@ namespace bgl
 		{
 			auto resourceManagerDesc               = ResourceManagerDesc();
 			resourceManagerDesc.maxCbvSrvUavs      = m_Opts.maxCbvSrvUavs;
+			resourceManagerDesc.maxBuffers         = m_Opts.maxBuffers;
+			resourceManagerDesc.maxSrvs            = m_Opts.maxSrvs;
 			resourceManagerDesc.maxDsvs            = m_Opts.maxDsvs;
 			resourceManagerDesc.maxRtvs            = m_Opts.maxRtvs;
 			resourceManagerDesc.maxTextures        = m_Opts.maxTextures;

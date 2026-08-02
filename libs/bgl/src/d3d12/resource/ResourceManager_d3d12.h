@@ -37,7 +37,8 @@ namespace bgl
 
 	enum class PendingType
 	{
-		kCbvSrvUav,
+		kBuffer,
+		kSrv,
 		kRtv,
 		kDsv,
 		kTexture,
@@ -47,7 +48,7 @@ namespace bgl
 
 	struct PendingDeletion
 	{
-		PendingType type      = PendingType::kCbvSrvUav;
+		PendingType type      = PendingType::kBuffer;
 		uint32_t    slotIndex = 0xFFFFFFFF;
 
 		// The descriptor to hand back when the gate clears, for a resource that holds one. It must

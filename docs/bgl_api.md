@@ -48,11 +48,19 @@ disagrees, trust the header, then fix this doc.
   them near the steady state only avoids the growth events. `SceneError` on a load now means the
   device could not allocate, not that a budget was hit.
 
-  `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxRtvs`, `maxDsvs`, `maxTextures`,
-  `maxSamplers` and `maxReadbackBuffers` size fixed pools that never grow, and exhausting one is
-  a hard failure. Note that growth *consumes* CBV/SRV/UAV slots — a grown buffer takes a new one and
-  gives the old one back only once the deferred destroy clears — so a scene that grows a lot needs
-  `maxCbvSrvUavs` headroom above its steady-state resource count.
+  `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxBuffers`, `maxSrvs`, `maxRtvs`, `maxDsvs`,
+  `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that never grow, and
+  exhausting one is a hard failure.
+
+  **`maxCbvSrvUavs` counts descriptors; `maxBuffers` and `maxSrvs` count resources.** Every buffer and
+  every SRV takes one descriptor from the shader-visible heap, so the heap must be at least as large
+  as the two pools together — the resource manager asserts it. They are separate knobs because they
+  run out for different reasons: the heap is a hardware-shaped limit, the pools are how many live
+  objects a scene keeps. A texture is in neither pool; only an SRV onto it is.
+
+  Note that growth *consumes* buffer slots and descriptors — a grown buffer takes a new one of each
+  and gives the old ones back only once the deferred destroy clears — so a scene that grows a lot
+  needs headroom above its steady-state resource count.
 
 * **Never cache a buffer's descriptor index across frames.** Growth allocates a new resource and a
   new descriptor slot rather than rewriting the existing one, because a descriptor is read by the GPU
