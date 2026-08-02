@@ -108,6 +108,11 @@ namespace bgl
 		core::slot_handle slot;
 		TextureUsage      usage = TextureUsageFlag::kSRV;
 
+		// What a shader must find in a constant buffer to reach this resource. The backend that
+		// created the handle decides it: a descriptor-heap index on D3D12, the pool slot Metal's
+		// dispatch rewrite looks the resource up by. Null until a resource manager hands one out.
+		uint32_t bindlessIndex = core::slot_handle::invalid_index;
+
 		[[nodiscard]] bool
 		IsNull() const
 		{
@@ -118,13 +123,15 @@ namespace bgl
 		From(TextureAssetHandle assetHandle)
 		{
 			// TextureAssets always kSrv
-			return { core::slot_handle(assetHandle.textureSlot), TextureUsageFlag::kSRV };
+			return { core::slot_handle(assetHandle.textureSlot),
+				     TextureUsageFlag::kSRV,
+				     assetHandle.bindlessIndex };
 		}
 
 		explicit
 		operator TextureAssetHandle() const noexcept
 		{
-			return { slot };
+			return { slot, bindlessIndex };
 		}
 
 		[[nodiscard]] bool
