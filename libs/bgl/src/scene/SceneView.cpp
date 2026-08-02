@@ -324,9 +324,8 @@ namespace bgl
 	SceneView::SetEnvironmentMap(const EnvironmentMapDesc& desc)
 	{
 		// Resolve an asset handle to a live RHI texture, optionally requiring a cube map.
-		const auto resolve =
-			[this](TextureAssetHandle asset, const char* name, bool requireCube) -> TextureHandle {
-			auto texHandle = TextureHandle::From(asset);
+		const auto resolve = [this](TextureAssetHandle asset, const char* name, bool requireCube) {
+			const auto texHandle = TextureHandle::From(asset);
 			if (!m_ResourceManager->ValidTextureHandle(texHandle))
 			{
 				throw SceneError(
@@ -336,7 +335,7 @@ namespace bgl
 			{
 				throw SceneError(std::format("SetEnvironmentMap: {} map must be a cube map", name));
 			}
-			return texHandle;
+			return asset;
 		};
 
 		// irradiance and prefilter are cubemaps; the BRDF LUT is a 2D texture.

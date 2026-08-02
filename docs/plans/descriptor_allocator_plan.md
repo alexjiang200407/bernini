@@ -32,7 +32,7 @@ them differently:
 
 | | Written | Resolved by |
 |---|---|---|
-| **Stored in GPU memory** — a material's texture | once, by the CPU | `ResolveDescriptor` — **done** |
+| **Stored in GPU memory** — a material's texture | once, by the CPU | `SrvHandle::descriptor` — **done** |
 | **Bound through a constant buffer** — everything in `Uniforms` and the scene buffers | per frame | the identity — **still open** |
 
 The first was solved by the Metal port, and its seam is exactly the one this plan set out to add:
@@ -56,7 +56,9 @@ backends implement it and `Scene.cpp:878,940` calls it.
 They coincide on D3D12, which is why one seam looked sufficient. On Metal they cannot: the cbuffer
 field is rewritten at dispatch, and the rewrite finds the resource by pool slot
 (`GetBufferBySlotIndex` and friends) — hand it a native id and there is nothing to look up.
-`ResolveDescriptor` therefore stays as it is, serving the stored-in-memory path only.
+For a while `ResolveDescriptor` served the stored-in-memory path alone for that reason. D3b deleted
+it: once a texture must be viewed explicitly, the `SrvHandle` a caller already holds carries both
+answers, and there is nothing left to ask the manager.
 
 ### Where the identity still lives
 
@@ -76,18 +78,8 @@ explicit DescriptorHandle(core::slot_handle slot) : DescriptorHandle(slot.index)
 ```
 `uniforms/DescriptorHandle.h:20`
 
-On the D3D12 side the identity is now stated once, and says so plainly:
-
-```cpp
-ResolveDescriptor(const TextureHandle& handle) const noexcept override
-{
-    // The shader indexes the descriptor heap with it, so the slot is already the descriptor.
-    return DescriptorHandle(handle.slot);
-}
-```
-`d3d12/resource/ResourceManager_d3d12.h:152`
-
-That comment is the whole plan in one line: it is true today, and D3b+D4 is what makes it false.
+On the D3D12 side the identity is now stated in one place — the slot `CreateSrv` allocates out of
+`m_CbvSrvUavSlots` *is* the descriptor index it writes the view at. D4 is what makes that false.
 
 ### Metal reintroduced the reversal WebGPU had
 
@@ -232,7 +224,7 @@ already sequences.
 
 ## 3. Staging
 
-Each step builds and passes on its own; the identity survives until D3b+D4 removes it, so nothing is
+Each step builds and passes on its own; the identity survives until D4 removes it, so nothing is
 half-migrated at a commit boundary.
 
 * **D1 — `DescriptorAllocator`, unused.** The class plus its tests: allocate to exhaustion, free and
@@ -254,17 +246,15 @@ half-migrated at a commit boundary.
   checkable — anything left behind fails to compile.
   *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
   diff is a bug).
-* **D3b+D4 — an SRV is created explicitly, and its descriptor comes from the allocator.** These are
-  one step on D3D12, not two. `CreateSrv(TextureHandle, SrvDesc) -> SrvHandle`, `CreateTexture` stops
+* **D3b — an SRV is created explicitly.** `CreateSrv(TextureHandle, SrvDesc) -> SrvHandle`, `CreateTexture` stops
   making one, every texture comes from `m_Textures`, and the bindless index moves from `TextureHandle`
   to `SrvHandle` — the thing that actually has a descriptor.
 
-  **Why they cannot be separated.** Buffers and textures share one heap *and one index space*:
-  `m_CbvSrvUavSlots` is a `variant<Buffer, Texture>` whose slot index is the descriptor index for
-  both (`ResourceManager_d3d12.cpp:137, 182`). Take textures out of that pool and an SRV still needs
-  an index from the same space a buffer draws from, so a private SRV pool would hand out indices that
-  collide with live buffer descriptors. Something has to own the one space — which is
-  `DescriptorAllocator`, already built and tested in D1.
+  **An earlier draft of this plan claimed D3b and D4 could not be separated**, on the grounds that an
+  SRV would need a private pool whose indices would collide with live buffer descriptors. That was
+  wrong: there is no new pool. The `Srv` takes over the slot in `m_CbvSrvUavSlots` that the `Texture`
+  used to hold, so `variant<Buffer, Texture>` simply becomes `variant<Buffer, Srv>` and the one index
+  space is unchanged. D4 stays a separate step, which is what keeps the risky part small.
 
   This is what makes the RTV/DSV-only case *unrepresentable* rather than merely handled: a texture has
   no bindless index to be wrong about, and only a caller that asked for an SRV gets one. It also
@@ -277,14 +267,20 @@ half-migrated at a commit boundary.
   (`ResourceManager_metal.cpp:303`), so `DestroySrv` follows that convention, and
   `Scene::DeleteTextureAsset` has to release both.
 
-  *Gate:* `bgl_tests` green on both backends; golden images bit-identical; a test that an RTV-only
-  texture and a sampled texture can hold the same slot index without colliding; and
-  `just run bgl_tests -- --gpu-validation` on Windows, because a mis-freed descriptor is what only
-  GPU-based validation catches. **Not verifiable on macOS beyond the Metal half.**
+  The identity survives this step — an `Srv`'s slot index is still its descriptor index — so the
+  goldens are a real gate rather than a formality.
+  *Gate:* `bgl_tests` green on both backends, goldens included; a sampling test that binds an
+  `SrvHandle` rather than a texture, so a wrong index shows up as a wrong texel.
+* **D4 — D3D12 allocates descriptors properly.** `CreateSrv` and `CreateStructBuffer` stamp the
+  handle with an index from `DescriptorAllocator` instead of the slot index; destruction frees it on
+  the deferred gate. This is the step where the two numbers diverge.
+  *Gate:* goldens within tolerance, and `just run bgl_tests -- --gpu-validation` on Windows, because
+  a mis-freed descriptor is what only GPU-based validation catches. Metal is unaffected — worth
+  re-running to prove it. **Not verifiable on macOS.**
 * **D5 — collapse what is left.** The `variant<Buffer, Texture>` goes, for a `slot_vector` of each,
   and `maxCbvSrvUavs` splits into a resource count and a descriptor count. D3b already merged the
   texture pools and retired `usage` as a discriminator.
-  *Gate:* as D3b+D4.
+  *Gate:* as D4.
 
 There is no WebGPU step. The old D6 removed `GetBufferBindingBySlotIndex`; that code left with the
 backend.
@@ -309,18 +305,18 @@ backend.
 
 ## 5. Risk
 
-The one that matters is **D3b+D4 landing silently wrong**. Once slot and descriptor diverge, an
+The one that matters is **D4 landing silently wrong**. Once slot and descriptor diverge, an
 off-by-one or a use-after-free reads a *valid* descriptor for the wrong resource — which renders
 something plausible rather than crashing. That is why its gate is GPU validation and not just goldens:
 a wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer alone does
-not see it. Folding D4 into D3b makes this worse, not better: it is now one larger D3D12 change to
-land at once, and the reason it cannot be split is in § 3.
+not see it. Keeping D4 separate from D3b is what holds it to a few lines, so a failure there has a
+small place to hide.
 
-The cheap mitigation, worth doing in that step rather than after: have the debug build write a known
+The cheap mitigation, worth doing in D4 rather than after: have the debug build write a known
 sentinel into every freed descriptor, so a stale read lands on something visibly wrong instead of on
 whatever took the slot.
 
-The second risk is now **asymmetric backends**. From D2 on, `ResolveDescriptor` means different things
-on D3D12 and Metal, and only D3D12's goldens can catch a mistake in D3D12's meaning. Every gate from
-D2 onward names both backends for that reason: this repo is developed on macOS, where the D3D12 path
+The second risk is now **asymmetric backends**. `SrvHandle::bindlessIndex` and `SrvHandle::descriptor`
+are the same number on D3D12 and different on Metal, so only D3D12's goldens can catch a mistake in
+D3D12's meaning. Every gate from D2 onward names both backends for that reason: this repo is developed on macOS, where the D3D12 path
 does not build, so a D3D12-only regression is invisible until CI or a Windows run.
