@@ -19,6 +19,15 @@ namespace bgl
 		Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
 		Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
 
+		Uniforms(const Uniforms&) noexcept = delete;
+		Uniforms(Uniforms&&) noexcept      = delete;
+
+		Uniforms&
+		operator=(const Uniforms&) noexcept = delete;
+
+		Uniforms&
+		operator=(Uniforms&&) noexcept = delete;
+
 		[[nodiscard]] DescriptorHandle
 		ResolveBindless(const BufferHandle& handle) const noexcept override;
 

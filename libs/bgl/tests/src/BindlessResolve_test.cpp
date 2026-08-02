@@ -18,6 +18,15 @@ namespace
 	public:
 		using core::RefCounter<bgl::IUniforms>::RefCounter;
 
+		BiasedUniforms(const BiasedUniforms&) noexcept = delete;
+		BiasedUniforms(BiasedUniforms&&) noexcept      = delete;
+
+		BiasedUniforms&
+		operator=(const BiasedUniforms&) noexcept = delete;
+
+		BiasedUniforms&
+		operator=(BiasedUniforms&&) noexcept = delete;
+
 		[[nodiscard]] bgl::DescriptorHandle
 		ResolveBindless(const bgl::BufferHandle& handle) const noexcept override
 		{

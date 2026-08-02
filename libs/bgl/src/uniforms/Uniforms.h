@@ -334,6 +334,15 @@ namespace bgl
 		using ConstAccessor = AccessorBase<const void*>;
 
 	public:
+		IUniforms(const IUniforms&) noexcept = delete;
+		IUniforms(IUniforms&&) noexcept      = delete;
+
+		IUniforms&
+		operator=(const IUniforms&) noexcept = delete;
+
+		IUniforms&
+		operator=(IUniforms&&) noexcept = delete;
+
 		/**
 		 * What the shader must find in the constant buffer to reach the handle's resource.
 		 *
