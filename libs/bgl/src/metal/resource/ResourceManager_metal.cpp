@@ -50,7 +50,7 @@ namespace bgl
 			logger::error("CreateStructBuffer '{}': buffer pool exhausted", desc.debugName);
 			return BufferHandle{};
 		}
-		return BufferHandle{ slot };
+		return BufferHandle{ slot, slot.index };
 	}
 
 	BufferHandle
@@ -281,7 +281,7 @@ namespace bgl
 			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
 			return TextureHandle{};
 		}
-		return TextureHandle{ slot, desc.usage };
+		return TextureHandle{ slot, desc.usage, slot.index };
 	}
 
 	RtvHandle
@@ -416,7 +416,7 @@ namespace bgl
 			logger::error("CreateSampler: sampler pool exhausted");
 			return SamplerHandle{};
 		}
-		return SamplerHandle{ slot.index, slot.generation };
+		return SamplerHandle{ slot.index, slot.generation, slot.index };
 	}
 
 	void

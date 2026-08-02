@@ -45,10 +45,18 @@ ResolveDescriptor(const TextureHandle& handle) const noexcept = 0;
 backend's business: a descriptor-heap index on D3D12, the native resource id on Metal."* Both
 backends implement it and `Scene.cpp:878,940` calls it.
 
-**So this plan must not add a second seam.** The original design proposed
-`GetBindlessIndex(BufferHandle|TextureHandle|SamplerHandle) -> uint32_t`; adding it now would give one
-contract two names, which is the very thing the seam exists to prevent. What is missing is not a new
-seam but its *reach*: `ResolveDescriptor` covers textures only, and only on the stored-in-memory path.
+**The two paths are not one contract.** An earlier draft read the opposite — that widening
+`ResolveDescriptor` would cover both. Implementing it disproved that. They ask different questions:
+
+| | Question | D3D12 | Metal |
+|---|---|---|---|
+| Stored in GPU memory | what does the GPU dereference? | descriptor index | native `MTLResourceID` |
+| Bound through a constant buffer | what does the *encoder* look the resource up by? | descriptor index | **pool slot** |
+
+They coincide on D3D12, which is why one seam looked sufficient. On Metal they cannot: the cbuffer
+field is rewritten at dispatch, and the rewrite finds the resource by pool slot
+(`GetBufferBySlotIndex` and friends) — hand it a native id and there is nothing to look up.
+`ResolveDescriptor` therefore stays as it is, serving the stored-in-memory path only.
 
 ### Where the identity still lives
 
@@ -120,34 +128,42 @@ Unchanged since the first survey, and all still present:
 
 ## 2. Design
 
-### The seam is `ResolveDescriptor`, widened
+### The constant-buffer index travels on the handle
 
-No new virtual. `ResolveDescriptor` gains the two overloads it lacks, so the constant-buffer path can
-ask the same question the stored-in-memory path already asks:
+A handle already names a resource. It now also carries what a shader needs to reach it:
 
 ```cpp
-[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const BufferHandle&)  const noexcept = 0;
-[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const SamplerHandle&) const noexcept = 0;
+struct TextureHandle
+{
+    core::slot_handle slot;           // which resource
+    TextureUsage      usage;
+    uint32_t          bindlessIndex;  // what a shader indexes with
+};
 ```
 
-D3D12 returns the descriptor index its allocator handed out. **Metal returns the slot index
-unchanged**, which is what its dispatch rewrite already expects to find, so Metal's behaviour does not
-change at all — it keeps reading a slot index out of the cbuffer and patching it to a native value at
-record time.
+and the same field on `BufferHandle`, `SamplerHandle` and `TextureAssetHandle`. The **resource
+manager stamps it at creation**, which is the one moment a backend is already in the loop: D3D12
+writes the index its allocator handed out, Metal writes the pool slot its dispatch rewrite looks the
+resource up by. `Uniforms::operator=` then writes `handle.bindlessIndex` and asks nobody anything.
 
-That asymmetry is the point rather than a wart: `ResolveDescriptor` means "the value this backend
-wants in GPU-visible memory for this handle", and for a backend that patches later, that value is the
-slot. `DescriptorHandle` is eight bytes and Metal already overwrites all eight at dispatch
-(`DescriptorHandle::FromNative`), so nothing needs to widen.
+Two things fall out. The mirror needs no resource manager and no backend-specific subclass — it stays
+a value type built from a pipeline. And the two numbers become separable per *resource* rather than
+per *call site*, so D4 changes one line in `CreateTexture` instead of every place a handle is written.
+
+**Rejected: give `Uniforms` a `ResourceManagerRef`** (#229). It works, but it makes the
+backend-agnostic mirror depend on the manager to answer a question the manager is not the authority
+on — Metal's answer needs no manager at all.
+
+**Rejected: split `Uniforms` into `IUniforms` plus a backend implementation** (#231, first attempt).
+It moves the coupling into backend code, but it makes the mirror polymorphic and therefore
+ref-counted, for a hook whose answer is a property of the handle rather than of the mirror writing
+it. The index is the same number wherever it is written; asking the *writer* was the wrong question.
 
 ### Resolve eagerly, or patch at flush — retaken
 
-`Uniforms::operator=` is where a handle becomes a number and it has no ResourceManager: it is built
-from a pipeline and its `AccessorBase` carries only `(m_Data, offset, node)`. Two ways out, and the
-first plan's answer no longer holds:
+Two ways to get the right number into the block, and the first plan's answer no longer holds:
 
-1. **Resolve eagerly.** `Uniforms` holds a `ResourceManagerRef` and `operator=` calls
-   `ResolveDescriptor`. One virtual call per assignment.
+1. **Resolve eagerly.** The number is decided before `operator=` runs and the mirror writes it.
 2. **Resolve at record time.** `operator=` writes the slot and the backend patches the block when it
    is flushed.
 
@@ -163,12 +179,8 @@ time, because nothing there knows which encoder will use the block.
 (2) for D3D12 means building that reflection a second time to solve a problem that is not about
 performance.
 
-The two backends therefore resolve at different moments, which is exactly what a seam is for. Write
-it down where the seam is declared, or the next reader will "fix" the asymmetry.
-
-Consequence to accept: `ResolveDescriptor` is called from scene-update code. Reads in the manager are
-already documented as lockless (fixed-capacity pools, storage never moves), so this lookup follows the
-same rule and takes no lock.
+Metal keeps patching at dispatch and is unaffected by any of this: the value it finds in the block is
+the pool slot either way.
 
 ### The allocator
 
@@ -206,28 +218,47 @@ half-migrated at a commit boundary.
   macOS build. This is what made the pre-rebase #156 unlandable. The test must be compiled only for
   the D3D12 backend.
   *Gate:* new unit tests in `bgl_tests`; **and `just build` green on both a D3D12 and a Metal preset**.
-* **D2 — widen `ResolveDescriptor` to buffers and samplers, returning what the identity returns
-  today.** D3D12 returns `handle.slot.index`; Metal returns the same. A pure seam: every call site can
-  migrate to it before the number behind it changes.
-  *Gate:* `bgl_tests` green on both backends; no golden image moves.
-* **D3 — move the constant-buffer call sites onto the seam.** `Uniforms` gains its
-  `ResourceManagerRef`; the eight sites in § 1 stop constructing `DescriptorHandle` from a slot. The
+* **D2 — the handle carries its bindless index.** `BufferHandle`, `SamplerHandle`, `TextureHandle`
+  and `TextureAssetHandle` gain the field; both resource managers stamp it with the slot index, which
+  is what the mirror wrote before; `Uniforms::operator=` reads it. Nothing the GPU sees changes, and
+  the two numbers become separable per resource.
+  *Gate:* `bgl_tests` green on both backends, including a handle whose index and slot are
+  deliberately different — the two are equal everywhere else, so nothing else can tell them apart.
+* **D3 — move the scene buffers onto the field too.** `PackedBuffer.h`, `RangeBuffer.h` and
+  `EntryBuffer.h` stop constructing `DescriptorHandle` from a slot. The
   `DescriptorHandle(core::slot_handle)` constructor is deleted, which is what makes the migration
   checkable — anything left behind fails to compile.
   *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
   diff is a bug).
-* **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` take an index
-  from the allocator instead of using the slot index; destruction frees it on the deferred gate. This
+* **D3b — an SRV is created explicitly, like an RTV.** `CreateSrv(TextureHandle, SrvDesc) ->
+  SrvHandle`, and `CreateTexture` stops making one. Every texture then comes from one pool —
+  `m_Textures` — because the slot no longer has to be a heap index; `TextureHandle::usage` stops
+  selecting an index space; and the bindless index moves from `TextureHandle` to `SrvHandle`, which
+  is the thing that actually has a descriptor.
+
+  This is what makes the RTV/DSV-only case *unrepresentable* rather than merely handled: a texture
+  has no bindless index to be wrong about, and only a caller that asked for an SRV gets one. It also
+  removes the hazard § 1 names — caller-supplied `usage` bits choosing between two index spaces.
+
+  Two costs, taken deliberately. **Metal pays ceremony**: it has no heap, so an `Srv` there is a
+  record naming a texture whose bindless index is the texture's own pool slot — the same shape
+  `Rtv`/`Dsv` already have on Metal, and the seam a format/mip texture view would need later.
+  **Destruction becomes two calls**: `DestroyTexture` does not cascade to `Rtv`/`Dsv` today, so
+  `DestroySrv` follows that convention, and `Scene::DeleteTextureAsset` has to release both.
+  *Gate:* `bgl_tests` green on both backends; golden images bit-identical; a test that an RTV-only
+  texture and a sampled texture can hold the same slot index without colliding.
+* **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` stamp the
+  handle with an index from the allocator instead of the slot index; destruction frees it on the
+  deferred gate. This
   is the step where the two numbers diverge, and where the comment at
   `ResourceManager_d3d12.h:155` stops being true.
   *Gate:* golden images within tolerance; `just run bgl_tests -- --gpu-validation`, because a mis-freed
   descriptor is exactly what GPU-based validation catches and nothing else does. Metal unaffected —
   worth re-running to prove it.
-* **D5 — collapse the pools.** `m_Textures` merges into the texture pool, the variant goes,
-  `TextureHandle::usage` stops selecting an index space, and `maxCbvSrvUavs` splits.
-  *Gate:* as D4, plus a test that an RTV-only texture and an SRV texture can hold the same slot index
-  without colliding — the failure the old design prevented structurally and this one must prevent
-  deliberately.
+* **D5 — collapse what is left.** The `variant<Buffer, Texture>` goes, for a `slot_vector` of each,
+  and `maxCbvSrvUavs` splits into a resource count and a descriptor count. D3b already merged the
+  texture pools and retired `usage` as a discriminator.
+  *Gate:* as D4.
 
 There is no WebGPU step. The old D6 removed `GetBufferBindingBySlotIndex`; that code left with the
 backend.

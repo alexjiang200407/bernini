@@ -134,7 +134,7 @@ namespace bgl
 
 		m_CbvSrvUavSlots[bufferSlotHandle] = std::move(buffer);
 
-		return BufferHandle{ bufferSlotHandle };
+		return BufferHandle{ bufferSlotHandle, bufferSlotHandle.index };
 	}
 
 	BufferHandle
@@ -179,7 +179,7 @@ namespace bgl
 				texture.GetCpuHandle());
 
 			m_CbvSrvUavSlots[slot.index] = std::move(texture);
-			return TextureHandle{ slot, desc.usage };
+			return TextureHandle{ slot, desc.usage, slot.index };
 		}
 
 		auto slot = m_Textures.try_allocate_slot();
@@ -189,6 +189,7 @@ namespace bgl
 			return TextureHandle{};
 		}
 		m_Textures[slot.index] = Texture(m_Device.Get(), nullptr, slot.index, desc);
+		// No bindless index: this slot indexes m_Textures, which is not the shader-visible heap.
 		return TextureHandle{ slot, desc.usage };
 	}
 
@@ -211,7 +212,7 @@ namespace bgl
 
 		m_Samplers[slotIndex] = std::move(sampler);
 
-		return SamplerHandle{ slotIndex, samplerSlotHandle.generation };
+		return SamplerHandle{ slotIndex, samplerSlotHandle.generation, slotIndex };
 	}
 
 	ReadbackBufferHandle
@@ -262,7 +263,7 @@ namespace bgl
 				texture.GetCpuHandle());
 
 			m_CbvSrvUavSlots[slot.index] = std::move(texture);
-			return TextureHandle{ slot, desc.usage };
+			return TextureHandle{ slot, desc.usage, slot.index };
 		}
 
 		auto slot = m_Textures.try_allocate_slot();
@@ -273,6 +274,7 @@ namespace bgl
 		}
 		m_Textures[slot.index] =
 			Texture(m_Device.Get(), nullptr, slot.index, std::move(d3d12Texture), desc);
+		// No bindless index: this slot indexes m_Textures, which is not the shader-visible heap.
 		return TextureHandle{ slot, desc.usage };
 	}
 
