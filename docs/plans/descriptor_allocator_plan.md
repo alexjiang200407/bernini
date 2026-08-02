@@ -273,7 +273,14 @@ half-migrated at a commit boundary.
   `SrvHandle` rather than a texture, so a wrong index shows up as a wrong texel.
 * **D4 — D3D12 allocates descriptors properly.** `CreateSrv` and `CreateStructBuffer` stamp the
   handle with an index from `DescriptorAllocator` instead of the slot index; destruction frees it on
-  the deferred gate. This is the step where the two numbers diverge.
+  the deferred gate.
+
+  **This separates the mechanism, not yet the values.** An earlier draft called D4 "the step where
+  the two numbers diverge". They do not, not while every slot in `m_CbvSrvUavSlots` takes exactly one
+  descriptor and both free lists are LIFO -- the two counters move in lockstep and stay numerically
+  equal. What changes is that nothing *derives* one from the other any more, so D5 splitting the two
+  capacities is free rather than a rewrite. Do not write a test asserting they differ; assert instead
+  that no live descriptor is ever handed out twice.
   *Gate:* goldens within tolerance, and `just run bgl_tests -- --gpu-validation` on Windows, because
   a mis-freed descriptor is what only GPU-based validation catches. Metal is unaffected — worth
   re-running to prove it. **Not verifiable on macOS.**
@@ -305,8 +312,8 @@ backend.
 
 ## 5. Risk
 
-The one that matters is **D4 landing silently wrong**. Once slot and descriptor diverge, an
-off-by-one or a use-after-free reads a *valid* descriptor for the wrong resource — which renders
+The one that matters is **D4 landing silently wrong**. Once a descriptor comes from a free list, an
+off-by-one or a double-free hands out a *valid* descriptor belonging to another resource — which renders
 something plausible rather than crashing. That is why its gate is GPU validation and not just goldens:
 a wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer alone does
 not see it. Keeping D4 separate from D3b is what holds it to a few lines, so a failure there has a

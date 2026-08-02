@@ -1,6 +1,7 @@
 #pragma once
 #include "cmd/CommandQueue.h"
 #include "resource/Buffer_d3d12.h"
+#include "resource/DescriptorAllocator_d3d12.h"
 #include "resource/Dsv_d3d12.h"
 #include "resource/ReadbackBuffer_d3d12.h"
 #include "resource/ResourceManager.h"
@@ -48,6 +49,11 @@ namespace bgl
 	{
 		PendingType type      = PendingType::kCbvSrvUav;
 		uint32_t    slotIndex = 0xFFFFFFFF;
+
+		// The descriptor to hand back when the gate clears, for a resource that holds one. It must
+		// outlive in-flight work exactly as the resource does, so it is freed here rather than at
+		// destroy time.
+		uint32_t descriptorIndex = 0xFFFFFFFF;
 	};
 
 	// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
@@ -212,7 +218,7 @@ namespace bgl
 		ID3D12DescriptorHeap*
 		GetCbvSrvUavHeap() const noexcept
 		{
-			return m_CbvSrvUavHeap.Get();
+			return m_CbvSrvUavDescriptors.GetHeap();
 		}
 
 		ID3D12DescriptorHeap*
@@ -258,14 +264,18 @@ namespace bgl
 		// Records a retired slot for deferred reclamation, appending it to the batch that shares the
 		// current gate (or opening a new batch when the gate has advanced).
 		void
-		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
+		RetireDeferred(
+			PendingType type,
+			uint32_t    slotIndex,
+			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
 
-		wrl::ComPtr<ID3D12Device>         m_Device;
-		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
+		wrl::ComPtr<ID3D12Device>        m_Device;
+		DescriptorAllocator              m_CbvSrvUavDescriptors;
+		core::slot_vector<CbvSrvUavSlot> m_CbvSrvUavSlots;
+
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
-		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
 		core::slot_vector<Sampler>        m_Samplers;
 
 		// Every texture, whatever it is used for. A texture owns storage and nothing else; the
