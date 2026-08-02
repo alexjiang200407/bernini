@@ -579,31 +579,24 @@ namespace bgl
 		switch (desc.dimension)
 		{
 		case TextureDimension::kTexture1D:
-			srv.Texture1D.MostDetailedMip = desc.mostDetailedMip;
-			srv.Texture1D.MipLevels       = desc.mipLevels;
+			srv.Texture1D.MipLevels = desc.mipLevels;
 			break;
 		case TextureDimension::kTexture2D:
-			srv.Texture2D.MostDetailedMip = desc.mostDetailedMip;
-			srv.Texture2D.MipLevels       = desc.mipLevels;
+			srv.Texture2D.MipLevels = desc.mipLevels;
 			break;
 		case TextureDimension::kTexture2DArray:
-			srv.Texture2DArray.MostDetailedMip = desc.mostDetailedMip;
-			srv.Texture2DArray.MipLevels       = desc.mipLevels;
-			srv.Texture2DArray.FirstArraySlice = desc.firstArraySlice;
-			srv.Texture2DArray.ArraySize       = desc.arraySize;
+			srv.Texture2DArray.MipLevels = desc.mipLevels;
+			srv.Texture2DArray.ArraySize = desc.arraySize;
 			break;
 		case TextureDimension::kTextureCube:
-			srv.TextureCube.MostDetailedMip = desc.mostDetailedMip;
-			srv.TextureCube.MipLevels       = desc.mipLevels;
+			srv.TextureCube.MipLevels = desc.mipLevels;
 			break;
 		case TextureDimension::kTextureCubeArray:
-			srv.TextureCubeArray.MostDetailedMip = desc.mostDetailedMip;
-			srv.TextureCubeArray.MipLevels       = desc.mipLevels;
-			srv.TextureCubeArray.NumCubes        = desc.arraySize / 6;
+			srv.TextureCubeArray.MipLevels = desc.mipLevels;
+			srv.TextureCubeArray.NumCubes  = desc.arraySize / 6;
 			break;
 		case TextureDimension::kTexture3D:
-			srv.Texture3D.MostDetailedMip = desc.mostDetailedMip;
-			srv.Texture3D.MipLevels       = desc.mipLevels;
+			srv.Texture3D.MipLevels = desc.mipLevels;
 			break;
 
 		case TextureDimension::kUnknown:

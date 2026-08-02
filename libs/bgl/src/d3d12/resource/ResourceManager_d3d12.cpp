@@ -166,7 +166,7 @@ namespace bgl
 		}
 		m_Textures[slot.index] = Texture(m_Device.Get(), nullptr, slot.index, desc);
 		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
-		return TextureHandle{ slot, desc.usage };
+		return TextureHandle{ slot };
 	}
 
 	SamplerHandle
@@ -225,7 +225,7 @@ namespace bgl
 		m_Textures[slot.index] =
 			Texture(m_Device.Get(), nullptr, slot.index, std::move(d3d12Texture), desc);
 		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
-		return TextureHandle{ slot, desc.usage };
+		return TextureHandle{ slot };
 	}
 
 	SrvHandle
@@ -638,19 +638,6 @@ namespace bgl
 		gassert(cmdList != nullptr, "Command list cannot be null");
 		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavHeap.Get(), m_SamplerHeap.Get() };
 		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
-	}
-
-	const Srv&
-	ResourceManager::GetSrv(SrvHandle handle) const noexcept
-	{
-		gassert(ValidSrvHandle(handle), "Invalid SRV handle");
-		return std::get<Srv>(m_CbvSrvUavSlots[handle.idx]);
-	}
-
-	TextureHandle
-	ResourceManager::GetSrvTexture(SrvHandle handle) const noexcept
-	{
-		return GetSrv(handle).GetTextureHandle();
 	}
 
 	bool

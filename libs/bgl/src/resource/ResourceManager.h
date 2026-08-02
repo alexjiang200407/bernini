@@ -123,7 +123,7 @@ namespace bgl
 		 *
 		 * Destroying the texture does not destroy its views. Release both, as with an Rtv.
 		 *
-		 * @param textureHandle a valid texture created with TextureUsageFlag::kSRV.
+		 * @param textureHandle a valid texture whose TextureDesc allowed TextureUsageFlag::kSRV.
 		 */
 		[[nodiscard]]
 		virtual SrvHandle
@@ -136,14 +136,6 @@ namespace bgl
 		[[nodiscard]]
 		virtual DsvHandle
 		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept = 0;
-
-		[[nodiscard]]
-		virtual const Srv&
-		GetSrv(SrvHandle handle) const noexcept = 0;
-
-		[[nodiscard]]
-		virtual TextureHandle
-		GetSrvTexture(SrvHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual const Rtv&

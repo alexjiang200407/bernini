@@ -40,13 +40,6 @@ namespace bgl
 		}
 
 		[[nodiscard]]
-		D3D12_CPU_DESCRIPTOR_HANDLE
-		GetCpuHandle() const noexcept
-		{
-			return m_CpuHandle;
-		}
-
-		[[nodiscard]]
 		bool
 		IsNull() const noexcept
 		{
@@ -61,9 +54,8 @@ namespace bgl
 		}
 
 	private:
-		SrvDesc                     m_Desc;
-		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
-		TextureHandle               m_TextureHandle   = {};
+		SrvDesc       m_Desc;
+		uint32_t      m_DescriptorIndex = 0xFFFFFFFF;
+		TextureHandle m_TextureHandle   = {};
 	};
 }

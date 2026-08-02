@@ -18,10 +18,11 @@ namespace bgl
 		const uint32_t descriptorSize =
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
 
-		m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		m_CpuHandle.ptr += static_cast<size_t>(descriptorIndex) * descriptorSize;
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
+			descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		cpuHandle.ptr += static_cast<size_t>(descriptorIndex) * descriptorSize;
 
 		const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertSrvDesc(desc);
-		device->CreateShaderResourceView(resource, &srvDesc, m_CpuHandle);
+		device->CreateShaderResourceView(resource, &srvDesc, cpuHandle);
 	}
 }

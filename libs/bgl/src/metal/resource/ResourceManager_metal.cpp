@@ -285,7 +285,7 @@ namespace bgl
 			return TextureHandle{};
 		}
 		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
-		return TextureHandle{ slot, desc.usage };
+		return TextureHandle{ slot };
 	}
 
 	SrvHandle
@@ -393,19 +393,6 @@ namespace bgl
 	{
 		gassert(ValidTextureHandle(handle), "GetTextureDesc on an invalid texture handle");
 		return m_Textures[handle.slot].GetDesc();
-	}
-
-	const Srv&
-	ResourceManager::GetSrv(SrvHandle handle) const noexcept
-	{
-		gassert(ValidSrvHandle(handle), "Invalid SRV handle");
-		return m_Srvs[handle.idx];
-	}
-
-	TextureHandle
-	ResourceManager::GetSrvTexture(SrvHandle handle) const noexcept
-	{
-		return GetSrv(handle).GetTextureHandle();
 	}
 
 	const Rtv&

@@ -106,7 +106,6 @@ namespace bgl
 	struct TextureHandle
 	{
 		core::slot_handle slot;
-		TextureUsage      usage = TextureUsageFlag::kSRV;
 
 		[[nodiscard]] bool
 		IsNull() const
@@ -117,8 +116,7 @@ namespace bgl
 		static TextureHandle
 		From(TextureAssetHandle assetHandle)
 		{
-			// TextureAssets always kSrv
-			return { core::slot_handle(assetHandle.textureSlot), TextureUsageFlag::kSRV };
+			return { core::slot_handle(assetHandle.textureSlot) };
 		}
 
 		[[nodiscard]] bool

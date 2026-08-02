@@ -8,13 +8,11 @@ namespace bgl
 
 	struct SrvDesc
 	{
-		Format           format          = Format::UNKNOWN;
-		TextureDimension dimension       = TextureDimension::kTexture2D;
-		uint32_t         mostDetailedMip = 0;
-		uint32_t         mipLevels       = 1;
-		uint32_t         firstArraySlice = 0;
-		uint32_t         arraySize       = 1;
-		std::string      debugName       = "";
+		Format           format    = Format::UNKNOWN;
+		TextureDimension dimension = TextureDimension::kTexture2D;
+		uint32_t         mipLevels = 1;
+		uint32_t         arraySize = 1;
+		std::string      debugName = "";
 	};
 
 	struct SrvHandle

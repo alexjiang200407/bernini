@@ -284,16 +284,6 @@ namespace
 		{
 			return {};
 		}
-		const Srv&
-		GetSrv(SrvHandle) const noexcept override
-		{
-			std::abort();
-		}
-		TextureHandle
-		GetSrvTexture(SrvHandle) const noexcept override
-		{
-			return TextureHandle{};
-		}
 		const Rtv&
 		GetRtv(RtvHandle) const noexcept override
 		{

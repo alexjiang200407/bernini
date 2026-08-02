@@ -138,12 +138,6 @@ namespace bgl
 		TextureDesc
 		GetTextureDesc(TextureHandle handle) const noexcept override;
 
-		const Srv&
-		GetSrv(SrvHandle handle) const noexcept override;
-
-		TextureHandle
-		GetSrvTexture(SrvHandle handle) const noexcept override;
-
 		const Rtv&
 		GetRtv(RtvHandle handle) const noexcept override;
 
