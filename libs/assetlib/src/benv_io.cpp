@@ -1,12 +1,12 @@
 #include "assetlib/benv_io.h"
 
 #include "ChunkFile.h"
+#include "fs_util.h"
 
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
-#include <core/math.h>
 
 namespace assetlib
 {
@@ -107,17 +107,7 @@ namespace assetlib
 		header.fileSize                = writer.size();
 		writer.patchPod(0, header);
 
-		const auto out = writer.take();
-
-		std::ofstream file(path, std::ios::binary | std::ios::trunc);
-		if (!file)
-			core::throw_runtime_error("assetlib::writeBenv: cannot open '{}'", path.string());
-
-		file.write(
-			reinterpret_cast<const char*>(out.data()),
-			static_cast<std::streamsize>(out.size()));
-		if (!file)
-			core::throw_runtime_error("assetlib::writeBenv: failed writing '{}'", path.string());
+		writeFileBytes(path, writer.take(), "assetlib::writeBenv");
 	}
 
 	EnvironmentMaps

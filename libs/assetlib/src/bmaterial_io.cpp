@@ -163,20 +163,7 @@ namespace assetlib
 	void
 	saveMaterial(const BMaterial& material, const std::filesystem::path& path)
 	{
-		const auto bytes = serializeMaterial(material);
-
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-			throw std::runtime_error(
-				fileErrorMessage("bmaterial: cannot open file for writing", path));
-
-		out.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("bmaterial: failed to write file", path));
+		writeFileBytes(path, serializeMaterial(material), "bmaterial");
 	}
 
 	BMaterial

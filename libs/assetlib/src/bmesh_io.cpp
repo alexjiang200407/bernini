@@ -152,19 +152,7 @@ namespace assetlib
 	void
 	save(const BMesh& mesh, const std::filesystem::path& path)
 	{
-		const auto bytes = serialize(mesh);
-
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("bmesh: cannot open file for writing", path));
-
-		out.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("bmesh: failed to write file", path));
+		writeFileBytes(path, serialize(mesh), c_Context);
 	}
 
 	BMesh
