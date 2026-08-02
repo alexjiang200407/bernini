@@ -1,8 +1,14 @@
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
+#include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/cancel.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
+#include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -232,5 +238,49 @@ TEST_CASE("a mesh that cannot be written reports why", "[io][fs]")
 		// point -- "permission denied" is actionable, "cannot open file for writing" is not.
 		REQUIRE(message.find("taken': ") != std::string::npos);
 		REQUIRE_FALSE(message.ends_with("'"));
+	}
+}
+
+// The same guarantee as above, for the four containers that never had it pinned. They report through
+// one writer now; before that each carried a private copy of it, and a copy that stopped naming the
+// OS's reason would only ever be noticed by whoever could not save.
+TEST_CASE("every container that cannot be written reports why", "[io][fs]")
+{
+	const ScratchDir dir("bernini_save_error_all");
+
+	const auto occupied = dir.path / "taken";
+	std::filesystem::create_directories(occupied);
+
+	struct Container
+	{
+		const char*                                       name;
+		std::function<void(const std::filesystem::path&)> write;
+	};
+
+	const Container containers[] = {
+		{ "bmaterial", [](const std::filesystem::path& p) { saveMaterial(BMaterial(), p); } },
+		{ "benv", [](const std::filesystem::path& p) { saveEnv(BEnv(), p); } },
+		{ "bsky", [](const std::filesystem::path& p) { saveSky(BSky(), p); } },
+		{ "benvl", [](const std::filesystem::path& p) { saveEnvLighting(BEnvLighting(), p); } },
+	};
+
+	for (const Container& container : containers)
+	{
+		INFO("container: " << container.name);
+		try
+		{
+			container.write(occupied);
+			FAIL("expected the save to throw");
+		}
+		catch (const std::runtime_error& e)
+		{
+			const auto message = std::string(e.what());
+			INFO("message: " << message);
+
+			// Names itself, names the path, and ends in the OS's reason rather than in the path.
+			REQUIRE(message.starts_with(std::string(container.name) + ": "));
+			REQUIRE(message.find("taken': ") != std::string::npos);
+			REQUIRE_FALSE(message.ends_with("'"));
+		}
 	}
 }

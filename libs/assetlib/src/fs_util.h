@@ -25,4 +25,21 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	fileErrorMessage(std::string_view what, const std::filesystem::path& path);
+
+	/**
+	 * Writes `bytes` to `path`, replacing whatever was there.
+	 *
+	 * Shared rather than repeated per container, for the reason writeString is: five private copies of
+	 * an open-write-check are five chances for one to stop reporting why it failed, and the one that
+	 * does is only noticed by whoever cannot save.
+	 *
+	 * @param what Prefixed to any message thrown, naming the container -- "bmesh", "bsky".
+	 * @throws std::runtime_error naming the OS's reason if the file cannot be opened or written; see
+	 *         fileErrorMessage.
+	 */
+	void
+	writeFileBytes(
+		const std::filesystem::path& path,
+		std::span<const std::byte>   bytes,
+		std::string_view             what);
 }
