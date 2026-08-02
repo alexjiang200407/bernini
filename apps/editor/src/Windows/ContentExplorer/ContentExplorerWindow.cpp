@@ -958,6 +958,19 @@ ContentExplorerWindow::ImportEnvironment(const QString& sourceFile)
 	desc.lightingDir = std::filesystem::path(dialog.LightingDirectory().toStdWString());
 	desc.sourceDir   = std::filesystem::path(dialog.SourceDirectory().toStdWString());
 
+	// Import never overwrites, here as for a mesh. The files are asked of assetlib rather than
+	// rebuilt here, so the check cannot come to name different ones than the import would write.
+	auto replaced = QStringList();
+	for (const std::string& target : assetlib::environmentImportTargets(desc))
+	{
+		std::error_code ec;
+		if (std::filesystem::exists(desc.dataRoot / target, ec))
+			replaced << QString::fromStdString(target);
+	}
+
+	if (ReportImportConflict(this, name, replaced))
+		return ImportOutcome::kBlocked;
+
 	// Projecting the source and convolving it are seconds to minutes of pure CPU, and none of it
 	// touches bgl -- so it runs on a worker, as the mesh import's cook does.
 	auto imported = assetlib::EnvImportResult();

@@ -105,6 +105,30 @@ namespace assetlib
 		}
 	}
 
+	std::vector<std::string>
+	environmentImportTargets(const EnvImportDesc& desc)
+	{
+		auto out = std::vector<std::string>();
+
+		if (desc.sky)
+		{
+			out.push_back(assetRef(desc.sourceDir, desc.name, "_sky.ktx2"));
+			out.push_back(assetRef(desc.skyDir, desc.name, ".bsky"));
+		}
+
+		if (desc.lighting)
+		{
+			out.push_back(assetRef(desc.sourceDir, desc.name, "_prefilter.ktx2"));
+			out.push_back(assetRef(desc.sourceDir, desc.name, "_irradiance.ktx2"));
+			out.push_back(assetRef(desc.lightingDir, desc.name, ".benvl"));
+		}
+
+		if (desc.environment && (desc.sky || desc.lighting))
+			out.push_back(assetRef(desc.environmentDir, desc.name, ".benv"));
+
+		return out;
+	}
+
 	EnvImportResult
 	importEnvironment(const EnvImportDesc& desc, const CancelToken& cancel)
 	{

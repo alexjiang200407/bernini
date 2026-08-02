@@ -66,10 +66,7 @@ namespace
 
 		return QString("%1/%2").arg(QString::fromLatin1(category), QDir::cleanPath(typed));
 	}
-}
 
-namespace
-{
 	/** A folder field behind its category, shown as an uneditable prefix so the layout is obvious. */
 	QLineEdit*
 	AddFolderRow(

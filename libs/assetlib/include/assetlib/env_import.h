@@ -88,4 +88,18 @@ namespace assetlib
 	 */
 	[[nodiscard]] EnvImportResult
 	importEnvironment(const EnvImportDesc& desc, const CancelToken& cancel = {});
+
+	/**
+	 * Every file `desc` would write, data-root relative, without writing any of them.
+	 *
+	 * For a caller that must decide *before* importing whether it would land on something already
+	 * there -- the editor refuses rather than overwrites, and cannot ask that question by trying it.
+	 * Naming the files here rather than in the caller is what keeps the two from disagreeing about
+	 * where an import goes.
+	 *
+	 * The baked maps are not included: they are content-addressed, so a collision with one is two
+	 * imports agreeing on content rather than one destroying the other.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	environmentImportTargets(const EnvImportDesc& desc);
 }
