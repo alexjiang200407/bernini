@@ -230,6 +230,23 @@ half-migrated at a commit boundary.
   checkable — anything left behind fails to compile.
   *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
   diff is a bug).
+* **D3b — an SRV is created explicitly, like an RTV.** `CreateSrv(TextureHandle, SrvDesc) ->
+  SrvHandle`, and `CreateTexture` stops making one. Every texture then comes from one pool —
+  `m_Textures` — because the slot no longer has to be a heap index; `TextureHandle::usage` stops
+  selecting an index space; and the bindless index moves from `TextureHandle` to `SrvHandle`, which
+  is the thing that actually has a descriptor.
+
+  This is what makes the RTV/DSV-only case *unrepresentable* rather than merely handled: a texture
+  has no bindless index to be wrong about, and only a caller that asked for an SRV gets one. It also
+  removes the hazard § 1 names — caller-supplied `usage` bits choosing between two index spaces.
+
+  Two costs, taken deliberately. **Metal pays ceremony**: it has no heap, so an `Srv` there is a
+  record naming a texture whose bindless index is the texture's own pool slot — the same shape
+  `Rtv`/`Dsv` already have on Metal, and the seam a format/mip texture view would need later.
+  **Destruction becomes two calls**: `DestroyTexture` does not cascade to `Rtv`/`Dsv` today, so
+  `DestroySrv` follows that convention, and `Scene::DeleteTextureAsset` has to release both.
+  *Gate:* `bgl_tests` green on both backends; golden images bit-identical; a test that an RTV-only
+  texture and a sampled texture can hold the same slot index without colliding.
 * **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` stamp the
   handle with an index from the allocator instead of the slot index; destruction frees it on the
   deferred gate. This
@@ -238,11 +255,10 @@ half-migrated at a commit boundary.
   *Gate:* golden images within tolerance; `just run bgl_tests -- --gpu-validation`, because a mis-freed
   descriptor is exactly what GPU-based validation catches and nothing else does. Metal unaffected —
   worth re-running to prove it.
-* **D5 — collapse the pools.** `m_Textures` merges into the texture pool, the variant goes,
-  `TextureHandle::usage` stops selecting an index space, and `maxCbvSrvUavs` splits.
-  *Gate:* as D4, plus a test that an RTV-only texture and an SRV texture can hold the same slot index
-  without colliding — the failure the old design prevented structurally and this one must prevent
-  deliberately.
+* **D5 — collapse what is left.** The `variant<Buffer, Texture>` goes, for a `slot_vector` of each,
+  and `maxCbvSrvUavs` splits into a resource count and a descriptor count. D3b already merged the
+  texture pools and retired `usage` as a discriminator.
+  *Gate:* as D4.
 
 There is no WebGPU step. The old D6 removed `GetBufferBindingBySlotIndex`; that code left with the
 backend.
