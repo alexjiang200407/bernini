@@ -13,6 +13,11 @@ namespace bgl
 		constexpr Format c_DepthFormat      = Format::D24S8;
 		constexpr Format c_MotionFormat     = Format::RG16_FLOAT;
 
+		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
+		// Alpha is carried because the blend state writes destination alpha and the capture path
+		// reads it, which rules out the packed three-channel float formats.
+		constexpr Format c_SceneColorFormat = Format::RGBA16_FLOAT;
+
 		// Holds a presented frame on screen for at least this long, which is what caps the loop at
 		// 60Hz: a plain present rides every refresh, and on a ProMotion panel that is 120.
 		constexpr CFTimeInterval c_MinPresentInterval = 1.0 / 60.0;
@@ -123,6 +128,30 @@ namespace bgl
 		motionRtvDesc.debugName = "Motion Vectors RTV";
 
 		m_MotionRtv = m_ResourceManager->CreateRtv(m_MotionTexture, motionRtvDesc);
+
+		auto sceneColorDesc   = TextureDesc();
+		sceneColorDesc.width  = m_Width;
+		sceneColorDesc.height = m_Height;
+		sceneColorDesc.format = c_SceneColorFormat;
+		sceneColorDesc.usage =
+			TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+		sceneColorDesc.initialLayout = BarrierLayout::kRenderTarget;
+		sceneColorDesc.debugName     = "Scene Color";
+		sceneColorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+		m_SceneColorTexture = m_ResourceManager->CreateTexture(sceneColorDesc);
+
+		auto sceneColorRtvDesc      = RtvDesc();
+		sceneColorRtvDesc.format    = c_SceneColorFormat;
+		sceneColorRtvDesc.debugName = "Scene Color RTV";
+
+		m_SceneColorRtv = m_ResourceManager->CreateRtv(m_SceneColorTexture, sceneColorRtvDesc);
+
+		auto sceneColorSrvDesc      = SrvDesc();
+		sceneColorSrvDesc.format    = c_SceneColorFormat;
+		sceneColorSrvDesc.debugName = "Scene Color SRV";
+
+		m_SceneColorSrv = m_ResourceManager->CreateSrv(m_SceneColorTexture, sceneColorSrvDesc);
 	}
 
 	void
@@ -137,6 +166,12 @@ namespace bgl
 			backbuffer = {};
 		}
 
+		if (!m_SceneColorSrv.IsNull())
+			m_ResourceManager->DestroySrv(m_SceneColorSrv, false);
+		if (!m_SceneColorRtv.IsNull())
+			m_ResourceManager->DestroyRtv(m_SceneColorRtv, false);
+		if (!m_SceneColorTexture.IsNull())
+			m_ResourceManager->DestroyTexture(m_SceneColorTexture, false);
 		if (!m_MotionRtv.IsNull())
 			m_ResourceManager->DestroyRtv(m_MotionRtv, false);
 		if (!m_MotionTexture.IsNull())
@@ -146,10 +181,13 @@ namespace bgl
 		if (!m_DepthTexture.IsNull())
 			m_ResourceManager->DestroyTexture(m_DepthTexture, false);
 
-		m_MotionRtv     = {};
-		m_MotionTexture = {};
-		m_DepthDsv      = {};
-		m_DepthTexture  = {};
+		m_SceneColorSrv     = {};
+		m_SceneColorRtv     = {};
+		m_SceneColorTexture = {};
+		m_MotionRtv         = {};
+		m_MotionTexture     = {};
+		m_DepthDsv          = {};
+		m_DepthTexture      = {};
 	}
 
 	void

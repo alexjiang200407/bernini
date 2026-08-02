@@ -17,6 +17,13 @@ namespace bgl
 		RtvHandle     rtvHandle;
 	};
 
+	struct TextureRtvSrvHandle
+	{
+		TextureHandle textureHandle;
+		RtvHandle     rtvHandle;
+		SrvHandle     srvHandle;
+	};
+
 	struct TextureDsvHandle
 	{
 		TextureHandle textureHandle;
@@ -133,6 +140,24 @@ namespace bgl
 			return m_MotionVectors.rtvHandle;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetSceneColorTexture() const noexcept override
+		{
+			return m_SceneColor.textureHandle;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetSceneColorRtv() const noexcept override
+		{
+			return m_SceneColor.rtvHandle;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetSceneColorSrv() const noexcept override
+		{
+			return m_SceneColor.srvHandle;
+		}
+
 		void
 		PresentAndAdvance() noexcept override;
 
@@ -150,7 +175,7 @@ namespace bgl
 		CreateOffscreenRenderTargets();
 
 		void
-		CreateDepthAndMotionVectors();
+		CreateAttachments();
 
 		void
 		DestroyRenderTargets();
@@ -167,12 +192,13 @@ namespace bgl
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 
-		UINT             m_FrameIndex         = 0;
-		UINT             m_LastPresentedIndex = 0;
-		TextureRtvHandle m_BackBuffers[c_SwapchainImageCount];
-		TextureDsvHandle m_DepthBuffer;
-		TextureRtvHandle m_MotionVectors;
-		UINT64           m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
+		UINT                m_FrameIndex         = 0;
+		UINT                m_LastPresentedIndex = 0;
+		TextureRtvHandle    m_BackBuffers[c_SwapchainImageCount];
+		TextureDsvHandle    m_DepthBuffer;
+		TextureRtvHandle    m_MotionVectors;
+		TextureRtvSrvHandle m_SceneColor;
+		UINT64              m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
 
 		CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
 	};
