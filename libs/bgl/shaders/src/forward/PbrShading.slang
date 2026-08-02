@@ -1,6 +1,5 @@
 import forward.common;
 import idl.TextureHandle;
-import util.Tonemap;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
@@ -119,7 +118,7 @@ public float4 ShadeSurface(
 
     float3 ambient = (kD * diffuse + specular) * ao;
 
-    float3 color = AgX(ambient * exposure);
+    float3 color = ambient * exposure;
 
     return float4(color, baseColor.a);
 }

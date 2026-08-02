@@ -19,7 +19,7 @@ namespace bgl
 		glm::mat4                   prevViewProj{ 1.0f };
 		idl::CullView               cullView{};
 		glm::vec3                   cameraPos{ 0.0f };
-		RtvHandle                   backBufferHandle;
+		RtvHandle                   sceneColorHandle;
 		DsvHandle                   depthBufferHandle;
 		RtvHandle                   motionVectorHandle;
 		SamplerHandle               anisoLinearWrapSampler;
