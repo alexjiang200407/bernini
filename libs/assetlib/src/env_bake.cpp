@@ -76,7 +76,10 @@ namespace assetlib
 			if (stampOf(dataRoot / route.source) != route.stamp)
 				return true;
 
-			return route.baked.empty();
+			// Named is not the same as present: a map deleted since the bake leaves the route
+			// pointing at a file there is nothing to sample. A bake cannot claim what it cannot
+			// produce, so that is stale and not up to date.
+			return route.baked.empty() || stampOf(dataRoot / route.baked).size == 0;
 		}
 	}
 
