@@ -1,5 +1,7 @@
 #include "assetlib/benv_io.h"
 
+#include "ChunkFile.h"
+
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/magic.h>
@@ -15,8 +17,6 @@ namespace assetlib
 		constexpr uint16_t c_VersionMajor = 1;
 		constexpr uint16_t c_VersionMinor = 0;
 
-		constexpr size_t c_ChunkAlign = 16;
-
 		enum class ChunkId : uint32_t
 		{
 			kPrefilter  = 0,
@@ -26,37 +26,15 @@ namespace assetlib
 
 		struct FileHeader
 		{
-			uint32_t magic;
-			uint16_t versionMajor;
-			uint16_t versionMinor;
-			uint8_t  byteOrder;  // 0 == little-endian
-			uint8_t  pad[3];
-			uint32_t chunkCount;
-			uint32_t chunkTableOffset;
-			float    exposure;
-			uint64_t sourceHash;
-			uint32_t samples;
-			uint32_t mipLevels;
-			uint64_t fileSize;
+			ChunkHeader chunks;
+			float       exposure;
+			uint64_t    sourceHash;
+			uint32_t    samples;
+			uint32_t    mipLevels;
+			uint64_t    fileSize;
 		};
 
 		static_assert(sizeof(FileHeader) == 48);
-
-		struct ChunkEntry
-		{
-			uint32_t id;
-			uint32_t pad;
-			uint64_t offset;
-			uint64_t byteSize;
-		};
-
-		static_assert(sizeof(ChunkEntry) == 24);
-
-		void
-		padToChunkAlignment(std::vector<std::byte>& out)
-		{
-			out.resize(core::align(out.size(), c_ChunkAlign), std::byte{ 0 });
-		}
 
 		const ImageData&
 		require(const ImageData& map, const char* which)
@@ -104,36 +82,32 @@ namespace assetlib
 			                           ChunkId::kIrradiance,
 			                           ChunkId::kSkybox };
 
-		auto out = std::vector<std::byte>(sizeof(FileHeader));
+		auto writer = core::io::ByteWriter();
+		writer.writePod(FileHeader{});  // placeholder, patched below
 
 		ChunkEntry entries[3] = {};
 		for (int i = 0; i < 3; ++i)
-		{
-			padToChunkAlignment(out);
-			entries[i].id       = static_cast<uint32_t>(c_Ids[i]);
-			entries[i].offset   = out.size();
-			entries[i].byteSize = blobs[i].size();
-			out.insert(out.end(), blobs[i].begin(), blobs[i].end());
-		}
+			entries[i] = appendBlob(writer, c_Ids[i], std::span<const std::byte>(blobs[i]));
 
-		padToChunkAlignment(out);
-		const size_t tableOffset = out.size();
-		out.resize(out.size() + sizeof(entries));
-		std::memcpy(out.data() + tableOffset, entries, sizeof(entries));
+		writer.alignTo(c_ChunkAlign);
+		const auto tableOffset = writer.size();
+		writer.writePodArray(std::span<const ChunkEntry>(entries));
 
 		FileHeader header{};
-		header.magic            = magic::c_BEnv;
-		header.versionMajor     = c_VersionMajor;
-		header.versionMinor     = c_VersionMinor;
-		header.byteOrder        = 0;
-		header.chunkCount       = 3;
-		header.chunkTableOffset = static_cast<uint32_t>(tableOffset);
-		header.exposure         = maps.exposure;
-		header.sourceHash       = provenance.sourceHash;
-		header.samples          = provenance.samples;
-		header.mipLevels        = provenance.mipLevels;
-		header.fileSize         = out.size();
-		std::memcpy(out.data(), &header, sizeof(header));
+		header.chunks.magic            = magic::c_BEnv;
+		header.chunks.versionMajor     = c_VersionMajor;
+		header.chunks.versionMinor     = c_VersionMinor;
+		header.chunks.byteOrder        = 0;
+		header.chunks.chunkCount       = 3;
+		header.chunks.chunkTableOffset = static_cast<uint32_t>(tableOffset);
+		header.exposure                = maps.exposure;
+		header.sourceHash              = provenance.sourceHash;
+		header.samples                 = provenance.samples;
+		header.mipLevels               = provenance.mipLevels;
+		header.fileSize                = writer.size();
+		writer.patchPod(0, header);
+
+		const auto out = writer.take();
 
 		std::ofstream file(path, std::ios::binary | std::ios::trunc);
 		if (!file)
@@ -164,68 +138,16 @@ namespace assetlib
 		FileHeader header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 
-		if (header.magic != magic::c_BEnv)
-			core::throw_runtime_error(
-				"assetlib::loadBenv: '{}' is not a .benv (bad magic)",
-				path.string());
-		if (header.versionMajor != c_VersionMajor)
-			core::throw_runtime_error(
-				"assetlib::loadBenv: '{}' is version {}, this build reads {}",
-				path.string(),
-				header.versionMajor,
-				c_VersionMajor);
-		if (header.chunkCount != 3 ||
-		    header.chunkTableOffset + 3 * sizeof(ChunkEntry) > bytes.size())
-			core::throw_runtime_error(
-				"assetlib::loadBenv: '{}' has a malformed chunk table",
-				path.string());
+		const auto context = std::format("assetlib::loadBenv: '{}'", path.string());
+		validateHeader(header.chunks, magic::c_BEnv, c_VersionMajor, context);
 
-		ChunkEntry entries[3] = {};
-		std::memcpy(entries, bytes.data() + header.chunkTableOffset, sizeof(entries));
+		const auto table = ChunkTable(bytes, header.chunks, context);
 
 		EnvironmentMaps maps;
-		maps.exposure = header.exposure;
-
-		bool seen[3] = {};
-		for (const ChunkEntry& entry : entries)
-		{
-			// Subtract rather than add: both are uint64_t straight out of the file, so a corrupt
-			// table could wrap `offset + byteSize` back under the bound while still pointing past the
-			// buffer, which decodeKTX2 would then read out of range.
-			if (entry.offset > bytes.size() || entry.byteSize > bytes.size() - entry.offset)
-				core::throw_runtime_error(
-					"assetlib::loadBenv: a chunk of '{}' runs past the file",
-					path.string());
-
-			const auto blob =
-				std::span<const std::byte>(bytes.data() + entry.offset, entry.byteSize);
-
-			switch (static_cast<ChunkId>(entry.id))
-			{
-			case ChunkId::kPrefilter:
-				maps.prefilter = decodeKTX2(blob);
-				seen[0]        = true;
-				break;
-			case ChunkId::kIrradiance:
-				maps.irradiance = decodeKTX2(blob);
-				seen[1]         = true;
-				break;
-			case ChunkId::kSkybox:
-				maps.skybox = decodeKTX2(blob);
-				seen[2]     = true;
-				break;
-			default:
-				core::throw_runtime_error(
-					"assetlib::loadBenv: '{}' has an unknown chunk id {}",
-					path.string(),
-					entry.id);
-			}
-		}
-
-		if (!seen[0] || !seen[1] || !seen[2])
-			core::throw_runtime_error(
-				"assetlib::loadBenv: '{}' is missing one of the three maps",
-				path.string());
+		maps.exposure   = header.exposure;
+		maps.prefilter  = decodeKTX2(table.Blob(ChunkId::kPrefilter));
+		maps.irradiance = decodeKTX2(table.Blob(ChunkId::kIrradiance));
+		maps.skybox     = decodeKTX2(table.Blob(ChunkId::kSkybox));
 
 		if (provenance != nullptr)
 		{

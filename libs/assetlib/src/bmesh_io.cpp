@@ -5,6 +5,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
+#include "ChunkFile.h"
 #include "fs_util.h"
 
 #include <core/file/file.h>
@@ -20,9 +21,9 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = magic::c_BMesh;
 
-		constexpr uint16_t c_VersionMajor = 3;
-		constexpr uint16_t c_VersionMinor = 0;
-		constexpr size_t   c_ChunkAlign   = 16;
+		constexpr uint16_t         c_VersionMajor = 3;
+		constexpr uint16_t         c_VersionMinor = 0;
+		constexpr std::string_view c_Context      = "bmesh";
 
 		enum class ChunkId : uint32_t
 		{
@@ -41,70 +42,11 @@ namespace assetlib
 
 		struct FileHeader
 		{
-			uint32_t magic;
-			uint16_t versionMajor;
-			uint16_t versionMinor;
-			uint8_t  byteOrder;  // 0 == little-endian
-			uint8_t  pad[3];
-			uint32_t chunkCount;
-			uint32_t chunkTableOffset;
-			uint64_t fileSize;
+			ChunkHeader chunks;
+			uint64_t    fileSize;
 		};
 
 		static_assert(sizeof(FileHeader) == 32);
-
-		struct ChunkEntry
-		{
-			uint32_t id;
-			uint32_t elementSize;
-			uint64_t offset;
-			uint64_t byteSize;
-		};
-
-		static_assert(sizeof(ChunkEntry) == 24);
-
-		// Subtracts rather than adds: both operands come straight out of the file, so `offset +
-		// byteSize` can wrap back under the bound while still naming a region far past the stream.
-		constexpr bool
-		fitsWithin(uint64_t offset, uint64_t byteSize, uint64_t total) noexcept
-		{
-			return offset <= total && byteSize <= total - offset;
-		}
-
-		template <typename T>
-		ChunkEntry
-		appendChunk(ByteWriter& writer, ChunkId id, const std::vector<T>& values)
-		{
-			writer.alignTo(c_ChunkAlign);
-
-			ChunkEntry entry{};
-			entry.id          = static_cast<uint32_t>(id);
-			entry.elementSize = static_cast<uint32_t>(sizeof(T));
-			entry.offset      = writer.size();
-			entry.byteSize    = values.size() * sizeof(T);
-			writer.writePodArray(std::span<const T>(values));
-			return entry;
-		}
-
-		template <typename T>
-		std::vector<T>
-		readChunk(std::span<const std::byte> all, const ChunkEntry& entry)
-		{
-			if (entry.elementSize != sizeof(T))
-				throw std::runtime_error("bmesh: chunk element size mismatch");
-			if (entry.byteSize % sizeof(T) != 0)
-				throw std::runtime_error(
-					"bmesh: chunk byte size is not a multiple of the element size");
-			if (!fitsWithin(entry.offset, entry.byteSize, all.size()))
-				throw std::runtime_error("bmesh: chunk extends past end of stream");
-
-			std::vector<T> out(entry.byteSize / sizeof(T));
-			std::copy_n(
-				all.data() + entry.offset,
-				entry.byteSize,
-				reinterpret_cast<std::byte*>(out.data()));
-			return out;
-		}
 
 		// Material paths are stored as one blob of NUL-terminated strings (one terminator per path).
 		std::vector<char>
@@ -167,13 +109,13 @@ namespace assetlib
 		writer.writePodArray(std::span<const ChunkEntry>(chunks));
 
 		FileHeader header{};
-		header.magic            = c_Magic;
-		header.versionMajor     = c_VersionMajor;
-		header.versionMinor     = c_VersionMinor;
-		header.byteOrder        = 0;
-		header.chunkCount       = static_cast<uint32_t>(chunks.size());
-		header.chunkTableOffset = static_cast<uint32_t>(tableOffset);
-		header.fileSize         = writer.size();
+		header.chunks.magic            = c_Magic;
+		header.chunks.versionMajor     = c_VersionMajor;
+		header.chunks.versionMinor     = c_VersionMinor;
+		header.chunks.byteOrder        = 0;
+		header.chunks.chunkCount       = static_cast<uint32_t>(chunks.size());
+		header.chunks.chunkTableOffset = static_cast<uint32_t>(tableOffset);
+		header.fileSize                = writer.size();
 		writer.patchPod(0, header);
 
 		return writer.take();
@@ -185,55 +127,25 @@ namespace assetlib
 		ByteReader reader(bytes);
 		const auto header = reader.readPod<FileHeader>();
 
-		if (header.magic != c_Magic)
-			throw std::runtime_error("bmesh: bad magic");
-		if (header.versionMajor != c_VersionMajor)
-			throw std::runtime_error("bmesh: unsupported major version");
-		if (header.byteOrder != 0)
-			throw std::runtime_error("bmesh: unsupported byte order");
+		validateHeader(header.chunks, c_Magic, c_VersionMajor, c_Context);
+
 		if (header.fileSize > bytes.size())
 			throw std::runtime_error("bmesh: stream shorter than declared file size");
 
-		const auto tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(ChunkEntry);
-		if (!fitsWithin(header.chunkTableOffset, tableBytes, bytes.size()))
-			throw std::runtime_error("bmesh: chunk table extends past end of stream");
-
-		reader.seek(header.chunkTableOffset);
-		std::unordered_map<uint32_t, ChunkEntry> table;
-		for (uint32_t i = 0; i < header.chunkCount; ++i)
-		{
-			const auto entry = reader.readPod<ChunkEntry>();
-			table.emplace(entry.id, entry);
-		}
-
-		const auto require = [&](ChunkId id) -> const ChunkEntry& {
-			const auto it = table.find(static_cast<uint32_t>(id));
-			if (it == table.end())
-				throw std::runtime_error("bmesh: missing required chunk");
-			return it->second;
-		};
-		const auto optional = [&](ChunkId id, const ChunkEntry& fallback) -> const ChunkEntry& {
-			const auto it = table.find(static_cast<uint32_t>(id));
-			return it == table.end() ? fallback : it->second;
-		};
-
-		const ChunkEntry empty{};
+		const auto table = ChunkTable(bytes, header.chunks, c_Context);
 
 		BMesh mesh;
-		mesh.nodes     = readChunk<Node>(bytes, require(ChunkId::kNodes));
-		mesh.meshes    = readChunk<Mesh>(bytes, require(ChunkId::kMeshes));
-		mesh.roots     = readChunk<uint32_t>(bytes, optional(ChunkId::kRoots, empty));
-		mesh.submeshes = readChunk<Submesh>(bytes, optional(ChunkId::kSubmeshes, empty));
-		mesh.meshlets  = readChunk<Meshlet>(bytes, optional(ChunkId::kMeshlets, empty));
-		mesh.meshletVertices =
-			readChunk<uint32_t>(bytes, optional(ChunkId::kMeshletVertices, empty));
-		mesh.meshletTriangles =
-			readChunk<uint8_t>(bytes, optional(ChunkId::kMeshletTriangles, empty));
-		mesh.vertexData = readChunk<std::byte>(bytes, optional(ChunkId::kVertexData, empty));
-		mesh.indexData  = readChunk<std::byte>(bytes, optional(ChunkId::kIndexData, empty));
-		mesh.stringPool = readChunk<char>(bytes, optional(ChunkId::kStringPool, empty));
-		mesh.materials =
-			unpackStrings(readChunk<char>(bytes, optional(ChunkId::kMaterialPaths, empty)));
+		mesh.nodes            = table.Read<Node>(ChunkId::kNodes);
+		mesh.meshes           = table.Read<Mesh>(ChunkId::kMeshes);
+		mesh.roots            = table.ReadOptional<uint32_t>(ChunkId::kRoots);
+		mesh.submeshes        = table.ReadOptional<Submesh>(ChunkId::kSubmeshes);
+		mesh.meshlets         = table.ReadOptional<Meshlet>(ChunkId::kMeshlets);
+		mesh.meshletVertices  = table.ReadOptional<uint32_t>(ChunkId::kMeshletVertices);
+		mesh.meshletTriangles = table.ReadOptional<uint8_t>(ChunkId::kMeshletTriangles);
+		mesh.vertexData       = table.ReadOptional<std::byte>(ChunkId::kVertexData);
+		mesh.indexData        = table.ReadOptional<std::byte>(ChunkId::kIndexData);
+		mesh.stringPool       = table.ReadOptional<char>(ChunkId::kStringPool);
+		mesh.materials        = unpackStrings(table.ReadOptional<char>(ChunkId::kMaterialPaths));
 		return mesh;
 	}
 
@@ -291,22 +203,18 @@ namespace assetlib
 		FileHeader header{};
 		readAt(&header, sizeof(header), 0);
 
-		if (header.magic != c_Magic)
-			throw std::runtime_error("bmesh: bad magic");
-		if (header.versionMajor != c_VersionMajor)
-			throw std::runtime_error("bmesh: unsupported major version");
-		if (header.byteOrder != 0)
-			throw std::runtime_error("bmesh: unsupported byte order");
+		validateHeader(header.chunks, c_Magic, c_VersionMajor, c_Context);
 
 		// Bounded before it is sized, not after: a corrupt chunkCount would otherwise allocate its way
 		// to 96 GB on the way to being rejected.
-		const auto tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(ChunkEntry);
-		if (!fitsWithin(header.chunkTableOffset, tableBytes, fileSize))
+		const auto tableBytes =
+			static_cast<uint64_t>(header.chunks.chunkCount) * sizeof(ChunkEntry);
+		if (!fitsWithin(header.chunks.chunkTableOffset, tableBytes, fileSize))
 			throw std::runtime_error("bmesh: chunk table extends past end of file");
 
-		std::vector<ChunkEntry> table(header.chunkCount);
+		std::vector<ChunkEntry> table(header.chunks.chunkCount);
 		if (!table.empty())
-			readAt(table.data(), tableBytes, header.chunkTableOffset);
+			readAt(table.data(), tableBytes, header.chunks.chunkTableOffset);
 
 		for (const ChunkEntry& entry : table)
 		{

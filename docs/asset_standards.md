@@ -247,6 +247,23 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   ([libs/bgl/shaders/src/Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang)).
 
 ### Containers
+
+`.bmesh` and `.benv` are both **chunked**: a header, 16-byte-aligned chunks, and a table at the end
+saying where each one is. Neither format spells that out for itself —
+[libs/assetlib/src/ChunkFile.h](libs/assetlib/src/ChunkFile.h) holds the shared 20-byte `ChunkHeader`
+prefix, the `ChunkEntry` row, and `ChunkTable`, which is the only thing that turns an entry into
+bytes. Each format embeds `ChunkHeader` in a header struct of its own and adds its own fields after
+it (`.benv` carries exposure and the bake's provenance there).
+
+Nothing in a chunk table is trusted: every offset and size in one came out of the file, so
+`ChunkTable` bounds each chunk against the stream before slicing it, and does the arithmetic by
+subtraction so a corrupt entry cannot wrap past the check. Chunks are found **by id, not by
+position**, so a container may carry them in any order and may carry ones this build does not know —
+which is what lets a minor version add a chunk.
+
+`.bmaterial` is not chunked. It is a linear stream of fields, small enough that seeking into it would
+buy nothing.
+
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
