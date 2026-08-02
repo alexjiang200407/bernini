@@ -62,6 +62,15 @@
 *.ktx filter=lfs diff=lfs merge=lfs -text
 *.ktx2 filter=lfs diff=lfs merge=lfs -text
 *.benv filter=lfs diff=lfs merge=lfs -text
+
+# Binary containers, small enough not to want LFS -- but `* text=auto` above would otherwise be free
+# to rewrite line endings inside them. Git's auto-detection spares a file with a NUL early on, which
+# is luck rather than a guarantee.
+*.bmesh -text
+*.bmaterial -text
+*.bsky -text
+*.benvl -text
+
 *.png filter=lfs diff=lfs merge=lfs -text
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.tga filter=lfs diff=lfs merge=lfs -text

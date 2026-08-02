@@ -2,62 +2,54 @@
 
 #include <QLoggingCategory>
 
-#include <assetlib/benv_io.h>
-#include <assetlib/image_io.h>
+#include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
 
 namespace editor
 {
-	void
+	AppliedEnvironment
 	ApplyEnvironment(
-		bgl::IScene*         scene,
-		bgl::ISceneView*     view,
-		const std::string&   benvPath,
-		const std::string&   brdfLutPath,
-		std::optional<float> exposureOverride,
-		const char*          who)
+		bgl::IScene*                 scene,
+		bgl::ISceneView*             view,
+		const std::string&           benvPath,
+		const std::filesystem::path& dataRoot,
+		std::optional<float>         exposureOverride,
+		const char*                  who)
 	{
-		if (benvPath.empty())
-			return;
+		auto applied = AppliedEnvironment();
 
-		auto maps = assetlib::EnvironmentMaps();
+		if (benvPath.empty())
+			return applied;
+
+		auto env = assetlib::ResolvedEnvironment();
 		try
 		{
-			maps = assetlib::loadBenv(benvPath);
+			env = assetlib::resolveEnvironment(std::filesystem::path(benvPath), dataRoot);
 		}
 		catch (const std::exception& e)
 		{
 			qWarning("%s: cannot load environment '%s': %s", who, benvPath.c_str(), e.what());
-			return;
+			return applied;
 		}
 
-		// The .benv's own exposure is the value derived from these maps, so it is the right default;
-		// config only overrules it deliberately.
-		view->SetExposure(exposureOverride.value_or(maps.exposure));
-
-		auto brdfLut = bgl::TextureAssetHandle();
-		if (!brdfLutPath.empty())
-		{
-			try
-			{
-				brdfLut = scene->AddTextureAsset(assetlib::loadKTX2(brdfLutPath));
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("%s: cannot load '%s': %s", who, brdfLutPath.c_str(), e.what());
-			}
-		}
+		// The lighting's own exposure is the value derived from these maps, so it is the right
+		// default; config only overrules it deliberately.
+		view->SetExposure(exposureOverride.value_or(env.maps.exposure));
 
 		try
 		{
-			const auto irradiance = scene->AddTextureAsset(std::move(maps.irradiance));
-			const auto prefilter  = scene->AddTextureAsset(std::move(maps.prefilter));
+			const auto irradiance = scene->AddTextureAsset(std::move(env.maps.irradiance));
+			const auto prefilter  = scene->AddTextureAsset(std::move(env.maps.prefilter));
 
-			// All three or none: the split-sum specular is the product of the prefilter and the LUT,
-			// so a missing LUT would leave the lobe unnormalised rather than merely dimmer.
-			if (irradiance.textureSlot && prefilter.textureSlot && brdfLut.textureSlot)
-				view->SetEnvironmentMap({ irradiance, prefilter, brdfLut });
+			// Both or neither: they are the diffuse and specular convolutions of one radiance, so a
+			// view holding one of them would light the scene from half an environment.
+			if (irradiance.textureSlot && prefilter.textureSlot)
+			{
+				view->SetEnvironmentMap({ irradiance, prefilter });
+				applied.irradiance = irradiance;
+				applied.prefilter  = prefilter;
+			}
 		}
 		catch (const std::exception& e)
 		{
@@ -66,13 +58,18 @@ namespace editor
 
 		try
 		{
-			if (const auto skybox = scene->AddTextureAsset(std::move(maps.skybox));
+			if (const auto skybox = scene->AddTextureAsset(std::move(env.maps.skybox));
 			    skybox.textureSlot)
-				view->SetSkyBox({ skybox });
+			{
+				view->SetSkyBox({ skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
+				applied.skybox = skybox;
+			}
 		}
 		catch (const std::exception& e)
 		{
 			qWarning("%s: SetSkyBox failed: %s", who, e.what());
 		}
+
+		return applied;
 	}
 }

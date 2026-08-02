@@ -3,13 +3,18 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
+#include <assetlib/env_bake.h>
+#include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/magic.h>
@@ -21,6 +26,9 @@ namespace
 	{
 		kMesh,
 		kMaterial,
+		kEnv,
+		kSky,
+		kEnvLighting,
 	};
 
 	std::string
@@ -66,32 +74,44 @@ namespace
 			return "baked";
 		case assetlib::RefKind::kChannelRoute:
 			return "routes a channel from";
+		case assetlib::RefKind::kEnvironmentPart:
+			return "composes";
+		case assetlib::RefKind::kEnvSource:
+			return "bakes its radiance from";
 		}
 
 		return "references";
 	}
 
-	// Both containers open with a 4-byte magic, so the type is read from the file rather than guessed
+	// Every container opens with a 4-byte magic, so the type is read from the file rather than guessed
 	// from its extension -- `describe` then works on a file named anything. This is the deliberate
 	// opposite of assetlib::assetTypeFromExtension, which never opens the file.
 	ContainerType
 	sniff(const std::filesystem::path& path)
 	{
-		constexpr uint32_t c_MeshMagic     = assetlib::magic::c_BMesh;
-		constexpr uint32_t c_MaterialMagic = assetlib::magic::c_BMaterial;
-
 		std::ifstream in(path, std::ios::binary);
 		uint32_t      magic = 0;
 		if (!in.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
 			throw std::runtime_error("cannot read the file header of " + path.string());
 
-		if (magic == c_MeshMagic)
+		switch (magic)
+		{
+		case assetlib::magic::c_BMesh:
 			return ContainerType::kMesh;
-		if (magic == c_MaterialMagic)
+		case assetlib::magic::c_BMaterial:
 			return ContainerType::kMaterial;
+		case assetlib::magic::c_BEnv:
+			return ContainerType::kEnv;
+		case assetlib::magic::c_BSky:
+			return ContainerType::kSky;
+		case assetlib::magic::c_BEnvL:
+			return ContainerType::kEnvLighting;
+		}
 
 		throw std::runtime_error(
-			path.string() + " is neither a .bmesh nor a .bmaterial (unrecognized magic)");
+			path.string() +
+			" is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky or "
+			".benvl)");
 	}
 }
 
@@ -119,8 +139,6 @@ main(int argc, char** argv)
 	std::string envOut;
 	std::string envCube;
 	std::string envIem;
-	std::string envBenv;
-	bool        envFloat      = false;
 	uint32_t    envIemSize    = 128;
 	uint32_t    envSkyboxSize = 512;
 	float       envSkyboxBlur = 0.0f;
@@ -143,14 +161,6 @@ main(int argc, char** argv)
 	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
 	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
 	envmap->add_option(
-		"-b,--benv",
-		envBenv,
-		"Write all three maps and the derived exposure as one .benv -- what the editor loads");
-	envmap->add_flag(
-		"--float",
-		envFloat,
-		"Keep the .benv's maps at RGBA32F instead of packing them to RGB9E5 (4x larger)");
-	envmap->add_option(
 		"-s,--size",
 		envSize,
 		"Prefilter base face size (default: 256). The lobe blurs it, so this can be modest");
@@ -171,6 +181,16 @@ main(int argc, char** argv)
 		envThreads,
 		"Worker threads (default: hardware concurrency)");
 
+	std::string envProject;
+	std::string envName = "env";
+	envmap->add_option(
+		"-p,--project",
+		envProject,
+		"Write the split formats into this project data root instead: float sources into "
+		"textures_src/, a baked Sky/<name>.bsky and EnvLighting/<name>.benvl, and an "
+		"Environments/<name>.benv composing the pair");
+	envmap->add_option("--name", envName, "Asset name for --project outputs (default: env)");
+
 	std::string objInput;
 	std::string objOut;
 	bool        objRaw = false;
@@ -188,15 +208,20 @@ main(int argc, char** argv)
 	bool        describeBrief = false;
 
 	auto* describe =
-		app.add_subcommand("describe", "Print the contents of a .bmesh or .bmaterial as text");
-	describe->add_option("input", describeInput, "Source .bmesh or .bmaterial file")
+		app.add_subcommand("describe", "Print the contents of an asset container as text");
+	describe
+		->add_option(
+			"input",
+			describeInput,
+			"Source .bmesh, .bmaterial, .benv, .bsky or .benvl file")
 		->required()
 		->check(CLI::ExistingFile);
 	describe->add_option(
 		"-d,--data-root",
 		describeDataRoot,
-		"Project data directory the asset's paths resolve against. For a material this also stats "
-		"each routed source, so a stale bake is reported");
+		"Project data directory the asset's paths resolve against. For a material, a sky or a "
+		"lighting this also stats each routed source, so a stale bake is reported; for an "
+		"environment it reports whether the files it names are there");
 	describe->add_flag(
 		"-b,--brief",
 		describeBrief,
@@ -281,8 +306,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			if (envOut.empty() && envBenv.empty())
-				throw std::runtime_error("nothing to write: pass --out and/or --benv");
+			if (envOut.empty() && envProject.empty())
+				throw std::runtime_error("nothing to write: pass --out and/or --project");
 
 			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
 
@@ -344,35 +369,30 @@ main(int argc, char** argv)
 					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
 					0.0);
 
-			if (!envBenv.empty())
+			if (!envProject.empty())
 			{
-				const float exposure = assetlib::exposureFor(iem);
+				auto importDesc               = assetlib::EnvImportDesc();
+				importDesc.dataRoot           = envProject;
+				importDesc.source             = envInput;
+				importDesc.name               = envName;
+				importDesc.skyFaceSize        = envSkyboxSize;
+				importDesc.skyBlur            = envSkyboxBlur;
+				importDesc.prefilterFaceSize  = envSize;
+				importDesc.prefilterMips      = envMips;
+				importDesc.prefilterSamples   = envSamples;
+				importDesc.irradianceFaceSize = envIemSize;
+				importDesc.threads            = envThreads;
 
-				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
-				// backend without an optional feature, so this is the shipping format rather than an
-				// intermediate needing a per-platform compile.
-				auto set                    = assetlib::EnvironmentMaps();
-				set.prefilter               = envFloat ? std::move(out) : assetlib::packRgb9e5(out);
-				set.irradiance              = envFloat ? std::move(iem) : assetlib::packRgb9e5(iem);
-				assetlib::ImageData& skyOut = envSkyboxBlur > 0.0f ? sky : src;
-				set.skybox   = envFloat ? std::move(skyOut) : assetlib::packRgb9e5(skyOut);
-				set.exposure = exposure;
-
-				auto provenance       = assetlib::EnvironmentProvenance();
-				provenance.samples    = desc.samples;
-				provenance.mipLevels  = desc.mipLevels;
-				provenance.sourceHash = assetlib::hashFile(envInput);
-
-				assetlib::writeBenv(set, envBenv, provenance);
+				const assetlib::EnvImportResult imported = assetlib::importEnvironment(importDesc);
 
 				spdlog::info(
-					"Wrote '{}': prefilter {}^2 x{}, irradiance {}^2, skybox {}^2, exposure {:.3f}",
-					envBenv,
-					set.prefilter.width,
-					set.prefilter.mipLevels,
-					set.irradiance.width,
-					set.skybox.width,
-					set.exposure);
+					"Imported '{}' into '{}': {} files, exposure {:.3f}",
+					envName,
+					envProject,
+					imported.written.size(),
+					imported.exposure);
+
+				for (const std::string& file : imported.written) spdlog::info("  wrote {}", file);
 			}
 		}
 		catch (const std::exception& e)
@@ -410,12 +430,26 @@ main(int argc, char** argv)
 
 			// Straight to stdout, not the logger: this is the command's output, so it should pipe into
 			// a file or a diff without spdlog's timestamps and level prefixes in the way.
-			if (sniff(path) == ContainerType::kMesh)
+			const auto dataRoot = std::filesystem::path(describeDataRoot);
+
+			switch (sniff(path))
+			{
+			case ContainerType::kMesh:
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
-			else
-				std::cout << assetlib::describe(
-					assetlib::loadMaterial(path),
-					std::filesystem::path(describeDataRoot));
+				break;
+			case ContainerType::kMaterial:
+				std::cout << assetlib::describe(assetlib::loadMaterial(path), dataRoot);
+				break;
+			case ContainerType::kEnv:
+				std::cout << assetlib::describe(assetlib::loadEnv(path), dataRoot);
+				break;
+			case ContainerType::kSky:
+				std::cout << assetlib::describe(assetlib::loadSky(path), dataRoot);
+				break;
+			case ContainerType::kEnvLighting:
+				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), dataRoot);
+				break;
+			}
 		}
 		catch (const std::exception& e)
 		{
@@ -469,9 +503,10 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(desc);
 
 			spdlog::info(
-				"Scanned {} meshes and {} materials: {} references",
+				"Scanned {} meshes, {} materials and {} environment assets: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
+				graph.environmentsScanned,
 				graph.Edges().size());
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.
@@ -534,8 +569,10 @@ main(int argc, char** argv)
 			const auto scan = assetlib::findUnusedBakedTextures(desc);
 
 			spdlog::info(
-				"Scanned {} materials: {} baked maps still referenced, {} present in '{}'",
+				"Scanned {} materials and {} environment assets: {} baked maps still referenced, "
+				"{} present in '{}'",
 				scan.materialsScanned,
+				scan.environmentsScanned,
 				scan.liveMaps,
 				scan.candidates,
 				pruneTextureDir);

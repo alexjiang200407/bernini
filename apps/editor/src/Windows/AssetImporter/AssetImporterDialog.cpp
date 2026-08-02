@@ -1,5 +1,7 @@
 #include "AssetImporterDialog.h"
 
+#include "util/asset_paths.h"
+
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -9,30 +11,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QVBoxLayout>
-
-namespace
-{
-	// A relative folder that cannot climb out of the texture root. A typed path only ever names a
-	// folder inside the project, so anything that could re-root the join is rejected.
-	bool
-	IsContainedRelativePath(const QString& path)
-	{
-		if (path.isEmpty() || QDir::isAbsolutePath(path))
-			return false;
-
-		// std::filesystem::path::operator/= replaces the left side when the right carries a root name
-		// that differs from it, so a drive-relative "D:" would re-root the join off the project.
-		// QDir::isAbsolutePath does not consider that absolute. A leading separator is a root too.
-		if (path.contains(':') || path.startsWith('/') || path.startsWith('\\'))
-			return false;
-
-		const QString cleaned = QDir::cleanPath(path);
-		if (cleaned == ".." || cleaned.startsWith("../"))
-			return false;
-
-		return !cleaned.isEmpty() && cleaned != ".";
-	}
-}
 
 AssetImporterDialog::AssetImporterDialog(
 	const QString&                     sourceFile,
@@ -132,7 +110,7 @@ QString
 AssetImporterDialog::TextureSubdirectory() const
 {
 	const QString typed = m_TextureSubdir->text().trimmed();
-	if (!IsContainedRelativePath(typed))
+	if (!editor::IsContainedRelativePath(typed))
 		return m_DefaultSubdir;
 
 	return QDir::cleanPath(typed);

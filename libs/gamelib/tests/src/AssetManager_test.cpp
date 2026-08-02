@@ -1,6 +1,10 @@
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
@@ -734,4 +738,92 @@ TEST_CASE("A material's textures come from the prefetch when it carries them", "
 
 	REQUIRE(mat.IsValid());
 	CHECK(prefetch.empty());
+}
+
+namespace
+{
+	// The environment family in project layout: a .benv in Environments/ composing a Sky/.bsky and
+	// an EnvLighting/.benvl whose baked maps live in Textures/.
+	void
+	WriteEnvironment(const std::filesystem::path& root, const char* name)
+	{
+		WriteTexture(root / "Textures" / (std::string(name) + "_sky.ktx2"));
+		WriteTexture(root / "Textures" / (std::string(name) + "_prefilter.ktx2"));
+		WriteTexture(root / "Textures" / (std::string(name) + "_irradiance.ktx2"));
+
+		auto sky      = assetlib::BSky();
+		sky.name      = name;
+		sky.sky.baked = "Textures/" + std::string(name) + "_sky.ktx2";
+		sky.mipLevel  = 1;
+		sky.rotationY = 0.25f;
+		std::filesystem::create_directories(root / "Sky");
+		assetlib::saveSky(sky, root / "Sky" / (std::string(name) + ".bsky"));
+
+		auto lighting             = assetlib::BEnvLighting();
+		lighting.name             = name;
+		lighting.prefilter.baked  = "Textures/" + std::string(name) + "_prefilter.ktx2";
+		lighting.irradiance.baked = "Textures/" + std::string(name) + "_irradiance.ktx2";
+		lighting.exposure         = 2.0f;
+		std::filesystem::create_directories(root / "EnvLighting");
+		assetlib::saveEnvLighting(lighting, root / "EnvLighting" / (std::string(name) + ".benvl"));
+
+		auto env     = assetlib::BEnv();
+		env.name     = name;
+		env.sky      = "Sky/" + std::string(name) + ".bsky";
+		env.lighting = "EnvLighting/" + std::string(name) + ".benvl";
+		std::filesystem::create_directories(root / "Environments");
+		assetlib::saveEnv(env, root / "Environments" / (std::string(name) + ".benv"));
+	}
+}
+
+TEST_CASE("AssetManager acquires an environment through its own data root", "[gamelib][assets]")
+{
+	Fixture fx("bernini_am_environment");
+	WriteEnvironment(fx.root.path, "forest");
+
+	const auto env = (*fx).AcquireEnvironment("Environments/forest.benv");
+
+	REQUIRE(env.irradiance.textureSlot);
+	REQUIRE(env.prefilter.textureSlot);
+	REQUIRE(env.skybox.textureSlot);
+	CHECK(env.exposure == 2.0f);
+	CHECK(env.skyMipLevel == 1);
+	CHECK(env.skyRotationY == 0.25f);
+
+	SECTION("two environments composing the same sky share its upload")
+	{
+		auto second     = assetlib::BEnv();
+		second.name     = "forest_night";
+		second.sky      = "Sky/forest.bsky";
+		second.lighting = "EnvLighting/forest.benvl";
+		assetlib::saveEnv(second, fx.root.path / "Environments" / "forest_night.benv");
+
+		const auto other = (*fx).AcquireEnvironment("Environments/forest_night.benv");
+		CHECK(other.skybox.textureSlot.index == env.skybox.textureSlot.index);
+		CHECK((*fx).TextureRefCount(env.skybox) == 2);
+
+		(*fx).ReleaseEnvironment(other);
+		CHECK((*fx).TextureRefCount(env.skybox) == 1);
+	}
+
+	SECTION("release drops the maps at zero")
+	{
+		(*fx).ReleaseEnvironment(env);
+		CHECK((*fx).TextureRefCount(env.skybox) == 0);
+	}
+
+	SECTION("a referenced sky that was never baked throws")
+	{
+		auto raw       = assetlib::BSky();
+		raw.name       = "raw";
+		raw.sky.source = "textures_src/raw.ktx2";
+		assetlib::saveSky(raw, fx.root.path / "Sky" / "raw.bsky");
+
+		auto env2 = assetlib::BEnv();
+		env2.name = "raw";
+		env2.sky  = "Sky/raw.bsky";
+		assetlib::saveEnv(env2, fx.root.path / "Environments" / "raw.benv");
+
+		CHECK_THROWS_AS((*fx).AcquireEnvironment("Environments/raw.benv"), std::runtime_error);
+	}
 }

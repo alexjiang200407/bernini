@@ -112,6 +112,58 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
+		/**
+		 * A `.benv` followed to its uploads: one texture reference per baked map it references, plus
+		 * the parameters that travel with them. A value, not a resource -- the three references are
+		 * what ReleaseEnvironment gives back.
+		 *
+		 * Pieces the `.benv` does not reference come back as invalid handles. Loading half an
+		 * environment is the caller's decision to make and not an error here -- but the scene does
+		 * **not** read an invalid handle as "absent": `SetEnvironmentMap` and `SetSkyBox` both throw
+		 * on one. Ask before binding, which is what HasLighting and HasSky are for.
+		 */
+		struct Environment
+		{
+			bgl::TextureAssetHandle irradiance;
+			bgl::TextureAssetHandle prefilter;
+			bgl::TextureAssetHandle skybox;
+
+			float    exposure     = 1.0f;
+			uint32_t skyMipLevel  = 0;
+			float    skyRotationY = 0.0f;
+
+			/**
+			 * Both or neither: the two are the diffuse and specular convolutions of one radiance, so a
+			 * view holding one of them would light the scene from half an environment.
+			 */
+			[[nodiscard]] bool
+			HasLighting() const noexcept
+			{
+				return irradiance.textureSlot && prefilter.textureSlot;
+			}
+
+			[[nodiscard]] bool
+			HasSky() const noexcept
+			{
+				return skybox.textureSlot;
+			}
+		};
+
+		/**
+		 * Loads the `.benv` at `relPath` and acquires one texture reference per baked map its chain
+		 * names. The maps are keyed by their own paths, so two environments composing the same sky
+		 * share its upload -- which is the point of the reference container.
+		 *
+		 * @throws std::runtime_error if a referenced file is missing or malformed, or a referenced
+		 *         asset has never been baked -- consumers draw the shipping maps, never the sources.
+		 */
+		Environment
+		AcquireEnvironment(std::string_view relPath);
+
+		/** Releases the three texture references an AcquireEnvironment took. */
+		void
+		ReleaseEnvironment(const Environment& environment);
+
 		// --- Procedural geometry: no file, so nothing to key on and nothing to share. -----------
 		// Refcounted like any other geom: released, it deletes and drops its material's reference.
 

@@ -207,13 +207,13 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 		bgl::ISceneView* view  = m_SceneView.Get();
 		// The same helper the material preview uses, so a thumbnail cannot be lit differently from
 		// the preview it was generated from.
-		editor::ApplyEnvironment(
+		static_cast<void>(editor::ApplyEnvironment(
 			scene,
 			view,
 			m_Desc.environmentMap,
-			m_Desc.brdfLut,
+			m_Desc.dataRoot,
 			m_Desc.exposureOverride,
-			"AssetThumbnail");
+			"AssetThumbnail"));
 
 		// What a submesh gets when the mesh names no material, or names one that will not load. A
 		// fresh import names none at all: toBMesh drops the source's materials on purpose.

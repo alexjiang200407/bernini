@@ -92,7 +92,8 @@ PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlet
 
 **[Environment Maps](./docs/envmaps.md)**
 
-Generating the IBL pair (radiance + irradiance) in CMFT Studio, why every gamma field must be 1.0, and how to verify the maps before shipping them.
+The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the
+authoring traps — gamma, cube-seam edge fixup, resampling — that still bite on a map from elsewhere.
 
 **[AI Coding Bots](./docs/ai-coding.md)**
 

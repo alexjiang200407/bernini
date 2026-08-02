@@ -3,6 +3,7 @@
 #include <assetlib_structs/magic.h>
 
 #include "fs_util.h"
+#include "string_io.h"
 
 #include <core/file/file.h>
 #include <core/io/ByteReader.h>
@@ -19,22 +20,6 @@ namespace assetlib
 
 		constexpr uint16_t c_VersionMajor = 7;
 		constexpr uint16_t c_VersionMinor = 1;
-
-		// Strings are stored as a uint32 length followed by the raw bytes (no terminator).
-		void
-		writeString(ByteWriter& writer, const std::string& value)
-		{
-			writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
-			writer.writeBytes(std::as_bytes(std::span<const char>(value)));
-		}
-
-		std::string
-		readString(ByteReader& reader)
-		{
-			const auto length = reader.readPod<uint32_t>();
-			const auto bytes  = reader.readBytes(length);
-			return std::string(reinterpret_cast<const char*>(bytes.data()), length);
-		}
 
 		void
 		writePbr(ByteWriter& writer, const PbrParams& pbr)
@@ -163,20 +148,7 @@ namespace assetlib
 	void
 	saveMaterial(const BMaterial& material, const std::filesystem::path& path)
 	{
-		const auto bytes = serializeMaterial(material);
-
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-			throw std::runtime_error(
-				fileErrorMessage("bmaterial: cannot open file for writing", path));
-
-		out.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("bmaterial: failed to write file", path));
+		writeFileBytes(path, serializeMaterial(material), "bmaterial");
 	}
 
 	BMaterial

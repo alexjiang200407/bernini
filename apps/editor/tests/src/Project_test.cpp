@@ -9,12 +9,8 @@ namespace
 {
 	namespace fs = std::filesystem;
 
-	/** Every directory Project promises to scaffold under Data/. */
-	const std::array<std::string_view, 5> c_DataDirectories = {
-		Project::c_MeshesDirectoryName,      Project::c_TexturesDirectoryName,
-		Project::c_TexturesSrcDirectoryName, Project::c_MaterialsDirectoryName,
-		Project::c_LevelsDirectoryName,
-	};
+	/** Every directory Project promises to scaffold under Data/, read from Project itself. */
+	constexpr auto& c_DataDirectories = Project::c_RequiredDirectories;
 
 	/** An empty directory, and the path of a project file that does not exist inside it yet. */
 	struct Sandbox
@@ -240,6 +236,12 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 	CHECK(Project::IsRequiredDirectory(Project::c_TexturesSrcDirectoryName));
 	CHECK(Project::IsRequiredDirectory(Project::c_MaterialsDirectoryName));
 	CHECK(Project::IsRequiredDirectory(Project::c_LevelsDirectoryName));
+
+	// One per environment container: a `.benv` names a `.bsky` and a `.benvl`, and each lives in its
+	// own category so the reference is a path the project layout guarantees.
+	CHECK(Project::IsRequiredDirectory(Project::c_EnvironmentsDirectoryName));
+	CHECK(Project::IsRequiredDirectory(Project::c_EnvLightingDirectoryName));
+	CHECK(Project::IsRequiredDirectory(Project::c_SkyDirectoryName));
 
 	SECTION("nor is the data root they sit in, however it is spelled")
 	{

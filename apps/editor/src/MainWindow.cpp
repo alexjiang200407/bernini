@@ -94,7 +94,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
-		matDesc.previewEnv.brdfLut = matSettings["brdfLut"].GetOrDefault(std::string());
+		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
@@ -106,7 +106,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
 		thumbDesc.environmentMap   = thumbSettings["environmentMap"].GetOrDefault(std::string());
-		thumbDesc.brdfLut          = thumbSettings["brdfLut"].GetOrDefault(std::string());
+		thumbDesc.dataRoot         = thumbSettings["dataRoot"].GetOrDefault(std::string());
 
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.exposureOverride = exposure.GetOrDefault(1.0f);
@@ -297,10 +297,11 @@ MainWindow::CleanUnusedTextures()
 			"Clean Unused Textures",
 			QString(
 				"No unused baked textures.\n\n%1 of the %2 baked textures are referenced by the "
-				"project's %3 materials.")
+				"project's %3 materials and %4 environment assets.")
 				.arg(scan.liveMaps)
 				.arg(scan.candidates)
-				.arg(scan.materialsScanned));
+				.arg(scan.materialsScanned)
+				.arg(scan.environmentsScanned));
 		return;
 	}
 

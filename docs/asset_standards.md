@@ -313,6 +313,51 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   `shadingModel` with no `default`, so the compiler names every one of them.
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture, all in one directory.
+* **`.bsky`** (v1) — the sky: one radiance cube map, the mip the backdrop samples, and its Y rotation.
+  **`.benvl`** (v1) — the lighting derived from that sky: the GGX prefilter chain, the irradiance
+  convolution, and the exposure they were measured at. Both structs:
+  [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h);
+  I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
+  [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
+
+  * **Authoring containers, shaped like `.bmaterial`.** Every map is an `EnvMapRoute`: the `source`
+    under `textures_src/`, the machine-ready `baked` `.ktx2` under `Textures/`, and the `SourceStamp`
+    the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
+  * **Sky and lighting are separate files because their lifetimes are.** Rotating a sky or sampling a
+    blurrier mip is immediate; re-convolving the lighting it implies is minutes of work that the same
+    edit need not trigger.
+  * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
+    ([libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h)) take the
+    routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
+    `Textures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
+    themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
+  * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
+    maps, so it must move whenever they do.
+  * `isSkyBakeStale`/`isEnvLightingBakeStale` mirror `bakeIsStale`: unrouted is never stale; a
+    changed, missing or never-baked source is.
+  * **The texture prune knows these assets.** Its mark phase reads every `.bsky`/`.benvl` below the
+    data root (unreadable ones are fatal, same as materials), and its sweep recognises
+    `isBakedEnvMapName` — `sky_`/`prefilter_`/`irradiance_` + 16 hex — disjoint from the material
+    groups by prefix. An orphaned env map is collected; a referenced one never is.
+* **`.benv`** (v2) — **an environment by reference**: `BEnv { name, sky, lighting }`, two data-root
+  relative paths to a `.bsky` and a `.benvl`, no pixels. On disk the family follows the same
+  per-kind directories materials use: the `.benv` in `Environments/`, the `.bsky` in `Sky/`, the
+  `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/` mirrors this exactly
+  as it does for `Materials/`. Composing by path lets a sky be re-authored
+  without touching the lighting minutes of convolution produced, and lets two environments share one
+  sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
+  [libs/assetlib/include/assetlib/benv_io.h](libs/assetlib/include/assetlib/benv_io.h).
+
+  * Either path may be empty — the import's checkboxes write whichever pieces were asked for; what a
+    `.benv` must reference is its consumer's rule, not the container's.
+  * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
+    ([libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h))
+    follows the chain and loads the **baked** maps — never the float sources, which would light the
+    scene subtly differently from the shipped build; referenced-but-never-baked throws.
+  * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
+    no migration path. It opened with the same magic and version-field layout, so the reader refuses
+    it *by number* with a message that says to re-import — reading on would take KTX2 bytes as
+    string lengths.
 
 ---
 
@@ -442,9 +487,8 @@ It is a **mark and sweep over the whole project**, and each half has a rule that
   it alone keeps alive would otherwise be swept as garbage.
 * **Sweep** — only files matching the bake's own naming, `<group>_<16 hex>.ktx2`, are candidates.
   That test is `isBakedMapName`, deliberately kept in `material_bake.cpp` beside the `c_Groups` table
-  that *writes* the names, so the two cannot drift. It is what keeps the hand-placed maps sharing the
-  directory — `forest.benv` and `brdf_lut.ktx2`, which are named in config and
-  by no material at all — from being swept as unreferenced.
+  that *writes* the names, so the two cannot drift. It is what keeps a hand-placed map sharing the
+  directory — one named in config, or by no material at all — from being swept as unreferenced.
 
 Because a baked name is a content hash, the live set is keyed by **file name**, not by the path a
 material stored: the name alone identifies the map, and a material that reached it through a different
@@ -566,13 +610,22 @@ assetlib_cli bake model.glb -o assets/model -n model
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
 assetlib_cli obj assets/model/model.bmesh -o model.obj
 
-# Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
+# Convolve an HDRI into a project's split environment set: float sources into textures_src/, a
+# baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
+assetlib_cli envmap forest.hdr -p Data --name forest
+
+# Print what is actually inside a container (the kind is read from the file's magic)
 assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
 assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
 assetlib_cli describe Data/Materials/skin.bmaterial      # factors, triplet, routing table, bake state
+assetlib_cli describe Data/Sky/forest.bsky               # presentation + the radiance route
+assetlib_cli describe Data/EnvLighting/forest.benvl      # exposure + the prefilter/irradiance pair
+assetlib_cli describe Data/Environments/forest.benv      # the .bsky and .benvl it composes
 
-# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
+# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel.
+# A .benv holds no pixels, so for one the root instead says whether what it names is there.
 assetlib_cli describe Data/Materials/skin.bmaterial -d Data
+assetlib_cli describe Data/Environments/forest.benv -d Data
 
 # Cut a material down to its shippable form: the triplet, the factors and the name. The routes and
 # the node graph do not survive it, so -o is the safe way to keep the authoring copy
@@ -591,7 +644,7 @@ assetlib_cli refs -d Data                    # summary, and every dangling refer
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps
-everything else as text. Both containers are opaque binary, so it is the intended answer to "what is
+everything else as text. Every container is opaque binary, so it is the intended answer to "what is
 in this file" — reach for it before hand-decoding a file against the serializer. The unrouted channels
 it lists are the usual cause of a material rendering wrong, since each one silently falls back to a
 default texture (see [Risky / Non-obvious contracts](#risky--non-obvious-contracts)). Rendered by

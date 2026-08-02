@@ -2,6 +2,8 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/env_bake.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 
@@ -124,6 +126,68 @@ namespace assetlib
 		texturePathOr(const std::string& path)
 		{
 			return path.empty() ? std::string("(none)") : path;
+		}
+
+		// One authored map: where it came from, what the bake wrote, and whether the two still agree.
+		// Shared by the sky and both halves of the lighting, so the three read alike.
+		void
+		describeEnvRoute(
+			std::string&                 out,
+			const char*                  label,
+			const EnvMapRoute&           route,
+			const std::filesystem::path& dataRoot)
+		{
+			out += std::format("\n  {}\n", label);
+			out += std::format("    source          {}\n", texturePathOr(route.source));
+			out += std::format("    baked           {}\n", texturePathOr(route.baked));
+
+			if (route.source.empty())
+			{
+				out += "    (unrouted)\n";
+				return;
+			}
+
+			if (dataRoot.empty())
+			{
+				out += std::format(
+					"    baked from {} B, mtime {}\n",
+					route.stamp.size,
+					route.stamp.mtime);
+				return;
+			}
+
+			// A map that is named but gone is what makes the route stale even when its source has not
+			// moved, so it has to be said here -- otherwise the route reads "up to date" beside a
+			// verdict of STALE and the two look like a contradiction.
+			if (!route.baked.empty() && stampOf(dataRoot / route.baked).size == 0)
+				out += "    baked map is missing\n";
+
+			const SourceStamp live = stampOf(dataRoot / route.source);
+			if (live == SourceStamp{})
+				out += "    source is missing\n";
+			else if (live == route.stamp)
+				out += std::format("    source up to date ({} B)\n", live.size);
+			else
+				out += std::format(
+					"    STALE: source is {} B / mtime {}, baked from {} B / mtime {}\n",
+					live.size,
+					live.mtime,
+					route.stamp.size,
+					route.stamp.mtime);
+		}
+
+		// A `.benv` names files rather than holding them, so whether the name resolves is the question
+		// worth answering. Without a root there is nothing to resolve against.
+		std::string
+		referenceOr(const std::string& path, const std::filesystem::path& dataRoot)
+		{
+			if (path.empty())
+				return "(unset)";
+			if (dataRoot.empty())
+				return path;
+
+			return std::filesystem::exists(dataRoot / path) ? path :
+			                                                  std::format("{} (missing)", path);
 		}
 
 		void
@@ -307,6 +371,61 @@ namespace assetlib
 			material.editorGraph.empty() ?
 				std::string("(none)") :
 				std::format("{} of JSON", byteSize(material.editorGraph.size())));
+
+		return out;
+	}
+
+	std::string
+	describe(const BSky& sky, const std::filesystem::path& dataRoot)
+	{
+		std::string out;
+
+		out += std::format("bsky '{}'\n", sky.name);
+		out += std::format("  mipLevel          {}\n", sky.mipLevel);
+		out += std::format(
+			"  rotationY         {:.3g} rad ({:.3g} deg)\n",
+			sky.rotationY,
+			glm::degrees(sky.rotationY));
+
+		describeEnvRoute(out, "sky", sky.sky, dataRoot);
+
+		if (!dataRoot.empty())
+			out += std::format(
+				"\n  bake              {}\n",
+				isSkyBakeStale(sky, dataRoot) ? "STALE" : "up to date");
+
+		return out;
+	}
+
+	std::string
+	describe(const BEnvLighting& lighting, const std::filesystem::path& dataRoot)
+	{
+		std::string out;
+
+		out += std::format("benvl '{}'\n", lighting.name);
+		out += std::format("  exposure          {:.3g}\n", lighting.exposure);
+
+		describeEnvRoute(out, "prefilter", lighting.prefilter, dataRoot);
+		describeEnvRoute(out, "irradiance", lighting.irradiance, dataRoot);
+
+		// One verdict, not one per route: the two are convolutions of the same radiance, so either
+		// having drifted makes the pair untrustworthy.
+		if (!dataRoot.empty())
+			out += std::format(
+				"\n  bake              {}\n",
+				isEnvLightingBakeStale(lighting, dataRoot) ? "STALE" : "up to date");
+
+		return out;
+	}
+
+	std::string
+	describe(const BEnv& env, const std::filesystem::path& dataRoot)
+	{
+		std::string out;
+
+		out += std::format("benv '{}'\n", env.name);
+		out += std::format("  sky               {}\n", referenceOr(env.sky, dataRoot));
+		out += std::format("  lighting          {}\n", referenceOr(env.lighting, dataRoot));
 
 		return out;
 	}

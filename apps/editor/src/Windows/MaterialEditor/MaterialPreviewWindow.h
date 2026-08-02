@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Render/environment.h"
+
 #include <QStringList>
 
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -17,7 +19,10 @@ class QWheelEvent;
 struct MaterialPreviewEnv
 {
 	std::string environmentMap;
-	std::string brdfLut;
+
+	// What the paths inside that `.benv` resolve against. Configured rather than derived from the
+	// file: an environment is not always two levels under the root it belongs to.
+	std::filesystem::path dataRoot;
 
 	// Absent means the exposure the `.benv` carries, which is the value derived from those maps.
 	// Set it only to overrule that deliberately.
@@ -110,6 +115,15 @@ protected:
 	void
 	dropEvent(QDropEvent* event) override;
 
+	/**
+	 * Lights the preview from `benvPath`, releasing whatever the last one bound.
+	 *
+	 * Without the release each dropped environment would keep its predecessor's three cube maps
+	 * uploaded for the life of the window, and the scene's texture slots are bounded.
+	 */
+	void
+	SetEnvironment(const std::string& benvPath);
+
 	void
 	mousePressEvent(QMouseEvent* event) override;
 	void
@@ -156,6 +170,11 @@ private:
 	QStringList                  m_SubmeshMaterialPaths;
 	std::filesystem::path        m_MeshPath;  // empty for the default sphere
 	std::filesystem::path        m_DataRoot;  // empty until a project is opened
+
+	// What the last ApplyEnvironment bound, so the next one can release it.
+	editor::AppliedEnvironment m_Environment;
+	std::optional<float>       m_ExposureOverride;
+	std::filesystem::path      m_ConfiguredRoot;  // stands in until a project is opened
 
 	glm::vec3 m_FocusCenter = glm::vec3(0.0f);
 	float     m_FocusRadius = 1.0f;

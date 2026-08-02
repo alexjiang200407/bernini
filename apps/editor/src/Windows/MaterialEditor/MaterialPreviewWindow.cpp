@@ -8,6 +8,7 @@
 #include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -80,6 +81,21 @@ namespace
 		}
 		return {};
 	}
+
+	// The first local `.benv` in a drag's payload, or an empty string.
+	QString
+	FirstEnvironmentUrl(const QMimeData* mime)
+	{
+		if (mime == nullptr || !mime->hasUrls())
+			return {};
+		for (const QUrl& url : mime->urls())
+		{
+			if (url.isLocalFile() &&
+			    QFileInfo(url.toLocalFile()).suffix().compare("benv", Qt::CaseInsensitive) == 0)
+				return url.toLocalFile();
+		}
+		return {};
+	}
 }
 
 MaterialPreviewWindow::MaterialPreviewWindow(
@@ -92,15 +108,18 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.
 	setFocusPolicy(Qt::StrongFocus);
 
+	m_ExposureOverride = env.exposureOverride;
+	m_ConfiguredRoot   = env.dataRoot;
+
 	m_DefaultMaterial = GetRenderer()->Invoke([&] {
 		bgl::IScene*     scene = PreviewScene();
 		bgl::ISceneView* view  = PreviewView();
 
-		editor::ApplyEnvironment(
+		m_Environment = editor::ApplyEnvironment(
 			scene,
 			view,
 			env.environmentMap,
-			env.brdfLut,
+			env.dataRoot,
 			env.exposureOverride,
 			"MaterialPreview");
 
@@ -360,7 +379,8 @@ MaterialPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHa
 void
 MaterialPreviewWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (!FirstMeshUrl(event->mimeData()).isEmpty())
+	if (!FirstMeshUrl(event->mimeData()).isEmpty() ||
+	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
 		event->acceptProposedAction();
 }
 
@@ -368,19 +388,56 @@ void
 MaterialPreviewWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if (!FirstMeshUrl(event->mimeData()).isEmpty())
+	if (!FirstMeshUrl(event->mimeData()).isEmpty() ||
+	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
 		event->acceptProposedAction();
 }
 
 void
 MaterialPreviewWindow::dropEvent(QDropEvent* event)
 {
+	if (const QString environment = FirstEnvironmentUrl(event->mimeData()); !environment.isEmpty())
+	{
+		SetEnvironment(environment.toStdString());
+		event->acceptProposedAction();
+		return;
+	}
+
 	const QString file = FirstMeshUrl(event->mimeData());
 	if (file.isEmpty())
 		return;
 
 	LoadMesh(std::filesystem::path(file.toStdWString()));
 	event->acceptProposedAction();
+}
+
+void
+MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
+{
+	GetRenderer()->Invoke([&] {
+		bgl::IScene* scene = PreviewScene();
+
+		const editor::AppliedEnvironment previous = m_Environment;
+
+		// A dropped `.benv` belongs to the open project, so its own data root is the one that
+		// resolves it. The configured root only stands in before a project is opened.
+		m_Environment = editor::ApplyEnvironment(
+			scene,
+			PreviewView(),
+			benvPath,
+			m_DataRoot.empty() ? m_ConfiguredRoot : m_DataRoot,
+			m_ExposureOverride,
+			"MaterialPreview");
+
+		// After the new one is bound, never before: releasing first would leave the view naming a
+		// slot that had been handed back, and a failed apply would leave it lit by nothing.
+		for (const bgl::TextureAssetHandle texture :
+		     { previous.irradiance, previous.prefilter, previous.skybox })
+		{
+			if (texture.textureSlot)
+				scene->DeleteTextureAsset(texture);
+		}
+	});
 }
 
 void

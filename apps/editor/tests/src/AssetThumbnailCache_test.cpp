@@ -87,9 +87,13 @@ namespace
 			auto desc           = AssetThumbnailDesc();
 			desc.renderer       = &*renderer;
 			desc.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
-			desc.brdfLut        = thumbSettings["brdfLut"].GetOrDefault(std::string());
 			REQUIRE_FALSE(desc.environmentMap.empty());
-			REQUIRE_FALSE(desc.brdfLut.empty());
+
+			// Read from the same config the editor uses. It is no longer derived from the `.benv`'s
+			// path, so a caller that does not say goes unlit -- which is what this asserts against.
+			desc.dataRoot = thumbSettings["dataRoot"].GetOrDefault(std::string());
+			REQUIRE_FALSE(desc.dataRoot.empty());
+
 			return desc;
 		}
 	};

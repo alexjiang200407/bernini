@@ -26,13 +26,13 @@
     },
     "materialEditor": {
         "initialPreviewInstances": 16,
-        "environmentMap": "assets/forest.benv",
-        "brdfLut": "assets/brdf_lut.ktx2"
+        "environmentMap": "assets/Environments/forest.benv",
+        "dataRoot": "assets"
     },
     "thumbnails": {
         "dimension": 256,
         "initialInstances": 256,
-        "environmentMap": "assets/forest.benv",
-        "brdfLut": "assets/brdf_lut.ktx2"
+        "environmentMap": "assets/Environments/forest.benv",
+        "dataRoot": "assets"
     }
 }

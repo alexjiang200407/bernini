@@ -5,6 +5,14 @@
 
 namespace editor
 {
+	/** The texture assets an apply bound, so a caller replacing one can release what it displaced. */
+	struct AppliedEnvironment
+	{
+		bgl::TextureAssetHandle irradiance;
+		bgl::TextureAssetHandle prefilter;
+		bgl::TextureAssetHandle skybox;
+	};
+
 	/**
 	 * Puts a `.benv`'s image-based lighting onto a view: the IBL pair, the skybox, and the exposure.
 	 *
@@ -20,17 +28,21 @@ namespace editor
 	 * Must be called on the render thread, like everything else that touches a scene or a view.
 	 *
 	 * @param benvPath The `.benv`; nothing is applied when empty.
-	 * @param brdfLutPath The shared split-sum LUT. IBL needs it, so the specular term is skipped
-	 *        without it, but the skybox and exposure still apply.
-	 * @param exposureOverride Overrules the exposure the `.benv` derived for these maps.
+	 * @param dataRoot What the paths inside the `.benv` chain are relative to. Passed rather than
+	 *        derived from `benvPath`: an environment is not always two levels under the root -- a
+	 *        subfolder, or a file dropped from anywhere -- and guessing lands on the wrong root
+	 *        without saying so.
+	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
 	 * @param who Prefix for warnings, naming the caller.
+	 * @return What was bound. Applying twice over one view leaks the first set's slots unless the
+	 *         caller releases them -- see MaterialPreviewWindow::SetEnvironment.
 	 */
-	void
+	[[nodiscard]] AppliedEnvironment
 	ApplyEnvironment(
-		bgl::IScene*         scene,
-		bgl::ISceneView*     view,
-		const std::string&   benvPath,
-		const std::string&   brdfLutPath,
-		std::optional<float> exposureOverride,
-		const char*          who);
+		bgl::IScene*                 scene,
+		bgl::ISceneView*             view,
+		const std::string&           benvPath,
+		const std::filesystem::path& dataRoot,
+		std::optional<float>         exposureOverride,
+		const char*                  who);
 }
