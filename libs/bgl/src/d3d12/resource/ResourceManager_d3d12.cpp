@@ -365,15 +365,20 @@ namespace bgl
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
+		// Read from the record rather than the handle: the manager allocated this descriptor and is
+		// the only thing that knows which one it is.
+		const uint32_t descriptorIndex =
+			std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex();
+
 		if (deferred)
 		{
 			m_CbvSrvUavSlots.retire_slot(handle.slot);
-			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index, handle.bindlessIndex);
+			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index, descriptorIndex);
 		}
 		else
 		{
 			m_CbvSrvUavSlots.release_slot(handle.slot);
-			m_CbvSrvUavDescriptors.Free(handle.bindlessIndex);
+			m_CbvSrvUavDescriptors.Free(descriptorIndex);
 		}
 	}
 
@@ -403,17 +408,20 @@ namespace bgl
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
 
+		const uint32_t descriptorIndex =
+			std::get<Srv>(m_CbvSrvUavSlots[handle.idx]).GetDescriptorIndex();
+
 		// An SRV owns no allocation -- only its descriptor, which outlives in-flight work exactly as
 		// a resource does, so the deferred path hands it back on the same gate.
 		if (deferred)
 		{
 			m_CbvSrvUavSlots.retire_slot(handle.idx);
-			RetireDeferred(PendingType::kCbvSrvUav, handle.idx, handle.bindlessIndex);
+			RetireDeferred(PendingType::kCbvSrvUav, handle.idx, descriptorIndex);
 		}
 		else
 		{
 			m_CbvSrvUavSlots.release_slot(handle.idx);
-			m_CbvSrvUavDescriptors.Free(handle.bindlessIndex);
+			m_CbvSrvUavDescriptors.Free(descriptorIndex);
 		}
 	}
 

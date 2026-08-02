@@ -269,16 +269,13 @@ namespace bgl
 			uint32_t    slotIndex,
 			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
 
-		wrl::ComPtr<ID3D12Device> m_Device;
-		// Owns the shader-visible heap and decides which descriptor a resource occupies. A slot in
-		// m_CbvSrvUavSlots says which resource a handle names; the index this hands out says where a
-		// shader finds it. They are no longer the same number.
-		DescriptorAllocator m_CbvSrvUavDescriptors;
+		wrl::ComPtr<ID3D12Device>        m_Device;
+		DescriptorAllocator              m_CbvSrvUavDescriptors;
+		core::slot_vector<CbvSrvUavSlot> m_CbvSrvUavSlots;
 
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
-		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
 		core::slot_vector<Sampler>        m_Samplers;
 
 		// Every texture, whatever it is used for. A texture owns storage and nothing else; the
