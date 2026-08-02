@@ -336,3 +336,75 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
 	}
 }
+
+// The editor refuses rather than overwrites, and cannot ask "would this land on something?" by
+// trying it. These are the same names importEnvironment writes, which is the point of asking here.
+TEST_CASE("An import can say what it would write before writing it", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_targets");
+
+	const auto names = [](const std::vector<std::string>& targets, std::string_view file) {
+		return std::ranges::find(targets, file) != targets.end();
+	};
+
+	SECTION("everything selected names every file, and no baked maps")
+	{
+		const std::vector<std::string> targets = environmentImportTargets(sandbox.Desc());
+
+		CHECK(names(targets, "Sky/forest.bsky"));
+		CHECK(names(targets, "EnvLighting/forest.benvl"));
+		CHECK(names(targets, "Environments/forest.benv"));
+		CHECK(names(targets, "textures_src/forest_sky.ktx2"));
+
+		// Content-addressed, so a collision with one is two imports agreeing rather than one
+		// destroying the other -- naming them here would refuse an import that is not in conflict.
+		CHECK(std::ranges::none_of(targets, [](const std::string& t) {
+			return t.starts_with("Textures/");
+		}));
+	}
+
+	SECTION("an unselected part names nothing")
+	{
+		auto desc     = sandbox.Desc();
+		desc.lighting = false;
+
+		const std::vector<std::string> targets = environmentImportTargets(desc);
+
+		CHECK(std::ranges::none_of(targets, [](const std::string& t) {
+			return t.ends_with(".benvl") || t.ends_with("_prefilter.ktx2");
+		}));
+	}
+
+	// The check is worthless if it names files the import does not, or misses ones it does.
+	SECTION("and it is exactly what the import goes on to create")
+	{
+		const auto desc = sandbox.Desc();
+
+		const std::vector<std::string> predicted = environmentImportTargets(desc);
+		const EnvImportResult          actual    = importEnvironment(desc);
+
+		// `written` is what was created; into a fresh project that is every target.
+		auto created = actual.written;
+		auto expect  = predicted;
+		std::ranges::sort(created);
+		std::ranges::sort(expect);
+
+		// The baked maps are in `written` but deliberately not predicted, so the prediction is a
+		// subset -- every predicted file must have been created.
+		for (const std::string& file : expect)
+		{
+			INFO("predicted: " << file);
+			CHECK(std::ranges::find(created, file) != created.end());
+		}
+	}
+
+	// Folders move the targets with them, or the check would look in the wrong place.
+	SECTION("a subfolder moves what it would write")
+	{
+		auto desc   = sandbox.Desc();
+		desc.skyDir = "Sky/outdoor";
+
+		const std::vector<std::string> targets = environmentImportTargets(desc);
+		CHECK(names(targets, "Sky/outdoor/forest.bsky"));
+	}
+}

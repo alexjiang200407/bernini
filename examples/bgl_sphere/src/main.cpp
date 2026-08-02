@@ -75,10 +75,11 @@ main(int argc, char** argv)
 		auto assets = game::AssetManager(scene, "assets");
 
 		const auto env = assets.AcquireEnvironment("Environments/forest.benv");
-		view->SetEnvironmentMap({ env.irradiance, env.prefilter });
+		if (env.HasLighting())
+			view->SetEnvironmentMap({ env.irradiance, env.prefilter });
 		view->SetExposure(env.exposure);
 
-		if (skyBoxEnabled)
+		if (skyBoxEnabled && env.HasSky())
 		{
 			view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
 		}

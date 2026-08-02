@@ -8,7 +8,7 @@
 
 namespace editor
 {
-	void
+	AppliedEnvironment
 	ApplyEnvironment(
 		bgl::IScene*         scene,
 		bgl::ISceneView*     view,
@@ -16,8 +16,10 @@ namespace editor
 		std::optional<float> exposureOverride,
 		const char*          who)
 	{
+		auto applied = AppliedEnvironment();
+
 		if (benvPath.empty())
-			return;
+			return applied;
 
 		auto env = assetlib::ResolvedEnvironment();
 		try
@@ -29,7 +31,7 @@ namespace editor
 		catch (const std::exception& e)
 		{
 			qWarning("%s: cannot load environment '%s': %s", who, benvPath.c_str(), e.what());
-			return;
+			return applied;
 		}
 
 		// The lighting's own exposure is the value derived from these maps, so it is the right
@@ -44,7 +46,11 @@ namespace editor
 			// Both or neither: they are the diffuse and specular convolutions of one radiance, so a
 			// view holding one of them would light the scene from half an environment.
 			if (irradiance.textureSlot && prefilter.textureSlot)
+			{
 				view->SetEnvironmentMap({ irradiance, prefilter });
+				applied.irradiance = irradiance;
+				applied.prefilter  = prefilter;
+			}
 		}
 		catch (const std::exception& e)
 		{
@@ -55,11 +61,16 @@ namespace editor
 		{
 			if (const auto skybox = scene->AddTextureAsset(std::move(env.maps.skybox));
 			    skybox.textureSlot)
+			{
 				view->SetSkyBox({ skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
+				applied.skybox = skybox;
+			}
 		}
 		catch (const std::exception& e)
 		{
 			qWarning("%s: SetSkyBox failed: %s", who, e.what());
 		}
+
+		return applied;
 	}
 }

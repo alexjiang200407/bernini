@@ -147,6 +147,19 @@ private:
 	[[nodiscard]] ImportOutcome
 	ImportMesh(const QString& sourceFile, const QString& targetDir, const ImportOptions& options);
 
+	/**
+	 * Converts a dropped Radiance `.hdr` into the environment family: a `.bsky`, the `.benvl`
+	 * convolved from the same radiance, and the `.benv` naming the pair.
+	 *
+	 * No `targetDir`: the three parts each belong in their own category, so where the file was
+	 * dropped says nothing about where they go.
+	 *
+	 * Unlike ImportMesh there is no RollBack here -- `assetlib::importEnvironment` undoes its own
+	 * half-written work, including on a cancel, so the editor has nothing to clean up after.
+	 */
+	[[nodiscard]] ImportOutcome
+	ImportEnvironment(const QString& sourceFile);
+
 	/** A directory an import writes into, and whether the import is the one that made it. */
 	struct ImportedDir
 	{
