@@ -7,6 +7,7 @@
 #include "passes/DrawData.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/jitter.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
 
@@ -409,14 +410,31 @@ namespace bgl
 		auto       view     = job.view->As<SceneView>();
 		auto       scene    = view->GetScene()->As<Scene>();
 		const auto viewport = job.viewport;
-		const auto viewProj = job.camera.GetViewProjection();
+
+		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
+		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
+		// that moves every frame.
+		const glm::vec2 jitter = m_ActiveTarget->IsTaaEnabled() ?
+		                             HaltonJitter(
+										 m_FrameCounter,
+										 viewport.maxX - viewport.minX,
+										 viewport.maxY - viewport.minY) :
+		                             glm::vec2(0.0f);
+
+		// Left-multiplied, so it adds jitter * clip.w to clip.xy and lands as a constant NDC offset
+		// after the divide. Applying it to the projection's own terms would be perspective-specific.
+		const glm::mat4 projection =
+			glm::translate(glm::mat4(1.0f), glm::vec3(jitter, 0.0f)) * job.camera.GetProjection();
+
+		const auto viewProj = projection * job.camera.GetView();
 
 		glm::mat4 viewNoTranslation = job.camera.GetView();
 		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
 		auto camera                 = ViewMatrices();
 		camera.viewProj             = viewProj;
-		camera.rotationOnlyViewProj = job.camera.GetProjection() * viewNoTranslation;
+		camera.rotationOnlyViewProj = projection * viewNoTranslation;
+		camera.jitter               = jitter;
 
 		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
 
@@ -433,6 +451,8 @@ namespace bgl
 		draw.viewport           = viewport;
 		draw.viewProj           = viewProj;
 		draw.prevViewProj       = prevCamera.viewProj;
+		draw.jitter             = jitter;
+		draw.prevJitter         = prevCamera.jitter;
 		draw.cullView           = BuildCullView(viewProj);
 		draw.sceneColorHandle   = m_ActiveTarget->GetSceneColorRtv();
 		draw.depthBufferHandle  = m_ActiveTarget->GetDepthDsv();

@@ -136,6 +136,12 @@ namespace bgl
 			return m_SceneColorSrv;
 		}
 
+		[[nodiscard]] bool
+		IsTaaEnabled() const noexcept override
+		{
+			return m_TaaEnabled;
+		}
+
 		void
 		PresentAndAdvance() noexcept override;
 
@@ -169,8 +175,9 @@ namespace bgl
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
 
-		uint32_t m_Width  = 0;
-		uint32_t m_Height = 0;
+		uint32_t m_Width      = 0;
+		uint32_t m_Height     = 0;
+		bool     m_TaaEnabled = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};
