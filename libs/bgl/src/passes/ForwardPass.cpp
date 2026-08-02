@@ -350,6 +350,8 @@ namespace bgl
 			auto& viewData           = *foundViewData;
 			viewData["viewProj"]     = draw.viewProj;
 			viewData["prevViewProj"] = draw.prevViewProj;
+			viewData["jitter"]       = draw.jitter;
+			viewData["prevJitter"]   = draw.prevJitter;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))

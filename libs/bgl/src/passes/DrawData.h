@@ -17,6 +17,8 @@ namespace bgl
 		Viewport                    viewport;
 		glm::mat4                   viewProj{ 1.0f };
 		glm::mat4                   prevViewProj{ 1.0f };
+		glm::vec2                   jitter{ 0.0f };
+		glm::vec2                   prevJitter{ 0.0f };
 		idl::CullView               cullView{};
 		glm::vec3                   cameraPos{ 0.0f };
 		RtvHandle                   sceneColorHandle;

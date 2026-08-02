@@ -30,7 +30,7 @@ namespace bgl
 		ResourceManagerRef      resourceManager) :
 		m_Device(std::move(device)), m_Queue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Width(static_cast<uint32_t>(desc.width)),
-		m_Height(static_cast<uint32_t>(desc.height))
+		m_Height(static_cast<uint32_t>(desc.height)), m_TaaEnabled(desc.taaEnabled)
 	{
 		if (!desc.headless)
 		{

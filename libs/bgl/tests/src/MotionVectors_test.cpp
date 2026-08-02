@@ -6,10 +6,12 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
+#include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/HalfFloat.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include "util/jitter.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -92,7 +94,7 @@ namespace
 		bgl::CommandListRef      cmdList;
 		bgl::CommandQueueRef     cmdQueue;
 
-		MotionFixture()
+		explicit MotionFixture(bool taaEnabled = false)
 		{
 			auto opts                     = bgl::GraphicsOptions();
 			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -102,10 +104,11 @@ namespace
 			gfx = bgl::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
-			auto targetDesc     = bgl::RenderTargetDesc();
-			targetDesc.width    = static_cast<int>(c_Width);
-			targetDesc.height   = static_cast<int>(c_Height);
-			targetDesc.headless = true;
+			auto targetDesc       = bgl::RenderTargetDesc();
+			targetDesc.width      = static_cast<int>(c_Width);
+			targetDesc.height     = static_cast<int>(c_Height);
+			targetDesc.headless   = true;
+			targetDesc.taaEnabled = taaEnabled;
 
 			target = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
@@ -446,4 +449,154 @@ TEST_CASE("A deleted instance stops contributing motion", "[motionvectors][rende
 		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
 		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
 	}
+}
+
+// The sequence itself, away from the GPU. A jitter that never leaves the pixel it started on
+// antialiases nothing, and one that wanders past the footprint smears -- so the span matters as
+// much as the variation, and neither is visible in a velocity readback.
+TEST_CASE("The jitter sequence walks one pixel and repeats", "[jitter]")
+{
+	constexpr float c_W = 256.0f;
+	constexpr float c_H = 128.0f;
+
+	// One pixel in NDC, which is what the offsets are expressed in.
+	const float pixelX = 2.0f / c_W;
+	const float pixelY = 2.0f / c_H;
+
+	std::vector<glm::vec2> offsets;
+	for (uint64_t frame = 0; frame < bgl::c_JitterSequenceLength; ++frame)
+	{
+		offsets.push_back(bgl::HaltonJitter(frame, c_W, c_H));
+	}
+
+	auto mean = glm::vec2(0.0f);
+	for (const glm::vec2& offset : offsets)
+	{
+		CHECK(std::abs(offset.x) <= pixelX * 0.5f);
+		CHECK(std::abs(offset.y) <= pixelY * 0.5f);
+		mean += offset;
+	}
+	mean /= static_cast<float>(offsets.size());
+
+	// Every term distinct, or the sequence spends frames re-sampling where it has already been.
+	for (size_t i = 0; i < offsets.size(); ++i)
+	{
+		for (size_t j = i + 1; j < offsets.size(); ++j)
+		{
+			CHECK(glm::distance(offsets[i], offsets[j]) > 1e-6f);
+		}
+	}
+
+	// No term is the zero offset: that frame would sample exactly where an unjittered one does and
+	// contribute nothing new to the accumulation.
+	for (const glm::vec2& offset : offsets)
+	{
+		CHECK(glm::length(offset) > 1e-6f);
+	}
+
+	// Balanced about the pixel centre, or the resolved image sits off-centre from the geometry.
+	CHECK(mean.x == Catch::Approx(0.0f).margin(pixelX * 0.15f));
+	CHECK(mean.y == Catch::Approx(0.0f).margin(pixelY * 0.15f));
+
+	// It is a cycle, so the frame after the last term repeats the first.
+	CHECK(
+		glm::distance(bgl::HaltonJitter(bgl::c_JitterSequenceLength, c_W, c_H), offsets[0]) <
+		1e-6f);
+}
+
+// Proof the offset reaches the rasterizer, which no velocity assertion can give: velocity is
+// de-jittered by construction, so a jitter that was computed and then dropped on the floor would
+// leave every motion test below passing.
+//
+// Two frames from one camera differ only if the sample grid moved between them.
+TEST_CASE("Jitter moves the sampling grid", "[jitter][render]")
+{
+	const std::string first  = "assets/golden/jitter_frame0.got.png";
+	const std::string second = "assets/golden/jitter_frame1.got.png";
+
+	const auto renderTwice = [&](bool taaEnabled) {
+		auto fixture = MotionFixture(taaEnabled);
+		fixture.AddQuad();
+
+		// Rotated off-axis so the quad's edges cross pixels diagonally; an axis-aligned edge can
+		// land on a pixel boundary and survive a sub-pixel shift unchanged.
+		const bgl::Camera camera = cameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(12.0f));
+
+		fixture.RenderFrom(camera);
+		fixture.gfx->ScreenshotPng(fixture.target, first);
+		fixture.RenderFrom(camera);
+		fixture.gfx->ScreenshotPng(fixture.target, second);
+	};
+
+	SECTION("with temporal AA the two frames differ")
+	{
+		renderTwice(true);
+		CHECK_FALSE(bgl::test::MatchesGolden(first, second));
+	}
+
+	SECTION("without it they are the same frame twice")
+	{
+		renderTwice(false);
+		CHECK(bgl::test::MatchesGolden(first, second));
+	}
+}
+
+// The assertion the whole task turns on. Both clip positions carry a jitter, and the two are
+// different offsets, so a velocity that forgot to remove them reports the difference between two
+// sample patterns on a scene where nothing moved. The margin is the RG16_FLOAT floor, and a missed
+// subtraction is a whole pixel -- 2/256 in NDC, an order of magnitude above it.
+TEST_CASE("Jitter leaves a still camera reporting no motion", "[jitter][motionvectors][render]")
+{
+	auto fixture = MotionFixture(true);
+	fixture.AddQuad();
+	const auto camera = cameraAt({ 0.0f, 0.0f, c_CameraZ });
+
+	// Four frames, so the pair being differenced is two distinct terms of the sequence rather than
+	// the first frame's history-equals-current special case.
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		fixture.RenderFrom(camera);
+	}
+
+	const auto motion = fixture.ReadMotionVectors();
+
+	for (const glm::vec2& texel : motion)
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// And the moving case: the velocity a camera translation produces must be the one the CPU computes
+// from the unjittered cameras, because that is the surface's motion. Same expectation as the
+// unjittered reprojection test above, which is the point -- jitter must not show up in the answer.
+TEST_CASE(
+	"Jitter does not change the velocity a camera translation reports",
+	"[jitter][motionvectors][render]")
+{
+	auto fixture = MotionFixture(true);
+	fixture.AddQuad();
+
+	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
+	const glm::vec3 eyeAfter{ 1.0f, 0.8f, c_CameraZ };
+
+	const bgl::Camera before = cameraAt(eyeBefore);
+	const bgl::Camera after  = cameraAt(eyeAfter);
+
+	fixture.RenderFrom(before);
+	fixture.RenderFrom(after);
+
+	const glm::vec2 measured = centrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = surfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = projectToUv(after, surface) - projectToUv(before, surface);
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	CHECK(std::abs(expected.x) > 1e-2f);
+	CHECK(std::abs(expected.y) > 1e-2f);
 }
