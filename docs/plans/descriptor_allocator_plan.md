@@ -181,9 +181,25 @@ performance.
 The two backends therefore resolve at different moments, which is exactly what a seam is for. Write
 it down where the seam is declared, or the next reader will "fix" the asymmetry.
 
-Consequence to accept: `ResolveDescriptor` is called from scene-update code. Reads in the manager are
+Consequence to accept: `GetBindlessIndex` is called from scene-update code. Reads in the manager are
 already documented as lockless (fixed-capacity pools, storage never moves), so this lookup follows the
 same rule and takes no lock.
+
+**A third option, raised in review of D3 and not considered above: let `Uniforms` record its own
+handle offsets.** `operator=` already knows it is writing a handle, so it can append `(offset, kind)`
+to a list on the block as it goes, and the backend patches from that list at flush. That gets (2)'s
+shape — no `ResourceManagerRef` in `Uniforms`, generations checkable — without (2)'s cost, because no
+reflection is needed: the offsets are recorded by the code that writes them rather than derived from
+the shader.
+
+Not taken now, for two reasons. It is a second mechanism beside Metal's working reflection-based walk
+until Metal migrates onto it, and there is nothing to measure it against until D4 makes a slot and a
+descriptor actually differ. Worth revisiting immediately after D4 — at which point (1)'s cost is real
+and visible rather than hypothetical.
+
+Recorded because the cost of (2) was understated above: the reflection is not merely Metal-local, it
+is also persisted in Metal's shader cache (`metal/shadercache/ShaderCache_metal.cpp`), so building it
+for D3D12 means cache plumbing too. That is what makes the reflection-free third option interesting.
 
 ### The allocator
 
