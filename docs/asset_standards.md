@@ -614,13 +614,18 @@ assetlib_cli obj assets/model/model.bmesh -o model.obj
 # baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
 assetlib_cli envmap forest.hdr -p Data --name forest
 
-# Print what is actually inside a .bmesh or .bmaterial (the kind is read from the file's magic)
+# Print what is actually inside a container (the kind is read from the file's magic)
 assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
 assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
 assetlib_cli describe Data/Materials/skin.bmaterial      # factors, triplet, routing table, bake state
+assetlib_cli describe Data/Sky/forest.bsky               # presentation + the radiance route
+assetlib_cli describe Data/EnvLighting/forest.benvl      # exposure + the prefilter/irradiance pair
+assetlib_cli describe Data/Environments/forest.benv      # the .bsky and .benvl it composes
 
-# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
+# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel.
+# A .benv holds no pixels, so for one the root instead says whether what it names is there.
 assetlib_cli describe Data/Materials/skin.bmaterial -d Data
+assetlib_cli describe Data/Environments/forest.benv -d Data
 
 # Cut a material down to its shippable form: the triplet, the factors and the name. The routes and
 # the node graph do not survive it, so -o is the safe way to keep the authoring copy
@@ -639,7 +644,7 @@ assetlib_cli refs -d Data                    # summary, and every dangling refer
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps
-everything else as text. Both containers are opaque binary, so it is the intended answer to "what is
+everything else as text. Every container is opaque binary, so it is the intended answer to "what is
 in this file" — reach for it before hand-decoding a file against the serializer. The unrouted channels
 it lists are the usual cause of a material rendering wrong, since each one silently falls back to a
 default texture (see [Risky / Non-obvious contracts](#risky--non-obvious-contracts)). Rendered by
