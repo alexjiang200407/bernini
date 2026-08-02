@@ -6,16 +6,17 @@
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_d3d12.h"
 #include "resource/Sampler_d3d12.h"
+#include "resource/Srv_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
 
 namespace bgl
 {
-	// Buffers and textures share the one shader-visible CBV_SRV_UAV heap: a slot's
-	// index is the bindless descriptor index the shader uses. RT/DS-only textures
-	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
-	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
+	// Buffers and shader resource views share the one shader-visible CBV_SRV_UAV heap: a slot's
+	// index is the bindless descriptor index the shader uses. A texture takes no slot here -- only
+	// a view onto it does.
+	using CbvSrvUavSlot = std::variant<Buffer, Srv>;
 
 	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
 	// expected over one device. Exceeding it asserts; it is not a hard device limit.
@@ -107,6 +108,10 @@ namespace bgl
 		CreateTexture(wrl::ComPtr<ID3D12Resource> d3d12Texture, const TextureDesc& desc) noexcept;
 
 		[[nodiscard]]
+		SrvHandle
+		CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept override;
+
+		[[nodiscard]]
 		RtvHandle
 		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
 
@@ -115,6 +120,9 @@ namespace bgl
 
 		void
 		UnregisterQueue(ICommandQueue* queue) noexcept override;
+
+		void
+		DestroySrv(SrvHandle handle, bool deferred = true) noexcept override;
 
 		void
 		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
@@ -149,15 +157,6 @@ namespace bgl
 		bool
 		IsTextureCube(const TextureHandle& handle) const noexcept override;
 
-		[[nodiscard]] DescriptorHandle
-		ResolveDescriptor(const TextureHandle& handle) const noexcept override
-		{
-			// The shader indexes the descriptor heap with it, so the slot is already the descriptor.
-			// Not handle.bindlessIndex: callers build the handle from a bare slot here, so the field
-			// is null.
-			return DescriptorHandle(handle.slot.index);
-		}
-
 		[[nodiscard]]
 		bool
 		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;
@@ -165,6 +164,10 @@ namespace bgl
 		[[nodiscard]]
 		bool
 		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidSrvHandle(const SrvHandle& handle) const noexcept override;
 
 		[[nodiscard]]
 		bool
@@ -265,9 +268,8 @@ namespace bgl
 		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
 		core::slot_vector<Sampler>        m_Samplers;
 
-		// RTV/DSV-only textures (no SRV): kept out of the shader-visible pool so they
-		// never consume a bindless descriptor slot. SRV textures live in
-		// m_CbvSrvUavSlots instead, where their slot index is the bindless index.
+		// Every texture, whatever it is used for. A texture owns storage and nothing else; the
+		// descriptor that makes one readable belongs to an Srv in m_CbvSrvUavSlots.
 		core::slot_vector<Texture> m_Textures;
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;

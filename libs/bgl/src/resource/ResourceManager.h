@@ -5,6 +5,7 @@
 #include "resource/Readback.h"
 #include "resource/Rtv.h"
 #include "resource/Sampler.h"
+#include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "types/ClearValue.h"
 
@@ -98,6 +99,9 @@ namespace bgl
 		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
+		DestroySrv(SrvHandle handle, bool deferred = true) noexcept = 0;
+
+		virtual void
 		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept = 0;
 
 		virtual void
@@ -109,6 +113,21 @@ namespace bgl
 		 */
 		virtual void
 		CleanupExpiredResources() noexcept = 0;
+
+		/**
+		 * Makes a texture readable by a shader, and is the only thing that does.
+		 *
+		 * A texture on its own has no descriptor: CreateTexture allocates storage, nothing more. The
+		 * returned handle carries what a shader needs to reach it, so a texture that is only ever a
+		 * render target has no bindless index to be wrong about.
+		 *
+		 * Destroying the texture does not destroy its views. Release both, as with an Rtv.
+		 *
+		 * @param textureHandle a valid texture whose TextureDesc allowed TextureUsageFlag::kSRV.
+		 */
+		[[nodiscard]]
+		virtual SrvHandle
+		CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept = 0;
 
 		[[nodiscard]]
 		virtual RtvHandle
@@ -181,18 +200,8 @@ namespace bgl
 		[[nodiscard]] virtual bool
 		IsTextureCube(const TextureHandle& handle) const noexcept = 0;
 
-		/**
-		 * The descriptor a GPU struct must carry for a shader to reach this texture.
-		 *
-		 * A handle bound through a constant buffer is rewritten per dispatch, but one *stored inside*
-		 * GPU memory -- a material's texture, say -- is only ever written once, by the CPU, and the
-		 * shader dereferences whatever it finds. What that has to be is the backend's business: a
-		 * descriptor-heap index on D3D12, the native resource id on Metal.
-		 *
-		 * @param handle a valid texture handle; a null one resolves to a null descriptor.
-		 */
-		[[nodiscard]] virtual DescriptorHandle
-		ResolveDescriptor(const TextureHandle& handle) const noexcept = 0;
+		[[nodiscard]] virtual bool
+		ValidSrvHandle(const SrvHandle& handle) const noexcept = 0;
 
 		[[nodiscard]] virtual bool
 		ValidSamplerHandle(const SamplerHandle& handle) const noexcept = 0;

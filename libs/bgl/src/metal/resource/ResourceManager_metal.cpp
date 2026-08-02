@@ -17,8 +17,8 @@ namespace bgl
 {
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc) :
 		m_Device(device), m_Buffers(desc.maxCbvSrvUavs), m_Readbacks(desc.maxReadbackBuffers),
-		m_Textures(desc.maxTextures), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs),
-		m_Samplers(desc.maxSamplers)
+		m_Textures(desc.maxTextures), m_Srvs(desc.maxCbvSrvUavs), m_Rtvs(desc.maxRtvs),
+		m_Dsvs(desc.maxDsvs), m_Samplers(desc.maxSamplers)
 	{
 		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
 		// built with no capacity grows by emplace_back, which moves its storage out from under a
@@ -211,6 +211,9 @@ namespace bgl
 			case PendingType::kTexture:
 				m_Textures.reclaim_slot(pending.slotIndex);
 				break;
+			case PendingType::kSrv:
+				m_Srvs.reclaim_slot(pending.slotIndex);
+				break;
 			case PendingType::kRtv:
 				m_Rtvs.reclaim_slot(pending.slotIndex);
 				break;
@@ -281,7 +284,33 @@ namespace bgl
 			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
 			return TextureHandle{};
 		}
-		return TextureHandle{ slot, desc.usage, slot.index };
+		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
+		return TextureHandle{ slot };
+	}
+
+	SrvHandle
+	ResourceManager::CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept
+	{
+		gassert(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		const auto                  slot = m_Srvs.try_allocate_and_emplace(desc, textureHandle);
+		if (slot.is_null())
+		{
+			logger::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
+			return SrvHandle{};
+		}
+
+		// The texture's own slot is what a cbuffer carries, because the dispatch rewrite looks the
+		// resource up by it; GPU memory carries the native id instead, which no encoder is in the
+		// loop for. The SRV's own slot is neither -- it names the view, and no shader ever sees it.
+		return SrvHandle{
+			slot.index,
+			slot.generation,
+			textureHandle.slot.index,
+			DescriptorHandle::FromNative(
+				m_Textures[textureHandle.slot].GetMTLResource()->gpuResourceID()._impl)
+		};
 	}
 
 	RtvHandle
@@ -314,6 +343,24 @@ namespace bgl
 		else
 		{
 			m_Textures.release_slot(handle.slot);
+		}
+	}
+
+	void
+	ResourceManager::DestroySrv(SrvHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
+
+		// An SRV owns no allocation -- it is a view onto a texture -- so only its slot is gated.
+		if (deferred)
+		{
+			m_Srvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kSrv, handle.idx);
+		}
+		else
+		{
+			m_Srvs.release_slot(handle.idx);
 		}
 	}
 
@@ -386,6 +433,13 @@ namespace bgl
 	{
 		return !handle.IsNull() && m_Textures.valid(handle.slot) &&
 		       !m_Textures[handle.slot].IsNull();
+	}
+
+	bool
+	ResourceManager::ValidSrvHandle(const SrvHandle& handle) const noexcept
+	{
+		return !handle.IsNull() && m_Srvs.valid(handle.idx, handle.generation) &&
+		       !m_Srvs[handle.idx].IsNull();
 	}
 
 	bool
@@ -515,16 +569,6 @@ namespace bgl
 
 		MTL::Texture* texture = m_Textures[GetDsvTexture(handle).slot].GetMTLResource();
 		cmdList->As<CommandList>()->ClearDepthStencil(texture, depth, stencil);
-	}
-
-	DescriptorHandle
-	ResourceManager::ResolveDescriptor(const TextureHandle& handle) const noexcept
-	{
-		if (!ValidTextureHandle(handle))
-			return {};
-
-		return DescriptorHandle::FromNative(
-			m_Textures[handle.slot].GetMTLResource()->gpuResourceID()._impl);
 	}
 
 	std::span<MTL::Resource* const>
