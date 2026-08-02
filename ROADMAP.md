@@ -38,7 +38,7 @@ and portability.
 - [ ] RHI
   - [x] DirectX 12
   - [ ] Vulkan
-  - [ ] Metal
+  - [x] Metal
   - [x] GPU Ring Buffer
   - [ ] Readback ring — N buffers, persistently mapped, fenced; never map a buffer written this frame.
   - [ ] `ExecuteIndirect` / `DispatchIndirect` plumbing so counts never leave the GPU.
