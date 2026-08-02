@@ -1,16 +1,23 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
 namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_MeshExtension     = ".bmesh";
-		constexpr std::string_view c_MaterialExtension = ".bmaterial";
-		constexpr std::string_view c_TextureExtension  = ".ktx2";
+		constexpr std::string_view c_MeshExtension        = ".bmesh";
+		constexpr std::string_view c_MaterialExtension    = ".bmaterial";
+		constexpr std::string_view c_TextureExtension     = ".ktx2";
+		constexpr std::string_view c_EnvironmentExtension = ".benv";
+		constexpr std::string_view c_SkyExtension         = ".bsky";
+		constexpr std::string_view c_EnvLightingExtension = ".benvl";
 
 		/**
 		 * The one form every path in the graph is keyed and stored in, so that the two sides of a reference
@@ -137,6 +144,80 @@ namespace assetlib
 					"' names an unknown shading model, so its textures cannot be known");
 			}
 		}
+
+		// A route holds two files alive for the same reason a material's does: the baked map is what the
+		// renderer samples, and the source is what a re-bake reads.
+		void
+		addRouteEdges(
+			std::vector<AssetRef>& edges,
+			const std::string&     referrer,
+			const EnvMapRoute&     route)
+		{
+			addEdge(edges, referrer, route.baked, RefKind::kBakedMap);
+			addEdge(edges, referrer, route.source, RefKind::kEnvSource);
+		}
+
+		/** The radiance a `.bsky` routes, and the map its bake wrote. */
+		void
+		collectSkyEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			try
+			{
+				addRouteEdges(edges, referrer, loadSky(file).sky);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the sky '" + file.string() +
+					"', so the textures it references cannot be known: " + e.what());
+			}
+		}
+
+		/** Both halves of a `.benvl`: each names a source and the map convolved from it. */
+		void
+		collectEnvLightingEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			try
+			{
+				const BEnvLighting lighting = loadEnvLighting(file);
+				addRouteEdges(edges, referrer, lighting.prefilter);
+				addRouteEdges(edges, referrer, lighting.irradiance);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the environment lighting '" +
+					file.string() +
+					"', so the textures it references cannot be known: " + e.what());
+			}
+		}
+
+		/** The pair a `.benv` composes. It holds no pixels, so these are its only edges. */
+		void
+		collectEnvironmentEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			try
+			{
+				const BEnv env = loadEnv(file);
+				addEdge(edges, referrer, env.sky, RefKind::kEnvironmentPart);
+				addEdge(edges, referrer, env.lighting, RefKind::kEnvironmentPart);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the environment '" + file.string() +
+					"', so the assets it composes cannot be known: " + e.what());
+			}
+		}
 	}
 
 	std::optional<AssetType>
@@ -150,6 +231,12 @@ namespace assetlib
 			return AssetType::kMaterial;
 		if (ext == c_TextureExtension)
 			return AssetType::kTexture;
+		if (ext == c_EnvironmentExtension)
+			return AssetType::kEnvironment;
+		if (ext == c_SkyExtension)
+			return AssetType::kSky;
+		if (ext == c_EnvLightingExtension)
+			return AssetType::kEnvLighting;
 
 		return std::nullopt;
 	}
@@ -187,6 +274,21 @@ namespace assetlib
 			{
 				collectMaterialEdges(edges, file, referrer);
 				++graph.materialsScanned;
+			}
+			else if (kind == c_SkyExtension)
+			{
+				collectSkyEdges(edges, file, referrer);
+				++graph.environmentsScanned;
+			}
+			else if (kind == c_EnvLightingExtension)
+			{
+				collectEnvLightingEdges(edges, file, referrer);
+				++graph.environmentsScanned;
+			}
+			else if (kind == c_EnvironmentExtension)
+			{
+				collectEnvironmentEdges(edges, file, referrer);
+				++graph.environmentsScanned;
 			}
 		}
 

@@ -1,10 +1,14 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
@@ -643,3 +647,158 @@ TEST_CASE("An asset held open cannot be deleted, and says so", "[assetrefs]")
 	CHECK(deleteAsset(plan, root.desc()).status == DeletionStatus::kDeleted);
 }
 #endif
+
+namespace
+{
+	/**
+	 * A whole environment on disk: a `.bsky` and a `.benvl` naming their sources and baked maps, and a
+	 * `.benv` composing the pair. The files the routes name are written too, so nothing lands in
+	 * `broken` and each edge is judged on the reference rather than on the absence.
+	 */
+	struct Environment
+	{
+		std::string env      = "Environments/forest.benv";
+		std::string sky      = "Sky/forest.bsky";
+		std::string lighting = "EnvLighting/forest.benvl";
+
+		std::string skySource  = "textures_src/forest.ktx2";
+		std::string skyBaked   = "Textures/forest_sky.ktx2";
+		std::string prefilter  = "Textures/forest_prefilter.ktx2";
+		std::string irradiance = "Textures/forest_irradiance.ktx2";
+	};
+
+	Environment
+	WriteEnvironment(const DataRoot& root)
+	{
+		const Environment e;
+
+		for (const std::string* dir : { &e.env, &e.sky, &e.lighting })
+			fs::create_directories((root.path / *dir).parent_path());
+		fs::create_directories(root.path / "Textures");
+
+		for (const std::string* map : { &e.skySource, &e.skyBaked, &e.prefilter, &e.irradiance })
+			writeSource(root.path / *map, { { 10, 20, 30, 255 } });
+
+		BSky sky;
+		sky.name       = "forest";
+		sky.sky.source = e.skySource;
+		sky.sky.baked  = e.skyBaked;
+		saveSky(sky, root.path / e.sky);
+
+		BEnvLighting lighting;
+		lighting.name              = "forest";
+		lighting.prefilter.source  = e.skySource;
+		lighting.prefilter.baked   = e.prefilter;
+		lighting.irradiance.source = e.skySource;
+		lighting.irradiance.baked  = e.irradiance;
+		saveEnvLighting(lighting, root.path / e.lighting);
+
+		BEnv env;
+		env.name     = "forest";
+		env.sky      = e.sky;
+		env.lighting = e.lighting;
+		saveEnv(env, root.path / e.env);
+
+		return e;
+	}
+}
+
+// The hole this closes: the graph knew .bmesh, .bmaterial and .ktx2 and nothing else, so a baked
+// environment map came back unreferenced and the editor -- which gates deletion on this -- would have
+// let a live one go.
+TEST_CASE("A baked environment map is held by the container that baked it", "[assetrefs]")
+{
+	const DataRoot    root("bernini_refs_env_baked");
+	const Environment e = WriteEnvironment(root);
+
+	const AssetRefGraph graph = root.scan();
+
+	CHECK(graph.environmentsScanned == 3);
+	CHECK(graph.broken.empty());
+
+	for (const std::string* map : { &e.skyBaked, &e.prefilter, &e.irradiance })
+	{
+		INFO("baked map: " << *map);
+		CHECK(graph.IsReferenced(*map));
+		CHECK_FALSE(planDeletion(graph, *map).Allowed());
+	}
+
+	// Named by the container that wrote it, and reported as such rather than as some other edge.
+	const std::span<const AssetRef> holders = graph.ReferrersOf(e.skyBaked);
+	REQUIRE(holders.size() == 1);
+	CHECK(holders.front().referrer == e.sky);
+	CHECK(holders.front().kind == RefKind::kBakedMap);
+}
+
+// The source is what a re-bake reads, so it is held for the same reason a material's routed source is.
+TEST_CASE("An environment source is held by what bakes from it", "[assetrefs]")
+{
+	const DataRoot    root("bernini_refs_env_source");
+	const Environment e = WriteEnvironment(root);
+
+	const AssetRefGraph graph = root.scan();
+
+	CHECK(graph.IsReferenced(e.skySource));
+	CHECK_FALSE(planDeletion(graph, e.skySource).Allowed());
+
+	// One source, three routes across two containers -- and the sky and the lighting are both named,
+	// each once, because a referrer reported twice would read as two blockers to the user.
+	const std::span<const AssetRef> holders = graph.ReferrersOf(e.skySource);
+	CHECK(holders.size() == 2);
+	CHECK(std::ranges::all_of(holders, [](const AssetRef& ref) {
+		return ref.kind == RefKind::kEnvSource;
+	}));
+}
+
+// A `.benv` holds no pixels, so composing the pair is the only thing it does -- and the only thing
+// keeping either half from being deleted out from under it.
+TEST_CASE("A .benv holds the sky and the lighting it composes", "[assetrefs]")
+{
+	const DataRoot    root("bernini_refs_env_parts");
+	const Environment e = WriteEnvironment(root);
+
+	const AssetRefGraph graph = root.scan();
+
+	for (const std::string* part : { &e.sky, &e.lighting })
+	{
+		INFO("part: " << *part);
+
+		const std::span<const AssetRef> holders = graph.ReferrersOf(*part);
+		REQUIRE(holders.size() == 1);
+		CHECK(holders.front().referrer == e.env);
+		CHECK(holders.front().kind == RefKind::kEnvironmentPart);
+
+		CHECK_FALSE(planDeletion(graph, *part).Allowed());
+	}
+
+	// Nothing names the .benv, so it is the one end of the chain that can go -- and taking it leaves
+	// the pair behind, exactly as deleting a mesh leaves its materials.
+	CHECK(planDeletion(graph, e.env).Allowed());
+}
+
+// Before this, planDeletion threw on one: a .bsky was "a file of no kind this project stores anything
+// about", so the editor could not even ask the question.
+TEST_CASE("The environment containers are assets the project knows", "[assetrefs]")
+{
+	CHECK(assetTypeFromExtension("Environments/forest.benv") == AssetType::kEnvironment);
+	CHECK(assetTypeFromExtension("Sky/forest.bsky") == AssetType::kSky);
+	CHECK(assetTypeFromExtension("EnvLighting/forest.benvl") == AssetType::kEnvLighting);
+
+	// The suffix decides, case-insensitively, as it does for every other kind.
+	CHECK(assetTypeFromExtension("Sky/FOREST.BSKY") == AssetType::kSky);
+
+	// .benvl must not be read as a .benv with something after it.
+	CHECK(assetTypeFromExtension("a.benvl") != AssetType::kEnvironment);
+}
+
+// Fatal on purpose, as it is for a mesh or a material: an environment we cannot read is one whose
+// maps we cannot see, and we would then delete one out from under it.
+TEST_CASE("An unreadable environment stops the scan rather than being skipped", "[assetrefs]")
+{
+	const DataRoot root("bernini_refs_env_unreadable");
+	WriteEnvironment(root);
+
+	std::ofstream(root.path / "Sky" / "broken.bsky", std::ios::binary) << "not a sky";
+
+	REQUIRE_THROWS_AS(root.scan(), std::runtime_error);
+}
