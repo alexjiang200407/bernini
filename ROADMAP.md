@@ -307,10 +307,6 @@ and portability.
   - [ ] Per-pass buffer hashing as a FrameGraph feature, to bisect to the first wrong pass in one run.
   - [ ] Determinism diffing as a race detector — run twice, compare, and perturb the schedule between
     runs to surface races that hide at one configuration.
-  - [ ] Standalone replay harness — serialize one frame's inputs, run headless, dump output; also what
-    makes GPU unit tests possible in CI.
-  - [ ] `printf` — `debugPrintfEXT` on Vulkan, Slang `printf` elsewhere; wave-guard it.
-  - [ ] GPU-based validation (D3D12 GBV / Vulkan GPU-AV) in nightly CI.
   - [ ] Optional: a CUDA port of one or two kernels purely for `compute-sanitizer --tool racecheck`.
   - [ ] DRED & Aftermath / Radeon GPU Detective, paired with monotonic breadcrumb markers.
 - [ ] Profiling
