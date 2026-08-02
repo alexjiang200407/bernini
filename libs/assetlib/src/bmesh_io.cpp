@@ -63,6 +63,14 @@ namespace assetlib
 
 		static_assert(sizeof(ChunkEntry) == 24);
 
+		// Subtracts rather than adds: both operands come straight out of the file, so `offset +
+		// byteSize` can wrap back under the bound while still naming a region far past the stream.
+		constexpr bool
+		fitsWithin(uint64_t offset, uint64_t byteSize, uint64_t total) noexcept
+		{
+			return offset <= total && byteSize <= total - offset;
+		}
+
 		template <typename T>
 		ChunkEntry
 		appendChunk(ByteWriter& writer, ChunkId id, const std::vector<T>& values)
@@ -87,7 +95,7 @@ namespace assetlib
 			if (entry.byteSize % sizeof(T) != 0)
 				throw std::runtime_error(
 					"bmesh: chunk byte size is not a multiple of the element size");
-			if (entry.offset + entry.byteSize > all.size())
+			if (!fitsWithin(entry.offset, entry.byteSize, all.size()))
 				throw std::runtime_error("bmesh: chunk extends past end of stream");
 
 			std::vector<T> out(entry.byteSize / sizeof(T));
@@ -186,8 +194,8 @@ namespace assetlib
 		if (header.fileSize > bytes.size())
 			throw std::runtime_error("bmesh: stream shorter than declared file size");
 
-		const auto tableBytes = static_cast<size_t>(header.chunkCount) * sizeof(ChunkEntry);
-		if (header.chunkTableOffset + tableBytes > bytes.size())
+		const auto tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(ChunkEntry);
+		if (!fitsWithin(header.chunkTableOffset, tableBytes, bytes.size()))
 			throw std::runtime_error("bmesh: chunk table extends past end of stream");
 
 		reader.seek(header.chunkTableOffset);
@@ -269,9 +277,9 @@ namespace assetlib
 			throw std::runtime_error(fileErrorMessage("bmesh: cannot size file", path));
 
 		// Every offset below comes out of the file, so each is checked against its real size before it is
-		// seeked to: a corrupt chunkCount would otherwise size an allocation.
+		// seeked to.
 		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
-			if (offset + bytes > fileSize)
+			if (!fitsWithin(offset, bytes, fileSize))
 				throw std::runtime_error("bmesh: chunk extends past end of file");
 
 			in.seekg(static_cast<std::streamoff>(offset));
@@ -290,9 +298,15 @@ namespace assetlib
 		if (header.byteOrder != 0)
 			throw std::runtime_error("bmesh: unsupported byte order");
 
+		// Bounded before it is sized, not after: a corrupt chunkCount would otherwise allocate its way
+		// to 96 GB on the way to being rejected.
+		const auto tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(ChunkEntry);
+		if (!fitsWithin(header.chunkTableOffset, tableBytes, fileSize))
+			throw std::runtime_error("bmesh: chunk table extends past end of file");
+
 		std::vector<ChunkEntry> table(header.chunkCount);
 		if (!table.empty())
-			readAt(table.data(), table.size() * sizeof(ChunkEntry), header.chunkTableOffset);
+			readAt(table.data(), tableBytes, header.chunkTableOffset);
 
 		for (const ChunkEntry& entry : table)
 		{
