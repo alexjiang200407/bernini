@@ -3,6 +3,7 @@
 #include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
+#include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 
@@ -32,6 +33,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -49,6 +51,14 @@ namespace
 	{
 		const auto ext = QFileInfo(localFile).suffix().toLower();
 		return ext == "glb" || ext == "gltf";
+	}
+
+	// Radiance HDR only, though importEnvironment also reads a float cube `.ktx2`: a `.ktx2` dragged
+	// in is far more likely to be a texture, and guessing wrong would import one as a sky.
+	bool
+	IsImportableEnvironment(const QString& localFile)
+	{
+		return QFileInfo(localFile).suffix().toLower() == "hdr";
 	}
 
 	/**
@@ -639,7 +649,8 @@ ContentExplorerWindow::dragEnterEvent(QDragEnterEvent* event)
 
 	for (const QUrl& url : mime->urls())
 	{
-		if (url.isLocalFile() && IsImportableMesh(url.toLocalFile()))
+		if (url.isLocalFile() &&
+		    (IsImportableMesh(url.toLocalFile()) || IsImportableEnvironment(url.toLocalFile())))
 		{
 			event->acceptProposedAction();
 			return;
@@ -667,6 +678,16 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 			continue;
 
 		const QString file = url.toLocalFile();
+
+		// An environment is not written into the dropped-on folder: its three parts each belong in
+		// their own category, so the drop names the project rather than a destination.
+		if (IsImportableEnvironment(file))
+		{
+			if (ImportEnvironment(file) == ImportOutcome::kCancelled)
+				break;
+			continue;
+		}
+
 		if (!IsImportableMesh(file))
 			continue;
 
@@ -911,6 +932,51 @@ ContentExplorerWindow::ImportMesh(
 	QMessageBox::warning(
 		this,
 		"Import Asset",
+		QString("Failed to import '%1':\n\n%2").arg(name, result.error));
+
+	return ImportOutcome::kFailed;
+}
+
+ContentExplorerWindow::ImportOutcome
+ContentExplorerWindow::ImportEnvironment(const QString& sourceFile)
+{
+	const QString name = QFileInfo(sourceFile).fileName();
+
+	EnvironmentImporterDialog dialog(sourceFile, m_RootPath, this);
+	if (dialog.exec() != QDialog::Accepted)
+		return ImportOutcome::kCancelled;
+
+	auto desc        = assetlib::EnvImportDesc();
+	desc.dataRoot    = std::filesystem::path(m_RootPath.toStdWString());
+	desc.source      = std::filesystem::path(sourceFile.toStdWString());
+	desc.name        = dialog.AssetName().toStdString();
+	desc.sky         = dialog.ImportSky();
+	desc.lighting    = dialog.ImportLighting();
+	desc.environment = dialog.ImportEnvironment();
+
+	// Projecting the source and convolving it are seconds to minutes of pure CPU, and none of it
+	// touches bgl -- so it runs on a worker, as the mesh import's cook does.
+	auto imported = assetlib::EnvImportResult();
+
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		this,
+		QString("Importing %1").arg(name),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, QString("Convolving %1...").arg(name));
+			imported = assetlib::importEnvironment(desc, progress.Cancellation());
+		},
+		background::Cancellable::kYes);
+
+	if (result.Completed())
+		return ImportOutcome::kImported;
+
+	// Nothing to undo: a failed or cancelled importEnvironment has already taken back what it wrote.
+	if (result.Cancelled())
+		return ImportOutcome::kCancelled;
+
+	QMessageBox::warning(
+		this,
+		"Import Environment",
 		QString("Failed to import '%1':\n\n%2").arg(name, result.error));
 
 	return ImportOutcome::kFailed;
