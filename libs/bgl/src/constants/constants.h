@@ -14,6 +14,7 @@ namespace bgl
 	// namespace prefix, so every view resolves them.
 	constexpr std::string_view c_BackbufferName    = "backbuffer"sv;
 	constexpr std::string_view c_MotionVectorsName = "motionVectors"sv;
+	constexpr std::string_view c_SceneColorName    = "sceneColor"sv;
 
 	// Constants shared with the GPU (meshlet caps, instance counting-sort group
 	// sizes, ...) now live in the IDL module bgl/idl/src/Constants.slang and are
