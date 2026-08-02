@@ -87,7 +87,7 @@ ResolveDescriptor(const TextureHandle& handle) const noexcept override
 ```
 `d3d12/resource/ResourceManager_d3d12.h:152`
 
-That comment is the whole plan in one line: it is true today, and D4 is what makes it false.
+That comment is the whole plan in one line: it is true today, and D3b+D4 is what makes it false.
 
 ### Metal reintroduced the reversal WebGPU had
 
@@ -148,7 +148,8 @@ resource up by. `Uniforms::operator=` then writes `handle.bindlessIndex` and ask
 
 Two things fall out. The mirror needs no resource manager and no backend-specific subclass — it stays
 a value type built from a pipeline. And the two numbers become separable per *resource* rather than
-per *call site*, so D4 changes one line in `CreateTexture` instead of every place a handle is written.
+per *call site*, so the step that separates them stamps one field in one creation path instead of
+touching every place a handle is written.
 
 **Rejected: give `Uniforms` a `ResourceManagerRef`** (#229). It works, but it makes the
 backend-agnostic mirror depend on the manager to answer a question the manager is not the authority
@@ -158,6 +159,29 @@ on — Metal's answer needs no manager at all.
 It moves the coupling into backend code, but it makes the mirror polymorphic and therefore
 ref-counted, for a hook whose answer is a property of the handle rather than of the mirror writing
 it. The index is the same number wherever it is written; asking the *writer* was the wrong question.
+
+### An SRV is a resource, created explicitly
+
+Carrying the index on the handle leaves one question the handle cannot answer: *does this texture
+have a descriptor at all?* D2 answered it with a null index on the RTV/DSV-only path, and got it
+wrong first (`1c93974`) — the branch stamped a slot that indexes `m_Textures`, a pool with no
+shader-visible descriptors, and nothing could tell.
+
+So an SRV becomes a thing you ask for, exactly as an RTV is:
+
+```cpp
+SrvHandle CreateSrv(TextureHandle texture, const SrvDesc& desc);
+```
+
+`CreateTexture` stops making one, every texture comes from `m_Textures`, and the bindless index moves
+from `TextureHandle` onto `SrvHandle` — the thing that actually has a descriptor. A texture then has
+no index to be wrong about, and `TextureHandle::usage` stops selecting an index space, which is the
+hazard § 1 names.
+
+**Rejected: keep the implicit SRV and null the index for RTV/DSV-only textures.** That is what D2
+shipped, and it works. It leaves the invariant unrepresentable in the type, though — enforced by a
+branch in `CreateTexture` that the same change had already got wrong once. The cost of the explicit
+form is real (see § 3), but it moves the rule from a branch into the API.
 
 ### Resolve eagerly, or patch at flush — retaken
 
@@ -208,7 +232,7 @@ already sequences.
 
 ## 3. Staging
 
-Each step builds and passes on its own; the identity survives until D4 removes it, so nothing is
+Each step builds and passes on its own; the identity survives until D3b+D4 removes it, so nothing is
 half-migrated at a commit boundary.
 
 * **D1 — `DescriptorAllocator`, unused.** The class plus its tests: allocate to exhaustion, free and
@@ -260,7 +284,7 @@ half-migrated at a commit boundary.
 * **D5 — collapse what is left.** The `variant<Buffer, Texture>` goes, for a `slot_vector` of each,
   and `maxCbvSrvUavs` splits into a resource count and a descriptor count. D3b already merged the
   texture pools and retired `usage` as a discriminator.
-  *Gate:* as D4.
+  *Gate:* as D3b+D4.
 
 There is no WebGPU step. The old D6 removed `GetBufferBindingBySlotIndex`; that code left with the
 backend.
@@ -271,7 +295,8 @@ backend.
 
 - **Bindless is not removed.** Shaders still index a heap. This changes where the index comes from,
   not what a shader does with it.
-- **Metal is not changed.** It implements D2 trivially and keeps its dispatch rewrite. If a later
+- **Metal's addressing is not changed.** It implements D2 trivially and keeps its dispatch rewrite;
+  D3b gives it an `Srv` that names a texture and hands back that texture's own pool slot. If a later
   change wants Metal to stop reading slot indices out of cbuffers, that is a separate argument about
   residency, not about descriptors.
 - **Generation checking is not added.** D3 makes it *possible* — the manager sees a full `slot_handle`
@@ -284,15 +309,16 @@ backend.
 
 ## 5. Risk
 
-The one that matters is **D4 landing silently wrong**. Once slot and descriptor diverge, an off-by-one
-or a use-after-free reads a *valid* descriptor for the wrong resource — which renders something
-plausible rather than crashing. That is why D4's gate is GPU validation and not just goldens: a
-wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer alone does not
-see it.
+The one that matters is **D3b+D4 landing silently wrong**. Once slot and descriptor diverge, an
+off-by-one or a use-after-free reads a *valid* descriptor for the wrong resource — which renders
+something plausible rather than crashing. That is why its gate is GPU validation and not just goldens:
+a wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer alone does
+not see it. Folding D4 into D3b makes this worse, not better: it is now one larger D3D12 change to
+land at once, and the reason it cannot be split is in § 3.
 
-The cheap mitigation, worth doing in D4 rather than after: have the debug build write a known sentinel
-into every freed descriptor, so a stale read lands on something visibly wrong instead of on whatever
-took the slot.
+The cheap mitigation, worth doing in that step rather than after: have the debug build write a known
+sentinel into every freed descriptor, so a stale read lands on something visibly wrong instead of on
+whatever took the slot.
 
 The second risk is now **asymmetric backends**. From D2 on, `ResolveDescriptor` means different things
 on D3D12 and Metal, and only D3D12's goldens can catch a mistake in D3D12's meaning. Every gate from
