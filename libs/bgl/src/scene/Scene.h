@@ -256,6 +256,17 @@ namespace bgl
 		};
 		std::array<TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_DefaultTextures;
 
+		// Every texture asset's shader resource view, keyed by the texture's slot index. A texture
+		// carries no descriptor of its own, and destroying one does not cascade to its views, so the
+		// scene that created both releases both.
+		std::unordered_map<uint32_t, SrvHandle> m_TextureSrvs;
+
+		// The descriptor a GPU struct must carry to reach the texture in `slot`, or a null one when
+		// that texture has no view. Null is not an error here: a material may name a channel no
+		// texture was ever routed to.
+		[[nodiscard]] DescriptorHandle
+		SrvDescriptorFor(core::slot_handle textureSlot) const noexcept;
+
 		// Decoded pixels awaiting upload, flushed by Update onto the command list of the context
 		// that draws this scene. Scene-owned so one scene's textures never ride another context's
 		// timeline -- an upload must be ordered against the frames that sample it.

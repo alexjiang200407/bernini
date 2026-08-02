@@ -158,39 +158,15 @@ namespace bgl
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		// Sampled textures go in the shader-visible pool so the slot index is a valid
-		// bindless SRV index. RTV/DSV-only textures go in m_Textures and never take a
-		// shader-visible descriptor slot.
-		if (desc.usage.any(TextureUsageFlag::kSRV))
-		{
-			auto slot = m_CbvSrvUavSlots.try_allocate_slot();
-			if (slot.is_null())
-			{
-				logger::error("CreateTexture '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
-				return TextureHandle{};
-			}
-
-			Texture texture(m_Device.Get(), m_CbvSrvUavHeap.Get(), slot.index, desc);
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
-			m_Device->CreateShaderResourceView(
-				texture.GetD3D12Resource(),
-				&srvDesc,
-				texture.GetCpuHandle());
-
-			m_CbvSrvUavSlots[slot.index] = std::move(texture);
-			return TextureHandle{ slot, desc.usage, slot.index };
-		}
-
-		auto slot = m_Textures.try_allocate_slot();
+		auto                        slot = m_Textures.try_allocate_slot();
 		if (slot.is_null())
 		{
 			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
 			return TextureHandle{};
 		}
 		m_Textures[slot.index] = Texture(m_Device.Get(), nullptr, slot.index, desc);
-		// No bindless index: this slot indexes m_Textures, which is not the shader-visible heap.
-		return TextureHandle{ slot, desc.usage };
+		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
+		return TextureHandle{ slot };
 	}
 
 	SamplerHandle
@@ -240,33 +216,7 @@ namespace bgl
 		const TextureDesc&          desc) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		if (desc.usage.any(TextureUsageFlag::kSRV))
-		{
-			auto slot = m_CbvSrvUavSlots.try_allocate_slot();
-			if (slot.is_null())
-			{
-				logger::error("CreateTexture '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
-				return TextureHandle{};
-			}
-
-			Texture texture(
-				m_Device.Get(),
-				m_CbvSrvUavHeap.Get(),
-				slot.index,
-				std::move(d3d12Texture),
-				desc);
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = ConvertTextureSrvDesc(desc);
-			m_Device->CreateShaderResourceView(
-				texture.GetD3D12Resource(),
-				&srvDesc,
-				texture.GetCpuHandle());
-
-			m_CbvSrvUavSlots[slot.index] = std::move(texture);
-			return TextureHandle{ slot, desc.usage, slot.index };
-		}
-
-		auto slot = m_Textures.try_allocate_slot();
+		auto                        slot = m_Textures.try_allocate_slot();
 		if (slot.is_null())
 		{
 			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
@@ -274,8 +224,36 @@ namespace bgl
 		}
 		m_Textures[slot.index] =
 			Texture(m_Device.Get(), nullptr, slot.index, std::move(d3d12Texture), desc);
-		// No bindless index: this slot indexes m_Textures, which is not the shader-visible heap.
-		return TextureHandle{ slot, desc.usage };
+		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
+		return TextureHandle{ slot };
+	}
+
+	SrvHandle
+	ResourceManager::CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
+
+		auto slot = m_CbvSrvUavSlots.try_allocate_slot();
+		if (slot.is_null())
+		{
+			logger::error("CreateSrv '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
+			return SrvHandle{};
+		}
+
+		Srv srv(
+			m_Device.Get(),
+			textureHandle,
+			m_Textures[textureHandle.slot].GetD3D12Resource(),
+			m_CbvSrvUavHeap.Get(),
+			slot.index,
+			desc);
+
+		m_CbvSrvUavSlots[slot.index] = std::move(srv);
+
+		// The heap index is both what a cbuffer carries and what GPU memory carries: a D3D12 shader
+		// indexes the same heap either way.
+		return SrvHandle{ slot.index, slot.generation, slot.index, DescriptorHandle(slot.index) };
 	}
 
 	RtvHandle
@@ -388,33 +366,35 @@ namespace bgl
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
-		const bool isSrv = handle.usage.any(TextureUsageFlag::kSRV);
-
+		// Views onto this texture are not cascaded to; release them separately, as with an Rtv.
 		if (deferred)
 		{
-			// SRV textures live in the CBV_SRV_UAV pool; RTV/DSV-only in m_Textures. Retiring now
-			// stales every handle immediately; the resource and its descriptor index survive until
-			// the sweep reclaims them.
-			if (isSrv)
-			{
-				m_CbvSrvUavSlots.retire_slot(handle.slot);
-			}
-			else
-			{
-				m_Textures.retire_slot(handle.slot);
-			}
-
-			RetireDeferred(
-				isSrv ? PendingType::kCbvSrvUav : PendingType::kTexture,
-				handle.slot.index);
-		}
-		else if (isSrv)
-		{
-			m_CbvSrvUavSlots.release_slot(handle.slot);
+			// Retiring now stales every handle immediately; the resource survives until the sweep
+			// reclaims it.
+			m_Textures.retire_slot(handle.slot);
+			RetireDeferred(PendingType::kTexture, handle.slot.index);
 		}
 		else
 		{
 			m_Textures.release_slot(handle.slot);
+		}
+	}
+
+	void
+	ResourceManager::DestroySrv(SrvHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
+
+		// An SRV owns no allocation -- only its descriptor, which the slot index still names.
+		if (deferred)
+		{
+			m_CbvSrvUavSlots.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kCbvSrvUav, handle.idx);
+		}
+		else
+		{
+			m_CbvSrvUavSlots.release_slot(handle.idx);
 		}
 	}
 
@@ -599,17 +579,6 @@ namespace bgl
 	bool
 	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
 	{
-		if (handle.usage.any(TextureUsageFlag::kSRV))
-		{
-			if (!m_CbvSrvUavSlots.valid(handle.slot))
-			{
-				return false;
-			}
-
-			const auto& slot = m_CbvSrvUavSlots[handle.slot];
-			return std::holds_alternative<Texture>(slot) && !std::get<Texture>(slot).IsNull();
-		}
-
 		if (!m_Textures.valid(handle.slot))
 		{
 			return false;
@@ -671,14 +640,22 @@ namespace bgl
 		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 	}
 
+	bool
+	ResourceManager::ValidSrvHandle(const SrvHandle& handle) const noexcept
+	{
+		if (handle.IsNull() || !m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
+		{
+			return false;
+		}
+
+		const auto& slot = m_CbvSrvUavSlots[handle.idx];
+		return std::holds_alternative<Srv>(slot) && !std::get<Srv>(slot).IsNull();
+	}
+
 	const Texture&
 	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
 		gassert(ValidTextureHandle(handle), "Invalid texture handle");
-		if (handle.usage.any(TextureUsageFlag::kSRV))
-		{
-			return std::get<Texture>(m_CbvSrvUavSlots[handle.slot]);
-		}
 		return m_Textures[handle.slot];
 	}
 

@@ -8,6 +8,12 @@
 
 namespace
 {
+	template <typename T>
+	concept HasBindlessIndex = requires(T h) { h.bindlessIndex; };
+
+	template <typename T>
+	concept HasResidentDescriptor = requires(T h) { h.descriptor; };
+
 	// The first uint32 of the descriptor handle a member holds, straight out of the flat mirror --
 	// which is the only view of it, since an accessor refuses to read a handle field back as a
 	// value.
@@ -23,28 +29,19 @@ namespace
 	}
 }
 
-// A handle's slot names which resource it is; its bindless index is what a shader has to find in a
-// constant buffer to reach it. They are the same number on both backends today and stop being one
-// as soon as D3D12 hands descriptors out through an allocator, so nothing may read a slot where it
-// means the index.
-TEST_CASE("A handle carries its own bindless index", "[uniforms][bindless]")
+// A texture names storage; a view names how a shader reaches it. Only the view carries the numbers,
+// so a texture that is never sampled has no bindless index to be wrong about.
+TEST_CASE("Only a view carries a bindless index", "[uniforms][bindless]")
 {
-	const auto asset = bgl::TextureAssetHandle{ core::slot_handle{ 7u, 3u }, 1007u };
+	STATIC_REQUIRE(HasBindlessIndex<bgl::SrvHandle>);
+	STATIC_REQUIRE(HasResidentDescriptor<bgl::SrvHandle>);
+	STATIC_REQUIRE_FALSE(HasBindlessIndex<bgl::TextureHandle>);
 
-	SECTION("TextureHandle::From carries it across")
+	SECTION("an asset handle still names its texture")
 	{
-		const bgl::TextureHandle handle = bgl::TextureHandle::From(asset);
+		const auto asset = bgl::TextureAssetHandle{ core::slot_handle{ 7u, 3u }, 1007u };
 
-		CHECK(handle.slot.index == 7u);
-		CHECK(handle.bindlessIndex == 1007u);
-	}
-
-	SECTION("and the conversion back keeps it")
-	{
-		const auto round = static_cast<bgl::TextureAssetHandle>(bgl::TextureHandle::From(asset));
-
-		CHECK(round.textureSlot.index == 7u);
-		CHECK(round.bindlessIndex == 1007u);
+		CHECK(bgl::TextureHandle::From(asset).slot.index == 7u);
 	}
 }
 

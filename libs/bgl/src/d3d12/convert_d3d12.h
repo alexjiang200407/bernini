@@ -1,6 +1,7 @@
 #pragma once
 
 #include "resource/Sampler.h"
+#include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
 #include "types/BlendState.h"
@@ -33,7 +34,7 @@ namespace bgl
 	ConvertSRVDimension(TextureDimension dimension);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC
-	ConvertTextureSrvDesc(const TextureDesc& desc);
+	ConvertSrvDesc(const SrvDesc& desc);
 
 	D3D12_BARRIER_SYNC
 	ConvertBarrierSync(BarrierSync sync);

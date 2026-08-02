@@ -569,7 +569,7 @@ namespace bgl
 	}
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC
-	ConvertTextureSrvDesc(const TextureDesc& desc)
+	ConvertSrvDesc(const SrvDesc& desc)
 	{
 		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
 		srv.Format                          = ConvertFormat(desc.format);
@@ -605,7 +605,7 @@ namespace bgl
 		case TextureDimension::kTexture2DMSArray:
 		default:
 			gfatal(
-				"ConvertTextureSrvDesc unsupported texture dimension: {}",
+				"ConvertSrvDesc unsupported texture dimension: {}",
 				static_cast<int>(desc.dimension));
 		}
 

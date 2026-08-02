@@ -65,6 +65,14 @@ TEST_CASE(
 	auto texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
+	auto srvDesc      = bgl::SrvDesc();
+	srvDesc.format    = texDesc.format;
+	srvDesc.dimension = texDesc.dimension;
+	srvDesc.debugName = "Texture Sample SRV";
+
+	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	REQUIRE(resourceManager->ValidSrvHandle(srv));
+
 	const uint8_t               redTexel[4] = { 255, 0, 0, 255 };
 	bgl::TextureSubresourceData sub{};
 	sub.data       = redTexel;
@@ -83,7 +91,7 @@ TEST_CASE(
 	REQUIRE(kernel.uniforms.contains("gUniforms"));
 	REQUIRE(kernel.uniforms.contains("gDebug"));
 
-	kernel["gUniforms"]["texture"] = texture;
+	kernel["gUniforms"]["texture"] = srv;
 	kernel["gUniforms"]["sampler"] = sampler;
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();
@@ -150,6 +158,7 @@ TEST_CASE(
 	debugBuffer.Release(false);
 	resourceManager->DestroyReadbackBuffer(rb, false);
 	resourceManager->DestroySampler(sampler, false);
+	resourceManager->DestroySrv(srv, false);
 	resourceManager->DestroyTexture(texture, false);
 }
 
@@ -191,6 +200,14 @@ TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture
 	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
+	auto srvDesc      = bgl::SrvDesc();
+	srvDesc.format    = texDesc.format;
+	srvDesc.dimension = texDesc.dimension;
+	srvDesc.debugName = "Texture Sample SRV";
+
+	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	REQUIRE(resourceManager->ValidSrvHandle(srv));
+
 	// Deliberately not grey: a wrong channel order or a zeroed sample is visible in the result.
 	const uint8_t               texel[4] = { 255, 128, 0, 255 };
 	bgl::TextureSubresourceData sub{};
@@ -221,7 +238,7 @@ TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture
 	REQUIRE(kernel.pipeline != nullptr);
 	REQUIRE(kernel.uniforms.contains("gUniforms"));
 
-	kernel["gUniforms"]["texture"]  = texture;
+	kernel["gUniforms"]["texture"]  = srv;
 	kernel["gUniforms"]["sampler"]  = sampler;
 	kernel["gUniforms"]["outColor"] = outBuffer;
 
@@ -269,5 +286,6 @@ TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture
 	resourceManager->DestroyReadbackBuffer(rb, false);
 	resourceManager->DestroyBuffer(outBuffer, false);
 	resourceManager->DestroySampler(sampler, false);
+	resourceManager->DestroySrv(srv, false);
 	resourceManager->DestroyTexture(texture, false);
 }

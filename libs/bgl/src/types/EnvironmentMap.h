@@ -3,12 +3,11 @@
 
 namespace bgl
 {
-	// The three precomputed image-based-lighting resources Forward_PBR samples. Each RHI handle's
-	// slot becomes a descriptor handle the shader samples through.
+	// The three precomputed image-based-lighting resources Forward_PBR samples.
 	struct EnvironmentMap
 	{
-		TextureHandle irradiance;  // cubemap
-		TextureHandle prefilter;   // cubemap (roughness mips)
-		TextureHandle brdfLut;     // 2D LUT
+		TextureAssetHandle irradiance;  // cubemap
+		TextureAssetHandle prefilter;   // cubemap (roughness mips)
+		TextureAssetHandle brdfLut;     // 2D LUT
 	};
 }

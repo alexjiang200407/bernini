@@ -875,8 +875,7 @@ namespace bgl
 		// has to be whatever the backend's shader can dereference.
 		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
 			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ m_ResourceManager->ResolveDescriptor(
-				TextureHandle{ slot, TextureUsageFlag::kSRV }) };
+			return idl::TextureHandle{ SrvDescriptorFor(slot) };
 		};
 
 		idl::PbrMaterial material{};
@@ -937,8 +936,7 @@ namespace bgl
 			const core::slot_handle slot   = routed ? route.texture.textureSlot : fallbackTex;
 
 			idl::ChannelSource cs{};
-			cs.texture = idl::TextureHandle{ m_ResourceManager->ResolveDescriptor(
-				TextureHandle{ slot, TextureUsageFlag::kSRV }) };
+			cs.texture = idl::TextureHandle{ SrvDescriptorFor(slot) };
 			cs.channel = routed ? route.channel : fallbackChannel;
 			return cs;
 		};
@@ -1110,11 +1108,24 @@ namespace bgl
 		m_GeomSubmeshes.release_slot(geom.handle.index);
 	}
 
+	DescriptorHandle
+	Scene::SrvDescriptorFor(core::slot_handle textureSlot) const noexcept
+	{
+		const auto it = m_TextureSrvs.find(textureSlot.index);
+		return it == m_TextureSrvs.end() ? DescriptorHandle{} : it->second.descriptor;
+	}
+
 	TextureAssetHandle
 	Scene::AddTextureAsset(assetlib::ImageData img, std::string debugName)
 	{
-		return static_cast<TextureAssetHandle>(
-			CreateTextureAsset(std::move(img), std::move(debugName)));
+		const TextureHandle handle = CreateTextureAsset(std::move(img), std::move(debugName));
+		if (handle.IsNull())
+		{
+			return TextureAssetHandle{};
+		}
+
+		// CreateTextureAsset made the view, so this lookup always hits.
+		return TextureAssetHandle{ handle.slot, m_TextureSrvs.at(handle.slot.index).bindlessIndex };
 	}
 
 	TextureHandle
@@ -1137,6 +1148,21 @@ namespace bgl
 		{
 			return handle;
 		}
+
+		SrvDesc srvDesc;
+		srvDesc.format    = desc.format;
+		srvDesc.dimension = desc.dimension;
+		srvDesc.mipLevels = desc.mipLevels;
+		srvDesc.arraySize = desc.arraySize;
+		srvDesc.debugName = desc.debugName;
+
+		const SrvHandle srv = m_ResourceManager->CreateSrv(handle, srvDesc);
+		if (srv.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(handle, /*deferred*/ false);
+			return TextureHandle{};
+		}
+		m_TextureSrvs.emplace(handle.slot.index, srv);
 
 		m_PendingTextureUploads.push_back({ handle, std::move(img) });
 		return handle;
@@ -1179,7 +1205,13 @@ namespace bgl
 
 		// Frames already submitted may still sample this texture, so only the *release* is deferred:
 		// the resource manager recycles the bindless slot no earlier than the last frame that could
-		// read it.
+		// read it. The view is not cascaded to by DestroyTexture, so it goes on the same gate.
+		if (const auto it = m_TextureSrvs.find(handle.slot.index); it != m_TextureSrvs.end())
+		{
+			m_ResourceManager->DestroySrv(it->second);
+			m_TextureSrvs.erase(it);
+		}
+
 		m_ResourceManager->DestroyTexture(handle);
 	}
 }

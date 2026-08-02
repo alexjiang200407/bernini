@@ -3,6 +3,7 @@
 #include "resource/Buffer.h"
 #include "resource/Sampler.h"
 #include "resource/Shader.h"
+#include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
 #include "uniforms/ReflectedLayout.h"
@@ -228,7 +229,7 @@ namespace bgl
 			}
 
 			AccessorBase&
-			operator=(TextureHandle handle)
+			operator=(SrvHandle handle)
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
@@ -237,7 +238,7 @@ namespace bgl
 				}
 
 				core::throw_runtime_error(
-					"Accessor at offset {} cannot be assigned with texture handle",
+					"Accessor at offset {} cannot be assigned with SRV handle",
 					m_Offset);
 			}
 
