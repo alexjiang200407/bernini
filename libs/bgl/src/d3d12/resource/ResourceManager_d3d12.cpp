@@ -13,11 +13,17 @@ namespace bgl
 										 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 										 desc.maxCbvSrvUavs,
 										 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE),
-		m_CbvSrvUavSlots(desc.maxCbvSrvUavs), m_Samplers(desc.maxSamplers),
+		m_Buffers(desc.maxBuffers), m_Srvs(desc.maxSrvs), m_Samplers(desc.maxSamplers),
 		m_Textures(desc.maxTextures), m_ReadbackBuffers(desc.maxReadbackBuffers),
 		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
-		gassert(desc.maxCbvSrvUavs > 0, "maxDescriptors must be greater than zero");
+		gassert(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
+		gassert(desc.maxSrvs > 0, "maxSrvs must be greater than zero");
+		// Every buffer and every SRV takes a descriptor, so a heap smaller than the pools it serves
+		// turns a legal create into an exhausted-heap failure.
+		gassert(
+			desc.maxCbvSrvUavs >= desc.maxBuffers + desc.maxSrvs,
+			"maxCbvSrvUavs must cover maxBuffers + maxSrvs");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
 		gassert(desc.maxTextures > 0, "maxTextures must be greater than zero");
@@ -62,10 +68,10 @@ namespace bgl
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
 		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
-		auto bufferSlotHandle = m_CbvSrvUavSlots.try_allocate_slot();
+		auto bufferSlotHandle = m_Buffers.try_allocate_slot();
 		if (bufferSlotHandle.is_null())
 		{
-			logger::error("CreateStructBuffer '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
+			logger::error("CreateStructBuffer '{}': buffer pool exhausted", desc.debugName);
 			return BufferHandle{};
 		}
 
@@ -98,7 +104,7 @@ namespace bgl
 			{
 				m_CbvSrvUavDescriptors.Free(descriptorIndex);
 			}
-			m_CbvSrvUavSlots.release_slot(bufferSlotHandle.index);
+			m_Buffers.release_slot(bufferSlotHandle.index);
 			return BufferHandle{};
 		}
 
@@ -135,7 +141,7 @@ namespace bgl
 				buffer.GetCpuHandle());
 		}
 
-		m_CbvSrvUavSlots[bufferSlotHandle] = std::move(buffer);
+		m_Buffers[bufferSlotHandle] = std::move(buffer);
 
 		return BufferHandle{ bufferSlotHandle, descriptorIndex };
 	}
@@ -237,10 +243,10 @@ namespace bgl
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
 
-		auto slot = m_CbvSrvUavSlots.try_allocate_slot();
+		auto slot = m_Srvs.try_allocate_slot();
 		if (slot.is_null())
 		{
-			logger::error("CreateSrv '{}': CBV/SRV/UAV pool exhausted", desc.debugName);
+			logger::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
 			return SrvHandle{};
 		}
 
@@ -252,11 +258,11 @@ namespace bgl
 		catch (const std::exception& e)
 		{
 			logger::error("CreateSrv '{}': {}", desc.debugName, e.what());
-			m_CbvSrvUavSlots.release_slot(slot.index);
+			m_Srvs.release_slot(slot.index);
 			return SrvHandle{};
 		}
 
-		m_CbvSrvUavSlots[slot.index] =
+		m_Srvs[slot.index] =
 			Srv(m_Device.Get(),
 		        textureHandle,
 		        m_Textures[textureHandle.slot].GetD3D12Resource(),
@@ -367,17 +373,16 @@ namespace bgl
 
 		// Read from the record rather than the handle: the manager allocated this descriptor and is
 		// the only thing that knows which one it is.
-		const uint32_t descriptorIndex =
-			std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]).GetDescriptorIndex();
+		const uint32_t descriptorIndex = m_Buffers[handle.slot].GetDescriptorIndex();
 
 		if (deferred)
 		{
-			m_CbvSrvUavSlots.retire_slot(handle.slot);
-			RetireDeferred(PendingType::kCbvSrvUav, handle.slot.index, descriptorIndex);
+			m_Buffers.retire_slot(handle.slot);
+			RetireDeferred(PendingType::kBuffer, handle.slot.index, descriptorIndex);
 		}
 		else
 		{
-			m_CbvSrvUavSlots.release_slot(handle.slot);
+			m_Buffers.release_slot(handle.slot);
 			m_CbvSrvUavDescriptors.Free(descriptorIndex);
 		}
 	}
@@ -408,19 +413,18 @@ namespace bgl
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
 
-		const uint32_t descriptorIndex =
-			std::get<Srv>(m_CbvSrvUavSlots[handle.idx]).GetDescriptorIndex();
+		const uint32_t descriptorIndex = m_Srvs[handle.idx].GetDescriptorIndex();
 
 		// An SRV owns no allocation -- only its descriptor, which outlives in-flight work exactly as
 		// a resource does, so the deferred path hands it back on the same gate.
 		if (deferred)
 		{
-			m_CbvSrvUavSlots.retire_slot(handle.idx);
-			RetireDeferred(PendingType::kCbvSrvUav, handle.idx, descriptorIndex);
+			m_Srvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kSrv, handle.idx, descriptorIndex);
 		}
 		else
 		{
-			m_CbvSrvUavSlots.release_slot(handle.idx);
+			m_Srvs.release_slot(handle.idx);
 			m_CbvSrvUavDescriptors.Free(descriptorIndex);
 		}
 	}
@@ -558,8 +562,15 @@ namespace bgl
 		const auto reclaim = [&](const PendingDeletion& pending) {
 			switch (pending.type)
 			{
-			case PendingType::kCbvSrvUav:
-				m_CbvSrvUavSlots.reclaim_slot(pending.slotIndex);
+			case PendingType::kBuffer:
+				m_Buffers.reclaim_slot(pending.slotIndex);
+				if (pending.descriptorIndex != 0xFFFFFFFF)
+				{
+					m_CbvSrvUavDescriptors.Free(pending.descriptorIndex);
+				}
+				break;
+			case PendingType::kSrv:
+				m_Srvs.reclaim_slot(pending.slotIndex);
 				if (pending.descriptorIndex != 0xFFFFFFFF)
 				{
 					m_CbvSrvUavDescriptors.Free(pending.descriptorIndex);
@@ -601,13 +612,7 @@ namespace bgl
 	bool
 	ResourceManager::ValidBufferHandle(const BufferHandle& handle) const noexcept
 	{
-		if (!m_CbvSrvUavSlots.valid(handle.slot))
-		{
-			return false;
-		}
-
-		const auto& slot = m_CbvSrvUavSlots[handle.slot];
-		return std::holds_alternative<Buffer>(slot) && !std::get<Buffer>(slot).IsNull();
+		return m_Buffers.valid(handle.slot) && !m_Buffers[handle.slot].IsNull();
 	}
 
 	bool
@@ -677,13 +682,8 @@ namespace bgl
 	bool
 	ResourceManager::ValidSrvHandle(const SrvHandle& handle) const noexcept
 	{
-		if (handle.IsNull() || !m_CbvSrvUavSlots.valid(handle.idx, handle.generation))
-		{
-			return false;
-		}
-
-		const auto& slot = m_CbvSrvUavSlots[handle.idx];
-		return std::holds_alternative<Srv>(slot) && !std::get<Srv>(slot).IsNull();
+		return !handle.IsNull() && m_Srvs.valid(handle.idx, handle.generation) &&
+		       !m_Srvs[handle.idx].IsNull();
 	}
 
 	const Texture&
@@ -710,7 +710,7 @@ namespace bgl
 	ResourceManager::GetBuffer(BufferHandle handle) const noexcept
 	{
 		gassert(ValidBufferHandle(handle), "Invalid buffer handle");
-		return std::get<Buffer>(m_CbvSrvUavSlots[handle.slot]);
+		return m_Buffers[handle.slot];
 	}
 
 	const ReadbackBuffer&

@@ -18,7 +18,12 @@ namespace bgl
 {
 	struct ResourceManagerDesc
 	{
-		uint32_t maxCbvSrvUavs      = 1024;
+		// Descriptors in the shader-visible heap. Every buffer and every SRV takes one, so it must be
+		// at least maxBuffers + maxSrvs.
+		uint32_t maxCbvSrvUavs = 1024;
+
+		uint32_t maxBuffers         = 512;
+		uint32_t maxSrvs            = 512;
 		uint32_t maxRtvs            = 128;
 		uint32_t maxDsvs            = 128;
 		uint32_t maxTextures        = 1024;

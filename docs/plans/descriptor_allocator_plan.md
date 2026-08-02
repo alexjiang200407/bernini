@@ -284,9 +284,11 @@ half-migrated at a commit boundary.
   *Gate:* goldens within tolerance, and `just run bgl_tests -- --gpu-validation` on Windows, because
   a mis-freed descriptor is what only GPU-based validation catches. Metal is unaffected — worth
   re-running to prove it. **Not verifiable on macOS.**
-* **D5 — collapse what is left.** The `variant<Buffer, Texture>` goes, for a `slot_vector` of each,
-  and `maxCbvSrvUavs` splits into a resource count and a descriptor count. D3b already merged the
-  texture pools and retired `usage` as a discriminator.
+* **D5 — collapse what is left.** The `variant<Buffer, Srv>` goes, for a `slot_vector` of each, and
+  `maxCbvSrvUavs` becomes the descriptor count beside new `maxBuffers`/`maxSrvs` resource counts --
+  added rather than renamed, because `GraphicsOptions::maxCbvSrvUavs` is public API the editor reads
+  from its settings file. The heap must cover both pools, which the manager asserts. D3b already
+  merged the texture pools and retired `usage` as a discriminator.
   *Gate:* as D4.
 
 There is no WebGPU step. The old D6 removed `GetBufferBindingBySlotIndex`; that code left with the
