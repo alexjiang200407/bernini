@@ -190,7 +190,7 @@ namespace bgl
 					{
 						if ((*this)[key].IsValid())
 						{
-							(*this)[key] = DescriptorHandle(handle.slot);
+							(*this)[key] = DescriptorHandle(handle.bindlessIndex);
 							return *this;
 						}
 					}
@@ -203,7 +203,7 @@ namespace bgl
 					GetType() == UniformType::kValue &&
 					m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.slot);
+					*this = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
@@ -218,7 +218,7 @@ namespace bgl
 				if (GetType() == UniformType::kValue &&
 				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.idx);
+					*this = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
@@ -232,7 +232,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.slot);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
@@ -246,7 +246,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.textureSlot);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 

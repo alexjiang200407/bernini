@@ -933,7 +933,7 @@ namespace bgl
 								 const ChannelRouteDesc& route,
 								 core::slot_handle       fallbackTex,
 								 uint16_t                fallbackChannel) {
-			const bool              routed = route.texture.textureSlot;
+			const bool              routed = !route.texture.textureSlot.is_null();
 			const core::slot_handle slot   = routed ? route.texture.textureSlot : fallbackTex;
 
 			idl::ChannelSource cs{};
