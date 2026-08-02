@@ -24,6 +24,9 @@ namespace
 	{
 		kMesh,
 		kMaterial,
+		kEnv,
+		kSky,
+		kEnvLighting,
 	};
 
 	std::string
@@ -74,27 +77,35 @@ namespace
 		return "references";
 	}
 
-	// Both containers open with a 4-byte magic, so the type is read from the file rather than guessed
+	// Every container opens with a 4-byte magic, so the type is read from the file rather than guessed
 	// from its extension -- `describe` then works on a file named anything. This is the deliberate
 	// opposite of assetlib::assetTypeFromExtension, which never opens the file.
 	ContainerType
 	sniff(const std::filesystem::path& path)
 	{
-		constexpr uint32_t c_MeshMagic     = assetlib::magic::c_BMesh;
-		constexpr uint32_t c_MaterialMagic = assetlib::magic::c_BMaterial;
-
 		std::ifstream in(path, std::ios::binary);
 		uint32_t      magic = 0;
 		if (!in.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
 			throw std::runtime_error("cannot read the file header of " + path.string());
 
-		if (magic == c_MeshMagic)
+		switch (magic)
+		{
+		case assetlib::magic::c_BMesh:
 			return ContainerType::kMesh;
-		if (magic == c_MaterialMagic)
+		case assetlib::magic::c_BMaterial:
 			return ContainerType::kMaterial;
+		case assetlib::magic::c_BEnv:
+			return ContainerType::kEnv;
+		case assetlib::magic::c_BSky:
+			return ContainerType::kSky;
+		case assetlib::magic::c_BEnvL:
+			return ContainerType::kEnvLighting;
+		}
 
 		throw std::runtime_error(
-			path.string() + " is neither a .bmesh nor a .bmaterial (unrecognized magic)");
+			path.string() +
+			" is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky or "
+			".benvl)");
 	}
 }
 
@@ -191,15 +202,20 @@ main(int argc, char** argv)
 	bool        describeBrief = false;
 
 	auto* describe =
-		app.add_subcommand("describe", "Print the contents of a .bmesh or .bmaterial as text");
-	describe->add_option("input", describeInput, "Source .bmesh or .bmaterial file")
+		app.add_subcommand("describe", "Print the contents of an asset container as text");
+	describe
+		->add_option(
+			"input",
+			describeInput,
+			"Source .bmesh, .bmaterial, .benv, .bsky or .benvl file")
 		->required()
 		->check(CLI::ExistingFile);
 	describe->add_option(
 		"-d,--data-root",
 		describeDataRoot,
-		"Project data directory the asset's paths resolve against. For a material this also stats "
-		"each routed source, so a stale bake is reported");
+		"Project data directory the asset's paths resolve against. For a material, a sky or a "
+		"lighting this also stats each routed source, so a stale bake is reported; for an "
+		"environment it reports whether the files it names are there");
 	describe->add_flag(
 		"-b,--brief",
 		describeBrief,
@@ -429,12 +445,26 @@ main(int argc, char** argv)
 
 			// Straight to stdout, not the logger: this is the command's output, so it should pipe into
 			// a file or a diff without spdlog's timestamps and level prefixes in the way.
-			if (sniff(path) == ContainerType::kMesh)
+			const auto dataRoot = std::filesystem::path(describeDataRoot);
+
+			switch (sniff(path))
+			{
+			case ContainerType::kMesh:
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
-			else
-				std::cout << assetlib::describe(
-					assetlib::loadMaterial(path),
-					std::filesystem::path(describeDataRoot));
+				break;
+			case ContainerType::kMaterial:
+				std::cout << assetlib::describe(assetlib::loadMaterial(path), dataRoot);
+				break;
+			case ContainerType::kEnv:
+				std::cout << assetlib::describe(assetlib::loadEnv(path), dataRoot);
+				break;
+			case ContainerType::kSky:
+				std::cout << assetlib::describe(assetlib::loadSky(path), dataRoot);
+				break;
+			case ContainerType::kEnvLighting:
+				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), dataRoot);
+				break;
+			}
 		}
 		catch (const std::exception& e)
 		{

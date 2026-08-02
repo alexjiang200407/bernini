@@ -1,6 +1,7 @@
 #include <assetlib/asset_describe.h>
 
 #include <assetlib/bmaterial_io.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 
@@ -130,4 +131,140 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 	const std::string brief = describe(mesh, /*verbose*/ false);
 	CHECK(brief.find("Materials/head.bmaterial") != std::string::npos);
 	CHECK(brief.find("'head'") == std::string::npos);
+}
+
+// A .benv holds no pixels at all, so the only thing worth reading out of it is what it names -- and
+// whether those names resolve. A dangling reference renders as an environment that silently loses its
+// sky or its lighting, which is exactly the case a dump has to make visible.
+TEST_CASE("describe(BEnv) reports whether the files it names are there", "[describe]")
+{
+	const auto root = std::filesystem::temp_directory_path() / "bernini_describe_benv";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root / "Sky");
+
+	{
+		std::ofstream out(root / "Sky" / "forest.bsky", std::ios::binary);
+		out << "x";
+	}
+
+	BEnv env;
+	env.name     = "forest";
+	env.sky      = "Sky/forest.bsky";
+	env.lighting = "EnvLighting/forest.benvl";  // never written
+
+	// Without a root there is nothing to resolve against, so neither is judged.
+	const std::string bare = describe(env);
+	CHECK(bare.find("forest") != std::string::npos);
+	CHECK(bare.find("Sky/forest.bsky") != std::string::npos);
+	CHECK(bare.find("(missing)") == std::string::npos);
+
+	const std::string text = describe(env, root);
+	CHECK(text.find("Sky/forest.bsky\n") != std::string::npos);  // present: unannotated
+	CHECK(text.find("EnvLighting/forest.benvl (missing)") != std::string::npos);
+
+	// An unset half is not the same as a missing one, and must not read as a broken reference.
+	BEnv skyless;
+	skyless.lighting            = "EnvLighting/forest.benvl";
+	const std::string unsetText = describe(skyless, root);
+	CHECK(unsetText.find("sky               (unset)") != std::string::npos);
+
+	std::filesystem::remove_all(root);
+}
+
+// The sky and the lighting carry EnvMapRoutes, which stale exactly the way a material's channel
+// routes do -- so the same question ("is what I am about to render still what was baked?") has to be
+// answerable here too.
+TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[describe]")
+{
+	const auto root = std::filesystem::temp_directory_path() / "bernini_describe_env";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root / "textures_src");
+
+	const auto source = root / "textures_src" / "forest.ktx2";
+	const auto write  = [](const std::filesystem::path& path, std::string_view bytes) {
+		std::ofstream out(path, std::ios::binary);
+		out << bytes;
+	};
+	write(source, "aaaa");
+
+	BSky sky;
+	sky.name       = "forest";
+	sky.mipLevel   = 2;
+	sky.rotationY  = 1.5f;
+	sky.sky.source = "textures_src/forest.ktx2";
+	sky.sky.baked  = "Textures/forest_sky_ab12.ktx2";
+	sky.sky.stamp  = stampOf(source);
+
+	SECTION("a sky reports its presentation and a current bake")
+	{
+		const std::string text = describe(sky, root);
+
+		CHECK(text.find("bsky 'forest'") != std::string::npos);
+		CHECK(text.find("mipLevel          2") != std::string::npos);
+		CHECK(text.find("rotationY         1.5 rad") != std::string::npos);
+		CHECK(text.find("textures_src/forest.ktx2") != std::string::npos);
+		CHECK(text.find("Textures/forest_sky_ab12.ktx2") != std::string::npos);
+		CHECK(text.find("up to date") != std::string::npos);
+		CHECK(text.find("STALE") == std::string::npos);
+	}
+
+	SECTION("a sky whose source moved on reads as stale")
+	{
+		write(source, "aaaaaaaa");  // different size
+
+		const std::string text = describe(sky, root);
+		CHECK(text.find("STALE") != std::string::npos);
+	}
+
+	SECTION("a sky whose source is gone says so rather than comparing stamps")
+	{
+		std::filesystem::remove(source);
+
+		const std::string text = describe(sky, root);
+		CHECK(text.find("source is missing") != std::string::npos);
+	}
+
+	BEnvLighting lighting;
+	lighting.name              = "forest";
+	lighting.exposure          = 1.25f;
+	lighting.prefilter.source  = "textures_src/forest.ktx2";
+	lighting.prefilter.baked   = "Textures/forest_prefilter.ktx2";
+	lighting.prefilter.stamp   = stampOf(source);
+	lighting.irradiance.source = "textures_src/forest.ktx2";
+	lighting.irradiance.baked  = "Textures/forest_irradiance.ktx2";
+	lighting.irradiance.stamp  = stampOf(source);
+
+	SECTION("a lighting names both halves and its exposure")
+	{
+		const std::string text = describe(lighting, root);
+
+		CHECK(text.find("benvl 'forest'") != std::string::npos);
+		CHECK(text.find("exposure          1.25") != std::string::npos);
+		CHECK(text.find("prefilter") != std::string::npos);
+		CHECK(text.find("irradiance") != std::string::npos);
+		CHECK(text.find("Textures/forest_prefilter.ktx2") != std::string::npos);
+		CHECK(text.find("Textures/forest_irradiance.ktx2") != std::string::npos);
+	}
+
+	// The pair is one verdict: they convolve the same radiance, so one drifting makes both suspect.
+	SECTION("one half drifting makes the whole lighting stale")
+	{
+		lighting.irradiance.stamp = SourceStamp{ 1, 1 };
+
+		const std::string text = describe(lighting, root);
+		CHECK(text.find("bake              STALE") != std::string::npos);
+	}
+
+	// Without a root nothing is stat'd, so the recorded stamp is all that can be reported -- and no
+	// verdict may be printed, because none was measured.
+	SECTION("no data root reports the recorded stamp and no verdict")
+	{
+		const std::string text = describe(sky);
+
+		CHECK(text.find("baked from") != std::string::npos);
+		CHECK(text.find("up to date") == std::string::npos);
+		CHECK(text.find("STALE") == std::string::npos);
+	}
+
+	std::filesystem::remove_all(root);
 }
