@@ -137,9 +137,9 @@ namespace bgl
 		}
 
 		[[nodiscard]] bool
-		HasTemporalAA() const noexcept override
+		IsTaaEnabled() const noexcept override
 		{
-			return m_TemporalAA;
+			return m_TaaEnabled;
 		}
 
 		void
@@ -177,7 +177,7 @@ namespace bgl
 
 		uint32_t m_Width      = 0;
 		uint32_t m_Height     = 0;
-		bool     m_TemporalAA = false;
+		bool     m_TaaEnabled = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};

@@ -413,7 +413,7 @@ namespace bgl
 		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
 		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
 		// that moves every frame.
-		const glm::vec2 jitter = m_ActiveTarget->HasTemporalAA() ?
+		const glm::vec2 jitter = m_ActiveTarget->IsTaaEnabled() ?
 		                             HaltonJitter(
 										 m_FrameCounter,
 										 viewport.maxX - viewport.minX,

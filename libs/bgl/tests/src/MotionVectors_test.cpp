@@ -94,7 +94,7 @@ namespace
 		bgl::CommandListRef      cmdList;
 		bgl::CommandQueueRef     cmdQueue;
 
-		explicit MotionFixture(bool temporalAA = false)
+		explicit MotionFixture(bool taaEnabled = false)
 		{
 			auto opts                     = bgl::GraphicsOptions();
 			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -108,7 +108,7 @@ namespace
 			targetDesc.width      = static_cast<int>(c_Width);
 			targetDesc.height     = static_cast<int>(c_Height);
 			targetDesc.headless   = true;
-			targetDesc.temporalAA = temporalAA;
+			targetDesc.taaEnabled = taaEnabled;
 
 			target = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
@@ -514,8 +514,8 @@ TEST_CASE("Jitter moves the sampling grid", "[jitter][render]")
 	const std::string first  = "assets/golden/jitter_frame0.got.png";
 	const std::string second = "assets/golden/jitter_frame1.got.png";
 
-	const auto renderTwice = [&](bool temporalAA) {
-		auto fixture = MotionFixture(temporalAA);
+	const auto renderTwice = [&](bool taaEnabled) {
+		auto fixture = MotionFixture(taaEnabled);
 		fixture.AddQuad();
 
 		// Rotated off-axis so the quad's edges cross pixels diagonally; an axis-aligned edge can

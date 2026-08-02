@@ -85,7 +85,7 @@ the pixel stage. `SceneView::AdvanceCamera` is what holds the previous frame's m
 view twice in a frame reports the same history to both draws rather than letting the second treat
 the first as history.
 
-When the target has `RenderTargetDesc::temporalAA` set, every projection is offset by a sub-pixel
+When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
 `HaltonJitter` ([util/jitter.h](libs/bgl/src/util/jitter.h)) that `RenderContext::Draw`
 left-multiplies onto it, so the sample grid walks the pixel footprint across eight frames. The
 client's `Camera` never sees it. **A velocity is about the surface, not the sample pattern**, so both

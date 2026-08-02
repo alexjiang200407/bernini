@@ -95,9 +95,9 @@ namespace bgl
 		[[nodiscard]] virtual SrvHandle
 		GetSceneColorSrv() const noexcept = 0;
 
-		/** Whether this target was created with RenderTargetDesc::temporalAA. */
+		/** Whether this target was created with RenderTargetDesc::taaEnabled. */
 		[[nodiscard]] virtual bool
-		HasTemporalAA() const noexcept = 0;
+		IsTaaEnabled() const noexcept = 0;
 
 		/**
 		 * Presents the frame just submitted, then advances to the index the next one records into.

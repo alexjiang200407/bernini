@@ -11,14 +11,10 @@ namespace bgl
 	 */
 	struct RenderTargetDesc
 	{
-		int  width    = 0;
-		int  height   = 0;
-		bool headless = false;
-
-		// Jitter the projection and accumulate a temporal history for this target. Off by default:
-		// it makes a frame depend on the frames before it, which a caller that renders a fixed small
-		// number of them -- a thumbnail, a render test -- cannot converge.
-		bool temporalAA = false;
+		int  width      = 0;
+		int  height     = 0;
+		bool headless   = false;
+		bool taaEnabled = false;
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless.
 		void* wnd = nullptr;
