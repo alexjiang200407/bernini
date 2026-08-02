@@ -1,6 +1,7 @@
 #pragma once
 
 #include "resource/Sampler.h"
+#include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
 #include "types/BlendState.h"
