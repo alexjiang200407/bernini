@@ -2,11 +2,11 @@
 #include <DemoWindow.h>
 #include <FlyCamera.h>
 #include <SDL3/SDL.h>
-#include <assetlib/benv_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/bgl.h>
 #include <format>
+#include <gamelib/AssetManager.h>
 #include <stdexcept>
 
 int
@@ -70,17 +70,17 @@ main(int argc, char** argv)
 
 		auto scene = graphics->CreateScene(std::move(sceneDesc));
 		auto view  = graphics->CreateSceneView(scene, 100);
-		auto env   = assetlib::loadBenv("assets/forest.benv");
 
-		view->SetEnvironmentMap(
-			{ scene->AddTextureAsset(std::move(env.irradiance)),
-		      scene->AddTextureAsset(std::move(env.prefilter)) });
+		// The manager holds the data root; every asset reference below is relative to it.
+		auto assets = game::AssetManager(scene, "assets");
 
+		const auto env = assets.AcquireEnvironment("Environments/forest.benv");
+		view->SetEnvironmentMap({ env.irradiance, env.prefilter });
 		view->SetExposure(env.exposure);
 
 		if (skyBoxEnabled)
 		{
-			view->SetSkyBox({ scene->AddTextureAsset(std::move(env.skybox)) });
+			view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
 		}
 
 		auto metalMat = scene->CreatePbrMaterial(

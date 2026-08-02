@@ -19,8 +19,11 @@ namespace editor
 	 *
 	 * Must be called on the render thread, like everything else that touches a scene or a view.
 	 *
+	 * The paths a `.benv` stores are data-root relative, and a `.benv` lives in
+	 * `<dataRoot>/Environments` -- so the data root is the file's parent's parent.
+	 *
 	 * @param benvPath The `.benv`; nothing is applied when empty.
-	 * @param exposureOverride Overrules the exposure the `.benv` derived for these maps.
+	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
 	 * @param who Prefix for warnings, naming the caller.
 	 */
 	void
