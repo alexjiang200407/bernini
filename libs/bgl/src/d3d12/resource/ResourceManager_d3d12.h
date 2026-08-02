@@ -153,7 +153,9 @@ namespace bgl
 		ResolveDescriptor(const TextureHandle& handle) const noexcept override
 		{
 			// The shader indexes the descriptor heap with it, so the slot is already the descriptor.
-			return DescriptorHandle(handle.slot);
+			// Not handle.bindlessIndex: callers build the handle from a bare slot here, so the field
+			// is null.
+			return DescriptorHandle(handle.slot.index);
 		}
 
 		[[nodiscard]]

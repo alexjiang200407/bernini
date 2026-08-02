@@ -22,9 +22,15 @@ doc and a header disagree, trust the header, then fix this doc.
   `SharedRef`. Copy handles freely; they are values. Every handle is an `{ index, generation }`
   pair: the index locates the slot, and a `generation` counter guards against use-after-free —
   destroying a resource bumps the slot's generation so stale copies fail `Valid*Handle`. A null
-  handle has index `0xFFFFFFFF` (`IsNull()`). The slot resolves to a `DescriptorHandle` the shader
-  samples through — on D3D12 that handle *is* the descriptor-heap index, a second backend is free to
-  make it a native resource id — which keeps GPU resources out of the refcount machinery.
+  handle has index `0xFFFFFFFF` (`IsNull()`). Keeping GPU resources addressed this way keeps them out
+  of the refcount machinery.
+
+  **A slot is not a descriptor.** Beside it, every bindless handle carries a `bindlessIndex` — what a
+  shader must find in a constant buffer to reach the resource — stamped by the resource manager that
+  created it: a descriptor-heap index on D3D12, the pool slot Metal's dispatch rewrite looks the
+  resource up by. `DescriptorHandle` is constructible from that index and **not** from a
+  `core::slot_handle`; the two are equal today and the conversion is deleted so nothing comes to
+  depend on it.
 
   **Two handle layouts, one meaning.** `BufferHandle` and `TextureHandle` wrap a
   `core::slot_handle` (reached as `.slot.index` / `.slot.generation`); `RtvHandle`, `DsvHandle`, and
@@ -35,8 +41,8 @@ doc and a header disagree, trust the header, then fix this doc.
 * **Samplers are descriptor-heap-only handles.** `CreateSampler(SamplerDesc)` returns a
   `SamplerHandle` (same `{idx, generation}` shape) but a sampler has **no backing GPU
   resource** — it owns only a slot in the shader-visible sampler heap (its own `maxSamplers`
-  pool, separate from textures). Bind it bindlessly: the slot resolves to a `DescriptorHandle` the
-  shader samples through. Texture and sampler are separate handles — `TextureHandle` wraps a
+  pool, separate from textures). Bind it bindlessly through its `bindlessIndex`, as any other handle.
+  Texture and sampler are separate handles — `TextureHandle` wraps a
   `Texture2D.Handle`, `SamplerHandle` *is* a `SamplerState.Handle` (a plain typealias), and sampling
   is `TextureHandle.Sample(SamplerHandle, uv)` in the shader IDL. `Scene`
   exposes ready-made presets via `StandardSampler` (`kAnisoLinearWrap`, `kLinearClamp`).
