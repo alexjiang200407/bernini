@@ -301,7 +301,8 @@ and portability.
   - [x] GPU-Side Assertions
   - [ ] Focus-unit trace — `g_debugUnit` uniform, tagged ring buffer, pretty-printer; gives one agent's
     linear narrative across every pass.
-  - [ ] Buffer poisoning (`0xDEADBEEF` / sNaN) before each dispatch in debug builds.
+  - [x] Buffer poisoning (`0x7FBADBAD` — sNaN and an impossible index) before a pass that declares
+    a scratch output, in debug builds.
   - [ ] NaN/Inf scan pass — more important now that procedural settling is a solver.
   - [ ] Append buffer high-water marks — clamp writes, record attempted counts, assert above 80%.
   - [ ] Per-pass buffer hashing as a FrameGraph feature, to bisect to the first wrong pass in one run.

@@ -171,10 +171,11 @@ namespace bgl
 						"scene.instanceVisibility",
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
+					// Only the visible instances are written, at offsets the prefix sum decides, so
+					// a stale entry left over from the previous frame is a plausible draw.
+					.AddPoisonedBufferArg(
 						"scene.compactedInstances",
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+						BarrierSyncFlag::kComputeShader)
 					.AddBufferArg(
 						"compactedInstances.psoPrefixSumBuffer",
 						BarrierSyncFlag::kComputeShader,
