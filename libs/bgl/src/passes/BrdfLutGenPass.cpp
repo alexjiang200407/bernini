@@ -40,6 +40,15 @@ namespace bgl
 		if (m_Texture.IsNull())
 			throw GraphicsError("BRDF LUT texture could not be created");
 
+		auto srvDesc      = SrvDesc();
+		srvDesc.format    = c_Format;
+		srvDesc.dimension = TextureDimension::kTexture2D;
+		srvDesc.debugName = "BRDF LUT SRV";
+
+		m_Srv = m_ResourceManager->CreateSrv(m_Texture, srvDesc);
+		if (m_Srv.IsNull())
+			throw GraphicsError("BRDF LUT SRV could not be created");
+
 		auto rtvDesc      = RtvDesc();
 		rtvDesc.format    = c_Format;
 		rtvDesc.debugName = "BRDF LUT RTV";
@@ -112,6 +121,8 @@ namespace bgl
 
 		if (!m_Rtv.IsNull())
 			m_ResourceManager->DestroyRtv(m_Rtv, false);
+		if (!m_Srv.IsNull())
+			m_ResourceManager->DestroySrv(m_Srv, false);
 		if (!m_Texture.IsNull())
 			m_ResourceManager->DestroyTexture(m_Texture, false);
 

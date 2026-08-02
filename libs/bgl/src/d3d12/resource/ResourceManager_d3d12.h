@@ -1,22 +1,19 @@
 #pragma once
 #include "cmd/CommandQueue.h"
 #include "resource/Buffer_d3d12.h"
+#include "resource/DescriptorAllocator_d3d12.h"
 #include "resource/Dsv_d3d12.h"
 #include "resource/ReadbackBuffer_d3d12.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv_d3d12.h"
 #include "resource/Sampler_d3d12.h"
+#include "resource/Srv_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
 
 namespace bgl
 {
-	// Buffers and textures share the one shader-visible CBV_SRV_UAV heap: a slot's
-	// index is the bindless descriptor index the shader uses. RT/DS-only textures
-	// also take a slot (no SRV written) so every TextureHandle.idx is a heap index.
-	using CbvSrvUavSlot = std::variant<Buffer, Texture>;
-
 	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
 	// expected over one device. Exceeding it asserts; it is not a hard device limit.
 	constexpr uint32_t c_MaxRegisteredQueues = 8;
@@ -35,7 +32,9 @@ namespace bgl
 
 	enum class PendingType
 	{
-		kCbvSrvUav,
+		kInvalid,
+		kBuffer,
+		kSrv,
 		kRtv,
 		kDsv,
 		kTexture,
@@ -45,8 +44,13 @@ namespace bgl
 
 	struct PendingDeletion
 	{
-		PendingType type      = PendingType::kCbvSrvUav;
+		PendingType type      = PendingType::kInvalid;
 		uint32_t    slotIndex = 0xFFFFFFFF;
+
+		// Set only for kBuffer and kSrv, the two that occupy the shader-visible heap; null for every
+		// other type. A descriptor must outlive in-flight work exactly as the resource does, so it is
+		// handed back when the gate clears rather than at destroy time.
+		uint32_t descriptorIndex = 0xFFFFFFFF;
 	};
 
 	// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
@@ -107,6 +111,10 @@ namespace bgl
 		CreateTexture(wrl::ComPtr<ID3D12Resource> d3d12Texture, const TextureDesc& desc) noexcept;
 
 		[[nodiscard]]
+		SrvHandle
+		CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept override;
+
+		[[nodiscard]]
 		RtvHandle
 		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
 
@@ -115,6 +123,9 @@ namespace bgl
 
 		void
 		UnregisterQueue(ICommandQueue* queue) noexcept override;
+
+		void
+		DestroySrv(SrvHandle handle, bool deferred = true) noexcept override;
 
 		void
 		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
@@ -149,13 +160,6 @@ namespace bgl
 		bool
 		IsTextureCube(const TextureHandle& handle) const noexcept override;
 
-		[[nodiscard]] DescriptorHandle
-		ResolveDescriptor(const TextureHandle& handle) const noexcept override
-		{
-			// The shader indexes the descriptor heap with it, so the slot is already the descriptor.
-			return DescriptorHandle(handle.slot);
-		}
-
 		[[nodiscard]]
 		bool
 		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;
@@ -163,6 +167,10 @@ namespace bgl
 		[[nodiscard]]
 		bool
 		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidSrvHandle(const SrvHandle& handle) const noexcept override;
 
 		[[nodiscard]]
 		bool
@@ -207,7 +215,7 @@ namespace bgl
 		ID3D12DescriptorHeap*
 		GetCbvSrvUavHeap() const noexcept
 		{
-			return m_CbvSrvUavHeap.Get();
+			return m_CbvSrvUavDescriptors.GetD3D12Heap();
 		}
 
 		ID3D12DescriptorHeap*
@@ -253,19 +261,25 @@ namespace bgl
 		// Records a retired slot for deferred reclamation, appending it to the batch that shares the
 		// current gate (or opening a new batch when the gate has advanced).
 		void
-		RetireDeferred(PendingType type, uint32_t slotIndex) noexcept;
+		RetireDeferred(
+			PendingType type,
+			uint32_t    slotIndex,
+			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
 
-		wrl::ComPtr<ID3D12Device>         m_Device;
-		wrl::ComPtr<ID3D12DescriptorHeap> m_CbvSrvUavHeap;
+		wrl::ComPtr<ID3D12Device> m_Device;
+		DescriptorAllocator       m_CbvSrvUavDescriptors;
+		// Buffers and shader resource views are separate pools drawing descriptors from the one
+		// shader-visible heap the allocator owns. A texture is in neither -- only a view onto it is.
+		core::slot_vector<Buffer> m_Buffers;
+		core::slot_vector<Srv>    m_Srvs;
+
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
-		core::slot_vector<CbvSrvUavSlot>  m_CbvSrvUavSlots;
 		core::slot_vector<Sampler>        m_Samplers;
 
-		// RTV/DSV-only textures (no SRV): kept out of the shader-visible pool so they
-		// never consume a bindless descriptor slot. SRV textures live in
-		// m_CbvSrvUavSlots instead, where their slot index is the bindless index.
+		// Every texture, whatever it is used for. A texture owns storage and nothing else; the
+		// descriptor that makes one readable belongs to an Srv in m_Srvs.
 		core::slot_vector<Texture> m_Textures;
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;

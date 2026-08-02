@@ -258,6 +258,9 @@ namespace
 		DestroyReadbackBuffer(ReadbackBufferHandle, bool) noexcept override
 		{}
 		void
+		DestroySrv(SrvHandle, bool) noexcept override
+		{}
+		void
 		DestroyRtv(RtvHandle, bool) noexcept override
 		{}
 		void
@@ -266,6 +269,11 @@ namespace
 		void
 		CleanupExpiredResources() noexcept override
 		{}
+		SrvHandle
+		CreateSrv(TextureHandle, const SrvDesc&) noexcept override
+		{
+			return {};
+		}
 		RtvHandle
 		CreateRtv(TextureHandle, const RtvDesc&) noexcept override
 		{
@@ -342,10 +350,10 @@ namespace
 		{
 			return false;
 		}
-		DescriptorHandle
-		ResolveDescriptor(const TextureHandle&) const noexcept override
+		bool
+		ValidSrvHandle(const SrvHandle&) const noexcept override
 		{
-			return {};
+			return false;
 		}
 		bool
 		ValidSamplerHandle(const SamplerHandle&) const noexcept override

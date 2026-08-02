@@ -63,7 +63,12 @@ namespace bgl
 		std::string gpuCapturePath;
 
 		// Capacities for the graphics-owned descriptor heaps / resource pools.
+		//
+		// maxCbvSrvUavs sizes the shader-visible heap -- how many *descriptors* exist. maxBuffers and
+		// maxSrvs size the resource pools that draw from it, and must together fit inside it.
 		uint32_t maxCbvSrvUavs      = 1000;
+		uint32_t maxBuffers         = 500;
+		uint32_t maxSrvs            = 500;
 		uint32_t maxRtvs            = 8;
 		uint32_t maxDsvs            = 5;
 		uint32_t maxTextures        = 1000;

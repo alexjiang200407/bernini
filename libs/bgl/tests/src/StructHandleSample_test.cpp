@@ -61,6 +61,14 @@ TEST_CASE(
 	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
+	auto srvDesc      = bgl::SrvDesc();
+	srvDesc.format    = texDesc.format;
+	srvDesc.dimension = texDesc.dimension;
+	srvDesc.debugName = "Struct Handle Source SRV";
+
+	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	REQUIRE(resourceManager->ValidSrvHandle(srv));
+
 	// Deliberately not grey: a wrong channel order or a zeroed sample is visible in the result.
 	const uint8_t               texel[4] = { 255, 128, 0, 255 };
 	bgl::TextureSubresourceData sub{};
@@ -80,7 +88,7 @@ TEST_CASE(
 	const bgl::BufferHandle materials = resourceManager->CreateComputeBuffer(materialDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(materials));
 
-	const bgl::idl::TextureHandle stored{ resourceManager->ResolveDescriptor(texture) };
+	const bgl::idl::TextureHandle stored{ srv.descriptor };
 
 	auto outDesc         = bgl::ComputeBufferDesc();
 	outDesc.initialCount = 1;
@@ -158,5 +166,6 @@ TEST_CASE(
 	resourceManager->DestroyBuffer(outBuffer, false);
 	resourceManager->DestroyBuffer(materials, false);
 	resourceManager->DestroySampler(sampler, false);
+	resourceManager->DestroySrv(srv, false);
 	resourceManager->DestroyTexture(texture, false);
 }

@@ -120,6 +120,8 @@ namespace bgl
 
 			auto rmDesc               = ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;
+			rmDesc.maxBuffers         = opts.maxBuffers;
+			rmDesc.maxSrvs            = opts.maxSrvs;
 			rmDesc.maxRtvs            = opts.maxRtvs;
 			rmDesc.maxDsvs            = opts.maxDsvs;
 			rmDesc.maxTextures        = opts.maxTextures;

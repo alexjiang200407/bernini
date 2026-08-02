@@ -1,14 +1,13 @@
 #pragma once
-#include "resource/Texture.h"
+#include "resource/Srv.h"
 
 namespace bgl
 {
-	// The three precomputed image-based-lighting resources Forward_PBR samples. Each RHI handle's
-	// slot becomes a descriptor handle the shader samples through.
+	// The three precomputed image-based-lighting resources Forward_PBR samples.
 	struct EnvironmentMap
 	{
-		TextureHandle irradiance;  // cubemap
-		TextureHandle prefilter;   // cubemap (roughness mips)
-		TextureHandle brdfLut;     // 2D LUT
+		SrvHandle irradiance;  // cubemap
+		SrvHandle prefilter;   // cubemap (roughness mips)
+		SrvHandle brdfLut;     // 2D LUT
 	};
 }

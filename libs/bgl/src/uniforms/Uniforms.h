@@ -3,6 +3,7 @@
 #include "resource/Buffer.h"
 #include "resource/Sampler.h"
 #include "resource/Shader.h"
+#include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
 #include "uniforms/ReflectedLayout.h"
@@ -190,7 +191,7 @@ namespace bgl
 					{
 						if ((*this)[key].IsValid())
 						{
-							(*this)[key] = DescriptorHandle(handle.slot);
+							(*this)[key] = DescriptorHandle(handle.bindlessIndex);
 							return *this;
 						}
 					}
@@ -203,7 +204,7 @@ namespace bgl
 					GetType() == UniformType::kValue &&
 					m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.slot);
+					*this = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
@@ -218,7 +219,7 @@ namespace bgl
 				if (GetType() == UniformType::kValue &&
 				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.idx);
+					*this = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
@@ -228,16 +229,16 @@ namespace bgl
 			}
 
 			AccessorBase&
-			operator=(TextureHandle handle)
+			operator=(SrvHandle handle)
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.slot);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
 				core::throw_runtime_error(
-					"Accessor at offset {} cannot be assigned with texture handle",
+					"Accessor at offset {} cannot be assigned with SRV handle",
 					m_Offset);
 			}
 
@@ -246,7 +247,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.textureSlot);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.srvBindlessIndex);
 					return *this;
 				}
 

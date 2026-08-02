@@ -22,9 +22,18 @@ doc and a header disagree, trust the header, then fix this doc.
   `SharedRef`. Copy handles freely; they are values. Every handle is an `{ index, generation }`
   pair: the index locates the slot, and a `generation` counter guards against use-after-free —
   destroying a resource bumps the slot's generation so stale copies fail `Valid*Handle`. A null
-  handle has index `0xFFFFFFFF` (`IsNull()`). The slot resolves to a `DescriptorHandle` the shader
-  samples through — on D3D12 that handle *is* the descriptor-heap index, a second backend is free to
-  make it a native resource id — which keeps GPU resources out of the refcount machinery.
+  handle has index `0xFFFFFFFF` (`IsNull()`). Keeping GPU resources addressed this way keeps them out
+  of the refcount machinery.
+
+  **A slot is not a descriptor.** Beside it, a handle a shader can reach carries a `bindlessIndex` —
+  what must appear in a constant buffer to address the resource — stamped by the resource manager
+  that created it: a descriptor-heap index on D3D12, the pool slot Metal's dispatch rewrite looks the
+  resource up by. `DescriptorHandle` is constructible from that index and **not** from a
+  `core::slot_handle`; the two are equal today and the conversion is deleted so nothing comes to
+  depend on it.
+
+  **A `TextureHandle` has no bindless index.** A texture owns storage and nothing else; the numbers a
+  shader needs live on the `SrvHandle` that views it. See *Views are explicit* below.
 
   **Two handle layouts, one meaning.** `BufferHandle` and `TextureHandle` wrap a
   `core::slot_handle` (reached as `.slot.index` / `.slot.generation`); `RtvHandle`, `DsvHandle`, and
@@ -32,11 +41,28 @@ doc and a header disagree, trust the header, then fix this doc.
   `{ index, generation }` and both null-test through `IsNull()`, but the accessor spelling differs —
   do not assume one field name across handle families.
 
+* **Views are explicit, and a texture is not one.** `CreateTexture` allocates storage; it writes no
+  descriptor and returns a handle a shader cannot reach. `CreateSrv(TextureHandle, SrvDesc)` is what
+  makes a texture readable, exactly as `CreateRtv` makes one drawable, and the `SrvHandle` it returns
+  carries both numbers a shader may need:
+
+  | field | where it goes | D3D12 | Metal |
+  |---|---|---|---|
+  | `bindlessIndex` | a constant buffer | descriptor-heap index | the texture's pool slot |
+  | `descriptor` | GPU memory (a material's texture) | the same heap index | native `MTLResourceID` |
+
+  They are the same number only on D3D12, which is why they are separate fields of separate types —
+  `DescriptorHandle` exposes no accessor, so neither can be read where the other is meant.
+
+  **Destroying a texture does not destroy its views.** `DestroySrv` and `DestroyRtv` are separate
+  calls on the same gate, and a caller that created both releases both. `TextureUsage` is
+  descriptive: it tells the backend what the allocation must support, and no longer selects a pool.
+
 * **Samplers are descriptor-heap-only handles.** `CreateSampler(SamplerDesc)` returns a
   `SamplerHandle` (same `{idx, generation}` shape) but a sampler has **no backing GPU
   resource** — it owns only a slot in the shader-visible sampler heap (its own `maxSamplers`
-  pool, separate from textures). Bind it bindlessly: the slot resolves to a `DescriptorHandle` the
-  shader samples through. Texture and sampler are separate handles — `TextureHandle` wraps a
+  pool, separate from textures). Bind it bindlessly through its `bindlessIndex`, as any other handle.
+  Texture and sampler are separate handles — `TextureHandle` wraps a
   `Texture2D.Handle`, `SamplerHandle` *is* a `SamplerState.Handle` (a plain typealias), and sampling
   is `TextureHandle.Sample(SamplerHandle, uv)` in the shader IDL. `Scene`
   exposes ready-made presets via `StandardSampler` (`kAnisoLinearWrap`, `kLinearClamp`).
