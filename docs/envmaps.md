@@ -1,281 +1,282 @@
-# Environment Maps
+# Environment Maps — authoring, baking and consuming an environment
 
-One command turns a `.hdr` into everything the renderer needs:
+An environment is a sky and the image-based lighting derived from it. On disk it is **three
+containers**, not one file: a `.bsky`, a `.benvl`, and a `.benv` that names the pair. This document
+covers how they relate, how a source becomes them, and the authoring rules that still bite when a cube
+map arrives from somewhere else.
+
+**This document is a map, not a mirror.** It captures design choices, topology, and the non-obvious
+contracts — not full signatures. The header at each linked path is the source of truth; when this doc
+disagrees, trust the header, then fix this doc.
+
+---
+
+## Design Choices
+
+* **The environment family mirrors `.bmaterial`'s authoring/baked split.** A `.bsky` and a `.benvl`
+  hold `EnvMapRoute`s — a *source* under `textures_src/`, a *baked* map under `Textures/`, and the
+  source's size+mtime stamp as it measured at bake time. The same shape, the same staleness question,
+  and the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
+* **A `.benv` holds no pixels.** It names a `.bsky` and a `.benvl` by path. Composing by reference is
+  what lets a sky be re-authored without touching the lighting that minutes of convolution produced,
+  and what lets two environments share one sky. Either half may be empty.
+* **The three are separate files because they have different lifetimes.** Rotating a sky or sampling a
+  blurrier mip of it is a change a person makes and looks at immediately; re-convolving the lighting is
+  minutes of work that the same change need not trigger.
+* **Sources are float, shipped maps are `RGB9E5`.** The import writes `R32G32B32A32_SFLOAT` cubes into
+  `textures_src/` as the routed sources, and the bake packs each into `E5B9G9R9_UFLOAT_PACK32` under
+  `Textures/`. 4 bytes a texel, filterable everywhere without an optional feature — WebGPU core
+  `rgb9e5ufloat`, D3D12 `R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float`. Preferred over BC6H, whose 1 byte a
+  texel is unreachable on Apple GPUs; `R11G11B10` is the same size but bands in sky gradients, its blue
+  channel carrying only 5 mantissa bits.
+* **Baked maps are shared, not owned.** The name is content-addressed from the route, so two skies
+  routing the same source name one file. Nothing deletes a baked map implicitly; reclaiming orphans is
+  the whole-project mark and sweep in
+  [libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h),
+  which recognises them via `isBakedEnvMapName`.
+* **Exposure belongs to the maps, not to the scene.** An HDR environment's absolute scale is
+  arbitrary, so `bakeEnvLighting` derives an exposure from the irradiance it produced and stores it in
+  the `.benvl`. It has to be re-derived whenever the maps change, which is why it lives in the file.
+* **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
+  environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
+  not of any environment. bgl renders its own 256² `RG16_FLOAT` copy once at device init
+  ([libs/bgl/src/gfx/BrdfLut.cpp](libs/bgl/src/gfx/BrdfLut.cpp)), so there is no file to ship, to
+  configure, or to get out of step with the shader that samples it.
+
+## Interface Index
+
+### Containers
+
+| Type | File | Role |
+|---|---|---|
+| `BSky` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | One radiance route, plus how the backdrop presents it (`mipLevel`, `rotationY`) |
+| `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair and the exposure they were measured at |
+| `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | Paths to a `.bsky` and a `.benvl`; no pixels |
+| `EnvMapRoute` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | source + baked + stamp, the same shape as a material's channel route |
+
+### Operations
+
+| Header | Role |
+|---|---|
+| [libs/assetlib/include/assetlib/env_import.h](libs/assetlib/include/assetlib/env_import.h) | `importEnvironment` — one `.hdr` or float cube into the whole family, with selectable parts, cancellation and rollback. `environmentImportTargets` names what it *would* write |
+| [libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h) | `bakeSky` / `bakeEnvLighting`, the staleness checks, and `isBakedEnvMapName` for the prune |
+| [libs/assetlib/include/assetlib/envmap_bake.h](libs/assetlib/include/assetlib/envmap_bake.h) | The convolutions themselves: `equirectToCube`, `prefilterRadiance`, `irradianceSh`, `blurCube` |
+| [libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h) | `resolveEnvironment` — a `.benv` followed to decoded pixels. What the editor consumes |
+| [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
+| [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h), [benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h), [benv_io.h](libs/assetlib/include/assetlib/benv_io.h) | Serialize / load each container |
+
+## Topology
+
+```mermaid
+flowchart TD
+    HDR[".hdr or float cube"] -- "importEnvironment" --> SRC["textures_src/*.ktx2 (float sources)"]
+    SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Textures/*.ktx2 (RGB9E5, content-addressed)"]
+
+    SRC -- "routed by" --> BSKY[".bsky"]
+    SRC -- "routed by" --> BENVL[".benvl"]
+    BAKED -- "named by" --> BSKY
+    BAKED -- "named by" --> BENVL
+
+    BENV[".benv"] -- "composes" --> BSKY
+    BENV -- "composes" --> BENVL
+
+    BENV -- "resolveEnvironment (pixels)" --> EDITOR["editor::ApplyEnvironment"]
+    BENV -- "AcquireEnvironment (handles)" --> GAME["game::AssetManager"]
+
+    EDITOR -- "SetEnvironmentMap / SetSkyBox" --> VIEW["bgl::ISceneView"]
+    GAME -- "SetEnvironmentMap / SetSkyBox" --> VIEW
+    LUT["BrdfLut (device init)"] -- "no file" --> VIEW
+```
+
+## Risky / Non-obvious Method Contracts
+
+### `bgl::ISceneView`
+
+* **`SetEnvironmentMap` / `SetSkyBox`** — **@pre every handle is valid.** Both **throw** on an invalid
+  one; neither reads it as "absent". A `.benv` naming only a sky resolves to null lighting handles, so
+  binding them unconditionally is a crash rather than an unlit scene. Ask first — see `HasLighting` /
+  `HasSky` below, and `editor::ApplyEnvironment`, which guards both.
+* The prefilter chain must be **7 mips**. `MAX_REFLECTION_LOD = 6` in
+  [libs/bgl/shaders/src/forward/PbrShading.slang](libs/bgl/shaders/src/forward/PbrShading.slang), and
+  roughness is `mip / (mipLevels - 1)` — a different count silently remaps roughness rather than
+  failing.
+
+### `game::AssetManager`
+
+* **`AcquireEnvironment`** — @post pieces the `.benv` does not reference come back as invalid handles.
+  **@throws** when a container it *does* name has never been baked; that is a project error, not a
+  partial environment. Use `Environment::HasLighting()` and `HasSky()` before binding: they exist
+  because the scene throws, not because it tolerates.
+
+### `assetlib::importEnvironment`
+
+* **@post rolls back on failure and on cancel**, removing only files it *created* — one already on
+  disk was overwritten rather than made, and taking it would destroy whatever wrote it first.
+* **Baked maps are deliberately not rolled back.** Content-addressed and shared, so the map this
+  import wrote may be the one another environment already names. An orphan is the prune's business.
+* Requires an `.hdr` or a **float** cube. A baked `RGB9E5` map is not a valid source — the bake reads
+  `R32G32B32A32_SFLOAT` and refuses anything else.
+
+### `assetlib::resolveEnvironment`
+
+* Loads the **baked** maps, never the float sources. Resolving is a consumer operation, and a fallback
+  to sources would light the scene subtly differently from the shipping build. **@throws** if a
+  referenced asset was never baked.
+
+### `editor::ApplyEnvironment`
+
+* **@pre the render thread**, like everything touching a scene or a view.
+* Finds the data root by taking the `.benv`'s **parent's parent**, so an environment anywhere but
+  directly inside `Environments/` resolves its references against the wrong root.
+* **@post applying twice over one view leaks the first set's texture slots** unless the caller releases
+  what it returns. See `MaterialPreviewWindow::SetEnvironment`, which releases the previous set *after*
+  binding the new one.
+
+## Usage Sketch
+
+```cpp
+// Import: one HDRI into the whole family, cancellable, rolled back on failure.
+auto desc     = assetlib::EnvImportDesc();
+desc.dataRoot = "Project/Data";
+desc.source   = "forest_4k.hdr";
+desc.name     = "forest";
+
+const assetlib::EnvImportResult imported = assetlib::importEnvironment(desc, cancel);
+
+// Consume: follow the .benv to uploaded handles, and bind only what it actually has.
+auto assets = game::AssetManager(scene, "Project/Data");
+const auto env = assets.AcquireEnvironment(imported.environment);
+
+if (env.HasLighting())
+    view->SetEnvironmentMap({ env.irradiance, env.prefilter });
+if (env.HasSky())
+    view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
+
+view->SetExposure(env.exposure);
+```
+
+See [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp).
+
+From a command line, `--project` does the import and both bakes:
 
 ```bash
-assetlib_cli envmap forest.hdr --benv assets/forest.benv \
+assetlib_cli envmap forest.hdr -p Project/Data --name forest \
     --size 256 --skybox-size 256 --skybox-blur 0.15 --irradiance-size 128 \
     --mips 7 --samples 2048
 ```
 
-That takes about four seconds and replaces the CMFT procedure this document used to describe. What it
-writes is a single `.benv`, holding three maps — all **linear radiance**, all `E5B9G9R9_UFLOAT_PACK32`:
+In the editor, dropping a `.hdr` on the Content Explorer opens the same import; dropping a `.benv` on
+the material preview relights it.
 
-| Chunk | What it is | Resolution | Sampled by |
-|---|---|---|---|
-| prefilter | the GGX split-sum chain — one mip per roughness | 256², 7 mips | the specular lobe (`prefilterMap`) |
-| irradiance | the clamped-cosine convolution, via order-3 spherical harmonics | 128², 1 mip | the diffuse term (`irradianceMap`) |
-| skybox | the environment, defocused | 256², 1 mip | `SkyboxPass` (`cubeTex`) |
+---
 
-Plus the **exposure** those maps were measured at, in the header.
+## Sizing
 
-**Each has its own size, because the three are looked at differently.** The prefilter is sampled
+Each map has its own size, because the three are looked at differently. The prefilter is sampled
 through a roughness lobe that blurs it, so 256² is already generous; the irradiance is band-limited to
 `l = 2`, so 128² is more than the signal contains. The skybox is the one seen *directly*, at viewport
 resolution, and wants the most.
 
-But not more than the source can supply. An equirectangular `.hdr` gives `width / 4` texels across a
-face's 90°, so `forest.hdr` at 1024×512 carries about 256 -- and a 512² face is already interpolating.
-Going further buys smoothness, not detail: raising the skybox from 256² to 512² did not move a single
-golden image. Size it from the source, not from the screen.
+**But not more than the source can supply.** An equirectangular `.hdr` gives `width / 4` texels across
+a face's 90°, so a 1024×512 source carries about 256 — and a 512² face is already interpolating. Going
+further buys smoothness, not detail: raising the skybox from 256² to 512² did not move a single golden
+image. Size it from the source, not from the screen.
 
 ### The skybox is deliberately defocused
 
-`--skybox-blur` convolves it with a GGX lobe; the shipped map uses 0.15. This is an effect, not a
+`--skybox-blur` convolves it with a GGX lobe; 0.15 is the shipped value. This is an effect, not a
 concession. A material editor wants the eye on the material, and a soft backdrop reads as depth of
 field where a sharp one competes for attention. It also decouples the background from the source's
-resolution, so the ceiling above stops showing up as pixelation.
+resolution, so the ceiling above stops showing as pixelation.
 
-0.08 leaves the fence and path legible enough to distract. 0.35 flattens the environment to one wash.
+0.08 leaves a fence and path legible enough to distract. 0.35 flattens the environment to one wash.
 0.15 keeps the colour variation that makes it read as a real place, out of focus.
 
-**Only the skybox.** The prefilter and the irradiance are convolved from the sharp projection, so
-nothing about the background reaches the lighting: the shipped map keeps the source's full 1092 peak in
-prefilter mip 0, while the skybox's is crushed to 91. Blurring the maps that light the scene would be
-the gamma mistake in another costume.
+**Only the skybox.** The prefilter and the irradiance convolve the sharp projection, so nothing about
+the background reaches the lighting — the shipped map keeps the source's full 1092 peak in prefilter
+mip 0 while the skybox's is crushed to 91. Blurring the maps that light the scene would be the gamma
+mistake in another costume.
 
-And because the blur removes everything above the face's Nyquist, the skybox wants *fewer* texels, not
-more -- 256² is indistinguishable from 512² here, at half the size.
-
-The split-sum BRDF table is not among them and is not an asset at all. It is the same integral taken
-against a *white* environment, which leaves a function of only `dot(N,V)` and roughness — a property
-of the shading model rather than of any environment. bgl renders its own 256² `RG16_FLOAT` copy once
-at device init (`libs/bgl/src/gfx/BrdfLut.cpp`), so there is no file to ship, to configure, or to get
-out of step with the shader that samples it.
-
-**One file rather than three, because the maps are only valid together.** The prefilter and the
-irradiance are the specular and diffuse convolutions of the *same* radiance in the same units; a pair
-from different sources disagrees about how bright the world is, and does so quietly, because each looks
-plausible alone. Exposure is in the header for the same reason: an HDR environment's absolute scale is
-arbitrary, so exposure belongs to the maps and has to change whenever they do. Three config keys and a
-fourth for exposure let all of that drift; one key cannot.
-
-Each chunk is a complete `.ktx2`, so `ktxinfo`, `ktx compare` and `ktx2check` still work on one carved
-out of the file. Those are the tools that diagnose a bad environment map, and they are worth more than
-the bytes a bespoke layout would save. It also leaves the stored format a per-chunk `vkFormat`, so a
-desktop-only BC6H bake (4× smaller again, unavailable on Apple GPUs) needs no container change.
+Because the blur removes everything above the face's Nyquist, a blurred skybox wants *fewer* texels,
+not more: 256² is indistinguishable from 512² at half the size.
 
 ---
 
-# Appendix: the CMFT procedure this replaced
+## Handling a cube map from elsewhere
 
-Everything below documents generating these maps by hand in CMFT Studio, which `assetlib_cli envmap`
-now does. It is kept because two of its warnings were expensive to find and still apply to any
-externally produced cube map you might be handed -- and because they explain what was wrong with the
-maps this engine shipped before.
+`importEnvironment` reads the `.hdr` directly and generates at the resolution asked for, so neither
+trap below can be sprung by the normal path. They still apply to any externally produced cube map,
+and both were expensive to diagnose.
 
-The baker makes most of it moot: it reads the `.hdr` directly, so there is no gamma field to set
-wrongly; it generates at the resolution you ask for, so nothing is resampled afterwards; and it emits
-the standard cube parameterisation, so there is no edge fixup to double-correct.
+### Every gamma field must be 1.0
 
-## Gamma: set every gamma field to 1.0
+External bakers (CMFT among them) expose *gamma before processing* and *gamma after processing* on
+both the radiance and irradiance filters. **All of them must be 1.0.**
 
-CMFT exposes a **gamma before processing** and a **gamma after processing** field on *both* the
-radiance and the irradiance filter. **All four must be 1.0.** This is the single easiest way to
-silently ruin these maps, so it gets its own section.
+* **Before** linearizes a gamma-encoded input. Filtering is a weighted average of radiance and is only
+  physically valid in linear space — but a `.hdr` is *already* linear radiance. There is nothing to
+  undo.
+* **After** re-encodes for display or LDR storage. Our output is float, consumed as linear radiance;
+  the engine tone maps (AgX) and sRGB-encodes at the end of the frame. There is nothing to apply.
 
-The two fields exist for a source that is *not* linear:
+Set either and you distort physical radiance that the BRDF then treats as physical. The failure is
+quiet, because the result still looks like a plausible environment map:
 
-* **Gamma before processing** linearizes a gamma-encoded input. Filtering is a weighted *average* of
-  radiance and is only physically valid in linear space, so a sRGB-encoded PNG must be linearized
-  first. **A `.hdr` is already linear radiance — there is nothing to undo.**
-* **Gamma after processing** re-encodes the result for display or for storage in an LDR file. **Our
-  output is float, consumed as linear radiance by the shader**; the engine tone maps (AgX) and
-  sRGB-encodes at the very end of the frame. There is nothing to apply.
+* **Highlights are crushed.** 2.2 on both fields compounds to ~4.8 and took a real sun peak of **833
+  down to 7.5** — the entire HDR range the specular lobe feeds on.
+* **The irradiance goes flat.** Gamma pushes everything toward 1.0, collapsing the contrast between
+  bright sky and dark ground (a real up/down ratio of ~6× measured as ~1.2×), so diffuse barely
+  responds to the surface normal.
+* Together those give a distinctive symptom: the diffuse term is directionless and the specular term is
+  the only view-dependent one left, so **the lighting appears to follow the camera** as you orbit.
 
-Set either one and you are distorting physical radiance values that the BRDF then treats as physical.
-The failure is quiet, because the result still *looks* like a plausible environment map:
+If a render is too bright that is **exposure**, not gamma. `ISceneView::SetExposure` is a tone knob and
+costs nothing; reaching for gamma to dim a map destroys data.
 
-* Highlights are crushed. A gamma of 2.2 on both fields compounds to ~4.8 and took a real sun peak of
-  **833 down to 7.5** — the entire HDR range that the specular lobe feeds on, gone.
-* The irradiance map goes **flat**. Gamma pushes everything toward 1.0, so the contrast between the
-  bright sky and the dark ground collapses (a real up/down ratio of ~6× measured as ~1.2×). Diffuse
-  then barely responds to the surface normal.
-* Together those produce a distinctive symptom: because the diffuse term is directionless and the
-  specular term is the only view-dependent one left, **the lighting appears to follow the camera** as
-  you orbit.
+### Edge fixup must be off
 
-If the render is too bright, that is **exposure**, not gamma. Use `ISceneView::SetExposure` — it is a
-tone knob and costs nothing. Reaching for gamma to dim a map destroys data.
-
----
-
-## Import the source (.hdr file)
-![alt text](./images/envmaps-1.png)
-
-**Notes**
-- Do not tonemap the skybox. The source must stay linear, unclamped HDR.
-
-## Generate the Radiance Texture (`pmrem`)
-
-![alt text](./images/envmaps-2.png)
-
-**Options**
-
-- **Edge Fixup -> None** (see below — `Warp` double-corrects and creases the seams)
-- Disable "Use OpenCL" option
-- **Gamma before / after processing -> 1.0** (see above)
-- Set the resolution to what you intend to ship; do not resize afterwards (see below)
-- Set CPU cores depending on your Computer Specifications
-
-**Click Process**
-
-- Wait a while
-- It may stall. If that is case Kill the process using task manager and restart
-
-**Modify LOD**
-- Modify LOD
-
-**Click Save**
-
-- File Type: **ktx** -- `ktx` reads it and DDS it does not; the conversion below starts there
-- Output Type: Cubemap
-- Format RGBA32F -- an intermediate, converted to RGB9E5 below
-- Then click **Save** again at the bottom
-
-The shader assumes a **7-mip** chain (`MAX_REFLECTION_LOD = 6` in
-[PbrShading.slang](../libs/bgl/shaders/src/forward/PbrShading.slang)): mip 0 is roughness 0, mip 6 is
-roughness 1. A chain with a different mip count silently remaps roughness.
-
-### Edge Fixup must be None
-
-CMFT's `Warp` fixup stretches each face's texel centres outward — `u' = a·u³ + u` with
-`a = n²/(n-1)³` — so the outermost one lands exactly on the face edge. That is a correction for
-hardware that cannot filter across a cube seam. **D3D12 and WebGPU both do it in hardware**, always
-on, so `Warp` gets applied twice: content near a border ends up displaced by up to half a texel, in
-opposite directions on the two faces sharing it, and the seam shows as a bright crease.
+CMFT's `Warp` fixup stretches each face's texel centres outward so the outermost lands exactly on the
+edge — a correction for hardware that cannot filter across a cube seam. **D3D12, Metal and WebGPU all
+do it in hardware**, always on, so `Warp` is applied twice: content near a border ends up displaced by
+up to half a texel, in opposite directions on the two faces sharing it, and the seam shows as a bright
+crease.
 
 The displacement is a fraction of a *texel*, so its angular size scales with the mip — about 0.04° at
-1024² but 2.8° at the 16² roughness-1 mip. That is why it appears as "seams only at roughness 1"
-rather than as a uniform problem, and why it is easy to live with for a long time before diagnosing.
+1024² but 2.8° at the 16² roughness-1 mip. That is why it appears as "seams only at roughness 1" rather
+than a uniform problem, and why it survives a long time before being diagnosed.
 
 A map that has it is recognisable without the source: its border texels are **bitwise identical** to
-their partners across every seam, which is only possible if both faces sample the exact same
-direction. A correctly generated map has them roughly one texel apart, like any other neighbours.
+their partners across every seam, which is only possible if both faces sample the exact same direction.
+A correctly generated map has them roughly one texel apart, like any other neighbours.
 
-## Generate the Irradiance Texture (`iem`)
+### Do not resample a cube map to resize it
 
-![alt text](./images/envmaps-3.png)
+`ktx create --width/--height`'s resampling kernel is wider than the output texel, so at a face border it
+reaches past the edge and clamps — and the two faces sharing that edge clamp to different data. A
+correct cube map has each border texel *equal* to its partner across the seam; resizing 1024 → 256 that
+way took a 0.00% mismatch to **32% mean, 178% peak**, which reads on a mirror surface as bright lines
+tracing the cube's edges and corners.
 
-**Options**
-
-- **Gamma before / after processing -> 1.0** (see above)
-- Modify resolution depending on needs. 128 is good enough
-
-**Click Process**
-
-- Wait a while
-
-**Click Save**
-
-- File Type: **ktx** -- `ktx` reads it and DDS it does not; the conversion below starts there
-- Output Type: Cubemap
-- Format RGBA32F -- an intermediate, converted to RGB9E5 below
-- Then click **Save** again at the bottom
-
-## Generate the Skybox (`skybox.ktx2`)
-
-The background is the environment itself, **unfiltered** — so this one runs no filter at all. Import
-the `.hdr`, set the output face size, and save; do not press Process.
-
-**Options**
-
-- Output Type: Cubemap, face size 512
-- **Edge Fixup -> None**, as above
-- No tonemapping, no gamma — the sky is linear HDR like everything else here
-
-Only one mip is needed: `SkyboxPass` samples an explicit `SkyboxDesc::mipLevel`, which defaults to 0.
+Downsampling a cube face correctly needs an exact box average that never reaches past the border,
+*followed by* averaging each matched edge pair and each 3-way corner. Generating at the target
+resolution avoids the question, which is what the importer does.
 
 ---
 
-## Convert to RGB9E5
+## Verifying
 
-CMFT writes `RGBA32F`, which is 16 bytes a texel and far more than radiance needs. Ship
-`E5B9G9R9_UFLOAT_PACK32` instead: 4 bytes a texel, a 5-bit exponent shared across a 9-bit mantissa per
-channel. It is filterable everywhere without an optional feature — WebGPU core `rgb9e5ufloat`, D3D12
-`R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float` — which is why it is preferred over BC6H, whose 1 byte a
-texel is unreachable on Apple GPUs. `R11G11B10` is the same size but bands in sky gradients, its blue
-channel carrying only 5 mantissa bits.
+Each baked map is a complete `.ktx2`, so `ktxinfo`, `ktx compare` and `ktx2check` work on it directly —
+those are the tools that diagnose a bad environment map.
 
-**Generate at the resolution you intend to ship** — set it in CMFT, in the "Modify resolution" field,
-and let the conversion below change only the format. Then `ktx` never resamples, and the step that
-follows is spatially neutral:
+`assetlib_cli describe` reads the containers themselves: a `.bsky` or `.benvl` reports its routes, the
+baked map each names, and whether the bake is stale against its source; a `.benv` reports the pair it
+composes and whether those files are there.
 
 ```bash
-ktx2ktx2 pmrem_cmft.ktx                  # CMFT writes KTX1; everything below needs KTX2
-ktx extract --all pmrem_cmft.ktx2 ex/    # names them <prefix>_level<L>_face<F>.exr,
-                                         # which is also the order ktx create wants
-FILES=$(for L in 0 1 2 3 4 5 6; do for F in 0 1 2 3 4 5; do echo ex/output_level${L}_face${F}.exr; done; done)
-
-ktx create --format E5B9G9R9_UFLOAT_PACK32 --cubemap --levels 7 \
-           --assign-tf linear --assign-primaries bt709 $FILES pmrem.ktx2
-ktx deflate --zstd 19 pmrem.ktx2 pmrem.ktx2
+assetlib_cli describe Data/Environments/forest.benv -d Data
+assetlib_cli describe Data/Sky/forest.bsky -d Data
+assetlib_cli refs -d Data Textures/forest_sky.ktx2   # what holds a baked map alive
 ```
 
-`iem.ktx2` and `skybox.ktx2` are the same, with `--levels 1` and the six `output_face<F>.exr` that a
-single-level `extract --all` produces. The zstd pass is worth taking: it is transparent to the loader
-(`ktxTexture2_CreateFromNamedFile` inflates it) and RGB9E5 compresses far better than float32, whose
-low mantissa bits are incompressible noise.
-
-Two things that look like they would work and do not:
-
-* **Do not resize with `ktx create --width/--height`.** Its resampling kernel is wider than the
-  output texel, so at a face border it reaches past the edge and clamps — and the two faces sharing
-  that edge clamp to different data. A correct cube map has each border texel *equal* to its partner
-  across the seam (the CMFT source measures 0.00% mismatch at every mip); resizing 1024 → 256 this way
-  took that to **32% mean, 178% peak**, which reads on a mirror surface as bright lines tracing the
-  cube's edges and corners. Downsampling a cube face at all needs an exact box average (never reaching
-  past the border) *followed by* averaging each matched edge pair and each 3-way corner — which is
-  what CMFT's own edge fixup does, and why generating at the target resolution is the easy path.
-* **Do not regenerate the mip chain with `--generate-mipmap`.** Each `pmrem` mip is a
-  roughness-specific convolution, not a box filter of the one above it; a mipmap generator would
-  silently replace the prefilter with a blur.
-
-Seam continuity is worth checking whenever these files are rebuilt, because it fails exactly the way
-everything else here does — quietly, and only on the shiniest material in the scene.
-
----
-
-## Verify before you ship them
-
-These maps fail *quietly* — a wrong one still renders a plausible-looking image, and the bug surfaces
-much later as "the lighting looks odd". Check them. All three numbers are cheap to compute and each
-catches a different mistake:
-
-1. **`pmrem`'s mean radiance is the same at every mip.** A prefilter mip is a normalized weighted
-   average of the same environment, so blurring moves energy around but cannot create it. A mean that
-   *climbs* with roughness means the filter is not normalizing (the classic bug is dividing by the
-   sample count instead of by `sum(NdotL)`), and the roughness-1 specular will be far too bright.
-2. **That mean matches the source `.hdr`'s solid-angle-weighted mean.** If it doesn't, a gamma is on.
-   Cube texels do not have equal solid angle — weight by `(1 + u² + v²)^-1.5` or the number is wrong.
-3. **`iem`'s mean equals `pmrem`'s**, and its up/down face ratio is several times (not ~1×). This is
-   the check that the two halves agree, and the one that catches a flattened irradiance.
-
-For `forest.hdr` (mean 0.777, max 832.7) a correct pair measures:
-
-```
-pmrem   mean 0.781 at every mip (mip0 max ~177 -- HDR peak survives)
-iem     mean 0.781, up/down 6.26x
-```
-
-## Exposure
-
-An HDR environment's absolute scale is arbitrary, so **exposure is a property of the environment** and
-must be reset whenever you change these maps. AgX places scene-linear `0.18` at middle grey, so:
-
-> `exposure = 0.18 / L`, where `L` is the radiance an 18% grey surface reflects in the environment
-> (i.e. `0.18 x iem_mean`).
-
-For `forest.hdr` that gives `0.18 / (0.96 x 0.781 x 0.18)` ≈ **1.33**. Set it with
-`ISceneView::SetExposure` (per-view — see [ISceneView.h](../libs/bgl/include/bgl/ISceneView.h)), or
-pass `--exposure` to `bgl_base` to try values without a rebuild.
+**Maintenance note.** The tables above are this document's load-bearing part, and their file links rot
+silently if files move. Re-check them whenever the environment file layout changes.
