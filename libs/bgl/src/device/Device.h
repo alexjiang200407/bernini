@@ -95,12 +95,12 @@ namespace bgl
 			bool                              enableDebug) const = 0;
 
 		[[nodiscard]]
-		virtual UniformsRef
+		virtual Uniforms
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 			const noexcept = 0;
 
 		[[nodiscard]]
-		virtual UniformsRef
+		virtual Uniforms
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept = 0;
 	};

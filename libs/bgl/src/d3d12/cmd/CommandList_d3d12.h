@@ -152,7 +152,7 @@ namespace bgl
 
 		// Uploads the uniform bytes to a transient CBV and binds it.
 		void
-		BindUniforms(const IUniforms& uniforms, bool compute) noexcept;
+		BindUniforms(const Uniforms& uniforms, bool compute) noexcept;
 
 		// Applies the bound MeshletState (viewport/scissor/targets/PSO/root sig/uniforms)
 		void

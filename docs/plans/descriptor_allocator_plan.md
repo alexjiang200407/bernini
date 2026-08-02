@@ -45,18 +45,10 @@ ResolveDescriptor(const TextureHandle& handle) const noexcept = 0;
 backend's business: a descriptor-heap index on D3D12, the native resource id on Metal."* Both
 backends implement it and `Scene.cpp:878,940` calls it.
 
-**The two paths need two seams, not one.** An earlier draft of this section read the opposite — that
-widening `ResolveDescriptor` to buffers and samplers would cover both, and that a second seam would
-give one contract two names. Implementing it disproved that. The paths ask different questions:
-
-| | Question | D3D12 | Metal |
-|---|---|---|---|
-| Stored in GPU memory | what value does the GPU dereference? | descriptor index | native `MTLResourceID` |
-| Bound through a constant buffer | what value does the *encoder* look the resource up by? | descriptor index | **pool slot** |
-
-They coincide on D3D12, which is why one seam looked sufficient. On Metal they cannot: the cbuffer
-field is rewritten at dispatch, and the rewrite finds the resource by pool slot
-(`GetBufferBySlotIndex` and friends) — hand it a native id and there is nothing to look up.
+**So this plan must not add a second seam.** The original design proposed
+`GetBindlessIndex(BufferHandle|TextureHandle|SamplerHandle) -> uint32_t`; adding it now would give one
+contract two names, which is the very thing the seam exists to prevent. What is missing is not a new
+seam but its *reach*: `ResolveDescriptor` covers textures only, and only on the stored-in-memory path.
 
 ### Where the identity still lives
 
@@ -128,34 +120,34 @@ Unchanged since the first survey, and all still present:
 
 ## 2. Design
 
-### The constant-buffer seam is `IUniforms::ResolveBindless`
+### The seam is `ResolveDescriptor`, widened
 
-The uniform mirror is where a handle becomes a number, so the seam belongs on the mirror:
+No new virtual. `ResolveDescriptor` gains the two overloads it lacks, so the constant-buffer path can
+ask the same question the stored-in-memory path already asks:
 
 ```cpp
-[[nodiscard]] virtual DescriptorHandle ResolveBindless(const BufferHandle&)  const noexcept = 0;
-[[nodiscard]] virtual DescriptorHandle ResolveBindless(const SamplerHandle&) const noexcept = 0;
-[[nodiscard]] virtual DescriptorHandle ResolveBindless(const TextureHandle&) const noexcept = 0;
+[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const BufferHandle&)  const noexcept = 0;
+[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const SamplerHandle&) const noexcept = 0;
 ```
 
-`Uniforms` therefore splits: `IUniforms` keeps the layout tree and the flat byte mirror, and each
-backend derives a `Uniforms` that answers these three. D3D12 returns the descriptor index its
-allocator handed out; Metal returns the pool slot, which is what its dispatch rewrite looks the
-resource up by. `IDevice::CreateUniforms` becomes the factory, and the mirror becomes ref-counted
-(`UniformsRef`) like every other RHI object, because a polymorphic type cannot live by value in the
-kernel maps.
+D3D12 returns the descriptor index its allocator handed out. **Metal returns the slot index
+unchanged**, which is what its dispatch rewrite already expects to find, so Metal's behaviour does not
+change at all — it keeps reading a slot index out of the cbuffer and patching it to a native value at
+record time.
 
-**Rejected: give `Uniforms` a `ResourceManagerRef` and call `ResolveDescriptor`.** It was implemented
-(#229) and it works, but it makes the backend-agnostic mirror depend on the resource manager to
-answer a question the manager is not the authority on — Metal's answer is "the slot", which needs no
-manager at all. It also forces `ResolveDescriptor` to mean two different things depending on which
-path called it.
+That asymmetry is the point rather than a wart: `ResolveDescriptor` means "the value this backend
+wants in GPU-visible memory for this handle", and for a backend that patches later, that value is the
+slot. `DescriptorHandle` is eight bytes and Metal already overwrites all eight at dispatch
+(`DescriptorHandle::FromNative`), so nothing needs to widen.
 
 ### Resolve eagerly, or patch at flush — retaken
 
-Two ways to get the right number into the block, and the first plan's answer no longer holds:
+`Uniforms::operator=` is where a handle becomes a number and it has no ResourceManager: it is built
+from a pipeline and its `AccessorBase` carries only `(m_Data, offset, node)`. Two ways out, and the
+first plan's answer no longer holds:
 
-1. **Resolve eagerly.** `operator=` resolves through the backend and writes the final value.
+1. **Resolve eagerly.** `Uniforms` holds a `ResourceManagerRef` and `operator=` calls
+   `ResolveDescriptor`. One virtual call per assignment.
 2. **Resolve at record time.** `operator=` writes the slot and the backend patches the block when it
    is flushed.
 
@@ -171,12 +163,12 @@ time, because nothing there knows which encoder will use the block.
 (2) for D3D12 means building that reflection a second time to solve a problem that is not about
 performance.
 
-The two backends therefore resolve at different moments, which is exactly what the split mirror is
-for: each `ResolveBindless` says what its own backend needs and neither has to know about the other.
+The two backends therefore resolve at different moments, which is exactly what a seam is for. Write
+it down where the seam is declared, or the next reader will "fix" the asymmetry.
 
-Consequence to accept: `ResolveBindless` is called from scene-update code. Reads in the manager are
-already documented as lockless (fixed-capacity pools, storage never moves), so D3D12's lookup follows
-the same rule and takes no lock.
+Consequence to accept: `ResolveDescriptor` is called from scene-update code. Reads in the manager are
+already documented as lockless (fixed-capacity pools, storage never moves), so this lookup follows the
+same rule and takes no lock.
 
 ### The allocator
 
@@ -214,16 +206,14 @@ half-migrated at a commit boundary.
   macOS build. This is what made the pre-rebase #156 unlandable. The test must be compiled only for
   the D3D12 backend.
   *Gate:* new unit tests in `bgl_tests`; **and `just build` green on both a D3D12 and a Metal preset**.
-* **D2 — split the mirror.** `Uniforms` becomes `IUniforms` plus a `Uniforms` per backend, both
-  answering `ResolveBindless` with the slot index the mirror writes today. `IDevice::CreateUniforms`
-  returns a `UniformsRef`, and the kernel maps hold one. A pure seam: nothing the GPU sees changes,
-  and the two implementations are identical until D4 makes them differ.
-  *Gate:* `bgl_tests` green on both backends, including a test that drives a non-identity
-  `ResolveBindless` through the accessor — the identity ones cannot tell the hook from a raw slot.
-* **D3 — move the remaining constant-buffer call sites onto a seam.** The scene buffers
-  (`PackedBuffer.h`, `RangeBuffer.h`, `EntryBuffer.h`) stop constructing `DescriptorHandle` from a
-  slot. The `DescriptorHandle(core::slot_handle)` constructor is deleted, which is what makes the
-  migration checkable — anything left behind fails to compile.
+* **D2 — widen `ResolveDescriptor` to buffers and samplers, returning what the identity returns
+  today.** D3D12 returns `handle.slot.index`; Metal returns the same. A pure seam: every call site can
+  migrate to it before the number behind it changes.
+  *Gate:* `bgl_tests` green on both backends; no golden image moves.
+* **D3 — move the constant-buffer call sites onto the seam.** `Uniforms` gains its
+  `ResourceManagerRef`; the eight sites in § 1 stop constructing `DescriptorHandle` from a slot. The
+  `DescriptorHandle(core::slot_handle)` constructor is deleted, which is what makes the migration
+  checkable — anything left behind fails to compile.
   *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
   diff is a bug).
 * **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` take an index

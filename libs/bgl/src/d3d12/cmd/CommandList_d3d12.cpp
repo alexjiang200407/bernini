@@ -570,7 +570,7 @@ namespace bgl
 
 			for (const auto& [name, uniforms] : kernel.uniforms)
 			{
-				BindUniforms(*uniforms.Get(), /*compute*/ false);
+				BindUniforms(uniforms, /*compute*/ false);
 			}
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -581,7 +581,7 @@ namespace bgl
 				BindConstantData(
 					&handle,
 					sizeof(handle),
-					it->second->GetRootParamIndex(),
+					it->second.GetRootParamIndex(),
 					/*compute*/ false);
 			}
 #endif
@@ -665,7 +665,7 @@ namespace bgl
 
 		for (const auto& [name, uniforms] : kernel.uniforms)
 		{
-			BindUniforms(*uniforms.Get(), /*compute*/ true);
+			BindUniforms(uniforms, /*compute*/ true);
 		}
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -681,7 +681,7 @@ namespace bgl
 			BindConstantData(
 				&handle,
 				sizeof(handle),
-				it->second->GetRootParamIndex(),
+				it->second.GetRootParamIndex(),
 				/*compute*/ true);
 		}
 #endif
@@ -729,7 +729,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::BindUniforms(const IUniforms& uniforms, bool compute) noexcept
+	CommandList::BindUniforms(const Uniforms& uniforms, bool compute) noexcept
 	{
 		BindConstantData(
 			uniforms.Data(),

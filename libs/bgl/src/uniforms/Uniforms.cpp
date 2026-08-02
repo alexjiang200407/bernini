@@ -242,31 +242,31 @@ namespace bgl
 
 	}
 
-	IUniforms::Accessor
-	IUniforms::operator[](std::string_view name)
+	Uniforms::Accessor
+	Uniforms::operator[](std::string_view name)
 	{
-		return Accessor(this, m_Buffer.data(), 0, m_Root.get())[name];
+		return Accessor(m_Buffer.data(), 0, m_Root.get())[name];
 	}
 
-	IUniforms::Accessor
-	IUniforms::operator[](uint32_t idx)
+	Uniforms::Accessor
+	Uniforms::operator[](uint32_t idx)
 	{
-		return Accessor(this, m_Buffer.data(), 0, m_Root.get())[idx];
+		return Accessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	IUniforms::ConstAccessor
-	IUniforms::operator[](std::string_view name) const
+	Uniforms::ConstAccessor
+	Uniforms::operator[](std::string_view name) const
 	{
-		return ConstAccessor(this, m_Buffer.data(), 0, m_Root.get())[name];
+		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[name];
 	}
 
-	IUniforms::ConstAccessor
-	IUniforms::operator[](uint32_t idx) const
+	Uniforms::ConstAccessor
+	Uniforms::operator[](uint32_t idx) const
 	{
-		return ConstAccessor(this, m_Buffer.data(), 0, m_Root.get())[idx];
+		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	IUniforms::IUniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName)
+	Uniforms::Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 
@@ -280,7 +280,7 @@ namespace bgl
 		m_Buffer.resize(entry.size, std::byte{ 0 });
 	}
 
-	IUniforms::IUniforms(IComputePipeline const* pipeline, std::string_view cbufferName)
+	Uniforms::Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
 
@@ -295,7 +295,7 @@ namespace bgl
 	}
 
 	std::unique_ptr<detail::UniformsNode>
-	IUniforms::BuildNode(const ReflectedLayout& layout)
+	Uniforms::BuildNode(const ReflectedLayout& layout)
 	{
 		switch (layout.kind)
 		{

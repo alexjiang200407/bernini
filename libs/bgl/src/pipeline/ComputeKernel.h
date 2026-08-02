@@ -16,13 +16,13 @@ namespace bgl
 		ComputeKernel&
 		operator=(ComputeKernel&&) noexcept = default;
 
-		core::SharedRef<IComputePipeline>            pipeline;
-		std::unordered_map<std::string, UniformsRef> uniforms;
+		core::SharedRef<IComputePipeline>         pipeline;
+		std::unordered_map<std::string, Uniforms> uniforms;
 
-		IUniforms&
+		Uniforms&
 		operator[](const std::string& cbuffer)
 		{
-			return *uniforms.at(cbuffer).Get();
+			return uniforms.at(cbuffer);
 		}
 
 		void

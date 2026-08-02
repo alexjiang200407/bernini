@@ -102,7 +102,7 @@ namespace bgl
 
 		void
 		BindSceneBuffers(
-			IUniforms&                   uniforms,
+			Uniforms&                    uniforms,
 			std::span<const SceneBuffer> bindings,
 			const PassContext&           resources)
 		{

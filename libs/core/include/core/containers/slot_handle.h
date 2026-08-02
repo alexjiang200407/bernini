@@ -26,10 +26,6 @@ namespace core
 			return !(*this == other);
 		}
 
-		explicit
-		operator bool() const noexcept
-		{
-			return !is_null();
-		}
+		operator bool() const noexcept { return !is_null(); }
 	};
 }
