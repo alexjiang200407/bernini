@@ -305,6 +305,12 @@ namespace
 			std::abort();
 		}
 
+		uint64_t
+		GetBufferByteSize(BufferHandle) const noexcept override
+		{
+			return 0;
+		}
+
 		TextureDesc
 		GetTextureDesc(TextureHandle) const noexcept override
 		{

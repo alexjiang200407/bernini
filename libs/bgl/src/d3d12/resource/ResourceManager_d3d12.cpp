@@ -717,6 +717,12 @@ namespace bgl
 		return m_Buffers[handle.slot];
 	}
 
+	uint64_t
+	ResourceManager::GetBufferByteSize(BufferHandle handle) const noexcept
+	{
+		return GetBuffer(handle).GetDesc().byteSize;
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
