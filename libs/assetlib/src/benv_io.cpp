@@ -64,19 +64,7 @@ namespace assetlib
 	void
 	saveEnv(const BEnv& env, const std::filesystem::path& path)
 	{
-		const auto bytes = serializeEnv(env);
-
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("benv: cannot open file for writing", path));
-
-		out.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("benv: failed to write file", path));
+		writeFileBytes(path, serializeEnv(env), "benv");
 	}
 
 	BEnv
