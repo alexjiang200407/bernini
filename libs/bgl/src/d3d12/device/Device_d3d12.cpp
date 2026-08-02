@@ -17,6 +17,7 @@
 #include "shadercache/ShaderCache_d3d12.h"
 #include "slang/SlangErrorChecker.h"
 #include "types/QueueType.h"
+#include "uniforms/Uniforms_d3d12.h"
 #include <core/ref/SharedRef.h>
 
 namespace bgl
@@ -184,19 +185,19 @@ namespace bgl
 		return core::SharedRef<CommandQueue>::Make(type, m_Device.Get());
 	}
 
-	Uniforms
+	UniformsRef
 	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
-		return Uniforms(pipeline, cbufferName);
+		return core::SharedRef<Uniforms>::Make(pipeline, cbufferName);
 	}
 
-	Uniforms
+	UniformsRef
 	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
-		return Uniforms(pipeline, cbufferName);
+		return core::SharedRef<Uniforms>::Make(pipeline, cbufferName);
 	}
 }

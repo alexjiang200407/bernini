@@ -729,7 +729,7 @@ namespace bgl
 	}
 
 	void
-	CommandList::BindUniforms(const Uniforms& uniforms, bool compute) noexcept
+	CommandList::BindUniforms(const IUniforms& uniforms, bool compute) noexcept
 	{
 		BindConstantData(
 			uniforms.Data(),

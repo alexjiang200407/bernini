@@ -76,11 +76,11 @@ namespace bgl
 		core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;
 
-		Uniforms
+		UniformsRef
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 
-		Uniforms
+		UniformsRef
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 

@@ -55,11 +55,11 @@ namespace bgl
 		core::SharedRef<IComputePipeline>
 		CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept override;
 
-		Uniforms
+		UniformsRef
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 
-		Uniforms
+		UniformsRef
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 

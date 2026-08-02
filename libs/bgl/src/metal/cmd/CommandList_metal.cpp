@@ -29,7 +29,7 @@ namespace bgl
 		// kind travels alongside the offset. Returns the resources to declare. Compute and mesh.
 		MappedUniform
 		MapUniformHandlesToGpuAddresses(
-			const Uniforms&                uniforms,
+			const IUniforms&               uniforms,
 			const std::vector<HandleSlot>& handles,
 			ResourceManager*               rm)
 		{
@@ -491,8 +491,10 @@ namespace bgl
 
 		for (const auto& [name, uniforms] : m_MeshletState.kernel->uniforms)
 		{
-			const MappedUniform mapped =
-				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
+			const MappedUniform mapped = MapUniformHandlesToGpuAddresses(
+				*uniforms.Get(),
+				pipeline->GetHandleOffsets(name),
+				rm);
 
 			for (MTL::Resource* resource : mapped.resident)
 				enc->useResource(
@@ -613,9 +615,11 @@ namespace bgl
 
 		for (const auto& [name, uniforms] : m_ComputeState.kernel->uniforms)
 		{
-			const UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(name);
-			const MappedUniform      mapped =
-				MapUniformHandlesToGpuAddresses(uniforms, pipeline->GetHandleOffsets(name), rm);
+			const UniformLayoutEntry entry  = pipeline->GetUniformLayoutEntry(name);
+			const MappedUniform      mapped = MapUniformHandlesToGpuAddresses(
+				*uniforms.Get(),
+				pipeline->GetHandleOffsets(name),
+				rm);
 
 			for (MTL::Resource* resource : mapped.resident)
 				enc->useResource(resource, MTL::ResourceUsageRead | MTL::ResourceUsageWrite);

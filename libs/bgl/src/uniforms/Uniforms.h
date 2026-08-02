@@ -8,6 +8,8 @@
 #include "uniforms/ReflectedLayout.h"
 #include "uniforms/UniformValueType.h"
 #include <core/err/util.h>
+#include <core/ref/Ref.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {
@@ -128,7 +130,18 @@ namespace bgl
 		}
 	}
 
-	class Uniforms final
+	/**
+	 * The CPU mirror of one constant buffer, addressed by member name or declaration index.
+	 *
+	 * A bindless handle assigned through an accessor is not written verbatim. What a shader has to
+	 * find in the cbuffer to reach the resource is the backend's business -- a descriptor index
+	 * under a directly-indexed heap, a pool slot where the value is patched at dispatch -- so the
+	 * translation is `ResolveBindless`, which each backend implements. Everything else, the layout
+	 * tree and the flat byte mirror, is shared.
+	 *
+	 * Obtained from IDevice::CreateUniforms; it cannot be constructed backend-agnostically.
+	 */
+	class IUniforms : public core::Ref
 	{
 	public:
 		template <typename DataPtr>
@@ -139,14 +152,14 @@ namespace bgl
 			operator[](std::string_view name) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, name);
-				return AccessorBase(m_Data, offset, node);
+				return AccessorBase(m_Owner, m_Data, offset, node);
 			}
 
 			AccessorBase
 			operator[](uint32_t idx) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, idx);
-				return AccessorBase(m_Data, offset, node);
+				return AccessorBase(m_Owner, m_Data, offset, node);
 			}
 
 			[[nodiscard]] bool
@@ -190,7 +203,7 @@ namespace bgl
 					{
 						if ((*this)[key].IsValid())
 						{
-							(*this)[key] = DescriptorHandle(handle.slot);
+							(*this)[key] = m_Owner->ResolveBindless(handle);
 							return *this;
 						}
 					}
@@ -203,7 +216,7 @@ namespace bgl
 					GetType() == UniformType::kValue &&
 					m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.slot);
+					*this = m_Owner->ResolveBindless(handle);
 					return *this;
 				}
 
@@ -218,7 +231,7 @@ namespace bgl
 				if (GetType() == UniformType::kValue &&
 				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.idx);
+					*this = m_Owner->ResolveBindless(handle);
 					return *this;
 				}
 
@@ -232,7 +245,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.slot);
+					(*this)[c_HandleUniformMember] = m_Owner->ResolveBindless(handle);
 					return *this;
 				}
 
@@ -246,7 +259,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.textureSlot);
+					(*this)[c_HandleUniformMember] = m_Owner->ResolveBindless(handle);
 					return *this;
 				}
 
@@ -284,8 +297,12 @@ namespace bgl
 			}
 
 		private:
-			AccessorBase(DataPtr data, size_t offset, detail::UniformsNode* node) :
-				m_Data(data), m_Offset(offset), m_Node(node)
+			AccessorBase(
+				const IUniforms*      owner,
+				DataPtr               data,
+				size_t                offset,
+				detail::UniformsNode* node) :
+				m_Owner(owner), m_Data(data), m_Offset(offset), m_Node(node)
 			{}
 
 			void
@@ -304,11 +321,12 @@ namespace bgl
 			}
 
 		private:
+			const IUniforms*      m_Owner;
 			DataPtr               m_Data;
 			size_t                m_Offset;
 			detail::UniformsNode* m_Node;
 
-			friend class Uniforms;
+			friend class IUniforms;
 		};
 
 	public:
@@ -316,18 +334,28 @@ namespace bgl
 		using ConstAccessor = AccessorBase<const void*>;
 
 	public:
-		Uniforms() = default;
-		Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
-		Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
+		/**
+		 * What the shader must find in the constant buffer to reach the handle's resource.
+		 *
+		 * The two backends disagree: D3D12 needs the resource's index into the shader-visible
+		 * descriptor heap, Metal the pool slot it patches to a native address at dispatch. Both
+		 * happen to be a uint32 today, which is why the return is a DescriptorHandle rather than
+		 * one -- a backend that can write the final native value here is free to.
+		 */
+		[[nodiscard]] virtual DescriptorHandle
+		ResolveBindless(const BufferHandle& handle) const noexcept = 0;
 
-		Uniforms(const Uniforms&) = delete;
-		Uniforms(Uniforms&&)      = default;
+		[[nodiscard]] virtual DescriptorHandle
+		ResolveBindless(const SamplerHandle& handle) const noexcept = 0;
 
-		Uniforms&
-		operator=(Uniforms&&) = default;
+		[[nodiscard]] virtual DescriptorHandle
+		ResolveBindless(const TextureHandle& handle) const noexcept = 0;
 
-		Uniforms&
-		operator=(const Uniforms&) = delete;
+		[[nodiscard]] DescriptorHandle
+		ResolveBindless(const TextureAssetHandle& handle) const noexcept
+		{
+			return ResolveBindless(TextureHandle::From(handle));
+		}
 
 		Accessor
 		operator[](std::string_view name);
@@ -373,6 +401,10 @@ namespace bgl
 			m_Size = 0;
 		}
 
+	protected:
+		IUniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
+		IUniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
+
 	private:
 		static std::unique_ptr<detail::UniformsNode>
 		BuildNode(const ReflectedLayout& layout);
@@ -385,4 +417,6 @@ namespace bgl
 		// flat CPU-side mirror
 		std::vector<std::byte> m_Buffer;
 	};
+
+	using UniformsRef = core::SharedRef<IUniforms>;
 }

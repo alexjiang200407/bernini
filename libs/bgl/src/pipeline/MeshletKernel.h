@@ -20,13 +20,13 @@ namespace bgl
 		MeshletKernel&
 		operator=(MeshletKernel&&) noexcept = default;
 
-		core::SharedRef<IMeshletPipeline>      pipeline;
-		core::str::unordered_str_map<Uniforms> uniforms;
+		core::SharedRef<IMeshletPipeline>         pipeline;
+		core::str::unordered_str_map<UniformsRef> uniforms;
 
-		Uniforms&
+		IUniforms&
 		operator[](const std::string& cbuffer)
 		{
-			return uniforms.at(cbuffer);
+			return *uniforms.at(cbuffer).Get();
 		}
 
 		[[nodiscard]]
@@ -37,13 +37,13 @@ namespace bgl
 		}
 
 		[[nodiscard]]
-		Uniforms*
+		IUniforms*
 		FindUniforms(std::string_view cbuffer)
 		{
 			auto it = uniforms.find(cbuffer);
 			if (it != uniforms.end())
 			{
-				return &it->second;
+				return it->second.Get();
 			}
 			else
 			{

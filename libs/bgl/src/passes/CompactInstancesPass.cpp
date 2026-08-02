@@ -218,7 +218,7 @@ namespace bgl
 			return;
 		}
 
-		Uniforms& uniforms         = m_CullInstances["gUniforms"];
+		IUniforms& uniforms        = m_CullInstances["gUniforms"];
 		uniforms["cullView"]       = ctx.GetBuffer("cull.view");
 		uniforms["instanceBuffer"] = ctx.GetBuffer("scene.instanceBuffer");
 		uniforms["meshBuffer"]     = ctx.GetBuffer("scene.meshInstanceBuffer");

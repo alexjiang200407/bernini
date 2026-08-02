@@ -10,6 +10,7 @@
 #include "resource/ResourceManager_metal.h"
 #include "resource/Shader_metal.h"
 #include "shadercache/ShaderCache_metal.h"
+#include "uniforms/Uniforms_metal.h"
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
@@ -169,17 +170,17 @@ namespace bgl
 			desc);
 	}
 
-	Uniforms
+	UniformsRef
 	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
-		return Uniforms(pipeline, cbufferName);
+		return core::SharedRef<Uniforms>::Make(pipeline, cbufferName);
 	}
 
-	Uniforms
+	UniformsRef
 	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
-		return Uniforms(pipeline, cbufferName);
+		return core::SharedRef<Uniforms>::Make(pipeline, cbufferName);
 	}
 }

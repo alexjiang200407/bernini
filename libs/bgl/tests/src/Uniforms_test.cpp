@@ -43,8 +43,9 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		pipelineDesc.SetMeshShader(device->CreateShader("MSUniformReflectionScalar"));
 
-		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
-		auto uniforms = device->CreateUniforms(pipeline, "gUniforms");
+		auto  pipeline    = device->CreateMeshletPipeline(pipelineDesc);
+		auto  uniformsRef = device->CreateUniforms(pipeline, "gUniforms");
+		auto& uniforms    = *uniformsRef.Get();
 
 		CHECK(uniforms.GetSize() == 208u);
 
