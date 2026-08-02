@@ -262,7 +262,12 @@ backend.
   at the point of translation — but validating there costs a branch per assignment and belongs in its
   own change with its own argument.
 - **Sampler heap is untouched.** Samplers have their own small heap and their own pool, and no second
-  pool grew around them; the sampler overload exists for symmetry.
+  pool grew around them, so D4 does not change what `GetBindlessIndex(SamplerHandle)` returns.
+  It is not there for symmetry, though: the sole caller is one template over all three handle types
+  (`Uniforms.h:297`), which spell their index differently — `slot.index` against a bare `idx` — and on
+  Metal the value is a pool slot the dispatch rewrite replaces with an `MTLResourceID`, exactly as for
+  a buffer or a texture. A caller reaching for `handle.idx` would be agreeing with the dispatch rewrite
+  behind the manager's back.
 - **No FrameGraph or barrier changes.** Resource lifetime and layout tracking key off handles, not
   descriptor indices.
 
