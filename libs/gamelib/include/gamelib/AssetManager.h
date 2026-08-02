@@ -117,8 +117,10 @@ namespace game
 		 * the parameters that travel with them. A value, not a resource -- the three references are
 		 * what ReleaseEnvironment gives back.
 		 *
-		 * Pieces the `.benv` does not reference come back as invalid handles, which the scene reads
-		 * as "absent"; loading half an environment is the caller's decision to make, not an error.
+		 * Pieces the `.benv` does not reference come back as invalid handles. Loading half an
+		 * environment is the caller's decision to make and not an error here -- but the scene does
+		 * **not** read an invalid handle as "absent": `SetEnvironmentMap` and `SetSkyBox` both throw
+		 * on one. Ask before binding, which is what HasLighting and HasSky are for.
 		 */
 		struct Environment
 		{
@@ -129,6 +131,22 @@ namespace game
 			float    exposure     = 1.0f;
 			uint32_t skyMipLevel  = 0;
 			float    skyRotationY = 0.0f;
+
+			/**
+			 * Both or neither: the two are the diffuse and specular convolutions of one radiance, so a
+			 * view holding one of them would light the scene from half an environment.
+			 */
+			[[nodiscard]] bool
+			HasLighting() const noexcept
+			{
+				return irradiance.textureSlot && prefilter.textureSlot;
+			}
+
+			[[nodiscard]] bool
+			HasSky() const noexcept
+			{
+				return skybox.textureSlot;
+			}
 		};
 
 		/**
