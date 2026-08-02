@@ -16,7 +16,8 @@ namespace bgl
 		bool                    enableDebug) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
-		m_EnableDebug(enableDebug), m_Wnd(desc.wnd), m_Width(desc.width), m_Height(desc.height)
+		m_TemporalAA(desc.temporalAA), m_EnableDebug(enableDebug), m_Wnd(desc.wnd),
+		m_Width(desc.width), m_Height(desc.height)
 	{
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{

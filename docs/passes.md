@@ -85,6 +85,15 @@ the pixel stage. `SceneView::AdvanceCamera` is what holds the previous frame's m
 view twice in a frame reports the same history to both draws rather than letting the second treat
 the first as history.
 
+When the target has `RenderTargetDesc::temporalAA` set, every projection is offset by a sub-pixel
+`HaltonJitter` ([util/jitter.h](libs/bgl/src/util/jitter.h)) that `RenderContext::Draw`
+left-multiplies onto it, so the sample grid walks the pixel footprint across eight frames. The
+client's `Camera` never sees it. **A velocity is about the surface, not the sample pattern**, so both
+clip positions are de-jittered against their own frame's offset before differencing —
+`ViewData::jitter` / `prevJitter` for geometry, the same pair on `gSkyboxData` for the sky, and
+`ViewMatrices` carries last frame's beside the matrices it already held. With temporal AA off every
+offset is zero and the arithmetic collapses to what it was.
+
 **The transparent phase writes no velocity** — a blended surface has no single depth to reproject —
 so its PSOs declare one render target and `DrawTransparent` binds a framebuffer without the velocity
 attachment. The skybox does write it, reprojecting the view ray through the previous frame's

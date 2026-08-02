@@ -1,6 +1,5 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
-import forward.ViewData;
 import idl.Constants;
 import idl.Mesh;
 import idl.Meshlet;
@@ -12,7 +11,6 @@ import debug.dbg;
 import forward.ExpansionData;
 
 ConstantBuffer<ForwardData> forwardData;
-ConstantBuffer<ViewData> viewData;
 
 // Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
 // any function that takes an OutputVertices/OutputIndices parameter, so only MSMain may index them.

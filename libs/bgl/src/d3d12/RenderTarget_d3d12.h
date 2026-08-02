@@ -158,6 +158,12 @@ namespace bgl
 			return m_SceneColor.srvHandle;
 		}
 
+		[[nodiscard]] bool
+		HasTemporalAA() const noexcept override
+		{
+			return m_TemporalAA;
+		}
+
 		void
 		PresentAndAdvance() noexcept override;
 
@@ -185,6 +191,7 @@ namespace bgl
 		ResourceManagerRef m_ResourceManager;
 
 		bool  m_Headless    = false;
+		bool  m_TemporalAA  = false;
 		bool  m_EnableDebug = false;
 		void* m_Wnd         = nullptr;
 		int   m_Width       = 0;
