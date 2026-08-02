@@ -136,10 +136,56 @@ namespace bgl
 			return m_SceneColorSrv;
 		}
 
+		[[nodiscard]] SrvHandle
+		GetMotionVectorSrv() const noexcept override
+		{
+			return m_MotionSrv;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
 			return m_TaaEnabled;
+		}
+
+		[[nodiscard]] TextureHandle
+		GetHistoryTexture(uint32_t index) const noexcept override
+		{
+			gassert(index < 2, "History index out of range");
+			return m_History[index].texture;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetHistoryRtv(uint32_t index) const noexcept override
+		{
+			gassert(index < 2, "History index out of range");
+			return m_History[index].rtv;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetHistorySrv(uint32_t index) const noexcept override
+		{
+			gassert(index < 2, "History index out of range");
+			return m_History[index].srv;
+		}
+
+		[[nodiscard]] uint32_t
+		GetHistoryIndex() const noexcept override
+		{
+			return m_HistoryIndex;
+		}
+
+		[[nodiscard]] bool
+		IsHistoryValid() const noexcept override
+		{
+			return m_HistoryValid;
+		}
+
+		void
+		AdvanceHistory() noexcept override
+		{
+			m_HistoryValid = true;
+			m_HistoryIndex ^= 1u;
 		}
 
 		void
@@ -153,6 +199,13 @@ namespace bgl
 		{
 			TextureHandle texture;
 			RtvHandle     rtv;
+		};
+
+		struct Accumulation
+		{
+			TextureHandle texture;
+			RtvHandle     rtv;
+			SrvHandle     srv;
 		};
 
 		void
@@ -190,6 +243,13 @@ namespace bgl
 		TextureHandle m_SceneColorTexture;
 		RtvHandle     m_SceneColorRtv;
 		SrvHandle     m_SceneColorSrv;
+		SrvHandle     m_MotionSrv;
+
+		// Allocated only when m_TaaEnabled; a target that never resolves pays neither the memory nor
+		// the two RTV slots.
+		std::array<Accumulation, 2> m_History;
+		uint32_t                    m_HistoryIndex = 0;
+		bool                        m_HistoryValid = false;
 
 		uint32_t m_FrameIndex         = 0;
 		uint32_t m_LastPresentedIndex = 0;

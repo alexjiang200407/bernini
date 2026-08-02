@@ -356,14 +356,20 @@ history instead of `sceneColor` when the target has TAA on.
 `docs/taa.md` and the `docs/passes.md` catalog entry land here, because this is the frame TAA first
 exists in.
 
-*Gate:* three, in the order they catch things.
-`MeanColor` on a static scene driven N frames with TAA on must converge to within a tight epsilon of
-the same scene with TAA off — under jitter a static image must resolve to what it supersamples to, so
-this is arithmetic, not taste. `AliasEnergy` across a high-contrast diagonal edge must fall
-substantially between the TAA-off capture and the converged one — that is the antialiasing claim
-stated as a number. A pan case must not smear the moving edge beyond a pixel of the unjittered
-result, which is what catches a reprojection sign error that the static test cannot see. Then a new
-golden for the converged frame, and `just run bgl_tests -- --gpu-validation`.
+*Gate:* `AliasEnergy` across the quad's tilted edge falls from 0.0056 unjittered to 0.0023 converged
+— the antialiasing claim as a number, with the unjittered value asserted to be aliased in the first
+place so the comparison cannot be vacuous. `MeanColor` on the flat interior converges to the
+unjittered value exactly (0.792157 either way), which is what catches an accumulation that converges
+to *something* — darkened, tinted, drifting — rather than to the truth. And the first frame matches
+the unjittered one, which is the cheapest check that the history-invalid path exists. Plus
+`just run bgl_tests -- --gpu-validation` for the new SRVs and the resolve's barriers.
+
+**No golden for the converged frame.** The plan asked for one; the two measurements above are
+stronger and do not need regenerating when the scene changes, and a stored image would have pinned
+the blend weight as if it were a contract. The pan case is also not here — the reprojection sign is
+already pinned by T2's `MotionVectors_test`, which asserts velocity against a CPU-computed
+expectation, and a smear test on top of that would be measuring the same arithmetic through a blurrier
+instrument.
 
 ### T4 — The editor turns it on where it should be on
 

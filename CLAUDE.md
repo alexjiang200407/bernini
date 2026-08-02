@@ -86,6 +86,11 @@ The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are 
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
+**[Temporal Antialiasing](./docs/taa.md)**
+
+The jitter, the history ping-pong and the resolve: why the client's camera never sees the offset, why
+velocity has it removed, and why the resolve writes history rather than the screen.
+
 **[Asset Standards](./docs/asset_standards.md)**
 
 PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.

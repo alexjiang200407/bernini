@@ -82,6 +82,12 @@ namespace bgl
 			return image;
 		}
 
+		std::string
+		HistoryName(uint32_t index)
+		{
+			return std::format("{}{}", c_HistoryName, index);
+		}
+
 		// Encodes a tight RGBA8 image as a PNG via stb_image_write -- cross-platform, replacing the
 		// old DirectXTex DDS / WIC PNG encoders.
 		void
@@ -136,9 +142,12 @@ namespace bgl
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
 		m_PostProcess.Init(m_Device);
+		m_TaaResolve.Init(m_Device);
 
 		m_PostProcessSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
+		m_HistorySampler = m_ResourceManager->CreateSampler(
+			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
@@ -181,9 +190,14 @@ namespace bgl
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
+		m_TaaResolve.Release();
 		if (!m_PostProcessSampler.IsNull())
 		{
 			m_ResourceManager->DestroySampler(m_PostProcessSampler, false);
+		}
+		if (!m_HistorySampler.IsNull())
+		{
+			m_ResourceManager->DestroySampler(m_HistorySampler, false);
 		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
@@ -375,6 +389,14 @@ namespace bgl
 		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
 		m_FrameGraph.ImportTexture(std::string(c_SceneColorName), rt.GetSceneColorTexture());
 
+		if (rt.IsTaaEnabled())
+		{
+			for (uint32_t i = 0; i < 2; ++i)
+			{
+				m_FrameGraph.ImportTexture(HistoryName(i), rt.GetHistoryTexture(i));
+			}
+		}
+
 		// The backbuffer is not cleared: the tonemap covers it whole, and it is the only pass that
 		// writes it. Zero motion is "this pixel did not move", which is what an untouched pixel
 		// should read as.
@@ -509,12 +531,39 @@ namespace bgl
 
 		m_FrameGraph.SetResourceNamespace("");
 
+		const auto viewport =
+			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
+
 		auto postProcessArgs       = PostProcessPass::Args();
-		postProcessArgs.sceneColor = rt.GetSceneColorSrv();
+		postProcessArgs.source     = rt.GetSceneColorSrv();
+		postProcessArgs.sourceName = std::string(c_SceneColorName);
 		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
 		postProcessArgs.sampler    = m_PostProcessSampler;
-		postProcessArgs.viewport =
-			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
+		postProcessArgs.viewport   = viewport;
+
+		if (rt.IsTaaEnabled())
+		{
+			const uint32_t current = rt.GetHistoryIndex();
+			const uint32_t prev    = current ^ 1u;
+
+			auto taaArgs            = TaaResolvePass::Args();
+			taaArgs.sceneColor      = rt.GetSceneColorSrv();
+			taaArgs.motionVectors   = rt.GetMotionVectorSrv();
+			taaArgs.prevHistory     = rt.GetHistorySrv(prev);
+			taaArgs.history         = rt.GetHistoryRtv(current);
+			taaArgs.prevHistoryName = HistoryName(prev);
+			taaArgs.historyName     = HistoryName(current);
+			taaArgs.pointSampler    = m_PostProcessSampler;
+			taaArgs.linearSampler   = m_HistorySampler;
+			taaArgs.viewport        = viewport;
+			taaArgs.historyValid    = rt.IsHistoryValid();
+			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
+
+			// The display curve is applied to what the resolve produced, not to the raw frame.
+			postProcessArgs.source     = rt.GetHistorySrv(current);
+			postProcessArgs.sourceName = HistoryName(current);
+		}
+
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
@@ -558,6 +607,11 @@ namespace bgl
 		// The readback copy rode the list just submitted, so this is what gates it.
 		m_DebugReadbackFence[index] = frameFence;
 #endif
+
+		if (rt.IsTaaEnabled())
+		{
+			rt.AdvanceHistory();
+		}
 
 		rt.PresentAndAdvance();
 
