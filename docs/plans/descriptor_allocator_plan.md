@@ -1,10 +1,10 @@
 # Descriptor allocator — implementation plan
 
-Separates two things `bgl` currently treats as one number: **which resource a handle names** and
-**where a shader finds it**. Today a resource's slot index in the manager's pool *is* its index into
-the D3D12 shader-visible descriptor heap, and that equation is written down not in the D3D12 backend
-but in backend-agnostic code — `uniforms/`, `scene/`, `Scene.cpp`. This plan gives the descriptor
-heap its own allocator and makes the ResourceManager own the mapping between the two.
+Separates two things `bgl` still treats as one number: **which resource a handle names** and **where
+a shader finds it**. A resource's slot index in the manager's pool *is* its index into the D3D12
+shader-visible descriptor heap, and that equation is written down not only in the D3D12 backend but
+in backend-agnostic code — `uniforms/`, `scene/`. This plan gives the descriptor heap its own
+allocator and makes the ResourceManager own the mapping between the two.
 
 This is a *plan*, not a mirror of code. When the work lands the durable parts belong in
 [rhi.md](../rhi.md) and [bgl_api.md](../bgl_api.md).
@@ -13,112 +13,162 @@ This is a *plan*, not a mirror of code. When the work lands the durable parts be
 `uint` out of a constant buffer and indexes a heap with it; `IGraphics`/`IScene` are untouched. What
 changes is *who computes that uint*.
 
+> **Rebased onto the Metal world.** This plan was first written when the two backends were D3D12 and
+> WebGPU. WebGPU was deleted (#175–#180) and Metal landed (#213), so the branch was rebased onto
+> master and the plan rewritten against it. Two things changed materially: half the seam this plan
+> proposed **already exists** under the name `ResolveDescriptor`, and the design decision in § 2 had
+> to be retaken, because Metal cannot make the choice the original plan made. The task PRs merged
+> before the rebase (#156, #158, #161, #164, #167) are not on the branch any more; #168 was closed
+> because its backend no longer exists. § 3 is the work that remains.
+
 ---
 
 ## 1. What the survey found
 
-### The identity, and where it is established
+### There are two paths, and only one has been fixed
 
-The CBV/SRV/UAV pool is sized to the heap, deliberately:
+A handle becomes a number the GPU can use in two quite different situations, and master now treats
+them differently:
+
+| | Written | Resolved by |
+|---|---|---|
+| **Stored in GPU memory** — a material's texture | once, by the CPU | `ResolveDescriptor` — **done** |
+| **Bound through a constant buffer** — everything in `Uniforms` and the scene buffers | per frame | the identity — **still open** |
+
+The first was solved by the Metal port, and its seam is exactly the one this plan set out to add:
 
 ```cpp
-m_CbvSrvUavSlots(desc.maxCbvSrvUavs)             // ResourceManager_d3d12.cpp:11
-heapDesc.NumDescriptors = desc.maxCbvSrvUavs;    // ResourceManager_d3d12.cpp:29
+[[nodiscard]] virtual DescriptorHandle
+ResolveDescriptor(const TextureHandle& handle) const noexcept = 0;
 ```
+`resource/ResourceManager.h:194`, whose contract is already written down: *"What that has to be is the
+backend's business: a descriptor-heap index on D3D12, the native resource id on Metal."* Both
+backends implement it and `Scene.cpp:878,940` calls it.
 
-So slot *i* is descriptor *i*, and the conversion is a constructor that drops everything else:
+**So this plan must not add a second seam.** The original design proposed
+`GetBindlessIndex(BufferHandle|TextureHandle|SamplerHandle) -> uint32_t`; adding it now would give one
+contract two names, which is the very thing the seam exists to prevent. What is missing is not a new
+seam but its *reach*: `ResolveDescriptor` covers textures only, and only on the stored-in-memory path.
+
+### Where the identity still lives
+
+Eight call sites, all in backend-agnostic code, all constructing a descriptor straight from a slot:
+
+| Site | What it does |
+|---|---|
+| `uniforms/Uniforms.h:193, 206` | `operator=(BufferHandle)` → `DescriptorHandle(handle.slot)` |
+| `uniforms/Uniforms.h:221` | `operator=(SamplerHandle)` → `DescriptorHandle(handle.idx)` |
+| `uniforms/Uniforms.h:235, 249` | `operator=(TextureHandle)` / `(TextureAssetHandle)` |
+| `scene/PackedBuffer.h:249`, `scene/RangeBuffer.h:117`, `scene/EntryBuffer.h:257` | `GetDescriptorHandle()` |
+
+They are all reachable from the constructor that encodes the assumption:
 
 ```cpp
 explicit DescriptorHandle(core::slot_handle slot) : DescriptorHandle(slot.index) {}
 ```
-`uniforms/DescriptorHandle.h:15`
+`uniforms/DescriptorHandle.h:20`
 
-That is a good trade in isolation — no map, no indirection, and `ResourceDescriptorHeap[i]` lands on
-the right descriptor by construction.
-
-### Where it is *consumed* — the actual finding
-
-Not in `src/d3d12/`. The call sites that turn a slot into a shader-visible index are all in code that
-is supposed to be backend-agnostic:
-
-| Site | What it does |
-|---|---|
-| `uniforms/Uniforms.h:194, 207` | `operator=(BufferHandle)` → `DescriptorHandle(handle.slot)` |
-| `uniforms/Uniforms.h:222` | `operator=(SamplerHandle)` → `DescriptorHandle(handle.idx)` |
-| `uniforms/Uniforms.h:236, 250` | `operator=(TextureHandle)` / `(TextureAssetHandle)` |
-| `scene/PackedBuffer.h:249`, `scene/RangeBuffer.h:117`, `scene/EntryBuffer.h:257` | `GetDescriptorHandle()` |
-| `scene/Scene.cpp:880, 939, 944` | material and texture routing |
-
-None of them asks a backend anything. They assume D3D12's addressing scheme and write it into a
-constant buffer.
-
-### What that assumption already costs
-
-**A second texture pool exists only to protect the heap.** A texture no shader samples must not
-consume a descriptor in a heap sized for shader-visible resources, so it goes somewhere else:
+On the D3D12 side the identity is now stated once, and says so plainly:
 
 ```cpp
-// RTV/DSV-only textures (no SRV): kept out of the shader-visible pool so they
-// never consume a bindless descriptor slot.
-core::slot_vector<Texture> m_Textures;   // ResourceManager_d3d12.h:262
+ResolveDescriptor(const TextureHandle& handle) const noexcept override
+{
+    // The shader indexes the descriptor heap with it, so the slot is already the descriptor.
+    return DescriptorHandle(handle.slot);
+}
 ```
+`d3d12/resource/ResourceManager_d3d12.h:152`
 
-**And `TextureHandle::usage` became the pool discriminator.** Two pools means two independent index
-spaces, so the index alone is ambiguous. `usage` is what disambiguates — its only three uses in the
-manager are exactly that (`ResourceManager_d3d12.cpp:389`, `:600`, `:676`). It is *caller-supplied
-data selecting an index space*: a handle constructed with the wrong bits reads the wrong pool at the
-same index and silently returns a different texture. `TextureHandle::From(TextureAssetHandle)`
-hardcodes `kSRV` for that reason.
+That comment is the whole plan in one line: it is true today, and D4 is what makes it false.
 
-**Buffers and textures share a pool because they share a heap.**
+### Metal reintroduced the reversal WebGPU had
+
+The original survey's sharpest finding was that WebGPU, having no heap, had to decode D3D12's
+addressing backwards — `GetBufferBindingBySlotIndex`. That code went with WebGPU. Metal then arrived
+and built the same thing:
 
 ```cpp
-using CbvSrvUavSlot = std::variant<Buffer, Texture>;   // ResourceManager_d3d12.h:18
+// D3D12 writes a bindless handle's slot index into the cbuffer and a directly-indexed heap
+// resolves it in-shader; Metal has no such heap, so at dispatch each handle field is rewritten
+// to the native value the emitted MSL dereferences [...]
+MappedUniform MapUniformHandlesToGpuAddresses(...)
 ```
+`metal/cmd/CommandList_metal.cpp:31`, reading through `GetBufferBySlotIndex` /
+`GetTextureBySlotIndex` / `GetSamplerBySlotIndex`.
 
-The pool's shape is dictated by the descriptor heap, not by the resources in it.
+The argument for this plan is therefore stronger than when it was written: the reversal is not an
+accident of one port, it is what the identity costs *every* backend without a heap, and it has now
+been paid twice.
 
-**The WebGPU backend has to run the identity backwards.** WebGPU has no descriptor heap, so it must
-recover a resource from the raw index that `Uniforms` wrote:
+### What the identity still costs D3D12
 
-```cpp
-// Resolves the raw slot index a Uniforms handle write records (DescriptorHandle stores the
-// index alone, without a generation) to its buffer, for bind-group assembly at dispatch.
-const wgpu::Buffer& GetBufferBindingBySlotIndex(uint32_t slotIndex) const noexcept;
-```
-`webgpu/resource/ResourceManager_wgpu.h:98`
+Unchanged since the first survey, and all still present:
 
-`CollectHandleBindings` (`webgpu/cmd/CommandList_wgpu.cpp:43`) `memcpy`s a `uint32_t` out of the
-uniform bytes and looks it up. A backend with no heap is decoding another backend's heap addressing.
-
-**Generations are dropped.** `DescriptorHandle(slot.index)` discards `slot.generation`, so a stale
-handle written into a uniform block cannot be detected — by either backend. The WebGPU comment above
-names this; nothing acts on it.
-
-### Why this is worth doing now and was not before
-
-With one backend the identity was free and the leak was invisible. A second backend makes it a real
-cost: every binding-model difference now has to be expressed as a reversal of D3D12's scheme rather
-than as its own scheme. The Metal port hits the same wall from the other side (`gpuAddress`
-translation at dispatch).
+- **A second texture pool exists only to protect the heap.** `m_Textures` holds RTV/DSV-only
+  textures so they never consume a bindless slot (`ResourceManager_d3d12.h:263-269`).
+- **`TextureHandle::usage` is the pool discriminator.** Two pools means two index spaces, and `usage`
+  is what picks one (`ResourceManager_d3d12.cpp:164, 242`). Caller-supplied data selecting an index
+  space: wrong bits read the wrong pool at the same index and return a different texture.
+- **Buffers and textures share a pool because they share a heap** —
+  `using CbvSrvUavSlot = std::variant<Buffer, Texture>` (`ResourceManager_d3d12.h:18`).
+- **Pool size *is* heap size.** `maxCbvSrvUavs` sizes both the slot vector and the heap
+  (`ResourceManager_d3d12.cpp:11, 29`).
+- **Generations are dropped.** `DescriptorHandle(slot.index)` discards `slot.generation`, so a stale
+  handle written into a uniform block cannot be detected.
 
 ---
 
 ## 2. Design
 
-### The seam
+### The seam is `ResolveDescriptor`, widened
 
-`IResourceManager` gains the mapping, as the one place it lives:
+No new virtual. `ResolveDescriptor` gains the two overloads it lacks, so the constant-buffer path can
+ask the same question the stored-in-memory path already asks:
 
 ```cpp
-[[nodiscard]] uint32_t GetBindlessIndex(BufferHandle handle) const noexcept;
-[[nodiscard]] uint32_t GetBindlessIndex(TextureHandle handle) const noexcept;
-[[nodiscard]] uint32_t GetBindlessIndex(SamplerHandle handle) const noexcept;
+[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const BufferHandle&)  const noexcept = 0;
+[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const SamplerHandle&) const noexcept = 0;
 ```
 
-D3D12 returns the descriptor index it allocated. WebGPU returns the slot index unchanged — which is
-what its bind-group assembly wants — and `GetBufferBindingBySlotIndex` is deleted, because the
-translation now runs in the direction the data flows.
+D3D12 returns the descriptor index its allocator handed out. **Metal returns the slot index
+unchanged**, which is what its dispatch rewrite already expects to find, so Metal's behaviour does not
+change at all — it keeps reading a slot index out of the cbuffer and patching it to a native value at
+record time.
+
+That asymmetry is the point rather than a wart: `ResolveDescriptor` means "the value this backend
+wants in GPU-visible memory for this handle", and for a backend that patches later, that value is the
+slot. `DescriptorHandle` is eight bytes and Metal already overwrites all eight at dispatch
+(`DescriptorHandle::FromNative`), so nothing needs to widen.
+
+### Resolve eagerly, or patch at flush — retaken
+
+`Uniforms::operator=` is where a handle becomes a number and it has no ResourceManager: it is built
+from a pipeline and its `AccessorBase` carries only `(m_Data, offset, node)`. Two ways out, and the
+first plan's answer no longer holds:
+
+1. **Resolve eagerly.** `Uniforms` holds a `ResourceManagerRef` and `operator=` calls
+   `ResolveDescriptor`. One virtual call per assignment.
+2. **Resolve at record time.** `operator=` writes the slot and the backend patches the block when it
+   is flushed.
+
+The original plan chose (1) and rejected (2) as *"charging every D3D12 draw for a per-flush layout
+walk"*. Since then Metal has implemented (2) — and **must** keep it, for a reason the first plan could
+not have known: the walk is also where Metal collects the resources to declare resident
+(`result.resident`, `CommandList_metal.cpp:60-75`). A residency list cannot be assembled at assignment
+time, because nothing there knows which encoder will use the block.
+
+**Still take (1), for D3D12 only.** It stays the smaller change, it keeps D3D12's flush a straight
+`memcpy`, and — decisively — the machinery (2) would need on D3D12 does not exist: `GetHandleOffsets`,
+`HandleSlot` and `HandleKind` are declared only in `metal/pipeline/*` and `metal/cmd/`, so choosing
+(2) for D3D12 means building that reflection a second time to solve a problem that is not about
+performance.
+
+The two backends therefore resolve at different moments, which is exactly what a seam is for. Write
+it down where the seam is declared, or the next reader will "fix" the asymmetry.
+
+Consequence to accept: `ResolveDescriptor` is called from scene-update code. Reads in the manager are
+already documented as lockless (fixed-capacity pools, storage never moves), so this lookup follows the
+same rule and takes no lock.
 
 ### The allocator
 
@@ -131,81 +181,56 @@ void     Free(uint32_t idx);  // returns it to the free list
 
 `Texture` and `Buffer` already carry a `D3D12_CPU_DESCRIPTOR_HANDLE`; they gain the index that
 produced it. Deferred destruction frees the descriptor on the same gate that reclaims the slot — the
-descriptor must outlive in-flight work exactly as the resource does, which is what
-`RetireDeferred` already sequences.
+descriptor must outlive in-flight work exactly as the resource does, which is what `RetireDeferred`
+already sequences.
 
 ### What falls out
 
-- **One texture pool.** `m_Textures` and the texture half of `m_CbvSrvUavSlots` merge. Heap
-  occupancy is no longer the reason to keep two.
-- **`TextureHandle::usage` stops being a discriminator.** It keeps its descriptive meaning; nothing
-  indexes on it.
-- **`std::variant<Buffer, Texture>` goes away.** `slot_vector<Buffer>` and `slot_vector<Texture>`,
-  each sized by how many of that resource can exist.
-- **Pool size and heap size decouple.** `maxCbvSrvUavs` currently means both "how many resources"
-  and "how many descriptors"; they become separate numbers with separate reasons.
-
-### The hard part, and the option taken
-
-`Uniforms::operator=` is where a handle becomes a number, and it has no ResourceManager — it is
-constructed from a pipeline (`Uniforms.h:321-323`) and its `AccessorBase` carries only
-`(m_Data, offset, node)`.
-
-Two ways out:
-
-1. **Resolve eagerly.** `Uniforms` holds a `ResourceManagerRef`; `operator=` calls `GetBindlessIndex`
-   and writes the result as it does today. One virtual call per assignment. The uniform block still
-   contains a backend-specific number.
-2. **Resolve at record time.** `operator=` writes the *slot* (index + generation, 8 bytes — the
-   `DescriptorHandle` is already a `uint2`), and the backend patches or reads it when the block is
-   flushed. This is what the WebGPU backend already does in `CollectHandleBindings`; D3D12 would gain
-   an equivalent walk it does not have today.
-
-**Take (1).** It is the smaller change, it keeps D3D12's flush a straight `memcpy`, and it puts the
-translation at the point where the resource is named rather than at the point where bytes are sent.
-(2) is architecturally tidier and makes generations checkable at bind time, but it charges every
-D3D12 draw for a per-flush layout walk to fix a problem that is not about performance. Revisit only
-if a third binding model turns up that (1) cannot express.
-
-Consequence to accept: `GetBindlessIndex` runs under the pool mutex, and `operator=` is called from
-scene-update code. Reads in the manager are already documented as lockless
-(`ResourceManager_d3d12.h:275-278` — fixed-capacity pools, storage never moves), so this lookup
-follows the same rule and takes no lock.
+- **One texture pool.** `m_Textures` and the texture half of `m_CbvSrvUavSlots` merge.
+- **`TextureHandle::usage` stops being a discriminator.** It keeps its descriptive meaning.
+- **`std::variant<Buffer, Texture>` goes away**, for `slot_vector<Buffer>` and `slot_vector<Texture>`.
+- **Pool size and heap size decouple.** `maxCbvSrvUavs` splits into a resource count and a descriptor
+  count, with separate reasons.
 
 ---
 
 ## 3. Staging
 
-Each step builds and passes on its own; the identity survives until D3 removes it, so nothing is
+Each step builds and passes on its own; the identity survives until D4 removes it, so nothing is
 half-migrated at a commit boundary.
 
 * **D1 — `DescriptorAllocator`, unused.** The class plus its tests: allocate to exhaustion, free and
   reallocate, and that a freed index is not handed out twice before `Free`. No wiring.
-  *Gate:* new unit tests in `bgl_tests`; nothing else changes.
-* **D2 — `GetBindlessIndex` on both backends, returning what the identity returns today.** D3D12
-  returns `handle.slot.index`; WebGPU returns the same. A pure seam: every call site can migrate to
-  it before the number behind it changes.
-  *Gate:* `bgl_tests` and `bgl_webgpu_tests` unchanged and green.
-* **D3 — move the call sites onto the seam.** `Uniforms` gains its `ResourceManagerRef`; the ten
-  sites in § 1 stop constructing `DescriptorHandle` from a slot. The `DescriptorHandle(slot_handle)`
-  constructor is deleted, which is what makes the migration checkable — anything left behind fails to
-  compile.
-  *Gate:* golden images bit-identical on D3D12 (the numbers have not changed yet, so any diff is a
-  bug); `bgl_webgpu_tests` green.
+  **`bgl_tests` is no longer D3D12-only** — it builds with `RENDERER_BACKEND_METAL` on macOS from one
+  unfiltered glob (`libs/bgl/CMakeLists.txt:175`), so a test that includes `<d3d12.h>` breaks the
+  macOS build. This is what made the pre-rebase #156 unlandable. The test must be compiled only for
+  the D3D12 backend.
+  *Gate:* new unit tests in `bgl_tests`; **and `just build` green on both a D3D12 and a Metal preset**.
+* **D2 — widen `ResolveDescriptor` to buffers and samplers, returning what the identity returns
+  today.** D3D12 returns `handle.slot.index`; Metal returns the same. A pure seam: every call site can
+  migrate to it before the number behind it changes.
+  *Gate:* `bgl_tests` green on both backends; no golden image moves.
+* **D3 — move the constant-buffer call sites onto the seam.** `Uniforms` gains its
+  `ResourceManagerRef`; the eight sites in § 1 stop constructing `DescriptorHandle` from a slot. The
+  `DescriptorHandle(core::slot_handle)` constructor is deleted, which is what makes the migration
+  checkable — anything left behind fails to compile.
+  *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
+  diff is a bug).
 * **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` take an index
-  from the allocator instead of using the slot index; destruction frees it on the deferred gate.
-  This is the step where the two numbers actually diverge.
-  *Gate:* golden images within tolerance; `just run bgl_tests -- --gpu-validation`, because a
-  mis-freed descriptor is exactly what GPU-based validation catches and nothing else does.
+  from the allocator instead of using the slot index; destruction frees it on the deferred gate. This
+  is the step where the two numbers diverge, and where the comment at
+  `ResourceManager_d3d12.h:155` stops being true.
+  *Gate:* golden images within tolerance; `just run bgl_tests -- --gpu-validation`, because a mis-freed
+  descriptor is exactly what GPU-based validation catches and nothing else does. Metal unaffected —
+  worth re-running to prove it.
 * **D5 — collapse the pools.** `m_Textures` merges into the texture pool, the variant goes,
-  `TextureHandle::usage` stops selecting an index space, and `maxCbvSrvUavs` splits into a resource
-  count and a descriptor count.
+  `TextureHandle::usage` stops selecting an index space, and `maxCbvSrvUavs` splits.
   *Gate:* as D4, plus a test that an RTV-only texture and an SRV texture can hold the same slot index
   without colliding — the failure the old design prevented structurally and this one must prevent
   deliberately.
-* **D6 — WebGPU drops the reversal.** `GetBufferBindingBySlotIndex` is deleted;
-  `CollectHandleBindings` resolves through the seam.
-  *Gate:* `bgl_webgpu_tests` green.
+
+There is no WebGPU step. The old D6 removed `GetBufferBindingBySlotIndex`; that code left with the
+backend.
 
 ---
 
@@ -213,24 +238,30 @@ half-migrated at a commit boundary.
 
 - **Bindless is not removed.** Shaders still index a heap. This changes where the index comes from,
   not what a shader does with it.
-- **Generation checking is not added.** D3 makes it *possible* — the manager sees a full
-  `slot_handle` at the point of translation and could validate it — but validating there costs a
-  branch per assignment and belongs in its own change with its own argument. Noted so the next reader
-  does not assume it came for free.
-- **Sampler heap is untouched.** Samplers have their own small heap and their own pool, and no
-  second pool grew around them; `GetBindlessIndex(SamplerHandle)` exists for symmetry, returning
-  `handle.idx`.
+- **Metal is not changed.** It implements D2 trivially and keeps its dispatch rewrite. If a later
+  change wants Metal to stop reading slot indices out of cbuffers, that is a separate argument about
+  residency, not about descriptors.
+- **Generation checking is not added.** D3 makes it *possible* — the manager sees a full `slot_handle`
+  at the point of translation — but validating there costs a branch per assignment and belongs in its
+  own change with its own argument.
+- **Sampler heap is untouched.** Samplers have their own small heap and their own pool, and no second
+  pool grew around them; the sampler overload exists for symmetry.
 - **No FrameGraph or barrier changes.** Resource lifetime and layout tracking key off handles, not
   descriptor indices.
 
 ## 5. Risk
 
-The one that matters is **D4 landing silently wrong**. Once slot and descriptor diverge, an
-off-by-one or a use-after-free reads a *valid* descriptor for the wrong resource — which renders
-something plausible rather than crashing. That is why D4's gate is GPU validation and not just
-goldens: a wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer
-alone does not see it.
+The one that matters is **D4 landing silently wrong**. Once slot and descriptor diverge, an off-by-one
+or a use-after-free reads a *valid* descriptor for the wrong resource — which renders something
+plausible rather than crashing. That is why D4's gate is GPU validation and not just goldens: a
+wrong-but-live descriptor can pass a tolerance-based image compare, and the debug layer alone does not
+see it.
 
-The cheap mitigation, worth doing in D4 rather than after: have the debug build write a known
-sentinel into every freed descriptor, so a stale read lands on something visibly wrong instead of on
-whatever took the slot.
+The cheap mitigation, worth doing in D4 rather than after: have the debug build write a known sentinel
+into every freed descriptor, so a stale read lands on something visibly wrong instead of on whatever
+took the slot.
+
+The second risk is now **asymmetric backends**. From D2 on, `ResolveDescriptor` means different things
+on D3D12 and Metal, and only D3D12's goldens can catch a mistake in D3D12's meaning. Every gate from
+D2 onward names both backends for that reason: this repo is developed on macOS, where the D3D12 path
+does not build, so a D3D12-only regression is invisible until CI or a Windows run.
