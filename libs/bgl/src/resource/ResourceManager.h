@@ -162,6 +162,13 @@ namespace bgl
 		virtual const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept = 0;
 
+		// What the buffer was allocated as, without exposing the backend Buffer -- so a caller in
+		// backend-agnostic code can read it (the concrete Buffer is an incomplete type there), as
+		// with GetTextureDesc.
+		[[nodiscard]]
+		virtual BufferDesc
+		GetBufferDesc(BufferHandle handle) const noexcept = 0;
+
 		[[nodiscard]]
 		virtual const Texture&
 		GetTexture(TextureHandle handle) const noexcept = 0;

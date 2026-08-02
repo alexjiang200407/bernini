@@ -1,15 +1,9 @@
 #pragma once
 #include "metal_cpp.h"
+#include "resource/Buffer.h"
 
 namespace bgl
 {
-	struct BufferDesc
-	{
-		uint64_t    byteSize  = 0;
-		bool        isUav     = false;
-		std::string debugName = "Unnamed Buffer";
-	};
-
 	// The Metal definition of the RHI's forward-declared `Buffer`. A GPU-private structured buffer;
 	// its bindless slot index (from the ResourceManager's pool) is what a handle carries.
 	class Buffer

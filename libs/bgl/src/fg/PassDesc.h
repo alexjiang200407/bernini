@@ -19,6 +19,10 @@ namespace bgl
 		std::string   name;
 		BarrierSync   sync;
 		BarrierAccess access;
+
+		// Fill the buffer with the poison word before the pass runs. See
+		// PassDesc::AddPoisonedBufferArg; ignored unless the graph has a poisoner installed.
+		bool poison = false;
 	};
 
 	struct TextureArg
@@ -139,6 +143,25 @@ namespace bgl
 		AddBufferArg(std::string_view name_, BarrierSync sync_, BarrierAccess access_)
 		{
 			buffers.push_back(BufferArg(std::string(name_), sync_, access_));
+			return *this;
+		}
+
+		/**
+		 * Declares a UAV output this pass rewrites from nothing, rather than one it accumulates
+		 * into. In a debug build the graph fills it with the poison word before the pass records,
+		 * so an element the pass leaves unwritten reads back as garbage instead of as whatever the
+		 * last frame put there -- which is usually plausible enough to look correct.
+		 *
+		 * Only valid for an unordered-access arg, which is why the access is not a parameter.
+		 */
+		PassDesc&
+		AddPoisonedBufferArg(std::string_view bufferName, BarrierSync bufferSync)
+		{
+			buffers.push_back(BufferArg(
+				std::string(bufferName),
+				bufferSync,
+				BarrierAccessFlag::kUnorderedAccess,
+				true));
 			return *this;
 		}
 

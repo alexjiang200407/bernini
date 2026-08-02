@@ -243,6 +243,13 @@ namespace bgl
 		return m_Buffers[handle.slot];
 	}
 
+	BufferDesc
+	ResourceManager::GetBufferDesc(BufferHandle handle) const noexcept
+	{
+		gassert(ValidBufferHandle(handle), "GetBufferDesc on an invalid buffer handle");
+		return m_Buffers[handle.slot].GetDesc();
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{

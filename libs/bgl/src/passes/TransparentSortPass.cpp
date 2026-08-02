@@ -103,10 +103,10 @@ namespace bgl
 						c_InstanceVisibility,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
-						c_EntriesBuffer,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+					// Only the transparent instances take a slot, and the count that says how many
+					// is written by this same pass -- so a leftover entry is indistinguishable
+					// from one this frame produced.
+					.AddPoisonedBufferArg(c_EntriesBuffer, BarrierSyncFlag::kComputeShader)
 					.AddBufferArg(
 						c_CountBuffer,
 						BarrierSyncFlag::kComputeShader,

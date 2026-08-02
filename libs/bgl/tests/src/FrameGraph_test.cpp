@@ -53,6 +53,9 @@ namespace
 		NullCommandList&
 		operator=(NullCommandList&&) = delete;
 
+		// Non-null only in the poison tests, which pin what the graph records and in what order.
+		std::vector<std::string>* log = nullptr;
+
 		void
 		WriteBuffer(BufferHandle, const void*, size_t, size_t) noexcept override
 		{}
@@ -60,8 +63,13 @@ namespace
 		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
 		{}
 		void
-		CopyBuffer(BufferHandle, BufferHandle, uint64_t, uint64_t, uint64_t) noexcept override
-		{}
+		CopyBuffer(BufferHandle dst, BufferHandle, uint64_t, uint64_t, uint64_t) noexcept override
+		{
+			if (log != nullptr)
+			{
+				log->push_back(std::format("copy:{}", dst.slot.index));
+			}
+		}
 		void
 		CopyBufferToReadback(ReadbackBufferHandle, BufferHandle) noexcept override
 		{}
@@ -69,8 +77,13 @@ namespace
 		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
 		{}
 		void
-		Barrier(BufferHandle, const BufferBarrierDesc&) noexcept override
-		{}
+		Barrier(BufferHandle handle, const BufferBarrierDesc&) noexcept override
+		{
+			if (log != nullptr)
+			{
+				log->push_back(std::format("barrier:{}", handle.slot.index));
+			}
+		}
 		void
 		Barrier(TextureHandle, const TextureBarrierDesc&) noexcept override
 		{}
@@ -82,7 +95,12 @@ namespace
 		{}
 		void
 		Barrier(std::span<const BufferHandle>, std::span<const BufferBarrierDesc>) noexcept override
-		{}
+		{
+			if (log != nullptr)
+			{
+				log->push_back("barriers");
+			}
+		}
 		void
 		Barrier(std::span<const TextureHandle>, std::span<const TextureBarrierDesc>) noexcept
 			override
@@ -214,10 +232,15 @@ namespace
 			return it != dsvToTexture.end() ? it->second : TextureHandle{};
 		}
 
+		// Enough of a buffer for a live BufferPoisoner: it creates one pattern buffer, asks for
+		// the target's size, and copies. c_PatternHandleIndex is what the poison tests see the
+		// one-time pattern upload barrier against.
+		static constexpr uint32_t c_PatternHandleIndex = 100;
+
 		BufferHandle
 		CreateStructBuffer(const StructBufferDesc&) noexcept override
 		{
-			return {};
+			return BufferHandle({ c_PatternHandleIndex, 0 }, c_PatternHandleIndex);
 		}
 		BufferHandle
 		CreateComputeBuffer(const ComputeBufferDesc&) noexcept override
@@ -305,6 +328,13 @@ namespace
 			std::abort();
 		}
 
+		BufferDesc
+		GetBufferDesc(BufferHandle) const noexcept override
+		{
+			// One pattern chunk over, so a poisoned buffer takes two copies.
+			return BufferDesc{ 96 * 1024, true, "Mock Buffer" };
+		}
+
 		TextureDesc
 		GetTextureDesc(TextureHandle) const noexcept override
 		{
@@ -338,7 +368,7 @@ namespace
 		bool
 		ValidBufferHandle(const BufferHandle&) const noexcept override
 		{
-			return false;
+			return true;
 		}
 		bool
 		ValidTextureHandle(const TextureHandle&) const noexcept override
@@ -644,4 +674,117 @@ TEST_CASE("FrameGraph: an attachment-only texture transitions to render target",
 	CHECK(barriers.textureHandles[0].slot.index == 7);
 	CHECK(barriers.textureDescs[0].accessAfter == BarrierAccessFlag::kRenderTarget);
 	CHECK(barriers.textureDescs[0].layoutAfter == BarrierLayout::kRenderTarget);
+}
+
+namespace
+{
+	// Everything the poison tests share: a live poisoner over the mock manager, and a command list
+	// that records what the graph put on it.
+	struct PoisonHarness
+	{
+		std::vector<std::string>             log;
+		core::SharedRef<MockResourceManager> rm    = core::SharedRef<MockResourceManager>::Make();
+		core::SharedRef<NullCommandList>     list  = core::SharedRef<NullCommandList>::Make();
+		CommandQueueRef                      queue = core::SharedRef<NullCommandQueue>::Make();
+		BufferPoisoner                       poisoner;
+
+		PoisonHarness()
+		{
+			list->log = &log;
+			poisoner.Init(rm);
+		}
+
+		~PoisonHarness() { poisoner.Release(false); }
+
+		PoisonHarness(const PoisonHarness&) = delete;
+		PoisonHarness(PoisonHarness&&)      = delete;
+
+		PoisonHarness&
+		operator=(const PoisonHarness&) = delete;
+
+		PoisonHarness&
+		operator=(PoisonHarness&&) = delete;
+
+		void
+		Run(FrameGraph& fg)
+		{
+			fg.Compile(rm.Get());
+			CommandListRef cmd = list;
+			fg.RegisterQueue("main", queue, cmd);
+			fg.Execute();
+		}
+	};
+}
+
+// The whole point of poisoning is that the fill lands *between* the transitions the graph derived
+// and the dispatches the pass records -- late enough that the buffer is the pass's to write, early
+// enough that the pass overwrites the poison. The bracketing single-buffer barriers are what keep
+// the fill from racing the pass's own writes.
+//
+// The mock buffer is half a chunk larger than the poisoner tiles from, so the two copies also pin
+// that a buffer bigger than the pattern is covered to its end.
+TEST_CASE("FrameGraph: a poisoned arg is filled between the pass barriers and its exec", "[fg]")
+{
+	PoisonHarness h;
+
+	FrameGraph fg;
+	fg.SetBufferPoisoner(&h.poisoner);
+	fg.ImportBuffer("scratch", MakeBuffer(7));
+	fg.AddPass(
+		PassDesc{}
+			.SetName("P")
+			.AddPoisonedBufferArg("scratch", BarrierSyncFlag::kComputeShader)
+			.SetExec([&](const PassContext&) { h.log.push_back("exec"); }));
+
+	h.Run(fg);
+
+	CHECK(
+		h.log == std::vector<std::string>{
+					 "barriers",   // the pass's own derived barriers
+					 "barrier:7",  // scratch -> copy dest
+					 std::format(
+						 "barrier:{}",
+						 MockResourceManager::c_PatternHandleIndex),  // the one-time pattern upload
+					 "copy:7",
+					 "copy:7",
+					 "barrier:7",  // scratch -> back to what the pass declared
+					 "exec" });
+}
+
+TEST_CASE("FrameGraph: a poison declaration is inert with no poisoner installed", "[fg]")
+{
+	PoisonHarness h;
+
+	FrameGraph fg;
+	fg.ImportBuffer("scratch", MakeBuffer(7));
+	fg.AddPass(
+		PassDesc{}
+			.SetName("P")
+			.AddPoisonedBufferArg("scratch", BarrierSyncFlag::kComputeShader)
+			.SetExec([&](const PassContext&) { h.log.push_back("exec"); }));
+
+	h.Run(fg);
+
+	CHECK(h.log == std::vector<std::string>{ "barriers", "exec" });
+}
+
+// A transient has no handle to fill, and reaches the poison path as a null one rather than as a
+// missing name -- deriving the barriers inserts an entry for every name the graph tracks.
+TEST_CASE("FrameGraph: a poisoned transient is skipped", "[fg]")
+{
+	PoisonHarness h;
+
+	FrameGraph fg;
+	fg.SetBufferPoisoner(&h.poisoner);
+	fg.AddPass(
+		PassDesc{}
+			.SetName("P")
+			.AddPoisonedBufferArg("never.imported", BarrierSyncFlag::kComputeShader)
+			.SetSideEffect()
+			.SetExec([&](const PassContext&) { h.log.push_back("exec"); }));
+
+	h.Run(fg);
+
+	CHECK(std::ranges::none_of(h.log, [](const std::string& e) { return e.starts_with("copy:"); }));
+	CHECK(h.log.back() == "exec");
 }

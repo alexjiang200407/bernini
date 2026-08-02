@@ -173,6 +173,9 @@ namespace bgl
 		// that fires. 256 records -> ~4 KB (header + 256*16 B).
 		static constexpr uint32_t c_DebugBufferCapacity = 256;
 
+		// Installed on the frame graph, which drives it for the buffer args passes declare poisoned.
+		BufferPoisoner m_BufferPoisoner;
+
 		DebugBuffer          m_DebugBuffer;
 		ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
 		bool                 m_DebugReadbackPending[c_SwapchainImageCount] = {};

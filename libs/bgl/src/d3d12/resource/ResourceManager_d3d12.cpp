@@ -717,6 +717,12 @@ namespace bgl
 		return m_Buffers[handle.slot];
 	}
 
+	BufferDesc
+	ResourceManager::GetBufferDesc(BufferHandle handle) const noexcept
+	{
+		return GetBuffer(handle).GetDesc();
+	}
+
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{

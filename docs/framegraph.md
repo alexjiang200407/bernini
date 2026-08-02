@@ -77,6 +77,16 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   instances to the wrong bucket offsets — nondeterministic flicker, again only in scenes mixing PSO
   buckets.
 
+* **Poisoning a scratch output is a graph service, not pass code.** A pass declares an output it
+  rewrites from nothing with `AddPoisonedBufferArg` instead of `AddBufferArg`; if a poisoner is
+  installed (`SetBufferPoisoner` — Debug builds only), `Execute` fills that buffer with a garbage
+  word between the pass's barriers and its `exec`, so an element the pass never writes cannot be
+  mistaken for one it did. The graph does it rather than the pass because the fill is a *copy*: the
+  buffer has to leave the state the graph just put it in and come back, and the round trip is what
+  keeps the fill from racing the pass's own writes — the same barrier reasoning the graph already
+  owns. A transient (no imported handle) is skipped. See
+  [Graphics Debug §7](docs/gfx_debug.md).
+
 * **The frame is consumed on execute.** `Execute` (and `Reset`) clears passes, imports, and queue
   bindings and requires a fresh `Compile` before the next `Execute`; only `m_LastState` survives.
   Passes — and everything their `exec` lambdas captured (e.g. scene references) — are rebuilt each
@@ -96,7 +106,8 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `BufferArg` / `TextureArg` | [fg/PassDesc.h](libs/bgl/src/fg/PassDesc.h) | A declared access: resource name + `BarrierSync` + `BarrierAccess` (+ `BarrierLayout` for textures). |
+| `BufferArg` / `TextureArg` | [fg/PassDesc.h](libs/bgl/src/fg/PassDesc.h) | A declared access: resource name + `BarrierSync` + `BarrierAccess` (+ `BarrierLayout` for textures). A `BufferArg` also carries the poison flag. |
+| `BufferPoisoner` | [debug/BufferPoisoner.h](libs/bgl/src/debug/BufferPoisoner.h) | Fills a buffer with the poison word; installed with `SetBufferPoisoner`. |
 | `AccessState` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | `(sync, access, layout)` triple; the unit the graph merges and diffs to derive barriers. |
 | `PassBarriers` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | The buffer/texture handles + `*BarrierDesc`s derived for one pass; queryable via `BarriersFor`. |
 | `ResourceKind` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | `kBuffer` / `kTexture`; used to reject a resource imported as one kind but accessed as the other. |
@@ -163,6 +174,9 @@ flowchart TD
   namespace prefix so the resource is reachable from every scope.
 * **`Reset()`** — clears the frame like `Execute`'s tail but **keeps** `m_LastState`; use to
   rebuild without having executed.
+* **`SetBufferPoisoner(poisoner)`** — the pointer is non-owning and must outlive every `Execute`
+  that follows; `ClearFrame` does not drop it. Null (the default, and every Release build) leaves
+  poison declarations inert.
 
 ### PassContext (inside `exec`)
 
@@ -182,6 +196,10 @@ flowchart TD
 * **A pass that writes only transients is culled** unless it has an attachment or
   `SetSideEffect(true)`. If a pass's work must always run (side effects the graph can't see), pin
   it.
+* **`AddPoisonedBufferArg(name, sync)`** — @pre the pass rewrites this buffer from nothing. It is an
+  unordered-access arg (which is why the access is not a parameter). Declaring it on a buffer the
+  pass *accumulates* into destroys that frame's data, not the previous frame's — a cleared histogram
+  or an append counter is not a poison candidate.
 
 ---
 
