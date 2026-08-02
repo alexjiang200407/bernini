@@ -10,9 +10,9 @@
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
+#include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/SkyboxPass.h"
-#include "passes/TonemapPass.h"
 #include "passes/TransparentSortPass.h"
 #include "resource/ResourceManager.h"
 #include <bgl/IGraphics.h>
@@ -159,13 +159,11 @@ namespace bgl
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
-		TonemapPass          m_Tonemap;
+		PostProcessPass      m_PostProcess;
 		CompactInstancesPass m_CompactInstances;
 		TransparentSortPass  m_TransparentSort;
 
-		// The tonemap's own point-clamp sampler. Its draw is 1:1 with the target, so it wants no
-		// filtering, and it runs outside any Draw -- the per-scene samplers are not reachable there.
-		SamplerHandle m_TonemapSampler;
+		SamplerHandle m_PostProcessSampler;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 

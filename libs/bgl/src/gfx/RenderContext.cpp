@@ -134,9 +134,9 @@ namespace bgl
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
-		m_Tonemap.Init(m_Device);
+		m_PostProcess.Init(m_Device);
 
-		m_TonemapSampler = m_ResourceManager->CreateSampler(
+		m_PostProcessSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
@@ -179,10 +179,10 @@ namespace bgl
 		}
 		m_Forward.Release();
 		m_Skybox.Release();
-		m_Tonemap.Release();
-		if (!m_TonemapSampler.IsNull())
+		m_PostProcess.Release();
+		if (!m_PostProcessSampler.IsNull())
 		{
-			m_ResourceManager->DestroySampler(m_TonemapSampler, false);
+			m_ResourceManager->DestroySampler(m_PostProcessSampler, false);
 		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
@@ -489,13 +489,13 @@ namespace bgl
 
 		m_FrameGraph.SetResourceNamespace("");
 
-		auto tonemapArgs       = TonemapPass::Args();
-		tonemapArgs.sceneColor = rt.GetSceneColorSrv();
-		tonemapArgs.backBuffer = rt.GetBackbufferRtv(index);
-		tonemapArgs.sampler    = m_TonemapSampler;
-		tonemapArgs.viewport =
+		auto postProcessArgs       = PostProcessPass::Args();
+		postProcessArgs.sceneColor = rt.GetSceneColorSrv();
+		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
+		postProcessArgs.sampler    = m_PostProcessSampler;
+		postProcessArgs.viewport =
 			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
-		m_Tonemap.AttachToFrameGraph(m_FrameGraph, tonemapArgs);
+		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 

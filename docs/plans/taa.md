@@ -154,21 +154,29 @@ The RHI has no UAV view type. A compute resolve means inventing one, plus its de
 
 *Rejected:* compute. Revisit when something needs UAV textures for its own sake.
 
-### One MRT draw writes the tonemapped backbuffer and the HDR history, off a two-texture ping-pong
+### The resolve writes history only, and stays a separate stage from post-processing
 
-The resolve computes one HDR value and both destinations want it, in different encodings: the history
-takes it raw, the backbuffer takes `Tonemap` of it. Two RTVs on one draw, one set of registers, and
-the tonemap pass T1 introduces is absorbed rather than added to.
+The resolve reads `sceneColor`, the previous history and `motionVectors`, and writes one thing: the
+new history, in `RGBA16_FLOAT` linear HDR. `PostProcess` then reads that instead of `sceneColor` and
+writes the backbuffer as before. Two full-screen passes, in the order
+`sceneColor → resolve → history → post-process → backbuffer`.
 
-History is two `RGBA16_FLOAT` textures because the pass samples last frame's while writing this
-frame's, and a resource cannot be an SRV and an RTV in one pass. It is HDR for the same reason
-`sceneColor` is: the display tonemap is the last thing that happens, not something baked into the
-accumulator. The resolve still *weights* its neighbourhood samples in a tonemapped space — that is
-what keeps a single firefly from dominating the average — but what it stores is linear.
+*Rejected — and this reverses an earlier draft of this plan:* one MRT draw writing the tonemapped
+backbuffer and the new history together, absorbing the post-process pass. It saves a full-screen
+pass, and that is the whole of its case. Against it: `PostProcess` is the stage where bloom, grading
+and exposure adaptation land, and merging it into the resolve means every one of those arrives as a
+change to the TAA shader. It also fixes the order — anything that must run *between* resolve and
+display would have nowhere to go. One extra full-screen pass is the cheaper side of that trade, and
+the separation is what the pass is named for.
 
-*Rejected:* resolve into history and then tonemap-blit to the backbuffer — a second full-screen pass
-for a value already computed. *Rejected:* a single history texture — illegal. *Rejected:* LDR history,
-which would put the display curve inside the accumulation and undo the previous decision.
+History is two textures because the pass samples last frame's while writing this frame's, and a
+resource cannot be an SRV and an RTV in one pass. It is HDR for the same reason `sceneColor` is: the
+display curve is the last thing that happens, not something baked into the accumulator. The resolve
+still *weights* its neighbourhood samples in a tonemapped space — that is what keeps a single firefly
+from dominating the average — but what it stores is linear.
+
+*Rejected:* a single history texture — illegal. *Rejected:* LDR history, which would put the display
+curve inside the accumulation and undo the previous decision.
 
 ### Jitter is applied inside `RenderContext::Draw`, and subtracted out of motion vectors as an offset
 
@@ -197,7 +205,7 @@ a converged image from few frames, which TAA cannot give it. So `RenderTargetDes
 `bool temporalAA = false`, and the history pair, the jitter and the temporal half of the resolve exist
 only when it is set.
 
-`sceneColor` and the tonemap pass are **not** gated on it — they are the pipeline now, for every
+`sceneColor` and the post-process pass are **not** gated on it — they are the pipeline now, for every
 target. So a non-TAA frame is not byte-identical to today's: it differs by the tonemap move, once, in
 T1. After that, whether TAA is on changes nothing about a target that did not ask for it.
 
@@ -251,12 +259,12 @@ converges to the noise instead of through it.
 | `libs/bgl/src/d3d12/RenderTarget_d3d12.{h,cpp}` | allocate/resize/release the texture set, and the velocity buffer's missing SRV |
 | `libs/bgl/src/metal/RenderTarget_metal.{h,mm}` | the same, second backend |
 | `libs/bgl/src/gfx/RenderContext.cpp` | import + clear `sceneColor`, route `DrawData`, build the jitter, attach the resolve |
-| `libs/bgl/src/passes/TonemapPass.{h,cpp}`, `TaaResolvePass.{h,cpp}` | new |
+| `libs/bgl/src/passes/PostProcessPass.{h,cpp}`, `TaaResolvePass.{h,cpp}` | new |
 | `libs/bgl/src/passes/DrawData.h` | `sceneColorHandle`, `jitter`, `prevJitter` |
 | `libs/bgl/src/passes/ForwardPass.cpp` | `RGBA16_FLOAT` colour format; two `c_Psos` rows; bind the jitter uniforms |
 | `libs/bgl/src/scene/SceneView.{h,cpp}` | `ViewMatrices` carries the jitter offset; `kHashed` in `SubmeshPso` |
 | `libs/bgl/src/constants/constants.h` | `c_SceneColorName`, `c_HistoryName` |
-| `libs/bgl/shaders/src/{Tonemap,TaaResolve}.slang` | new |
+| `libs/bgl/shaders/src/{PostProcess,TaaResolve}.slang` | new |
 | `libs/bgl/shaders/src/forward/PbrShading.slang`, `Skybox.slang` | the tonemap comes out |
 | `libs/bgl/shaders/src/util/HashedAlpha.slang` | new |
 | `libs/bgl/shaders/src/Forward_PBR_HashedAlpha.slang`, `_Loose_` | new |
@@ -306,12 +314,12 @@ both.
 
 Bottom-up: `bgl` before `assetlib` before the editor, and every task builds and passes on its own.
 
-### T1 — HDR `sceneColor`, and a tonemap pass that writes the backbuffer
+### T1 — HDR `sceneColor`, and a post-process pass that writes the backbuffer
 
 An `RGBA16_FLOAT` `sceneColor` texture with its RTV and SRV on every render target (both backends),
 `RenderTargetBase` accessors, `c_SceneColorName`, `RenderContext` clearing and routing `DrawData` to
 it, `RGBA16_FLOAT` as `BuildForwardKernel`'s colour format, `util.Tonemap` out of `PbrShading.slang`
-and `Skybox.slang` and into a new `TonemapPass`, and a `maxRtvs` default that covers four per target.
+and `Skybox.slang` and into a new `PostProcessPass`, and a `maxRtvs` default that covers four per target.
 No TAA at all — this task decides where the pixels land and where the display curve is applied.
 
 *Gate:* the 15 existing goldens, with the ones that move rebaselined and justified per image. Plus
@@ -343,7 +351,8 @@ subtraction, and nothing else will.
 The `RGBA16_FLOAT` history ping-pong with its RTVs and SRVs, the velocity buffer's missing SRV, and
 `TaaResolvePass` — sampling `sceneColor`, the previous history and `motionVectors`, with a 3×3 YCoCg
 neighbourhood clamp, tonemapped weighting, an exponential blend, and a history-invalid path that takes
-`sceneColor` whole. It absorbs `TonemapPass` on a TAA target: same `Tonemap`, second RTV.
+`sceneColor` whole. It writes the new history and nothing else; `PostProcess` is repointed at that
+history instead of `sceneColor` when the target has TAA on.
 `docs/taa.md` and the `docs/passes.md` catalog entry land here, because this is the frame TAA first
 exists in.
 

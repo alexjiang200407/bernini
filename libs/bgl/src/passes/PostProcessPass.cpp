@@ -1,4 +1,4 @@
-#include "passes/TonemapPass.h"
+#include "passes/PostProcessPass.h"
 #include "cmd/CommandList.h"
 #include "constants/constants.h"
 #include "device/Device.h"
@@ -13,11 +13,11 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_Src = "Tonemap"sv;
+		constexpr auto c_Src = "PostProcess"sv;
 	}
 
 	void
-	TonemapPass::Init(IDevice* device)
+	PostProcessPass::Init(IDevice* device)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -43,11 +43,11 @@ namespace bgl
 	}
 
 	void
-	TonemapPass::AttachToFrameGraph(FrameGraph& fg, const Args& args)
+	PostProcessPass::AttachToFrameGraph(FrameGraph& fg, const Args& args)
 	{
 		auto desc = PassDesc();
 
-		desc.SetName("Tonemap")
+		desc.SetName("PostProcess")
 			.AddTextureArg(
 				TextureArg{ std::string(c_SceneColorName),
 		                    BarrierSyncFlag::kPixelShader,
@@ -65,16 +65,16 @@ namespace bgl
 	}
 
 	void
-	TonemapPass::Execute(const Args& args, const PassContext& resources)
+	PostProcessPass::Execute(const Args& args, const PassContext& resources)
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "Tonemap pipeline must be initialized");
+		gassert(m_Kernel.pipeline.IsInitialized(), "PostProcess pipeline must be initialized");
 
 		// Keyed on the Slang global's name as reflection reports it, so this string must track the
-		// ConstantBuffer declaration in Tonemap.slang.
-		if (auto found = m_Kernel.FindUniforms("gTonemapData"))
+		// ConstantBuffer declaration in PostProcess.slang.
+		if (auto found = m_Kernel.FindUniforms("gPostProcessData"))
 		{
 			auto& tonemap = *found;
 
@@ -89,7 +89,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Tonemap shader is missing its 'gTonemapData' constant buffer");
+			gfatal("PostProcess shader is missing its 'gPostProcessData' constant buffer");
 		}
 
 		auto gfxState   = MeshletState();

@@ -31,13 +31,13 @@ flowchart TD
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then per transparent partition)"]
     end
-    D --> TM["Tonemap (scene colour -> backbuffer)"]
-    TM --> PP["PreparePresent (transition backbuffer to Present)"]
+    D --> PPX["PostProcess (scene colour -> backbuffer)"]
+    PPX --> PP["PreparePresent (transition backbuffer to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
 `Clear`, `Skybox`, and `Forward` take the imported `sceneColor` and `motionVectors` textures as
-render targets; `Tonemap` reads `sceneColor` and is the **only** writer of the backbuffer;
+render targets; `PostProcess` reads `sceneColor` and is the **only** writer of the backbuffer;
 `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
@@ -57,7 +57,7 @@ passes name them by.
 ## Scene colour, and where the display curve is applied
 
 Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the render target owns, and
-`Tonemap` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
+`PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
 fold it in, while the display curve — `AgX` in
 [util/Tonemap.slang](libs/bgl/shaders/src/util/Tonemap.slang) — belongs to the output and runs once.
@@ -239,16 +239,20 @@ the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks be
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
 
-### Tonemap — [passes/TonemapPass.{h,cpp}](libs/bgl/src/passes/TonemapPass.cpp)
+### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
 
-Applies `AgX` to `sceneColor` and writes the backbuffer, as a single full-screen triangle from the
-`Tonemap` module (mesh + pixel, no amplification shader, depth test off). Added in `EndFrame`, after
-every draw and before `PreparePresent`.
+Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
+the `PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
+`EndFrame`, after every draw and before `PreparePresent`.
+
+Today it applies `AgX` and nothing else. It is named for the stage rather than that one step:
+everything between a resolved scene and the screen — bloom, grading, exposure adaptation — belongs
+here as it lands.
 
 * **In:** `sceneColor` as a shader resource, through the `SrvHandle` the render target owns; its own
   point-clamp sampler, created by `RenderContext` because the pass runs outside any `Draw` and the
-  per-scene samplers are not reachable there. The `gTonemapData` cbuffer name is matched against
-  Slang reflection, so it must track the declaration in `Tonemap.slang`.
+  per-scene samplers are not reachable there. The `gPostProcessData` cbuffer name is matched
+  against Slang reflection, so it must track the declaration in `PostProcess.slang`.
 * **Out:** the backbuffer.
 * It covers the whole target, which is why `BeginFrame` does not clear the backbuffer.
 * **It is the only pass that writes the backbuffer**, which is what keeps `SubmitCapture` — a

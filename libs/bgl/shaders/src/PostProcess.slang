@@ -1,13 +1,13 @@
 import idl.TextureHandle;
 import util.Tonemap;
 
-struct TonemapData
+struct PostProcessData
 {
     TextureHandle sceneColor;
     SamplerState.Handle sampler;
 };
 
-ConstantBuffer<TonemapData> gTonemapData;
+ConstantBuffer<PostProcessData> gPostProcessData;
 
 struct VSOut
 {
@@ -41,7 +41,7 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
 [shader("pixel")]
 float4 PSMain(VSOut input) : SV_Target
 {
-    float4 scene = gTonemapData.sceneColor.SampleLevel(gTonemapData.sampler, input.uv, 0.0);
+    float4 scene = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv, 0.0);
 
     return float4(AgX(scene.rgb), scene.a);
 }
