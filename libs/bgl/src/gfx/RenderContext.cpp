@@ -134,6 +134,10 @@ namespace bgl
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
+		m_Tonemap.Init(m_Device);
+
+		m_TonemapSampler = m_ResourceManager->CreateSampler(
+			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
@@ -175,6 +179,11 @@ namespace bgl
 		}
 		m_Forward.Release();
 		m_Skybox.Release();
+		m_Tonemap.Release();
+		if (!m_TonemapSampler.IsNull())
+		{
+			m_ResourceManager->DestroySampler(m_TonemapSampler, false);
+		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
 		m_TransparentSort.Release(false);
@@ -361,14 +370,15 @@ namespace bgl
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
-		// Resumes the state the graph tracked last frame; the target creates it in render-target.
+		// Resumes the state the graph tracked last frame; the target creates them in render-target.
 		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
+		m_FrameGraph.ImportTexture(std::string(c_SceneColorName), rt.GetSceneColorTexture());
 
-		// Zero motion is "this pixel did not move", which is what an untouched pixel should read as.
+		// The backbuffer is not cleared: the tonemap covers it whole, and it is the only pass that
+		// writes it. Zero motion is "this pixel did not move", which is what an untouched pixel
+		// should read as.
 		const std::array<ClearPass::ColorTarget, 2> colorTargets{
-			{ { std::string(c_BackbufferName),
-			    rt.GetBackbufferRtv(index),
-			    { 0.0f, 0.0f, 0.0f, 1.0f } },
+			{ { std::string(c_SceneColorName), rt.GetSceneColorRtv(), { 0.0f, 0.0f, 0.0f, 1.0f } },
 			  { std::string(c_MotionVectorsName),
 			    rt.GetMotionVectorRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
@@ -423,7 +433,7 @@ namespace bgl
 		draw.viewProj           = viewProj;
 		draw.prevViewProj       = prevCamera.viewProj;
 		draw.cullView           = BuildCullView(viewProj);
-		draw.backBufferHandle   = m_ActiveTarget->GetBackbufferRtv(m_ActiveTarget->GetFrameIndex());
+		draw.sceneColorHandle   = m_ActiveTarget->GetSceneColorRtv();
 		draw.depthBufferHandle  = m_ActiveTarget->GetDepthDsv();
 		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
 
@@ -478,6 +488,15 @@ namespace bgl
 		const uint32_t    index = rt.GetFrameIndex();
 
 		m_FrameGraph.SetResourceNamespace("");
+
+		auto tonemapArgs       = TonemapPass::Args();
+		tonemapArgs.sceneColor = rt.GetSceneColorSrv();
+		tonemapArgs.backBuffer = rt.GetBackbufferRtv(index);
+		tonemapArgs.sampler    = m_TonemapSampler;
+		tonemapArgs.viewport =
+			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
+		m_Tonemap.AttachToFrameGraph(m_FrameGraph, tonemapArgs);
+
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 
 		m_FrameGraph.Compile(m_ResourceManager.Get());

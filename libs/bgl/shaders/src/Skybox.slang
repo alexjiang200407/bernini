@@ -1,5 +1,4 @@
 import idl.TextureHandle;
-import util.Tonemap;
 
 struct SkyboxData
 {
@@ -60,7 +59,7 @@ SkyboxPSOut PSMain(VSOut input)
 
     float3 color = gSkyboxData.cubeTex.SampleCubeLevel(gSkyboxData.sampler, dir, gSkyboxData.mipLevel).rgb;
 
-    color = AgX(color * gSkyboxData.exposure);
+    color = color * gSkyboxData.exposure;
 
     // w = 0: the sky is infinitely far, so a camera translation displaces it nowhere and only the
     // rotation between the two frames survives.

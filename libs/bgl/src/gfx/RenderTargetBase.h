@@ -2,6 +2,7 @@
 #include "cmd/CommandAllocator.h"
 #include "resource/Dsv.h"
 #include "resource/Rtv.h"
+#include "resource/Srv.h"
 #include "resource/Texture.h"
 #include <bgl/IRenderTarget.h>
 
@@ -77,6 +78,22 @@ namespace bgl
 
 		[[nodiscard]] virtual RtvHandle
 		GetMotionVectorRtv() const noexcept = 0;
+
+		/**
+		 * The linear HDR colour every geometry pass renders into, ahead of the tonemap that writes
+		 * the backbuffer. Exposure is already applied; the display curve is not.
+		 *
+		 * One texture, not one per frame in flight: the tonemap consumes it within the frame that
+		 * wrote it, so a second copy would never be read.
+		 */
+		[[nodiscard]] virtual TextureHandle
+		GetSceneColorTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual RtvHandle
+		GetSceneColorRtv() const noexcept = 0;
+
+		[[nodiscard]] virtual SrvHandle
+		GetSceneColorSrv() const noexcept = 0;
 
 		/**
 		 * Presents the frame just submitted, then advances to the index the next one records into.

@@ -23,7 +23,7 @@ in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (backbuffer + motion vectors + depth)"]
+    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
@@ -31,12 +31,14 @@ flowchart TD
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then per transparent partition)"]
     end
-    D --> PP["PreparePresent (transition backbuffer to Present)"]
+    D --> TM["Tonemap (scene colour -> backbuffer)"]
+    TM --> PP["PreparePresent (transition backbuffer to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
-`Clear`, `Skybox`, and `Forward` take the imported `backbuffer` and `motionVectors` textures as
-render targets; `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
+`Clear`, `Skybox`, and `Forward` take the imported `sceneColor` and `motionVectors` textures as
+render targets; `Tonemap` reads `sceneColor` and is the **only** writer of the backbuffer;
+`PreparePresent` only transitions the backbuffer to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
@@ -44,11 +46,27 @@ resource namespace (see [Frame Graph](docs/framegraph.md)).
 
 `DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection
-(this frame's and the previous frame's), camera position, back/depth/motion-vector handles, standard
+(this frame's and the previous frame's), camera position, scene-colour/depth/motion-vector handles, standard
 samplers, environment map, exposure, and the optional skybox. The graph resource *names* are not in
-it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` in
+it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` / `c_SceneColorName` in
 [constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
 passes name them by.
+
+---
+
+## Scene colour, and where the display curve is applied
+
+Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the render target owns, and
+`Tonemap` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
+applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
+fold it in, while the display curve — `AgX` in
+[util/Tonemap.slang](libs/bgl/shaders/src/util/Tonemap.slang) — belongs to the output and runs once.
+`AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
+
+Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
+space. And a pixel shader that writes a literal colour — `Forward_Null`, `Forward_Assert` — is
+writing radiance, not a display value, so its `1.0` reaches the screen as the curve's answer for
+unit radiance and not as white.
 
 ---
 
@@ -95,7 +113,7 @@ culling, so it fills only where nothing has been drawn.
 
 * **No-op** when the view has no skybox (`DrawData::skybox` is empty) — `AttachToFrameGraph` adds
   nothing.
-* **In:** the backbuffer and the velocity buffer as render targets; samples the skybox cube texture
+* **In:** the scene-colour and velocity buffers as render targets; samples the skybox cube texture
   through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,
   `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, and `mipLevel`; the constant-buffer name is
   matched against Slang reflection, so it must track the declaration in `Skybox.slang`.
@@ -212,14 +230,29 @@ its own.
 Both partitions read their base from `transparentSort.partitionBase`, indexed by `partitionIndex`;
 the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks between the two.
 
-* **In:** the backbuffer and the velocity buffer as render targets; `compactDispatchArgs` and
+* **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
   buffers, the three `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
   `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
-* **Out:** the backbuffer (rendered), the velocity buffer (opaque and alpha-test only), depth.
+* **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
+
+### Tonemap — [passes/TonemapPass.{h,cpp}](libs/bgl/src/passes/TonemapPass.cpp)
+
+Applies `AgX` to `sceneColor` and writes the backbuffer, as a single full-screen triangle from the
+`Tonemap` module (mesh + pixel, no amplification shader, depth test off). Added in `EndFrame`, after
+every draw and before `PreparePresent`.
+
+* **In:** `sceneColor` as a shader resource, through the `SrvHandle` the render target owns; its own
+  point-clamp sampler, created by `RenderContext` because the pass runs outside any `Draw` and the
+  per-scene samplers are not reachable there. The `gTonemapData` cbuffer name is matched against
+  Slang reflection, so it must track the declaration in `Tonemap.slang`.
+* **Out:** the backbuffer.
+* It covers the whole target, which is why `BeginFrame` does not clear the backbuffer.
+* **It is the only pass that writes the backbuffer**, which is what keeps `SubmitCapture` — a
+  readback of the last presented backbuffer — describing what was displayed.
 
 ### PreparePresent — [passes/PreparePresentPass.h](libs/bgl/src/passes/PreparePresentPass.h)
 

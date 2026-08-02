@@ -126,6 +126,7 @@ namespace bgl
 		constexpr auto c_TransparentArgsBuffer   = "transparentSort.partitionDispatchArgs"sv;
 
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
+		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
 		constexpr auto c_GeomSrc               = "Forward_StaticMesh"sv;
 		constexpr auto c_PbrPixelSrc           = "Forward_PBR"sv;
@@ -216,7 +217,7 @@ namespace bgl
 			// A depth-only pre-pass binds no render target: it exists only to write depth.
 			if (!cfg.depthOnly)
 			{
-				pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+				pipelineDesc.AddRtvFormat(c_SceneColorFormat);
 
 				// The rtvFormats count is what the bound framebuffer must match, so a blend PSO
 				// omitting this is also what keeps the velocity buffer out of its attachments.
@@ -414,7 +415,7 @@ namespace bgl
 		auto gfxState = MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.backBufferHandle)
+		                           .AddColorAttachment(draw.sceneColorHandle)
 		                           .AddColorAttachment(draw.motionVectorHandle)
 		                           .SetDepthAttachment(draw.depthBufferHandle);
 
@@ -481,7 +482,7 @@ namespace bgl
 		auto colorState = MeshletState();
 		colorState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		colorState.frameBuffer = FrameBuffer()
-		                             .AddColorAttachment(draw.backBufferHandle)
+		                             .AddColorAttachment(draw.sceneColorHandle)
 		                             .SetDepthAttachment(draw.depthBufferHandle);
 
 		// Depth-only: the self-occluding partition writes its front layer's depth with no colour

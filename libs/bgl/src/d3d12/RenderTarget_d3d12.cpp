@@ -122,7 +122,7 @@ namespace bgl
 			}
 		}
 
-		CreateDepthAndMotionVectors();
+		CreateAttachments();
 	}
 
 	void
@@ -151,11 +151,11 @@ namespace bgl
 			}
 		}
 
-		CreateDepthAndMotionVectors();
+		CreateAttachments();
 	}
 
 	void
-	RenderTarget::CreateDepthAndMotionVectors()
+	RenderTarget::CreateAttachments()
 	{
 		{
 			auto depthTextureDesc          = TextureDesc();
@@ -201,6 +201,41 @@ namespace bgl
 
 			m_MotionVectors.rtvHandle =
 				m_ResourceManager->CreateRtv(m_MotionVectors.textureHandle, rtvDesc);
+		}
+
+		{
+			// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
+			// Alpha is carried because the blend state writes destination alpha and the capture path
+			// reads it, which rules out the packed three-channel float formats.
+			constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
+
+			auto sceneColorDesc      = TextureDesc();
+			sceneColorDesc.format    = c_SceneColorFormat;
+			sceneColorDesc.width     = static_cast<uint32_t>(m_Width);
+			sceneColorDesc.height    = static_cast<uint32_t>(m_Height);
+			sceneColorDesc.dimension = TextureDimension::kTexture2D;
+			sceneColorDesc.debugName = "Scene Color";
+			sceneColorDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			sceneColorDesc.initialLayout = BarrierLayout::kRenderTarget;
+
+			sceneColorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+			m_SceneColor.textureHandle = m_ResourceManager->CreateTexture(sceneColorDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = c_SceneColorFormat;
+			rtvDesc.debugName = "Scene Color RTV";
+
+			m_SceneColor.rtvHandle =
+				m_ResourceManager->CreateRtv(m_SceneColor.textureHandle, rtvDesc);
+
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = c_SceneColorFormat;
+			srvDesc.debugName = "Scene Color SRV";
+
+			m_SceneColor.srvHandle =
+				m_ResourceManager->CreateSrv(m_SceneColor.textureHandle, srvDesc);
 		}
 	}
 
@@ -274,5 +309,9 @@ namespace bgl
 
 		m_ResourceManager->DestroyRtv(m_MotionVectors.rtvHandle, false);
 		m_ResourceManager->DestroyTexture(m_MotionVectors.textureHandle, false);
+
+		m_ResourceManager->DestroySrv(m_SceneColor.srvHandle, false);
+		m_ResourceManager->DestroyRtv(m_SceneColor.rtvHandle, false);
+		m_ResourceManager->DestroyTexture(m_SceneColor.textureHandle, false);
 	}
 }

@@ -314,14 +314,18 @@ it, `RGBA16_FLOAT` as `BuildForwardKernel`'s colour format, `util.Tonemap` out o
 and `Skybox.slang` and into a new `TonemapPass`, and a `maxRtvs` default that covers four per target.
 No TAA at all — this task decides where the pixels land and where the display curve is applied.
 
-*Gate:* the 15 existing goldens. The blend-free ones (`cube`, `plane`, `pbr_ibl`, `two_targets_*`, …)
-must pass **untouched** — the tonemap is the same function on the same values, just later. The
-blend-carrying ones are rebaselined because compositing moves from tonemapped to linear HDR, with the
-before/after pair in the PR body and a sentence per image saying why the difference is the expected
-one. Plus `just run bgl_tests -- --gpu-validation` for the new SRV and the extra pass's barriers.
+*Gate:* the 15 existing goldens, with the ones that move rebaselined and justified per image. Plus
+`just run bgl_tests -- --gpu-validation` for the new SRV and the extra pass's barriers.
 
-Rebaselining goldens in the same PR that changes the code they guard is a hole in the net, so the
-count matters: if more than the blend set moves, something is wrong and the task is not done.
+**This plan predicted the wrong set, in both directions.** It said the blend-carrying goldens would
+move and the rest would not. What actually moved was `cube`, `plane`, `plane_floor`, `sphere_cube`
+and `two_cubes` — every one of them drawn by `kOpaque_StaticMesh_Null`, whose pixel shader writes a
+literal `float4(1, 1, 1, 1)`. That constant is radiance now, so the display curve maps it to about
+0.8 instead of leaving it white. The blend goldens did not move: the transparent tests compare two
+captures against each other rather than against a stored image, and the `alpha_test_*` set is
+alpha-*tested* PBR shading, where moving the curve later is arithmetically neutral. So the real
+lesson is that self-referential assertions survive a pipeline change and stored references do not,
+which is the argument for the `AliasEnergy`/`MeanColor` gates in the sections above.
 
 ### T2 — Jitter, and motion vectors that survive it
 
