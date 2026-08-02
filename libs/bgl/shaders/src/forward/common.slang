@@ -1,10 +1,5 @@
 import types.SubmeshInstance;
-import forward.ViewData;
 import idl.PsoType;
-
-// Declared here rather than beside the mesh shader that fills it: the pixel stage needs the jitter
-// offsets to de-jitter its motion vector, and every pixel module imports this one.
-public ConstantBuffer<ViewData> viewData;
 
 public struct InstancedPayload
 {
@@ -24,9 +19,11 @@ public struct ForwardVSOut
     // material types, so their pixel shader cannot know it from the PSO the way the others do.
     public nointerpolation uint materialIsLoose : MATERIALTYPE;
 
-    // Undivided clip position under this frame's and last frame's camera. Carried as a pair rather
-    // than reusing SV_Position so both endpoints of the delta go through identical math, and so the
-    // skinned path can substitute its own previous-frame position without touching the pixel stage.
+    // Undivided clip position under this frame's and last frame's camera, with each frame's jitter
+    // already removed -- SV_Position keeps its offset, these do not, because a velocity is about the
+    // surface and the sample pattern is not part of it. Carried as a pair rather than reusing
+    // SV_Position so both endpoints of the delta go through identical math, and so the skinned path
+    // can substitute its own previous-frame position without touching the pixel stage.
     public float4 clip : CLIPPOSITION;
     public float4 prevClip : PREVCLIPPOSITION;
 };
@@ -41,15 +38,10 @@ public struct ForwardPSOut
 
 // Where this pixel's surface sat last frame, as a UV displacement: history is sampled at
 // `uv - motion`. NDC y runs opposite to UV y, hence the sign flip.
-//
-// Both clip positions carry the jitter of the frame that produced them, and each is removed against
-// its own frame's offset -- a velocity is about the surface, and the sample pattern is not part of
-// it. Both offsets are zero when the target has no temporal AA, which leaves this the plain
-// difference it was.
 public float2 ComputeMotionVector(ForwardVSOut input)
 {
-    float2 ndc = input.clip.xy / input.clip.w - viewData.jitter;
-    float2 prevNdc = input.prevClip.xy / input.prevClip.w - viewData.prevJitter;
+    float2 ndc = input.clip.xy / input.clip.w;
+    float2 prevNdc = input.prevClip.xy / input.prevClip.w;
 
     return (ndc - prevNdc) * float2(0.5, -0.5);
 }

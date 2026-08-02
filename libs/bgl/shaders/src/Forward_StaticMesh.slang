@@ -1,5 +1,6 @@
 import types.SubmeshInstance;
 import forward.ForwardData;
+import forward.ViewData;
 import idl.Constants;
 import idl.Mesh;
 import idl.Meshlet;
@@ -11,6 +12,7 @@ import debug.dbg;
 import forward.ExpansionData;
 
 ConstantBuffer<ForwardData> forwardData;
+ConstantBuffer<ViewData> viewData;
 
 // Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
 // any function that takes an OutputVertices/OutputIndices parameter, so only MSMain may index them.
@@ -31,8 +33,15 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     // through both cameras; a movable instance would carry its own previous transform here.
     ForwardVSOut vertexOut;
     vertexOut.position = mul(viewData.viewProj, worldPos);
+
+    // Both matrices carry their frame's sub-pixel offset; the raster keeps it and the motion vector
+    // must not, so it comes back out here rather than in the pixel stage -- undoing it in clip space
+    // costs one multiply-add and leaves ComputeMotionVector a plain difference.
     vertexOut.clip = vertexOut.position;
+    vertexOut.clip.xy -= viewData.jitter * vertexOut.position.w;
+
     vertexOut.prevClip = mul(viewData.prevViewProj, worldPos);
+    vertexOut.prevClip.xy -= viewData.prevJitter * vertexOut.prevClip.w;
     vertexOut.worldPos = worldPos.xyz;
     vertexOut.normal = mul((float3x3)mesh.transform, vertex.normal);
     vertexOut.uv = vertex.uv;
