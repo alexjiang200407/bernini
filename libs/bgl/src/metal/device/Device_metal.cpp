@@ -170,16 +170,20 @@ namespace bgl
 	}
 
 	Uniforms
-	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
-		const noexcept
+	Device::CreateUniforms(
+		IMeshletPipeline const*           pipeline,
+		const std::string&                cbufferName,
+		core::SharedRef<IResourceManager> resourceManager) const noexcept
 	{
-		return Uniforms(pipeline, cbufferName);
+		return Uniforms(pipeline, cbufferName, std::move(resourceManager));
 	}
 
 	Uniforms
-	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
-		const noexcept
+	Device::CreateUniforms(
+		IComputePipeline const*           pipeline,
+		const std::string&                cbufferName,
+		core::SharedRef<IResourceManager> resourceManager) const noexcept
 	{
-		return Uniforms(pipeline, cbufferName);
+		return Uniforms(pipeline, cbufferName, std::move(resourceManager));
 	}
 }

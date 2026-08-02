@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/TextureHandle.h"
 #include "pipeline/ComputeKernel.h"
@@ -97,7 +98,8 @@ TEST_CASE(
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSStructHandleSample"))
-			.SetDebugName("Struct Handle Sample"));
+			.SetDebugName("Struct Handle Sample"),
+		resourceManager);
 	REQUIRE(kernel.pipeline != nullptr);
 	REQUIRE(kernel.uniforms.contains("gUniforms"));
 

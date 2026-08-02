@@ -53,10 +53,14 @@ namespace bgl
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
 
 		[[nodiscard]] ComputeKernel
-		CreateComputeKernel(const ComputePipelineDesc& desc) const noexcept;
+		CreateComputeKernel(
+			const ComputePipelineDesc&        desc,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept;
 
 		[[nodiscard]] MeshletKernel
-		CreateMeshletKernel(const MeshletPipelineDesc& desc) const noexcept;
+		CreateMeshletKernel(
+			const MeshletPipelineDesc&        desc,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept;
 
 		virtual core::SharedRef<ICommandList>
 		CreateCommandList(
@@ -96,13 +100,17 @@ namespace bgl
 
 		[[nodiscard]]
 		virtual Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
-			const noexcept = 0;
+		CreateUniforms(
+			IMeshletPipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual Uniforms
-		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
-			const noexcept = 0;
+		CreateUniforms(
+			IComputePipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept = 0;
 	};
 
 	using DeviceRef = core::SharedRef<IDevice>;

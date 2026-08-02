@@ -77,12 +77,16 @@ namespace bgl
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;
 
 		Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
-			const noexcept override;
+		CreateUniforms(
+			IMeshletPipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept override;
 
 		Uniforms
-		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
-			const noexcept override;
+		CreateUniforms(
+			IComputePipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept override;
 
 	private:
 		NS::SharedPtr<MTL::Device> m_Device;

@@ -1,5 +1,4 @@
 #pragma once
-#include "device/Device.h"
 #include "resource/Buffer.h"
 #include "resource/Dsv.h"
 #include "resource/Readback.h"
@@ -15,6 +14,9 @@
 
 namespace bgl
 {
+	class ICommandList;
+	class ICommandQueue;
+
 	struct ResourceManagerDesc
 	{
 		uint32_t maxCbvSrvUavs      = 1024;

@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
@@ -161,7 +162,8 @@ TEST_CASE(
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("TransparentDepthKeys"))
-			.SetDebugName("Transparent Depth Keys"));
+			.SetDebugName("Transparent Depth Keys"),
+		resourceManager);
 
 	kernel["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
 	kernel["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();

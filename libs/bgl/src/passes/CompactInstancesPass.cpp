@@ -1,4 +1,5 @@
 #include "passes/CompactInstancesPass.h"
+#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "idl/CullView.h"
@@ -22,22 +23,26 @@ namespace bgl
 		m_CullInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("CullInstances"))
-				.SetDebugName("Cull Instances"));
+				.SetDebugName("Cull Instances"),
+			resourceManager);
 
 		m_Histogram = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("HistogramInstances"))
-				.SetDebugName("Histogram Instances"));
+				.SetDebugName("Histogram Instances"),
+			resourceManager);
 
 		m_PrefixSum = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("PrefixSumInstances"))
-				.SetDebugName("Prefix-Sum Instances"));
+				.SetDebugName("Prefix-Sum Instances"),
+			resourceManager);
 
 		m_CompactInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("CompactInstances"))
-				.SetDebugName("Compact Instances"));
+				.SetDebugName("Compact Instances"),
+			resourceManager);
 
 		{
 			auto desc = ComputeBufferDesc();

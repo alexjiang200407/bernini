@@ -204,7 +204,10 @@ namespace bgl
 			"empty pixel shader");
 
 		MeshletKernel
-		BuildForwardKernel(IDevice* device, const PsoConfig& cfg)
+		BuildForwardKernel(
+			IDevice*                          device,
+			const PsoConfig&                  cfg,
+			core::SharedRef<IResourceManager> resourceManager)
 		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
@@ -258,24 +261,24 @@ namespace bgl
 				RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
 					depth);
 
-			return device->CreateMeshletKernel(pipelineDesc);
+			return device->CreateMeshletKernel(pipelineDesc, std::move(resourceManager));
 		}
 	}
 
 	void
-	ForwardPass::Init(IDevice* device)
+	ForwardPass::Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
 		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
 		{
-			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
+			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso], resourceManager);
 		}
 
 		for (const PrepassEntry& entry : c_Prepasses)
 		{
 			m_PrepassKernels[static_cast<size_t>(entry.pso)] =
-				BuildForwardKernel(device, entry.config);
+				BuildForwardKernel(device, entry.config, resourceManager);
 		}
 	}
 

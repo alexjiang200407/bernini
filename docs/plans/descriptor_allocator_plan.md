@@ -15,11 +15,11 @@ changes is *who computes that uint*.
 
 > **Rebased onto the Metal world.** This plan was first written when the two backends were D3D12 and
 > WebGPU. WebGPU was deleted (#175–#180) and Metal landed (#213), so the branch was rebased onto
-> master and the plan rewritten against it. Two things changed materially: half the seam this plan
-> proposed **already exists** under the name `ResolveDescriptor`, and the design decision in § 2 had
-> to be retaken, because Metal cannot make the choice the original plan made. The task PRs merged
-> before the rebase (#156, #158, #161, #164, #167) are not on the branch any more; #168 was closed
-> because its backend no longer exists. § 3 is the work that remains.
+> master and the plan rewritten against it. The design decision in § 2 had to be retaken, because
+> Metal cannot make the choice the original plan made. The task PRs merged before the rebase (#156,
+> #158, #161, #164, #167) are not on the branch any more — they are preserved on the
+> `pre-rebase/descriptor-allocator` tag and the remaining tasks cherry-pick from it rather than
+> reimplementing. #168 was closed because its backend no longer exists. § 3 is the work that remains.
 
 ---
 
@@ -35,7 +35,8 @@ them differently:
 | **Stored in GPU memory** — a material's texture | once, by the CPU | `ResolveDescriptor` — **done** |
 | **Bound through a constant buffer** — everything in `Uniforms` and the scene buffers | per frame | the identity — **still open** |
 
-The first was solved by the Metal port, and its seam is exactly the one this plan set out to add:
+The first was solved by the Metal port, with a seam that looks very like the one this plan set out to
+add:
 
 ```cpp
 [[nodiscard]] virtual DescriptorHandle
@@ -45,10 +46,19 @@ ResolveDescriptor(const TextureHandle& handle) const noexcept = 0;
 backend's business: a descriptor-heap index on D3D12, the native resource id on Metal."* Both
 backends implement it and `Scene.cpp:878,940` calls it.
 
-**So this plan must not add a second seam.** The original design proposed
-`GetBindlessIndex(BufferHandle|TextureHandle|SamplerHandle) -> uint32_t`; adding it now would give one
-contract two names, which is the very thing the seam exists to prevent. What is missing is not a new
-seam but its *reach*: `ResolveDescriptor` covers textures only, and only on the stored-in-memory path.
+An earlier draft of this plan concluded that `GetBindlessIndex` must therefore not be added, because it
+would give one contract two names. **That was wrong, and D2 is where it was caught.** The two rows
+above are two *different* contracts that happen to coincide on D3D12:
+
+| | D3D12 | Metal |
+|---|---|---|
+| stored in GPU memory | heap index | native `gpuResourceID` — nothing can patch it later |
+| constant buffer | heap index | **slot index**, which the dispatch rewrite looks up and replaces |
+
+One function cannot answer both on Metal. Routing `Uniforms` through `ResolveDescriptor` would write a
+native id into the cbuffer, and `MapUniformHandlesToGpuAddresses` would then read its low four bytes
+as a slot index and dereference a garbage pool entry. So the two seams stay separate, and the
+identical answers on D3D12 are a coincidence of that backend, not evidence they are one thing.
 
 ### Where the identity still lives
 
@@ -120,25 +130,30 @@ Unchanged since the first survey, and all still present:
 
 ## 2. Design
 
-### The seam is `ResolveDescriptor`, widened
+### Two seams, one per question
 
-No new virtual. `ResolveDescriptor` gains the two overloads it lacks, so the constant-buffer path can
-ask the same question the stored-in-memory path already asks:
+`IResourceManager` carries both, and which one a call site wants is decided by where the number ends
+up, not by what it names:
 
 ```cpp
-[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const BufferHandle&)  const noexcept = 0;
-[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const SamplerHandle&) const noexcept = 0;
+// stored in GPU memory -- written once by the CPU, dereferenced as it stands
+[[nodiscard]] virtual DescriptorHandle ResolveDescriptor(const TextureHandle&) const noexcept = 0;
+
+// bound through a constant buffer -- the backend may still rewrite it at record time
+[[nodiscard]] virtual uint32_t GetBindlessIndex(BufferHandle)  const noexcept = 0;
+[[nodiscard]] virtual uint32_t GetBindlessIndex(TextureHandle) const noexcept = 0;
+[[nodiscard]] virtual uint32_t GetBindlessIndex(SamplerHandle) const noexcept = 0;
 ```
 
-D3D12 returns the descriptor index its allocator handed out. **Metal returns the slot index
-unchanged**, which is what its dispatch rewrite already expects to find, so Metal's behaviour does not
-change at all — it keeps reading a slot index out of the cbuffer and patching it to a native value at
-record time.
+On D3D12 both return the heap index, because the shader indexes the heap directly in either case. On
+Metal they differ: `ResolveDescriptor` returns the native `gpuResourceID`, `GetBindlessIndex` returns
+the pool slot that `MapUniformHandlesToGpuAddresses` looks up and replaces at dispatch. Metal's
+behaviour is therefore unchanged by this plan — it keeps finding a slot index where it already expects
+one.
 
-That asymmetry is the point rather than a wart: `ResolveDescriptor` means "the value this backend
-wants in GPU-visible memory for this handle", and for a backend that patches later, that value is the
-slot. `DescriptorHandle` is eight bytes and Metal already overwrites all eight at dispatch
-(`DescriptorHandle::FromNative`), so nothing needs to widen.
+Naming them apart is what stops a later reader "unifying" them: the D3D12 implementations are
+identical today and will still be identical after D4, which makes them look redundant right up until
+the moment a heapless backend proves they are not.
 
 ### Resolve eagerly, or patch at flush — retaken
 
@@ -206,14 +221,16 @@ half-migrated at a commit boundary.
   macOS build. This is what made the pre-rebase #156 unlandable. The test must be compiled only for
   the D3D12 backend.
   *Gate:* new unit tests in `bgl_tests`; **and `just build` green on both a D3D12 and a Metal preset**.
-* **D2 — widen `ResolveDescriptor` to buffers and samplers, returning what the identity returns
-  today.** D3D12 returns `handle.slot.index`; Metal returns the same. A pure seam: every call site can
-  migrate to it before the number behind it changes.
-  *Gate:* `bgl_tests` green on both backends; no golden image moves.
+* **D2 — `GetBindlessIndex` on both backends, returning what the identity returns today.** D3D12
+  returns `handle.slot.index`; Metal returns the same, which is what its dispatch rewrite already
+  expects. A pure seam: every call site can migrate to it before the number behind it changes.
+  *Gate:* `bgl_tests` green on both backends; no golden image moves. `BindlessIndex_test` drives the
+  seam through `IResourceManager` rather than a backend type, so both implementations are covered.
 * **D3 — move the constant-buffer call sites onto the seam.** `Uniforms` gains its
-  `ResourceManagerRef`; the eight sites in § 1 stop constructing `DescriptorHandle` from a slot. The
-  `DescriptorHandle(core::slot_handle)` constructor is deleted, which is what makes the migration
-  checkable — anything left behind fails to compile.
+  `ResourceManagerRef`; the eight sites in § 1 stop constructing `DescriptorHandle` from a slot.
+  `slot_handle::operator bool` becomes explicit, which is what makes the migration checkable —
+  a handle can no longer promote to an integer, so anything left behind fails to compile. Scene.cpp
+  keeps `ResolveDescriptor`: it is the other path, and it was migrated already.
   *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
   diff is a bug).
 * **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` take an index

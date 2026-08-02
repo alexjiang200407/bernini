@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/Readback.h"
@@ -68,7 +69,8 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 		bgl::MeshletPipelineDesc()
 			.SetMeshShader(device->CreateShader("FullscreenRect", "MSMain"))
 			.SetPixelShader(device->CreateShader("FullscreenRect", "PSMain"))
-			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+			.AddRtvFormat(bgl::Format::RGBA32_FLOAT),
+		resourceManager);
 
 	auto state   = bgl::MeshletState();
 	state.kernel = &kernel;
@@ -183,7 +185,8 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 		bgl::MeshletPipelineDesc()
 			.SetMeshShader(device->CreateShader("MeshUniformTest", "MSMain"))
 			.SetPixelShader(device->CreateShader("MeshUniformTest", "PSMain"))
-			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+			.AddRtvFormat(bgl::Format::RGBA32_FLOAT),
+		resourceManager);
 
 	// R comes from the mesh stage (meshValue), G/B from the fragment stage (fragColor).
 	kernel["gUniforms"]["meshValue"] = 0.25f;
@@ -294,7 +297,8 @@ TEST_CASE("Two meshlet draws to one target share a pass and rebind their uniform
 		bgl::MeshletPipelineDesc()
 			.SetMeshShader(device->CreateShader("MeshUniformTest", "MSMain"))
 			.SetPixelShader(device->CreateShader("MeshUniformTest", "PSMain"))
-			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+			.AddRtvFormat(bgl::Format::RGBA32_FLOAT),
+		resourceManager);
 
 	auto state   = bgl::MeshletState();
 	state.kernel = &kernel;
@@ -413,7 +417,8 @@ TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[mesh
 		bgl::MeshletPipelineDesc()
 			.SetMeshShader(device->CreateShader("MeshTwoCbufferTest", "MSMain"))
 			.SetPixelShader(device->CreateShader("MeshTwoCbufferTest", "PSMain"))
-			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+			.AddRtvFormat(bgl::Format::RGBA32_FLOAT),
+		resourceManager);
 
 	kernel["gMesh"]["meshValue"] = 0.25f;  // mesh-only cbuffer -> R
 	kernel["gFrag"]["fragColor"] =

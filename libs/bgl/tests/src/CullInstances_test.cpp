@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "culling/Frustum.h"
+#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/idl.h"
@@ -156,7 +157,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	auto cull = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CullInstances"))
-			.SetDebugName("Cull Instances"));
+			.SetDebugName("Cull Instances"),
+		resourceManager);
 	REQUIRE(cull.pipeline != nullptr);
 
 	bgl::FrameGraph fg;

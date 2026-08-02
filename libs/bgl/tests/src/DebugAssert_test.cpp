@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "debug/DebugBuffer.h"
 #include "debug/DebugReadback.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -170,7 +171,8 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSDbgRaiseTest"))
-			.SetDebugName("Dbg Raise Test"));
+			.SetDebugName("Dbg Raise Test"),
+		resourceManager);
 	REQUIRE(kernel.pipeline != nullptr);
 
 	// The shader references the implicit gDebug cbuffer; reflection must surface it so

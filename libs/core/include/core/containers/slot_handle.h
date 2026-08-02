@@ -26,6 +26,12 @@ namespace core
 			return !(*this == other);
 		}
 
-		operator bool() const noexcept { return !is_null(); }
+		// Explicit so a handle cannot silently become an integer through bool promotion --
+		// an overload that stops taking slot_handle must fail to compile, not bind to 1.
+		explicit
+		operator bool() const noexcept
+		{
+			return !is_null();
+		}
 	};
 }

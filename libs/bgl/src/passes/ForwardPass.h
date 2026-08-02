@@ -6,6 +6,7 @@
 namespace bgl
 {
 	class IDevice;
+	class IResourceManager;
 	class FrameGraph;
 	class PassContext;
 
@@ -16,7 +17,10 @@ namespace bgl
 	public:
 		ForwardPass() = default;
 		~ForwardPass() noexcept { logger::trace("~ForwardPass"); }
-		ForwardPass(IDevice* device) { Init(device); }
+		ForwardPass(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
+		{
+			Init(device, std::move(resourceManager));
+		}
 
 		ForwardPass(const ForwardPass&) noexcept = delete;
 		ForwardPass(ForwardPass&&) noexcept      = delete;
@@ -41,7 +45,7 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager);
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

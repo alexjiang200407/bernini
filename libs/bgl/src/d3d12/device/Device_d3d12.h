@@ -56,12 +56,16 @@ namespace bgl
 		CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept override;
 
 		Uniforms
-		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
-			const noexcept override;
+		CreateUniforms(
+			IMeshletPipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept override;
 
 		Uniforms
-		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
-			const noexcept override;
+		CreateUniforms(
+			IComputePipeline const*           pipeline,
+			const std::string&                cbufferName,
+			core::SharedRef<IResourceManager> resourceManager) const noexcept override;
 
 		/**
 		 * The Slang session shaders are compiled through, created on first call.

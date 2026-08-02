@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
@@ -132,13 +133,15 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	auto histogramKernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("HistogramInstances"))
-			.SetDebugName("Histogram Instances"));
+			.SetDebugName("Histogram Instances"),
+		resourceManager);
 	REQUIRE(histogramKernel.pipeline != nullptr);
 
 	auto prefixSumKernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("PrefixSumInstances"))
-			.SetDebugName("Prefix-Sum Instances"));
+			.SetDebugName("Prefix-Sum Instances"),
+		resourceManager);
 	REQUIRE(prefixSumKernel.pipeline != nullptr);
 
 	// ComputeBuffer wraps its UAV handle in a struct, so it binds through the same

@@ -1,6 +1,7 @@
 #pragma once
 #include "constants/constants.h"
 #include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
 #include "resource/Shader.h"
 #include "resource/Texture.h"
@@ -139,14 +140,14 @@ namespace bgl
 			operator[](std::string_view name) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, name);
-				return AccessorBase(m_Data, offset, node);
+				return AccessorBase(m_Data, offset, node, m_ResourceManager);
 			}
 
 			AccessorBase
 			operator[](uint32_t idx) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, idx);
-				return AccessorBase(m_Data, offset, node);
+				return AccessorBase(m_Data, offset, node, m_ResourceManager);
 			}
 
 			[[nodiscard]] bool
@@ -190,7 +191,7 @@ namespace bgl
 					{
 						if ((*this)[key].IsValid())
 						{
-							(*this)[key] = DescriptorHandle(handle.slot);
+							(*this)[key] = DescriptorHandle(ResolveBindlessIndex(handle));
 							return *this;
 						}
 					}
@@ -203,7 +204,7 @@ namespace bgl
 					GetType() == UniformType::kValue &&
 					m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.slot);
+					*this = DescriptorHandle(ResolveBindlessIndex(handle));
 					return *this;
 				}
 
@@ -218,7 +219,7 @@ namespace bgl
 				if (GetType() == UniformType::kValue &&
 				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					*this = DescriptorHandle(handle.idx);
+					*this = DescriptorHandle(ResolveBindlessIndex(handle));
 					return *this;
 				}
 
@@ -232,7 +233,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.slot);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(ResolveBindlessIndex(handle));
 					return *this;
 				}
 
@@ -246,7 +247,8 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.textureSlot);
+					(*this)[c_HandleUniformMember] =
+						DescriptorHandle(ResolveBindlessIndex(TextureHandle::From(handle)));
 					return *this;
 				}
 
@@ -284,9 +286,21 @@ namespace bgl
 			}
 
 		private:
-			AccessorBase(DataPtr data, size_t offset, detail::UniformsNode* node) :
-				m_Data(data), m_Offset(offset), m_Node(node)
+			AccessorBase(
+				DataPtr                 data,
+				size_t                  offset,
+				detail::UniformsNode*   node,
+				const IResourceManager* resourceManager) :
+				m_Data(data), m_Offset(offset), m_Node(node), m_ResourceManager(resourceManager)
 			{}
+
+			template <typename Handle>
+			uint32_t
+			ResolveBindlessIndex(Handle handle) const
+			{
+				gassert(m_ResourceManager != nullptr, "Uniforms accessor has no resource manager");
+				return m_ResourceManager->GetBindlessIndex(handle);
+			}
 
 			void
 			AssertIsValue() const
@@ -304,9 +318,10 @@ namespace bgl
 			}
 
 		private:
-			DataPtr               m_Data;
-			size_t                m_Offset;
-			detail::UniformsNode* m_Node;
+			DataPtr                 m_Data;
+			size_t                  m_Offset;
+			detail::UniformsNode*   m_Node;
+			const IResourceManager* m_ResourceManager;
 
 			friend class Uniforms;
 		};
@@ -317,8 +332,14 @@ namespace bgl
 
 	public:
 		Uniforms() = default;
-		Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
-		Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
+		Uniforms(
+			IMeshletPipeline const* pipeline,
+			std::string_view        cbufferName,
+			ResourceManagerRef      resourceManager);
+		Uniforms(
+			IComputePipeline const* pipeline,
+			std::string_view        cbufferName,
+			ResourceManagerRef      resourceManager);
 
 		Uniforms(const Uniforms&) = delete;
 		Uniforms(Uniforms&&)      = default;
@@ -381,6 +402,7 @@ namespace bgl
 		std::unique_ptr<detail::UniformsNode> m_Root           = nullptr;
 		size_t                                m_Size           = 0;
 		uint32_t                              m_RootParamIndex = 0xFFFFFFFF;
+		ResourceManagerRef                    m_ResourceManager;
 
 		// flat CPU-side mirror
 		std::vector<std::byte> m_Buffer;

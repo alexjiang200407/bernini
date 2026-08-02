@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/Constants.h"
 #include "idl/DispatchArgs.h"
@@ -114,7 +115,8 @@ TEST_CASE(
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
 			.SetShader(device->CreateShader("TransparentSort"))
-			.SetDebugName("Transparent Sort"));
+			.SetDebugName("Transparent Sort"),
+		resourceManager);
 
 	kernel["gUniforms"]["entries"]               = entries.GetBufferHandle();
 	kernel["gUniforms"]["count"]                 = counter.GetBufferHandle();

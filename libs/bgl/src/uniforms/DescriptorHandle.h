@@ -1,5 +1,4 @@
 #pragma once
-#include <core/containers/slot_handle.h>
 
 namespace bgl
 {
@@ -17,7 +16,6 @@ namespace bgl
 		DescriptorHandle() = default;
 		explicit DescriptorHandle(uint32_t hi, uint32_t lo) : m_Hi(hi), m_Lo(lo) {}
 		explicit DescriptorHandle(uint32_t hi) : m_Hi(hi) {}
-		explicit DescriptorHandle(core::slot_handle slot) : DescriptorHandle(slot.index) {}
 
 		// The eight bytes verbatim, for a backend whose shader reads them as one 64-bit value rather
 		// than as a pair. Byte order is the machine's, which is the only order the GPU reads them in;

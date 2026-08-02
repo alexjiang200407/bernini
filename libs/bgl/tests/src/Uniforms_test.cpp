@@ -33,7 +33,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 	REQUIRE(gfxBase != nullptr);
 
-	auto device = gfxBase->GetDevice();
+	auto resourceManager = gfxBase->GetResourceManagerCpy();
+	auto device          = gfxBase->GetDevice();
 
 	REQUIRE(device != nullptr);
 
@@ -44,7 +45,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 		pipelineDesc.SetMeshShader(device->CreateShader("MSUniformReflectionScalar"));
 
 		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
-		auto uniforms = device->CreateUniforms(pipeline, "gUniforms");
+		auto uniforms = device->CreateUniforms(pipeline, "gUniforms", resourceManager);
 
 		CHECK(uniforms.GetSize() == 208u);
 

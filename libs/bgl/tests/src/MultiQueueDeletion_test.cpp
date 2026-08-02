@@ -1,4 +1,5 @@
 #include "cmd/CommandQueue.h"
+#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
