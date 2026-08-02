@@ -144,6 +144,9 @@ namespace bgl
 		m_BrdfLut.ReleaseTarget();
 
 #if defined(BERNINI_GPU_DEBUG)
+		m_BufferPoisoner.Init(m_ResourceManager);
+		m_FrameGraph.SetBufferPoisoner(&m_BufferPoisoner);
+
 		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
 		for (auto& readback : m_DebugReadbacks)
 		{
@@ -191,6 +194,9 @@ namespace bgl
 			m_ResourceManager->DestroyReadbackBuffer(readback, false);
 		}
 		m_DebugBuffer.Release(false);
+
+		m_FrameGraph.SetBufferPoisoner(nullptr);
+		m_BufferPoisoner.Release(false);
 #endif
 
 		// Clear retained passes; each pass descriptor holds a resource-manager reference that would

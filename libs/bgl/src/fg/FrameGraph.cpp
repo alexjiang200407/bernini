@@ -510,6 +510,11 @@ namespace bgl
 				cmd->Barrier(b.textureHandles, b.textureDescs);
 			}
 
+			if (m_Poisoner != nullptr)
+			{
+				PoisonPassBuffers(pass, cmd);
+			}
+
 			if (pass.desc.exec)
 			{
 				PassContext ctx;
@@ -561,6 +566,51 @@ namespace bgl
 		// and the queue bindings, and require a recompile before the next Execute.
 		// The tracked resource states (m_LastState) are kept for the next frame.
 		ClearFrame();
+	}
+
+	void
+	FrameGraph::PoisonPassBuffers(const PassNode& pass, ICommandList* cmd)
+	{
+		for (const BufferArg& arg : pass.desc.buffers)
+		{
+			if (!arg.poison)
+			{
+				continue;
+			}
+
+			const auto it = m_Imported.find(ResolveName(pass.ns, arg.name));
+			if (it == m_Imported.end() || !std::holds_alternative<BufferHandle>(it->second.handle))
+			{
+				continue;
+			}
+
+			// A transient reaches here as a null handle: DeriveBarriers inserts a default entry for
+			// every name it tracks, imported or not.
+			const BufferHandle handle = std::get<BufferHandle>(it->second.handle);
+			if (handle.IsNull())
+			{
+				continue;
+			}
+
+			// The fill is a copy, so the buffer round-trips out of the state DeriveBarriers put it
+			// in and back again -- leaving the tracked state the pass declared, and separating the
+			// fill from the pass's own writes with a barrier the graph would not otherwise emit.
+			BufferBarrierDesc toCopy;
+			toCopy.syncBefore   = arg.sync;
+			toCopy.accessBefore = arg.access;
+			toCopy.syncAfter    = BarrierSyncFlag::kCopy;
+			toCopy.accessAfter  = BarrierAccessFlag::kCopyDest;
+
+			BufferBarrierDesc toPass;
+			toPass.syncBefore   = BarrierSyncFlag::kCopy;
+			toPass.accessBefore = BarrierAccessFlag::kCopyDest;
+			toPass.syncAfter    = arg.sync;
+			toPass.accessAfter  = arg.access;
+
+			cmd->Barrier(handle, toCopy);
+			m_Poisoner->Poison(cmd, handle);
+			cmd->Barrier(handle, toPass);
+		}
 	}
 
 	void

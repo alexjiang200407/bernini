@@ -50,6 +50,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Symptom | Reach for |
 |---|---|
 | Shader produced wrong/impossible data (bad index, overflow) but didn't crash | **GPU assertion** via `dbg_raise` |
+| A pass reads a buffer element nobody wrote this frame, and the stale value looks plausible | **Buffer poisoning** (§7) |
 | D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgl.log` |
 | Silent wrong output, want a timeline of what the engine did | **`bgl.log`** (raise `logLevel` to `kTrace`) |
 | Broken internal invariant should stop the process now | **`gassert`/`gfatal`** |
@@ -264,6 +265,46 @@ and bgl throws, naming the variable.
 writes a valid `.gputrace`, which then opens in Xcode's Metal debugger anywhere. That split is the
 whole point of the flag: it is how a headless or CI macOS box hands a frame to someone who can look
 at it.
+
+---
+
+## 7. Buffer poisoning
+
+A GPU buffer this engine allocates is never freed and re-allocated per frame — the scratch a compute
+pass writes is the same resource it wrote last frame. So a pass that fails to write an element does
+not read garbage; it reads *last frame's value*, which is plausible enough that the frame still looks
+right and the bug surfaces later, somewhere else. Poisoning removes that luck: the graph fills the
+buffer with a value that is wrong under every interpretation just before the pass runs.
+
+* **The pattern is `0x7FBADBAD`** ([BufferPoisoner.h](libs/bgl/src/debug/BufferPoisoner.h),
+  `c_PoisonWord`) — a **signalling NaN** read as a `float` and an impossible element index read as a
+  `uint`. `0xDEADBEEF` alone is a finite float (-6.3e18) that a solver consumes without complaint,
+  which is the interpretation poisoning most needs to break.
+* **It is opt-in per pass, per buffer.** `PassDesc::AddPoisonedBufferArg(name, sync)` declares a UAV
+  output the pass rewrites *from nothing*. Declaring it on a buffer the pass **accumulates** into —
+  a histogram, an append counter — destroys the frame's own data: those want
+  `ComputeBuffer::Clear`, which zeroes, not this.
+* **Only the poisoner is Debug-only.** The declaration compiles in every configuration and does
+  nothing without a poisoner installed, so pass code carries no `#ifdef`. `RenderContext` installs
+  one under `BERNINI_GPU_DEBUG` (§1's switch), and nothing else does.
+* **The fill is a copy, not a dispatch.** A buffer's one bindless descriptor is a *structured* view
+  with that buffer's own stride, so a compute shader cannot address an arbitrary buffer as `uint`s.
+  `BufferPoisoner` instead keeps a 64 KiB chunk of the repeated pattern and `CopyBuffer`s it over
+  the target as many times as it takes — which needs no descriptor, and no backend code.
+* **Cost per poisoned buffer, per frame:** two barriers (the graph transitions out of the state it
+  derived, and back) plus one copy per 64 KiB. Nothing crosses PCIe; the pattern chunk is uploaded
+  once, on the first poison of the process.
+
+Poisoned today: `scene.compactedInstances` (written only for visible instances, at offsets the
+prefix sum decides) and `scene.transparentSortEntries` (only transparent instances take a slot).
+
+### Reading a poisoned value
+
+| Where it shows up | What you see |
+|---|---|
+| A readback or PIX/Xcode buffer view | `0x7FBADBAD`, `2143082413`, or `nan` |
+| Anything shaded with it | NaN propagation — black or missing pixels, not subtly wrong ones |
+| An index derived from it | far out of bounds, so a `dbg_assert` on the bound fires (§1) |
 
 ---
 

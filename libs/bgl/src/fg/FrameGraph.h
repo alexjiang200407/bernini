@@ -1,6 +1,7 @@
 #pragma once
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "debug/BufferPoisoner.h"
 #include "fg/PassDesc.h"
 #include <core/str/str.h>
 
@@ -90,6 +91,17 @@ namespace bgl
 		void
 		RegisterQueue(std::string name, CommandQueueRef queue, CommandListRef list);
 
+		/**
+		 * Installs the poisoner that fills the buffer args passes declare with
+		 * AddPoisonedBufferArg. Without one -- which is every Release build -- those declarations
+		 * are inert. The poisoner must outlive every Execute that follows.
+		 */
+		void
+		SetBufferPoisoner(IBufferPoisoner* poisoner) noexcept
+		{
+			m_Poisoner = poisoner;
+		}
+
 		void
 		Compile(IResourceManager* resourceManager);
 
@@ -145,6 +157,11 @@ namespace bgl
 		void
 		DeriveBarriers(IResourceManager* resourceManager);
 
+		// Fills every poison-declared buffer of `pass`, bracketed by the transitions from and back
+		// to the state the pass declared for it.
+		void
+		PoisonPassBuffers(const PassNode& pass, ICommandList* cmd);
+
 		FrameGraph&
 		ImportBufferKey(std::string key, BufferHandle handle, std::optional<AccessState> initial);
 
@@ -176,5 +193,6 @@ namespace bgl
 		std::string                                m_CurrentNamespace;
 		bool                                       m_Compiled = false;
 		core::str::unordered_str_map<AccessState>  m_LastState;
+		IBufferPoisoner*                           m_Poisoner = nullptr;
 	};
 }

@@ -53,6 +53,9 @@ namespace
 		NullCommandList&
 		operator=(NullCommandList&&) = delete;
 
+		// Non-null only in the poison tests, which pin what the graph records and in what order.
+		std::vector<std::string>* log = nullptr;
+
 		void
 		WriteBuffer(BufferHandle, const void*, size_t, size_t) noexcept override
 		{}
@@ -69,8 +72,13 @@ namespace
 		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
 		{}
 		void
-		Barrier(BufferHandle, const BufferBarrierDesc&) noexcept override
-		{}
+		Barrier(BufferHandle handle, const BufferBarrierDesc&) noexcept override
+		{
+			if (log != nullptr)
+			{
+				log->push_back(std::format("barrier:{}", handle.slot.index));
+			}
+		}
 		void
 		Barrier(TextureHandle, const TextureBarrierDesc&) noexcept override
 		{}
@@ -82,7 +90,12 @@ namespace
 		{}
 		void
 		Barrier(std::span<const BufferHandle>, std::span<const BufferBarrierDesc>) noexcept override
-		{}
+		{
+			if (log != nullptr)
+			{
+				log->push_back("barriers");
+			}
+		}
 		void
 		Barrier(std::span<const TextureHandle>, std::span<const TextureBarrierDesc>) noexcept
 			override
@@ -181,6 +194,23 @@ namespace
 		void
 		Flush() noexcept override
 		{}
+	};
+
+	// Records what the graph asked to poison instead of filling anything, so the poison tests need
+	// no device.
+	class RecordingPoisoner final : public IBufferPoisoner
+	{
+	public:
+		explicit RecordingPoisoner(std::vector<std::string>& log) noexcept : m_Log(&log) {}
+
+		void
+		Poison(ICommandList*, BufferHandle buffer) noexcept override
+		{
+			m_Log->push_back(std::format("poison:{}", buffer.slot.index));
+		}
+
+	private:
+		std::vector<std::string>* m_Log;
 	};
 
 	// A ResourceManager that only resolves attachment views to textures; the rest
@@ -650,4 +680,92 @@ TEST_CASE("FrameGraph: an attachment-only texture transitions to render target",
 	CHECK(barriers.textureHandles[0].slot.index == 7);
 	CHECK(barriers.textureDescs[0].accessAfter == BarrierAccessFlag::kRenderTarget);
 	CHECK(barriers.textureDescs[0].layoutAfter == BarrierLayout::kRenderTarget);
+}
+
+// The whole point of poisoning is that the fill lands *between* the transitions the graph derived
+// and the dispatches the pass records -- late enough that the buffer is the pass's to write, early
+// enough that the pass overwrites the poison. The bracketing single-buffer barriers are what keep
+// the fill from racing the pass's own writes.
+TEST_CASE("FrameGraph: a poisoned arg is filled between the pass barriers and its exec", "[fg]")
+{
+	std::vector<std::string> log;
+	RecordingPoisoner        poisoner(log);
+
+	FrameGraph fg;
+	fg.SetBufferPoisoner(&poisoner);
+	fg.ImportBuffer("scratch", MakeBuffer(7));
+	fg.AddPass(
+		PassDesc{}
+			.SetName("P")
+			.AddPoisonedBufferArg("scratch", BarrierSyncFlag::kComputeShader)
+			.SetExec([&](const PassContext&) { log.push_back("exec"); }));
+
+	fg.Compile(&NullRm());
+
+	auto list = core::SharedRef<NullCommandList>::Make();
+	list->log = &log;
+
+	CommandListRef  cmd   = list;
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+	fg.Execute();
+
+	CHECK(
+		log ==
+		std::vector<std::string>{ "barriers", "barrier:7", "poison:7", "barrier:7", "exec" });
+}
+
+TEST_CASE("FrameGraph: a poison declaration is inert with no poisoner installed", "[fg]")
+{
+	std::vector<std::string> log;
+
+	FrameGraph fg;
+	fg.ImportBuffer("scratch", MakeBuffer(7));
+	fg.AddPass(
+		PassDesc{}
+			.SetName("P")
+			.AddPoisonedBufferArg("scratch", BarrierSyncFlag::kComputeShader)
+			.SetExec([&](const PassContext&) { log.push_back("exec"); }));
+
+	fg.Compile(&NullRm());
+
+	auto list = core::SharedRef<NullCommandList>::Make();
+	list->log = &log;
+
+	CommandListRef  cmd   = list;
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+	fg.Execute();
+
+	CHECK(log == std::vector<std::string>{ "barriers", "exec" });
+}
+
+// A transient has no handle to fill, and reaches the poison path as a null one rather than as a
+// missing name -- deriving the barriers inserts an entry for every name the graph tracks.
+TEST_CASE("FrameGraph: a poisoned transient is skipped", "[fg]")
+{
+	std::vector<std::string> log;
+	RecordingPoisoner        poisoner(log);
+
+	FrameGraph fg;
+	fg.SetBufferPoisoner(&poisoner);
+	fg.AddPass(
+		PassDesc{}
+			.SetName("P")
+			.AddPoisonedBufferArg("never.imported", BarrierSyncFlag::kComputeShader)
+			.SetSideEffect()
+			.SetExec([&](const PassContext&) { log.push_back("exec"); }));
+
+	fg.Compile(&NullRm());
+
+	auto list = core::SharedRef<NullCommandList>::Make();
+	list->log = &log;
+
+	CommandListRef  cmd   = list;
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+	fg.Execute();
+
+	CHECK(std::ranges::find(log, "poison:4294967295") == log.end());
+	CHECK(log.back() == "exec");
 }
