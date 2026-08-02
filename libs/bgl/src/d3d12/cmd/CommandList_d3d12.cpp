@@ -577,7 +577,7 @@ namespace bgl
 			if (auto it = kernel.uniforms.find("gDebug");
 			    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
 			{
-				const DescriptorHandle handle(m_ActiveDebugBuffer.slot);
+				const DescriptorHandle handle(m_ActiveDebugBuffer.bindlessIndex);
 				BindConstantData(
 					&handle,
 					sizeof(handle),
@@ -677,7 +677,7 @@ namespace bgl
 		if (auto it = kernel.uniforms.find("gDebug");
 		    it != kernel.uniforms.end() && !m_ActiveDebugBuffer.IsNull())
 		{
-			const DescriptorHandle handle(m_ActiveDebugBuffer.slot);
+			const DescriptorHandle handle(m_ActiveDebugBuffer.bindlessIndex);
 			BindConstantData(
 				&handle,
 				sizeof(handle),

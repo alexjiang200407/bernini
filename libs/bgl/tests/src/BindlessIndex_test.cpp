@@ -48,6 +48,16 @@ TEST_CASE("A handle carries its own bindless index", "[uniforms][bindless]")
 	}
 }
 
+// The migration's real gate. Both numbers are still equal everywhere, so no runtime assertion can
+// tell a slot from a descriptor -- the compiler can, once the conversion is gone.
+TEST_CASE("A slot cannot be spelled as a descriptor", "[uniforms][bindless]")
+{
+	STATIC_REQUIRE_FALSE(std::is_constructible_v<bgl::DescriptorHandle, core::slot_handle>);
+
+	// The index off a handle is still a plain uint32_t, and still is one.
+	STATIC_REQUIRE(std::is_constructible_v<bgl::DescriptorHandle, uint32_t>);
+}
+
 TEST_CASE("Uniforms write a handle's bindless index", "[uniforms][bindless]")
 {
 	auto opts                     = bgl::GraphicsOptions();
