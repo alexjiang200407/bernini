@@ -243,11 +243,11 @@ namespace bgl
 		return m_Buffers[handle.slot];
 	}
 
-	uint64_t
-	ResourceManager::GetBufferByteSize(BufferHandle handle) const noexcept
+	BufferDesc
+	ResourceManager::GetBufferDesc(BufferHandle handle) const noexcept
 	{
-		gassert(ValidBufferHandle(handle), "GetBufferByteSize on an invalid buffer handle");
-		return m_Buffers[handle.slot].GetDesc().byteSize;
+		gassert(ValidBufferHandle(handle), "GetBufferDesc on an invalid buffer handle");
+		return m_Buffers[handle.slot].GetDesc();
 	}
 
 	const ReadbackBuffer&

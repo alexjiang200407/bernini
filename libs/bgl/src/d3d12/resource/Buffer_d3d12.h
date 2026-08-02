@@ -4,13 +4,6 @@
 
 namespace bgl
 {
-	struct BufferDesc
-	{
-		uint64_t    byteSize  = 0;
-		bool        isUav     = false;
-		std::string debugName = "Unnamed Buffer";
-	};
-
 	class Buffer final
 	{
 	public:

@@ -107,7 +107,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `BufferArg` / `TextureArg` | [fg/PassDesc.h](libs/bgl/src/fg/PassDesc.h) | A declared access: resource name + `BarrierSync` + `BarrierAccess` (+ `BarrierLayout` for textures). A `BufferArg` also carries the poison flag. |
-| `IBufferPoisoner` | [debug/BufferPoisoner.h](libs/bgl/src/debug/BufferPoisoner.h) | Fills a buffer with the poison word; installed with `SetBufferPoisoner`. |
+| `BufferPoisoner` | [debug/BufferPoisoner.h](libs/bgl/src/debug/BufferPoisoner.h) | Fills a buffer with the poison word; installed with `SetBufferPoisoner`. |
 | `AccessState` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | `(sync, access, layout)` triple; the unit the graph merges and diffs to derive barriers. |
 | `PassBarriers` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | The buffer/texture handles + `*BarrierDesc`s derived for one pass; queryable via `BarriersFor`. |
 | `ResourceKind` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | `kBuffer` / `kTexture`; used to reject a resource imported as one kind but accessed as the other. |

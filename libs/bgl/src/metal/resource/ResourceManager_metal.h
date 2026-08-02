@@ -97,8 +97,8 @@ namespace bgl
 		const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept override;
 
-		[[nodiscard]] uint64_t
-		GetBufferByteSize(BufferHandle handle) const noexcept override;
+		[[nodiscard]] BufferDesc
+		GetBufferDesc(BufferHandle handle) const noexcept override;
 
 		const ReadbackBuffer&
 		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept override;

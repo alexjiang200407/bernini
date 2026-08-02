@@ -15,6 +15,9 @@
 
 namespace
 {
+	// A device, a queue, and a poisoner over the same resource manager the buffers under test come
+	// from. Constructed in place, never returned by value: BufferPoisoner owns a GPU resource and
+	// so is neither copyable nor movable.
 	struct PoisonFixture
 	{
 		bgl::GraphicsRef         gfx;
@@ -24,41 +27,44 @@ namespace
 		bgl::CommandListRef      cmdList;
 		bgl::CommandQueueRef     cmdQueue;
 		bgl::BufferPoisoner      poisoner;
+
+		PoisonFixture()
+		{
+			auto opts                     = bgl::GraphicsOptions();
+			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+			opts.enableDebugLayer         = true;
+			opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+			gfx = bgl::CreateGraphics(opts);
+			REQUIRE(gfx != nullptr);
+
+			auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+			REQUIRE(gfxBase != nullptr);
+
+			resourceManager = gfxBase->GetResourceManagerCpy();
+			device          = gfxBase->GetDevice();
+
+			auto cmdListDesc = bgl::CommandListDesc();
+			cmdListDesc.type = bgl::QueueType::kGraphics;
+
+			cmdAllocator = device->CreateCommandAllocator();
+			cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+			cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+			poisoner.Init(resourceManager);
+		}
+
+		~PoisonFixture() { poisoner.Release(false); }
+
+		PoisonFixture(const PoisonFixture&) = delete;
+		PoisonFixture(PoisonFixture&&)      = delete;
+
+		PoisonFixture&
+		operator=(const PoisonFixture&) = delete;
+
+		PoisonFixture&
+		operator=(PoisonFixture&&) = delete;
 	};
-
-	// Everything a poison test needs: a device, a queue, and a poisoner bound to the same resource
-	// manager the buffers under test come from.
-	PoisonFixture
-	MakeFixture()
-	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-
-		PoisonFixture fixture;
-		fixture.gfx = bgl::CreateGraphics(opts);
-		REQUIRE(fixture.gfx != nullptr);
-
-		auto* gfxBase = fixture.gfx->As<bgl::GraphicsBase>();
-		REQUIRE(gfxBase != nullptr);
-
-		fixture.resourceManager = gfxBase->GetResourceManagerCpy();
-		fixture.device          = gfxBase->GetDevice();
-
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
-
-		fixture.cmdAllocator = fixture.device->CreateCommandAllocator();
-		fixture.cmdList      = fixture.device->CreateCommandList(
-			cmdListDesc,
-			fixture.cmdAllocator,
-			fixture.resourceManager);
-		fixture.cmdQueue = fixture.device->CreateCommandQueue(bgl::QueueType::kGraphics);
-
-		fixture.poisoner.Init(fixture.resourceManager);
-		return fixture;
-	}
 
 	bgl::BufferBarrierDesc
 	ToCopySource() noexcept
@@ -76,7 +82,7 @@ namespace
 // would survive, which is what poisoning exists to prevent.
 TEST_CASE("Poisoning fills a buffer larger than the pattern chunk", "[poison][render]")
 {
-	PoisonFixture fixture = MakeFixture();
+	PoisonFixture fixture;
 
 	// Over 64 KiB, so the fill takes more than one copy and the last one is a partial chunk.
 	constexpr uint32_t c_Count = 20'000;
@@ -120,7 +126,6 @@ TEST_CASE("Poisoning fills a buffer larger than the pattern chunk", "[poison][re
 
 	fixture.resourceManager->DestroyReadbackBuffer(readback, false);
 	fixture.resourceManager->DestroyBuffer(target, false);
-	fixture.poisoner.Release(false);
 }
 
 // Poison is only worth anything if what a dispatch writes replaces it and what the dispatch skips
@@ -128,7 +133,7 @@ TEST_CASE("Poisoning fills a buffer larger than the pattern chunk", "[poison][re
 // written half would pass with no poison at all -- the untouched tail is the assertion that counts.
 TEST_CASE("A dispatch overwrites the poison it was given, and only that", "[poison][render]")
 {
-	PoisonFixture fixture = MakeFixture();
+	PoisonFixture fixture;
 
 	// CSComputeBufferTest runs one group of 8 threads, so the second half is never written.
 	constexpr uint32_t c_Count   = 16;
@@ -201,5 +206,4 @@ TEST_CASE("A dispatch overwrites the poison it was given, and only that", "[pois
 
 	fixture.resourceManager->DestroyReadbackBuffer(readback, false);
 	fixture.resourceManager->DestroyBuffer(target, false);
-	fixture.poisoner.Release(false);
 }

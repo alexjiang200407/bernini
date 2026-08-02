@@ -24,6 +24,15 @@ namespace bgl
 		}
 	};
 
+	// What a backend allocated a buffer as. Every Create*Buffer lowers its own descriptor to this
+	// one, and it is what GetBufferDesc hands back to code that holds only a handle.
+	struct BufferDesc
+	{
+		uint64_t    byteSize  = 0;
+		bool        isUav     = false;
+		std::string debugName = "Unnamed Buffer";
+	};
+
 	struct BufferBarrierDesc
 	{
 		BarrierSync   syncBefore   = BarrierSyncFlag::kNone;

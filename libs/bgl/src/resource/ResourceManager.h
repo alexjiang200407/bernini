@@ -162,12 +162,12 @@ namespace bgl
 		virtual const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept = 0;
 
-		// The buffer's allocated size. The concrete Buffer is an incomplete type in
-		// backend-agnostic code, so this is how a caller there sizes a copy that spans a whole
-		// buffer it only holds a handle to.
+		// What the buffer was allocated as, without exposing the backend Buffer -- so a caller in
+		// backend-agnostic code can read it (the concrete Buffer is an incomplete type there), as
+		// with GetTextureDesc.
 		[[nodiscard]]
-		virtual uint64_t
-		GetBufferByteSize(BufferHandle handle) const noexcept = 0;
+		virtual BufferDesc
+		GetBufferDesc(BufferHandle handle) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual const Texture&

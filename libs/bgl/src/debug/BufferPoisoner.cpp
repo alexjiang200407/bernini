@@ -50,7 +50,7 @@ namespace bgl
 
 		constexpr uint64_t c_PatternBytes = uint64_t{ c_PatternWords } * sizeof(uint32_t);
 
-		const uint64_t byteSize = m_ResourceManager->GetBufferByteSize(buffer);
+		const uint64_t byteSize = m_ResourceManager->GetBufferDesc(buffer).byteSize;
 		for (uint64_t offset = 0; offset < byteSize; offset += c_PatternBytes)
 		{
 			cmdList->CopyBuffer(

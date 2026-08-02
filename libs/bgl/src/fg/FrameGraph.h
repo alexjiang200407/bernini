@@ -97,7 +97,7 @@ namespace bgl
 		 * are inert. The poisoner must outlive every Execute that follows.
 		 */
 		void
-		SetBufferPoisoner(IBufferPoisoner* poisoner) noexcept
+		SetBufferPoisoner(BufferPoisoner* poisoner) noexcept
 		{
 			m_Poisoner = poisoner;
 		}
@@ -193,6 +193,6 @@ namespace bgl
 		std::string                                m_CurrentNamespace;
 		bool                                       m_Compiled = false;
 		core::str::unordered_str_map<AccessState>  m_LastState;
-		IBufferPoisoner*                           m_Poisoner = nullptr;
+		BufferPoisoner*                            m_Poisoner = nullptr;
 	};
 }
