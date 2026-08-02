@@ -3,13 +3,17 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
+#include <assetlib/env_bake.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/magic.h>
@@ -119,8 +123,6 @@ main(int argc, char** argv)
 	std::string envOut;
 	std::string envCube;
 	std::string envIem;
-	std::string envBenv;
-	bool        envFloat      = false;
 	uint32_t    envIemSize    = 128;
 	uint32_t    envSkyboxSize = 512;
 	float       envSkyboxBlur = 0.0f;
@@ -143,14 +145,6 @@ main(int argc, char** argv)
 	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
 	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
 	envmap->add_option(
-		"-b,--benv",
-		envBenv,
-		"Write all three maps and the derived exposure as one .benv -- what the editor loads");
-	envmap->add_flag(
-		"--float",
-		envFloat,
-		"Keep the .benv's maps at RGBA32F instead of packing them to RGB9E5 (4x larger)");
-	envmap->add_option(
 		"-s,--size",
 		envSize,
 		"Prefilter base face size (default: 256). The lobe blurs it, so this can be modest");
@@ -170,6 +164,16 @@ main(int argc, char** argv)
 		"-j,--threads",
 		envThreads,
 		"Worker threads (default: hardware concurrency)");
+
+	std::string envProject;
+	std::string envName = "env";
+	envmap->add_option(
+		"-p,--project",
+		envProject,
+		"Write the split formats into this project data root instead: float sources into "
+		"textures_src/, a baked Sky/<name>.bsky and EnvLighting/<name>.benvl, and an "
+		"Environments/<name>.benv composing the pair");
+	envmap->add_option("--name", envName, "Asset name for --project outputs (default: env)");
 
 	std::string objInput;
 	std::string objOut;
@@ -281,8 +285,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			if (envOut.empty() && envBenv.empty())
-				throw std::runtime_error("nothing to write: pass --out and/or --benv");
+			if (envOut.empty() && envProject.empty())
+				throw std::runtime_error("nothing to write: pass --out and/or --project");
 
 			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
 
@@ -344,35 +348,69 @@ main(int argc, char** argv)
 					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
 					0.0);
 
-			if (!envBenv.empty())
+			if (!envProject.empty())
 			{
-				const float exposure = assetlib::exposureFor(iem);
+				const auto dataRoot = std::filesystem::path(envProject);
+				const auto sources  = dataRoot / "textures_src";
+				std::filesystem::create_directories(sources);
+				std::filesystem::create_directories(dataRoot / "Sky");
+				std::filesystem::create_directories(dataRoot / "EnvLighting");
+				std::filesystem::create_directories(dataRoot / "Environments");
 
-				// RGB9E5 unless asked otherwise: 4 bytes a texel against 16, filterable on every
-				// backend without an optional feature, so this is the shipping format rather than an
-				// intermediate needing a per-platform compile.
-				auto set                    = assetlib::EnvironmentMaps();
-				set.prefilter               = envFloat ? std::move(out) : assetlib::packRgb9e5(out);
-				set.irradiance              = envFloat ? std::move(iem) : assetlib::packRgb9e5(iem);
-				assetlib::ImageData& skyOut = envSkyboxBlur > 0.0f ? sky : src;
-				set.skybox   = envFloat ? std::move(skyOut) : assetlib::packRgb9e5(skyOut);
-				set.exposure = exposure;
+				// The float intermediates are the routed sources; the bake packs them RGB9E5 into
+				// Textures/ and stamps the routes, exactly as it will for an editor re-bake later.
+				const assetlib::ImageData& skySrc = envSkyboxBlur > 0.0f ? sky : src;
+				const auto                 srcRel = [&](const char* suffix) {
+					return (std::filesystem::path("textures_src") / (envName + suffix))
+					    .generic_string();
+				};
+				assetlib::writeKTX2(
+					skySrc,
+					dataRoot / srcRel("_sky.ktx2"),
+					false,
+					assetlib::Ktx2Compression::kNone);
+				assetlib::writeKTX2(
+					out,
+					dataRoot / srcRel("_prefilter.ktx2"),
+					false,
+					assetlib::Ktx2Compression::kNone);
+				assetlib::writeKTX2(
+					iem,
+					dataRoot / srcRel("_irradiance.ktx2"),
+					false,
+					assetlib::Ktx2Compression::kNone);
 
-				auto provenance       = assetlib::EnvironmentProvenance();
-				provenance.samples    = desc.samples;
-				provenance.mipLevels  = desc.mipLevels;
-				provenance.sourceHash = assetlib::hashFile(envInput);
+				auto bsky       = assetlib::BSky();
+				bsky.name       = envName;
+				bsky.sky.source = srcRel("_sky.ktx2");
+				assetlib::bakeSky(bsky, { dataRoot });
+				assetlib::saveSky(bsky, dataRoot / "Sky" / (envName + ".bsky"));
 
-				assetlib::writeBenv(set, envBenv, provenance);
+				auto lighting              = assetlib::BEnvLighting();
+				lighting.name              = envName;
+				lighting.prefilter.source  = srcRel("_prefilter.ktx2");
+				lighting.irradiance.source = srcRel("_irradiance.ktx2");
+				assetlib::bakeEnvLighting(lighting, { dataRoot });
+				assetlib::saveEnvLighting(
+					lighting,
+					dataRoot / "EnvLighting" / (envName + ".benvl"));
+
+				auto env     = assetlib::BEnv();
+				env.name     = envName;
+				env.sky      = "Sky/" + envName + ".bsky";
+				env.lighting = "EnvLighting/" + envName + ".benvl";
+				assetlib::saveEnv(env, dataRoot / "Environments" / (envName + ".benv"));
 
 				spdlog::info(
-					"Wrote '{}': prefilter {}^2 x{}, irradiance {}^2, skybox {}^2, exposure {:.3f}",
-					envBenv,
-					set.prefilter.width,
-					set.prefilter.mipLevels,
-					set.irradiance.width,
-					set.skybox.width,
-					set.exposure);
+					"Wrote '{}' into '{}': sky {}^2, prefilter {}^2 x{}, irradiance {}^2, exposure "
+					"{:.3f}",
+					envName,
+					envProject,
+					skySrc.width,
+					out.width,
+					out.mipLevels,
+					iem.width,
+					lighting.exposure);
 			}
 		}
 		catch (const std::exception& e)

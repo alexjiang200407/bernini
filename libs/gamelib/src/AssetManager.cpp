@@ -1,8 +1,12 @@
 #include <gamelib/AssetManager.h>
 
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
@@ -132,6 +136,49 @@ namespace game
 		m_Textures.emplace(handle.textureSlot.index, TextureRecord{ std::move(key), handle, 1 });
 
 		return handle;
+	}
+
+	AssetManager::Environment
+	AssetManager::AcquireEnvironment(std::string_view relPath)
+	{
+		const assetlib::BEnv env = assetlib::loadEnv(m_DataRoot / relPath);
+
+		const auto acquireBaked = [this](const std::string& baked, const std::string& asset) {
+			if (baked.empty())
+				throw std::runtime_error(
+					"AssetManager::AcquireEnvironment: '" + asset +
+					"' has never been baked; bake it before acquiring");
+			return AcquireTexture(baked);
+		};
+
+		Environment out;
+
+		if (!env.sky.empty())
+		{
+			const assetlib::BSky sky = assetlib::loadSky(m_DataRoot / env.sky);
+			out.skybox               = acquireBaked(sky.sky.baked, env.sky);
+			out.skyMipLevel          = sky.mipLevel;
+			out.skyRotationY         = sky.rotationY;
+		}
+
+		if (!env.lighting.empty())
+		{
+			const assetlib::BEnvLighting lighting =
+				assetlib::loadEnvLighting(m_DataRoot / env.lighting);
+			out.prefilter  = acquireBaked(lighting.prefilter.baked, env.lighting);
+			out.irradiance = acquireBaked(lighting.irradiance.baked, env.lighting);
+			out.exposure   = lighting.exposure;
+		}
+
+		return out;
+	}
+
+	void
+	AssetManager::ReleaseEnvironment(const Environment& environment)
+	{
+		ReleaseTexture(environment.irradiance);
+		ReleaseTexture(environment.prefilter);
+		ReleaseTexture(environment.skybox);
 	}
 
 	bgl::MaterialHandle

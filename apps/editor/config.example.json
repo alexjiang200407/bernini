@@ -26,11 +26,11 @@
     },
     "materialEditor": {
         "initialPreviewInstances": 16,
-        "environmentMap": "assets/forest.benv"
+        "environmentMap": "assets/Environments/forest.benv"
     },
     "thumbnails": {
         "dimension": 256,
         "initialInstances": 256,
-        "environmentMap": "assets/forest.benv"
+        "environmentMap": "assets/Environments/forest.benv"
     }
 }
