@@ -230,31 +230,33 @@ half-migrated at a commit boundary.
   checkable — anything left behind fails to compile.
   *Gate:* golden images bit-identical on **both** backends (the numbers have not changed yet, so any
   diff is a bug).
-* **D3b — an SRV is created explicitly, like an RTV.** `CreateSrv(TextureHandle, SrvDesc) ->
-  SrvHandle`, and `CreateTexture` stops making one. Every texture then comes from one pool —
-  `m_Textures` — because the slot no longer has to be a heap index; `TextureHandle::usage` stops
-  selecting an index space; and the bindless index moves from `TextureHandle` to `SrvHandle`, which
-  is the thing that actually has a descriptor.
+* **D3b+D4 — an SRV is created explicitly, and its descriptor comes from the allocator.** These are
+  one step on D3D12, not two. `CreateSrv(TextureHandle, SrvDesc) -> SrvHandle`, `CreateTexture` stops
+  making one, every texture comes from `m_Textures`, and the bindless index moves from `TextureHandle`
+  to `SrvHandle` — the thing that actually has a descriptor.
 
-  This is what makes the RTV/DSV-only case *unrepresentable* rather than merely handled: a texture
-  has no bindless index to be wrong about, and only a caller that asked for an SRV gets one. It also
+  **Why they cannot be separated.** Buffers and textures share one heap *and one index space*:
+  `m_CbvSrvUavSlots` is a `variant<Buffer, Texture>` whose slot index is the descriptor index for
+  both (`ResourceManager_d3d12.cpp:137, 182`). Take textures out of that pool and an SRV still needs
+  an index from the same space a buffer draws from, so a private SRV pool would hand out indices that
+  collide with live buffer descriptors. Something has to own the one space — which is
+  `DescriptorAllocator`, already built and tested in D1.
+
+  This is what makes the RTV/DSV-only case *unrepresentable* rather than merely handled: a texture has
+  no bindless index to be wrong about, and only a caller that asked for an SRV gets one. It also
   removes the hazard § 1 names — caller-supplied `usage` bits choosing between two index spaces.
 
   Two costs, taken deliberately. **Metal pays ceremony**: it has no heap, so an `Srv` there is a
   record naming a texture whose bindless index is the texture's own pool slot — the same shape
   `Rtv`/`Dsv` already have on Metal, and the seam a format/mip texture view would need later.
-  **Destruction becomes two calls**: `DestroyTexture` does not cascade to `Rtv`/`Dsv` today, so
-  `DestroySrv` follows that convention, and `Scene::DeleteTextureAsset` has to release both.
+  **Destruction becomes two calls**: `DestroyTexture` does not cascade to `Rtv`/`Dsv`
+  (`ResourceManager_metal.cpp:303`), so `DestroySrv` follows that convention, and
+  `Scene::DeleteTextureAsset` has to release both.
+
   *Gate:* `bgl_tests` green on both backends; golden images bit-identical; a test that an RTV-only
-  texture and a sampled texture can hold the same slot index without colliding.
-* **D4 — D3D12 allocates descriptors properly.** `CreateTexture`/`CreateStructBuffer` stamp the
-  handle with an index from the allocator instead of the slot index; destruction frees it on the
-  deferred gate. This
-  is the step where the two numbers diverge, and where the comment at
-  `ResourceManager_d3d12.h:155` stops being true.
-  *Gate:* golden images within tolerance; `just run bgl_tests -- --gpu-validation`, because a mis-freed
-  descriptor is exactly what GPU-based validation catches and nothing else does. Metal unaffected —
-  worth re-running to prove it.
+  texture and a sampled texture can hold the same slot index without colliding; and
+  `just run bgl_tests -- --gpu-validation` on Windows, because a mis-freed descriptor is what only
+  GPU-based validation catches. **Not verifiable on macOS beyond the Metal half.**
 * **D5 — collapse what is left.** The `variant<Buffer, Texture>` goes, for a `slot_vector` of each,
   and `maxCbvSrvUavs` splits into a resource count and a descriptor count. D3b already merged the
   texture pools and retired `usage` as a discriminator.
