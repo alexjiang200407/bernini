@@ -8,6 +8,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -235,6 +236,24 @@ main(int argc, char** argv)
 	prune->add_flag("--dry-run", pruneDryRun, "List what would be deleted and delete nothing");
 	prune->add_flag("-y,--yes", pruneYes, "Delete without asking for confirmation");
 
+	std::string stripInput;
+	std::string stripOut;
+	bool        stripYes = false;
+
+	auto* strip = app.add_subcommand(
+		"strip",
+		"Drop a material's authoring data, leaving the shippable form: the baked triplet, the "
+		"factors and the name");
+	strip->add_option("input", stripInput, "Source .bmaterial file")
+		->required()
+		->check(CLI::ExistingFile);
+	strip->add_option(
+		"-o,--out",
+		stripOut,
+		"Write here instead of rewriting the input. The routes and the node graph are not "
+		"recoverable, so prefer this over stripping a material you still intend to author");
+	strip->add_flag("-y,--yes", stripYes, "Rewrite the input without asking for confirmation");
+
 	CLI11_PARSE(app, argc, argv);
 
 	if (*bake)
@@ -401,6 +420,41 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("describe failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*strip)
+	{
+		try
+		{
+			const std::filesystem::path in = stripInput;
+			const std::filesystem::path out =
+				stripOut.empty() ? in : std::filesystem::path(stripOut);
+
+			assetlib::BMaterial material = assetlib::loadMaterial(in);
+
+			// Asked before the strip, not after: the routes and the graph are the only record of how
+			// the material was authored, and rewriting the input destroys them.
+			if (out == in && !stripYes &&
+			    !confirm(
+					"Rewrite '" + in.string() +
+					"' without its routes or node graph? This cannot be undone."))
+			{
+				spdlog::info("Left '{}' alone.", in.string());
+				return 0;
+			}
+
+			// Throws when the material has never been baked, leaving it untouched -- so the file is
+			// only written once there is a shippable form to write.
+			assetlib::stripAuthoringData(material);
+			assetlib::saveMaterial(material, out);
+
+			spdlog::info("Stripped '{}' -> '{}'", in.string(), out.string());
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("strip failed: {}", e.what());
 			return 1;
 		}
 	}
