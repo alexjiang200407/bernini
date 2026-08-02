@@ -247,7 +247,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.bindlessIndex);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.srvBindlessIndex);
 					return *this;
 				}
 

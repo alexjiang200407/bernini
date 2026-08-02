@@ -109,7 +109,7 @@ TEST_CASE("Descriptor addresses step by the device increment", "[descriptor]")
 	auto device    = CreateTestDevice();
 	auto allocator = MakeAllocator(device.Get());
 
-	const auto start = allocator.GetHeap()->GetCPUDescriptorHandleForHeapStart();
+	const auto start = allocator.GetD3D12Heap()->GetCPUDescriptorHandleForHeapStart();
 	const auto increment =
 		device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 

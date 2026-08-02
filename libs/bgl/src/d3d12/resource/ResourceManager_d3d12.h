@@ -32,6 +32,7 @@ namespace bgl
 
 	enum class PendingType
 	{
+		kInvalid,
 		kBuffer,
 		kSrv,
 		kRtv,
@@ -43,12 +44,12 @@ namespace bgl
 
 	struct PendingDeletion
 	{
-		PendingType type      = PendingType::kBuffer;
+		PendingType type      = PendingType::kInvalid;
 		uint32_t    slotIndex = 0xFFFFFFFF;
 
-		// The descriptor to hand back when the gate clears, for a resource that holds one. It must
-		// outlive in-flight work exactly as the resource does, so it is freed here rather than at
-		// destroy time.
+		// Set only for kBuffer and kSrv, the two that occupy the shader-visible heap; null for every
+		// other type. A descriptor must outlive in-flight work exactly as the resource does, so it is
+		// handed back when the gate clears rather than at destroy time.
 		uint32_t descriptorIndex = 0xFFFFFFFF;
 	};
 
@@ -214,7 +215,7 @@ namespace bgl
 		ID3D12DescriptorHeap*
 		GetCbvSrvUavHeap() const noexcept
 		{
-			return m_CbvSrvUavDescriptors.GetHeap();
+			return m_CbvSrvUavDescriptors.GetD3D12Heap();
 		}
 
 		ID3D12DescriptorHeap*

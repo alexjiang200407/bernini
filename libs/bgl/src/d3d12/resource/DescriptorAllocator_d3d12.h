@@ -44,7 +44,7 @@ namespace bgl
 
 		[[nodiscard]]
 		ID3D12DescriptorHeap*
-		GetHeap() const noexcept
+		GetD3D12Heap() const noexcept
 		{
 			return m_Heap.Get();
 		}

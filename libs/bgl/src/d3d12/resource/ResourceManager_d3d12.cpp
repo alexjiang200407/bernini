@@ -89,7 +89,7 @@ namespace bgl
 			descriptorIndex = m_CbvSrvUavDescriptors.Allocate();
 			buffer          = Buffer(
 				m_Device.Get(),
-				m_CbvSrvUavDescriptors.GetHeap(),
+				m_CbvSrvUavDescriptors.GetD3D12Heap(),
 				descriptorIndex,
 				bufferDesc);
 		}
@@ -266,7 +266,7 @@ namespace bgl
 			Srv(m_Device.Get(),
 		        textureHandle,
 		        m_Textures[textureHandle.slot].GetD3D12Resource(),
-		        m_CbvSrvUavDescriptors.GetHeap(),
+		        m_CbvSrvUavDescriptors.GetD3D12Heap(),
 		        descriptorIndex,
 		        desc);
 
@@ -591,6 +591,9 @@ namespace bgl
 			case PendingType::kSampler:
 				m_Samplers.reclaim_slot(pending.slotIndex);
 				break;
+			case PendingType::kInvalid:
+				gassert(false, "A pending deletion was recorded with no resource type");
+				break;
 			}
 		};
 
@@ -675,7 +678,8 @@ namespace bgl
 	ResourceManager::SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList) noexcept
 	{
 		gassert(cmdList != nullptr, "Command list cannot be null");
-		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavDescriptors.GetHeap(), m_SamplerHeap.Get() };
+		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavDescriptors.GetD3D12Heap(),
+			                              m_SamplerHeap.Get() };
 		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 	}
 
