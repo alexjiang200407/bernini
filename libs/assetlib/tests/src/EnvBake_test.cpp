@@ -165,6 +165,29 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 		std::filesystem::remove(root.path / sky.sky.source);
 		CHECK(skyBakeIsStale(sky, root.path));
 	}
+
+	// The other half of "mirror the material's": naming a map is not the same as having one. A route
+	// left claiming a deleted map would report up to date and then bind the renderer's default.
+	SECTION("a deleted baked map is stale, however fresh the source is")
+	{
+		BSky sky = RoutedSky(root);
+		bakeSky(sky, { root.path });
+		REQUIRE_FALSE(skyBakeIsStale(sky, root.path));
+
+		std::filesystem::remove(root.path / sky.sky.baked);
+		CHECK(skyBakeIsStale(sky, root.path));
+	}
+
+	// The pair is one verdict, so either map going missing has to carry it.
+	SECTION("either half of the lighting losing its map makes the pair stale")
+	{
+		BEnvLighting lighting = RoutedLighting(root);
+		bakeEnvLighting(lighting, { root.path });
+		REQUIRE_FALSE(envLightingBakeIsStale(lighting, root.path));
+
+		std::filesystem::remove(root.path / lighting.irradiance.baked);
+		CHECK(envLightingBakeIsStale(lighting, root.path));
+	}
 }
 
 TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "[envbake]")

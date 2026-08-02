@@ -156,11 +156,17 @@ namespace assetlib
 				return;
 			}
 
+			// A map that is named but gone is what makes the route stale even when its source has not
+			// moved, so it has to be said here -- otherwise the route reads "up to date" beside a
+			// verdict of STALE and the two look like a contradiction.
+			if (!route.baked.empty() && stampOf(dataRoot / route.baked).size == 0)
+				out += "    baked map is missing\n";
+
 			const SourceStamp live = stampOf(dataRoot / route.source);
 			if (live == SourceStamp{})
 				out += "    source is missing\n";
 			else if (live == route.stamp)
-				out += std::format("    up to date ({} B)\n", live.size);
+				out += std::format("    source up to date ({} B)\n", live.size);
 			else
 				out += std::format(
 					"    STALE: source is {} B / mtime {}, baked from {} B / mtime {}\n",
