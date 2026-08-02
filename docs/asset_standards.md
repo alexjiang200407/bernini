@@ -298,7 +298,8 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     references — and with no routes there is nothing for the triplet to be stale against, so a stripped
     material always draws from it. It refuses to strip a material that was never baked, which would leave
     nothing to render — and it refuses *before* clearing anything, so a rejected material comes out
-    untouched rather than half-stripped.
+    untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
+    so it asks before rewriting a file in place.
 
   **There is exactly one readable version, and no migration path.** `deserializeMaterial` refuses any
   other major rather than guessing at a layout it does not know — an older file is converted, not
@@ -572,6 +573,11 @@ assetlib_cli describe Data/Materials/skin.bmaterial      # factors, triplet, rou
 
 # ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel
 assetlib_cli describe Data/Materials/skin.bmaterial -d Data
+
+# Cut a material down to its shippable form: the triplet, the factors and the name. The routes and
+# the node graph do not survive it, so -o is the safe way to keep the authoring copy
+assetlib_cli strip Data/Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
+assetlib_cli strip Data/Materials/skin.bmaterial      # rewrites in place; asks first, -y skips
 
 # List the baked maps no material references any more, and delete nothing
 assetlib_cli prune -d Data --dry-run
