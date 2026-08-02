@@ -10,6 +10,7 @@
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
+#include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/SkyboxPass.h"
 #include "passes/TransparentSortPass.h"
@@ -158,8 +159,11 @@ namespace bgl
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
+		PostProcessPass      m_PostProcess;
 		CompactInstancesPass m_CompactInstances;
 		TransparentSortPass  m_TransparentSort;
+
+		SamplerHandle m_PostProcessSampler;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 

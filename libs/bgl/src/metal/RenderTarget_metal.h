@@ -118,6 +118,24 @@ namespace bgl
 			return m_MotionRtv;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetSceneColorTexture() const noexcept override
+		{
+			return m_SceneColorTexture;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetSceneColorRtv() const noexcept override
+		{
+			return m_SceneColorRtv;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetSceneColorSrv() const noexcept override
+		{
+			return m_SceneColorSrv;
+		}
+
 		void
 		PresentAndAdvance() noexcept override;
 
@@ -162,6 +180,9 @@ namespace bgl
 		DsvHandle     m_DepthDsv;
 		TextureHandle m_MotionTexture;
 		RtvHandle     m_MotionRtv;
+		TextureHandle m_SceneColorTexture;
+		RtvHandle     m_SceneColorRtv;
+		SrvHandle     m_SceneColorSrv;
 
 		uint32_t m_FrameIndex         = 0;
 		uint32_t m_LastPresentedIndex = 0;
