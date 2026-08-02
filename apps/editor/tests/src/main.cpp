@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QtGlobal>
 #include <catch2/catch_session.hpp>
+#include <core/err/util.h>
 
 /**
  * A QApplication, not a QCoreApplication: the tests construct real widgets, and QPixmap needs a
@@ -10,6 +11,11 @@
 int
 main(int argc, char* argv[])
 {
+	// First thing, before a widget or a device exists: a crash here otherwise leaves nothing behind,
+	// and this suite stands up both. It also keeps a CRT assertion from opening a modal dialog that a
+	// sharded or CI run would wait on forever.
+	core::install_crash_handlers();
+
 	// Offscreen by default, so the widgets the tests stand up never take focus off whatever is
 	// being worked on. A default only: `-platform windows` outranks the environment, so the
 	// windows can still be watched. Guarded by the define set alongside the CMake that deploys
