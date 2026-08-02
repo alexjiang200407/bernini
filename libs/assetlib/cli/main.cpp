@@ -9,6 +9,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
 #include <assetlib/env_bake.h>
+#include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/texture_prune.h>
@@ -351,67 +352,28 @@ main(int argc, char** argv)
 
 			if (!envProject.empty())
 			{
-				const auto dataRoot = std::filesystem::path(envProject);
-				const auto sources  = dataRoot / "textures_src";
-				std::filesystem::create_directories(sources);
-				std::filesystem::create_directories(dataRoot / "Sky");
-				std::filesystem::create_directories(dataRoot / "EnvLighting");
-				std::filesystem::create_directories(dataRoot / "Environments");
+				auto importDesc               = assetlib::EnvImportDesc();
+				importDesc.dataRoot           = envProject;
+				importDesc.source             = envInput;
+				importDesc.name               = envName;
+				importDesc.skyFaceSize        = envSkyboxSize;
+				importDesc.skyBlur            = envSkyboxBlur;
+				importDesc.prefilterFaceSize  = envSize;
+				importDesc.prefilterMips      = envMips;
+				importDesc.prefilterSamples   = envSamples;
+				importDesc.irradianceFaceSize = envIemSize;
+				importDesc.threads            = envThreads;
 
-				// The float intermediates are the routed sources; the bake packs them RGB9E5 into
-				// Textures/ and stamps the routes, exactly as it will for an editor re-bake later.
-				const assetlib::ImageData& skySrc = envSkyboxBlur > 0.0f ? sky : src;
-				const auto                 srcRel = [&](const char* suffix) {
-					return (std::filesystem::path("textures_src") / (envName + suffix))
-					    .generic_string();
-				};
-				assetlib::writeKTX2(
-					skySrc,
-					dataRoot / srcRel("_sky.ktx2"),
-					false,
-					assetlib::Ktx2Compression::kNone);
-				assetlib::writeKTX2(
-					out,
-					dataRoot / srcRel("_prefilter.ktx2"),
-					false,
-					assetlib::Ktx2Compression::kNone);
-				assetlib::writeKTX2(
-					iem,
-					dataRoot / srcRel("_irradiance.ktx2"),
-					false,
-					assetlib::Ktx2Compression::kNone);
-
-				auto bsky       = assetlib::BSky();
-				bsky.name       = envName;
-				bsky.sky.source = srcRel("_sky.ktx2");
-				assetlib::bakeSky(bsky, { dataRoot });
-				assetlib::saveSky(bsky, dataRoot / "Sky" / (envName + ".bsky"));
-
-				auto lighting              = assetlib::BEnvLighting();
-				lighting.name              = envName;
-				lighting.prefilter.source  = srcRel("_prefilter.ktx2");
-				lighting.irradiance.source = srcRel("_irradiance.ktx2");
-				assetlib::bakeEnvLighting(lighting, { dataRoot });
-				assetlib::saveEnvLighting(
-					lighting,
-					dataRoot / "EnvLighting" / (envName + ".benvl"));
-
-				auto env     = assetlib::BEnv();
-				env.name     = envName;
-				env.sky      = "Sky/" + envName + ".bsky";
-				env.lighting = "EnvLighting/" + envName + ".benvl";
-				assetlib::saveEnv(env, dataRoot / "Environments" / (envName + ".benv"));
+				const assetlib::EnvImportResult imported = assetlib::importEnvironment(importDesc);
 
 				spdlog::info(
-					"Wrote '{}' into '{}': sky {}^2, prefilter {}^2 x{}, irradiance {}^2, exposure "
-					"{:.3f}",
+					"Imported '{}' into '{}': {} files, exposure {:.3f}",
 					envName,
 					envProject,
-					skySrc.width,
-					out.width,
-					out.mipLevels,
-					iem.width,
-					lighting.exposure);
+					imported.written.size(),
+					imported.exposure);
+
+				for (const std::string& file : imported.written) spdlog::info("  wrote {}", file);
 			}
 		}
 		catch (const std::exception& e)
