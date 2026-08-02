@@ -14,11 +14,6 @@
 
 namespace bgl
 {
-	// Buffers and shader resource views share the one shader-visible CBV_SRV_UAV heap: a slot's
-	// index is the bindless descriptor index the shader uses. A texture takes no slot here -- only
-	// a view onto it does.
-	using CbvSrvUavSlot = std::variant<Buffer, Srv>;
-
 	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
 	// expected over one device. Exceeding it asserts; it is not a hard device limit.
 	constexpr uint32_t c_MaxRegisteredQueues = 8;
@@ -270,9 +265,12 @@ namespace bgl
 			uint32_t    slotIndex,
 			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
 
-		wrl::ComPtr<ID3D12Device>        m_Device;
-		DescriptorAllocator              m_CbvSrvUavDescriptors;
-		core::slot_vector<CbvSrvUavSlot> m_CbvSrvUavSlots;
+		wrl::ComPtr<ID3D12Device> m_Device;
+		DescriptorAllocator       m_CbvSrvUavDescriptors;
+		// Buffers and shader resource views are separate pools drawing descriptors from the one
+		// shader-visible heap the allocator owns. A texture is in neither -- only a view onto it is.
+		core::slot_vector<Buffer> m_Buffers;
+		core::slot_vector<Srv>    m_Srvs;
 
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
@@ -280,7 +278,7 @@ namespace bgl
 		core::slot_vector<Sampler>        m_Samplers;
 
 		// Every texture, whatever it is used for. A texture owns storage and nothing else; the
-		// descriptor that makes one readable belongs to an Srv in m_CbvSrvUavSlots.
+		// descriptor that makes one readable belongs to an Srv in m_Srvs.
 		core::slot_vector<Texture> m_Textures;
 
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
