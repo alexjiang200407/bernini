@@ -95,6 +95,10 @@ namespace bgl
 		[[nodiscard]] virtual SrvHandle
 		GetSceneColorSrv() const noexcept = 0;
 
+		/** Whether this target was created with RenderTargetDesc::taaEnabled. */
+		[[nodiscard]] virtual bool
+		IsTaaEnabled() const noexcept = 0;
+
 		/**
 		 * Presents the frame just submitted, then advances to the index the next one records into.
 		 * A headless target presents nothing and advances round-robin; a windowed one takes the

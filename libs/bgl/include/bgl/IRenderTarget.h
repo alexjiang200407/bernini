@@ -11,9 +11,10 @@ namespace bgl
 	 */
 	struct RenderTargetDesc
 	{
-		int  width    = 0;
-		int  height   = 0;
-		bool headless = false;
+		int  width      = 0;
+		int  height     = 0;
+		bool headless   = false;
+		bool taaEnabled = false;
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless.
 		void* wnd = nullptr;

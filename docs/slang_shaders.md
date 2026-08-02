@@ -47,6 +47,20 @@ element matches the CPU mirror `bgl_idlgen` emits — the default structured-buf
 both plain data and resource handles cannot be placed. The reflection asserts rather than binding the
 wrong slot. Keep resources at the top level of the constant buffer, as `ExpansionData` does.
 
+## Declare a `ConstantBuffer` in the module that uses it, not in a shared one
+
+A `ConstantBuffer` global is a shader parameter, so declaring one in a widely-imported module adds it
+to the layout of **every** program that imports that module -- including the ones whose entry points
+never read it. That shifts the bindings of everything else those programs declare, and the failure is
+silent: materials sample the wrong descriptor and the frame comes back black rather than erroring.
+
+*Bug precedent:* the temporal-AA work needed the jitter offsets in the pixel stage and moved
+`ConstantBuffer<ViewData> viewData` from `Forward_StaticMesh.slang` into `forward/common.slang`, which
+every pixel module imports. Eight test cases began rendering black. The fix was to keep the
+declaration in the mesh module and hand the pixel stage a value it had already corrected -- when the
+pixel stage needs something a constant buffer holds, prefer passing it through the stage output over
+widening who can see the buffer.
+
 ## Formatting
 
 `.slang` files are clang-formatted like the C++ — `just format <files...>`.
