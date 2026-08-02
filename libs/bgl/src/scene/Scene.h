@@ -267,6 +267,13 @@ namespace bgl
 		[[nodiscard]] DescriptorHandle
 		SrvDescriptorFor(core::slot_handle textureSlot) const noexcept;
 
+	public:
+		// The view this scene created for a texture asset, or a null handle if it created none.
+		[[nodiscard]] SrvHandle
+		GetTextureSrv(core::slot_handle textureSlot) const noexcept;
+
+	private:
+
 		// Decoded pixels awaiting upload, flushed by Update onto the command list of the context
 		// that draws this scene. Scene-owned so one scene's textures never ride another context's
 		// timeline -- an upload must be ordered against the frames that sample it.

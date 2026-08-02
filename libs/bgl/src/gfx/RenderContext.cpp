@@ -433,7 +433,7 @@ namespace bgl
 		draw.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
 
 		draw.env         = view_->GetEnvironmentMap();
-		draw.env.brdfLut = m_BrdfLut.GetTexture();
+		draw.env.brdfLut = m_BrdfLut.GetSrv();
 		draw.exposure    = view_->GetExposure();
 		draw.skybox      = view_->GetSkybox();
 

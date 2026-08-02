@@ -323,7 +323,7 @@ namespace bgl
 	void
 	SceneView::SetEnvironmentMap(const EnvironmentMapDesc& desc)
 	{
-		// Resolve an asset handle to a live RHI texture, optionally requiring a cube map.
+		// Resolve an asset handle to the view the scene created for it, optionally requiring a cube map.
 		const auto resolve = [this](TextureAssetHandle asset, const char* name, bool requireCube) {
 			const auto texHandle = TextureHandle::From(asset);
 			if (!m_ResourceManager->ValidTextureHandle(texHandle))
@@ -335,7 +335,7 @@ namespace bgl
 			{
 				throw SceneError(std::format("SetEnvironmentMap: {} map must be a cube map", name));
 			}
-			return asset;
+			return m_SceneRaw->GetTextureSrv(asset.textureSlot);
 		};
 
 		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance", true);

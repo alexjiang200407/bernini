@@ -55,11 +55,18 @@ namespace bgl
 		void
 		ReleaseTarget() noexcept;
 
-		/** Null until Init. Valid to sample only after the Generate submission has completed. */
+		/** The table itself, for barriers and copies. Null until Init. */
 		[[nodiscard]] TextureHandle
 		GetTexture() const noexcept
 		{
 			return m_Texture;
+		}
+
+		/** Null until Init. Valid to sample only after the Generate submission has completed. */
+		[[nodiscard]] SrvHandle
+		GetSrv() const noexcept
+		{
+			return m_Srv;
 		}
 
 		// @pre the GPU is idle -- the frees are immediate.
@@ -74,6 +81,7 @@ namespace bgl
 		ResourceManagerRef m_ResourceManager;
 		MeshletKernel      m_Kernel;
 		TextureHandle      m_Texture;
+		SrvHandle          m_Srv;
 		RtvHandle          m_Rtv;
 	};
 }

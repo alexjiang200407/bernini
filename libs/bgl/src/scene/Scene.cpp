@@ -1111,8 +1111,14 @@ namespace bgl
 	DescriptorHandle
 	Scene::SrvDescriptorFor(core::slot_handle textureSlot) const noexcept
 	{
+		return GetTextureSrv(textureSlot).descriptor;
+	}
+
+	SrvHandle
+	Scene::GetTextureSrv(core::slot_handle textureSlot) const noexcept
+	{
 		const auto it = m_TextureSrvs.find(textureSlot.index);
-		return it == m_TextureSrvs.end() ? DescriptorHandle{} : it->second.descriptor;
+		return it == m_TextureSrvs.end() ? SrvHandle{} : it->second;
 	}
 
 	TextureAssetHandle

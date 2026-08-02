@@ -139,13 +139,13 @@ namespace game
 			[[nodiscard]] bool
 			HasLighting() const noexcept
 			{
-				return irradiance.textureSlot && prefilter.textureSlot;
+				return !irradiance.textureSlot.is_null() && !prefilter.textureSlot.is_null();
 			}
 
 			[[nodiscard]] bool
 			HasSky() const noexcept
 			{
-				return skybox.textureSlot;
+				return !skybox.textureSlot.is_null();
 			}
 		};
 
