@@ -87,9 +87,9 @@ namespace assetlib
 		};
 
 		std::string
-		sourceRef(const std::string& name, const char* suffix)
+		assetRef(const std::filesystem::path& dir, const std::string& name, const char* suffix)
 		{
-			return (std::filesystem::path("textures_src") / (name + suffix)).generic_string();
+			return (dir / (name + suffix)).generic_string();
 		}
 
 		/** Writes `image` as an uncompressed float `.ktx2`, recording it if it is a new file. */
@@ -126,13 +126,13 @@ namespace assetlib
 		if (desc.name.empty())
 			throw std::runtime_error("assetlib::importEnvironment: the asset name is empty");
 
-		createDirectories(desc.dataRoot / "textures_src");
+		createDirectories(desc.dataRoot / desc.sourceDir);
 		if (desc.sky)
-			createDirectories(desc.dataRoot / "Sky");
+			createDirectories(desc.dataRoot / desc.skyDir);
 		if (desc.lighting)
-			createDirectories(desc.dataRoot / "EnvLighting");
+			createDirectories(desc.dataRoot / desc.lightingDir);
 		if (desc.environment)
-			createDirectories(desc.dataRoot / "Environments");
+			createDirectories(desc.dataRoot / desc.environmentDir);
 
 		auto created = CreatedFiles(desc.dataRoot);
 		auto result  = EnvImportResult();
@@ -158,7 +158,7 @@ namespace assetlib
 					blurCube(source, desc.skyFaceSize, desc.skyBlur, 256, desc.threads) :
 					ImageData();
 
-			const std::string ref = sourceRef(desc.name, "_sky.ktx2");
+			const std::string ref = assetRef(desc.sourceDir, desc.name, "_sky.ktx2");
 			writeSource(desc.dataRoot, created, ref, desc.skyBlur > 0.0f ? blurred : source);
 
 			auto bsky       = BSky();
@@ -168,7 +168,7 @@ namespace assetlib
 			throwIfCancelled(cancel);
 			bakeSky(bsky, { desc.dataRoot });
 
-			result.sky = ("Sky/" + desc.name + ".bsky");
+			result.sky = assetRef(desc.skyDir, desc.name, ".bsky");
 			created.WillWrite(result.sky);
 			saveSky(bsky, desc.dataRoot / result.sky);
 		}
@@ -187,8 +187,9 @@ namespace assetlib
 			throwIfCancelled(cancel);
 			const ImageData prefilter = prefilterRadiance(source, prefilterDesc);
 
-			const std::string prefilterRef  = sourceRef(desc.name, "_prefilter.ktx2");
-			const std::string irradianceRef = sourceRef(desc.name, "_irradiance.ktx2");
+			const std::string prefilterRef = assetRef(desc.sourceDir, desc.name, "_prefilter.ktx2");
+			const std::string irradianceRef =
+				assetRef(desc.sourceDir, desc.name, "_irradiance.ktx2");
 			writeSource(desc.dataRoot, created, prefilterRef, prefilter);
 			writeSource(desc.dataRoot, created, irradianceRef, irradiance);
 
@@ -200,7 +201,7 @@ namespace assetlib
 			throwIfCancelled(cancel);
 			bakeEnvLighting(lighting, { desc.dataRoot });
 
-			result.lighting = ("EnvLighting/" + desc.name + ".benvl");
+			result.lighting = assetRef(desc.lightingDir, desc.name, ".benvl");
 			created.WillWrite(result.lighting);
 			saveEnvLighting(lighting, desc.dataRoot / result.lighting);
 
@@ -214,7 +215,7 @@ namespace assetlib
 			env.sky      = result.sky;
 			env.lighting = result.lighting;
 
-			result.environment = ("Environments/" + desc.name + ".benv");
+			result.environment = assetRef(desc.environmentDir, desc.name, ".benv");
 			created.WillWrite(result.environment);
 			saveEnv(env, desc.dataRoot / result.environment);
 		}

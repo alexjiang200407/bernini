@@ -136,3 +136,81 @@ TEST_CASE("A plain environment name is taken as typed", "[envimportdialog]")
 
 	CHECK(dialog.AssetName() == accepted);
 }
+
+namespace
+{
+	QLineEdit*
+	SkyDirField(const EnvironmentImporterDialog& dialog)
+	{
+		return dialog.findChild<QLineEdit*>("skyDirectory");
+	}
+
+	QLineEdit*
+	SourceDirField(const EnvironmentImporterDialog& dialog)
+	{
+		return dialog.findChild<QLineEdit*>("sourceDirectory");
+	}
+}
+
+// Each part lands in its category by default: that is the layout Project::Create scaffolds and every
+// reference in the project is written against.
+TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
+{
+	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
+
+	CHECK(dialog.SkyDirectory() == "Sky");
+	CHECK(dialog.LightingDirectory() == "EnvLighting");
+	CHECK(dialog.SourceDirectory() == "textures_src");
+}
+
+TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
+{
+	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
+
+	SkyDirField(dialog)->setText("outdoor/dusk");
+	SourceDirField(dialog)->setText("hdri");
+
+	CHECK(dialog.SkyDirectory() == "Sky/outdoor/dusk");
+	CHECK(dialog.SourceDirectory() == "textures_src/hdri");
+
+	// The others are untouched by it.
+	CHECK(dialog.LightingDirectory() == "EnvLighting");
+}
+
+// The category is the fixed part. A folder that could re-root the join would put a `.bsky` somewhere
+// the project's layout does not cover -- and the content explorer protects the categories, not that.
+TEST_CASE("A folder that could leave its category is ignored", "[envimportdialog]")
+{
+	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
+
+	const QString rejected = GENERATE(
+		QString("../Meshes"),
+		QString("/absolute"),
+		QString("C:/elsewhere"),
+		QString("D:"),
+		QString(".."),
+		QString("."),
+		QString("   "));
+
+	INFO("typed: " << rejected.toStdString());
+
+	SkyDirField(dialog)->setText(rejected);
+
+	// Falls back to the bare category rather than refusing: the import still lands somewhere correct.
+	CHECK(dialog.SkyDirectory() == "Sky");
+}
+
+// A destination is meaningless when that part is not being written, and leaving it live invites the
+// user to fill in a field that does nothing.
+TEST_CASE("A part's folder is disabled with the part", "[envimportdialog]")
+{
+	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
+
+	REQUIRE(SkyDirField(dialog)->isEnabled());
+
+	SkyBox(dialog)->setChecked(false);
+	CHECK_FALSE(SkyDirField(dialog)->isEnabled());
+
+	SkyBox(dialog)->setChecked(true);
+	CHECK(SkyDirField(dialog)->isEnabled());
+}

@@ -5,6 +5,14 @@
 
 namespace editor
 {
+	/** The texture assets an apply bound, so a caller replacing one can release what it displaced. */
+	struct AppliedEnvironment
+	{
+		bgl::TextureAssetHandle irradiance;
+		bgl::TextureAssetHandle prefilter;
+		bgl::TextureAssetHandle skybox;
+	};
+
 	/**
 	 * Puts a `.benv`'s image-based lighting onto a view: the IBL pair, the skybox, and the exposure.
 	 *
@@ -25,8 +33,10 @@ namespace editor
 	 * @param benvPath The `.benv`; nothing is applied when empty.
 	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
 	 * @param who Prefix for warnings, naming the caller.
+	 * @return What was bound. Applying twice over one view leaks the first set's slots unless the
+	 *         caller releases them -- see MaterialPreviewWindow::SetEnvironment.
 	 */
-	void
+	[[nodiscard]] AppliedEnvironment
 	ApplyEnvironment(
 		bgl::IScene*         scene,
 		bgl::ISceneView*     view,

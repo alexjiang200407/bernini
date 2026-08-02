@@ -2,8 +2,10 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -28,6 +30,70 @@ namespace
 
 		// "." and ".." survive the character check and are not names.
 		return name != "." && name != "..";
+	}
+
+	/**
+	 * A relative folder that cannot climb out of the category it is joined onto. Anything that could
+	 * re-root the join names a folder outside the layout, so it is refused and the category is used
+	 * bare.
+	 */
+	bool
+	IsContainedSubfolder(const QString& path)
+	{
+		if (path.isEmpty())
+			return false;
+		if (QDir::isAbsolutePath(path) || path.startsWith('/') || path.startsWith('\\'))
+			return false;
+
+		// operator/= replaces the left side when the right carries a differing root name, so a
+		// drive-relative "D:" would re-root the join off the project. QDir does not call that absolute.
+		if (path.contains(':'))
+			return false;
+
+		const QString cleaned = QDir::cleanPath(path);
+		if (cleaned == ".." || cleaned.startsWith("../"))
+			return false;
+
+		return !cleaned.isEmpty() && cleaned != ".";
+	}
+
+	QString
+	JoinCategory(const char* category, const QLineEdit& field)
+	{
+		const QString typed = field.text().trimmed();
+		if (!IsContainedSubfolder(typed))
+			return QString::fromLatin1(category);
+
+		return QString("%1/%2").arg(QString::fromLatin1(category), QDir::cleanPath(typed));
+	}
+}
+
+namespace
+{
+	/** A folder field behind its category, shown as an uneditable prefix so the layout is obvious. */
+	QLineEdit*
+	AddFolderRow(
+		QVBoxLayout*   layout,
+		QWidget*       parent,
+		const char*    label,
+		const char*    category,
+		const char*    objectName,
+		const QString& tip)
+	{
+		auto* row = new QHBoxLayout();
+		row->addWidget(new QLabel(QString("%1/").arg(category), parent));
+
+		auto* field = new QLineEdit(parent);
+		field->setObjectName(objectName);
+		field->setPlaceholderText("(optional subfolder)");
+		field->setToolTip(tip);
+		row->addWidget(field, 1);
+
+		auto* form = new QFormLayout();
+		form->addRow(label, row);
+		layout->addLayout(form);
+
+		return field;
 	}
 }
 
@@ -65,6 +131,17 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	m_ImportSky->setToolTip("The backdrop: one radiance cube map, projected from the source.");
 	layout->addWidget(m_ImportSky);
 
+	m_SkyDir = AddFolderRow(
+		layout,
+		this,
+		"Sky folder:",
+		"Sky",
+		"skyDirectory",
+		"Subfolder of Sky/ to write the .bsky into. The category itself is fixed: every reference "
+		"in "
+		"the project is written against it.");
+	connect(m_ImportSky, &QCheckBox::toggled, m_SkyDir, &QWidget::setEnabled);
+
 	m_ImportLighting = new QCheckBox("Environment lighting", this);
 	m_ImportLighting->setObjectName("importLighting");
 	m_ImportLighting->setChecked(true);
@@ -74,6 +151,15 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		"paying for the lighting again.");
 	layout->addWidget(m_ImportLighting);
 
+	m_LightingDir = AddFolderRow(
+		layout,
+		this,
+		"Lighting folder:",
+		"EnvLighting",
+		"lightingDirectory",
+		"Subfolder of EnvLighting/ to write the .benvl into.");
+	connect(m_ImportLighting, &QCheckBox::toggled, m_LightingDir, &QWidget::setEnabled);
+
 	m_ImportEnvironment = new QCheckBox("Environment (composes the two above)", this);
 	m_ImportEnvironment->setObjectName("importEnvironment");
 	m_ImportEnvironment->setChecked(true);
@@ -82,6 +168,15 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		"least "
 		"one of them.");
 	layout->addWidget(m_ImportEnvironment);
+
+	m_SourceDir = AddFolderRow(
+		layout,
+		this,
+		"Sources folder:",
+		"textures_src",
+		"sourceDirectory",
+		"Subfolder of textures_src/ for the float intermediates each part is baked from. They are "
+		"what a re-bake reads, so they are kept rather than being scratch.");
 
 	// It composes the other two, so with neither there is nothing for it to name. Disabled rather
 	// than left tickable, so the refusal is visible before OK rather than as an error afterwards.
@@ -126,6 +221,24 @@ EnvironmentImporterDialog::ImportEnvironment() const
 {
 	// Disabled means unavailable, whatever the box happens to be showing.
 	return m_ImportEnvironment->isEnabled() && m_ImportEnvironment->isChecked();
+}
+
+QString
+EnvironmentImporterDialog::SkyDirectory() const
+{
+	return JoinCategory("Sky", *m_SkyDir);
+}
+
+QString
+EnvironmentImporterDialog::LightingDirectory() const
+{
+	return JoinCategory("EnvLighting", *m_LightingDir);
+}
+
+QString
+EnvironmentImporterDialog::SourceDirectory() const
+{
+	return JoinCategory("textures_src", *m_SourceDir);
 }
 
 QString

@@ -18,6 +18,19 @@ namespace assetlib
 		// Names every file the import writes: `Sky/<name>.bsky`, `textures_src/<name>_sky.ktx2`, ...
 		std::string name = "env";
 
+		/**
+		 * Where each part lands, relative to the data root. Defaulted to the project's categories, so
+		 * a caller that does not care writes the layout `Project::Create` scaffolds.
+		 *
+		 * A caller that does care -- the import dialog offers a folder per part -- names a
+		 * subdirectory *inside* the category rather than replacing it, so the categories stay the
+		 * layout every other reference is written against.
+		 */
+		std::filesystem::path skyDir         = "Sky";
+		std::filesystem::path lightingDir    = "EnvLighting";
+		std::filesystem::path environmentDir = "Environments";
+		std::filesystem::path sourceDir      = "textures_src";
+
 		bool sky         = true;  // write the `.bsky`
 		bool lighting    = true;  // write the `.benvl` -- the prefilter/irradiance pair
 		bool environment = true;  // write the `.benv` composing whichever of the two were written

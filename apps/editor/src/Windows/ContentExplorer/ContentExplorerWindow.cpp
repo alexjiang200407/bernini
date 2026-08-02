@@ -954,6 +954,10 @@ ContentExplorerWindow::ImportEnvironment(const QString& sourceFile)
 	desc.lighting    = dialog.ImportLighting();
 	desc.environment = dialog.ImportEnvironment();
 
+	desc.skyDir      = std::filesystem::path(dialog.SkyDirectory().toStdWString());
+	desc.lightingDir = std::filesystem::path(dialog.LightingDirectory().toStdWString());
+	desc.sourceDir   = std::filesystem::path(dialog.SourceDirectory().toStdWString());
+
 	// Projecting the source and convolving it are seconds to minutes of pure CPU, and none of it
 	// touches bgl -- so it runs on a worker, as the mesh import's cook does.
 	auto imported = assetlib::EnvImportResult();

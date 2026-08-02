@@ -52,10 +52,35 @@ public:
 	QString
 	AssetName() const;
 
+	/**
+	 * Folder each part is written into, relative to the data root: the category it belongs in, plus
+	 * whatever subfolder was typed.
+	 *
+	 * The category is a fixed prefix rather than something typed, because every reference in the
+	 * project is written against that layout -- a `.benv` names `Sky/...`, and the content explorer
+	 * protects the categories from deletion. A typed folder organises *inside* one; it cannot move a
+	 * part out of it, and anything that could is ignored.
+	 *
+	 * There is deliberately no field for the `.benv` itself: `editor::ApplyEnvironment` finds a
+	 * project's data root by taking the file's parent's parent, so an environment anywhere but
+	 * directly inside `Environments/` would resolve its references against the wrong root.
+	 */
+	QString
+	SkyDirectory() const;
+
+	QString
+	LightingDirectory() const;
+
+	QString
+	SourceDirectory() const;
+
 private:
 	QCheckBox* m_ImportSky         = nullptr;
 	QCheckBox* m_ImportLighting    = nullptr;
 	QCheckBox* m_ImportEnvironment = nullptr;
 	QLineEdit* m_Name              = nullptr;
+	QLineEdit* m_SkyDir            = nullptr;
+	QLineEdit* m_LightingDir       = nullptr;
+	QLineEdit* m_SourceDir         = nullptr;
 	QString    m_DefaultName;
 };
