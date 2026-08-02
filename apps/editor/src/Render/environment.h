@@ -27,10 +27,11 @@ namespace editor
 	 *
 	 * Must be called on the render thread, like everything else that touches a scene or a view.
 	 *
-	 * The paths a `.benv` stores are data-root relative, and a `.benv` lives in
-	 * `<dataRoot>/Environments` -- so the data root is the file's parent's parent.
-	 *
 	 * @param benvPath The `.benv`; nothing is applied when empty.
+	 * @param dataRoot What the paths inside the `.benv` chain are relative to. Passed rather than
+	 *        derived from `benvPath`: an environment is not always two levels under the root -- a
+	 *        subfolder, or a file dropped from anywhere -- and guessing lands on the wrong root
+	 *        without saying so.
 	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
 	 * @param who Prefix for warnings, naming the caller.
 	 * @return What was bound. Applying twice over one view leaks the first set's slots unless the
@@ -38,9 +39,10 @@ namespace editor
 	 */
 	[[nodiscard]] AppliedEnvironment
 	ApplyEnvironment(
-		bgl::IScene*         scene,
-		bgl::ISceneView*     view,
-		const std::string&   benvPath,
-		std::optional<float> exposureOverride,
-		const char*          who);
+		bgl::IScene*                 scene,
+		bgl::ISceneView*             view,
+		const std::string&           benvPath,
+		const std::filesystem::path& dataRoot,
+		std::optional<float>         exposureOverride,
+		const char*                  who);
 }

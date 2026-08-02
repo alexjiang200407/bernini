@@ -13,20 +13,20 @@ namespace bgl
 	 * against a white one -- so it is owned here and shared by every view, and no caller can supply a
 	 * mismatched one.
 	 */
-	class BrdfLut
+	class BrdfLutGenPass
 	{
 	public:
-		BrdfLut() = default;
-		~BrdfLut() noexcept { logger::trace("~BrdfLut"); }
+		BrdfLutGenPass() = default;
+		~BrdfLutGenPass() noexcept { logger::trace("~BrdfLutGenPass"); }
 
-		BrdfLut(const BrdfLut&) noexcept = delete;
-		BrdfLut(BrdfLut&&) noexcept      = delete;
+		BrdfLutGenPass(const BrdfLutGenPass&) noexcept = delete;
+		BrdfLutGenPass(BrdfLutGenPass&&) noexcept      = delete;
 
-		BrdfLut&
-		operator=(const BrdfLut&) noexcept = delete;
+		BrdfLutGenPass&
+		operator=(const BrdfLutGenPass&) noexcept = delete;
 
-		BrdfLut&
-		operator=(BrdfLut&&) noexcept = delete;
+		BrdfLutGenPass&
+		operator=(BrdfLutGenPass&&) noexcept = delete;
 
 		/**
 		 * Creates the texture, its RTV and the pipeline. Compiles a shader, so it must run before the
@@ -57,7 +57,7 @@ namespace bgl
 
 		/** Null until Init. Valid to sample only after the Generate submission has completed. */
 		[[nodiscard]] TextureHandle
-		Texture() const noexcept
+		GetTexture() const noexcept
 		{
 			return m_Texture;
 		}

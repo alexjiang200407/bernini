@@ -333,7 +333,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
   * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
     maps, so it must move whenever they do.
-  * `skyBakeIsStale`/`envLightingBakeIsStale` mirror `bakeIsStale`: unrouted is never stale; a
+  * `isSkyBakeStale`/`isEnvLightingBakeStale` mirror `bakeIsStale`: unrouted is never stale; a
     changed, missing or never-baked source is.
   * **The texture prune knows these assets.** Its mark phase reads every `.bsky`/`.benvl` below the
     data root (unreadable ones are fatal, same as materials), and its sweep recognises

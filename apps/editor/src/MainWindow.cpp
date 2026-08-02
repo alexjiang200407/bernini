@@ -94,6 +94,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
+		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
@@ -105,6 +106,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
 		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
 		thumbDesc.environmentMap   = thumbSettings["environmentMap"].GetOrDefault(std::string());
+		thumbDesc.dataRoot         = thumbSettings["dataRoot"].GetOrDefault(std::string());
 
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.exposureOverride = exposure.GetOrDefault(1.0f);

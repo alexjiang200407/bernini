@@ -200,69 +200,6 @@ mistake in another costume.
 Because the blur removes everything above the face's Nyquist, a blurred skybox wants *fewer* texels,
 not more: 256² is indistinguishable from 512² at half the size.
 
----
-
-## Handling a cube map from elsewhere
-
-`importEnvironment` reads the `.hdr` directly and generates at the resolution asked for, so neither
-trap below can be sprung by the normal path. They still apply to any externally produced cube map,
-and both were expensive to diagnose.
-
-### Every gamma field must be 1.0
-
-External bakers (CMFT among them) expose *gamma before processing* and *gamma after processing* on
-both the radiance and irradiance filters. **All of them must be 1.0.**
-
-* **Before** linearizes a gamma-encoded input. Filtering is a weighted average of radiance and is only
-  physically valid in linear space — but a `.hdr` is *already* linear radiance. There is nothing to
-  undo.
-* **After** re-encodes for display or LDR storage. Our output is float, consumed as linear radiance;
-  the engine tone maps (AgX) and sRGB-encodes at the end of the frame. There is nothing to apply.
-
-Set either and you distort physical radiance that the BRDF then treats as physical. The failure is
-quiet, because the result still looks like a plausible environment map:
-
-* **Highlights are crushed.** 2.2 on both fields compounds to ~4.8 and took a real sun peak of **833
-  down to 7.5** — the entire HDR range the specular lobe feeds on.
-* **The irradiance goes flat.** Gamma pushes everything toward 1.0, collapsing the contrast between
-  bright sky and dark ground (a real up/down ratio of ~6× measured as ~1.2×), so diffuse barely
-  responds to the surface normal.
-* Together those give a distinctive symptom: the diffuse term is directionless and the specular term is
-  the only view-dependent one left, so **the lighting appears to follow the camera** as you orbit.
-
-If a render is too bright that is **exposure**, not gamma. `ISceneView::SetExposure` is a tone knob and
-costs nothing; reaching for gamma to dim a map destroys data.
-
-### Edge fixup must be off
-
-CMFT's `Warp` fixup stretches each face's texel centres outward so the outermost lands exactly on the
-edge — a correction for hardware that cannot filter across a cube seam. **D3D12, Metal and WebGPU all
-do it in hardware**, always on, so `Warp` is applied twice: content near a border ends up displaced by
-up to half a texel, in opposite directions on the two faces sharing it, and the seam shows as a bright
-crease.
-
-The displacement is a fraction of a *texel*, so its angular size scales with the mip — about 0.04° at
-1024² but 2.8° at the 16² roughness-1 mip. That is why it appears as "seams only at roughness 1" rather
-than a uniform problem, and why it survives a long time before being diagnosed.
-
-A map that has it is recognisable without the source: its border texels are **bitwise identical** to
-their partners across every seam, which is only possible if both faces sample the exact same direction.
-A correctly generated map has them roughly one texel apart, like any other neighbours.
-
-### Do not resample a cube map to resize it
-
-`ktx create --width/--height`'s resampling kernel is wider than the output texel, so at a face border it
-reaches past the edge and clamps — and the two faces sharing that edge clamp to different data. A
-correct cube map has each border texel *equal* to its partner across the seam; resizing 1024 → 256 that
-way took a 0.00% mismatch to **32% mean, 178% peak**, which reads on a mirror surface as bright lines
-tracing the cube's edges and corners.
-
-Downsampling a cube face correctly needs an exact box average that never reaches past the border,
-*followed by* averaging each matched edge pair and each 3-way corner. Generating at the target
-resolution avoids the question, which is what the importer does.
-
----
-
 ## Verifying
 
 Each baked map is a complete `.ktx2`, so `ktxinfo`, `ktx compare` and `ktx2check` work on it directly —

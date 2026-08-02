@@ -1,4 +1,4 @@
-#include "gfx/BrdfLut.h"
+#include "passes/BrdfLutGenPass.h"
 
 #include "cmd/CommandList.h"
 #include "device/Device.h"
@@ -12,7 +12,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_Src = "BrdfLut"sv;
+		constexpr auto c_Src = "BrdfLut"sv;  // the Slang module, not this class
 
 		// Two channels: the integral factors into a scale and a bias on F0, and nothing else is
 		// stored. Half float covers [0,1] with far more precision than the bilinear fetch resolves.
@@ -20,7 +20,7 @@ namespace bgl
 	}
 
 	void
-	BrdfLut::Init(IDevice* device, ResourceManagerRef resourceManager)
+	BrdfLutGenPass::Init(IDevice* device, ResourceManagerRef resourceManager)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -66,7 +66,7 @@ namespace bgl
 	}
 
 	void
-	BrdfLut::Generate(ICommandList* cmdList)
+	BrdfLutGenPass::Generate(ICommandList* cmdList)
 	{
 		gassert(cmdList != nullptr, "Command list must be initialized");
 		gassert(m_Kernel.pipeline.IsInitialized(), "BRDF LUT pipeline must be initialized");
@@ -95,7 +95,7 @@ namespace bgl
 	}
 
 	void
-	BrdfLut::ReleaseTarget() noexcept
+	BrdfLutGenPass::ReleaseTarget() noexcept
 	{
 		if (m_ResourceManager == nullptr || m_Rtv.IsNull())
 			return;
@@ -105,7 +105,7 @@ namespace bgl
 	}
 
 	void
-	BrdfLut::Release() noexcept
+	BrdfLutGenPass::Release() noexcept
 	{
 		if (m_ResourceManager == nullptr)
 			return;

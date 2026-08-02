@@ -44,7 +44,7 @@ TEST_CASE("An environment import offers the whole family by default", "[envimpor
 	CHECK(dialog.ImportEnvironment());
 
 	// Named from the source, so the common case needs nothing typed.
-	CHECK(dialog.AssetName() == "forest_4k");
+	CHECK(dialog.GetAssetName() == "forest_4k");
 }
 
 // A `.benv` composes the other two, so with neither there is nothing for it to name --
@@ -116,7 +116,7 @@ TEST_CASE("An environment name that could name another directory is refused", "[
 
 	// Falls back to the source's base name rather than refusing the import outright: the user gets a
 	// working import under an obvious name instead of an error about punctuation.
-	CHECK(dialog.AssetName() == "forest_4k");
+	CHECK(dialog.GetAssetName() == "forest_4k");
 }
 
 TEST_CASE("A plain environment name is taken as typed", "[envimportdialog]")
@@ -134,7 +134,7 @@ TEST_CASE("A plain environment name is taken as typed", "[envimportdialog]")
 
 	NameField(dialog)->setText(accepted);
 
-	CHECK(dialog.AssetName() == accepted);
+	CHECK(dialog.GetAssetName() == accepted);
 }
 
 namespace
@@ -158,9 +158,9 @@ TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
 {
 	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
 
-	CHECK(dialog.SkyDirectory() == "Sky");
-	CHECK(dialog.LightingDirectory() == "EnvLighting");
-	CHECK(dialog.SourceDirectory() == "textures_src");
+	CHECK(dialog.GetSkyDirectory() == "Sky");
+	CHECK(dialog.GetLightingDirectory() == "EnvLighting");
+	CHECK(dialog.GetSourceDirectory() == "textures_src");
 }
 
 TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
@@ -170,11 +170,11 @@ TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
 	SkyDirField(dialog)->setText("outdoor/dusk");
 	SourceDirField(dialog)->setText("hdri");
 
-	CHECK(dialog.SkyDirectory() == "Sky/outdoor/dusk");
-	CHECK(dialog.SourceDirectory() == "textures_src/hdri");
+	CHECK(dialog.GetSkyDirectory() == "Sky/outdoor/dusk");
+	CHECK(dialog.GetSourceDirectory() == "textures_src/hdri");
 
 	// The others are untouched by it.
-	CHECK(dialog.LightingDirectory() == "EnvLighting");
+	CHECK(dialog.GetLightingDirectory() == "EnvLighting");
 }
 
 // The category is the fixed part. A folder that could re-root the join would put a `.bsky` somewhere
@@ -197,7 +197,7 @@ TEST_CASE("A folder that could leave its category is ignored", "[envimportdialog
 	SkyDirField(dialog)->setText(rejected);
 
 	// Falls back to the bare category rather than refusing: the import still lands somewhere correct.
-	CHECK(dialog.SkyDirectory() == "Sky");
+	CHECK(dialog.GetSkyDirectory() == "Sky");
 }
 
 // A destination is meaningless when that part is not being written, and leaving it live invites the

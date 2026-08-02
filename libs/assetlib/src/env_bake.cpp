@@ -118,13 +118,13 @@ namespace assetlib
 	}
 
 	bool
-	skyBakeIsStale(const BSky& sky, const std::filesystem::path& dataRoot)
+	isSkyBakeStale(const BSky& sky, const std::filesystem::path& dataRoot)
 	{
 		return routeIsStale(sky.sky, dataRoot);
 	}
 
 	bool
-	envLightingBakeIsStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot)
+	isEnvLightingBakeStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot)
 	{
 		return routeIsStale(lighting.prefilter, dataRoot) ||
 		       routeIsStale(lighting.irradiance, dataRoot);

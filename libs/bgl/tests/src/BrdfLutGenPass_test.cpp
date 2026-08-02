@@ -1,8 +1,8 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
-#include "gfx/BrdfLut.h"
 #include "gfx/GraphicsBase.h"
+#include "passes/BrdfLutGenPass.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "util/HalfFloat.h"
@@ -44,10 +44,10 @@ namespace
 
 		// This suite's own table, not the RenderContext's: the point is to exercise the generation,
 		// and a second one costs a single 256x256 draw.
-		auto lut = bgl::BrdfLut();
+		auto lut = bgl::BrdfLutGenPass();
 		lut.Init(device, resourceManager);
 
-		const auto layout = resourceManager->GetTextureReadbackLayout(lut.Texture());
+		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
 
 		auto rbDesc      = bgl::ReadbackBufferDesc();
 		rbDesc.byteSize  = layout.totalBytes;
@@ -69,9 +69,9 @@ namespace
 			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
 			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource)
 			.SetLayoutAfter(bgl::BarrierLayout::kCopySource);
-		cmdList->Barrier(lut.Texture(), toCopySource);
+		cmdList->Barrier(lut.GetTexture(), toCopySource);
 
-		cmdList->CopyTextureToReadback(readback, lut.Texture());
+		cmdList->CopyTextureToReadback(readback, lut.GetTexture());
 		cmdList->Close();
 		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
 

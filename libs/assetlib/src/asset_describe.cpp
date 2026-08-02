@@ -392,7 +392,7 @@ namespace assetlib
 		if (!dataRoot.empty())
 			out += std::format(
 				"\n  bake              {}\n",
-				skyBakeIsStale(sky, dataRoot) ? "STALE" : "up to date");
+				isSkyBakeStale(sky, dataRoot) ? "STALE" : "up to date");
 
 		return out;
 	}
@@ -413,7 +413,7 @@ namespace assetlib
 		if (!dataRoot.empty())
 			out += std::format(
 				"\n  bake              {}\n",
-				envLightingBakeIsStale(lighting, dataRoot) ? "STALE" : "up to date");
+				isEnvLightingBakeStale(lighting, dataRoot) ? "STALE" : "up to date");
 
 		return out;
 	}

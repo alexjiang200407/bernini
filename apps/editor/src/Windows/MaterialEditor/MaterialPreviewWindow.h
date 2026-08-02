@@ -20,6 +20,10 @@ struct MaterialPreviewEnv
 {
 	std::string environmentMap;
 
+	// What the paths inside that `.benv` resolve against. Configured rather than derived from the
+	// file: an environment is not always two levels under the root it belongs to.
+	std::filesystem::path dataRoot;
+
 	// Absent means the exposure the `.benv` carries, which is the value derived from those maps.
 	// Set it only to overrule that deliberately.
 	std::optional<float> exposureOverride;
@@ -170,6 +174,7 @@ private:
 	// What the last ApplyEnvironment bound, so the next one can release it.
 	editor::AppliedEnvironment m_Environment;
 	std::optional<float>       m_ExposureOverride;
+	std::filesystem::path      m_ConfiguredRoot;  // stands in until a project is opened
 
 	glm::vec3 m_FocusCenter = glm::vec3(0.0f);
 	float     m_FocusRadius = 1.0f;

@@ -139,23 +139,23 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 
 	SECTION("unrouted is never stale; routed-but-never-baked always is")
 	{
-		CHECK_FALSE(skyBakeIsStale(BSky{}, root.path));
-		CHECK_FALSE(envLightingBakeIsStale(BEnvLighting{}, root.path));
+		CHECK_FALSE(isSkyBakeStale(BSky{}, root.path));
+		CHECK_FALSE(isEnvLightingBakeStale(BEnvLighting{}, root.path));
 
-		CHECK(skyBakeIsStale(RoutedSky(root), root.path));
-		CHECK(envLightingBakeIsStale(RoutedLighting(root), root.path));
+		CHECK(isSkyBakeStale(RoutedSky(root), root.path));
+		CHECK(isEnvLightingBakeStale(RoutedLighting(root), root.path));
 	}
 
 	SECTION("a bake settles it; editing the source unsettles it")
 	{
 		BSky sky = RoutedSky(root);
 		bakeSky(sky, { root.path });
-		CHECK_FALSE(skyBakeIsStale(sky, root.path));
+		CHECK_FALSE(isSkyBakeStale(sky, root.path));
 
 		// A different face size changes the file's byte size, so the stamp moves even inside the
 		// same mtime second.
 		root.AddSource("sky_src.ktx2", 16, 1.0f);
-		CHECK(skyBakeIsStale(sky, root.path));
+		CHECK(isSkyBakeStale(sky, root.path));
 	}
 
 	SECTION("a deleted source reads as stale rather than as unchanged")
@@ -163,7 +163,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 		BSky sky = RoutedSky(root);
 		bakeSky(sky, { root.path });
 		std::filesystem::remove(root.path / sky.sky.source);
-		CHECK(skyBakeIsStale(sky, root.path));
+		CHECK(isSkyBakeStale(sky, root.path));
 	}
 
 	// The other half of "mirror the material's": naming a map is not the same as having one. A route
@@ -172,10 +172,10 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	{
 		BSky sky = RoutedSky(root);
 		bakeSky(sky, { root.path });
-		REQUIRE_FALSE(skyBakeIsStale(sky, root.path));
+		REQUIRE_FALSE(isSkyBakeStale(sky, root.path));
 
 		std::filesystem::remove(root.path / sky.sky.baked);
-		CHECK(skyBakeIsStale(sky, root.path));
+		CHECK(isSkyBakeStale(sky, root.path));
 	}
 
 	// The pair is one verdict, so either map going missing has to carry it.
@@ -183,10 +183,10 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	{
 		BEnvLighting lighting = RoutedLighting(root);
 		bakeEnvLighting(lighting, { root.path });
-		REQUIRE_FALSE(envLightingBakeIsStale(lighting, root.path));
+		REQUIRE_FALSE(isEnvLightingBakeStale(lighting, root.path));
 
 		std::filesystem::remove(root.path / lighting.irradiance.baked);
-		CHECK(envLightingBakeIsStale(lighting, root.path));
+		CHECK(isEnvLightingBakeStale(lighting, root.path));
 	}
 }
 

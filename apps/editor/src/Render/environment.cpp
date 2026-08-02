@@ -10,11 +10,12 @@ namespace editor
 {
 	AppliedEnvironment
 	ApplyEnvironment(
-		bgl::IScene*         scene,
-		bgl::ISceneView*     view,
-		const std::string&   benvPath,
-		std::optional<float> exposureOverride,
-		const char*          who)
+		bgl::IScene*                 scene,
+		bgl::ISceneView*             view,
+		const std::string&           benvPath,
+		const std::filesystem::path& dataRoot,
+		std::optional<float>         exposureOverride,
+		const char*                  who)
 	{
 		auto applied = AppliedEnvironment();
 
@@ -24,9 +25,7 @@ namespace editor
 		auto env = assetlib::ResolvedEnvironment();
 		try
 		{
-			// A .benv lives in <dataRoot>/Environments, so the data root is two levels up.
-			const auto path = std::filesystem::path(benvPath);
-			env             = assetlib::resolveEnvironment(path, path.parent_path().parent_path());
+			env = assetlib::resolveEnvironment(std::filesystem::path(benvPath), dataRoot);
 		}
 		catch (const std::exception& e)
 		{

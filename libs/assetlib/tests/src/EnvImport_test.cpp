@@ -130,10 +130,10 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 	const BSky sky = loadSky(sandbox.DataRoot() / result.sky);
 	CHECK_FALSE(sky.sky.baked.empty());
 	CHECK(sandbox.Has(sky.sky.baked));
-	CHECK_FALSE(skyBakeIsStale(sky, sandbox.DataRoot()));
+	CHECK_FALSE(isSkyBakeStale(sky, sandbox.DataRoot()));
 
 	const BEnvLighting lighting = loadEnvLighting(sandbox.DataRoot() / result.lighting);
-	CHECK_FALSE(envLightingBakeIsStale(lighting, sandbox.DataRoot()));
+	CHECK_FALSE(isEnvLightingBakeStale(lighting, sandbox.DataRoot()));
 
 	// A constant environment's exposure is 1 / (0.96 * radiance) -- the same value bakeEnvLighting
 	// derives, which is what says the import ran the real bake rather than a shortcut.

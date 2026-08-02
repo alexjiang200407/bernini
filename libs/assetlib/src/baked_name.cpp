@@ -4,18 +4,24 @@
 
 namespace assetlib
 {
+	namespace
+	{
+		// Hex digits of the content hash in a baked map's name -- a uint64 as 16 hex digits.
+		constexpr size_t c_BakedHashDigits = 16;
+
+		constexpr std::string_view c_BakedMapExtension = ".ktx2";
+	}
+
 	std::string
 	bakedMapFileName(std::string_view group, std::string_view key)
 	{
 		assert(group.find('_') == std::string_view::npos);
 
-		char hex[c_BakedHashDigits + 1] = {};
-		std::snprintf(
-			hex,
-			sizeof(hex),
-			"%016llx",
-			static_cast<unsigned long long>(core::hash_string(key, core::hash_seed())));
-		return std::string(group) + '_' + hex + std::string(c_BakedMapExtension);
+		return std::format(
+			"{}_{:016x}{}",
+			group,
+			core::hash_string(key, core::hash_seed()),
+			c_BakedMapExtension);
 	}
 
 	bool

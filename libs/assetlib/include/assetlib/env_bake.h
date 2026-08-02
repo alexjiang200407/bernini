@@ -57,11 +57,11 @@ namespace assetlib
 	 * not there to sample, so a deleted one reads as stale rather than as up to date.
 	 */
 	[[nodiscard]] bool
-	skyBakeIsStale(const BSky& sky, const std::filesystem::path& dataRoot);
+	isSkyBakeStale(const BSky& sky, const std::filesystem::path& dataRoot);
 
-	/** skyBakeIsStale over the lighting pair: stale when either route is. */
+	/** isSkyBakeStale over the lighting pair: stale when either route is. */
 	[[nodiscard]] bool
-	envLightingBakeIsStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot);
+	isEnvLightingBakeStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot);
 
 	/**
 	 * Whether `fileName` is a name bakeSky or bakeEnvLighting could have written:

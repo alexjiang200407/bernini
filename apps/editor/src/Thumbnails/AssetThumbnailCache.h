@@ -26,7 +26,11 @@ struct AssetThumbnailDesc
 	uint32_t dimension        = 256;
 	uint32_t initialInstances = 256;
 
-	std::string          environmentMap;
+	std::string environmentMap;
+
+	// What the paths inside that `.benv` resolve against; see MaterialPreviewEnv::dataRoot.
+	std::filesystem::path dataRoot;
+
 	std::optional<float> exposureOverride;
 };
 

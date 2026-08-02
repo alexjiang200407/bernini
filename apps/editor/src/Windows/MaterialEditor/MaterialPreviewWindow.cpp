@@ -82,8 +82,7 @@ namespace
 		return {};
 	}
 
-	// The first local `.benv` in a drag's payload, or an empty string. Dropping one relights the
-	// preview, which is the fastest way to see a material under the environment it will ship under.
+	// The first local `.benv` in a drag's payload, or an empty string.
 	QString
 	FirstEnvironmentUrl(const QMimeData* mime)
 	{
@@ -110,6 +109,7 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	setFocusPolicy(Qt::StrongFocus);
 
 	m_ExposureOverride = env.exposureOverride;
+	m_ConfiguredRoot   = env.dataRoot;
 
 	m_DefaultMaterial = GetRenderer()->Invoke([&] {
 		bgl::IScene*     scene = PreviewScene();
@@ -119,6 +119,7 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 			scene,
 			view,
 			env.environmentMap,
+			env.dataRoot,
 			env.exposureOverride,
 			"MaterialPreview");
 
@@ -418,10 +419,13 @@ MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
 
 		const editor::AppliedEnvironment previous = m_Environment;
 
+		// A dropped `.benv` belongs to the open project, so its own data root is the one that
+		// resolves it. The configured root only stands in before a project is opened.
 		m_Environment = editor::ApplyEnvironment(
 			scene,
 			PreviewView(),
 			benvPath,
+			m_DataRoot.empty() ? m_ConfiguredRoot : m_DataRoot,
 			m_ExposureOverride,
 			"MaterialPreview");
 

@@ -1,5 +1,7 @@
 #include "EnvironmentImporterDialog.h"
 
+#include "util/asset_paths.h"
+
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -14,59 +16,6 @@
 
 namespace
 {
-	/**
-	 * Whether `name` is a plain file stem: the import joins it onto three category directories and a
-	 * suffix, so anything that could redirect that join names a file outside the project's layout.
-	 */
-	bool
-	IsPlainFileStem(const QString& name)
-	{
-		if (name.isEmpty())
-			return false;
-
-		static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
-		if (name.contains(c_Unsafe))
-			return false;
-
-		// "." and ".." survive the character check and are not names.
-		return name != "." && name != "..";
-	}
-
-	/**
-	 * A relative folder that cannot climb out of the category it is joined onto. Anything that could
-	 * re-root the join names a folder outside the layout, so it is refused and the category is used
-	 * bare.
-	 */
-	bool
-	IsContainedSubfolder(const QString& path)
-	{
-		if (path.isEmpty())
-			return false;
-		if (QDir::isAbsolutePath(path) || path.startsWith('/') || path.startsWith('\\'))
-			return false;
-
-		// operator/= replaces the left side when the right carries a differing root name, so a
-		// drive-relative "D:" would re-root the join off the project. QDir does not call that absolute.
-		if (path.contains(':'))
-			return false;
-
-		const QString cleaned = QDir::cleanPath(path);
-		if (cleaned == ".." || cleaned.startsWith("../"))
-			return false;
-
-		return !cleaned.isEmpty() && cleaned != ".";
-	}
-
-	QString
-	JoinCategory(const char* category, const QLineEdit& field)
-	{
-		const QString typed = field.text().trimmed();
-		if (!IsContainedSubfolder(typed))
-			return QString::fromLatin1(category);
-
-		return QString("%1/%2").arg(QString::fromLatin1(category), QDir::cleanPath(typed));
-	}
-
 	/** A folder field behind its category, shown as an uneditable prefix so the layout is obvious. */
 	QLineEdit*
 	AddFolderRow(
@@ -221,26 +170,26 @@ EnvironmentImporterDialog::ImportEnvironment() const
 }
 
 QString
-EnvironmentImporterDialog::SkyDirectory() const
+EnvironmentImporterDialog::GetSkyDirectory() const
 {
-	return JoinCategory("Sky", *m_SkyDir);
+	return editor::JoinCategory("Sky", m_SkyDir->text().trimmed());
 }
 
 QString
-EnvironmentImporterDialog::LightingDirectory() const
+EnvironmentImporterDialog::GetLightingDirectory() const
 {
-	return JoinCategory("EnvLighting", *m_LightingDir);
+	return editor::JoinCategory("EnvLighting", m_LightingDir->text().trimmed());
 }
 
 QString
-EnvironmentImporterDialog::SourceDirectory() const
+EnvironmentImporterDialog::GetSourceDirectory() const
 {
-	return JoinCategory("textures_src", *m_SourceDir);
+	return editor::JoinCategory("textures_src", m_SourceDir->text().trimmed());
 }
 
 QString
-EnvironmentImporterDialog::AssetName() const
+EnvironmentImporterDialog::GetAssetName() const
 {
 	const QString typed = m_Name->text().trimmed();
-	return IsPlainFileStem(typed) ? typed : m_DefaultName;
+	return editor::IsPlainFileStem(typed) ? typed : m_DefaultName;
 }

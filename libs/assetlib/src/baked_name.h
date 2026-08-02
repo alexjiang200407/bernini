@@ -2,11 +2,6 @@
 
 namespace assetlib
 {
-	// Hex digits of the content hash in a baked map's name -- a uint64 printed as %016llx.
-	inline constexpr size_t c_BakedHashDigits = 16;
-
-	inline constexpr std::string_view c_BakedMapExtension = ".ktx2";
-
 	/**
 	 * The name a bake writes for `group`: `<group>_<16 hex digits of hash_string(key)>.ktx2`.
 	 *

@@ -136,16 +136,11 @@ namespace bgl
 		m_Skybox.Init(m_Device);
 		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
-		// Integrated here rather than on the first frame so that every view samples a table that is
-		// already written: the wait is a few microseconds and happens once, where a lazy build would
-		// have to be ordered against each render target's own timeline.
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_BrdfLut.Generate(m_CommandList.Get());
 		m_CommandList->Close();
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
 
-		// After the wait, so the view outlives the list that referenced it. The table is sampled from
-		// here on, never drawn into again, and a device must not spend one of the caller's RTVs on it.
 		m_BrdfLut.ReleaseTarget();
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -438,7 +433,7 @@ namespace bgl
 		draw.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
 
 		draw.env         = view_->GetEnvironmentMap();
-		draw.env.brdfLut = m_BrdfLut.Texture();
+		draw.env.brdfLut = m_BrdfLut.GetTexture();
 		draw.exposure    = view_->GetExposure();
 		draw.skybox      = view_->GetSkybox();
 

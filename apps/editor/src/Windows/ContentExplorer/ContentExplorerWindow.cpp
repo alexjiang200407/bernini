@@ -949,14 +949,14 @@ ContentExplorerWindow::ImportEnvironment(const QString& sourceFile)
 	auto desc        = assetlib::EnvImportDesc();
 	desc.dataRoot    = std::filesystem::path(m_RootPath.toStdWString());
 	desc.source      = std::filesystem::path(sourceFile.toStdWString());
-	desc.name        = dialog.AssetName().toStdString();
+	desc.name        = dialog.GetAssetName().toStdString();
 	desc.sky         = dialog.ImportSky();
 	desc.lighting    = dialog.ImportLighting();
 	desc.environment = dialog.ImportEnvironment();
 
-	desc.skyDir      = std::filesystem::path(dialog.SkyDirectory().toStdWString());
-	desc.lightingDir = std::filesystem::path(dialog.LightingDirectory().toStdWString());
-	desc.sourceDir   = std::filesystem::path(dialog.SourceDirectory().toStdWString());
+	desc.skyDir      = std::filesystem::path(dialog.GetSkyDirectory().toStdWString());
+	desc.lightingDir = std::filesystem::path(dialog.GetLightingDirectory().toStdWString());
+	desc.sourceDir   = std::filesystem::path(dialog.GetSourceDirectory().toStdWString());
 
 	// Import never overwrites, here as for a mesh. The files are asked of assetlib rather than
 	// rebuilt here, so the check cannot come to name different ones than the import would write.

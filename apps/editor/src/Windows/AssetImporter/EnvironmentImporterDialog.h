@@ -50,7 +50,7 @@ public:
 	 * categories it belongs in -- a separator, or anything that is not a plain file stem.
 	 */
 	QString
-	AssetName() const;
+	GetAssetName() const;
 
 	/**
 	 * Folder each part is written into, relative to the data root: the category it belongs in, plus
@@ -66,13 +66,13 @@ public:
 	 * directly inside `Environments/` would resolve its references against the wrong root.
 	 */
 	QString
-	SkyDirectory() const;
+	GetSkyDirectory() const;
 
 	QString
-	LightingDirectory() const;
+	GetLightingDirectory() const;
 
 	QString
-	SourceDirectory() const;
+	GetSourceDirectory() const;
 
 private:
 	QCheckBox* m_ImportSky         = nullptr;
