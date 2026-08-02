@@ -8,6 +8,12 @@ struct SkyboxData
     SamplerState.Handle sampler;
     float exposure;
     float mipLevel;
+
+    // The sub-pixel NDC offsets clipToWorld and prevWorldToClip were built with. The covering
+    // triangle is not itself jittered, so the ray direction carries this frame's offset and the
+    // reprojection carries last frame's; both come back out below.
+    float2 jitter;
+    float2 prevJitter;
 };
 
 ConstantBuffer<SkyboxData> gSkyboxData;
@@ -64,10 +70,10 @@ SkyboxPSOut PSMain(VSOut input)
     // w = 0: the sky is infinitely far, so a camera translation displaces it nowhere and only the
     // rotation between the two frames survives.
     float4 prevClip = mul(gSkyboxData.prevWorldToClip, float4(input.dir, 0.0));
-    float2 prevNdc = prevClip.xy / prevClip.w;
+    float2 prevNdc = prevClip.xy / prevClip.w - gSkyboxData.prevJitter;
 
     SkyboxPSOut output;
     output.color = float4(color, 1.0);
-    output.motion = (input.ndc - prevNdc) * float2(0.5, -0.5);
+    output.motion = ((input.ndc - gSkyboxData.jitter) - prevNdc) * float2(0.5, -0.5);
     return output;
 }

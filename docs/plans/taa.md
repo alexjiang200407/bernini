@@ -202,7 +202,7 @@ longer sequence lengthens the ghosting tail for no visible gain at this blend we
 Every render test draws a fixed small number of frames and asserts on the readback. Jitter alone moves
 all of them; an unconverged history moves them again. The thumbnail cache is the same shape and wants
 a converged image from few frames, which TAA cannot give it. So `RenderTargetDesc` gains
-`bool temporalAA = false`, and the history pair, the jitter and the temporal half of the resolve exist
+`bool taaEnabled = false`, and the history pair, the jitter and the temporal half of the resolve exist
 only when it is set.
 
 `sceneColor` and the post-process pass are **not** gated on it — they are the pipeline now, for every
@@ -252,7 +252,7 @@ converges to the noise instead of through it.
 
 | | |
 |---|---|
-| `libs/bgl/include/bgl/IRenderTarget.h` | `RenderTargetDesc::temporalAA` |
+| `libs/bgl/include/bgl/IRenderTarget.h` | `RenderTargetDesc::taaEnabled` |
 | `libs/bgl/include/bgl/LayerType.h` | `kHashed` |
 | `libs/bgl/include/bgl/IGraphics.h` | a `maxRtvs` default that covers the new per-target cost |
 | `libs/bgl/src/gfx/RenderTargetBase.h` | scene-colour and history accessors, `HasTemporalAA()` |

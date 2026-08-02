@@ -110,6 +110,14 @@ namespace bgl
 			{
 				u = static_cast<float>(draw.skybox->mipLevel);
 			}
+			if (auto u = skybox["jitter"]; u.IsValid())
+			{
+				u = draw.jitter;
+			}
+			if (auto u = skybox["prevJitter"]; u.IsValid())
+			{
+				u = draw.prevJitter;
+			}
 		}
 		else
 		{
