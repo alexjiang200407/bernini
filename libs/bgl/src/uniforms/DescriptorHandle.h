@@ -17,7 +17,11 @@ namespace bgl
 		DescriptorHandle() = default;
 		explicit DescriptorHandle(uint32_t hi, uint32_t lo) : m_Hi(hi), m_Lo(lo) {}
 		explicit DescriptorHandle(uint32_t hi) : m_Hi(hi) {}
-		explicit DescriptorHandle(core::slot_handle slot) : DescriptorHandle(slot.index) {}
+
+		// A slot names which resource a handle is; a descriptor is where a shader finds it. They are
+		// the same number on both backends today and stop being one as soon as D3D12 hands descriptors
+		// out through an allocator, so a slot may not be spelled as a descriptor.
+		DescriptorHandle(core::slot_handle) = delete;
 
 		// The eight bytes verbatim, for a backend whose shader reads them as one 64-bit value rather
 		// than as a pair. Byte order is the machine's, which is the only order the GPU reads them in;

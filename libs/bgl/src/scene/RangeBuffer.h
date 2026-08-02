@@ -114,7 +114,7 @@ namespace bgl
 		GetDescriptorHandle() const noexcept
 		{
 			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			return DescriptorHandle(m_Storage.GetHandle().slot);
+			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
