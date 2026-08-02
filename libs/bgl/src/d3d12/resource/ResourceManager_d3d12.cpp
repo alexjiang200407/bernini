@@ -189,7 +189,8 @@ namespace bgl
 			return TextureHandle{};
 		}
 		m_Textures[slot.index] = Texture(m_Device.Get(), nullptr, slot.index, desc);
-		return TextureHandle{ slot, desc.usage, slot.index };
+		// No bindless index: this slot indexes m_Textures, which is not the shader-visible heap.
+		return TextureHandle{ slot, desc.usage };
 	}
 
 	SamplerHandle
@@ -273,7 +274,8 @@ namespace bgl
 		}
 		m_Textures[slot.index] =
 			Texture(m_Device.Get(), nullptr, slot.index, std::move(d3d12Texture), desc);
-		return TextureHandle{ slot, desc.usage, slot.index };
+		// No bindless index: this slot indexes m_Textures, which is not the shader-visible heap.
+		return TextureHandle{ slot, desc.usage };
 	}
 
 	RtvHandle
