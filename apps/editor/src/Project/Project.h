@@ -11,9 +11,26 @@ public:
 	static constexpr auto c_MaterialsDirectoryName   = "Materials";
 	static constexpr auto c_LevelsDirectoryName      = "Levels";
 
+	// One per environment container, because the three have different lifetimes: a sky is re-authored
+	// in seconds, the lighting convolved from it takes minutes, and the `.benv` naming the pair is a
+	// few bytes that outlives both.
+	static constexpr auto c_EnvironmentsDirectoryName = "Environments";
+	static constexpr auto c_EnvLightingDirectoryName  = "EnvLighting";
+	static constexpr auto c_SkyDirectoryName          = "Sky";
+
+	/**
+	 * Every category Create scaffolds and IsRequiredDirectory protects, in one place -- anything that
+	 * needs to know the layout reads it here rather than restating it and drifting.
+	 */
+	static constexpr std::array<std::string_view, 8> c_RequiredDirectories = {
+		c_MeshesDirectoryName,      c_TexturesDirectoryName, c_TexturesSrcDirectoryName,
+		c_MaterialsDirectoryName,   c_LevelsDirectoryName,   c_EnvironmentsDirectoryName,
+		c_EnvLightingDirectoryName, c_SkyDirectoryName,
+	};
+
 	/**
 	 * Creates a new project on disk: scaffolds the Data directory tree
-	 * (Meshes, Textures, Materials) and writes the project metadata file.
+	 * (one directory per asset category) and writes the project metadata file.
 	 *
 	 * The parent directory of projectFile becomes the project root and is
 	 * created if it does not already exist.

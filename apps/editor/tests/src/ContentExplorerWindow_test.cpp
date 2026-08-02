@@ -152,9 +152,12 @@ TEST_CASE("The content explorer is rooted at the project's data directory", "[co
 	// project's business.
 	REQUIRE(QDir(model->filePath(Hierarchy(window)->rootIndex())) == QDir(sandbox.DataRootPath()));
 
-	// And it fills in, on a worker thread. Project::Create scaffolds Meshes, Textures, textures_src,
-	// Materials and Levels.
-	REQUIRE(WaitFor([&] { return model->rowCount(Hierarchy(window)->rootIndex()) == 5; }));
+	// And it fills in, on a worker thread -- one row per category Project::Create scaffolds, counted
+	// from that list rather than restated, so adding a category does not fail this on arithmetic.
+	REQUIRE(WaitFor([&] {
+		return model->rowCount(Hierarchy(window)->rootIndex()) ==
+		       static_cast<int>(Project::c_RequiredDirectories.size());
+	}));
 }
 
 TEST_CASE("Files are dragged out of the explorer rather than moved", "[contentexplorer]")
