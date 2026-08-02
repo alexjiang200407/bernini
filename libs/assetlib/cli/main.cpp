@@ -72,6 +72,10 @@ namespace
 			return "baked";
 		case assetlib::RefKind::kChannelRoute:
 			return "routes a channel from";
+		case assetlib::RefKind::kEnvironmentPart:
+			return "composes";
+		case assetlib::RefKind::kEnvSource:
+			return "bakes its radiance from";
 		}
 
 		return "references";
@@ -483,9 +487,10 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(desc);
 
 			spdlog::info(
-				"Scanned {} meshes and {} materials: {} references",
+				"Scanned {} meshes, {} materials and {} environment assets: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
+				graph.environmentsScanned,
 				graph.Edges().size());
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.

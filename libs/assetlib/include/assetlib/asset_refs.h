@@ -3,20 +3,25 @@
 
 namespace assetlib
 {
-	/** The three kinds of asset file a project holds, one file extension each. */
+	/** The kinds of asset file a project holds, one file extension each. */
 	enum class AssetType : uint32_t
 	{
-		kMesh,      // .bmesh
-		kMaterial,  // .bmaterial
-		kTexture,   // .ktx2
+		kMesh,         // .bmesh
+		kMaterial,     // .bmaterial
+		kTexture,      // .ktx2
+		kEnvironment,  // .benv
+		kSky,          // .bsky
+		kEnvLighting,  // .benvl
 	};
 
 	/** Why one asset holds another alive. */
 	enum class RefKind : uint32_t
 	{
 		kSubmeshMaterial,  // a .bmesh names a .bmaterial
-		kBakedMap,         // a .bmaterial names a map its bake wrote
+		kBakedMap,         // a .bmaterial, .bsky or .benvl names a map its bake wrote
 		kChannelRoute,     // a .bmaterial routes a channel from a source texture
+		kEnvironmentPart,  // a .benv names the .bsky or .benvl it composes
+		kEnvSource,        // a .bsky or .benvl names the radiance its bake read
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
@@ -62,9 +67,9 @@ namespace assetlib
 	{
 	public:
 		/**
-		 * @throws std::runtime_error if `dataRoot` is not a directory, or if a *referrer* -- a `.bmesh` or
-		 *         `.bmaterial` -- below it cannot be read. Fatal on purpose, and for the reason the prune
-		 *         is: edges we cannot see are edges we would delete through.
+		 * @throws std::runtime_error if `dataRoot` is not a directory, or if a *referrer* -- a `.bmesh`,
+		 *         `.bmaterial`, `.benv`, `.bsky` or `.benvl` -- below it cannot be read. Fatal on purpose,
+		 *         and for the reason the prune is: edges we cannot see are edges we would delete through.
 		 */
 		[[nodiscard]] static AssetRefGraph
 		Scan(const AssetRefScanDesc& desc);
@@ -109,8 +114,9 @@ namespace assetlib
 
 		std::vector<AssetRef> broken;  // `target` is named by `referrer`, but is not on disk
 
-		size_t meshesScanned    = 0;
-		size_t materialsScanned = 0;
+		size_t meshesScanned       = 0;
+		size_t materialsScanned    = 0;
+		size_t environmentsScanned = 0;  // .benv, .bsky and .benvl together
 
 	private:
 		struct Range
