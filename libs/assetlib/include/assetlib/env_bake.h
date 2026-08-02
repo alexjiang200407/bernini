@@ -50,8 +50,11 @@ namespace assetlib
 
 	/**
 	 * Whether `sky`'s baked map no longer reflects the source its route names. False when unrouted --
-	 * there is no source to have drifted from -- and true when the source changed, went missing, or
-	 * was never baked.
+	 * there is no source to have drifted from -- and true when the source changed, went missing, was
+	 * never baked, or when the map the route names is no longer on disk.
+	 *
+	 * That last case is the same rule the material triplet follows: a bake cannot claim a map that is
+	 * not there to sample, so a deleted one reads as stale rather than as up to date.
 	 */
 	[[nodiscard]] bool
 	skyBakeIsStale(const BSky& sky, const std::filesystem::path& dataRoot);

@@ -180,12 +180,19 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	std::filesystem::remove_all(root);
 	std::filesystem::create_directories(root / "textures_src");
 
+	std::filesystem::create_directories(root / "Textures");
+
 	const auto source = root / "textures_src" / "forest.ktx2";
+	const auto baked  = root / "Textures" / "forest_sky_ab12.ktx2";
 	const auto write  = [](const std::filesystem::path& path, std::string_view bytes) {
 		std::ofstream out(path, std::ios::binary);
 		out << bytes;
 	};
 	write(source, "aaaa");
+
+	// The map has to be on disk, not merely named: a route claiming one that is gone is stale, so a
+	// fixture that never wrote it would be describing a stale bake while calling itself current.
+	write(baked, "bbbb");
 
 	BSky sky;
 	sky.name       = "forest";
@@ -204,8 +211,19 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		CHECK(text.find("rotationY         1.5 rad") != std::string::npos);
 		CHECK(text.find("textures_src/forest.ktx2") != std::string::npos);
 		CHECK(text.find("Textures/forest_sky_ab12.ktx2") != std::string::npos);
-		CHECK(text.find("up to date") != std::string::npos);
+		CHECK(text.find("source up to date") != std::string::npos);
 		CHECK(text.find("STALE") == std::string::npos);
+	}
+
+	// The case the stricter rule exists for: nothing about the source moved, but what was baked from
+	// it is gone, so the route names a file there is nothing to sample.
+	SECTION("a sky whose baked map is gone says so and reads as stale")
+	{
+		std::filesystem::remove(baked);
+
+		const std::string text = describe(sky, root);
+		CHECK(text.find("baked map is missing") != std::string::npos);
+		CHECK(text.find("bake              STALE") != std::string::npos);
 	}
 
 	SECTION("a sky whose source moved on reads as stale")
