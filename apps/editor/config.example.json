@@ -24,10 +24,12 @@
         "initialLoosePbrMaterials": 256
     },
     "levelEditor": {
-        "initialInstances": 1000
+        "initialInstances": 1000,
+        "temporalAA": true
     },
     "materialEditor": {
         "initialPreviewInstances": 16,
+        "temporalAA": true,
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },

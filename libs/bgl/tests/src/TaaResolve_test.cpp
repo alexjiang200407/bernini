@@ -44,6 +44,49 @@ namespace
 		return camera;
 	}
 
+	// The tilted quad, sized so its edges cross pixels diagonally at the camera above.
+	void
+	AddQuad(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		auto plane = scene->AddPlaneGeom(1, 1, c_QuadScale * 2.0f, c_QuadScale * 2.0f);
+		view->CreateStaticMeshInstance(
+			plane,
+			glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+	}
+
+	bgl::SceneDesc
+	QuadSceneDesc()
+	{
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 4;
+		sceneDesc.initialMeshlets             = 64;
+		sceneDesc.initialSubmeshes            = 4;
+		sceneDesc.initialVertexBufferByteSize = 8192;
+		sceneDesc.initialIndices              = 256;
+		return sceneDesc;
+	}
+
+	bgl::GraphicsOptions
+	TestOptions()
+	{
+		auto opts                     = bgl::GraphicsOptions();
+		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.enableDebugLayer         = true;
+		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		return opts;
+	}
+
+	bgl::Viewport
+	FullViewport()
+	{
+		return bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	}
+
+	// The quad's upper-left edge, which the 20-degree roll puts on a diagonal through this box.
+	constexpr int c_EdgeBoxX = 60;
+	constexpr int c_EdgeBoxY = 60;
+	constexpr int c_EdgeBox  = 40;
+
 	// Renders the same tilted quad for `frames` frames and writes the last one to `path`.
 	void
 	RenderTo(const std::string& path, bool taaEnabled, int frames)
@@ -171,4 +214,96 @@ TEST_CASE("The first TAA frame is the scene colour whole", "[taa][render]")
 
 	CHECK(withoutTaa.Luma() > 0.1f);
 	CHECK(withTaa.Luma() == Catch::Approx(withoutTaa.Luma()).margin(0.02));
+}
+
+// The toggle exists so a temporal artifact can be judged against its absence without a restart, so
+// the flag round-tripping is not the contract -- the image changing is. Turning it off must put the
+// aliasing back, and turning it on again must resolve it a second time from a history that was
+// discarded rather than resumed across frames that were never rendered.
+TEST_CASE("Toggling temporal AA at runtime turns the resolve off and on", "[taa][render]")
+{
+	auto gfx = bgl::CreateGraphics(TestOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc       = bgl::RenderTargetDesc();
+	targetDesc.width      = static_cast<int>(c_Width);
+	targetDesc.height     = static_cast<int>(c_Height);
+	targetDesc.headless   = true;
+	targetDesc.taaEnabled = true;
+
+	auto target = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+	CHECK(target->IsTaaEnabled());
+
+	auto scene = gfx->CreateScene(QuadSceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 4);
+	AddQuad(scene, view);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = Camera();
+	job.viewport = FullViewport();
+
+	const auto drive = [&](int frames, const std::string& path) {
+		for (int frame = 0; frame < frames; ++frame)
+		{
+			gfx->DrawFrame(target, job);
+		}
+		gfx->ScreenshotPng(target, path);
+		return bgl::test::AliasEnergy(path, c_EdgeBoxX, c_EdgeBoxY, c_EdgeBox, c_EdgeBox);
+	};
+
+	const float converged = drive(c_ConvergeFrames, "assets/golden/taa_toggle_on.got.png");
+
+	target->SetTaaEnabled(false);
+	CHECK_FALSE(target->IsTaaEnabled());
+
+	// One frame is enough: with the resolve off there is nothing to converge, so the very next
+	// frame is the raw unjittered image.
+	const float disabled = drive(1, "assets/golden/taa_toggle_off.got.png");
+
+	target->SetTaaEnabled(true);
+	CHECK(target->IsTaaEnabled());
+
+	const float reconverged = drive(c_ConvergeFrames, "assets/golden/taa_toggle_back_on.got.png");
+
+	INFO(
+		"alias energy: converged = " << converged << ", disabled = " << disabled
+									 << ", reconverged = " << reconverged);
+
+	// Off is aliased, and both on-states resolve it. The middle term is what proves the toggle does
+	// something rather than leaving the resolve running.
+	CHECK(disabled > converged * 1.5f);
+	CHECK(reconverged < disabled * 0.6f);
+
+	// Re-converging must reach the same place as the first time. A history that resumed across the
+	// gap instead of restarting would land somewhere between the two.
+	CHECK(reconverged == Catch::Approx(converged).margin(converged * 0.25f));
+}
+
+// Enabling it on a target that allocated nothing has no history to accumulate into. Silently
+// ignoring the call would leave a caller believing TAA is on and wondering why the image never
+// resolves, so it is a caller error rather than a no-op.
+TEST_CASE("Enabling temporal AA on a target without it is an error", "[taa][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+
+	auto target = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+	CHECK_FALSE(target->IsTaaEnabled());
+
+	CHECK_THROWS_AS(target->SetTaaEnabled(true), bgl::GraphicsError);
+
+	// Turning it off on a target that never had it is the caller asking for what it already has.
+	CHECK_NOTHROW(target->SetTaaEnabled(false));
 }
