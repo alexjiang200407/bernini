@@ -176,6 +176,11 @@ RenderTargetWindow::SetTaaEnabled(bool enabled)
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
 		return;
 
+	// This viewport allocated no history, so there is nothing to switch and SetTaaEnabled(true)
+	// would throw. The menu offers one entry across viewports that need not agree.
+	if (!m_Desc.taaEnabled)
+		return;
+
 	// The render thread is what reads this between frames, so the change is posted there rather
 	// than written from the GUI thread under it.
 	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetTaaEnabled(enabled); });

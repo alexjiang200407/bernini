@@ -41,9 +41,17 @@ public:
 	SetRenderingEnabled(bool enabled);
 
 	// Turns temporal AA on or off for this viewport, so it can be compared against itself without
-	// restarting the editor.
+	// restarting the editor. A no-op on a viewport configured without it -- there is no history to
+	// switch on, and the setting that says so is in config.json rather than here.
 	void
 	SetTaaEnabled(bool enabled);
+
+	// Whether this viewport allocated temporal-AA resources, and so has anything to toggle.
+	[[nodiscard]] bool
+	IsTaaAvailable() const noexcept
+	{
+		return m_Desc.taaEnabled;
+	}
 
 protected:
 	void

@@ -12,8 +12,7 @@
         "maxDsvs": 16,
         "maxTextures": 2048,
         "strictError": false,
-        "enableShaderCache": true,
-        "temporalAA": true
+        "enableShaderCache": true
     },
     "scene": {
         "initialGeom": 256,
@@ -25,10 +24,12 @@
         "initialLoosePbrMaterials": 256
     },
     "levelEditor": {
-        "initialInstances": 1000
+        "initialInstances": 1000,
+        "temporalAA": true
     },
     "materialEditor": {
         "initialPreviewInstances": 16,
+        "temporalAA": true,
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },
