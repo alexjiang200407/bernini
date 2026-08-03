@@ -39,8 +39,14 @@ clone that hasn't installed it. Or use Visual Studio.
 
 ### vcpkg
 
-1. Clone [repo](https://github.com/microsoft/vcpkg) and set **VCPKG_ROOT** environment variable to install location
+`init.py` looks for a checkout (`VCPKG_ROOT`, `~/vcpkg`, `C:\vcpkg`, `/opt/vcpkg`, …) and
+offers to clone and bootstrap one when there is none. It records the path in
+`scripts/config.json` and every build exports it as `VCPKG_ROOT`, so the environment
+variable is not something you have to set.
 
+Which vcpkg it is does not matter — `vcpkg.json` pins `builtin-baseline`, so the package
+versions come from the manifest. It must, though, be a **full clone**: a `--depth 1` one
+does not contain the baseline commit vcpkg has to resolve.
 
 ### Git LFS
 

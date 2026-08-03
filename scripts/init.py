@@ -7,6 +7,10 @@ answers down so neither has to happen again on every invocation. Anything that
 can't be detected is prompted for; a blank answer leaves the key out, which just
 means that tool keeps being looked up on PATH at run time.
 
+Finds the vcpkg the presets build against -- cloning and bootstrapping one when the
+machine has none -- and records where it is. Every build exports that as VCPKG_ROOT, so
+the variable does not have to be set on the machine.
+
 config.json is git-ignored. It describes a machine, not the project -- see
 scripts/config.example.json for the shape and scripts/util/config.py for the
 schema.
@@ -35,6 +39,7 @@ Usage:
     just init --no-just                             # skip the `just` check
     just init --no-gh                               # skip the GitHub CLI check
     just init --no-lfs                              # skip the Git LFS setup
+    just init --no-vcpkg                            # skip the vcpkg check
     just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
@@ -47,6 +52,7 @@ import sys
 import util.cmake_tools as ct
 import util.config as cfg
 import util.lfs as lfs
+import util.vcpkg as vcpkg
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
 
@@ -329,6 +335,54 @@ def ensure_gh():
           "Install it from https://cli.github.com/ and add it to PATH; it is not a pip package.")
 
 
+def ensure_vcpkg(install=True):
+    """Path to a vcpkg checkout to build against, cloning one when there is none.
+
+    Every preset's toolchain file resolves through $env{VCPKG_ROOT}, and the recorded path
+    is what the build scripts export it as -- so this is what replaces setting the variable
+    on the machine by hand. Bootstrapped here rather than left to the CMake toolchain so a
+    broken checkout is reported now, by name, instead of mid-configure.
+    """
+    found = cfg.find_vcpkg()
+    if found:
+        if install and not vcpkg.executable(found):
+            print(f"vcpkg: bootstrapping {found}")
+            error = vcpkg.bootstrap(found)
+            if error:
+                print(f"warning: {error} Run {vcpkg.bootstrap_script(found)} by hand.",
+                      file=sys.stderr)
+        return found
+
+    if not install or not interactive():
+        print(f"missing   {'vcpkg':<13} not found. Clone {vcpkg.REPO_URL} and re-run this, "
+              f"or set VCPKG_ROOT.", file=sys.stderr)
+        return None
+
+    default = vcpkg.default_install_dir()
+    print(f"\nvcpkg was not found. Every preset builds its dependencies with it.\n"
+          f"It can be cloned and bootstrapped now (about 1 GB; shared by every project on this\n"
+          f"machine, and the package versions come from vcpkg.json, not from the checkout).")
+    if not confirm(f"clone {vcpkg.REPO_URL} into {default}?"):
+        raw = ask("path to an existing vcpkg checkout (blank to skip): ").strip('"')
+        if not raw:
+            print("skipped; builds fail until a vcpkg is found or VCPKG_ROOT is set.")
+            return None
+        path = os.path.expanduser(os.path.expandvars(raw))
+        if vcpkg.is_root(path):
+            return os.path.normpath(path)
+        print(f"  '{raw}' is not a vcpkg checkout (no {vcpkg.TOOLCHAIN}); skipped.", file=sys.stderr)
+        return None
+
+    error = vcpkg.clone(default)
+    if error:
+        print(f"warning: {error}", file=sys.stderr)
+        return None
+    error = vcpkg.bootstrap(default)
+    if error:
+        print(f"warning: cloned, but {error}", file=sys.stderr)
+    return default
+
+
 def ensure_bot_key():
     """Set up this developer's key for the morgana-coding-agent App bcp-revise posts with.
 
@@ -371,8 +425,12 @@ def ensure_bot_key():
     print(f"wrote {BOT_KEY}\nwrote {BOT_ENV}")
 
 
-def detect(preset, arch):
-    """Work out the config for `preset`. Returns (config dict, [(label, value), ...])."""
+def detect(preset, arch, install=True, with_vcpkg=True):
+    """Work out the config for `preset`. Returns (config dict, [(label, value), ...]).
+
+    With `install` off nothing is downloaded -- what is already on the machine is recorded
+    and the rest is left out, which is what --show reports.
+    """
     generator = ct.generator_of(preset)
     if generator is None:
         print(f"warning: could not resolve a generator for preset '{preset}'; it may not exist "
@@ -405,6 +463,14 @@ def detect(preset, arch):
         if vcvars:
             data["precommand"] = f'"{vcvars}" {arch}'
             notes.append(("precommand", data["precommand"]))
+
+    # The presets' toolchain file resolves through VCPKG_ROOT, which the build scripts
+    # export from here rather than expecting the machine to define it.
+    if with_vcpkg:
+        root = ensure_vcpkg(install)
+        if root:
+            data["vcpkg"] = root
+            notes.append(("vcpkg", root))
 
     tools = {}
 
@@ -459,6 +525,7 @@ def main():
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
     parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
+    parser.add_argument("--no-vcpkg", action="store_true", help="Don't look for (or offer to clone) vcpkg.")
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
@@ -473,7 +540,7 @@ def main():
     preset = args.preset or ask_preset(existing.get("preset") or cfg.DEFAULT_PRESET)
     arch = args.arch or existing.get("arch") or cfg.DEFAULT_ARCH
 
-    data, notes = detect(preset, arch)
+    data, notes = detect(preset, arch, install=not args.show, with_vcpkg=not args.no_vcpkg)
 
     rows = [("preset", preset)] + notes
     width = max(len(label) for label, _ in rows)

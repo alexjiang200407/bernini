@@ -1,0 +1,14 @@
+{
+  "preset": "windows-vs2026-msvc-dx12-debug",
+  "config": "Debug",
+  "arch": "x64",
+  "precommand": "\"C:\\Program Files\\Microsoft Visual Studio\\2026\\Insiders\\VC\\Auxiliary\\Build\\vcvarsall.bat\" x64",
+  "vcpkg": "C:\\Users\\you\\vcpkg",
+  "tools": {
+    "cmake": "C:\\Program Files\\CMake\\bin\\cmake.exe",
+    "ninja": "C:\\Program Files\\Microsoft Visual Studio\\2026\\Insiders\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\Ninja\\ninja.exe",
+    "clang": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang-format": "C:\\Program Files\\LLVM\\bin\\clang-format.exe",
+    "clang-tidy": "C:\\Program Files\\LLVM\\bin\\clang-tidy.exe"
+  }
+}

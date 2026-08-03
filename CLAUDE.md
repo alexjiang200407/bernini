@@ -150,7 +150,7 @@ suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-valida
 
 ## Configuration
 
-`just init` records this machine's settings in `scripts/config.json`, and every command reads them so they don't have to be retyped: the CMake preset, the build configuration, absolute paths to tools that aren't on PATH (`cmake`, `ninja`, `clang`, `clang-format`), and a `precommand` — a shell command run for its effect on the environment, normally `vcvarsall.bat`, whose resulting environment every build then runs in.
+`just init` records this machine's settings in `scripts/config.json`, and every command reads them so they don't have to be retyped: the CMake preset, the build configuration, absolute paths to tools that aren't on PATH (`cmake`, `ninja`, `clang`, `clang-format`), the `vcpkg` checkout — exported as `VCPKG_ROOT` into every build environment, which is why that variable never has to be set by hand — and a `precommand`, a shell command run for its effect on the environment, normally `vcvarsall.bat`, whose resulting environment every build then runs in.
 
 The file is git-ignored; it describes a machine, not the project. `scripts/config.example.json` shows the shape and `scripts/util/config.py` documents the schema.
 
