@@ -100,6 +100,7 @@ namespace bgl
 	{
 		const bool cutout = layer == LayerType::kMask;
 		const bool blend  = layer == LayerType::kBlend;
+		const bool hashed = layer == LayerType::kHashed;
 
 		switch (geom)
 		{
@@ -110,12 +111,16 @@ namespace bgl
 				if (blend)
 					return occlude ? PsoType::kTransparentOcclude_StaticMesh_PBR :
 					                 PsoType::kTransparent_StaticMesh_PBR;
+				if (hashed)
+					return PsoType::kHashedAlpha_StaticMesh_PBR;
 				return cutout ? PsoType::kAlphaTest_StaticMesh_PBR :
 				                PsoType::kOpaque_StaticMesh_PBR;
 			case MaterialType::kLoosePbr:
 				if (blend)
 					return occlude ? PsoType::kTransparentOcclude_StaticMesh_LoosePbr :
 					                 PsoType::kTransparent_StaticMesh_LoosePbr;
+				if (hashed)
+					return PsoType::kHashedAlpha_StaticMesh_LoosePbr;
 				return cutout ? PsoType::kAlphaTest_StaticMesh_LoosePbr :
 				                PsoType::kOpaque_StaticMesh_LoosePbr;
 

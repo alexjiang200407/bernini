@@ -112,6 +112,20 @@ history buffer is allocated.
 
 ---
 
+## Hashed alpha depends on this
+
+`LayerType::kHashed` ([passes.md](docs/passes.md)) turns alpha into stochastic coverage, which is
+noise in any one frame and only correct once this has averaged it. Two couplings worth knowing:
+
+* **The hash seed is not the jitter index.** Eight seeds means eight distinct coverage patterns, and
+  averaging eight binary masks converges to nine grey levels rather than to smooth coverage. It
+  advances on its own longer cycle, which only has to outrun the history's memory.
+* **The blend weight bounds how smooth it can get.** At `c_BlendWeight` 0.1 the accumulation averages
+  roughly ten frames, which leaves about 16% residual noise on a half-covered surface. That is
+  arithmetic, not a defect — lowering the weight trades it against a longer ghosting tail.
+
+---
+
 ## Risky / Non-obvious Contracts
 
 * **The ping-pong is per target, not per frame counter.** `GetCurrentHistoryIndex()` is state the target

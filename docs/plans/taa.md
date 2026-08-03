@@ -11,9 +11,9 @@ integrates that noise over time. TAA is that something. The two land as one feat
 neither is worth shipping without the other: TAA alone antialiases geometry nobody complained about,
 and hashed alpha alone looks worse than what it replaces.
 
-> **The reference image was not legible to me.** The screenshot attached to the request arrived as a
-> blank placeholder, so the diagnosis below is derived from the code path rather than from the
-> artifact. It should be checked against the image before the hair tasks (T5–T6) are cut.
+> **The reference image was checked against this on 2026-08-03.** The diagnosis below was written
+> from the code path — the screenshot originally arrived as a blank placeholder — and the image
+> confirms it, with one addition recorded under *What the image added*.
 
 ## Why hair looks wrong
 
@@ -44,6 +44,37 @@ every layer participates.
 The ensemble is the catch. One frame of it is visibly noisy. The noise is resolved by averaging over
 pixels (which a screen-space hash gives for free) and over frames (which is TAA). This is why the
 order below is TAA first.
+
+### What the image added
+
+The artifact is **card-shaped**, which the code alone did not say. The background shows through the
+hair in angular patches whose edges are hair-card quads, not strands, and the face reads straight
+through the hairline.
+
+That follows from the same mechanism, one step further than the reasoning above reached: where *no*
+card over a pixel clears the cutoff, the pre-pass writes no depth there at all, so the `Equal` colour
+draw matches nothing and **the environment is what shows**. The surface is not merely thin — it is
+holed, in the shape of the geometry that failed the test. It is the strongest evidence for the fix,
+because stochastic coverage has no threshold for a card to fail.
+
+### Ghosting under fast camera motion — reported with the same image
+
+Two causes, and they are separable.
+
+**The transparent phase writes no velocity.** `ForwardPass::DrawTransparent` binds a framebuffer with
+only the scene-colour attachment, so every blend surface — `occlude` included — has a motion vector
+of zero. Hair is `occlude`, so the resolve reprojects it as though it were static while the camera
+moves. The hair is the worst-ghosting surface in the frame *by construction*, and no amount of
+tuning the clamp addresses it.
+
+**T5–T6 fix that one for free**, which is the reason they come first: `kHashed` puts hair in the
+opaque bucket, which writes velocity like everything else. Re-measure after T6 before touching
+anything else, because the artifact changes shape.
+
+What is left after that is generic ghosting, from two known gaps: the clamp is a min/max box rather
+than variance clipping (cheap to change, no new resources), and there is no closest-fragment velocity
+dilation (which needs the depth SRV T3 deferred). That becomes **T8**, after T7's measurement says
+how much of it survives.
 
 ## What the survey found
 
@@ -234,13 +265,16 @@ for them.
 velocity MRT — and no pre-pass. Existing `occlude` materials are untouched.
 
 The obvious alternative is to redefine `occlude` to mean hashed alpha and delete the pre-pass path
-entirely; it is very likely where this ends up, and it would delete two PSO rows, two prepass kernels,
-`Forward_Transparent_Prepass`, and the transparent sort's `[occlude][plain]` partition. It is
-*rejected for now* for two reasons. TAA defaults off, so redefining `occlude` would make every
-existing hair asset render as raw noise for any caller that has not opted in — including the thumbnail
-cache, which cannot opt in. And a separate layer type is the only way to put the old and the new
-side by side in one scene, which is how the fix gets judged against the artifact it is meant to fix.
-Retiring `occlude` is a follow-up, once the images say so.
+entirely. It is where this ends up — see T9 — but not in the task that introduces the replacement,
+because **T7 needs both paths in one scene**: the claim this branch is judged on is hashed-versus-
+`occlude` on the real asset, and deleting the old path first turns that into a comparison against a
+screenshot taken earlier. It is also the fallback if T7 says hashed alpha loses.
+
+*One reason given here was wrong and is corrected.* The plan argued that TAA defaults off, so
+redefining `occlude` would make hair render as noise for callers that cannot opt in — the thumbnail
+cache among them. The thumbnail cache renders `c_WarmupFrames = 1` frame and captures; it is a
+cached one-shot, so raising that count and enabling TAA converges it. Nothing structural stands in
+the way, and the retirement is gated on evidence rather than on that.
 
 The hash is taken from world position with screen-space derivatives (Wyman & McGuire §3.2), not object
 position: `ForwardVSOut` already interpolates `worldPos`, and adding an object-space channel costs a
@@ -380,11 +414,18 @@ history that stops updating stops converging.
 *Gate:* `editor_tests`, plus a screenshot of a static scene held for a second showing edges resolved
 and no crawl.
 
-### T5 — Hashed alpha: the shader and the PSO pair
+### T5 — Hashed alpha: the shader, the PSO pair, and the layer that reaches them
 
 `util/HashedAlpha.slang` (the three-level world-space hash with screen-space derivatives, seeded off
 the jitter index), `Forward_PBR_HashedAlpha` and its loose twin, and two `PsoType` rows in the opaque
-shape. Nothing selects them yet — this is dead scaffolding, and the PR says so.
+shape.
+
+**Correction to the split this plan first drew.** T5 was to be dead scaffolding with T6 carrying
+`LayerType::kHashed`, but the two cannot separate that way: a `PsoType` is only reachable through
+`GetPsoFromGeomAndMaterial`, which switches on `LayerType`, so with no enum value nothing — including
+the test below — can drive the new pipeline at all. T5 therefore also adds `LayerType::kHashed` and
+its `SubmeshPso` mapping, which is the smallest thing that makes its own gate runnable. T6 keeps what
+is genuinely separable: persistence and authoring.
 
 *Gate:* a `bgl_tests` case driving the new PSO directly over a known alpha ramp. `MeanColor` over a
 flat-alpha patch gives the survival fraction, which must equal alpha within the sampling error, and it
@@ -393,10 +434,10 @@ over the same patch across a converged TAA run, falling as the frames accumulate
 assertion that the noise is being *integrated* rather than merely produced. No golden here — a single
 frame of stochastic coverage is noise by design and would be a golden of a random seed.
 
-### T6 — `LayerType::kHashed` through the authoring chain
+### T6 — `kHashed` through the authoring chain
 
-The enum, `SubmeshPso`'s mapping, `.bmaterial` and the assetlib cook, and the material editor's output
-node so a hair material can be switched to it.
+`.bmaterial` and the assetlib cook, and the material editor's output node so a hair material can be
+switched to it. The enum and its PSO mapping come in T5, which cannot be tested without them.
 
 *Gate:* `assetlib_tests` on the round-trip, `gamelib_tests` on the resolved `MaterialHandle`, and a
 render test asserting an instance authored `kHashed` lands in the new bucket.
@@ -411,4 +452,26 @@ an assumption in T3.
 *Gate:* `AliasEnergy` over the hair region, `kHashed` under converged TAA against the `occlude`
 original, plus the before/after pair in the PR body at rest and under camera motion. The numeric part
 matters because "looks better" is what this whole branch is being judged on and is the one claim a
-screenshot cannot settle on its own.
+screenshot cannot settle on its own. It also measures how much of the reported ghosting was the
+missing velocity, which is what sizes T8.
+
+### T8 — whatever ghosting survives the hair fix
+
+Variance clipping in place of the min/max box, and closest-fragment velocity dilation if the images
+still ask for it — the latter needs the depth SRV, so it is the task that pays for the thing T3
+deferred. Not cut until T7 has measured, because tuning a clamp against an artifact that is about to
+change shape is wasted work.
+
+*Gate:* `AliasEnergy` and a pan case over the hair, against T7's numbers rather than against T3's.
+
+### T9 — retire the `occlude` path
+
+Gated on T7 saying hashed alpha wins. First the thumbnail cache converges — more than one warm-up
+frame, and TAA on — because that is what makes a stochastic material safe everywhere. Then `occlude`
+goes, and takes with it two `PsoType` rows, the two prepass kernels, `Forward_Transparent_Prepass`,
+the `[occlude][plain]` partitioning in `TransparentSortPass` (which collapses the transparent phase
+from three indirect dispatches to one), the `occlude` bool on `MaterialHandle` and `BMaterial`, and
+the material editor's checkbox.
+
+*Gate:* the thumbnail goldens, which are what would catch a warm-up count too low for the material to
+converge; and the hair unchanged from T7's captures once its material is `kHashed` either way.
