@@ -43,10 +43,11 @@ namespace
 		const char* modelName;
 	};
 
-	constexpr std::array<OutputType, 3> c_OutputTypes = { {
+	constexpr std::array<OutputType, 4> c_OutputTypes = { {
 		{ "Opaque", "MaterialOutput" },
 		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
 		{ "Alpha Blend", "BlendedMaterialOutput" },
+		{ "Hashed Alpha", "HashedAlphaMaterialOutput" },
 	} };
 
 	bgl::LayerType
@@ -58,6 +59,8 @@ namespace
 			return bgl::LayerType::kMask;
 		case assetlib::AlphaMode::kBlend:
 			return bgl::LayerType::kBlend;
+		case assetlib::AlphaMode::kHashed:
+			return bgl::LayerType::kHashed;
 		case assetlib::AlphaMode::kOpaque:
 			break;
 		}

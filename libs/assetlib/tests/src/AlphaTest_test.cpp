@@ -287,6 +287,29 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	CHECK(loaded.pbr.occlude);
 }
 
+// kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new
+// one round-trips. It carries no cutoff of its own -- the threshold is what it replaces -- so what
+// matters is only that the mode itself survives.
+TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][hashedalpha]")
+{
+	const BakeDir dir("bernini_bake_hashed_io");
+
+	BMaterial material;
+	material.pbr.alphaMode        = AlphaMode::kHashed;
+	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
+
+	const auto path = dir.path / "hashed.bmaterial";
+	REQUIRE_NOTHROW(saveMaterial(material, path));
+
+	CHECK(loadMaterial(path).pbr.alphaMode == AlphaMode::kHashed);
+
+	// The values the enum already had must not have moved, or every material baked before this
+	// reads as a different mode.
+	CHECK(static_cast<uint32_t>(AlphaMode::kOpaque) == 0u);
+	CHECK(static_cast<uint32_t>(AlphaMode::kMask) == 1u);
+	CHECK(static_cast<uint32_t>(AlphaMode::kBlend) == 2u);
+}
+
 TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][alphatest]")
 {
 	// Only the current major version loads. The point is that a stale file fails *loudly*: the

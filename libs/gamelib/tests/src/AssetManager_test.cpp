@@ -221,6 +221,15 @@ TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[
 	const bgl::MaterialHandle hair = (*fx).AcquireMaterial("Materials/hair.bmaterial");
 	CHECK(hair.layerType == bgl::LayerType::kBlend);
 	CHECK(hair.occlude);
+
+	// kHashed is the mode nothing imports -- glTF cannot express it -- so this mapping is the only
+	// way a baked material reaches the stochastic-coverage PSO.
+	WriteBakedMaterial(
+		fx.root.path / "Materials" / "hashed.bmaterial",
+		"Textures/a.ktx2",
+		assetlib::AlphaMode::kHashed);
+
+	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kHashed);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")
