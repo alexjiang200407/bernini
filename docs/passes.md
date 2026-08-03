@@ -73,6 +73,27 @@ unit radiance and not as white.
 
 ---
 
+## Two-sided surfaces
+
+Every cutout, blend and hashed bucket is `RasterCullMode::kNone`, so the rasterizer draws both sides
+of a surface. On the back one the interpolated normal still points away from the camera, which sends
+the view angle, the irradiance lookup and the reflection vector into the wrong hemisphere — the same
+material then shades differently depending on which side happens to be visible.
+
+The seven shading pixel shaders therefore take `bool isFrontFace : SV_IsFrontFace` and hand it to
+`CalculateNormal`, which negates the geometric normal before building the tangent frame. **Before,
+not after**: the bitangent is `cross(N, T) * tangent.w`, so flipping N carries the frame with it,
+where negating the finished shading normal would leave a mirrored bitangent and lean the normal map's
+detail the wrong way on every back face.
+
+`Forward_Null`, `Forward_Assert` and `Forward_Transparent_Prepass` take `ForwardVSOut` but never read
+its normal, so they do not take the flag. The opaque buckets cull back faces and can never see one,
+but their shaders share `Shade<M>` with the transparent bucket, which can — so they pass the hardware
+value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
+the shader cannot see.
+
+---
+
 ## Hashed alpha
 
 `LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/LayerType.h)) is stochastic coverage:
