@@ -455,6 +455,34 @@ matters because "looks better" is what this whole branch is being judged on and 
 screenshot cannot settle on its own. It also measures how much of the reported ghosting was the
 missing velocity, which is what sizes T8.
 
+### T7b — what T7 found
+
+T7 was answered by a capture from the user rather than by a task of mine, and it said the fix works —
+volume, layering and silhouette all correct, the face no longer through the hairline, the card-shaped
+holes gone. Two defects came with it.
+
+**Blotches, and they are a bug in T5.** `HashedAlphaThreshold` sized its hash cell off
+`max(length(ddx), length(ddy))`. A cell is isotropic in world space and the projection is not, so on a
+surface seen near edge-on — which is most of a hair card — that is right along the stretched screen
+axis and many pixels too wide along the compressed one. A streak of pixels then shares one threshold:
+coverage stops being independent per pixel, which reads as an occlusion failure rather than as noise,
+and no accumulation removes it. Bounding how far the two derivatives may diverge (4) fixes it.
+Confirmed as the cause before the fix by the user holding the camera still with TAA off — residual
+noise moves, a hash artifact does not.
+
+Measured on a plane at grazing incidence: grain 0.027 → 0.100 against 0.12 for the same material
+head-on, and coverage 0.572 → 0.509 against the 0.5 asked for. The correlation was biasing the
+coverage as well as clumping it.
+
+**Flicker is not fixed here, deliberately.** It is `c_BlendWeight` — an exponential average over about
+ten frames leaves roughly 11% standard deviation on a half-covered pixel, and the seed advances every
+frame so the residual moves. Halving the weight halves it and doubles the ghosting tail, and ghosting
+is the other thing the user reported. But correlated flicker over a patch is far more visible than the
+same variance spread per pixel, so the anisotropy fix should take a large part of it on its own; the
+weight is worth re-judging after, not before.
+
+*Gate:* the grazing-angle case above, which fails on both assertions against the unfixed shader.
+
 ### T8 — whatever ghosting survives the hair fix
 
 Variance clipping in place of the min/max box, and closest-fragment velocity dilation if the images
