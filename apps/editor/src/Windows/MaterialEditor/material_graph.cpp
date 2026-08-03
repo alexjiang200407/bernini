@@ -9,6 +9,7 @@
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/BlendedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/HashedAlphaMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 
@@ -79,6 +80,9 @@ MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews)
 	registry->registerModel<BlendedMaterialOutputNode>(
 		[]() { return std::make_unique<BlendedMaterialOutputNode>(); },
 		QLatin1String(c_OutputCategory));
+	registry->registerModel<HashedAlphaMaterialOutputNode>(
+		[]() { return std::make_unique<HashedAlphaMaterialOutputNode>(); },
+		QLatin1String(c_OutputCategory));
 
 	return registry;
 }
@@ -131,11 +135,15 @@ BuildImportedMaterialGraph(
 {
 	const bool alphaTested = material.alphaMode == assetlib::AlphaMode::kMask;
 	const bool blended     = material.alphaMode == assetlib::AlphaMode::kBlend;
-	// A cutout and a blend sink both expose a 4-wide base-color port; the opaque one is 3-wide.
-	const bool carriesAlpha = alphaTested || blended;
+	const bool hashed      = material.alphaMode == assetlib::AlphaMode::kHashed;
+	// Every sink but the opaque one exposes a 4-wide base-color port; that one is 3-wide.
+	const bool carriesAlpha = alphaTested || blended || hashed;
 
+	// kHashed never arrives from an import -- glTF cannot say it -- but a graph rebuilt from a
+	// material that was authored to it does.
 	const QString outputModel = alphaTested ? QStringLiteral("AlphaTestedMaterialOutput") :
 	                            blended     ? QStringLiteral("BlendedMaterialOutput") :
+	                            hashed      ? QStringLiteral("HashedAlphaMaterialOutput") :
 	                                          QStringLiteral("MaterialOutput");
 
 	const QtNodes::NodeId outputId = model.addNode(outputModel);

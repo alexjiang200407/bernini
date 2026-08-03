@@ -113,10 +113,17 @@ function of the *material*, not a constant:
 |---|---|---|
 | `kOpaque` | `BC1_RGB_SRGB` | 4 bpp; unchanged, so no existing asset re-cooks |
 | `kMask` | `BC7_SRGB` | 8 bpp; carries alpha in an independent channel |
+| `kBlend`, `kHashed` | `BC7_SRGB` | as `kMask`; the alpha is composited rather than tested |
 
-**The alpha mode is authored, never inferred.** In the material editor, a graph ends in either a
-**Material Output** node or an **Alpha Tested Material Output** node; the alpha port exists only on the
-latter, along with the cutoff. Which sink the graph ends in *is* the alpha mode, so "routes an alpha
+**The alpha mode is authored, never inferred.** In the material editor, a graph ends in one of four
+sinks — **Material Output**, **Alpha Tested**, **Alpha Blend** or **Hashed Alpha** — and the alpha port
+exists on every one but the first, along with a cutoff on the two that have a threshold to author.
+
+`kHashed` is the one mode **no import can produce**: glTF has only `OPAQUE`, `MASK` and `BLEND`, so it
+is reachable solely by picking that sink. It turns alpha into stochastic coverage rather than a
+threshold, which is what lets a self-occluding surface keep every layer — and it resolves only under
+temporal antialiasing (see [Temporal Antialiasing](docs/taa.md)). It is appended to `AlphaMode` as
+`3`, so every material baked before it keeps its value. Which sink the graph ends in *is* the alpha mode, so "routes an alpha
 channel" and "is a cutout" cannot disagree — and the opaque node's base-colour port is 3-wide (RGB), so
 the type system rejects the wrong wiring rather than tolerating it.
 
