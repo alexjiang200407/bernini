@@ -116,7 +116,7 @@ Everything is driven by `just` from the repo root, via the `justfile`. Each reci
 
 ```bash
 just                              # list the recipes
-just init                         # write scripts/config.json for this machine (see below)
+just init                         # set this machine up and write scripts/config.json (see below)
 just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
 just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build
@@ -151,6 +151,8 @@ suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-valida
 ## Configuration
 
 `just init` records this machine's settings in `scripts/config.json`, and every command reads them so they don't have to be retyped: the CMake preset, the build configuration, absolute paths to tools that aren't on PATH (`cmake`, `ninja`, `clang`, `clang-format`), the `vcpkg` checkout — exported as `VCPKG_ROOT` into every build environment, which is why that variable never has to be set by hand — and a `precommand`, a shell command run for its effect on the environment, normally `vcvarsall.bat`, whose resulting environment every build then runs in.
+
+It also installs what is missing rather than reporting it: vcpkg is cloned and bootstrapped, `cmake`/`ninja`/`clang-format`/`clang-tidy`/`just` come from the versions pinned in `scripts/requirements.txt` (binary wheels), and `git-lfs`/`gh` come from winget or brew. Anything already installed is kept and recorded.
 
 The file is git-ignored; it describes a machine, not the project. `scripts/config.example.json` shows the shape and `scripts/util/config.py` documents the schema.
 

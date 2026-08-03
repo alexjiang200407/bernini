@@ -1,12 +1,31 @@
-# Optional tooling for the Bernini scripts.
+# Pinned developer tooling for the Bernini scripts.
 #
-#   pip install -r scripts/requirements.txt
+#   pip install -r scripts/requirements.txt      # install all of it
+#   python scripts/init.py                       # install only what this machine lacks
 #
-# just is the task runner behind the root justfile (`just build`, `just format`,
-# ...). It is a convenience layer only -- every recipe is a one-line call into
-# scripts/, so `python scripts/build.py ...` works without it.
+# Every entry ships a real prebuilt binary as a per-platform wheel, so none of them needs a
+# compiler, a Rust toolchain or an LLVM install, and everyone who takes one gets the same
+# version on Windows, Linux and macOS -- which the OS package managers can't promise.
 #
-# rust-just ships just as a prebuilt binary wheel, so this needs no Rust
-# toolchain and installs the same version on Windows, Linux and macOS. Pinned so
-# everyone gets the same one; the OS package managers can't promise that.
+# `just init` treats this file as the version registry rather than a batch install: it detects
+# each tool first and installs the pinned wheel only for what is missing, so a machine that
+# already has cmake or clang-format keeps using the one it has.
+
+# The task runner behind the root justfile (`just build`, `just format`, ...). A convenience
+# layer only -- every recipe is a one-line call into scripts/, so `python scripts/build.py ...`
+# works without it.
 rust-just==1.56.0
+
+# The buildsystem. Deliberately the last 3.x: CMake 4 drops support for a
+# `cmake_minimum_required` below 3.5, which some of the vcpkg ports this project depends on
+# still declare, and they fail to configure under it. The project itself asks for 3.24.
+cmake==3.31.6
+
+# The generator the ninja and clang presets build with.
+ninja==1.13.0
+
+# `just format` and the pre-commit hook. LLVM's own release, repackaged as a wheel.
+clang-format==22.1.8
+
+# `just tidy` -- the naming rules in the .clang-tidy files.
+clang-tidy==22.1.8
