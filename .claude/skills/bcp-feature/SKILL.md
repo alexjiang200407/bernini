@@ -82,7 +82,7 @@ and reconcile the tracker with reality before anything else — a `[>]` may have
 
 ```bash
 gh pr list --base feat/<name> --state all --json number,title,state
-just watch-pr <n> --once      # per open PR: merge state, plus every submitted review and comment
+just watch-pr <n> --once      # per open PR: merge state, failing checks, reviews and comments
 ```
 
 ### Naming
@@ -209,15 +209,25 @@ is satisfied while it runs rather than only after it exits. If the user has to d
 before it can be watched, say so and release it with `just pr unwatch <n>`.
 
 It baselines the PR's current activity, polls, and blocks until something actionable happens, printing
-one JSON event. Do not poll `gh` yourself while it runs — it is the wait, not a hint. Only *submitted*
-reviews fire it; a reviewer's pending draft stays invisible until they send it.
+one JSON event. Do not poll `gh` yourself while it runs — it is the wait, not a hint, and that includes
+`gh pr checks`. Only *submitted* reviews fire it; a reviewer's pending draft stays invisible until they
+send it.
 
 | event | do |
 |---|---|
 | `merged` | mark `[x]` in the tracker; next task (§ 3), or § 5 if that was the last |
+| `ci_failure` | fix the build on the same branch, push, restart the watcher — see below |
 | `review` / `comment` | [bcp-revise](.claude/skills/bcp-revise/SKILL.md) on the same branch, push more commits, restart the watcher |
 | `closed` | stop and ask — the user rejected something |
 | `timeout` (exit 3) | say you are still waiting, restart the watcher |
+
+**A red build is fixed before the review is answered.** Each failed check in a `ci_failure` event
+carries the diagnostics lifted out of its job log, so the compiler errors are already in hand — read
+them rather than opening the `url`. Reproduce locally where the runner's toolchain allows it
+(`just build --preset windows-ninja-msvc-dx12-debug`), fix, push, and restart the watcher. Where it
+does not — a warning only MSVC emits, a macOS-only failure — say in chat that the fix is unverified
+locally and that the next CI run is the gate. The event also carries any review or comment that was
+waiting; answer those in the same turn, then restart the watcher once.
 
 **Just restart it.** The baseline is not yours to compute:
 
