@@ -38,7 +38,7 @@ namespace
 
 	// Looks along -Z, yawed left by `yaw` about +Y.
 	bgl::Camera
-	cameraAt(glm::vec3 eye, float yaw = 0.0f)
+	CameraAt(glm::vec3 eye, float yaw = 0.0f)
 	{
 		const glm::vec3 forward{ -std::sin(yaw), 0.0f, -std::cos(yaw) };
 
@@ -56,7 +56,7 @@ namespace
 	// `camera` and intersecting it with the quad's plane. Derived independently of the shader, so
 	// agreeing with it is evidence rather than tautology.
 	glm::vec3
-	surfacePointAt(const bgl::Camera& camera, glm::vec3 eye, uint32_t px, uint32_t py)
+	SurfacePointAt(const bgl::Camera& camera, glm::vec3 eye, uint32_t px, uint32_t py)
 	{
 		const float ndcX = 2.0f * ((static_cast<float>(px) + 0.5f) / c_Width) - 1.0f;
 		const float ndcY = 1.0f - 2.0f * ((static_cast<float>(py) + 0.5f) / c_Height);
@@ -72,7 +72,7 @@ namespace
 	// Where `worldPos` lands in screen UV under `camera` -- the same [0,1] space the shader's motion
 	// vectors are expressed in.
 	glm::vec2
-	projectToUv(const bgl::Camera& camera, glm::vec3 worldPos)
+	ProjectToUv(const bgl::Camera& camera, glm::vec3 worldPos)
 	{
 		const glm::vec4 clip = camera.GetViewProjection() * glm::vec4(worldPos, 1.0f);
 		const glm::vec2 ndc  = glm::vec2(clip) / clip.w;
@@ -235,7 +235,7 @@ namespace
 	};
 
 	glm::vec2
-	centrePixel(const std::vector<glm::vec2>& motion)
+	CentrePixel(const std::vector<glm::vec2>& motion)
 	{
 		return motion[static_cast<size_t>(c_Height / 2) * c_Width + (c_Width / 2)];
 	}
@@ -248,7 +248,7 @@ TEST_CASE("The first frame a view is drawn has no motion", "[motionvectors][rend
 {
 	auto fixture = MotionFixture();
 	fixture.AddQuad();
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
 
 	const auto motion = fixture.ReadMotionVectors();
 
@@ -266,7 +266,7 @@ TEST_CASE("A still camera leaves static geometry with no motion", "[motionvector
 {
 	auto fixture = MotionFixture();
 	fixture.AddQuad();
-	const auto camera = cameraAt({ 0.0f, 0.0f, c_CameraZ });
+	const auto camera = CameraAt({ 0.0f, 0.0f, c_CameraZ });
 
 	fixture.RenderFrom(camera);
 	fixture.RenderFrom(camera);
@@ -297,16 +297,16 @@ TEST_CASE(
 	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
 	const glm::vec3 eyeAfter{ 1.0f, 0.8f, c_CameraZ };
 
-	const bgl::Camera before = cameraAt(eyeBefore);
-	const bgl::Camera after  = cameraAt(eyeAfter);
+	const bgl::Camera before = CameraAt(eyeBefore);
+	const bgl::Camera after  = CameraAt(eyeAfter);
 
 	fixture.RenderFrom(before);
 	fixture.RenderFrom(after);
 
-	const glm::vec2 measured = centrePixel(fixture.ReadMotionVectors());
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
 
-	const glm::vec3 surface  = surfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
-	const glm::vec2 expected = projectToUv(after, surface) - projectToUv(before, surface);
+	const glm::vec3 surface  = SurfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(after, surface) - ProjectToUv(before, surface);
 
 	INFO("measured = " << measured.x << ", " << measured.y);
 	INFO("expected = " << expected.x << ", " << expected.y);
@@ -337,11 +337,11 @@ TEST_CASE("A camera yaw displaces the skybox horizontally", "[motionvectors][ren
 
 	const float yaw = glm::radians(5.0f);
 
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }, yaw));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }, yaw));
 
 	// No quad, so the sky is what shaded every pixel including this one.
-	const glm::vec2 sky = centrePixel(fixture.ReadMotionVectors());
+	const glm::vec2 sky = CentrePixel(fixture.ReadMotionVectors());
 
 	const float expectedX = 0.5f * std::tan(yaw) / std::tan(c_Fov * 0.5f);
 
@@ -362,8 +362,8 @@ TEST_CASE("Pixels no geometry covered stay at zero motion", "[motionvectors][ren
 	auto fixture = MotionFixture();
 	fixture.AddQuad();
 
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
-	fixture.RenderFrom(cameraAt({ 3.0f, 2.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 3.0f, 2.0f, c_CameraZ }));
 
 	const auto motion = fixture.ReadMotionVectors();
 
@@ -373,7 +373,7 @@ TEST_CASE("Pixels no geometry covered stay at zero motion", "[motionvectors][ren
 	CHECK(corner.y == Catch::Approx(0.0f).margin(1e-4));
 
 	// ...while the centre, which the quad does cover, moved.
-	CHECK(glm::length(centrePixel(motion)) > 1e-2f);
+	CHECK(glm::length(CentrePixel(motion)) > 1e-2f);
 }
 
 // A surface that was off-screen last frame still has a previous position -- it just is not one the
@@ -386,10 +386,10 @@ TEST_CASE("Geometry entering the frame reprojects to outside it", "[motionvector
 	fixture.AddQuad();
 
 	// Yawed well past the 30-degree half-angle, so the quad is outside the frustum entirely.
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(60.0f)));
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(60.0f)));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
 
-	const glm::vec2 motion = centrePixel(fixture.ReadMotionVectors());
+	const glm::vec2 motion = CentrePixel(fixture.ReadMotionVectors());
 
 	// Where the consumer would go looking for this pixel's history.
 	const glm::vec2 previousUv = glm::vec2(0.5f, 0.5f) - motion;
@@ -408,14 +408,14 @@ TEST_CASE("Geometry leaving the frame leaves no motion behind", "[motionvectors]
 	auto fixture = MotionFixture();
 	fixture.AddQuad();
 
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
-	REQUIRE(glm::length(centrePixel(fixture.ReadMotionVectors())) < 1e-4f);
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) < 1e-4f);
 
 	// Moving and then turning away: the frame before this one had motion everywhere the quad was.
-	fixture.RenderFrom(cameraAt({ 1.0f, 0.8f, c_CameraZ }));
-	REQUIRE(glm::length(centrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }));
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) > 1e-2f);
 
-	fixture.RenderFrom(cameraAt({ 1.0f, 0.8f, c_CameraZ }, glm::radians(60.0f)));
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }, glm::radians(60.0f)));
 
 	for (const glm::vec2& texel : fixture.ReadMotionVectors())
 	{
@@ -432,14 +432,14 @@ TEST_CASE("A deleted instance stops contributing motion", "[motionvectors][rende
 	auto                          fixture = MotionFixture();
 	const bgl::MeshInstanceHandle quad    = fixture.AddQuad();
 
-	fixture.RenderFrom(cameraAt({ 0.0f, 0.0f, c_CameraZ }));
-	fixture.RenderFrom(cameraAt({ 1.0f, 0.8f, c_CameraZ }));
-	REQUIRE(glm::length(centrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }));
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) > 1e-2f);
 
 	fixture.view->DeleteMeshInstance(quad);
 
 	// The camera keeps moving, so anything still drawing would still be writing velocity.
-	fixture.RenderFrom(cameraAt({ 2.0f, 1.6f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 2.0f, 1.6f, c_CameraZ }));
 
 	for (const glm::vec2& texel : fixture.ReadMotionVectors())
 	{

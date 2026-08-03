@@ -6,3 +6,8 @@ InheritParentConfig: true
 
 CheckOptions:
   readability-identifier-naming.FunctionCase: lower_case
+  # core::type_traits stands in for <type_traits>, and a constraint is read beside the
+  # trait it wraps -- `trivially_copyable T` next to `std::is_trivially_copyable_v<T>`.
+  # Only the snake_case spelling is exempt; a concept named for the engine's own idea of
+  # a type, like PackedElementConcept, is still PascalCase.
+  readability-identifier-naming.ConceptIgnoredRegexp: '^[a-z][a-z0-9_]*$'

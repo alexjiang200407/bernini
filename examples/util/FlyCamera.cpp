@@ -13,8 +13,8 @@ namespace demo
 	DeltaClock::Tick() noexcept
 	{
 		const auto  now = std::chrono::steady_clock::now();
-		const float dt  = std::chrono::duration<float>(now - m_last).count();
-		m_last          = now;
+		const float dt  = std::chrono::duration<float>(now - m_Last).count();
+		m_Last          = now;
 		return dt;
 	}
 

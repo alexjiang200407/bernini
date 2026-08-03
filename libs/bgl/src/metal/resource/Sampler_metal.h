@@ -64,6 +64,7 @@ namespace bgl
 			return m_Sampler.get() == nullptr;
 		}
 
+	private:
 		SamplerDesc                      m_Desc;
 		NS::SharedPtr<MTL::SamplerState> m_Sampler;
 	};

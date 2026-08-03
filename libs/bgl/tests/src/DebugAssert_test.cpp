@@ -25,11 +25,11 @@ namespace
 	MakeDebugImage(uint32_t count, uint32_t overflow, uint32_t capacity)
 	{
 		std::vector<uint32_t> words(
-			bgl::DebugBuffer::kHeaderWords + capacity * bgl::DebugBuffer::kRecordWords,
+			bgl::DebugBuffer::c_HeaderWords + capacity * bgl::DebugBuffer::c_RecordWords,
 			0u);
-		words[bgl::DebugBuffer::kCounterWord]  = count;
-		words[bgl::DebugBuffer::kOverflowWord] = overflow;
-		words[bgl::DebugBuffer::kCapacityWord] = capacity;
+		words[bgl::DebugBuffer::c_CounterWord]  = count;
+		words[bgl::DebugBuffer::c_OverflowWord] = overflow;
+		words[bgl::DebugBuffer::c_CapacityWord] = capacity;
 		return words;
 	}
 
@@ -42,7 +42,7 @@ namespace
 		uint32_t               limit = 0,
 		uint32_t               job   = 0)
 	{
-		const uint32_t base = bgl::DebugBuffer::kHeaderWords + i * bgl::DebugBuffer::kRecordWords;
+		const uint32_t base = bgl::DebugBuffer::c_HeaderWords + i * bgl::DebugBuffer::c_RecordWords;
 		words[base + 0]     = errcode;
 		words[base + 1]     = value;
 		words[base + 2]     = limit;
@@ -140,7 +140,7 @@ TEST_CASE("An errcode reports by name", "[debug][gpu-assert]")
 // survive the atomic append, the implicit gDebug auto-bind, and CPU readback.
 TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][compute]")
 {
-	constexpr uint32_t kCapacity = 16;
+	constexpr uint32_t c_Capacity = 16;
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -165,7 +165,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
 	auto debugBuffer = bgl::DebugBuffer();
-	debugBuffer.Init(kCapacity, resourceManager);
+	debugBuffer.Init(c_Capacity, resourceManager);
 
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
@@ -228,7 +228,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	const auto* mapped = resourceManager->MapReadback(rb);
 	REQUIRE(mapped != nullptr);
 
-	const auto report = bgl::InspectDebugReadback(mapped, kCapacity);
+	const auto report = bgl::InspectDebugReadback(mapped, c_Capacity);
 	REQUIRE(report.has_value());
 	CHECK(report->count == 1);
 	CHECK_FALSE(report->overflow);

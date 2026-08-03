@@ -105,14 +105,14 @@ namespace assetlib
 		std::string
 		byteSize(size_t bytes)
 		{
-			constexpr double kKiB = 1024.0;
-			constexpr double kMiB = 1024.0 * 1024.0;
+			constexpr double c_KiB = 1024.0;
+			constexpr double c_MiB = 1024.0 * 1024.0;
 
 			const auto value = static_cast<double>(bytes);
-			if (value >= kMiB)
-				return std::format("{:.1f} MiB", value / kMiB);
-			if (value >= kKiB)
-				return std::format("{:.1f} KiB", value / kKiB);
+			if (value >= c_MiB)
+				return std::format("{:.1f} MiB", value / c_MiB);
+			if (value >= c_KiB)
+				return std::format("{:.1f} KiB", value / c_KiB);
 			return std::format("{} B", bytes);
 		}
 

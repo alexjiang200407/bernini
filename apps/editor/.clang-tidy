@@ -1,7 +1,12 @@
 # Qt names its own virtual hooks, and an override that renames them stops
 # overriding -- silently, since none of them are marked final. Add to the list when
-# you override one that isn't here yet.
+# you override one that isn't here yet. `convert` is Catch2's, not Qt's: a
+# StringMaker specialisation that spells it anything else is never called.
+#
+# QtNodes is the third-party node-editor library's own namespace, and the forward
+# declaration has to spell it the way the library does.
 InheritParentConfig: true
 
 CheckOptions:
-  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint|styleHint|drawPrimitive)$'
+  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint|styleHint|drawPrimitive|convert)$'
+  readability-identifier-naming.NamespaceIgnoredRegexp: '^QtNodes$'

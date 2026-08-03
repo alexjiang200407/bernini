@@ -79,7 +79,7 @@ namespace assetlib
 			case VkFormat::BC7_UNORM_BLOCK:
 			case VkFormat::BC7_SRGB_BLOCK:
 				return { 4, 4, 16 };
-			case VkFormat::Undefined:
+			case VkFormat::UNDEFINED:
 			default:
 				throw std::runtime_error(
 					"assetlib: no block info for Vulkan format " +

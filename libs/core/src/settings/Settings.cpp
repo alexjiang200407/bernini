@@ -16,7 +16,7 @@ namespace core
 		// nodes (strings, objects, arrays).
 		template <typename T>
 		T
-		asNumber(const void* node, T defaultValue) noexcept
+		as_number(const void* node, T defaultValue) noexcept
 		{
 			if (node == nullptr)
 			{
@@ -46,7 +46,7 @@ namespace core
 		}
 
 		std::string
-		asString(const void* node, std::string defaultValue)
+		as_string(const void* node, std::string defaultValue)
 		{
 			if (node == nullptr)
 			{
@@ -95,85 +95,85 @@ namespace core
 	SettingsAccessor::
 	operator bool() const noexcept
 	{
-		return asNumber<bool>(m_Value, false);
+		return as_number<bool>(m_Value, false);
 	}
 
 	SettingsAccessor::
 	operator int() const noexcept
 	{
-		return asNumber<int>(m_Value, 0);
+		return as_number<int>(m_Value, 0);
 	}
 
 	SettingsAccessor::
 	operator unsigned int() const noexcept
 	{
-		return asNumber<unsigned int>(m_Value, 0u);
+		return as_number<unsigned int>(m_Value, 0u);
 	}
 
 	SettingsAccessor::
 	operator int64_t() const noexcept
 	{
-		return asNumber<int64_t>(m_Value, 0);
+		return as_number<int64_t>(m_Value, 0);
 	}
 
 	SettingsAccessor::
 	operator uint64_t() const noexcept
 	{
-		return asNumber<uint64_t>(m_Value, 0);
+		return as_number<uint64_t>(m_Value, 0);
 	}
 
 	SettingsAccessor::
 	operator float() const noexcept
 	{
-		return asNumber<float>(m_Value, 0.0f);
+		return as_number<float>(m_Value, 0.0f);
 	}
 
 	SettingsAccessor::
 	operator std::string() const
 	{
-		return asString(m_Value, std::string());
+		return as_string(m_Value, std::string());
 	}
 
 	bool
 	SettingsAccessor::GetOrDefault(bool defaultValue) const noexcept
 	{
-		return asNumber<bool>(m_Value, defaultValue);
+		return as_number<bool>(m_Value, defaultValue);
 	}
 
 	int
 	SettingsAccessor::GetOrDefault(int defaultValue) const noexcept
 	{
-		return asNumber<int>(m_Value, defaultValue);
+		return as_number<int>(m_Value, defaultValue);
 	}
 
 	unsigned int
 	SettingsAccessor::GetOrDefault(unsigned int defaultValue) const noexcept
 	{
-		return asNumber<unsigned int>(m_Value, defaultValue);
+		return as_number<unsigned int>(m_Value, defaultValue);
 	}
 
 	int64_t
 	SettingsAccessor::GetOrDefault(int64_t defaultValue) const noexcept
 	{
-		return asNumber<int64_t>(m_Value, defaultValue);
+		return as_number<int64_t>(m_Value, defaultValue);
 	}
 
 	uint64_t
 	SettingsAccessor::GetOrDefault(uint64_t defaultValue) const noexcept
 	{
-		return asNumber<uint64_t>(m_Value, defaultValue);
+		return as_number<uint64_t>(m_Value, defaultValue);
 	}
 
 	float
 	SettingsAccessor::GetOrDefault(float defaultValue) const noexcept
 	{
-		return asNumber<float>(m_Value, defaultValue);
+		return as_number<float>(m_Value, defaultValue);
 	}
 
 	std::string
 	SettingsAccessor::GetOrDefault(std::string defaultValue) const
 	{
-		return asString(m_Value, std::move(defaultValue));
+		return as_string(m_Value, std::move(defaultValue));
 	}
 
 	Settings::Settings(const std::filesystem::path& filepath) : m_Impl(std::make_unique<Impl>())

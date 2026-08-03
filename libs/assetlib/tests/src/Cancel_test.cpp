@@ -35,7 +35,7 @@ namespace
 	// An import carrying `count` tiny textures and nothing else -- enough for writeTextures, and small
 	// enough that the Basis encode of each is quick.
 	imp::BMeshImport
-	importWithTextures(size_t count)
+	ImportWithTextures(size_t count)
 	{
 		auto mesh = imp::BMeshImport();
 		mesh.stringPool.push_back('\0');  // offset 0 == empty string
@@ -48,7 +48,7 @@ namespace
 
 	// Writes a `size` x `size` uncompressed RGBA8 .ktx2, for a material to route at.
 	void
-	writeSource(const std::filesystem::path& path, uint32_t size)
+	WriteSource(const std::filesystem::path& path, uint32_t size)
 	{
 		const std::vector<std::byte> pixels(static_cast<size_t>(size) * size * 4, std::byte{ 200 });
 		writeKTX2(rgba8ToImage(pixels, size, size), path, false, Ktx2Compression::kNone);
@@ -56,7 +56,7 @@ namespace
 
 	// A token that is already signalled, as one is when the user cancels before the cook gets there.
 	std::stop_source
-	signalledSource()
+	SignalledSource()
 	{
 		auto source = std::stop_source();
 		source.request_stop();
@@ -87,7 +87,7 @@ TEST_CASE("Cancelled is not a runtime_error", "[cancel]")
 	// must not report a cancel as one. It is still a std::exception, so it cannot escape a catch-all.
 	try
 	{
-		throwIfCancelled(signalledSource().get_token());
+		throwIfCancelled(SignalledSource().get_token());
 		FAIL("expected Cancelled");
 	}
 	catch (const std::runtime_error&)
@@ -103,12 +103,12 @@ TEST_CASE("Cancelled is not a runtime_error", "[cancel]")
 TEST_CASE("writeTextures honours the cancel token", "[cancel][bmesh][io]")
 {
 	const ScratchDir dir("bernini_cancel_textures");
-	const auto       mesh = importWithTextures(3);
+	const auto       mesh = ImportWithTextures(3);
 
 	SECTION("a token signalled up front writes nothing at all")
 	{
 		REQUIRE_THROWS_AS(
-			writeTextures(mesh, dir.path, {}, signalledSource().get_token()),
+			writeTextures(mesh, dir.path, {}, SignalledSource().get_token()),
 			Cancelled);
 
 		REQUIRE_FALSE(std::filesystem::exists(dir.path / "tex0.ktx2"));
@@ -148,9 +148,9 @@ TEST_CASE("writeTextures honours the cancel token", "[cancel][bmesh][io]")
 TEST_CASE("bake stops on a signalled token", "[cancel][bmesh][bake]")
 {
 	const ScratchDir dir("bernini_cancel_bake");
-	const auto       mesh = importWithTextures(2);
+	const auto       mesh = ImportWithTextures(2);
 
-	REQUIRE_THROWS_AS(bake(mesh, dir.path, "cancelled", signalledSource().get_token()), Cancelled);
+	REQUIRE_THROWS_AS(bake(mesh, dir.path, "cancelled", SignalledSource().get_token()), Cancelled);
 
 	// The .bmesh is written last, so a cancelled bake never leaves a container behind that names
 	// textures and materials it never got round to emitting.
@@ -162,14 +162,14 @@ TEST_CASE("loadFromGltf stops on a signalled token", "[cancel][gltf]")
 	const std::filesystem::path glb = "assets/suzanne.glb";
 	REQUIRE(std::filesystem::exists(glb));
 
-	REQUIRE_THROWS_AS(loadFromGltf(glb, signalledSource().get_token()), Cancelled);
+	REQUIRE_THROWS_AS(loadFromGltf(glb, SignalledSource().get_token()), Cancelled);
 	REQUIRE_NOTHROW(loadFromGltf(glb));
 }
 
 TEST_CASE("bakeMaterial stops on a signalled token and leaves the material alone", "[cancel][bake]")
 {
 	const ScratchDir dir("bernini_cancel_material");
-	writeSource(dir.path / "albedo.ktx2", 16);
+	WriteSource(dir.path / "albedo.ktx2", 16);
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };
@@ -177,7 +177,7 @@ TEST_CASE("bakeMaterial stops on a signalled token and leaves the material alone
 	mat.pbr.routes[2] = { "albedo.ktx2", 2 };
 
 	REQUIRE_THROWS_AS(
-		bakeMaterial(mat, MaterialBakeDesc{ dir.path }, signalledSource().get_token()),
+		bakeMaterial(mat, MaterialBakeDesc{ dir.path }, SignalledSource().get_token()),
 		Cancelled);
 
 	// A half-updated material is worse than an unbaked one: it would name maps that are not there. So

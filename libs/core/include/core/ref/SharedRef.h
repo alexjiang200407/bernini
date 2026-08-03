@@ -8,27 +8,27 @@ namespace core
 	public:
 		typedef T InterfaceType;
 
-		template <bool b, typename U = void>
+		template <bool B, typename U = void>
 		struct EnableIf
 		{};
 
 		template <typename U>
 		struct EnableIf<true, U>
 		{
-			typedef U type;
+			typedef U Type;
 		};
 
 	protected:
-		InterfaceType* ptr_;
+		InterfaceType* m_Ptr;
 		template <class U>
 		friend class SharedRef;
 
 		void
 		InternalAddRef() const noexcept
 		{
-			if (ptr_ != nullptr)
+			if (m_Ptr != nullptr)
 			{
-				ptr_->AddRef();
+				m_Ptr->AddRef();
 			}
 		}
 
@@ -36,42 +36,42 @@ namespace core
 		InternalRelease() noexcept
 		{
 			unsigned long ref  = 0;
-			T*            temp = ptr_;
+			T*            temp = m_Ptr;
 
 			if (temp != nullptr)
 			{
-				ptr_ = nullptr;
-				ref  = temp->Release();
+				m_Ptr = nullptr;
+				ref   = temp->Release();
 			}
 
 			return ref;
 		}
 
 	public:
-		SharedRef() noexcept : ptr_(nullptr) {}
+		SharedRef() noexcept : m_Ptr(nullptr) {}
 
-		SharedRef(std::nullptr_t) noexcept : ptr_(nullptr) {}
+		SharedRef(std::nullptr_t) noexcept : m_Ptr(nullptr) {}
 
 		template <class U>
-		SharedRef(U* other) noexcept : ptr_(other)
+		SharedRef(U* other) noexcept : m_Ptr(other)
 		{
 			InternalAddRef();
 		}
 
-		SharedRef(const SharedRef& other) noexcept : ptr_(other.ptr_) { InternalAddRef(); }
+		SharedRef(const SharedRef& other) noexcept : m_Ptr(other.m_Ptr) { InternalAddRef(); }
 
 		// copy ctor that allows to instanatiate class when U* is convertible to T*
 		template <class U>
 		SharedRef(
 			const SharedRef<U>& other,
 			typename std::enable_if<std::is_convertible<U*, T*>::value, void*>::type* =
-				nullptr) noexcept : ptr_(other.ptr_)
+				nullptr) noexcept : m_Ptr(other.m_Ptr)
 
 		{
 			InternalAddRef();
 		}
 
-		SharedRef(SharedRef&& other) noexcept : ptr_(nullptr)
+		SharedRef(SharedRef&& other) noexcept : m_Ptr(nullptr)
 		{
 			if (this != reinterpret_cast<SharedRef*>(&reinterpret_cast<unsigned char&>(other)))
 			{
@@ -84,9 +84,9 @@ namespace core
 		SharedRef(
 			SharedRef<U>&& other,
 			typename std::enable_if<std::is_convertible<U*, T*>::value, void*>::type* =
-				nullptr) noexcept : ptr_(other.ptr_)
+				nullptr) noexcept : m_Ptr(other.m_Ptr)
 		{
-			other.ptr_ = nullptr;
+			other.m_Ptr = nullptr;
 		}
 
 		~SharedRef() noexcept { InternalRelease(); }
@@ -101,7 +101,7 @@ namespace core
 		SharedRef&
 		operator=(T* other) noexcept
 		{
-			if (ptr_ != other)
+			if (m_Ptr != other)
 			{
 				SharedRef(other).Swap(*this);
 			}
@@ -119,7 +119,7 @@ namespace core
 		SharedRef&
 		operator=(const SharedRef& other) noexcept  // NOLINT(bugprone-unhandled-self-assignment)
 		{
-			if (ptr_ != other.ptr_)
+			if (m_Ptr != other.m_Ptr)
 			{
 				SharedRef(other).Swap(*this);
 			}
@@ -152,63 +152,63 @@ namespace core
 		void
 		Swap(SharedRef&& r) noexcept
 		{
-			T* tmp = ptr_;
-			ptr_   = r.ptr_;
-			r.ptr_ = tmp;
+			T* tmp  = m_Ptr;
+			m_Ptr   = r.m_Ptr;
+			r.m_Ptr = tmp;
 		}
 
 		void
 		Swap(SharedRef& r) noexcept
 		{
-			T* tmp = ptr_;
-			ptr_   = r.ptr_;
-			r.ptr_ = tmp;
+			T* tmp  = m_Ptr;
+			m_Ptr   = r.m_Ptr;
+			r.m_Ptr = tmp;
 		}
 
 		[[nodiscard]] T*
 		Get() const noexcept
 		{
-			return ptr_;
+			return m_Ptr;
 		}
 
-		operator T*() const { return ptr_; }
+		operator T*() const { return m_Ptr; }
 
 		InterfaceType*
 		operator->() const noexcept
 		{
-			return ptr_;
+			return m_Ptr;
 		}
 
 		T**
 		operator&()  // NOLINT(google-runtime-operator)
 		{
-			return &ptr_;
+			return &m_Ptr;
 		}
 
 		[[nodiscard]] T* const*
 		GetAddressOf() const noexcept
 		{
-			return &ptr_;
+			return &m_Ptr;
 		}
 
 		[[nodiscard]] T**
 		GetAddressOf() noexcept
 		{
-			return &ptr_;
+			return &m_Ptr;
 		}
 
 		[[nodiscard]] T**
 		ReleaseAndGetAddressOf() noexcept
 		{
 			InternalRelease();
-			return &ptr_;
+			return &m_Ptr;
 		}
 
 		T*
 		Detach() noexcept
 		{
-			T* ptr = ptr_;
-			ptr_   = nullptr;
+			T* ptr = m_Ptr;
+			m_Ptr  = nullptr;
 			return ptr;
 		}
 
@@ -216,26 +216,26 @@ namespace core
 		void
 		Attach(InterfaceType* other)
 		{
-			if (ptr_ != nullptr)
+			if (m_Ptr != nullptr)
 			{
-				auto ref = ptr_->Release();
+				auto ref = m_Ptr->Release();
 				(void)ref;
 
 				// Attaching to the same object only works if duplicate references are being coalesced. Otherwise
 				// re-attaching will cause the pointer to be released and may cause a crash on a subsequent dereference.
-				assert(ref != 0 || ptr_ != other);
+				assert(ref != 0 || m_Ptr != other);
 			}
 
-			ptr_ = other;
+			m_Ptr = other;
 		}
 
 		// Create a wrapper around a raw object while keeping the object's reference count unchanged
 		static SharedRef<T>
 		Create(T* other)
 		{
-			SharedRef<T> Ptr;
-			Ptr.Attach(other);
-			return Ptr;
+			SharedRef<T> ptr;
+			ptr.Attach(other);
+			return ptr;
 		}
 
 		template <typename... Args>
@@ -254,14 +254,14 @@ namespace core
 		[[nodiscard]] bool
 		IsInitialized() const noexcept
 		{
-			return ptr_ != nullptr;
+			return m_Ptr != nullptr;
 		}
 
 		template <std::derived_from<T> U>
 		inline
 		operator SharedRef<U>() const noexcept
 		{
-			U* castedPtr = static_cast<U*>(ptr_);
+			U* castedPtr = static_cast<U*>(m_Ptr);
 			if (castedPtr != nullptr)
 			{
 				castedPtr->AddRef();

@@ -13,8 +13,8 @@ namespace assetlib
 	{
 		writeString(writer, route.source);
 		writeString(writer, route.baked);
-		writer.writePod(route.stamp.size);
-		writer.writePod(route.stamp.mtime);
+		writer.WritePod(route.stamp.size);
+		writer.WritePod(route.stamp.mtime);
 	}
 
 	EnvMapRoute
@@ -23,8 +23,8 @@ namespace assetlib
 		EnvMapRoute route;
 		route.source      = readString(reader);
 		route.baked       = readString(reader);
-		route.stamp.size  = reader.readPod<uint64_t>();
-		route.stamp.mtime = reader.readPod<int64_t>();
+		route.stamp.size  = reader.ReadPod<uint64_t>();
+		route.stamp.mtime = reader.ReadPod<int64_t>();
 		return route;
 	}
 }

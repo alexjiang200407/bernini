@@ -16,7 +16,7 @@ namespace
 	// A translucent plane at world-space depth z, facing the camera. `occlude` selects the
 	// depth-pre-pass self-occlusion path.
 	void
-	addPane(
+	AddPane(
 		const bgl::SceneRef&     scene,
 		const bgl::SceneViewRef& view,
 		const glm::vec4&         baseColor,
@@ -41,7 +41,7 @@ namespace
 	// colour / ORM, flat normal for XY). So with no routes and matching factors the two must shade
 	// identically -- while taking opposite branches of the shared transparent pixel shader.
 	void
-	addLoosePane(
+	AddLoosePane(
 		const bgl::SceneRef&     scene,
 		const bgl::SceneViewRef& view,
 		const glm::vec4&         baseColor,
@@ -121,13 +121,13 @@ TEST_CASE(
 
 		if (farFirst)
 		{
-			addPane(scene, view, blue, c_FarZ);
-			addPane(scene, view, red, c_NearZ);
+			AddPane(scene, view, blue, c_FarZ);
+			AddPane(scene, view, red, c_NearZ);
 		}
 		else
 		{
-			addPane(scene, view, red, c_NearZ);
-			addPane(scene, view, blue, c_FarZ);
+			AddPane(scene, view, red, c_NearZ);
+			AddPane(scene, view, blue, c_FarZ);
 		}
 
 		auto job     = bgl::RenderJob();
@@ -202,8 +202,8 @@ TEST_CASE("A self-occluding blend material hides the layers behind it", "[transp
 		auto view = gfx->CreateSceneView(scene, 8);
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
-		addPane(scene, view, blue, 0.0f, occlude);  // far
-		addPane(scene, view, red, 5.0f, occlude);   // near
+		AddPane(scene, view, blue, 0.0f, occlude);  // far
+		AddPane(scene, view, red, 5.0f, occlude);   // near
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -285,13 +285,13 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 
 		if (loose)
 		{
-			addLoosePane(scene, view, blue, 0.0f, occlude);
-			addLoosePane(scene, view, red, 5.0f, occlude);
+			AddLoosePane(scene, view, blue, 0.0f, occlude);
+			AddLoosePane(scene, view, red, 5.0f, occlude);
 		}
 		else
 		{
-			addPane(scene, view, blue, 0.0f, occlude);
-			addPane(scene, view, red, 5.0f, occlude);
+			AddPane(scene, view, blue, 0.0f, occlude);
+			AddPane(scene, view, red, 5.0f, occlude);
 		}
 
 		auto job     = bgl::RenderJob();

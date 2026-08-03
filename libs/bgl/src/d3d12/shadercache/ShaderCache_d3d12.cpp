@@ -23,25 +23,25 @@ namespace bgl
 		{
 			ByteWriter writer;
 
-			writer.writePod<uint32_t>(static_cast<uint32_t>(program.cbuffers.size()));
+			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.cbuffers.size()));
 			for (const CachedCbuffer& cbuffer : program.cbuffers)
 			{
 				WriteString(writer, cbuffer.name);
-				writer.writePod<uint32_t>(cbuffer.size);
-				writer.writePod<uint32_t>(cbuffer.rootParamIndex);
-				writer.writePod<uint32_t>(cbuffer.shaderRegister);
-				writer.writePod<uint32_t>(cbuffer.registerSpace);
+				writer.WritePod<uint32_t>(cbuffer.size);
+				writer.WritePod<uint32_t>(cbuffer.rootParamIndex);
+				writer.WritePod<uint32_t>(cbuffer.shaderRegister);
+				writer.WritePod<uint32_t>(cbuffer.registerSpace);
 				WriteLayout(writer, cbuffer.layout);
 			}
 
-			writer.writePod<uint32_t>(static_cast<uint32_t>(program.entryPointDxil.size()));
+			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.entryPointDxil.size()));
 			for (const auto& [entry, dxil] : program.entryPointDxil)
 			{
 				WriteString(writer, entry);
 				WriteBlob(writer, dxil);
 			}
 
-			return writer.take();
+			return writer.Take();
 		}
 
 		CachedProgram
@@ -50,21 +50,21 @@ namespace bgl
 			ByteReader    reader(bytes);
 			CachedProgram program;
 
-			const uint32_t cbufferCount = reader.readPod<uint32_t>();
+			const uint32_t cbufferCount = reader.ReadPod<uint32_t>();
 			program.cbuffers.reserve(cbufferCount);
 			for (uint32_t i = 0; i < cbufferCount; ++i)
 			{
 				CachedCbuffer cbuffer;
 				cbuffer.name           = ReadString(reader);
-				cbuffer.size           = reader.readPod<uint32_t>();
-				cbuffer.rootParamIndex = reader.readPod<uint32_t>();
-				cbuffer.shaderRegister = reader.readPod<uint32_t>();
-				cbuffer.registerSpace  = reader.readPod<uint32_t>();
+				cbuffer.size           = reader.ReadPod<uint32_t>();
+				cbuffer.rootParamIndex = reader.ReadPod<uint32_t>();
+				cbuffer.shaderRegister = reader.ReadPod<uint32_t>();
+				cbuffer.registerSpace  = reader.ReadPod<uint32_t>();
 				cbuffer.layout         = ReadLayout(reader);
 				program.cbuffers.push_back(std::move(cbuffer));
 			}
 
-			const uint32_t entryCount = reader.readPod<uint32_t>();
+			const uint32_t entryCount = reader.ReadPod<uint32_t>();
 			program.entryPointDxil.reserve(entryCount);
 			for (uint32_t i = 0; i < entryCount; ++i)
 			{

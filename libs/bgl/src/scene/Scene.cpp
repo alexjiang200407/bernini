@@ -545,7 +545,7 @@ namespace bgl
 			glm::vec3 normal;
 			glm::vec3 tangent;  // +u direction; bitangent = cross(normal, tangent)
 		};
-		static const FaceBasis faces[6] = {
+		static const FaceBasis c_Faces[6] = {
 			{ { 1, 0, 0 }, { 0, 0, -1 } },   // +X
 			{ { -1, 0, 0 }, { 0, 0, 1 } },   // -X
 			{ { 0, 1, 0 }, { 1, 0, 0 } },    // +Y
@@ -554,19 +554,19 @@ namespace bgl
 			{ { 0, 0, -1 }, { -1, 0, 0 } },  // -Z
 		};
 		// Per-face corners in (s, t) order: BL, BR, TR, TL -- CCW from outside.
-		static const glm::vec2 corners[4] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+		static const glm::vec2 c_Corners[4] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
 
 		std::vector<VertexGen> cubeVertices;
 		std::vector<uint32_t>  cubeIndices;
 		cubeVertices.reserve(24);
 		cubeIndices.reserve(36);
 
-		for (const auto& face : faces)
+		for (const auto& face : c_Faces)
 		{
 			const glm::vec3 up   = glm::cross(face.normal, face.tangent);
 			const uint32_t  base = static_cast<uint32_t>(cubeVertices.size());
 
-			for (const auto& c : corners)
+			for (const auto& c : c_Corners)
 			{
 				auto v    = VertexGen();
 				v.pos     = face.normal + c.x * face.tangent + c.y * up;
@@ -607,16 +607,16 @@ namespace bgl
 		{
 			for (uint32_t x = 0u; x <= xSegments; ++x)
 			{
-				constexpr auto pi       = std::numbers::pi_v<float>;
+				constexpr auto c_Pi     = std::numbers::pi_v<float>;
 				float          xSegment = static_cast<float>(x) / static_cast<float>(xSegments);
 				float          ySegment = static_cast<float>(y) / static_cast<float>(ySegments);
-				float          xPos     = std::cos(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
-				float          yPos     = std::cos(ySegment * pi);
-				float          zPos     = std::sin(xSegment * 2.0f * pi) * std::sin(ySegment * pi);
+				float          xPos = std::cos(xSegment * 2.0f * c_Pi) * std::sin(ySegment * c_Pi);
+				float          yPos = std::cos(ySegment * c_Pi);
+				float          zPos = std::sin(xSegment * 2.0f * c_Pi) * std::sin(ySegment * c_Pi);
 
 				// Tangent follows +u (increasing longitude): d(pos)/d(xSegment),
 				// normalized. bitangent = cross(normal, tangent), so w = +1.
-				const float a = xSegment * 2.0f * pi;
+				const float a = xSegment * 2.0f * c_Pi;
 
 				auto v   = VertexGen();
 				v.pos    = glm::vec3(xPos, yPos, zPos) * radius;

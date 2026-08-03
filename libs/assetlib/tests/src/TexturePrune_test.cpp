@@ -24,7 +24,7 @@ namespace
 		~DataRoot() { std::filesystem::remove_all(path); }
 
 		std::filesystem::path
-		textures() const
+		Textures() const
 		{
 			return path / "Textures";
 		}
@@ -32,7 +32,7 @@ namespace
 
 	// Writes a `size` x `size` uncompressed RGBA8 .ktx2 whose every texel is `rgba`.
 	void
-	writeSource(const std::filesystem::path& path, uint32_t size, std::array<uint8_t, 4> rgba)
+	WriteSource(const std::filesystem::path& path, uint32_t size, std::array<uint8_t, 4> rgba)
 	{
 		std::vector<std::byte> pixels(static_cast<size_t>(size) * size * 4);
 		for (size_t t = 0; t < static_cast<size_t>(size) * size; ++t)
@@ -43,7 +43,7 @@ namespace
 
 	// Bakes a material whose base colour reads `source`, and saves it as `<root>/Materials/<name>`.
 	BMaterial
-	bakeAndSave(const DataRoot& root, const char* name, const char* source)
+	BakeAndSave(const DataRoot& root, const char* name, const char* source)
 	{
 		BMaterial material;
 		material.pbr.routes[0] = { source, 0 };
@@ -54,7 +54,7 @@ namespace
 	}
 
 	size_t
-	countMaps(const std::filesystem::path& dir)
+	CountMaps(const std::filesystem::path& dir)
 	{
 		size_t count = 0;
 		for (const auto& entry : std::filesystem::directory_iterator(dir))
@@ -94,14 +94,14 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 	// material writes a *new* file and simply stops naming the old one.
 	const DataRoot root("bernini_prune_orphan");
 
-	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
-	writeSource(root.path / "b.ktx2", 16, { { 0, 200, 0, 255 } });
+	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "b.ktx2", 16, { { 0, 200, 0, 255 } });
 
-	const BMaterial first  = bakeAndSave(root, "mat.bmaterial", "a.ktx2");
-	const BMaterial second = bakeAndSave(root, "mat.bmaterial", "b.ktx2");
+	const BMaterial first  = BakeAndSave(root, "mat.bmaterial", "a.ktx2");
+	const BMaterial second = BakeAndSave(root, "mat.bmaterial", "b.ktx2");
 
 	REQUIRE(first.pbr.baseColorTexture != second.pbr.baseColorTexture);
-	REQUIRE(countMaps(root.textures()) == 2);
+	REQUIRE(CountMaps(root.Textures()) == 2);
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
 
@@ -130,7 +130,7 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 
 		CHECK_FALSE(std::filesystem::exists(root.path / first.pbr.baseColorTexture));
 		CHECK(std::filesystem::exists(root.path / second.pbr.baseColorTexture));
-		CHECK(countMaps(root.textures()) == 1);
+		CHECK(CountMaps(root.Textures()) == 1);
 	}
 
 	SECTION("a second scan finds nothing left to do")
@@ -149,16 +149,16 @@ TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "
 	// Pruning "the maps this material no longer names" would delete it out from under the other one.
 	const DataRoot root("bernini_prune_shared");
 
-	writeSource(root.path / "shared.ktx2", 16, { { 10, 60, 90, 255 } });
-	writeSource(root.path / "other.ktx2", 16, { { 90, 60, 10, 255 } });
+	WriteSource(root.path / "shared.ktx2", 16, { { 10, 60, 90, 255 } });
+	WriteSource(root.path / "other.ktx2", 16, { { 90, 60, 10, 255 } });
 
-	const BMaterial keeper = bakeAndSave(root, "keeper.bmaterial", "shared.ktx2");
+	const BMaterial keeper = BakeAndSave(root, "keeper.bmaterial", "shared.ktx2");
 
 	// A second material bakes the same map, then re-bakes onto a different source and drops it.
-	BMaterial rebaked = bakeAndSave(root, "rebaked.bmaterial", "shared.ktx2");
+	BMaterial rebaked = BakeAndSave(root, "rebaked.bmaterial", "shared.ktx2");
 	REQUIRE(rebaked.pbr.baseColorTexture == keeper.pbr.baseColorTexture);
 
-	rebaked = bakeAndSave(root, "rebaked.bmaterial", "other.ktx2");
+	rebaked = BakeAndSave(root, "rebaked.bmaterial", "other.ktx2");
 	REQUIRE(rebaked.pbr.baseColorTexture != keeper.pbr.baseColorTexture);
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
@@ -178,9 +178,9 @@ TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[te
 	// not a claim that the triplet is dead.
 	const DataRoot root("bernini_prune_loose");
 
-	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
 
-	BMaterial material = bakeAndSave(root, "loose.bmaterial", "a.ktx2");
+	BMaterial material = BakeAndSave(root, "loose.bmaterial", "a.ktx2");
 
 	// Rewind a stamp so the bake reads stale without touching the maps it wrote.
 	material.pbr.routeStamps[0] = SourceStamp{ 1, 1 };
@@ -198,11 +198,11 @@ TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_pr
 	// name keeps it alive.
 	const DataRoot root("bernini_prune_handplaced");
 
-	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
-	bakeAndSave(root, "mat.bmaterial", "a.ktx2");
+	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "a.ktx2");
 
-	writeSource(root.textures() / "skybox.ktx2", 8, { { 1, 2, 3, 255 } });
-	writeSource(root.textures() / "logo.ktx2", 8, { { 4, 5, 6, 255 } });
+	WriteSource(root.Textures() / "skybox.ktx2", 8, { { 1, 2, 3, 255 } });
+	WriteSource(root.Textures() / "logo.ktx2", 8, { { 4, 5, 6, 255 } });
 
 	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
 
@@ -211,8 +211,8 @@ TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_pr
 
 	deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
 
-	CHECK(std::filesystem::exists(root.textures() / "skybox.ktx2"));
-	CHECK(std::filesystem::exists(root.textures() / "logo.ktx2"));
+	CHECK(std::filesystem::exists(root.Textures() / "skybox.ktx2"));
+	CHECK(std::filesystem::exists(root.Textures() / "logo.ktx2"));
 }
 
 TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[texture_prune]")
@@ -221,8 +221,8 @@ TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[
 	// would sweep them as garbage, so the scan aborts instead and nothing is deleted.
 	const DataRoot root("bernini_prune_corrupt");
 
-	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
-	const BMaterial material = bakeAndSave(root, "good.bmaterial", "a.ktx2");
+	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
+	const BMaterial material = BakeAndSave(root, "good.bmaterial", "a.ktx2");
 
 	std::ofstream(root.path / "Materials" / "broken.bmaterial", std::ios::binary)
 		<< "not a material";
@@ -256,8 +256,8 @@ TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[textur
 {
 	const DataRoot root("bernini_prune_texdir");
 
-	writeSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
-	writeSource(root.path / "b.ktx2", 16, { { 0, 200, 0, 255 } });
+	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "b.ktx2", 16, { { 0, 200, 0, 255 } });
 
 	auto desc       = TexturePruneDesc{ root.path };
 	desc.textureDir = "cooked";

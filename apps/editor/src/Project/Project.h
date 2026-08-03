@@ -75,19 +75,19 @@ public:
 	const std::string&
 	GetName() const noexcept
 	{
-		return m_name;
+		return m_Name;
 	}
 
 	const std::filesystem::path&
 	GetProjectFile() const noexcept
 	{
-		return m_projectFile;
+		return m_ProjectFile;
 	}
 
 	std::filesystem::path
 	GetDataDirectory() const noexcept
 	{
-		return m_projectFile.parent_path() / c_DataDirectoryName;
+		return m_ProjectFile.parent_path() / c_DataDirectoryName;
 	}
 
 private:
@@ -96,7 +96,7 @@ private:
 	static constexpr auto c_DataDirectoryName = "Data";
 	static constexpr auto c_FormatVersion     = 1;
 
-	std::string           m_name;
-	std::filesystem::path m_projectFile;
-	int                   m_formatVersion = c_FormatVersion;
+	std::string           m_Name;
+	std::filesystem::path m_ProjectFile;
+	int                   m_FormatVersion = c_FormatVersion;
 };

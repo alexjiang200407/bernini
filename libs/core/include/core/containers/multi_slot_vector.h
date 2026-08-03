@@ -162,13 +162,13 @@ namespace core
 				m_Data[subIdx] = T();
 			}
 
-			FreeSegment freedSeg{ index, count };
+			free_segment freedSeg{ index, count };
 
 			auto it = std::lower_bound(
 				m_FreeSegments.begin(),
 				m_FreeSegments.end(),
 				freedSeg,
-				[](const FreeSegment& lhs, const FreeSegment& rhs) {
+				[](const free_segment& lhs, const free_segment& rhs) {
 					return lhs.offset < rhs.offset;
 				});
 
@@ -285,15 +285,15 @@ namespace core
 			bool     is_active         = false;
 		};
 
-		struct FreeSegment
+		struct free_segment
 		{
 			uint32_t offset = 0;
 			uint32_t count  = 0;
 		};
 
-		std::vector<T>           m_Data;
-		std::vector<slot_meta>   m_Meta;
-		std::vector<FreeSegment> m_FreeSegments;
-		uint32_t                 m_MaxSlots = 0;
+		std::vector<T>            m_Data;
+		std::vector<slot_meta>    m_Meta;
+		std::vector<free_segment> m_FreeSegments;
+		uint32_t                  m_MaxSlots = 0;
 	};
 }

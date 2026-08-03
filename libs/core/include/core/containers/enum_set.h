@@ -15,16 +15,16 @@ namespace core
 		constexpr enum_set() noexcept                = default;
 		constexpr enum_set(const enum_set&) noexcept = default;
 		constexpr enum_set(enum_set&&) noexcept      = default;
-		explicit constexpr enum_set(U a_value) noexcept : _impl(a_value) {}
+		explicit constexpr enum_set(U value) noexcept : m_Impl(value) {}
 
 		template <class U2>
-		constexpr enum_set(enum_set<E, U2> a_rhs) noexcept : _impl(static_cast<U>(a_rhs.Get()))
+		constexpr enum_set(enum_set<E, U2> rhs) noexcept : m_Impl(static_cast<U>(rhs.Get()))
 		{}
 
 		template <class... Args>
-		constexpr enum_set(Args... a_values) noexcept
+		constexpr enum_set(Args... values) noexcept
 			requires(std::same_as<Args, E> && ...)
-			: _impl((static_cast<U>(a_values) | ...))
+			: m_Impl((static_cast<U>(values) | ...))
 		{}
 
 		~enum_set() noexcept = default;
@@ -36,83 +36,83 @@ namespace core
 
 		template <class U2>
 		constexpr enum_set&
-		operator=(enum_set<E, U2> a_rhs) noexcept
+		operator=(enum_set<E, U2> rhs) noexcept
 		{
-			_impl = static_cast<U>(a_rhs.Get());
+			m_Impl = static_cast<U>(rhs.Get());
 			return *this;
 		}
 
 		constexpr enum_set&
-		operator=(E a_value) noexcept
+		operator=(E value) noexcept
 		{
-			_impl = static_cast<U>(a_value);
+			m_Impl = static_cast<U>(value);
 			return *this;
 		}
 
 		constexpr enum_set&
 		operator&=(const enum_set& rhs) noexcept
 		{
-			_impl &= rhs._impl;
+			m_Impl &= rhs.m_Impl;
 			return *this;
 		}
 
 		constexpr enum_set
 		operator&(const enum_set& rhs) const noexcept
 		{
-			return enum_set{ _impl & rhs._impl };
+			return enum_set{ m_Impl & rhs.m_Impl };
 		}
 
 		[[nodiscard]]
 		constexpr bool
 		operator==(E e) const noexcept
 		{
-			return _impl == static_cast<U>(e);
+			return m_Impl == static_cast<U>(e);
 		}
 
 		[[nodiscard]]
 		constexpr bool
 		operator==(const enum_set& rhs) const noexcept
 		{
-			return _impl == rhs._impl;
+			return m_Impl == rhs.m_Impl;
 		}
 
 		constexpr enum_set&
 		operator|=(const enum_set& rhs) noexcept
 		{
-			_impl |= rhs._impl;
+			m_Impl |= rhs.m_Impl;
 			return *this;
 		}
 
 		constexpr enum_set
 		operator|(const enum_set& rhs) const noexcept
 		{
-			return enum_set{ _impl | rhs._impl };
+			return enum_set{ m_Impl | rhs.m_Impl };
 		}
 
 		constexpr enum_set
 		operator^(const enum_set& rhs) const noexcept
 		{
-			return enum_set{ _impl ^ rhs._impl };
+			return enum_set{ m_Impl ^ rhs.m_Impl };
 		}
 
 		constexpr enum_set&
 		operator^=(const enum_set& rhs) noexcept
 		{
-			_impl ^= rhs._impl;
+			m_Impl ^= rhs.m_Impl;
 			return *this;
 		}
 
 		constexpr enum_set
 		operator~() const noexcept
 		{
-			return enum_set{ ~_impl };
+			return enum_set{ ~m_Impl };
 		}
 
 	public:
 		[[nodiscard]] explicit constexpr
 		operator bool() const noexcept
 		{
-			return _impl != static_cast<U>(0);
+			return m_Impl != static_cast<U>(0);
 		}
 
 		[[nodiscard]] constexpr E
@@ -124,84 +124,84 @@ namespace core
 		[[nodiscard]] constexpr bool
 		empty() const noexcept
 		{
-			return _impl == static_cast<U>(0);
+			return m_Impl == static_cast<U>(0);
 		}
 
 		[[nodiscard]] constexpr E
 		get() const noexcept
 		{
-			return static_cast<E>(_impl);
+			return static_cast<E>(m_Impl);
 		}
 
 		[[nodiscard]] constexpr U
 		underlying() const noexcept
 		{
-			return _impl;
+			return m_Impl;
 		}
 
 	public:
 		template <class... Args>
 		constexpr enum_set&
-		set(Args... a_args) noexcept
+		set(Args... args) noexcept
 			requires(std::same_as<Args, E> && ...)
 		{
-			_impl |= (static_cast<U>(a_args) | ...);
+			m_Impl |= (static_cast<U>(args) | ...);
 			return *this;
 		}
 
 		template <class... Args>
 		constexpr enum_set&
-		set(bool a_set, Args... a_args) noexcept
+		set(bool enable, Args... args) noexcept
 			requires(std::same_as<Args, E> && ...)
 		{
-			if (a_set)
-				_impl |= (static_cast<U>(a_args) | ...);
+			if (enable)
+				m_Impl |= (static_cast<U>(args) | ...);
 			else
-				_impl &= ~(static_cast<U>(a_args) | ...);
+				m_Impl &= ~(static_cast<U>(args) | ...);
 
 			return *this;
 		}
 
 		template <class... Args>
 		constexpr enum_set&
-		reset(Args... a_args) noexcept
+		reset(Args... args) noexcept
 			requires(std::same_as<Args, E> && ...)
 		{
-			_impl &= ~(static_cast<U>(a_args) | ...);
+			m_Impl &= ~(static_cast<U>(args) | ...);
 			return *this;
 		}
 
 		constexpr enum_set&
 		reset() noexcept
 		{
-			_impl = 0;
+			m_Impl = 0;
 			return *this;
 		}
 
 		template <class... Args>
 		[[nodiscard]] constexpr bool
-		any(Args... a_args) const noexcept
+		any(Args... args) const noexcept
 			requires(std::same_as<Args, E> && ...)
 		{
-			return (_impl & (static_cast<U>(a_args) | ...)) != static_cast<U>(0);
+			return (m_Impl & (static_cast<U>(args) | ...)) != static_cast<U>(0);
 		}
 
 		template <class... Args>
 		[[nodiscard]] constexpr bool
-		all(Args... a_args) const noexcept
+		all(Args... args) const noexcept
 			requires(std::same_as<Args, E> && ...)
 		{
-			return (_impl & (static_cast<U>(a_args) | ...)) == (static_cast<U>(a_args) | ...);
+			return (m_Impl & (static_cast<U>(args) | ...)) == (static_cast<U>(args) | ...);
 		}
 
 		[[nodiscard]] constexpr bool
 		all(const enum_set<E, U>& rhs) const noexcept
 		{
-			return (_impl & rhs._impl) == rhs._impl;
+			return (m_Impl & rhs.m_Impl) == rhs.m_Impl;
 		}
 
 	private:
-		U _impl{ 0 };
+		U m_Impl{ 0 };
 	};
 
 	template <class... Args>

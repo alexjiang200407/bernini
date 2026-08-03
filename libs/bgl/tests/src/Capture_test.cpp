@@ -4,8 +4,8 @@
 
 namespace
 {
-	constexpr uint32_t kWidth  = 600;
-	constexpr uint32_t kHeight = 800;
+	constexpr uint32_t c_Width  = 600;
+	constexpr uint32_t c_Height = 800;
 
 	bgl::GraphicsOptions
 	CaptureOptions()
@@ -40,14 +40,14 @@ namespace
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(
 				glm::radians(60.0f),
-				static_cast<float>(kWidth) / static_cast<float>(kHeight),
+				static_cast<float>(c_Width) / static_cast<float>(c_Height),
 				0.5f,
 				500.0f);
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 		return job;
 	}
 
@@ -55,8 +55,8 @@ namespace
 	HeadlessTarget(const bgl::GraphicsRef& gfx)
 	{
 		auto desc     = bgl::RenderTargetDesc();
-		desc.width    = static_cast<int>(kWidth);
-		desc.height   = static_cast<int>(kHeight);
+		desc.width    = static_cast<int>(c_Width);
+		desc.height   = static_cast<int>(c_Height);
 		desc.headless = true;
 		return gfx->CreateRenderTarget(desc);
 	}

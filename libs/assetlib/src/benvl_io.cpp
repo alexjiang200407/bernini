@@ -27,16 +27,16 @@ namespace assetlib
 	serializeEnvLighting(const BEnvLighting& lighting)
 	{
 		ByteWriter writer;
-		writer.writePod(c_Magic);
-		writer.writePod(c_VersionMajor);
-		writer.writePod(c_VersionMinor);
+		writer.WritePod(c_Magic);
+		writer.WritePod(c_VersionMajor);
+		writer.WritePod(c_VersionMinor);
 
 		writeString(writer, lighting.name);
 		writeRoute(writer, lighting.prefilter);
 		writeRoute(writer, lighting.irradiance);
-		writer.writePod(lighting.exposure);
+		writer.WritePod(lighting.exposure);
 
-		return writer.take();
+		return writer.Take();
 	}
 
 	BEnvLighting
@@ -44,12 +44,12 @@ namespace assetlib
 	{
 		ByteReader reader(bytes);
 
-		if (reader.readPod<uint32_t>() != c_Magic)
+		if (reader.ReadPod<uint32_t>() != c_Magic)
 			throw std::runtime_error("benvl: bad magic");
 
-		const auto versionMajor = reader.readPod<uint16_t>();
+		const auto versionMajor = reader.ReadPod<uint16_t>();
 		// The minor version is additive within a major, and nothing here is optional yet.
-		static_cast<void>(reader.readPod<uint16_t>());
+		static_cast<void>(reader.ReadPod<uint16_t>());
 
 		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
@@ -60,7 +60,7 @@ namespace assetlib
 		lighting.name       = readString(reader);
 		lighting.prefilter  = readRoute(reader);
 		lighting.irradiance = readRoute(reader);
-		lighting.exposure   = reader.readPod<float>();
+		lighting.exposure   = reader.ReadPod<float>();
 		return lighting;
 	}
 

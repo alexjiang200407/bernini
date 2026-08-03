@@ -664,8 +664,8 @@ namespace bgl
 	const PassBarriers&
 	FrameGraph::BarriersFor(std::string_view passName) const
 	{
-		static const PassBarriers kEmpty;
+		static const PassBarriers c_Empty;
 		const PassNode*           pass = FindPass(passName);
-		return pass ? pass->barriers : kEmpty;
+		return pass ? pass->barriers : c_Empty;
 	}
 }

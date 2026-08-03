@@ -27,7 +27,7 @@
 TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][prefixsum]")
 {
 	// Must match HistogramInstances.slang's [numthreads].
-	constexpr uint32_t kThreadsPerGroup = 256;
+	constexpr uint32_t c_ThreadsPerGroup = 256;
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -54,22 +54,22 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// Many real instances spread (with collisions) across the non-null PSO types. The
 	// instance buffer is padded to a whole number of groups; the histogram dispatches one
 	// thread per slot and skips the kInvalid padding, so no instance count is passed.
-	constexpr uint32_t     activeCount = 1000;
-	constexpr uint32_t     groupCount  = (activeCount + kThreadsPerGroup - 1) / kThreadsPerGroup;
-	constexpr uint32_t     paddedCount = groupCount * kThreadsPerGroup;
-	constexpr bgl::PsoType buckets[]   = { bgl::PsoType::kOpaque_StaticMesh_PBR,
+	constexpr uint32_t c_ActiveCount = 1000;
+	constexpr uint32_t c_GroupCount  = (c_ActiveCount + c_ThreadsPerGroup - 1) / c_ThreadsPerGroup;
+	constexpr uint32_t c_PaddedCount = c_GroupCount * c_ThreadsPerGroup;
+	constexpr bgl::PsoType c_Buckets[] = { bgl::PsoType::kOpaque_StaticMesh_PBR,
 		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
 		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
 
 	// The PSO bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
 	// no submesh, no indirection to build. Two instances of one submesh are free to bucket
 	// differently, which is exactly what a per-instance material override is.
-	constexpr uint32_t kBucketCount = static_cast<uint32_t>(std::size(buckets));
+	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
 		auto desc         = bgl::PackedBufferDesc();
-		desc.initialCount = paddedCount;
+		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Histogram Instances";
 		instanceBuffer.Init(desc, resourceManager);
 	}
@@ -80,20 +80,20 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		// Any non-null mesh entry: the shader only tests it against the padding sentinel.
 		instance.meshInstance.offset = 0u;
 		instance.submeshIndex        = 0u;
-		instance.pso                 = static_cast<uint32_t>(buckets[bucketIdx]);
+		instance.pso                 = static_cast<uint32_t>(c_Buckets[bucketIdx]);
 
 		instanceBuffer.Add(instance);
 	};
 
 	std::array<uint32_t, bgl::c_PsoCount> expectedHistogram{};
-	for (uint32_t i = 0; i < activeCount; ++i)
+	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
-		const uint32_t b = i % kBucketCount;
+		const uint32_t b = i % c_BucketCount;
 		addInstance(b);
-		expectedHistogram[static_cast<size_t>(buckets[b])] += 1;
+		expectedHistogram[static_cast<size_t>(c_Buckets[b])] += 1;
 	}
 	// Padding slots carry a null meshInstance sentinel; the shader skips them.
-	for (uint32_t i = activeCount; i < paddedCount; ++i)
+	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
 		auto instance                = bgl::SubmeshInstance();
 		instance.meshInstance.offset = 0xFFFFFFFFu;
@@ -124,7 +124,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::InstanceVisibility>();
-		desc.initialCount = paddedCount;
+		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Visibility";
 		visibility.Init(desc, resourceManager);
 	}
@@ -175,7 +175,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	instanceBuffer.Update(cmdList);
 	outBuffer.Clear(cmdList);
 
-	const std::vector<uint32_t> allVisible(paddedCount, 1u);
+	const std::vector<uint32_t> allVisible(c_PaddedCount, 1u);
 	cmdList->WriteBuffer(
 		visibility.GetBufferHandle(),
 		allVisible.data(),
@@ -207,7 +207,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	auto histogramState   = bgl::ComputeState();
 	histogramState.kernel = &histogramKernel;
 	cmdList->SetComputeState(histogramState);
-	cmdList->Dispatch(groupCount, 1, 1);
+	cmdList->Dispatch(c_GroupCount, 1, 1);
 
 	// Snapshot the histogram, then hand the buffer back to the prefix-sum pass.
 	cmdList->Barrier(

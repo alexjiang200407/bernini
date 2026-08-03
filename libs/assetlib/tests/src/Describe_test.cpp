@@ -10,7 +10,7 @@ using namespace assetlib;
 namespace
 {
 	BMaterial
-	routedMaterial()
+	RoutedMaterial()
 	{
 		BMaterial material;
 		material.name                 = "skin";
@@ -30,7 +30,7 @@ namespace
 // channel selectors and the unrouted channels.
 TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 {
-	const std::string text = describe(routedMaterial());
+	const std::string text = describe(RoutedMaterial());
 
 	CHECK(text.find("skin") != std::string::npos);
 

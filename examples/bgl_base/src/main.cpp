@@ -137,7 +137,7 @@ main(int argc, char** argv)
 		const auto worldMatrix = [&](uint32_t node) {
 			auto m = glm::mat4(1.0f);
 			for (uint32_t n = node; n != assetlib::c_InvalidIndex; n = model.nodes[n].parent)
-				m = assetlib::toMatrix(model.nodes[n].localTransform) * m;
+				m = assetlib::ToMatrix(model.nodes[n].localTransform) * m;
 			return m;
 		};
 
@@ -216,7 +216,7 @@ main(int argc, char** argv)
 
 				graphics->DrawFrame(target, job);
 
-				if (demo::KeyPressed(demo::kScancodeF10))
+				if (demo::KeyPressed(demo::c_ScancodeF10))
 				{
 					graphics->ScreenshotPng(
 						target,

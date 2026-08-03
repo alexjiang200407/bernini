@@ -11,8 +11,8 @@
 
 TEST_CASE("Geometry", "[geometry][render]")
 {
-	constexpr uint32_t kWidth  = 600;
-	constexpr uint32_t kHeight = 800;
+	constexpr uint32_t c_Width  = 600;
+	constexpr uint32_t c_Height = 800;
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -28,8 +28,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 	REQUIRE(resourceManager != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
-	targetDesc.width    = static_cast<int>(kWidth);
-	targetDesc.height   = static_cast<int>(kHeight);
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
@@ -42,7 +42,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
 	auto camera = bgl::Camera();
-	auto aspect = static_cast<float>(kWidth) / static_cast<float>(kHeight);
+	auto aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);
 
 	auto sceneDesc                        = bgl::SceneDesc();
 	sceneDesc.initialGeom                 = 8;
@@ -69,7 +69,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/cube.got.png");
@@ -101,7 +101,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/plane.got.png");
@@ -137,7 +137,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		REQUIRE_NOTHROW(gfx->DrawFrame(target, job));
 
@@ -175,7 +175,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/plane_floor.got.png");
@@ -223,7 +223,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/sphere_cube.got.png");
@@ -258,7 +258,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		sphereView->CreateStaticMeshInstance(sphereGeom, sphereTransform);
 
 		const auto viewport =
-			bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+			bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		auto cubeContext     = bgl::RenderJob();
 		cubeContext.view     = cubeView;
@@ -309,7 +309,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/two_cubes.got.png");
@@ -348,7 +348,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/delete_sphere_cube.got.png");
@@ -385,7 +385,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/delete_two_cubes.got.png");
@@ -402,8 +402,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 // target is read back and compared to its own golden.
 TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 {
-	constexpr uint32_t kWidth  = 600;
-	constexpr uint32_t kHeight = 800;
+	constexpr uint32_t c_Width  = 600;
+	constexpr uint32_t c_Height = 800;
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -418,8 +418,8 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 
 	// One device driving two independent headless outputs.
 	auto targetDesc     = bgl::RenderTargetDesc();
-	targetDesc.width    = static_cast<int>(kWidth);
-	targetDesc.height   = static_cast<int>(kHeight);
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
 
 	auto targetA = gfx->CreateRenderTarget(targetDesc);
@@ -428,7 +428,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	REQUIRE(targetB != nullptr);
 
 	auto camera = bgl::Camera();
-	auto aspect = static_cast<float>(kWidth) / static_cast<float>(kHeight);
+	auto aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);
 	camera
 		.LookAt(
 			glm::vec3(0.0f, 0.0f, 20.0f),
@@ -436,7 +436,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 			glm::vec3(0.0f, 1.0f, 0.0f))
 		.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
-	const auto viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+	const auto viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 	auto sceneDesc                        = bgl::SceneDesc();
 	sceneDesc.initialGeom                 = 8;

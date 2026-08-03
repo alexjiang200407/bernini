@@ -18,13 +18,13 @@ namespace bgl
 	{
 		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
 		bool
-		isBgra(Format format)
+		IsBgra(Format format)
 		{
 			return format == Format::BGRA8_UNORM || format == Format::SBGRA8_UNORM;
 		}
 
 		bool
-		isSrgb(Format format)
+		IsSrgb(Format format)
 		{
 			return format == Format::SRGBA8_UNORM || format == Format::SBGRA8_UNORM;
 		}
@@ -33,7 +33,7 @@ namespace bgl
 		// swaps R and B if the backbuffer was BGRA. `src` already points past the readback's base
 		// offset.
 		assetlib::ImageData
-		readbackToImage(
+		ReadbackToImage(
 			const uint8_t* src,
 			size_t         rowPitch,
 			uint32_t       width,
@@ -55,12 +55,12 @@ namespace bgl
 			auto image     = assetlib::ImageData();
 			image.width    = width;
 			image.height   = height;
-			image.vkFormat = isSrgb(format) ? assetlib::VkFormat::R8G8B8A8_SRGB :
+			image.vkFormat = IsSrgb(format) ? assetlib::VkFormat::R8G8B8A8_SRGB :
 			                                  assetlib::VkFormat::R8G8B8A8_UNORM;
 			image.pixels   = core::fixed_buffer<std::byte>(tightPitch * height);
 			image.subresources.push_back({ 0, tightPitch, tightPitch * height });
 
-			const bool bgra = isBgra(format);
+			const bool bgra = IsBgra(format);
 			auto*      dst  = reinterpret_cast<uint8_t*>(image.pixels.data());
 
 			for (uint32_t y = 0; y < height; ++y)
@@ -84,7 +84,7 @@ namespace bgl
 		// Encodes a tight RGBA8 image as a PNG via stb_image_write -- cross-platform, replacing the
 		// old DirectXTex DDS / WIC PNG encoders.
 		void
-		writePng(const std::string& filepath, const assetlib::ImageData& image)
+		WritePng(const std::string& filepath, const assetlib::ImageData& image)
 		{
 			if (const std::filesystem::path parent = std::filesystem::path(filepath).parent_path();
 			    !parent.empty())
@@ -401,8 +401,8 @@ namespace bgl
 			throw GraphicsError("RenderJob passed to Draw requires a SceneView");
 		}
 
-		auto       view_    = job.view->As<SceneView>();
-		auto       scene_   = view_->GetScene()->As<Scene>();
+		auto       view     = job.view->As<SceneView>();
+		auto       scene    = view->GetScene()->As<Scene>();
 		const auto viewport = job.viewport;
 		const auto viewProj = job.camera.GetViewProjection();
 
@@ -413,14 +413,14 @@ namespace bgl
 		camera.viewProj             = viewProj;
 		camera.rotationOnlyViewProj = job.camera.GetProjection() * viewNoTranslation;
 
-		const ViewMatrices prevCamera = view_->AdvanceCamera(m_FrameCounter, camera);
+		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
 
 		const uint32_t drawIdx = m_DrawCount++;
 
-		m_FrameGraph.SetResourceNamespace(view_->ResourceNamespace());
+		m_FrameGraph.SetResourceNamespace(view->ResourceNamespace());
 
-		scene_->AttachToFrameGraph(m_FrameGraph, drawIdx);
-		view_->AttachToFrameGraph(m_FrameGraph, drawIdx);
+		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
+		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
 		auto draw               = DrawData();
 		draw.drawIdx            = drawIdx;
@@ -433,15 +433,15 @@ namespace bgl
 		draw.depthBufferHandle  = m_ActiveTarget->GetDepthDsv();
 		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
 
-		draw.anisoLinearWrapSampler = scene_->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
-		draw.linearClampSampler     = scene_->GetSampler(Scene::StandardSampler::kLinearClamp);
+		draw.anisoLinearWrapSampler = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
+		draw.linearClampSampler     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
 		draw.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
 
-		draw.env         = view_->GetEnvironmentMap();
+		draw.env         = view->GetEnvironmentMap();
 		draw.env.brdfLut = m_BrdfLut.GetSrv();
-		draw.exposure    = view_->GetExposure();
-		draw.skybox      = view_->GetSkybox();
+		draw.exposure    = view->GetExposure();
+		draw.skybox      = view->GetSkybox();
 
 		if (draw.skybox.has_value())
 		{
@@ -692,7 +692,7 @@ namespace bgl
 		auto image = std::optional<assetlib::ImageData>();
 		try
 		{
-			image = readbackToImage(
+			image = ReadbackToImage(
 				static_cast<const uint8_t*>(mapped) + slot.layout.offset,
 				static_cast<size_t>(slot.layout.rowPitch),
 				slot.width,
@@ -754,7 +754,7 @@ namespace bgl
 	void
 	RenderContext::ScreenshotPng(const RenderTargetRef& target, const std::string& filepath)
 	{
-		writePng(filepath, CaptureBackbuffer(target, "ScreenshotPng"));
+		WritePng(filepath, CaptureBackbuffer(target, "ScreenshotPng"));
 	}
 
 	assetlib::ImageData

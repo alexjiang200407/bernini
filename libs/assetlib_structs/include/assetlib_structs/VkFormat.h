@@ -4,7 +4,7 @@ namespace assetlib
 {
 	enum class VkFormat : uint32_t
 	{
-		Undefined = 0,
+		UNDEFINED = 0,
 
 		R8_UNORM       = 9,
 		R8G8_UNORM     = 16,

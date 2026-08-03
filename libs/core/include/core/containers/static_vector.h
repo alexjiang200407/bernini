@@ -2,13 +2,13 @@
 
 namespace core
 {
-	template <typename T, uint32_t _max_elements>
-	struct static_vector : private std::array<T, _max_elements>
+	template <typename T, uint32_t MaxElements>
+	struct static_vector : private std::array<T, MaxElements>
 	{
-		typedef std::array<T, _max_elements> base;
+		typedef std::array<T, MaxElements> base;
 		enum
 		{
-			max_elements = _max_elements
+			max_elements = MaxElements
 		};
 
 		using typename base::const_iterator;
@@ -21,11 +21,11 @@ namespace core
 		using typename base::size_type;
 		using typename base::value_type;
 
-		static_vector() : base(), current_size(0) {}
+		static_vector() : base(), m_CurrentSize(0) {}
 
-		static_vector(size_t size) : base(), current_size(size) { assert(size <= max_elements); }
+		static_vector(size_t size) : base(), m_CurrentSize(size) { assert(size <= max_elements); }
 
-		static_vector(std::initializer_list<T> il) : current_size(0)
+		static_vector(std::initializer_list<T> il) : m_CurrentSize(0)
 		{
 			for (auto i : il) push_back(i);
 		}
@@ -35,14 +35,14 @@ namespace core
 		reference
 		operator[](size_type pos)
 		{
-			assert(pos < current_size);
+			assert(pos < m_CurrentSize);
 			return base::operator[](pos);
 		}
 
 		const_reference
 		operator[](size_type pos) const
 		{
-			assert(pos < current_size);
+			assert(pos < m_CurrentSize);
 			return base::operator[](pos);
 		}
 
@@ -70,7 +70,7 @@ namespace core
 		iterator
 		end() noexcept
 		{
-			return iterator(begin()) + static_cast<difference_type>(current_size);
+			return iterator(begin()) + static_cast<difference_type>(m_CurrentSize);
 		}
 		const_iterator
 		end() const noexcept
@@ -80,18 +80,18 @@ namespace core
 		const_iterator
 		cend() const noexcept
 		{
-			return const_iterator(cbegin()) + static_cast<difference_type>(current_size);
+			return const_iterator(cbegin()) + static_cast<difference_type>(m_CurrentSize);
 		}
 
 		bool
 		empty() const noexcept
 		{
-			return current_size == 0;
+			return m_CurrentSize == 0;
 		}
 		size_t
 		size() const noexcept
 		{
-			return current_size;
+			return m_CurrentSize;
 		}
 		constexpr size_t
 		max_size() const noexcept
@@ -103,66 +103,66 @@ namespace core
 		fill(const T& value) noexcept
 		{
 			base::fill(value);
-			current_size = max_elements;
+			m_CurrentSize = max_elements;
 		}
 
 		void
 		swap(static_vector& other) noexcept
 		{
 			base::swap(*this);
-			std::swap(current_size, other.current_size);
+			std::swap(m_CurrentSize, other.m_CurrentSize);
 		}
 
 		void
 		push_back(const T& value) noexcept
 		{
-			assert(current_size < max_elements);
-			*(data() + current_size) = value;
-			current_size++;
+			assert(m_CurrentSize < max_elements);
+			*(data() + m_CurrentSize) = value;
+			m_CurrentSize++;
 		}
 
 		void
 		push_back(T&& value) noexcept
 		{
-			assert(current_size < max_elements);
-			*(data() + current_size) = std::move(value);
-			current_size++;
+			assert(m_CurrentSize < max_elements);
+			*(data() + m_CurrentSize) = std::move(value);
+			m_CurrentSize++;
 		}
 
 		void
 		pop_back() noexcept
 		{
-			assert(current_size > 0);
-			current_size--;
+			assert(m_CurrentSize > 0);
+			m_CurrentSize--;
 		}
 
 		void
-		resize(size_type new_size) noexcept
+		resize(size_type newSize) noexcept
 		{
-			assert(new_size <= max_elements);
+			assert(newSize <= max_elements);
 
-			if (current_size > new_size)
+			if (m_CurrentSize > newSize)
 			{
-				for (size_type i = new_size; i < current_size; i++) *(data() + i) = T{};
+				for (size_type i = newSize; i < m_CurrentSize; i++) *(data() + i) = T{};
 			}
 			else
 			{
-				for (size_type i = current_size; i < new_size; i++) *(data() + i) = T{};
+				for (size_type i = m_CurrentSize; i < newSize; i++) *(data() + i) = T{};
 			}
 
-			current_size = new_size;
+			m_CurrentSize = newSize;
 		}
 
 		reference
 		emplace_back() noexcept
 		{
-			assert(current_size < max_elements);
-			++current_size;
+			assert(m_CurrentSize < max_elements);
+			++m_CurrentSize;
 			back() = T{};
 			return back();
 		}
 
 	private:
-		size_type current_size = 0;
+		size_type m_CurrentSize = 0;
 	};
 }

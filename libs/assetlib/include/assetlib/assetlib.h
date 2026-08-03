@@ -3,5 +3,5 @@
 namespace assetlib
 {
 	const char*
-	Version() noexcept;
+	version() noexcept;
 }

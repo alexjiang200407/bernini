@@ -15,11 +15,11 @@ namespace bgl
 	{
 		// Bump when the on-disk format below changes; folded into every key so old files are missed
 		// rather than misread.
-		constexpr uint32_t kCacheFormatVersion = 1;
+		constexpr uint32_t c_CacheFormatVersion = 1;
 
 		// Named as on D3D12: one file per backend holding whatever its driver calls a pipeline
 		// library, so a cache directory reads the same whichever backend wrote it.
-		constexpr const char* kPipelineLibraryFile = "pipelines.psolib";
+		constexpr const char* c_PipelineLibraryFile = "pipelines.psolib";
 
 		using core::io::ByteReader;
 		using core::io::ByteWriter;
@@ -29,39 +29,39 @@ namespace bgl
 		{
 			ByteWriter writer;
 
-			writer.writePod<uint32_t>(static_cast<uint32_t>(program.cbuffers.size()));
+			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.cbuffers.size()));
 			for (const CachedCbuffer& cbuffer : program.cbuffers)
 			{
 				WriteString(writer, cbuffer.name);
-				writer.writePod<uint32_t>(cbuffer.size);
+				writer.WritePod<uint32_t>(cbuffer.size);
 				WriteLayout(writer, cbuffer.layout);
 
-				writer.writePod<uint32_t>(static_cast<uint32_t>(cbuffer.handles.size()));
+				writer.WritePod<uint32_t>(static_cast<uint32_t>(cbuffer.handles.size()));
 				for (const HandleSlot& handle : cbuffer.handles)
 				{
-					writer.writePod<uint32_t>(handle.offset);
-					writer.writePod<uint32_t>(static_cast<uint32_t>(handle.kind));
+					writer.WritePod<uint32_t>(handle.offset);
+					writer.WritePod<uint32_t>(static_cast<uint32_t>(handle.kind));
 				}
 			}
 
-			writer.writePod<uint32_t>(static_cast<uint32_t>(program.stages.size()));
+			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.stages.size()));
 			for (const CachedStage& stage : program.stages)
 			{
-				writer.writePod<uint32_t>(static_cast<uint32_t>(stage.stage));
+				writer.WritePod<uint32_t>(static_cast<uint32_t>(stage.stage));
 				WriteString(writer, stage.entryPoint);
 				WriteString(writer, stage.msl);
 
-				writer.writePod<uint32_t>(static_cast<uint32_t>(stage.bindings.size()));
+				writer.WritePod<uint32_t>(static_cast<uint32_t>(stage.bindings.size()));
 				for (const auto& [name, index] : stage.bindings)
 				{
 					WriteString(writer, name);
-					writer.writePod<uint32_t>(index);
+					writer.WritePod<uint32_t>(index);
 				}
 
-				for (uint32_t axis : stage.threadsPerThreadgroup) writer.writePod<uint32_t>(axis);
+				for (uint32_t axis : stage.threadsPerThreadgroup) writer.WritePod<uint32_t>(axis);
 			}
 
-			return writer.take();
+			return writer.Take();
 		}
 
 		CachedProgram
@@ -70,48 +70,48 @@ namespace bgl
 			ByteReader    reader(bytes);
 			CachedProgram program;
 
-			const uint32_t cbufferCount = reader.readPod<uint32_t>();
+			const uint32_t cbufferCount = reader.ReadPod<uint32_t>();
 			program.cbuffers.reserve(cbufferCount);
 			for (uint32_t i = 0; i < cbufferCount; ++i)
 			{
 				CachedCbuffer cbuffer;
 				cbuffer.name   = ReadString(reader);
-				cbuffer.size   = reader.readPod<uint32_t>();
+				cbuffer.size   = reader.ReadPod<uint32_t>();
 				cbuffer.layout = ReadLayout(reader);
 
-				const uint32_t handleCount = reader.readPod<uint32_t>();
+				const uint32_t handleCount = reader.ReadPod<uint32_t>();
 				cbuffer.handles.reserve(handleCount);
 				for (uint32_t h = 0; h < handleCount; ++h)
 				{
 					HandleSlot handle;
-					handle.offset = reader.readPod<uint32_t>();
-					handle.kind   = static_cast<HandleKind>(reader.readPod<uint32_t>());
+					handle.offset = reader.ReadPod<uint32_t>();
+					handle.kind   = static_cast<HandleKind>(reader.ReadPod<uint32_t>());
 					cbuffer.handles.push_back(handle);
 				}
 
 				program.cbuffers.push_back(std::move(cbuffer));
 			}
 
-			const uint32_t stageCount = reader.readPod<uint32_t>();
+			const uint32_t stageCount = reader.ReadPod<uint32_t>();
 			program.stages.reserve(stageCount);
 			for (uint32_t i = 0; i < stageCount; ++i)
 			{
 				CachedStage stage;
-				stage.stage      = static_cast<ShaderStage>(reader.readPod<uint32_t>());
+				stage.stage      = static_cast<ShaderStage>(reader.ReadPod<uint32_t>());
 				stage.entryPoint = ReadString(reader);
 				stage.msl        = ReadString(reader);
 
-				const uint32_t bindingCount = reader.readPod<uint32_t>();
+				const uint32_t bindingCount = reader.ReadPod<uint32_t>();
 				stage.bindings.reserve(bindingCount);
 				for (uint32_t b = 0; b < bindingCount; ++b)
 				{
 					std::string    name  = ReadString(reader);
-					const uint32_t index = reader.readPod<uint32_t>();
+					const uint32_t index = reader.ReadPod<uint32_t>();
 					stage.bindings.emplace_back(std::move(name), index);
 				}
 
 				for (uint32_t& axis : stage.threadsPerThreadgroup)
-					axis = reader.readPod<uint32_t>();
+					axis = reader.ReadPod<uint32_t>();
 
 				program.stages.push_back(std::move(stage));
 			}
@@ -132,7 +132,7 @@ namespace bgl
 		std::string_view                optionsSalt,
 		const std::vector<std::string>& searchPaths) :
 		m_CacheDir(std::move(cacheDir)),
-		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, kCacheFormatVersion))
+		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, c_CacheFormatVersion))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
@@ -143,7 +143,7 @@ namespace bgl
 		NS::SharedPtr<MTL::BinaryArchiveDescriptor> desc =
 			NS::TransferPtr(MTL::BinaryArchiveDescriptor::alloc()->init());
 
-		const std::filesystem::path libPath = m_CacheDir / kPipelineLibraryFile;
+		const std::filesystem::path libPath = m_CacheDir / c_PipelineLibraryFile;
 		if (std::filesystem::exists(libPath, ec))
 			desc->setUrl(FileUrl(libPath));
 
@@ -178,7 +178,7 @@ namespace bgl
 		// owns the write and refuses an existing file. The temp name carries the process id: several
 		// processes may share one cache directory -- a sharded test run does -- and a fixed name
 		// would let them serialize into each other's file.
-		const std::filesystem::path libPath = m_CacheDir / kPipelineLibraryFile;
+		const std::filesystem::path libPath = m_CacheDir / c_PipelineLibraryFile;
 		const std::filesystem::path tmp =
 			std::format("{}.{}.tmp", libPath.string(), core::process_id());
 

@@ -32,9 +32,9 @@ Project::Create(const std::filesystem::path& projectFile, std::string_view name)
 	}
 
 	Project project;
-	project.m_name          = std::string(name);
-	project.m_projectFile   = projectFile;
-	project.m_formatVersion = c_FormatVersion;
+	project.m_Name          = std::string(name);
+	project.m_ProjectFile   = projectFile;
+	project.m_FormatVersion = c_FormatVersion;
 	project.Save();
 
 	return project;
@@ -58,9 +58,9 @@ Project::Open(const std::filesystem::path& projectFile)
 	}
 
 	Project project;
-	project.m_projectFile   = projectFile;
-	project.m_name          = json.value("name", projectFile.stem().string());
-	project.m_formatVersion = json.value("version", static_cast<int>(c_FormatVersion));
+	project.m_ProjectFile   = projectFile;
+	project.m_Name          = json.value("name", projectFile.stem().string());
+	project.m_FormatVersion = json.value("version", static_cast<int>(c_FormatVersion));
 
 	const auto root = projectFile.parent_path();
 	for (const auto category : c_RequiredDirectories)
@@ -92,14 +92,14 @@ void
 Project::Save() const
 {
 	const nlohmann::json json = {
-		{ "name", m_name },
-		{ "version", m_formatVersion },
+		{ "name", m_Name },
+		{ "version", m_FormatVersion },
 		{ "dataDirectory", c_DataDirectoryName },
 	};
 
-	std::ofstream stream(m_projectFile);
+	std::ofstream stream(m_ProjectFile);
 	if (!stream)
-		throw std::runtime_error("Cannot write project file: " + m_projectFile.string());
+		throw std::runtime_error("Cannot write project file: " + m_ProjectFile.string());
 
 	stream << json.dump(4);
 }

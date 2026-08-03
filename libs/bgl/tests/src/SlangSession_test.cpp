@@ -58,10 +58,10 @@ TEST_CASE("A compute kernel built after device creation recreates the Slang sess
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-		constexpr uint32_t kCount = 8;
+		constexpr uint32_t c_Count = 8;
 
 		auto bufDesc = bgl::ComputeBufferDesc();
-		bufDesc.SetElement<uint32_t>().SetInitialCount(kCount).SetDebugName("Slang Session Out");
+		bufDesc.SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName("Slang Session Out");
 
 		auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 		REQUIRE(resourceManager->ValidBufferHandle(outBuf));
@@ -77,7 +77,7 @@ TEST_CASE("A compute kernel built after device creation recreates the Slang sess
 		state.kernel = &kernel;
 
 		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = kCount * sizeof(uint32_t);
+		rbDesc.byteSize  = c_Count * sizeof(uint32_t);
 		rbDesc.debugName = "Slang Session Readback";
 
 		auto rb = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -103,7 +103,7 @@ TEST_CASE("A compute kernel built after device creation recreates the Slang sess
 		const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(rb));
 		REQUIRE(mapped != nullptr);
 
-		for (uint32_t i = 0; i < kCount; ++i)
+		for (uint32_t i = 0; i < c_Count; ++i)
 		{
 			CHECK(mapped[i] == i * 10u + 1u);
 		}

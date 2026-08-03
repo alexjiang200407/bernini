@@ -71,13 +71,13 @@ namespace bgl::shader_cache
 	bool
 	WriteFileAtomic(const std::filesystem::path& path, std::span<const std::byte> bytes)
 	{
-		static std::atomic<uint32_t> counter = 0;
+		static std::atomic<uint32_t> g_Counter = 0;
 
 		const std::filesystem::path tmp = std::format(
 			"{}.{}.{}.tmp",
 			path.string(),
 			core::process_id(),
-			counter.fetch_add(1, std::memory_order_relaxed));
+			g_Counter.fetch_add(1, std::memory_order_relaxed));
 
 		std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
 		if (!out)
@@ -105,51 +105,51 @@ namespace bgl::shader_cache
 	void
 	WriteString(core::io::ByteWriter& writer, std::string_view value)
 	{
-		writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
-		writer.writeBytes(std::as_bytes(std::span<const char>(value.data(), value.size())));
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(value.size()));
+		writer.WriteBytes(std::as_bytes(std::span<const char>(value.data(), value.size())));
 	}
 
 	std::string
 	ReadString(core::io::ByteReader& reader)
 	{
-		const uint32_t                   size = reader.readPod<uint32_t>();
-		const std::span<const std::byte> raw  = reader.readBytes(size);
+		const uint32_t                   size = reader.ReadPod<uint32_t>();
+		const std::span<const std::byte> raw  = reader.ReadBytes(size);
 		return std::string(reinterpret_cast<const char*>(raw.data()), size);
 	}
 
 	void
 	WriteBlob(core::io::ByteWriter& writer, std::span<const std::byte> value)
 	{
-		writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
-		writer.writeBytes(value);
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(value.size()));
+		writer.WriteBytes(value);
 	}
 
 	std::vector<std::byte>
 	ReadBlob(core::io::ByteReader& reader)
 	{
-		const uint32_t                   size = reader.readPod<uint32_t>();
-		const std::span<const std::byte> raw  = reader.readBytes(size);
+		const uint32_t                   size = reader.ReadPod<uint32_t>();
+		const std::span<const std::byte> raw  = reader.ReadBytes(size);
 		return std::vector<std::byte>(raw.begin(), raw.end());
 	}
 
 	void
 	WriteLayout(core::io::ByteWriter& writer, const ReflectedLayout& layout)
 	{
-		writer.writePod<uint32_t>(static_cast<uint32_t>(layout.kind));
-		writer.writePod<uint32_t>(static_cast<uint32_t>(layout.valueType));
-		writer.writePod<uint32_t>(layout.size);
-		writer.writePod<uint32_t>(layout.arrayCount);
-		writer.writePod<uint32_t>(layout.arrayStride);
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(layout.kind));
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(layout.valueType));
+		writer.WritePod<uint32_t>(layout.size);
+		writer.WritePod<uint32_t>(layout.arrayCount);
+		writer.WritePod<uint32_t>(layout.arrayStride);
 
-		writer.writePod<uint32_t>(static_cast<uint32_t>(layout.fields.size()));
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(layout.fields.size()));
 		for (const ReflectedField& field : layout.fields)
 		{
 			WriteString(writer, field.name);
-			writer.writePod<uint32_t>(field.offset);
+			writer.WritePod<uint32_t>(field.offset);
 			WriteLayout(writer, field.layout);
 		}
 
-		writer.writePod<uint32_t>(static_cast<uint32_t>(layout.element.size()));
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(layout.element.size()));
 		for (const ReflectedLayout& element : layout.element) WriteLayout(writer, element);
 	}
 
@@ -157,24 +157,24 @@ namespace bgl::shader_cache
 	ReadLayout(core::io::ByteReader& reader)
 	{
 		ReflectedLayout layout;
-		layout.kind        = static_cast<UniformType>(reader.readPod<uint32_t>());
-		layout.valueType   = static_cast<UniformValueType>(reader.readPod<uint32_t>());
-		layout.size        = reader.readPod<uint32_t>();
-		layout.arrayCount  = reader.readPod<uint32_t>();
-		layout.arrayStride = reader.readPod<uint32_t>();
+		layout.kind        = static_cast<UniformType>(reader.ReadPod<uint32_t>());
+		layout.valueType   = static_cast<UniformValueType>(reader.ReadPod<uint32_t>());
+		layout.size        = reader.ReadPod<uint32_t>();
+		layout.arrayCount  = reader.ReadPod<uint32_t>();
+		layout.arrayStride = reader.ReadPod<uint32_t>();
 
-		const uint32_t fieldCount = reader.readPod<uint32_t>();
+		const uint32_t fieldCount = reader.ReadPod<uint32_t>();
 		layout.fields.reserve(fieldCount);
 		for (uint32_t i = 0; i < fieldCount; ++i)
 		{
 			ReflectedField field;
 			field.name   = ReadString(reader);
-			field.offset = reader.readPod<uint32_t>();
+			field.offset = reader.ReadPod<uint32_t>();
 			field.layout = ReadLayout(reader);
 			layout.fields.push_back(std::move(field));
 		}
 
-		const uint32_t elementCount = reader.readPod<uint32_t>();
+		const uint32_t elementCount = reader.ReadPod<uint32_t>();
 		layout.element.reserve(elementCount);
 		for (uint32_t i = 0; i < elementCount; ++i) layout.element.push_back(ReadLayout(reader));
 

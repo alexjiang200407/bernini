@@ -26,7 +26,7 @@ TEST_CASE(
 	"bindless texture sample uploads and resolves end-to-end",
 	"[texture][gpu-assert][compute]")
 {
-	constexpr uint32_t kCapacity = 16;
+	constexpr uint32_t c_Capacity = 16;
 
 	auto opts                     = bgl::GraphicsOptions();
 	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -51,7 +51,7 @@ TEST_CASE(
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
 	auto debugBuffer = bgl::DebugBuffer();
-	debugBuffer.Init(kCapacity, resourceManager);
+	debugBuffer.Init(c_Capacity, resourceManager);
 
 	// A 1x1 RGBA8 texture we will upload a known red texel into.
 	auto texDesc          = bgl::TextureDesc();
@@ -146,7 +146,7 @@ TEST_CASE(
 	const auto* mapped = resourceManager->MapReadback(rb);
 	REQUIRE(mapped != nullptr);
 
-	const auto report = bgl::InspectDebugReadback(mapped, kCapacity);
+	const auto report = bgl::InspectDebugReadback(mapped, c_Capacity);
 	REQUIRE(report.has_value());
 	CHECK(report->count == 1);
 	CHECK_FALSE(report->overflow);

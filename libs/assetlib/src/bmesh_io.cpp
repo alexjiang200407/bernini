@@ -67,14 +67,14 @@ namespace assetlib
 		ChunkEntry
 		appendChunk(ByteWriter& writer, ChunkId id, const std::vector<T>& values)
 		{
-			writer.alignTo(c_ChunkAlign);
+			writer.AlignTo(c_ChunkAlign);
 
 			ChunkEntry entry{};
 			entry.id          = static_cast<uint32_t>(id);
 			entry.elementSize = static_cast<uint32_t>(sizeof(T));
-			entry.offset      = writer.size();
+			entry.offset      = writer.Size();
 			entry.byteSize    = values.size() * sizeof(T);
-			writer.writePodArray(std::span<const T>(values));
+			writer.WritePodArray(std::span<const T>(values));
 			return entry;
 		}
 
@@ -136,7 +136,7 @@ namespace assetlib
 	serialize(const BMesh& mesh)
 	{
 		ByteWriter writer;
-		writer.writePod(FileHeader{});  // placeholder, patched below
+		writer.WritePod(FileHeader{});  // placeholder, patched below
 
 		const auto materialPool = packStrings(mesh.materials);
 
@@ -154,9 +154,9 @@ namespace assetlib
 			appendChunk(writer, ChunkId::kMaterialPaths, materialPool),
 		};
 
-		writer.alignTo(c_ChunkAlign);
-		const auto tableOffset = writer.size();
-		writer.writePodArray(std::span<const ChunkEntry>(chunks));
+		writer.AlignTo(c_ChunkAlign);
+		const auto tableOffset = writer.Size();
+		writer.WritePodArray(std::span<const ChunkEntry>(chunks));
 
 		FileHeader header{};
 		header.magic            = c_Magic;
@@ -165,17 +165,17 @@ namespace assetlib
 		header.byteOrder        = 0;
 		header.chunkCount       = static_cast<uint32_t>(chunks.size());
 		header.chunkTableOffset = static_cast<uint32_t>(tableOffset);
-		header.fileSize         = writer.size();
-		writer.patchPod(0, header);
+		header.fileSize         = writer.Size();
+		writer.PatchPod(0, header);
 
-		return writer.take();
+		return writer.Take();
 	}
 
 	BMesh
 	deserialize(std::span<const std::byte> bytes)
 	{
 		ByteReader reader(bytes);
-		const auto header = reader.readPod<FileHeader>();
+		const auto header = reader.ReadPod<FileHeader>();
 
 		if (header.magic != c_Magic)
 			throw std::runtime_error("bmesh: bad magic");
@@ -190,11 +190,11 @@ namespace assetlib
 		if (header.chunkTableOffset + tableBytes > bytes.size())
 			throw std::runtime_error("bmesh: chunk table extends past end of stream");
 
-		reader.seek(header.chunkTableOffset);
+		reader.Seek(header.chunkTableOffset);
 		std::unordered_map<uint32_t, ChunkEntry> table;
 		for (uint32_t i = 0; i < header.chunkCount; ++i)
 		{
-			const auto entry = reader.readPod<ChunkEntry>();
+			const auto entry = reader.ReadPod<ChunkEntry>();
 			table.emplace(entry.id, entry);
 		}
 

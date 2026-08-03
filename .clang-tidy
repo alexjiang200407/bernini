@@ -21,6 +21,10 @@ CheckOptions:
 
   readability-identifier-naming.ClassCase: CamelCase
   readability-identifier-naming.StructCase: CamelCase
+  # The struct half of a std-shaped type trait, whose `_v` variable template is
+  # exempted below for the same reason: `is_range_buffer` reads beside
+  # `std::is_trivially_copyable`, and only one of the pair may keep the spelling.
+  readability-identifier-naming.StructIgnoredRegexp: '^is_[a-z][a-z0-9_]*$'
   readability-identifier-naming.UnionCase: CamelCase
   readability-identifier-naming.EnumCase: CamelCase
   readability-identifier-naming.TypeAliasCase: CamelCase
@@ -34,8 +38,10 @@ CheckOptions:
   readability-identifier-naming.ScopedEnumConstantPrefix: k
   # A constant naming a hardware format keeps the hardware's spelling: RGBA8_UNORM
   # greps against DXGI_FORMAT_R8G8B8A8_UNORM and VK_FORMAT_R8G8B8A8_UNORM, kRgba8Unorm
-  # greps against nothing.
-  readability-identifier-naming.ScopedEnumConstantIgnoredRegexp: '^k?[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$'
+  # greps against nothing. SCREAMING_CASE is the whole vocabulary of such an enum, its
+  # sentinels included -- Format::UNKNOWN and VkFormat::UNDEFINED are spelled the way
+  # DXGI_FORMAT_UNKNOWN and VK_FORMAT_UNDEFINED are, not kUnknown beside RGBA8_UNORM.
+  readability-identifier-naming.ScopedEnumConstantIgnoredRegexp: '^k?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$'
 
   readability-identifier-naming.FunctionCase: CamelCase
   readability-identifier-naming.MethodCase: CamelCase

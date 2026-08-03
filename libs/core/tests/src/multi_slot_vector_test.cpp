@@ -190,10 +190,10 @@ TEST_CASE("multi_slot_vector destroys each element exactly once", "[multi_slot_v
 
 	{
 		core::multi_slot_vector<TrackedElement> slots(4);
-		REQUIRE(TrackedElement::s_Live == 4);
+		REQUIRE(TrackedElement::g_Live == 4);
 
 		auto handle = slots.allocate_slots(3u);
-		REQUIRE(TrackedElement::s_Live == 4);
+		REQUIRE(TrackedElement::g_Live == 4);
 		REQUIRE(slots[0u].value == 0);
 
 		slots[0u] = TrackedElement(5);
@@ -202,9 +202,9 @@ TEST_CASE("multi_slot_vector destroys each element exactly once", "[multi_slot_v
 		// erase resets each slot in place -- it must not destroy the element and
 		// then assign over the corpse.
 		slots.erase(handle);
-		REQUIRE(TrackedElement::s_DoubleDestroy == 0);
-		REQUIRE(TrackedElement::s_AssignToDead == 0);
-		REQUIRE(TrackedElement::s_Live == 4);
+		REQUIRE(TrackedElement::g_DoubleDestroy == 0);
+		REQUIRE(TrackedElement::g_AssignToDead == 0);
+		REQUIRE(TrackedElement::g_Live == 4);
 
 		auto reused = slots.allocate_slots(3u);
 		REQUIRE(reused.index == handle.index);
@@ -223,12 +223,12 @@ TEST_CASE("multi_slot_vector clear and reset release every element", "[multi_slo
 		(void)slots.allocate_slots(2u);
 
 		slots.reset(5u);
-		REQUIRE(TrackedElement::s_Live == 5);
+		REQUIRE(TrackedElement::g_Live == 5);
 		REQUIRE(slots.size() == 5u);
 		REQUIRE_FALSE(slots.is_allocated_root(0u));
 
 		slots.clear();
-		REQUIRE(TrackedElement::s_Live == 0);
+		REQUIRE(TrackedElement::g_Live == 0);
 		REQUIRE(slots.size() == 0u);
 	}
 

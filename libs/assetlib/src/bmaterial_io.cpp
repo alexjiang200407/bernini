@@ -24,52 +24,52 @@ namespace assetlib
 		void
 		writePbr(ByteWriter& writer, const PbrParams& pbr)
 		{
-			writer.writePod(pbr.baseColorFactor);
-			writer.writePod(pbr.metallicFactor);
-			writer.writePod(pbr.roughnessFactor);
+			writer.WritePod(pbr.baseColorFactor);
+			writer.WritePod(pbr.metallicFactor);
+			writer.WritePod(pbr.roughnessFactor);
 			writeString(writer, pbr.baseColorTexture);
 			writeString(writer, pbr.normalTexture);
 			writeString(writer, pbr.ormTexture);
 			for (const ChannelRoute& route : pbr.routes)
 			{
 				writeString(writer, route.texture);
-				writer.writePod(route.channel);
+				writer.WritePod(route.channel);
 			}
 			for (const SourceStamp& stamp : pbr.routeStamps)
 			{
-				writer.writePod(stamp.size);
-				writer.writePod(stamp.mtime);
+				writer.WritePod(stamp.size);
+				writer.WritePod(stamp.mtime);
 			}
-			writer.writePod(static_cast<uint32_t>(pbr.alphaMode));
-			writer.writePod(pbr.alphaCutoff);
-			writer.writePod<uint8_t>(pbr.occlude ? 1u : 0u);  // minor >= 1
+			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
+			writer.WritePod(pbr.alphaCutoff);
+			writer.WritePod<uint8_t>(pbr.occlude ? 1u : 0u);  // minor >= 1
 		}
 
 		PbrParams
 		readPbr(ByteReader& reader, uint16_t versionMinor)
 		{
 			PbrParams pbr;
-			pbr.baseColorFactor  = reader.readPod<glm::vec4>();
-			pbr.metallicFactor   = reader.readPod<float>();
-			pbr.roughnessFactor  = reader.readPod<float>();
+			pbr.baseColorFactor  = reader.ReadPod<glm::vec4>();
+			pbr.metallicFactor   = reader.ReadPod<float>();
+			pbr.roughnessFactor  = reader.ReadPod<float>();
 			pbr.baseColorTexture = readString(reader);
 			pbr.normalTexture    = readString(reader);
 			pbr.ormTexture       = readString(reader);
 			for (ChannelRoute& route : pbr.routes)
 			{
 				route.texture = readString(reader);
-				route.channel = reader.readPod<uint16_t>();
+				route.channel = reader.ReadPod<uint16_t>();
 			}
 			for (SourceStamp& stamp : pbr.routeStamps)
 			{
-				stamp.size  = reader.readPod<uint64_t>();
-				stamp.mtime = reader.readPod<int64_t>();
+				stamp.size  = reader.ReadPod<uint64_t>();
+				stamp.mtime = reader.ReadPod<int64_t>();
 			}
-			pbr.alphaMode   = static_cast<AlphaMode>(reader.readPod<uint32_t>());
-			pbr.alphaCutoff = reader.readPod<float>();
+			pbr.alphaMode   = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
+			pbr.alphaCutoff = reader.ReadPod<float>();
 			if (versionMinor >= 1)
 			{
-				pbr.occlude = reader.readPod<uint8_t>() != 0u;
+				pbr.occlude = reader.ReadPod<uint8_t>() != 0u;
 			}
 			return pbr;
 		}
@@ -80,11 +80,11 @@ namespace assetlib
 	serializeMaterial(const BMaterial& material)
 	{
 		ByteWriter writer;
-		writer.writePod(c_Magic);
-		writer.writePod(c_VersionMajor);
-		writer.writePod(c_VersionMinor);
+		writer.WritePod(c_Magic);
+		writer.WritePod(c_VersionMajor);
+		writer.WritePod(c_VersionMinor);
 
-		writer.writePod(static_cast<uint32_t>(material.shadingModel));
+		writer.WritePod(static_cast<uint32_t>(material.shadingModel));
 		writeString(writer, material.name);
 		writeString(writer, material.editorGraph);
 
@@ -100,7 +100,7 @@ namespace assetlib
 				std::to_string(static_cast<uint32_t>(material.shadingModel)));
 		}
 
-		return writer.take();
+		return writer.Take();
 	}
 
 	BMaterial
@@ -108,11 +108,11 @@ namespace assetlib
 	{
 		ByteReader reader(bytes);
 
-		if (reader.readPod<uint32_t>() != c_Magic)
+		if (reader.ReadPod<uint32_t>() != c_Magic)
 			throw std::runtime_error("bmaterial: bad magic");
 
-		const auto versionMajor = reader.readPod<uint16_t>();
-		const auto versionMinor = reader.readPod<uint16_t>();  // additive within a major
+		const auto versionMajor = reader.ReadPod<uint16_t>();
+		const auto versionMinor = reader.ReadPod<uint16_t>();  // additive within a major
 
 		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
@@ -120,7 +120,7 @@ namespace assetlib
 				std::to_string(c_VersionMajor) + "); re-bake the material");
 
 		BMaterial  material;
-		const auto shadingModel = reader.readPod<uint32_t>();
+		const auto shadingModel = reader.ReadPod<uint32_t>();
 
 		if (shadingModel >= static_cast<uint32_t>(ShadingModel::kCount))
 			throw std::runtime_error(
