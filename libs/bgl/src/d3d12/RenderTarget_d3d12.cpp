@@ -380,7 +380,7 @@ namespace bgl
 		}
 
 		// The accumulation cannot be rescaled, so a resize starts it over.
-		m_HistoryValid = false;
-		m_HistoryIndex = 0;
+		m_HistoryValid        = false;
+		m_CurrentHistoryIndex = 0;
 	}
 }

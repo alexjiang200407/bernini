@@ -97,7 +97,7 @@ history buffer is allocated.
 
 ## Risky / Non-obvious Contracts
 
-* **The ping-pong is per target, not per frame counter.** `GetHistoryIndex()` is state the target
+* **The ping-pong is per target, not per frame counter.** `GetCurrentHistoryIndex()` is state the target
   owns and `AdvanceHistory()` flips at `EndFrame`. Deriving it from a context-wide frame counter
   would break the moment two targets are drawn at different rates — each target's history has to
   alternate on *its* frames.
@@ -109,6 +109,17 @@ history buffer is allocated.
 * **The two halves are imported under separate graph names** (`taaHistory0` / `taaHistory1`). The
   frame graph tracks resource state by name, so a single name for both would have the pass declaring
   the same resource as an SRV and a render target at once.
+
+* **Nothing transitions the two halves by hand — the graph does it, and it does it every frame.**
+  The resolve declares the half it reads with `BarrierAccessFlag::kShaderResource` /
+  `BarrierLayout::kShaderResource` and the half it writes as a render target; `PostProcess` then
+  declares the written half as a shader resource. `DeriveBarriers` emits exactly those transitions
+  ahead of each pass, and `Execute` persists each imported resource's end state into `m_LastState`,
+  so next frame — when the roles swap — the graph sees the half it is about to write sitting in
+  shader-resource state and transitions it back. That is why the roles can alternate without any
+  `ICommandList::Barrier` call in the pass code, and why both halves are imported every frame even
+  though a given frame only touches one as a target. See
+  [Frame Graph](docs/framegraph.md) for the state-persistence rule this leans on.
 
 * **The velocity buffer needs an SRV, and did not have one until this landed.** It was allocated
   `kSRV`-capable from the start against a future reader; TAA is that reader.

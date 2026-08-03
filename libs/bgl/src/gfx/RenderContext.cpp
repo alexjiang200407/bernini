@@ -83,7 +83,7 @@ namespace bgl
 		}
 
 		std::string
-		HistoryName(uint32_t index)
+		GetHistoryName(uint32_t index)
 		{
 			return std::format("{}{}", c_HistoryName, index);
 		}
@@ -393,7 +393,7 @@ namespace bgl
 		{
 			for (uint32_t i = 0; i < 2; ++i)
 			{
-				m_FrameGraph.ImportTexture(HistoryName(i), rt.GetHistoryTexture(i));
+				m_FrameGraph.ImportTexture(GetHistoryName(i), rt.GetHistoryTexture(i));
 			}
 		}
 
@@ -543,7 +543,7 @@ namespace bgl
 
 		if (rt.IsTaaEnabled())
 		{
-			const uint32_t current = rt.GetHistoryIndex();
+			const uint32_t current = rt.GetCurrentHistoryIndex();
 			const uint32_t prev    = current ^ 1u;
 
 			auto taaArgs            = TaaResolvePass::Args();
@@ -551,8 +551,8 @@ namespace bgl
 			taaArgs.motionVectors   = rt.GetMotionVectorSrv();
 			taaArgs.prevHistory     = rt.GetHistorySrv(prev);
 			taaArgs.history         = rt.GetHistoryRtv(current);
-			taaArgs.prevHistoryName = HistoryName(prev);
-			taaArgs.historyName     = HistoryName(current);
+			taaArgs.prevHistoryName = GetHistoryName(prev);
+			taaArgs.historyName     = GetHistoryName(current);
 			taaArgs.pointSampler    = m_PostProcessSampler;
 			taaArgs.linearSampler   = m_HistorySampler;
 			taaArgs.viewport        = viewport;
@@ -561,7 +561,7 @@ namespace bgl
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.
 			postProcessArgs.source     = rt.GetHistorySrv(current);
-			postProcessArgs.sourceName = HistoryName(current);
+			postProcessArgs.sourceName = GetHistoryName(current);
 		}
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);

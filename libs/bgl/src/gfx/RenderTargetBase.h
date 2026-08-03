@@ -103,7 +103,7 @@ namespace bgl
 		IsTaaEnabled() const noexcept = 0;
 
 		/**
-		 * The two accumulation buffers TAA ping-pongs between: index `GetHistoryIndex()` is the one
+		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
 		 * this frame's resolve writes, the other is the one it reads. Null on a target without TAA,
 		 * which allocates neither.
 		 *
@@ -119,7 +119,7 @@ namespace bgl
 		GetHistorySrv(uint32_t index) const noexcept = 0;
 
 		[[nodiscard]] virtual uint32_t
-		GetHistoryIndex() const noexcept = 0;
+		GetCurrentHistoryIndex() const noexcept = 0;
 
 		/**
 		 * False until a resolve has written a history this target can reproject from -- at creation

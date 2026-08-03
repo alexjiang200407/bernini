@@ -192,9 +192,9 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint32_t
-		GetHistoryIndex() const noexcept override
+		GetCurrentHistoryIndex() const noexcept override
 		{
-			return m_HistoryIndex;
+			return m_CurrentHistoryIndex;
 		}
 
 		[[nodiscard]] bool
@@ -207,7 +207,7 @@ namespace bgl
 		AdvanceHistory() noexcept override
 		{
 			m_HistoryValid = true;
-			m_HistoryIndex ^= 1u;
+			m_CurrentHistoryIndex ^= 1u;
 		}
 
 		void
@@ -256,7 +256,7 @@ namespace bgl
 		// Allocated only when m_TaaEnabled; a target that never resolves pays neither the memory nor
 		// the two RTV slots.
 		std::array<TextureRtvSrvHandle, 2> m_History;
-		uint32_t                           m_HistoryIndex                       = 0;
+		uint32_t                           m_CurrentHistoryIndex                = 0;
 		bool                               m_HistoryValid                       = false;
 		UINT64                             m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
 
