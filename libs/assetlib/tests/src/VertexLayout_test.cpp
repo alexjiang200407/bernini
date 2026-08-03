@@ -2,15 +2,15 @@
 
 using namespace assetlib;
 
-TEST_CASE("FormatSize reports the byte size of each vertex format", "[bmesh][layout]")
+TEST_CASE("formatSize reports the byte size of each vertex format", "[bmesh][layout]")
 {
-	REQUIRE(FormatSize(VertexFormat::kFloat32x2) == 8);
-	REQUIRE(FormatSize(VertexFormat::kFloat32x3) == 12);
-	REQUIRE(FormatSize(VertexFormat::kFloat32x4) == 16);
-	REQUIRE(FormatSize(VertexFormat::kUnorm8x4) == 4);
-	REQUIRE(FormatSize(VertexFormat::kUnorm16x2) == 4);
-	REQUIRE(FormatSize(VertexFormat::kUnorm16x4) == 8);
-	REQUIRE(FormatSize(VertexFormat::kUint16x4) == 8);
+	REQUIRE(formatSize(VertexFormat::kFloat32x2) == 8);
+	REQUIRE(formatSize(VertexFormat::kFloat32x3) == 12);
+	REQUIRE(formatSize(VertexFormat::kFloat32x4) == 16);
+	REQUIRE(formatSize(VertexFormat::kUnorm8x4) == 4);
+	REQUIRE(formatSize(VertexFormat::kUnorm16x2) == 4);
+	REQUIRE(formatSize(VertexFormat::kUnorm16x4) == 8);
+	REQUIRE(formatSize(VertexFormat::kUint16x4) == 8);
 }
 
 TEST_CASE("a packed layout's stride equals the sum of its attribute sizes", "[bmesh][layout]")
@@ -26,7 +26,7 @@ TEST_CASE("a packed layout's stride equals the sum of its attribute sizes", "[bm
 
 	uint32_t sum = 0;
 	for (uint8_t i = 0; i < layout.attributeCount; ++i)
-		sum += FormatSize(layout.attributes[i].format);
+		sum += formatSize(layout.attributes[i].format);
 
 	REQUIRE(sum == layout.stride);
 }

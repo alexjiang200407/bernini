@@ -723,11 +723,11 @@ namespace game
 
 		// The runs come from BMaterial.h, which owns `routes` -- never a literal offset.
 		for (size_t i = 0; i < desc.baseColor.size(); ++i)
-			desc.baseColor[i] = route(assetlib::ChannelIndex(assetlib::c_BaseColorChannels, i));
+			desc.baseColor[i] = route(assetlib::channelIndex(assetlib::c_BaseColorChannels, i));
 		for (size_t i = 0; i < desc.orm.size(); ++i)
-			desc.orm[i] = route(assetlib::ChannelIndex(assetlib::c_OrmChannels, i));
+			desc.orm[i] = route(assetlib::channelIndex(assetlib::c_OrmChannels, i));
 		for (size_t i = 0; i < desc.normal.size(); ++i)
-			desc.normal[i] = route(assetlib::ChannelIndex(assetlib::c_NormalChannels, i));
+			desc.normal[i] = route(assetlib::channelIndex(assetlib::c_NormalChannels, i));
 
 		return desc;
 	}

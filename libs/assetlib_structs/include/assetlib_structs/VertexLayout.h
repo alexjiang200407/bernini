@@ -27,7 +27,7 @@ namespace assetlib
 
 	/** Byte size of a single attribute encoded in `format`. */
 	[[nodiscard]] uint32_t
-	FormatSize(VertexFormat format) noexcept;
+	formatSize(VertexFormat format) noexcept;
 
 	struct VertexAttribute
 	{

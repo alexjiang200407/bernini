@@ -31,13 +31,13 @@ TEST_CASE("first-child / next-sibling links reconstruct a node's children", "[bm
 	REQUIRE(children == std::vector<uint32_t>{ 1, 2, 3 });
 }
 
-TEST_CASE("ToMatrix composes translation, rotation and scale", "[bmesh][node]")
+TEST_CASE("toMatrix composes translation, rotation and scale", "[bmesh][node]")
 {
 	Transform transform{ glm::vec3(1.0f, 2.0f, 3.0f),
 		                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
 		                 glm::vec3(2.0f) };
 
-	const auto matrix = ToMatrix(transform);
+	const auto matrix = toMatrix(transform);
 
 	// Translation lands in the 4th column.
 	REQUIRE(matrix[3][0] == Catch::Approx(1.0f));

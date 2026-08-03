@@ -328,8 +328,8 @@ TEST_CASE("A material routing one texture into two channels is one blocker", "[a
 	WriteSource(root.path / "textures_src" / "orm.ktx2", { { 10, 60, 90, 255 } });
 
 	BMaterial material;
-	material.pbr.routes[ChannelIndex(PbrChannel::kRoughness)] = { "textures_src/orm.ktx2", 1 };
-	material.pbr.routes[ChannelIndex(PbrChannel::kMetallic)]  = { "textures_src/orm.ktx2", 2 };
+	material.pbr.routes[channelIndex(PbrChannel::kRoughness)] = { "textures_src/orm.ktx2", 1 };
+	material.pbr.routes[channelIndex(PbrChannel::kMetallic)]  = { "textures_src/orm.ktx2", 2 };
 	saveMaterial(material, root.path / "Materials" / "mat.bmaterial");
 
 	const AssetRefGraph graph = root.Scan();

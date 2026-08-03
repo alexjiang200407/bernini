@@ -3,7 +3,7 @@
 namespace assetlib
 {
 	uint32_t
-	FormatSize(VertexFormat format) noexcept
+	formatSize(VertexFormat format) noexcept
 	{
 		switch (format)
 		{

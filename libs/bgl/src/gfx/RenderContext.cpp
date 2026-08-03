@@ -7,6 +7,7 @@
 #include "passes/DrawData.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/util.h"
 #include <bgl/IGraphics.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -21,12 +22,6 @@ namespace bgl
 		IsBgra(Format format)
 		{
 			return format == Format::BGRA8_UNORM || format == Format::SBGRA8_UNORM;
-		}
-
-		bool
-		IsSrgb(Format format)
-		{
-			return format == Format::SRGBA8_UNORM || format == Format::SBGRA8_UNORM;
 		}
 
 		// A mapped GPU readback as an RGBA8 image: drops the padding D3D12 aligns each row to, and
@@ -55,8 +50,8 @@ namespace bgl
 			auto image     = assetlib::ImageData();
 			image.width    = width;
 			image.height   = height;
-			image.vkFormat = IsSrgb(format) ? assetlib::VkFormat::R8G8B8A8_SRGB :
-			                                  assetlib::VkFormat::R8G8B8A8_UNORM;
+			image.vkFormat = GetFormatInfo(format).isSRGB ? assetlib::VkFormat::R8G8B8A8_SRGB :
+			                                                assetlib::VkFormat::R8G8B8A8_UNORM;
 			image.pixels   = core::fixed_buffer<std::byte>(tightPitch * height);
 			image.subresources.push_back({ 0, tightPitch, tightPitch * height });
 

@@ -258,7 +258,7 @@ namespace assetlib
 				submesh.layout.attributes[submesh.layout.attributeCount++] = { attr.semantic,
 					                                                           attr.format,
 					                                                           offset };
-				offset += static_cast<uint16_t>(FormatSize(attr.format));
+				offset += static_cast<uint16_t>(formatSize(attr.format));
 			}
 			submesh.layout.stride = offset;
 

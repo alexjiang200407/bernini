@@ -54,16 +54,16 @@ namespace assetlib
 	inline constexpr ChannelGroup c_NormalChannels{ PbrChannel::kNormalX, 2 };
 
 	[[nodiscard]] inline constexpr size_t
-	ChannelIndex(PbrChannel channel) noexcept
+	channelIndex(PbrChannel channel) noexcept
 	{
 		return static_cast<size_t>(channel);
 	}
 
 	/** The index of the `component`-th channel of `group` in `PbrParams::routes`. */
 	[[nodiscard]] inline constexpr size_t
-	ChannelIndex(const ChannelGroup& group, size_t component) noexcept
+	channelIndex(const ChannelGroup& group, size_t component) noexcept
 	{
-		return ChannelIndex(group.first) + component;
+		return channelIndex(group.first) + component;
 	}
 
 	static_assert(

@@ -137,7 +137,7 @@ main(int argc, char** argv)
 		const auto worldMatrix = [&](uint32_t node) {
 			auto m = glm::mat4(1.0f);
 			for (uint32_t n = node; n != assetlib::c_InvalidIndex; n = model.nodes[n].parent)
-				m = assetlib::ToMatrix(model.nodes[n].localTransform) * m;
+				m = assetlib::toMatrix(model.nodes[n].localTransform) * m;
 			return m;
 		};
 

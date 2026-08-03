@@ -10,7 +10,7 @@ namespace bmesh
 		while (index != assetlib::c_InvalidIndex && index < mesh.nodes.size())
 		{
 			const assetlib::Node& node = mesh.nodes[index];
-			world                      = assetlib::ToMatrix(node.localTransform) * world;
+			world                      = assetlib::toMatrix(node.localTransform) * world;
 			index                      = node.parent;
 		}
 		return world;

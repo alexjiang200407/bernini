@@ -949,11 +949,11 @@ namespace bgl
 			"The GPU and the .bmaterial file must agree on how many loose channels there are");
 		static_assert(
 			static_cast<size_t>(idl::PbrChannel::kBaseColorR) ==
-					assetlib::ChannelIndex(assetlib::PbrChannel::kBaseColorR) &&
+					assetlib::channelIndex(assetlib::PbrChannel::kBaseColorR) &&
 				static_cast<size_t>(idl::PbrChannel::kAo) ==
-					assetlib::ChannelIndex(assetlib::PbrChannel::kAo) &&
+					assetlib::channelIndex(assetlib::PbrChannel::kAo) &&
 				static_cast<size_t>(idl::PbrChannel::kNormalX) ==
-					assetlib::ChannelIndex(assetlib::PbrChannel::kNormalX),
+					assetlib::channelIndex(assetlib::PbrChannel::kNormalX),
 			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
 		idl::LoosePbrMaterial material{};

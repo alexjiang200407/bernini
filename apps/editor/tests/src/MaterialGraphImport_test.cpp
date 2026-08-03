@@ -28,7 +28,7 @@ namespace
 	const assetlib::ChannelRoute&
 	Route(const assetlib::BMaterial& material, PbrChannel channel)
 	{
-		return material.pbr.routes[assetlib::ChannelIndex(channel)];
+		return material.pbr.routes[assetlib::channelIndex(channel)];
 	}
 
 	/** Builds the graph a glTF material implies and compiles it, exactly as an import does. */
