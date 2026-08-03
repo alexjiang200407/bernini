@@ -23,7 +23,7 @@ namespace assetlib
 		uint32_t arraySize = 1;
 		// The format tag the KTX2 container carries natively. API-neutral on purpose: the renderer
 		// maps it to its own format (bgl's FromVkFormat). Not a DXGI/Metal format.
-		VkFormat vkFormat  = VkFormat::Undefined;
+		VkFormat vkFormat  = VkFormat::UNDEFINED;
 		bool     isCubemap = false;
 
 		core::fixed_buffer<std::byte> pixels;

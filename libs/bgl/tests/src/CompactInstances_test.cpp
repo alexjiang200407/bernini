@@ -54,34 +54,34 @@ TEST_CASE(
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	constexpr uint32_t activeCount = 4000;
-	constexpr uint32_t paddedCount =
-		((activeCount + bgl::idl::cHistogramGroupSize - 1) / bgl::idl::cHistogramGroupSize) *
+	constexpr uint32_t c_ActiveCount = 4000;
+	constexpr uint32_t c_PaddedCount =
+		((c_ActiveCount + bgl::idl::cHistogramGroupSize - 1) / bgl::idl::cHistogramGroupSize) *
 		bgl::idl::cHistogramGroupSize;
 
 	// kOpaque_StaticMesh_PBR is bucket 1, so its base is the (empty) null bucket: 0 before the scan
 	// and 0 after. The alpha-test and transparent buckets are the ones with something to get wrong.
-	constexpr bgl::PsoType buckets[]   = { bgl::PsoType::kOpaque_StaticMesh_PBR,
-		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
-		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
-	constexpr uint32_t     bucketCount = static_cast<uint32_t>(std::size(buckets));
+	constexpr bgl::PsoType c_Buckets[]   = { bgl::PsoType::kOpaque_StaticMesh_PBR,
+		                                     bgl::PsoType::kAlphaTest_StaticMesh_PBR,
+		                                     bgl::PsoType::kTransparent_StaticMesh_PBR };
+	constexpr uint32_t     c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
 		auto desc         = bgl::PackedBufferDesc();
-		desc.initialCount = paddedCount;
+		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Compact Instances";
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
 	// The pso each instance index carries, so a compacted index can be checked against the bucket it
 	// was filed under.
-	std::vector<uint32_t>                 psoOf(activeCount);
+	std::vector<uint32_t>                 psoOf(c_ActiveCount);
 	std::array<uint32_t, bgl::c_PsoCount> expectedCount{};
 
-	for (uint32_t i = 0; i < activeCount; ++i)
+	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
-		const auto pso = static_cast<uint32_t>(buckets[i % bucketCount]);
+		const auto pso = static_cast<uint32_t>(c_Buckets[i % c_BucketCount]);
 
 		auto instance                = bgl::SubmeshInstance();
 		instance.meshInstance.offset = 0u;
@@ -92,7 +92,7 @@ TEST_CASE(
 		psoOf[i] = pso;
 		expectedCount[pso] += 1;
 	}
-	for (uint32_t i = activeCount; i < paddedCount; ++i)
+	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
 		auto padding                = bgl::SubmeshInstance();
 		padding.meshInstance.offset = 0xFFFFFFFFu;
@@ -121,12 +121,12 @@ TEST_CASE(
 	auto psoPrefixSum = makeCompute(uint32_t{}, bgl::c_PsoCount, "Pso Prefix Sum");
 	auto dispatchArgs =
 		makeCompute(bgl::idl::DispatchArgs{}, bgl::c_PsoCount, "Compacted Dispatch Args");
-	auto compacted = makeCompute(uint32_t{}, paddedCount, "Compacted Instances");
+	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
 
 	// The histogram and compaction now gate on a per-instance visibility word the cull pass writes.
 	// This test isolates the counting sort, so it stands in for a cull that passed everything: the
 	// buffer is seeded all-visible. Frustum culling has its own test.
-	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, paddedCount, "Visibility");
+	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, c_PaddedCount, "Visibility");
 
 	const auto makeKernel = [&](const char* module, const char* debugName) {
 		auto kernel = device->CreateComputeKernel(
@@ -181,7 +181,7 @@ TEST_CASE(
 				psoPrefixSum.Clear(cmd);
 				compacted.Clear(cmd);
 
-				const std::vector<uint32_t> allVisible(paddedCount, 1u);
+				const std::vector<uint32_t> allVisible(c_PaddedCount, 1u);
 				cmd->WriteBuffer(
 					visibility.GetBufferHandle(),
 					allVisible.data(),
@@ -220,7 +220,7 @@ TEST_CASE(
 				auto state   = bgl::ComputeState();
 				state.kernel = &histogram;
 				cmd->SetComputeState(state);
-				cmd->Dispatch(paddedCount / bgl::idl::cHistogramGroupSize, 1, 1);
+				cmd->Dispatch(c_PaddedCount / bgl::idl::cHistogramGroupSize, 1, 1);
 
 				// Both dispatches live in this one pass, so the graph cannot barrier between them.
 				cmd->Barrier(
@@ -274,7 +274,7 @@ TEST_CASE(
 				state.kernel = &compact;
 				cmd->SetComputeState(state);
 				cmd->Dispatch(
-					(activeCount + bgl::idl::cCompactGroupSize - 1) / bgl::idl::cCompactGroupSize,
+					(c_ActiveCount + bgl::idl::cCompactGroupSize - 1) / bgl::idl::cCompactGroupSize,
 					1,
 					1);
 			}));
@@ -296,7 +296,7 @@ TEST_CASE(
 	}
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize  = static_cast<uint64_t>(paddedCount) * sizeof(uint32_t);
+	rbDesc.byteSize  = static_cast<uint64_t>(c_PaddedCount) * sizeof(uint32_t);
 	rbDesc.debugName = "Compacted Readback";
 	auto rbCompacted = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -358,7 +358,7 @@ TEST_CASE(
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{
 			const uint32_t instanceIdx = compactedOut[slot];
-			if (instanceIdx >= activeCount || psoOf[instanceIdx] != p)
+			if (instanceIdx >= c_ActiveCount || psoOf[instanceIdx] != p)
 			{
 				++misfiled;
 			}
@@ -370,13 +370,13 @@ TEST_CASE(
 	// arithmetic overlaps two groups' runs: one instance gets written twice and another is dropped.
 	// Both sit in the right bucket, so the misfiled count above cannot see it. 4000 instances is 32
 	// groups of 128, the last one partial, so the runs actually have to abut.
-	std::vector<uint32_t> occurrences(activeCount, 0u);
+	std::vector<uint32_t> occurrences(c_ActiveCount, 0u);
 	for (uint32_t p = 0; p < bgl::c_PsoCount; ++p)
 	{
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{
 			const uint32_t instanceIdx = compactedOut[slot];
-			if (instanceIdx < activeCount)
+			if (instanceIdx < c_ActiveCount)
 			{
 				++occurrences[instanceIdx];
 			}

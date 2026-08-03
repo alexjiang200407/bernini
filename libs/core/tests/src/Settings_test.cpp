@@ -13,7 +13,7 @@ namespace
 		return path;
 	}
 
-	constexpr const char* kConfig = R"({
+	constexpr const char* c_Config = R"({
 		"graphics": {
 			"msaa": 4,
 			"gamma": 2.2,
@@ -29,7 +29,7 @@ namespace
 
 TEST_CASE("Settings reads scalars with implicit conversions", "[settings]")
 {
-	const auto     path = WriteTempJson("settings_scalars.json", kConfig);
+	const auto     path = WriteTempJson("settings_scalars.json", c_Config);
 	core::Settings settings(path);
 
 	const int          msaa     = settings["graphics"]["msaa"];
@@ -55,7 +55,7 @@ TEST_CASE("Settings reads scalars with implicit conversions", "[settings]")
 
 TEST_CASE("Settings returns defaults for missing keys", "[settings]")
 {
-	const auto     path = WriteTempJson("settings_missing.json", kConfig);
+	const auto     path = WriteTempJson("settings_missing.json", c_Config);
 	core::Settings settings(path);
 
 	// A missing key yields a null accessor, not a throw.
@@ -84,7 +84,7 @@ TEST_CASE("Settings returns defaults for missing keys", "[settings]")
 
 TEST_CASE("Settings chains through null without throwing", "[settings]")
 {
-	const auto     path = WriteTempJson("settings_chain.json", kConfig);
+	const auto     path = WriteTempJson("settings_chain.json", c_Config);
 	core::Settings settings(path);
 
 	// Indexing past a missing branch stays null all the way down.
@@ -100,7 +100,7 @@ TEST_CASE("Settings chains through null without throwing", "[settings]")
 
 TEST_CASE("Settings returns defaults on type mismatch", "[settings]")
 {
-	const auto     path = WriteTempJson("settings_mismatch.json", kConfig);
+	const auto     path = WriteTempJson("settings_mismatch.json", c_Config);
 	core::Settings settings(path);
 
 	// A string requested as a number => default, not a throw.

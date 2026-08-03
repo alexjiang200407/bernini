@@ -418,8 +418,8 @@ namespace
 	MockResourceManager&
 	NullRm()
 	{
-		static MockResourceManager rm;
-		return rm;
+		static MockResourceManager g_Rm;
+		return g_Rm;
 	}
 }
 

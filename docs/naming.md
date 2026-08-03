@@ -7,7 +7,7 @@ not by what the thing feels like. That is the whole rule; everything below is de
 |---|---|---|
 | `libs/core/include/core/containers/`, `libs/core/include/core/str/` | `lower_case` throughout | These substitute for standard-library types. `static_vector` has to be usable where a `std::vector` was, down to `value_type` and `push_back`. |
 | the rest of `libs/core/` | `lower_case` free functions, `PascalCase` types and methods | A `core` helper is read beside `std::` ones in the same expression — `split_once(str, "/")`, not `SplitOnce`. |
-| `libs/assetlib/` | `camelBack` free functions, `PascalCase` types and methods | The codec surface has always spelled them this way -- `loadKTX2`, `bake`, `serialize` -- and a caller reads `loadKTX2(path)` beside `load(path)`. |
+| `libs/assetlib/`, `libs/assetlib_structs/` | `camelBack` free functions, `PascalCase` types and methods | The codec surface has always spelled them this way -- `loadKTX2`, `bake`, `serialize` -- and a caller reads `loadKTX2(path)` beside `load(path)`. `assetlib_structs` holds the PODs it decodes into, and `toMatrix(node.localTransform)` is read in the same expression as the rest. |
 | `libs/assetlib/tests/` | `PascalCase`, as everywhere else | A fixture is engine code. Only the published codec functions read beside `std::`. |
 | everything else | `PascalCase` types and functions | Engine code. `bgl`, `gamelib`, `apps`, `examples`. |
 
@@ -65,9 +65,14 @@ Homebrew's keg-only `llvm` on macOS, `/usr/lib/llvm-*/` on Linux. Install it wit
 | File | Says |
 |---|---|
 | [`.clang-tidy`](../.clang-tidy) | The engine's rules. Only `readability-identifier-naming` runs. |
-| [`libs/core/.clang-tidy`](../libs/core/.clang-tidy) | `lower_case` free functions. |
+| [`libs/core/.clang-tidy`](../libs/core/.clang-tidy) | `lower_case` free functions, and `lower_case` concepts where they stand in for `<type_traits>`. |
 | [`libs/core/include/core/containers/.clang-tidy`](../libs/core/include/core/containers/.clang-tidy) | `lower_case` everything. |
 | [`libs/core/include/core/str/.clang-tidy`](../libs/core/include/core/str/.clang-tidy) | `lower_case` everything. |
+| [`libs/core/tests/.clang-tidy`](../libs/core/tests/.clang-tidy) | `PascalCase` functions again: a fixture is engine code. |
+| [`libs/assetlib/.clang-tidy`](../libs/assetlib/.clang-tidy) | `camelBack` free functions. |
+| [`libs/assetlib_structs/.clang-tidy`](../libs/assetlib_structs/.clang-tidy) | `camelBack` free functions, like the codec that decodes into them. |
+| [`libs/assetlib/tests/.clang-tidy`](../libs/assetlib/tests/.clang-tidy) | `PascalCase` functions again. |
+| [`apps/editor/.clang-tidy`](../apps/editor/.clang-tidy) | The names Qt and Catch2 own: virtual hooks, `StringMaker::convert`, the `QtNodes` namespace. |
 
 Each of the narrowing files sets `InheritParentConfig: true`. Without it a child config *replaces*
 the parent rather than merging with it, and the omitted rules silently stop being checked.
@@ -89,6 +94,11 @@ so on macOS it comes from Homebrew's LLVM while the build uses Xcode's, and the 
 every entry, leaving the textual `-include` of the same header. Sources here deliberately do not
 include the standard library, so that force-include is what keeps them parsing.
 
+That force-include points at a copy of CMake's `cmake_pch.hxx` with its
+`#pragma clang system_header` removed. The pragma makes everything the PCH pulls in a system header,
+and clang-tidy says nothing about those — so a header the PCH includes would come back clean however
+it was named. The copy holds absolute includes, so it parses the same from `<build>/clang-tidy/`.
+
 ## What it covers, and what it doesn't
 
 A sweep only reaches what the configured preset compiles, and no single preset compiles everything.
@@ -96,10 +106,12 @@ On `macos-clang-metal-debug` the D3D12 backend has no compile commands and is sk
 says out loud — with a count — rather than counting it as a pass. Checking a Windows preset as well
 as a macOS one is what covers the tree.
 
-Four headers do not parse standalone and report compiler errors rather than findings —
-`bgl/SkyboxDesc.h`, `bgl/error.h`, `bgl/src/scene/RangeBuffer.h`, `bgl/src/uniforms/DescriptorHandle.h`.
-They expect to be included after something else. Naming findings elsewhere in them are still
-reported.
+A header its own target's PCH pre-includes cannot be the main file: `#pragma once` only suppresses
+an `#include`, and the main file is not one, so every declaration in it is a redefinition and the
+parse dies before a name is looked at. `bgl/error.h`, `bgl/src/uniforms/DescriptorHandle.h` and
+`bgl/src/metal/MetalErrorChecker.h` are the ones today. Those are checked through the source they
+borrowed their flags from — the translation unit they are really compiled in — filtered back down to
+themselves, which is why the compile database also carries an entry for the lender.
 
 `--fix` renames mechanically and its output wants reading. It rewrites to the rule, not to intent:
 a static `s_Live` that should be `g_Live` becomes `g_SLive`, because the check has no idea `s_` was

@@ -9,15 +9,15 @@ namespace demo
 		std::vector<DemoWindow*>&
 		Registry() noexcept
 		{
-			static std::vector<DemoWindow*> s_windows;
-			return s_windows;
+			static std::vector<DemoWindow*> g_Windows;
+			return g_Windows;
 		}
 
 		std::set<int>&
 		PressedKeys() noexcept
 		{
-			static std::set<int> s_pressed;
-			return s_pressed;
+			static std::set<int> g_Pressed;
+			return g_Pressed;
 		}
 	}
 
@@ -34,23 +34,23 @@ namespace demo
 		if (options.resizable)
 			flags |= SDL_WINDOW_RESIZABLE;
 
-		m_window = SDL_CreateWindow(options.title, options.width, options.height, flags);
-		if (!m_window)
+		m_Window = SDL_CreateWindow(options.title, options.width, options.height, flags);
+		if (!m_Window)
 		{
 			std::string err = SDL_GetError();
 			SDL_QuitSubSystem(SDL_INIT_VIDEO);
 			throw std::runtime_error("SDL_CreateWindow failed: " + err);
 		}
 
-		m_id = SDL_GetWindowID(m_window);
+		m_Id = SDL_GetWindowID(m_Window);
 #if defined(__APPLE__)
 		// A Metal target binds to a CAMetalLayer, not a raw window handle. SDL owns the view and
 		// its layer; the backend interprets `RenderTargetDesc::wnd` as the CAMetalLayer.
-		m_metalView    = SDL_Metal_CreateView(m_window);
-		m_nativeHandle = SDL_Metal_GetLayer(m_metalView);
+		m_MetalView    = SDL_Metal_CreateView(m_Window);
+		m_NativeHandle = SDL_Metal_GetLayer(m_MetalView);
 #else
-		m_nativeHandle = SDL_GetPointerProperty(
-			SDL_GetWindowProperties(m_window),
+		m_NativeHandle = SDL_GetPointerProperty(
+			SDL_GetWindowProperties(m_Window),
 			SDL_PROP_WINDOW_WIN32_HWND_POINTER,
 			nullptr);
 #endif
@@ -58,7 +58,7 @@ namespace demo
 		if (options.captureMouse)
 		{
 			// Relative mode hides and grabs the cursor and reports raw motion deltas.
-			SDL_SetWindowRelativeMouseMode(m_window, true);
+			SDL_SetWindowRelativeMouseMode(m_Window, true);
 		}
 
 		Registry().push_back(this);
@@ -70,12 +70,12 @@ namespace demo
 		reg.erase(std::remove(reg.begin(), reg.end(), this), reg.end());
 
 #if defined(__APPLE__)
-		if (m_metalView)
-			SDL_Metal_DestroyView(m_metalView);
+		if (m_MetalView)
+			SDL_Metal_DestroyView(m_MetalView);
 #endif
 
-		if (m_window)
-			SDL_DestroyWindow(m_window);
+		if (m_Window)
+			SDL_DestroyWindow(m_Window);
 
 		SDL_QuitSubSystem(SDL_INIT_VIDEO);
 	}
@@ -83,7 +83,7 @@ namespace demo
 	void
 	DemoWindow::SetPosition(int x, int y) noexcept
 	{
-		SDL_SetWindowPosition(m_window, x, y);
+		SDL_SetWindowPosition(m_Window, x, y);
 	}
 
 	void
@@ -97,14 +97,14 @@ namespace demo
 			switch (e.type)
 			{
 			case SDL_EVENT_QUIT:
-				for (auto* w : Registry()) w->m_shouldClose = true;
+				for (auto* w : Registry()) w->m_ShouldClose = true;
 				break;
 
 			case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 				for (auto* w : Registry())
 				{
-					if (w->m_id == e.window.windowID)
-						w->m_shouldClose = true;
+					if (w->m_Id == e.window.windowID)
+						w->m_ShouldClose = true;
 				}
 				break;
 

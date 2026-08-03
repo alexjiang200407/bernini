@@ -18,14 +18,14 @@ namespace
 	assetlib::BMesh
 	MakeMeshletMesh(std::span<const uint32_t> meshletCounts)
 	{
-		constexpr uint16_t kStride = 12;  // one float32x3 position
+		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
 		mesh.stringPool.push_back('\0');
 
 		uint32_t totalVertices = 0;
 		for (const uint32_t count : meshletCounts) totalVertices += count * 3;
-		mesh.vertexData.resize(static_cast<size_t>(totalVertices) * kStride);
+		mesh.vertexData.resize(static_cast<size_t>(totalVertices) * c_Stride);
 
 		uint32_t vertexCursor = 0;
 		for (const uint32_t count : meshletCounts)
@@ -49,11 +49,11 @@ namespace
 
 			auto submesh                  = assetlib::Submesh();
 			submesh.layout.attributeCount = 1;
-			submesh.layout.stride         = kStride;
+			submesh.layout.stride         = c_Stride;
 			submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
 				                              assetlib::VertexFormat::kFloat32x3,
 				                              0 };
-			submesh.vertexByteOffset      = vertexCursor * kStride;
+			submesh.vertexByteOffset      = vertexCursor * c_Stride;
 			submesh.vertexCount           = count * 3;
 			submesh.firstMeshlet          = firstMeshlet;
 			submesh.meshletCount          = count;

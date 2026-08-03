@@ -18,11 +18,11 @@ namespace
 	assetlib::BMesh
 	MakeTwoSubmeshMesh(std::span<const std::pair<glm::vec3, glm::vec3>> aabbs)
 	{
-		constexpr uint16_t kStride = 12;
+		constexpr uint16_t c_Stride = 12;
 
 		auto mesh = assetlib::BMesh();
 		mesh.stringPool.push_back('\0');
-		mesh.vertexData.resize(static_cast<size_t>(aabbs.size()) * 3 * kStride);
+		mesh.vertexData.resize(static_cast<size_t>(aabbs.size()) * 3 * c_Stride);
 
 		uint32_t vertexCursor = 0;
 		for (const auto& [aabbMin, aabbMax] : aabbs)
@@ -42,11 +42,11 @@ namespace
 
 			auto submesh                  = assetlib::Submesh();
 			submesh.layout.attributeCount = 1;
-			submesh.layout.stride         = kStride;
+			submesh.layout.stride         = c_Stride;
 			submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
 				                              assetlib::VertexFormat::kFloat32x3,
 				                              0 };
-			submesh.vertexByteOffset      = vertexCursor * kStride;
+			submesh.vertexByteOffset      = vertexCursor * c_Stride;
 			submesh.vertexCount           = 3;
 			submesh.firstMeshlet          = firstMeshlet;
 			submesh.meshletCount          = 1;

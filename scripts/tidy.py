@@ -43,6 +43,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -291,7 +292,7 @@ def match_entries(files, entries):
         if root:
             within.setdefault(root, []).append(entry)
 
-    matched, skipped = [], []
+    matched, skipped, borrowed = [], [], {}
     for path in files:
         entry = by_file.get(os.path.normpath(path))
         if entry:
@@ -311,9 +312,10 @@ def match_entries(files, entries):
         best = max(candidates, key=lambda e: _shared_prefix(e["file"], path), default=None)
         if best:
             matched.append((path, header_entry(best, path)))
+            borrowed[path] = best
         else:
             skipped.append(path)
-    return matched, skipped
+    return matched, skipped, borrowed
 
 
 def _shared_prefix(a, b):
@@ -340,17 +342,50 @@ def strip_pch_arguments(arguments):
     return kept
 
 
+# CMake writes the force-include either bare or wrapped, one -Xclang per word.
+PCH_INCLUDE = re.compile(r'(-include(?:\s+-Xclang)?[\s=]+)("?)([^\s"]*cmake_pch\.[^\s"]*)\2')
+
+# What CMake writes at the top of its generated PCH header. It makes everything the
+# PCH pulls in a system header, and clang-tidy has nothing to say about those -- so a
+# header the PCH includes could never be diagnosed through a source that includes it.
+SYSTEM_HEADER_PRAGMA = re.compile(r"^\s*#pragma\s+clang\s+system_header\s*$", re.MULTILINE)
+
+
+def unsystem_pch(command, directory):
+    """`command` with its force-included PCH swapped for a non-system copy.
+
+    The copy holds absolute includes, so it parses the same from anywhere.
+    """
+    def swap(match):
+        source = match.group(3)
+        digest = hashlib.sha1(source.encode("utf-8")).hexdigest()[:12]
+        target = os.path.join(directory, f"{digest}_{os.path.basename(source)}")
+        try:
+            with open(source, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            return match.group(0)
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write(SYSTEM_HEADER_PRAGMA.sub("", text))
+        return f'{match.group(1)}{match.group(2)}{target}{match.group(2)}'
+
+    return PCH_INCLUDE.sub(swap, command)
+
+
 def sanitized_db(build_dir, files):
     """Write a database that compiles exactly `files`, PCH-free.
 
     Every entry keeps its textual `-include cmake_pch.hxx`, so the standard library
     is still in scope for sources that (by project rule) never include it. Returns
-    (directory, checkable files, files nothing in the database can compile).
+    (directory, checkable files, files nothing in the database can compile, and the
+    source each header borrowed its flags from).
     """
     with open(os.path.join(build_dir, "compile_commands.json"), encoding="utf-8") as fh:
         entries = json.load(fh)
 
     sysroot = macos_sysroot()
+    directory = os.path.join(build_dir, "clang-tidy")
+    os.makedirs(directory, exist_ok=True)
 
     usable = []
     for entry in entries:
@@ -363,26 +398,44 @@ def sanitized_db(build_dir, files):
                 command = pattern.sub("", command)
             if sysroot and "-isysroot" not in command:
                 command += sysroot
-            entry = dict(entry, command=silence_warnings(command))
+            entry = dict(entry, command=unsystem_pch(silence_warnings(command), directory))
         elif "arguments" in entry:
             entry = dict(entry, arguments=strip_pch_arguments(entry["arguments"]))
         usable.append(entry)
 
-    matched, skipped = match_entries(files, usable)
+    matched, skipped, borrowed = match_entries(files, usable)
 
-    directory = os.path.join(build_dir, "clang-tidy")
-    os.makedirs(directory, exist_ok=True)
+    # The lender's own entry goes in too: a header the PCH already includes is checked
+    # through it instead of as its own translation unit. See `check`. One command per
+    # file -- a source compiled into two targets has two, and clang-tidy would then
+    # parse it once per command.
+    written = [entry for _, entry in matched]
+    seen = {os.path.normpath(entry["file"]) for entry in written}
+    for entry in borrowed.values():
+        if os.path.normpath(entry["file"]) not in seen:
+            seen.add(os.path.normpath(entry["file"]))
+            written.append(entry)
+
     with open(os.path.join(directory, "compile_commands.json"), "w", encoding="utf-8") as fh:
-        json.dump([entry for _, entry in matched], fh, indent=1)
-    return directory, [path for path, _ in matched], skipped
+        json.dump(written, fh, indent=1)
+    lenders = {path: entry["file"] for path, entry in borrowed.items()}
+    return directory, [path for path, _ in matched], skipped, lenders
 
 
 def line_filter(path, spans):
-    return json.dumps([{"name": os.path.basename(path), "lines": [[a, b] for a, b in spans]}])
+    entry = {"name": os.path.basename(path)}
+    if spans:
+        entry["lines"] = [[a, b] for a, b in spans]
+    return json.dumps([entry])
 
 
-def check(tidy, build_dir, path, args, spans=None):
-    """Run clang-tidy over one file. Returns (path, returncode, output)."""
+# A header the translation unit's PCH already includes, parsed a second time as the
+# main file. `#pragma once` does not stop it: the guard only suppresses an #include,
+# and the main file is not one.
+PRE_INCLUDED = "included multiple times, additional include site here"
+
+
+def run_tidy(tidy, build_dir, main_file, args, filters=()):
     # Only naming gates the exit code. A parse diagnostic still shows, and still fails
     # the file, but a stray compiler warning in someone's header does not.
     cmd = [tidy, "-p", build_dir, "--quiet", "--warnings-as-errors=readability-identifier-naming"]
@@ -390,12 +443,30 @@ def check(tidy, build_dir, path, args, spans=None):
         cmd.append("--fix")
     if args.checks:
         cmd.append(f"--checks={args.checks}")
-    if spans:
-        cmd.append(f"--line-filter={line_filter(path, spans)}")
-    cmd.append(path)
+    cmd += list(filters)
+    cmd.append(main_file)
 
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=ct.REPO_ROOT)
-    return path, result.returncode, (result.stdout or "") + (result.stderr or "")
+    return result.returncode, (result.stdout or "") + (result.stderr or "")
+
+
+def check(tidy, build_dir, path, args, spans=None, lender=None):
+    """Run clang-tidy over one file. Returns (path, returncode, output).
+
+    A header its own PCH pre-includes cannot be the main file -- every declaration in
+    it is a redefinition, and the parse dies before a name is looked at. Such a header
+    is checked through the source it borrowed its flags from instead, filtered back
+    down to itself, which is the translation unit it is really compiled in anyway.
+    """
+    filters = [f"--line-filter={line_filter(path, spans)}"] if spans else []
+    rc, output = run_tidy(tidy, build_dir, path, args, filters)
+
+    if rc != 0 and lender and PRE_INCLUDED in output:
+        filters = [f"--line-filter={line_filter(path, spans)}",
+                   f"--header-filter={re.escape(os.path.abspath(path))}"]
+        rc, output = run_tidy(tidy, build_dir, lender, args, filters)
+
+    return path, rc, output
 
 
 def main():
@@ -452,7 +523,7 @@ def main():
               "    just build --preset windows-clang-dx12-debug", file=sys.stderr)
         return 1
 
-    db_dir, files, skipped = sanitized_db(build_dir, sorted(spans))
+    db_dir, files, skipped, lenders = sanitized_db(build_dir, sorted(spans))
     if skipped:
         # Never silently: "0 findings" has to mean checked, not passed over.
         print(f"{len(skipped)} file(s) skipped -- the configured preset does not compile them "
@@ -462,7 +533,8 @@ def main():
 
     failures = 0
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        futures = [pool.submit(check, tidy, db_dir, path, args, spans[path]) for path in files]
+        futures = [pool.submit(check, tidy, db_dir, path, args, spans[path], lenders.get(path))
+                   for path in files]
         for future in futures:
             path, rc, output = future.result()
             if output.strip():

@@ -944,7 +944,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	// The channel runs come from BMaterial.h, which owns the `routes` array a graph is saved into.
 	// A literal offset here would silently disagree with the baker the moment a channel is added.
 	const auto channel = [](const assetlib::ChannelGroup& group, size_t component) {
-		return static_cast<unsigned int>(assetlib::ChannelIndex(group, component));
+		return static_cast<unsigned int>(assetlib::channelIndex(group, component));
 	};
 
 	for (size_t i = 0; i < desc.baseColor.size(); ++i)

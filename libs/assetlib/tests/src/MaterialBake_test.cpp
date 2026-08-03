@@ -27,7 +27,7 @@ namespace
 
 	// Writes a `size` x `size` uncompressed RGBA8 .ktx2 whose every texel is `rgba`.
 	void
-	writeSource(const std::filesystem::path& path, uint32_t size, std::array<uint8_t, 4> rgba)
+	WriteSource(const std::filesystem::path& path, uint32_t size, std::array<uint8_t, 4> rgba)
 	{
 		std::vector<std::byte> pixels(static_cast<size_t>(size) * size * 4);
 		for (size_t t = 0; t < static_cast<size_t>(size) * size; ++t)
@@ -83,8 +83,8 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	const BakeDir dir("bernini_bake_material");
 
 	// Two sources: an albedo and a packed map whose G is roughness and B is metallic.
-	writeSource(dir.path / "albedo.ktx2", 16, { { 200, 100, 50, 255 } });
-	writeSource(dir.path / "packed.ktx2", 16, { { 10, 60, 90, 255 } });
+	WriteSource(dir.path / "albedo.ktx2", 16, { { 200, 100, 50, 255 } });
+	WriteSource(dir.path / "packed.ktx2", 16, { { 10, 60, 90, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };  // base R
@@ -146,7 +146,7 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 
 	SECTION("editing a source makes the bake stale")
 	{
-		writeSource(dir.path / "albedo.ktx2", 32, { { 1, 2, 3, 255 } });  // different size
+		WriteSource(dir.path / "albedo.ktx2", 32, { { 1, 2, 3, 255 } });  // different size
 		REQUIRE(bakeIsStale(mat, dir.path));
 	}
 }
@@ -156,7 +156,7 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 	const BakeDir dir("bernini_bake_blend");
 
 	// A base colour whose alpha channel actually carries data (A = 128, not opaque).
-	writeSource(dir.path / "albedo.ktx2", 16, { { 200, 100, 50, 128 } });
+	WriteSource(dir.path / "albedo.ktx2", 16, { { 200, 100, 50, 128 } });
 
 	const auto bakeBaseColor = [&](AlphaMode mode) {
 		BMaterial mat;
@@ -192,7 +192,7 @@ namespace
 	// upper one and c1 the lower, and their midpoint is what every texel in the block decodes to. That
 	// recovers (approximately) the texel that was composited -- enough to prove which channel is where.
 	std::array<int, 3>
-	firstBc1Color(const ImageData& image)
+	FirstBc1Color(const ImageData& image)
 	{
 		REQUIRE(image.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
 
@@ -222,9 +222,9 @@ TEST_CASE("bakeMaterial routes each channel from its own source", "[bmaterial][b
 	const BakeDir dir("bernini_bake_routing");
 
 	// Distinct constant sources, so each composited component can be traced back to exactly one.
-	writeSource(dir.path / "a.ktx2", 16, { { 240, 0, 0, 255 } });
-	writeSource(dir.path / "b.ktx2", 16, { { 0, 128, 0, 255 } });
-	writeSource(dir.path / "c.ktx2", 16, { { 0, 0, 64, 255 } });
+	WriteSource(dir.path / "a.ktx2", 16, { { 240, 0, 0, 255 } });
+	WriteSource(dir.path / "b.ktx2", 16, { { 0, 128, 0, 255 } });
+	WriteSource(dir.path / "c.ktx2", 16, { { 0, 0, 64, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "a.ktx2", 0 };  // base R <- a.R = 240
@@ -233,7 +233,7 @@ TEST_CASE("bakeMaterial routes each channel from its own source", "[bmaterial][b
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
-	const auto rgb = firstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
+	const auto rgb = FirstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
 
 	// The UASTC -> BC1 round trip is lossy and BC1 quantizes to 5/6/5 bits, so allow a wide margin.
 	// It is still far tighter than any channel swap: these three values are 64 apart or more.
@@ -247,7 +247,7 @@ TEST_CASE("bakeMaterial fills an unrouted channel with its neutral value", "[bma
 {
 	const BakeDir dir("bernini_bake_neutral");
 
-	writeSource(dir.path / "a.ktx2", 16, { { 240, 10, 10, 255 } });
+	WriteSource(dir.path / "a.ktx2", 16, { { 240, 10, 10, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "a.ktx2", 0 };  // only base R is routed
@@ -256,7 +256,7 @@ TEST_CASE("bakeMaterial fills an unrouted channel with its neutral value", "[bma
 
 	// G and B are unrouted, so they sample 1.0 and let baseColorFactor drive them.
 	constexpr double c_Bc1Margin = 12.0;
-	const auto       rgb         = firstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
+	const auto       rgb         = FirstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
 	CHECK(rgb[0] == Catch::Approx(240).margin(c_Bc1Margin));
 	CHECK(rgb[1] == Catch::Approx(255).margin(c_Bc1Margin));
 	CHECK(rgb[2] == Catch::Approx(255).margin(c_Bc1Margin));
@@ -266,8 +266,8 @@ TEST_CASE("bakeMaterial resamples sources to the largest routed one", "[bmateria
 {
 	const BakeDir dir("bernini_bake_resample");
 
-	writeSource(dir.path / "small.ktx2", 8, { { 255, 0, 0, 255 } });
-	writeSource(dir.path / "big.ktx2", 32, { { 0, 255, 0, 255 } });
+	WriteSource(dir.path / "small.ktx2", 8, { { 255, 0, 0, 255 } });
+	WriteSource(dir.path / "big.ktx2", 32, { { 0, 255, 0, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "small.ktx2", 0 };
@@ -284,7 +284,7 @@ TEST_CASE("bakeMaterial resamples sources to the largest routed one", "[bmateria
 namespace
 {
 	size_t
-	countMaps(const std::filesystem::path& textureDir, std::string_view prefix)
+	CountMaps(const std::filesystem::path& textureDir, std::string_view prefix)
 	{
 		size_t count = 0;
 		for (const auto& entry : std::filesystem::directory_iterator(textureDir))
@@ -301,9 +301,9 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 	// file, not two copies.
 	const BakeDir dir("bernini_bake_sharing");
 
-	writeSource(dir.path / "orm.ktx2", 16, { { 10, 60, 90, 255 } });
-	writeSource(dir.path / "albedo1.ktx2", 16, { { 200, 0, 0, 255 } });
-	writeSource(dir.path / "albedo2.ktx2", 16, { { 0, 200, 0, 255 } });
+	WriteSource(dir.path / "orm.ktx2", 16, { { 10, 60, 90, 255 } });
+	WriteSource(dir.path / "albedo1.ktx2", 16, { { 200, 0, 0, 255 } });
+	WriteSource(dir.path / "albedo2.ktx2", 16, { { 0, 200, 0, 255 } });
 
 	const auto ormRoutes = [](BMaterial& mat) {
 		mat.pbr.routes[4] = { "orm.ktx2", 0 };
@@ -327,20 +327,20 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 	SECTION("the shared group converges on one file")
 	{
 		REQUIRE(apple1.pbr.ormTexture == apple2.pbr.ormTexture);
-		REQUIRE(countMaps(textures, "orm_") == 1);
+		REQUIRE(CountMaps(textures, "orm_") == 1);
 	}
 
 	SECTION("the groups that differ do not")
 	{
 		REQUIRE(apple1.pbr.baseColorTexture != apple2.pbr.baseColorTexture);
-		REQUIRE(countMaps(textures, "basecolor_") == 2);
+		REQUIRE(CountMaps(textures, "basecolor_") == 2);
 	}
 
 	SECTION("a group's output does not depend on textures outside it")
 	{
 		// apple2's base colour source could have been a different size; its ORM map must not change.
 		// Each group is sized to the largest source routed into that group, nothing else.
-		writeSource(dir.path / "albedo2.ktx2", 64, { { 0, 200, 0, 255 } });
+		WriteSource(dir.path / "albedo2.ktx2", 64, { { 0, 200, 0, 255 } });
 
 		BMaterial apple3;
 		apple3.pbr.routes[0] = { "albedo2.ktx2", 0 };
@@ -348,7 +348,7 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 
 		REQUIRE_NOTHROW(bakeMaterial(apple3, MaterialBakeDesc{ dir.path }));
 		REQUIRE(apple3.pbr.ormTexture == apple1.pbr.ormTexture);
-		REQUIRE(countMaps(textures, "orm_") == 1);
+		REQUIRE(CountMaps(textures, "orm_") == 1);
 	}
 }
 
@@ -356,7 +356,7 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 {
 	const BakeDir dir("bernini_bake_cache");
 
-	writeSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
+	WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "a.ktx2", 0 };
@@ -408,7 +408,7 @@ TEST_CASE("bakeMaterial honours a custom texture directory", "[bmaterial][bake]"
 {
 	const BakeDir dir("bernini_bake_texdir");
 
-	writeSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
+	WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "a.ktx2", 0 };
@@ -446,7 +446,7 @@ TEST_CASE("bakeMaterial accepts a Basis-supercompressed source", "[bmaterial][ba
 
 	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
 
-	const auto rgb = firstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
+	const auto rgb = FirstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
 	CHECK(rgb[0] == Catch::Approx(200).margin(12));
 }
 

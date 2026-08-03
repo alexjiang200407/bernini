@@ -10,15 +10,15 @@ namespace core::io
 		explicit ByteReader(std::span<const std::byte> bytes) noexcept : m_Bytes(bytes) {}
 
 		[[nodiscard]] size_t
-		remaining() const noexcept
+		Remaining() const noexcept
 		{
 			return m_Bytes.size() - m_Cursor;
 		}
 
 		[[nodiscard]] std::span<const std::byte>
-		readBytes(size_t count)
+		ReadBytes(size_t count)
 		{
-			if (count > remaining())
+			if (count > Remaining())
 				throw std::runtime_error("byte stream: unexpected end of stream");
 			const auto out = m_Bytes.subspan(m_Cursor, count);
 			m_Cursor += count;
@@ -27,16 +27,16 @@ namespace core::io
 
 		template <core::type_traits::trivially_copyable T>
 		[[nodiscard]] T
-		readPod()
+		ReadPod()
 		{
-			const auto raw = readBytes(sizeof(T));
+			const auto raw = ReadBytes(sizeof(T));
 			T          value;
 			std::copy_n(raw.data(), sizeof(T), reinterpret_cast<std::byte*>(&value));
 			return value;
 		}
 
 		void
-		seek(size_t offset)
+		Seek(size_t offset)
 		{
 			if (offset > m_Bytes.size())
 				throw std::runtime_error("byte stream: seek out of range");

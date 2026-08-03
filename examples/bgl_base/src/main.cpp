@@ -216,7 +216,7 @@ main(int argc, char** argv)
 
 				graphics->DrawFrame(target, job);
 
-				if (demo::KeyPressed(demo::kScancodeF10))
+				if (demo::KeyPressed(demo::c_ScancodeF10))
 				{
 					graphics->ScreenshotPng(
 						target,

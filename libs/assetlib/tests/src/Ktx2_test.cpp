@@ -10,14 +10,14 @@ using namespace assetlib;
 // writeKTX2 compression, and loadKTX2 transcoding + block-aware subresource layout.
 TEST_CASE("KTX2 LDR round-trips through Basis UASTC -> BC7", "[ktx2][io]")
 {
-	constexpr uint32_t w = 64;
-	constexpr uint32_t h = 64;
+	constexpr uint32_t c_Width  = 64;
+	constexpr uint32_t c_Height = 64;
 
-	std::vector<std::byte> rgba(static_cast<size_t>(w) * h * 4, std::byte{ 180 });
-	const ImageData        src = rgba8ToImage(rgba, w, h);
+	std::vector<std::byte> rgba(static_cast<size_t>(c_Width) * c_Height * 4, std::byte{ 180 });
+	const ImageData        src = rgba8ToImage(rgba, c_Width, c_Height);
 
 	REQUIRE(src.vkFormat == VkFormat::R8G8B8A8_UNORM);
-	REQUIRE(src.width == w);
+	REQUIRE(src.width == c_Width);
 	REQUIRE(src.mipLevels == 7);  // floor(log2(64)) + 1
 
 	const auto path = std::filesystem::temp_directory_path() / "bernini_ktx2_roundtrip.ktx2";
@@ -27,8 +27,8 @@ TEST_CASE("KTX2 LDR round-trips through Basis UASTC -> BC7", "[ktx2][io]")
 		writeKTX2(src, path, /*srgb*/ true);
 		const ImageData loaded = loadKTX2(path);
 
-		REQUIRE(loaded.width == w);
-		REQUIRE(loaded.height == h);
+		REQUIRE(loaded.width == c_Width);
+		REQUIRE(loaded.height == c_Height);
 		REQUIRE(loaded.mipLevels == src.mipLevels);
 		REQUIRE(loaded.vkFormat == VkFormat::BC7_SRGB_BLOCK);
 		// BC7 is 4x4 16-byte blocks: base mip row pitch = ceil(64/4) * 16 = 256.
@@ -65,11 +65,11 @@ TEST_CASE("KTX2 LDR round-trips through Basis UASTC -> BC7", "[ktx2][io]")
 // than the UASTC textures a mesh import emits.
 TEST_CASE("KTX2 bake targets write their block format directly", "[ktx2][io][bake]")
 {
-	constexpr uint32_t w = 64;
-	constexpr uint32_t h = 64;
+	constexpr uint32_t c_Width  = 64;
+	constexpr uint32_t c_Height = 64;
 
-	std::vector<std::byte> rgba(static_cast<size_t>(w) * h * 4, std::byte{ 180 });
-	const ImageData        src = rgba8ToImage(rgba, w, h);
+	std::vector<std::byte> rgba(static_cast<size_t>(c_Width) * c_Height * 4, std::byte{ 180 });
+	const ImageData        src = rgba8ToImage(rgba, c_Width, c_Height);
 
 	const auto path = std::filesystem::temp_directory_path() / "bernini_ktx2_bake.ktx2";
 
@@ -79,7 +79,7 @@ TEST_CASE("KTX2 bake targets write their block format directly", "[ktx2][io][bak
 		const ImageData loaded = loadKTX2(path);
 
 		REQUIRE(loaded.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
-		REQUIRE(loaded.width == w);
+		REQUIRE(loaded.width == c_Width);
 		REQUIRE(loaded.mipLevels == src.mipLevels);
 		// BC1 is 4x4 8-byte blocks: base mip row pitch = ceil(64/4) * 8 = 128.
 		REQUIRE(loaded.subresources.front().rowPitch == 128);
@@ -114,10 +114,10 @@ TEST_CASE("KTX2 bake targets write their block format directly", "[ktx2][io][bak
 // consumer (an editor thumbnail) needs no block decoder.
 TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")
 {
-	constexpr uint32_t w = 256;
-	constexpr uint32_t h = 256;
+	constexpr uint32_t c_Width  = 256;
+	constexpr uint32_t c_Height = 256;
 
-	std::vector<std::byte> rgba(static_cast<size_t>(w) * h * 4, std::byte{ 0 });
+	std::vector<std::byte> rgba(static_cast<size_t>(c_Width) * c_Height * 4, std::byte{ 0 });
 	for (size_t i = 0; i < rgba.size(); i += 4)
 	{
 		rgba[i + 0] = std::byte{ 200 };  // R
@@ -126,7 +126,7 @@ TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")
 		rgba[i + 3] = std::byte{ 255 };  // A
 	}
 
-	const ImageData src  = rgba8ToImage(rgba, w, h);
+	const ImageData src  = rgba8ToImage(rgba, c_Width, c_Height);
 	const auto      path = std::filesystem::temp_directory_path() / "bernini_ktx2_preview.ktx2";
 
 	SECTION("picks the smallest mip covering maxDim and keeps channel order")
@@ -168,8 +168,8 @@ TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")
 		writeKTX2(src, path, /*srgb*/ true);
 		const ImageData preview = loadKTX2Preview(path, 4096);
 
-		REQUIRE(preview.width == w);
-		REQUIRE(preview.height == h);
+		REQUIRE(preview.width == c_Width);
+		REQUIRE(preview.height == c_Height);
 
 		std::filesystem::remove(path);
 	}
@@ -205,19 +205,21 @@ TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")
 // assetlib serialises until the init has completed, which this exercises.
 TEST_CASE("KTX2 decodes concurrently from several threads", "[ktx2][io][threading]")
 {
-	constexpr uint32_t w        = 128;
-	constexpr uint32_t h        = 128;
-	constexpr int      kThreads = 4;
+	constexpr uint32_t c_Width   = 128;
+	constexpr uint32_t c_Height  = 128;
+	constexpr int      c_Threads = 4;
 
-	const std::vector<std::byte> rgba(static_cast<size_t>(w) * h * 4, std::byte{ 120 });
+	const std::vector<std::byte> rgba(
+		static_cast<size_t>(c_Width) * c_Height * 4,
+		std::byte{ 120 });
 	const auto path = std::filesystem::temp_directory_path() / "bernini_ktx2_threads.ktx2";
-	writeKTX2(rgba8ToImage(rgba, w, h), path, /*srgb*/ true);
+	writeKTX2(rgba8ToImage(rgba, c_Width, c_Height), path, /*srgb*/ true);
 
 	std::vector<std::thread> threads;
 	std::atomic<int>         decoded{ 0 };
 	std::atomic<int>         failures{ 0 };
 
-	for (int i = 0; i < kThreads; ++i)
+	for (int i = 0; i < c_Threads; ++i)
 	{
 		// Alternate the two transcode targets so both the BC7 and RGBA8 paths run concurrently.
 		threads.emplace_back([&, i]() {
@@ -239,7 +241,7 @@ TEST_CASE("KTX2 decodes concurrently from several threads", "[ktx2][io][threadin
 	for (std::thread& thread : threads) thread.join();
 
 	CHECK(failures.load() == 0);
-	CHECK(decoded.load() == kThreads);
+	CHECK(decoded.load() == c_Threads);
 
 	std::filesystem::remove(path);
 }

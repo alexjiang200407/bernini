@@ -3,7 +3,7 @@
 namespace assetlib
 {
 	const char*
-	Version() noexcept
+	version() noexcept
 	{
 		return "0.0.1";
 	}

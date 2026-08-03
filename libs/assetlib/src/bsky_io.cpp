@@ -27,16 +27,16 @@ namespace assetlib
 	serializeSky(const BSky& sky)
 	{
 		ByteWriter writer;
-		writer.writePod(c_Magic);
-		writer.writePod(c_VersionMajor);
-		writer.writePod(c_VersionMinor);
+		writer.WritePod(c_Magic);
+		writer.WritePod(c_VersionMajor);
+		writer.WritePod(c_VersionMinor);
 
 		writeString(writer, sky.name);
 		writeRoute(writer, sky.sky);
-		writer.writePod(sky.mipLevel);
-		writer.writePod(sky.rotationY);
+		writer.WritePod(sky.mipLevel);
+		writer.WritePod(sky.rotationY);
 
-		return writer.take();
+		return writer.Take();
 	}
 
 	BSky
@@ -44,12 +44,12 @@ namespace assetlib
 	{
 		ByteReader reader(bytes);
 
-		if (reader.readPod<uint32_t>() != c_Magic)
+		if (reader.ReadPod<uint32_t>() != c_Magic)
 			throw std::runtime_error("bsky: bad magic");
 
-		const auto versionMajor = reader.readPod<uint16_t>();
+		const auto versionMajor = reader.ReadPod<uint16_t>();
 		// The minor version is additive within a major, and nothing here is optional yet.
-		static_cast<void>(reader.readPod<uint16_t>());
+		static_cast<void>(reader.ReadPod<uint16_t>());
 
 		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
@@ -59,8 +59,8 @@ namespace assetlib
 		BSky sky;
 		sky.name      = readString(reader);
 		sky.sky       = readRoute(reader);
-		sky.mipLevel  = reader.readPod<uint32_t>();
-		sky.rotationY = reader.readPod<float>();
+		sky.mipLevel  = reader.ReadPod<uint32_t>();
+		sky.rotationY = reader.ReadPod<float>();
 		return sky;
 	}
 

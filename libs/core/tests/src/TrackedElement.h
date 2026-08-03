@@ -4,16 +4,16 @@ namespace test
 {
 	struct TrackedElement
 	{
-		static inline int s_Live          = 0;
-		static inline int s_DoubleDestroy = 0;
-		static inline int s_AssignToDead  = 0;
+		static inline int g_Live          = 0;
+		static inline int g_DoubleDestroy = 0;
+		static inline int g_AssignToDead  = 0;
 
 		static void
 		ResetCounters() noexcept
 		{
-			s_Live          = 0;
-			s_DoubleDestroy = 0;
-			s_AssignToDead  = 0;
+			g_Live          = 0;
+			g_DoubleDestroy = 0;
+			g_AssignToDead  = 0;
 		}
 
 		static constexpr uint32_t c_Alive = 0xA11EA11Eu;
@@ -22,36 +22,36 @@ namespace test
 		uint32_t magic = c_Alive;
 		int      value = 0;
 
-		TrackedElement() noexcept { ++s_Live; }
-		explicit TrackedElement(int a_value) noexcept : value(a_value) { ++s_Live; }
+		TrackedElement() noexcept { ++g_Live; }
+		explicit TrackedElement(int initialValue) noexcept : value(initialValue) { ++g_Live; }
 
-		TrackedElement(const TrackedElement& a_other) noexcept : value(a_other.value) { ++s_Live; }
-		TrackedElement(TrackedElement&& a_other) noexcept : value(a_other.value) { ++s_Live; }
+		TrackedElement(const TrackedElement& other) noexcept : value(other.value) { ++g_Live; }
+		TrackedElement(TrackedElement&& other) noexcept : value(other.value) { ++g_Live; }
 
 		TrackedElement&
-		operator=(const TrackedElement& a_other) noexcept
+		operator=(const TrackedElement& other) noexcept
 		{
 			if (magic != c_Alive)
-				++s_AssignToDead;
-			value = a_other.value;
+				++g_AssignToDead;
+			value = other.value;
 			return *this;
 		}
 
 		TrackedElement&
-		operator=(TrackedElement&& a_other) noexcept
+		operator=(TrackedElement&& other) noexcept
 		{
 			if (magic != c_Alive)
-				++s_AssignToDead;
-			value = a_other.value;
+				++g_AssignToDead;
+			value = other.value;
 			return *this;
 		}
 
 		~TrackedElement() noexcept
 		{
 			if (magic != c_Alive)
-				++s_DoubleDestroy;
+				++g_DoubleDestroy;
 			magic = c_Dead;
-			--s_Live;
+			--g_Live;
 		}
 	};
 
@@ -59,7 +59,7 @@ namespace test
 	inline bool
 	TrackingClean() noexcept
 	{
-		return TrackedElement::s_Live == 0 && TrackedElement::s_DoubleDestroy == 0 &&
-		       TrackedElement::s_AssignToDead == 0;
+		return TrackedElement::g_Live == 0 && TrackedElement::g_DoubleDestroy == 0 &&
+		       TrackedElement::g_AssignToDead == 0;
 	}
 }

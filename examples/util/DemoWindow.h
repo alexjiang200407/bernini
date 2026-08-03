@@ -27,13 +27,13 @@ namespace demo
 		void*
 		NativeHandle() const noexcept
 		{
-			return m_nativeHandle;
+			return m_NativeHandle;
 		}
 
 		bool
 		ShouldClose() const noexcept
 		{
-			return m_shouldClose;
+			return m_ShouldClose;
 		}
 
 		void
@@ -43,17 +43,17 @@ namespace demo
 		friend void
 		PumpEvents();
 
-		unsigned int m_id           = 0;  // SDL_WindowID
-		SDL_Window*  m_window       = nullptr;
-		void*        m_nativeHandle = nullptr;  // HWND (Windows) or CAMetalLayer* (macOS)
-		void*        m_metalView    = nullptr;  // SDL_MetalView, macOS only
-		bool         m_shouldClose  = false;
+		unsigned int m_Id           = 0;  // SDL_WindowID
+		SDL_Window*  m_Window       = nullptr;
+		void*        m_NativeHandle = nullptr;  // HWND (Windows) or CAMetalLayer* (macOS)
+		void*        m_MetalView    = nullptr;  // SDL_MetalView, macOS only
+		bool         m_ShouldClose  = false;
 	};
 
 	void
 	PumpEvents();
 
-	inline constexpr int kScancodeF10 = 67;  // SDL_SCANCODE_F10
+	inline constexpr int c_ScancodeF10 = 67;  // SDL_SCANCODE_F10
 
 	bool
 	KeyPressed(int scancode);

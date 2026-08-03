@@ -41,18 +41,18 @@ namespace core
 		void
 		write_crash_log(std::string_view reason)
 		{
-			std::ofstream log_file(crash_log_path(), std::ios::out | std::ios::trunc);
+			std::ofstream logFile(crash_log_path(), std::ios::out | std::ios::trunc);
 
-			if (!log_file.is_open())
+			if (!logFile.is_open())
 			{
 				return;
 			}
 
-			log_file << "--- CRASH DETECTED (" << reason << ") ---\n";
-			cpptrace::generate_trace().print(log_file);
+			logFile << "--- CRASH DETECTED (" << reason << ") ---\n";
+			cpptrace::generate_trace().print(logFile);
 
 			// The process is about to be killed, so the stream will not be flushed on its way out.
-			log_file.close();
+			logFile.close();
 		}
 
 #if defined(_WIN32)

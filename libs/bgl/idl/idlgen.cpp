@@ -181,11 +181,11 @@ namespace
 	std::string
 	ConstTypeToCpp(const std::string& slangType)
 	{
-		static const std::map<std::string, std::string> kMap = {
+		static const std::map<std::string, std::string> c_Map = {
 			{ "let", "auto" },    { "int", "int32_t" },   { "uint", "uint32_t" },
 			{ "float", "float" }, { "double", "double" }, { "bool", "bool" },
 		};
-		if (auto it = kMap.find(slangType); it != kMap.end())
+		if (auto it = c_Map.find(slangType); it != c_Map.end())
 		{
 			return it->second;
 		}

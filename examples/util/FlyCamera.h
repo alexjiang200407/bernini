@@ -11,7 +11,7 @@ namespace demo
 		Tick() noexcept;
 
 	private:
-		std::chrono::steady_clock::time_point m_last = std::chrono::steady_clock::now();
+		std::chrono::steady_clock::time_point m_Last = std::chrono::steady_clock::now();
 	};
 
 	bool

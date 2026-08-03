@@ -14,7 +14,7 @@ namespace bgl
 	 *   [1] overflow flag
 	 *   [2] record capacity
 	 *   [3] reserved
-	 *   [kHeaderWords + i * kRecordWords ..] record i = { errcode, payload.xyz }
+	 *   [c_HeaderWords + i * c_RecordWords ..] record i = { errcode, payload.xyz }
 	 *
 	 * Debug-build only: the whole type is compiled out of Release via
 	 * BERNINI_GPU_DEBUG, which is a global Debug-config define.
@@ -23,17 +23,17 @@ namespace bgl
 	{
 	public:
 		// Word layout -- MUST stay in sync with dbg.slang.
-		static constexpr uint32_t kHeaderWords = 4;
-		static constexpr uint32_t kRecordWords = 4;
+		static constexpr uint32_t c_HeaderWords = 4;
+		static constexpr uint32_t c_RecordWords = 4;
 
 		static_assert(
-			kRecordWords * sizeof(uint32_t) == sizeof(idl::DebugRecord),
-			"dbg.slang writes kRecordWords words per record and the readback reads a DebugRecord "
+			c_RecordWords * sizeof(uint32_t) == sizeof(idl::DebugRecord),
+			"dbg.slang writes c_RecordWords words per record and the readback reads a DebugRecord "
 			"over them; a field added to one and not the other decodes as garbage");
 
-		static constexpr uint32_t kCounterWord  = 0;
-		static constexpr uint32_t kOverflowWord = 1;
-		static constexpr uint32_t kCapacityWord = 2;
+		static constexpr uint32_t c_CounterWord  = 0;
+		static constexpr uint32_t c_OverflowWord = 1;
+		static constexpr uint32_t c_CapacityWord = 2;
 
 		DebugBuffer() noexcept = default;
 
@@ -53,7 +53,7 @@ namespace bgl
 
 			auto desc = ComputeBufferDesc()
 			                .SetElement<uint32_t>()
-			                .SetInitialCount(kHeaderWords + recordCapacity * kRecordWords)
+			                .SetInitialCount(c_HeaderWords + recordCapacity * c_RecordWords)
 			                .SetDebugName("GPU Debug Buffer");
 
 			m_Buffer.Init(std::move(desc), std::move(resourceManager));
@@ -94,7 +94,7 @@ namespace bgl
 			gassert(cmd != nullptr, "Command list cannot be null");
 			gassert(IsInitialized(), "DebugBuffer is uninitialized; call Init() first");
 
-			const std::array<uint32_t, kHeaderWords> header = { 0u, 0u, m_Capacity, 0u };
+			const std::array<uint32_t, c_HeaderWords> header = { 0u, 0u, m_Capacity, 0u };
 			cmd->WriteBuffer(m_Buffer.GetBufferHandle(), header.data(), sizeof(header));
 		}
 

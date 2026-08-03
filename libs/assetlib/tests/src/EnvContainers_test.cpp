@@ -174,11 +174,11 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 TEST_CASE("the reference reader refuses a v1 .benv and the other containers' files", "[benv][io]")
 {
 	core::io::ByteWriter v1;
-	v1.writePod(magic::c_BEnv);
-	v1.writePod<uint16_t>(1);
-	v1.writePod<uint16_t>(0);
-	v1.writePod<uint64_t>(0);  // the v1 header continues; the reader must not get that far
-	CHECK_THROWS_WITH(deserializeEnv(v1.take()), Catch::Matchers::ContainsSubstring("re-imported"));
+	v1.WritePod(magic::c_BEnv);
+	v1.WritePod<uint16_t>(1);
+	v1.WritePod<uint16_t>(0);
+	v1.WritePod<uint64_t>(0);  // the v1 header continues; the reader must not get that far
+	CHECK_THROWS_WITH(deserializeEnv(v1.Take()), Catch::Matchers::ContainsSubstring("re-imported"));
 
 	CHECK_THROWS_AS(deserializeEnv(serializeSky(SampleSky())), std::runtime_error);
 	CHECK_THROWS_AS(deserializeEnv(serializeEnvLighting(SampleLighting())), std::runtime_error);

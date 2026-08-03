@@ -17,7 +17,7 @@ namespace
 	constexpr uint32_t c_MaskSize = 256;
 
 	assetlib::ImageData
-	makeHoleMask()
+	MakeHoleMask()
 	{
 		const float centre = static_cast<float>(c_MaskSize) * 0.5f;
 		const float radius = static_cast<float>(c_MaskSize) * 0.3f;
@@ -89,7 +89,7 @@ TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render
 
 	// Through the real encoder: RGBA8 -> UASTC -> BC7, exactly what bakeMaterial does for a cutout.
 	const auto encoded = std::filesystem::temp_directory_path() / "bernini_alphatest_mask.ktx2";
-	assetlib::writeKTX2(makeHoleMask(), encoded, true, assetlib::Ktx2Compression::kBC7_RGBA);
+	assetlib::writeKTX2(MakeHoleMask(), encoded, true, assetlib::Ktx2Compression::kBC7_RGBA);
 
 	assetlib::ImageData baseColor = assetlib::loadKTX2(encoded);
 	std::filesystem::remove(encoded);

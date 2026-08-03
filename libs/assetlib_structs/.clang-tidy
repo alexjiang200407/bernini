@@ -1,0 +1,7 @@
+# assetlib_structs holds the PODs assetlib decodes into, and its free functions are read in the
+# same expression as assetlib's own -- `toMatrix(node.localTransform)` beside `loadKTX2(path)` --
+# so they are spelled the same way. Types and methods keep the engine's PascalCase.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.FunctionCase: camelBack

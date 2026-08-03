@@ -113,7 +113,7 @@ TEST_CASE("slot_vector destroys each element exactly once", "[slot_vector]")
 
 	{
 		core::slot_vector<TrackedElement> slots(4);
-		REQUIRE(TrackedElement::s_Live == 4);
+		REQUIRE(TrackedElement::g_Live == 4);
 
 		auto a = slots.allocate_and_emplace(11);
 		auto b = slots.allocate_and_emplace(22);
@@ -122,8 +122,8 @@ TEST_CASE("slot_vector destroys each element exactly once", "[slot_vector]")
 		// release_slot resets the slot in place -- it must not destroy the element
 		// and then assign over the corpse.
 		slots.release_slot(a);
-		REQUIRE(TrackedElement::s_DoubleDestroy == 0);
-		REQUIRE(TrackedElement::s_AssignToDead == 0);
+		REQUIRE(TrackedElement::g_DoubleDestroy == 0);
+		REQUIRE(TrackedElement::g_AssignToDead == 0);
 		REQUIRE(slots[b].value == 22);
 
 		// A released slot holds a default-constructed element again.
@@ -144,12 +144,12 @@ TEST_CASE("slot_vector clear and reset release every element", "[slot_vector]")
 		(void)slots.allocate_and_emplace(1);
 
 		slots.reset(5u);
-		REQUIRE(TrackedElement::s_Live == 5);
+		REQUIRE(TrackedElement::g_Live == 5);
 		REQUIRE(slots.size() == 5u);
 		REQUIRE_FALSE(slots.allocated(0u));
 
 		slots.clear();
-		REQUIRE(TrackedElement::s_Live == 0);
+		REQUIRE(TrackedElement::g_Live == 0);
 		REQUIRE(slots.size() == 0u);
 	}
 

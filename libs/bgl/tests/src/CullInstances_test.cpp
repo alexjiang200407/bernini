@@ -79,8 +79,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		{ glm::vec3(0.0f, 0.0f, -200.0f), false },   // beyond the far plane
 		{ glm::vec3(200.0f, 0.0f, -10.0f), false },  // past the right plane
 	};
-	constexpr uint32_t liveCount = static_cast<uint32_t>(std::size(placements));
-	const uint32_t     padded    = core::round_up(liveCount, bgl::idl::cHistogramGroupSize);
+	constexpr uint32_t c_LiveCount = static_cast<uint32_t>(std::size(placements));
+	const uint32_t     padded      = core::round_up(c_LiveCount, bgl::idl::cHistogramGroupSize);
 
 	uint32_t expectedCulled = 0;
 	for (const Placement& p : placements)
@@ -105,7 +105,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();
 	{
 		auto desc         = bgl::EntryBufferDesc();
-		desc.initialCount = liveCount;
+		desc.initialCount = c_LiveCount;
 		desc.debugName    = "Cull Mesh";
 		meshBuffer.Init(desc, resourceManager);
 	}
@@ -132,7 +132,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		instance.pso          = static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR);
 		instanceBuffer.Add(instance);
 	}
-	for (uint32_t i = liveCount; i < padded; ++i)
+	for (uint32_t i = c_LiveCount; i < padded; ++i)
 	{
 		auto padding                = bgl::SubmeshInstance();
 		padding.meshInstance.offset = 0xFFFFFFFFu;
@@ -290,16 +290,16 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	REQUIRE(visibilityOut != nullptr);
 
 	uint32_t visibleCount = 0;
-	for (uint32_t i = 0; i < liveCount; ++i)
+	for (uint32_t i = 0; i < c_LiveCount; ++i)
 	{
 		CAPTURE(i);
 		CHECK((visibilityOut[i].visible != 0u) == placements[i].visible);
 		visibleCount += visibilityOut[i].visible != 0u ? 1u : 0u;
 	}
-	CHECK(visibleCount == liveCount - expectedCulled);
+	CHECK(visibleCount == c_LiveCount - expectedCulled);
 
 	// Padding slots name no mesh, so the cull writes them 0.
-	for (uint32_t i = liveCount; i < padded; ++i)
+	for (uint32_t i = c_LiveCount; i < padded; ++i)
 	{
 		CHECK(visibilityOut[i].visible == 0u);
 	}
@@ -310,7 +310,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	const auto* statsOut =
 		static_cast<const bgl::idl::CullStats*>(resourceManager->MapReadback(rbStats));
 	REQUIRE(statsOut != nullptr);
-	CHECK(statsOut->tested == liveCount);              // every live instance is tested
+	CHECK(statsOut->tested == c_LiveCount);            // every live instance is tested
 	CHECK(statsOut->frustumCulled == expectedCulled);  // and the outside ones are counted culled
 	resourceManager->UnmapReadback(rbStats);
 #endif

@@ -199,7 +199,7 @@ namespace bgl
 
 		cmd->WriteBuffer(m_CullView.GetBufferHandle(), &draw.cullView, sizeof(idl::CullView));
 
-		static constexpr std::array<idl::DispatchArgs, c_PsoCount> kSeed = [] {
+		static constexpr std::array<idl::DispatchArgs, c_PsoCount> c_Seed = [] {
 			std::array<idl::DispatchArgs, c_PsoCount> seed{};
 			for (idl::DispatchArgs& args : seed)
 			{
@@ -208,7 +208,7 @@ namespace bgl
 			return seed;
 		}();
 
-		cmd->WriteBuffer(m_CompactedDispatchArgs.GetBufferHandle(), kSeed.data(), sizeof(kSeed));
+		cmd->WriteBuffer(m_CompactedDispatchArgs.GetBufferHandle(), c_Seed.data(), sizeof(c_Seed));
 	}
 
 	void

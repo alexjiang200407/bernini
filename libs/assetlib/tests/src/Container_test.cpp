@@ -6,7 +6,7 @@ using namespace assetlib;
 namespace
 {
 	BMesh
-	makeSampleMesh()
+	MakeSampleMesh()
 	{
 		BMesh mesh;
 		mesh.stringPool.push_back('\0');
@@ -71,7 +71,7 @@ namespace
 
 TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 {
-	const auto original = makeSampleMesh();
+	const auto original = MakeSampleMesh();
 	const auto bytes    = serialize(original);
 	const auto restored = deserialize(bytes);
 
@@ -95,21 +95,21 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 
 TEST_CASE("deserialize rejects a corrupt magic", "[bmesh][io]")
 {
-	auto bytes = serialize(makeSampleMesh());
+	auto bytes = serialize(MakeSampleMesh());
 	bytes[0]   = std::byte{ 0xFF };
 	REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 }
 
 TEST_CASE("deserialize rejects a truncated stream", "[bmesh][io]")
 {
-	const auto                       bytes = serialize(makeSampleMesh());
+	const auto                       bytes = serialize(MakeSampleMesh());
 	const std::span<const std::byte> truncated(bytes.data(), bytes.size() / 2);
 	REQUIRE_THROWS_AS(deserialize(truncated), std::runtime_error);
 }
 
 TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 {
-	const auto original = makeSampleMesh();
+	const auto original = MakeSampleMesh();
 	const auto path     = std::filesystem::temp_directory_path() / "bmesh_container_test.bmesh";
 
 	save(original, path);
@@ -126,7 +126,7 @@ namespace
 {
 	// A mesh with `submeshMaterials.size()` submeshes, each pointing at the given material slot.
 	BMesh
-	makeMaterialMesh(std::vector<uint32_t> submeshMaterials, std::vector<std::string> materials)
+	MakeMaterialMesh(std::vector<uint32_t> submeshMaterials, std::vector<std::string> materials)
 	{
 		BMesh mesh;
 		mesh.materials = std::move(materials);
@@ -143,7 +143,7 @@ namespace
 TEST_CASE("attachMaterial rewrites an unshared slot in place", "[bmesh][material]")
 {
 	// Submesh 1 is the only user of slot 1, so it may claim it.
-	auto mesh = makeMaterialMesh({ 0, 1 }, { "mat0.bmaterial", "mat1.bmaterial" });
+	auto mesh = MakeMaterialMesh({ 0, 1 }, { "mat0.bmaterial", "mat1.bmaterial" });
 
 	REQUIRE(attachMaterial(mesh, 1, "authored.bmaterial"));
 
@@ -158,7 +158,7 @@ TEST_CASE("attachMaterial does not repoint siblings sharing a slot", "[bmesh][ma
 {
 	// Both submeshes were imported with the same material. Re-materialing one must not change the
 	// other -- it gets a slot of its own instead.
-	auto mesh = makeMaterialMesh({ 0, 0 }, { "shared.bmaterial" });
+	auto mesh = MakeMaterialMesh({ 0, 0 }, { "shared.bmaterial" });
 
 	REQUIRE(attachMaterial(mesh, 0, "authored.bmaterial"));
 
@@ -170,7 +170,7 @@ TEST_CASE("attachMaterial does not repoint siblings sharing a slot", "[bmesh][ma
 
 TEST_CASE("attachMaterial reuses an existing entry instead of duplicating", "[bmesh][material]")
 {
-	auto mesh = makeMaterialMesh({ 0, 0 }, { "shared.bmaterial", "other.bmaterial" });
+	auto mesh = MakeMaterialMesh({ 0, 0 }, { "shared.bmaterial", "other.bmaterial" });
 
 	REQUIRE(attachMaterial(mesh, 1, "other.bmaterial"));
 
@@ -181,13 +181,13 @@ TEST_CASE("attachMaterial reuses an existing entry instead of duplicating", "[bm
 
 TEST_CASE("attachMaterial reports no change when already attached", "[bmesh][material]")
 {
-	auto mesh = makeMaterialMesh({ 0 }, { "mat0.bmaterial" });
+	auto mesh = MakeMaterialMesh({ 0 }, { "mat0.bmaterial" });
 
 	// Sole user of the slot, and it already names this material.
 	REQUIRE_FALSE(attachMaterial(mesh, 0, "mat0.bmaterial"));
 
 	// Shared slot already naming the material: the submesh stays where it is.
-	auto shared = makeMaterialMesh({ 0, 0 }, { "mat0.bmaterial" });
+	auto shared = MakeMaterialMesh({ 0, 0 }, { "mat0.bmaterial" });
 	REQUIRE_FALSE(attachMaterial(shared, 0, "mat0.bmaterial"));
 	REQUIRE(shared.materials.size() == 1);
 	REQUIRE(shared.submeshes[0].material == 0);
@@ -195,7 +195,7 @@ TEST_CASE("attachMaterial reports no change when already attached", "[bmesh][mat
 
 TEST_CASE("attachMaterial gives an unmaterialed submesh a new slot", "[bmesh][material]")
 {
-	auto mesh = makeMaterialMesh({ c_InvalidIndex }, {});
+	auto mesh = MakeMaterialMesh({ c_InvalidIndex }, {});
 
 	REQUIRE(attachMaterial(mesh, 0, "authored.bmaterial"));
 
@@ -205,6 +205,6 @@ TEST_CASE("attachMaterial gives an unmaterialed submesh a new slot", "[bmesh][ma
 
 TEST_CASE("attachMaterial rejects an out-of-range submesh", "[bmesh][material]")
 {
-	auto mesh = makeMaterialMesh({ 0 }, { "mat0.bmaterial" });
+	auto mesh = MakeMaterialMesh({ 0 }, { "mat0.bmaterial" });
 	REQUIRE_THROWS_AS(attachMaterial(mesh, 1, "authored.bmaterial"), std::runtime_error);
 }

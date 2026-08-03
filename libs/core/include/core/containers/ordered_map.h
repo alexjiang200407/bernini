@@ -28,8 +28,8 @@ namespace core
 		using key_equal   = KeyEqual;
 
 	private:
-		std::vector<T>                                     nodes;
-		std::unordered_map<Key, size_type, Hash, KeyEqual> index;
+		std::vector<T>                                     m_Nodes;
+		std::unordered_map<Key, size_type, Hash, KeyEqual> m_Index;
 
 	public:
 		ordered_map() = default;
@@ -39,15 +39,15 @@ namespace core
 		void
 		reserve(size_type count)
 		{
-			nodes.reserve(count);
-			index.reserve(count);
+			m_Nodes.reserve(count);
+			m_Index.reserve(count);
 		}
 
 		[[nodiscard]]
 		bool
 		contains(const Key& key) const noexcept
 		{
-			return index.find(key) != index.end();
+			return m_Index.find(key) != m_Index.end();
 		}
 
 		template <typename K>
@@ -56,23 +56,23 @@ namespace core
 		bool
 		contains(const K& key) const noexcept
 		{
-			return index.find(key) != index.end();
+			return m_Index.find(key) != m_Index.end();
 		}
 
 		[[nodiscard]]
 		T*
 		find(const Key& key) noexcept
 		{
-			auto it = index.find(key);
-			return it == index.end() ? nullptr : &nodes[it->second];
+			auto it = m_Index.find(key);
+			return it == m_Index.end() ? nullptr : &m_Nodes[it->second];
 		}
 
 		[[nodiscard]]
 		const T*
 		find(const Key& key) const noexcept
 		{
-			auto it = index.find(key);
-			return it == index.end() ? nullptr : &nodes[it->second];
+			auto it = m_Index.find(key);
+			return it == m_Index.end() ? nullptr : &m_Nodes[it->second];
 		}
 
 		template <typename K>
@@ -81,8 +81,8 @@ namespace core
 		T*
 		find(const K& key) noexcept
 		{
-			auto it = index.find(key);
-			return it == index.end() ? nullptr : &nodes[it->second];
+			auto it = m_Index.find(key);
+			return it == m_Index.end() ? nullptr : &m_Nodes[it->second];
 		}
 
 		template <typename K>
@@ -91,8 +91,8 @@ namespace core
 		const T*
 		find(const K& key) const noexcept
 		{
-			auto it = index.find(key);
-			return it == index.end() ? nullptr : &nodes[it->second];
+			auto it = m_Index.find(key);
+			return it == m_Index.end() ? nullptr : &m_Nodes[it->second];
 		}
 
 		// at with exact Key type
@@ -140,56 +140,56 @@ namespace core
 		operator[](const Key& key)
 			requires std::is_default_constructible_v<T>
 		{
-			auto it = index.find(key);
-			if (it != index.end())
-				return nodes[it->second];
+			auto it = m_Index.find(key);
+			if (it != m_Index.end())
+				return m_Nodes[it->second];
 
-			size_type idx = nodes.size();
-			index.emplace(key, idx);
-			nodes.emplace_back();
-			return nodes.back();
+			size_type idx = m_Nodes.size();
+			m_Index.emplace(key, idx);
+			m_Nodes.emplace_back();
+			return m_Nodes.back();
 		}
 
 		T&
 		operator[](Key&& key)
 			requires std::is_default_constructible_v<T>
 		{
-			auto it = index.find(key);
-			if (it != index.end())
-				return nodes[it->second];
+			auto it = m_Index.find(key);
+			if (it != m_Index.end())
+				return m_Nodes[it->second];
 
-			size_type idx = nodes.size();
-			index.emplace(std::move(key), idx);
-			nodes.emplace_back();
-			return nodes.back();
+			size_type idx = m_Nodes.size();
+			m_Index.emplace(std::move(key), idx);
+			m_Nodes.emplace_back();
+			return m_Nodes.back();
 		}
 
 		template <typename... Args>
 		T&
 		emplace(const Key& key, Args&&... args)
 		{
-			auto it = index.find(key);
-			if (it != index.end())
+			auto it = m_Index.find(key);
+			if (it != m_Index.end())
 				throw std::runtime_error("ordered_map::emplace - duplicate key");
 
-			size_type idx = nodes.size();
-			index.emplace(key, idx);
-			nodes.emplace_back(std::forward<Args>(args)...);
-			return nodes.back();
+			size_type idx = m_Nodes.size();
+			m_Index.emplace(key, idx);
+			m_Nodes.emplace_back(std::forward<Args>(args)...);
+			return m_Nodes.back();
 		}
 
 		template <typename... Args>
 		T&
 		emplace(Key&& key, Args&&... args)
 		{
-			auto it = index.find(key);
-			if (it != index.end())
+			auto it = m_Index.find(key);
+			if (it != m_Index.end())
 				throw std::runtime_error("ordered_map::emplace - duplicate key");
 
-			size_type idx = nodes.size();
-			index.emplace(std::move(key), idx);
-			nodes.emplace_back(std::forward<Args>(args)...);
-			return nodes.back();
+			size_type idx = m_Nodes.size();
+			m_Index.emplace(std::move(key), idx);
+			m_Nodes.emplace_back(std::forward<Args>(args)...);
+			return m_Nodes.back();
 		}
 
 		template <typename K, typename... Args>
@@ -198,66 +198,66 @@ namespace core
 		T&
 		emplace(K&& key, Args&&... args)
 		{
-			auto it = index.find(key);
-			if (it != index.end())
+			auto it = m_Index.find(key);
+			if (it != m_Index.end())
 				throw std::runtime_error("ordered_map::emplace - duplicate key");
 
-			size_type idx = nodes.size();
-			index.emplace(Key{ std::forward<K>(key) }, idx);
-			nodes.emplace_back(std::forward<Args>(args)...);
-			return nodes.back();
+			size_type idx = m_Nodes.size();
+			m_Index.emplace(Key{ std::forward<K>(key) }, idx);
+			m_Nodes.emplace_back(std::forward<Args>(args)...);
+			return m_Nodes.back();
 		}
 
 		[[nodiscard]]
 		size_type
 		size() const noexcept
 		{
-			return nodes.size();
+			return m_Nodes.size();
 		}
 
 		[[nodiscard]]
 		bool
 		empty() const noexcept
 		{
-			return nodes.empty();
+			return m_Nodes.empty();
 		}
 
 		void
 		clear() noexcept
 		{
-			nodes.clear();
-			index.clear();
+			m_Nodes.clear();
+			m_Index.clear();
 		}
 
 		auto
 		begin() noexcept
 		{
-			return nodes.begin();
+			return m_Nodes.begin();
 		}
 		auto
 		end() noexcept
 		{
-			return nodes.end();
+			return m_Nodes.end();
 		}
 		auto
 		begin() const noexcept
 		{
-			return nodes.begin();
+			return m_Nodes.begin();
 		}
 		auto
 		end() const noexcept
 		{
-			return nodes.end();
+			return m_Nodes.end();
 		}
 		auto
 		cbegin() const noexcept
 		{
-			return nodes.cbegin();
+			return m_Nodes.cbegin();
 		}
 		auto
 		cend() const noexcept
 		{
-			return nodes.cend();
+			return m_Nodes.cend();
 		}
 	};
 }

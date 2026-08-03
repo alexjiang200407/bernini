@@ -66,8 +66,8 @@ namespace bgl
 	{
 		const auto* words = static_cast<const uint32_t*>(mapped);
 
-		const uint32_t count    = words[DebugBuffer::kCounterWord];
-		const uint32_t overflow = words[DebugBuffer::kOverflowWord];
+		const uint32_t count    = words[DebugBuffer::c_CounterWord];
+		const uint32_t overflow = words[DebugBuffer::c_OverflowWord];
 
 		if (count == 0 && overflow == 0)
 		{
@@ -82,7 +82,7 @@ namespace bgl
 		report.records.reserve(valid);
 		for (uint32_t i = 0; i < valid; ++i)
 		{
-			const uint32_t base = DebugBuffer::kHeaderWords + i * DebugBuffer::kRecordWords;
+			const uint32_t base = DebugBuffer::c_HeaderWords + i * DebugBuffer::c_RecordWords;
 
 			idl::DebugRecord rec{};
 			std::memcpy(&rec, words + base, sizeof(idl::DebugRecord));

@@ -132,8 +132,8 @@ namespace assetlib
 		bool
 		groupIsRouted(const PbrParams& pbr, const Group& group)
 		{
-			for (size_t i = ChannelIndex(group.channels, 0);
-			     i < ChannelIndex(group.channels, group.channels.count);
+			for (size_t i = channelIndex(group.channels, 0);
+			     i < channelIndex(group.channels, group.channels.count);
 			     ++i)
 				if (!pbr.routes[i].texture.empty())
 					return true;
@@ -189,8 +189,8 @@ namespace assetlib
 		{
 			uint32_t width  = 0;
 			uint32_t height = 0;
-			for (size_t i = ChannelIndex(group.channels, 0);
-			     i < ChannelIndex(group.channels, group.channels.count);
+			for (size_t i = channelIndex(group.channels, 0);
+			     i < channelIndex(group.channels, group.channels.count);
 			     ++i)
 			{
 				const ChannelRoute& route = pbr.routes[i];
@@ -233,8 +233,8 @@ namespace assetlib
 				key += mipCutoff ? "|cut:" + std::to_string(*mipCutoff) : "|cut:none";
 			}
 
-			for (size_t i = ChannelIndex(group.channels, 0);
-			     i < ChannelIndex(group.channels, group.channels.count);
+			for (size_t i = channelIndex(group.channels, 0);
+			     i < channelIndex(group.channels, group.channels.count);
 			     ++i)
 			{
 				const ChannelRoute& route = pbr.routes[i];
@@ -270,7 +270,7 @@ namespace assetlib
 			Rgba8 out(texels * 4u, std::byte{ 0xFF });
 			for (size_t component = 0; component < group.channels.count; ++component)
 			{
-				const ChannelRoute& route = pbr.routes[ChannelIndex(group.channels, component)];
+				const ChannelRoute& route = pbr.routes[channelIndex(group.channels, component)];
 
 				if (route.texture.empty())
 				{
@@ -308,8 +308,8 @@ namespace assetlib
 			if (stamp.size == 0)
 				return false;  // missing, or empty and so not a real map
 
-			for (size_t i = ChannelIndex(group.channels, 0);
-			     i < ChannelIndex(group.channels, group.channels.count);
+			for (size_t i = channelIndex(group.channels, 0);
+			     i < channelIndex(group.channels, group.channels.count);
 			     ++i)
 			{
 				const ChannelRoute& route = pbr.routes[i];

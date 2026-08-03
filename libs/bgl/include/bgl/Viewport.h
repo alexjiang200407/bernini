@@ -14,8 +14,8 @@ namespace bgl
 			minX(0.f), maxX(width), minY(0.f), maxY(height), minZ(0.f), maxZ(1.f)
 		{}
 
-		Viewport(float _minX, float _maxX, float _minY, float _maxY, float _minZ, float _maxZ) :
-			minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY), minZ(_minZ), maxZ(_maxZ)
+		Viewport(float xMin, float xMax, float yMin, float yMax, float zMin, float zMax) :
+			minX(xMin), maxX(xMax), minY(yMin), maxY(yMax), minZ(zMin), maxZ(zMax)
 		{}
 	};
 }

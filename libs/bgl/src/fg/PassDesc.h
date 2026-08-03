@@ -140,9 +140,12 @@ namespace bgl
 		}
 
 		PassDesc&
-		AddBufferArg(std::string_view name_, BarrierSync sync_, BarrierAccess access_)
+		AddBufferArg(
+			std::string_view bufferName,
+			BarrierSync      bufferSync,
+			BarrierAccess    bufferAccess)
 		{
-			buffers.push_back(BufferArg(std::string(name_), sync_, access_));
+			buffers.push_back(BufferArg(std::string(bufferName), bufferSync, bufferAccess));
 			return *this;
 		}
 
@@ -174,12 +177,13 @@ namespace bgl
 
 		PassDesc&
 		AddTextureArg(
-			std::string_view name_,
-			BarrierSync      sync_,
-			BarrierAccess    access_,
-			BarrierLayout    layout_)
+			std::string_view textureName,
+			BarrierSync      textureSync,
+			BarrierAccess    textureAccess,
+			BarrierLayout    textureLayout)
 		{
-			textures.push_back(TextureArg(std::string(name_), sync_, access_, layout_));
+			textures.push_back(
+				TextureArg(std::string(textureName), textureSync, textureAccess, textureLayout));
 			return *this;
 		}
 

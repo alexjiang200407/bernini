@@ -69,7 +69,7 @@ namespace bgl
 		case VkFormat::BC7_SRGB_BLOCK:
 			return Format::BC7_UNORM_SRGB;
 
-		case VkFormat::Undefined:
+		case VkFormat::UNDEFINED:
 		default:
 			gfatal("FromVkFormat unsupported format: {}", static_cast<uint32_t>(vkFormat));
 		}

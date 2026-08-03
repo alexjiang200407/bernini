@@ -8,15 +8,15 @@ namespace assetlib
 	void
 	writeString(core::io::ByteWriter& writer, const std::string& value)
 	{
-		writer.writePod<uint32_t>(static_cast<uint32_t>(value.size()));
-		writer.writeBytes(std::as_bytes(std::span<const char>(value)));
+		writer.WritePod<uint32_t>(static_cast<uint32_t>(value.size()));
+		writer.WriteBytes(std::as_bytes(std::span<const char>(value)));
 	}
 
 	std::string
 	readString(core::io::ByteReader& reader)
 	{
-		const auto length = reader.readPod<uint32_t>();
-		const auto bytes  = reader.readBytes(length);
+		const auto length = reader.ReadPod<uint32_t>();
+		const auto bytes  = reader.ReadBytes(length);
 		return std::string(reinterpret_cast<const char*>(bytes.data()), length);
 	}
 }

@@ -15,8 +15,8 @@
 // draws a frame with a skybox bound.
 TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 {
-	constexpr uint32_t kWidth  = 200;
-	constexpr uint32_t kHeight = 150;
+	constexpr uint32_t c_Width  = 200;
+	constexpr uint32_t c_Height = 150;
 
 	auto opts             = bgl::GraphicsOptions();
 	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -26,8 +26,8 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
-	targetDesc.width    = static_cast<int>(kWidth);
-	targetDesc.height   = static_cast<int>(kHeight);
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
 	targetDesc.headless = true;
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
@@ -60,14 +60,14 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 			glm::vec3(0.0f, 1.0f, 0.0f))
 		.Perspective(
 			glm::radians(60.0f),
-			static_cast<float>(kWidth) / static_cast<float>(kHeight),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
 			0.5f,
 			500.0f);
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
 	job.camera   = camera;
-	job.viewport = bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 	REQUIRE_NOTHROW(gfx->DrawFrame(target, job));
 }

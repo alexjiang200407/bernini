@@ -119,7 +119,7 @@ int
 main(int argc, char** argv)
 {
 	CLI::App app{ "Bernini asset pipeline CLI" };
-	app.set_version_flag("--version", assetlib::Version());
+	app.set_version_flag("--version", assetlib::version());
 	app.require_subcommand(1);
 
 	std::string input;

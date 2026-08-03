@@ -42,10 +42,10 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	constexpr uint32_t kCount = 8;
+	constexpr uint32_t c_Count = 8;
 
 	auto bufDesc = bgl::ComputeBufferDesc();
-	bufDesc.SetElement<uint32_t>().SetInitialCount(kCount).SetDebugName("Compute Out Buffer");
+	bufDesc.SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName("Compute Out Buffer");
 
 	auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuf));
@@ -61,7 +61,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 	state.kernel = &kernel;
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize  = kCount * sizeof(uint32_t);
+	rbDesc.byteSize  = c_Count * sizeof(uint32_t);
 	rbDesc.debugName = "Compute Readback";
 
 	auto rb = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -69,7 +69,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 	cmdList->Open(cmdQueue, cmdAllocator);
 
 	cmdList->SetComputeState(state);
-	cmdList->Dispatch(1, 1, 1);  // one threadgroup of 8 threads == kCount elements
+	cmdList->Dispatch(1, 1, 1);  // one threadgroup of 8 threads == c_Count elements
 
 	cmdList->Barrier(
 		outBuf,
@@ -88,7 +88,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 	const auto* mapped = static_cast<const uint32_t*>(resourceManager->MapReadback(rb));
 	REQUIRE(mapped != nullptr);
 
-	for (uint32_t i = 0; i < kCount; ++i)
+	for (uint32_t i = 0; i < c_Count; ++i)
 	{
 		CHECK(mapped[i] == i * 10u + 1u);
 	}
@@ -127,10 +127,10 @@ TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[c
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	constexpr uint32_t kCount = 8;
+	constexpr uint32_t c_Count = 8;
 
 	auto bufDesc = bgl::ComputeBufferDesc();
-	bufDesc.SetElement<uint32_t>().SetInitialCount(kCount).SetDebugName("Layout Out Buffer");
+	bufDesc.SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName("Layout Out Buffer");
 
 	auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuf));
@@ -148,7 +148,7 @@ TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[c
 	state.kernel = &kernel;
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize  = kCount * sizeof(uint32_t);
+	rbDesc.byteSize  = c_Count * sizeof(uint32_t);
 	rbDesc.debugName = "Layout Readback";
 
 	auto rb = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -176,7 +176,7 @@ TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[c
 	REQUIRE(mapped != nullptr);
 
 	// i*10 + seed(5) + tint.x(2)
-	for (uint32_t i = 0; i < kCount; ++i)
+	for (uint32_t i = 0; i < c_Count; ++i)
 	{
 		CHECK(mapped[i] == i * 10u + 7u);
 	}

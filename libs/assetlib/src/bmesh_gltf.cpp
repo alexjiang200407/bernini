@@ -28,13 +28,13 @@ namespace assetlib
 			int              components = 0;
 
 			[[nodiscard]] bool
-			present() const noexcept
+			Present() const noexcept
 			{
 				return base != nullptr;
 			}
 
 			[[nodiscard]] const float*
-			at(size_t index) const noexcept
+			At(size_t index) const noexcept
 			{
 				return reinterpret_cast<const float*>(base + index * stride);
 			}
@@ -253,7 +253,7 @@ namespace assetlib
 			uint16_t offset = 0;
 			for (const auto& attr : candidates)
 			{
-				if (!attr.view.present())
+				if (!attr.view.Present())
 					continue;
 				submesh.layout.attributes[submesh.layout.attributeCount++] = { attr.semantic,
 					                                                           attr.format,
@@ -273,11 +273,11 @@ namespace assetlib
 			{
 				for (const auto& attr : candidates)
 				{
-					if (!attr.view.present())
+					if (!attr.view.Present())
 						continue;
 					appendBytes(
 						mesh.vertexData,
-						attr.view.at(i),
+						attr.view.At(i),
 						static_cast<size_t>(attr.components) * sizeof(float));
 				}
 			}
@@ -300,7 +300,7 @@ namespace assetlib
 			{
 				for (size_t i = 0; i < vertexCount; ++i)
 				{
-					const float* p = candidates[0].view.at(i);
+					const float* p = candidates[0].view.At(i);
 					aabbMin        = glm::min(aabbMin, glm::vec3(p[0], p[1], p[2]));
 					aabbMax        = glm::max(aabbMax, glm::vec3(p[0], p[1], p[2]));
 				}

@@ -35,14 +35,14 @@ main(int argc, char** argv)
 		// the first launch pays it.
 		gfxOpts.shaderCacheDir = "shadercache";
 
-		constexpr uint32_t kWidth  = 800;
-		constexpr uint32_t kHeight = 600;
+		constexpr uint32_t c_Width  = 800;
+		constexpr uint32_t c_Height = 600;
 
 		auto gfx = bgl::CreateGraphics(gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc();
-		targetDesc.width    = static_cast<int>(kWidth);
-		targetDesc.height   = static_cast<int>(kHeight);
+		targetDesc.width    = static_cast<int>(c_Width);
+		targetDesc.height   = static_cast<int>(c_Height);
 		targetDesc.headless = false;
 		targetDesc.wnd      = wnd1.NativeHandle();
 
@@ -53,7 +53,7 @@ main(int argc, char** argv)
 		auto targetB = gfx->CreateRenderTarget(targetDesc);
 
 		auto camera = bgl::Camera();
-		auto aspect = static_cast<float>(kWidth) / static_cast<float>(kHeight);
+		auto aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);
 		camera
 			.LookAt(
 				glm::vec3(0.0f, 0.0f, 20.0f),
@@ -62,7 +62,7 @@ main(int argc, char** argv)
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		const auto viewport =
-			bgl::Viewport(static_cast<float>(kWidth), static_cast<float>(kHeight));
+			bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		auto sceneDesc                        = bgl::SceneDesc();
 		sceneDesc.initialGeom                 = 8;

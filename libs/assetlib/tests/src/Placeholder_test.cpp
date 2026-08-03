@@ -2,5 +2,5 @@
 
 TEST_CASE("assetlib exposes a version string", "[assetlib]")
 {
-	REQUIRE(assetlib::Version() != nullptr);
+	REQUIRE(assetlib::version() != nullptr);
 }

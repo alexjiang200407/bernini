@@ -24,15 +24,15 @@ namespace assetlib
 	serializeEnv(const BEnv& env)
 	{
 		core::io::ByteWriter writer;
-		writer.writePod(magic::c_BEnv);
-		writer.writePod(c_EnvVersionMajor);
-		writer.writePod(c_EnvVersionMinor);
+		writer.WritePod(magic::c_BEnv);
+		writer.WritePod(c_EnvVersionMajor);
+		writer.WritePod(c_EnvVersionMinor);
 
 		writeString(writer, env.name);
 		writeString(writer, env.sky);
 		writeString(writer, env.lighting);
 
-		return writer.take();
+		return writer.Take();
 	}
 
 	BEnv
@@ -40,13 +40,13 @@ namespace assetlib
 	{
 		core::io::ByteReader reader(bytes);
 
-		if (reader.readPod<uint32_t>() != magic::c_BEnv)
+		if (reader.ReadPod<uint32_t>() != magic::c_BEnv)
 			throw std::runtime_error("benv: bad magic");
 
-		const auto versionMajor = reader.readPod<uint16_t>();
+		const auto versionMajor = reader.ReadPod<uint16_t>();
 
 		// The minor version is additive within a major, and nothing here is optional yet.
-		static_cast<void>(reader.readPod<uint16_t>());
+		static_cast<void>(reader.ReadPod<uint16_t>());
 
 		if (versionMajor != c_EnvVersionMajor)
 			throw std::runtime_error(

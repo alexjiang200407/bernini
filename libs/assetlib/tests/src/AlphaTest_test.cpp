@@ -28,7 +28,7 @@ namespace
 	// A `size` x `size` RGBA8 mask: opaque wherever `inside(x, y)`, fully transparent elsewhere. The
 	// colour is a constant leafy green; only the alpha matters here.
 	std::vector<std::byte>
-	makeMask(uint32_t size, const std::function<bool(uint32_t, uint32_t)>& inside)
+	MakeMask(uint32_t size, const std::function<bool(uint32_t, uint32_t)>& inside)
 	{
 		std::vector<std::byte> pixels(static_cast<size_t>(size) * size * 4, std::byte{ 0 });
 
@@ -51,18 +51,18 @@ namespace
 	// the kind that dissolves under naive mipping -- averaging pulls its alpha under any sane cutoff
 	// immediately.
 	std::vector<std::byte>
-	stripeMask(uint32_t size, uint32_t period)
+	StripeMask(uint32_t size, uint32_t period)
 	{
-		return makeMask(size, [period](uint32_t x, uint32_t) { return (x % period) == 0; });
+		return MakeMask(size, [period](uint32_t x, uint32_t) { return (x % period) == 0; });
 	}
 
 	std::vector<std::byte>
-	discMask(uint32_t size, float radiusFraction)
+	DiscMask(uint32_t size, float radiusFraction)
 	{
 		const float centre = static_cast<float>(size) * 0.5f;
 		const float radius = static_cast<float>(size) * radiusFraction;
 
-		return makeMask(size, [centre, radius](uint32_t x, uint32_t y) {
+		return MakeMask(size, [centre, radius](uint32_t x, uint32_t y) {
 			const float dx = static_cast<float>(x) + 0.5f - centre;
 			const float dy = static_cast<float>(y) + 0.5f - centre;
 			return dx * dx + dy * dy <= radius * radius;
@@ -72,7 +72,7 @@ namespace
 	// The fraction of texels in one mip of `image` whose alpha passes `cutoff` -- i.e. exactly what
 	// survives the shader's alpha test at that level.
 	double
-	coverageOfMip(const ImageData& image, uint32_t mip, float cutoff)
+	CoverageOfMip(const ImageData& image, uint32_t mip, float cutoff)
 	{
 		const ImageSubresource& sub = image.subresources[mip];
 
@@ -96,7 +96,7 @@ namespace
 
 	// Writes a `size` x `size` uncompressed RGBA8 .ktx2 from raw pixels.
 	void
-	writeSource(
+	WriteSource(
 		const std::filesystem::path&  path,
 		uint32_t                      size,
 		const std::vector<std::byte>& pixels)
@@ -114,16 +114,16 @@ TEST_CASE("a thin cutout mask survives mipping", "[bmaterial][alphatest]")
 	constexpr uint32_t c_Period = 4;  // 1-in-4 stripes -> 25% coverage
 	constexpr float    c_Cutoff = 0.5f;
 
-	const auto mask = stripeMask(c_Size, c_Period);
+	const auto mask = StripeMask(c_Size, c_Period);
 
 	const ImageData naive     = rgba8ToImage(mask, c_Size, c_Size);
 	const ImageData corrected = rgba8ToImage(mask, c_Size, c_Size, c_Cutoff);
 
-	const double target = coverageOfMip(naive, 0, c_Cutoff);
+	const double target = CoverageOfMip(naive, 0, c_Cutoff);
 	REQUIRE(target == Catch::Approx(0.25).margin(0.02));
 
 	// Mip 0 is the authored mask either way -- the correction only ever touches smaller levels.
-	REQUIRE(coverageOfMip(corrected, 0, c_Cutoff) == Catch::Approx(target));
+	REQUIRE(CoverageOfMip(corrected, 0, c_Cutoff) == Catch::Approx(target));
 
 	SECTION("naively, the mask is gone by mip 1")
 	{
@@ -132,7 +132,7 @@ TEST_CASE("a thin cutout mask survives mipping", "[bmaterial][alphatest]")
 		for (uint32_t mip = 1; mip < naive.mipLevels; ++mip)
 		{
 			INFO("naive mip " << mip);
-			CHECK(coverageOfMip(naive, mip, c_Cutoff) < 0.01);
+			CHECK(CoverageOfMip(naive, mip, c_Cutoff) < 0.01);
 		}
 	}
 
@@ -147,7 +147,7 @@ TEST_CASE("a thin cutout mask survives mipping", "[bmaterial][alphatest]")
 		// on 0.25. A real cutout is a blob, not a grating -- see the disc below, which lands close.
 		for (uint32_t mip = 1; mip + 1 < corrected.mipLevels; ++mip)
 		{
-			const double coverage = coverageOfMip(corrected, mip, c_Cutoff);
+			const double coverage = CoverageOfMip(corrected, mip, c_Cutoff);
 			INFO("corrected mip " << mip << " coverage " << coverage << " target " << target);
 
 			CHECK(coverage >= target);
@@ -170,12 +170,12 @@ TEST_CASE("a disc cutout holds its coverage closely", "[bmaterial][alphatest]")
 	// levels with enough texels to express the answer.
 	constexpr uint32_t c_MinMeaningfulSize = 16;
 
-	const auto mask = discMask(c_Size, 0.3f);  // ~28% coverage
+	const auto mask = DiscMask(c_Size, 0.3f);  // ~28% coverage
 
 	const ImageData naive     = rgba8ToImage(mask, c_Size, c_Size);
 	const ImageData corrected = rgba8ToImage(mask, c_Size, c_Size, c_Cutoff);
 
-	const double target = coverageOfMip(naive, 0, c_Cutoff);
+	const double target = CoverageOfMip(naive, 0, c_Cutoff);
 	REQUIRE(target > 0.2);
 
 	uint32_t checked = 0;
@@ -184,8 +184,8 @@ TEST_CASE("a disc cutout holds its coverage closely", "[bmaterial][alphatest]")
 		if ((c_Size >> mip) < c_MinMeaningfulSize)
 			break;
 
-		const double got   = coverageOfMip(corrected, mip, c_Cutoff);
-		const double eaten = coverageOfMip(naive, mip, c_Cutoff);
+		const double got   = CoverageOfMip(corrected, mip, c_Cutoff);
+		const double eaten = CoverageOfMip(naive, mip, c_Cutoff);
 		INFO("mip " << mip << " corrected " << got << " naive " << eaten << " target " << target);
 
 		// A level is still a step function of a shrinking texel count, so an exact match is impossible;
@@ -203,7 +203,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 {
 	const BakeDir dir("bernini_bake_cutout");
 
-	writeSource(dir.path / "leaf.ktx2", 32, stripeMask(32, 4));
+	WriteSource(dir.path / "leaf.ktx2", 32, StripeMask(32, 4));
 
 	// The alpha mode is authored -- in the editor, by ending the graph in an Alpha Tested Material
 	// Output node rather than the opaque one. The bake reads it and never infers it.

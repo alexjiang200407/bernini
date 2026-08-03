@@ -489,7 +489,7 @@ namespace bgl
 		// Viewport
 		{
 			const auto& viewports = m_CurrentMeshletState->viewportState.viewports;
-			std::array<D3D12_VIEWPORT, ViewportState::MaxViewports> d3d12Viewports = {};
+			std::array<D3D12_VIEWPORT, ViewportState::c_MaxViewports> d3d12Viewports = {};
 
 			for (size_t i = 0; i < viewports.size(); ++i)
 			{
@@ -511,7 +511,7 @@ namespace bgl
 		// Scissor rect
 		{
 			const auto& scissorRects = m_CurrentMeshletState->viewportState.scissorRects;
-			std::array<D3D12_RECT, ViewportState::MaxViewports> d3d12Rects = {};
+			std::array<D3D12_RECT, ViewportState::c_MaxViewports> d3d12Rects = {};
 
 			for (size_t i = 0; i < scissorRects.size(); ++i)
 			{

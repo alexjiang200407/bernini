@@ -125,13 +125,13 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	CHECK(material.name == "Rust");
 	CHECK(material.pbr.baseColorTexture.empty());  // no bake has run, so it draws from its routes
 	CHECK(
-		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorR)].texture ==
+		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorR)].texture ==
 		"textures_src/hydrant/tex0.ktx2");
 	CHECK(
-		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kMetallic)].texture ==
+		material.pbr.routes[assetlib::channelIndex(PbrChannel::kMetallic)].texture ==
 		"textures_src/hydrant/tex1.ktx2");
 	CHECK(
-		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kNormalY)].texture ==
+		material.pbr.routes[assetlib::channelIndex(PbrChannel::kNormalY)].texture ==
 		"textures_src/hydrant/tex2.ktx2");
 	CHECK_FALSE(material.editorGraph.empty());
 }
@@ -248,9 +248,9 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kMask);
 	CHECK(material.pbr.alphaCutoff == Catch::Approx(0.25f));
 	CHECK(
-		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorA)].texture ==
+		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorA)].texture ==
 		"textures_src/hydrant/tex0.ktx2");
-	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorA)].channel == 3);
+	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorA)].channel == 3);
 }
 
 TEST_CASE("One texture used as two maps routes both at the same file", "[importedmaterials]")
@@ -280,12 +280,12 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 
 	// Base colour and ORM both name tex3, each reading the channels its own role wants.
 	CHECK(
-		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kBaseColorR)].texture ==
+		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorR)].texture ==
 		"textures_src/hydrant/tex3.ktx2");
 	CHECK(
-		material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kAo)].texture ==
+		material.pbr.routes[assetlib::channelIndex(PbrChannel::kAo)].texture ==
 		"textures_src/hydrant/tex3.ktx2");
-	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kAo)].channel == 0);
-	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kRoughness)].channel == 1);
-	CHECK(material.pbr.routes[assetlib::ChannelIndex(PbrChannel::kNormalX)].texture.empty());
+	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kAo)].channel == 0);
+	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kRoughness)].channel == 1);
+	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kNormalX)].texture.empty());
 }

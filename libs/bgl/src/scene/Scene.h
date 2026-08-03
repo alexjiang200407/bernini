@@ -273,7 +273,6 @@ namespace bgl
 		GetTextureSrv(core::slot_handle textureSlot) const noexcept;
 
 	private:
-
 		// Decoded pixels awaiting upload, flushed by Update onto the command list of the context
 		// that draws this scene. Scene-owned so one scene's textures never ride another context's
 		// timeline -- an upload must be ordered against the frames that sample it.
@@ -282,8 +281,8 @@ namespace bgl
 			TextureHandle       handle;
 			assetlib::ImageData image;
 
-			PendingTextureUpload(TextureHandle handle_, assetlib::ImageData image_) noexcept :
-				handle(handle_), image(std::move(image_))
+			PendingTextureUpload(TextureHandle texture, assetlib::ImageData data) noexcept :
+				handle(texture), image(std::move(data))
 			{}
 
 			PendingTextureUpload(PendingTextureUpload&&) noexcept = default;

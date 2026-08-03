@@ -45,7 +45,7 @@ namespace
 	// An opaque green card with a transparent disc punched out of the middle. Only a material whose
 	// layer is kAlphaTest tests against that alpha; an opaque one ignores it.
 	assetlib::ImageData
-	makeHoleMask()
+	MakeHoleMask()
 	{
 		const float centre = static_cast<float>(c_MaskSize) * 0.5f;
 		const float radius = static_cast<float>(c_MaskSize) * 0.35f;
@@ -234,7 +234,7 @@ TEST_CASE(
 		// the counting sort has to dispatch the same submesh twice, under two different pipelines, in
 		// a single frame. If it bucketed per submesh (as it did before), both would draw opaque and the
 		// hole below would never appear.
-		const auto masked = scene->AddTextureAsset(makeHoleMask(), "override-mask");
+		const auto masked = scene->AddTextureAsset(MakeHoleMask(), "override-mask");
 
 		auto opaqueDesc             = bgl::PbrMaterialDesc();
 		opaqueDesc.baseColorTexture = masked;

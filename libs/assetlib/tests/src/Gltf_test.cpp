@@ -48,7 +48,7 @@ namespace
 })";
 
 	std::filesystem::path
-	writeTempGltf(const char* json = c_TriangleGltf, const char* name = "bmesh_triangle_test.gltf")
+	WriteTempGltf(const char* json = c_TriangleGltf, const char* name = "bmesh_triangle_test.gltf")
 	{
 		const auto    path = std::filesystem::temp_directory_path() / name;
 		std::ofstream out(path, std::ios::binary);
@@ -58,9 +58,9 @@ namespace
 
 	/** The materials document, imported and cleaned up. */
 	BMeshImport
-	loadMaterialsGltf()
+	LoadMaterialsGltf()
 	{
-		const auto path = writeTempGltf(c_MaterialsGltf, "bmesh_materials_test.gltf");
+		const auto path = WriteTempGltf(c_MaterialsGltf, "bmesh_materials_test.gltf");
 		auto       mesh = loadFromGltf(path);
 		std::filesystem::remove(path);
 		return mesh;
@@ -69,7 +69,7 @@ namespace
 
 TEST_CASE("loadFromGltf imports geometry and hierarchy from a triangle", "[bmesh][gltf]")
 {
-	const auto path = writeTempGltf();
+	const auto path = WriteTempGltf();
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
@@ -100,7 +100,7 @@ TEST_CASE("loadFromGltf imports geometry and hierarchy from a triangle", "[bmesh
 
 TEST_CASE("an imported triangle survives a container round-trip", "[bmesh][gltf][io]")
 {
-	const auto path = writeTempGltf();
+	const auto path = WriteTempGltf();
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
@@ -190,7 +190,7 @@ TEST_CASE(
 
 TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 {
-	const auto mesh = loadMaterialsGltf();
+	const auto mesh = LoadMaterialsGltf();
 	REQUIRE(mesh.materials.size() == 5);
 
 	// Each of glTF's three alpha modes maps to its own: OPAQUE, MASK (alpha test), BLEND (alpha blend).
@@ -205,7 +205,7 @@ TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 
 TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf]")
 {
-	const auto mesh = loadMaterialsGltf();
+	const auto mesh = LoadMaterialsGltf();
 	REQUIRE(mesh.materials.size() == 5);
 
 	// Metallic-roughness is glTF's shading model, so a material is PBR unless it says otherwise. The
@@ -220,7 +220,7 @@ TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf
 
 TEST_CASE("probeGltfMaterials counts the PBR materials", "[bmesh][gltf]")
 {
-	const auto path  = writeTempGltf(c_MaterialsGltf, "bmesh_probe_test.gltf");
+	const auto path  = WriteTempGltf(c_MaterialsGltf, "bmesh_probe_test.gltf");
 	const auto probe = probeGltfMaterials(path);
 	std::filesystem::remove(path);
 
@@ -252,7 +252,7 @@ TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")
 
 TEST_CASE("A glTF that will not parse is reported, not guessed at", "[bmesh][gltf]")
 {
-	const auto path = writeTempGltf("{ not json", "bmesh_broken_test.gltf");
+	const auto path = WriteTempGltf("{ not json", "bmesh_broken_test.gltf");
 
 	CHECK_THROWS_AS(probeGltfMaterials(path), std::runtime_error);
 
