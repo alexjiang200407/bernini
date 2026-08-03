@@ -63,6 +63,11 @@ private:
 	void
 	SetUpFrameStats();
 
+	// The Render menu. Its one entry toggles temporal AA across every viewport, which is how a
+	// temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
+	void
+	SetUpRenderMenu();
+
 	Ui::MainWindow            m_Ui;
 	std::unique_ptr<Project>  m_Project;
 	ContentExplorerWindow*    m_ContentExplorer     = nullptr;

@@ -11,9 +11,12 @@ namespace bgl
 	 */
 	struct RenderTargetDesc
 	{
-		int  width      = 0;
-		int  height     = 0;
-		bool headless   = false;
+		int  width    = 0;
+		int  height   = 0;
+		bool headless = false;
+
+		// Allocates this target's temporal-AA resources and starts with it running. A target created
+		// without it can never turn it on -- there is nothing to accumulate into.
 		bool taaEnabled = false;
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless.
@@ -43,6 +46,22 @@ namespace bgl
 
 		virtual uint32_t
 		GetHeight() const noexcept = 0;
+
+		/** Whether temporal AA is running on this target -- jitter applied and history accumulated. */
+		[[nodiscard]] virtual bool
+		IsTaaEnabled() const noexcept = 0;
+
+		/**
+		 * Turns temporal AA on or off for subsequent frames, so it can be compared against itself
+		 * without recreating the target. Turning it off discards the accumulation rather than
+		 * pausing it: the frames it would have to bridge are not rendered, so the first frame after
+		 * turning it back on starts from the scene colour.
+		 *
+		 * @throws GraphicsError if `enabled` and the target was created without
+		 *         RenderTargetDesc::taaEnabled -- it has no history to accumulate into.
+		 */
+		virtual void
+		SetTaaEnabled(bool enabled) = 0;
 
 	protected:
 		IRenderTarget() noexcept = default;

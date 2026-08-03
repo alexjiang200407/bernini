@@ -8,6 +8,7 @@
 #include "gfx/RenderTargetBase.h"
 #include "resource/ResourceManager.h"
 
+#include <bgl/IGraphics.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
@@ -148,6 +149,26 @@ namespace bgl
 			return m_TaaEnabled;
 		}
 
+		void
+		SetTaaEnabled(bool enabled) override
+		{
+			if (enabled && !m_TaaAllocated)
+			{
+				throw GraphicsError(
+					"SetTaaEnabled(true) on a render target created without "
+					"RenderTargetDesc::taaEnabled: it has no history to accumulate into");
+			}
+
+			// Discarded rather than paused: the frames the accumulation would have to bridge were
+			// never rendered, so reprojecting across the gap would blend in a stale image.
+			if (!enabled)
+			{
+				m_HistoryValid = false;
+			}
+
+			m_TaaEnabled = enabled;
+		}
+
 		[[nodiscard]] TextureHandle
 		GetHistoryTexture(uint32_t index) const noexcept override
 		{
@@ -228,9 +249,10 @@ namespace bgl
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
 
-		uint32_t m_Width      = 0;
-		uint32_t m_Height     = 0;
-		bool     m_TaaEnabled = false;
+		uint32_t m_Width        = 0;
+		uint32_t m_Height       = 0;
+		bool     m_TaaEnabled   = false;
+		bool     m_TaaAllocated = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};
@@ -245,7 +267,7 @@ namespace bgl
 		SrvHandle     m_SceneColorSrv;
 		SrvHandle     m_MotionSrv;
 
-		// Allocated only when m_TaaEnabled; a target that never resolves pays neither the memory nor
+		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.
 		std::array<Accumulation, 2> m_History;
 		uint32_t                    m_CurrentHistoryIndex = 0;

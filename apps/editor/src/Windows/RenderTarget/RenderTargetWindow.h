@@ -35,6 +35,11 @@ public:
 	void
 	SetRenderingEnabled(bool enabled);
 
+	// Turns temporal AA on or off for this viewport, so it can be compared against itself without
+	// restarting the editor.
+	void
+	SetTaaEnabled(bool enabled);
+
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;

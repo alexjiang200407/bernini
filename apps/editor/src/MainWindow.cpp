@@ -19,6 +19,8 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+
+#include <QMenuBar>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
@@ -166,6 +168,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
 
+	SetUpRenderMenu();
+
 	SetUpFrameStats();
 
 	// config.json may name a project to open on launch, so working on one does not mean reopening
@@ -173,6 +177,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	// absolute path in it reasonable.
 	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
 		ShowEmptyState();
+}
+
+void
+MainWindow::SetUpRenderMenu()
+{
+	QMenu* render = menuBar()->addMenu("Render");
+
+	auto* taa = render->addAction("Temporal Antialiasing");
+	taa->setCheckable(true);
+	taa->setChecked(true);
+	taa->setStatusTip("Jitter the projection and accumulate a temporal history in the viewports.");
+
+	connect(taa, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetTaaEnabled(enabled);
+	});
 }
 
 void

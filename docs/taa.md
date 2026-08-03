@@ -7,7 +7,14 @@ each surface *was*, not from where the pixel is.
 
 It is **opt-in per render target** (`RenderTargetDesc::taaEnabled`) and off by default, because it
 makes a frame depend on the frames before it. A caller that renders a fixed small number of frames —
-a thumbnail, a render test — cannot converge, so it must not silently get an unconverged image.
+a thumbnail, a render test — cannot converge, so it must not silently get an unconverged image. In
+the editor that split is exactly the viewport windows (which redraw continuously) against the
+thumbnail cache (which does not).
+
+The desc flag decides **allocation**; `IRenderTarget::SetTaaEnabled` decides whether it **runs**, so
+a viewport can be compared against itself without recreating anything. Enabling it on a target that
+allocated nothing throws — there is no history to accumulate into, and silently ignoring the call
+would leave a caller wondering why the image never resolves.
 
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
@@ -63,7 +70,8 @@ a thumbnail, a render test — cannot converge, so it must not silently get an u
 
 | Type | File | Role |
 |---|---|---|
-| `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in. Off by default. |
+| `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
+| `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
 | `HaltonJitter` | [util/jitter.h](libs/bgl/src/util/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl/src/passes/TaaResolvePass.h) | Reprojects, clamps, blends into the new history. |
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
@@ -101,6 +109,11 @@ history buffer is allocated.
   owns and `AdvanceHistory()` flips at `EndFrame`. Deriving it from a context-wide frame counter
   would break the moment two targets are drawn at different rates — each target's history has to
   alternate on *its* frames.
+
+* **Turning it off discards the accumulation; it does not pause it.** The frames the history would
+  have to bridge are never rendered, so resuming across the gap would reproject a stale image. The
+  first frame after turning it back on takes the scene colour whole, exactly as the first frame ever
+  does.
 
 * **A resize discards the accumulation.** The buffers are screen-sized and the history cannot be
   rescaled into, so `ReleaseAttachments` clears `m_HistoryValid` and the next frame takes the scene

@@ -43,6 +43,10 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 #endif
 	rtvDesc.headless = false;
 
+	// A viewport redraws continuously, so it is the one surface here that can converge. The
+	// thumbnail cache renders a handful of frames and cannot, which is why it stays off.
+	rtvDesc.taaEnabled = true;
+
 	m_RenderTarget = m_Desc.renderer->Invoke(
 		[&] { return m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc); });
 	m_SceneView = m_Desc.renderer->Invoke([&] {
@@ -164,6 +168,17 @@ RenderTargetWindow::hideEvent(QHideEvent* event)
 	m_ResizeTimer->stop();
 
 	QWidget::hideEvent(event);
+}
+
+void
+RenderTargetWindow::SetTaaEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	// The render thread is what reads this between frames, so the change is posted there rather
+	// than written from the GUI thread under it.
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetTaaEnabled(enabled); });
 }
 
 void
