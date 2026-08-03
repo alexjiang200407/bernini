@@ -40,8 +40,25 @@ public float HashedAlphaThreshold(float3 surfacePos, float seed)
     // roughly a pixel; larger trades noise for a coarser, blotchier pattern.
     const float c_HashScale = 1.0;
 
-    // Pixels per hash cell, from the fastest-changing screen axis of the object position.
-    float pixelScale = 1.0 / (c_HashScale * max(length(ddx(surfacePos)), length(ddy(surfacePos))));
+    // How far the two screen axes may disagree about the cell size before the smaller one wins. 4
+    // is where the grazing pattern measures as fine as the head-on one; tighter only buys sub-pixel
+    // cells, which is noise for nothing.
+    const float c_MaxAnisotropy = 4.0;
+
+    float dx = length(ddx(surfacePos));
+    float dy = length(ddy(surfacePos));
+
+    // A cell is isotropic in world space but the projection is not. Sizing it off max() alone is
+    // right along the stretched screen axis and many pixels too wide along the compressed one, which
+    // gives one threshold to a whole streak of pixels -- correlated coverage, which reads as a
+    // blotch rather than as noise and defeats the ensemble the technique depends on. It is worst at
+    // grazing angles, which is most of a hair card. Bounding the ratio keeps the cell near
+    // pixel-sized on both axes; the cost is a finer pattern, which is noise, which is what temporal
+    // AA is here to remove.
+    float deriv = min(max(dx, dy), min(dx, dy) * c_MaxAnisotropy);
+
+    // A degenerate derivative would send pixelScale to infinity and the log2 below to NaN.
+    float pixelScale = 1.0 / max(c_HashScale * deriv, 1.0e-8);
 
     // The two powers of two either side, so the interpolation below is over one octave.
     float2 scales = float2(exp2(floor(log2(pixelScale))), exp2(ceil(log2(pixelScale))));
