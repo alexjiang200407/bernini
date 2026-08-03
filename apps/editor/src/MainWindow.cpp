@@ -67,6 +67,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
+		// Viewports only: the thumbnail cache renders too few frames to converge, so it is never
+		// given the option. False here frees the history buffers rather than idling them, which is
+		// what the Render menu's toggle cannot do.
+		m_TaaEnabled = gfxSettings["temporalAA"].GetOrDefault(true);
+
 		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
 		// preview) renders it through a SceneView of its own, so geometry, textures and materials
 		// are pooled here once and these budgets must cover all of them together.
@@ -89,6 +94,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		auto levelDesc             = RenderTargetWindowDesc();
 		levelDesc.renderer         = m_Renderer.get();
 		levelDesc.initialInstances = settings["levelEditor"]["initialInstances"].GetOrDefault(1000);
+		levelDesc.taaEnabled       = m_TaaEnabled;
 
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
 
@@ -96,6 +102,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		auto matDesc                    = MaterialEditorWindowDesc();
 		matDesc.renderer                = m_Renderer.get();
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
+		matDesc.taaEnabled              = m_TaaEnabled;
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
@@ -186,8 +193,15 @@ MainWindow::SetUpRenderMenu()
 
 	auto* taa = render->addAction("Temporal Antialiasing");
 	taa->setCheckable(true);
-	taa->setChecked(true);
-	taa->setStatusTip("Jitter the projection and accumulate a temporal history in the viewports.");
+	taa->setChecked(m_TaaEnabled);
+
+	// Nothing was allocated, so there is nothing to switch on -- SetTaaEnabled(true) would throw.
+	// Disabled rather than hidden, so the tooltip can say where the decision was made.
+	taa->setEnabled(m_TaaEnabled);
+	taa->setStatusTip(
+		m_TaaEnabled ?
+			"Jitter the projection and accumulate a temporal history in the viewports." :
+			"Disabled by graphics.temporalAA in config.json; the viewports allocated no history.");
 
 	connect(taa, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())

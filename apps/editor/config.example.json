@@ -12,7 +12,8 @@
         "maxDsvs": 16,
         "maxTextures": 2048,
         "strictError": false,
-        "enableShaderCache": true
+        "enableShaderCache": true,
+        "temporalAA": true
     },
     "scene": {
         "initialGeom": 256,

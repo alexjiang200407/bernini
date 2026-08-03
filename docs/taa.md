@@ -9,12 +9,19 @@ It is **opt-in per render target** (`RenderTargetDesc::taaEnabled`) and off by d
 makes a frame depend on the frames before it. A caller that renders a fixed small number of frames —
 a thumbnail, a render test — cannot converge, so it must not silently get an unconverged image. In
 the editor that split is exactly the viewport windows (which redraw continuously) against the
-thumbnail cache (which does not).
+thumbnail cache (which does not), and the viewports read it from `graphics.temporalAA` in
+`config.json`.
 
 The desc flag decides **allocation**; `IRenderTarget::SetTaaEnabled` decides whether it **runs**, so
 a viewport can be compared against itself without recreating anything. Enabling it on a target that
 allocated nothing throws — there is no history to accumulate into, and silently ignoring the call
 would leave a caller wondering why the image never resolves.
+
+The two are not interchangeable, which is why the editor exposes both. `graphics.temporalAA: false`
+in `config.json` means the history buffers are never created, so it is what actually gives back the
+memory and the two RTV slots; the Render menu's toggle only stops the work. With the config key
+false the menu entry is disabled rather than hidden, so the answer to "why can I not turn this on" is
+in the place that asks the question.
 
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 

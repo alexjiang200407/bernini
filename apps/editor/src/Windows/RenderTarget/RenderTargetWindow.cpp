@@ -45,7 +45,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 
 	// A viewport redraws continuously, so it is the one surface here that can converge. The
 	// thumbnail cache renders a handful of frames and cannot, which is why it stays off.
-	rtvDesc.taaEnabled = true;
+	rtvDesc.taaEnabled = m_Desc.taaEnabled;
 
 	m_RenderTarget = m_Desc.renderer->Invoke(
 		[&] { return m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc); });
