@@ -7,11 +7,11 @@ import idl.LoosePbrMaterial;
 // lets the depth-sorted draw collapse to two PSOs (blend vs self-occluding blend), so a run in the
 // sorted list never has to split just because the material type changed.
 [shader("pixel")]
-float4 PSMain(ForwardVSOut input) : SV_Target
+float4 PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
 {
     if (input.materialIsLoose != 0u)
     {
-        return Shade<LoosePbrMaterial>(input);
+        return Shade<LoosePbrMaterial>(input, isFrontFace);
     }
-    return Shade<PbrMaterial>(input);
+    return Shade<PbrMaterial>(input, isFrontFace);
 }
