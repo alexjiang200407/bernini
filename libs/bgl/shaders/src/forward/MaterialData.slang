@@ -123,7 +123,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
 // The shared tail of both shading paths. Base color is passed in rather than sampled here, so the
 // alpha-tested path can test it without sampling the texture a second time.
-float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor)
+float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
@@ -132,6 +132,7 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
         baseColor,
         material.GetORM(wrapSampler, input.uv),
         material.GetNormalXY(wrapSampler, input.uv),
+        isFrontFace,
         materialData.cameraPos,
         materialData.irradianceMap,
         materialData.prefilterMap,
@@ -141,16 +142,16 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
     );
 }
 
-public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
+public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
     M material = M.Load(input.materialIndex);
 
-    return ShadeWithBaseColor(input, material, material.GetBaseColor(wrapSampler, input.uv));
+    return ShadeWithBaseColor(input, material, material.GetBaseColor(wrapSampler, input.uv), isFrontFace);
 }
 
-public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
@@ -163,7 +164,7 @@ public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
         discard;
     }
 
-    return ShadeWithBaseColor(input, material, baseColor);
+    return ShadeWithBaseColor(input, material, baseColor, isFrontFace);
 }
 
 // Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
@@ -172,7 +173,7 @@ public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
 //
 // The material's alphaCutoff is deliberately unused. A cutoff is the thing being replaced, and
 // applying both would put back the binary silhouette that costs the surface its layers.
-public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
@@ -185,7 +186,7 @@ public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
         discard;
     }
 
-    return ShadeWithBaseColor(input, material, baseColor);
+    return ShadeWithBaseColor(input, material, baseColor, isFrontFace);
 }
 
 // Depth-only pre-pass for a self-occluding blend material: keep only the fragments whose base-color
