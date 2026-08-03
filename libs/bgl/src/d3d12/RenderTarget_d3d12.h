@@ -7,6 +7,7 @@
 #include "resource/Dsv.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv.h"
+#include <bgl/IGraphics.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
@@ -170,6 +171,26 @@ namespace bgl
 			return m_TaaEnabled;
 		}
 
+		void
+		SetTaaEnabled(bool enabled) override
+		{
+			if (enabled && !m_TaaAllocated)
+			{
+				throw GraphicsError(
+					"SetTaaEnabled(true) on a render target created without "
+					"RenderTargetDesc::taaEnabled: it has no history to accumulate into");
+			}
+
+			// Discarded rather than paused: the frames the accumulation would have to bridge were
+			// never rendered, so reprojecting across the gap would blend in a stale image.
+			if (!enabled)
+			{
+				m_HistoryValid = false;
+			}
+
+			m_TaaEnabled = enabled;
+		}
+
 		[[nodiscard]] TextureHandle
 		GetHistoryTexture(uint32_t index) const noexcept override
 		{
@@ -236,12 +257,13 @@ namespace bgl
 		CommandQueueRef    m_CommandQueue;
 		ResourceManagerRef m_ResourceManager;
 
-		bool  m_Headless    = false;
-		bool  m_TaaEnabled  = false;
-		bool  m_EnableDebug = false;
-		void* m_Wnd         = nullptr;
-		int   m_Width       = 0;
-		int   m_Height      = 0;
+		bool  m_Headless     = false;
+		bool  m_TaaEnabled   = false;
+		bool  m_TaaAllocated = false;
+		bool  m_EnableDebug  = false;
+		void* m_Wnd          = nullptr;
+		int   m_Width        = 0;
+		int   m_Height       = 0;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 
@@ -253,7 +275,7 @@ namespace bgl
 		TextureRtvSrvHandle m_SceneColor;
 		SrvHandle           m_MotionVectorSrv;
 
-		// Allocated only when m_TaaEnabled; a target that never resolves pays neither the memory nor
+		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.
 		std::array<TextureRtvSrvHandle, 2> m_History;
 		uint32_t                           m_CurrentHistoryIndex                = 0;

@@ -32,6 +32,7 @@ struct MaterialEditorWindowDesc
 {
 	Renderer*          renderer                = nullptr;
 	uint32_t           initialPreviewInstances = 16;
+	bool               taaEnabled              = true;
 	MaterialPreviewEnv previewEnv;
 };
 
