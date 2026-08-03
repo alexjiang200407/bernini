@@ -75,7 +75,11 @@ unit radiance and not as white.
 
 ## Hashed alpha
 
-`LayerType::kHashed` resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
+`LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/LayerType.h)) is stochastic coverage:
+alpha becomes a per-pixel hashed threshold rather than a cutoff, so every layer of a self-occluding
+surface writes depth and participates, and the correct blend is what the ensemble averages to.
+
+It resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
 write, no blend, velocity written like any other geometry — and drawn in the PSO-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
 threshold ([util/HashedAlpha.slang](libs/bgl/shaders/src/util/HashedAlpha.slang)) instead of the

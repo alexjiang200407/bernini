@@ -488,12 +488,8 @@ namespace bgl
 		draw.env.brdfLut = m_BrdfLut.GetSrv();
 		draw.exposure    = view_->GetExposure();
 
-		// Only when the accumulation exists to integrate it. Without temporal AA a pattern that moved
-		// every frame would read as flicker, so a still target keeps a still pattern.
-		//
-		// Deliberately NOT the jitter index: eight seeds means eight distinct coverage patterns, and
-		// averaging eight binary masks converges to nine grey levels rather than to smooth coverage.
-		// The cycle only has to outrun the history's memory, and the modulus keeps the float exact.
+		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
+		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
 		constexpr uint64_t c_AlphaHashPeriod = 1024;
 
 		draw.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
