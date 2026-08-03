@@ -25,6 +25,82 @@ namespace
 
 	constexpr int c_ConvergeFrames = 24;
 
+	// The band just below the horizon, where a pixel's footprint on the receding plane is long along
+	// the view axis and short across it. Wide and short, because that is the shape of the region --
+	// the foreground half is already near-isotropic and would dilute the measurement.
+	constexpr int c_GrazeX = 28;
+	constexpr int c_GrazeY = 130;
+	constexpr int c_GrazeW = 200;
+	constexpr int c_GrazeH = 22;
+
+	// A plane laid flat and viewed almost edge-on, so one pixel spans a long stretch of it along the
+	// view axis and almost none across -- the anisotropy a hair card sits in for most of its area.
+	bgl::test::Rgba
+	RenderGrazing(const std::string& path, bgl::LayerType layer, float alpha)
+	{
+		auto opts             = bgl::GraphicsOptions();
+		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.enableDebugLayer = true;
+
+		auto gfx = bgl::CreateGraphics(opts);
+		REQUIRE(gfx != nullptr);
+
+		auto targetDesc     = bgl::RenderTargetDesc();
+		targetDesc.width    = static_cast<int>(c_Width);
+		targetDesc.height   = static_cast<int>(c_Height);
+		targetDesc.headless = true;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 8;
+		sceneDesc.initialMeshlets             = 512;
+		sceneDesc.initialSubmeshes            = 8;
+		sceneDesc.initialVertexBufferByteSize = 800000;
+		sceneDesc.initialIndices              = 20000;
+		sceneDesc.initialPbrMaterials         = 8;
+
+		auto scene = gfx->CreateScene(sceneDesc);
+		auto view  = gfx->CreateSceneView(scene, 8);
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		auto desc            = bgl::PbrMaterialDesc();
+		desc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, alpha);
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 0.6f;
+		desc.layerType       = layer;
+
+		auto material = scene->CreatePbrMaterial(desc);
+		auto plane    = scene->AddPlaneGeom(1, 1, 400.0f, 400.0f, material);
+
+		// Laid flat, so the camera just above it sees it recede to the horizon.
+		view->CreateStaticMeshInstance(
+			plane,
+			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 1.5f, 0.0f),
+				glm::vec3(0.0f, 1.4f, -10.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(
+				glm::radians(60.0f),
+				static_cast<float>(c_Width) / static_cast<float>(c_Height),
+				0.1f,
+				500.0f);
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+		return bgl::test::MeanColor(path, c_GrazeX, c_GrazeY, c_GrazeW, c_GrazeH);
+	}
+
 	// Renders one plane at `alpha` with the given layer, `frames` times, and returns the mean colour
 	// of the patch. The background is black, so a discarded fragment contributes nothing and the mean
 	// over the patch is the surviving fraction times what a fully covered patch would read.
@@ -204,4 +280,39 @@ TEST_CASE("Temporal AA resolves the hashed noise", "[hashedalpha][render]")
 	// display value of their mean -- the curve is concave, so averaging in linear before it lands
 	// higher. Asserting the two were equal would be asserting the tonemap is linear.
 	CHECK(many.Luma() > one.Luma());
+}
+
+// A hash cell is isotropic in world space; the projection is not. Sizing it off the larger screen
+// derivative alone leaves it many pixels wide along the compressed axis, so a whole streak of pixels
+// shares one threshold -- coverage stops being independent per pixel and becomes a blotch. It reads
+// as an occlusion failure rather than as noise, and no amount of temporal accumulation removes it,
+// because it does not move.
+//
+// Blotchiness is the discriminator, not variance: a correlated pattern and a fine one can have the
+// same mean and the same spread while differing entirely in how much they change between neighbours.
+// That is what AliasEnergy measures.
+TEST_CASE("The hashed pattern stays per-pixel at grazing angles", "[hashedalpha][render]")
+{
+	const std::string grazing = "assets/golden/hashed_alpha_grazing.got.png";
+	const std::string flat    = "assets/golden/hashed_alpha_grazing_flat.got.png";
+
+	const bgl::test::Rgba covered = RenderGrazing(flat, bgl::LayerType::kOpaque, 1.0f);
+	const bgl::test::Rgba patch   = RenderGrazing(grazing, bgl::LayerType::kHashed, 0.5f);
+
+	// The box has to be on the surface, or everything below measures the background.
+	REQUIRE(covered.Luma() > 0.1f);
+
+	const float ratio = patch.Luma() / covered.Luma();
+	const float grain = bgl::test::AliasEnergy(grazing, c_GrazeX, c_GrazeY, c_GrazeW, c_GrazeH);
+
+	INFO("grazing: survived = " << ratio << ", grain = " << grain);
+
+	// Correlated cells bias coverage as well as clumping it: sizing the cell off the larger
+	// derivative alone measures 0.57 here, and bounding the ratio brings it back to 0.51.
+	CHECK(ratio == Catch::Approx(0.5f).margin(0.05));
+
+	// And it has to be per-pixel. Measured: 0.027 with the cell sized off the larger derivative
+	// alone, 0.100 with the ratio bounded, against 0.12 for the same material seen head-on. The
+	// floor sits between the first two with room either side.
+	CHECK(grain > 0.06f);
 }
