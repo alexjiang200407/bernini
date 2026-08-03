@@ -49,7 +49,7 @@ namespace bgl
 
 		desc.SetName("PostProcess")
 			.AddTextureArg(
-				TextureArg{ std::string(c_SceneColorName),
+				TextureArg{ args.sourceName,
 		                    BarrierSyncFlag::kPixelShader,
 		                    BarrierAccessFlag::kShaderResource,
 		                    BarrierLayout::kShaderResource })
@@ -80,7 +80,7 @@ namespace bgl
 
 			if (auto u = tonemap["sceneColor"]; u.IsValid())
 			{
-				u = args.sceneColor;
+				u = args.source;
 			}
 			if (auto u = tonemap["sampler"]; u.IsValid())
 			{
