@@ -154,7 +154,7 @@ suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-valida
 
 It also installs what is missing rather than reporting it: vcpkg is cloned and bootstrapped, `cmake`/`ninja`/`clang-format`/`clang-tidy`/`just` come from the versions pinned in `scripts/requirements.txt` (binary wheels), and `git-lfs`/`gh` come from winget or brew. Anything already installed is kept and recorded.
 
-The file is git-ignored; it describes a machine, not the project. `scripts/config.example.json` shows the shape and `scripts/util/config.py` documents the schema.
+The file is git-ignored; it describes a machine, not the project. `scripts/util/config.py` documents the schema.
 
 Every key is optional and every lookup falls back to auto-detection, so a fresh clone still builds with no `config.json` at all. **Precedence, highest first: command-line flag > config.json > auto-detection.**
 

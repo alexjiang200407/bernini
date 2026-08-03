@@ -18,7 +18,8 @@ It sets the machine up rather than telling you to: it finds or clones and bootst
 the committed hooks. Whatever it finds already installed it keeps.
 
 Then it asks which preset you build and writes `scripts/config.json` (git-ignored — it
-describes your machine, not the project; see `scripts/config.example.json`). Everything
+describes your machine, not the project; `scripts/util/config.py` documents its
+schema). Everything
 afterwards reads that config, so no preset, no configuration, no tool path and no
 `VCPKG_ROOT` need retyping:
 

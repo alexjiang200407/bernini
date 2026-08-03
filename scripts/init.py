@@ -18,8 +18,8 @@ tool path and no vcvars invocation has to be retyped. Anything that could not be
 installed is prompted for; a blank answer leaves the key out, which just means that tool
 keeps being looked up on PATH at run time.
 
-config.json is git-ignored. It describes a machine, not the project -- see
-scripts/config.example.json for the shape and scripts/util/config.py for the schema.
+config.json is git-ignored. It describes a machine, not the project; scripts/util/config.py
+documents its schema.
 
 Points git at the committed .githooks, and configures Git LFS -- whose filters are
 machine-local config a clone cannot inherit, so without this the assets check out as
