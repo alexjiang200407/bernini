@@ -7,11 +7,16 @@ import idl.IAlphaTestMaterial;
 import idl.TextureHandle;
 import forward.common;
 import forward.PbrShading;
+import util.HashedAlpha;
 
 struct MaterialData
 {
     float3 cameraPos;
     float exposure;
+
+    // Advances once per frame, and decorrelates the hashed-alpha pattern between frames. Zero on a
+    // target without temporal AA, where a changing pattern would be flicker rather than coverage.
+    float alphaHashSeed;
 
     EntryBuffer<PbrMaterial> pbrMaterials;
     EntryBuffer<LoosePbrMaterial> looseMaterials;
@@ -154,6 +159,28 @@ public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
     let baseColor = material.GetBaseColor(wrapSampler, input.uv);
 
     if (baseColor.a < material.GetAlphaCutoff())
+    {
+        discard;
+    }
+
+    return ShadeWithBaseColor(input, material, baseColor);
+}
+
+// Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
+// alpha, and writes real depth like any opaque surface. One frame of it is noise; the ensemble over
+// pixels and frames is the blend, which is why this pairs with temporal AA and not without it.
+//
+// The material's alphaCutoff is deliberately unused. A cutoff is the thing being replaced, and
+// applying both would put back the binary silhouette that costs the surface its layers.
+public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+{
+    let wrapSampler = materialData.anisoLinearWrapSampler;
+
+    M material = M.Load(input.materialIndex);
+
+    let baseColor = material.GetBaseColor(wrapSampler, input.uv);
+
+    if (baseColor.a < HashedAlphaThreshold(input.worldPos, materialData.alphaHashSeed))
     {
         discard;
     }

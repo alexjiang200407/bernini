@@ -8,6 +8,7 @@ namespace bgl
 		kOpaque  = 0,
 		kMask,
 		kBlend,
+		kHashed,
 		kCount,
 	};
 }

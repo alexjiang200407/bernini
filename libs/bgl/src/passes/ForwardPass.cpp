@@ -134,6 +134,8 @@ namespace bgl
 		constexpr auto c_NullPixelSrc          = "Forward_Null"sv;
 		constexpr auto c_PbrCutoutPixelSrc     = "Forward_PBR_AlphaTest"sv;
 		constexpr auto c_LooseCutoutPixelSrc   = "Forward_PBR_Loose_AlphaTest"sv;
+		constexpr auto c_PbrHashedPixelSrc     = "Forward_PBR_HashedAlpha"sv;
+		constexpr auto c_LooseHashedPixelSrc   = "Forward_PBR_Loose_HashedAlpha"sv;
 		constexpr auto c_TransparentSrc        = "Forward_Transparent"sv;
 		constexpr auto c_TransparentPrepassSrc = "Forward_Transparent_Prepass"sv;
 		constexpr auto c_AssertPixelSrc        = "Forward_Assert"sv;
@@ -170,6 +172,10 @@ namespace bgl
 			{ c_TransparentSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
 			// kTransparentOcclude_StaticMesh_LoosePbr
 			{ c_TransparentSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
+			// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
+			{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
+			// kHashedAlpha_StaticMesh_LoosePbr
+			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 		} };
@@ -397,6 +403,10 @@ namespace bgl
 			if (auto u = matData["exposure"]; u.IsValid())
 			{
 				u = draw.exposure;
+			}
+			if (auto u = matData["alphaHashSeed"]; u.IsValid())
+			{
+				u = draw.alphaHashSeed;
 			}
 		}
 	}
