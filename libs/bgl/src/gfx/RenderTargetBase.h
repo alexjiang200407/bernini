@@ -98,10 +98,6 @@ namespace bgl
 		[[nodiscard]] virtual SrvHandle
 		GetMotionVectorSrv() const noexcept = 0;
 
-		/** Whether this target was created with RenderTargetDesc::taaEnabled. */
-		[[nodiscard]] virtual bool
-		IsTaaEnabled() const noexcept = 0;
-
 		/**
 		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
 		 * this frame's resolve writes, the other is the one it reads. Null on a target without TAA,
