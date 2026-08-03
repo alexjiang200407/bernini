@@ -15,6 +15,10 @@ namespace assetlib
 		kOpaque = 0,
 		kMask   = 1,
 		kBlend  = 2,
+
+		// Not a glTF mode: nothing imports it, and it is chosen in the material editor. Alpha becomes
+		// stochastic coverage rather than a cutoff, which only resolves under temporal AA.
+		kHashed = 3,
 	};
 
 	struct ChannelRoute
