@@ -11,13 +11,11 @@ namespace bgl
 	 */
 	struct RenderTargetDesc
 	{
-		int  width    = 0;
-		int  height   = 0;
-		bool headless = false;
-
-		// Allocates this target's temporal-AA resources and starts with it running. A target created
-		// without it can never turn it on -- there is nothing to accumulate into.
+		int  width      = 0;
+		int  height     = 0;
+		bool headless   = false;
 		bool taaEnabled = false;
+
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless.
 		void* wnd = nullptr;
