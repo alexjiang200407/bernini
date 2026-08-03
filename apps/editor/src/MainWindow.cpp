@@ -19,6 +19,8 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+
+#include <QMenuBar>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
@@ -88,12 +90,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 		levelDesc.renderer         = m_Renderer.get();
 		levelDesc.initialInstances = settings["levelEditor"]["initialInstances"].GetOrDefault(1000);
 
+		// Per viewport, not graphics-wide: it sizes what this window's render target allocates, the
+		// way initialInstances above sizes its instance buffer. The thumbnail cache is never offered
+		// it -- it renders too few frames to converge.
+		levelDesc.taaEnabled = settings["levelEditor"]["temporalAA"].GetOrDefault(true);
+
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
 
 		auto matSettings                = settings["materialEditor"];
 		auto matDesc                    = MaterialEditorWindowDesc();
 		matDesc.renderer                = m_Renderer.get();
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
+		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
@@ -166,6 +174,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
 
+	SetUpRenderMenu();
+
 	SetUpFrameStats();
 
 	// config.json may name a project to open on launch, so working on one does not mean reopening
@@ -173,6 +183,34 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	// absolute path in it reasonable.
 	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
 		ShowEmptyState();
+}
+
+void
+MainWindow::SetUpRenderMenu()
+{
+	QMenu* render = menuBar()->addMenu("Render");
+
+	// Each viewport is configured on its own, so the menu offers the toggle if any of them has
+	// something to toggle. A window configured without it ignores the call rather than throwing.
+	bool anyTaa = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		anyTaa = anyTaa || view->IsTaaAvailable();
+
+	auto* taa = render->addAction("Temporal Antialiasing");
+	taa->setCheckable(true);
+	taa->setChecked(anyTaa);
+
+	// Disabled rather than hidden, so the answer to "why can I not turn this on" is where the
+	// question gets asked.
+	taa->setEnabled(anyTaa);
+	taa->setStatusTip(
+		anyTaa ? "Jitter the projection and accumulate a temporal history in the viewports." :
+				 "No viewport enabled temporalAA in config.json, so none allocated a history.");
+
+	connect(taa, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetTaaEnabled(enabled);
+	});
 }
 
 void
