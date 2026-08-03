@@ -488,7 +488,15 @@ namespace bgl
 		draw.env         = view->GetEnvironmentMap();
 		draw.env.brdfLut = m_BrdfLut.GetSrv();
 		draw.exposure    = view->GetExposure();
-		draw.skybox      = view->GetSkybox();
+
+		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
+		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
+		constexpr uint64_t c_AlphaHashPeriod = 1024;
+
+		draw.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
+		                         static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
+		                         0.0f;
+		draw.skybox        = view->GetSkybox();
 
 		if (draw.skybox.has_value())
 		{

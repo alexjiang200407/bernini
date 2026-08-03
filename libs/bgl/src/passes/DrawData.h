@@ -29,6 +29,10 @@ namespace bgl
 		EnvironmentMap              env;
 		float                       exposure = 1.0f;
 
+		// Decorrelates the hashed-alpha pattern between frames. Zero without temporal AA, where a
+		// pattern that changed every frame would be flicker rather than coverage.
+		float alphaHashSeed = 0.0f;
+
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
 		glm::mat4                 skyboxPrevWorldToClip{ 1.0f };
