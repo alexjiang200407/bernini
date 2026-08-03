@@ -152,6 +152,44 @@ namespace bgl
 		sceneColorSrvDesc.debugName = "Scene Color SRV";
 
 		m_SceneColorSrv = m_ResourceManager->CreateSrv(m_SceneColorTexture, sceneColorSrvDesc);
+
+		auto motionSrvDesc      = SrvDesc();
+		motionSrvDesc.format    = c_MotionFormat;
+		motionSrvDesc.debugName = "Motion Vectors SRV";
+
+		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);
+
+		if (!m_TaaEnabled)
+		{
+			return;
+		}
+
+		for (uint32_t i = 0; i < m_History.size(); ++i)
+		{
+			auto historyDesc   = TextureDesc();
+			historyDesc.width  = m_Width;
+			historyDesc.height = m_Height;
+			historyDesc.format = c_SceneColorFormat;
+			historyDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			historyDesc.initialLayout = BarrierLayout::kRenderTarget;
+			historyDesc.debugName     = std::format("TAA History: {}", i);
+			historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+			m_History[i].texture = m_ResourceManager->CreateTexture(historyDesc);
+
+			auto historyRtvDesc      = RtvDesc();
+			historyRtvDesc.format    = c_SceneColorFormat;
+			historyRtvDesc.debugName = std::format("TAA History RTV: {}", i);
+
+			m_History[i].rtv = m_ResourceManager->CreateRtv(m_History[i].texture, historyRtvDesc);
+
+			auto historySrvDesc      = SrvDesc();
+			historySrvDesc.format    = c_SceneColorFormat;
+			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
+
+			m_History[i].srv = m_ResourceManager->CreateSrv(m_History[i].texture, historySrvDesc);
+		}
 	}
 
 	void
@@ -166,6 +204,23 @@ namespace bgl
 			backbuffer = {};
 		}
 
+		for (Accumulation& history : m_History)
+		{
+			if (!history.srv.IsNull())
+				m_ResourceManager->DestroySrv(history.srv, false);
+			if (!history.rtv.IsNull())
+				m_ResourceManager->DestroyRtv(history.rtv, false);
+			if (!history.texture.IsNull())
+				m_ResourceManager->DestroyTexture(history.texture, false);
+			history = {};
+		}
+
+		// The accumulation cannot be rescaled, so a resize starts it over.
+		m_HistoryValid        = false;
+		m_CurrentHistoryIndex = 0;
+
+		if (!m_MotionSrv.IsNull())
+			m_ResourceManager->DestroySrv(m_MotionSrv, false);
 		if (!m_SceneColorSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_SceneColorSrv, false);
 		if (!m_SceneColorRtv.IsNull())
@@ -181,6 +236,7 @@ namespace bgl
 		if (!m_DepthTexture.IsNull())
 			m_ResourceManager->DestroyTexture(m_DepthTexture, false);
 
+		m_MotionSrv         = {};
 		m_SceneColorSrv     = {};
 		m_SceneColorRtv     = {};
 		m_SceneColorTexture = {};

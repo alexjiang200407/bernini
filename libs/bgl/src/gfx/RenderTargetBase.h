@@ -95,9 +95,43 @@ namespace bgl
 		[[nodiscard]] virtual SrvHandle
 		GetSceneColorSrv() const noexcept = 0;
 
+		[[nodiscard]] virtual SrvHandle
+		GetMotionVectorSrv() const noexcept = 0;
+
 		/** Whether this target was created with RenderTargetDesc::taaEnabled. */
 		[[nodiscard]] virtual bool
 		IsTaaEnabled() const noexcept = 0;
+
+		/**
+		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
+		 * this frame's resolve writes, the other is the one it reads. Null on a target without TAA,
+		 * which allocates neither.
+		 *
+		 * @pre `index` is 0 or 1.
+		 */
+		[[nodiscard]] virtual TextureHandle
+		GetHistoryTexture(uint32_t index) const noexcept = 0;
+
+		[[nodiscard]] virtual RtvHandle
+		GetHistoryRtv(uint32_t index) const noexcept = 0;
+
+		[[nodiscard]] virtual SrvHandle
+		GetHistorySrv(uint32_t index) const noexcept = 0;
+
+		[[nodiscard]] virtual uint32_t
+		GetCurrentHistoryIndex() const noexcept = 0;
+
+		/**
+		 * False until a resolve has written a history this target can reproject from -- at creation
+		 * and again after a resize, which discards the accumulation rather than rescaling it. The
+		 * frame that sees it false takes the scene colour whole instead of blending.
+		 */
+		[[nodiscard]] virtual bool
+		IsHistoryValid() const noexcept = 0;
+
+		/** Swaps which history the next frame writes, and marks the one just written readable. */
+		virtual void
+		AdvanceHistory() noexcept = 0;
 
 		/**
 		 * Presents the frame just submitted, then advances to the index the next one records into.

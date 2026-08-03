@@ -31,13 +31,16 @@ flowchart TD
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then per transparent partition)"]
     end
-    D --> PPX["PostProcess (scene colour -> backbuffer)"]
+    D --> TAA["TaaResolve (only when the target has TAA)"]
+    TAA --> PPX["PostProcess (-> backbuffer)"]
     PPX --> PP["PreparePresent (transition backbuffer to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
 `Clear`, `Skybox`, and `Forward` take the imported `sceneColor` and `motionVectors` textures as
-render targets; `PostProcess` reads `sceneColor` and is the **only** writer of the backbuffer;
+render targets; `TaaResolve` reads `sceneColor`, the velocity buffer and the previous accumulation and writes the
+next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
+writer of the backbuffer;
 `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
@@ -251,6 +254,25 @@ the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks be
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
 
+### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl/src/passes/TaaResolvePass.cpp)
+
+Accumulates the jittered scene colour into the temporal history: reprojects the previous accumulation
+through the velocity buffer, clamps it to the 3x3 neighbourhood in YCoCg, and blends. A single
+full-screen triangle from the `TaaResolve` module, depth test off. Added in `EndFrame`, before
+`PostProcess`, and **only when the target has `taaEnabled`** — a target without it allocates no
+history and the pass is never attached.
+
+See [Temporal Antialiasing](docs/taa.md) for why the clamp is in YCoCg, why the blend is luma-weighted
+and why the resolve writes history rather than the backbuffer.
+
+* **In:** `sceneColor`, `motionVectors` and the previous history as shader resources; a point sampler
+  for the two read 1:1 and a linear one for the reprojected history, both owned by `RenderContext`.
+* **Out:** the current history. `PostProcess` is then pointed at it instead of `sceneColor`.
+* **The first frame, and the first after a resize, take the scene colour whole** — `historyValid` is
+  false and there is no accumulation to blend against.
+* The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
+  declaration in `TaaResolve.slang`.
+
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
@@ -261,7 +283,8 @@ Today it applies `AgX` and nothing else. It is named for the stage rather than t
 everything between a resolved scene and the screen — bloom, grading, exposure adaptation — belongs
 here as it lands.
 
-* **In:** `sceneColor` as a shader resource, through the `SrvHandle` the render target owns; its own
+* **In:** whatever the last HDR stage produced — `sceneColor`, or the freshly resolved history on a
+  TAA target — through the `SrvHandle` the render target owns; its own
   point-clamp sampler, created by `RenderContext` because the pass runs outside any `Draw` and the
   per-scene samplers are not reachable there. The `gPostProcessData` cbuffer name is matched
   against Slang reflection, so it must track the declaration in `PostProcess.slang`.

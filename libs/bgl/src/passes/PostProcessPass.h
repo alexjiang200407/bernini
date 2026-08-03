@@ -28,7 +28,10 @@ namespace bgl
 	public:
 		struct Args
 		{
-			SrvHandle     sceneColor;
+			// The last HDR stage's output: scene colour directly, or the freshly resolved history
+			// when the target has TAA on.
+			SrvHandle     source;
+			std::string   sourceName;
 			RtvHandle     backBuffer;
 			SamplerHandle sampler;
 			Viewport      viewport;
