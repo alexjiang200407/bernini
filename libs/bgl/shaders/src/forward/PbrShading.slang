@@ -7,20 +7,10 @@ public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-/**
- * The shading normal, with the normal map applied in the surface's tangent frame.
- *
- * `isFrontFace` is the rasterizer's own answer, from SV_IsFrontFace. A two-sided pipeline
- * (RasterCullMode::kNone -- every cutout, blend and hashed bucket) rasterizes the back of a surface
- * with the interpolated normal still pointing away from the camera, which sends the view angle, the
- * irradiance lookup and the reflection vector all to the wrong hemisphere.
- *
- * The flip is applied to the geometric normal *before* the frame is built rather than to the result,
- * so the bitangent flips with it. Negating the shaded normal afterwards leaves a mirrored bitangent
- * and leans the normal map's detail the wrong way on every back face.
- */
 public float3 CalculateNormal(float3 worldNormal, float4 worldTangent, float2 sampledNormalXY, bool isFrontFace)
 {
+    // Flipped here rather than on the way out: the bitangent below is built from N, so negating the
+    // finished normal instead would leave the frame mirrored and lean the normal map the wrong way.
     float3 N = normalize(isFrontFace ? worldNormal : -worldNormal);
 
     // Normal maps are BC5_UNORM
