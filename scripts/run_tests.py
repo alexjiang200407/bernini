@@ -46,6 +46,7 @@ import time
 
 import util.cmake_tools as ct
 import util.config as cfg
+import util.lfs as lfs
 
 # What makes a target a test suite.
 SUITE_SUFFIX = "_tests"
@@ -186,6 +187,14 @@ def main():
         split = argv.index("--")
         argv, forward = argv[:split], argv[split + 1:]
     args = parser.parse_args(argv)
+
+    # The suites read assets/, so an LFS checkout that never got its filters fails them all
+    # as corrupt files. Say so here rather than letting the build run into it.
+    if not args.list:
+        broken = lfs.problem()
+        if broken:
+            print(broken, file=sys.stderr)
+            return 1
 
     # Build everything before resolving: a build dir that has never been configured has no
     # codemodel to discover the suites in, and building is what produces one.

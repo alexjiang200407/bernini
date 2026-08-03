@@ -27,6 +27,7 @@ import sys
 
 import util.cmake_tools as ct
 import util.config as cfg
+import util.lfs as lfs
 
 
 def main():
@@ -48,6 +49,14 @@ def main():
     else:
         own_args, passthrough = argv, []
     args = parser.parse_args(own_args)
+
+    # Before the build, not after it: a clone whose assets are LFS pointers is going to fail
+    # the moment the binary reads one, and there is no reason to compile first to find out.
+    if not args.dry_run:
+        broken = lfs.problem()
+        if broken:
+            print(broken, file=sys.stderr)
+            return 1
 
     build_cmd = None
     if not args.no_build:

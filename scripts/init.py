@@ -13,7 +13,7 @@ schema.
 
 Points git at the committed .githooks, and configures Git LFS -- whose filters are
 machine-local config a clone cannot inherit, so without this the assets check out as
-pointer text and the tests fail on them.
+pointer text and the tests fail on them as though they were corrupt.
 
 Also offers to install `just` (the task runner behind the root justfile) and the
 GitHub CLI `gh` (which bcp-revise uses for PR reviews). Both are optional -- every
@@ -46,6 +46,7 @@ import sys
 
 import util.cmake_tools as ct
 import util.config as cfg
+import util.lfs as lfs
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
 
@@ -57,10 +58,6 @@ BOT_KEYS_URL = "https://github.com/settings/apps/morgana-coding-agent/keys"
 BOT_DIR = os.path.join(os.path.expanduser("~"), ".claude")
 BOT_KEY = os.path.join(BOT_DIR, "morgana-coding-agent.private-key.pem")
 BOT_ENV = os.path.join(BOT_DIR, "morgana-coding-agent.env")
-
-# First bytes of a Git LFS pointer file -- what a clone with no smudge filter leaves
-# in the working tree in place of the asset.
-LFS_POINTER_MAGIC = b"version https://git-lfs.github.com/spec/v1"
 
 
 if sys.platform == "darwin":
@@ -247,26 +244,6 @@ def ensure_hooks():
     print(f"git hooks: set core.hooksPath to {hooks_dir}")
 
 
-def lfs_pointer_files():
-    """Tracked LFS paths whose working-tree copy is still the pointer text, not the asset."""
-    listed = subprocess.run(
-        ["git", "lfs", "ls-files", "-n"],
-        cwd=ct.REPO_ROOT, capture_output=True, text=True,
-    )
-    if listed.returncode:
-        return []
-
-    stale = []
-    for rel in listed.stdout.splitlines():
-        try:
-            with open(os.path.join(ct.REPO_ROOT, rel), "rb") as fh:
-                if fh.read(len(LFS_POINTER_MAGIC)) == LFS_POINTER_MAGIC:
-                    stale.append(rel)
-        except OSError:
-            pass  # Absent or unreadable is not this function's problem; git will say so.
-    return stale
-
-
 def ensure_lfs():
     """Configure Git LFS for this clone, and fetch anything still left as a pointer.
 
@@ -301,7 +278,7 @@ def ensure_lfs():
     else:
         print("git lfs: installed the filters for this clone")
 
-    stale = lfs_pointer_files()
+    stale = lfs.pointer_files()
     if not stale:
         return
 
@@ -310,7 +287,7 @@ def ensure_lfs():
         print("warning: `git lfs pull` failed; run it by hand.", file=sys.stderr)
         return
 
-    remaining = lfs_pointer_files()
+    remaining = lfs.pointer_files()
     if remaining:
         print(f"warning: {len(remaining)} file(s) are still pointers, e.g. {remaining[0]}. "
               f"Run `git lfs pull` by hand.", file=sys.stderr)
