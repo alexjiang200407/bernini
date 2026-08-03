@@ -73,6 +73,24 @@ unit radiance and not as white.
 
 ---
 
+## Hashed alpha
+
+`LayerType::kHashed` resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
+write, no blend, velocity written like any other geometry — and drawn in the PSO-bucketed phase
+rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
+threshold ([util/HashedAlpha.slang](libs/bgl/shaders/src/util/HashedAlpha.slang)) instead of the
+material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
+self-occluding surface writes real depth.
+
+The material's `alphaCutoff` is deliberately unused there: a cutoff is the thing being replaced.
+
+`MaterialData::alphaHashSeed` advances once per frame so the pattern decorrelates, and is zero on a
+target without temporal AA — a pattern that moved with nothing accumulating it is flicker rather than
+coverage. **A single frame of this is noise by design**; it is only correct once
+[TAA](docs/taa.md) has integrated it.
+
+---
+
 ## Motion vectors
 
 The forward pass writes a screen-space velocity buffer alongside colour, as MRT slot 1: for each
@@ -216,7 +234,8 @@ The main geometry pass: a mesh-shader forward render, in two phases. It holds `c
 raster/depth/blend state), plus a second `m_PrepassKernels` array whose only built slots are the
 self-occluding transparent PSOs. The amplification and mesh shaders are always the shared
 `Forward_StaticMesh` module; the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
-`Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`, `Forward_Transparent`,
+`Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
+`Forward_PBR_HashedAlpha`, `Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`,
 `Forward_Transparent_Prepass`, `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a
 `static_assert` catches an empty row but not a misordering.
 

@@ -12,6 +12,8 @@ public enum PsoType : uint32_t
     kTransparent_StaticMesh_LoosePbr,
     kTransparentOcclude_StaticMesh_PBR,
     kTransparentOcclude_StaticMesh_LoosePbr,
+    kHashedAlpha_StaticMesh_PBR,
+    kHashedAlpha_StaticMesh_LoosePbr,
     kAssert_StaticMesh,
     kCount,
 }

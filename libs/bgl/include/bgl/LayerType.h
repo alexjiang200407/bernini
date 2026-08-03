@@ -8,6 +8,11 @@ namespace bgl
 		kOpaque  = 0,
 		kMask,
 		kBlend,
+
+		// Stochastic coverage: alpha becomes a per-pixel hashed threshold rather than a cutoff, so
+		// every layer of a self-occluding surface writes depth and participates. Resolves to the
+		// correct blend only under temporal AA -- a single frame of it is noise.
+		kHashed,
 		kCount,
 	};
 }
