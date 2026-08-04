@@ -20,10 +20,10 @@ namespace editor
 	 * differently -- a thumbnail that disagrees with the preview it was generated from is a bug that
 	 * only shows up side by side.
 	 *
-	 * Degrades rather than throws: a missing or unreadable environment warns and leaves the view
-	 * unlit. That is deliberately survivable, because an editor that will not open is worse than one
-	 * that draws dark -- but it is also why a broken path is quiet, so check the log if a viewport is
-	 * black.
+	 * Degrades rather than throws: a missing or unreadable environment warns and binds nothing,
+	 * leaving whatever the view was already lit by in place. That is deliberately survivable, because
+	 * an editor that will not open is worse than one that draws dark -- but it is also why a broken
+	 * path is quiet, so check the log if a viewport is black.
 	 *
 	 * Must be called on the render thread, like everything else that touches a scene or a view.
 	 *
@@ -35,7 +35,7 @@ namespace editor
 	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
 	 * @param who Prefix for warnings, naming the caller.
 	 * @return What was bound. Applying twice over one view leaks the first set's slots unless the
-	 *         caller releases them -- see MaterialPreviewWindow::SetEnvironment.
+	 *         caller releases them -- pass both to ReplaceEnvironment.
 	 */
 	[[nodiscard]] AppliedEnvironment
 	ApplyEnvironment(
@@ -45,4 +45,24 @@ namespace editor
 		const std::filesystem::path& dataRoot,
 		std::optional<float>         exposureOverride,
 		const char*                  who);
+
+	/**
+	 * Hands back the maps an apply displaced, and only those: a map the apply did not rebind is one
+	 * the view still samples every frame, so it is kept rather than released.
+	 *
+	 * Releasing the whole of `previous` after a failed or partial apply leaves the view naming
+	 * retired slots. D3D12 survives that -- the shader indexes the heap and reads a stale
+	 * descriptor -- but Metal resolves each handle to an MTLResourceID at dispatch, so the next
+	 * frame aborts.
+	 *
+	 * Must be called on the render thread.
+	 *
+	 * @return What the view now names: `applied` wherever it bound something, `previous` elsewhere.
+	 * @throws bgl::SceneError if a displaced handle was already deleted.
+	 */
+	[[nodiscard]] AppliedEnvironment
+	ReplaceEnvironment(
+		bgl::IScene*              scene,
+		const AppliedEnvironment& previous,
+		const AppliedEnvironment& applied);
 }

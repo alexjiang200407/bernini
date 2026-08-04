@@ -190,6 +190,54 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	}
 }
 
+TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbake]")
+{
+	const DataRoot root("bernini_envbake_draw");
+
+	BSky sky = RoutedSky(root);
+	bakeSky(sky, { root.path });
+	const std::string source = sky.sky.source;
+	const std::string baked  = sky.sky.baked;
+
+	SECTION("a current bake is what is drawn") { CHECK(envMapToDraw(sky.sky, root.path) == baked); }
+
+	// The case a fresh checkout is in: Textures/ is regenerated per platform and kept out of source
+	// control, so the sources arrive and the bakes do not.
+	SECTION("a baked map that was never written falls back to the source")
+	{
+		std::filesystem::remove(root.path / baked);
+		CHECK(envMapToDraw(sky.sky, root.path) == source);
+
+		BSky unbaked = RoutedSky(root);
+		CHECK(envMapToDraw(unbaked.sky, root.path) == unbaked.sky.source);
+	}
+
+	// The material's rule: loose is not a representation a route with no source can draw, so the
+	// baked map is kept even though the stamp says it no longer reflects anything.
+	SECTION("a deleted source keeps the baked map")
+	{
+		std::filesystem::remove(root.path / source);
+		CHECK(envMapToDraw(sky.sky, root.path) == baked);
+	}
+
+	SECTION("a stale bake is displaced by the source it drifted from")
+	{
+		root.AddSource("sky_src.ktx2", 16, 1.0f);
+		REQUIRE(isSkyBakeStale(sky, root.path));
+		CHECK(envMapToDraw(sky.sky, root.path) == source);
+	}
+
+	SECTION("neither on disk throws, naming both")
+	{
+		std::filesystem::remove(root.path / source);
+		std::filesystem::remove(root.path / baked);
+		CHECK_THROWS_AS(envMapToDraw(sky.sky, root.path), std::runtime_error);
+
+		// An unrouted route names nothing at all, which is the same verdict by a different path.
+		CHECK_THROWS_AS(envMapToDraw(EnvMapRoute{}, root.path), std::runtime_error);
+	}
+}
+
 TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "[envbake]")
 {
 	const DataRoot root("bernini_envbake_cancel");

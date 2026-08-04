@@ -5,6 +5,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -143,12 +144,8 @@ namespace game
 	{
 		const assetlib::BEnv env = assetlib::loadEnv(m_DataRoot / relPath);
 
-		const auto acquireBaked = [this](const std::string& baked, const std::string& asset) {
-			if (baked.empty())
-				throw std::runtime_error(
-					"AssetManager::AcquireEnvironment: '" + asset +
-					"' has never been baked; bake it before acquiring");
-			return AcquireTexture(baked);
+		const auto acquireRoute = [this](const assetlib::EnvMapRoute& route) {
+			return AcquireTexture(assetlib::envMapToDraw(route, m_DataRoot));
 		};
 
 		Environment out;
@@ -156,7 +153,7 @@ namespace game
 		if (!env.sky.empty())
 		{
 			const assetlib::BSky sky = assetlib::loadSky(m_DataRoot / env.sky);
-			out.skybox               = acquireBaked(sky.sky.baked, env.sky);
+			out.skybox               = acquireRoute(sky.sky);
 			out.skyMipLevel          = sky.mipLevel;
 			out.skyRotationY         = sky.rotationY;
 		}
@@ -165,8 +162,8 @@ namespace game
 		{
 			const assetlib::BEnvLighting lighting =
 				assetlib::loadEnvLighting(m_DataRoot / env.lighting);
-			out.prefilter  = acquireBaked(lighting.prefilter.baked, env.lighting);
-			out.irradiance = acquireBaked(lighting.irradiance.baked, env.lighting);
+			out.prefilter  = acquireRoute(lighting.prefilter);
+			out.irradiance = acquireRoute(lighting.irradiance);
 			out.exposure   = lighting.exposure;
 		}
 

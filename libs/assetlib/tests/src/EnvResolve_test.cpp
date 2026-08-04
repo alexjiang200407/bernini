@@ -123,7 +123,27 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 		CHECK(resolved.maps.exposure == Catch::Approx(1.0f));
 	}
 
-	SECTION("a referenced sky that was never baked throws rather than loading its source")
+	// The state a fresh checkout is in: the baked maps are regenerated per platform and kept out of
+	// source control, so a sky arrives with its float source and nothing compiled from it.
+	SECTION("a referenced sky that was never baked resolves to its source")
+	{
+		writeKTX2(
+			GradientCube(16, 3.0f),
+			root.path / "raw_src.ktx2",
+			false,
+			Ktx2Compression::kNone);
+
+		BSky sky;
+		sky.name       = "raw";
+		sky.sky.source = "raw_src.ktx2";
+		saveSky(sky, root.path / "raw.bsky");
+		saveEnv(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
+
+		const ResolvedEnvironment resolved = resolveEnvironment(root.path / "raw.benv", root.path);
+		CHECK(SamePixels(resolved.maps.skybox, GradientCube(16, 3.0f)));
+	}
+
+	SECTION("a referenced sky with neither a baked map nor a source throws")
 	{
 		BSky sky;
 		sky.name       = "raw";
@@ -133,7 +153,7 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 
 		CHECK_THROWS_WITH(
 			resolveEnvironment(root.path / "raw.benv", root.path),
-			Catch::Matchers::ContainsSubstring("never been baked"));
+			Catch::Matchers::ContainsSubstring("is on disk"));
 	}
 
 	SECTION("a dangling reference throws")

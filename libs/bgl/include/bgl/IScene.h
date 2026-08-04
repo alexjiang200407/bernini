@@ -186,6 +186,10 @@ namespace bgl
 		 * material still routes leaves that material reading a slot that a later AddTextureAsset
 		 * may reuse; delete such materials first.
 		 *
+		 * A view's SetEnvironmentMap / SetSkyBox bindings are the same hazard and are not cascaded
+		 * to: rebind the view before releasing what it named. The retired slot is not benign on
+		 * every backend -- Metal resolves the handle at dispatch and aborts on the next frame.
+		 *
 		 * @param texture A handle returned by AddTextureAsset.
 		 * @throws SceneError if the handle is null, or already deleted.
 		 */

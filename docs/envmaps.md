@@ -104,9 +104,9 @@ flowchart TD
 ### `game::AssetManager`
 
 * **`AcquireEnvironment`** — @post pieces the `.benv` does not reference come back as invalid handles.
-  **@throws** when a container it *does* name has never been baked; that is a project error, not a
-  partial environment. Use `Environment::HasLighting()` and `HasSky()` before binding: they exist
-  because the scene throws, not because it tolerates.
+  **@throws** when a route it *does* name has neither a baked map nor a source on disk; that is a
+  project error, not a partial environment. Use `Environment::HasLighting()` and `HasSky()` before
+  binding: they exist because the scene throws, not because it tolerates.
 
 ### `assetlib::importEnvironment`
 
@@ -119,18 +119,36 @@ flowchart TD
 
 ### `assetlib::resolveEnvironment`
 
-* Loads the **baked** maps, never the float sources. Resolving is a consumer operation, and a fallback
-  to sources would light the scene subtly differently from the shipping build. **@throws** if a
-  referenced asset was never baked.
+* Loads whichever map each route draws — `envMapToDraw`, below. **@throws** only when a route has
+  neither its baked map nor its source on disk.
+
+### `assetlib::envMapToDraw`
+
+* **The baked-vs-source branch, in one place**, because two consumers ask it: `resolveEnvironment`
+  (the editor) and `game::AssetManager::AcquireEnvironment` (the runtime). It is the environment's
+  copy of a material's `drawsLoose`, and follows the same rule — the baked RGB9E5 while it is on disk
+  and current, the float source it was compiled from while it is not, and the baked map anyway when
+  the source has gone, because a route with neither cannot be drawn at all.
+* **This is what makes a fresh checkout work.** `Data/Textures/` is git-ignored by design — baked
+  output is regenerated per platform — so a clone has every `textures_src/` source and no bake. Before
+  this branch existed, every environment in such a project failed to load while its materials drew
+  fine, because materials already had the fallback.
+* The fallback costs memory (`R32G32B32A32_SFLOAT` against RGB9E5, four times the bytes) and is not
+  what ships. It is not a different *image*: the source is exactly what the bake compiled, blur and
+  all.
 
 ### `editor::ApplyEnvironment`
 
 * **@pre the render thread**, like everything touching a scene or a view.
-* Finds the data root by taking the `.benv`'s **parent's parent**, so an environment anywhere but
-  directly inside `Environments/` resolves its references against the wrong root.
+* Takes the data root as an argument rather than deriving it from the `.benv`: an environment is not
+  always two levels under the root, and guessing lands on the wrong one without saying so.
+* Binds the IBL pair and the skybox **independently**, and binds neither when the resolve fails — so
+  what it returns can be empty, or half of an environment, with the view still naming what it had.
 * **@post applying twice over one view leaks the first set's texture slots** unless the caller releases
-  what it returns. See `MaterialPreviewWindow::SetEnvironment`, which releases the previous set *after*
-  binding the new one.
+  what it displaced. `editor::ReplaceEnvironment` is that rule: it releases only the maps the new apply
+  rebound, because a map the apply left alone is one the view still samples every frame. Releasing the
+  whole previous set is what crashed the Metal backend on a failed drop — D3D12 reads a stale
+  descriptor and survives, Metal resolves the handle to an `MTLResourceID` at dispatch and aborts.
 
 ## Usage Sketch
 

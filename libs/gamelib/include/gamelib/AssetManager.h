@@ -150,12 +150,15 @@ namespace game
 		};
 
 		/**
-		 * Loads the `.benv` at `relPath` and acquires one texture reference per baked map its chain
-		 * names. The maps are keyed by their own paths, so two environments composing the same sky
-		 * share its upload -- which is the point of the reference container.
+		 * Loads the `.benv` at `relPath` and acquires one texture reference per map its chain names.
+		 * The maps are keyed by their own paths, so two environments composing the same sky share its
+		 * upload -- which is the point of the reference container.
 		 *
-		 * @throws std::runtime_error if a referenced file is missing or malformed, or a referenced
-		 *         asset has never been baked -- consumers draw the shipping maps, never the sources.
+		 * Baked or source per route, by `assetlib::envMapToDraw` -- the rule a material's baked-vs-
+		 * loose branch follows.
+		 *
+		 * @throws std::runtime_error if a referenced file is missing or malformed, or a route has
+		 *         neither a baked map nor a source on disk.
 		 */
 		Environment
 		AcquireEnvironment(std::string_view relPath);
