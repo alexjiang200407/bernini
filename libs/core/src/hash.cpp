@@ -2,6 +2,8 @@
 
 namespace core
 {
+	static_assert(false, "deliberate break: proving watch_pr.py reports a red build");
+
 	namespace
 	{
 		constexpr uint64_t c_FnvOffset = 14695981039346656037ull;
