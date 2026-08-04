@@ -24,12 +24,8 @@
 
 namespace
 {
-	// One frame was enough while every material drew the same fragments every time. A hashed one does
-	// not: its coverage is stochastic, and a single frame of it is a noise pattern rather than a
-	// picture of the material. The thumbnail target therefore runs temporal AA, and this has to be
-	// several times the resolve's time constant for the accumulation to have settled -- see
-	// docs/taa.md. Nothing else here needs the frames, so the cost is paid only to make a stochastic
-	// material safe to thumbnail.
+	// Several times the TAA resolve's time constant. One frame of a hashed material is a noise
+	// pattern rather than a picture of it. See docs/taa.md.
 	constexpr int c_WarmupFrames = 100;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
