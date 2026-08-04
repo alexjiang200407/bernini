@@ -55,6 +55,9 @@ namespace bgl
 		LogLevel logLevel = LogLevel::kError;
 
 		// Directory for the persistent shader cache. Empty disables caching.
+		//
+		// Under GPU validation only the driver-pipeline layer is dropped -- the generated code and
+		// reflection are identical either way, so they stay cached. See docs/shader_cache.md.
 		std::string shaderCacheDir;
 
 		// Writes the first frame to a .gputrace bundle at this path. Metal only; empty disables it.

@@ -22,4 +22,16 @@ namespace bgl::test
 	/** Set once by main() from the parsed command line, before any test runs. */
 	void
 	SetGpuValidation(bool enabled) noexcept;
+
+	/**
+	 * Whether GPU validation is actually running, by whatever route turns it on -- the flag above on
+	 * D3D12, or Metal's own environment variables, which the runtime reads before this process gets a
+	 * say.
+	 *
+	 * For a test whose subject is incompatible with validation rather than merely slower under it.
+	 * The shader cache's driver-pipeline layer is the case: it is not built while validation runs, so
+	 * a test that asserts one was written has nothing to assert.
+	 */
+	[[nodiscard]] bool
+	GpuValidationActive() noexcept;
 }

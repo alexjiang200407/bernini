@@ -114,8 +114,15 @@ namespace bgl
 
 			logger::info("Metal device: {}", mtlDevice->name()->utf8String());
 
+			// Metal's validation is switched on by the environment, not by us, so the option alone
+			// cannot say whether it is running. Either variable instruments shaders enough that a
+			// binary archive written without them no longer describes what the driver will run.
+			const bool gpuValidation = opts.enableGPUValidationLayer ||
+			                           std::getenv("MTL_SHADER_VALIDATION") != nullptr ||
+			                           std::getenv("METAL_DEVICE_WRAPPER_TYPE") != nullptr;
+
 			core::SharedRef<Device> device =
-				core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir);
+				core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir, !gpuValidation);
 			m_Device = device;
 
 			auto rmDesc               = ResourceManagerDesc();

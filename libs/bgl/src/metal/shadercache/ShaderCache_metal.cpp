@@ -130,12 +130,16 @@ namespace bgl
 		MTL::Device*                    device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,
-		const std::vector<std::string>& searchPaths) :
+		const std::vector<std::string>& searchPaths,
+		bool                            usePipelineLibrary) :
 		m_CacheDir(std::move(cacheDir)),
 		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, c_CacheFormatVersion))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
+
+		if (!usePipelineLibrary)
+			return;
 
 		NS::SharedPtr<NS::AutoreleasePool> pool =
 			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());

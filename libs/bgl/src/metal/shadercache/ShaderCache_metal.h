@@ -48,11 +48,16 @@ namespace bgl
 		// searchPaths are the session's shader source roots; every file under them contributes to
 		// the invalidation hash. optionsSalt captures the compiler version and the compile options
 		// that affect codegen.
+		//
+		// usePipelineLibrary false keeps the program cache but drops the binary archive; pass false
+		// when GPU validation is on. An archive is written by an uninstrumented run, and Metal
+		// crashes inside newBinaryArchive loading one into a validating device.
 		ShaderCache(
 			MTL::Device*                    device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
-			const std::vector<std::string>& searchPaths);
+			const std::vector<std::string>& searchPaths,
+			bool                            usePipelineLibrary);
 
 		~ShaderCache();
 

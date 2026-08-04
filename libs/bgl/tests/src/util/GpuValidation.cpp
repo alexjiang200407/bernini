@@ -20,4 +20,11 @@ namespace bgl::test
 	{
 		g_GpuValidation = enabled;
 	}
+
+	bool
+	GpuValidationActive() noexcept
+	{
+		return g_GpuValidation || std::getenv("MTL_SHADER_VALIDATION") != nullptr ||
+		       std::getenv("METAL_DEVICE_WRAPPER_TYPE") != nullptr;
+	}
 }
