@@ -275,7 +275,6 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kBlend;
 	material.pbr.alphaCutoff      = 0.25f;
-	material.pbr.occlude          = true;
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
@@ -284,7 +283,29 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BMaterial loaded = loadMaterial(path);
 	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
-	CHECK(loaded.pbr.occlude);
+}
+
+// The byte `occlude` used to occupy is still written and still skipped, so a material baked before
+// it was retired reads back intact. Version minor stays 1: the stream layout has not moved, only the
+// meaning of one byte, and bumping it would strand every file on disk for no gain.
+TEST_CASE("a material baked with the retired occlude byte still reads", "[bmaterial][alphatest]")
+{
+	BMaterial material;
+	material.pbr.alphaMode        = AlphaMode::kBlend;
+	material.pbr.alphaCutoff      = 0.75f;
+	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
+
+	std::vector<std::byte> bytes = serializeMaterial(material);
+	REQUIRE_FALSE(bytes.empty());
+
+	// The retired flag was the last byte written, and a material baked while it still meant
+	// something has it set. The reader has to consume it and ignore it rather than stop short.
+	bytes.back() = std::byte{ 1 };
+
+	const BMaterial loaded = deserializeMaterial(bytes);
+	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
+	CHECK(loaded.pbr.alphaCutoff == 0.75f);
+	CHECK(loaded.pbr.baseColorTexture == "Textures/basecolor_dead.ktx2");
 }
 
 // kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new

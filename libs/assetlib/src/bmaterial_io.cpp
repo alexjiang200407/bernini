@@ -42,7 +42,10 @@ namespace assetlib
 			}
 			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
 			writer.WritePod(pbr.alphaCutoff);
-			writer.WritePod<uint8_t>(pbr.occlude ? 1u : 0u);  // minor >= 1
+			// Reserved, written zero. Was `occlude`, the depth-pre-pass self-occlusion flag, which
+			// hashed alpha replaced. The byte stays so the stream layout does not move and every
+			// material already on disk still reads.
+			writer.WritePod<uint8_t>(0u);  // minor >= 1
 		}
 
 		PbrParams
@@ -69,7 +72,7 @@ namespace assetlib
 			pbr.alphaCutoff = reader.ReadPod<float>();
 			if (versionMinor >= 1)
 			{
-				pbr.occlude = reader.ReadPod<uint8_t>() != 0u;
+				static_cast<void>(reader.ReadPod<uint8_t>());  // reserved; see writePbr
 			}
 			return pbr;
 		}

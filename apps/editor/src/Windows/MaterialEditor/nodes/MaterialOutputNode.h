@@ -90,13 +90,6 @@ public:
 		return false;
 	}
 
-	// Blend only: whether the material self-occludes via a depth pre-pass. Off for every other sink.
-	[[nodiscard]] virtual bool
-	Occlude() const noexcept
-	{
-		return false;
-	}
-
 	[[nodiscard]] virtual float
 	AlphaCutoff() const noexcept
 	{

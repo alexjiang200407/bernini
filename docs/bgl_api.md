@@ -82,9 +82,9 @@ disagrees, trust the header, then fix this doc.
   job — or `gamelib`'s `AssetManager`, which refcounts them.
 
 * **A material's PSO bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
-  carries `layerType` (`kOpaque`/`kMask`/`kBlend`) and `occlude` alongside `materialType`, because a
-  submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` and
-  `occlude` are therefore part of the handle, not just the desc. See
+  carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
+  submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
+  therefore part of the handle, not just the desc. See
   [PsoType.h](libs/bgl/include/bgl/PsoType.h) for the resulting buckets — it is IDL-generated; do not
   edit it.
 

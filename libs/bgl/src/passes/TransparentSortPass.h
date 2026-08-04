@@ -63,7 +63,6 @@ namespace bgl
 		ComputeKernel m_DepthKeys;
 		ComputeKernel m_Sort;
 
-		ComputeBuffer m_PartitionBase;
-		ComputeBuffer m_PartitionDispatchArgs;
+		ComputeBuffer m_DispatchArgs;
 	};
 }
