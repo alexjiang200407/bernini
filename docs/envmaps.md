@@ -104,9 +104,9 @@ flowchart TD
 ### `game::AssetManager`
 
 * **`AcquireEnvironment`** — @post pieces the `.benv` does not reference come back as invalid handles.
-  **@throws** when a container it *does* name has never been baked; that is a project error, not a
-  partial environment. Use `Environment::HasLighting()` and `HasSky()` before binding: they exist
-  because the scene throws, not because it tolerates.
+  **@throws** when a route it *does* name has neither a baked map nor a source on disk; that is a
+  project error, not a partial environment. Use `Environment::HasLighting()` and `HasSky()` before
+  binding: they exist because the scene throws, not because it tolerates.
 
 ### `assetlib::importEnvironment`
 
