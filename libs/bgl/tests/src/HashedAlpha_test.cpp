@@ -101,16 +101,20 @@ namespace
 		return bgl::test::MeanColor(path, c_GrazeX, c_GrazeY, c_GrazeW, c_GrazeH);
 	}
 
-	// Renders one plane at `alpha` with the given layer, `frames` times, and returns the mean colour
-	// of the patch. The background is black, so a discarded fragment contributes nothing and the mean
-	// over the patch is the surviving fraction times what a fully covered patch would read.
-	bgl::test::Rgba
-	RenderPatch(
-		const std::string& path,
-		bgl::LayerType     layer,
-		float              alpha,
-		bool               taaEnabled = false,
-		int                frames     = 1)
+	// One plane at `alpha` filling the middle of the frame, and everything needed to keep drawing it.
+	// Held together because a test that captures more than one frame has to drive the same target
+	// across them -- a fresh stack per frame would start the accumulation over each time.
+	struct PatchScene
+	{
+		bgl::GraphicsRef     gfx;
+		bgl::RenderTargetRef target;
+		bgl::SceneRef        scene;
+		bgl::SceneViewRef    view;
+		bgl::RenderJob       job;
+	};
+
+	PatchScene
+	MakePatchScene(bgl::LayerType layer, float alpha, bool taaEnabled)
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -170,13 +174,54 @@ namespace
 		job.camera   = camera;
 		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
+		return PatchScene{ gfx, target, scene, view, job };
+	}
+
+	// Renders one plane at `alpha` with the given layer, `frames` times, and returns the mean colour
+	// of the patch. The background is black, so a discarded fragment contributes nothing and the mean
+	// over the patch is the surviving fraction times what a fully covered patch would read.
+	bgl::test::Rgba
+	RenderPatch(
+		const std::string& path,
+		bgl::LayerType     layer,
+		float              alpha,
+		bool               taaEnabled = false,
+		int                frames     = 1)
+	{
+		PatchScene patch = MakePatchScene(layer, alpha, taaEnabled);
+
 		for (int frame = 0; frame < frames; ++frame)
 		{
-			gfx->DrawFrame(target, job);
+			patch.gfx->DrawFrame(patch.target, patch.job);
 		}
 
-		gfx->ScreenshotPng(target, path);
+		patch.gfx->ScreenshotPng(patch.target, path);
 		return bgl::test::MeanColor(path, c_BoxX, c_BoxY, c_Box, c_Box);
+	}
+
+	// Draws `warmup` frames, captures, draws one more and captures again -- two consecutive frames of
+	// one accumulation, with the camera never moving. What separates them is flicker and nothing else.
+	float
+	ConsecutiveFrameDelta(
+		const std::string& pathA,
+		const std::string& pathB,
+		bgl::LayerType     layer,
+		float              alpha,
+		int                warmup)
+	{
+		PatchScene patch = MakePatchScene(layer, alpha, true);
+
+		for (int frame = 0; frame < warmup; ++frame)
+		{
+			patch.gfx->DrawFrame(patch.target, patch.job);
+		}
+
+		patch.gfx->ScreenshotPng(patch.target, pathA);
+
+		patch.gfx->DrawFrame(patch.target, patch.job);
+		patch.gfx->ScreenshotPng(patch.target, pathB);
+
+		return bgl::test::FrameDelta(pathA, pathB, c_BoxX, c_BoxY, c_Box, c_Box);
 	}
 }
 
@@ -280,6 +325,42 @@ TEST_CASE("Temporal AA resolves the hashed noise", "[hashedalpha][render]")
 	// display value of their mean -- the curve is concave, so averaging in linear before it lands
 	// higher. Asserting the two were equal would be asserting the tonemap is linear.
 	CHECK(many.Luma() > one.Luma());
+}
+
+// Smooth is not the same as still. A patch can measure flat across its pixels every frame and be a
+// different flat patch each time, which is what flicker is -- and the spatial measure above scores
+// that as a success. This is the temporal half: with the camera fixed and the accumulation warm, two
+// consecutive frames have to agree.
+//
+// The opaque patch is the floor. It draws the same fragments every frame and differs only by the
+// jitter, so whatever it scores is what "still" costs here; hashed alpha is asked to come within a
+// small multiple of it rather than to reach zero.
+TEST_CASE("A converged hashed patch stops changing between frames", "[hashedalpha][render]")
+{
+	const float opaque = ConsecutiveFrameDelta(
+		"assets/golden/hashed_alpha_still_opaque_a.got.png",
+		"assets/golden/hashed_alpha_still_opaque_b.got.png",
+		bgl::LayerType::kOpaque,
+		1.0f,
+		c_ConvergeFrames);
+
+	const float hashed = ConsecutiveFrameDelta(
+		"assets/golden/hashed_alpha_still_a.got.png",
+		"assets/golden/hashed_alpha_still_b.got.png",
+		bgl::LayerType::kHashed,
+		0.5f,
+		c_ConvergeFrames);
+
+	INFO("frame-to-frame delta: opaque = " << opaque << ", hashed = " << hashed);
+
+	// The instrument has to be able to read zero, or the bound below is measuring its own noise floor.
+	REQUIRE(opaque < 1e-5f);
+
+	// Measured 0.0049 with a hash cell one to two pixels wide and 0.0022 once it is sub-pixel; the
+	// bound sits between them, so the correlated pattern cannot come back unnoticed. Not tightened to
+	// the current figure: the residual is the neighbourhood clamp pulling the accumulation onto the
+	// noise, and what removes the rest of it is a change to the clamp rather than to the hash.
+	CHECK(hashed < 3.0e-3f);
 }
 
 // A hash cell is isotropic in world space; the projection is not. Sizing it off the larger screen

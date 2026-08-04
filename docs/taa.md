@@ -120,13 +120,30 @@ noise in any one frame and only correct once this has averaged it. Two couplings
 * **The hash seed is not the jitter index.** Eight seeds means eight distinct coverage patterns, and
   averaging eight binary masks converges to nine grey levels rather than to smooth coverage. It
   advances on its own longer cycle, which only has to outrun the history's memory.
-* **The blend weight bounds how smooth it can get.** At `c_BlendWeight` 0.1 the accumulation averages
-  roughly ten frames, which leaves about 16% residual noise on a half-covered surface. That is
-  arithmetic, not a defect — lowering the weight trades it against a longer ghosting tail.
+* **The hash cell must be sub-pixel, and that is the clamp's requirement rather than the hash's.**
+  The neighbourhood clamp admits history only within the range of a 3×3 of the current frame. A hash
+  cell wider than a pixel makes those nine samples share a value, the range collapses towards a
+  point, and the clamp snaps the accumulation back onto the noise every frame — which reads as
+  flicker, and on a surface that self-occludes as seeing through it, because the resolve is then
+  showing a single stochastic frame rather than the average of many. `c_HashScale` is the *lower*
+  bound of a 2× range, since the octave selection rounds down to a power of two.
+
+* **The blend weight is not what bounds the residual.** The arithmetic says a weight of 0.1 leaves
+  about 16% noise on a half-covered surface, but measurement disagrees about what dominates:
+  quartering the weight to 0.025 moved the frame-to-frame difference only 0.0049 → 0.0037, while
+  making the hash cell sub-pixel moved it to 0.0022 and bypassing the clamp entirely to 0.0008. The
+  clamp is the larger term, so reach for the weight last.
 
 ---
 
 ## Risky / Non-obvious Contracts
+
+* **The history buffers are never cleared, so the first frame must not read them.** The resolve
+  returns the scene colour by an early `return`, not by blending with a weight of 1 — `lerp(NaN, c,
+  1.0)` is NaN, because a zero coefficient does not discard its operand, and a NaN written into the
+  accumulation stays for the life of the target. This was live for a while and invisible: the
+  neighbourhood clamp happens to launder NaN, since IEEE `min`/`max` return the non-NaN operand.
+  Deleting the clamp turned every resolved frame black, which is how it surfaced.
 
 * **The ping-pong is per target, not per frame counter.** `GetCurrentHistoryIndex()` is state the target
   owns and `AdvanceHistory()` flips at `EndFrame`. Deriving it from a context-wide frame counter

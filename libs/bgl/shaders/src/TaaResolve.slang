@@ -112,19 +112,22 @@ float4 PSMain(VSOut input) : SV_Target
     // edge texel in would be a smear rather than an accumulation.
     bool onScreen = all(historyUv >= 0.0) && all(historyUv <= 1.0);
 
+    // Branched, not folded into the blend weight below: the history texture is not cleared, so on the
+    // first frame it holds whatever the allocation did, which may decode as NaN. `lerp(NaN, c, 1.0)`
+    // is NaN -- the zero coefficient does not discard the operand -- and a NaN written into the
+    // accumulation stays there for the life of the target.
+    if (!onScreen || gTaaResolveData.historyValid == 0.0)
+    {
+        return current;
+    }
+
     float3 history = gTaaResolveData.history.SampleLevel(gTaaResolveData.linearSampler, historyUv, 0.0).rgb;
 
     // Clamped rather than rejected: a pixel whose history is merely stale still carries subpixel
     // detail worth keeping once it is pulled inside what this frame could have produced.
     history = YCoCgToRgb(clamp(RgbToYCoCg(history), boxMin, boxMax));
 
-    float weight = gTaaResolveData.blendWeight;
-    if (!onScreen || gTaaResolveData.historyValid == 0.0)
-    {
-        weight = 1.0;
-    }
-
-    float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
+    float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), gTaaResolveData.blendWeight));
 
     return float4(resolved, current.a);
 }

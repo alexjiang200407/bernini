@@ -36,9 +36,10 @@ float Hash3(float3 v)
  */
 public float HashedAlphaThreshold(float3 surfacePos, float seed)
 {
-    // How much a hash cell may be magnified before the next scale is picked up. 1 keeps a cell at
-    // roughly a pixel; larger trades noise for a coarser, blotchier pattern.
-    const float c_HashScale = 1.0;
+    // The lower bound of a 2x range, since the octave snapping below rounds down to a power of two.
+    // Must keep a cell sub-pixel: neighbouring pixels sharing one collapse TAA's neighbourhood clamp
+    // onto the noise. See docs/taa.md.
+    const float c_HashScale = 0.5;
 
     // How far the two screen axes may disagree about the cell size before the smaller one wins. 4
     // is where the grazing pattern measures as fine as the head-on one; tighter only buys sub-pixel
