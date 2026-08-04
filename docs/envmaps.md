@@ -140,11 +140,15 @@ flowchart TD
 ### `editor::ApplyEnvironment`
 
 * **@pre the render thread**, like everything touching a scene or a view.
-* Finds the data root by taking the `.benv`'s **parent's parent**, so an environment anywhere but
-  directly inside `Environments/` resolves its references against the wrong root.
+* Takes the data root as an argument rather than deriving it from the `.benv`: an environment is not
+  always two levels under the root, and guessing lands on the wrong one without saying so.
+* Binds the IBL pair and the skybox **independently**, and binds neither when the resolve fails — so
+  what it returns can be empty, or half of an environment, with the view still naming what it had.
 * **@post applying twice over one view leaks the first set's texture slots** unless the caller releases
-  what it returns. See `MaterialPreviewWindow::SetEnvironment`, which releases the previous set *after*
-  binding the new one.
+  what it displaced. `editor::ReplaceEnvironment` is that rule: it releases only the maps the new apply
+  rebound, because a map the apply left alone is one the view still samples every frame. Releasing the
+  whole previous set is what crashed the Metal backend on a failed drop — D3D12 reads a stale
+  descriptor and survives, Metal resolves the handle to an `MTLResourceID` at dispatch and aborts.
 
 ## Usage Sketch
 

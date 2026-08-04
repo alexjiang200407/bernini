@@ -72,4 +72,25 @@ namespace editor
 
 		return applied;
 	}
+
+	AppliedEnvironment
+	ReplaceEnvironment(
+		bgl::IScene*              scene,
+		const AppliedEnvironment& previous,
+		const AppliedEnvironment& applied)
+	{
+		const auto replace = [scene](bgl::TextureAssetHandle prev, bgl::TextureAssetHandle next) {
+			if (!next.textureSlot)
+				return prev;
+			if (prev.textureSlot && prev.textureSlot != next.textureSlot)
+				scene->DeleteTextureAsset(prev);
+			return next;
+		};
+
+		auto bound       = AppliedEnvironment();
+		bound.irradiance = replace(previous.irradiance, applied.irradiance);
+		bound.prefilter  = replace(previous.prefilter, applied.prefilter);
+		bound.skybox     = replace(previous.skybox, applied.skybox);
+		return bound;
+	}
 }

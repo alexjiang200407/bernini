@@ -417,11 +417,9 @@ MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
 	GetRenderer()->Invoke([&] {
 		bgl::IScene* scene = PreviewScene();
 
-		const editor::AppliedEnvironment previous = m_Environment;
-
 		// A dropped `.benv` belongs to the open project, so its own data root is the one that
 		// resolves it. The configured root only stands in before a project is opened.
-		m_Environment = editor::ApplyEnvironment(
+		const editor::AppliedEnvironment applied = editor::ApplyEnvironment(
 			scene,
 			PreviewView(),
 			benvPath,
@@ -430,13 +428,8 @@ MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
 			"MaterialPreview");
 
 		// After the new one is bound, never before: releasing first would leave the view naming a
-		// slot that had been handed back, and a failed apply would leave it lit by nothing.
-		for (const bgl::TextureAssetHandle texture :
-		     { previous.irradiance, previous.prefilter, previous.skybox })
-		{
-			if (texture.textureSlot)
-				scene->DeleteTextureAsset(texture);
-		}
+		// slot that had been handed back.
+		m_Environment = editor::ReplaceEnvironment(scene, m_Environment, applied);
 	});
 }
 
