@@ -57,4 +57,18 @@ namespace bgl::test
 	 */
 	[[nodiscard]] float
 	AliasEnergy(const std::string& path, int x, int y, int w, int h);
+
+	/**
+	 * Mean squared difference between the same region of two frames -- how much a pixel changed
+	 * between them.
+	 *
+	 * The temporal counterpart of AliasEnergy, which measures the same quantity across neighbouring
+	 * pixels of one frame. A static camera over a converged accumulation should score near zero;
+	 * what it scores instead is flicker, which no single-frame measurement can see.
+	 *
+	 * @throws std::runtime_error if either image cannot be read, they differ in size, or the box is
+	 *         not wholly inside them.
+	 */
+	[[nodiscard]] float
+	FrameDelta(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h);
 }
