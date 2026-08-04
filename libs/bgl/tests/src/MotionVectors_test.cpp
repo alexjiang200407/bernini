@@ -520,7 +520,7 @@ TEST_CASE("Jitter moves the sampling grid", "[jitter][render]")
 
 		// Rotated off-axis so the quad's edges cross pixels diagonally; an axis-aligned edge can
 		// land on a pixel boundary and survive a sub-pixel shift unchanged.
-		const bgl::Camera camera = cameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(12.0f));
+		const bgl::Camera camera = CameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(12.0f));
 
 		fixture.RenderFrom(camera);
 		fixture.gfx->ScreenshotPng(fixture.target, first);
@@ -554,7 +554,7 @@ TEST_CASE("Jitter leaves a still camera reporting no motion", "[jitter][motionve
 {
 	auto fixture = MotionFixture(true);
 	fixture.AddQuad();
-	const auto camera = cameraAt({ 0.0f, 0.0f, c_CameraZ });
+	const auto camera = CameraAt({ 0.0f, 0.0f, c_CameraZ });
 
 	// Four frames, so the pair being differenced is two distinct terms of the sequence rather than
 	// the first frame's history-equals-current special case.
@@ -585,16 +585,16 @@ TEST_CASE(
 	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
 	const glm::vec3 eyeAfter{ 1.0f, 0.8f, c_CameraZ };
 
-	const bgl::Camera before = cameraAt(eyeBefore);
-	const bgl::Camera after  = cameraAt(eyeAfter);
+	const bgl::Camera before = CameraAt(eyeBefore);
+	const bgl::Camera after  = CameraAt(eyeAfter);
 
 	fixture.RenderFrom(before);
 	fixture.RenderFrom(after);
 
-	const glm::vec2 measured = centrePixel(fixture.ReadMotionVectors());
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
 
-	const glm::vec3 surface  = surfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
-	const glm::vec2 expected = projectToUv(after, surface) - projectToUv(before, surface);
+	const glm::vec3 surface  = SurfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(after, surface) - ProjectToUv(before, surface);
 
 	INFO("measured = " << measured.x << ", " << measured.y);
 	INFO("expected = " << expected.x << ", " << expected.y);
