@@ -73,6 +73,18 @@ the call instead of throwing.
   closest-fragment velocity dilation and depth-based disocclusion rejection are refinements that land
   when the images ask for them.
 
+* **Min/max bounds, not variance clipping.** Tried and rejected on measurement rather than on
+  principle. Clipping to mean ± γ·σ over the same 3×3 is *tighter* than min/max on a stochastic
+  surface — nine binary samples have an empirical σ below half the range — so it clamps harder and
+  flickers more: at γ=1, +49% frame-to-frame noise for −8% trail. Raising γ walks the result back
+  towards min/max from the wrong side, matching its flicker only around γ≈2.3, where the trail is
+  indistinguishable too. It is the same trade-off curve, slightly worse.
+
+* **Not velocity-scaled either.** A blend weight ramped by reprojection distance — long accumulation
+  at rest, short under motion — is the standard answer to wanting both, and measured no better than a
+  constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
+  clamp already bounds ghosting, so there is no second problem for the weight to solve.
+
 ---
 
 ## Interface Index
@@ -128,11 +140,13 @@ noise in any one frame and only correct once this has averaged it. Two couplings
   showing a single stochastic frame rather than the average of many. `c_HashScale` is the *lower*
   bound of a 2× range, since the octave selection rounds down to a power of two.
 
-* **The blend weight is not what bounds the residual.** The arithmetic says a weight of 0.1 leaves
-  about 16% noise on a half-covered surface, but measurement disagrees about what dominates:
-  quartering the weight to 0.025 moved the frame-to-frame difference only 0.0049 → 0.0037, while
-  making the hash cell sub-pixel moved it to 0.0022 and bypassing the clamp entirely to 0.0008. The
-  clamp is the larger term, so reach for the weight last.
+* **The blend weight trades flicker against settling time, not against ghosting.** This is the
+  opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
+  from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the trail left
+  behind a pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
+  essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
+  actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
+  camera stops. 0.025 is where that starts to show.
 
 ---
 
