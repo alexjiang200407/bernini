@@ -5,6 +5,8 @@
 #include <QImage>
 #include <QSignalSpy>
 
+#include <assetlib/bmaterial_io.h>
+#include <assetlib_structs/BMaterial.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <core/file/file.h>
@@ -98,6 +100,53 @@ namespace
 		}
 	};
 
+	// Mean squared difference between horizontally adjacent pixels: how grainy the image is. A
+	// stochastic material that the accumulation has not resolved is speckle, and speckle is precisely
+	// a large difference between neighbours. `DistinctColours` cannot see it -- noise passes that with
+	// room to spare.
+	double
+	Grain(const QImage& image)
+	{
+		double sum   = 0.0;
+		size_t count = 0;
+
+		for (int y = 0; y < image.height(); ++y)
+		{
+			for (int x = 0; x + 1 < image.width(); ++x)
+			{
+				const QColor a = image.pixelColor(x, y);
+				const QColor b = image.pixelColor(x + 1, y);
+
+				for (const double d :
+				     { a.redF() - b.redF(), a.greenF() - b.greenF(), a.blueF() - b.blueF() })
+				{
+					sum += d * d;
+					++count;
+				}
+			}
+		}
+
+		return count > 0 ? sum / static_cast<double>(count) : 0.0;
+	}
+
+	// Writes a `.bmaterial` under the shared data root and returns its path relative to it. The alpha
+	// lives in the factor rather than in a texture, so the material needs no companion files: hashed
+	// alpha reads `baseColor.a` whatever produced it.
+	std::string
+	WriteMaterial(const std::string& name, assetlib::AlphaMode alphaMode, float alpha)
+	{
+		auto material                = assetlib::BMaterial();
+		material.name                = name;
+		material.pbr.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, alpha);
+		material.pbr.metallicFactor  = 0.0f;
+		material.pbr.roughnessFactor = 0.6f;
+		material.pbr.alphaMode       = alphaMode;
+
+		const std::string relative = "Materials/" + name + ".bmaterial";
+		assetlib::saveMaterial(material, std::filesystem::path(c_DataRoot) / relative);
+		return relative;
+	}
+
 	// How many distinct colours an image holds, capped -- a render that produced nothing (a cleared
 	// buffer, geometry that never made it into the scene) is one flat colour.
 	int
@@ -179,6 +228,61 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 	const QImage image = thumbnail.toImage();
 	REQUIRE(image.save(c_MaterialGot));
 	REQUIRE(DistinctColours(image) > 1);
+}
+
+// What makes a stochastic material safe to thumbnail, and the reason the cache runs temporal AA over
+// a hundred warm-up frames rather than capturing the first frame it draws.
+//
+// A hashed material's coverage is a per-pixel random decision. One frame of it is a speckle pattern,
+// not a picture of the material, and every assertion the other thumbnail tests make -- it rendered,
+// it has more than one colour -- passes on speckle. Grain is what tells them apart, and the same
+// material at kOpaque is the reference for how smooth a resolved sphere is: it is the same geometry
+// under the same light, differing only in the coverage decision.
+TEST_CASE("A hashed material thumbnails as a surface rather than as noise", "[thumbnails][render]")
+{
+	Fixture fixture;
+
+	const std::string opaquePath =
+		WriteMaterial("thumb_opaque", assetlib::AlphaMode::kOpaque, 1.0f);
+	const std::string hashedPath =
+		WriteMaterial("thumb_hashed", assetlib::AlphaMode::kHashed, 0.5f);
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetAssets(&*fixture.assets);
+
+	const auto thumbnailOf = [&](const std::string& relative) {
+		QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+
+		const std::string path = std::string(c_DataRoot) + "/" + relative;
+		cache.Request(QString::fromStdString(path));
+		REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+
+		const QPixmap thumbnail = cache.Lookup(QString::fromStdString(path));
+		REQUIRE(!thumbnail.isNull());
+		return thumbnail.toImage();
+	};
+
+	const QImage opaque = thumbnailOf(opaquePath);
+	const QImage hashed = thumbnailOf(hashedPath);
+
+	REQUIRE(opaque.save("assets/golden/thumbnail_opaque.got.png"));
+	REQUIRE(hashed.save("assets/golden/thumbnail_hashed.got.png"));
+
+	const double opaqueGrain = Grain(opaque);
+	const double hashedGrain = Grain(hashed);
+
+	INFO("thumbnail grain: opaque = " << opaqueGrain << ", hashed = " << hashedGrain);
+
+	// Both drew something with an edge in it, or "smooth" would be satisfied by an empty frame.
+	REQUIRE(DistinctColours(opaque) > 1);
+	REQUIRE(DistinctColours(hashed) > 1);
+	REQUIRE(opaqueGrain > 1e-5);
+
+	// The margin covers what hashed alpha legitimately costs -- it thins the silhouette, and a
+	// half-covered sphere edge is a busier edge -- without leaving room for an unresolved pattern,
+	// which measures orders of magnitude above this rather than a factor of three.
+	CHECK(hashedGrain < opaqueGrain * 3.0);
 }
 
 TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][render]")
