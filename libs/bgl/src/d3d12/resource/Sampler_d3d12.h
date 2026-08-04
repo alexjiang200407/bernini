@@ -1,6 +1,6 @@
 #pragma once
-#include "resource/Sampler.h"
 #include "convert_d3d12.h"
+#include "resource/Sampler.h"
 
 namespace bgl
 {
