@@ -36,9 +36,15 @@ float Hash3(float3 v)
  */
 public float HashedAlphaThreshold(float3 surfacePos, float seed)
 {
-    // How much a hash cell may be magnified before the next scale is picked up. 1 keeps a cell at
-    // roughly a pixel; larger trades noise for a coarser, blotchier pattern.
-    const float c_HashScale = 1.0;
+    // How much a hash cell may be magnified before the next scale is picked up. The octave snapping
+    // below rounds the scale down to a power of two, so this is the *lower* bound of a 2x range: at 1
+    // a cell is one to two pixels wide, which correlates neighbouring pixels. That is fatal here --
+    // temporal AA clamps the history to the range of a 3x3 neighbourhood, and a neighbourhood that
+    // shares one cell collapses that range to a point, snapping the accumulation back onto the noise
+    // every frame. Measured over a converged static patch, the frame-to-frame difference is 0.0049 at
+    // 1 and 0.0022 at 0.5. Halving again buys 0.0016 and spends the precision Hash3's sin() needs on
+    // large world coordinates.
+    const float c_HashScale = 0.5;
 
     // How far the two screen axes may disagree about the cell size before the smaller one wins. 4
     // is where the grazing pattern measures as fine as the head-on one; tighter only buys sub-pixel
