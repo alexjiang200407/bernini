@@ -166,4 +166,54 @@ namespace bgl::test
 		stbi_image_free(pixels);
 		return count > 0 ? static_cast<float>(sum / static_cast<double>(count)) : 0.0f;
 	}
+
+	float
+	FrameDelta(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h)
+	{
+		int            aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+		unsigned char* a = stbi_load(pathA.c_str(), &aw, &ah, &ac, 4);
+		if (a == nullptr)
+			throw std::runtime_error("FrameDelta: cannot read '" + pathA + "'");
+
+		unsigned char* b = stbi_load(pathB.c_str(), &bw, &bh, &bc, 4);
+		if (b == nullptr)
+		{
+			stbi_image_free(a);
+			throw std::runtime_error("FrameDelta: cannot read '" + pathB + "'");
+		}
+
+		const bool sized  = aw == bw && ah == bh;
+		const bool inside = w > 0 && h > 0 && x >= 0 && y >= 0 && x + w <= aw && y + h <= ah;
+
+		if (!sized || !inside)
+		{
+			stbi_image_free(a);
+			stbi_image_free(b);
+			throw std::runtime_error(
+				"FrameDelta: '" + pathA + "' and '" + pathB +
+				"' must be the same size and contain the box");
+		}
+
+		double sum   = 0.0;
+		size_t count = 0;
+
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const size_t texel = (static_cast<size_t>(row) * aw + col) * 4;
+				for (int c = 0; c < 3; ++c)
+				{
+					const double d = (static_cast<double>(a[texel + c]) - b[texel + c]) / 255.0;
+					sum += d * d;
+					++count;
+				}
+			}
+		}
+
+		stbi_image_free(a);
+		stbi_image_free(b);
+
+		return count > 0 ? static_cast<float>(sum / static_cast<double>(count)) : 0.0f;
+	}
 }
