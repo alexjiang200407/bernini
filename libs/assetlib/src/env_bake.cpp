@@ -5,6 +5,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
+#include <core/err/util.h>
 
 #include "baked_name.h"
 #include "fs_util.h"
@@ -144,9 +145,11 @@ namespace assetlib
 		if (bakedOnDisk)
 			return route.baked;
 
-		throw std::runtime_error(
-			"assetlib::envMapToDraw: neither the baked map '" + route.baked + "' nor the source '" +
-			route.source + "' is on disk; bake the environment, or restore its source");
+		core::throw_runtime_error(
+			"assetlib::envMapToDraw: neither the baked map '{}' nor the source '{}' is on disk; "
+			"bake the environment, or restore its source",
+			route.baked,
+			route.source);
 	}
 
 	bool
