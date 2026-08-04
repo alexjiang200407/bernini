@@ -453,6 +453,9 @@ namespace bgl
 		colorState.kernel       = &kernel;
 		colorState.indirectArgs = transparentArgs;
 		cmd->SetMeshletState(colorState);
+
+		// The argument index within `transparentArgs`, which holds a single grid now that the sorted
+		// list is drawn whole. The opaque path indexes the same way, by PsoType.
 		cmd->DispatchMeshIndirect(0);
 	}
 

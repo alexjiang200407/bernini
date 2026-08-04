@@ -285,10 +285,11 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
 }
 
-// The byte `occlude` used to occupy is still written and still skipped, so a material baked before
-// it was retired reads back intact. Version minor stays 1: the stream layout has not moved, only the
-// meaning of one byte, and bumping it would strand every file on disk for no gain.
-TEST_CASE("a material baked with the retired occlude byte still reads", "[bmaterial][alphatest]")
+// Retiring `occlude` took its byte out of the stream rather than reserving it, so a material baked
+// before that reads as a different layout from the same major version -- which is exactly what the
+// major is for. The reader must reject it and say so, because the alternative is parsing the fields
+// after it as garbage.
+TEST_CASE("a material from before the format break is rejected, not misread", "[bmaterial]")
 {
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kBlend;
@@ -296,16 +297,14 @@ TEST_CASE("a material baked with the retired occlude byte still reads", "[bmater
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	std::vector<std::byte> bytes = serializeMaterial(material);
-	REQUIRE_FALSE(bytes.empty());
 
-	// The retired flag was the last byte written, and a material baked while it still meant
-	// something has it set. The reader has to consume it and ignore it rather than stop short.
-	bytes.back() = std::byte{ 1 };
+	// The major sits right after the magic. Stamping the previous one is what a file baked before
+	// the break looks like.
+	REQUIRE(bytes.size() > 6);
+	bytes[4] = std::byte{ 7 };
+	bytes[5] = std::byte{ 0 };
 
-	const BMaterial loaded = deserializeMaterial(bytes);
-	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
-	CHECK(loaded.pbr.alphaCutoff == 0.75f);
-	CHECK(loaded.pbr.baseColorTexture == "Textures/basecolor_dead.ktx2");
+	CHECK_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
 }
 
 // kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new
