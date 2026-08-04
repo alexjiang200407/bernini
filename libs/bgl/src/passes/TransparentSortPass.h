@@ -16,10 +16,8 @@ namespace bgl
 	 * Depth-sorts the transparent instances on the GPU.
 	 *
 	 * Blending needs back-to-front order, which cuts across the PSO bucketing the opaque path uses,
-	 * so transparent instances are compacted into their own list and sorted by distance. The sort
-	 * key also carries the occlude class, so the sorted list comes out split into
-	 * [self-occluding][plain] -- the partitions the forward pass draws with three indirect
-	 * dispatches, the self-occluding one being drawn twice for its depth pre-pass.
+	 * so transparent instances are compacted into their own list and sorted by distance. The forward
+	 * pass draws that list whole, with one indirect dispatch whose count this pass emits.
 	 */
 	class TransparentSortPass
 	{
