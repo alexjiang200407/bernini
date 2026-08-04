@@ -24,10 +24,13 @@
 
 namespace
 {
-	// The capture reads the backbuffer the last DrawFrame presented, and that frame's Scene::Update
-	// uploads this asset on its own list -- so one drawn frame is enough. Zero captures a blank
-	// backbuffer; the thumbnail goldens catch a too-low count.
-	constexpr int c_WarmupFrames = 1;
+	// One frame was enough while every material drew the same fragments every time. A hashed one does
+	// not: its coverage is stochastic, and a single frame of it is a noise pattern rather than a
+	// picture of the material. The thumbnail target therefore runs temporal AA, and this has to be
+	// several times the resolve's time constant for the accumulation to have settled -- see
+	// docs/taa.md. Nothing else here needs the frames, so the cost is paid only to make a stochastic
+	// material safe to thumbnail.
+	constexpr int c_WarmupFrames = 100;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
 	constexpr float c_Yaw   = 0.6f;
@@ -185,10 +188,11 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 	m_Desc.renderer->Invoke([&] {
 		try
 		{
-			auto rtDesc     = bgl::RenderTargetDesc();
-			rtDesc.width    = static_cast<int>(m_Desc.dimension);
-			rtDesc.height   = static_cast<int>(m_Desc.dimension);
-			rtDesc.headless = true;
+			auto rtDesc       = bgl::RenderTargetDesc();
+			rtDesc.width      = static_cast<int>(m_Desc.dimension);
+			rtDesc.height     = static_cast<int>(m_Desc.dimension);
+			rtDesc.headless   = true;
+			rtDesc.taaEnabled = true;
 
 			m_RenderTarget = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtDesc);
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
