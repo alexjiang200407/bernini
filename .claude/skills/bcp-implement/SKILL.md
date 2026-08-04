@@ -121,7 +121,32 @@ Check specifically: did this make a stated constraint false? ("None of them are 
 takes about a second", "X is the only place that branch lives"). Those sentences rot silently. Use
 [bcp-docs](.claude/skills/bcp-docs/SKILL.md) for `docs/` subsystem pages.
 
-## 8. Format, commit, PR
+## 8. The critical read
+
+**Every pull request is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) before it opens.**
+It reads the diff against the base, so it runs *inside* § 9's sequence — after the format, the commit
+and the rebase, and before the push. This section is what it does; § 9's block is where it goes.
+
+Spawn it with the Agent tool, `subagent_type: bcp-precheck`:
+
+> Review the diff against the base. Be as critical as the evidence allows.
+
+It answers three questions the author is worst placed to answer about their own diff: has this code
+already been written in `core`, does the design fight `ROADMAP.md`, and does it break `STYLE.md`. It
+reports back; it posts nothing and edits nothing.
+
+Act on its verdict before pushing:
+
+- `block` — fix it, then run the precheck again. The PR does not open on a blocking finding.
+- `revise` — fix what is right, and for anything you reject, say why in the PR body. A finding you
+  disagreed with is worth a line so the reviewer does not re-derive it.
+- `clean` — push.
+
+Fixes go into the commits they belong in, not a "self-review" commit on the end. The cloud reviewer
+(`/review` on the PR) is deliberately **not** automatic — this gate is what makes that affordable, so
+a trivial PR never needs it.
+
+## 9. Format, commit, PR
 
 **Format before every commit**, or CI-visible noise lands in the diff:
 
@@ -141,6 +166,7 @@ joins a recipe's arguments on spaces and a quoted one would not survive:
 
 ```bash
 git fetch origin && git rebase origin/master
+# spawn bcp-precheck here (§ 8), and act on it before pushing
 git push -u origin HEAD
 just pr create --base master --body-file <file>
 ```

@@ -8,8 +8,8 @@
 # is skipped rather than failed when there isn't one, so a Visual Studio-generator checkout still
 # commits. `SKIP_TIDY=1 git commit` skips it outright.
 
-# Staged source files that still exist (Added/Copied/Modified/Renamed) -- .cpp and .slang only.
-files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cpp' '*.slang')
+# Staged source files that still exist (Added/Copied/Modified/Renamed).
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cpp' '*.h' '*.slang')
 
 if command -v python3 >/dev/null 2>&1; then
 	py=python3
