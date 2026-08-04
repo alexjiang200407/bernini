@@ -531,7 +531,12 @@ TEST_CASE("Jitter moves the sampling grid", "[jitter][render]")
 	SECTION("with temporal AA the two frames differ")
 	{
 		renderTwice(true);
-		CHECK_FALSE(bgl::test::MatchesGolden(first, second));
+
+		// Tighter than the default, because what reaches the screen is not the difference between two
+		// sample grids but `c_BlendWeight` of it -- the second frame is mostly the first, by design.
+		// The tolerance therefore has to sit below the smallest weight the resolve ships with, or this
+		// stops being a test of the jitter and becomes a test of the blend.
+		CHECK_FALSE(bgl::test::MatchesGolden(first, second, 1e-5f));
 	}
 
 	SECTION("without it they are the same frame twice")

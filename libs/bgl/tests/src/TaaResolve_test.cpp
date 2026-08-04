@@ -16,9 +16,12 @@ namespace
 	constexpr uint32_t c_Width  = 256;
 	constexpr uint32_t c_Height = 256;
 
-	// Enough frames to walk the eight-term jitter sequence twice, so the accumulation has seen every
-	// sample position and the exponential blend has settled.
-	constexpr int c_ConvergeFrames = 24;
+	// Enough frames for the exponential blend to have actually settled, which is several times its
+	// 1/`c_BlendWeight` time constant and not merely a couple of passes over the eight-term jitter
+	// sequence. Sized for the weight the resolve ships with: too few and "converged" means "wherever
+	// the accumulation had got to", which lands somewhere different for each jitter phase and makes
+	// any comparison between two converged images a comparison of where they were interrupted.
+	constexpr int c_ConvergeFrames = 100;
 
 	// A quad rotated off-axis, so its edges cross pixels diagonally. An axis-aligned edge lands on a
 	// pixel boundary and is already free of the stair-stepping TAA is meant to remove, which would
@@ -135,6 +138,65 @@ namespace
 
 		gfx->ScreenshotPng(target, path);
 	}
+
+	// How far the camera slides sideways per frame while panning, in world units. Fast enough that a
+	// pixel's history comes from well outside its own neighbourhood, which is the case ghosting shows
+	// up in and the one the report was about.
+	constexpr float c_PanStep   = 0.35f;
+	constexpr int   c_PanFrames = 10;
+
+	bgl::Camera
+	CameraAt(float x)
+	{
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(x, 0.0f, c_CameraZ),
+				glm::vec3(x, 0.0f, c_CameraZ - 1.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(
+				glm::radians(60.0f),
+				static_cast<float>(c_Width) / static_cast<float>(c_Height),
+				0.5f,
+				500.0f);
+		return camera;
+	}
+
+	// Pans the camera to x = 0 from `c_PanTotal` to its left, and captures the frame it lands on.
+	// `panning` false holds it at the destination throughout, which is the reference: the same camera,
+	// the same geometry, nothing behind it.
+	void
+	RenderPan(const std::string& path, bool taaEnabled, bool panning)
+	{
+		auto gfx = bgl::CreateGraphics(TestOptions());
+		REQUIRE(gfx != nullptr);
+
+		auto targetDesc       = bgl::RenderTargetDesc();
+		targetDesc.width      = static_cast<int>(c_Width);
+		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.headless   = true;
+		targetDesc.taaEnabled = taaEnabled;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto scene = gfx->CreateScene(QuadSceneDesc());
+		auto view  = gfx->CreateSceneView(scene, 4);
+		AddQuad(scene, view);
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = FullViewport();
+
+		for (int frame = 0; frame < c_PanFrames; ++frame)
+		{
+			const float offset = static_cast<float>(c_PanFrames - 1 - frame) * c_PanStep;
+			job.camera         = CameraAt(panning ? -offset : 0.0f);
+			gfx->DrawFrame(target, job);
+		}
+
+		gfx->ScreenshotPng(target, path);
+	}
 }
 
 // The antialiasing claim, as a number. AliasEnergy is the mean squared difference between
@@ -194,6 +256,45 @@ TEST_CASE("A static scene converges to the unjittered image", "[taa][render]")
 
 	const bgl::test::Rgba backgroundOn = bgl::test::MeanColor(on, 4, 4, 16, 16);
 	CHECK(backgroundOn.Luma() < 0.02f);
+}
+
+// Ghosting, as a number: how much of where the camera *was* is still on screen the moment it stops.
+//
+// The TAA-off control is the instrument's zero. With no history the frame the pan lands on and the
+// frame after holding still are the same render, so anything it scores is the measurement's own noise
+// and the TAA figure has to be read against it.
+//
+// This is the other half of the trade. Flicker (in HashedAlpha_test) falls as the resolve leans harder
+// on history; ghosting rises. Neither number means anything alone, and changing the clamp or the blend
+// weight against one of them while blind to the other is how the branch got its two open complaints.
+TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]")
+{
+	const std::string reference = "assets/golden/taa_ghost_reference.got.png";
+	const std::string panned    = "assets/golden/taa_ghost_panned.got.png";
+	const std::string still     = "assets/golden/taa_ghost_still.got.png";
+
+	// TAA off at the destination: what is genuinely background, decided by where the geometry is
+	// rather than by how far any accumulation has got.
+	RenderPan(reference, false, false);
+
+	RenderPan(panned, true, true);
+	RenderPan(still, true, false);
+
+	const float trail = bgl::test::BackgroundBleed(panned, reference);
+	const float floor = bgl::test::BackgroundBleed(still, reference);
+
+	INFO("background bleed: arrived from a pan = " << trail << ", never moved = " << floor);
+
+	// The same renderer that never moved is the zero. It is not exactly zero -- jitter spreads the
+	// quad's edge a fraction of a pixel into its neighbours -- so the trail is read against it and not
+	// against nothing.
+	CHECK(floor < 2.5e-3f);
+
+	// Measured 0.0066 against a floor of 0.0017 -- most of that gap is the resolved edge spreading a
+	// fraction of a pixel, not a trail. What this actually guards is the clamp: bypassing it takes the
+	// history whole and the figure goes to 0.090, so the bound is set an order of magnitude below that
+	// rather than tight against the current number, which the blend weight moves by only a percent.
+	CHECK(trail < 2.0e-2f);
 }
 
 // The first frame has no accumulation to blend against. If it blended anyway it would come out at
