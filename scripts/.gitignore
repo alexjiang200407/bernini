@@ -1,4 +1,4 @@
-# Machine-local settings written by `b init`. See config.example.json.
+# Machine-local settings written by `just init`. Schema: util/config.py.
 config.json
 
 __pycache__/

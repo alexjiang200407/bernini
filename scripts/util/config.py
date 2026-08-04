@@ -18,6 +18,9 @@ Schema:
     config       Configuration for multi-config generators, e.g. "Debug".
     arch         vcvars architecture, e.g. "x64". Only used to auto-locate
                  vcvarsall when `precommand` is unset.
+    vcpkg        Path to the vcpkg checkout the presets' toolchain file resolves
+                 through. Exported as VCPKG_ROOT into every build environment, so
+                 the variable does not have to be set on the machine.
     precommand   Shell command run for its effect on the environment before any
                  build; the environment it leaves behind is what child processes
                  get. Typically a quoted vcvarsall.bat plus its architecture.
@@ -32,6 +35,7 @@ import os
 import sys
 
 import util.cmake_tools as ct
+import util.vcpkg as vcpkg
 
 PATH = os.path.join(ct.REPO_ROOT, "scripts", "config.json")
 
@@ -131,6 +135,18 @@ def precommand():
     return load().get("precommand") or None
 
 
+def find_vcpkg():
+    """The vcpkg checkout to build against: config.json, else auto-detected, else None."""
+    value = load().get("vcpkg")
+    if value:
+        path = os.path.expanduser(os.path.expandvars(value))
+        if vcpkg.is_root(path):
+            return os.path.normpath(path)
+        print(f"warning: vcpkg in {rel(PATH)} is '{value}', which is not a vcpkg checkout; "
+              f"falling back to auto-detection. Re-run `just init` to refresh it.", file=sys.stderr)
+    return vcpkg.find()
+
+
 def build_dir(override=None):
     """Build directory to read the CMake File API codemodel from.
 
@@ -212,13 +228,27 @@ def find_clang(env=None):
 
 # --- Environment -----------------------------------------------------------
 
+def _with_vcpkg(env):
+    """`env` with VCPKG_ROOT pointing at the resolved vcpkg, if one was found.
+
+    The presets' toolchainFile is $env{VCPKG_ROOT}/..., so cmake needs the variable set.
+    Putting it here means it is set for every build regardless of how -- or whether -- the
+    machine's own environment defines it, which is one less thing to get wrong per clone.
+    """
+    root = find_vcpkg()
+    if root:
+        env["VCPKG_ROOT"] = root
+    return env
+
+
 def build_env(generator=None, arch_override=None):
     """The environment to run cmake and the toolchain in, plus a label for --dry-run.
 
     A `precommand` is run for its environment and that environment is used. With
     none set we fall back to locating vcvarsall via vswhere, but only for the
     generators that need MSVC in the environment -- which is what keeps a fresh
-    clone building before `just init` has ever run.
+    clone building before `just init` has ever run. VCPKG_ROOT is exported into
+    whichever environment comes out.
 
     Returns (env, description).
     """
@@ -226,20 +256,20 @@ def build_env(generator=None, arch_override=None):
     if pre:
         captured = ct.capture_env(pre)
         if captured:
-            return captured, f"precommand: {pre}"
+            return _with_vcpkg(captured), f"precommand: {pre}"
         print(f"warning: precommand from {rel(PATH)} failed, so the compiler may not be on PATH:\n"
               f"    {pre}\n"
               f"Proceeding with the current environment.", file=sys.stderr)
-        return os.environ.copy(), "inherited (precommand failed)"
+        return _with_vcpkg(os.environ.copy()), "inherited (precommand failed)"
 
     if ct.needs_msvc_env(generator):
         want = arch(arch_override)
         captured = ct.msvc_env(want)
         if captured:
-            return captured, f"vcvars ({want})"
+            return _with_vcpkg(captured), f"vcvars ({want})"
         print("warning: this generator needs the MSVC environment but vcvarsall.bat was not found "
               "via vswhere.\nSet `precommand` in scripts/config.json (`just init`), or build from a "
               "developer prompt. Proceeding with the current environment.", file=sys.stderr)
-        return os.environ.copy(), "inherited (vcvars not found)"
+        return _with_vcpkg(os.environ.copy()), "inherited (vcvars not found)"
 
-    return os.environ.copy(), "inherited"
+    return _with_vcpkg(os.environ.copy()), "inherited"

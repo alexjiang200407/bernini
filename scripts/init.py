@@ -1,40 +1,45 @@
 #!/usr/bin/env python3
-"""Generate scripts/config.json, the machine-local settings the other scripts read.
+"""Set this machine up to build Bernini, and write down what it found.
 
-Detects the toolchain (cmake, ninja, clang, clang-format, clang-tidy, vcvarsall) the same way
-the scripts do today, asks which CMake preset you want to work in, and writes the
-answers down so neither has to happen again on every invocation. Anything that
-can't be detected is prompted for; a blank answer leaves the key out, which just
-means that tool keeps being looked up on PATH at run time.
+One command is meant to take a fresh clone to a working build, so this both *detects* and
+*installs*. Anything missing that can be obtained without a decision is offered:
 
-config.json is git-ignored. It describes a machine, not the project -- see
-scripts/config.example.json for the shape and scripts/util/config.py for the
-schema.
+  * vcpkg -- located, or cloned and bootstrapped. Its path is recorded and exported as
+    VCPKG_ROOT by every build, so the environment variable never has to be set by hand.
+  * cmake, ninja, clang-format, clang-tidy -- detected first, else installed from the
+    version pinned in scripts/requirements.txt, which ships each as a real binary wheel.
+    A machine that already has one keeps the one it has.
+  * `just`, the task runner behind the root justfile, the same way.
+  * Git LFS and the GitHub CLI, through this platform's package manager, since neither
+    has a wheel.
+
+Then it asks which CMake preset you work in and writes config.json, so no preset, no
+tool path and no vcvars invocation has to be retyped. Anything that could not be found or
+installed is prompted for; a blank answer leaves the key out, which just means that tool
+keeps being looked up on PATH at run time.
+
+config.json is git-ignored. It describes a machine, not the project; scripts/util/config.py
+documents its schema.
 
 Points git at the committed .githooks, and configures Git LFS -- whose filters are
 machine-local config a clone cannot inherit, so without this the assets check out as
-pointer text and the tests fail on them.
-
-Also offers to install `just` (the task runner behind the root justfile) and the
-GitHub CLI `gh` (which bcp-revise uses for PR reviews). Both are optional -- every
-recipe is a one-line call into these scripts, so `python scripts/build.py ...`
-works without `just`, and only the review workflow needs `gh` -- which is why this
-asks rather than installs.
+pointer text and the tests fail on them as though they were corrupt.
 
 Finally, offers to set up this developer's morgana-coding-agent key, which bcp-revise
-posts PR review replies with. Also optional, and skipped by a blank answer. See
+posts PR review replies with. Optional, and skipped by a blank answer. See
 docs/ai-coding.md.
 
 Bootstrap this with `python scripts/init.py`; afterwards it is `just init`.
 
 Usage:
-    just init                                       # detect, prompt, write
+    just init                                       # detect, install, prompt, write
     just init --preset windows-clang-dx12-debug     # skip the preset prompt
     just init --show                                # print what would be written
     just init --force                               # overwrite without confirming
     just init --no-just                             # skip the `just` check
     just init --no-gh                               # skip the GitHub CLI check
     just init --no-lfs                              # skip the Git LFS setup
+    just init --no-vcpkg                            # skip the vcpkg check
     just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
@@ -43,9 +48,12 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 
 import util.cmake_tools as ct
 import util.config as cfg
+import util.lfs as lfs
+import util.vcpkg as vcpkg
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
 
@@ -58,9 +66,15 @@ BOT_DIR = os.path.join(os.path.expanduser("~"), ".claude")
 BOT_KEY = os.path.join(BOT_DIR, "morgana-coding-agent.private-key.pem")
 BOT_ENV = os.path.join(BOT_DIR, "morgana-coding-agent.env")
 
-# First bytes of a Git LFS pointer file -- what a clone with no smudge filter leaves
-# in the working tree in place of the asset.
-LFS_POINTER_MAGIC = b"version https://git-lfs.github.com/spec/v1"
+# Tools that come from a pinned wheel in requirements.txt when the machine has none. The
+# wheel is named after the executable it installs in every case.
+WHEEL_TOOLS = ("cmake", "ninja", "clang-format", "clang-tidy")
+
+# Package-manager ids for the tools with no wheel, by manager.
+PACKAGE_IDS = {
+    "gh": {"winget": "GitHub.cli", "brew": "gh", "apt": "gh"},
+    "git-lfs": {"winget": "GitHub.GitLFS", "brew": "git-lfs", "apt": "git-lfs"},
+}
 
 
 if sys.platform == "darwin":
@@ -164,6 +178,141 @@ def confirm(question):
     return ask(f"{question} [y/N]: ").lower() in ("y", "yes")
 
 
+# --- Installing ------------------------------------------------------------
+
+def pinned(package):
+    """The requirement line for `package` from requirements.txt, e.g. "cmake==3.31.6".
+
+    requirements.txt is the one place a version is written down, but init installs one
+    tool at a time rather than the whole file, so the pin is read back out of it.
+    """
+    try:
+        with open(REQUIREMENTS, encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return package
+
+    for line in lines:
+        line = line.split("#")[0].strip()
+        name = line.split("==")[0].split(">=")[0].strip()
+        if line and name.lower() == package.lower():
+            return line
+    return package
+
+
+def pip_install(requirement):
+    """Install one pinned requirement. Returns True on success."""
+    cmd = [sys.executable, "-m", "pip", "install", requirement]
+    print("  " + " ".join(cmd))
+    try:
+        return subprocess.run(cmd).returncode == 0
+    except OSError as exc:
+        print(f"warning: could not run pip: {exc}", file=sys.stderr)
+        return False
+
+
+def script_dirs():
+    """Directories pip drops console scripts into, whether or not they are on PATH.
+
+    A wheel installed into the user site (or into a Python whose Scripts/bin directory
+    the current shell never had) is invisible to shutil.which, so a freshly installed
+    tool would look as missing as it did before.
+    """
+    dirs = []
+    for scheme in (None, f"{os.name}_user"):
+        try:
+            path = sysconfig.get_path("scripts") if scheme is None \
+                else sysconfig.get_path("scripts", scheme)
+        except KeyError:
+            continue
+        if path and path not in dirs:
+            dirs.append(path)
+    return dirs
+
+
+def find_installed(name):
+    """Locate `name` on PATH or in pip's script directories."""
+    found = shutil.which(name)
+    if found:
+        return found
+    exe = name + (".exe" if sys.platform == "win32" else "")
+    for directory in script_dirs():
+        candidate = os.path.join(directory, exe)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def offer_wheel(label, purpose):
+    """Offer to install `label` from its pinned wheel. Returns its path, or None.
+
+    Declining is not a failure: everything installed here is also satisfiable by a copy
+    that is already on the machine, which is what the caller falls back to asking for.
+    """
+    requirement = pinned(label)
+    print(f"\n{label} was not found. {purpose}\n"
+          f"It ships as a prebuilt wheel, so this needs no compiler or LLVM install.")
+    if not confirm(f"install it now (pip install {requirement})?"):
+        return None
+    if not pip_install(requirement):
+        print(f"warning: installing {label} failed. Install it by hand with: "
+              f"pip install {requirement}", file=sys.stderr)
+        return None
+
+    found = find_installed(label)
+    if not found:
+        print(f"warning: {label} installed but could not be located afterwards.", file=sys.stderr)
+        return None
+    if not shutil.which(label):
+        print(f"note: {label} isn't on this shell's PATH; the scripts use the recorded path.")
+    return found
+
+
+def package_manager():
+    """(name, install command prefix) for this platform's package manager, or None."""
+    if sys.platform == "win32" and shutil.which("winget"):
+        return "winget", ["winget", "install", "-e", "--id"]
+    if sys.platform == "darwin" and shutil.which("brew"):
+        return "brew", ["brew", "install"]
+    if shutil.which("apt-get"):
+        return "apt", ["sudo", "apt-get", "install", "-y"]
+    return None
+
+
+def offer_package(label, purpose, fallback):
+    """Offer to install a tool that has no wheel through the platform's package manager.
+
+    Returns True when it is installed afterwards. `fallback` is what to tell someone this
+    cannot help -- no package manager, an unknown platform, or a failed install.
+    """
+    manager = package_manager()
+    ids = PACKAGE_IDS.get(label, {})
+    package = ids.get(manager[0]) if manager else None
+
+    if not package:
+        print(f"\n{label} was not found. {purpose}\n{fallback}")
+        return False
+
+    name, prefix = manager
+    print(f"\n{label} was not found. {purpose}")
+    if not confirm(f"install it now ({name} install {package})?"):
+        print(f"skipped. {fallback}")
+        return False
+
+    try:
+        rc = subprocess.run(prefix + [package]).returncode
+    except OSError as exc:
+        print(f"warning: could not run {name}: {exc}", file=sys.stderr)
+        rc = 1
+    if rc:
+        print(f"warning: installing {label} failed. {fallback}", file=sys.stderr)
+        return False
+
+    if not shutil.which(label):
+        print(f"note: {label} isn't on this shell's PATH yet -- open a new one.")
+    return True
+
+
 def ensure_just():
     """Report on `just`, and offer to install it if it's missing.
 
@@ -171,24 +320,22 @@ def ensure_just():
     wheel -- so this is one command on Windows, Linux and macOS, needs no Rust
     toolchain, and pins the same version for everyone (`scripts/requirements.txt`).
     """
-    found = shutil.which("just")
+    found = find_installed("just")
     if found:
         print(f"just is installed: {found}")
         return
 
+    requirement = pinned("rust-just")
     print("\njust was not found. It runs the root justfile (`just build`, `just format`, ...).\n"
           "It is optional: `python scripts/build.py ...` works without it.")
-    if not confirm(f"install it now (pip install -r {cfg.rel(REQUIREMENTS)})?"):
-        print(f"skipped. Install it later with: pip install -r {cfg.rel(REQUIREMENTS)}")
+    if not confirm(f"install it now (pip install {requirement})?"):
+        print(f"skipped. Install it later with: pip install {requirement}")
         return
-
-    cmd = [sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS]
-    if subprocess.run(cmd).returncode:
+    if not pip_install(requirement):
         print(f"warning: installing just failed. Install it by hand with: "
-              f"pip install -r {cfg.rel(REQUIREMENTS)}", file=sys.stderr)
+              f"pip install {requirement}", file=sys.stderr)
         return
 
-    # pip drops it in a Scripts/bin dir that may not be on this process's PATH.
     installed = shutil.which("just")
     print(f"\ninstalled just{'  ' + installed if installed else ''}")
     if not installed:
@@ -247,26 +394,6 @@ def ensure_hooks():
     print(f"git hooks: set core.hooksPath to {hooks_dir}")
 
 
-def lfs_pointer_files():
-    """Tracked LFS paths whose working-tree copy is still the pointer text, not the asset."""
-    listed = subprocess.run(
-        ["git", "lfs", "ls-files", "-n"],
-        cwd=ct.REPO_ROOT, capture_output=True, text=True,
-    )
-    if listed.returncode:
-        return []
-
-    stale = []
-    for rel in listed.stdout.splitlines():
-        try:
-            with open(os.path.join(ct.REPO_ROOT, rel), "rb") as fh:
-                if fh.read(len(LFS_POINTER_MAGIC)) == LFS_POINTER_MAGIC:
-                    stale.append(rel)
-        except OSError:
-            pass  # Absent or unreadable is not this function's problem; git will say so.
-    return stale
-
-
 def ensure_lfs():
     """Configure Git LFS for this clone, and fetch anything still left as a pointer.
 
@@ -282,10 +409,12 @@ def ensure_lfs():
 
     Installed with --local, so a machine that keeps per-repo git identities keeps them.
     """
-    if not shutil.which("git-lfs"):
-        print(f"\ngit-lfs was not found. The assets under assets/ are stored with Git LFS, and\n"
-              f"without it they check out as text pointers and the tests fail on them.\n"
-              f"{GIT_LFS_HINT}")
+    if not shutil.which("git-lfs") and not offer_package(
+        "git-lfs",
+        "The assets under assets/ are stored with Git LFS, and without it they check out as "
+        "text pointers\nand the tests fail on them as though they were corrupt.",
+        GIT_LFS_HINT,
+    ):
         return
 
     configured = subprocess.run(
@@ -301,7 +430,7 @@ def ensure_lfs():
     else:
         print("git lfs: installed the filters for this clone")
 
-    stale = lfs_pointer_files()
+    stale = lfs.pointer_files()
     if not stale:
         return
 
@@ -310,7 +439,7 @@ def ensure_lfs():
         print("warning: `git lfs pull` failed; run it by hand.", file=sys.stderr)
         return
 
-    remaining = lfs_pointer_files()
+    remaining = lfs.pointer_files()
     if remaining:
         print(f"warning: {len(remaining)} file(s) are still pointers, e.g. {remaining[0]}. "
               f"Run `git lfs pull` by hand.", file=sys.stderr)
@@ -338,9 +467,11 @@ def find_gh():
 
 
 def ensure_gh():
-    """Report on the GitHub CLI, which bcp-revise uses to read PR reviews and post
-    replies. It is not a Python package -- the `gh` on PyPI is an unrelated project --
-    so it is a manual install; only the review workflow needs it.
+    """Report on the GitHub CLI, and offer to install it through the package manager.
+
+    bcp-revise uses it to read PR reviews and post replies. It is not a Python package --
+    the `gh` on PyPI is an unrelated project -- so it cannot come from a pinned wheel like
+    the rest; winget and brew are the way, and only the review workflow needs it at all.
     """
     found = find_gh()
     if found:
@@ -348,8 +479,60 @@ def ensure_gh():
         if not shutil.which("gh"):
             print(f"note: gh isn't on this shell's PATH; add {os.path.dirname(found)} to PATH.")
         return
-    print("\ngh (GitHub CLI) was not found. bcp-revise uses it for PR reviews.\n"
-          "Install it from https://cli.github.com/ and add it to PATH; it is not a pip package.")
+
+    offer_package(
+        "gh",
+        "bcp-revise uses the GitHub CLI to read PR reviews and post replies.",
+        "Install it from https://cli.github.com/ and add it to PATH; it is not a pip package.",
+    )
+
+
+def ensure_vcpkg(install=True):
+    """Path to a vcpkg checkout to build against, cloning one when there is none.
+
+    Every preset's toolchain file resolves through $env{VCPKG_ROOT}, and the recorded path
+    is what the build scripts export it as -- so this is what replaces setting the variable
+    on the machine by hand. Bootstrapped here rather than left to the CMake toolchain so a
+    broken checkout is reported now, by name, instead of mid-configure.
+    """
+    found = cfg.find_vcpkg()
+    if found:
+        if install and not vcpkg.executable(found):
+            print(f"vcpkg: bootstrapping {found}")
+            error = vcpkg.bootstrap(found)
+            if error:
+                print(f"warning: {error} Run {vcpkg.bootstrap_script(found)} by hand.",
+                      file=sys.stderr)
+        return found
+
+    if not install or not interactive():
+        print(f"missing   {'vcpkg':<13} not found. Clone {vcpkg.REPO_URL} and re-run this, "
+              f"or set VCPKG_ROOT.", file=sys.stderr)
+        return None
+
+    default = vcpkg.default_install_dir()
+    print(f"\nvcpkg was not found. Every preset builds its dependencies with it.\n"
+          f"It can be cloned and bootstrapped now (about 1 GB; shared by every project on this\n"
+          f"machine, and the package versions come from vcpkg.json, not from the checkout).")
+    if not confirm(f"clone {vcpkg.REPO_URL} into {default}?"):
+        raw = ask("path to an existing vcpkg checkout (blank to skip): ").strip('"')
+        if not raw:
+            print("skipped; builds fail until a vcpkg is found or VCPKG_ROOT is set.")
+            return None
+        path = os.path.expanduser(os.path.expandvars(raw))
+        if vcpkg.is_root(path):
+            return os.path.normpath(path)
+        print(f"  '{raw}' is not a vcpkg checkout (no {vcpkg.TOOLCHAIN}); skipped.", file=sys.stderr)
+        return None
+
+    error = vcpkg.clone(default)
+    if error:
+        print(f"warning: {error}", file=sys.stderr)
+        return None
+    error = vcpkg.bootstrap(default)
+    if error:
+        print(f"warning: cloned, but {error}", file=sys.stderr)
+    return default
 
 
 def ensure_bot_key():
@@ -394,8 +577,22 @@ def ensure_bot_key():
     print(f"wrote {BOT_KEY}\nwrote {BOT_ENV}")
 
 
-def detect(preset, arch):
-    """Work out the config for `preset`. Returns (config dict, [(label, value), ...])."""
+def obtain(label, finder, purpose, hint, install=True):
+    """Path to `label`: detected, else installed from its pinned wheel, else asked for."""
+    found = finder()
+    if found:
+        return found
+    if install and label in WHEEL_TOOLS and interactive():
+        found = offer_wheel(label, purpose)
+    return found or ask_path(label, hint)
+
+
+def detect(preset, arch, install=True, with_vcpkg=True):
+    """Work out the config for `preset`. Returns (config dict, [(label, value), ...]).
+
+    With `install` off nothing is downloaded -- what is already on the machine is recorded
+    and the rest is left out, which is what --show reports.
+    """
     generator = ct.generator_of(preset)
     if generator is None:
         print(f"warning: could not resolve a generator for preset '{preset}'; it may not exist "
@@ -429,21 +626,29 @@ def detect(preset, arch):
             data["precommand"] = f'"{vcvars}" {arch}'
             notes.append(("precommand", data["precommand"]))
 
+    # The presets' toolchain file resolves through VCPKG_ROOT, which the build scripts
+    # export from here rather than expecting the machine to define it.
+    if with_vcpkg:
+        root = ensure_vcpkg(install)
+        if root:
+            data["vcpkg"] = root
+            notes.append(("vcpkg", root))
+
     tools = {}
 
-    cmake = ct.find_cmake()
-    if not cmake:
-        cmake = ask_path("cmake", CMAKE_HINT)
+    cmake = obtain("cmake", ct.find_cmake, "It is the buildsystem this project is driven by.",
+                   CMAKE_HINT, install)
     if cmake:
         tools["cmake"] = cmake
 
     if generator and "ninja" in generator.lower():
-        ninja = ct.find_ninja()
-        if not ninja:
-            ninja = ask_path("ninja", NINJA_HINT)
+        ninja = obtain("ninja", ct.find_ninja, "This preset's generator is Ninja.", NINJA_HINT,
+                       install)
         if ninja:
             tools["ninja"] = ninja
 
+    # The compiler is the one tool with no wheel to fall back on: it has to match the
+    # platform SDK it builds against.
     if ct.uses_clang(preset):
         clang = ct.find_clang()
         if clang:
@@ -454,15 +659,19 @@ def detect(preset, arch):
                 tools["clang"] = answer
 
     # clang-format is needed by `just format` regardless of which compiler builds.
-    clang_format = ct.find_clang_format()
-    if not clang_format:
-        clang_format = ask_path("clang-format", CLANG_FORMAT_HINT)
+    clang_format = obtain("clang-format", ct.find_clang_format,
+                          "`just format` and the pre-commit hook run it on every source file "
+                          "you touch.", CLANG_FORMAT_HINT, install)
     if clang_format:
         tools["clang-format"] = clang_format
 
-    # clang-tidy is not prompted for: `just tidy` degrades to a message that says how to
+    # clang-tidy is never asked for by path: `just tidy` degrades to a message that says how to
     # install it, and the pre-commit hook skips the naming check when it is absent.
     clang_tidy = ct.find_clang_tidy()
+    if not clang_tidy and install and interactive():
+        clang_tidy = offer_wheel("clang-tidy", "`just tidy` checks the naming rules with it, "
+                                               "and the pre-commit hook checks the lines you "
+                                               "changed.")
     if clang_tidy:
         tools["clang-tidy"] = clang_tidy
 
@@ -482,6 +691,7 @@ def main():
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
     parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
+    parser.add_argument("--no-vcpkg", action="store_true", help="Don't look for (or offer to clone) vcpkg.")
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
@@ -496,7 +706,7 @@ def main():
     preset = args.preset or ask_preset(existing.get("preset") or cfg.DEFAULT_PRESET)
     arch = args.arch or existing.get("arch") or cfg.DEFAULT_ARCH
 
-    data, notes = detect(preset, arch)
+    data, notes = detect(preset, arch, install=not args.show, with_vcpkg=not args.no_vcpkg)
 
     rows = [("preset", preset)] + notes
     width = max(len(label) for label, _ in rows)

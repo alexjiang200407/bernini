@@ -57,8 +57,10 @@ just build --preset windows-clang-dx12-debug
 clang-tidy itself is found the same way clang-format is: `tools.clang-tidy` in `scripts/config.json`
 first, then `PATH`, then a versioned `clang-tidy-<n>` on `PATH` (how Debian and Ubuntu ship it), then
 a known LLVM install — the Visual Studio LLVM component or `C:\Program Files\LLVM` on Windows,
-Homebrew's keg-only `llvm` on macOS, `/usr/lib/llvm-*/` on Linux. Install it with
-`brew install llvm`, `apt install clang-tidy`, or the "C++ Clang tools for Windows" component.
+Homebrew's keg-only `llvm` on macOS, `/usr/lib/llvm-*/` on Linux. Finding none, `just init` offers
+the version pinned in [`scripts/requirements.txt`](../scripts/requirements.txt) as a wheel, which
+needs no LLVM install; `brew install llvm`, `apt install clang-tidy` and the "C++ Clang tools for
+Windows" component all work too.
 
 ## Where the config lives
 

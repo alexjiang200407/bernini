@@ -203,6 +203,16 @@ def uses_clang(preset):
     return "clang" in os.path.basename(str(compiler)).lower()
 
 
+def toolchain_file_of(preset):
+    _, by_name = load_presets()
+    return _resolve_field(preset, by_name, "toolchainFile")
+
+
+def needs_vcpkg(preset):
+    """True when the preset's toolchain file resolves through $env{VCPKG_ROOT}."""
+    return "VCPKG_ROOT" in (toolchain_file_of(preset) or "")
+
+
 def binary_dir_of(preset):
     _, by_name = load_presets()
     binary_dir = _resolve_field(preset, by_name, "binaryDir")

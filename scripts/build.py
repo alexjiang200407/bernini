@@ -23,6 +23,10 @@ vcvarsall.bat. Without one, vcvars is located via vswhere for the generators tha
 need it (Visual Studio, Ninja, NMake on Windows); Xcode and Unix Makefiles are
 left untouched.
 
+VCPKG_ROOT is exported into that environment from the vcpkg recorded in config.json
+(else an auto-detected one), so the presets' toolchain file resolves without the
+variable being set on the machine.
+
 Ninja and clang presets get their make program and compiler pinned to absolute
 paths: ninja and the clang/clang++ pair come from config.json, else from the
 Visual Studio install (its bundled Ninja and "C++ Clang tools for Windows" LLVM
@@ -181,12 +185,19 @@ def main():
     stale, reason = needs_configure(binary_dir)
     configure = args.configure or (stale and not args.no_configure)
 
+    # Only the configure consumes the toolchain file; an already-configured dir has the
+    # resolved path in its cache and builds fine without one.
+    wants_vcpkg = configure and ct.needs_vcpkg(preset)
+    vcpkg_root = cfg.find_vcpkg() if wants_vcpkg else None
+
     if args.dry_run:
         print(f"preset:    {preset}")
         print(f"generator: {generator}")
         print(f"config:    {config or '(generator default)'}")
         print(f"cmake:     {cmake}")
         print(f"env:       {env_source}")
+        if wants_vcpkg:
+            print(f"vcpkg:     {vcpkg_root or '(not found -- run `just init`)'}")
         for note in toolchain:
             print(f"toolchain: {note}")
         if configure:
@@ -196,6 +207,12 @@ def main():
         if not args.configure:
             print("build:     " + " ".join(build_cmd))
         return 0
+
+    if wants_vcpkg and not vcpkg_root:
+        print(f"error: preset '{preset}' builds against vcpkg, and no vcpkg checkout was found in "
+              f"{cfg.rel(cfg.PATH)}, in VCPKG_ROOT, or in the usual install locations.\n"
+              f"Run `just init`, which offers to clone and bootstrap one.", file=sys.stderr)
+        return 1
 
     if configure:
         # The File API query must exist before cmake runs, or it writes no codemodel reply and
