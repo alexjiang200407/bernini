@@ -71,4 +71,22 @@ namespace bgl::test
 	 */
 	[[nodiscard]] float
 	FrameDelta(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h);
+
+	/**
+	 * Mean luma of `path` over exactly those pixels that are background in `referencePath` — where
+	 * "background" is a reference luma below `threshold`.
+	 *
+	 * Ghosting is content that is somewhere it should not be, and this is that and nothing else: the
+	 * reference says where the frame is genuinely empty, and anything the candidate puts there came
+	 * from a place the camera has left. Deliberately not a difference against a converged frame, which
+	 * cannot tell a trail apart from detail the accumulation has not gathered yet — and so would score
+	 * a slower, better-converging setting as though it ghosted more.
+	 *
+	 * @throws std::runtime_error if either image cannot be read or they differ in size.
+	 */
+	[[nodiscard]] float
+	BackgroundBleed(
+		const std::string& path,
+		const std::string& referencePath,
+		float              threshold = 0.02f);
 }

@@ -23,7 +23,8 @@ namespace
 	constexpr int c_BoxY = 88;
 	constexpr int c_Box  = 80;
 
-	constexpr int c_ConvergeFrames = 24;
+	// Several times the resolve's 1/`c_BlendWeight` time constant, so the accumulation has settled
+	constexpr int c_ConvergeFrames = 100;
 
 	// The band just below the horizon, where a pixel's footprint on the receding plane is long along
 	// the view axis and short across it. Wide and short, because that is the shape of the region --
@@ -356,11 +357,10 @@ TEST_CASE("A converged hashed patch stops changing between frames", "[hashedalph
 	// The instrument has to be able to read zero, or the bound below is measuring its own noise floor.
 	REQUIRE(opaque < 1e-5f);
 
-	// Measured 0.0049 with a hash cell one to two pixels wide and 0.0022 once it is sub-pixel; the
-	// bound sits between them, so the correlated pattern cannot come back unnoticed. Not tightened to
-	// the current figure: the residual is the neighbourhood clamp pulling the accumulation onto the
-	// noise, and what removes the rest of it is a change to the clamp rather than to the hash.
-	CHECK(hashed < 3.0e-3f);
+	// Measured 0.0049 with a hash cell one to two pixels wide, 0.0020 once it is sub-pixel, and 0.0013
+	// at a blend weight of 0.05. The bound sits between the last two, so neither the correlated pattern
+	// nor a weight raised back to 0.1 can return unnoticed.
+	CHECK(hashed < 1.6e-3f);
 }
 
 // A hash cell is isotropic in world space; the projection is not. Sizing it off the larger screen
