@@ -29,3 +29,6 @@ apps/editor/config.json
 dist/
 
 TODO.md
+
+# Finder drops these all over a macOS checkout; one `git add -A` and they land.
+.DS_Store
