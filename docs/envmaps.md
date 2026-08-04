@@ -119,9 +119,23 @@ flowchart TD
 
 ### `assetlib::resolveEnvironment`
 
-* Loads the **baked** maps, never the float sources. Resolving is a consumer operation, and a fallback
-  to sources would light the scene subtly differently from the shipping build. **@throws** if a
-  referenced asset was never baked.
+* Loads whichever map each route draws — `envMapToDraw`, below. **@throws** only when a route has
+  neither its baked map nor its source on disk.
+
+### `assetlib::envMapToDraw`
+
+* **The baked-vs-source branch, in one place**, because two consumers ask it: `resolveEnvironment`
+  (the editor) and `game::AssetManager::AcquireEnvironment` (the runtime). It is the environment's
+  copy of a material's `drawsLoose`, and follows the same rule — the baked RGB9E5 while it is on disk
+  and current, the float source it was compiled from while it is not, and the baked map anyway when
+  the source has gone, because a route with neither cannot be drawn at all.
+* **This is what makes a fresh checkout work.** `Data/Textures/` is git-ignored by design — baked
+  output is regenerated per platform — so a clone has every `textures_src/` source and no bake. Before
+  this branch existed, every environment in such a project failed to load while its materials drew
+  fine, because materials already had the fallback.
+* The fallback costs memory (`R32G32B32A32_SFLOAT` against RGB9E5, four times the bytes) and is not
+  what ships. It is not a different *image*: the source is exactly what the bake compiled, blur and
+  all.
 
 ### `editor::ApplyEnvironment`
 

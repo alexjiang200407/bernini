@@ -5,6 +5,7 @@ namespace assetlib
 {
 	struct BSky;
 	struct BEnvLighting;
+	struct EnvMapRoute;
 
 	/**
 	 * Where an environment bake reads and writes. Mirrors MaterialBakeDesc: every path a `.bsky` or
@@ -62,6 +63,21 @@ namespace assetlib
 	/** isSkyBakeStale over the lighting pair: stale when either route is. */
 	[[nodiscard]] bool
 	isEnvLightingBakeStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot);
+
+	/**
+	 * The map a consumer draws for `route`, data-root relative: the baked RGB9E5 while that is on
+	 * disk and current, and the float source it was compiled from while it is not.
+	 *
+	 * The rule a material follows -- see drawsLoose. A stale or never-written bake falls back to
+	 * what it was compiled from, but only a source that is still there can be sampled, so a route
+	 * whose source has gone keeps its baked map. Two representations of one image: the fallback
+	 * costs memory and skips the shipping compile, it does not change what is drawn.
+	 *
+	 * @throws std::runtime_error when neither is on disk, which is the only case a consumer cannot
+	 *         draw at all.
+	 */
+	[[nodiscard]] const std::string&
+	envMapToDraw(const EnvMapRoute& route, const std::filesystem::path& dataRoot);
 
 	/**
 	 * Whether `fileName` is a name bakeSky or bakeEnvLighting could have written:

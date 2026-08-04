@@ -130,6 +130,25 @@ namespace assetlib
 		       routeIsStale(lighting.irradiance, dataRoot);
 	}
 
+	const std::string&
+	envMapToDraw(const EnvMapRoute& route, const std::filesystem::path& dataRoot)
+	{
+		const bool bakedOnDisk = !route.baked.empty() && stampOf(dataRoot / route.baked).size != 0;
+
+		if (bakedOnDisk && !routeIsStale(route, dataRoot))
+			return route.baked;
+
+		if (!route.source.empty() && stampOf(dataRoot / route.source).size != 0)
+			return route.source;
+
+		if (bakedOnDisk)
+			return route.baked;
+
+		throw std::runtime_error(
+			"assetlib::envMapToDraw: neither the baked map '" + route.baked + "' nor the source '" +
+			route.source + "' is on disk; bake the environment, or restore its source");
+	}
+
 	bool
 	isBakedEnvMapName(std::string_view fileName) noexcept
 	{

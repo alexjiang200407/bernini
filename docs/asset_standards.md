@@ -352,8 +352,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     `.benv` must reference is its consumer's rule, not the container's.
   * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
     ([libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h))
-    follows the chain and loads the **baked** maps — never the float sources, which would light the
-    scene subtly differently from the shipped build; referenced-but-never-baked throws.
+    follows the chain and loads, per route, whatever `envMapToDraw` says is there to draw: the baked
+    map while it is current, the float source it was compiled from otherwise. Same branch a material
+    takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
+    fresh checkout has sources and no bakes. Only a route with neither throws.
   * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
     no migration path. It opened with the same magic and version-field layout, so the reader refuses
     it *by number* with a message that says to re-import — reading on would take KTX2 bytes as
