@@ -120,9 +120,13 @@ what the source and `docs/` are for. Follow [bcp-docs](.claude/skills/bcp-docs/S
 git switch -c docs/<name>-plan feat/<name>
 git add docs/plans/<name>.md
 git commit -m "docs(plans): plan <what the feature delivers>"   # the hook adds the bot co-author
+# spawn bcp-precheck here (§ 3), and act on it before pushing
 git push -u origin HEAD
 just pr create --base feat/<name> --body-file <file>
 ```
+
+The plan is where a design finding is cheapest of all — it costs a paragraph here and a rewrite once
+the tasks have landed.
 
 Then § 4. **No task branch is cut until this PR merges** — the plan fixes what every later PR is
 measured against, and a decomposition reviewed after three tasks have landed is reviewed too late to
@@ -171,9 +175,20 @@ just run bgl_tests -- --gpu-validation       # if it touches shaders, barriers o
 just format <files...>
 git fetch origin && git rebase origin/feat/<name>   # the base moved if a sibling merged
 just build && just test                             # again — a rebase is a real merge
+# spawn bcp-precheck here, and act on it before pushing
 git push -u origin HEAD
 just pr create --base feat/<name> --body-file <file>
 ```
+
+**Every PR this skill opens is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) first**, the
+plan's and § 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, after the last
+verification step and before the push — § 2 has no rebase to hang it on, § 5 needs its base named
+explicitly. It reads the diff against the base for code that already exists in `core`, a design
+that fights `ROADMAP.md`, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does
+not open on one. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for the full loop.
+
+`bernini.feature` is what tells the precheck its base, so a slice reviewed while that config is unset
+gets diffed against `master` and reports the whole feature. § 1 sets it; check it is still set.
 
 `--base` is not optional, and it is not defaulted: name the feature branch or the PR proposes the
 work to `master`. The body goes in a file, headed by `# type(scope): the title` — the title is lifted
@@ -265,12 +280,19 @@ When the tracker is all `[x]`:
 git fetch origin && git switch feat/<name> && git rebase origin/master
 just build && just test                      # the whole feature at once
 just run bgl_tests -- --gpu-validation       # if any task touched shaders, barriers or descriptors
+# spawn bcp-precheck here, against origin/master -- see below
 git push --force-with-lease
 just pr create --base master --head feat/<name> --body-file <file>
 ```
 
 This run matters more than any single task's did: each was verified against the branch as it stood at
-the time, and this is the first time all of them exist together.
+the time, and this is the first time all of them exist together. The critical read is the same: it is
+the first time anyone reads the feature as one diff.
+
+**Tell it the base explicitly here.** `bernini.feature` is still set until the merge, so a precheck
+left to resolve its own base would diff against `origin/feat/<name>` — the stale remote ref, whose
+merge-base with the just-rebased branch is where the feature was cut. It would report the feature
+plus every unrelated `master` commit since. The base for this one is `origin/master`.
 
 The body is the feature's story — what it adds, why, how it was verified as a whole, what was
 deliberately left out. Link the task PRs; do not restate them. Then § 4 again.
