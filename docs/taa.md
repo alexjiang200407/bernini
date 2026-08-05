@@ -156,6 +156,13 @@ noise in any one frame and only correct once this has averaged it. Two couplings
   showing a single stochastic frame rather than the average of many. `c_HashScale` is the *lower*
   bound of a 2× range, since the octave selection rounds down to a power of two.
 
+* **Its base colour must keep its alpha and preserve coverage down the mips, and the bake does
+  both.** A hashed material's alpha would otherwise be destroyed outright — the alpha-less block
+  format renders opaque cards — and plain box mips dilute a sub-texel strand's alpha, which under
+  stochastic coverage is expected coverage lost: the strand fades out with distance rather than
+  thinning. `bakeMaterial` keeps hashed base colour in BC7 and rescales its mips against the
+  material's cutoff, exactly as the alpha test always had ([material_bake.cpp](libs/assetlib/src/material_bake.cpp)).
+
 * **Near pixel size on both axes, which is what bounds the anisotropy.** The cell is isotropic on
   the surface and the projection is not, so `c_MaxAnisotropy` decides how wide a cell may get across
   the compressed screen axis — the axis a grazing surface, which is most of a hair card, is

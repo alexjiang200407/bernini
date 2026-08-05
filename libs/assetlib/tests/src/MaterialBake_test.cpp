@@ -183,6 +183,22 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 		// and blend bakes plain ones -- different bytes, so they must not share a file.
 		REQUIRE(bakeBaseColor(AlphaMode::kMask) != bakeBaseColor(AlphaMode::kBlend));
 	}
+
+	SECTION("a hashed base color bakes to BC7, not the alpha-less BC1")
+	{
+		// Hashed tests base-color alpha against a per-pixel threshold, so losing the channel would
+		// leave every fragment surviving -- opaque cards where the strands should be.
+		REQUIRE(
+			loadKTX2(dir.path / bakeBaseColor(AlphaMode::kHashed)).vkFormat ==
+			VkFormat::BC7_SRGB_BLOCK);
+	}
+
+	SECTION("hashed and blend do not converge on one baked map")
+	{
+		// Hashed bakes coverage-preserving mips like the cutout: diluted alpha under stochastic
+		// coverage is expected coverage lost, so a distant strand fades out instead of thinning.
+		REQUIRE(bakeBaseColor(AlphaMode::kHashed) != bakeBaseColor(AlphaMode::kBlend));
+	}
 }
 
 namespace

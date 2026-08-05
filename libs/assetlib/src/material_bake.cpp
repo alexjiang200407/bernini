@@ -146,26 +146,31 @@ namespace assetlib
 		 * Base color is the only 4-channel group, so it is the only one with an alpha component at all
 		 * -- ORM and normal have none. Whether that component matters is the material's authored alpha
 		 * mode, *not* something inferred from the routes: an importer that wires all four channels of
-		 * every texture out of habit would otherwise turn every material into a cutout. Both alpha
-		 * modes that read the channel -- test (kMask) and blend (kBlend) -- keep it, so it bakes BC7.
+		 * every texture out of habit would otherwise turn every material into a cutout. Every alpha
+		 * mode that reads the channel -- test (kMask), blend (kBlend) and stochastic coverage
+		 * (kHashed) -- keeps it, so it bakes BC7.
 		 */
 		bool
 		groupCarriesAlpha(const PbrParams& pbr, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
-			       (pbr.alphaMode == AlphaMode::kMask || pbr.alphaMode == AlphaMode::kBlend);
+			       (pbr.alphaMode == AlphaMode::kMask || pbr.alphaMode == AlphaMode::kBlend ||
+			        pbr.alphaMode == AlphaMode::kHashed);
 		}
 
 		/**
-		 * Whether this group's mips are coverage-preserving. Only the alpha *test* cutout rescales each
-		 * mip against its cutoff so thin geometry does not dissolve; blend keeps the channel but uses
-		 * plain mips, since it has no threshold to preserve.
+		 * Whether this group's mips are coverage-preserving. The alpha test rescales each mip against
+		 * its cutoff so thin geometry does not dissolve. Hashed coverage dissolves the same way --
+		 * averaging pulls a strand's alpha towards zero and its expected coverage with it, so a
+		 * distant strand fades out rather than thinning -- and takes the same correction. Blend keeps
+		 * the channel but uses plain mips: dilution is exactly the prefiltering blending wants at
+		 * distance.
 		 */
 		bool
-		groupIsCutout(const PbrParams& pbr, const Group& group)
+		groupPreservesCoverage(const PbrParams& pbr, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
-			       pbr.alphaMode == AlphaMode::kMask;
+			       (pbr.alphaMode == AlphaMode::kMask || pbr.alphaMode == AlphaMode::kHashed);
 		}
 
 		/**
@@ -363,9 +368,10 @@ namespace assetlib
 
 			const Ktx2Compression compression = groupCompression(pbr, group);
 
-			// Cutout mips are keyed against the cutoff; blend keeps its alpha but bakes plain mips.
+			// Cutout and hashed mips are keyed against the cutoff; blend keeps its alpha but bakes
+			// plain mips.
 			const std::optional<float> mipCutoff =
-				groupIsCutout(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
+				groupPreservesCoverage(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
 
 			const std::string name = bakedMapFileName(
 				group.name,

@@ -4,6 +4,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -226,6 +227,233 @@ namespace
 		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
 		return PatchScene{ gfx, target, scene, view, job };
+	}
+
+	// Vertical strands two texels wide every 16, opaque on a transparent background -- a hair
+	// texture's flyaway region, reduced to what matters. The strand covers an eighth of its period,
+	// so plain box mips dilute its alpha by half per level once the strand is sub-texel.
+	constexpr uint32_t c_StrandTexSize = 256;
+	constexpr uint32_t c_StrandWidth   = 2;
+	constexpr uint32_t c_StrandPeriod  = 16;
+
+	// The two mip policies a base colour can reach the shader with: plain box mips, which is what
+	// blend bakes (and what hashed wrongly got), and coverage-preserving mips, which rescale each
+	// level's alpha so the fraction passing 0.5 matches mip 0's -- the bake's kMask/kHashed path,
+	// reproduced here because the baked file is BC7 and cannot be authored directly in a test.
+	assetlib::ImageData
+	MakeStrandTexture(bool preserveCoverage)
+	{
+		auto image      = assetlib::ImageData();
+		image.width     = c_StrandTexSize;
+		image.height    = c_StrandTexSize;
+		image.arraySize = 1;
+		image.vkFormat  = assetlib::VkFormat::R8G8B8A8_SRGB;
+		image.isCubemap = false;
+
+		image.mipLevels = 1;
+		for (uint32_t dim = c_StrandTexSize; dim > 1; dim >>= 1)
+		{
+			++image.mipLevels;
+		}
+
+		size_t totalBytes = 0;
+		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
+		{
+			const uint32_t dim = std::max(1u, c_StrandTexSize >> mip);
+			totalBytes += static_cast<size_t>(dim) * dim * 4;
+		}
+		image.pixels = core::fixed_buffer<std::byte>(totalBytes);
+
+		// Alpha per texel, box-filtered down the chain in float so the rescale below is not
+		// quantized away.
+		std::vector<float> alpha(static_cast<size_t>(c_StrandTexSize) * c_StrandTexSize);
+		for (uint32_t y = 0; y < c_StrandTexSize; ++y)
+		{
+			for (uint32_t x = 0; x < c_StrandTexSize; ++x)
+			{
+				alpha[static_cast<size_t>(y) * c_StrandTexSize + x] =
+					(x % c_StrandPeriod) < c_StrandWidth ? 1.0f : 0.0f;
+			}
+		}
+
+		const double mip0Coverage =
+			static_cast<double>(c_StrandWidth) / static_cast<double>(c_StrandPeriod);
+
+		size_t offset = 0;
+		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
+		{
+			const uint32_t dim = std::max(1u, c_StrandTexSize >> mip);
+
+			std::vector<float> level = alpha;
+			if (preserveCoverage && mip > 0)
+			{
+				// The smallest scale whose coverage still reaches mip 0's, like the bake's
+				// matchAlphaCoverage.
+				float lo = 0.0f;
+				float hi = 8.0f;
+				for (int i = 0; i < 12; ++i)
+				{
+					const float mid   = 0.5f * (lo + hi);
+					size_t      count = 0;
+					for (const float a : alpha)
+					{
+						if (std::min(1.0f, a * mid) >= 0.5f)
+						{
+							++count;
+						}
+					}
+					const double coverage =
+						static_cast<double>(count) / static_cast<double>(alpha.size());
+					(coverage < mip0Coverage ? lo : hi) = mid;
+				}
+				for (float& a : level)
+				{
+					a = std::min(1.0f, a * hi);
+				}
+			}
+
+			for (uint32_t y = 0; y < dim; ++y)
+			{
+				for (uint32_t x = 0; x < dim; ++x)
+				{
+					const size_t t = offset + (static_cast<size_t>(y) * dim + x) * 4;
+
+					image.pixels[t + 0] = std::byte{ 140 };
+					image.pixels[t + 1] = std::byte{ 100 };
+					image.pixels[t + 2] = std::byte{ 70 };
+					image.pixels[t + 3] = std::byte{ static_cast<uint8_t>(
+						level[static_cast<size_t>(y) * dim + x] * 255.0f + 0.5f) };
+				}
+			}
+
+			image.subresources.push_back(
+				{ offset, static_cast<uint64_t>(dim) * 4, static_cast<uint64_t>(dim) * dim * 4 });
+			offset += static_cast<size_t>(dim) * dim * 4;
+
+			// Box-filter down for the next level.
+			if (dim > 1)
+			{
+				const uint32_t     next = dim >> 1;
+				std::vector<float> down(static_cast<size_t>(next) * next);
+				for (uint32_t y = 0; y < next; ++y)
+				{
+					for (uint32_t x = 0; x < next; ++x)
+					{
+						const size_t a = static_cast<size_t>(y * 2) * dim + x * 2;
+						const size_t b = a + 1;
+						const size_t c = a + dim;
+						const size_t d = c + 1;
+						down[static_cast<size_t>(y) * next + x] =
+							0.25f * (alpha[a] + alpha[b] + alpha[c] + alpha[d]);
+					}
+				}
+				alpha = std::move(down);
+			}
+		}
+
+		return image;
+	}
+
+	// The strand plane on screen: small enough that a strand is sub-pixel and the active mip is the
+	// diluted regime a distant hair card samples.
+	constexpr float c_StrandPlane = 5.0f;
+
+	constexpr int c_StrandBoxX = 104;
+	constexpr int c_StrandBoxY = 104;
+	constexpr int c_StrandBox  = 48;
+
+	PatchScene
+	MakeStrandScene(bool preserveCoverage)
+	{
+		auto opts                     = bgl::GraphicsOptions();
+		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.enableDebugLayer         = true;
+		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+		auto gfx = bgl::CreateGraphics(opts);
+		REQUIRE(gfx != nullptr);
+
+		auto targetDesc       = bgl::RenderTargetDesc();
+		targetDesc.width      = static_cast<int>(c_Width);
+		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.headless   = true;
+		targetDesc.taaEnabled = true;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 8;
+		sceneDesc.initialMeshlets             = 512;
+		sceneDesc.initialSubmeshes            = 8;
+		sceneDesc.initialVertexBufferByteSize = 800000;
+		sceneDesc.initialIndices              = 20000;
+		sceneDesc.initialPbrMaterials         = 8;
+
+		auto scene = gfx->CreateScene(sceneDesc);
+		auto view  = gfx->CreateSceneView(scene, 8);
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		auto desc            = bgl::PbrMaterialDesc();
+		desc.baseColorFactor = glm::vec4(1.0f);
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 0.6f;
+		desc.layerType       = bgl::LayerType::kHashed;
+		desc.baseColorTexture =
+			scene->AddTextureAsset(MakeStrandTexture(preserveCoverage), "strands");
+
+		auto material = scene->CreatePbrMaterial(desc);
+		auto plane    = scene->AddPlaneGeom(1, 1, c_StrandPlane, c_StrandPlane, material);
+		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 0.0f, 20.0f),
+				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(
+				glm::radians(60.0f),
+				static_cast<float>(c_Width) / static_cast<float>(c_Height),
+				0.5f,
+				500.0f);
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		return PatchScene{ gfx, target, scene, view, job };
+	}
+
+	// Converges the strand scene, then captures two consecutive frames: the delta is flicker, and
+	// the mean is how much of the strands' footprint survived to the screen.
+	std::pair<float, bgl::test::Rgba>
+	StrandFlicker(const std::string& pathA, const std::string& pathB, bool preserveCoverage)
+	{
+		PatchScene strands = MakeStrandScene(preserveCoverage);
+
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			strands.gfx->DrawFrame(strands.target, strands.job);
+		}
+
+		strands.gfx->ScreenshotPng(strands.target, pathA);
+
+		strands.gfx->DrawFrame(strands.target, strands.job);
+		strands.gfx->ScreenshotPng(strands.target, pathB);
+
+		const float delta = bgl::test::FrameDelta(
+			pathA,
+			pathB,
+			c_StrandBoxX,
+			c_StrandBoxY,
+			c_StrandBox,
+			c_StrandBox);
+		const bgl::test::Rgba mean =
+			bgl::test::MeanColor(pathA, c_StrandBoxX, c_StrandBoxY, c_StrandBox, c_StrandBox);
+
+		return { delta, mean };
 	}
 
 	// Renders one plane at `alpha` with the given layer, `frames` times, and returns the mean colour
@@ -553,6 +781,48 @@ TEST_CASE("A converged hashed surface stays still at grazing angles", "[hashedal
 
 	CHECK(hashedStill < 2.5e-3f);
 	CHECK(hashedPan < 5.0e-3f);
+}
+
+// The strand regime: geometry whose *texture alpha* is thinner than a pixel, which is the flyaway
+// half of a hair asset. Plain box mips dilute such a strand's alpha, and under stochastic coverage
+// diluted alpha is a strand that fades out of the frame -- its expected coverage falls with every
+// level. The bake's coverage-preserving mips, which kMask always had and kHashed now shares, are
+// what keeps the footprint; this is the renderer-level half of that contract, the same strands
+// drawn under both mip policies.
+//
+// What this does *not* claim: that the rescale calms flicker. Measured at parity here (0.0012
+// plain, 0.0014 preserved) -- this grating's diluted alpha lands exactly at the matching cutoff,
+// where a rescaled texel is still a coin flip per frame. The footprint is the win; the flicker on
+// such content is bounded by the accumulation, as elsewhere.
+TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hashedalpha][render]")
+{
+	const auto [plainDelta, plainMean] = StrandFlicker(
+		"assets/golden/hashed_strand_plain_a.got.png",
+		"assets/golden/hashed_strand_plain_b.got.png",
+		false);
+
+	const auto [preservedDelta, preservedMean] = StrandFlicker(
+		"assets/golden/hashed_strand_preserved_a.got.png",
+		"assets/golden/hashed_strand_preserved_b.got.png",
+		true);
+
+	INFO(
+		"strand flicker: plain = " << plainDelta << ", preserved = " << preservedDelta
+								   << "; strand luma: plain = " << plainMean.Luma()
+								   << ", preserved = " << preservedMean.Luma());
+
+	// The strands have to be on screen at all, or the footprint comparison is background against
+	// background.
+	CHECK(plainMean.Luma() > 5e-3f);
+
+	// Measured 0.029 against 0.045 -- the preserved chain holds half again the footprint at a
+	// two-mip minification, and the gap widens with distance as the plain chain keeps halving.
+	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.3f);
+
+	// Neither chain may flicker beyond the converged-patch scale; this is where a regression in
+	// the accumulation on textured stochastic content would surface.
+	CHECK(plainDelta < 3e-3f);
+	CHECK(preservedDelta < 3e-3f);
 }
 
 // A hash cell is isotropic in world space; the projection is not. Sizing it off the larger screen
