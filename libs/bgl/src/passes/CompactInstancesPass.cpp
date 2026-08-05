@@ -7,6 +7,7 @@
 #include "pipeline/ComputePipeline.h"
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
+#include "scene/CullState.h"
 #include "scene/Scene.h"
 #include <bgl/ISceneView.h>
 #include <bgl/PsoType.h>
@@ -41,29 +42,6 @@ namespace bgl
 
 		{
 			auto desc = ComputeBufferDesc();
-			desc.SetElement<uint32_t>().SetInitialCount(c_PsoCount).SetDebugName("Pso Prefix Sum");
-
-			m_PsoPrefixSumBuffer.Init(desc, resourceManager);
-		}
-
-		{
-			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(c_PsoCount)
-				.SetDebugName("Compacted Dispatch Args");
-
-			m_CompactedDispatchArgs.Init(desc, resourceManager);
-		}
-
-		{
-			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::CullView>().SetInitialCount(1).SetDebugName("Cull View");
-
-			m_CullView.Init(desc, resourceManager);
-		}
-
-		{
-			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName("Cull Stats");
 
 			m_CullStats.Init(desc, resourceManager);
@@ -80,23 +58,14 @@ namespace bgl
 		m_PrefixSum.Reset();
 		m_CompactInstances.Reset();
 
-		m_CompactedDispatchArgs.Release(deferred);
-		m_PsoPrefixSumBuffer.Release(deferred);
-		m_CullView.Release(deferred);
 		m_CullStats.Release(deferred);
 	}
 
 	void
 	CompactInstancesPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
-		fg.ImportGlobalBuffer(
-			  "compactedInstances.psoPrefixSumBuffer",
-			  m_PsoPrefixSumBuffer.GetBufferHandle())
-			.ImportGlobalBuffer(
-				"compactedInstances.compactDispatchArgs",
-				m_CompactedDispatchArgs.GetBufferHandle())
-			.ImportGlobalBuffer("cull.view", m_CullView.GetBufferHandle())
-			.ImportGlobalBuffer("cull.stats", m_CullStats.GetBufferHandle())
+		// Every other buffer named below is imported by the view, under its namespace.
+		fg.ImportGlobalBuffer("cull.stats", m_CullStats.GetBufferHandle())
 			.AddPass(
 				PassDesc()
 					.SetName(std::format("Compact Instances Update {}", draw.drawIdx))
@@ -194,10 +163,15 @@ namespace bgl
 	{
 		auto cmd = ctx.GetCommandList();
 
-		m_PsoPrefixSumBuffer.Clear(cmd);
+		gassert(draw.cullState != nullptr, "Compact pass requires the draw's cull state");
+
+		draw.cullState->GetPsoPrefixSum().Clear(cmd);
 		m_CullStats.Clear(cmd);
 
-		cmd->WriteBuffer(m_CullView.GetBufferHandle(), &draw.cullView, sizeof(idl::CullView));
+		cmd->WriteBuffer(
+			draw.cullState->GetCullView().GetBufferHandle(),
+			&draw.cullView,
+			sizeof(idl::CullView));
 
 		static constexpr std::array<idl::DispatchArgs, c_PsoCount> c_Seed = [] {
 			std::array<idl::DispatchArgs, c_PsoCount> seed{};
@@ -208,7 +182,10 @@ namespace bgl
 			return seed;
 		}();
 
-		cmd->WriteBuffer(m_CompactedDispatchArgs.GetBufferHandle(), c_Seed.data(), sizeof(c_Seed));
+		cmd->WriteBuffer(
+			draw.cullState->GetCompactedDispatchArgs().GetBufferHandle(),
+			c_Seed.data(),
+			sizeof(c_Seed));
 	}
 
 	void

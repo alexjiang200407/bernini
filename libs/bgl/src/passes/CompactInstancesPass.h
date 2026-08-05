@@ -59,16 +59,8 @@ namespace bgl
 		ComputeKernel m_PrefixSum;
 		ComputeKernel m_CompactInstances;
 
-		// These size of these buffers is PsoType::kCount
-		// Not tied to the scene
-		ComputeBuffer m_CompactedDispatchArgs;
-		ComputeBuffer m_PsoPrefixSumBuffer;
-
-		// One CullView per draw, uploaded before the cull dispatch reads it. Per-context, not
-		// per-view: rewritten each draw.
-		ComputeBuffer m_CullView;
-
-		// [tested, frustum-culled], cleared each draw and read back for the stats overlay.
+		// [tested, frustum-culled], cleared each draw. Debug-only, aggregated nowhere and read by
+		// nothing on the CPU, so it stays device-wide rather than multiplying per frustum.
 		ComputeBuffer m_CullStats;
 	};
 }
