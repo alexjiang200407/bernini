@@ -1,4 +1,5 @@
 #include "util/GoldenImage.h"
+#include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -91,6 +92,14 @@ TEST_CASE(
 	"Shader cache is populated cold and reused warm without recompiling",
 	"[shadercache][render]")
 {
+	// The driver-pipeline layer this asserts on is not built while validation is running, since a
+	// pipeline stored by an uninstrumented run would replay around the patching. See
+	// docs/shader_cache.md.
+	if (bgl::test::GpuValidationActive())
+	{
+		SKIP("the driver pipeline layer is disabled while GPU validation is running");
+	}
+
 	const std::string golden   = "assets/golden/pbr_ibl.exp.png";
 	const fs::path    cacheDir = fs::temp_directory_path() / "bernini_shadercache_test";
 

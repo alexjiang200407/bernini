@@ -40,8 +40,10 @@ namespace bgl
 
 	Device::~Device() = default;
 
-	Device::Device(MTL::Device* device, const std::string& shaderCacheDir) :
-		m_Device(NS::RetainPtr(device))
+	Device::Device(
+		MTL::Device*       device,
+		const std::string& shaderCacheDir,
+		bool               usePipelineLibrary) : m_Device(NS::RetainPtr(device))
 	{
 		if (!shaderCacheDir.empty())
 		{
@@ -51,7 +53,8 @@ namespace bgl
 				ShaderCacheSalt(),
 				std::vector<std::string>(
 					std::begin(c_ShaderSearchPaths),
-					std::end(c_ShaderSearchPaths)));
+					std::end(c_ShaderSearchPaths)),
+				usePipelineLibrary);
 		}
 	}
 

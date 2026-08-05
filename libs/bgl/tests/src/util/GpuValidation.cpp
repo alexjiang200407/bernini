@@ -1,5 +1,7 @@
 #include "util/GpuValidation.h"
 
+#include <core/platform/util.h>
+
 namespace bgl::test
 {
 	namespace
@@ -19,5 +21,12 @@ namespace bgl::test
 	SetGpuValidation(bool enabled) noexcept
 	{
 		g_GpuValidation = enabled;
+	}
+
+	bool
+	GpuValidationActive() noexcept
+	{
+		return g_GpuValidation || core::env_var("MTL_SHADER_VALIDATION").has_value() ||
+		       core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
 	}
 }

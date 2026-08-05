@@ -158,13 +158,22 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   leaves `pipelines.psolib` unrewritten. The program cache (`.bsc`), by contrast, is deterministic
   and *is* safe to assert on.
 
-* **The pipeline library is disabled under GPU-based validation.** A PSO replayed from the library
-  carries the instrumentation it was built with, so replaying one into a GBV-enabled device would
-  skip the shader patching that run exists to apply. When `enableGPUValidationLayer` is on, the
-  `ShaderCache` is constructed with `usePipelineLibrary=false` and no `pipelines.psolib` is created
-  or read; every PSO goes through `CreatePipelineState`. The program cache (`.bsc`) is unaffected —
-  the DXIL is identical either way — so only the driver's DXIL→ISA compile is repaid, not the Slang
-  front-end.
+* **The pipeline library is disabled under GPU validation, on both backends.** A PSO replayed from
+  the library carries the instrumentation it was built with, so replaying one into a validating
+  device would skip the shader patching that run exists to apply. The `ShaderCache` is constructed
+  with `usePipelineLibrary=false` and no driver-pipeline file is created or read; every PSO goes
+  through the driver. The program cache (`.bsc`) is unaffected — the generated code is identical
+  either way — so only the driver's compile is repaid, not the Slang front-end.
+
+  On Metal this is not merely an optimisation to skip: `newBinaryArchive` **segfaults inside Metal**
+  loading an archive written by an uninstrumented run, so before this gate existed a GPU-validation
+  run crashed at device creation unless the cache directory was deleted first. That is why nobody had
+  run one.
+
+  **Metal's validation is turned on by the environment, not by `GraphicsOptions`** —
+  `MTL_SHADER_VALIDATION` / `METAL_DEVICE_WRAPPER_TYPE` are read by the Metal runtime before the
+  process gets a say. `Graphics_metal` therefore reads both variables as well as
+  `enableGPUValidationLayer`, or the flag would say "off" during a validating run.
 
 * **`GetSlangModule()` is a lazy, memoizing const getter** (`mutable` module handle). @pre it may
   front-end-compile on first call (the slow path) and `gfatal` on a shader error; it does nothing on

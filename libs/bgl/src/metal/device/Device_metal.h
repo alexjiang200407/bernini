@@ -17,7 +17,7 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(MTL::Device* device, const std::string& shaderCacheDir);
+		Device(MTL::Device* device, const std::string& shaderCacheDir, bool usePipelineLibrary);
 
 		// Out of line: m_ShaderCache holds an incomplete type here.
 		~Device() override;
