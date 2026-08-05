@@ -1,9 +1,9 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "scene/ViewCullState.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -105,10 +105,11 @@ namespace bgl
 			return m_NamePrefix;
 		}
 
+		// The cull inputs: one per view, shared by every frustum it is culled against.
 		auto
 		GetInstanceBuffers()
 		{
-			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_CompactedInstances);
+			return std::tie(m_InstanceBuffer, m_MeshBuffer);
 		}
 
 		/**
@@ -171,12 +172,9 @@ namespace bgl
 		void
 		InitBuffers();
 
-		void
-		InitInstanceScratch(uint32_t paddedInstances);
-
 		/**
-		 * Brings the per-instance-slot scratch buffers back in line with the instance buffer after
-		 * it has grown. A no-op when they already cover it.
+		 * Brings the cull state back in line with the instance buffer after it has grown. A no-op
+		 * when it already covers it.
 		 */
 		void
 		SyncInstanceScratch();
@@ -192,17 +190,9 @@ namespace bgl
 
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
-		ComputeBuffer                    m_CompactedInstances;
 
-		// One word per instance slot, written by the cull pass and read by the counting sort and the
-		// transparent depth-key pass. Sized like the instance buffer.
-		ComputeBuffer m_InstanceVisibility;
-
-		// The depth-sorted transparent path, all written by TransparentSortPass. The keys buffer is
-		// sized off the instance buffer, not the sort capacity: see the note at its initialization.
-		ComputeBuffer m_SortedTransparentInstances;
-		ComputeBuffer m_TransparentSortEntries;
-		ComputeBuffer m_TransparentSortCount;
+		// One frustum's cull outputs.
+		ViewCullState m_CullState;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
