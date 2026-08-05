@@ -62,7 +62,7 @@ TEST_CASE("A delivered preview is cached and announced", "[thumbnails]")
 	const Sandbox sandbox;
 
 	TexturePreviewCache cache;
-	QSignalSpy          ready(&cache, &TexturePreviewCache::PreviewReady);
+	QSignalSpy          ready(&cache, &StampedPixmapCache::Ready);
 
 	const QString path = sandbox.WriteTexture("albedo.ktx2");
 	cache.Deliver(path, Preview(), TexturePreviewCache::FileStamp(path));
@@ -94,7 +94,7 @@ TEST_CASE("A failed decode caches nothing and announces nothing", "[thumbnails]"
 	const Sandbox sandbox;
 
 	TexturePreviewCache cache;
-	QSignalSpy          ready(&cache, &TexturePreviewCache::PreviewReady);
+	QSignalSpy          ready(&cache, &StampedPixmapCache::Ready);
 
 	const QString path = sandbox.WriteTexture("broken.ktx2");
 
@@ -106,10 +106,34 @@ TEST_CASE("A failed decode caches nothing and announces nothing", "[thumbnails]"
 	REQUIRE(ready.count() == 0);
 }
 
+TEST_CASE("A late failed decode does not evict what already landed", "[thumbnails]")
+{
+	// The preview path's half of E3's gate. Request claims the file and starts a decode of content
+	// that is not a KTX2, so the worker will fail -- but a good preview is delivered before it comes
+	// back. The failure ends a claim that is already over, and must not take the cached preview with
+	// it.
+	const Sandbox sandbox;
+
+	TexturePreviewCache cache;
+	QSignalSpy          ready(&cache, &StampedPixmapCache::Ready);
+
+	const QString path = sandbox.WriteTexture("albedo.ktx2");
+
+	cache.Request(path);
+	cache.Deliver(path, Preview(), TexturePreviewCache::FileStamp(path));
+
+	REQUIRE(!cache.Lookup(path).isNull());
+	REQUIRE(ready.count() == 1);
+
+	// The worker's own Deliver, with the null image a failed decode yields.
+	REQUIRE(editor::test::WaitFor([&] { return cache.Lookup(path).isNull(); }, 1000) == false);
+	REQUIRE(ready.count() == 1);
+}
+
 TEST_CASE("Requesting nothing does nothing", "[thumbnails]")
 {
 	TexturePreviewCache cache;
-	QSignalSpy          ready(&cache, &TexturePreviewCache::PreviewReady);
+	QSignalSpy          ready(&cache, &StampedPixmapCache::Ready);
 
 	// A node with no texture assigned asks for one every time it is redrawn.
 	cache.Request("");

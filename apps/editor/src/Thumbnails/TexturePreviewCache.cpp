@@ -1,8 +1,6 @@
 #include "Thumbnails/TexturePreviewCache.h"
 
-#include <QDateTime>
 #include <QDebug>
-#include <QFileInfo>
 #include <QPainter>
 #include <QRunnable>
 
@@ -85,69 +83,31 @@ namespace
 	};
 }
 
-TexturePreviewCache::TexturePreviewCache(QObject* parent) : QObject(parent)
+TexturePreviewCache::TexturePreviewCache(QObject* parent) : StampedPixmapCache(c_BudgetKb, parent)
 {
 	// Decodes are memory-hungry (a transcoded mip chain of a 4K map is tens of MB); a couple in
 	// flight keeps drag-drop responsive without thrashing.
 	m_Pool.setMaxThreadCount(2);
 }
 
-qint64
-TexturePreviewCache::FileStamp(const QString& path)
-{
-	const QFileInfo info(path);
-	return info.exists() ? info.lastModified().toMSecsSinceEpoch() : 0;
-}
-
-QPixmap
-TexturePreviewCache::Lookup(const QString& path) const
-{
-	const CachedPreview* entry = m_Cache.object(path);
-	if (entry == nullptr || entry->stamp != FileStamp(path))
-		return {};
-
-	return entry->pixmap;
-}
-
 void
 TexturePreviewCache::Request(const QString& path)
 {
-	if (path.isEmpty() || m_InFlight.contains(path))
+	const std::optional<qint64> stamp = BeginRequest(path);
+	if (!stamp)
 		return;
 
-	const qint64 stamp = FileStamp(path);
-
-	const CachedPreview* entry = m_Cache.object(path);
-	if (entry != nullptr)
-	{
-		if (entry->stamp == stamp)
-			return;
-
-		// Rebaked on disk since we decoded it. The editor is also the asset-cook host, so this is
-		// reachable without ever closing the material.
-		m_Cache.remove(path);
-	}
-
-	m_InFlight.insert(path);
-	m_Pool.start(new DecodeTask(this, path, stamp));
+	m_Pool.start(new DecodeTask(this, path, *stamp));
 }
 
 void
 TexturePreviewCache::Deliver(const QString& path, const QImage& image, qint64 stamp)
 {
-	m_InFlight.remove(path);
-
 	if (image.isNull())
+	{
+		Abandon(path);
 		return;
+	}
 
-	const QPixmap preview = ToDisplayPixmap(image);
-
-	const int costKb = std::max(
-		1,
-		static_cast<int>(
-			(static_cast<qint64>(preview.width()) * preview.height() * preview.depth() / 8) /
-			1024));
-
-	m_Cache.insert(path, new CachedPreview{ preview, stamp }, costKb);
-	Q_EMIT PreviewReady(path, preview);
+	Store(path, ToDisplayPixmap(image), stamp);
 }

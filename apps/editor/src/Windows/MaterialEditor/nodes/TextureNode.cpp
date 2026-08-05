@@ -25,7 +25,7 @@ TextureNode::TextureNode(Renderer* renderer, TexturePreviewCache* previews) :
 
 	connect(
 		m_Previews,
-		&TexturePreviewCache::PreviewReady,
+		&StampedPixmapCache::Ready,
 		this,
 		[this](const QString& path, const QPixmap& preview) {
 			// One decode notifies every node; several nodes commonly share a texture.
@@ -130,7 +130,7 @@ TextureNode::SetTexturePath(const QString& path)
 	if (m_Previews != nullptr)
 	{
 		// Decoding is asynchronous, so a texture already decoded for another node arrives now and
-		// the rest land later via PreviewReady.
+		// the rest land later via Ready.
 		m_Preview = m_Previews->Lookup(path);
 		if (m_Preview.isNull())
 			m_Previews->Request(path);

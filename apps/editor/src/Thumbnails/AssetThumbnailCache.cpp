@@ -155,7 +155,7 @@ namespace
 }
 
 AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* parent) :
-	QObject(parent), m_Desc(std::move(desc))
+	StampedPixmapCache(c_BudgetKb, parent), m_Desc(std::move(desc))
 {
 	// Reading a .bmesh is I/O plus a parse; two at a time keeps the explorer responsive without
 	// queueing up more decoded meshes than the GPU drain can retire.
@@ -260,9 +260,10 @@ AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 
 	m_Assets = assets;
 
-	m_Cache.clear();
+	// The pixmaps were rendered with the old manager's materials, and the queued reads resolve
+	// against the old data root.
+	Clear();
 	m_Queue.clear();
-	m_InFlight.clear();
 }
 
 std::filesystem::path
@@ -276,13 +277,6 @@ AssetThumbnailCache::CanThumbnail(const QString& path)
 {
 	return path.endsWith(c_MeshSuffix, Qt::CaseInsensitive) ||
 	       path.endsWith(c_MaterialSuffix, Qt::CaseInsensitive);
-}
-
-qint64
-AssetThumbnailCache::FileStamp(const QString& path)
-{
-	const QFileInfo info(path);
-	return info.exists() ? info.lastModified().toMSecsSinceEpoch() : 0;
 }
 
 std::string
@@ -302,20 +296,10 @@ AssetThumbnailCache::ToRelative(const QString& path) const
 	return relative.generic_string();
 }
 
-QPixmap
-AssetThumbnailCache::Lookup(const QString& path) const
-{
-	const CachedThumbnail* entry = m_Cache.object(path);
-	if (entry == nullptr || entry->stamp != FileStamp(path))
-		return {};
-
-	return entry->pixmap;
-}
-
 void
 AssetThumbnailCache::Request(const QString& path)
 {
-	if (!IsReady() || path.isEmpty() || m_InFlight.contains(path) || !CanThumbnail(path))
+	if (!IsReady() || !CanThumbnail(path))
 		return;
 
 	const bool material = path.endsWith(c_MaterialSuffix, Qt::CaseInsensitive);
@@ -325,20 +309,11 @@ AssetThumbnailCache::Request(const QString& path)
 	if (material && m_Assets == nullptr)
 		return;
 
-	const qint64 stamp = FileStamp(path);
+	const std::optional<qint64> claimed = BeginRequest(path);
+	if (!claimed)
+		return;
 
-	const CachedThumbnail* entry = m_Cache.object(path);
-	if (entry != nullptr)
-	{
-		if (entry->stamp == stamp)
-			return;
-
-		// Rebaked on disk since we rendered it. The editor is also the asset-cook host, so this is
-		// reachable without ever closing the folder.
-		m_Cache.remove(path);
-	}
-
-	m_InFlight.insert(path);
+	const qint64 stamp = *claimed;
 
 	auto sink = [this, path, material, stamp](
 					std::shared_ptr<assetlib::BMesh>       mesh,
@@ -372,7 +347,7 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 	// The worker failed: no prefetch, and for a mesh no mesh either.
 	if (pending.prefetch == nullptr || (type == ThumbnailType::kMesh && pending.mesh == nullptr))
 	{
-		m_InFlight.remove(path);
+		Abandon(path);
 		return;
 	}
 
@@ -400,6 +375,7 @@ AssetThumbnailCache::RenderNextQueued()
 				"AssetThumbnail: cannot resolve '%s': %s",
 				qPrintable(m_PendingCapture->path),
 				e.what());
+			Abandon(m_PendingCapture->path);
 			m_PendingCapture.reset();
 		}
 
@@ -408,20 +384,10 @@ AssetThumbnailCache::RenderNextQueued()
 			if (!image.has_value())
 				return;  // The GPU copy is still in flight; poll again next turn.
 
-			const QPixmap thumbnail = QPixmap::fromImage(ToImage(*image));
-
-			const int costKb = std::max(
-				1,
-				static_cast<int>(
-					(static_cast<qint64>(thumbnail.width()) * thumbnail.height() *
-			         thumbnail.depth() / 8) /
-					1024));
-
-			m_Cache.insert(
+			Store(
 				m_PendingCapture->path,
-				new CachedThumbnail{ thumbnail, m_PendingCapture->stamp },
-				costKb);
-			Q_EMIT ThumbnailReady(m_PendingCapture->path, thumbnail);
+				QPixmap::fromImage(ToImage(*image)),
+				m_PendingCapture->stamp);
 			m_PendingCapture.reset();
 		}
 	}
@@ -434,29 +400,53 @@ AssetThumbnailCache::RenderNextQueued()
 		return;
 	}
 
+	// The claim ends when the capture resolves into a cache entry, several turns from now -- not
+	// here. A repaint in between misses on Lookup, and would otherwise restart the read and render.
 	const PendingRender pending = m_Queue.dequeue();
-	m_InFlight.remove(pending.path);
 
-	const bgl::CaptureTicket ticket = m_Desc.renderer->Invoke([&] {
-		auto t = bgl::CaptureTicket();
-		try
-		{
-			t = pending.type == ThumbnailType::kMesh ? RenderMesh(pending) :
-			                                           RenderMaterial(pending);
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("AssetThumbnail: cannot render '%s': %s", qPrintable(pending.path), e.what());
-		}
+	auto ticket = bgl::CaptureTicket();
+	try
+	{
+		ticket = m_Desc.renderer->Invoke([&] {
+			auto t = bgl::CaptureTicket();
+			try
+			{
+				t = pending.type == ThumbnailType::kMesh ? RenderMesh(pending) :
+				                                           RenderMaterial(pending);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning(
+					"AssetThumbnail: cannot render '%s': %s",
+					qPrintable(pending.path),
+					e.what());
+			}
 
-		// Safe with the capture in flight: it copies the presented backbuffer, and the scene's
-		// deletes are fence-deferred behind it.
-		ReleaseGeometry();
-		return t;
-	});
+			// Safe with the capture in flight: it copies the presented backbuffer, and the scene's
+			// deletes are fence-deferred behind it.
+			ReleaseGeometry();
+			return t;
+		});
+	}
+	catch (...)
+	{
+		// Invoke carries anything the closure's own handler did not back to here, and this runs from
+		// a timer slot -- so it stops here, having first released the claim it would otherwise strand.
+		qWarning(
+			"AssetThumbnail: rendering '%s' threw off the render thread",
+			qPrintable(pending.path));
+		Abandon(pending.path);
+		return;
+	}
 
 	if (ticket.IsValid())
+	{
 		m_PendingCapture = PendingCapture{ ticket, pending.path, pending.stamp };
+		return;
+	}
+
+	// The render threw, so nothing will resolve into a cache entry and end the claim.
+	Abandon(pending.path);
 }
 
 void
@@ -467,6 +457,8 @@ AssetThumbnailCache::DiscardPendingCapture()
 
 	m_Desc.renderer->Invoke(
 		[&] { m_Desc.renderer->GetGraphics()->DiscardCapture(m_PendingCapture->ticket); });
+
+	Abandon(m_PendingCapture->path);
 	m_PendingCapture.reset();
 }
 
