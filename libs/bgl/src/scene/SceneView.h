@@ -105,6 +105,13 @@ namespace bgl
 			return m_NamePrefix;
 		}
 
+		// This view's frustum scratch.
+		[[nodiscard]] ViewCullState&
+		GetCullState() noexcept
+		{
+			return m_CullState;
+		}
+
 		// The cull inputs: one per view, shared by every frustum it is culled against.
 		auto
 		GetInstanceBuffers()
