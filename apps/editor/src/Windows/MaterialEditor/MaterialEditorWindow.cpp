@@ -932,8 +932,8 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	desc.metallicFactor  = output->MetallicFactor();
 	desc.roughnessFactor = output->RoughnessFactor();
 
-	desc.layerType   = ToLayerType(output->AlphaMode());
-	desc.alphaCutoff = output->AlphaCutoff();
+	desc.layerType   = ToLayerType(output->GetAlphaMode());
+	desc.alphaCutoff = output->GetAlphaCutoff();
 
 	const auto route = [&](unsigned int channel) {
 		const ChannelData::Route wired = output->Route(channel);

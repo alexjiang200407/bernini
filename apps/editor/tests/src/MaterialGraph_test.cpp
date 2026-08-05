@@ -173,7 +173,7 @@ TEST_CASE("The hashed-alpha sink is reachable and reports its mode", "[materialg
 	REQUIRE(sink != nullptr);
 
 	// What the compile step reads to fill BMaterial::pbr.alphaMode.
-	CHECK(sink->AlphaMode() == assetlib::AlphaMode::kHashed);
+	CHECK(sink->GetAlphaMode() == assetlib::AlphaMode::kHashed);
 
 	// A 4-wide base-color port: the alpha it carries is the coverage, so it must be wired.
 	CHECK(sink->IsAlphaTested());

@@ -115,7 +115,7 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 
 	REQUIRE(model.OutputNode() != nullptr);
 	CHECK(model.OutputNode()->name() == QStringLiteral("BlendedMaterialOutput"));
-	CHECK(model.OutputNode()->AlphaMode() == assetlib::AlphaMode::kBlend);
+	CHECK(model.OutputNode()->GetAlphaMode() == assetlib::AlphaMode::kBlend);
 	// It is not the cutout sink: blend keeps the alpha but tests nothing against a cutoff.
 	CHECK_FALSE(model.OutputNode()->IsAlphaTested());
 
@@ -144,7 +144,7 @@ TEST_CASE("A blend graph saved with the retired occlude keys still loads", "[mat
 	saved["alphaCutoff"] = 0.2;
 	REQUIRE_NOTHROW(output->load(saved));
 
-	CHECK(output->AlphaMode() == assetlib::AlphaMode::kBlend);
+	CHECK(output->GetAlphaMode() == assetlib::AlphaMode::kBlend);
 
 	const assetlib::BMaterial compiled = CompileMaterial(model, QStringLiteral("m"), c_DataRoot);
 	CHECK(compiled.pbr.alphaMode == assetlib::AlphaMode::kBlend);

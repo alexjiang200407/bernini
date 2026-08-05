@@ -24,7 +24,7 @@ public:
 	}
 
 	[[nodiscard]] assetlib::AlphaMode
-	AlphaMode() const noexcept override
+	GetAlphaMode() const noexcept override
 	{
 		return assetlib::AlphaMode::kBlend;
 	}

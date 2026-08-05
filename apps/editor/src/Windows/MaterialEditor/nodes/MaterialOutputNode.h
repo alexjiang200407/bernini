@@ -78,7 +78,7 @@ public:
 	// The alpha mode the material this sink compiles to is authored with; the sink type *is* the
 	// choice. Opaque here, overridden by the cutout and blend sinks.
 	[[nodiscard]] virtual assetlib::AlphaMode
-	AlphaMode() const noexcept
+	GetAlphaMode() const noexcept
 	{
 		return assetlib::AlphaMode::kOpaque;
 	}
@@ -91,7 +91,7 @@ public:
 	}
 
 	[[nodiscard]] virtual float
-	AlphaCutoff() const noexcept
+	GetAlphaCutoff() const noexcept
 	{
 		return 0.5f;
 	}

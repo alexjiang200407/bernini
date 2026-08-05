@@ -24,7 +24,7 @@ public:
 	}
 
 	[[nodiscard]] assetlib::AlphaMode
-	AlphaMode() const noexcept override
+	GetAlphaMode() const noexcept override
 	{
 		return assetlib::AlphaMode::kMask;
 	}
@@ -36,7 +36,7 @@ public:
 	}
 
 	[[nodiscard]] float
-	AlphaCutoff() const noexcept override
+	GetAlphaCutoff() const noexcept override
 	{
 		return m_AlphaCutoff;
 	}

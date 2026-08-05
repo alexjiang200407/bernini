@@ -107,8 +107,8 @@ CompileMaterial(
 		pbr.metallicFactor  = output->MetallicFactor();
 		pbr.roughnessFactor = output->RoughnessFactor();
 
-		pbr.alphaMode   = output->AlphaMode();
-		pbr.alphaCutoff = output->AlphaCutoff();
+		pbr.alphaMode   = output->GetAlphaMode();
+		pbr.alphaCutoff = output->GetAlphaCutoff();
 
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
 		{
@@ -140,10 +140,15 @@ BuildImportedMaterialGraph(
 
 	// kHashed never arrives from an import -- glTF cannot say it -- but a graph rebuilt from a
 	// material that was authored to it does.
-	const QString outputModel = alphaTested ? QStringLiteral("AlphaTestedMaterialOutput") :
-	                            blended     ? QStringLiteral("BlendedMaterialOutput") :
-	                            hashed      ? QStringLiteral("HashedAlphaMaterialOutput") :
-	                                          QStringLiteral("MaterialOutput");
+	QString outputModel;
+	if (alphaTested)
+		outputModel = QStringLiteral("AlphaTestedMaterialOutput");
+	else if (blended)
+		outputModel = QStringLiteral("BlendedMaterialOutput");
+	else if (hashed)
+		outputModel = QStringLiteral("HashedAlphaMaterialOutput");
+	else
+		outputModel = QStringLiteral("MaterialOutput");
 
 	const QtNodes::NodeId outputId = model.addNode(outputModel);
 	model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(c_OutputNodeX, c_OutputNodeY));

@@ -16,8 +16,6 @@ namespace bgl
 	constexpr std::string_view c_MotionVectorsName = "motionVectors"sv;
 	constexpr std::string_view c_SceneColorName    = "sceneColor"sv;
 
-	// The TAA accumulation ping-pong. Suffixed with the index rather than named a pair, so the graph
-	// tracks the half being written separately from the half being read.
 	constexpr std::string_view c_HistoryName = "taaHistory"sv;
 
 	// Constants shared with the GPU (meshlet caps, instance counting-sort group
