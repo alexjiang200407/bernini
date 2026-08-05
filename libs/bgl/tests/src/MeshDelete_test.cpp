@@ -146,8 +146,8 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, pbrBuffer, looseBuffer] =
 		geomBuffers;
 
-	auto instBuffers                                              = view->GetInstanceBuffers();
-	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, drawArgs] = instBuffers;
+	auto instBuffers                                    = view->GetInstanceBuffers();
+	[[maybe_unused]] auto& [instanceBuffer, meshBuffer] = instBuffers;
 
 	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
 	// one submesh-instance per submesh (the cube has exactly one).
