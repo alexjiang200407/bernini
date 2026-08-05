@@ -1,10 +1,19 @@
 #include "util/asset_paths.h"
 
+#include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QRegularExpression>
 
 namespace editor
 {
+	qint64
+	FileStamp(const QString& path)
+	{
+		const QFileInfo info(path);
+		return info.exists() ? info.lastModified().toMSecsSinceEpoch() : 0;
+	}
+
 	bool
 	IsPlainFileStem(const QString& name)
 	{

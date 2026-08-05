@@ -5,6 +5,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 
+#include "Windows/MaterialEditor/CachedMaterial.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
 class TexturePreviewCache;
@@ -155,6 +156,10 @@ private:
 	void
 	RefreshActions();
 
+	/** Drops every graph's cached parse, for a caller that has just rewritten one on disk. */
+	void
+	ForgetMaterialsOnDisk();
+
 	/** The graph backing the selected submesh, or -1 when nothing is selected. */
 	[[nodiscard]] int
 	CurrentGraph() const noexcept;
@@ -182,6 +187,8 @@ private:
 		std::unique_ptr<MaterialGraphScene> scene;
 
 		QString materialPath;
+
+		CachedMaterial onDisk;
 
 		// The live material this graph is previewed through. Created once and rewritten in place on
 		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's

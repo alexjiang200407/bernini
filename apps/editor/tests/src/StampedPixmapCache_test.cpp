@@ -1,6 +1,7 @@
 #include "Thumbnails/StampedPixmapCache.h"
 
 #include "util/QtSupport.h"
+#include "util/asset_paths.h"
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -119,7 +120,7 @@ TEST_CASE("A file rewritten since it was produced is produced again", "[thumbnai
 	// Stored against a stamp that is not the file's -- exactly the state an asset re-baked since it
 	// was rendered ends up in. The editor is also the cook host, so this is reachable without ever
 	// closing the folder.
-	cache.Store(path, Produced(), StampedPixmapCache::FileStamp(path) - 1);
+	cache.Store(path, Produced(), editor::FileStamp(path) - 1);
 
 	REQUIRE(cache.Lookup(path).isNull());
 	REQUIRE(cache.BeginRequest(path).has_value());
