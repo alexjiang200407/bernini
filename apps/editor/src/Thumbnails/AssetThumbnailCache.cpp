@@ -19,7 +19,6 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/RenderJob.h>
-#include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
 
 namespace
@@ -47,22 +46,6 @@ namespace
 				   static_cast<qsizetype>(shot.subresources.front().rowPitch),
 				   QImage::Format_RGBA8888)
 		    .copy();
-	}
-
-	bgl::TextureAssetHandle
-	TryLoadTexture(bgl::IScene* scene, const std::string& path)
-	{
-		if (path.empty())
-			return {};
-		try
-		{
-			return scene->AddTextureAsset(assetlib::loadKTX2(path));
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("AssetThumbnail: failed to load '%s': %s", path.c_str(), e.what());
-			return {};
-		}
 	}
 
 	// Decodes every texture the material at `relPath` names into `out`. A texture that will not decode

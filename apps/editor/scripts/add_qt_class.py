@@ -11,7 +11,7 @@ The class name is the last path component; any leading path becomes a
 subdirectory under both qt/ and src/. Existing files are never overwritten.
 
 Examples:
-    python editor/scripts/add_qt_class.py Windows/AssetImport/AssetImportWindow --base QMainWindow
+    python editor/scripts/add_qt_class.py Windows/Preferences/PreferencesWindow --base QMainWindow
     python editor/scripts/add_qt_class.py panels/Outliner
     python editor/scripts/add_qt_class.py dialogs/AboutDialog --base QDialog
 
@@ -91,7 +91,7 @@ BASES = ("QWidget", "QMainWindow", "QDialog", "QFrame")
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("name", help="Class path, e.g. Windows/AssetImport/AssetImportWindow")
+    ap.add_argument("name", help="Class path, e.g. Windows/Preferences/PreferencesWindow")
     ap.add_argument("--base", default="QWidget",
                     help=f"Base widget class (default: QWidget). Common: {', '.join(BASES)}")
     ap.add_argument("--ui-root", default=os.path.join(EDITOR_ROOT, "qt"))

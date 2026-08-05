@@ -16,14 +16,6 @@ namespace bmesh
 		return world;
 	}
 
-	std::string
-	NameFromPool(const std::vector<char>& pool, uint32_t offset)
-	{
-		if (offset == 0 || offset >= pool.size())
-			return {};
-		return std::string(pool.data() + offset);
-	}
-
 	void
 	GrowBounds(
 		const glm::mat4& transform,
