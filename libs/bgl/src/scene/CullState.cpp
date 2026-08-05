@@ -1,4 +1,4 @@
-#include "scene/ViewCullState.h"
+#include "scene/CullState.h"
 #include "fg/FrameGraph.h"
 #include "idl/CullView.h"
 #include "idl/DispatchArgs.h"
@@ -20,7 +20,7 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
+	CullState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
 	{
 		{
 			auto desc         = ComputeBufferDesc();
@@ -92,7 +92,7 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::Resize(uint32_t paddedInstances)
+	CullState::Resize(uint32_t paddedInstances)
 	{
 		if (paddedInstances <= m_CompactedInstances.GetDesc().initialCount)
 		{
@@ -106,7 +106,7 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::Release(bool deferred) noexcept
+	CullState::Release(bool deferred) noexcept
 	{
 		m_CompactedInstances.Release(deferred);
 		m_InstanceVisibility.Release(deferred);
@@ -119,7 +119,7 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::Update(ICommandList* cmdList)
+	CullState::Update(ICommandList* cmdList)
 	{
 		m_CompactedInstances.Update(cmdList);
 		m_InstanceVisibility.Update(cmdList);
@@ -128,7 +128,7 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const
+	CullState::ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const
 	{
 		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
 			std::string key(name);

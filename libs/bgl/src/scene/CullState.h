@@ -13,19 +13,19 @@ namespace bgl
 	 * Separate from the SceneView that owns it because these are outputs of culling *one* frustum,
 	 * not per-view state.
 	 */
-	class ViewCullState
+	class CullState
 	{
 	public:
-		ViewCullState() noexcept = default;
+		CullState() noexcept = default;
 
-		ViewCullState(const ViewCullState&)     = delete;
-		ViewCullState(ViewCullState&&) noexcept = default;
+		CullState(const CullState&)     = delete;
+		CullState(CullState&&) noexcept = default;
 
-		ViewCullState&
-		operator=(const ViewCullState&) = delete;
+		CullState&
+		operator=(const CullState&) = delete;
 
-		ViewCullState&
-		operator=(ViewCullState&&) noexcept = default;
+		CullState&
+		operator=(CullState&&) noexcept = default;
 
 		/**
 		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group

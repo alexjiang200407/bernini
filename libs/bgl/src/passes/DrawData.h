@@ -9,15 +9,17 @@
 namespace bgl
 {
 	class ISceneView;
-	class ViewCullState;
+	class CullState;
 
 	struct DrawData
 	{
 		uint32_t                    drawIdx = 0;
 		core::SharedRef<ISceneView> view    = nullptr;
 
-		// This draw's frustum scratch, owned by the view. Non-owning; valid for the frame only.
-		ViewCullState* cullState = nullptr;
+		// This draw's frustum scratch, owned by the view. Non-owning, and kept alive by `view`
+		// above: a DrawData is captured by value into the pass exec lambdas, so the SharedRef
+		// travels with the pointer and the view cannot be destroyed while a pass still holds one.
+		CullState*     cullState = nullptr;
 		Viewport       viewport;
 		glm::mat4      viewProj{ 1.0f };
 		glm::mat4      prevViewProj{ 1.0f };

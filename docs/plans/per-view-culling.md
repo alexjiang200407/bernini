@@ -96,7 +96,7 @@ at one. That fixes the symptom, not the cause, and the cascade work would have t
 
 ### D1 — Cull outputs become their own type; a `SceneView` holds N
 
-Introduce `ViewCullState`: one frustum's cull outputs, with `Init`/`Resize`/`Release`. A `SceneView`
+Introduce `CullState`: one frustum's cull outputs, with `Init`/`Resize`/`Release`. A `SceneView`
 owns a vector of them, one per frustum it is culled against; the camera is index 0 and is the only one
 this plan creates.
 
@@ -147,7 +147,7 @@ there are only two outcomes, and both are defects:
   precisely the aliasing `ImportGlobalBuffer` exists to prevent.
 
 So the scopes have to be split: **tier-1 and Scene-owned buffers stay imported under `v{n}:`; only the
-`ViewCullState` buffers are imported under the cull scope.** A cull pass sets the cull scope for its own
+`CullState` buffers are imported under the cull scope.** A cull pass sets the cull scope for its own
 declarations and resolves tier-1 names by falling outward to the view scope. That fall-back is
 currently bare-name-only, so **`ResolveName` must learn to walk outward through prefixes** — the one
 piece of `FrameGraph` this plan changes, landing in T4.
@@ -197,7 +197,7 @@ while `m_Order` is submission order regardless, but it is the one cross-frustum 
 plan — worth knowing in a subsystem whose next roadmap item is async compute
 ([ROADMAP.md:252](../../ROADMAP.md)). Deleting the buffer removes the edge with it.
 
-**Rejected: migrate it to `ViewCullState`.** Multiplies a buffer nobody reads by the cascade count —
+**Rejected: migrate it to `CullState`.** Multiplies a buffer nobody reads by the cascade count —
 and it could not aggregate across frustums even if something did read it, since `ExecuteClear` zeroes
 it per draw ([CompactInstancesPass.cpp:198](../../libs/bgl/src/passes/CompactInstancesPass.cpp)) and
 under T4 that clear is per frustum.
@@ -211,7 +211,7 @@ does not sort transparents**, so every cascade allocates two `paddedInstances`-s
 per instance for the sorted list, 8 for the `uvec2` keys — plus two single-element ones, none of which
 anything reads.
 
-They move into `ViewCullState` anyway, and the waste is accepted, because the alternative — splitting
+They move into `CullState` anyway, and the waste is accepted, because the alternative — splitting
 tier 2 into "cull outputs" and "camera-only sort outputs" — adds a second type and a second lifetime
 before there is a consumer that needs the distinction. When cascades land and N is real, the split and
 the D1 arena are the same follow-up and should be taken together.
@@ -224,9 +224,9 @@ Recorded here so it is a decision rather than an oversight.
 
 | File | Change | What could break |
 |---|---|---|
-| `scene/ViewCullState.h/.cpp` *(new)* | the tier-2 set: init, resize, release, import | — |
-| `scene/SceneView.h/.cpp` | holds `std::vector<ViewCullState>`; five buffers move out | **`GetInstanceBuffers()` welds the tiers**: `m_CompactedInstances` rides the tuple beside two tier-1 inputs ([SceneView.h:111](../../libs/bgl/src/scene/SceneView.h), folded at [SceneView.cpp:504-516](../../libs/bgl/src/scene/SceneView.cpp)). T1 has to split it — **and shorten `c_InstanceBufferInfo` ([:18-22](../../libs/bgl/src/scene/SceneView.cpp)) in the same commit**, since the fold pairs the two positionally with `i++`. Shorten one alone and a name binds to the wrong buffer with no diagnostic. |
-| | | `SyncInstanceScratch` resizes the four `paddedInstances`-sized buffers and early-outs on `m_CompactedInstances` alone ([:157-158](../../libs/bgl/src/scene/SceneView.cpp)) — every frustum must grow together or a cull writes out of bounds. `m_TransparentSortCount` is a single `uint32_t` made in `InitBuffers` ([:86-93](../../libs/bgl/src/scene/SceneView.cpp)) and correctly never resized, so `ViewCullState` has two creation lifetimes to absorb, not one. |
+| `scene/CullState.h/.cpp` *(new)* | the tier-2 set: init, resize, release, import | — |
+| `scene/SceneView.h/.cpp` | holds `std::vector<CullState>`; five buffers move out | **`GetInstanceBuffers()` welds the tiers**: `m_CompactedInstances` rides the tuple beside two tier-1 inputs ([SceneView.h:111](../../libs/bgl/src/scene/SceneView.h), folded at [SceneView.cpp:504-516](../../libs/bgl/src/scene/SceneView.cpp)). T1 has to split it — **and shorten `c_InstanceBufferInfo` ([:18-22](../../libs/bgl/src/scene/SceneView.cpp)) in the same commit**, since the fold pairs the two positionally with `i++`. Shorten one alone and a name binds to the wrong buffer with no diagnostic. |
+| | | `SyncInstanceScratch` resizes the four `paddedInstances`-sized buffers and early-outs on `m_CompactedInstances` alone ([:157-158](../../libs/bgl/src/scene/SceneView.cpp)) — every frustum must grow together or a cull writes out of bounds. `m_TransparentSortCount` is a single `uint32_t` made in `InitBuffers` ([:86-93](../../libs/bgl/src/scene/SceneView.cpp)) and correctly never resized, so `CullState` has two creation lifetimes to absorb, not one. |
 | | | **`SceneView::Update` retires three of them by hand** ([:460-464](../../libs/bgl/src/scene/SceneView.cpp)) precisely because they are not in `GetInstanceBuffers()`, and `ImportResources`' `resourceNames` out-param feeds the copy-dest args of the `SceneView Update {drawIdx}` pass ([:483-497](../../libs/bgl/src/scene/SceneView.cpp)). Both must move with the buffers, or that pass — recorded under `v{n}:` — declares args naming nothing. |
 | `passes/CompactInstancesPass.*` | drops three buffers (keeps `m_CullStats`, D3); takes the set from `DrawData` | the intra-pass UAV barrier at [:281-287](../../libs/bgl/src/passes/CompactInstancesPass.cpp) must follow the buffer, not the pass |
 | | | **the clear and dispatch halves reach the same buffer two different ways**: `ExecuteClear` writes through the pass's own members ([:197-211](../../libs/bgl/src/passes/CompactInstancesPass.cpp)) while `ExecuteCull` binds `ctx.GetBuffer("cull.view")` ([:223](../../libs/bgl/src/passes/CompactInstancesPass.cpp)). Move the import without moving the clear and the graph barriers the view-owned buffer while the seed lands in the orphaned device-wide one — no throw, no validation error. |
@@ -281,7 +281,7 @@ must stay green because a task that changes a pass's declarations without updati
 puts the two out of step — but the gate that catches a broken migration is the full-suite run, the
 end-to-end tests that call `DrawFrame`, and the goldens.
 
-### T1 — `ViewCullState`, holding what `SceneView` already owns
+### T1 — `CullState`, holding what `SceneView` already owns
 
 Extract the five view-owned tier-2 buffers into the new type; split `GetInstanceBuffers()`. `SceneView`
 holds exactly one, so nothing observable changes.
@@ -293,7 +293,7 @@ moved behaviour, not just code.
 
 ### T2 — `CompactInstancesPass` stops owning storage
 
-Prefix sum, compact dispatch args and cull view move into `ViewCullState`; `ImportGlobalBuffer` →
+Prefix sum, compact dispatch args and cull view move into `CullState`; `ImportGlobalBuffer` →
 `ImportBuffer` for those three. `m_CullStats` stays (D3).
 
 **Gate:** the full-suite validation run above — this task moves UAV barriers, which validation

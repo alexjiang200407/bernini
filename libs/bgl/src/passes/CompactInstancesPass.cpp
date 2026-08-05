@@ -7,8 +7,8 @@
 #include "pipeline/ComputePipeline.h"
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
+#include "scene/CullState.h"
 #include "scene/Scene.h"
-#include "scene/ViewCullState.h"
 #include <bgl/ISceneView.h>
 #include <bgl/PsoType.h>
 #include <core/math.h>
