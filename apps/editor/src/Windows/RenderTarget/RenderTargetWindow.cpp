@@ -18,6 +18,16 @@
 namespace
 {
 	constexpr int c_ResizeSettleMs = 200;
+
+	// Qt sizes are logical (device-independent) pixels; the render target and the layer's drawable
+	// are physical ones. Rendering at the logical size leaves the compositor upscaling every frame
+	// on a high-DPI display -- half resolution on a 2x screen, which reads as blur everywhere and
+	// is worst on detail near the pixel scale.
+	uint32_t
+	PhysicalExtent(int logical, qreal ratio)
+	{
+		return static_cast<uint32_t>(std::lround(std::max(1, logical) * ratio));
+	}
 }
 
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
@@ -27,8 +37,8 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_ResizeTimer->setSingleShot(true);
 	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
 
-	m_Width  = static_cast<uint32_t>(std::max(1, width()));
-	m_Height = static_cast<uint32_t>(std::max(1, height()));
+	m_Width  = PhysicalExtent(width(), devicePixelRatio());
+	m_Height = PhysicalExtent(height(), devicePixelRatio());
 
 	auto rtvDesc   = bgl::RenderTargetDesc();
 	rtvDesc.width  = m_Width;
@@ -137,6 +147,18 @@ RenderTargetWindow::resizeEvent(QResizeEvent* event)
 	m_ResizeTimer->start(c_ResizeSettleMs);
 }
 
+bool
+RenderTargetWindow::event(QEvent* e)
+{
+	// Dragging the window to a screen with a different scale changes the physical size without a
+	// resize; SyncSize recomputes from the ratio, so it only needs the nudge.
+	if (e->type() == QEvent::DevicePixelRatioChange)
+	{
+		m_ResizeTimer->start(c_ResizeSettleMs);
+	}
+	return QWidget::event(e);
+}
+
 void
 RenderTargetWindow::showEvent(QShowEvent* event)
 {
@@ -223,8 +245,8 @@ RenderTargetWindow::SyncSize(int w, int h)
 		return;
 	}
 
-	const uint32_t width  = static_cast<uint32_t>(w);
-	const uint32_t height = static_cast<uint32_t>(h);
+	const uint32_t width  = PhysicalExtent(w, devicePixelRatio());
+	const uint32_t height = PhysicalExtent(h, devicePixelRatio());
 	if (width == m_Width && height == m_Height)
 	{
 		return;
