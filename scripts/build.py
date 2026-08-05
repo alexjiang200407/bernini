@@ -111,6 +111,46 @@ def write_presets_stamp(binary_dir):
         print(f"warning: could not write {PRESETS_STAMP}: {exc}", file=sys.stderr)
 
 
+def repair_deps_log(ninja, binary_dir, env):
+    """
+    Rewrites Ninja's dependency log, reporting when it had to be recovered rather than merely
+    compacted.
+
+    A build killed part-way -- Ctrl-C, a pipe closed by `head`, a machine that went down -- leaves
+    `.ninja_deps` truncated. Ninja recovers by discarding everything past the tear, but an object
+    whose entry went with it has no recorded dependencies, and Ninja must rebuild it to find out what
+    they are. From then on every build rebuilds it, and the only symptom is one warning line that
+    scrolls past: `premature end of file; recovering`.
+
+    Recompacting is what actually repairs it, and against a log of several megabytes it costs tens of
+    milliseconds -- less than probing for the damage separately, since a probe has to read the same
+    file. So it runs before every Ninja build rather than after a diagnosis.
+    """
+    if not (ninja and binary_dir):
+        return
+
+    if not os.path.exists(os.path.join(binary_dir, ".ninja_deps")):
+        return
+
+    result = subprocess.run([ninja, "-C", binary_dir, "-t", "recompact"],
+                            env=env, capture_output=True, text=True)
+
+    if result.returncode:
+        # Nothing here is worth failing a build over: at worst the log stays as it was. The reason
+        # travels with it, since this is the one place that captured ninja's stderr.
+        detail = (result.stderr or "").strip()
+        print(f"warning: could not compact ninja's dependency log (exit {result.returncode})."
+              + (f"\n{detail}" if detail else ""), file=sys.stderr, flush=True)
+        return
+
+    if "premature end of file" in (result.stdout or "") + (result.stderr or ""):
+        # Flushed, because the build below writes straight to the terminal and would otherwise
+        # come out ahead of a note that describes what happened before it.
+        print("note: ninja's dependency log was truncated and has been repaired. Until now every "
+              "build was recompiling the objects whose recorded dependencies went with it.",
+              flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("target", nargs="?", help="Target to build (default: all).")
@@ -156,6 +196,7 @@ def main():
     #   * Ninja generators need a make program (VS bundles one off-PATH).
     #   * clang presets need clang/clang++ (VS LLVM component preferred, else PATH).
     toolchain = []
+    ninja = None
     if generator and "ninja" in generator.lower():
         ninja = cfg.find_ninja(env)
         if ninja:
@@ -229,6 +270,8 @@ def main():
 
     if args.configure:
         return 0
+
+    repair_deps_log(ninja, binary_dir, env)
 
     return subprocess.run(build_cmd, env=env).returncode
 
