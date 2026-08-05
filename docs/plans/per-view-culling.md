@@ -202,21 +202,23 @@ and it could not aggregate across frustums even if something did read it, since 
 it per draw ([CompactInstancesPass.cpp:198](../../libs/bgl/src/passes/CompactInstancesPass.cpp)) and
 under T4 that clear is per frustum.
 
-### D4 — The transparent sort buffers move, and the waste is accepted for now
+### D4 — The transparent sort gets its own type; it is not cull state
 
-`m_SortedTransparentInstances`, `m_TransparentSortEntries`, `m_TransparentSortCount` and the pass's
-`m_DispatchArgs` depth-sort transparents against a camera position
+`m_SortedTransparentInstances`, `m_TransparentSortEntries`, `m_TransparentSortCount` and the sort's
+indirect args depth-sort transparents against a camera position
 ([TransparentSortPass.cpp:152](../../libs/bgl/src/passes/TransparentSortPass.cpp)). **A shadow cascade
-does not sort transparents**, so every cascade allocates two `paddedInstances`-sized buffers — 4 bytes
-per instance for the sorted list, 8 for the `uvec2` keys — plus two single-element ones, none of which
-anything reads.
+does not sort transparents.** They are per *view*, not per frustum.
 
-They move into `CullState` anyway, and the waste is accepted, because the alternative — splitting
-tier 2 into "cull outputs" and "camera-only sort outputs" — adds a second type and a second lifetime
-before there is a consumer that needs the distinction. When cascades land and N is real, the split and
-the D1 arena are the same follow-up and should be taken together.
+They therefore live in `TransparentSortState`, beside `CullState` on the `SceneView` rather than
+inside it. `CullState` becomes a vector at T4; this one stays singular, because one camera per view is
+what sorts.
 
-Recorded here so it is a decision rather than an oversight.
+**Rejected: fold them into `CullState` and accept the waste.** This is what an earlier draft of this
+plan chose, on the grounds that splitting adds a second type before a consumer needs the distinction.
+The argument does not survive T4, which *is* that consumer: multiplying `CullState` per cascade would
+allocate two `paddedInstances`-sized buffers per cascade — 4 bytes per instance for the sorted list, 8
+for the `uvec2` keys — plus two single-element ones, none of which anything reads. It also left a type
+called `CullState` holding the transparent sort, which is not what the name says.
 
 ---
 

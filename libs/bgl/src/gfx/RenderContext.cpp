@@ -133,7 +133,7 @@ namespace bgl
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
-		m_TransparentSort.Init(m_Device, m_ResourceManager);
+		m_TransparentSort.Init(m_Device);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
 		m_PostProcess.Init(m_Device);
@@ -199,7 +199,7 @@ namespace bgl
 		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
-		m_TransparentSort.Release(false);
+		m_TransparentSort.Release();
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The GPU is idle, so assertions from the final frames whose slot was never reused by a later

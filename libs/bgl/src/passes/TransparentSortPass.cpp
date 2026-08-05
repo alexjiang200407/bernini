@@ -4,7 +4,6 @@
 #include "idl/DispatchArgs.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
-#include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include <bgl/ISceneView.h>
 #include <core/math.h>
@@ -13,8 +12,9 @@ namespace bgl
 {
 	namespace
 	{
-		// Owned by the SceneView: both are sized off its instance buffer, so the depth-key pass
-		// cannot append past the end however many instances turn out to be transparent.
+		// All owned by the view's CullState: the two instance-sized buffers are sized off its
+		// instance buffer, so the depth-key pass cannot append past the end however many instances
+		// turn out to be transparent.
 		constexpr auto c_EntriesBuffer      = "scene.transparentSortEntries";
 		constexpr auto c_CountBuffer        = "scene.transparentSortCount";
 		constexpr auto c_DispatchArgs       = "transparentSort.dispatchArgs";
@@ -25,7 +25,7 @@ namespace bgl
 	}
 
 	void
-	TransparentSortPass::Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
+	TransparentSortPass::Init(IDevice* device)
 	{
 		gassert(device != nullptr, "Device pointer is null");
 
@@ -38,43 +38,29 @@ namespace bgl
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("TransparentSort"))
 				.SetDebugName("Transparent Sort"));
-
-		{
-			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::DispatchArgs>().SetInitialCount(1).SetDebugName(
-				"Transparent Dispatch Args");
-
-			m_DispatchArgs.Init(desc, resourceManager);
-		}
 	}
 
 	void
-	TransparentSortPass::Release(bool deferred)
+	TransparentSortPass::Release()
 	{
 		logger::trace("TransparentSortPass::Release");
 
 		m_DepthKeys.Reset();
 		m_Sort.Reset();
-
-		m_DispatchArgs.Release(deferred);
 	}
 
 	void
 	TransparentSortPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
-		fg.ImportGlobalBuffer(c_DispatchArgs, m_DispatchArgs.GetBufferHandle())
-			.AddPass(
-				PassDesc()
-					.SetName(std::format("Transparent Sort Clear {}", draw.drawIdx))
-					.AddBufferArg(
-						c_CountBuffer,
-						BarrierSyncFlag::kCopy,
-						BarrierAccessFlag::kCopyDest)
-					.AddBufferArg(
-						c_DispatchArgs,
-						BarrierSyncFlag::kCopy,
-						BarrierAccessFlag::kCopyDest)
-					.SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
+		fg.AddPass(
+			  PassDesc()
+				  .SetName(std::format("Transparent Sort Clear {}", draw.drawIdx))
+				  .AddBufferArg(c_CountBuffer, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest)
+				  .AddBufferArg(
+					  c_DispatchArgs,
+					  BarrierSyncFlag::kCopy,
+					  BarrierAccessFlag::kCopyDest)
+				  .SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
 			.AddPass(
 				PassDesc()
 					.SetName(std::format("Transparent Depth Keys {}", draw.drawIdx))
@@ -133,7 +119,7 @@ namespace bgl
 		// issue its indirect dispatch, and a zeroed y/z would be an invalid dispatch.
 		static constexpr idl::DispatchArgs c_Seed = { 0u, 1u, 1u };
 
-		cmd->WriteBuffer(m_DispatchArgs.GetBufferHandle(), &c_Seed, sizeof(c_Seed));
+		cmd->WriteBuffer(ctx.GetBuffer(c_DispatchArgs), &c_Seed, sizeof(c_Seed));
 	}
 
 	void
