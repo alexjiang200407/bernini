@@ -470,55 +470,56 @@ namespace bgl
 		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw               = DrawData();
-		draw.drawIdx            = drawIdx;
-		draw.view               = job.view;
-		draw.cullState          = &view->GetCullState();
-		draw.viewport           = viewport;
-		draw.viewProj           = viewProj;
-		draw.prevViewProj       = prevCamera.viewProj;
-		draw.jitter             = jitter;
-		draw.prevJitter         = prevCamera.jitter;
-		draw.cullView           = BuildCullView(viewProj);
-		draw.sceneColorHandle   = m_ActiveTarget->GetSceneColorRtv();
-		draw.depthBufferHandle  = m_ActiveTarget->GetDepthDsv();
-		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
+		auto draw                   = DrawData();
+		draw.drawIdx                = drawIdx;
+		draw.view                   = job.view;
+		draw.cullState              = &view->GetCullState();
+		draw.viewState.viewport     = viewport;
+		draw.viewState.viewProj     = viewProj;
+		draw.viewState.prevViewProj = prevCamera.viewProj;
+		draw.viewState.jitter       = jitter;
+		draw.viewState.prevJitter   = prevCamera.jitter;
+		draw.viewState.cullView     = BuildCullView(viewProj);
+		draw.targets.sceneColor     = m_ActiveTarget->GetSceneColorRtv();
+		draw.targets.depth          = m_ActiveTarget->GetDepthDsv();
+		draw.targets.motionVector   = m_ActiveTarget->GetMotionVectorRtv();
 
-		draw.anisoLinearWrapSampler = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
-		draw.linearClampSampler     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
+		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
+		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
+		draw.viewState.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
 
-		draw.env         = view->GetEnvironmentMap();
-		draw.env.brdfLut = m_BrdfLut.GetSrv();
-		draw.exposure    = view->GetExposure();
+		draw.lighting.env         = view->GetEnvironmentMap();
+		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();
+		draw.lighting.exposure    = view->GetExposure();
 
 		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
 		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
 		constexpr uint64_t c_AlphaHashPeriod = 1024;
 
-		draw.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
-		                         static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
-		                         0.0f;
-		draw.skybox        = view->GetSkybox();
+		draw.viewState.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
+		                                   static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
+		                                   0.0f;
+		draw.lighting.skybox         = view->GetSkybox();
 
-		if (draw.skybox.has_value())
+		if (draw.lighting.skybox.has_value())
 		{
 			auto skyRotation = glm::mat4(1.0f);
-			if (draw.skybox->rotationY != 0.0f)
+			if (draw.lighting.skybox->rotationY != 0.0f)
 			{
 				skyRotation = glm::rotate(
 					glm::mat4(1.0f),
-					draw.skybox->rotationY,
+					draw.lighting.skybox->rotationY,
 					glm::vec3(0.0f, 1.0f, 0.0f));
 			}
 
-			draw.skyboxClipToWorld = skyRotation * glm::inverse(camera.rotationOnlyViewProj);
+			draw.lighting.skyboxClipToWorld =
+				skyRotation * glm::inverse(camera.rotationOnlyViewProj);
 
 			// Undoes the spin the ray direction was baked with before reprojecting, so a rotated
 			// skybox reports the camera's motion and not its own offset. rotationY is authoring
 			// state rather than per-frame animation, so last frame's spin is taken to be this one's.
-			draw.skyboxPrevWorldToClip =
+			draw.lighting.skyboxPrevWorldToClip =
 				prevCamera.rotationOnlyViewProj * glm::inverse(skyRotation);
 
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);

@@ -51,9 +51,11 @@ by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneVie
 resource namespace (see [Frame Graph](docs/framegraph.md)).
 
 `DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
-handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection
-(this frame's and the previous frame's), camera position, scene-colour/depth/motion-vector handles, standard
-samplers, environment map, exposure, and the optional skybox. The graph resource *names* are not in
+handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the view and its cull
+state it carries four groups: `viewState` (viewport, this frame's and the previous frame's
+view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour, motion-vector
+and depth handles), `lighting` (environment map, exposure, optional skybox) and `samplers`. The graph
+resource *names* are not in
 it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` / `c_SceneColorName` /
 `c_DepthName` in
 [constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
@@ -178,7 +180,7 @@ is mesh + pixel only (no amplification shader), built from the `Skybox` module; 
 1)` emits the one covering triangle. Depth test is `LessOrEqual` with **depth-write off** and no
 culling, so it fills only where nothing has been drawn.
 
-* **No-op** when the view has no skybox (`DrawData::skybox` is empty) — `AttachToFrameGraph` adds
+* **No-op** when the view has no skybox (`DrawData::lighting.skybox` is empty) — `AttachToFrameGraph` adds
   nothing.
 * **In:** the scene-colour and velocity buffers as render targets; samples the skybox cube texture
   through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,

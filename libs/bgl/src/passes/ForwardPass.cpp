@@ -312,10 +312,10 @@ namespace bgl
 		if (auto foundViewData = kernel.FindUniforms("viewData"))
 		{
 			auto& viewData           = *foundViewData;
-			viewData["viewProj"]     = draw.viewProj;
-			viewData["prevViewProj"] = draw.prevViewProj;
-			viewData["jitter"]       = draw.jitter;
-			viewData["prevJitter"]   = draw.prevJitter;
+			viewData["viewProj"]     = draw.viewState.viewProj;
+			viewData["prevViewProj"] = draw.viewState.prevViewProj;
+			viewData["jitter"]       = draw.viewState.jitter;
+			viewData["prevJitter"]   = draw.viewState.prevJitter;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -333,38 +333,38 @@ namespace bgl
 
 			if (auto anisoUniform = matData["anisoLinearWrapSampler"]; anisoUniform.IsValid())
 			{
-				anisoUniform = draw.anisoLinearWrapSampler;
+				anisoUniform = draw.samplers.anisoLinearWrap;
 			}
 			if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
 			{
-				clampUniform = draw.linearClampSampler;
+				clampUniform = draw.samplers.linearClamp;
 			}
 
 			// IBL maps: assigning the RHI TextureHandle writes a descriptor handle into the
 			// shader-side handle's sole member.
 			if (auto u = matData["irradianceMap"]; u.IsValid())
 			{
-				u = draw.env.irradiance;
+				u = draw.lighting.env.irradiance;
 			}
 			if (auto u = matData["prefilterMap"]; u.IsValid())
 			{
-				u = draw.env.prefilter;
+				u = draw.lighting.env.prefilter;
 			}
 			if (auto u = matData["brdfLUT"]; u.IsValid())
 			{
-				u = draw.env.brdfLut;
+				u = draw.lighting.env.brdfLut;
 			}
 			if (auto u = matData["cameraPos"]; u.IsValid())
 			{
-				u = draw.cameraPos;
+				u = draw.viewState.cameraPos;
 			}
 			if (auto u = matData["exposure"]; u.IsValid())
 			{
-				u = draw.exposure;
+				u = draw.lighting.exposure;
 			}
 			if (auto u = matData["alphaHashSeed"]; u.IsValid())
 			{
-				u = draw.alphaHashSeed;
+				u = draw.viewState.alphaHashSeed;
 			}
 		}
 	}
@@ -383,11 +383,11 @@ namespace bgl
 
 		// Colour + velocity, matching the two rtvFormats every non-blend PSO declares.
 		auto gfxState = MeshletState();
-		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
+		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
 		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.sceneColorHandle)
-		                           .AddColorAttachment(draw.motionVectorHandle)
-		                           .SetDepthAttachment(draw.depthBufferHandle);
+		                           .AddColorAttachment(draw.targets.sceneColor)
+		                           .AddColorAttachment(draw.targets.motionVector)
+		                           .SetDepthAttachment(draw.targets.depth);
 
 		const auto dispatchArgs = resources.GetBuffer(c_DispatchArgsBuffer);
 
@@ -432,10 +432,10 @@ namespace bgl
 		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be attached
 		// here -- a blended surface has no single depth to reproject.
 		auto colorState = MeshletState();
-		colorState.viewportState.AddViewportAndScissorRect(draw.viewport);
+		colorState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
 		colorState.frameBuffer = FrameBuffer()
-		                             .AddColorAttachment(draw.sceneColorHandle)
-		                             .SetDepthAttachment(draw.depthBufferHandle);
+		                             .AddColorAttachment(draw.targets.sceneColor)
+		                             .SetDepthAttachment(draw.targets.depth);
 
 		MeshletKernel& kernel =
 			m_Kernels[static_cast<size_t>(PsoType::kTransparent_StaticMesh_PBR)];
