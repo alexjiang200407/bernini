@@ -170,7 +170,7 @@ namespace bgl
 
 		cmd->WriteBuffer(
 			draw.cullState->GetCullView().GetBufferHandle(),
-			&draw.cullView,
+			&draw.viewState.cullView,
 			sizeof(idl::CullView));
 
 		static constexpr std::array<idl::DispatchArgs, c_PsoCount> c_Seed = [] {
