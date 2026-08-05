@@ -189,11 +189,15 @@ culling, so it fills only where nothing has been drawn.
 
 Frustum-culls the view's instances, then buckets the survivors by PSO into contiguous ranges and
 builds the per-PSO indirect dispatch arguments that `Forward` consumes. Owns four compute kernels
-(`CullInstances`, `HistogramInstances`, `PrefixSumInstances`, `CompactInstances`) and the
-scene-independent `ComputeBuffer`s it imports globally (namespace-free): `psoPrefixSumBuffer` and
-`compactDispatchArgs` (sized `c_PsoCount`), `cull.view` (one `CullView` — view-proj + frustum planes
-— rewritten each draw), and `cull.stats` (profiling counters, written only in `BERNINI_GPU_DEBUG`
-builds).
+(`CullInstances`, `HistogramInstances`, `PrefixSumInstances`, `CompactInstances`) and one
+`ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
+in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
+
+The buffers it *writes* belong to the view being culled — `psoPrefixSumBuffer` and
+`compactDispatchArgs` (sized `c_PsoCount`) and `cull.view` (one `CullView`: view-proj + frustum
+planes, rewritten each draw) live in that view's `CullState` and are imported under its
+namespace. The pass reaches them through `DrawData::cullState` and names them by the same graph
+names as before.
 
 It adds **four sub-passes**:
 

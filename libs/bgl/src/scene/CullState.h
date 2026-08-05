@@ -13,19 +13,19 @@ namespace bgl
 	 * Separate from the SceneView that owns it because these are outputs of culling *one* frustum,
 	 * not per-view state.
 	 */
-	class ViewCullState
+	class CullState
 	{
 	public:
-		ViewCullState() noexcept = default;
+		CullState() noexcept = default;
 
-		ViewCullState(const ViewCullState&)     = delete;
-		ViewCullState(ViewCullState&&) noexcept = default;
+		CullState(const CullState&)     = delete;
+		CullState(CullState&&) noexcept = default;
 
-		ViewCullState&
-		operator=(const ViewCullState&) = delete;
+		CullState&
+		operator=(const CullState&) = delete;
 
-		ViewCullState&
-		operator=(ViewCullState&&) noexcept = default;
+		CullState&
+		operator=(CullState&&) noexcept = default;
 
 		/**
 		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group
@@ -54,10 +54,35 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList);
 
-		// Imports every buffer under the graph's current namespace, appending each name to
-		// `resourceNames` so the caller can declare them as the copy-dest args of its update pass.
+		/**
+		 * Imports every buffer under the graph's current namespace.
+		 *
+		 * `updateArgs` receives the names the owning view's update pass declares copy-dest. The cull
+		 * pass's own scratch is left out: that pass seeds it, so making the view's update its last
+		 * writer would be a dependency edge nothing produces.
+		 */
 		void
-		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames) const;
+		ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const;
+
+		// Non-const: the cull pass seeds these through ComputeBuffer::Clear / WriteBuffer, which
+		// need the object rather than the handle the frame graph hands back.
+		[[nodiscard]] ComputeBuffer&
+		GetPsoPrefixSum() noexcept
+		{
+			return m_PsoPrefixSum;
+		}
+
+		[[nodiscard]] ComputeBuffer&
+		GetCompactedDispatchArgs() noexcept
+		{
+			return m_CompactedDispatchArgs;
+		}
+
+		[[nodiscard]] ComputeBuffer&
+		GetCullView() noexcept
+		{
+			return m_CullView;
+		}
 
 	private:
 		// Written by the compaction, bounded by the dispatch args that same compaction wrote, so it
@@ -77,5 +102,13 @@ namespace bgl
 
 		// A single counter, so it is made once and never resized.
 		ComputeBuffer m_TransparentSortCount;
+
+		// Sized by the PSO bucket count rather than the instance count, so Resize does not reach
+		// them: one running total per bucket, and the indirect args the forward pass dispatches on.
+		ComputeBuffer m_PsoPrefixSum;
+		ComputeBuffer m_CompactedDispatchArgs;
+
+		// This frustum's planes, uploaded per draw and read by the cull dispatch.
+		ComputeBuffer m_CullView;
 	};
 }
