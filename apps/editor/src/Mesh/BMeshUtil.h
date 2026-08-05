@@ -9,11 +9,6 @@ namespace bmesh
 	glm::mat4
 	WorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
 
-	// The NUL-terminated name at `offset` in a BMesh's string pool (empty for offset 0 / out of
-	// range).
-	std::string
-	NameFromPool(const std::vector<char>& pool, uint32_t offset);
-
 	// Grows [outMin,outMax] to contain the box after `transform`, corner by corner (the box is not
 	// axis-aligned once rotated).
 	void

@@ -17,34 +17,13 @@
 #include <QWheelEvent>
 
 #include <assetlib/bmesh_io.h>
-#include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/SkyboxDesc.h>
 
 namespace
 {
-	// Loads a KTX2 into the scene as a texture asset; on failure returns an invalid handle (and logs)
-	// so a missing/optional environment asset degrades gracefully instead of throwing.
-	bgl::TextureAssetHandle
-	TryLoadTexture(bgl::IScene* scene, const std::string& path)
-	{
-		if (path.empty())
-			return {};
-		try
-		{
-			return scene->AddTextureAsset(assetlib::loadKTX2(path));
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialPreview: failed to load '%s': %s", path.c_str(), e.what());
-			return {};
-		}
-	}
-
 	bool
 	IsPreviewMesh(const QString& localFile)
 	{
@@ -292,7 +271,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 						const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
 
 						auto name = QString::fromStdString(
-							bmesh::NameFromPool(mesh.stringPool, submesh.nameOffset));
+							assetlib::nameFromPool(mesh.stringPool, submesh.nameOffset));
 						if (name.isEmpty())
 							name = QString("Submesh %1").arg(m_SubmeshNames.size());
 						m_SubmeshNames << name;

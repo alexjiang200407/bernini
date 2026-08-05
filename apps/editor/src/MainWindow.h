@@ -78,9 +78,7 @@ private:
 	// reach go away.
 	std::vector<QMetaObject::Connection> m_TabVisibility;
 
-	// The editor's one asset manager, over the Level Editor's view. Shared, so a material loaded by
-	// the thumbnails and by the level is one upload and one reference count. Rebuilt per project,
-	// because it resolves every path against that project's Data root.
+	// Rebuilt per project: it resolves every path against that project's Data root.
 	std::unique_ptr<game::AssetManager> m_Assets;
 
 	// Declared last, so it is destroyed first: its destructor releases geometry and materials through
