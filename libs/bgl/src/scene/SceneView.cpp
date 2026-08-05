@@ -15,21 +15,17 @@ namespace bgl
 			std::string_view name;
 		};
 
-		static constexpr std::array<BufferInfo, 3> c_InstanceBufferInfo = { {
+		// Paired positionally with SceneView::GetInstanceBuffers(); shorten one and you must
+		// shorten the other.
+		static constexpr std::array<BufferInfo, 2> c_InstanceBufferInfo = { {
 			{ "scene.instanceBuffer" },
 			{ "scene.meshInstanceBuffer" },
-			{ "scene.compactedInstances" },
 		} };
 
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
 		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
 		// which both the histogram and the compaction skip.
 		constexpr std::array<SubmeshInstance, idl::cHistogramGroupSize> c_InstanceTailPadding{};
-
-		constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility";
-		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
-		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
-		constexpr std::string_view c_TransparentCountName   = "scene.transparentSortCount";
 
 		// Each SceneView gets a process-unique namespace so views sharing one Scene
 		// don't collide in the frame graph.
@@ -83,84 +79,13 @@ namespace bgl
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
 
-		{
-			auto countDesc = ComputeBufferDesc();
-			countDesc.SetElement<uint32_t>();
-			countDesc.initialCount = 1;
-			countDesc.debugName    = "Transparent Sort Count";
-
-			m_TransparentSortCount.Init(std::move(countDesc), m_ResourceManager);
-		}
-
-		InitInstanceScratch(paddedInstances);
-	}
-
-	void
-	SceneView::InitInstanceScratch(uint32_t paddedInstances)
-	{
-		{
-			auto compactedInstancesDesc = ComputeBufferDesc();
-			compactedInstancesDesc.SetElement<uint32_t>();
-			// Match the instance buffer: the compact pass appends one entry per live instance, of
-			// which there can be as many as that (padded) buffer holds.
-			//
-			// Never cleared between frames: a reader is bounded by the dispatch args the same
-			// compaction wrote, so it only ever touches slots this frame's scatter filled.
-			compactedInstancesDesc.initialCount = paddedInstances;
-			compactedInstancesDesc.debugName    = "Compacted Instances";
-
-			m_CompactedInstances.Init(std::move(compactedInstancesDesc), m_ResourceManager);
-		}
-
-		{
-			auto visibilityDesc = ComputeBufferDesc();
-			visibilityDesc.SetElement<idl::InstanceVisibility>();
-			// The cull pass writes one word per instance slot over the whole padded range, so match
-			// the instance buffer's padded size exactly.
-			visibilityDesc.initialCount = paddedInstances;
-			visibilityDesc.debugName    = "Instance Visibility";
-
-			m_InstanceVisibility.Init(std::move(visibilityDesc), m_ResourceManager);
-		}
-
-		{
-			auto sortedTransparentDesc         = ComputeBufferDesc();
-			sortedTransparentDesc.initialCount = paddedInstances;
-			sortedTransparentDesc.debugName    = "Sorted Transparent Instances";
-			sortedTransparentDesc.SetElement<uint32_t>();
-
-			m_SortedTransparentInstances.Init(std::move(sortedTransparentDesc), m_ResourceManager);
-		}
-
-		{
-			// One (key, instance) pair per live instance. Sized off the instance buffer rather than
-			// the sort's capacity so the depth-key pass, which appends without knowing how many
-			// instances are transparent, cannot run past the end -- only the sort itself is capped.
-			auto keysDesc = ComputeBufferDesc();
-			keysDesc.SetElement<glm::uvec2>();
-			keysDesc.initialCount = paddedInstances;
-			keysDesc.debugName    = "Transparent Sort Entries";
-
-			m_TransparentSortEntries.Init(std::move(keysDesc), m_ResourceManager);
-		}
+		m_CullState.Init(paddedInstances, m_ResourceManager);
 	}
 
 	void
 	SceneView::SyncInstanceScratch()
 	{
-		// These four are indexed by instance slot and written over the whole padded range, so they
-		// must track the instance buffer exactly -- resizing one without the others is an
-		// out-of-bounds UAV write, not a capacity shortfall.
-		const uint32_t padded =
-			core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize);
-
-		if (padded <= m_CompactedInstances.GetDesc().initialCount)
-			return;
-
-		m_CompactedInstances.Resize(padded);
-		m_InstanceVisibility.Resize(padded);
-		m_SortedTransparentInstances.Resize(padded);
-		m_TransparentSortEntries.Resize(padded);
+		m_CullState.Resize(core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize));
 	}
 
 	SceneView::~SceneView() noexcept
@@ -457,11 +382,7 @@ namespace bgl
 			m_SceneEpoch = epoch;
 		}
 
-		// Retires the resources a scratch resize superseded. These are not in GetInstanceBuffers, so
-		// nothing else would.
-		m_InstanceVisibility.Update(cmdList);
-		m_SortedTransparentInstances.Update(cmdList);
-		m_TransparentSortEntries.Update(cmdList);
+		m_CullState.Update(cmdList);
 
 		auto buffers = GetInstanceBuffers();
 		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
@@ -515,20 +436,6 @@ namespace bgl
 			},
 			buffers);
 
-		std::string visibilityName(c_InstanceVisibilityName);
-		fg.ImportBuffer(visibilityName, m_InstanceVisibility.GetBufferHandle());
-		resourceNames.push_back(std::move(visibilityName));
-
-		std::string sortedName(c_SortedTransparentName);
-		fg.ImportBuffer(sortedName, m_SortedTransparentInstances.GetBufferHandle());
-		resourceNames.push_back(std::move(sortedName));
-
-		std::string keysName(c_TransparentKeysName);
-		fg.ImportBuffer(keysName, m_TransparentSortEntries.GetBufferHandle());
-		resourceNames.push_back(std::move(keysName));
-
-		std::string countName(c_TransparentCountName);
-		fg.ImportBuffer(countName, m_TransparentSortCount.GetBufferHandle());
-		resourceNames.push_back(std::move(countName));
+		m_CullState.ImportResources(fg, resourceNames);
 	}
 }
