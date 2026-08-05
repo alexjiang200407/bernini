@@ -77,8 +77,6 @@ if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
     add_subdirectory(examples)
 endif()
 
-get_property(EXAMPLE_TARGETS GLOBAL PROPERTY GLOBAL_EXAMPLE_TARGETS)
-
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/core"             "misc")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl"              "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib"         "editor")
@@ -95,12 +93,40 @@ if (TARGET editor)
 endif()
 
 
-set(KTX_CONSUMER_TARGETS "")
-foreach(_ktx_consumer assetlib_cli assetlib_tests bgl_tests editor ${EXAMPLE_TARGETS})
-    if (TARGET ${_ktx_consumer})
-        list(APPEND KTX_CONSUMER_TARGETS ${_ktx_consumer})
-    endif()
-endforeach()
+# Every executable in the tree, however deep, and whatever it links.
+#
+# vcpkg's applocal step runs as each executable links and *reads* the runtime output directory to
+# work out what to deploy beside it. The copy below writes into that same directory, so the two
+# must be ordered -- on Windows an overlap fails the link outright with
+# `open_for_read(...\ktx.dll): permission denied`, from whichever target happened to be linking.
+function(bernini_collect_executables dir out_var)
+    set(_found "")
+
+    get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_target IN LISTS _targets)
+        get_target_property(_type ${_target} TYPE)
+        if (_type STREQUAL "EXECUTABLE")
+            list(APPEND _found ${_target})
+        endif()
+    endforeach()
+
+    get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_subdir IN LISTS _subdirs)
+        # FetchContent adds its dependencies' source trees as subdirectories, and what those ship is
+        # not ours to order or to build. Collecting one would put it in ALL by the dependency below.
+        cmake_path(IS_PREFIX CMAKE_BINARY_DIR "${_subdir}" NORMALIZE _vendored)
+        if (_vendored)
+            continue()
+        endif()
+
+        bernini_collect_executables("${_subdir}" _from_subdir)
+        list(APPEND _found ${_from_subdir})
+    endforeach()
+
+    set(${out_var} "${_found}" PARENT_SCOPE)
+endfunction()
+
+bernini_collect_executables("${CMAKE_CURRENT_SOURCE_DIR}" KTX_CONSUMER_TARGETS)
 
 if (KTX_CONSUMER_TARGETS)
     add_custom_target(deploy_release_ktx ALL
