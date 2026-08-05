@@ -93,22 +93,11 @@ TEST_CASE(
 		sortedInstances.Init(desc, resourceManager);
 	}
 
-	auto partitionBase = bgl::ComputeBuffer();
+	auto dispatchArgs = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>()
-			.SetInitialCount(bgl::idl::cTransparentPartitionCount)
-			.SetDebugName("Partition Base");
-		partitionBase.Init(desc, resourceManager);
-	}
-
-	auto partitionArgs = bgl::ComputeBuffer();
-	{
-		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<bgl::idl::DispatchArgs>()
-			.SetInitialCount(bgl::idl::cTransparentPartitionCount)
-			.SetDebugName("Partition Dispatch Args");
-		partitionArgs.Init(desc, resourceManager);
+		desc.SetElement<bgl::idl::DispatchArgs>().SetInitialCount(1).SetDebugName("Dispatch Args");
+		dispatchArgs.Init(desc, resourceManager);
 	}
 
 	auto kernel = device->CreateComputeKernel(
@@ -116,11 +105,10 @@ TEST_CASE(
 			.SetShader(device->CreateShader("TransparentSort"))
 			.SetDebugName("Transparent Sort"));
 
-	kernel["gUniforms"]["entries"]               = entries.GetBufferHandle();
-	kernel["gUniforms"]["count"]                 = counter.GetBufferHandle();
-	kernel["gUniforms"]["sortedInstances"]       = sortedInstances.GetBufferHandle();
-	kernel["gUniforms"]["partitionBase"]         = partitionBase.GetBufferHandle();
-	kernel["gUniforms"]["partitionDispatchArgs"] = partitionArgs.GetBufferHandle();
+	kernel["gUniforms"]["entries"]         = entries.GetBufferHandle();
+	kernel["gUniforms"]["count"]           = counter.GetBufferHandle();
+	kernel["gUniforms"]["sortedInstances"] = sortedInstances.GetBufferHandle();
+	kernel["gUniforms"]["dispatchArgs"]    = dispatchArgs.GetBufferHandle();
 
 	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 

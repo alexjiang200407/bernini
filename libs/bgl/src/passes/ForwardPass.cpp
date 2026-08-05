@@ -85,17 +85,13 @@ namespace bgl
 			    BarrierSyncFlag::kVertexShader } }
 		};
 
-		static constexpr std::array<SceneBuffer, 3> c_ExpansionBuffers = {
+		static constexpr std::array<SceneBuffer, 2> c_ExpansionBuffers = {
 			{ { "scene.compactedInstances",
 			    "compactedInstances",
 			    BarrierAccessFlag::kUnorderedAccess,
 			    BarrierSyncFlag::kVertexShader },
 			  { "compactedInstances.psoPrefixSumBuffer",
 			    "psoPrefixSum",
-			    BarrierAccessFlag::kUnorderedAccess,
-			    BarrierSyncFlag::kVertexShader },
-			  { "transparentSort.partitionBase",
-			    "transparentPartitionBase",
 			    BarrierAccessFlag::kUnorderedAccess,
 			    BarrierSyncFlag::kVertexShader } }
 		};
@@ -123,22 +119,21 @@ namespace bgl
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
 		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
-		constexpr auto c_TransparentArgsBuffer   = "transparentSort.partitionDispatchArgs"sv;
+		constexpr auto c_TransparentArgsBuffer   = "transparentSort.dispatchArgs"sv;
 
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
-		constexpr auto c_GeomSrc               = "Forward_StaticMesh"sv;
-		constexpr auto c_PbrPixelSrc           = "Forward_PBR"sv;
-		constexpr auto c_LoosePixelSrc         = "Forward_PBR_Loose"sv;
-		constexpr auto c_NullPixelSrc          = "Forward_Null"sv;
-		constexpr auto c_PbrCutoutPixelSrc     = "Forward_PBR_AlphaTest"sv;
-		constexpr auto c_LooseCutoutPixelSrc   = "Forward_PBR_Loose_AlphaTest"sv;
-		constexpr auto c_PbrHashedPixelSrc     = "Forward_PBR_HashedAlpha"sv;
-		constexpr auto c_LooseHashedPixelSrc   = "Forward_PBR_Loose_HashedAlpha"sv;
-		constexpr auto c_TransparentSrc        = "Forward_Transparent"sv;
-		constexpr auto c_TransparentPrepassSrc = "Forward_Transparent_Prepass"sv;
-		constexpr auto c_AssertPixelSrc        = "Forward_Assert"sv;
+		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
+		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
+		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
+		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
+		constexpr auto c_PbrCutoutPixelSrc   = "Forward_PBR_AlphaTest"sv;
+		constexpr auto c_LooseCutoutPixelSrc = "Forward_PBR_Loose_AlphaTest"sv;
+		constexpr auto c_PbrHashedPixelSrc   = "Forward_PBR_HashedAlpha"sv;
+		constexpr auto c_LooseHashedPixelSrc = "Forward_PBR_Loose_HashedAlpha"sv;
+		constexpr auto c_TransparentSrc      = "Forward_Transparent"sv;
+		constexpr auto c_AssertPixelSrc      = "Forward_Assert"sv;
 
 		struct PsoConfig
 		{
@@ -168,41 +163,12 @@ namespace bgl
 			{ c_TransparentSrc, RasterCullMode::kNone, false, true },
 			// kTransparent_StaticMesh_LoosePbr
 			{ c_TransparentSrc, RasterCullMode::kNone, false, true },
-			// kTransparentOcclude_StaticMesh_PBR: front layer only, matched to the pre-pass depth.
-			{ c_TransparentSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
-			// kTransparentOcclude_StaticMesh_LoosePbr
-			{ c_TransparentSrc, RasterCullMode::kNone, false, true, ComparisonFunc::kEqual },
 			// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
 			{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kHashedAlpha_StaticMesh_LoosePbr
 			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
-		} };
-
-		// Depth-only pre-pass configs, keyed by the self-occluding PSO they precede. Write depth for
-		// the front layer (alpha-discarding the rest), so its Equal-tested colour draw blends once.
-		struct PrepassEntry
-		{
-			PsoType   pso;
-			PsoConfig config;
-		};
-
-		static constexpr std::array<PrepassEntry, 2> c_Prepasses = { {
-			{ PsoType::kTransparentOcclude_StaticMesh_PBR,
-			  { c_TransparentPrepassSrc,
-			    RasterCullMode::kNone,
-			    true,
-			    false,
-			    ComparisonFunc::kLess,
-			    true } },
-			{ PsoType::kTransparentOcclude_StaticMesh_LoosePbr,
-			  { c_TransparentPrepassSrc,
-			    RasterCullMode::kNone,
-			    true,
-			    false,
-			    ComparisonFunc::kLess,
-			    true } },
 		} };
 
 		static_assert(
@@ -277,12 +243,6 @@ namespace bgl
 		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
 		{
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
-		}
-
-		for (const PrepassEntry& entry : c_Prepasses)
-		{
-			m_PrepassKernels[static_cast<size_t>(entry.pso)] =
-				BuildForwardKernel(device, entry.config);
 		}
 	}
 
@@ -466,57 +426,37 @@ namespace bgl
 	{
 		ICommandList* cmd             = resources.GetCommandList();
 		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
-		const auto    partitionArgs   = resources.GetBuffer(c_TransparentArgsBuffer);
+		const auto    transparentArgs = resources.GetBuffer(c_TransparentArgsBuffer);
 
-		// The sort leaves the list as [self-occluding][plain], each half farthest-first, and both
-		// occlude PSOs share one pipeline -- so the whole depth-sorted draw is three dispatches whose
-		// counts and bases live entirely on the GPU.
-		const auto dispatchPartition =
-			[&](MeshletKernel& kernel, MeshletState& state, uint32_t partition) {
-				gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
-
-				BindKernel(kernel, draw, resources);
-				if (auto expansionData = kernel.FindUniforms("expansionData"))
-				{
-					(*expansionData)["compactedInstances"] = sortedInstances;
-					(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
-					(*expansionData)["partitionIndex"]     = partition;
-				}
-
-				state.kernel       = &kernel;
-				state.indirectArgs = partitionArgs;
-				cmd->SetMeshletState(state);
-				cmd->DispatchMeshIndirect(partition);
-			};
-
-		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be
-		// attached here -- a blended surface has no single depth to reproject.
+		// The sort leaves the whole list farthest-first and both transparent PSOs share one pipeline,
+		// so the depth-sorted draw is a single dispatch whose count lives entirely on the GPU.
+		//
+		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be attached
+		// here -- a blended surface has no single depth to reproject.
 		auto colorState = MeshletState();
 		colorState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		colorState.frameBuffer = FrameBuffer()
 		                             .AddColorAttachment(draw.sceneColorHandle)
 		                             .SetDepthAttachment(draw.depthBufferHandle);
 
-		// Depth-only: the self-occluding partition writes its front layer's depth with no colour
-		// target, so its Equal-tested colour draw below blends that layer once.
-		auto prepassState = MeshletState();
-		prepassState.viewportState.AddViewportAndScissorRect(draw.viewport);
-		prepassState.frameBuffer = FrameBuffer().SetDepthAttachment(draw.depthBufferHandle);
+		MeshletKernel& kernel =
+			m_Kernels[static_cast<size_t>(PsoType::kTransparent_StaticMesh_PBR)];
+		gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
-		dispatchPartition(
-			m_PrepassKernels[static_cast<size_t>(PsoType::kTransparentOcclude_StaticMesh_PBR)],
-			prepassState,
-			idl::cOccludePartition);
+		BindKernel(kernel, draw, resources);
+		if (auto expansionData = kernel.FindUniforms("expansionData"))
+		{
+			(*expansionData)["compactedInstances"] = sortedInstances;
+			(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
+		}
 
-		dispatchPartition(
-			m_Kernels[static_cast<size_t>(PsoType::kTransparentOcclude_StaticMesh_PBR)],
-			colorState,
-			idl::cOccludePartition);
+		colorState.kernel       = &kernel;
+		colorState.indirectArgs = transparentArgs;
+		cmd->SetMeshletState(colorState);
 
-		dispatchPartition(
-			m_Kernels[static_cast<size_t>(PsoType::kTransparent_StaticMesh_PBR)],
-			colorState,
-			idl::cPlainPartition);
+		// The argument index within `transparentArgs`, which holds a single grid now that the sorted
+		// list is drawn whole. The opaque path indexes the same way, by PsoType.
+		cmd->DispatchMeshIndirect(0);
 	}
 
 }

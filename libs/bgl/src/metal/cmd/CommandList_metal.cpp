@@ -623,6 +623,15 @@ namespace bgl
 			enc->setBytes(mapped.bytes.data(), mapped.bytes.size(), entry.rootParamIndex);
 		}
 
+		// A texture id read out of GPU memory names a texture the encoder never sees, so nothing
+		// above declares it resident. Without this a compute shader sampling through a handle it
+		// loaded from a buffer reads whatever residency the rest of the frame happened to leave --
+		// zeroes under GPU validation, which enforces it. The draw path does the same, and for the
+		// same reason.
+		const std::span<MTL::Resource* const> textures = rm->GetLiveTextureResources();
+		if (!textures.empty())
+			enc->useResources(textures.data(), textures.size(), MTL::ResourceUsageRead);
+
 		if (auto it = m_ComputeState.kernel->uniforms.find("gDebug");
 		    it != m_ComputeState.kernel->uniforms.end())
 		{

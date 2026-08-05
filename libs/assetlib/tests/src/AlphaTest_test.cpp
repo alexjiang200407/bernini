@@ -275,7 +275,6 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kBlend;
 	material.pbr.alphaCutoff      = 0.25f;
-	material.pbr.occlude          = true;
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
@@ -284,7 +283,28 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BMaterial loaded = loadMaterial(path);
 	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
-	CHECK(loaded.pbr.occlude);
+}
+
+// Retiring `occlude` took its byte out of the stream rather than reserving it, so a material baked
+// before that reads as a different layout from the same major version -- which is exactly what the
+// major is for. The reader must reject it and say so, because the alternative is parsing the fields
+// after it as garbage.
+TEST_CASE("a material from before the format break is rejected, not misread", "[bmaterial]")
+{
+	BMaterial material;
+	material.pbr.alphaMode        = AlphaMode::kBlend;
+	material.pbr.alphaCutoff      = 0.75f;
+	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
+
+	std::vector<std::byte> bytes = serializeMaterial(material);
+
+	// The major sits right after the magic. Stamping the previous one is what a file baked before
+	// the break looks like.
+	REQUIRE(bytes.size() > 6);
+	bytes[4] = std::byte{ 7 };
+	bytes[5] = std::byte{ 0 };
+
+	CHECK_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
 }
 
 // kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new
