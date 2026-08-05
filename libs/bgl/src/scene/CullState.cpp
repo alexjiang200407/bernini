@@ -14,9 +14,10 @@ namespace bgl
 		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
 		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
 		constexpr std::string_view c_TransparentCountName   = "scene.transparentSortCount";
-		constexpr std::string_view c_PsoPrefixSumName = "compactedInstances.psoPrefixSumBuffer";
-		constexpr std::string_view c_DispatchArgsName = "compactedInstances.compactDispatchArgs";
-		constexpr std::string_view c_CullViewName     = "cull.view";
+		constexpr std::string_view c_PsoPrefixSumName    = "compactedInstances.psoPrefixSumBuffer";
+		constexpr std::string_view c_DispatchArgsName    = "compactedInstances.compactDispatchArgs";
+		constexpr std::string_view c_CullViewName        = "cull.view";
+		constexpr std::string_view c_TransparentArgsName = "transparentSort.dispatchArgs";
 	}
 
 	void
@@ -87,7 +88,15 @@ namespace bgl
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::CullView>().SetInitialCount(1).SetDebugName("Cull View");
 
-			m_CullView.Init(std::move(desc), std::move(resourceManager));
+			m_CullView.Init(std::move(desc), resourceManager);
+		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<idl::DispatchArgs>().SetInitialCount(1).SetDebugName(
+				"Transparent Dispatch Args");
+
+			m_TransparentDispatchArgs.Init(std::move(desc), std::move(resourceManager));
 		}
 	}
 
@@ -116,6 +125,7 @@ namespace bgl
 		m_PsoPrefixSum.Release(deferred);
 		m_CompactedDispatchArgs.Release(deferred);
 		m_CullView.Release(deferred);
+		m_TransparentDispatchArgs.Release(deferred);
 	}
 
 	void
@@ -145,5 +155,8 @@ namespace bgl
 		fg.ImportBuffer(std::string(c_PsoPrefixSumName), m_PsoPrefixSum.GetBufferHandle());
 		fg.ImportBuffer(std::string(c_DispatchArgsName), m_CompactedDispatchArgs.GetBufferHandle());
 		fg.ImportBuffer(std::string(c_CullViewName), m_CullView.GetBufferHandle());
+		fg.ImportBuffer(
+			std::string(c_TransparentArgsName),
+			m_TransparentDispatchArgs.GetBufferHandle());
 	}
 }

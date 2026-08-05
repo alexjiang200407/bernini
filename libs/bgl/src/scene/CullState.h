@@ -110,5 +110,8 @@ namespace bgl
 
 		// This frustum's planes, uploaded per draw and read by the cull dispatch.
 		ComputeBuffer m_CullView;
+
+		// The transparent sort's indirect args: one dispatch over the depth-sorted list.
+		ComputeBuffer m_TransparentDispatchArgs;
 	};
 }
