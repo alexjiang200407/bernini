@@ -24,7 +24,7 @@ namespace
 	// on a high-DPI display -- half resolution on a 2x screen, which reads as blur everywhere and
 	// is worst on detail near the pixel scale.
 	uint32_t
-	PhysicalExtent(int logical, qreal ratio)
+	GetPhysicalExtent(int logical, qreal ratio)
 	{
 		return static_cast<uint32_t>(std::lround(std::max(1, logical) * ratio));
 	}
@@ -37,8 +37,8 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_ResizeTimer->setSingleShot(true);
 	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
 
-	m_Width  = PhysicalExtent(width(), devicePixelRatio());
-	m_Height = PhysicalExtent(height(), devicePixelRatio());
+	m_Width  = GetPhysicalExtent(width(), devicePixelRatio());
+	m_Height = GetPhysicalExtent(height(), devicePixelRatio());
 
 	auto rtvDesc   = bgl::RenderTargetDesc();
 	rtvDesc.width  = m_Width;
@@ -245,8 +245,8 @@ RenderTargetWindow::SyncSize(int w, int h)
 		return;
 	}
 
-	const uint32_t width  = PhysicalExtent(w, devicePixelRatio());
-	const uint32_t height = PhysicalExtent(h, devicePixelRatio());
+	const uint32_t width  = GetPhysicalExtent(w, devicePixelRatio());
+	const uint32_t height = GetPhysicalExtent(h, devicePixelRatio());
 	if (width == m_Width && height == m_Height)
 	{
 		return;
