@@ -23,20 +23,25 @@ in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (backbuffer + motion vectors + depth)"]
+    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
         SKY --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
-        CI --> FWD["Forward (indirect dispatch per PSO bucket, then per transparent partition)"]
+        CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
     end
-    D --> PP["PreparePresent (transition backbuffer to Present)"]
+    D --> TAA["TaaResolve (only when the target has TAA)"]
+    TAA --> PPX["PostProcess (-> backbuffer)"]
+    PPX --> PP["PreparePresent (transition backbuffer to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
-`Clear`, `Skybox`, and `Forward` take the imported `backbuffer` and `motionVectors` textures as
-render targets; `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
+`Clear`, `Skybox`, and `Forward` take the imported `sceneColor` and `motionVectors` textures as
+render targets; `TaaResolve` reads `sceneColor`, the velocity buffer and the previous accumulation and writes the
+next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
+writer of the backbuffer;
+`PreparePresent` only transitions the backbuffer to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
@@ -44,11 +49,70 @@ resource namespace (see [Frame Graph](docs/framegraph.md)).
 
 `DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection
-(this frame's and the previous frame's), camera position, back/depth/motion-vector handles, standard
+(this frame's and the previous frame's), camera position, scene-colour/depth/motion-vector handles, standard
 samplers, environment map, exposure, and the optional skybox. The graph resource *names* are not in
-it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` in
+it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` / `c_SceneColorName` in
 [constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
 passes name them by.
+
+---
+
+## Scene colour, and where the display curve is applied
+
+Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the render target owns, and
+`PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
+applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
+fold it in, while the display curve — `AgX` in
+[util/Tonemap.slang](libs/bgl/shaders/src/util/Tonemap.slang) — belongs to the output and runs once.
+`AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
+
+Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
+space. And a pixel shader that writes a literal colour — `Forward_Null`, `Forward_Assert` — is
+writing radiance, not a display value, so its `1.0` reaches the screen as the curve's answer for
+unit radiance and not as white.
+
+---
+
+## Two-sided surfaces
+
+Every cutout, blend and hashed bucket is `RasterCullMode::kNone`, so the rasterizer draws both sides
+of a surface. On the back one the interpolated normal still points away from the camera, which sends
+the view angle, the irradiance lookup and the reflection vector into the wrong hemisphere — the same
+material then shades differently depending on which side happens to be visible.
+
+The seven shading pixel shaders therefore take `bool isFrontFace : SV_IsFrontFace` and hand it to
+`CalculateNormal`, which negates the geometric normal before building the tangent frame. **Before,
+not after**: the bitangent is `cross(N, T) * tangent.w`, so flipping N carries the frame with it,
+where negating the finished shading normal would leave a mirrored bitangent and lean the normal map's
+detail the wrong way on every back face.
+
+`Forward_Null` and `Forward_Assert` take `ForwardVSOut` but never read its normal, so they do not
+take the flag. The opaque buckets cull back faces and can never see one,
+but their shaders share `Shade<M>` with the transparent bucket, which can — so they pass the hardware
+value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
+the shader cannot see.
+
+---
+
+## Hashed alpha
+
+`LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/LayerType.h)) is stochastic coverage:
+alpha becomes a per-pixel hashed threshold rather than a cutoff, so every layer of a self-occluding
+surface writes depth and participates, and the correct blend is what the ensemble averages to.
+
+It resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
+write, no blend, velocity written like any other geometry — and drawn in the PSO-bucketed phase
+rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
+threshold ([util/HashedAlpha.slang](libs/bgl/shaders/src/util/HashedAlpha.slang)) instead of the
+material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
+self-occluding surface writes real depth.
+
+The material's `alphaCutoff` is deliberately unused there: a cutoff is the thing being replaced.
+
+`MaterialData::alphaHashSeed` advances once per frame so the pattern decorrelates, and is zero on a
+target without temporal AA — a pattern that moved with nothing accumulating it is flicker rather than
+coverage. **A single frame of this is noise by design**; it is only correct once
+[TAA](docs/taa.md) has integrated it.
 
 ---
 
@@ -66,6 +130,18 @@ plugs in by substituting its own previous-frame position for the second of those
 the pixel stage. `SceneView::AdvanceCamera` is what holds the previous frame's matrices; drawing one
 view twice in a frame reports the same history to both draws rather than letting the second treat
 the first as history.
+
+When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
+`HaltonJitter` ([util/jitter.h](libs/bgl/src/util/jitter.h)) that `RenderContext::Draw`
+left-multiplies onto it, so the sample grid walks the pixel footprint across eight frames. The
+client's `Camera` never sees it. **A velocity is about the surface, not the sample pattern**, so both
+clip positions are de-jittered against their own frame's offset before differencing. For geometry
+that happens **in the mesh shader**, which subtracts `ViewData::jitter` / `prevJitter` in clip space
+as it fills `ForwardVSOut::clip` and `prevClip` — `SV_Position` keeps its offset, those two do not,
+and `ComputeMotionVector` stays a plain difference. The sky does the same subtraction in its pixel
+shader from the matching pair on `gSkyboxData`, its covering triangle not being jittered to begin
+with. `ViewMatrices` carries last frame's offset beside the matrices it already held. With temporal
+AA off every offset is zero and the arithmetic collapses to what it was.
 
 **The transparent phase writes no velocity** — a blended surface has no single depth to reproject —
 so its PSOs declare one render target and `DrawTransparent` binds a framebuffer without the velocity
@@ -95,7 +171,7 @@ culling, so it fills only where nothing has been drawn.
 
 * **No-op** when the view has no skybox (`DrawData::skybox` is empty) — `AttachToFrameGraph` adds
   nothing.
-* **In:** the backbuffer and the velocity buffer as render targets; samples the skybox cube texture
+* **In:** the scene-colour and velocity buffers as render targets; samples the skybox cube texture
   through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,
   `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, and `mipLevel`; the constant-buffer name is
   matched against Slang reflection, so it must track the declaration in `Skybox.slang`.
@@ -145,20 +221,17 @@ Depth-sorts the transparent instances on the GPU, in three sub-passes. Runs **af
 Instances` and depends on it: the depth-key pass reads the per-instance visibility word the cull
 sub-pass writes, so a frustum-culled transparent instance takes no slot in the sorted list.
 
-1. **Clear** — zeroes the entry counter and seeds both `partitionDispatchArgs` entries to
-   `{0, 1, 1}`. Seeded rather than zeroed because a frame with no transparent instances still has the
-   forward pass issue its indirect dispatches, and a zeroed `y`/`z` is an invalid grid.
+1. **Clear** — zeroes the entry counter and seeds `dispatchArgs` to `{0, 1, 1}`. Seeded rather than
+   zeroed because a frame with no transparent instances still has the forward pass issue its
+   indirect dispatch, and a zeroed `y`/`z` is an invalid grid.
 2. **Depth Keys** (`TransparentDepthKeys`, one thread per instance) — compacts the transparent
    instances into `(key, instanceIndex)` pairs via an `InterlockedAdd` on the counter. The key is
-   `~asuint(distanceSquared)` shifted right one bit, with the top bit clear for `occlude` materials
-   and set for the rest — so one ascending sort emits **farthest-first within each occlude class**,
-   and leaves the list already split into `[self-occluding][plain]`. Squared distance is
+   `~asuint(distanceSquared)`, so one ascending sort emits **farthest-first**. Squared distance is
    non-negative, so its bit pattern already orders like the float; the inversion is what makes
    ascending mean farthest-first.
 3. **Sort** (`TransparentSort`, one workgroup) — a bitonic sort in groupshared memory, padded to
    `cTransparentSortCapacity` with `0xFFFFFFFF` keys so the padding sorts to the tail. Writes the
-   sorted instance indices to `sortedTransparentInstances`, counts the low-half keys, and emits
-   `partitionBase` (`{0, occludeCount}`) and `partitionDispatchArgs` (a grid per partition).
+   sorted instance indices to `sortedTransparentInstances` and emits `dispatchArgs`.
 
 **One workgroup caps the list at `cTransparentSortCapacity` (1024) instances.** That is what buys a
 single dispatch with no ping-pong buffers and no cross-group scan; a multi-group radix sort is the
@@ -172,20 +245,19 @@ many instances turn out to be transparent; only the sort itself is bounded.
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
   position.
 * **Out:** `scene.transparentSortEntries`/`Count` (its own scratch, owned by the view),
-  `scene.sortedTransparentInstances`, `transparentSort.partitionBase`,
-  `transparentSort.partitionDispatchArgs` (all consumed by `Forward`).
+  `scene.sortedTransparentInstances`, `transparentSort.dispatchArgs` (both consumed by `Forward`).
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
-raster/depth/blend state), plus a second `m_PrepassKernels` array whose only built slots are the
-self-occluding transparent PSOs. The amplification and mesh shaders are always the shared
+raster/depth/blend state). The amplification and mesh shaders are always the shared
 `Forward_StaticMesh` module; the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
-`Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`, `Forward_Transparent`,
-`Forward_Transparent_Prepass`, `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a
-`static_assert` catches an empty row but not a misordering.
+`Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
+`Forward_PBR_HashedAlpha`, `Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`,
+`Forward_Assert`). **`c_Psos` order must match `PsoType`** — a `static_assert` catches an empty row
+but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
@@ -197,29 +269,65 @@ colour/velocity/depth framebuffer), and calls
 
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
-`sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Because that list
-is partitioned `[self-occluding][plain]` and both occlude PSOs share one pipeline, the whole
-transparent phase is **three fixed `DispatchMeshIndirect` calls** — occluder pre-pass, occluder
-colour, plain colour — whose grids and base offsets are GPU values the CPU never sees.
+`sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Both transparent
+PSOs share one pipeline and the list is drawn whole, so the transparent phase is **one
+`DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees.
 
-The self-occluding partition (`occlude` materials, the `kTransparentOcclude_*` buckets) is drawn
-**twice**: first a depth-only pre-pass — a **0-RTV pipeline** bound to a depth-only framebuffer,
-alpha-discarding below the material's cutoff and writing depth — then its colour draw with
-`depthFunc == Equal`, so only the front layer blends. The pre-pass must share this pass's depth
-attachment and sit between the colour draws, which is why it is a sub-draw here rather than a pass of
-its own.
+A surface that has to hide its own back layers uses `kHashed` ([Hashed alpha](#hashed-alpha)) rather
+than blending: stochastic coverage writes real depth, so it self-occludes in the opaque phase with no
+pre-pass. That replaced an `occlude` flag which drew a blend material twice — a depth-only pre-pass,
+then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
 
-Both partitions read their base from `transparentSort.partitionBase`, indexed by `partitionIndex`;
-the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks between the two.
+The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` indexed by `psoIndex`.
+`baseTable` picks between the two.
 
-* **In:** the backbuffer and the velocity buffer as render targets; `compactDispatchArgs` and
-  `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the three `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
+* **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
+  `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
+  buffers, the two `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
   `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
-* **Out:** the backbuffer (rendered), the velocity buffer (opaque and alpha-test only), depth.
+* **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
+
+### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl/src/passes/TaaResolvePass.cpp)
+
+Accumulates the jittered scene colour into the temporal history: reprojects the previous accumulation
+through the velocity buffer, clamps it to the 3x3 neighbourhood in YCoCg, and blends. A single
+full-screen triangle from the `TaaResolve` module, depth test off. Added in `EndFrame`, before
+`PostProcess`, and **only when the target has `taaEnabled`** — a target without it allocates no
+history and the pass is never attached.
+
+See [Temporal Antialiasing](docs/taa.md) for why the clamp is in YCoCg, why the blend is luma-weighted
+and why the resolve writes history rather than the backbuffer.
+
+* **In:** `sceneColor`, `motionVectors` and the previous history as shader resources; a point sampler
+  for the two read 1:1 and a linear one for the reprojected history, both owned by `RenderContext`.
+* **Out:** the current history. `PostProcess` is then pointed at it instead of `sceneColor`.
+* **The first frame, and the first after a resize, take the scene colour whole** — `historyValid` is
+  false and there is no accumulation to blend against.
+* The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
+  declaration in `TaaResolve.slang`.
+
+### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
+
+Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
+the `PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
+`EndFrame`, after every draw and before `PreparePresent`.
+
+Today it applies `AgX` and nothing else. It is named for the stage rather than that one step:
+everything between a resolved scene and the screen — bloom, grading, exposure adaptation — belongs
+here as it lands.
+
+* **In:** whatever the last HDR stage produced — `sceneColor`, or the freshly resolved history on a
+  TAA target — through the `SrvHandle` the render target owns; its own
+  point-clamp sampler, created by `RenderContext` because the pass runs outside any `Draw` and the
+  per-scene samplers are not reachable there. The `gPostProcessData` cbuffer name is matched
+  against Slang reflection, so it must track the declaration in `PostProcess.slang`.
+* **Out:** the backbuffer.
+* It covers the whole target, which is why `BeginFrame` does not clear the backbuffer.
+* **It is the only pass that writes the backbuffer**, which is what keeps `SubmitCapture` — a
+  readback of the last presented backbuffer — describing what was displayed.
 
 ### PreparePresent — [passes/PreparePresentPass.h](libs/bgl/src/passes/PreparePresentPass.h)
 
@@ -242,8 +350,8 @@ in `EndFrame`, after all draws.
   nondeterministic flicker. This is the bug precedent the [Frame Graph](docs/framegraph.md) barrier
   caveat is written from.
 * **A bound framebuffer's colour-attachment count must match the PSO's `rtvFormats` count.** The
-  forward pass now runs three shapes against one depth buffer — opaque (colour + velocity),
-  transparent (colour), and the transparent pre-pass (neither) — and each builds its own
+  forward pass runs two shapes against one depth buffer — opaque (colour + velocity) and
+  transparent (colour) — and each builds its own
   `MeshletState`. Handing the opaque framebuffer to a blend PSO binds a render target it does not
   declare; the reverse leaves a declared target unbound. `PsoConfig::blend` is what decides whether
   `BuildForwardKernel` adds the velocity format, so the two sides move together.

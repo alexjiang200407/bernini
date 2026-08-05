@@ -57,4 +57,36 @@ namespace bgl::test
 	 */
 	[[nodiscard]] float
 	AliasEnergy(const std::string& path, int x, int y, int w, int h);
+
+	/**
+	 * Mean squared difference between the same region of two frames -- how much a pixel changed
+	 * between them.
+	 *
+	 * The temporal counterpart of AliasEnergy, which measures the same quantity across neighbouring
+	 * pixels of one frame. A static camera over a converged accumulation should score near zero;
+	 * what it scores instead is flicker, which no single-frame measurement can see.
+	 *
+	 * @throws std::runtime_error if either image cannot be read, they differ in size, or the box is
+	 *         not wholly inside them.
+	 */
+	[[nodiscard]] float
+	FrameDelta(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h);
+
+	/**
+	 * Mean luma of `path` over exactly those pixels that are background in `referencePath` — where
+	 * "background" is a reference luma below `threshold`.
+	 *
+	 * Ghosting is content that is somewhere it should not be, and this is that and nothing else: the
+	 * reference says where the frame is genuinely empty, and anything the candidate puts there came
+	 * from a place the camera has left. Deliberately not a difference against a converged frame, which
+	 * cannot tell a trail apart from detail the accumulation has not gathered yet — and so would score
+	 * a slower, better-converging setting as though it ghosted more.
+	 *
+	 * @throws std::runtime_error if either image cannot be read or they differ in size.
+	 */
+	[[nodiscard]] float
+	BackgroundBleed(
+		const std::string& path,
+		const std::string& referencePath,
+		float              threshold = 0.02f);
 }

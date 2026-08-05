@@ -82,9 +82,9 @@ disagrees, trust the header, then fix this doc.
   job — or `gamelib`'s `AssetManager`, which refcounts them.
 
 * **A material's PSO bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
-  carries `layerType` (`kOpaque`/`kMask`/`kBlend`) and `occlude` alongside `materialType`, because a
-  submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` and
-  `occlude` are therefore part of the handle, not just the desc. See
+  carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
+  submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
+  therefore part of the handle, not just the desc. See
   [PsoType.h](libs/bgl/include/bgl/PsoType.h) for the resulting buckets — it is IDL-generated; do not
   edit it.
 
@@ -111,7 +111,7 @@ disagrees, trust the header, then fix this doc.
 | `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
 | `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
 | `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, and lighting (IBL, skybox, exposure). |
-| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth and the screen-space velocity buffer. |
+| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime. |
 | `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
 
 ### Supporting types
@@ -192,8 +192,8 @@ flowchart TD
   @post the job's scene and view are scheduled for GPU upload as part of *this* frame; content added
   since the last frame becomes visible only once this frame is submitted.
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
-  @throws `GraphicsError` otherwise. Recreates backbuffers, depth, and the velocity buffer,
-  invalidating anything that cached them.
+  @throws `GraphicsError` otherwise. Recreates backbuffers, depth, scene colour and the velocity
+  buffer, invalidating anything that cached them.
 * **`WaitIdle()`** — @pre not between `BeginFrame`/`EndFrame`. Blocks until every submitted frame,
   queued presents included, has drained from the GPU. Call it *before* hiding the last window being
   presented to (the editor does, in `MainWindow::closeEvent`): a present left pending across the hide

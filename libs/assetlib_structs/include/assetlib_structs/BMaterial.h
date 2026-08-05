@@ -15,6 +15,10 @@ namespace assetlib
 		kOpaque = 0,
 		kMask   = 1,
 		kBlend  = 2,
+
+		// Not a glTF mode: nothing imports it, and it is chosen in the material editor. Alpha becomes
+		// stochastic coverage rather than a cutoff, which only resolves under temporal AA.
+		kHashed = 3,
 	};
 
 	struct ChannelRoute
@@ -83,9 +87,6 @@ namespace assetlib
 
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
-
-		// Blend only: render with a depth-only pre-pass so the surface self-occludes (hair, foliage).
-		bool occlude = false;
 
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 

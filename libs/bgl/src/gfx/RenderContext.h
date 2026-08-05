@@ -10,8 +10,10 @@
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
+#include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/SkyboxPass.h"
+#include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
 #include "resource/ResourceManager.h"
 #include <bgl/IGraphics.h>
@@ -158,8 +160,15 @@ namespace bgl
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
+		PostProcessPass      m_PostProcess;
+		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;
 		TransparentSortPass  m_TransparentSort;
+
+		SamplerHandle m_PointClampSampler;
+
+		// The reprojected history lands between texels, so it is the one thing here that is filtered.
+		SamplerHandle m_LinearClampSampler;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 

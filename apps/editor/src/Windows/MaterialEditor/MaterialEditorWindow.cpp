@@ -43,10 +43,11 @@ namespace
 		const char* modelName;
 	};
 
-	constexpr std::array<OutputType, 3> c_OutputTypes = { {
+	constexpr std::array<OutputType, 4> c_OutputTypes = { {
 		{ "Opaque", "MaterialOutput" },
 		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
 		{ "Alpha Blend", "BlendedMaterialOutput" },
+		{ "Hashed Alpha", "HashedAlphaMaterialOutput" },
 	} };
 
 	bgl::LayerType
@@ -58,6 +59,8 @@ namespace
 			return bgl::LayerType::kMask;
 		case assetlib::AlphaMode::kBlend:
 			return bgl::LayerType::kBlend;
+		case assetlib::AlphaMode::kHashed:
+			return bgl::LayerType::kHashed;
 		case assetlib::AlphaMode::kOpaque:
 			break;
 		}
@@ -198,6 +201,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		auto rtDesc             = RenderTargetWindowDesc();
 		rtDesc.renderer         = m_Desc.renderer;
 		rtDesc.initialInstances = m_Desc.initialPreviewInstances;
+		rtDesc.taaEnabled       = m_Desc.taaEnabled;
 
 		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
 		rightPanel = m_Preview;
@@ -928,9 +932,8 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	desc.metallicFactor  = output->MetallicFactor();
 	desc.roughnessFactor = output->RoughnessFactor();
 
-	desc.layerType   = ToLayerType(output->AlphaMode());
-	desc.alphaCutoff = output->AlphaCutoff();
-	desc.occlude     = output->Occlude();
+	desc.layerType   = ToLayerType(output->GetAlphaMode());
+	desc.alphaCutoff = output->GetAlphaCutoff();
 
 	const auto route = [&](unsigned int channel) {
 		const ChannelData::Route wired = output->Route(channel);
@@ -958,13 +961,11 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	// An in-place rewrite keeps the handle, so the instances already overriding with it follow the
 	// edit with no rebinding -- but only while the PSO bucket is unchanged. The bucket comes from the
-	// handle's layer *and* its occlude flag, neither of which an update can rewrite, so flipping the
-	// alpha mode (opaque / cutout / blend) or toggling Occlude needs a new material or it would keep
-	// the old pass.
+	// handle's layer, which an update cannot rewrite, so changing the alpha mode needs a new material
+	// or it would keep the old pass.
 	Renderer* renderer = m_Desc.renderer;
 
-	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType &&
-	    entry.preview.occlude == desc.occlude)
+	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType)
 	{
 		// Fire-and-forget on every keystroke; the instances already override with this handle, so the
 		// in-place rewrite is all the edit needs.

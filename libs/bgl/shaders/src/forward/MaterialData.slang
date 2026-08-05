@@ -7,11 +7,16 @@ import idl.IAlphaTestMaterial;
 import idl.TextureHandle;
 import forward.common;
 import forward.PbrShading;
+import util.HashedAlpha;
 
 struct MaterialData
 {
     float3 cameraPos;
     float exposure;
+
+    // Advances once per frame, and decorrelates the hashed-alpha pattern between frames. Zero on a
+    // target without temporal AA, where a changing pattern would be flicker rather than coverage.
+    float alphaHashSeed;
 
     EntryBuffer<PbrMaterial> pbrMaterials;
     EntryBuffer<LoosePbrMaterial> looseMaterials;
@@ -118,7 +123,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
 // The shared tail of both shading paths. Base color is passed in rather than sampled here, so the
 // alpha-tested path can test it without sampling the texture a second time.
-float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor)
+float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
@@ -127,6 +132,7 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
         baseColor,
         material.GetORM(wrapSampler, input.uv),
         material.GetNormalXY(wrapSampler, input.uv),
+        isFrontFace,
         materialData.cameraPos,
         materialData.irradianceMap,
         materialData.prefilterMap,
@@ -136,16 +142,16 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
     );
 }
 
-public float4 Shade<M : IPbrMaterial>(ForwardVSOut input)
+public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
     M material = M.Load(input.materialIndex);
 
-    return ShadeWithBaseColor(input, material, material.GetBaseColor(wrapSampler, input.uv));
+    return ShadeWithBaseColor(input, material, material.GetBaseColor(wrapSampler, input.uv), isFrontFace);
 }
 
-public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
@@ -158,20 +164,27 @@ public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
         discard;
     }
 
-    return ShadeWithBaseColor(input, material, baseColor);
+    return ShadeWithBaseColor(input, material, baseColor, isFrontFace);
 }
 
-// Depth-only pre-pass for a self-occluding blend material: keep only the fragments whose base-color
-// alpha clears the cutoff, so the front layer's depth is what the Equal-tested colour pass matches.
-// Writes no colour; the pipeline binds no render target.
-public void PrepassDiscard<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
+// Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
+// alpha, and writes real depth like any opaque surface. One frame of it is noise; the ensemble over
+// pixels and frames is the blend, which is why this pairs with temporal AA and not without it.
+//
+// The material's alphaCutoff is deliberately unused. A cutoff is the thing being replaced, and
+// applying both would put back the binary silhouette that costs the surface its layers.
+public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
     M material = M.Load(input.materialIndex);
 
-    if (material.GetBaseColor(wrapSampler, input.uv).a < material.GetAlphaCutoff())
+    let baseColor = material.GetBaseColor(wrapSampler, input.uv);
+
+    if (baseColor.a < HashedAlphaThreshold(input.worldPos, materialData.alphaHashSeed))
     {
         discard;
     }
+
+    return ShadeWithBaseColor(input, material, baseColor, isFrontFace);
 }

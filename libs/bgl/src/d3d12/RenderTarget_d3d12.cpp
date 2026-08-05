@@ -16,7 +16,8 @@ namespace bgl
 		bool                    enableDebug) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
-		m_EnableDebug(enableDebug), m_Wnd(desc.wnd), m_Width(desc.width), m_Height(desc.height)
+		m_TaaEnabled(desc.taaEnabled), m_TaaAllocated(desc.taaEnabled), m_EnableDebug(enableDebug),
+		m_Wnd(desc.wnd), m_Width(desc.width), m_Height(desc.height)
 	{
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
@@ -122,7 +123,7 @@ namespace bgl
 			}
 		}
 
-		CreateDepthAndMotionVectors();
+		CreateAttachments();
 	}
 
 	void
@@ -151,11 +152,21 @@ namespace bgl
 			}
 		}
 
-		CreateDepthAndMotionVectors();
+		CreateAttachments();
+	}
+
+	namespace
+	{
+		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
+
+		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
+		// Alpha is carried because the blend state writes destination alpha and the capture path
+		// reads it, which rules out the packed three-channel float formats.
+		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
 	}
 
 	void
-	RenderTarget::CreateDepthAndMotionVectors()
+	RenderTarget::CreateAttachments()
 	{
 		{
 			auto depthTextureDesc          = TextureDesc();
@@ -182,7 +193,7 @@ namespace bgl
 		{
 			// kSRV as well as kRenderTarget: the buffer exists to be resampled by a later pass.
 			auto motionTextureDesc      = TextureDesc();
-			motionTextureDesc.format    = Format::RG16_FLOAT;
+			motionTextureDesc.format    = c_MotionVectorFormat;
 			motionTextureDesc.width     = static_cast<uint32_t>(m_Width);
 			motionTextureDesc.height    = static_cast<uint32_t>(m_Height);
 			motionTextureDesc.dimension = TextureDimension::kTexture2D;
@@ -196,11 +207,85 @@ namespace bgl
 			m_MotionVectors.textureHandle = m_ResourceManager->CreateTexture(motionTextureDesc);
 
 			auto rtvDesc      = RtvDesc();
-			rtvDesc.format    = Format::RG16_FLOAT;
+			rtvDesc.format    = c_MotionVectorFormat;
 			rtvDesc.debugName = "Motion Vectors RTV";
 
 			m_MotionVectors.rtvHandle =
 				m_ResourceManager->CreateRtv(m_MotionVectors.textureHandle, rtvDesc);
+		}
+
+		{
+			auto sceneColorDesc      = TextureDesc();
+			sceneColorDesc.format    = c_SceneColorFormat;
+			sceneColorDesc.width     = static_cast<uint32_t>(m_Width);
+			sceneColorDesc.height    = static_cast<uint32_t>(m_Height);
+			sceneColorDesc.dimension = TextureDimension::kTexture2D;
+			sceneColorDesc.debugName = "Scene Color";
+			sceneColorDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			sceneColorDesc.initialLayout = BarrierLayout::kRenderTarget;
+
+			sceneColorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+			m_SceneColor.textureHandle = m_ResourceManager->CreateTexture(sceneColorDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = c_SceneColorFormat;
+			rtvDesc.debugName = "Scene Color RTV";
+
+			m_SceneColor.rtvHandle =
+				m_ResourceManager->CreateRtv(m_SceneColor.textureHandle, rtvDesc);
+
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = c_SceneColorFormat;
+			srvDesc.debugName = "Scene Color SRV";
+
+			m_SceneColor.srvHandle =
+				m_ResourceManager->CreateSrv(m_SceneColor.textureHandle, srvDesc);
+		}
+
+		{
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = c_MotionVectorFormat;
+			srvDesc.debugName = "Motion Vectors SRV";
+
+			m_MotionVectorSrv =
+				m_ResourceManager->CreateSrv(m_MotionVectors.textureHandle, srvDesc);
+		}
+
+		if (!m_TaaAllocated)
+		{
+			return;
+		}
+
+		for (uint32_t i = 0; i < m_History.size(); ++i)
+		{
+			auto historyDesc      = TextureDesc();
+			historyDesc.format    = c_SceneColorFormat;
+			historyDesc.width     = static_cast<uint32_t>(m_Width);
+			historyDesc.height    = static_cast<uint32_t>(m_Height);
+			historyDesc.dimension = TextureDimension::kTexture2D;
+			historyDesc.debugName = std::format("TAA History: {}", i);
+			historyDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			historyDesc.initialLayout = BarrierLayout::kRenderTarget;
+			historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+			m_History[i].textureHandle = m_ResourceManager->CreateTexture(historyDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = c_SceneColorFormat;
+			rtvDesc.debugName = std::format("TAA History RTV: {}", i);
+
+			m_History[i].rtvHandle =
+				m_ResourceManager->CreateRtv(m_History[i].textureHandle, rtvDesc);
+
+			auto historySrvDesc      = SrvDesc();
+			historySrvDesc.format    = c_SceneColorFormat;
+			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
+
+			m_History[i].srvHandle =
+				m_ResourceManager->CreateSrv(m_History[i].textureHandle, historySrvDesc);
 		}
 	}
 
@@ -274,5 +359,28 @@ namespace bgl
 
 		m_ResourceManager->DestroyRtv(m_MotionVectors.rtvHandle, false);
 		m_ResourceManager->DestroyTexture(m_MotionVectors.textureHandle, false);
+
+		m_ResourceManager->DestroySrv(m_SceneColor.srvHandle, false);
+		m_ResourceManager->DestroyRtv(m_SceneColor.rtvHandle, false);
+		m_ResourceManager->DestroyTexture(m_SceneColor.textureHandle, false);
+
+		m_ResourceManager->DestroySrv(m_MotionVectorSrv, false);
+		m_MotionVectorSrv = {};
+
+		for (TextureRtvSrvHandle& history : m_History)
+		{
+			if (history.srvHandle.IsNull())
+			{
+				continue;
+			}
+			m_ResourceManager->DestroySrv(history.srvHandle, false);
+			m_ResourceManager->DestroyRtv(history.rtvHandle, false);
+			m_ResourceManager->DestroyTexture(history.textureHandle, false);
+			history = {};
+		}
+
+		// The accumulation cannot be rescaled, so a resize starts it over.
+		m_HistoryValid        = false;
+		m_CurrentHistoryIndex = 0;
 	}
 }

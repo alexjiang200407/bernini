@@ -19,9 +19,11 @@ public struct ForwardVSOut
     // material types, so their pixel shader cannot know it from the PSO the way the others do.
     public nointerpolation uint materialIsLoose : MATERIALTYPE;
 
-    // Undivided clip position under this frame's and last frame's camera. Carried as a pair rather
-    // than reusing SV_Position so both endpoints of the delta go through identical math, and so the
-    // skinned path can substitute its own previous-frame position without touching the pixel stage.
+    // Undivided clip position under this frame's and last frame's camera, with each frame's jitter
+    // already removed -- SV_Position keeps its offset, these do not, because a velocity is about the
+    // surface and the sample pattern is not part of it. Carried as a pair rather than reusing
+    // SV_Position so both endpoints of the delta go through identical math, and so the skinned path
+    // can substitute its own previous-frame position without touching the pixel stage.
     public float4 clip : CLIPPOSITION;
     public float4 prevClip : PREVCLIPPOSITION;
 };
@@ -52,5 +54,5 @@ public float2 ComputeMotionVector(ForwardVSOut input)
 public bool IsLoosePso(PsoType pso)
 {
     return pso == PsoType::kOpaque_StaticMesh_LoosePbr || pso == PsoType::kAlphaTest_StaticMesh_LoosePbr ||
-           pso == PsoType::kTransparent_StaticMesh_LoosePbr || pso == PsoType::kTransparentOcclude_StaticMesh_LoosePbr;
+           pso == PsoType::kTransparent_StaticMesh_LoosePbr;
 }

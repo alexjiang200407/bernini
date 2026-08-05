@@ -159,6 +159,28 @@ TEST_CASE("Switching the output type replaces the sink", "[materialgraph]")
 	REQUIRE(model.allNodeIds().size() == 1);
 }
 
+// The sink glTF cannot describe, and therefore the one that only exists because an author picked it.
+// If it were not registered, SetOutputType would fail and the material editor would silently offer a
+// menu entry that does nothing.
+TEST_CASE("The hashed-alpha sink is reachable and reports its mode", "[materialgraph][hashedalpha]")
+{
+	MaterialGraphModel model(Registry());
+
+	model.addNode("MaterialOutput");
+	REQUIRE(model.SetOutputType("HashedAlphaMaterialOutput"));
+
+	MaterialOutputNode* sink = model.OutputNode();
+	REQUIRE(sink != nullptr);
+
+	// What the compile step reads to fill BMaterial::pbr.alphaMode.
+	CHECK(sink->GetAlphaMode() == assetlib::AlphaMode::kHashed);
+
+	// A 4-wide base-color port: the alpha it carries is the coverage, so it must be wired.
+	CHECK(sink->IsAlphaTested());
+
+	CHECK(model.allNodeIds().size() == 1);
+}
+
 TEST_CASE("Switching to what the sink already is changes nothing", "[materialgraph]")
 {
 	MaterialGraphModel model(Registry());

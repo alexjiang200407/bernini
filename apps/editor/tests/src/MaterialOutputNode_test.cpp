@@ -295,7 +295,7 @@ TEST_CASE("An alpha tested material output is a cutout", "[materialoutput]")
 	const AlphaTestedMaterialOutputNode node;
 
 	REQUIRE(node.IsAlphaTested());
-	REQUIRE(node.AlphaCutoff() == 0.5f);
+	REQUIRE(node.GetAlphaCutoff() == 0.5f);
 	REQUIRE(node.name() == QString("AlphaTestedMaterialOutput"));
 
 	// The counterpart to the opaque node's RGB: a cutout needs the alpha, so its base-colour port is
@@ -320,12 +320,12 @@ TEST_CASE("An alpha tested material output round-trips its cutoff", "[materialou
 	QJsonObject authored;
 	authored["alphaCutoff"] = 0.25;
 	saved.load(authored);
-	REQUIRE(saved.AlphaCutoff() == 0.25f);
+	REQUIRE(saved.GetAlphaCutoff() == 0.25f);
 
 	AlphaTestedMaterialOutputNode reloaded;
 	reloaded.load(saved.save());
 
-	REQUIRE(reloaded.AlphaCutoff() == 0.25f);
+	REQUIRE(reloaded.GetAlphaCutoff() == 0.25f);
 }
 
 TEST_CASE("A missing cutoff loads as the default", "[materialoutput]")
@@ -334,5 +334,5 @@ TEST_CASE("A missing cutoff loads as the default", "[materialoutput]")
 
 	node.load(QJsonObject{});
 
-	REQUIRE(node.AlphaCutoff() == 0.5f);
+	REQUIRE(node.GetAlphaCutoff() == 0.5f);
 }

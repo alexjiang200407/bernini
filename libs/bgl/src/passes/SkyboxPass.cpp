@@ -28,7 +28,7 @@ namespace bgl
 		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
 		pipelineDesc.AddRtvFormat(Format::RG16_FLOAT);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
 
@@ -110,6 +110,14 @@ namespace bgl
 			{
 				u = static_cast<float>(draw.skybox->mipLevel);
 			}
+			if (auto u = skybox["jitter"]; u.IsValid())
+			{
+				u = draw.jitter;
+			}
+			if (auto u = skybox["prevJitter"]; u.IsValid())
+			{
+				u = draw.prevJitter;
+			}
 		}
 		else
 		{
@@ -120,7 +128,7 @@ namespace bgl
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
 		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.backBufferHandle)
+		                           .AddColorAttachment(draw.sceneColorHandle)
 		                           .AddColorAttachment(draw.motionVectorHandle)
 		                           .SetDepthAttachment(draw.depthBufferHandle);
 

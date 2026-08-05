@@ -7,6 +7,7 @@
 #include "passes/DrawData.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/jitter.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
 
@@ -76,6 +77,12 @@ namespace bgl
 			return image;
 		}
 
+		std::string
+		GetHistoryName(uint32_t index)
+		{
+			return std::format("{}{}", c_HistoryName, index);
+		}
+
 		// Encodes a tight RGBA8 image as a PNG via stb_image_write -- cross-platform, replacing the
 		// old DirectXTex DDS / WIC PNG encoders.
 		void
@@ -129,6 +136,13 @@ namespace bgl
 		m_TransparentSort.Init(m_Device, m_ResourceManager);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
+		m_PostProcess.Init(m_Device);
+		m_TaaResolve.Init(m_Device);
+
+		m_PointClampSampler = m_ResourceManager->CreateSampler(
+			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
+		m_LinearClampSampler = m_ResourceManager->CreateSampler(
+			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
@@ -173,6 +187,16 @@ namespace bgl
 		}
 		m_Forward.Release();
 		m_Skybox.Release();
+		m_PostProcess.Release();
+		m_TaaResolve.Release();
+		if (!m_PointClampSampler.IsNull())
+		{
+			m_ResourceManager->DestroySampler(m_PointClampSampler, false);
+		}
+		if (!m_LinearClampSampler.IsNull())
+		{
+			m_ResourceManager->DestroySampler(m_LinearClampSampler, false);
+		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
 		m_TransparentSort.Release(false);
@@ -362,14 +386,23 @@ namespace bgl
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
-		// Resumes the state the graph tracked last frame; the target creates it in render-target.
+		// Resumes the state the graph tracked last frame; the target creates them in render-target.
 		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
+		m_FrameGraph.ImportTexture(std::string(c_SceneColorName), rt.GetSceneColorTexture());
 
-		// Zero motion is "this pixel did not move", which is what an untouched pixel should read as.
+		if (rt.IsTaaEnabled())
+		{
+			for (uint32_t i = 0; i < 2; ++i)
+			{
+				m_FrameGraph.ImportTexture(GetHistoryName(i), rt.GetHistoryTexture(i));
+			}
+		}
+
+		// The backbuffer is not cleared: the tonemap covers it whole, and it is the only pass that
+		// writes it. Zero motion is "this pixel did not move", which is what an untouched pixel
+		// should read as.
 		const std::array<ClearPass::ColorTarget, 2> colorTargets{
-			{ { std::string(c_BackbufferName),
-			    rt.GetBackbufferRtv(index),
-			    { 0.0f, 0.0f, 0.0f, 1.0f } },
+			{ { std::string(c_SceneColorName), rt.GetSceneColorRtv(), { 0.0f, 0.0f, 0.0f, 1.0f } },
 			  { std::string(c_MotionVectorsName),
 			    rt.GetMotionVectorRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
@@ -399,14 +432,31 @@ namespace bgl
 		auto       view     = job.view->As<SceneView>();
 		auto       scene    = view->GetScene()->As<Scene>();
 		const auto viewport = job.viewport;
-		const auto viewProj = job.camera.GetViewProjection();
+
+		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
+		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
+		// that moves every frame.
+		const glm::vec2 jitter = m_ActiveTarget->IsTaaEnabled() ?
+		                             HaltonJitter(
+										 m_FrameCounter,
+										 viewport.maxX - viewport.minX,
+										 viewport.maxY - viewport.minY) :
+		                             glm::vec2(0.0f);
+
+		// Left-multiplied, so it adds jitter * clip.w to clip.xy and lands as a constant NDC offset
+		// after the divide. Applying it to the projection's own terms would be perspective-specific.
+		const glm::mat4 projection =
+			glm::translate(glm::mat4(1.0f), glm::vec3(jitter, 0.0f)) * job.camera.GetProjection();
+
+		const auto viewProj = projection * job.camera.GetView();
 
 		glm::mat4 viewNoTranslation = job.camera.GetView();
 		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
 		auto camera                 = ViewMatrices();
 		camera.viewProj             = viewProj;
-		camera.rotationOnlyViewProj = job.camera.GetProjection() * viewNoTranslation;
+		camera.rotationOnlyViewProj = projection * viewNoTranslation;
+		camera.jitter               = jitter;
 
 		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
 
@@ -423,8 +473,10 @@ namespace bgl
 		draw.viewport           = viewport;
 		draw.viewProj           = viewProj;
 		draw.prevViewProj       = prevCamera.viewProj;
+		draw.jitter             = jitter;
+		draw.prevJitter         = prevCamera.jitter;
 		draw.cullView           = BuildCullView(viewProj);
-		draw.backBufferHandle   = m_ActiveTarget->GetBackbufferRtv(m_ActiveTarget->GetFrameIndex());
+		draw.sceneColorHandle   = m_ActiveTarget->GetSceneColorRtv();
 		draw.depthBufferHandle  = m_ActiveTarget->GetDepthDsv();
 		draw.motionVectorHandle = m_ActiveTarget->GetMotionVectorRtv();
 
@@ -436,7 +488,15 @@ namespace bgl
 		draw.env         = view->GetEnvironmentMap();
 		draw.env.brdfLut = m_BrdfLut.GetSrv();
 		draw.exposure    = view->GetExposure();
-		draw.skybox      = view->GetSkybox();
+
+		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
+		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
+		constexpr uint64_t c_AlphaHashPeriod = 1024;
+
+		draw.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
+		                         static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
+		                         0.0f;
+		draw.skybox        = view->GetSkybox();
 
 		if (draw.skybox.has_value())
 		{
@@ -479,6 +539,42 @@ namespace bgl
 		const uint32_t    index = rt.GetFrameIndex();
 
 		m_FrameGraph.SetResourceNamespace("");
+
+		const auto viewport =
+			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
+
+		auto postProcessArgs       = PostProcessPass::Args();
+		postProcessArgs.source     = rt.GetSceneColorSrv();
+		postProcessArgs.sourceName = std::string(c_SceneColorName);
+		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
+		postProcessArgs.sampler    = m_PointClampSampler;
+		postProcessArgs.viewport   = viewport;
+
+		if (rt.IsTaaEnabled())
+		{
+			const uint32_t current = rt.GetCurrentHistoryIndex();
+			const uint32_t prev    = current ^ 1u;
+
+			auto taaArgs            = TaaResolvePass::Args();
+			taaArgs.sceneColor      = rt.GetSceneColorSrv();
+			taaArgs.motionVectors   = rt.GetMotionVectorSrv();
+			taaArgs.prevHistory     = rt.GetHistorySrv(prev);
+			taaArgs.history         = rt.GetHistoryRtv(current);
+			taaArgs.prevHistoryName = GetHistoryName(prev);
+			taaArgs.historyName     = GetHistoryName(current);
+			taaArgs.pointSampler    = m_PointClampSampler;
+			taaArgs.linearSampler   = m_LinearClampSampler;
+			taaArgs.viewport        = viewport;
+			taaArgs.historyValid    = rt.IsHistoryValid();
+			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
+
+			// The display curve is applied to what the resolve produced, not to the raw frame.
+			postProcessArgs.source     = rt.GetHistorySrv(current);
+			postProcessArgs.sourceName = GetHistoryName(current);
+		}
+
+		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
+
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 
 		m_FrameGraph.Compile(m_ResourceManager.Get());
@@ -520,6 +616,11 @@ namespace bgl
 		// The readback copy rode the list just submitted, so this is what gates it.
 		m_DebugReadbackFence[index] = frameFence;
 #endif
+
+		if (rt.IsTaaEnabled())
+		{
+			rt.AdvanceHistory();
+		}
 
 		rt.PresentAndAdvance();
 
