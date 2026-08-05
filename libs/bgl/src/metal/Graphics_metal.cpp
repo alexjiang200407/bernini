@@ -10,6 +10,7 @@
 
 #include <core/file/file.h>
 #include <core/log/log.h>
+#include <core/platform/util.h>
 #include <core/ref/RefCounter.h>
 
 namespace fs = std::filesystem;
@@ -118,8 +119,8 @@ namespace bgl
 			// cannot say whether it is running. Either variable instruments shaders enough that a
 			// binary archive written without them no longer describes what the driver will run.
 			const bool gpuValidation = opts.enableGPUValidationLayer ||
-			                           std::getenv("MTL_SHADER_VALIDATION") != nullptr ||
-			                           std::getenv("METAL_DEVICE_WRAPPER_TYPE") != nullptr;
+			                           core::env_var("MTL_SHADER_VALIDATION").has_value() ||
+			                           core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
 
 			core::SharedRef<Device> device =
 				core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir, !gpuValidation);

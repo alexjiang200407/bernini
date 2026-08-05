@@ -2,31 +2,28 @@
 
 namespace core
 {
-	namespace
+	// _dupenv_s is MSVC's replacement for the deprecated getenv, and hands back an allocation the
+	// caller frees.
+	std::optional<std::string>
+	env_var(const char* name)
 	{
-		// getenv is deprecated on MSVC, where a warning is an error; _dupenv_s is its replacement and
-		// hands back an allocation the caller frees.
-		std::optional<std::string>
-		env_var(const char* name)
-		{
 #if defined(_WIN32)
-			char*         value = nullptr;
-			size_t        size  = 0;
-			const errno_t err   = _dupenv_s(&value, &size, name);
-			if (err != 0 || value == nullptr)
-				return std::nullopt;
+		char*         value = nullptr;
+		size_t        size  = 0;
+		const errno_t err   = _dupenv_s(&value, &size, name);
+		if (err != 0 || value == nullptr)
+			return std::nullopt;
 
-			auto out = std::string(value);
-			std::free(value);
-			return out;
+		auto out = std::string(value);
+		std::free(value);
+		return out;
 #else
-			const char* value = std::getenv(name);
-			if (value == nullptr)
-				return std::nullopt;
+		const char* value = std::getenv(name);
+		if (value == nullptr)
+			return std::nullopt;
 
-			return std::string(value);
+		return std::string(value);
 #endif
-		}
 	}
 
 	std::filesystem::path

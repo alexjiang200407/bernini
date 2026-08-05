@@ -1,5 +1,7 @@
 #include "util/GpuValidation.h"
 
+#include <core/platform/util.h>
+
 namespace bgl::test
 {
 	namespace
@@ -24,7 +26,7 @@ namespace bgl::test
 	bool
 	GpuValidationActive() noexcept
 	{
-		return g_GpuValidation || std::getenv("MTL_SHADER_VALIDATION") != nullptr ||
-		       std::getenv("METAL_DEVICE_WRAPPER_TYPE") != nullptr;
+		return g_GpuValidation || core::env_var("MTL_SHADER_VALIDATION").has_value() ||
+		       core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
 	}
 }
