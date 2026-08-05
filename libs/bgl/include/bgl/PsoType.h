@@ -13,10 +13,12 @@ namespace bgl
 		kAlphaTest_StaticMesh_LoosePbr = 4,
 		kTransparent_StaticMesh_PBR = 5,
 		kTransparent_StaticMesh_LoosePbr = 6,
-		kHashedAlpha_StaticMesh_PBR = 7,
-		kHashedAlpha_StaticMesh_LoosePbr = 8,
-		kAssert_StaticMesh = 9,
-		kCount = 10,
+		kTransparentOcclude_StaticMesh_PBR = 7,
+		kTransparentOcclude_StaticMesh_LoosePbr = 8,
+		kHashedAlpha_StaticMesh_PBR = 9,
+		kHashedAlpha_StaticMesh_LoosePbr = 10,
+		kAssert_StaticMesh = 11,
+		kCount = 12,
 	};
 
 	static_assert(sizeof(PsoType) == 4);

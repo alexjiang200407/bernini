@@ -275,6 +275,7 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kBlend;
 	material.pbr.alphaCutoff      = 0.25f;
+	material.pbr.occlude          = true;
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
@@ -283,28 +284,43 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BMaterial loaded = loadMaterial(path);
 	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
+	CHECK(loaded.pbr.occlude);
 }
 
-// Retiring `occlude` took its byte out of the stream rather than reserving it, so a material baked
-// before that reads as a different layout from the same major version -- which is exactly what the
-// major is for. The reader must reject it and say so, because the alternative is parsing the fields
-// after it as garbage.
-TEST_CASE("a material from before the format break is rejected, not misread", "[bmaterial]")
+// The era that retired occlude wrote major 8: the same stream as 9 without the trailing occlude
+// byte. Every material a project saved in that era is stamped 8, so the reader must take it as
+// occlude-less rather than demanding a re-bake -- built here by restamping a 9.0 file and cutting
+// the byte, which is exactly the difference between the two eras.
+TEST_CASE("A major-8 .bmaterial from the occlude-less era still loads", "[bmaterial][alphatest]")
 {
+	const BakeDir dir("bernini_bake_v8_io");
+
 	BMaterial material;
-	material.pbr.alphaMode        = AlphaMode::kBlend;
-	material.pbr.alphaCutoff      = 0.75f;
+	material.pbr.alphaMode        = AlphaMode::kHashed;
+	material.pbr.alphaCutoff      = 0.25f;
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
-	std::vector<std::byte> bytes = serializeMaterial(material);
+	const auto path = dir.path / "era8.bmaterial";
+	REQUIRE_NOTHROW(saveMaterial(material, path));
 
-	// The major sits right after the magic. Stamping the previous one is what a file baked before
-	// the break looks like.
-	REQUIRE(bytes.size() > 6);
-	bytes[4] = std::byte{ 7 };
-	bytes[5] = std::byte{ 0 };
+	auto bytes = [&] {
+		std::ifstream in(path, std::ios::binary);
+		return std::vector<char>(std::istreambuf_iterator<char>(in), {});
+	}();
 
-	CHECK_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
+	// magic u32, then major u16 at offset 4 and minor u16 at 6; the occlude byte is the last thing
+	// writePbr emits, and pbr is the last section, so it is the file's final byte.
+	bytes[4] = 8;
+	bytes[5] = 0;
+	bytes[6] = 0;
+	bytes[7] = 0;
+	bytes.pop_back();
+	std::ofstream(path, std::ios::binary | std::ios::trunc).write(bytes.data(), bytes.size());
+
+	const BMaterial loaded = loadMaterial(path);
+	CHECK(loaded.pbr.alphaMode == AlphaMode::kHashed);
+	CHECK(loaded.pbr.alphaCutoff == 0.25f);
+	CHECK_FALSE(loaded.pbr.occlude);
 }
 
 // kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new

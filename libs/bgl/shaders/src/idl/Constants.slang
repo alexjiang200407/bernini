@@ -35,3 +35,9 @@ public static const uint cTransparentSortGroupSize = 512; // one thread per comp
 // Fills the sort's tail so padding never displaces a real entry. Reserved: TransparentDepthKeys
 // caps real keys below it, or padding could sort into the drawn prefix.
 public static const uint cSortPadKey = 0xFFFFFFFF;
+
+// The sorted list is partitioned by occlude class: [self-occluding][plain]. Each partition is one
+// indirect dispatch, so the draw needs no discovered run list.
+public static const uint cTransparentPartitionCount = 2;
+public static const uint cOccludePartition = 0;
+public static const uint cPlainPartition = 1;

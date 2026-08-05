@@ -894,7 +894,7 @@ namespace bgl
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
 		const core::slot_handle slot = m_Pbr.Add(BuildPbrMaterial(desc));
-		return MaterialHandle{ MaterialType::kPBR, desc.layerType, slot };
+		return MaterialHandle{ MaterialType::kPBR, desc.layerType, desc.occlude, slot };
 	}
 
 	void
@@ -991,7 +991,7 @@ namespace bgl
 	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
 	{
 		const core::slot_handle slot = m_Loose.Add(BuildLoosePbrMaterial(desc));
-		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, slot };
+		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, desc.occlude, slot };
 	}
 
 	void

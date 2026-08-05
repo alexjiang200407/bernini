@@ -691,6 +691,7 @@ namespace game
 		desc.roughnessFactor = pbr.roughnessFactor;
 		desc.layerType       = ToLayerType(pbr.alphaMode);
 		desc.alphaCutoff     = pbr.alphaCutoff;
+		desc.occlude         = pbr.occlude;
 
 		desc.baseColorTexture = record.textures[0];
 		desc.normalTexture    = record.textures[1];
@@ -710,6 +711,7 @@ namespace game
 		desc.roughnessFactor = pbr.roughnessFactor;
 		desc.layerType       = ToLayerType(pbr.alphaMode);
 		desc.alphaCutoff     = pbr.alphaCutoff;
+		desc.occlude         = pbr.occlude;
 
 		const auto route = [&](size_t index) {
 			auto out    = bgl::ChannelRouteDesc();

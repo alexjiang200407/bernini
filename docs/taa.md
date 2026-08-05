@@ -150,11 +150,13 @@ depth-writing transparency — layers occlude each other correctly with no sorti
 blend nor a cutoff gives. What it costs is that every texel of partial alpha is a coin flipped per
 frame, so content authored as wide soft gradients — hair painted for alpha blending is the common
 case — becomes a large stochastic region that this resolve must hold steady, and camera motion is
-where that shows. A card-hair asset usually reads better as the alpha *test* under TAA: the
+where that shows. A card-hair asset usually reads better as the alpha *test* under TAA — the
 silhouette is deterministic, the jitter still antialiases its edges, and the bake's
-coverage-preserving mips are keyed to the authored cutoff, so strands hold at distance. Reach for
-hashed when the content genuinely self-occludes in depth and needs soft coverage — dense foliage,
-layered interior hair — not because a texture has an alpha channel.
+coverage-preserving mips are keyed to the authored cutoff, so strands hold at distance — or as
+blend with `occlude` ([passes.md](docs/passes.md)), which is the same deterministic front layer
+with soft blended edges over it. Reach for hashed when the content genuinely self-occludes in
+depth and needs soft coverage — dense foliage, layered interior hair — not because a texture has
+an alpha channel.
 
 Two couplings worth knowing:
 

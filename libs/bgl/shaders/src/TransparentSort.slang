@@ -11,19 +11,27 @@ struct Uniforms
     // The sorted instance indices alone, which is what the amplification shader indexes.
     ComputeBuffer<uint> sortedInstances;
 
-    // The whole sorted list is one dispatch.
-    ComputeBuffer<DispatchArgs> dispatchArgs;
+    // Where each partition starts in sortedInstances, and its dispatch args. Both are indexed by
+    // cOccludePartition / cPlainPartition.
+    ComputeBuffer<uint> partitionBase;
+    ComputeBuffer<DispatchArgs> partitionDispatchArgs;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
 
 groupshared uint2 gItems[cTransparentSortCapacity];
+groupshared Atomic<uint> gOccludeCount;
 
 [shader("compute")]
 [numthreads(cTransparentSortGroupSize, 1, 1)]
 void main(uint tid: SV_GroupThreadID)
 {
     const uint n = min(gUniforms.count[0], cTransparentSortCapacity);
+
+    if (tid == 0u)
+    {
+        gOccludeCount.store(0u);
+    }
 
     // Pad to the full power of two with the reserved key so the padding sorts to the tail and never
     // displaces a real entry.
@@ -61,19 +69,35 @@ void main(uint tid: SV_GroupThreadID)
         }
     }
 
+    // The depth-key pass puts the self-occluding instances in the low half of the key space, so the
+    // sorted list is already split -- counting the low half is all the partitioning that is left.
     for (uint i = tid; i < n; i += cTransparentSortGroupSize)
     {
         gUniforms.entries[i] = gItems[i];
         gUniforms.sortedInstances[i] = gItems[i].y;
+
+        if (gItems[i].x < 0x80000000u)
+        {
+            gOccludeCount.add(1u);
+        }
     }
     GroupMemoryBarrierWithGroupSync();
 
     if (tid == 0u)
     {
-        // Field-wise, not an aggregate: threadCountX is an Atomic<uint>, so it is written through
-        // .store rather than positional initialization.
-        gUniforms.dispatchArgs[0].threadCountX.store(n);
-        gUniforms.dispatchArgs[0].threadCountY = 1u;
-        gUniforms.dispatchArgs[0].threadCountZ = 1u;
+        const uint occludeCount = gOccludeCount.load();
+
+        gUniforms.partitionBase[cOccludePartition] = 0u;
+        gUniforms.partitionBase[cPlainPartition] = occludeCount;
+
+        // Field-wise, not an aggregate: threadCountX is an Atomic<uint> now, so it is written
+        // through .store rather than positional initialization.
+        gUniforms.partitionDispatchArgs[cOccludePartition].threadCountX.store(occludeCount);
+        gUniforms.partitionDispatchArgs[cOccludePartition].threadCountY = 1u;
+        gUniforms.partitionDispatchArgs[cOccludePartition].threadCountZ = 1u;
+
+        gUniforms.partitionDispatchArgs[cPlainPartition].threadCountX.store(n - occludeCount);
+        gUniforms.partitionDispatchArgs[cPlainPartition].threadCountY = 1u;
+        gUniforms.partitionDispatchArgs[cPlainPartition].threadCountZ = 1u;
     }
 }

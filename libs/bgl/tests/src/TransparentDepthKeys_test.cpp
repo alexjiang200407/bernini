@@ -72,7 +72,7 @@ TEST_CASE(
 	const std::array<Placement, 7> placements = { {
 		{ 10.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
 		{ 5.0f, bgl::PsoType::kOpaque_StaticMesh_PBR },
-		{ 30.0f, bgl::PsoType::kTransparent_StaticMesh_LoosePbr },
+		{ 30.0f, bgl::PsoType::kTransparentOcclude_StaticMesh_LoosePbr },
 		{ 20.0f, bgl::PsoType::kTransparent_StaticMesh_LoosePbr },
 		{ 7.0f, bgl::PsoType::kAlphaTest_StaticMesh_PBR },
 		{ 50.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
@@ -104,6 +104,7 @@ TEST_CASE(
 	// which slot the GPU's atomic append handed each instance.
 	std::unordered_map<uint32_t, float> zOfInstance;
 	std::unordered_set<uint32_t>        transparentInstances;
+	std::unordered_set<uint32_t>        occludeInstances;
 
 	for (const Placement& placement : placements)
 	{
@@ -124,6 +125,10 @@ TEST_CASE(
 		if (bgl::IsTransparentPso(static_cast<uint32_t>(placement.pso)))
 		{
 			transparentInstances.insert(denseIndex);
+		}
+		if (bgl::IsOccludeTransparentPso(static_cast<uint32_t>(placement.pso)))
+		{
+			occludeInstances.insert(denseIndex);
 		}
 		(void)instanceHandle;
 	}
@@ -266,14 +271,23 @@ TEST_CASE(
 	}
 	REQUIRE(keyOfInstance.size() == transparentInstances.size());
 
-	// The whole contract now: farther away sorts first, so its key is smaller. One ascending sort
-	// then leaves the list back-to-front, which is the order blending needs and the order the single
-	// indirect dispatch draws it in.
+	// Every self-occluding instance must key below every plain one, so one ascending sort leaves the
+	// list already split into [occluders][the rest] -- the split the three fixed dispatches rely on.
 	for (const auto& [lhs, lhsKey] : keyOfInstance)
 	{
 		for (const auto& [rhs, rhsKey] : keyOfInstance)
 		{
-			if (zOfInstance.at(lhs) > zOfInstance.at(rhs))
+			const bool lhsOccludes = occludeInstances.contains(lhs);
+			const bool rhsOccludes = occludeInstances.contains(rhs);
+
+			if (lhsOccludes && !rhsOccludes)
+			{
+				INFO("occluder " << lhs << " vs plain " << rhs);
+				CHECK(lhsKey < rhsKey);
+			}
+
+			// Within a partition the contract is unchanged: farther away sorts first, so keys smaller.
+			if (lhsOccludes == rhsOccludes && zOfInstance.at(lhs) > zOfInstance.at(rhs))
 			{
 				INFO("z " << zOfInstance.at(lhs) << " vs " << zOfInstance.at(rhs));
 				CHECK(lhsKey < rhsKey);

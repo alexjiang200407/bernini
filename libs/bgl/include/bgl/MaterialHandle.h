@@ -13,6 +13,10 @@ namespace bgl
 		// submesh cannot know which bucket it belongs in from the material's storage alone.
 		LayerType layerType = LayerType::kOpaque;
 
+		// Blend only: draw a depth-only pre-pass so the surface self-occludes (hair, foliage) instead
+		// of blending every layer through. Selects the kTransparentOcclude PSO bucket.
+		bool occlude = false;
+
 		core::slot_handle handle;
 
 		[[nodiscard]]

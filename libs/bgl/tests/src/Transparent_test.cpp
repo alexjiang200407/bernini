@@ -13,13 +13,15 @@ namespace
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	// A translucent plane at world-space depth z, facing the camera.
+	// A translucent plane at world-space depth z, facing the camera. `occlude` selects the
+	// depth-pre-pass self-occlusion path.
 	void
 	AddPane(
 		const bgl::SceneRef&     scene,
 		const bgl::SceneViewRef& view,
 		const glm::vec4&         baseColor,
-		float                    z)
+		float                    z,
+		bool                     occlude = false)
 	{
 		auto desc = bgl::PbrMaterialDesc();
 		desc.baseColorFactor =
@@ -27,6 +29,7 @@ namespace
 		desc.metallicFactor  = 0.0f;
 		desc.roughnessFactor = 0.9f;
 		desc.layerType       = bgl::LayerType::kBlend;
+		desc.occlude         = occlude;
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
@@ -42,13 +45,15 @@ namespace
 		const bgl::SceneRef&     scene,
 		const bgl::SceneViewRef& view,
 		const glm::vec4&         baseColor,
-		float                    z)
+		float                    z,
+		bool                     occlude = false)
 	{
 		auto desc            = bgl::LoosePbrMaterialDesc();
 		desc.baseColorFactor = baseColor;
 		desc.metallicFactor  = 0.0f;
 		desc.roughnessFactor = 0.9f;
 		desc.layerType       = bgl::LayerType::kBlend;
+		desc.occlude         = occlude;
 
 		auto material = scene->CreateLoosePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
@@ -149,7 +154,83 @@ TEST_CASE(
 	CHECK(bgl::test::MatchesGolden(gotFar, gotNear));
 }
 
-// The transparent colour shader is shared by both material types and branches on a
+// The depth pre-pass makes a self-occluding blend material hide its own back layers: the near red
+// pane's depth is stamped first, so the far blue pane is rejected in the overlap instead of bleeding
+// through. Without occlude the blue shows through; with it, the overlap is red over the background.
+TEST_CASE("A self-occluding blend material hides the layers behind it", "[transparent][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 512;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 800000;
+	sceneDesc.initialIndices              = 20000;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+
+	const glm::vec4 red{ 1.0f, 0.03f, 0.03f, 0.5f };
+	const glm::vec4 blue{ 0.03f, 0.03f, 1.0f, 0.5f };
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 0.0f, 19.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	const auto overlapBlue = [&](bool occlude, const std::string& path) {
+		auto view = gfx->CreateSceneView(scene, 8);
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		AddPane(scene, view, blue, 0.0f, occlude);  // far
+		AddPane(scene, view, red, 5.0f, occlude);   // near
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+
+		return bgl::test::MeanColor(path, 200, 300, 200, 200).b;
+	};
+
+	const float bPlain   = overlapBlue(false, "assets/golden/transparent_occlude_off.got.png");
+	const float bOcclude = overlapBlue(true, "assets/golden/transparent_occlude_on.got.png");
+
+	INFO("far-blue in overlap: plain=" << bPlain << " occlude=" << bOcclude);
+
+	// Without occlude the far blue clearly bleeds into the overlap (a lit red pane alone carries far
+	// less blue -- the rest is the environment reflecting off it).
+	CHECK(bPlain > 0.35f);
+
+	// The pre-pass stamps the near red pane's depth, so the far blue is depth-rejected: its
+	// contribution to the overlap drops sharply.
+	CHECK(bOcclude < bPlain * 0.65f);
+}
+
+// The transparent colour and pre-pass shaders are shared by both material types and branch on a
 // per-instance discriminator. Every other transparent case here uses a baked PBR material, so the
 // loose branch -- the one the Material Editor's preview actually takes -- would otherwise be
 // exercised by nothing. Authoring the same material both ways must produce the same pixels; if the
@@ -197,20 +278,20 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 	// A scene per render, so only one of the two material buffers is ever populated. Sharing one
 	// would let a read of the *wrong* buffer land on an identically-authored material and match
 	// anyway -- the test would then pass even with the type discriminator broken.
-	const auto render = [&](bool loose, const std::string& path) {
+	const auto render = [&](bool loose, bool occlude, const std::string& path) {
 		auto scene = gfx->CreateScene(sceneDesc);
 		auto view  = gfx->CreateSceneView(scene, 8);
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 		if (loose)
 		{
-			AddLoosePane(scene, view, blue, 0.0f);
-			AddLoosePane(scene, view, red, 5.0f);
+			AddLoosePane(scene, view, blue, 0.0f, occlude);
+			AddLoosePane(scene, view, red, 5.0f, occlude);
 		}
 		else
 		{
-			AddPane(scene, view, blue, 0.0f);
-			AddPane(scene, view, red, 5.0f);
+			AddPane(scene, view, blue, 0.0f, occlude);
+			AddPane(scene, view, red, 5.0f, occlude);
 		}
 
 		auto job     = bgl::RenderJob();
@@ -222,11 +303,26 @@ TEST_CASE("A loose blend material renders the same as the baked one", "[transpar
 		gfx->ScreenshotPng(target, path);
 	};
 
-	render(false, "assets/golden/transparent_uber_baked.got.png");
-	render(true, "assets/golden/transparent_uber_loose.got.png");
+	SECTION("plain blend")
+	{
+		render(false, false, "assets/golden/transparent_uber_baked.got.png");
+		render(true, false, "assets/golden/transparent_uber_loose.got.png");
 
-	CHECK(
-		bgl::test::MatchesGolden(
-			"assets/golden/transparent_uber_baked.got.png",
-			"assets/golden/transparent_uber_loose.got.png"));
+		CHECK(
+			bgl::test::MatchesGolden(
+				"assets/golden/transparent_uber_baked.got.png",
+				"assets/golden/transparent_uber_loose.got.png"));
+	}
+
+	// Covers the pre-pass shader too, which carries the same branch.
+	SECTION("self-occluding blend")
+	{
+		render(false, true, "assets/golden/transparent_uber_baked_occlude.got.png");
+		render(true, true, "assets/golden/transparent_uber_loose_occlude.got.png");
+
+		CHECK(
+			bgl::test::MatchesGolden(
+				"assets/golden/transparent_uber_baked_occlude.got.png",
+				"assets/golden/transparent_uber_loose_occlude.got.png"));
+	}
 }

@@ -17,7 +17,8 @@ namespace bgl
 		// cannot append past the end however many instances turn out to be transparent.
 		constexpr auto c_EntriesBuffer      = "scene.transparentSortEntries";
 		constexpr auto c_CountBuffer        = "scene.transparentSortCount";
-		constexpr auto c_DispatchArgs       = "transparentSort.dispatchArgs";
+		constexpr auto c_PartitionBase      = "transparentSort.partitionBase";
+		constexpr auto c_PartitionArgs      = "transparentSort.partitionDispatchArgs";
 		constexpr auto c_SortedTransparent  = "scene.sortedTransparentInstances";
 		constexpr auto c_InstanceBuffer     = "scene.instanceBuffer";
 		constexpr auto c_MeshBuffer         = "scene.meshInstanceBuffer";
@@ -41,10 +42,20 @@ namespace bgl
 
 		{
 			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::DispatchArgs>().SetInitialCount(1).SetDebugName(
-				"Transparent Dispatch Args");
+			desc.SetElement<uint32_t>()
+				.SetInitialCount(idl::cTransparentPartitionCount)
+				.SetDebugName("Transparent Partition Base");
 
-			m_DispatchArgs.Init(desc, resourceManager);
+			m_PartitionBase.Init(desc, resourceManager);
+		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<idl::DispatchArgs>()
+				.SetInitialCount(idl::cTransparentPartitionCount)
+				.SetDebugName("Transparent Partition Dispatch Args");
+
+			m_PartitionDispatchArgs.Init(desc, resourceManager);
 		}
 	}
 
@@ -56,13 +67,15 @@ namespace bgl
 		m_DepthKeys.Reset();
 		m_Sort.Reset();
 
-		m_DispatchArgs.Release(deferred);
+		m_PartitionDispatchArgs.Release(deferred);
+		m_PartitionBase.Release(deferred);
 	}
 
 	void
 	TransparentSortPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
-		fg.ImportGlobalBuffer(c_DispatchArgs, m_DispatchArgs.GetBufferHandle())
+		fg.ImportGlobalBuffer(c_PartitionBase, m_PartitionBase.GetBufferHandle())
+			.ImportGlobalBuffer(c_PartitionArgs, m_PartitionDispatchArgs.GetBufferHandle())
 			.AddPass(
 				PassDesc()
 					.SetName(std::format("Transparent Sort Clear {}", draw.drawIdx))
@@ -71,7 +84,7 @@ namespace bgl
 						BarrierSyncFlag::kCopy,
 						BarrierAccessFlag::kCopyDest)
 					.AddBufferArg(
-						c_DispatchArgs,
+						c_PartitionArgs,
 						BarrierSyncFlag::kCopy,
 						BarrierAccessFlag::kCopyDest)
 					.SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
@@ -115,7 +128,11 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
-						c_DispatchArgs,
+						c_PartitionBase,
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferArg(
+						c_PartitionArgs,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteSort(ctx, draw); }));
@@ -129,11 +146,19 @@ namespace bgl
 		static constexpr uint32_t c_Zero = 0;
 		cmd->WriteBuffer(ctx.GetBuffer(c_CountBuffer), &c_Zero, sizeof(c_Zero));
 
-		// Seeded rather than zeroed: a frame with no transparent instances still has the forward pass
-		// issue its indirect dispatch, and a zeroed y/z would be an invalid dispatch.
-		static constexpr idl::DispatchArgs c_Seed = { 0u, 1u, 1u };
+		// Seeded rather than zeroed: a frame with no transparent instances still has the forward
+		// pass issue its three indirect dispatches, and a zeroed y/z would be an invalid dispatch.
+		static constexpr std::array<idl::DispatchArgs, idl::cTransparentPartitionCount> c_Seed =
+			[] {
+				std::array<idl::DispatchArgs, idl::cTransparentPartitionCount> seed{};
+				for (idl::DispatchArgs& args : seed)
+				{
+					args = { 0u, 1u, 1u };
+				}
+				return seed;
+			}();
 
-		cmd->WriteBuffer(m_DispatchArgs.GetBufferHandle(), &c_Seed, sizeof(c_Seed));
+		cmd->WriteBuffer(m_PartitionDispatchArgs.GetBufferHandle(), c_Seed.data(), sizeof(c_Seed));
 	}
 
 	void
@@ -171,10 +196,11 @@ namespace bgl
 			return;
 		}
 
-		m_Sort["gUniforms"]["entries"]         = ctx.GetBuffer(c_EntriesBuffer);
-		m_Sort["gUniforms"]["count"]           = ctx.GetBuffer(c_CountBuffer);
-		m_Sort["gUniforms"]["sortedInstances"] = ctx.GetBuffer(c_SortedTransparent);
-		m_Sort["gUniforms"]["dispatchArgs"]    = ctx.GetBuffer(c_DispatchArgs);
+		m_Sort["gUniforms"]["entries"]               = ctx.GetBuffer(c_EntriesBuffer);
+		m_Sort["gUniforms"]["count"]                 = ctx.GetBuffer(c_CountBuffer);
+		m_Sort["gUniforms"]["sortedInstances"]       = ctx.GetBuffer(c_SortedTransparent);
+		m_Sort["gUniforms"]["partitionBase"]         = ctx.GetBuffer(c_PartitionBase);
+		m_Sort["gUniforms"]["partitionDispatchArgs"] = ctx.GetBuffer(c_PartitionArgs);
 
 		auto cmdList = ctx.GetCommandList();
 

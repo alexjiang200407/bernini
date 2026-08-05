@@ -226,17 +226,20 @@ Depth-sorts the transparent instances on the GPU, in three sub-passes. Runs **af
 Instances` and depends on it: the depth-key pass reads the per-instance visibility word the cull
 sub-pass writes, so a frustum-culled transparent instance takes no slot in the sorted list.
 
-1. **Clear** — zeroes the entry counter and seeds `dispatchArgs` to `{0, 1, 1}`. Seeded rather than
-   zeroed because a frame with no transparent instances still has the forward pass issue its
-   indirect dispatch, and a zeroed `y`/`z` is an invalid grid.
+1. **Clear** — zeroes the entry counter and seeds both `partitionDispatchArgs` entries to
+   `{0, 1, 1}`. Seeded rather than zeroed because a frame with no transparent instances still has the
+   forward pass issue its indirect dispatches, and a zeroed `y`/`z` is an invalid grid.
 2. **Depth Keys** (`TransparentDepthKeys`, one thread per instance) — compacts the transparent
    instances into `(key, instanceIndex)` pairs via an `InterlockedAdd` on the counter. The key is
-   `~asuint(distanceSquared)`, so one ascending sort emits **farthest-first**. Squared distance is
+   `~asuint(distanceSquared)` shifted right one bit, with the top bit clear for `occlude` materials
+   and set for the rest — so one ascending sort emits **farthest-first within each occlude class**,
+   and leaves the list already split into `[self-occluding][plain]`. Squared distance is
    non-negative, so its bit pattern already orders like the float; the inversion is what makes
    ascending mean farthest-first.
 3. **Sort** (`TransparentSort`, one workgroup) — a bitonic sort in groupshared memory, padded to
    `cTransparentSortCapacity` with `0xFFFFFFFF` keys so the padding sorts to the tail. Writes the
-   sorted instance indices to `sortedTransparentInstances` and emits `dispatchArgs`.
+   sorted instance indices to `sortedTransparentInstances`, counts the low-half keys, and emits
+   `partitionBase` (`{0, occludeCount}`) and `partitionDispatchArgs` (a grid per partition).
 
 **One workgroup caps the list at `cTransparentSortCapacity` (1024) instances.** That is what buys a
 single dispatch with no ping-pong buffers and no cross-group scan; a multi-group radix sort is the
@@ -250,7 +253,8 @@ many instances turn out to be transparent; only the sort itself is bounded.
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
   position.
 * **Out:** `scene.transparentSortEntries`/`Count` (its own scratch, owned by the view),
-  `scene.sortedTransparentInstances`, `transparentSort.dispatchArgs` (both consumed by `Forward`).
+  `scene.sortedTransparentInstances`, `transparentSort.partitionBase` and
+  `transparentSort.partitionDispatchArgs` (all consumed by `Forward`).
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
@@ -274,20 +278,23 @@ colour/velocity/depth framebuffer), and calls
 
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
-`sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Both transparent
-PSOs share one pipeline and the list is drawn whole, so the transparent phase is **one
-`DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees.
+`sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Because that list
+is partitioned `[self-occluding][plain]` and both occlude PSOs share one pipeline, the whole
+transparent phase is **three fixed `DispatchMeshIndirect` calls** — occluder pre-pass, occluder
+colour, plain colour — whose grids and base offsets are GPU values the CPU never sees.
 
-A surface that has to hide its own back layers uses `kHashed` ([Hashed alpha](#hashed-alpha)) rather
-than blending: stochastic coverage writes real depth, so it self-occludes in the opaque phase with no
-pre-pass. That replaced an `occlude` flag which drew a blend material twice — a depth-only pre-pass,
-then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
+The self-occluding partition (`occlude` materials, the `kTransparentOcclude_*` buckets) is drawn
+**twice**: first a depth-only pre-pass — a **0-RTV pipeline** bound to a depth-only framebuffer,
+alpha-discarding below the material's cutoff and writing depth — then its colour draw with
+`depthFunc == Equal`, so only the front layer blends. The pre-pass must share this pass's depth
+attachment and sit between the colour draws, which is why it is a sub-draw here rather than a pass of
+its own.
 
-The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` indexed by `psoIndex`.
-`baseTable` picks between the two.
+Both partitions read their base from `transparentSort.partitionBase`, indexed by `partitionIndex`;
+the opaque path reads `psoPrefixSum` indexed by `psoIndex`. `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
-  `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
+  `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
   buffers, the two `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
   `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
@@ -355,8 +362,8 @@ in `EndFrame`, after all draws.
   nondeterministic flicker. This is the bug precedent the [Frame Graph](docs/framegraph.md) barrier
   caveat is written from.
 * **A bound framebuffer's colour-attachment count must match the PSO's `rtvFormats` count.** The
-  forward pass runs two shapes against one depth buffer — opaque (colour + velocity) and
-  transparent (colour) — and each builds its own
+  forward pass now runs three shapes against one depth buffer — opaque (colour + velocity),
+  transparent (colour), and the transparent pre-pass (neither) — and each builds its own
   `MeshletState`. Handing the opaque framebuffer to a blend PSO binds a render target it does not
   declare; the reverse leaves a declared target unbound. `PsoConfig::blend` is what decides whether
   `BuildForwardKernel` adds the velocity format, so the two sides move together.

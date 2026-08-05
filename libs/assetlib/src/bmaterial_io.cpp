@@ -18,8 +18,14 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = magic::c_BMaterial;
 
-		constexpr uint16_t c_VersionMajor = 8;
-		constexpr uint16_t c_VersionMinor = 0;
+		// Three eras share this stream. 7 grew the trailing occlude byte at minor 1; 8 is the era
+		// that retired occlude -- the same stream without that byte; 9 restored it. The reader
+		// takes all three, because projects saved between the retirement and the restore are
+		// stamped 8 and differ from 9 by exactly the byte.
+		constexpr uint16_t c_VersionMajor     = 9;
+		constexpr uint16_t c_VersionMinor     = 0;
+		constexpr uint16_t c_OccludelessMajor = 8;
+		constexpr uint16_t c_OccludeAtMinor1  = 7;
 
 		void
 		writePbr(ByteWriter& writer, const PbrParams& pbr)
@@ -42,10 +48,11 @@ namespace assetlib
 			}
 			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
 			writer.WritePod(pbr.alphaCutoff);
+			writer.WritePod<uint8_t>(pbr.occlude ? 1u : 0u);  // absent from the major-8 era
 		}
 
 		PbrParams
-		readPbr(ByteReader& reader)
+		readPbr(ByteReader& reader, bool hasOccludeByte)
 		{
 			PbrParams pbr;
 			pbr.baseColorFactor  = reader.ReadPod<glm::vec4>();
@@ -66,6 +73,10 @@ namespace assetlib
 			}
 			pbr.alphaMode   = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
 			pbr.alphaCutoff = reader.ReadPod<float>();
+			if (hasOccludeByte)
+			{
+				pbr.occlude = reader.ReadPod<uint8_t>() != 0u;
+			}
 			return pbr;
 		}
 
@@ -107,9 +118,13 @@ namespace assetlib
 			throw std::runtime_error("bmaterial: bad magic");
 
 		const auto versionMajor = reader.ReadPod<uint16_t>();
-		static_cast<void>(reader.ReadPod<uint16_t>());  // minor; additive within a major
+		const auto versionMinor = reader.ReadPod<uint16_t>();  // additive within a major
 
-		if (versionMajor != c_VersionMajor)
+		const bool hasOccludeByte = versionMajor == c_VersionMajor ||
+		                            (versionMajor == c_OccludeAtMinor1 && versionMinor >= 1);
+
+		if (versionMajor != c_VersionMajor && versionMajor != c_OccludelessMajor &&
+		    versionMajor != c_OccludeAtMinor1)
 			throw std::runtime_error(
 				"bmaterial: unsupported version " + std::to_string(versionMajor) + " (expected " +
 				std::to_string(c_VersionMajor) + "); re-bake the material");
@@ -128,7 +143,7 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			material.pbr = readPbr(reader);
+			material.pbr = readPbr(reader, hasOccludeByte);
 			break;
 
 		// Already excluded by the range check above; the case exists so a new model cannot be added

@@ -54,5 +54,5 @@ public float2 ComputeMotionVector(ForwardVSOut input)
 public bool IsLoosePso(PsoType pso)
 {
     return pso == PsoType::kOpaque_StaticMesh_LoosePbr || pso == PsoType::kAlphaTest_StaticMesh_LoosePbr ||
-           pso == PsoType::kTransparent_StaticMesh_LoosePbr;
+           pso == PsoType::kTransparent_StaticMesh_LoosePbr || pso == PsoType::kTransparentOcclude_StaticMesh_LoosePbr;
 }
