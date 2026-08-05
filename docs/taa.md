@@ -59,6 +59,14 @@ the call instead of throwing.
   `RGBA16_FLOAT` linear radiance with exposure already folded in. The display curve is the last thing
   that happens, never something baked into the accumulator.
 
+* **The history is fetched with Catmull-Rom, not bilinear.** The reprojected position is off texel
+  centres every frame the camera moves, and a bilinear fetch convolves the accumulation with a tent
+  each time — under sustained motion the softening compounds, and snaps sharp again on stopping,
+  which reads as motion blur. Five bilinear taps stand in for the 4×4 kernel; at rest the fetch
+  lands on texel centres and is exact, so a still image is bit-identical. Measured on a moving
+  mid-grey fence: 0.60 of the still image's detail with bilinear, 0.66 with Catmull-Rom — the clamp
+  bounds how much softness can survive, so the gap is modest, but it is the visible part.
+
 * **Neighbourhood clamping in YCoCg, not RGB.** The bounds are an axis-aligned box, and in RGB that
   box is a poor fit to the colours an edge actually produces — it admits history the pixel could not
   have come from, which is what ghosting looks like. History is *clamped* rather than rejected: a
@@ -70,8 +78,16 @@ the call instead of throwing.
 
 * **No depth.** The depth buffer is allocated depth-stencil-only, so reading it means an SRV over a
   depth format in both backends. The neighbourhood clamp removes the bulk of ghosting on its own;
-  closest-fragment velocity dilation and depth-based disocclusion rejection are refinements that land
-  when the images ask for them.
+  closest-fragment velocity dilation and depth-based disocclusion rejection stay open until depth
+  grows an SRV. The depth-free stand-in was tried and rejected — see the next bullet.
+
+* **Not velocity-dilated either.** Reprojecting by the longest velocity in the 3×3 — the no-depth
+  stand-in for closest-fragment dilation — measured worse everywhere it was meant to help: panning
+  over a hashed patch went from 0.0029 to 0.0040–0.0073 of frame-to-frame noise. On stochastic
+  coverage a pixel whose fragment was discarded carries zero motion, and an exact-texel fetch by
+  zero *pins* the noise field; "correcting" it to the surface's velocity re-samples that field at a
+  fresh fractional offset every frame, which is flicker. The thin-feature case it exists for is
+  better served by keeping the hash cell near pixel size (below), which attacks the cause.
 
 * **Min/max bounds, not variance clipping.** Tried and rejected on measurement rather than on
   principle. Clipping to mean ± γ·σ over the same 3×3 is *tighter* than min/max on a stochastic
@@ -127,7 +143,20 @@ history buffer is allocated.
 ## Hashed alpha depends on this
 
 `LayerType::kHashed` ([passes.md](docs/passes.md)) turns alpha into stochastic coverage, which is
-noise in any one frame and only correct once this has averaged it. Two couplings worth knowing:
+noise in any one frame and only correct once this has averaged it.
+
+**It is not the default answer for every alpha texture.** What hashed buys is unsorted,
+depth-writing transparency — layers occlude each other correctly with no sorting, which neither
+blend nor a cutoff gives. What it costs is that every texel of partial alpha is a coin flipped per
+frame, so content authored as wide soft gradients — hair painted for alpha blending is the common
+case — becomes a large stochastic region that this resolve must hold steady, and camera motion is
+where that shows. A card-hair asset usually reads better as the alpha *test* under TAA: the
+silhouette is deterministic, the jitter still antialiases its edges, and the bake's
+coverage-preserving mips are keyed to the authored cutoff, so strands hold at distance. Reach for
+hashed when the content genuinely self-occludes in depth and needs soft coverage — dense foliage,
+layered interior hair — not because a texture has an alpha channel.
+
+Two couplings worth knowing:
 
 * **The hash seed is not the jitter index.** Eight seeds means eight distinct coverage patterns, and
   averaging eight binary masks converges to nine grey levels rather than to smooth coverage. It
@@ -139,6 +168,24 @@ noise in any one frame and only correct once this has averaged it. Two couplings
   flicker, and on a surface that self-occludes as seeing through it, because the resolve is then
   showing a single stochastic frame rather than the average of many. `c_HashScale` is the *lower*
   bound of a 2× range, since the octave selection rounds down to a power of two.
+
+* **Its base colour must keep its alpha and preserve coverage down the mips, and the bake does
+  both.** A hashed material's alpha would otherwise be destroyed outright — the alpha-less block
+  format renders opaque cards — and plain box mips dilute a sub-texel strand's alpha, which under
+  stochastic coverage is expected coverage lost: the strand fades out with distance rather than
+  thinning. `bakeMaterial` keeps hashed base colour in BC7 and rescales its mips against the
+  material's cutoff, exactly as the alpha test always had ([material_bake.cpp](libs/assetlib/src/material_bake.cpp)).
+
+* **Near pixel size on both axes, which is what bounds the anisotropy.** The cell is isotropic on
+  the surface and the projection is not, so `c_MaxAnisotropy` decides how wide a cell may get across
+  the compressed screen axis — the axis a grazing surface, which is most of a hair card, is
+  compressed along. Through the octave rounding the bound leaves a cell of half-to-one times it in
+  pixels: at 4 that is two to four, the shared thresholds collapsed the clamp's box exactly as
+  above, and it measured seven times the head-on frame-to-frame flicker — at grazing incidence
+  only, which is why the head-on flicker test never saw it. At 2 the cell is one to two pixels and
+  the flicker measures at parity with head-on, so there is nothing left for a finer cell to buy.
+  The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
+  does not move.
 
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight

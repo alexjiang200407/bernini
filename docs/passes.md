@@ -71,6 +71,11 @@ space. And a pixel shader that writes a literal colour — `Forward_Null`, `Forw
 writing radiance, not a display value, so its `1.0` reaches the screen as the curve's answer for
 unit radiance and not as white.
 
+`sceneColor`'s alpha never reaches the screen: a surviving hashed or cutout fragment writes its
+*texture* alpha there, which is the surface's own coverage and not the pixel's, so `PostProcess`
+writes the backbuffer opaque — a capture (or anything compositing the backbuffer) that inherited it
+would hold transparency the image does not have.
+
 ---
 
 ## Two-sided surfaces

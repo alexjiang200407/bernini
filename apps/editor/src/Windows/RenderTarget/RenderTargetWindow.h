@@ -56,6 +56,9 @@ protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
 
+	bool
+	event(QEvent* e) override;
+
 	void
 	showEvent(QShowEvent* event) override;
 	void

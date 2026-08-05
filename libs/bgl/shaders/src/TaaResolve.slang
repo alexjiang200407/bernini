@@ -6,8 +6,8 @@ struct TaaResolveData
     TextureHandle history;
     TextureHandle motionVectors;
 
-    // sceneColor and motionVectors are read 1:1 and want no filtering; the history is reprojected to
-    // an arbitrary sub-pixel position and wants bilinear.
+    // sceneColor and motionVectors are read 1:1 and want no filtering; the history is reprojected
+    // to an arbitrary sub-pixel position and goes through SampleHistoryCatmullRom's bilinear taps.
     SamplerState.Handle pointSampler;
     SamplerState.Handle linearSampler;
 
@@ -74,6 +74,44 @@ float3 UnToneWeight(float3 c)
     return c / max(1e-4, 1.0 - max(max(c.r, c.g), c.b));
 }
 
+// Catmull-Rom over the 4x4 around `uv`, folded to five bilinear fetches by pairing the two inner
+// taps per axis and dropping the four corners, whose weights are near zero (renormalised out).
+//
+// A plain bilinear fetch convolves the history with a tent every frame it lands off a texel
+// centre, which under sustained motion is every frame -- the accumulation re-blurs each hop and
+// the image softens until the camera stops. The negative lobes here undo that. They can also
+// overshoot, so the result is only safe once the neighbourhood clamp has pulled it inside the box.
+float3 SampleHistoryCatmullRom(float2 uv, float2 texel)
+{
+    let history = gTaaResolveData.history;
+    let linearClamp = gTaaResolveData.linearSampler;
+
+    float2 samplePos = uv / texel;
+    float2 innerTexel = floor(samplePos - 0.5) + 0.5;
+    float2 f = samplePos - innerTexel;
+
+    float2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    float2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    float2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    float2 w3 = f * f * (-0.5 + 0.5 * f);
+
+    // The two inner taps collapse to one bilinear fetch placed where their weights balance.
+    float2 w12 = w1 + w2;
+    float2 uv0 = (innerTexel - 1.0) * texel;
+    float2 uv3 = (innerTexel + 2.0) * texel;
+    float2 uv12 = (innerTexel + w2 / w12) * texel;
+
+    float3 sum = history.SampleLevel(linearClamp, float2(uv12.x, uv0.y), 0.0).rgb * (w12.x * w0.y) +
+                 history.SampleLevel(linearClamp, float2(uv0.x, uv12.y), 0.0).rgb * (w0.x * w12.y) +
+                 history.SampleLevel(linearClamp, uv12, 0.0).rgb * (w12.x * w12.y) +
+                 history.SampleLevel(linearClamp, float2(uv3.x, uv12.y), 0.0).rgb * (w3.x * w12.y) +
+                 history.SampleLevel(linearClamp, float2(uv12.x, uv3.y), 0.0).rgb * (w12.x * w3.y);
+
+    float weight = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+
+    return sum / weight;
+}
+
 [shader("pixel")]
 float4 PSMain(VSOut input) : SV_Target
 {
@@ -121,7 +159,7 @@ float4 PSMain(VSOut input) : SV_Target
         return current;
     }
 
-    float3 history = gTaaResolveData.history.SampleLevel(gTaaResolveData.linearSampler, historyUv, 0.0).rgb;
+    float3 history = SampleHistoryCatmullRom(historyUv, texel);
 
     // Clamped rather than rejected: a pixel whose history is merely stale still carries subpixel
     // detail worth keeping once it is pulled inside what this frame could have produced.
