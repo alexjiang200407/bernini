@@ -41,10 +41,14 @@ public float HashedAlphaThreshold(float3 surfacePos, float seed)
     // onto the noise. See docs/taa.md.
     const float c_HashScale = 0.5;
 
-    // How far the two screen axes may disagree about the cell size before the smaller one wins. 4
-    // is where the grazing pattern measures as fine as the head-on one; tighter only buys sub-pixel
-    // cells, which is noise for nothing.
-    const float c_MaxAnisotropy = 4.0;
+    // How far the two screen axes may disagree about the cell size before the smaller one wins.
+    // Through the octave rounding below a grazing cell spans half-to-one times this in pixels
+    // across the compressed axis: at 4 that is two to four, and pixels sharing one threshold
+    // collapse the TAA clamp's neighbourhood box -- measured as 7x the frame-to-frame flicker of
+    // the head-on patch. At 2 the cell is one to two pixels and the flicker measures at parity
+    // with head-on; the cost is single-frame grain, which is what the accumulation removes -- the
+    // correlated pattern is what it cannot.
+    const float c_MaxAnisotropy = 2.0;
 
     float dx = length(ddx(surfacePos));
     float dy = length(ddy(surfacePos));

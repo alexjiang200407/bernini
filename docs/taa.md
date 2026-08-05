@@ -78,8 +78,16 @@ the call instead of throwing.
 
 * **No depth.** The depth buffer is allocated depth-stencil-only, so reading it means an SRV over a
   depth format in both backends. The neighbourhood clamp removes the bulk of ghosting on its own;
-  closest-fragment velocity dilation and depth-based disocclusion rejection are refinements that land
-  when the images ask for them.
+  closest-fragment velocity dilation and depth-based disocclusion rejection stay open until depth
+  grows an SRV. The depth-free stand-in was tried and rejected — see the next bullet.
+
+* **Not velocity-dilated either.** Reprojecting by the longest velocity in the 3×3 — the no-depth
+  stand-in for closest-fragment dilation — measured worse everywhere it was meant to help: panning
+  over a hashed patch went from 0.0029 to 0.0040–0.0073 of frame-to-frame noise. On stochastic
+  coverage a pixel whose fragment was discarded carries zero motion, and an exact-texel fetch by
+  zero *pins* the noise field; "correcting" it to the surface's velocity re-samples that field at a
+  fresh fractional offset every frame, which is flicker. The thin-feature case it exists for is
+  better served by keeping the hash cell near pixel size (below), which attacks the cause.
 
 * **Min/max bounds, not variance clipping.** Tried and rejected on measurement rather than on
   principle. Clipping to mean ± γ·σ over the same 3×3 is *tighter* than min/max on a stochastic
@@ -147,6 +155,17 @@ noise in any one frame and only correct once this has averaged it. Two couplings
   flicker, and on a surface that self-occludes as seeing through it, because the resolve is then
   showing a single stochastic frame rather than the average of many. `c_HashScale` is the *lower*
   bound of a 2× range, since the octave selection rounds down to a power of two.
+
+* **Near pixel size on both axes, which is what bounds the anisotropy.** The cell is isotropic on
+  the surface and the projection is not, so `c_MaxAnisotropy` decides how wide a cell may get across
+  the compressed screen axis — the axis a grazing surface, which is most of a hair card, is
+  compressed along. Through the octave rounding the bound leaves a cell of half-to-one times it in
+  pixels: at 4 that is two to four, the shared thresholds collapsed the clamp's box exactly as
+  above, and it measured seven times the head-on frame-to-frame flicker — at grazing incidence
+  only, which is why the head-on flicker test never saw it. At 2 the cell is one to two pixels and
+  the flicker measures at parity with head-on, so there is nothing left for a finer cell to buy.
+  The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
+  does not move.
 
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
