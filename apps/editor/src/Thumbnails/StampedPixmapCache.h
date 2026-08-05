@@ -23,10 +23,6 @@ class StampedPixmapCache : public QObject
 	Q_OBJECT
 
 public:
-	// Modification time of `path` in ms, or 0 when it cannot be read.
-	[[nodiscard]] static qint64
-	FileStamp(const QString& path);
-
 	// The pixmap for `path`, or a null one when it is absent, still being produced, or stale because
 	// the file changed on disk since it was made.
 	[[nodiscard]] QPixmap

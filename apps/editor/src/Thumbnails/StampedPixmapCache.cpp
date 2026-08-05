@@ -1,24 +1,16 @@
 #include "Thumbnails/StampedPixmapCache.h"
 
-#include <QDateTime>
-#include <QFileInfo>
+#include "util/asset_paths.h"
 
 StampedPixmapCache::StampedPixmapCache(int budgetKb, QObject* parent) :
 	QObject(parent), m_Cache(budgetKb)
 {}
 
-qint64
-StampedPixmapCache::FileStamp(const QString& path)
-{
-	const QFileInfo info(path);
-	return info.exists() ? info.lastModified().toMSecsSinceEpoch() : 0;
-}
-
 QPixmap
 StampedPixmapCache::Lookup(const QString& path) const
 {
 	const Entry* entry = m_Cache.object(path);
-	if (entry == nullptr || entry->stamp != FileStamp(path))
+	if (entry == nullptr || entry->stamp != editor::FileStamp(path))
 		return {};
 
 	return entry->pixmap;
@@ -30,7 +22,7 @@ StampedPixmapCache::BeginRequest(const QString& path)
 	if (path.isEmpty() || m_Claimed.contains(path))
 		return std::nullopt;
 
-	const qint64 stamp = FileStamp(path);
+	const qint64 stamp = editor::FileStamp(path);
 
 	if (const Entry* entry = m_Cache.object(path); entry != nullptr)
 	{

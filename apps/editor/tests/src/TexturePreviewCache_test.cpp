@@ -1,6 +1,7 @@
 #include "Thumbnails/TexturePreviewCache.h"
 
 #include "util/QtSupport.h"
+#include "util/asset_paths.h"
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -40,14 +41,14 @@ TEST_CASE("A file that is not there has no stamp", "[thumbnails]")
 {
 	const Sandbox sandbox;
 
-	REQUIRE(TexturePreviewCache::FileStamp(sandbox.temp.filePath("gone.ktx2")) == 0);
+	REQUIRE(editor::FileStamp(sandbox.temp.filePath("gone.ktx2")) == 0);
 }
 
 TEST_CASE("A file that is there does", "[thumbnails]")
 {
 	const Sandbox sandbox;
 
-	REQUIRE(TexturePreviewCache::FileStamp(sandbox.WriteTexture("stamped.ktx2")) > 0);
+	REQUIRE(editor::FileStamp(sandbox.WriteTexture("stamped.ktx2")) > 0);
 }
 
 TEST_CASE("A preview cache starts empty", "[thumbnails]")
@@ -65,7 +66,7 @@ TEST_CASE("A delivered preview is cached and announced", "[thumbnails]")
 	QSignalSpy          ready(&cache, &StampedPixmapCache::Ready);
 
 	const QString path = sandbox.WriteTexture("albedo.ktx2");
-	cache.Deliver(path, Preview(), TexturePreviewCache::FileStamp(path));
+	cache.Deliver(path, Preview(), editor::FileStamp(path));
 
 	REQUIRE(!cache.Lookup(path).isNull());
 
@@ -84,7 +85,7 @@ TEST_CASE("A preview goes stale once its file changes", "[thumbnails]")
 	// Cached against a stamp that is not the file's. That is exactly the state a texture rebaked
 	// since it was decoded ends up in, and the cache has to notice rather than show the old image for
 	// the rest of the session.
-	cache.Deliver(path, Preview(), TexturePreviewCache::FileStamp(path) - 1);
+	cache.Deliver(path, Preview(), editor::FileStamp(path) - 1);
 
 	REQUIRE(cache.Lookup(path).isNull());
 }
@@ -100,7 +101,7 @@ TEST_CASE("A failed decode caches nothing and announces nothing", "[thumbnails]"
 
 	// A null image is how a worker reports that it could not decode the file. Caching that would be
 	// caching a failure.
-	cache.Deliver(path, QImage(), TexturePreviewCache::FileStamp(path));
+	cache.Deliver(path, QImage(), editor::FileStamp(path));
 
 	REQUIRE(cache.Lookup(path).isNull());
 	REQUIRE(ready.count() == 0);
@@ -120,7 +121,7 @@ TEST_CASE("A late failed decode does not evict what already landed", "[thumbnail
 	const QString path = sandbox.WriteTexture("albedo.ktx2");
 
 	cache.Request(path);
-	cache.Deliver(path, Preview(), TexturePreviewCache::FileStamp(path));
+	cache.Deliver(path, Preview(), editor::FileStamp(path));
 
 	REQUIRE(!cache.Lookup(path).isNull());
 	REQUIRE(ready.count() == 1);

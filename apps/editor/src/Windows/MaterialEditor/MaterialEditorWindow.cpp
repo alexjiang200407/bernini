@@ -525,7 +525,14 @@ MaterialEditorWindow::OpenMaterialPaths() const
 void
 MaterialEditorWindow::RefreshMaterialState()
 {
+	ForgetMaterialsOnDisk();
 	RefreshActions();
+}
+
+void
+MaterialEditorWindow::ForgetMaterialsOnDisk()
+{
+	for (MaterialGraph& entry : m_MaterialGraphs) entry.onDisk.Forget();
 }
 
 void
@@ -574,17 +581,11 @@ MaterialEditorWindow::RefreshActions()
 	// both this and the baked-texture listing below.
 	bool    stale = true;
 	QString bakedSummary;
-	try
+	if (const assetlib::BMaterial* material =
+	        m_MaterialGraphs[static_cast<size_t>(graphIndex)].onDisk.Get(materialPath))
 	{
-		const auto                file     = std::filesystem::path(materialPath.toStdWString());
-		const assetlib::BMaterial material = assetlib::loadMaterial(file);
-		stale                              = assetlib::bakeIsStale(material, m_DataRoot);
-		bakedSummary                       = BakedTexturesSummary(material);
-	}
-	catch (const std::exception& e)
-	{
-		// The file may not exist yet (Save As has set the path but not written it). Say nothing.
-		qWarning("MaterialEditor: could not read the material: %s", e.what());
+		stale        = assetlib::bakeIsStale(*material, m_DataRoot);
+		bakedSummary = BakedTexturesSummary(*material);
 	}
 
 	m_BakedTexturesLabel->setText(bakedSummary);
@@ -692,6 +693,10 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	}
 
 	entry.materialPath = path;
+
+	// Every graph, not just this one: Save As can put a second graph on a path another already
+	// holds, and a stamp cannot separate two writes inside one millisecond.
+	ForgetMaterialsOnDisk();
 
 	// A submesh with no material yet is bound by its first Save -- there is nothing to overwrite, and
 	// leaving it unbound would mean saving a material the mesh never references. Once it has one,

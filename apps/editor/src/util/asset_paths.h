@@ -5,6 +5,16 @@
 namespace editor
 {
 	/**
+	 * Modification time of `path` in milliseconds, or 0 when it cannot be read.
+	 *
+	 * What the editor's caches compare to decide whether what they hold still describes the file. The
+	 * resolution is the caller's problem: two writes inside one millisecond share a stamp, so anything
+	 * that has just rewritten a file invalidates rather than trusting this to have moved.
+	 */
+	[[nodiscard]] qint64
+	FileStamp(const QString& path);
+
+	/**
 	 * Whether `name` is a plain file stem -- letters, digits, `_`, `.` and `-`, and not `.` or `..`.
 	 *
 	 * An import joins a typed name onto a category directory and a suffix, so anything that could
