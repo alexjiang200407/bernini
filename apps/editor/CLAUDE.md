@@ -98,9 +98,10 @@ a fake would buy coverage of three branches no user reaches, and nothing else. W
 device does instead is leave through `main`, which reports it and exits; only the viewports
 still have no way to stand without one.
 
-What *is* testable is anything lifted clear of the window. `EditorConfig::Parse` reads the
-whole of `config.json` and is covered key by key; `CachedMaterial` and `StampedPixmapCache`
-hold the rules the caches are built on. Reach for that shape before reaching for a fake.
+What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
+`StampedPixmapCache` hold the ones the caches are built on. Reach for that shape before
+reaching for a fake — and only where there is a rule worth pinning, not to give a passive
+value somewhere else to live.
 
 A **device alone is fine**. `editor_tests` links `bgl_d3d12_agility` (on the executable — see
 `tests/CMakeLists.txt` for why an OBJECT library cannot carry it through `editor_lib`), so a

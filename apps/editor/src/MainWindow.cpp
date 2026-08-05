@@ -12,7 +12,6 @@
 #include <QTabWidget>
 
 #include "Async/BackgroundTask.h"
-#include "EditorConfig.h"
 #include "Project/Project.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
@@ -24,10 +23,12 @@
 #include <QMenuBar>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
+#include <core/file/file.h>
 #include <core/platform/util.h>
+#include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
-MainWindow::MainWindow(const EditorConfig& config, QWidget* parent) : QMainWindow(parent)
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
 	m_Ui.setupUi(this);
 
@@ -40,35 +41,89 @@ MainWindow::MainWindow(const EditorConfig& config, QWidget* parent) : QMainWindo
 		&MainWindow::CleanUnusedTextures);
 	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
 
-	// The renderer owns the Graphics and the Scene and is the only thing that touches them. Every
-	// viewport and the thumbnail cache render through it.
-	m_Renderer = std::make_unique<Renderer>(config.graphics, config.scene);
+	std::string startupProject;
+	{
+		const auto     configPath = core::file::get_executable_path().parent_path() / "config.json";
+		core::Settings settings(configPath);
 
-	auto levelDesc             = RenderTargetWindowDesc();
-	levelDesc.renderer         = m_Renderer.get();
-	levelDesc.initialInstances = config.levelEditor.initialInstances;
-	levelDesc.taaEnabled       = config.levelEditor.temporalAA;
+		startupProject         = settings["startupProject"].GetOrDefault(std::string());
+		const auto gfxSettings = settings["graphics"];
 
-	m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
+		auto gfxOpts             = bgl::GraphicsOptions();
+		gfxOpts.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
+		gfxOpts.enableGPUValidationLayer =
+			gfxSettings["enableGPUBasedValidation"].GetOrDefault(false);
+		gfxOpts.enablePixDebug = gfxSettings["enablePixDebug"].GetOrDefault(false);
+		gfxOpts.strictError    = gfxSettings["strictError"].GetOrDefault(false);
+		gfxOpts.logLevel       = static_cast<bgl::GraphicsOptions::LogLevel>(
+			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(gfxOpts.logLevel)));
+		gfxOpts.maxCbvSrvUavs = gfxSettings["maxCbvSrvUavs"].GetOrDefault(gfxOpts.maxCbvSrvUavs);
+		gfxOpts.maxBuffers    = gfxSettings["maxBuffers"].GetOrDefault(gfxOpts.maxBuffers);
+		gfxOpts.maxSrvs       = gfxSettings["maxSrvs"].GetOrDefault(gfxOpts.maxSrvs);
+		gfxOpts.maxRtvs       = gfxSettings["maxRtvs"].GetOrDefault(gfxOpts.maxRtvs);
+		gfxOpts.maxDsvs       = gfxSettings["maxDsvs"].GetOrDefault(gfxOpts.maxDsvs);
+		gfxOpts.maxTextures   = gfxSettings["maxTextures"].GetOrDefault(gfxOpts.maxTextures);
 
-	auto matDesc                        = MaterialEditorWindowDesc();
-	matDesc.renderer                    = m_Renderer.get();
-	matDesc.initialPreviewInstances     = config.materialEditor.initialPreviewInstances;
-	matDesc.taaEnabled                  = config.materialEditor.temporalAA;
-	matDesc.previewEnv.environmentMap   = config.materialEditor.environment.environmentMap;
-	matDesc.previewEnv.dataRoot         = config.materialEditor.environment.dataRoot;
-	matDesc.previewEnv.exposureOverride = config.materialEditor.environment.exposureOverride;
+		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
+			gfxOpts.shaderCacheDir = "shadercache";
 
-	auto thumbDesc             = AssetThumbnailDesc();
-	thumbDesc.renderer         = m_Renderer.get();
-	thumbDesc.dimension        = config.thumbnails.dimension;
-	thumbDesc.initialInstances = config.thumbnails.initialInstances;
-	thumbDesc.environmentMap   = config.thumbnails.environment.environmentMap;
-	thumbDesc.dataRoot         = config.thumbnails.environment.dataRoot;
-	thumbDesc.exposureOverride = config.thumbnails.environment.exposureOverride;
+		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
+		// preview) renders it through a SceneView of its own, so geometry, textures and materials
+		// are pooled here once and these budgets must cover all of them together.
+		auto sceneDesc             = bgl::SceneDesc();
+		auto sceneSettings         = settings["scene"];
+		sceneDesc.initialGeom      = sceneSettings["initialGeom"].GetOrDefault(256);
+		sceneDesc.initialMeshlets  = sceneSettings["initialMeshlets"].GetOrDefault(32768);
+		sceneDesc.initialSubmeshes = sceneSettings["initialSubmeshes"].GetOrDefault(512);
+		sceneDesc.initialVertexBufferByteSize =
+			sceneSettings["initialVertexBufferByteSize"].GetOrDefault(33554432);
+		sceneDesc.initialIndices      = sceneSettings["initialIndices"].GetOrDefault(2000000);
+		sceneDesc.initialPbrMaterials = sceneSettings["initialPbrMaterials"].GetOrDefault(256);
+		sceneDesc.initialLoosePbrMaterials =
+			sceneSettings["initialLoosePbrMaterials"].GetOrDefault(256);
 
-	m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
-	m_Thumbnails     = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
+		// The renderer owns the Graphics and the Scene and, once threaded, is the only thing that
+		// touches them. Every viewport and the thumbnail cache render through it.
+		m_Renderer = std::make_unique<Renderer>(gfxOpts, sceneDesc);
+
+		auto levelDesc             = RenderTargetWindowDesc();
+		levelDesc.renderer         = m_Renderer.get();
+		levelDesc.initialInstances = settings["levelEditor"]["initialInstances"].GetOrDefault(1000);
+
+		// Per viewport, not graphics-wide: it sizes what this window's render target allocates, the
+		// way initialInstances above sizes its instance buffer. The thumbnail cache is never offered
+		// it -- it renders too few frames to converge.
+		levelDesc.taaEnabled = settings["levelEditor"]["temporalAA"].GetOrDefault(true);
+
+		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
+
+		auto matSettings                = settings["materialEditor"];
+		auto matDesc                    = MaterialEditorWindowDesc();
+		matDesc.renderer                = m_Renderer.get();
+		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
+		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
+		matDesc.previewEnv.environmentMap =
+			matSettings["environmentMap"].GetOrDefault(std::string());
+		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
+
+		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
+		if (auto exposure = matSettings["exposure"])
+			matDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+
+		auto thumbSettings         = settings["thumbnails"];
+		auto thumbDesc             = AssetThumbnailDesc();
+		thumbDesc.renderer         = m_Renderer.get();
+		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
+		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
+		thumbDesc.environmentMap   = thumbSettings["environmentMap"].GetOrDefault(std::string());
+		thumbDesc.dataRoot         = thumbSettings["dataRoot"].GetOrDefault(std::string());
+
+		if (auto exposure = thumbSettings["exposure"])
+			thumbDesc.exposureOverride = exposure.GetOrDefault(1.0f);
+
+		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
+		m_Thumbnails     = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
+	}
 
 	setDockNestingEnabled(true);
 	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
@@ -126,7 +181,7 @@ MainWindow::MainWindow(const EditorConfig& config, QWidget* parent) : QMainWindo
 	// config.json may name a project to open on launch, so working on one does not mean reopening
 	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
 	// absolute path in it reasonable.
-	if (config.startupProject.empty() || !OpenProjectAt(core::expand_home(config.startupProject)))
+	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
 		ShowEmptyState();
 }
 

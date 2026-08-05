@@ -14,14 +14,13 @@ class AssetThumbnailCache;
 class LevelEditorWindow;
 class MaterialEditorWindow;
 class Renderer;
-struct EditorConfig;
 
 class MainWindow : public QMainWindow
 {
 	Q_OBJECT
 
 public:
-	explicit MainWindow(const EditorConfig& config, QWidget* parent = nullptr);
+	explicit MainWindow(QWidget* parent = nullptr);
 	~MainWindow();
 
 protected:
