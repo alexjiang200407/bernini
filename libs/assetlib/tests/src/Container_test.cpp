@@ -107,6 +107,81 @@ TEST_CASE("deserialize rejects a truncated stream", "[bmesh][io]")
 	REQUIRE_THROWS_AS(deserialize(truncated), std::runtime_error);
 }
 
+namespace
+{
+	// The container's header and chunk table are private to bmesh_io.cpp, so the corruption tests
+	// below hand-decode them: chunkCount at 12 and chunkTableOffset at 16 of the header, then entries
+	// of { id, elementSize, offset, byteSize }.
+	constexpr size_t c_ChunkCountField       = 12;
+	constexpr size_t c_ChunkTableOffsetField = 16;
+	constexpr size_t c_EntryOffsetField      = 8;
+	constexpr size_t c_EntryByteSizeField    = 16;
+
+	template <typename T>
+	T
+	FieldAt(const std::vector<std::byte>& bytes, size_t offset)
+	{
+		T value;
+		std::memcpy(&value, bytes.data() + offset, sizeof(T));
+		return value;
+	}
+
+	template <typename T>
+	void
+	SetFieldAt(std::vector<std::byte>& bytes, size_t offset, T value)
+	{
+		std::memcpy(bytes.data() + offset, &value, sizeof(T));
+	}
+
+	std::filesystem::path
+	WriteTemp(const std::vector<std::byte>& bytes, const char* stem)
+	{
+		const auto    path = std::filesystem::temp_directory_path() / stem;
+		std::ofstream out(path, std::ios::binary);
+		out.write(
+			reinterpret_cast<const char*>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size()));
+		return path;
+	}
+}
+
+// A chunk's offset and size are both uint64_t straight out of the file, so a bound written as
+// `offset + byteSize > size` wraps: this entry passes it while naming a region nowhere near the
+// stream, and the copy that follows reads from a wild pointer.
+TEST_CASE("deserialize rejects a chunk whose offset and size wrap", "[bmesh][io]")
+{
+	auto bytes = serialize(makeSampleMesh());
+
+	const auto entry    = FieldAt<uint32_t>(bytes, c_ChunkTableOffsetField);
+	const auto byteSize = FieldAt<uint64_t>(bytes, entry + c_EntryByteSizeField);
+	REQUIRE(byteSize > 0);
+
+	// offset + byteSize == 2^64 == 0, i.e. under any size the stream can have.
+	SetFieldAt<uint64_t>(bytes, entry + c_EntryOffsetField, ~byteSize + 1);
+
+	REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+}
+
+// The chunk table is sized from a count in the file, so it has to be bounded against the file before
+// it is allocated rather than after. Rejecting it is not enough to prove that: this count reserves
+// 96 GB on the way to being rejected, which takes half a minute and swaps the machine out. Hence the
+// clock -- the bound is 5000x the time the check itself needs, so only a re-ordering can trip it.
+TEST_CASE("loadMaterialPaths rejects a chunk count without allocating from it", "[bmesh][io]")
+{
+	auto bytes = serialize(makeSampleMesh());
+	SetFieldAt<uint32_t>(bytes, c_ChunkCountField, 0xFFFFFFFFu);
+
+	const auto path  = WriteTemp(bytes, "bmesh_chunk_count_test.bmesh");
+	const auto start = std::chrono::steady_clock::now();
+
+	REQUIRE_THROWS_AS(loadMaterialPaths(path), std::runtime_error);
+
+	const auto elapsed = std::chrono::steady_clock::now() - start;
+	CHECK(elapsed < std::chrono::seconds(5));
+
+	std::filesystem::remove(path);
+}
+
 TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 {
 	const auto original = MakeSampleMesh();
