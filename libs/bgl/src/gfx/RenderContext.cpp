@@ -470,6 +470,7 @@ namespace bgl
 		auto draw               = DrawData();
 		draw.drawIdx            = drawIdx;
 		draw.view               = job.view;
+		draw.cullState          = &view->GetCullState();
 		draw.viewport           = viewport;
 		draw.viewProj           = viewProj;
 		draw.prevViewProj       = prevCamera.viewProj;

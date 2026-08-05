@@ -1,6 +1,9 @@
-#include "scene/ViewCullState.h"
+#include "scene/CullState.h"
 #include "fg/FrameGraph.h"
+#include "idl/CullView.h"
+#include "idl/DispatchArgs.h"
 #include "idl/InstanceVisibility.h"
+#include <bgl/PsoType.h>
 
 namespace bgl
 {
@@ -11,10 +14,13 @@ namespace bgl
 		constexpr std::string_view c_SortedTransparentName  = "scene.sortedTransparentInstances";
 		constexpr std::string_view c_TransparentKeysName    = "scene.transparentSortEntries";
 		constexpr std::string_view c_TransparentCountName   = "scene.transparentSortCount";
+		constexpr std::string_view c_PsoPrefixSumName = "compactedInstances.psoPrefixSumBuffer";
+		constexpr std::string_view c_DispatchArgsName = "compactedInstances.compactDispatchArgs";
+		constexpr std::string_view c_CullViewName     = "cull.view";
 	}
 
 	void
-	ViewCullState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
+	CullState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
 	{
 		{
 			auto desc         = ComputeBufferDesc();
@@ -58,12 +64,35 @@ namespace bgl
 			desc.debugName    = "Transparent Sort Count";
 			desc.SetElement<uint32_t>();
 
-			m_TransparentSortCount.Init(std::move(desc), std::move(resourceManager));
+			m_TransparentSortCount.Init(std::move(desc), resourceManager);
+		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<uint32_t>().SetInitialCount(c_PsoCount).SetDebugName("Pso Prefix Sum");
+
+			m_PsoPrefixSum.Init(std::move(desc), resourceManager);
+		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<idl::DispatchArgs>()
+				.SetInitialCount(c_PsoCount)
+				.SetDebugName("Compacted Dispatch Args");
+
+			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);
+		}
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<idl::CullView>().SetInitialCount(1).SetDebugName("Cull View");
+
+			m_CullView.Init(std::move(desc), std::move(resourceManager));
 		}
 	}
 
 	void
-	ViewCullState::Resize(uint32_t paddedInstances)
+	CullState::Resize(uint32_t paddedInstances)
 	{
 		if (paddedInstances <= m_CompactedInstances.GetDesc().initialCount)
 		{
@@ -77,17 +106,20 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::Release(bool deferred) noexcept
+	CullState::Release(bool deferred) noexcept
 	{
 		m_CompactedInstances.Release(deferred);
 		m_InstanceVisibility.Release(deferred);
 		m_SortedTransparentInstances.Release(deferred);
 		m_TransparentSortEntries.Release(deferred);
 		m_TransparentSortCount.Release(deferred);
+		m_PsoPrefixSum.Release(deferred);
+		m_CompactedDispatchArgs.Release(deferred);
+		m_CullView.Release(deferred);
 	}
 
 	void
-	ViewCullState::Update(ICommandList* cmdList)
+	CullState::Update(ICommandList* cmdList)
 	{
 		m_CompactedInstances.Update(cmdList);
 		m_InstanceVisibility.Update(cmdList);
@@ -96,18 +128,22 @@ namespace bgl
 	}
 
 	void
-	ViewCullState::ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames) const
+	CullState::ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const
 	{
-		const auto importBuffer = [&](std::string_view name, const ComputeBuffer& buffer) {
+		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
 			std::string key(name);
 			fg.ImportBuffer(key, buffer.GetBufferHandle());
-			resourceNames.push_back(std::move(key));
+			updateArgs.push_back(std::move(key));
 		};
 
-		importBuffer(c_CompactedInstancesName, m_CompactedInstances);
-		importBuffer(c_InstanceVisibilityName, m_InstanceVisibility);
-		importBuffer(c_SortedTransparentName, m_SortedTransparentInstances);
-		importBuffer(c_TransparentKeysName, m_TransparentSortEntries);
-		importBuffer(c_TransparentCountName, m_TransparentSortCount);
+		importUpdated(c_CompactedInstancesName, m_CompactedInstances);
+		importUpdated(c_InstanceVisibilityName, m_InstanceVisibility);
+		importUpdated(c_SortedTransparentName, m_SortedTransparentInstances);
+		importUpdated(c_TransparentKeysName, m_TransparentSortEntries);
+		importUpdated(c_TransparentCountName, m_TransparentSortCount);
+
+		fg.ImportBuffer(std::string(c_PsoPrefixSumName), m_PsoPrefixSum.GetBufferHandle());
+		fg.ImportBuffer(std::string(c_DispatchArgsName), m_CompactedDispatchArgs.GetBufferHandle());
+		fg.ImportBuffer(std::string(c_CullViewName), m_CullView.GetBufferHandle());
 	}
 }

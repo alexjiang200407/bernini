@@ -91,7 +91,15 @@ namespace bgl
 	SceneView::~SceneView() noexcept
 	{
 		// Nothing to release back to the Scene: instances reference geometry by value and keep
-		// nothing alive. Dropping this view's buffers drops its instances with them.
+		// nothing alive. The GPU buffers are another matter -- none of these types has a
+		// destructor, so a view that is not released here holds its resource-manager slots until
+		// the manager itself goes, and a session that opens and closes views exhausts the pools.
+		//
+		// Deferred: frames recorded against this view may still be in flight.
+		m_InstanceBuffer.Release();
+		m_MeshBuffer.Release();
+		m_CullState.Release();
+
 		logger::trace("~SceneView");
 	}
 

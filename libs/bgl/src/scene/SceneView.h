@@ -1,9 +1,9 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
+#include "scene/CullState.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
-#include "scene/ViewCullState.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -105,6 +105,13 @@ namespace bgl
 			return m_NamePrefix;
 		}
 
+		// This view's frustum scratch.
+		[[nodiscard]] CullState&
+		GetCullState() noexcept
+		{
+			return m_CullState;
+		}
+
 		// The cull inputs: one per view, shared by every frustum it is culled against.
 		auto
 		GetInstanceBuffers()
@@ -192,7 +199,7 @@ namespace bgl
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
 
 		// One frustum's cull outputs.
-		ViewCullState m_CullState;
+		CullState m_CullState;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
