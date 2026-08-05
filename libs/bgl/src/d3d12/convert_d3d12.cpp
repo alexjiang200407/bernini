@@ -428,6 +428,57 @@ namespace bgl
 		}
 	}
 
+	// If-chains rather than switches: a defaulted switch over Format trips C4061 under the MSVC
+	// strict flags, and handling every enumerator to name four is worse than not switching.
+	DXGI_FORMAT
+	ConvertResourceFormat(Format bglFormat, TextureUsage usage)
+	{
+		if (!usage.any(TextureUsageFlag::kSRV))
+		{
+			return ConvertFormat(bglFormat);
+		}
+
+		if (bglFormat == Format::D16)
+		{
+			return DXGI_FORMAT_R16_TYPELESS;
+		}
+		if (bglFormat == Format::D24S8)
+		{
+			return DXGI_FORMAT_R24G8_TYPELESS;
+		}
+		if (bglFormat == Format::D32)
+		{
+			return DXGI_FORMAT_R32_TYPELESS;
+		}
+		if (bglFormat == Format::D32S8)
+		{
+			return DXGI_FORMAT_R32G8X24_TYPELESS;
+		}
+		return ConvertFormat(bglFormat);
+	}
+
+	DXGI_FORMAT
+	ConvertSrvFormat(Format bglFormat)
+	{
+		if (bglFormat == Format::D16)
+		{
+			return DXGI_FORMAT_R16_UNORM;
+		}
+		if (bglFormat == Format::D24S8)
+		{
+			return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+		}
+		if (bglFormat == Format::D32)
+		{
+			return DXGI_FORMAT_R32_FLOAT;
+		}
+		if (bglFormat == Format::D32S8)
+		{
+			return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+		}
+		return ConvertFormat(bglFormat);
+	}
+
 	D3D12_RESOURCE_DIMENSION
 	ConvertResourceDimension(TextureDimension dimension)
 	{
@@ -572,7 +623,7 @@ namespace bgl
 	ConvertSrvDesc(const SrvDesc& desc)
 	{
 		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-		srv.Format                          = ConvertFormat(desc.format);
+		srv.Format                          = ConvertSrvFormat(desc.format);
 		srv.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		srv.ViewDimension                   = ConvertSRVDimension(desc.dimension);
 

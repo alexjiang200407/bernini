@@ -169,13 +169,14 @@ namespace bgl
 	RenderTarget::CreateAttachments()
 	{
 		{
-			auto depthTextureDesc          = TextureDesc();
-			depthTextureDesc.format        = Format::D24S8;
-			depthTextureDesc.width         = static_cast<uint32_t>(m_Width);
-			depthTextureDesc.height        = static_cast<uint32_t>(m_Height);
-			depthTextureDesc.dimension     = TextureDimension::kTexture2D;
-			depthTextureDesc.debugName     = "Depth Buffer";
-			depthTextureDesc.usage         = TextureUsageFlag::kDepthStencil;
+			auto depthTextureDesc      = TextureDesc();
+			depthTextureDesc.format    = Format::D24S8;
+			depthTextureDesc.width     = static_cast<uint32_t>(m_Width);
+			depthTextureDesc.height    = static_cast<uint32_t>(m_Height);
+			depthTextureDesc.dimension = TextureDimension::kTexture2D;
+			depthTextureDesc.debugName = "Depth Buffer";
+			depthTextureDesc.usage =
+				TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
 			depthTextureDesc.initialLayout = BarrierLayout::kDepthWrite;
 
 			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
@@ -188,6 +189,13 @@ namespace bgl
 
 			m_DepthBuffer.dsvHandle =
 				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
+
+			auto depthSrvDesc      = SrvDesc();
+			depthSrvDesc.format    = Format::D24S8;
+			depthSrvDesc.debugName = "Depth Buffer SRV";
+
+			m_DepthBuffer.srvHandle =
+				m_ResourceManager->CreateSrv(m_DepthBuffer.textureHandle, depthSrvDesc);
 		}
 
 		{
@@ -354,8 +362,10 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
 		}
 
+		m_ResourceManager->DestroySrv(m_DepthBuffer.srvHandle, false);
 		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, false);
 		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
+		m_DepthBuffer = {};
 
 		m_ResourceManager->DestroyRtv(m_MotionVectors.rtvHandle, false);
 		m_ResourceManager->DestroyTexture(m_MotionVectors.textureHandle, false);

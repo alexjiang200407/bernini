@@ -108,6 +108,18 @@ namespace bgl
 		}
 
 		[[nodiscard]] TextureHandle
+		GetDepthTexture() const noexcept override
+		{
+			return m_DepthTexture;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetDepthSrv() const noexcept override
+		{
+			return m_DepthSrv;
+		}
+
+		[[nodiscard]] TextureHandle
 		GetMotionVectorTexture() const noexcept override
 		{
 			return m_MotionTexture;
@@ -260,6 +272,7 @@ namespace bgl
 
 		TextureHandle m_DepthTexture;
 		DsvHandle     m_DepthDsv;
+		SrvHandle     m_DepthSrv;
 		TextureHandle m_MotionTexture;
 		RtvHandle     m_MotionRtv;
 		TextureHandle m_SceneColorTexture;

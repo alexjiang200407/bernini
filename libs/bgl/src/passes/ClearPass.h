@@ -6,9 +6,9 @@
 
 namespace bgl
 {
-	// Clears a set of render targets (and an optional depth target). Each color
-	// target is declared to the graph by name so the graph derives its transition
-	// to render-target; the pass only records the clears, never barriers.
+	// Clears a set of render targets (and an optional depth target). Each target
+	// is declared to the graph by name so the graph derives its transition to
+	// render-target / depth-write; the pass only records the clears, never barriers.
 	class ClearPass
 	{
 	public:
@@ -24,6 +24,7 @@ namespace bgl
 			FrameGraph&                  fg,
 			IResourceManager*            resourceManager,
 			std::span<const ColorTarget> colors,
+			std::string                  depthName,
 			DsvHandle                    depth)
 		{
 			PassDesc desc;
@@ -36,6 +37,15 @@ namespace bgl
 				                BarrierSyncFlag::kRenderTarget,
 				                BarrierAccessFlag::kRenderTarget,
 				                BarrierLayout::kRenderTarget });
+			}
+
+			if (!depth.IsNull())
+			{
+				desc.AddTextureArg(
+					TextureArg{ std::move(depthName),
+				                BarrierSyncFlag::kDepthStencil,
+				                BarrierAccessFlag::kDepthWrite,
+				                BarrierLayout::kDepthWrite });
 			}
 
 			std::vector<ColorTarget> targets(colors.begin(), colors.end());

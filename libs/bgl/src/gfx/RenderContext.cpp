@@ -386,9 +386,11 @@ namespace bgl
 		                 BarrierAccessFlag::kNone,
 		                 BarrierLayout::kPresent });
 
-		// Resumes the state the graph tracked last frame; the target creates them in render-target.
+		// Resumes the state the graph tracked last frame; the target creates them in
+		// render-target / depth-write.
 		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
 		m_FrameGraph.ImportTexture(std::string(c_SceneColorName), rt.GetSceneColorTexture());
+		m_FrameGraph.ImportTexture(std::string(c_DepthName), rt.GetDepthTexture());
 
 		if (rt.IsTaaEnabled())
 		{
@@ -411,6 +413,7 @@ namespace bgl
 			m_FrameGraph,
 			m_ResourceManager.Get(),
 			colorTargets,
+			std::string(c_DepthName),
 			rt.GetDepthDsv());
 
 		m_FrameActive = true;

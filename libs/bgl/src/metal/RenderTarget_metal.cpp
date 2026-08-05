@@ -94,11 +94,11 @@ namespace bgl
 			m_Backbuffers[i].rtv = m_ResourceManager->CreateRtv(m_Backbuffers[i].texture, rtvDesc);
 		}
 
-		auto depthDesc          = TextureDesc();
-		depthDesc.width         = m_Width;
-		depthDesc.height        = m_Height;
-		depthDesc.format        = c_DepthFormat;
-		depthDesc.usage         = TextureUsageFlag::kDepthStencil;
+		auto depthDesc   = TextureDesc();
+		depthDesc.width  = m_Width;
+		depthDesc.height = m_Height;
+		depthDesc.format = c_DepthFormat;
+		depthDesc.usage  = TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
 		depthDesc.initialLayout = BarrierLayout::kDepthWrite;
 		depthDesc.debugName     = "Depth Buffer";
 		depthDesc.clearValue.SetDepthStencil(1.0f, 0);
@@ -110,6 +110,12 @@ namespace bgl
 		dsvDesc.debugName = "Depth Buffer DSV";
 
 		m_DepthDsv = m_ResourceManager->CreateDsv(m_DepthTexture, dsvDesc);
+
+		auto depthSrvDesc      = SrvDesc();
+		depthSrvDesc.format    = c_DepthFormat;
+		depthSrvDesc.debugName = "Depth Buffer SRV";
+
+		m_DepthSrv = m_ResourceManager->CreateSrv(m_DepthTexture, depthSrvDesc);
 
 		auto motionDesc   = TextureDesc();
 		motionDesc.width  = m_Width;
@@ -220,6 +226,8 @@ namespace bgl
 		m_HistoryValid        = false;
 		m_CurrentHistoryIndex = 0;
 
+		if (!m_DepthSrv.IsNull())
+			m_ResourceManager->DestroySrv(m_DepthSrv, false);
 		if (!m_MotionSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_MotionSrv, false);
 		if (!m_SceneColorSrv.IsNull())
@@ -237,6 +245,7 @@ namespace bgl
 		if (!m_DepthTexture.IsNull())
 			m_ResourceManager->DestroyTexture(m_DepthTexture, false);
 
+		m_DepthSrv          = {};
 		m_MotionSrv         = {};
 		m_SceneColorSrv     = {};
 		m_SceneColorRtv     = {};

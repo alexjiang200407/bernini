@@ -21,6 +21,18 @@ namespace bgl
 	DXGI_FORMAT
 	ConvertFormat(Format bglFormat);
 
+	/**
+	 * The format to create a texture resource with. Depth formats that will also be sampled must be
+	 * created typeless -- D3D12 forbids an SRV over a resource created with a D* format -- and the
+	 * DSV/SRV formats then re-type the views. Everything else is ConvertFormat.
+	 */
+	DXGI_FORMAT
+	ConvertResourceFormat(Format bglFormat, TextureUsage usage);
+
+	/** The format an SRV reads a depth texture's depth aspect through; ConvertFormat otherwise. */
+	DXGI_FORMAT
+	ConvertSrvFormat(Format bglFormat);
+
 	D3D12_RESOURCE_DIMENSION
 	ConvertResourceDimension(TextureDimension dimension);
 

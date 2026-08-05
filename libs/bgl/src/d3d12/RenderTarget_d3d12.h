@@ -29,6 +29,7 @@ namespace bgl
 	{
 		TextureHandle textureHandle;
 		DsvHandle     dsvHandle;
+		SrvHandle     srvHandle;
 	};
 
 	/**
@@ -127,6 +128,18 @@ namespace bgl
 		GetDepthDsv() const noexcept override
 		{
 			return m_DepthBuffer.dsvHandle;
+		}
+
+		[[nodiscard]] TextureHandle
+		GetDepthTexture() const noexcept override
+		{
+			return m_DepthBuffer.textureHandle;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetDepthSrv() const noexcept override
+		{
+			return m_DepthBuffer.srvHandle;
 		}
 
 		[[nodiscard]] TextureHandle

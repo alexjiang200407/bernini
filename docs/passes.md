@@ -38,7 +38,10 @@ flowchart TD
 ```
 
 `Clear`, `Skybox`, and `Forward` take the imported `sceneColor` and `motionVectors` textures as
-render targets; `TaaResolve` reads `sceneColor`, the velocity buffer and the previous accumulation and writes the
+render targets and the imported `depth` texture as their depth attachment — **every pass that binds
+the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
+later pass read it as a shader resource and have the graph derive the write → read → write cycle;
+`TaaResolve` reads `sceneColor`, the velocity buffer and the previous accumulation and writes the
 next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
 writer of the backbuffer;
 `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
@@ -51,7 +54,8 @@ resource namespace (see [Frame Graph](docs/framegraph.md)).
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`: the view, viewport, view-projection
 (this frame's and the previous frame's), camera position, scene-colour/depth/motion-vector handles, standard
 samplers, environment map, exposure, and the optional skybox. The graph resource *names* are not in
-it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` / `c_SceneColorName` in
+it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` / `c_SceneColorName` /
+`c_DepthName` in
 [constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
 passes name them by.
 
@@ -159,10 +163,10 @@ rotation-only view-projection; the sky is at infinity, so a camera translation d
 
 ### Clear — [passes/ClearPass.h](libs/bgl/src/passes/ClearPass.h)
 
-Clears a set of color render targets and an optional depth target. Each color target is declared as
-a `TextureArg` in the render-target state so the graph transitions it; the pass's `exec` records
-`ClearRtv`/`ClearDsv` and nothing else. Stateless — it holds no kernel and is constructed inline
-each frame. It is the first pass of the frame, added in `BeginFrame`.
+Clears a set of color render targets and an optional depth target. Each target — depth included —
+is declared as a `TextureArg` in its write state so the graph transitions it; the pass's `exec`
+records `ClearRtv`/`ClearDsv` and nothing else. Stateless — it holds no kernel and is constructed
+inline each frame. It is the first pass of the frame, added in `BeginFrame`.
 
 * **In:** each color target + the depth target, transitioned to render-target / depth-write.
 * **Out:** the cleared attachments (via clears, not declared writes).
