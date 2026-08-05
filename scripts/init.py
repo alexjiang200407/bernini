@@ -39,11 +39,13 @@ Usage:
     just init --no-just                             # skip the `just` check
     just init --no-gh                               # skip the GitHub CLI check
     just init --no-lfs                              # skip the Git LFS setup
+    just init --lfs-key                             # replace the stored LFS credentials
     just init --no-vcpkg                            # skip the vcpkg check
     just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
 import argparse
+import getpass
 import os
 import shutil
 import subprocess
@@ -53,6 +55,8 @@ import sysconfig
 import util.cmake_tools as ct
 import util.config as cfg
 import util.lfs as lfs
+import util.lfs_store as lfs_store
+import util.secrets as secrets
 import util.vcpkg as vcpkg
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
@@ -394,7 +398,106 @@ def ensure_hooks():
     print(f"git hooks: set core.hooksPath to {hooks_dir}")
 
 
-def ensure_lfs():
+def ensure_lfs_agent(replace=False):
+    """Point this clone's Git LFS at the project's own object store.
+
+    The store's location is committed in .lfsstore, but the two settings that make
+    git-lfs use it cannot be: git-lfs ignores `standalonetransferagent` and
+    `customtransfer.*` from .lfsconfig, since a file that arrives with a clone must not
+    get to name the program git executes. They are machine-local, which is this script's
+    job -- and they have to name absolute paths, because git-lfs runs the agent from
+    whatever directory the triggering git command was in.
+
+    Returns False when the credentials are missing, so the caller does not then try a
+    fetch that can only fail.
+    """
+    endpoint = lfs_store.setting("endpoint")
+    if not endpoint:
+        return True
+
+    agent = os.path.join(ct.REPO_ROOT, "scripts", "lfs_agent.py")
+    settings = {
+        "lfs.standalonetransferagent": "bernini",
+        "lfs.customtransfer.bernini.path": sys.executable,
+        # git-lfs quotes `path` for itself but interpolates `args` into a shell command
+        # verbatim, so an unquoted path splits on the first space in it.
+        "lfs.customtransfer.bernini.args": f'"{agent}"',
+    }
+
+    for key, value in settings.items():
+        if subprocess.run(["git", "config", "--local", key, value],
+                          cwd=ct.REPO_ROOT).returncode:
+            print(f"warning: could not set {key}; run `git config --local {key} \"{value}\"` "
+                  f"by hand.", file=sys.stderr)
+            return False
+
+    print(f"git lfs: transfers go to {endpoint}")
+
+    if endpoint.startswith("file://"):
+        return True
+
+    return ensure_lfs_credentials(replace)
+
+
+def ensure_lfs_credentials(replace=False):
+    """Make sure this machine can reach the LFS object store, storing the key if asked.
+
+    The secret is encrypted to this user account before it is written, so config.json --
+    which is git-ignored but is also the file people paste into bug reports -- does not
+    become the credential itself.
+
+    With `replace`, prompts even when a usable key is already stored, which is how a
+    leaked one is rotated.
+    """
+    try:
+        access, secret = lfs_store.credentials()
+    except lfs_store.StoreError as exc:
+        print(f"warning: {exc}", file=sys.stderr)
+        access, secret = "", ""
+
+    if access and secret and not replace:
+        stored = cfg.load().get("lfs") or {}
+        where = "environment" if os.environ.get("BERNINI_LFS_ACCESS_KEY_ID") else \
+            f"{cfg.rel(cfg.PATH)}, {secrets.describe(stored.get('secretAccessKey'))}"
+        print(f"git lfs: credentials from the {where}")
+        return True
+
+    print("\nThe LFS object store needs an access key. Create one in Cloudflare R2\n"
+          "(Object Read & Write is enough) and paste it here, or leave blank to skip and\n"
+          "set BERNINI_LFS_ACCESS_KEY_ID / BERNINI_LFS_SECRET_ACCESS_KEY yourself.")
+
+    key_id = ask("  access key id: ")
+    if not key_id:
+        print("warning: no credentials stored; assets will stay as pointer text until\n"
+              "         they are provided. See docs/lfs.md.", file=sys.stderr)
+        return False
+
+    key_secret = getpass.getpass("  secret access key (not echoed): ").strip()
+    if not key_secret:
+        print("warning: no secret given; nothing stored.", file=sys.stderr)
+        return False
+
+    try:
+        protected = secrets.protect(key_secret)
+    except secrets.SecretError as exc:
+        print(f"warning: could not protect the secret ({exc}); nothing stored.", file=sys.stderr)
+        return False
+
+    data = cfg.load()
+    data["lfs"] = {"accessKeyId": key_id, "secretAccessKey": protected}
+    cfg.save(data)
+    secrets.restrict(cfg.PATH)
+
+    if secrets.scheme() == "plain":
+        print(f"warning: this platform has no key store, so the secret is in "
+              f"{cfg.rel(cfg.PATH)} as\n         plaintext. Treat that file as the "
+              f"credential.", file=sys.stderr)
+    else:
+        print(f"git lfs: stored in {cfg.rel(cfg.PATH)}, {secrets.describe(protected)}")
+    return True
+
+
+def ensure_lfs(replace=False):
     """Configure Git LFS for this clone, and fetch anything still left as a pointer.
 
     The `filter.lfs.*` entries live in machine-local git config, which cannot be
@@ -430,8 +533,10 @@ def ensure_lfs():
     else:
         print("git lfs: installed the filters for this clone")
 
+    ready = ensure_lfs_agent(replace)
+
     stale = lfs.pointer_files()
-    if not stale:
+    if not stale or not ready:
         return
 
     print(f"git lfs: {len(stale)} file(s) are still pointers; fetching...")
@@ -691,6 +796,8 @@ def main():
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
     parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
+    parser.add_argument("--lfs-key", action="store_true",
+                        help="Ask for the LFS object store credentials again, replacing what is stored.")
     parser.add_argument("--no-vcpkg", action="store_true", help="Don't look for (or offer to clone) vcpkg.")
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
@@ -708,6 +815,11 @@ def main():
 
     data, notes = detect(preset, arch, install=not args.show, with_vcpkg=not args.no_vcpkg)
 
+    # detect() describes the toolchain and nothing else, so anything else already in the
+    # file -- the LFS credential in particular -- has to be carried across a re-run.
+    if existing.get("lfs"):
+        data["lfs"] = existing["lfs"]
+
     rows = [("preset", preset)] + notes
     width = max(len(label) for label, _ in rows)
     print()
@@ -718,6 +830,7 @@ def main():
         return 0
 
     cfg.save(data)
+    secrets.restrict(cfg.PATH)
     print(f"\nwrote {cfg.rel(cfg.PATH)}")
 
     # After the config, so a failed/declined install never costs you the config.
@@ -727,7 +840,7 @@ def main():
         ensure_gh()
     ensure_hooks()
     if not args.no_lfs:
-        ensure_lfs()
+        ensure_lfs(args.lfs_key)
     if not args.no_bot:
         ensure_bot_key()
     return 0

@@ -62,6 +62,14 @@ exes *args:
 count:
     @{{ python }} scripts/count_source.py
 
+# Upload every referenced Git LFS object from the local cache to the object store.
+lfs-seed *args:
+    @{{ python }} scripts/lfs_seed.py {{ args }}
+
+# Report what the Git LFS object store holds, against its ceiling.
+lfs-usage *args:
+    @{{ python }} scripts/lfs_usage.py {{ args }}
+
 # Open, read, answer and check a pull request, as the morgana-coding-agent bot.
 pr *args:
     @{{ python }} scripts/pr.py {{ args }}

@@ -81,6 +81,7 @@ def problem():
         f"error: the assets in this clone are Git LFS pointers, not files "
         f"(e.g. {stale[0]}).\n"
         f"Binaries reading them fail as though the asset were corrupt. Fix the clone with:\n"
-        f"    git lfs install --local && git lfs pull\n"
-        f"or run `just init`, which does it and records the rest of this machine's setup."
+        f"    just init\n"
+        f"which installs the filters, points this clone at the object store, and fetches.\n"
+        f"If it has already run, the store credentials are the usual cause: see docs/lfs.md."
     )

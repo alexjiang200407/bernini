@@ -8,6 +8,14 @@
 # is skipped rather than failed when there isn't one, so a Visual Studio-generator checkout still
 # commits. `SKIP_TIDY=1 git commit` skips it outright.
 
+# scripts/config.json holds this machine's LFS credential. It is git-ignored, so reaching the
+# index at all means someone forced it there; refuse rather than publish a key.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'scripts/config.json'; then
+	echo "pre-commit: scripts/config.json is staged, and it holds your LFS credential." >&2
+	echo "            Unstage it with: git restore --staged scripts/config.json" >&2
+	exit 1
+fi
+
 # Staged source files that still exist (Added/Copied/Modified/Renamed).
 files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cpp' '*.h' '*.slang')
 
