@@ -89,8 +89,10 @@ written to prevent, and nothing fails to compile.
   first — an invariant no signature carries.
 - `FrameStatsUpdated` is emitted from the render thread and is safe only because
   `MainWindow::SetUpFrameStats` remembers `Qt::QueuedConnection`.
-- Teardown order is hand-maintained in three places: `~MainWindow`, the member-declaration comment in
-  `MainWindow.h:86`, and `closeEvent`. One more widget that touches the renderer breaks it silently.
+- Teardown order is hand-maintained: `MainWindow::ReleaseRenderResources`, the member-declaration
+  comment in `MainWindow.h`, and `closeEvent`. One more widget that touches the renderer breaks it
+  silently. E5 named the sequence rather than leaving it in `~MainWindow` alone, because a
+  constructor that fails part-way needs the same order and does not get a destructor.
 
 ### The two caches are one cache, and it renders every tile twice
 
@@ -249,15 +251,19 @@ until the cache entry lands or the work is abandoned, which is the duplicate-ren
 instantiation and more syntax. *Rejected: one cache class with a kind enum.* The two production paths
 share nothing, so the merged class is two disjoint halves behind a branch.
 
-### `EditorConfig`, and a startup that fails with a message
+### A startup that fails with a message
 
-One struct, one `Parse(const core::Settings&)` that validates the values it reads, and a split between
-what describes the machine (device options, budgets) and what describes the workspace
-(`startupProject`, the preview and thumbnail environments). `MainWindow`'s constructor takes the
-parsed struct.
+`main()` catches. A graphics failure, or a `config.json` that will not parse, becomes a message box
+and a non-zero exit instead of `std::terminate` and a crash log.
 
-`main()` catches. A graphics failure becomes a message box and a non-zero exit instead of
-`std::terminate` and a crash log.
+**No `EditorConfig`.** An earlier draft of this plan called for one: a struct holding every key, with a
+`Parse(const core::Settings&)` that validated them. It was written, reviewed on #279, and rejected --
+414 lines of type and test to replace thirty lines of `settings["x"]["y"]`, wrapping a class whose
+whole job is already to be read that way. The argument that it caught a lost default did not survive
+inspection either: the default was only at risk *because* the parse was being moved.
+
+`core::Settings` is the config abstraction. `MainWindow` keeps reading it directly, with its defaults
+as the `GetOrDefault` fallbacks beside each key.
 
 **It does not become a degraded editor**, and an earlier draft of this plan said it did. That draft
 claimed the null-`Renderer` editor "already exists": it does not.
@@ -292,7 +298,7 @@ testing code no user reaches.
 | `src/Assets/` (new) | the five project operations move out of the widgets | import/bake/delete regress silently — none of them is covered today, which is why the tests land with the move |
 | `ContentExplorerWindow` | loses ~500 lines; keeps drops, menus, dialogs | drop routing and the multi-file cancel rule, both currently pinned by tests |
 | `MaterialEditorWindow` | `MaterialGraph` + two `int` maps → `MaterialDocument` | the shared-graph rule (submeshes naming one material share one document and one preview handle) — reachable only with a device, so it needs a `static` extracted for it |
-| `MainWindow` | config parsing leaves; `actionSave`/`menuEdit` gain owners | startup ordering, and the hand-ordered destructor, which is untested in any form |
+| `MainWindow` | `actionSave`/`menuEdit` gain owners | startup ordering, and the hand-ordered destructor, which is untested in any form |
 | `Thumbnails/` | both caches rebase on `StampedPixmapCache` | thumbnail staleness on re-bake, covered; the drain/capture split, covered by the goldens |
 | `gamelib` | gains `PlaceMesh` over a decoded `BMesh`, and `bmesh::WorldTransform`/`GrowBounds` move into it from the editor | nothing existing — `PlaceMesh` is an addition and `AssetManager`'s path-keyed cache is deliberately untouched; the two moved helpers have no other caller |
 | `apps/editor/src/Mesh/` | emptied and deleted — E1 takes `NameFromPool`, E9 the other two | nothing; `BMeshUtil.h` holds exactly three functions and no fourth thing lives there |
@@ -346,13 +352,14 @@ cut from a `master` that already carries this plan and E1–E5, so there is noth
 * **E4 — `RefreshActions` stops reading the disk.** Cache the loaded `BMaterial` and its mtime on the
   editor; refresh on save and on `MaterialBaked`, not on selection.
   *Gate:* a case pinning one `loadMaterial` per save rather than one per submesh change.
-* **E5 — `EditorConfig` and a catching `main`.** The struct, its parse, the machine/workspace split,
-  and a graphics failure that leaves through a message box rather than `std::terminate`. It also
-  updates `apps/editor/CLAUDE.md`, whose "fake `IGraphics`" suggestion this step declines.
-  *Gate:* unit tests over the parse — out-of-range budgets rejected, every default the one the struct
-  documents, an absent section falling back whole; plus one launch with a deliberately impossible
-  budget, confirming a message rather than a crash log. No unknown-key case: `core::Settings` cannot
-  enumerate keys, and giving it that is out of scope here.
+* **E5 — a catching `main`.** A startup failure that leaves through a message box rather than
+  `std::terminate`. It also updates `apps/editor/CLAUDE.md`, whose "fake `IGraphics`" suggestion this
+  step declines.
+  *Gate:* two launches -- a deliberately broken `config.json`, and a failure injected late in the
+  constructor -- each confirming a logged critical, a message, and no crash log where master
+  terminates. The second is the one that matters: catching makes the unwind of a half-built
+  `MainWindow` reachable for the first time, and Qt deletes the viewports as children *after* the
+  members, so `~RenderTargetWindow` would otherwise run with `m_Renderer` already gone.
 
 ### On feat/editor-design
 

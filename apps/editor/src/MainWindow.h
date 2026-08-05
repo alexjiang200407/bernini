@@ -63,6 +63,22 @@ private:
 	void
 	SetUpFrameStats();
 
+	/** Everything the constructor does once its base is built, so a failure can be caught around it. */
+	void
+	Build();
+
+	/**
+	 * Hands back everything that renders, in the order it has to go: the thumbnails and the assets
+	 * release through the Renderer, and the viewports outlive both.
+	 *
+	 * Called by the destructor, and by the constructor when it fails part-way. Qt destroys the
+	 * viewports as children of this window, which happens *after* its members -- so leaving it to
+	 * either destructor alone puts ~RenderTargetWindow on the far side of ~m_Renderer. Safe with any
+	 * of it not built yet.
+	 */
+	void
+	ReleaseRenderResources() noexcept;
+
 	// The Render menu. Its one entry toggles temporal AA across every viewport, which is how a
 	// temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void
