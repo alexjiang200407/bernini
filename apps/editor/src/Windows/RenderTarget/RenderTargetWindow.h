@@ -107,7 +107,7 @@ private:
 	UpdateViewport();
 
 	void
-	ReportFrameTiming(qint64 startNs, qint64 endNs);
+	ReportFrameTiming(qint64 startNs);
 
 	// Single-shot, restarted by every resizeEvent, so it only fires once the window has been still
 	// long enough to call the drag finished. That firing is the only thing that resizes the
@@ -136,7 +136,6 @@ private:
 
 	QElapsedTimer m_FrameClock;  // monotonic clock for the timings above
 	qint64        m_LastFrameStartNs = -1;
-	qint64        m_LastFrameEndNs   = -1;
 
 	// ~2 seconds of frames at 60Hz: long enough that one stall does not dominate the mean, short
 	// enough that the readout still tracks what the viewport is doing now.

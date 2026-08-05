@@ -97,30 +97,21 @@ RenderTargetWindow::SetCamera(const bgl::Camera& cam)
 }
 
 void
-RenderTargetWindow::ReportFrameTiming(qint64 startNs, qint64 endNs)
+RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 {
 	// Present is vsync-locked, so a healthy frame lands on one refresh (~16.7ms). Treat anything
-	// past ~1.2 refreshes as having missed a vblank and report what caused it.
+	// past ~1.2 refreshes as having missed a vblank.
 	constexpr double c_MissedFrameMs = 20.0;
 	constexpr double c_NsToMs        = 1.0e-6;
 
 	if (m_LastFrameStartNs >= 0)
 	{
 		const double deltaMs = static_cast<double>(startNs - m_LastFrameStartNs) * c_NsToMs;
-		const double drawMs  = static_cast<double>(endNs - startNs) * c_NsToMs;
-		const double gapMs   = static_cast<double>(startNs - m_LastFrameEndNs) * c_NsToMs;
 
 		m_FrameTimes.Push(deltaMs);
 
 		if (deltaMs > c_MissedFrameMs)
-		{
 			++m_MissedFrames;
-			qWarning(
-				"RenderTarget: missed a vblank -- frame %.1f ms (draw %.1f ms, gap %.1f ms)",
-				deltaMs,
-				drawMs,
-				gapMs);
-		}
 
 		if (++m_FramesSinceEmit >= c_FrameStatsInterval)
 		{
@@ -133,7 +124,6 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs, qint64 endNs)
 	}
 
 	m_LastFrameStartNs = startNs;
-	m_LastFrameEndNs   = endNs;
 }
 
 void
@@ -185,9 +175,7 @@ RenderTargetWindow::UpdateViewport()
 		m_ViewportId = m_Desc.renderer->AddViewport([this]() {
 			const qint64 startNs = m_FrameClock.nsecsElapsed();
 			DrawFrame();
-			const qint64 endNs = m_FrameClock.nsecsElapsed();
-
-			ReportFrameTiming(startNs, endNs);
+			ReportFrameTiming(startNs);
 		});
 		return;
 	}
@@ -196,10 +184,9 @@ RenderTargetWindow::UpdateViewport()
 	m_ViewportId = 0;
 
 	// RemoveViewport blocks until the frame loop has dropped this window, so no frame is in flight
-	// and the render thread cannot be mid-ReportFrameTiming. Clearing the timestamps keeps the time
+	// and the render thread cannot be mid-ReportFrameTiming. Clearing the timestamp keeps the time
 	// spent out of the loop from being measured as one enormous frame when the window rejoins.
 	m_LastFrameStartNs = -1;
-	m_LastFrameEndNs   = -1;
 }
 
 void

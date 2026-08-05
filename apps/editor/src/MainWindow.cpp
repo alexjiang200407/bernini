@@ -425,9 +425,11 @@ MainWindow::SetUpFrameStats()
 
 	m_FrameStats = new QLabel(this);
 	m_FrameStats->setObjectName("FrameStats");
+	// The count is cumulative where the two times are windowed: a session total, not a property of
+	// the 120 frames beside it.
 	m_FrameStats->setToolTip(
-		"Level Editor frame time: mean and worst over the last 120 frames, and how many of them "
-		"overran a vblank.");
+		"Level Editor frame time: mean and worst over the last 120 frames, and how many frames "
+		"have overrun a vblank since startup.");
 
 	// A permanent widget sits to the right of the bar and survives showMessage, so the project and
 	// texture-cleanup messages cannot overwrite the readout.
