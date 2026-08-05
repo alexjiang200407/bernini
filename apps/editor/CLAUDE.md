@@ -90,7 +90,18 @@ What blocks coverage is the **window**, not the device. `RenderTargetWindow`'s c
 calls `CreateRenderTarget` with `winId()` and `headless = false`, and does not guard a null
 device — so `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow` and
 `MainWindow` (whose constructor creates the device) are **not covered**. Covering them needs
-a seam first: a `headless` flag on `RenderTargetWindowDesc`, or a fake `IGraphics`.
+a seam first: a `headless` flag on `RenderTargetWindowDesc`.
+
+A fake `IGraphics` is **not** that seam. `MaterialEditorWindow`, `AssetThumbnailCache` and
+`TextureNode` each degrade when their `Renderer` is null, and no shipping path produces one —
+a fake would buy coverage of three branches no user reaches, and nothing else. What a failing
+device does instead is leave through `main`, which reports it and exits; only the viewports
+still have no way to stand without one.
+
+What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
+`StampedPixmapCache` hold the ones the caches are built on. Reach for that shape before
+reaching for a fake — and only where there is a rule worth pinning, not to give a passive
+value somewhere else to live.
 
 A **device alone is fine**. `editor_tests` links `bgl_d3d12_agility` (on the executable — see
 `tests/CMakeLists.txt` for why an OBJECT library cannot carry it through `editor_lib`), so a

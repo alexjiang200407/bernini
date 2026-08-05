@@ -30,6 +30,24 @@
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
+	try
+	{
+		Build();
+	}
+	catch (...)
+	{
+		// A viewport is already a child of this window, and ~MainWindow does not run for a
+		// constructor that threw -- so without this the unwind reaches ~RenderTargetWindow with
+		// m_Renderer gone. A function-try-block cannot do it: its handler runs after the members
+		// have been destroyed.
+		ReleaseRenderResources();
+		throw;
+	}
+}
+
+void
+MainWindow::Build()
+{
 	m_Ui.setupUi(this);
 
 	connect(m_Ui.actionNewProject, &QAction::triggered, this, &MainWindow::NewProject);
@@ -228,12 +246,16 @@ MainWindow::closeEvent(QCloseEvent* event)
 	QMainWindow::closeEvent(event);
 }
 
-MainWindow::~MainWindow()
+MainWindow::~MainWindow() { ReleaseRenderResources(); }
+
+void
+MainWindow::ReleaseRenderResources() noexcept
 {
-	// Everything that renders releases its bgl objects through the Renderer, so all of it has to be
-	// gone before the Renderer member is. Qt would otherwise destroy these as children of this window,
-	// which happens after the members -- with the render thread already stopped.
-	m_ContentExplorer->SetThumbnails(nullptr);
+	if (m_Renderer == nullptr)
+		return;
+
+	if (m_ContentExplorer != nullptr)
+		m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
 	// After the thumbnails, which release their materials back through it, and before the viewports,
@@ -241,7 +263,10 @@ MainWindow::~MainWindow()
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
 	delete m_LevelEditor;
+	m_LevelEditor = nullptr;
+
 	delete m_MaterialEditor;
+	m_MaterialEditor = nullptr;
 }
 
 void
