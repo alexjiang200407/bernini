@@ -149,7 +149,7 @@ namespace bgl
 		m_DepthKeys["gUniforms"]["visibility"]     = ctx.GetBuffer(c_InstanceVisibility);
 		m_DepthKeys["gUniforms"]["outEntries"]     = ctx.GetBuffer(c_EntriesBuffer);
 		m_DepthKeys["gUniforms"]["outCount"]       = ctx.GetBuffer(c_CountBuffer);
-		m_DepthKeys["gUniforms"]["cameraPos"]      = draw.cameraPos;
+		m_DepthKeys["gUniforms"]["cameraPos"]      = draw.viewState.cameraPos;
 
 		auto cmdList = ctx.GetCommandList();
 

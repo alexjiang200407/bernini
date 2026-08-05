@@ -52,7 +52,7 @@ namespace bgl
 	void
 	SkyboxPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
-		if (!draw.skybox.has_value())
+		if (!draw.lighting.skybox.has_value())
 		{
 			return;
 		}
@@ -83,7 +83,7 @@ namespace bgl
 
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
 		gassert(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
-		gassert(draw.skybox.has_value(), "SkyboxPass executed without a valid skybox");
+		gassert(draw.lighting.skybox.has_value(), "SkyboxPass executed without a valid skybox");
 
 		// Keyed on the Slang global's name as reflection reports it, so this string must track
 		// the ConstantBuffer declaration in Skybox.slang.
@@ -91,32 +91,32 @@ namespace bgl
 		{
 			auto& skybox = *found;
 
-			skybox["clipToWorld"]     = draw.skyboxClipToWorld;
-			skybox["prevWorldToClip"] = draw.skyboxPrevWorldToClip;
+			skybox["clipToWorld"]     = draw.lighting.skyboxClipToWorld;
+			skybox["prevWorldToClip"] = draw.lighting.skyboxPrevWorldToClip;
 
 			if (auto u = skybox["cubeTex"]; u.IsValid())
 			{
-				u = draw.skybox->skyboxCubeTex;
+				u = draw.lighting.skybox->skyboxCubeTex;
 			}
 			if (auto u = skybox["sampler"]; u.IsValid())
 			{
-				u = draw.linearClampSampler;
+				u = draw.samplers.linearClamp;
 			}
 			if (auto u = skybox["exposure"]; u.IsValid())
 			{
-				u = draw.skybox->exposure;
+				u = draw.lighting.skybox->exposure;
 			}
 			if (auto u = skybox["mipLevel"]; u.IsValid())
 			{
-				u = static_cast<float>(draw.skybox->mipLevel);
+				u = static_cast<float>(draw.lighting.skybox->mipLevel);
 			}
 			if (auto u = skybox["jitter"]; u.IsValid())
 			{
-				u = draw.jitter;
+				u = draw.viewState.jitter;
 			}
 			if (auto u = skybox["prevJitter"]; u.IsValid())
 			{
-				u = draw.prevJitter;
+				u = draw.viewState.prevJitter;
 			}
 		}
 		else
@@ -126,11 +126,11 @@ namespace bgl
 
 		auto gfxState   = MeshletState();
 		gfxState.kernel = &m_Kernel;
-		gfxState.viewportState.AddViewportAndScissorRect(draw.viewport);
+		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
 		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.sceneColorHandle)
-		                           .AddColorAttachment(draw.motionVectorHandle)
-		                           .SetDepthAttachment(draw.depthBufferHandle);
+		                           .AddColorAttachment(draw.targets.sceneColor)
+		                           .AddColorAttachment(draw.targets.motionVector)
+		                           .SetDepthAttachment(draw.targets.depth);
 
 		cmd->SetMeshletState(gfxState);
 
