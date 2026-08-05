@@ -33,7 +33,6 @@ namespace bgl
 		void
 		Init(IDevice* device);
 
-		// No-op when the view has no skybox bound (draw.skybox.valid == false).
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
 
