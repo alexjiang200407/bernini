@@ -139,9 +139,9 @@ namespace bgl
 		m_PostProcess.Init(m_Device);
 		m_TaaResolve.Init(m_Device);
 
-		m_PostProcessSampler = m_ResourceManager->CreateSampler(
+		m_PointClampSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
-		m_HistorySampler = m_ResourceManager->CreateSampler(
+		m_LinearClampSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
@@ -189,13 +189,13 @@ namespace bgl
 		m_Skybox.Release();
 		m_PostProcess.Release();
 		m_TaaResolve.Release();
-		if (!m_PostProcessSampler.IsNull())
+		if (!m_PointClampSampler.IsNull())
 		{
-			m_ResourceManager->DestroySampler(m_PostProcessSampler, false);
+			m_ResourceManager->DestroySampler(m_PointClampSampler, false);
 		}
-		if (!m_HistorySampler.IsNull())
+		if (!m_LinearClampSampler.IsNull())
 		{
-			m_ResourceManager->DestroySampler(m_HistorySampler, false);
+			m_ResourceManager->DestroySampler(m_LinearClampSampler, false);
 		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
@@ -547,7 +547,7 @@ namespace bgl
 		postProcessArgs.source     = rt.GetSceneColorSrv();
 		postProcessArgs.sourceName = std::string(c_SceneColorName);
 		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
-		postProcessArgs.sampler    = m_PostProcessSampler;
+		postProcessArgs.sampler    = m_PointClampSampler;
 		postProcessArgs.viewport   = viewport;
 
 		if (rt.IsTaaEnabled())
@@ -562,8 +562,8 @@ namespace bgl
 			taaArgs.history         = rt.GetHistoryRtv(current);
 			taaArgs.prevHistoryName = GetHistoryName(prev);
 			taaArgs.historyName     = GetHistoryName(current);
-			taaArgs.pointSampler    = m_PostProcessSampler;
-			taaArgs.linearSampler   = m_HistorySampler;
+			taaArgs.pointSampler    = m_PointClampSampler;
+			taaArgs.linearSampler   = m_LinearClampSampler;
 			taaArgs.viewport        = viewport;
 			taaArgs.historyValid    = rt.IsHistoryValid();
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);

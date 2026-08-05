@@ -170,8 +170,8 @@ noise in any one frame and only correct once this has averaged it. Two couplings
   does.
 
 * **A resize discards the accumulation.** The buffers are screen-sized and the history cannot be
-  rescaled into, so `ReleaseAttachments` clears `m_HistoryValid` and the next frame takes the scene
-  colour whole. Resizing into a stale history reprojects garbage for one frame.
+  rescaled into, so the backend's attachment teardown clears `m_HistoryValid` and the next frame
+  takes the scene colour whole. Resizing into a stale history reprojects garbage for one frame.
 
 * **The two halves are imported under separate graph names** (`taaHistory0` / `taaHistory1`). The
   frame graph tracks resource state by name, so a single name for both would have the pass declaring

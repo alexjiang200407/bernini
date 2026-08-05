@@ -258,7 +258,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
-* **`.bmaterial`** (v6) — **a shading-model tag plus that model's parameters**. Struct:
+* **`.bmaterial`** (v8) — **a shading-model tag plus that model's parameters**. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).

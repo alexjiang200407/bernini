@@ -51,10 +51,9 @@ namespace bgl
 		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
 
 		/**
-		 * The depth-sorted transparent phase, drawn after the opaque buckets and inside the same pass:
-		 * a depth-only pre-pass over the self-occluding partition, then both partitions' blended
-		 * draws back-to-front. The pre-pass has to share this pass's depth attachment and sit between
-		 * the colour draws, which is why it is a sub-draw here rather than a pass of its own.
+		 * The depth-sorted transparent phase: one indirect dispatch over the whole sorted list,
+		 * back-to-front, drawn after the opaque buckets and inside the same pass so it shares the
+		 * depth attachment.
 		 *
 		 * Binds its own framebuffers rather than reusing the opaque one: a blend PSO declares no
 		 * velocity render target, and an attachment count that outruns the PSO's is invalid.
@@ -63,7 +62,5 @@ namespace bgl
 		DrawTransparent(const DrawData& draw, const PassContext& resources);
 
 		std::array<MeshletKernel, c_PsoCount> m_Kernels;
-
-		// Depth-only pre-pass kernels; only the self-occluding transparent PSO slots are built.
 	};
 }

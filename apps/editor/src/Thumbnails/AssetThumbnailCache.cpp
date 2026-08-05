@@ -24,9 +24,11 @@
 
 namespace
 {
-	// Several times the TAA resolve's time constant. One frame of a hashed material is a noise
-	// pattern rather than a picture of it. See docs/taa.md.
-	constexpr int c_WarmupFrames = 100;
+	// Three times the TAA resolve's time constant, which is what a hashed material needs before it
+	// is a picture rather than a noise pattern. Measured on the patch grain: 0.000685 at 40 frames,
+	// 0.000676 at 60, 0.000675 at 100 -- so this is where it stops paying, and every thumbnail pays
+	// it. See docs/taa.md.
+	constexpr int c_WarmupFrames = 60;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
 	constexpr float c_Yaw   = 0.6f;

@@ -29,7 +29,7 @@ flowchart TD
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
         SKY --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
-        CI --> FWD["Forward (indirect dispatch per PSO bucket, then per transparent partition)"]
+        CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
     TAA --> PPX["PostProcess (-> backbuffer)"]
@@ -86,8 +86,8 @@ not after**: the bitangent is `cross(N, T) * tangent.w`, so flipping N carries t
 where negating the finished shading normal would leave a mirrored bitangent and lean the normal map's
 detail the wrong way on every back face.
 
-`Forward_Null`, `Forward_Assert` and `Forward_Transparent_Prepass` take `ForwardVSOut` but never read
-its normal, so they do not take the flag. The opaque buckets cull back faces and can never see one,
+`Forward_Null` and `Forward_Assert` take `ForwardVSOut` but never read its normal, so they do not
+take the flag. The opaque buckets cull back faces and can never see one,
 but their shaders share `Shade<M>` with the transparent bucket, which can — so they pass the hardware
 value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
 the shader cannot see.
@@ -245,21 +245,19 @@ many instances turn out to be transparent; only the sort itself is bounded.
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
   position.
 * **Out:** `scene.transparentSortEntries`/`Count` (its own scratch, owned by the view),
-  `scene.sortedTransparentInstances`, `transparentSort.partitionBase`,
-  `transparentSort.partitionDispatchArgs` (all consumed by `Forward`).
+  `scene.sortedTransparentInstances`, `transparentSort.dispatchArgs` (both consumed by `Forward`).
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
-raster/depth/blend state), plus a second `m_PrepassKernels` array whose only built slots are the
-self-occluding transparent PSOs. The amplification and mesh shaders are always the shared
+raster/depth/blend state). The amplification and mesh shaders are always the shared
 `Forward_StaticMesh` module; the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
 `Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
 `Forward_PBR_HashedAlpha`, `Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`,
-`Forward_Transparent_Prepass`, `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a
-`static_assert` catches an empty row but not a misordering.
+`Forward_Assert`). **`c_Psos` order must match `PsoType`** — a `static_assert` catches an empty row
+but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
@@ -284,8 +282,8 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
-  `transparentSort.partitionDispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the three `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
+  `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
+  buffers, the two `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
   `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.

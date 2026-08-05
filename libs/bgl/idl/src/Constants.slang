@@ -33,5 +33,3 @@ public static const uint cTransparentSortGroupSize = 512; // one thread per comp
 // Fills the sort's tail so padding never displaces a real entry. Reserved: TransparentDepthKeys
 // caps real keys below it, or padding could sort into the drawn prefix.
 public static const uint cSortPadKey = 0xFFFFFFFF;
-
-// The depth-sorted list is drawn by one indirect dispatch, so the draw needs no discovered run list.

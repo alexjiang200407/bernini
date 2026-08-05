@@ -78,10 +78,6 @@ private:
 	QDockWidget*             m_ContentExplorerDock = nullptr;
 	QLabel*                  m_FrameStats          = nullptr;
 
-	// graphics.temporalAA, read once at construction. It decides what the viewports allocate, so it
-	// is the Render menu's ceiling rather than its initial value alone.
-	bool m_TaaEnabled = true;
-
 	std::unique_ptr<Renderer> m_Renderer;
 
 	// The dock-visibility connections, held so the destructor can cut them before the windows they

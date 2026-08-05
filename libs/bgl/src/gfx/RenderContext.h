@@ -165,10 +165,10 @@ namespace bgl
 		CompactInstancesPass m_CompactInstances;
 		TransparentSortPass  m_TransparentSort;
 
-		SamplerHandle m_PostProcessSampler;
+		SamplerHandle m_PointClampSampler;
 
 		// The reprojected history lands between texels, so it is the one thing here that is filtered.
-		SamplerHandle m_HistorySampler;
+		SamplerHandle m_LinearClampSampler;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 

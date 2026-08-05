@@ -94,12 +94,7 @@ namespace
 	void
 	RenderTo(const std::string& path, bool taaEnabled, int frames)
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-
-		auto gfx = bgl::CreateGraphics(opts);
+		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
@@ -111,25 +106,14 @@ namespace
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
 
-		auto sceneDesc                        = bgl::SceneDesc();
-		sceneDesc.initialGeom                 = 4;
-		sceneDesc.initialMeshlets             = 64;
-		sceneDesc.initialSubmeshes            = 4;
-		sceneDesc.initialVertexBufferByteSize = 8192;
-		sceneDesc.initialIndices              = 256;
-
-		auto scene = gfx->CreateScene(sceneDesc);
+		auto scene = gfx->CreateScene(QuadSceneDesc());
 		auto view  = gfx->CreateSceneView(scene, 4);
-
-		auto plane = scene->AddPlaneGeom(1, 1, c_QuadScale * 2.0f, c_QuadScale * 2.0f);
-		view->CreateStaticMeshInstance(
-			plane,
-			glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+		AddQuad(scene, view);
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.camera   = Camera();
-		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		job.viewport = FullViewport();
 
 		for (int frame = 0; frame < frames; ++frame)
 		{

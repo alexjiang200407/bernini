@@ -142,9 +142,6 @@ namespace bgl
 			bool             depthWrite;
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
-
-			// A depth-only pass binds no render target and writes no colour (the pre-pass).
-			bool depthOnly = false;
 		};
 
 		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).
@@ -186,17 +183,13 @@ namespace bgl
 
 			pipelineDesc.pixelShader = device->CreateShader(std::string(cfg.pixelSrc), "PSMain");
 
-			// A depth-only pre-pass binds no render target: it exists only to write depth.
-			if (!cfg.depthOnly)
-			{
-				pipelineDesc.AddRtvFormat(c_SceneColorFormat);
+			pipelineDesc.AddRtvFormat(c_SceneColorFormat);
 
-				// The rtvFormats count is what the bound framebuffer must match, so a blend PSO
-				// omitting this is also what keeps the velocity buffer out of its attachments.
-				if (!cfg.blend)
-				{
-					pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
-				}
+			// The rtvFormats count is what the bound framebuffer must match, so a blend PSO omitting
+			// this is also what keeps the velocity buffer out of its attachments.
+			if (!cfg.blend)
+			{
+				pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
 			}
 			pipelineDesc.SetDsvFormat(Format::D24S8);
 

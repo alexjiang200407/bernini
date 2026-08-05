@@ -17,9 +17,8 @@ struct RenderTargetWindowDesc
 	Renderer* renderer         = nullptr;
 	uint32_t  initialInstances = 0;
 
-	// Whether this viewport allocates temporal-AA resources and starts with it running. Comes from
-	// graphics.temporalAA in config.json; false also frees the history buffers and their RTVs, which
-	// a runtime toggle cannot.
+	// Whether this viewport allocates temporal-AA resources and starts with it running. False also
+	// frees the history buffers and their RTVs, which a runtime toggle cannot.
 	bool taaEnabled = true;
 };
 
