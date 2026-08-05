@@ -255,8 +255,9 @@ many instances turn out to be transparent; only the sort itself is bounded.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
   position.
-* **Out:** `scene.transparentSortEntries`/`Count` (its own scratch, owned by the view),
-  `scene.sortedTransparentInstances`, `transparentSort.dispatchArgs` (both consumed by `Forward`).
+* **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and
+  `transparentSort.dispatchArgs` — all owned by the view's `CullState`, the last two consumed by
+  `Forward`. The pass itself owns no buffers, only its two kernels.
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)

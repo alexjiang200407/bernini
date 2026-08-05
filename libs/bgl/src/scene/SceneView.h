@@ -4,6 +4,7 @@
 #include "scene/CullState.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "scene/TransparentSortState.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -200,6 +201,9 @@ namespace bgl
 
 		// One frustum's cull outputs.
 		CullState m_CullState;
+
+		// Per view, not per frustum: only the camera sorts transparents.
+		TransparentSortState m_TransparentSort;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
