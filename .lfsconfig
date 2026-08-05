@@ -1,0 +1,14 @@
+# Git LFS settings for this project. See docs/lfs.md.
+#
+# Only lfs.url belongs here: git-lfs rejects any key it does not recognise as safe in a
+# .lfsconfig, warning about it on every command, because this file arrives with a clone.
+# The store's location lives in .lfsstore and the agent's keys are machine-local, written
+# by `just init`.
+
+[lfs]
+	# Never contacted. `just init` sets lfs.standalonetransferagent locally, which makes
+	# git-lfs skip the batch API and hand every transfer to the agent; this only has to
+	# parse as a URL for it to get that far. Pointing at nothing is deliberate: a clone
+	# that has not run `just init` fails here instead of silently asking GitHub for
+	# objects it does not have.
+	url = https://bernini.invalid/lfs

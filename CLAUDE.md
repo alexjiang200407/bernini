@@ -91,6 +91,12 @@ How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang 
 The jitter, the history ping-pong and the resolve: why the client's camera never sees the offset, why
 velocity has it removed, and why the resolve writes history rather than the screen.
 
+**[Git LFS](./docs/lfs.md)**
+
+Where the binaries under `assets/` actually live — this project's own R2 bucket, reached by a
+standalone transfer agent with no LFS server in front of it — how a machine is set up to read and
+write it, and why the agent's git config keys cannot be committed.
+
 **[Asset Standards](./docs/asset_standards.md)**
 
 PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.

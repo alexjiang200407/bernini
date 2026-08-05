@@ -1,0 +1,18 @@
+# Where this project's Git LFS objects live. Read by scripts/util/lfs_store.py -- git and
+# git-lfs never see this file. See docs/lfs.md.
+#
+# A bucket name is not a secret, so it is committed and every clone agrees on it. The
+# credentials to reach it are per-machine and come from the environment:
+# BERNINI_LFS_ACCESS_KEY_ID and BERNINI_LFS_SECRET_ACCESS_KEY.
+#
+# Each key is overridable per machine by BERNINI_LFS_<KEY>, and an endpoint of the form
+# file:///path/to/dir uses a directory instead of a bucket.
+
+[store]
+	endpoint = https://05d5bb995303a463292bd58a3c9ee20a.r2.cloudflarestorage.com
+	bucket = bernini-git-lfs
+	prefix = lfs
+	region = auto
+
+	# Uploads are refused past this. Set well under the provider's free tier; see docs/lfs.md.
+	ceiling = 5 GB

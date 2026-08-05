@@ -62,7 +62,8 @@ jobs:
 
     steps:
       # No LFS: every job compiles and none runs a suite, so assets/ is only staged, never read.
-      # Restore `lfs: true` alongside any step that runs one.
+      # A job that runs one needs the BERNINI_LFS_* secrets and a `git lfs pull`, not
+      # `lfs: true` -- the objects are in this project's own bucket. See docs/lfs.md.
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5

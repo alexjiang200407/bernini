@@ -28,6 +28,13 @@ Schema:
                  the executable itself or the directory holding it.
                  Recognised: cmake, ninja, clang, clang-format, clang-tidy.
                  clang++ is taken from clang's directory.
+    lfs          Credentials for the Git LFS object store (see docs/lfs.md):
+                 accessKeyId, and secretAccessKey encrypted to this user account
+                 by util/secrets.py. Environment variables override both. This
+                 is the one part of the file that is sensitive -- the pre-commit
+                 hook refuses to commit it, but do not paste it into a bug report
+                 on a platform with no key store, where it falls back to
+                 plaintext and says so.
 """
 
 import json

@@ -68,17 +68,19 @@ does not contain the baseline commit vcpkg has to resolve.
 The assets under `assets/` — meshes, textures, environment maps, the golden images the
 render tests compare against — are stored with [Git LFS](https://git-lfs.com).
 
-It has to be configured **per clone**: the `filter.lfs.*` entries live in local git config,
-which no repository can carry. Without them a clone checks out 130-byte pointer files in
-place of the assets, and the failure never mentions LFS — the tests report a corrupt
-`.glb` ("Invalid magic"), and `git lfs pull` exits 0 having done nothing. `init.py`
-installs git-lfs, configures the filters and refetches anything left as a pointer; after
-that, `just run` and `just test` refuse to launch a binary against a pointer checkout and
-say exactly this. To fix a clone by hand:
+The objects are **not** on GitHub. They live in a bucket this project owns, reached by a
+transfer agent in `scripts/`, so a clone needs credentials as well as git-lfs — see
+[docs/lfs.md](docs/lfs.md).
 
-```bash
-git lfs install --local && git lfs pull
-```
+It has to be configured **per clone**: the `filter.lfs.*` entries and the agent's own keys
+live in local git config, which no repository can carry. Without them a clone checks out
+130-byte pointer files in place of the assets, and the failure never mentions LFS — the
+tests report a corrupt `.glb` ("Invalid magic"), and `git lfs pull` exits 0 having done
+nothing. `just init` installs git-lfs, configures the filters, points the clone at the
+store, asks for the credentials and refetches anything left as a pointer; after that,
+`just run` and `just test` refuse to launch a binary against a pointer checkout and say
+exactly this. There is no by-hand shortcut — `git lfs pull` alone cannot work until
+`just init` has told this clone where the objects are.
 
 ### Bash
 
