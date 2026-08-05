@@ -2,6 +2,7 @@
 #include "gfx/RenderTargetBase.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -57,6 +58,45 @@ namespace
 			glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
 	}
 
+	// Abutting slats in two mid greys: fine detail at moderate contrast, which is what actual scene
+	// content is and what the quad cannot stand in for. Blur has to be measured against content the
+	// neighbourhood clamp does not repair -- between black and white the box degenerates to the slat's
+	// own colour and snaps any history back to full contrast, but between two greys the box is as wide
+	// as their difference and a softened history survives inside it.
+	constexpr float c_SlatWidth = 0.5f;
+	constexpr int   c_SlatCount = 76;
+
+	// Sized so the slats cover the measurement box from the drift's starting camera through its
+	// arrival at x = 0.
+	constexpr float c_FenceStartX = -34.0f;
+
+	void
+	AddFence(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		const auto grey = [&scene](float value) {
+			auto desc            = bgl::PbrMaterialDesc();
+			desc.baseColorFactor = glm::vec4(value, value, value, 1.0f);
+			desc.metallicFactor  = 0.0f;
+			desc.roughnessFactor = 0.6f;
+			return scene->CreatePbrMaterial(desc);
+		};
+
+		const bgl::GeomHandle slats[] = {
+			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, grey(0.62f)),
+			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, grey(0.38f)),
+		};
+
+		for (int i = 0; i < c_SlatCount; ++i)
+		{
+			const float x = c_FenceStartX + static_cast<float>(i) * c_SlatWidth;
+			view->CreateStaticMeshInstance(
+				slats[i % 2],
+				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
+		}
+	}
+
 	bgl::SceneDesc
 	QuadSceneDesc()
 	{
@@ -66,6 +106,7 @@ namespace
 		sceneDesc.initialSubmeshes            = 4;
 		sceneDesc.initialVertexBufferByteSize = 8192;
 		sceneDesc.initialIndices              = 256;
+		sceneDesc.initialPbrMaterials         = 4;
 		return sceneDesc;
 	}
 
@@ -90,9 +131,24 @@ namespace
 	constexpr int c_EdgeBoxY = 60;
 	constexpr int c_EdgeBox  = 40;
 
-	// Renders the same tilted quad for `frames` frames and writes the last one to `path`.
+	using ScenePopulator = void (*)(const bgl::SceneRef&, const bgl::SceneViewRef&);
+	using CameraProvider = bgl::Camera (*)(int frame);
+
+	bgl::Camera
+	StillCamera(int)
+	{
+		return Camera();
+	}
+
+	// Renders the populated scene for `frames` frames, each from `cameraAt(frame)`, and writes the
+	// last one to `path`.
 	void
-	RenderTo(const std::string& path, bool taaEnabled, int frames)
+	RenderTo(
+		const std::string& path,
+		bool               taaEnabled,
+		int                frames,
+		ScenePopulator     populate = AddQuad,
+		CameraProvider     cameraAt = StillCamera)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
@@ -107,16 +163,16 @@ namespace
 		REQUIRE(target != nullptr);
 
 		auto scene = gfx->CreateScene(QuadSceneDesc());
-		auto view  = gfx->CreateSceneView(scene, 4);
-		AddQuad(scene, view);
+		auto view  = gfx->CreateSceneView(scene, 128);
+		populate(scene, view);
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
-		job.camera   = Camera();
 		job.viewport = FullViewport();
 
 		for (int frame = 0; frame < frames; ++frame)
 		{
+			job.camera = cameraAt(frame);
 			gfx->DrawFrame(target, job);
 		}
 
@@ -144,6 +200,20 @@ namespace
 				0.5f,
 				500.0f);
 		return camera;
+	}
+
+	// A slower, longer slide than the ghosting pan: slow enough that the quad never leaves the frame,
+	// long enough that the accumulation reaches its steady state under motion rather than measuring
+	// wherever the warm-up had got to.
+	constexpr float c_DriftStep   = 0.5f;
+	constexpr int   c_DriftFrames = 30;
+
+	// A constant `c_DriftStep` per frame, arriving at x = 0 on the last -- which is captured while
+	// the camera is still moving.
+	bgl::Camera
+	DriftingCamera(int frame)
+	{
+		return CameraAt(-static_cast<float>(c_DriftFrames - 1 - frame) * c_DriftStep);
 	}
 
 	// Pans the camera to x = 0 from `c_PanTotal` to its left, and captures the frame it lands on.
@@ -279,6 +349,42 @@ TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]"
 	// history whole and the figure goes to 0.090, so the bound is set an order of magnitude below that
 	// rather than tight against the current number, which the blend weight moves by only a percent.
 	CHECK(trail < 2.0e-2f);
+}
+
+// Blur under motion, as a number. Every off-centre history fetch low-passes the accumulation, and
+// while the camera moves the fetches are off-centre every frame, so the softening compounds until
+// the resolve reaches a steady state visibly blurrier than the still image -- and snaps back once
+// the camera stops, which is what makes it read as motion blur rather than as the antialiasing.
+//
+// The instrument is the fence's alias energy, which is contrast at the pixel scale: filtering the
+// accumulation too softly dims the pattern towards its mean and the energy falls. The still
+// converged frame is what the resolve considers finished, so the bound is a ratio to it.
+TEST_CASE("Fine detail survives the camera moving", "[taa][render]")
+{
+	const std::string still  = "assets/golden/taa_drift_still.got.png";
+	const std::string moving = "assets/golden/taa_drift_moving.got.png";
+
+	RenderTo(still, true, c_ConvergeFrames, AddFence);
+	RenderTo(moving, true, c_DriftFrames, AddFence, DriftingCamera);
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const float stillDetail =
+		bgl::test::AliasEnergy(still, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+	const float movingDetail =
+		bgl::test::AliasEnergy(moving, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+
+	INFO("fence alias energy: still = " << stillDetail << ", moving = " << movingDetail);
+
+	// The still fence has to carry real detail, or the ratio below compares noise to noise.
+	CHECK(stillDetail > 3e-4f);
+
+	// Measured 0.66 with the Catmull-Rom history fetch and 0.60 with a plain bilinear one, which is
+	// the regression this pins out. The clamp bounds how much softness can survive, so the gap is
+	// modest -- but it is the visible part of the moving image going soft.
+	CHECK(movingDetail > stillDetail * 0.62f);
 }
 
 // The first frame has no accumulation to blend against. If it blended anyway it would come out at
