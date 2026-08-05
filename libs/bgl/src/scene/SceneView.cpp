@@ -80,12 +80,17 @@ namespace bgl
 		}
 
 		m_CullState.Init(paddedInstances, m_ResourceManager);
+		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 	}
 
 	void
 	SceneView::SyncInstanceScratch()
 	{
-		m_CullState.Resize(core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize));
+		const uint32_t padded =
+			core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize);
+
+		m_CullState.Resize(padded);
+		m_TransparentSort.Resize(padded);
 	}
 
 	SceneView::~SceneView() noexcept
@@ -99,6 +104,7 @@ namespace bgl
 		m_InstanceBuffer.Release();
 		m_MeshBuffer.Release();
 		m_CullState.Release();
+		m_TransparentSort.Release();
 
 		logger::trace("~SceneView");
 	}
@@ -391,6 +397,7 @@ namespace bgl
 		}
 
 		m_CullState.Update(cmdList);
+		m_TransparentSort.Update(cmdList);
 
 		auto buffers = GetInstanceBuffers();
 		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
@@ -445,5 +452,6 @@ namespace bgl
 			buffers);
 
 		m_CullState.ImportResources(fg, resourceNames);
+		m_TransparentSort.ImportResources(fg, resourceNames);
 	}
 }

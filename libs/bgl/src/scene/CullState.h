@@ -8,7 +8,7 @@ namespace bgl
 
 	/**
 	 * The GPU scratch one culled frustum produces: which instances survived, where they were
-	 * compacted to, and the depth-sorted transparent list drawn from them.
+	 * compacted to, and the per-PSO bucket bases and indirect args built from that.
 	 *
 	 * Separate from the SceneView that owns it because these are outputs of culling *one* frustum,
 	 * not per-view state.
@@ -93,16 +93,6 @@ namespace bgl
 		// transparent depth-key pass.
 		ComputeBuffer m_InstanceVisibility;
 
-		// The depth-sorted transparent path, all written by TransparentSortPass. The keys buffer is
-		// sized off the instance buffer rather than the sort's capacity so the depth-key pass, which
-		// appends without knowing how many instances are transparent, cannot run past the end -- only
-		// the sort itself is capped.
-		ComputeBuffer m_SortedTransparentInstances;
-		ComputeBuffer m_TransparentSortEntries;
-
-		// A single counter, so it is made once and never resized.
-		ComputeBuffer m_TransparentSortCount;
-
 		// Sized by the PSO bucket count rather than the instance count, so Resize does not reach
 		// them: one running total per bucket, and the indirect args the forward pass dispatches on.
 		ComputeBuffer m_PsoPrefixSum;
@@ -110,8 +100,5 @@ namespace bgl
 
 		// This frustum's planes, uploaded per draw and read by the cull dispatch.
 		ComputeBuffer m_CullView;
-
-		// The transparent sort's indirect args: one dispatch over the depth-sorted list.
-		ComputeBuffer m_TransparentDispatchArgs;
 	};
 }
