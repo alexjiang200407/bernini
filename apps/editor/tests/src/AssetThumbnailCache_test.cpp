@@ -188,7 +188,7 @@ TEST_CASE("A .bmesh renders to a thumbnail wearing its own materials", "[thumbna
 	// Nothing has been asked for yet, so nothing is cached.
 	REQUIRE(cache.Lookup(c_MeshPath).isNull());
 
-	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MeshPath);
 
@@ -208,6 +208,39 @@ TEST_CASE("A .bmesh renders to a thumbnail wearing its own materials", "[thumbna
 	REQUIRE(DistinctColours(image) > 1);
 }
 
+TEST_CASE(
+	"A repaint while a thumbnail renders does not start a second render",
+	"[thumbnails][render]")
+{
+	// The end-to-end half of what StampedPixmapCache_test pins directly. A render takes several turns
+	// of the event loop -- a read on a worker, a draw, then a readback resolved on a later turn -- and
+	// the grid repaints throughout, looking the tile up and asking again on every miss.
+	Fixture fixture;
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+
+	cache.SetAssets(&*fixture.assets);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+
+	cache.Request(c_MeshPath);
+
+	// Exactly what AssetFileModel::data does on every paint: look it up, and ask again on a miss.
+	REQUIRE(WaitFor([&] {
+		if (cache.Lookup(c_MeshPath).isNull())
+			cache.Request(c_MeshPath);
+		return ready.count() >= 1;
+	}));
+
+	// A duplicate would be a whole second read and render, so give it room to surface. This bounds
+	// how much of the duplicate it can catch, not whether the claim rule holds -- that is the unit
+	// test's job, and it needs no clock.
+	static_cast<void>(WaitFor([&] { return ready.count() >= 2; }, 3000));
+
+	REQUIRE(ready.count() == 1);
+}
+
 TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][render]")
 {
 	Fixture fixture;
@@ -217,7 +250,7 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 
 	cache.SetAssets(&*fixture.assets);
 
-	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MaterialPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
@@ -252,7 +285,7 @@ TEST_CASE("A hashed material thumbnails as a surface rather than as noise", "[th
 	cache.SetAssets(&*fixture.assets);
 
 	const auto thumbnailOf = [&](const std::string& relative) {
-		QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+		QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 		const std::string path = std::string(c_DataRoot) + "/" + relative;
 		cache.Request(QString::fromStdString(path));
@@ -294,7 +327,7 @@ TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][r
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
-	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MaterialPath);
 	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 1000));
@@ -313,7 +346,7 @@ TEST_CASE("A second request for an unchanged asset does not re-render", "[thumbn
 	REQUIRE(cache.IsReady());
 	cache.SetAssets(&*fixture.assets);
 
-	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MeshPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
@@ -332,7 +365,7 @@ TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][rend
 	REQUIRE(cache.IsReady());
 	cache.SetAssets(&*fixture.assets);
 
-	QSignalSpy ready(&cache, &AssetThumbnailCache::ThumbnailReady);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request("assets/Meshes/does_not_exist.bmesh");
 

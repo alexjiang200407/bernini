@@ -19,7 +19,7 @@ AssetFileModel::SetThumbnails(AssetThumbnailCache* thumbnails)
 
 	connect(
 		m_Thumbnails,
-		&AssetThumbnailCache::ThumbnailReady,
+		&StampedPixmapCache::Ready,
 		this,
 		[this](const QString& path, const QPixmap&) { OnThumbnailReady(path); });
 }

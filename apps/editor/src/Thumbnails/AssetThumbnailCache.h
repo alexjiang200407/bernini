@@ -1,12 +1,9 @@
 #pragma once
 
-#include <QCache>
-#include <QObject>
-#include <QPixmap>
 #include <QQueue>
-#include <QSet>
-#include <QString>
 #include <QThreadPool>
+
+#include "Thumbnails/StampedPixmapCache.h"
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
@@ -49,7 +46,7 @@ struct AssetThumbnailDesc
  * Geometry is added to the shared scene and torn down again after each shot, so a thumbnail leaves
  * nothing behind for the Level Editor's view to draw.
  */
-class AssetThumbnailCache : public QObject
+class AssetThumbnailCache : public StampedPixmapCache
 {
 	Q_OBJECT
 
@@ -68,8 +65,8 @@ public:
 	 * Borrowed, not owned: one manager is shared across the editor so that a material loaded twice is
 	 * one upload and one reference count. It must outlive this cache.
 	 *
-	 * Drops everything already rendered -- the same relative path means a different asset under a
-	 * different root.
+	 * Drops everything already rendered, and everything queued: both were made against the manager
+	 * being replaced.
 	 */
 	void
 	SetAssets(game::AssetManager* assets);
@@ -78,19 +75,10 @@ public:
 	[[nodiscard]] static bool
 	CanThumbnail(const QString& path);
 
-	// The thumbnail for `path`, or a null pixmap when it is absent, still rendering, undrawable, or
-	// stale because the file changed on disk since it was rendered.
-	[[nodiscard]] QPixmap
-	Lookup(const QString& path) const;
-
-	// Renders `path` unless a current copy is cached or one is already in flight. Emits ThumbnailReady
-	// on success.
+	// Renders `path` unless a current copy is cached or one is already being rendered. Emits Ready on
+	// success.
 	void
 	Request(const QString& path);
-
-	// Modification time of `path` in ms, or 0 when it cannot be read.
-	[[nodiscard]] static qint64
-	FileStamp(const QString& path);
 
 	// True if the cache has a working render target, i.e. thumbnails are possible at all.
 	[[nodiscard]] bool
@@ -105,10 +93,6 @@ public:
 	{
 		return m_Desc.dimension;
 	}
-
-Q_SIGNALS:
-	void
-	ThumbnailReady(const QString& path, const QPixmap& thumbnail);
 
 private:
 	enum class ThumbnailType
@@ -188,14 +172,6 @@ private:
 	[[nodiscard]] std::string
 	ToRelative(const QString& path) const;
 
-	struct CachedThumbnail
-	{
-		QPixmap pixmap;
-		qint64  stamp = 0;
-	};
-
-	mutable QCache<QString, CachedThumbnail> m_Cache{ c_BudgetKb };
-
 	// The one capture whose GPU copy is still in flight, and the cache entry it will become.
 	struct PendingCapture
 	{
@@ -206,7 +182,6 @@ private:
 
 	std::optional<PendingCapture> m_PendingCapture;
 
-	QSet<QString>         m_InFlight;
 	QQueue<PendingRender> m_Queue;
 	QThreadPool           m_Pool;
 	QTimer*               m_DrainTimer = nullptr;
