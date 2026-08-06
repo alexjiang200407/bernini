@@ -48,7 +48,10 @@ writer of the backbuffer;
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
-resource namespace (see [Frame Graph](docs/framegraph.md)).
+resource namespace, `v{n}:`; a view's **cull outputs** sit one scope further in, at `v{n}:c{k}:`,
+one `k` per frustum it is culled against. `Compact Instances`, `Transparent Sort` and `Forward` are
+recorded under the frustum's scope and reach the view's own buffers by the outward walk (see
+[Frame Graph](docs/framegraph.md)). Today `k` is only ever 0, the camera.
 
 `DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the view and its cull
@@ -201,9 +204,11 @@ in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `psoPrefixSumBuffer` and
 `compactDispatchArgs` (sized `c_PsoCount`) and `cull.view` (one `CullView`: view-proj + frustum
-planes, rewritten each draw) live in that view's `CullState` and are imported under its
-namespace. The pass reaches them through `DrawData::cullState` and names them by the same graph
-names as before.
+planes, rewritten each draw) live in the `CullState` for the frustum being culled and are imported
+under that frustum's scope. The pass reaches them through `DrawData::cullState` and names them by
+the same graph names as before, so N frustums of one view carry identical names without aliasing.
+Its four sub-pass names are keyed on `(drawIdx, cullIdx)`, since pass names are unique graph-wide
+rather than per namespace.
 
 It adds **four sub-passes**:
 
@@ -260,7 +265,8 @@ many instances turn out to be transparent; only the sort itself is bounded.
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
   position.
 * **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and
-  `transparentSort.dispatchArgs` — all owned by the view's `CullState`, the last two consumed by
+  `transparentSort.dispatchArgs` — all owned by the view's `TransparentSortState`, one per view
+  rather than per frustum since only a camera sorts transparents, the last two consumed by
   `Forward`. The pass itself owns no buffers, only its two kernels.
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
