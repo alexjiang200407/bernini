@@ -1027,3 +1027,107 @@ TEST_CASE("A pan leaves no smear across a hashed alpha ramp", "[hashedalpha][ren
 	// 2.58e-3 wide, 2.28e-3 tightened. Bounded loosely against gross regression.
 	CHECK(on.lead < 3.0e-3f);
 }
+
+namespace
+{
+	// A texture whose every mip is one solid RGBA: whatever colour a draw shows is the mip the
+	// shader actually read, and whatever coverage it shows is the alpha it actually sampled.
+	assetlib::ImageData
+	MakeMipProbeTexture(std::span<const std::array<uint8_t, 4>> mipColors)
+	{
+		auto image      = assetlib::ImageData();
+		image.width     = c_StrandTexSize;
+		image.height    = c_StrandTexSize;
+		image.arraySize = 1;
+		image.vkFormat  = assetlib::VkFormat::R8G8B8A8_SRGB;
+		image.isCubemap = false;
+		image.mipLevels = static_cast<uint32_t>(mipColors.size());
+
+		size_t totalBytes = 0;
+		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
+		{
+			const uint32_t dim = c_StrandTexSize >> mip;
+			totalBytes += static_cast<size_t>(dim) * dim * 4;
+		}
+		image.pixels = core::fixed_buffer<std::byte>(totalBytes);
+
+		size_t offset = 0;
+		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
+		{
+			const uint32_t dim = c_StrandTexSize >> mip;
+			for (size_t t = 0; t < static_cast<size_t>(dim) * dim; ++t)
+			{
+				std::memcpy(image.pixels.data() + offset + t * 4, mipColors[mip].data(), 4);
+			}
+			image.subresources.push_back(
+				{ offset, static_cast<uint64_t>(dim) * 4, static_cast<uint64_t>(dim) * dim * 4 });
+			offset += static_cast<size_t>(dim) * dim * 4;
+		}
+
+		return image;
+	}
+
+	// One frame of the card, no TAA: the seed is frozen, so the render is deterministic and the
+	// patch mean is the coverage times the shaded colour.
+	bgl::test::Rgba
+	RenderCardMean(const std::string& path, assetlib::ImageData texture)
+	{
+		PatchScene card = MakeCardScene(std::move(texture), false);
+		card.gfx->DrawFrame(card.target, card.job);
+		card.gfx->ScreenshotPng(card.target, path);
+		return bgl::test::MeanColor(path, c_StrandBoxX, c_StrandBoxY, c_StrandBox, c_StrandBox);
+	}
+}
+
+// Where the distant-card divergence lives, split in two through the real forward path. The card
+// covers about 55 pixels at this camera, 4.7 texels a pixel, so the footprint asks for mip 2.2 of
+// its 256-texel chain: a draw showing mip 0's colour means the implicit LOD never left mip 0, and
+// a draw showing mip 0's alpha means the chain's alpha never reached the hash. The explicit-LOD
+// compute readback of an equivalent chain passes on every backend, so this pins the draw-time
+// half alone.
+TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha][texture][render]")
+{
+	// mip 0 red, mip 1 green, mip 2 blue, mip 3 yellow, all opaque.
+	constexpr std::array<std::array<uint8_t, 4>, 4> c_ColourPerMip = { {
+		{ 255, 0, 0, 255 },
+		{ 0, 255, 0, 255 },
+		{ 0, 0, 255, 255 },
+		{ 255, 255, 0, 255 },
+	} };
+
+	// White throughout; only the alpha descends with the chain.
+	constexpr std::array<std::array<uint8_t, 4>, 4> c_AlphaPerMip = { {
+		{ 255, 255, 255, 255 },
+		{ 255, 255, 255, 128 },
+		{ 255, 255, 255, 64 },
+		{ 255, 255, 255, 32 },
+	} };
+
+	constexpr std::array<std::array<uint8_t, 4>, 4> c_WhitePerMip = { {
+		{ 255, 255, 255, 255 },
+		{ 255, 255, 255, 255 },
+		{ 255, 255, 255, 255 },
+		{ 255, 255, 255, 255 },
+	} };
+
+	const bgl::test::Rgba hue = RenderCardMean(
+		"assets/golden/mip_probe_colour.got.png",
+		MakeMipProbeTexture(c_ColourPerMip));
+	const bgl::test::Rgba faded =
+		RenderCardMean("assets/golden/mip_probe_alpha.got.png", MakeMipProbeTexture(c_AlphaPerMip));
+	const bgl::test::Rgba full =
+		RenderCardMean("assets/golden/mip_probe_full.got.png", MakeMipProbeTexture(c_WhitePerMip));
+
+	INFO(
+		"hue = " << hue.r << "," << hue.g << "," << hue.b << "  faded luma = " << faded.Luma()
+				 << "  full luma = " << full.Luma());
+
+	// The reference has to be lit, or the ratio below compares noise.
+	REQUIRE(full.Luma() > 0.05f);
+
+	// Around mip 2 the card reads blue into yellow; at mip 0 it is red and nothing else.
+	CHECK(hue.b > hue.r);
+
+	// The sampled alpha around mip 2 is a quarter and below; mip 0's is opaque.
+	CHECK(faded.Luma() < full.Luma() * 0.5f);
+}
