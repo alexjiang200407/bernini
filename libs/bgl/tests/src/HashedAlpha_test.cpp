@@ -1118,7 +1118,9 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 	const bgl::test::Rgba full =
 		RenderCardMean("assets/golden/mip_probe_full.got.png", MakeMipProbeTexture(c_WhitePerMip));
 
-	INFO(
+	// WARN rather than INFO so the figures print on a passing run too: this probe exists to be
+	// compared across backends, and the passing side's numbers are half the comparison.
+	WARN(
 		"hue = " << hue.r << "," << hue.g << "," << hue.b << "  faded luma = " << faded.Luma()
 				 << "  full luma = " << full.Luma());
 
