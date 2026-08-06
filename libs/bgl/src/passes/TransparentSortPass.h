@@ -1,7 +1,6 @@
 #pragma once
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
-#include "scene/ComputeBuffer.h"
 #include "uniforms/Uniforms.h"
 
 namespace bgl
@@ -24,10 +23,7 @@ namespace bgl
 	public:
 		TransparentSortPass() = default;
 		~TransparentSortPass() noexcept { logger::trace("~TransparentSortPass"); }
-		TransparentSortPass(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
-		{
-			Init(device, resourceManager);
-		}
+		explicit TransparentSortPass(IDevice* device) { Init(device); }
 
 		TransparentSortPass(const TransparentSortPass&) noexcept = delete;
 		TransparentSortPass(TransparentSortPass&&) noexcept      = delete;
@@ -39,10 +35,12 @@ namespace bgl
 		operator=(TransparentSortPass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager);
+		Init(IDevice* device);
 
+		// Owns no GPU storage -- the sort buffers live on the view's TransparentSortState, one set
+		// per view rather than per frustum -- so this only drops the kernels.
 		void
-		Release(bool deferred = true);
+		Release();
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
@@ -60,7 +58,5 @@ namespace bgl
 	private:
 		ComputeKernel m_DepthKeys;
 		ComputeKernel m_Sort;
-
-		ComputeBuffer m_DispatchArgs;
 	};
 }

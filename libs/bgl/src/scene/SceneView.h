@@ -1,9 +1,10 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
+#include "scene/CullState.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "scene/TransparentSortState.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -100,15 +101,52 @@ namespace bgl
 		}
 
 		[[nodiscard]] const std::string&
-		ResourceNamespace() const noexcept
+		GetResourceNamespace() const noexcept
 		{
 			return m_NamePrefix;
 		}
 
+		/**
+		 * The scratch for the `cullIdx`th frustum this view is culled against. Index 0 is the
+		 * camera and always exists.
+		 */
+		[[nodiscard]] CullState&
+		GetCullState(uint32_t cullIdx) noexcept
+		{
+			gassert(cullIdx < m_CullStates.size(), "cull index is out of range");
+			return m_CullStates[cullIdx];
+		}
+
+		[[nodiscard]] uint32_t
+		GetCullStateCount() const noexcept
+		{
+			return static_cast<uint32_t>(m_CullStates.size());
+		}
+
+		/**
+		 * Grows this view to `count` frustums, allocating the scratch each new one needs.
+		 *
+		 * Never shrinks. Must not be called while a frame that has already recorded against this
+		 * view is in flight: a DrawData holds a raw pointer to one of these, which growing
+		 * invalidates.
+		 *
+		 * @throws std::runtime_error if the device cannot allocate.
+		 */
+		void
+		EnsureCullStateCount(uint32_t count);
+
+		/** The graph namespace the `cullIdx`th frustum's outputs are imported under. */
+		[[nodiscard]] std::string
+		GetCullNamespace(uint32_t cullIdx) const
+		{
+			return std::format("{}c{}:", m_NamePrefix, cullIdx);
+		}
+
+		// The cull inputs: one per view, shared by every frustum it is culled against.
 		auto
 		GetInstanceBuffers()
 		{
-			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_CompactedInstances);
+			return std::tie(m_InstanceBuffer, m_MeshBuffer);
 		}
 
 		/**
@@ -125,6 +163,11 @@ namespace bgl
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
+		/**
+		 * Imports this view's buffers under its own scope and each frustum's under one nested inside
+		 * it. Leaves the graph's namespace at this view's, whatever it was on entry, since the
+		 * update pass `resourceNames` feeds has to be recorded there.
+		 */
 		void
 		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames);
 
@@ -171,12 +214,9 @@ namespace bgl
 		void
 		InitBuffers();
 
-		void
-		InitInstanceScratch(uint32_t paddedInstances);
-
 		/**
-		 * Brings the per-instance-slot scratch buffers back in line with the instance buffer after
-		 * it has grown. A no-op when they already cover it.
+		 * Brings the cull state back in line with the instance buffer after it has grown. A no-op
+		 * when it already covers it.
 		 */
 		void
 		SyncInstanceScratch();
@@ -192,17 +232,12 @@ namespace bgl
 
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
-		ComputeBuffer                    m_CompactedInstances;
 
-		// One word per instance slot, written by the cull pass and read by the counting sort and the
-		// transparent depth-key pass. Sized like the instance buffer.
-		ComputeBuffer m_InstanceVisibility;
+		// One entry per frustum this view is culled against; index 0 is the camera.
+		std::vector<CullState> m_CullStates;
 
-		// The depth-sorted transparent path, all written by TransparentSortPass. The keys buffer is
-		// sized off the instance buffer, not the sort capacity: see the note at its initialization.
-		ComputeBuffer m_SortedTransparentInstances;
-		ComputeBuffer m_TransparentSortEntries;
-		ComputeBuffer m_TransparentSortCount;
+		// Per view, not per frustum: only the camera sorts transparents.
+		TransparentSortState m_TransparentSort;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;

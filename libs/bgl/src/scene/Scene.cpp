@@ -419,7 +419,7 @@ namespace bgl
 		ImportResources(fg, updateBuffers);
 
 		PassDesc desc;
-		desc.SetName(std::format("Scene Update {}", drawIdx));
+		desc.SetName("Scene Update {}", drawIdx);
 
 		for (const std::string& buffer : updateBuffers)
 		{

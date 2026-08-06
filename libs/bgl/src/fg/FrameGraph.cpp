@@ -5,6 +5,25 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// The scope one level out: "v0:c1:" -> "v0:" -> "". A scope has to end in ':' for another
+		// to nest inside it.
+		std::string_view
+		ParentScope(std::string_view scope) noexcept
+		{
+			if (scope.empty())
+			{
+				return {};
+			}
+
+			scope.remove_suffix(1);
+
+			const size_t cut = scope.find_last_of(':');
+			return cut == std::string_view::npos ? std::string_view() : scope.substr(0, cut + 1);
+		}
+	}
+
 	BufferHandle
 	PassContext::GetBuffer(std::string_view sv) const
 	{
@@ -115,20 +134,20 @@ namespace bgl
 
 	FrameGraph&
 	FrameGraph::ImportBuffer(
-		std::string                name,
+		std::string_view           name,
 		BufferHandle               handle,
 		std::optional<AccessState> initial)
 	{
-		return ImportBufferKey(m_CurrentNamespace + name, handle, initial);
+		return ImportBufferKey(std::string(m_CurrentNamespace).append(name), handle, initial);
 	}
 
 	FrameGraph&
 	FrameGraph::ImportGlobalBuffer(
-		std::string                name,
+		std::string_view           name,
 		BufferHandle               handle,
 		std::optional<AccessState> initial)
 	{
-		return ImportBufferKey(std::move(name), handle, initial);
+		return ImportBufferKey(std::string(name), handle, initial);
 	}
 
 	FrameGraph&
@@ -147,11 +166,11 @@ namespace bgl
 
 	FrameGraph&
 	FrameGraph::ImportTexture(
-		std::string                name,
+		std::string_view           name,
 		TextureHandle              handle,
 		std::optional<AccessState> initial)
 	{
-		const std::string key = m_CurrentNamespace + name;
+		const std::string key = std::string(m_CurrentNamespace).append(name);
 
 		ImportedRes res;
 		res.handle  = handle;
@@ -175,10 +194,22 @@ namespace bgl
 		{
 			return scoped;
 		}
+
+		for (std::string_view outer = ParentScope(ns); !outer.empty(); outer = ParentScope(outer))
+		{
+			scoped.assign(outer).append(name);
+			if (m_Imported.contains(scoped))
+			{
+				return scoped;
+			}
+		}
+
 		if (m_Imported.contains(name))
 		{
 			return std::string(name);
 		}
+
+		scoped.assign(ns).append(name);
 		return scoped;
 	}
 
