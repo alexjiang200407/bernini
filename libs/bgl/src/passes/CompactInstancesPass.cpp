@@ -69,8 +69,7 @@ namespace bgl
 		fg.ImportGlobalBuffer("cull.stats", m_CullStats.GetBufferHandle())
 			.AddPass(
 				PassDesc()
-					.SetName(
-						std::format("Compact Instances Update {}.{}", draw.drawIdx, draw.cullIdx))
+					.SetName("Compact Instances Update {}.{}", draw.drawIdx, draw.cullIdx)
 					.AddBufferArg(
 						"compactedInstances.psoPrefixSumBuffer",
 						BarrierSyncFlag::kCopy,
@@ -87,7 +86,7 @@ namespace bgl
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteClear(ctx, draw); }))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx))
+					.SetName("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx)
 					.AddBufferArg(
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,
@@ -115,11 +114,7 @@ namespace bgl
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
 			.AddPass(
 				PassDesc()
-					.SetName(
-						std::format(
-							"Histogram and Prefix Sum Instances {}.{}",
-							draw.drawIdx,
-							draw.cullIdx))
+					.SetName("Histogram and Prefix Sum Instances {}.{}", draw.drawIdx, draw.cullIdx)
 					.AddBufferArg(
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,
@@ -137,7 +132,7 @@ namespace bgl
 					}))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Compact Instances {}.{}", draw.drawIdx, draw.cullIdx))
+					.SetName("Compact Instances {}.{}", draw.drawIdx, draw.cullIdx)
 					.AddBufferArg(
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,

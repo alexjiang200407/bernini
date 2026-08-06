@@ -79,12 +79,12 @@ namespace bgl
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
 
-		EnsureCullStates(1);
+		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 	}
 
 	void
-	SceneView::EnsureCullStates(uint32_t count)
+	SceneView::EnsureCullStateCount(uint32_t count)
 	{
 		const uint32_t padded =
 			core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize);
@@ -459,7 +459,7 @@ namespace bgl
 		ImportResources(fg, updateBuffers);
 
 		PassDesc desc;
-		desc.SetName(std::format("SceneView Update {}", drawIdx));
+		desc.SetName("SceneView Update {}", drawIdx);
 
 		for (const std::string& buffer : updateBuffers)
 		{
@@ -497,7 +497,7 @@ namespace bgl
 		// same names without aliasing. The view's own imports stay outside, shared by all of them.
 		for (uint32_t cullIdx = 0; cullIdx < m_CullStates.size(); ++cullIdx)
 		{
-			m_CullStates[cullIdx].ImportResources(fg, CullNamespace(cullIdx), resourceNames);
+			m_CullStates[cullIdx].ImportResources(fg, GetCullNamespace(cullIdx), resourceNames);
 		}
 
 		fg.SetResourceNamespace(m_NamePrefix);

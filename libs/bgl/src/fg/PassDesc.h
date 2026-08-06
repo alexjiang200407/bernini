@@ -187,6 +187,14 @@ namespace bgl
 			return *this;
 		}
 
+		/** Formats the name, so a pass keyed on its draw and frustum need not spell out std::format. */
+		template <typename... Args>
+		PassDesc&
+		SetName(std::format_string<Args...> fmt, Args&&... args)
+		{
+			return SetName(std::format(fmt, std::forward<Args>(args)...));
+		}
+
 		PassDesc&
 		SetName(std::string passName) noexcept
 		{

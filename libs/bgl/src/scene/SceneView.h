@@ -133,11 +133,11 @@ namespace bgl
 		 * @throws std::runtime_error if the device cannot allocate.
 		 */
 		void
-		EnsureCullStates(uint32_t count);
+		EnsureCullStateCount(uint32_t count);
 
 		/** The graph namespace the `cullIdx`th frustum's outputs are imported under. */
 		[[nodiscard]] std::string
-		CullNamespace(uint32_t cullIdx) const
+		GetCullNamespace(uint32_t cullIdx) const
 		{
 			return std::format("{}c{}:", m_NamePrefix, cullIdx);
 		}

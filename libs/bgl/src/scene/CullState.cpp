@@ -99,15 +99,15 @@ namespace bgl
 		fg.SetResourceNamespace(std::string(scope));
 
 		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
-			fg.ImportBuffer(std::string(name), buffer.GetBufferHandle());
-			updateArgs.push_back(std::string(scope) + std::string(name));
+			fg.ImportBuffer(name, buffer.GetBufferHandle());
+			updateArgs.push_back(std::format("{}{}", scope, name));
 		};
 
 		importUpdated(c_CompactedInstancesName, m_CompactedInstances);
 		importUpdated(c_InstanceVisibilityName, m_InstanceVisibility);
 
-		fg.ImportBuffer(std::string(c_PsoPrefixSumName), m_PsoPrefixSum.GetBufferHandle());
-		fg.ImportBuffer(std::string(c_DispatchArgsName), m_CompactedDispatchArgs.GetBufferHandle());
-		fg.ImportBuffer(std::string(c_CullViewName), m_CullView.GetBufferHandle());
+		fg.ImportBuffer(c_PsoPrefixSumName, m_PsoPrefixSum.GetBufferHandle());
+		fg.ImportBuffer(c_DispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
+		fg.ImportBuffer(c_CullViewName, m_CullView.GetBufferHandle());
 	}
 }

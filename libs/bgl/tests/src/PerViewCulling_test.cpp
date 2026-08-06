@@ -121,7 +121,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	// positions[i]. The reference cull below is indexed on that.
 	REQUIRE(view->GetInstanceCount() == c_InstanceCount);
 
-	view->EnsureCullStates(2);
+	view->EnsureCullStateCount(2);
 	REQUIRE(view->GetCullStateCount() == 2);
 
 	auto  sceneBuffers  = scene->GetBuffers();
@@ -202,7 +202,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		draw.viewState.viewProj = viewProj[cullIdx];
 		draw.viewState.cullView = bgl::BuildCullView(viewProj[cullIdx]);
 
-		fg.SetResourceNamespace(view->CullNamespace(cullIdx));
+		fg.SetResourceNamespace(view->GetCullNamespace(cullIdx));
 		compactPass.AttachToFrameGraph(fg, draw);
 	}
 
@@ -215,11 +215,11 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	// are the ones name resolution produced for each frustum's scope.
 	for (uint32_t cullIdx = 0; cullIdx < 2; ++cullIdx)
 	{
-		fg.SetResourceNamespace(view->CullNamespace(cullIdx));
+		fg.SetResourceNamespace(view->GetCullNamespace(cullIdx));
 
 		fg.AddPass(
 			bgl::PassDesc()
-				.SetName(std::format("Readback {}", cullIdx))
+				.SetName("Readback {}", cullIdx)
 				.AddBufferArg(
 					"scene.compactedInstances",
 					bgl::BarrierSyncFlag::kCopy,

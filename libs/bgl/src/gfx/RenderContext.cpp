@@ -527,7 +527,7 @@ namespace bgl
 		}
 
 		// The skybox above names only globals; everything below reads cull outputs.
-		m_FrameGraph.SetResourceNamespace(view->CullNamespace(draw.cullIdx));
+		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
 
 		// Cull first (a sub-pass of CompactInstances writes the visibility word), then the transparent
 		// sort, which reads it.

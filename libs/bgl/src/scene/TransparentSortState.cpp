@@ -93,6 +93,6 @@ namespace bgl
 		importUpdated(c_EntriesName, m_Entries);
 		importUpdated(c_CountName, m_Count);
 
-		fg.ImportBuffer(std::string(c_DispatchArgsName), m_DispatchArgs.GetBufferHandle());
+		fg.ImportBuffer(c_DispatchArgsName, m_DispatchArgs.GetBufferHandle());
 	}
 }

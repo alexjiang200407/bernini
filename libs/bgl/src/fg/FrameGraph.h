@@ -59,7 +59,7 @@ namespace bgl
 		 */
 		FrameGraph&
 		ImportBuffer(
-			std::string                name,
+			std::string_view           name,
 			BufferHandle               handle,
 			std::optional<AccessState> initial = {});
 
@@ -72,13 +72,13 @@ namespace bgl
 		 */
 		FrameGraph&
 		ImportGlobalBuffer(
-			std::string                name,
+			std::string_view           name,
 			BufferHandle               handle,
 			std::optional<AccessState> initial = {});
 
 		FrameGraph&
 		ImportTexture(
-			std::string                name,
+			std::string_view           name,
 			TextureHandle              handle,
 			std::optional<AccessState> initial = {});
 

@@ -73,8 +73,10 @@ namespace bgl
 		uint32_t                    drawIdx = 0;
 		core::SharedRef<ISceneView> view    = nullptr;
 
-		// Which of the view's frustums this records for. The cull pipeline's pass names are keyed on
-		// it as well as drawIdx, since a draw may record that pipeline once per frustum.
+		// Which of the SceneView's frustums this records for. An identifier only -- the scratch
+		// itself arrives through cullState below, and the count lives on the view
+		// (SceneView::GetCullStateCount). The cull pipeline's pass names are keyed on it as well as
+		// drawIdx, since a draw may record that pipeline once per frustum.
 		uint32_t cullIdx = 0;
 
 		// This draw's frustum scratch, owned by the view. Non-owning: a DrawData is captured by

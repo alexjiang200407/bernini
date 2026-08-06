@@ -59,7 +59,7 @@ namespace bgl
 
 		auto desc = PassDesc();
 
-		desc.SetName(std::format("Skybox {}", draw.drawIdx))
+		desc.SetName("Skybox {}", draw.drawIdx)
 			.AddTextureArg(
 				TextureArg{ std::string(c_BackbufferName),
 		                    BarrierSyncFlag::kRenderTarget,

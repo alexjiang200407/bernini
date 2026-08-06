@@ -54,7 +54,7 @@ namespace bgl
 	{
 		fg.AddPass(
 			  PassDesc()
-				  .SetName(std::format("Transparent Sort Clear {}", draw.drawIdx))
+				  .SetName("Transparent Sort Clear {}", draw.drawIdx)
 				  .AddBufferArg(c_CountBuffer, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest)
 				  .AddBufferArg(
 					  c_DispatchArgs,
@@ -63,7 +63,7 @@ namespace bgl
 				  .SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Transparent Depth Keys {}", draw.drawIdx))
+					.SetName("Transparent Depth Keys {}", draw.drawIdx)
 					.AddBufferArg(
 						c_InstanceBuffer,
 						BarrierSyncFlag::kComputeShader,
@@ -87,7 +87,7 @@ namespace bgl
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteDepthKeys(ctx, draw); }))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Transparent Sort {}", draw.drawIdx))
+					.SetName("Transparent Sort {}", draw.drawIdx)
 					.AddBufferArg(
 						c_EntriesBuffer,
 						BarrierSyncFlag::kComputeShader,
