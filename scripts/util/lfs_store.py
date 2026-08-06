@@ -275,10 +275,16 @@ class S3Store:
             raise StoreError(str(exc)) from exc
 
     def exists(self, oid):
+        """Whether the store already holds an object.
+
+        Signed whenever there is a key, because every caller is deciding whether to skip an
+        upload: a public endpoint answers from a cache, and a stale hit would drop an object
+        that never made it into the bucket.
+        """
         try:
-            if self._read_url:
-                return s3.exists_public(self._public_url(oid))
-            return self._signed("checking the store").exists(object_key(oid, self.prefix))
+            if self._client:
+                return self._client.exists(object_key(oid, self.prefix))
+            return s3.exists_public(self._public_url(oid))
         except s3.S3Error as exc:
             raise StoreError(str(exc)) from exc
 
