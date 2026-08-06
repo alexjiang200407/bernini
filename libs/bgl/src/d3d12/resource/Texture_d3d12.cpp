@@ -25,7 +25,7 @@ namespace bgl
 
 		D3D12_RESOURCE_DESC1 textureDesc = {};
 		textureDesc.MipLevels            = static_cast<uint16_t>(desc.mipLevels);
-		textureDesc.Format               = ConvertFormat(desc.format);
+		textureDesc.Format               = ConvertResourceFormat(desc.format, desc.usage);
 		textureDesc.Width                = desc.width;
 		textureDesc.Height               = desc.height;
 		textureDesc.Flags                = D3D12_RESOURCE_FLAG_NONE;

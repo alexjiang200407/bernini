@@ -76,10 +76,18 @@ the call instead of throwing.
   average and smear across frames. The weighting is undone afterwards, so what is stored stays
   linear.
 
-* **No depth.** The depth buffer is allocated depth-stencil-only, so reading it means an SRV over a
-  depth format in both backends. The neighbourhood clamp removes the bulk of ghosting on its own;
-  closest-fragment velocity dilation and depth-based disocclusion rejection stay open until depth
-  grows an SRV. The depth-free stand-in was tried and rejected — see the next bullet.
+* **Depth has an SRV now, and the resolve still does not read it.** Depth-based disocclusion
+  rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
+  surface nearer than the neighbourhood shows — was built and measured once the SRV existed, and
+  rejected on those measurements. Every ghost instrument scored it at parity: the wake a receding
+  occluder leaves is already scrubbed by the neighbourhood clamp within a frame or two, over empty
+  *and* detailed backgrounds (the wake-over-slats test measures 1.2e-4 with and without it). What
+  it did move was flicker on stochastic coverage — a grazing hashed pan trebled, 0.0024 → 0.0067 —
+  because a hashed pixel's depth flips between strand and backdrop every frame, so single-frame
+  depth cannot tell "the strand left" from "the strand's coin came up tails", and the ghost halo
+  that *is* visible on hair hugs the sprinkle zone where that ambiguity lives. What stands is the
+  depth SRV and its frame-graph tracking ([Passes Overview](docs/passes.md)), which any future
+  depth reader starts from.
 
 * **Not velocity-dilated either.** Reprojecting by the longest velocity in the 3×3 — the no-depth
   stand-in for closest-fragment dilation — measured worse everywhere it was meant to help: panning

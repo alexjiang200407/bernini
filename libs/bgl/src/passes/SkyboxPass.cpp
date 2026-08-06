@@ -69,7 +69,12 @@ namespace bgl
 				TextureArg{ std::string(c_MotionVectorsName),
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget });
+		                    BarrierLayout::kRenderTarget })
+			.AddTextureArg(
+				TextureArg{ std::string(c_DepthName),
+		                    BarrierSyncFlag::kDepthStencil,
+		                    BarrierAccessFlag::kDepthWrite,
+		                    BarrierLayout::kDepthWrite });
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 

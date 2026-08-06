@@ -255,6 +255,11 @@ namespace bgl
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget })
+			.AddTextureArg(
+				TextureArg{ std::string(c_DepthName),
+		                    BarrierSyncFlag::kDepthStencil,
+		                    BarrierAccessFlag::kDepthWrite,
+		                    BarrierLayout::kDepthWrite })
 			.AddBufferArg(
 				BufferArg{ std::string(c_DispatchArgsBuffer),
 		                   BarrierSyncFlag::kIndirectArgument,

@@ -71,10 +71,8 @@ namespace
 	constexpr float c_FenceStartX = -34.0f;
 
 	void
-	AddFence(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	AddSlatWall(const bgl::SceneRef& scene, const bgl::SceneViewRef& view, int count, float startX)
 	{
-		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
-
 		const auto grey = [&scene](float value) {
 			auto desc            = bgl::PbrMaterialDesc();
 			desc.baseColorFactor = glm::vec4(value, value, value, 1.0f);
@@ -88,13 +86,20 @@ namespace
 			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, grey(0.38f)),
 		};
 
-		for (int i = 0; i < c_SlatCount; ++i)
+		for (int i = 0; i < count; ++i)
 		{
-			const float x = c_FenceStartX + static_cast<float>(i) * c_SlatWidth;
+			const float x = startX + static_cast<float>(i) * c_SlatWidth;
 			view->CreateStaticMeshInstance(
 				slats[i % 2],
 				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
 		}
+	}
+
+	void
+	AddFence(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+		AddSlatWall(scene, view, c_SlatCount, c_FenceStartX);
 	}
 
 	bgl::SceneDesc
@@ -214,6 +219,49 @@ namespace
 	DriftingCamera(int frame)
 	{
 		return CameraAt(-static_cast<float>(c_DriftFrames - 1 - frame) * c_DriftStep);
+	}
+
+	// A quad floating in front of a wall of grey slats, for the ghost test the empty-background pan
+	// cannot perform: over emptiness the neighbourhood colour clamp degenerates to the background's
+	// own colour and scrubs a trail by itself, but over mid-contrast detail the clamp's box is as
+	// wide as the slats' difference and a bright ghost survives inside it. Only depth can tell that
+	// ghost from detail. The quad is nearer than the slats so a camera pan uncovers them by
+	// parallax.
+	constexpr float c_ParallaxQuadZ    = 8.0f;
+	constexpr float c_ParallaxQuadSize = 6.0f;
+	constexpr int   c_WallSlatCount    = 80;
+
+	void
+	AddQuadOverSlats(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+		AddSlatWall(
+			scene,
+			view,
+			c_WallSlatCount,
+			-static_cast<float>(c_WallSlatCount / 2) * c_SlatWidth);
+
+		auto quad = scene->AddPlaneGeom(1, 1, c_ParallaxQuadSize, c_ParallaxQuadSize);
+		view->CreateStaticMeshInstance(
+			quad,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
+				glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+	}
+
+	// Converges at the pan's start, then arrives at x = 0 exactly as RenderPan's pan does -- so the
+	// accumulation is full of the quad when the parallax uncovers the slats behind it.
+	bgl::Camera
+	GhostPanCamera(int frame)
+	{
+		const int panFrame  = frame - c_ConvergeFrames;
+		const int remaining = std::max(0, c_PanFrames - 1 - std::max(panFrame, 0));
+		return CameraAt(-static_cast<float>(remaining) * c_PanStep);
+	}
+
+	bgl::Camera
+	GhostStillCamera(int)
+	{
+		return CameraAt(0.0f);
 	}
 
 	// Pans the camera to x = 0 from `c_PanTotal` to its left, and captures the frame it lands on.
@@ -349,6 +397,39 @@ TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]"
 	// history whole and the figure goes to 0.090, so the bound is set an order of magnitude below that
 	// rather than tight against the current number, which the blend weight moves by only a percent.
 	CHECK(trail < 2.0e-2f);
+}
+
+// The wake over detail, as a number -- the case the empty-background pan cannot measure. Over
+// emptiness the clamp's box collapses to the background's own colour and scrubs a trail
+// trivially; over mid-contrast slats the box is as wide as their difference, which is where a
+// bright occluder's remnant would have room to hide. It does not: wherever the wake is locally
+// flat the box is tight again, and the remnant is snapped out within a frame or two of the
+// reveal. The wake box is slats the quad covered at the pan's start and has fully uncovered on
+// the arrival frame; the still render is the same converged scene, so anything above its own
+// convergence noise is ghost.
+TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
+{
+	const std::string still  = "assets/golden/taa_parallax_still.got.png";
+	const std::string panned = "assets/golden/taa_parallax_panned.got.png";
+
+	RenderTo(still, true, c_ConvergeFrames + c_PanFrames, AddQuadOverSlats, GhostStillCamera);
+	RenderTo(panned, true, c_ConvergeFrames + c_PanFrames, AddQuadOverSlats, GhostPanCamera);
+
+	// Slats the quad's right edge (at x = 199 on arrival) has left behind, inside its span at the
+	// pan's start.
+	constexpr int c_WakeX = 204;
+	constexpr int c_WakeY = 70;
+	constexpr int c_WakeW = 32;
+	constexpr int c_WakeH = 116;
+
+	const float ghost = bgl::test::FrameDelta(panned, still, c_WakeX, c_WakeY, c_WakeW, c_WakeH);
+
+	INFO("wake delta against the converged still: " << ghost);
+
+	// Measured 1.2e-4, which is convergence-state noise; a ghost the clamp admitted would sit an
+	// order of magnitude above. Depth-based disocclusion rejection was measured against this very
+	// number and moved it nowhere -- the clamp owns the wake.
+	CHECK(ghost < 1.0e-3f);
 }
 
 // Blur under motion, as a number. Every off-centre history fetch low-passes the accumulation, and

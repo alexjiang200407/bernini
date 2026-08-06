@@ -65,6 +65,17 @@ namespace bgl
 		[[nodiscard]] virtual DsvHandle
 		GetDepthDsv() const noexcept = 0;
 
+		[[nodiscard]] virtual TextureHandle
+		GetDepthTexture() const noexcept = 0;
+
+		/**
+		 * A shader-readable view of the depth attachment, for passes that consume the scene's depth
+		 * after the geometry has written it. Reads raw device depth; linearizing it is the
+		 * consumer's business, since only it knows which projection produced the frame.
+		 */
+		[[nodiscard]] virtual SrvHandle
+		GetDepthSrv() const noexcept = 0;
+
 		/**
 		 * The screen-space velocity buffer the forward pass writes alongside colour: for each pixel,
 		 * the UV displacement from where its surface was last frame to where it is now, so history is
