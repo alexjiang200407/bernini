@@ -51,10 +51,21 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   name was never imported is a *transient*: it participates in dependency/ordering by name but has
   no handle, so `PassContext::GetBuffer/GetTexture` throws for it.
 
-* **Namespaces let many scopes share one graph.** `SetResourceNamespace(ns)` prefixes subsequent
-  imports and the name-resolution of subsequently-added passes. `ResolveName` tries `ns+name` then
-  falls back to the bare `name`, so `ImportGlobalBuffer` registers a resource reachable from every
-  namespace. This is how multiple scenes/views populate one graph without colliding.
+* **Namespaces let many scopes share one graph, and they nest.** `SetResourceNamespace(ns)` prefixes
+  subsequent imports and the name-resolution of subsequently-added passes. `ResolveName` tries
+  `ns+name`, then falls outward one `:`-delimited segment at a time, and finally tries the bare
+  `name` — so a pass under `v0:c1:` sees that frustum's import, else its view's at `v0:`, else a
+  global one. The innermost import wins. A scope meant to be nested inside must end in `:`, or
+  there is no segment to strip and the walk lands straight on the bare name.
+
+  This is how multiple scenes/views populate one graph without colliding, and how one view holds
+  several frustums' cull outputs under the same names. `ImportGlobalBuffer` skips the prefix
+  entirely, so it is what every scope reaches through the bare-name step.
+
+  The walk is **import-only**: `ResolveName` consults imported resources and nothing else, while
+  `Compile` keys transients on the unresolved scoped name. A transient produced under one scope and
+  named from another is therefore two independent resources — no edge, no barrier, and a pass whose
+  only output is that transient culled as dead.
 
 * **Resource state persists across frames.** `Execute` remembers the final `AccessState` of each
   imported resource in `m_LastState`. Next frame, re-importing the same name resumes from that
@@ -172,6 +183,8 @@ flowchart TD
   namespace; re-importing the same key overwrites. Omit `initial` to resume from last frame's
   tracked state (undefined the first time the name is seen). `ImportGlobalBuffer` skips the
   namespace prefix so the resource is reachable from every scope.
+* **`SetResourceNamespace(ns)`** — scopes nest by `:`-delimited segment; see the resolution rule
+  above. An outer scope cannot name an inner scope's import relatively, only by its full key.
 * **`Reset()`** — clears the frame like `Execute`'s tail but **keeps** `m_LastState`; use to
   rebuild without having executed.
 * **`SetBufferPoisoner(poisoner)`** — the pointer is non-owning and must outlive every `Execute`

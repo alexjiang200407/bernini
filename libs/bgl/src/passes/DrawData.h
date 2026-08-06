@@ -73,9 +73,14 @@ namespace bgl
 		uint32_t                    drawIdx = 0;
 		core::SharedRef<ISceneView> view    = nullptr;
 
-		// This draw's frustum scratch, owned by the view. Non-owning, and kept alive by `view`
-		// above: a DrawData is captured by value into the pass exec lambdas, so the SharedRef
-		// travels with the pointer and the view cannot be destroyed while a pass still holds one.
+		// Which of the view's frustums this records for. The cull pipeline's pass names are keyed on
+		// it as well as drawIdx, since a draw may record that pipeline once per frustum.
+		uint32_t cullIdx = 0;
+
+		// This draw's frustum scratch, owned by the view. Non-owning: a DrawData is captured by
+		// value into the pass exec lambdas, so the SharedRef above travels with the pointer and the
+		// view cannot be destroyed while a pass still holds one. The view staying alive is not
+		// enough on its own -- see SceneView::EnsureCullStates for what invalidates the address.
 		CullState* cullState = nullptr;
 
 		ViewState    viewState;

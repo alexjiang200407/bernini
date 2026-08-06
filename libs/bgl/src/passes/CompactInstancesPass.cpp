@@ -64,11 +64,13 @@ namespace bgl
 	void
 	CompactInstancesPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
-		// Every other buffer named below is imported by the view, under its namespace.
+		// Every other buffer named below is imported by the view: the cull inputs under its own
+		// scope, the cull outputs under the scope of the frustum this records for.
 		fg.ImportGlobalBuffer("cull.stats", m_CullStats.GetBufferHandle())
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Compact Instances Update {}", draw.drawIdx))
+					.SetName(
+						std::format("Compact Instances Update {}.{}", draw.drawIdx, draw.cullIdx))
 					.AddBufferArg(
 						"compactedInstances.psoPrefixSumBuffer",
 						BarrierSyncFlag::kCopy,
@@ -85,7 +87,7 @@ namespace bgl
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteClear(ctx, draw); }))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Cull Instances {}", draw.drawIdx))
+					.SetName(std::format("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx))
 					.AddBufferArg(
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,
@@ -113,7 +115,11 @@ namespace bgl
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Histogram and Prefix Sum Instances {}", draw.drawIdx))
+					.SetName(
+						std::format(
+							"Histogram and Prefix Sum Instances {}.{}",
+							draw.drawIdx,
+							draw.cullIdx))
 					.AddBufferArg(
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,
@@ -131,7 +137,7 @@ namespace bgl
 					}))
 			.AddPass(
 				PassDesc()
-					.SetName(std::format("Compact Instances {}", draw.drawIdx))
+					.SetName(std::format("Compact Instances {}.{}", draw.drawIdx, draw.cullIdx))
 					.AddBufferArg(
 						"scene.instanceBuffer",
 						BarrierSyncFlag::kComputeShader,

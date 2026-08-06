@@ -106,11 +106,40 @@ namespace bgl
 			return m_NamePrefix;
 		}
 
-		// This view's frustum scratch.
+		/**
+		 * The scratch for the `cullIdx`th frustum this view is culled against. Index 0 is the
+		 * camera and always exists.
+		 */
 		[[nodiscard]] CullState&
-		GetCullState() noexcept
+		GetCullState(uint32_t cullIdx) noexcept
 		{
-			return m_CullState;
+			gassert(cullIdx < m_CullStates.size(), "cull index is out of range");
+			return m_CullStates[cullIdx];
+		}
+
+		[[nodiscard]] uint32_t
+		GetCullStateCount() const noexcept
+		{
+			return static_cast<uint32_t>(m_CullStates.size());
+		}
+
+		/**
+		 * Grows this view to `count` frustums, allocating the scratch each new one needs.
+		 *
+		 * Never shrinks. Must not be called while a frame that has already recorded against this
+		 * view is in flight: a DrawData holds a raw pointer to one of these, which growing
+		 * invalidates.
+		 *
+		 * @throws std::runtime_error if the device cannot allocate.
+		 */
+		void
+		EnsureCullStates(uint32_t count);
+
+		/** The graph namespace the `cullIdx`th frustum's outputs are imported under. */
+		[[nodiscard]] std::string
+		CullNamespace(uint32_t cullIdx) const
+		{
+			return std::format("{}c{}:", m_NamePrefix, cullIdx);
 		}
 
 		// The cull inputs: one per view, shared by every frustum it is culled against.
@@ -134,6 +163,11 @@ namespace bgl
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
+		/**
+		 * Imports this view's buffers under its own scope and each frustum's under one nested inside
+		 * it. Leaves the graph's namespace at this view's, whatever it was on entry, since the
+		 * update pass `resourceNames` feeds has to be recorded there.
+		 */
 		void
 		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames);
 
@@ -199,8 +233,8 @@ namespace bgl
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
 
-		// One frustum's cull outputs.
-		CullState m_CullState;
+		// One entry per frustum this view is culled against; index 0 is the camera.
+		std::vector<CullState> m_CullStates;
 
 		// Per view, not per frustum: only the camera sorts transparents.
 		TransparentSortState m_TransparentSort;

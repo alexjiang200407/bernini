@@ -55,14 +55,18 @@ namespace bgl
 		Update(ICommandList* cmdList);
 
 		/**
-		 * Imports every buffer under the graph's current namespace.
+		 * Imports every buffer under `scope`, which it makes the graph's current namespace.
 		 *
-		 * `updateArgs` receives the names the owning view's update pass declares copy-dest. The cull
-		 * pass's own scratch is left out: that pass seeds it, so making the view's update its last
-		 * writer would be a dependency edge nothing produces.
+		 * `updateArgs` receives the names the owning view's update pass declares copy-dest, prefixed
+		 * with `scope`: that pass is recorded one scope out, and resolution only ever falls outward.
+		 * The cull pass's own scratch is left out: that pass seeds it, so making the view's update
+		 * its last writer would be a dependency edge nothing produces.
 		 */
 		void
-		ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const;
+		ImportResources(
+			FrameGraph&               fg,
+			std::string_view          scope,
+			std::vector<std::string>& updateArgs) const;
 
 		// Non-const: the cull pass seeds these through ComputeBuffer::Clear / WriteBuffer, which
 		// need the object rather than the handle the frame graph hands back.

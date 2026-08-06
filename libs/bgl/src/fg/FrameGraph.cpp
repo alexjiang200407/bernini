@@ -175,11 +175,22 @@ namespace bgl
 		{
 			return scoped;
 		}
-		if (m_Imported.contains(name))
+
+		std::string_view outer = ns;
+		while (!outer.empty())
 		{
-			return std::string(name);
+			outer.remove_suffix(1);
+			const size_t cut = outer.find_last_of(':');
+			outer = cut == std::string_view::npos ? std::string_view() : outer.substr(0, cut + 1);
+
+			scoped.assign(outer).append(name);
+			if (m_Imported.contains(scoped))
+			{
+				return scoped;
+			}
 		}
-		return scoped;
+
+		return std::string(ns) + std::string(name);
 	}
 
 	FrameGraph&

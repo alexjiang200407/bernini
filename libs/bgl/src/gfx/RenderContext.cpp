@@ -18,6 +18,9 @@ namespace bgl
 {
 	namespace
 	{
+		// The one frustum a Draw culls against. Shadow cascades will take 1..N.
+		constexpr uint32_t c_CameraCullIdx = 0;
+
 		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
 		bool
 		IsBgra(Format format)
@@ -470,7 +473,8 @@ namespace bgl
 		auto draw                   = DrawData();
 		draw.drawIdx                = drawIdx;
 		draw.view                   = job.view;
-		draw.cullState              = &view->GetCullState();
+		draw.cullIdx                = c_CameraCullIdx;
+		draw.cullState              = &view->GetCullState(c_CameraCullIdx);
 		draw.viewState.viewport     = viewport;
 		draw.viewState.viewProj     = viewProj;
 		draw.viewState.prevViewProj = prevCamera.viewProj;
@@ -521,6 +525,9 @@ namespace bgl
 
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
+
+		// The skybox above names only globals; everything below reads cull outputs.
+		m_FrameGraph.SetResourceNamespace(view->CullNamespace(draw.cullIdx));
 
 		// Cull first (a sub-pass of CompactInstances writes the visibility word), then the transparent
 		// sort, which reads it.

@@ -788,3 +788,93 @@ TEST_CASE("FrameGraph: a poisoned transient is skipped", "[fg]")
 	CHECK(std::ranges::none_of(h.log, [](const std::string& e) { return e.starts_with("copy:"); }));
 	CHECK(h.log.back() == "exec");
 }
+
+// A view's frustum scopes nest inside the view's: "v0:c1:" is one of view v0's culled frustums, and
+// several of them carry buffers under identical names. Resolution therefore has to prefer the
+// innermost scope that imported a name and fall outward from there, or N frustums alias one buffer.
+TEST_CASE("FrameGraph: name resolution walks outward through nested scopes", "[fg]")
+{
+	FrameGraph fg;
+
+	fg.ImportBuffer("buf", MakeBuffer(1));
+	fg.ImportBuffer("globalOnly", MakeBuffer(5));
+
+	fg.SetResourceNamespace("v0:");
+	fg.ImportBuffer("buf", MakeBuffer(2));
+	fg.ImportBuffer("viewOnly", MakeBuffer(3));
+
+	fg.SetResourceNamespace("v0:c1:");
+	fg.ImportBuffer("buf", MakeBuffer(4));
+
+	BufferHandle innerBuf{};
+	BufferHandle viewOnly{};
+	BufferHandle globalOnly{};
+	fg.AddPass(
+		PassDesc{}
+			.SetName("Frustum")
+			.AddBufferArg(UavBuf("buf"))
+			.AddBufferArg(UavBuf("viewOnly"))
+			.AddBufferArg(UavBuf("globalOnly"))
+			.SetExec([&](const PassContext& ctx) {
+				innerBuf   = ctx.GetBuffer("buf");
+				viewOnly   = ctx.GetBuffer("viewOnly");
+				globalOnly = ctx.GetBuffer("globalOnly");
+			}));
+
+	fg.SetResourceNamespace("v0:");
+
+	BufferHandle viewBuf{};
+	fg.AddPass(
+		PassDesc{}.SetName("View").AddBufferArg(UavBuf("buf")).SetExec([&](const PassContext& ctx) {
+			viewBuf = ctx.GetBuffer("buf");
+		}));
+
+	fg.SetResourceNamespace("");
+
+	BufferHandle bareBuf{};
+	fg.AddPass(
+		PassDesc{}.SetName("Bare").AddBufferArg(UavBuf("buf")).SetExec([&](const PassContext& ctx) {
+			bareBuf = ctx.GetBuffer("buf");
+		}));
+
+	fg.Compile(&NullRm());
+
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+	fg.Execute();
+
+	CHECK(innerBuf.slot.index == 4);    // the frustum's own, not the view's and not the global one
+	CHECK(viewOnly.slot.index == 3);    // one scope out
+	CHECK(globalOnly.slot.index == 5);  // all the way out
+	CHECK(viewBuf.slot.index == 2);     // the inner scope's import does not leak outward
+	CHECK(bareBuf.slot.index == 1);
+}
+
+// The other direction of the same rule. Nothing relies on it today, but it is what stops a buffer
+// that was meant to be per-frustum from being reachable -- and silently shared -- from the view.
+TEST_CASE("FrameGraph: an outer scope cannot name an inner scope's import", "[fg]")
+{
+	FrameGraph fg;
+
+	fg.SetResourceNamespace("v0:c1:");
+	fg.ImportBuffer("frustumOnly", MakeBuffer(7));
+
+	fg.SetResourceNamespace("v0:");
+
+	// Unresolvable, so it is a transient: it takes part in ordering by name but has no handle.
+	fg.AddPass(
+		PassDesc{}
+			.SetName("View")
+			.AddBufferArg(UavBuf("frustumOnly"))
+			.SetSideEffect()
+			.SetExec([](const PassContext& ctx) { (void)ctx.GetBuffer("frustumOnly"); }));
+
+	fg.Compile(&NullRm());
+
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+
+	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
+}

@@ -91,12 +91,16 @@ namespace bgl
 	}
 
 	void
-	CullState::ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const
+	CullState::ImportResources(
+		FrameGraph&               fg,
+		std::string_view          scope,
+		std::vector<std::string>& updateArgs) const
 	{
+		fg.SetResourceNamespace(std::string(scope));
+
 		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
-			std::string key(name);
-			fg.ImportBuffer(key, buffer.GetBufferHandle());
-			updateArgs.push_back(std::move(key));
+			fg.ImportBuffer(std::string(name), buffer.GetBufferHandle());
+			updateArgs.push_back(std::string(scope) + std::string(name));
 		};
 
 		importUpdated(c_CompactedInstancesName, m_CompactedInstances);

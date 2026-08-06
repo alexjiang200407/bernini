@@ -79,8 +79,33 @@ namespace bgl
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
 
-		m_CullState.Init(paddedInstances, m_ResourceManager);
+		EnsureCullStates(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
+	}
+
+	void
+	SceneView::EnsureCullStates(uint32_t count)
+	{
+		const uint32_t padded =
+			core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize);
+
+		while (m_CullStates.size() < count)
+		{
+			// Init part-way through leaves buffers behind that no destructor reclaims, and the
+			// entry must not join the vector either: a later call would count it as already made.
+			auto cullState = CullState();
+			try
+			{
+				cullState.Init(padded, m_ResourceManager);
+			}
+			catch (...)
+			{
+				cullState.Release();
+				throw;
+			}
+
+			m_CullStates.push_back(std::move(cullState));
+		}
 	}
 
 	void
@@ -89,7 +114,11 @@ namespace bgl
 		const uint32_t padded =
 			core::round_up(m_InstanceBuffer.Capacity(), idl::cHistogramGroupSize);
 
-		m_CullState.Resize(padded);
+		for (CullState& cullState : m_CullStates)
+		{
+			cullState.Resize(padded);
+		}
+
 		m_TransparentSort.Resize(padded);
 	}
 
@@ -103,7 +132,12 @@ namespace bgl
 		// Deferred: frames recorded against this view may still be in flight.
 		m_InstanceBuffer.Release();
 		m_MeshBuffer.Release();
-		m_CullState.Release();
+
+		for (CullState& cullState : m_CullStates)
+		{
+			cullState.Release();
+		}
+
 		m_TransparentSort.Release();
 
 		logger::trace("~SceneView");
@@ -396,7 +430,11 @@ namespace bgl
 			m_SceneEpoch = epoch;
 		}
 
-		m_CullState.Update(cmdList);
+		for (CullState& cullState : m_CullStates)
+		{
+			cullState.Update(cmdList);
+		}
+
 		m_TransparentSort.Update(cmdList);
 
 		auto buffers = GetInstanceBuffers();
@@ -437,6 +475,8 @@ namespace bgl
 	void
 	SceneView::ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames)
 	{
+		fg.SetResourceNamespace(m_NamePrefix);
+
 		resourceNames.reserve(resourceNames.size() + c_InstanceBufferInfo.size());
 
 		auto   buffers = GetInstanceBuffers();
@@ -451,7 +491,15 @@ namespace bgl
 			},
 			buffers);
 
-		m_CullState.ImportResources(fg, resourceNames);
 		m_TransparentSort.ImportResources(fg, resourceNames);
+
+		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the
+		// same names without aliasing. The view's own imports stay outside, shared by all of them.
+		for (uint32_t cullIdx = 0; cullIdx < m_CullStates.size(); ++cullIdx)
+		{
+			m_CullStates[cullIdx].ImportResources(fg, CullNamespace(cullIdx), resourceNames);
+		}
+
+		fg.SetResourceNamespace(m_NamePrefix);
 	}
 }

@@ -85,6 +85,13 @@ namespace bgl
 		FrameGraph&
 		AddPass(PassDesc desc);
 
+		/**
+		 * Sets the prefix subsequent imports are keyed under and subsequent passes resolve against.
+		 *
+		 * Scopes nest by ':'-delimited segment: a pass recorded under "v0:c1:" resolves a name at
+		 * "v0:c1:", then "v0:", then bare, taking the innermost that was imported. A scope that is
+		 * to be nested inside must therefore end in ':'.
+		 */
 		void
 		SetResourceNamespace(std::string resourceNamespace);
 
