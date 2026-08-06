@@ -84,9 +84,8 @@ namespace bgl
 		const
 	{
 		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
-			std::string key(name);
-			fg.ImportBuffer(key, buffer.GetBufferHandle());
-			updateArgs.push_back(std::move(key));
+			fg.ImportBuffer(name, buffer.GetBufferHandle());
+			updateArgs.emplace_back(name);
 		};
 
 		importUpdated(c_SortedName, m_SortedInstances);

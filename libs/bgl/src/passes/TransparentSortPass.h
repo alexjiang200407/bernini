@@ -37,8 +37,8 @@ namespace bgl
 		void
 		Init(IDevice* device);
 
-		// Owns no GPU storage -- its buffers live on the view's CullState -- so this only drops the
-		// kernels.
+		// Owns no GPU storage -- the sort buffers live on the view's TransparentSortState, one set
+		// per view rather than per frustum -- so this only drops the kernels.
 		void
 		Release();
 

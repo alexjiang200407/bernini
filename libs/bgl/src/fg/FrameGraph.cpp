@@ -7,8 +7,8 @@ namespace bgl
 {
 	namespace
 	{
-		// The scope one level out: "v0:c1:" -> "v0:" -> "". A scope not ending in ':' has no
-		// segment to strip and goes straight to the outermost.
+		// The scope one level out: "v0:c1:" -> "v0:" -> "". A scope has to end in ':' for another
+		// to nest inside it.
 		std::string_view
 		ParentScope(std::string_view scope) noexcept
 		{
@@ -138,7 +138,7 @@ namespace bgl
 		BufferHandle               handle,
 		std::optional<AccessState> initial)
 	{
-		return ImportBufferKey(m_CurrentNamespace + std::string(name), handle, initial);
+		return ImportBufferKey(std::string(m_CurrentNamespace).append(name), handle, initial);
 	}
 
 	FrameGraph&
@@ -170,7 +170,7 @@ namespace bgl
 		TextureHandle              handle,
 		std::optional<AccessState> initial)
 	{
-		const std::string key = m_CurrentNamespace + std::string(name);
+		const std::string key = std::string(m_CurrentNamespace).append(name);
 
 		ImportedRes res;
 		res.handle  = handle;
@@ -209,7 +209,8 @@ namespace bgl
 			return std::string(name);
 		}
 
-		return std::string(ns) + std::string(name);
+		scoped.assign(ns).append(name);
+		return scoped;
 	}
 
 	FrameGraph&

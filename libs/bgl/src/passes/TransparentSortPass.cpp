@@ -4,7 +4,6 @@
 #include "idl/DispatchArgs.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
-#include "scene/ComputeBuffer.h"
 #include <bgl/ISceneView.h>
 #include <core/math.h>
 
@@ -12,9 +11,9 @@ namespace bgl
 {
 	namespace
 	{
-		// All owned by the view's CullState: the two instance-sized buffers are sized off its
-		// instance buffer, so the depth-key pass cannot append past the end however many instances
-		// turn out to be transparent.
+		// The four sort buffers are the view's TransparentSortState; the two instance-sized ones are
+		// sized off its instance buffer, so the depth-key pass cannot append past the end however
+		// many instances turn out to be transparent.
 		constexpr auto c_EntriesBuffer      = "scene.transparentSortEntries";
 		constexpr auto c_CountBuffer        = "scene.transparentSortCount";
 		constexpr auto c_DispatchArgs       = "transparentSort.dispatchArgs";

@@ -58,11 +58,9 @@ handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the 
 state it carries four groups: `viewState` (viewport, this frame's and the previous frame's
 view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour, motion-vector
 and depth handles), `lighting` (environment map, exposure, optional skybox) and `samplers`. The graph
-resource *names* are not in
-it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` / `c_SceneColorName` /
-`c_DepthName` in
-[constants/constants.h](libs/bgl/src/constants/constants.h) are what both the importer and the
-passes name them by.
+resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
+`c_SceneColorName` / `c_DepthName` in [constants/constants.h](libs/bgl/src/constants/constants.h) are
+what both the importer and the passes name them by.
 
 ---
 

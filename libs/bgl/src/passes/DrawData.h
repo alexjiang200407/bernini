@@ -82,7 +82,7 @@ namespace bgl
 		// This draw's frustum scratch, owned by the view. Non-owning: a DrawData is captured by
 		// value into the pass exec lambdas, so the SharedRef above travels with the pointer and the
 		// view cannot be destroyed while a pass still holds one. The view staying alive is not
-		// enough on its own -- see SceneView::EnsureCullStates for what invalidates the address.
+		// enough on its own -- see SceneView::EnsureCullStateCount for what invalidates the address.
 		CullState* cullState = nullptr;
 
 		ViewState    viewState;

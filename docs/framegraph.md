@@ -55,8 +55,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   subsequent imports and the name-resolution of subsequently-added passes. `ResolveName` tries
   `ns+name`, then falls outward one `:`-delimited segment at a time, and finally tries the bare
   `name` — so a pass under `v0:c1:` sees that frustum's import, else its view's at `v0:`, else a
-  global one. The innermost import wins. A scope meant to be nested inside must end in `:`, or
-  there is no segment to strip and the walk lands straight on the bare name.
+  global one. The innermost import wins. A scope meant to be nested inside must end in `:`.
 
   This is how multiple scenes/views populate one graph without colliding, and how one view holds
   several frustums' cull outputs under the same names. `ImportGlobalBuffer` skips the prefix
