@@ -33,9 +33,27 @@ turn into a recurring bill, and a full clone costs nothing to serve.
 * **No LFS server.** git-lfs supports a *standalone transfer agent*: with
   `lfs.standalonetransferagent` set, it skips the batch API entirely and hands each transfer to a
   subprocess. So there is nothing to host, nothing to authenticate against, and nothing to keep
-  running — the client talks S3 to the bucket directly. The cost is that every machine needs
-  credentials of its own, which is the right trade for a project with few contributors and no
-  anonymous readers.
+  running — the client talks S3 to the bucket directly. The cost is that a machine that writes
+  needs credentials of its own, which is why `just init` mints them rather than asking you to.
+
+* **Reading is public; writing is keyed.** The repository is public and every pointer file
+  publishes its object's SHA-256, so a key on the read path was guarding bytes that the clone
+  already describes. `store.readUrl` in [.lfsstore](../.lfsstore) names an endpoint that serves the
+  bucket unsigned, and downloads go there — so `git clone` plus `just init` is enough to get every
+  asset, with nothing to provision and nothing to leak. Uploads stay signed, which is what the
+  ceiling and the per-machine keys below are for. Objects are content-addressed and git-lfs
+  verifies the hash it gets back, so a tampered object fails at checkout rather than reaching the
+  cache.
+
+  Unset `readUrl` and everything reverts: reads need a key again, and a clone without one leaves
+  the assets as pointer text.
+
+* **There is no tooling for the write key.** It is one key, made by hand in the R2 dashboard, held
+  by whoever adds assets. Automating that — minting scoped tokens through Cloudflare's API, listing
+  and revoking them per machine — was built and then deleted: it needed an account token with *API
+  Tokens: Edit*, which is more privileged than the R2 key it produces, to save a dashboard visit
+  that happens about once a year now that nobody needs a key to *read*. If write access ever
+  spreads past one or two people, that trade changes and it is worth revisiting.
 
 * **The agent is stdlib-only.** [scripts/lfs_agent.py](../scripts/lfs_agent.py) signs its own SigV4
   requests via [scripts/util/s3.py](../scripts/util/s3.py) rather than taking a dependency on boto3.
@@ -49,13 +67,14 @@ turn into a recurring bill, and a full clone costs nothing to serve.
   therefore cost no extra pass over the file.
 
 * **Settings are committed; credentials are not.** [.lfsstore](../.lfsstore) carries the endpoint,
-  bucket, prefix and region — a bucket name is not a secret and every clone must agree on it. The
-  key pair never is.
+  bucket, prefix, region and the public read URL — none of those is a secret, and every clone must
+  agree on all of them. The key pair never is.
 
 * **The credential is stored, but encrypted to the user account.** An environment variable is not
-  enough on its own: git-lfs runs the agent from inside `git checkout`, which also happens from a
+  enough on its own: git-lfs runs the agent from inside `git push`, which also happens from a
   GUI client, an IDE's git integration or a shell extension — none of which load a shell profile,
-  so the variable is simply absent and the checkout silently writes pointer text. So `just init`
+  so the variable is simply absent and the push fails on a credential the machine does have. So
+  `just init`
   records the key in `scripts/config.json`, which every script already reads. That file is
   git-ignored, but it is also the one people paste into a bug report, so the secret is passed
   through [scripts/util/secrets.py](../scripts/util/secrets.py) first: DPAPI on Windows, the login
@@ -72,7 +91,15 @@ turn into a recurring bill, and a full clone costs nothing to serve.
   the agent — `lfs.standalonetransferagent` and `lfs.customtransfer.*` — are refused from
   `.lfsconfig` outright, since a file that arrives with a clone must not get to name the program git
   executes; `just init` writes those into the clone's local git config. `.lfsconfig` is left holding
-  only `lfs.url`, which git-lfs insists on having before it will consider an agent at all.
+  `lfs.url`, which git-lfs insists on having before it will consider an agent at all, and
+  `lfs.fetchexclude`.
+
+* **The first checkout is told to fetch nothing.** The agent is local config a clone cannot inherit,
+  so the checkout inside `git clone` has no way to reach the store — and its smudge filter does not
+  fail gracefully: it aborts, leaving the working tree half-written before `just init` has had a
+  chance to run. `fetchexclude = *` in `.lfsconfig` makes it not try, so the pointers land and the
+  clone finishes clean. `just init` sets `lfs.fetchexclude` to empty in the clone's own config,
+  which outranks the committed file, and pulls.
 
 * **The agent's configured paths are absolute.** git-lfs runs it from whatever directory the
   triggering git command was in, so a relative path does not survive — which is the other reason
@@ -96,28 +123,58 @@ turn into a recurring bill, and a full clone costs nothing to serve.
 
 ## Setting up a machine
 
-1. Create an R2 API token scoped to the bucket. **Object Read & Write is enough** — an admin token
-   would also be able to create and delete buckets, which nothing here needs.
+```bash
+git clone git@github.com:alexjiang200407/bernini.git && cd bernini
+python scripts/init.py
+```
 
-2. `just init`. It installs the git-lfs filters, points the clone at the store, asks for the key
-   pair (the secret is not echoed), and fetches anything still sitting as a pointer. The secret is
-   encrypted before it is written, and `scripts/config.json` is restricted to your account.
+That is the whole of it, for anyone. It installs the git-lfs filters, points the clone at the
+store, and fetches anything still sitting as a pointer — over the public read endpoint, so it asks
+for nothing. It does offer to set up a key; **answering no is a finished setup**, not a
+half-finished one, and is the right answer unless you are going to add assets.
 
-To supply the credentials some other way — CI, or a machine where you would rather not store them —
-set `BERNINI_LFS_ACCESS_KEY_ID` and `BERNINI_LFS_SECRET_ACCESS_KEY` in the environment instead.
-They take precedence over anything stored, and `just init` will not ask.
+## Setting up a machine that *adds* assets
 
-Rotating a key is `just init --lfs-key`, which asks again and replaces what is stored. A plain
-`just init` will not: it carries an existing credential across a re-run untouched, so nothing else
-you re-run can quietly drop it.
+Committing a new texture means uploading it, and that needs a key. Create one in the Cloudflare
+dashboard — R2 → Manage API tokens → Object Read & Write, scoped to `bernini-git-lfs` — then
+`just init --lfs-key` and paste it. An admin token is not needed and should not be used: it could
+create and delete buckets, which nothing here does.
+
+`just init --lfs-key` also replaces a key that has leaked; delete the old one in the dashboard
+afterwards, since nothing here does that for you. A plain `just init` carries an existing
+credential across a re-run untouched, so nothing you re-run can quietly drop it.
+
+To supply the key some other way — CI, or a machine you would rather not store it on — set
+`BERNINI_LFS_ACCESS_KEY_ID` and `BERNINI_LFS_SECRET_ACCESS_KEY`. They take precedence over anything
+stored, and `just init` will not ask when they are set.
+
+## Opening the read path
+
+Reads are public only because `store.readUrl` in [.lfsstore](../.lfsstore) says where to go. To set
+it up: in the R2 dashboard, `bernini-git-lfs` → Settings → **Public Development URL** → Enable,
+then commit the `pub-*.r2.dev` URL it hands back:
+
+```ini
+[store]
+	readUrl = https://pub-xxxxxxxx.r2.dev
+```
+
+Cloudflare rate-limits that domain and calls it development-only. The alternative on the same page
+is **Custom Domains**, which needs a domain on this Cloudflare account and is what to move to if a
+clone ever fetches slowly — it is a one-line change here, since nothing but this setting knows
+where reads go. Unset the key and every clone needs a credential to read again, which is where
+this started.
+
+Listing is never public, so `just lfs-usage` and `just lfs-seed` still need a key.
 
 The pre-commit hook refuses to commit `scripts/config.json`, which is git-ignored anyway, so it
 takes `git add -f` to get it near a commit and the hook stops that too.
 
 `just run` and `just test` refuse to launch a binary while any asset is still pointer text
 ([scripts/util/lfs.py](../scripts/util/lfs.py)), because the binaries otherwise fail on a "corrupt"
-asset that is really ASCII. If you see that error after `just init`, the credentials are the usual
-cause.
+asset that is really ASCII. After a `just init` that reported no error, the usual cause is a read
+endpoint that is not serving: check `store.readUrl` in `.lfsstore`, then `git lfs pull` by hand to
+see what it says.
 
 ## Seeding or re-seeding the bucket
 
@@ -157,7 +214,7 @@ to the bucket with another S3 client is unguarded.
 
 Every setting in `.lfsstore` is overridable per machine by environment variable —
 `BERNINI_LFS_ENDPOINT`, `BERNINI_LFS_BUCKET`, `BERNINI_LFS_PREFIX`, `BERNINI_LFS_REGION`,
-`BERNINI_LFS_CEILING`. An
+`BERNINI_LFS_CEILING`, `BERNINI_LFS_READ_URL`. An
 endpoint of the form `file:///path/to/dir` uses a directory as the object store instead of a
 bucket, which is how the agent is exercised without credentials and what a shared network drive
 would use.
@@ -166,6 +223,9 @@ would use.
 
 The build jobs in [.github/workflows/ci.yml](../.github/workflows/ci.yml) check out with `lfs: false`:
 they compile and none of them runs a suite, so `assets/` is only staged, never read. A job that
-runs a test suite needs the assets, and therefore needs `BERNINI_LFS_*` secrets in the environment
-plus a `just init` to point the clone at the store. Neither `actions/checkout`'s `lfs: true` nor a
-bare `git lfs pull` works: both go to GitHub's endpoint, which holds nothing.
+runs a test suite needs the assets, and gets them the same way a fresh clone does — a `just init`
+to point the clone at the store, and no secrets at all. Neither `actions/checkout`'s `lfs: true`
+nor a bare `git lfs pull` works: both go to GitHub's endpoint, which holds nothing.
+
+A runner needs `BERNINI_LFS_*` secrets only if it *writes* — a nightly re-seed, say — and that
+should be a key of its own, so revoking it costs nobody else their assets.

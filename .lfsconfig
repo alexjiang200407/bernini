@@ -9,6 +9,14 @@
 	# Never contacted. `just init` sets lfs.standalonetransferagent locally, which makes
 	# git-lfs skip the batch API and hand every transfer to the agent; this only has to
 	# parse as a URL for it to get that far. Pointing at nothing is deliberate: a clone
-	# that has not run `just init` fails here instead of silently asking GitHub for
-	# objects it does not have.
+	# that has not run `just init` must not silently ask GitHub for objects it does not
+	# have.
 	url = https://bernini.invalid/lfs
+
+	# A clone has no agent configured yet -- that is machine-local, and `just init` writes
+	# it -- so the first checkout cannot fetch anything. Excluding everything makes it not
+	# try: the pointers are written and the clone finishes clean. `just init` overrides
+	# this in the clone's own config, which outranks a committed .lfsconfig, and pulls.
+	# Without it the smudge filter aborts on the first object and leaves the working tree
+	# half-written, before init has had any chance to run.
+	fetchexclude = *

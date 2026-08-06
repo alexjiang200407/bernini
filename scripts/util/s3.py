@@ -21,12 +21,64 @@ DEFAULT_REGION = "auto"
 
 CHUNK = 1 << 20
 
+USER_AGENT = "bernini-lfs/1"
+
 # SHA-256 of the empty string: the payload hash of every request that sends no body.
 EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 
 class S3Error(Exception):
     """A request reached the endpoint and came back as a failure."""
+
+
+def _fetch(request, timeout):
+    # Cloudflare's public r2.dev endpoint answers urllib's default User-Agent with a 403.
+    if not request.has_header("User-agent"):
+        request.add_header("User-Agent", USER_AGENT)
+    try:
+        return urllib.request.urlopen(request, timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        body = exc.read(2048).decode("utf-8", "replace").strip()
+        raise S3Error(f"{exc.code} {exc.reason}: {body}") from exc
+    except urllib.error.URLError as exc:
+        host = urllib.parse.urlsplit(request.full_url).netloc
+        raise S3Error(f"cannot reach {host}: {exc.reason}") from exc
+
+
+def _stream(response, path, on_progress):
+    """Write a response body to a path, returning the SHA-256 of what was written."""
+    digest = hashlib.sha256()
+    with open(path, "wb") as out:
+        while True:
+            block = response.read(CHUNK)
+            if not block:
+                break
+            digest.update(block)
+            out.write(block)
+            if on_progress:
+                on_progress(len(block))
+    return digest.hexdigest()
+
+
+def download(url, path, on_progress=None, timeout=600):
+    """GET a URL that needs no credentials, returning the SHA-256 of what was written.
+
+    The read half of a public bucket: an object is addressed by the same key a signed
+    request would use, so nothing about the layout changes when a clone has no key.
+    """
+    with _fetch(urllib.request.Request(url, method="GET"), timeout) as response:
+        return _stream(response, path, on_progress)
+
+
+def exists_public(url, timeout=30):
+    """Whether a URL that needs no credentials resolves to an object."""
+    try:
+        with _fetch(urllib.request.Request(url, method="HEAD"), timeout):
+            return True
+    except S3Error as exc:
+        if str(exc).startswith("404 "):
+            return False
+        raise
 
 
 class _ProgressReader:
@@ -134,13 +186,7 @@ class Client:
         return headers
 
     def _open(self, request, timeout):
-        try:
-            return urllib.request.urlopen(request, timeout=timeout)
-        except urllib.error.HTTPError as exc:
-            body = exc.read(2048).decode("utf-8", "replace").strip()
-            raise S3Error(f"{exc.code} {exc.reason}: {body}") from exc
-        except urllib.error.URLError as exc:
-            raise S3Error(f"cannot reach {self._host}: {exc.reason}") from exc
+        return _fetch(request, timeout)
 
     def exists(self, key, timeout=30):
         """Whether the object is already in the bucket."""
@@ -220,15 +266,5 @@ class Client:
         """Download an object to a path, returning its SHA-256 as written."""
         headers = self._authorize("GET", self._key_uri(key), EMPTY_SHA256)
         request = urllib.request.Request(self.url_for(key), method="GET", headers=headers)
-
-        digest = hashlib.sha256()
-        with self._open(request, timeout) as response, open(path, "wb") as out:
-            while True:
-                block = response.read(CHUNK)
-                if not block:
-                    break
-                digest.update(block)
-                out.write(block)
-                if on_progress:
-                    on_progress(len(block))
-        return digest.hexdigest()
+        with self._open(request, timeout) as response:
+            return _stream(response, path, on_progress)

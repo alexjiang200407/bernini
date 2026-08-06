@@ -9,12 +9,17 @@ Settings come from .lfsstore, which is committed and describes the project, and 
 overridable per machine by environment variable. A bucket name is not a secret and belongs
 in the repository; the key pair does not, and comes from the environment or from what
 `just init` stored.
+
+Reading and writing are separate privileges. With store.readUrl set the bucket serves
+downloads publicly, so a clone needs no key to fetch assets and one is only provisioned by
+whoever adds them -- see docs/lfs.md.
 """
 
 import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import urllib.parse
 
 import util.cmake_tools as ct
@@ -30,6 +35,7 @@ SETTINGS = {
     "prefix": "BERNINI_LFS_PREFIX",
     "region": "BERNINI_LFS_REGION",
     "ceiling": "BERNINI_LFS_CEILING",
+    "readUrl": "BERNINI_LFS_READ_URL",
 }
 
 CHUNK = 1 << 20
@@ -219,20 +225,49 @@ class FileStore:
         return _sha256(path)
 
 
-class S3Store:
-    """An S3-compatible bucket -- Cloudflare R2 in this project's case."""
+NO_CREDENTIALS = (
+    "that needs a key for the LFS object store, and this clone has none. Run "
+    "`just init --lfs-key`, or set BERNINI_LFS_ACCESS_KEY_ID and "
+    "BERNINI_LFS_SECRET_ACCESS_KEY. See docs/lfs.md."
+)
 
-    def __init__(self, client, prefix, ceiling):
+
+class S3Store:
+    """An S3-compatible bucket -- Cloudflare R2 in this project's case.
+
+    Reads and writes are separate privileges here. When store.readUrl names a public
+    endpoint, downloads go there unsigned, so a fresh clone fetches every asset with no
+    credentials at all; uploads are always signed, and a clone with no key raises rather
+    than pretending it could push.
+    """
+
+    def __init__(self, client, prefix, ceiling, read_url=""):
         self._client = client
+        self._read_url = (read_url or "").rstrip("/")
         self.prefix = prefix
         self.ceiling = ceiling
-        self.description = f"{client.endpoint}/{client.bucket}"
+        self.description = f"{client.endpoint}/{client.bucket}" if client else self._read_url
+        if client and self._read_url:
+            self.description += f" (reads via {self._read_url})"
+
+    def _signed(self, what):
+        if not self._client:
+            raise StoreError(f"{what}: {NO_CREDENTIALS}")
+        return self._client
+
+    def _public_url(self, oid):
+        return f"{self._read_url}/{object_key(oid, self.prefix)}"
 
     def usage(self):
-        """(bytes, object count) currently in the bucket, under this project's prefix."""
+        """(bytes, object count) currently in the bucket, under this project's prefix.
+
+        Signed even when reads are public: a public bucket serves objects by key but does
+        not list them.
+        """
+        client = self._signed("reporting store usage")
         try:
             total, count = 0, 0
-            for _, size in self._client.list_objects(self.prefix):
+            for _, size in client.list_objects(self.prefix):
                 total += size
                 count += 1
             return total, count
@@ -240,25 +275,49 @@ class S3Store:
             raise StoreError(str(exc)) from exc
 
     def exists(self, oid):
+        """Whether the store already holds an object.
+
+        Signed whenever there is a key, because every caller is deciding whether to skip an
+        upload: a public endpoint answers from a cache, and a stale hit would drop an object
+        that never made it into the bucket.
+        """
         try:
-            return self._client.exists(object_key(oid, self.prefix))
+            if self._client:
+                return self._client.exists(object_key(oid, self.prefix))
+            return s3.exists_public(self._public_url(oid))
         except s3.S3Error as exc:
             raise StoreError(str(exc)) from exc
 
     def put(self, oid, path, on_progress=None):
+        client = self._signed(f"uploading {oid[:12]}")
         size = os.path.getsize(path)
         self.ceiling.check(self, size)
         try:
             # The OID is the SHA-256 of the content, which is exactly the payload hash
             # SigV4 wants -- so a signed upload costs no extra pass over the file.
-            self._client.put_file(object_key(oid, self.prefix), path, oid, on_progress)
+            client.put_file(object_key(oid, self.prefix), path, oid, on_progress)
         except s3.S3Error as exc:
             raise StoreError(str(exc)) from exc
         self.ceiling.charge(size)
 
     def get(self, oid, path, on_progress=None):
+        if self._read_url:
+            try:
+                return s3.download(self._public_url(oid), path, on_progress)
+            except s3.S3Error as exc:
+                if not self._client:
+                    raise StoreError(f"{exc}\nThe public read endpoint "
+                                     f"({source_of('readUrl')}) is not serving this object.") \
+                        from exc
+                # A key is the fallback, but never silently: everyone without one is broken
+                # while this still works.
+                print(f"lfs: {self._read_url} refused {oid[:12]} "
+                      f"({str(exc).splitlines()[0][:160]}); falling back to a signed read. "
+                      f"Clones without a key cannot fetch.", file=sys.stderr)
+
         try:
-            return self._client.get_file(object_key(oid, self.prefix), path, on_progress)
+            return self._signed(f"downloading {oid[:12]}").get_file(
+                object_key(oid, self.prefix), path, on_progress)
         except s3.S3Error as exc:
             raise StoreError(str(exc)) from exc
 
@@ -298,15 +357,23 @@ def open_store():
         return FileStore(os.path.abspath(root), prefix, ceiling)
 
     bucket = setting("bucket")
+    read_url = setting("readUrl")
     access, secret = credentials()
+
+    # No key is not an error when reads are public: that is the state a fresh clone is in,
+    # and it can fetch every asset. Only an upload has anything to refuse.
     if not access or not secret:
+        if read_url:
+            return S3Store(None, prefix, ceiling, read_url)
         raise StoreError(
-            "no credentials for the LFS object store: set BERNINI_LFS_ACCESS_KEY_ID and "
-            "BERNINI_LFS_SECRET_ACCESS_KEY in the environment. See docs/lfs.md."
+            "no credentials for the LFS object store, and no public read endpoint "
+            f"({source_of('readUrl')}) to fall back on: set BERNINI_LFS_ACCESS_KEY_ID and "
+            "BERNINI_LFS_SECRET_ACCESS_KEY in the environment, or run `just init`. "
+            "See docs/lfs.md."
         )
 
     try:
         client = s3.Client(endpoint, bucket, access, secret, setting("region") or s3.DEFAULT_REGION)
     except ValueError as exc:
         raise StoreError(str(exc)) from exc
-    return S3Store(client, prefix, ceiling)
+    return S3Store(client, prefix, ceiling, read_url)

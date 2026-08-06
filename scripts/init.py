@@ -23,7 +23,9 @@ documents its schema.
 
 Points git at the committed .githooks, and configures Git LFS -- whose filters are
 machine-local config a clone cannot inherit, so without this the assets check out as
-pointer text and the tests fail on them as though they were corrupt.
+pointer text and the tests fail on them as though they were corrupt. Fetching them needs no
+credentials -- the store serves reads publicly -- so the key it asks about is only for
+adding assets, and skipping it leaves a working clone. See docs/lfs.md.
 
 Finally, offers to set up this developer's morgana-coding-agent key, which bcp-revise
 posts PR review replies with. Optional, and skipped by a blank answer. See
@@ -422,6 +424,10 @@ def ensure_lfs_agent(replace=False):
         # git-lfs quotes `path` for itself but interpolates `args` into a shell command
         # verbatim, so an unquoted path splits on the first space in it.
         "lfs.customtransfer.bernini.args": f'"{agent}"',
+        # .lfsconfig excludes everything so that a clone with no agent yet writes pointers
+        # instead of failing its checkout. This is the line that takes it back off, and it
+        # has to be local config, which outranks the committed file.
+        "lfs.fetchexclude": "",
     }
 
     for key, value in settings.items():
@@ -431,7 +437,11 @@ def ensure_lfs_agent(replace=False):
                   f"by hand.", file=sys.stderr)
             return False
 
-    print(f"git lfs: transfers go to {endpoint}")
+    read_url = lfs_store.setting("readUrl")
+    if read_url:
+        print(f"git lfs: reads come from {read_url}, writes go to {endpoint}")
+    else:
+        print(f"git lfs: transfers go to {endpoint}")
 
     if endpoint.startswith("file://"):
         return True
@@ -442,12 +452,16 @@ def ensure_lfs_agent(replace=False):
 def ensure_lfs_credentials(replace=False):
     """Make sure this machine can reach the LFS object store, storing the key if asked.
 
+    Returns whether this clone can *fetch* assets, which is what decides whether the caller
+    then pulls them. With a public read endpoint configured that is true with no key at
+    all, and a key is only what lets this machine add one.
+
     The secret is encrypted to this user account before it is written, so config.json --
     which is git-ignored but is also the file people paste into bug reports -- does not
     become the credential itself.
 
-    With `replace`, prompts even when a usable key is already stored, which is how a
-    leaked one is rotated.
+    With `replace`, asks even when a usable key is already stored, which is how a leaked
+    one is rotated.
     """
     try:
         access, secret = lfs_store.credentials()
@@ -462,12 +476,30 @@ def ensure_lfs_credentials(replace=False):
         print(f"git lfs: credentials from the {where}")
         return True
 
-    print("\nThe LFS object store needs an access key. Create one in Cloudflare R2\n"
-          "(Object Read & Write is enough) and paste it here, or leave blank to skip and\n"
-          "set BERNINI_LFS_ACCESS_KEY_ID / BERNINI_LFS_SECRET_ACCESS_KEY yourself.")
+    read_url = lfs_store.setting("readUrl")
+
+    # Fetching is the only thing most clones ever do, and a public read endpoint covers it.
+    # So a key is offered rather than demanded, and declining is a working setup, not a
+    # half-finished one.
+    if read_url and not replace:
+        print(f"git lfs: assets download from {read_url}; this clone needs no key to fetch "
+              f"them.")
+        if not interactive() or not confirm("set up a key that can also *add* assets?"):
+            print("         Skipped -- run `just init --lfs-key` if you need to add assets "
+                  "later.")
+            return True
+
+    print("\nAdding an asset means uploading it, which needs an access key. Create one in\n"
+          "Cloudflare R2 (Object Read & Write is enough) and paste it here, or leave blank\n"
+          "to skip and set BERNINI_LFS_ACCESS_KEY_ID / BERNINI_LFS_SECRET_ACCESS_KEY\n"
+          "yourself.")
 
     key_id = ask("  access key id: ")
     if not key_id:
+        if read_url:
+            print(f"note: nothing stored; assets still download from {read_url}, but adding "
+                  f"one needs a key.")
+            return True
         print("warning: no credentials stored; assets will stay as pointer text until\n"
               "         they are provided. See docs/lfs.md.", file=sys.stderr)
         return False
@@ -475,13 +507,13 @@ def ensure_lfs_credentials(replace=False):
     key_secret = getpass.getpass("  secret access key (not echoed): ").strip()
     if not key_secret:
         print("warning: no secret given; nothing stored.", file=sys.stderr)
-        return False
+        return bool(read_url)
 
     try:
         protected = secrets.protect(key_secret)
     except secrets.SecretError as exc:
         print(f"warning: could not protect the secret ({exc}); nothing stored.", file=sys.stderr)
-        return False
+        return bool(read_url)
 
     data = cfg.load()
     data["lfs"] = {"accessKeyId": key_id, "secretAccessKey": protected}
@@ -797,7 +829,7 @@ def main():
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
     parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
     parser.add_argument("--lfs-key", action="store_true",
-                        help="Ask for the LFS object store credentials again, replacing what is stored.")
+                        help="Ask for the key that uploads assets, replacing what is stored.")
     parser.add_argument("--no-vcpkg", action="store_true", help="Don't look for (or offer to clone) vcpkg.")
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
