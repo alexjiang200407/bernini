@@ -97,12 +97,20 @@ the call instead of throwing.
   fresh fractional offset every frame, which is flicker. The thin-feature case it exists for is
   better served by keeping the hash cell near pixel size (below), which attacks the cause.
 
-* **Min/max bounds, not variance clipping.** Tried and rejected on measurement rather than on
-  principle. Clipping to mean ± γ·σ over the same 3×3 is *tighter* than min/max on a stochastic
-  surface — nine binary samples have an empirical σ below half the range — so it clamps harder and
-  flickers more: at γ=1, +49% frame-to-frame noise for −8% trail. Raising γ walks the result back
-  towards min/max from the wrong side, matching its flicker only around γ≈2.3, where the trail is
-  indistinguishable too. It is the same trade-off curve, slightly worse.
+* **The clamp box is min/max at rest and tightens to mean ± σ under motion.** Always-on variance
+  clipping was tried first and rejected: tighter everywhere means snapping converged stochastic
+  coverage back onto each frame's noise, +49% resting flicker for −8% trail. But the wide box has
+  a blind spot that is exactly the visible artifact — on hashed coverage at a distance one strand
+  texel and one backdrop texel put the min/max corners at the extremes, so under a pan every
+  dragged mixture is admitted, and hair trails a smear. The σ box tightens with the mixture and
+  recentres on the majority population, which is the grip the clamp lacks there. Gating the
+  tightening on the pixel's own motion (fully tight from one texel per frame) takes the resting
+  image out of the trade entirely: motion has the jitter removed, so a still camera reads exactly
+  zero and every resting figure is bit-identical to min/max. Measured on a panned hashed-alpha
+  ramp over a lit backdrop: trailing-band error 1.73e-3 → 1.30e-3 against a 1.7e-4 still floor,
+  leading-band 2.58e-3 → 2.28e-3, grazing pan flicker 0.0024 → 0.0021, every resting bound
+  unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
+  otherwise escape.
 
 * **Not velocity-scaled either.** A blend weight ramped by reprojection distance — long accumulation
   at rest, short under motion — is the standard answer to wanting both, and measured no better than a

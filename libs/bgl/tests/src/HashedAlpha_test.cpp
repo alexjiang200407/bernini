@@ -240,8 +240,10 @@ namespace
 	// blend bakes (and what hashed wrongly got), and coverage-preserving mips, which rescale each
 	// level's alpha so the fraction passing 0.5 matches mip 0's -- the bake's kMask/kHashed path,
 	// reproduced here because the baked file is BC7 and cannot be authored directly in a test.
+	// `alpha` is mip 0, one float per texel; the chain is box-filtered down from it in float so
+	// the rescale is not quantized away.
 	assetlib::ImageData
-	MakeStrandTexture(bool preserveCoverage)
+	MippedAlphaTexture(std::vector<float> alpha, bool preserveCoverage)
 	{
 		auto image      = assetlib::ImageData();
 		image.width     = c_StrandTexSize;
@@ -264,20 +266,10 @@ namespace
 		}
 		image.pixels = core::fixed_buffer<std::byte>(totalBytes);
 
-		// Alpha per texel, box-filtered down the chain in float so the rescale below is not
-		// quantized away.
-		std::vector<float> alpha(static_cast<size_t>(c_StrandTexSize) * c_StrandTexSize);
-		for (uint32_t y = 0; y < c_StrandTexSize; ++y)
-		{
-			for (uint32_t x = 0; x < c_StrandTexSize; ++x)
-			{
-				alpha[static_cast<size_t>(y) * c_StrandTexSize + x] =
-					(x % c_StrandPeriod) < c_StrandWidth ? 1.0f : 0.0f;
-			}
-		}
-
 		const double mip0Coverage =
-			static_cast<double>(c_StrandWidth) / static_cast<double>(c_StrandPeriod);
+			static_cast<double>(
+				std::count_if(alpha.begin(), alpha.end(), [](float a) { return a >= 0.5f; })) /
+			static_cast<double>(alpha.size());
 
 		size_t offset = 0;
 		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
@@ -354,6 +346,46 @@ namespace
 		return image;
 	}
 
+	// Vertical strands two texels wide every 16, opaque on a transparent background -- a hair
+	// texture's flyaway region, reduced to what matters. The strand covers an eighth of its
+	// period, so plain box mips dilute its alpha by half per level once the strand is sub-texel.
+	assetlib::ImageData
+	MakeStrandTexture(bool preserveCoverage)
+	{
+		std::vector<float> alpha(static_cast<size_t>(c_StrandTexSize) * c_StrandTexSize);
+		for (uint32_t y = 0; y < c_StrandTexSize; ++y)
+		{
+			for (uint32_t x = 0; x < c_StrandTexSize; ++x)
+			{
+				alpha[static_cast<size_t>(y) * c_StrandTexSize + x] =
+					(x % c_StrandPeriod) < c_StrandWidth ? 1.0f : 0.0f;
+			}
+		}
+
+		return MippedAlphaTexture(std::move(alpha), preserveCoverage);
+	}
+
+	// Alpha rising linearly from nothing at either side edge to opaque at the vertical midline --
+	// a hair card's tip region, reduced to what matters: a band holding every partial coverage at
+	// once, so the stochastic zone is spatially wide instead of a thin silhouette fringe.
+	assetlib::ImageData
+	MakeRampTexture()
+	{
+		std::vector<float> alpha(static_cast<size_t>(c_StrandTexSize) * c_StrandTexSize);
+		for (uint32_t y = 0; y < c_StrandTexSize; ++y)
+		{
+			for (uint32_t x = 0; x < c_StrandTexSize; ++x)
+			{
+				const float u =
+					(static_cast<float>(x) + 0.5f) / static_cast<float>(c_StrandTexSize);
+				alpha[static_cast<size_t>(y) * c_StrandTexSize + x] =
+					std::clamp(1.0f - std::abs(u - 0.5f) * 2.0f, 0.0f, 1.0f);
+			}
+		}
+
+		return MippedAlphaTexture(std::move(alpha), true);
+	}
+
 	// The strand plane on screen: small enough that a strand is sub-pixel and the active mip is the
 	// diluted regime a distant hair card samples.
 	constexpr float c_StrandPlane = 5.0f;
@@ -362,8 +394,14 @@ namespace
 	constexpr int c_StrandBoxY = 104;
 	constexpr int c_StrandBox  = 48;
 
+	// A backdrop bright enough that a strand-coloured remnant on it is measurable, far enough
+	// behind the strands that a camera pan separates their motions -- hair over a lit scene,
+	// reduced to what matters.
+	constexpr float c_BackdropZ    = -6.0f;
+	constexpr float c_BackdropSize = 40.0f;
+
 	PatchScene
-	MakeStrandScene(bool preserveCoverage)
+	MakeCardScene(assetlib::ImageData texture, bool taaEnabled = true, bool withBackdrop = false)
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -377,7 +415,7 @@ namespace
 		targetDesc.width      = static_cast<int>(c_Width);
 		targetDesc.height     = static_cast<int>(c_Height);
 		targetDesc.headless   = true;
-		targetDesc.taaEnabled = true;
+		targetDesc.taaEnabled = taaEnabled;
 
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
@@ -394,17 +432,34 @@ namespace
 		auto view  = gfx->CreateSceneView(scene, 8);
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
-		auto desc            = bgl::PbrMaterialDesc();
-		desc.baseColorFactor = glm::vec4(1.0f);
-		desc.metallicFactor  = 0.0f;
-		desc.roughnessFactor = 0.6f;
-		desc.layerType       = bgl::LayerType::kHashed;
-		desc.baseColorTexture =
-			scene->AddTextureAsset(MakeStrandTexture(preserveCoverage), "strands");
+		auto desc             = bgl::PbrMaterialDesc();
+		desc.baseColorFactor  = glm::vec4(1.0f);
+		desc.metallicFactor   = 0.0f;
+		desc.roughnessFactor  = 0.6f;
+		desc.layerType        = bgl::LayerType::kHashed;
+		desc.baseColorTexture = scene->AddTextureAsset(std::move(texture), "strands");
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, c_StrandPlane, c_StrandPlane, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+
+		if (withBackdrop)
+		{
+			auto grey            = bgl::PbrMaterialDesc();
+			grey.baseColorFactor = glm::vec4(0.62f, 0.62f, 0.62f, 1.0f);
+			grey.metallicFactor  = 0.0f;
+			grey.roughnessFactor = 0.6f;
+
+			auto backdrop = scene->AddPlaneGeom(
+				1,
+				1,
+				c_BackdropSize,
+				c_BackdropSize,
+				scene->CreatePbrMaterial(grey));
+			view->CreateStaticMeshInstance(
+				backdrop,
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_BackdropZ)));
+		}
 
 		auto camera = bgl::Camera();
 		camera
@@ -431,7 +486,7 @@ namespace
 	std::pair<float, bgl::test::Rgba>
 	StrandFlicker(const std::string& pathA, const std::string& pathB, bool preserveCoverage)
 	{
-		PatchScene strands = MakeStrandScene(preserveCoverage);
+		PatchScene strands = MakeCardScene(MakeStrandTexture(preserveCoverage));
 
 		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
 		{
@@ -552,6 +607,71 @@ namespace
 		patch.gfx->ScreenshotPng(patch.target, pathB);
 
 		return bgl::test::FrameDelta(pathA, pathB, c_BoxX, c_BoxY, c_Box, c_Box);
+	}
+
+	// The pan the strand smear is measured under. Fast enough (about two pixels a frame at this
+	// camera) that a trailing ghost has room to show inside the band before the clamp scrubs it.
+	constexpr float c_SmearPanStep   = 0.2f;
+	constexpr int   c_SmearPanFrames = 40;
+
+	// Bands inside the ramp's two stochastic zones. The card spans x = 100 to 156 at this camera
+	// with the ramp opaque at its midline, so each band covers partial coverage from about a
+	// quarter to seven eighths. `trail` is the side the pan drags history across; `lead` mirrors
+	// it on the side being uncovered. Softness the motion adds legitimately is symmetric between
+	// them; a ghost is not.
+	constexpr int c_TrailBandX = 132;
+	constexpr int c_LeadBandX  = 104;
+	constexpr int c_BandW      = 20;
+	constexpr int c_BandY      = 108;
+	constexpr int c_BandH      = 40;
+
+	struct SmearBands
+	{
+		float trail;
+		float lead;
+
+		// The same bands between two consecutive frames of the converged still: the residual the
+		// stochastic coverage keeps even at rest, which is the zero the figures above are read
+		// against -- the deterministic TAA-off control cannot supply it.
+		float trailFloor;
+		float leadFloor;
+	};
+
+	// Converges one strand accumulation still at the destination camera, pans a second one to
+	// arrive at the same camera, and differences the two over each band -- the backdrop the two
+	// renders share cancels out, so a band reads what the pan itself left there.
+	SmearBands
+	StrandSmear(const std::string& stillPath, const std::string& pannedPath, bool taaEnabled)
+	{
+		const std::string stillNextPath = stillPath + ".next.png";
+
+		PatchScene still = MakeCardScene(MakeRampTexture(), taaEnabled, true);
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			still.gfx->DrawFrame(still.target, still.job);
+		}
+		still.gfx->ScreenshotPng(still.target, stillPath);
+
+		still.gfx->DrawFrame(still.target, still.job);
+		still.gfx->ScreenshotPng(still.target, stillNextPath);
+
+		PatchScene panned = MakeCardScene(MakeRampTexture(), taaEnabled, true);
+		for (int frame = 0; frame < c_SmearPanFrames; ++frame)
+		{
+			panned.job.camera =
+				PanCameraAt(-static_cast<float>(c_SmearPanFrames - 1 - frame) * c_SmearPanStep);
+			panned.gfx->DrawFrame(panned.target, panned.job);
+		}
+		panned.gfx->ScreenshotPng(panned.target, pannedPath);
+
+		const auto band = [&](const std::string& path, int x) {
+			return bgl::test::FrameDelta(path, stillPath, x, c_BandY, c_BandW, c_BandH);
+		};
+
+		return SmearBands{ band(pannedPath, c_TrailBandX),
+			               band(pannedPath, c_LeadBandX),
+			               band(stillNextPath, c_TrailBandX),
+			               band(stillNextPath, c_LeadBandX) };
 	}
 }
 
@@ -858,4 +978,52 @@ TEST_CASE("The hashed pattern stays per-pixel at grazing angles", "[hashedalpha]
 	// alone, 0.100 with the ratio bounded at 4, and 0.34 bounded at 2. The floor sits between the
 	// correlated figure and the bounded ones with room either side.
 	CHECK(grain > 0.06f);
+}
+
+// The reported artifact, as a number: hair viewed from mid-to-far distance trails a smear when the
+// camera pans, and close up it does not. At distance the sampled alpha sits in the open interval
+// across the whole tip region, so every pixel there is stochastic coverage -- the neighbourhood
+// the resolve clamps against spans strand and backdrop at once, and whatever the box admits
+// decays at the blend weight rather than being snapped out. The trailing band is where dragged
+// history lands; the leading band is the same stochastic zone on the side being uncovered, so
+// blur, jitter and the coverage noise itself cancel out of the comparison.
+//
+// TAA off is the instrument's zero: no accumulation, so both its bands read the difference between
+// two stochastic stills, which is the noise floor the TAA figures are read against.
+TEST_CASE("A pan leaves no smear across a hashed alpha ramp", "[hashedalpha][render]")
+{
+	const SmearBands off = StrandSmear(
+		"assets/golden/strand_smear_off_still.got.png",
+		"assets/golden/strand_smear_off_panned.got.png",
+		false);
+
+	const SmearBands on = StrandSmear(
+		"assets/golden/strand_smear_still.got.png",
+		"assets/golden/strand_smear_panned.got.png",
+		true);
+
+	INFO(
+		"band delta against the converged still: taa trail = "
+		<< on.trail << ", taa lead = " << on.lead << ", still floor trail = " << on.trailFloor
+		<< ", still floor lead = " << on.leadFloor << ", off trail = " << off.trail
+		<< ", off lead = " << off.lead);
+
+	// Without TAA the two renders are the same deterministic image, so the zero is exact.
+	CHECK(off.trail < 1e-5f);
+	CHECK(off.lead < 1e-5f);
+
+	// The still floors are the min/max box's own convergence noise; the moving-box gate reads
+	// zero motion at rest, so a tightening that leaks into the resting image shows up here.
+	CHECK(on.trailFloor < 5e-4f);
+	CHECK(on.leadFloor < 5e-4f);
+
+	// Measured 1.73e-3 with the min/max clamp box and 1.30e-3 with the motion-gated sigma box;
+	// the bound sits between them so the wide box cannot return unnoticed. The residual above the
+	// floor is reprojection incoherence -- the sprinkle zone's motion alternates between strand
+	// and backdrop -- which no clamp box can reach.
+	CHECK(on.trail < 1.6e-3f);
+
+	// The leading deficit is convergence lag, larger than the trail and moved less by the box:
+	// 2.58e-3 wide, 2.28e-3 tightened. Bounded loosely against gross regression.
+	CHECK(on.lead < 3.0e-3f);
 }
