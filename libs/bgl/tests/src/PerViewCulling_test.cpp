@@ -188,7 +188,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 
 	// Exactly what RenderContext::Draw does: the scene's and the view's buffers under the view's
 	// scope, then the cull pipeline once per frustum under that frustum's scope inside it.
-	fg.SetResourceNamespace(view->ResourceNamespace());
+	fg.SetResourceNamespace(view->GetResourceNamespace());
 	scene->AttachToFrameGraph(fg, 0);
 	view->AttachToFrameGraph(fg, 0);
 

@@ -101,7 +101,7 @@ namespace bgl
 		}
 
 		[[nodiscard]] const std::string&
-		ResourceNamespace() const noexcept
+		GetResourceNamespace() const noexcept
 		{
 			return m_NamePrefix;
 		}

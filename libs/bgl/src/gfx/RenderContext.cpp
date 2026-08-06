@@ -465,7 +465,7 @@ namespace bgl
 
 		const uint32_t drawIdx = m_DrawCount++;
 
-		m_FrameGraph.SetResourceNamespace(view->ResourceNamespace());
+		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
 
 		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
