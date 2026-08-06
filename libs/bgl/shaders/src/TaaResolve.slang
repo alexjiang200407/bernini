@@ -120,11 +120,19 @@ float4 PSMain(VSOut input) : SV_Target
 
     float4 current = gTaaResolveData.sceneColor.SampleLevel(pointClamp, input.uv, 0.0);
 
-    // The 3x3 the history is admitted from. Bounds are taken in YCoCg, and the centre sample is the
-    // one the blend starts from.
+    float2 motion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, input.uv, 0.0).xy;
+    float2 historyUv = input.uv - motion;
+
+    // The 3x3 the history is admitted from: min/max bounds at rest, tightening to mean +/- sigma
+    // as the pixel moves. On stochastic coverage the min/max box spans both populations whole and
+    // admits every dragged mixture -- the smear a hashed surface trails at a distance -- where the
+    // sigma box recentres on the majority. Motion is jitter-free, so rest is exactly min/max.
+    // The trade-off history is in docs/taa.md.
     float3 centre = RgbToYCoCg(current.rgb);
     float3 boxMin = centre;
     float3 boxMax = centre;
+    float3 m1 = centre;
+    float3 m2 = centre * centre;
 
     for (int y = -1; y <= 1; ++y)
     {
@@ -140,11 +148,21 @@ float4 PSMain(VSOut input) : SV_Target
 
             boxMin = min(boxMin, tap);
             boxMax = max(boxMax, tap);
+            m1 += tap;
+            m2 += tap * tap;
         }
     }
 
-    float2 motion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, input.uv, 0.0).xy;
-    float2 historyUv = input.uv - motion;
+    // Fully tight from one texel of motion per frame. The sigma box is kept inside the min/max
+    // box: nine bounded samples can put mu +/- sigma outside it, and outside it the clamp would
+    // admit colours the neighbourhood never produced.
+    float3 mu = m1 / 9.0;
+    float3 sigma = sqrt(max(m2 / 9.0 - mu * mu, 0.0));
+    float3 tightMin = clamp(mu - sigma, boxMin, boxMax);
+    float3 tightMax = clamp(mu + sigma, boxMin, boxMax);
+    float tightness = saturate(length(motion / texel));
+    boxMin = lerp(boxMin, tightMin, tightness);
+    boxMax = lerp(boxMax, tightMax, tightness);
 
     // Reprojected off-screen: there is no history for this pixel, and wrapping the clamp sampler's
     // edge texel in would be a smear rather than an accumulation.
