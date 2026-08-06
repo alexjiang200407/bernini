@@ -424,6 +424,10 @@ def ensure_lfs_agent(replace=False):
         # git-lfs quotes `path` for itself but interpolates `args` into a shell command
         # verbatim, so an unquoted path splits on the first space in it.
         "lfs.customtransfer.bernini.args": f'"{agent}"',
+        # .lfsconfig excludes everything so that a clone with no agent yet writes pointers
+        # instead of failing its checkout. This is the line that takes it back off, and it
+        # has to be local config, which outranks the committed file.
+        "lfs.fetchexclude": "",
     }
 
     for key, value in settings.items():

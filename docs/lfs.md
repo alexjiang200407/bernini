@@ -91,7 +91,15 @@ turn into a recurring bill, and a full clone costs nothing to serve.
   the agent — `lfs.standalonetransferagent` and `lfs.customtransfer.*` — are refused from
   `.lfsconfig` outright, since a file that arrives with a clone must not get to name the program git
   executes; `just init` writes those into the clone's local git config. `.lfsconfig` is left holding
-  only `lfs.url`, which git-lfs insists on having before it will consider an agent at all.
+  `lfs.url`, which git-lfs insists on having before it will consider an agent at all, and
+  `lfs.fetchexclude`.
+
+* **The first checkout is told to fetch nothing.** The agent is local config a clone cannot inherit,
+  so the checkout inside `git clone` has no way to reach the store — and its smudge filter does not
+  fail gracefully: it aborts, leaving the working tree half-written before `just init` has had a
+  chance to run. `fetchexclude = *` in `.lfsconfig` makes it not try, so the pointers land and the
+  clone finishes clean. `just init` sets `lfs.fetchexclude` to empty in the clone's own config,
+  which outranks the committed file, and pulls.
 
 * **The agent's configured paths are absolute.** git-lfs runs it from whatever directory the
   triggering git command was in, so a relative path does not survive — which is the other reason
