@@ -137,7 +137,7 @@ just init                         # set this machine up and write scripts/config
 just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
 just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build
-just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report (see docs/coverage.md)
+just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)
 just format <files...>            # clang-format in place (--check to verify only)
 just tidy [paths...]              # clang-tidy the naming rules (--changed for a diff, --fix to apply)
 just idl                          # regenerate the IDL C++ headers and Slang copies

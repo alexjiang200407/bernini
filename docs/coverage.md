@@ -28,6 +28,33 @@ is passed to `llvm-cov` as an `-object`, and the report is filtered to `libs/`, 
 `examples/`. Stale profiles are deleted before the suites start — a merge across runs would mix
 them silently. A failing suite does not stop the report; the exit code carries the failure.
 
+## Diff coverage
+
+```bash
+just coverage --diff                  # added lines of the staged diff that no test executed
+just coverage --diff origin/master    # ... of everything this branch changed (merge-base)
+just coverage core --diff --json      # machine-readable, running only the core suite
+```
+
+The output this feature exists for: *these lines of the diff are executed by no test* — checkable,
+hard to game, and exactly what a reviewer otherwise does by eye. Each line of output is
+`file:first-last`, clickable and greppable; `--json` emits
+`{"uncovered": {"<file>": [[first, last], …]}, "no_data": […]}` for an agent — and stdout then
+carries only the JSON object (the runner reports on stderr), so it pipes cleanly. The ref semantics
+are `just tidy --changed`'s: staged diff by default, `REF...HEAD` merge-base with a ref.
+
+Reading the answer right:
+
+* A line is reported only if it is executable and its count is zero. Changed lines with no `DA:`
+  record — comments, blanks, declarations — are not "covered"; they are not statements.
+* A changed file that appears under `no_data` was compiled into no instrumented image (or only ever
+  included through `-isystem`). That is a louder warning than an uncovered line: nothing measured
+  it at all.
+* Uncovered lines never fail the command. Coverage is a diagnostic, not a gate — a threshold here
+  would reward tests that execute lines without asserting anything.
+* Run the suites that could plausibly reach the change (`just coverage core --diff` while iterating
+  on `libs/core`); the full default run is the honest final answer.
+
 ## Design Choices
 
 * **A separate preset and build directory, never the debug build.** `macos-clang-metal-coverage`
