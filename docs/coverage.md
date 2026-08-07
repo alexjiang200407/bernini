@@ -7,9 +7,26 @@ the macOS host, not of the project. The output is a diagnostic — there is no t
 and nothing in the pre-commit hook, deliberately: a coverage number that gates a merge rewards
 tests that execute lines without asserting anything about them.
 
-**This document is a map, not a mirror.** [cmake/enable_coverage.cmake](../cmake/enable_coverage.cmake)
-and [CMakePresets.json](../CMakePresets.json) are the source of truth; when this doc disagrees, trust
-them, then fix this doc.
+**This document is a map, not a mirror.** [cmake/enable_coverage.cmake](../cmake/enable_coverage.cmake),
+[CMakePresets.json](../CMakePresets.json) and [scripts/coverage.py](../scripts/coverage.py) are the
+source of truth; when this doc disagrees, trust them, then fix this doc.
+
+## just coverage
+
+```bash
+just coverage                     # build the coverage preset, run every suite, report
+just coverage core assetlib      # only suites matching these names, like `just test`
+just coverage --no-build         # run what is already built
+just coverage -- "[materialgraph]"  # forward a Catch2 filter to every suite
+```
+
+One command does the whole pipeline: build `macos-clang-metal-coverage`, run the suites through
+the same runner as `just test` (same discovery, same sharding, cwd per suite), merge the per-process
+profiles, and report — a per-file summary on stdout and an HTML report under
+`build/macos-metal-coverage/coverage/html/`. Every executable and shared library from the codemodel
+is passed to `llvm-cov` as an `-object`, and the report is filtered to `libs/`, `apps/` and
+`examples/`. Stale profiles are deleted before the suites start — a merge across runs would mix
+them silently. A failing suite does not stop the report; the exit code carries the failure.
 
 ## Design Choices
 
@@ -41,6 +58,9 @@ them, then fix this doc.
 The tools must come from `xcrun`, which resolves against the active developer directory — the same
 toolchain that compiled the code. A mismatched `llvm-profdata` cannot read the profile. (They are
 not beside the configured clang: `/usr/bin/clang` has no `llvm-cov` neighbour.)
+
+The example keeps a profile directory of its own, apart from `coverage/` — which `just coverage`
+deletes stale profiles from on every run.
 
 ```bash
 just build --preset macos-clang-metal-coverage
