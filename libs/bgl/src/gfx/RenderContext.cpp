@@ -379,7 +379,8 @@ namespace bgl
 #endif
 
 		m_FrameGraph.Reset();
-		m_DrawCount = 0;
+		m_DrawCount   = 0;
+		m_CameraStill = true;
 		++m_FrameCounter;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
@@ -463,8 +464,14 @@ namespace bgl
 		camera.viewProj             = viewProj;
 		camera.rotationOnlyViewProj = projection * viewNoTranslation;
 		camera.jitter               = jitter;
+		camera.unjitteredViewProj   = job.camera.GetProjection() * job.camera.GetView();
 
 		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
+
+		// Exact comparison on purpose: a held camera reproduces the matrices bitwise, and any
+		// threshold would have to know the scene's scale. ANDed across the frame's draws -- one
+		// panning view must veto the widening for all of them, or its pixels bank a passing edge.
+		m_CameraStill &= camera.unjitteredViewProj == prevCamera.unjitteredViewProj;
 
 		const uint32_t drawIdx = m_DrawCount++;
 
@@ -578,6 +585,7 @@ namespace bgl
 			taaArgs.linearSampler   = m_LinearClampSampler;
 			taaArgs.viewport        = viewport;
 			taaArgs.historyValid    = rt.IsHistoryValid();
+			taaArgs.cameraStill     = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.

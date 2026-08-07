@@ -130,6 +130,10 @@ namespace bgl
 			{
 				u = args.historyValid ? 1.0f : 0.0f;
 			}
+			if (auto u = taa["cameraStill"]; u.IsValid())
+			{
+				u = args.cameraStill ? 1.0f : 0.0f;
+			}
 		}
 		else
 		{

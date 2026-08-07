@@ -18,5 +18,9 @@ namespace bgl
 		// because a motion vector describes the surface, not the sample pattern, so the shader has
 		// to subtract this frame's and last frame's before differencing.
 		glm::vec2 jitter{ 0.0f };
+
+		// viewProj before the jitter, kept so consecutive frames can be compared for camera
+		// stillness bitwise -- stripping the jitter back out of viewProj is not float-exact.
+		glm::mat4 unjitteredViewProj{ 1.0f };
 	};
 }
