@@ -128,21 +128,24 @@ have no call site to put it at. So `enable_coverage` issues
 sites confined to the libraries. It reaches `editor` and `editor_tests` because they consume
 `editor_lib` by link rather than by `$<TARGET_OBJECTS:>`; C1's gate is what proves it.
 
-**`enable_coverage(bgl)` is load-bearing on its own.** Because the Metal branch never links
-`bgl_metal` (above), no `PUBLIC` link option declared on the backend object library can reach the
-dylib. `libbgl.dylib` gets the profile runtime from exactly one place — the existing
-`enable_strict_compiler` site at `libs/bgl/CMakeLists.txt:114`, where `enable_coverage(bgl)` goes
-beside it. `bgl`'s own sources are only `BGL_SHARED_HEADERS`, so that call looks redundant and is not:
-removing it breaks the Metal coverage build silently, with `libs/bgl` simply absent from the report.
+**`bgl` needs no call of its own — corrected during C1.** This plan first claimed
+`enable_coverage(bgl)` was load-bearing, arguing from the Metal branch never linking `bgl_metal`.
+That overlooked `target_link_libraries(bgl PUBLIC bgl_objects glm::glm)`
+(`libs/bgl/CMakeLists.txt:113`): `enable_coverage(bgl_objects)`'s `PUBLIC` link option rides that
+edge to the dylib's link line and on to every consumer, which C1's precheck verified empirically in
+a project mirroring the shape. `bgl`'s own sources are only `BGL_SHARED_HEADERS`, so a call on it
+would instrument nothing and add no link flag that is not already inherited. There are 13 call
+sites, not 14.
 
 **Per-target, not directory-scoped.** Rejected: `add_compile_options` at the root guarded by
-`BUILD_COVERAGE`, which is one line instead of fourteen. It would instrument `QtNodes` and `metalcpp`,
+`BUILD_COVERAGE`, which is one line instead of thirteen. It would instrument `QtNodes` and `metalcpp`,
 inflating build time and putting third-party files in every report. Per-target calls keep the vendored
 trees out by construction rather than by a filter someone has to maintain.
 
 **The editor is instrumented, so the call-site set deliberately differs from
-`enable_strict_compiler`'s.** `enable_coverage` is called at 14 sites across five files: the 12 above,
-plus `editor_lib` and `editor_tests` under `apps/editor`. Rejected: keeping the two sets identical for
+`enable_strict_compiler`'s.** `enable_coverage` is called at 13 sites across five files: 11 of the
+12 above (all but `bgl`, per the correction), plus `editor_lib` and `editor_tests` under
+`apps/editor`. Rejected: keeping the two sets identical for
 symmetry, which would leave `editor_tests` — the third-largest suite — running under `just coverage`
 for its full wall-clock while reporting nothing about the editor. The sets differ because the
 constraint differs: strict warnings stay out of `apps/` because Qt and moc-generated code trip them,
@@ -214,7 +217,7 @@ hook. Failing a build on a percentage is what turns the signal into a target. It
 |---|---|
 | `cmake/enable_coverage.cmake` | new; compile + `PUBLIC` link options, a no-op unless `BUILD_COVERAGE` |
 | `CMakeLists.txt` | `include()` it beside the other `cmake/` modules |
-| `libs/{core,bgl,assetlib,gamelib}/CMakeLists.txt` | `enable_coverage(<target>)` at the 12 `enable_strict_compiler` sites |
+| `libs/{core,bgl,assetlib,gamelib}/CMakeLists.txt` | `enable_coverage(<target>)` at 11 of the 12 `enable_strict_compiler` sites (all but `bgl`) |
 | `apps/editor/CMakeLists.txt`, `apps/editor/tests/CMakeLists.txt` | `enable_coverage` for `editor_lib` and `editor_tests` — 2 sites with no strict-compiler counterpart |
 | `CMakePresets.json` | `macos-clang-metal-coverage`, configure + build preset |
 | `scripts/util/gitdiff.py` | new; `changed()`, `is_generated`, `SOURCE_EXTS`, `SOURCE_ROOTS` moved out of `tidy.py`, which imports them |
@@ -242,7 +245,7 @@ binaries. Narrow, but it belongs in the doc's troubleshooting section.
 ## Tasks
 
 **C1 — the build mode.** `cmake/enable_coverage.cmake`, the `BUILD_COVERAGE` cache variable, the
-`macos-clang-metal-coverage` preset, the 14 call sites, `docs/coverage.md` covering the mode and how
+`macos-clang-metal-coverage` preset, the 13 call sites, `docs/coverage.md` covering the mode and how
 to drive `llvm-cov` by hand — including the `-object` argument, which is what makes manual use
 correct — and the `CLAUDE.md` index entry. Adds no script.
 

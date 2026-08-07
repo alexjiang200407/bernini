@@ -75,6 +75,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 endif()
 
 enable_strict_compiler(bgl_objects)
+enable_coverage(bgl_objects)
 
 # CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
 # backend's IR, so nothing below can be built without one.
@@ -137,6 +138,7 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx12-agility CONFIG REQUIRED)
 	copy_to_target(bgl ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
+	enable_coverage(bgl_d3d12)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	target_compile_definitions(bgl_metal PRIVATE BGL_EXPORTS)
 	# bgl_objects too, not just the backend: DescriptorHandle's alignment is per-backend, and
@@ -146,6 +148,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	# bgl embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
 	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
 	enable_strict_compiler(bgl_metal)
+	enable_coverage(bgl_metal)
 endif()
 
 # Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
@@ -244,6 +247,7 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	endif()
 
 	enable_strict_compiler(bgl_tests)
+	enable_coverage(bgl_tests)
 endif()
 
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
@@ -323,4 +327,5 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 	target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_METAL BGL_EXPORTS)
 
 	enable_strict_compiler(bgl_tests)
+	enable_coverage(bgl_tests)
 endif()

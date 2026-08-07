@@ -91,6 +91,12 @@ How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang 
 The jitter, the history ping-pong and the resolve: why the client's camera never sees the offset, why
 velocity has it removed, and why the resolve writes history rather than the screen.
 
+**[Coverage](./docs/coverage.md)**
+
+The instrumented build mode: the `macos-clang-metal-coverage` preset, why `enable_coverage` is
+per-target with a `PUBLIC` link half, and how to drive `llvm-profdata`/`llvm-cov` by hand —
+including the `-object` list a correct report needs.
+
 **[Git LFS](./docs/lfs.md)**
 
 Where the binaries under `assets/` actually live — this project's own R2 bucket, reached by a

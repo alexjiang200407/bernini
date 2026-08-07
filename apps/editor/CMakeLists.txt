@@ -118,6 +118,10 @@ target_precompile_headers(editor_lib
 		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
+# No enable_strict_compiler here -- Qt and moc output trip the strict set -- but instrumentation
+# is not a warning, and the editor is where coverage is most informative.
+enable_coverage(editor_lib)
+
 set_target_properties(editor_lib PROPERTIES
 	AUTOUIC_SEARCH_PATHS "${EDITOR_UI_DIRS}"
 )
