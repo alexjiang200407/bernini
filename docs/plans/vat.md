@@ -8,14 +8,15 @@ no bones on the GPU, no per-unit CPU work, free inter-frame interpolation from t
 and file live on, which is why it lands before the skinned path.
 
 **This feature depends on PR #109** (`feat/animation-asset-import`) — for its content, not for its
-merge to `master`. The bake consumes exactly what it cooks: `.bskel` (bones, bind pose, inverse
-bind matrices), `.banim` (fixed-rate local-space pose samples), and the `JOINTS_0`/`WEIGHTS_0`
+merge. The bake consumes exactly what it cooks: `.bskel` (bones, bind pose, inverse bind
+matrices), `.banim` (fixed-rate local-space pose samples), and the `JOINTS_0`/`WEIGHTS_0`
 attributes on the `.bmesh`. VAT is the engine's priority, so `master` should not take the animation
-import ahead of it: **#109 is retargeted onto `feat/vat`** and merges here as this feature's first
-PR, keeping its review history intact — cherry-picking its commits instead would duplicate history
-against the open PR and forfeit the review thread. `master` sees the import and VAT together, when
-the feature lands whole. No task below starts until #109 has merged into `feat/vat`. File
-references into those containers cite the PR branch and may drift under its review.
+import ahead of it: **#109 is dropped — closed unmerged — and its commits are cherry-picked onto
+`feat/vat`** as this feature's first PR (T0). With #109 closed the patches exist only once, so the
+duplication that argued against cherry-picking is gone; its review thread stays readable on the
+closed PR. `master` sees the import and VAT together, when the feature lands whole. No task below
+starts until T0 has merged into `feat/vat`. File references into those containers cite #109's
+branch and hold for the cherry-picked commits.
 
 This is a *plan*, not a mirror of code. When the work lands, the durable parts belong in a new
 `docs/vat.md`, in [asset_standards.md](../asset_standards.md) (the new container and texture
@@ -300,9 +301,12 @@ the `.bvat` references them by path).
 
 ## 4. Tasks
 
-Each is one PR into `feat/vat`, in this order. **T1 starts only after #109 — retargeted onto
-`feat/vat` — has merged into it.**
+Each is one PR into `feat/vat`, in this order.
 
+- **T0 — the animation asset import, cherry-picked from #109** (`assetlib`). The five commits of
+  `feat/animation-asset-import` cherry-picked onto a branch cut from `feat/vat` — conflict-free
+  today, since `feat/vat` equals `master` — after which #109 is closed unmerged. No new code.
+  Gate: the assetlib suite green on the cherry-picked branch.
 - **T1 — pose evaluation and CPU skinning** (`assetlib`). `poseModelTransforms(skeleton, set,
   clip, frame)`, `skinningMatrices`, and a skinned-vertex evaluator that decodes the quantized
   joint/weight attributes. Gate: a clip frame whose pose equals the bind pose reproduces the source
