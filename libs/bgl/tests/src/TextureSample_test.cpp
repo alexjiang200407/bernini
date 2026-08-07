@@ -289,3 +289,163 @@ TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture
 	resourceManager->DestroySrv(srv, false);
 	resourceManager->DestroyTexture(texture, false);
 }
+
+// The mip chain's existence on the GPU, level by level. Each mip is uploaded a distinct solid
+// colour and read back through an explicit-LOD sample, so a level that comes back as another
+// level's colour (or garbage) names the broken link outright: creation, upload, or the view.
+// Written to corner a backend divergence -- distant hashed-alpha content behaved as if only mip 0
+// existed on D3D12 while Metal sampled the chain -- and kept because it pins the contract every
+// asset texture relies on.
+//
+// SRGBA8, matching the asset path; the colours are channel extremes, which the sRGB decode maps to
+// themselves.
+TEST_CASE("explicit-LOD samples return each uploaded mip", "[texture][compute]")
+{
+	constexpr uint32_t c_TexSize   = 8;
+	constexpr uint32_t c_MipLevels = 4;
+
+	constexpr std::array<std::array<uint8_t, 4>, c_MipLevels> c_MipColors = { {
+		{ 255, 0, 0, 255 },
+		{ 0, 255, 0, 255 },
+		{ 0, 0, 255, 255 },
+		{ 255, 255, 0, 255 },
+	} };
+
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto  resourceManager = gfxBase->GetResourceManagerCpy();
+	auto* device          = gfxBase->GetDevice();
+
+	auto cmdListDesc  = bgl::CommandListDesc();
+	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	auto texDesc          = bgl::TextureDesc();
+	texDesc.width         = c_TexSize;
+	texDesc.height        = c_TexSize;
+	texDesc.mipLevels     = c_MipLevels;
+	texDesc.format        = bgl::Format::SRGBA8_UNORM;
+	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.debugName     = "Mip Readback Source";
+
+	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
+	REQUIRE(resourceManager->ValidTextureHandle(texture));
+
+	auto srvDesc      = bgl::SrvDesc();
+	srvDesc.format    = texDesc.format;
+	srvDesc.dimension = texDesc.dimension;
+	srvDesc.mipLevels = texDesc.mipLevels;
+	srvDesc.debugName = "Mip Readback SRV";
+
+	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	REQUIRE(resourceManager->ValidSrvHandle(srv));
+
+	// Each mip filled with its colour; the buffers must outlive WriteTexture's recording.
+	std::array<std::vector<uint8_t>, c_MipLevels>        mipPixels;
+	std::array<bgl::TextureSubresourceData, c_MipLevels> subresources;
+	for (uint32_t mip = 0; mip < c_MipLevels; ++mip)
+	{
+		const uint32_t dim = c_TexSize >> mip;
+		mipPixels[mip].resize(static_cast<size_t>(dim) * dim * 4);
+		for (size_t t = 0; t < mipPixels[mip].size(); t += 4)
+		{
+			std::memcpy(&mipPixels[mip][t], c_MipColors[mip].data(), 4);
+		}
+		subresources[mip] = { mipPixels[mip].data(),
+			                  static_cast<uint64_t>(dim) * 4,
+			                  static_cast<uint64_t>(dim) * dim * 4 };
+	}
+
+	const bgl::SamplerHandle sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
+	REQUIRE(resourceManager->ValidSamplerHandle(sampler));
+
+	auto outDesc         = bgl::ComputeBufferDesc();
+	outDesc.initialCount = c_MipLevels;
+	outDesc.debugName    = "Sampled Mip Colours";
+	outDesc.SetElement<glm::vec4>();
+	const bgl::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
+	REQUIRE(resourceManager->ValidBufferHandle(outBuffer));
+
+	auto rbDesc                        = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize                    = sizeof(glm::vec4) * c_MipLevels;
+	rbDesc.debugName                   = "Sampled Mip Readback";
+	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	auto kernel = device->CreateComputeKernel(
+		bgl::ComputePipelineDesc()
+			.SetShader(device->CreateShader("CSTextureMipReadback"))
+			.SetDebugName("Texture Mip Readback"));
+	REQUIRE(kernel.pipeline != nullptr);
+	REQUIRE(kernel.uniforms.contains("gUniforms"));
+
+	kernel["gUniforms"]["texture"]  = srv;
+	kernel["gUniforms"]["sampler"]  = sampler;
+	kernel["gUniforms"]["outColor"] = outBuffer;
+	kernel["gUniforms"]["levels"]   = c_MipLevels;
+
+	cmdList->Open(cmdQueue, cmdAllocator);
+
+	cmdList->WriteTexture(texture, subresources);
+	cmdList->Barrier(
+		texture,
+		bgl::TextureBarrierDesc()
+			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+			.SetLayoutBefore(bgl::BarrierLayout::kCopyDest)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource)
+			.SetLayoutAfter(bgl::BarrierLayout::kShaderResource));
+
+	auto state   = bgl::ComputeState();
+	state.kernel = &kernel;
+	cmdList->SetComputeState(state);
+	cmdList->Dispatch(1, 1, 1);
+
+	cmdList->Barrier(
+		outBuffer,
+		bgl::BufferBarrierDesc()
+			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+
+	cmdList->CopyBufferToReadback(rb, outBuffer);
+	cmdList->Close();
+
+	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+
+	const auto* sampled = static_cast<const glm::vec4*>(resourceManager->MapReadback(rb));
+	REQUIRE(sampled != nullptr);
+
+	for (uint32_t mip = 0; mip < c_MipLevels; ++mip)
+	{
+		INFO(
+			"mip " << mip << " sampled " << sampled[mip].r << "," << sampled[mip].g << ","
+				   << sampled[mip].b << "," << sampled[mip].a);
+
+		CHECK(sampled[mip].r == Catch::Approx(c_MipColors[mip][0] / 255.0f).margin(0.01));
+		CHECK(sampled[mip].g == Catch::Approx(c_MipColors[mip][1] / 255.0f).margin(0.01));
+		CHECK(sampled[mip].b == Catch::Approx(c_MipColors[mip][2] / 255.0f).margin(0.01));
+		CHECK(sampled[mip].a == Catch::Approx(c_MipColors[mip][3] / 255.0f).margin(0.01));
+	}
+
+	resourceManager->UnmapReadback(rb);
+
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(outBuffer, false);
+	resourceManager->DestroySampler(sampler, false);
+	resourceManager->DestroySrv(srv, false);
+	resourceManager->DestroyTexture(texture, false);
+}
