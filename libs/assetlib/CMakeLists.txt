@@ -51,6 +51,7 @@ target_link_libraries(assetlib
 target_include_directories(assetlib PRIVATE ${Stb_INCLUDE_DIR} ${TINYGLTF_INCLUDE_DIRS})
 
 enable_strict_compiler(assetlib)
+enable_coverage(assetlib)
 
 file(GLOB_RECURSE ASSETLIB_CLI_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/cli/*.cpp
@@ -142,4 +143,5 @@ if (BUILD_TESTS)
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${ASSETLIB_TESTS_SOURCES})
 
 	enable_strict_compiler(assetlib_tests)
+	enable_coverage(assetlib_tests)
 endif()

@@ -35,6 +35,7 @@ target_link_libraries(
 )
 
 enable_strict_compiler(core)
+enable_coverage(core)
 
 target_precompile_headers(core
     PRIVATE
@@ -127,4 +128,5 @@ if (BUILD_TESTS)
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${CORE_TESTS_SOURCES})
 
     enable_strict_compiler(core_tests)
+    enable_coverage(core_tests)
 endif()

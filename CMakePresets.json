@@ -242,6 +242,22 @@
       }
     },
     {
+      "name": "macos-clang-metal-coverage",
+      "displayName": "macOS Clang Coverage ninja - Metal",
+      "binaryDir": "${sourceDir}/build/macos-metal-coverage",
+      "inherits": [
+        "vcpkg",
+        "macos",
+        "clang",
+        "metal",
+        "debug"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_COVERAGE": "ON"
+      }
+    },
+    {
       "name": "macos-clang-metal-release",
       "displayName": "macOS Clang Release ninja - Metal",
       "binaryDir": "${sourceDir}/build/macos-metal-release",
@@ -299,6 +315,11 @@
     {
       "name": "macos-clang-metal-debug",
       "configurePreset": "macos-clang-metal-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-clang-metal-coverage",
+      "configurePreset": "macos-clang-metal-coverage",
       "configuration": "Debug"
     },
     {
