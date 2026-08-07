@@ -140,8 +140,17 @@ one sky. Neither applies to a bake-derived texture pair.)
 
 Partial reads stay cheap: chunks are addressed by id and read selectively
 (`readChunksFromFile`, the same seek-only path `loadMeshRefs` uses), so `describe` and the refs
-scan read the tables without touching the pixel chunks. The consequence to accept: a `.bvat` is
-tens of MB, so `*.bvat` joins the LFS patterns before any is committed.
+scan read the tables without touching the pixel chunks.
+
+**A `.bvat` is never committed.** It is wholly derived — regenerated from the `.bskel` and the
+`.banim` set attached to a skeleton, a stale bake detectable from the input stamps and a re-bake
+seconds of CPU skinning — so it is a build product, not an asset: `*.bvat` goes in `.gitignore`
+(the guarded failure is an accidental tens-of-MB git blob), never in the LFS patterns. Machines
+cook identical bytes because the pixel chunks are uncompressed unorm — pure CPU math, no
+compressor in the loop — which is one more reason compression stays an export concern: a
+compressed chunk cooked on dev machines would vary by compressor version. The cost is a cook step
+where nothing referenced one before; T5's load path treats a missing or stale `.bvat` as "bake
+it" (gamelib links assetlib — this is exactly the seam), not as an error.
 
 **No source/compiled texture split inside the container.** A VAT texture has no authored source —
 its source *is* the clip data, so "re-bake" means regenerating from the `.banim`, not re-encoding
@@ -195,9 +204,14 @@ nothing here precludes either, and the 8-bit normal is already the cheap half. A
 doubles its term for quality the tier cannot show; octahedral `RG16` (same 4 B, better
 distribution) is deferred until banding is observed.
 
-**Rejected: one texture per clip.** Bindless makes it feasible, but every clip boundary becomes a
-handle swap in the shader, transitions still need padding, and the container must route N textures
-per rig instead of two.
+**Rejected: one texture per clip** — including the variant that splits per clip during
+development and merges into the atlas at export. Bindless makes it feasible, but every clip
+boundary becomes a handle swap in the shader, transitions still need padding, and the container
+must route N textures per rig instead of two. The split-then-merge variant adds two more: the
+global AABB couples the clips regardless of storage (a new clip that grows the box stales every
+"independent" texture), and development would exercise a per-instance texture-selection path the
+exported build never runs. Per-clip modularity already lives at the source layer — one `.banim`
+per clip; the atlas is the compiled form, and D1 makes re-baking it cheap and atomic.
 
 **Rejected: `float16`/`float32` positions.** 2–4× the dominant memory term; unorm16 in a box is
 ~0.1 mm of quantization on a 4 m rig, below anything a crowd tier shows. The box comes with D3's
@@ -289,7 +303,7 @@ the CLI seam, that feature is a caller — the logic is already testable without
 | `libs/bgl` shaders | `Forward_Vat.slang`; `ViewData` gains `time`/`prevTime` | a cbuffer key missing from any forward binding is `gfatal` at first draw — every pixel module binds `ViewData`, so the field lands in one shared struct |
 | `libs/bgl` | scene buffers for VAT records, `AddVatGeom`/`CreateVatMeshInstance` public API, per-row mesh source in the PSO table | `c_Psos` is positional against `PsoType` and its `static_assert` only catches an empty row — a misordered row draws with the wrong pixel shader |
 | `libs/gamelib` | `AssetManager` acquires `.bvat` — `decodeKTX2` on the embedded chunks feeds `AddTextureAsset`, then the geom + instance calls | refcount graph gains texture edges from a geom kind that is not a material — follow the instance→geom→texture discipline in `gamelib/CLAUDE.md` |
-| `assets/`, `.gitattributes` | `*.bvat` joins the LFS patterns in T2 (it embeds pixels, tens of MB); fixtures stay synthesized, and `.glb` is already LFS-tracked if a real rig lands later | a `.bvat` committed before the attribute lands as a plain git blob |
+| `.gitignore` | `*.bvat` is a derived build product, ignored in T2 before the first bake exists; fixtures stay synthesized, and `.glb` is already LFS-tracked if a real rig lands later | a `.bvat` committed by accident lands as a tens-of-MB plain git blob |
 | `ROADMAP.md`, docs | ticked per task; `docs/vat.md` at the end | — |
 
 Existing behaviour that must not move: every current golden (static path untouched — new PSO
@@ -316,7 +330,7 @@ Each is one PR into `feat/vat`, in this order.
 - **T2 — `.bvat` container and the bake** (`assetlib` + CLI). Global AABB over all clips,
   embedded KTX2 payload chunks via `encodeKTX2`, padding rows, side-channel palettes, input
   stamps, the registration checklist (magic, extension, refs, describe, sniff), `*.bvat` into
-  `.gitattributes`. Gate: container round-trip pixels included; unpacking a baked texel matches
+  `.gitignore`. Gate: container round-trip pixels included; unpacking a baked texel matches
   T1's CPU skin within unorm tolerance; the padded terminal row equals the last frame; refs
   reports the three edges (`.bvat` → mesh/skel/anim) and `describe` reads the tables without
   loading the pixel chunks; a bake past 16384 in either dimension — vertices or padded frame
@@ -330,9 +344,11 @@ Each is one PR into `feat/vat`, in this order.
   the CPU lerp of the two poses within tolerance; the motion-vector test derives expected
   displacement independently (the `MotionVectors_test` pattern) for a static camera over an
   animated quad; loop wraparound crosses the padded row without a discontinuity; `--gpu-validation`.
-- **T5 — gamelib loads `.bvat`** (`gamelib`). AssetManager acquisition, lifetime edges, the
-  end-to-end test: synthesize a rig, bake it through the assetlib API, load the `.bvat`, draw, and
-  assert on pixels. Gate: that test, plus delete-order tests (geom before textures, instance
+- **T5 — gamelib loads `.bvat`** (`gamelib`). AssetManager acquisition, lifetime edges,
+  bake-on-demand (a missing or stale `.bvat` — checked against the input stamps — is baked, not an
+  error; it is never committed, per D1), and the end-to-end test: synthesize a rig, bake it
+  through the assetlib API, load the `.bvat`, draw, and assert on pixels. Gate: that test, a
+  load-with-no-`.bvat`-on-disk test, plus delete-order tests (geom before textures, instance
   before geom).
 - **T6 — docs**. `docs/vat.md` (bcp-docs shape), the asset-standards and passes updates, roadmap
   ticks reconciled, this plan corrected to what shipped.
