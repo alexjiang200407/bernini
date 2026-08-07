@@ -29,10 +29,20 @@ namespace assetlib
 	 *
 	 * @param path Path to a .ktx2 file.
 	 * @param decode What to transcode a Basis-supercompressed file to; ignored for uncompressed ones.
+	 * @param maxDim When non-zero, only the tail of the stored mip chain is returned: the top level
+	 *        is the smallest stored mip whose longer edge still covers `maxDim` (the whole image when
+	 *        it is already smaller), and for a block-compressed format it backs off further to the
+	 *        first block-aligned level, since D3D12 rejects an unaligned top level. Selects among
+	 *        stored mips, never resamples -- an image with no smaller mips comes back whole. For a
+	 *        consumer that displays at a known small size, this cuts the decoded bytes and the
+	 *        upload that follows by the skipped levels.
 	 * @throws std::runtime_error if the file cannot be read, decoded, or carries an unmapped format.
 	 */
 	[[nodiscard]] ImageData
-	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode = Ktx2Decode::kGpu);
+	loadKTX2(
+		const std::filesystem::path& path,
+		Ktx2Decode                   decode = Ktx2Decode::kGpu,
+		uint32_t                     maxDim = 0);
 
 	/**
 	 * loadKTX2 over a `.ktx2` already in memory, for a container that embeds one.
