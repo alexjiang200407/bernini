@@ -7,11 +7,15 @@ no bones on the GPU, no per-unit CPU work, free inter-frame interpolation from t
 `ROADMAP.md` **Module 1 → Animation → Vertex Animation Textures**, the tier the battle game's rank
 and file live on, which is why it lands before the skinned path.
 
-**This feature depends on PR #109** (`feat/animation-asset-import`), which is open against `master`
-at the time of writing. The bake consumes exactly what it cooks: `.bskel` (bones, bind pose, inverse
+**This feature depends on PR #109** (`feat/animation-asset-import`) — for its content, not for its
+merge to `master`. The bake consumes exactly what it cooks: `.bskel` (bones, bind pose, inverse
 bind matrices), `.banim` (fixed-rate local-space pose samples), and the `JOINTS_0`/`WEIGHTS_0`
-attributes on the `.bmesh`. No task below starts until #109 merges and `feat/vat` rebases onto it.
-File references into those containers cite the PR branch and may drift under its review.
+attributes on the `.bmesh`. VAT is the engine's priority, so `master` should not take the animation
+import ahead of it: **#109 is retargeted onto `feat/vat`** and merges here as this feature's first
+PR, keeping its review history intact — cherry-picking its commits instead would duplicate history
+against the open PR and forfeit the review thread. `master` sees the import and VAT together, when
+the feature lands whole. No task below starts until #109 has merged into `feat/vat`. File
+references into those containers cite the PR branch and may drift under its review.
 
 This is a *plan*, not a mirror of code. When the work lands, the durable parts belong in a new
 `docs/vat.md`, in [asset_standards.md](../asset_standards.md) (the new container and texture
@@ -24,8 +28,11 @@ conventions) and [passes.md](../passes.md) (the new forward variant); this file 
 ### 1.1 The inputs #109 provides
 
 - A pose sample is an `assetlib::Transform` (`{vec3, quat, vec3}`, TRS, 40 bytes) in **local
-  space** — relative to the bone's parent. Samples are frame-major: bone `b` of frame `f` of a clip
-  is `samples[clip.firstSample + f * boneCount + b]`
+  space** — relative to the bone's parent. An input fact, not a hazard: T1's hierarchy walk turns
+  local into model space, and the bake writes **object-space** positions (D3) — world space is
+  never baked, since that would weld the animation to one placement; the instance transform is
+  applied at draw exactly as the static path applies it. Samples are frame-major: bone `b` of
+  frame `f` of a clip is `samples[clip.firstSample + f * boneCount + b]`
   ([Animation.h:39-41](../../libs/assetlib_structs/include/assetlib_structs/Animation.h)).
 - Bones are topologically sorted (`parent < i`), validated at import, so local→model is one forward
   pass ([Skeleton.h:9-11](../../libs/assetlib_structs/include/assetlib_structs/Skeleton.h)).
@@ -108,15 +115,45 @@ conventions) and [passes.md](../passes.md) (the new forward variant); this file 
 
 ## 2. Design decisions
 
-### D1 — A `.bvat` container plus content-addressed textures; bake output, not import output
+### D1 — One `.bvat` file, textures embedded as KTX2 chunks; bake output, not import output
 
-The bake reads `.bmesh` + `.bskel` + `.banim` and writes `<name>.bvat` beside them plus
-`vatpos_<hash>.ktx2` / `vatnrm_<hash>.ktx2` under `Textures/`. The container holds no pixels: clip
-rows, global bounds, per-submesh column bases, the skeletal side-channel, texture routes with
-stamps, and the paths + signature of what it was baked from.
+The bake reads `.bmesh` + `.bskel` + `.banim` and writes exactly one `<name>.bvat` beside them: a
+chunked container holding the clip rows, global bounds, per-submesh column bases, the skeletal
+side-channel, the paths + signature + `SourceStamp`s of the three inputs it was baked from — and
+the position and normal textures as **embedded KTX2 payload chunks**. `encodeKTX2` and
+`decodeKTX2` already round-trip KTX2 through memory
+([image_io.cpp:639-688](../../libs/assetlib/src/image_io.cpp)), so the codec, the format tags and
+the subresource layout are reused without any file existing.
 
-**Rejected: embedding the pixels in the container.** The whole texture pipeline — ktx2 io, upload,
-staleness, prune — exists for files under `Textures/`; an embedded blob re-implements all of it.
+Why embedding is right here when `.bmaterial` and `.benv` reference: **sharing is the only reason
+those reference, and a VAT texture is never shared.** Content-hashed names under `Textures/` exist
+so two materials routing identically converge on one file; a VAT texture is a pure derivative of
+one rig's clip set, 1:1 with its `.bvat` forever. With nothing shared there is nothing to
+reference, no hash to compute (hash-naming buys dedup, not integrity), no prune registration to
+get wrong — the "mark phase must learn the container or its maps are swept" hazard disappears
+outright — and the refs graph carries three edges instead of five. Deleting the asset is deleting
+the file. Staleness is one check against the three input stamps, not per-route texture stamps.
+(`.benv` v1 *was* embedded KTX2 and was retired to references — but for authoring-lifetime and
+sharing reasons, a sky re-authored without re-convolving its lighting, two environments sharing
+one sky. Neither applies to a bake-derived texture pair.)
+
+Partial reads stay cheap: chunks are addressed by id and read selectively
+(`readChunksFromFile`, the same seek-only path `loadMeshRefs` uses), so `describe` and the refs
+scan read the tables without touching the pixel chunks. The consequence to accept: a `.bvat` is
+tens of MB, so `*.bvat` joins the LFS patterns before any is committed.
+
+**No source/compiled texture split inside the container.** A VAT texture has no authored source —
+its source *is* the clip data, so "re-bake" means regenerating from the `.banim`, not re-encoding
+a stored original. The container carries exactly one form of each texture (uncompressed
+`RGBA16_UNORM` / `RGBA8_UNORM` KTX2), both chunks required; there is nothing for a project export
+to strip. If a compressed form is ever wanted, it arrives as an additive minor-version chunk
+beside the tables — an absent chunk is not an error in this format, which is what minor versions
+are.
+
+**Rejected: content-addressed `vatpos_`/`vatnrm_` files under `Textures/`** (this plan's first
+draft). The naming, the route stamps and the prune branch exist to keep shared maps alive across
+referrers — a problem VAT does not have. The cost was five refs edges, a prune mark-phase branch
+and a sweep predicate, for zero dedup.
 
 **Rejected: extending `.banim`.** Lifetimes differ: a `.banim` is an import artifact re-cut when
 the source glTF changes; a `.bvat` is a bake artifact re-cut when the `.banim`, the mesh, *or the
@@ -133,8 +170,8 @@ it is its own task with its own tests rather than a private helper of the bake.
 
 ### D3 — One 2D texture pair per rig: vertices along U, frames along V, clips stacked
 
-Position: `RGBA16_UNORM`, unorm-packed in **one global AABB over all clips** (blended or
-interpolated samples are meaningless across per-clip boxes — `ROADMAP.md:99`). Normal:
+Position: `RGBA16_UNORM`, **object-space**, unorm-packed in **one global AABB over all clips**
+(blended or interpolated samples are meaningless across per-clip boxes — `ROADMAP.md:99`). Normal:
 `RGBA8_UNORM`, object-space, `xyz * 0.5 + 0.5`. Columns are geometry-local vertex indices — the
 same index the mesh shader's vertexMap step yields — offset by a per-submesh column base, so the
 runtime fetch is `(columnBase + vertexIdx, clipRow + frame)`. Clips stack along V, each padded
@@ -192,6 +229,17 @@ record points at a per-geom record (texture handles, bounds, clip table range, c
 new Scene-owned buffer; clip rows live in a parallel GPU buffer so the state machine can index
 them later. All new GPU structs go through the IDL.
 
+**This shape survives a mesh that is both skinned and VAT.** The roadmap's LOD section drives the
+skinned→VAT switch per instance from screen size, so "both" is the eventual normal case, and the
+design keeps it open at every level: the geometry buffers are untouched (VAT adds records *beside*
+the shared `Submesh` data, not a fork of it), a future skinned path hangs its bone-palette `Entry`
+off `idl::Mesh` the same way this plan hangs the VAT `Entry` — both can be non-null on one mesh —
+and which path draws an instance is its `SubmeshInstance::pso`, which the counting sort re-buckets
+from scratch every frame. A tier swap is therefore one field write per instance, GPU-writable
+later when the top-K skinned budget drives it, with the dithered-crossfade item as the visual
+mechanism. The `.bmesh` already serves both: it keeps its `JOINTS_0`/`WEIGHTS_0` attributes,
+which the VAT path simply does not read.
+
 **Rejected: a field on `SubmeshInstance`.** Grows the struct every compute kernel touches for a
 value only the mesh shader wants, and the struct is hand-mirrored — the highest-friction place in
 the codebase to grow.
@@ -234,13 +282,13 @@ the CLI seam, that feature is a caller — the logic is already testable without
 
 | Where | Change | Risk |
 |---|---|---|
-| `libs/assetlib` | pose eval + skinning (new files), `bvat_io`, `vat_bake`, CLI subcommand, refs/describe/prune registration | **prune mark-phase must learn `.bvat` in the same PR that writes textures**, or a prune run sweeps live VAT maps |
+| `libs/assetlib` | pose eval + skinning (new files), `bvat_io`, `vat_bake`, CLI subcommand, refs/describe registration | the pixel chunks must stay out of the seek-only reads `describe`/refs do, or every project scan pays tens of MB per rig |
 | `libs/assetlib_structs` | `BVat` POD header | — |
 | `libs/bgl/idl` | `VatGeom`, `VatState`, `VatClip`, constants; `Mesh` gains an `Entry`; `PsoType` + `GeomType` gain a value | `idl::Mesh` layout change touches its `static_assert`s; regenerate, never hand-edit |
 | `libs/bgl` shaders | `Forward_Vat.slang`; `ViewData` gains `time`/`prevTime` | a cbuffer key missing from any forward binding is `gfatal` at first draw — every pixel module binds `ViewData`, so the field lands in one shared struct |
 | `libs/bgl` | scene buffers for VAT records, `AddVatGeom`/`CreateVatMeshInstance` public API, per-row mesh source in the PSO table | `c_Psos` is positional against `PsoType` and its `static_assert` only catches an empty row — a misordered row draws with the wrong pixel shader |
-| `libs/gamelib` | `AssetManager` acquires `.bvat` (textures via the existing ktx2 path, then the geom + instance calls) | refcount graph gains texture edges from a geom kind that is not a material — follow the instance→geom→texture discipline in `gamelib/CLAUDE.md` |
-| `assets/`, `.gitattributes` | none planned — fixtures are synthesized; if a real rig lands later, `.glb` is already LFS-tracked and `.bvat` (palettes, few MB) should join `.benv` in `.gitattributes` | — |
+| `libs/gamelib` | `AssetManager` acquires `.bvat` — `decodeKTX2` on the embedded chunks feeds `AddTextureAsset`, then the geom + instance calls | refcount graph gains texture edges from a geom kind that is not a material — follow the instance→geom→texture discipline in `gamelib/CLAUDE.md` |
+| `assets/`, `.gitattributes` | `*.bvat` joins the LFS patterns in T2 (it embeds pixels, tens of MB); fixtures stay synthesized, and `.glb` is already LFS-tracked if a real rig lands later | a `.bvat` committed before the attribute lands as a plain git blob |
 | `ROADMAP.md`, docs | ticked per task; `docs/vat.md` at the end | — |
 
 Existing behaviour that must not move: every current golden (static path untouched — new PSO
@@ -252,8 +300,8 @@ the `.bvat` references them by path).
 
 ## 4. Tasks
 
-Each is one PR into `feat/vat`, in this order. **T1 starts only after #109 merges to `master` and
-`feat/vat` rebases onto it.**
+Each is one PR into `feat/vat`, in this order. **T1 starts only after #109 — retargeted onto
+`feat/vat` — has merged into it.**
 
 - **T1 — pose evaluation and CPU skinning** (`assetlib`). `poseModelTransforms(skeleton, set,
   clip, frame)`, `skinningMatrices`, and a skinned-vertex evaluator that decodes the quantized
@@ -261,12 +309,14 @@ Each is one PR into `feat/vat`, in this order. **T1 starts only after #109 merge
   vertex positions exactly (inverse-bind cancellation); the awkward two-bone rig animated over
   known TRS channels matches closed-form positions; weights that sum to 1 after renormalization
   stay sum-1 through the quantized decode.
-- **T2 — `.bvat` container and the bake** (`assetlib` + CLI). Global AABB over all clips, texture
-  write via `writeKTX2`, padding rows, side-channel palettes, stamps, the full registration
-  checklist including prune. Gate: container round-trip; unpacking a baked texel matches T1's CPU
-  skin within unorm tolerance; the padded terminal row equals the last frame; refs reports the
-  five edges (`.bvat` → mesh/skel/anim/two textures) and prune protects both maps; a bake past
-  16384 in either dimension — vertices or padded frame rows — refuses with the counted error.
+- **T2 — `.bvat` container and the bake** (`assetlib` + CLI). Global AABB over all clips,
+  embedded KTX2 payload chunks via `encodeKTX2`, padding rows, side-channel palettes, input
+  stamps, the registration checklist (magic, extension, refs, describe, sniff), `*.bvat` into
+  `.gitattributes`. Gate: container round-trip pixels included; unpacking a baked texel matches
+  T1's CPU skin within unorm tolerance; the padded terminal row equals the last frame; refs
+  reports the three edges (`.bvat` → mesh/skel/anim) and `describe` reads the tables without
+  loading the pixel chunks; a bake past 16384 in either dimension — vertices or padded frame
+  rows — refuses with the counted error.
 - **T3 — the VAT draw path, fixed frame** (`bgl`). IDL structs, geom/PSO additions, per-row mesh
   source, `Forward_Vat.slang`, public API, procedural VAT upload — phase static, no time yet.
   Gate: golden image of two instances frozen at different frames of a synthesized texture; the
@@ -299,4 +349,4 @@ skinned→VAT LOD swap, transition/layering/crossfade authoring, GPU consumption
 side-channel (baked now so every rig cooked from day one carries it — re-baking the whole library
 later is the expensive alternative), editor UI and preview, hashed/cutout VAT material variants,
 texture tiling past 16384 in either dimension, a baked tangent texture (D3 records why), and
-compression of the position texture.
+compressed texture chunks (D1 records the additive minor-version path).
