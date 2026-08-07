@@ -346,6 +346,24 @@ namespace
 		return image;
 	}
 
+	// Mean alpha of one mip level, read off the image the scene will upload. Under stochastic
+	// coverage this is the fraction of a fully lit patch the ensemble should converge to once the
+	// footprint sits at that level -- whatever the coverage rescale did to it included.
+	float
+	MeanMipAlpha(const assetlib::ImageData& image, uint32_t mip)
+	{
+		const uint32_t dim    = std::max(1u, image.width >> mip);
+		const size_t   offset = image.subresources[mip].offset;
+
+		size_t sum = 0;
+		for (size_t t = 0; t < static_cast<size_t>(dim) * dim; ++t)
+		{
+			sum += static_cast<uint8_t>(image.pixels[offset + t * 4 + 3]);
+		}
+		return static_cast<float>(sum) /
+		       (255.0f * static_cast<float>(dim) * static_cast<float>(dim));
+	}
+
 	// Vertical strands two texels wide every 16, opaque on a transparent background -- a hair
 	// texture's flyaway region, reduced to what matters. The strand covers an eighth of its
 	// period, so plain box mips dilute its alpha by half per level once the strand is sub-texel.
@@ -401,7 +419,12 @@ namespace
 	constexpr float c_BackdropSize = 40.0f;
 
 	PatchScene
-	MakeCardScene(assetlib::ImageData texture, bool taaEnabled = true, bool withBackdrop = false)
+	MakeCardScene(
+		assetlib::ImageData texture,
+		bool                taaEnabled   = true,
+		bool                withBackdrop = false,
+		float               cameraZ      = 20.0f,
+		bgl::LayerType      layer        = bgl::LayerType::kHashed)
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -436,7 +459,7 @@ namespace
 		desc.baseColorFactor  = glm::vec4(1.0f);
 		desc.metallicFactor   = 0.0f;
 		desc.roughnessFactor  = 0.6f;
-		desc.layerType        = bgl::LayerType::kHashed;
+		desc.layerType        = layer;
 		desc.baseColorTexture = scene->AddTextureAsset(std::move(texture), "strands");
 
 		auto material = scene->CreatePbrMaterial(desc);
@@ -464,8 +487,8 @@ namespace
 		auto camera = bgl::Camera();
 		camera
 			.LookAt(
-				glm::vec3(0.0f, 0.0f, 20.0f),
-				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 0.0f, cameraZ),
+				glm::vec3(0.0f, 0.0f, cameraZ - 1.0f),
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(
 				glm::radians(60.0f),
@@ -939,9 +962,11 @@ TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hash
 	// background.
 	CHECK(plainMean.Luma() > 5e-3f);
 
-	// Measured 0.029 against 0.045 -- the preserved chain holds half again the footprint at a
-	// two-mip minification, and the gap widens with distance as the plain chain keeps halving.
-	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.3f);
+	// Measured 0.136 against 0.161. Under a resolve that no longer wipes sparse coverage the gap
+	// is just the chains' mean-alpha ratio at this minification (1.21 at mip 2.2) -- box mips
+	// already preserve a hashed material's expected coverage, and the old half-again gap was the
+	// wipe amplifying the difference nonlinearly.
+	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.1f);
 
 	// Neither chain may flicker beyond the converged-patch scale; this is where a regression in
 	// the accumulation on textured stochastic content would surface.
@@ -1136,4 +1161,101 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 
 	// The sampled alpha around mip 2 is a quarter and below; mip 0's is opaque.
 	CHECK(faded.Luma() < full.Luma() * 0.5f);
+}
+
+// The user-visible report this instruments: hashed hair thins out and boils as the camera backs
+// away, on Metal and D3D12 alike, while the mip probes above clear the texture chain. The ground
+// truth is the same card alpha-*blended*: the analytic composite of the very texels, mips and
+// lighting the stochastic path samples, so the converged hashed card should match it pixel for
+// pixel, and the display curve cancels out of the ratio. `survived` below 1 is coverage the
+// resolve destroyed; the frame-to-frame delta is the flicker where it is being rebuilt.
+TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][taa][render]")
+{
+	struct Rung
+	{
+		float       cameraZ;
+		const char* name;
+	};
+	constexpr std::array<Rung, 3> c_Rungs = { {
+		{ 10.0f, "near" },
+		{ 20.0f, "mid" },
+		{ 40.0f, "far" },
+	} };
+
+	const float tanHalfFov = std::tan(glm::radians(30.0f));
+
+	for (const auto& rung : c_Rungs)
+	{
+		INFO("distance " << rung.cameraZ);
+
+		const float spanPx =
+			c_StrandPlane / (2.0f * rung.cameraZ * tanHalfFov) * static_cast<float>(c_Height);
+		const int box   = static_cast<int>(spanPx * 0.6f);
+		const int boxXY = (static_cast<int>(c_Width) - box) / 2;
+
+		auto strandImage = MakeStrandTexture(true);
+
+		// The chain level the footprint asks for, and the coverage the chain holds there.
+		const float    mipF     = std::log2(static_cast<float>(c_StrandTexSize) / spanPx);
+		const uint32_t lo       = static_cast<uint32_t>(std::max(0.0f, std::floor(mipF)));
+		const uint32_t hi       = std::min(lo + 1, strandImage.mipLevels - 1);
+		const float    expected = std::lerp(
+			MeanMipAlpha(strandImage, lo),
+			MeanMipAlpha(strandImage, hi),
+			mipF - std::floor(mipF));
+
+		const auto base = std::string("assets/golden/strand_coverage_") + rung.name;
+
+		PatchScene hashed = MakeCardScene(std::move(strandImage), true, false, rung.cameraZ);
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			hashed.gfx->DrawFrame(hashed.target, hashed.job);
+		}
+		hashed.gfx->ScreenshotPng(hashed.target, base + ".got.png");
+		hashed.gfx->DrawFrame(hashed.target, hashed.job);
+		hashed.gfx->ScreenshotPng(hashed.target, base + "_next.got.png");
+
+		const float flicker = bgl::test::FrameDelta(
+			base + ".got.png",
+			base + "_next.got.png",
+			boxXY,
+			boxXY,
+			box,
+			box);
+		const bgl::test::Rgba strandMean =
+			bgl::test::MeanColor(base + ".got.png", boxXY, boxXY, box, box);
+
+		PatchScene blend = MakeCardScene(
+			MakeStrandTexture(true),
+			true,
+			false,
+			rung.cameraZ,
+			bgl::LayerType::kBlend);
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			blend.gfx->DrawFrame(blend.target, blend.job);
+		}
+		blend.gfx->ScreenshotPng(blend.target, base + "_blend.got.png");
+		const bgl::test::Rgba blendMean =
+			bgl::test::MeanColor(base + "_blend.got.png", boxXY, boxXY, box, box);
+
+		// The reference has to be lit, or the ratio below compares noise.
+		REQUIRE(blendMean.Luma() > 0.01f);
+
+		const float survived = strandMean.Luma() / blendMean.Luma();
+
+		// WARN rather than INFO so the figures print on a passing run too: the deficit and its
+		// trend with distance are what this instrument exists to show.
+		WARN(
+			rung.name << ": span " << spanPx << "px  mip " << mipF << "  chain mean alpha "
+					  << expected << "  blend luma " << blendMean.Luma() << "  survived "
+					  << survived << "  flicker " << flicker);
+
+		// 0.97-0.98 with the variance-widened box and the luma-1 tone-weight knee; the wiping
+		// resolve measured 0.23 here. Headroom for backend and driver noise, not for regression.
+		CHECK(survived > 0.9f);
+
+		// 1.3e-4 to 2.3e-4 measured; the wiping resolve's rebuild cycle scored 7.5e-4 to 1.8e-3.
+		CHECK(flicker < 6e-4f);
+	}
 }
