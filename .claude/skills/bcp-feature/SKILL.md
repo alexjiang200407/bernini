@@ -115,6 +115,8 @@ Write `docs/plans/<name>.md`:
 
 It records reasoning and the shape of what does not exist yet — not a mirror of the code, which is
 what the source and `docs/` are for. Follow [bcp-docs](.claude/skills/bcp-docs/SKILL.md) for prose.
+It lives only as long as the feature: § 5 deletes it, once whatever should outlive the feature has
+moved into `docs/`.
 
 ```bash
 git switch -c docs/<name>-plan feat/<name>
@@ -297,10 +299,13 @@ plus every unrelated `master` commit since. The base for this one is `origin/mas
 The body is the feature's story — what it adds, why, how it was verified as a whole, what was
 deliberately left out. Link the task PRs; do not restate them. Then § 4 again.
 
-Read the plan against what actually shipped first: anything it still promises that the feature did not
-do is a correction for the last task PR. Whatever in it describes how the code now *behaves* belongs
-in a subsystem page under `docs/` — move it there with
-[bcp-docs](.claude/skills/bcp-docs/SKILL.md) and leave the plan holding the reasoning.
+Read the plan against what actually shipped first: anything it still promises that the feature did
+not do is a correction for the last task PR. Whatever in it should outlive the feature — how the
+code now *behaves*, the decisions worth keeping — belongs in a subsystem page under `docs/`: move it
+there with [bcp-docs](.claude/skills/bcp-docs/SKILL.md), then **delete the plan** — by PR into
+`feat/<name>` like everything else, the feature's last, so the landing PR carries the deletion.
+A plan is scaffolding for the feature's review, not documentation; once the feature lands,
+`docs/*.md` is the record, and a kept plan is a second source of truth waiting to disagree.
 
 `master` moves under a long feature. Rebase onto it when it drifts, and only when **no PR is open** —
 a rebase rewrites the commits those PRs are based on, and each then shows a diff nobody wrote. With
@@ -311,7 +316,7 @@ After the feature merges:
 ```bash
 git config --local --unset bernini.feature
 git switch master && git pull && git branch -d feat/<name>
-rm .claude/features/<name>.md          # the tracker only; the plan lives on in docs/plans/
+rm .claude/features/<name>.md          # the tracker only; the plan went with the landing PR
 ```
 
 ## Rules
