@@ -10,7 +10,7 @@ public struct TextureHandle
 
     // Mip 0 texel counts. A caller relating a UV footprint to texels needs the real size;
     // hardcoding one would silently mis-scale the moment the asset changed.
-    public float2 Dimensions()
+    public float2 GetDimensions()
     {
         uint w;
         uint h;

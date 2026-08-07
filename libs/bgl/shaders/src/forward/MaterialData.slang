@@ -60,7 +60,7 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float2 GetBaseColorDimensions()
     {
-        return baseColorTexture.Dimensions();
+        return baseColorTexture.GetDimensions();
     }
 }
 
@@ -129,7 +129,7 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
     // and the loose colour channels may come from other maps at other sizes.
     float2 GetBaseColorDimensions()
     {
-        return sources[3].texture.Dimensions();
+        return sources[3].texture.GetDimensions();
     }
 }
 
