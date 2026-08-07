@@ -224,6 +224,22 @@ Two couplings worth knowing:
   The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
   does not move.
 
+* **Minified alpha is sharpened toward the cutoff's isocontour before the hash.** Once a strand is
+  sub-texel at the active mip, the sampled alpha is many strands averaged, and stochastic coverage
+  that honestly reproduces that mean converges to exactly what alpha-blending it would show — a
+  mixture the backdrop swallows. The strands *vanish* at distance not because coverage is lost
+  (the resolve above now conserves it to a few percent) but because energy-true rendering of a
+  sub-pixel feature **is** its disappearance; the alpha test keeps distant strands visible
+  precisely by being energy-false, drawing the smooth field's cutoff isocontour crisp. So
+  `ShadeHashedAlpha` steepens alpha about the material's cutoff in proportion to the base colour's
+  minification (`SharpenMinifiedAlpha`): magnified alpha — where soft self-occluding coverage is
+  the point of hashed — is untouched, and far alpha approaches the test's step, whose coverage the
+  bake's mips preserve. The minification is the *smaller* screen axis, since a grazing card
+  minifies along the view axis at any distance and anisotropic filtering resolves that axis. The
+  coverage ladder reads 0.74 near/mid and 1.05 far of the blend reference under it — the mid-band
+  energy traded for far-field crispness — and resting flicker drops another 5×, since sharpened
+  alpha leaves few partial values to flip coins with.
+
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
   from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the trail left
