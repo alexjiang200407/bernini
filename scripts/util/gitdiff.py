@@ -1,8 +1,8 @@
 """What counts as our source, and which lines of it a diff touched.
 
-Shared by tidy.py (naming checks on changed lines) and coverage.py (uncovered lines
-of the staged diff, or a ref's): both need the same merge-base line ranges, and two
-parsers of `@@` hunk headers would drift.
+The one implementation of merge-base line ranges and of what is ours to name, format
+and cover: two parsers of `@@` hunk headers would drift, so every consumer imports
+from here.
 """
 
 import os

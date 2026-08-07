@@ -40,7 +40,7 @@ The output this feature exists for: *these lines of the diff are executed by no 
 hard to game, and exactly what a reviewer otherwise does by eye. Each line of output is
 `file:first-last`, clickable and greppable; `--json` emits
 `{"uncovered": {"<file>": [[first, last], …]}, "no_data": […]}` for an agent — and stdout then
-carries only the JSON object (the runner reports on stderr), so it pipes cleanly. The ref semantics
+carries only the JSON object (everything else reports on stderr), so it pipes cleanly. The ref semantics
 are `just tidy --changed`'s: staged diff by default, `REF...HEAD` merge-base with a ref.
 
 Reading the answer right:

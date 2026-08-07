@@ -119,7 +119,7 @@ target_precompile_headers(editor_lib
 )
 
 # No enable_strict_compiler here -- Qt and moc output trip the strict set -- but instrumentation
-# is not a warning, and the editor is where coverage is most informative.
+# is not a warning.
 enable_coverage(editor_lib)
 
 set_target_properties(editor_lib PROPERTIES

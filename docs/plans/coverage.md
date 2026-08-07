@@ -143,7 +143,7 @@ inflating build time and putting third-party files in every report. Per-target c
 trees out by construction rather than by a filter someone has to maintain.
 
 **The editor is instrumented, so the call-site set deliberately differs from
-`enable_strict_compiler`'s.** `enable_coverage` is called at 13 sites across five files: 11 of the
+`enable_strict_compiler`'s.** `enable_coverage` is called at 13 sites across six files: 11 of the
 12 above (all but `bgl`, per the correction), plus `editor_lib` and `editor_tests` under
 `apps/editor`. Rejected: keeping the two sets identical for
 symmetry, which would leave `editor_tests` — the third-largest suite — running under `just coverage`
@@ -221,6 +221,7 @@ hook. Failing a build on a percentage is what turns the signal into a target. It
 | `apps/editor/CMakeLists.txt`, `apps/editor/tests/CMakeLists.txt` | `enable_coverage` for `editor_lib` and `editor_tests` — 2 sites with no strict-compiler counterpart |
 | `CMakePresets.json` | `macos-clang-metal-coverage`, configure + build preset |
 | `scripts/util/gitdiff.py` | new; `changed()`, `is_generated`, `SOURCE_EXTS`, `SOURCE_ROOTS` moved out of `tidy.py`, which imports them |
+| `scripts/format.py` | its own copy of `is_generated`/`GENERATED_BANNER` removed; imports from `gitdiff.py` |
 | `scripts/coverage.py` | new; build, run, merge, report |
 | `justfile` | `coverage` recipe |
 | `docs/coverage.md` | new; created by C1, extended by C2 and C3 |
