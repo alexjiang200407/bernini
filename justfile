@@ -34,6 +34,10 @@ run target *args:
 test *args:
     @{{ python }} scripts/run_tests.py {{ args }}
 
+# Build the coverage preset, run the suites instrumented, and report what they executed (macOS).
+coverage *args:
+    @{{ python }} scripts/coverage.py {{ args }}
+
 # Build the CLI tools and stage them (with their DLLs) into ./dist, for PATH.
 install *args:
     @{{ python }} scripts/install.py {{ args }}
