@@ -31,8 +31,10 @@ namespace game
 	 * Hand one of these to AcquireTexture / AcquireMaterial and a matching entry is consumed instead
 	 * of the file being read, leaving only the upload on the render thread.
 	 *
-	 * Entries are moved out as they are used. A path that is not present simply falls back to reading
-	 * the file, so a partial prefetch is a valid one.
+	 * Entries are moved out as they are used. A supplied prefetch is the whole truth: a path it does
+	 * not carry resolves to the scene's default map (with a warning), never to a read of the file --
+	 * so handing one in *is* the guarantee that the acquiring thread does no decode. A texture whose
+	 * decode failed is simply left out, and was reported where it failed.
 	 */
 	using TexturePrefetch = core::str::unordered_str_map<assetlib::ImageData>;
 
@@ -85,9 +87,11 @@ namespace game
 		 * Uploads the `.ktx2` at `relPath`, or shares the upload from a previous call. An empty path
 		 * yields an invalid handle, which the scene reads as "absent" and replaces with its default.
 		 *
-		 * @param prefetch Optional decoded images to upload instead of reading the file. See
-		 *        TexturePrefetch; a path it does not carry is read from disk as usual.
-		 * @throws std::runtime_error if the file cannot be read or decoded.
+		 * @param prefetch Optional decoded images to upload instead of reading the file. When
+		 *        supplied it is authoritative: a path it does not carry (and no previous call
+		 *        uploaded) yields an invalid handle rather than a read of the file. Null means
+		 *        decode here.
+		 * @throws std::runtime_error if the file cannot be read or decoded (null `prefetch` only).
 		 */
 		bgl::TextureAssetHandle
 		AcquireTexture(std::string_view relPath, TexturePrefetch* prefetch = nullptr);
@@ -97,7 +101,9 @@ namespace game
 		 * previous call, acquiring a reference to every texture it names.
 		 *
 		 * @param prefetch Optional decoded images for the textures it names -- the way to keep their
-		 *        decode off the render thread. MaterialTextures() says what to put in one.
+		 *        decode off the render thread. MaterialTextures() says what to put in one, and
+		 *        AcquireTexture's rule applies per texture: absent from a supplied prefetch means
+		 *        the default map, not a disk read.
 		 * @throws std::runtime_error if the file cannot be read, or the scene cannot allocate.
 		 */
 		bgl::MaterialHandle

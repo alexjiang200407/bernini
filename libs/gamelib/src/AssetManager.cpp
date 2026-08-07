@@ -117,22 +117,30 @@ namespace game
 		}
 
 		// Someone decoded this for us off the render thread. Take it; only the upload has to be here.
+		// A supplied prefetch is authoritative: a path it lacks is one whose decode already failed
+		// and was reported there, and re-reading the file would put the decode back on this thread --
+		// the very cost the prefetch exists to keep off it. The invalid handle reads as "absent", so
+		// the scene substitutes its default map.
 		auto decoded = assetlib::ImageData();
-		bool hoisted = false;
 		if (prefetch != nullptr)
 		{
-			if (const auto it = prefetch->find(relPath); it != prefetch->end())
+			const auto it = prefetch->find(relPath);
+			if (it == prefetch->end())
 			{
-				decoded = std::move(it->second);
-				prefetch->erase(it);
-				hoisted = true;
+				logger::warn(
+					"AcquireTexture: '{}' is not in the prefetch; using the default map",
+					relPath);
+				return {};
 			}
+
+			decoded = std::move(it->second);
+			prefetch->erase(it);
 		}
 
 		auto key = std::string(relPath);
 
 		const bgl::TextureAssetHandle handle = m_Scene->AddTextureAsset(
-			hoisted ? std::move(decoded) : assetlib::loadKTX2(m_DataRoot / key),
+			prefetch != nullptr ? std::move(decoded) : assetlib::loadKTX2(m_DataRoot / key),
 			key);
 
 		m_TextureByPath.emplace(key, handle.textureSlot.index);

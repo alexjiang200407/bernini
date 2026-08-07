@@ -696,18 +696,24 @@ TEST_CASE("A prefetched texture is uploaded without its file being read", "[game
 	CHECK(prefetch.empty());
 }
 
-TEST_CASE("A prefetch the texture is missing from falls back to the file", "[gamelib][assets]")
+TEST_CASE(
+	"A texture missing from a supplied prefetch is the default, not a read",
+	"[gamelib][assets]")
 {
-	// A partial prefetch is a valid one -- a texture whose decode failed is simply left out of it.
+	// A supplied prefetch is authoritative. Its reason to exist is keeping the decode off the
+	// acquiring (render) thread, and a fallback read would put a whole-chain transcode right back
+	// on it -- so a path the prefetch lacks resolves to the scene's default map instead. The file
+	// here is real and decodable, which is what proves it was not read.
 	Fixture fx("bernini_am_prefetch_partial");
 	WriteTexture(fx.root.path / "Textures" / "real.ktx2");
 
 	auto prefetch = game::TexturePrefetch();  // empty
 
-	CHECK((*fx).AcquireTexture("Textures/real.ktx2", &prefetch).textureSlot);
+	CHECK(!(*fx).AcquireTexture("Textures/real.ktx2", &prefetch).textureSlot);
 
-	// And a miss in both places is still an error, not a silent default.
-	CHECK_THROWS_AS((*fx).AcquireTexture("Textures/absent.ktx2", &prefetch), std::runtime_error);
+	// No prefetch means decode here: the same path uploads, and a missing file is an error.
+	CHECK((*fx).AcquireTexture("Textures/real.ktx2").textureSlot);
+	CHECK_THROWS_AS((*fx).AcquireTexture("Textures/absent.ktx2"), std::runtime_error);
 }
 
 TEST_CASE("A material's textures come from the prefetch when it carries them", "[gamelib][assets]")
