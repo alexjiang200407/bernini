@@ -8,6 +8,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/target_force_include.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/copy_to_target.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/compile_shader.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/enable_strict_compiler.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/enable_coverage.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/assign_folder.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/strip_msvc_only_flags.cmake)
 

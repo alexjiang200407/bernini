@@ -45,6 +45,8 @@ target_precompile_headers(editor_tests
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
+enable_coverage(editor_tests)
+
 # The tests read fixtures out of the shared asset directory, which copy_assets stages into the
 # runtime output dir they run from.
 add_dependencies(editor_tests copy_assets)

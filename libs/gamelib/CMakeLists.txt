@@ -37,6 +37,7 @@ target_link_libraries(gamelib
 )
 
 enable_strict_compiler(gamelib)
+enable_coverage(gamelib)
 
 # The suite drives a real scene through IGraphics, which needs a backend.
 if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
@@ -80,4 +81,5 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${GAMELIB_TESTS_SOURCES})
 
 	enable_strict_compiler(gamelib_tests)
+	enable_coverage(gamelib_tests)
 endif()
