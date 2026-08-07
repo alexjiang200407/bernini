@@ -263,8 +263,9 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 	REQUIRE(DistinctColours(image) > 1);
 }
 
-// What makes a stochastic material safe to thumbnail, and the reason the cache runs temporal AA over
-// a hundred warm-up frames rather than capturing the first frame it draws.
+// What makes a stochastic material safe to thumbnail, and the reason the cache turns temporal AA on
+// for a hashed asset and pays its warm-up burst rather than capturing the single frame everything
+// else gets.
 //
 // A hashed material's coverage is a per-pixel random decision. One frame of it is a speckle pattern,
 // not a picture of the material, and every assertion the other thumbnail tests make -- it rendered,

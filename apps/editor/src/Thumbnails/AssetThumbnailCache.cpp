@@ -18,16 +18,27 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
+#include <bgl/LayerType.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 
 namespace
 {
+	// The capture reads the backbuffer the last DrawFrame presented, and that frame's Scene::Update
+	// uploads this asset on its own list -- so one drawn frame is enough. Zero captures a blank
+	// backbuffer; the thumbnail goldens catch a too-low count.
+	constexpr int c_WarmupFrames = 1;
+
 	// Three times the TAA resolve's time constant, which is what a hashed material needs before it
 	// is a picture rather than a noise pattern. Measured on the patch grain: 0.000685 at 40 frames,
-	// 0.000676 at 60, 0.000675 at 100 -- so this is where it stops paying, and every thumbnail pays
-	// it. See docs/taa.md.
-	constexpr int c_WarmupFrames = 60;
+	// 0.000676 at 60, 0.000675 at 100 -- so this is where it stops paying. Only a hashed asset pays
+	// it; the render thread is blocked for the whole burst. See docs/taa.md.
+	constexpr int c_HashedWarmupFrames = 60;
+
+	// Textures decode to the stored mip tail covering twice the output edge: the sphere and the
+	// three-quarter mesh view never sample denser than that at 256px, and the skipped levels of a
+	// 4K chain are what used to make one thumbnail a multi-megabyte upload burst.
+	constexpr uint32_t c_TextureSupersample = 2;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
 	constexpr float c_Yaw   = 0.6f;
@@ -49,12 +60,14 @@ namespace
 		    .copy();
 	}
 
-	// Decodes every texture the material at `relPath` names into `out`. A texture that will not decode
-	// is left out: AcquireTexture then falls back to reading the file, and reports it there.
+	// Decodes every texture the material at `relPath` names into `out`, capped at `textureMaxDim`. A
+	// texture that will not decode is left out and reported here; AcquireTexture then resolves it to
+	// the scene's default map rather than re-reading the file on the render thread.
 	void
 	PrefetchMaterial(
 		const std::filesystem::path& dataRoot,
 		const std::string&           relPath,
+		uint32_t                     textureMaxDim,
 		game::TexturePrefetch&       out)
 	{
 		if (relPath.empty())
@@ -70,7 +83,12 @@ namespace
 
 			try
 			{
-				out.emplace(texture, assetlib::loadKTX2(dataRoot / texture));
+				out.emplace(
+					texture,
+					assetlib::loadKTX2(
+						dataRoot / texture,
+						assetlib::Ktx2Decode::kGpu,
+						textureMaxDim));
 			}
 			catch (const std::exception& e)
 			{
@@ -97,9 +115,10 @@ namespace
 			std::string           relPath,
 			bool                  isMaterial,
 			std::filesystem::path dataRoot,
+			uint32_t              textureMaxDim,
 			Sink                  sink) :
 			m_Path(std::move(path)), m_RelPath(std::move(relPath)), m_IsMaterial(isMaterial),
-			m_DataRoot(std::move(dataRoot)), m_Sink(std::move(sink))
+			m_DataRoot(std::move(dataRoot)), m_TextureMaxDim(textureMaxDim), m_Sink(std::move(sink))
 		{
 			setAutoDelete(true);
 		}
@@ -116,7 +135,7 @@ namespace
 
 				if (m_IsMaterial)
 				{
-					PrefetchMaterial(m_DataRoot, m_RelPath, *prefetch);
+					PrefetchMaterial(m_DataRoot, m_RelPath, m_TextureMaxDim, *prefetch);
 				}
 				else
 				{
@@ -131,7 +150,7 @@ namespace
 					if (!m_DataRoot.empty())
 					{
 						for (const std::string& relPath : mesh->materials)
-							PrefetchMaterial(m_DataRoot, relPath, *prefetch);
+							PrefetchMaterial(m_DataRoot, relPath, m_TextureMaxDim, *prefetch);
 					}
 				}
 			}
@@ -150,6 +169,7 @@ namespace
 		std::string           m_RelPath;
 		bool                  m_IsMaterial = false;
 		std::filesystem::path m_DataRoot;
+		uint32_t              m_TextureMaxDim = 0;
 		Sink                  m_Sink;
 	};
 }
@@ -230,6 +250,8 @@ AssetThumbnailCache::~AssetThumbnailCache()
 	// GUI thread -- flushing the command queue and freeing SceneView's allocations while the render
 	// thread is still presenting the viewports.
 	m_Desc.renderer->Invoke([&] {
+		m_ThumbAssets.reset();
+
 		if (m_DefaultMaterial.IsValid())
 		{
 			try
@@ -253,12 +275,23 @@ AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 	if (m_Assets == assets)
 		return;
 
-	// Hand the old project's assets back through the manager that owns them, before we let go of it.
+	// Hand the old project's assets back through the manager that acquired them, before it goes.
 	DiscardPendingCapture();
 	ReleaseGeometry();
 	ReleaseMaterials();
 
 	m_Assets = assets;
+
+	if (IsReady())
+	{
+		m_Desc.renderer->Invoke([&] {
+			m_ThumbAssets.reset();
+			if (m_Assets != nullptr)
+				m_ThumbAssets = std::make_unique<game::AssetManager>(
+					m_Desc.renderer->GetScene(),
+					m_Assets->DataRoot());
+		});
+	}
 
 	// The pixmaps were rendered with the old manager's materials, and the queued reads resolve
 	// against the old data root.
@@ -338,7 +371,13 @@ AssetThumbnailCache::Request(const QString& path)
 			Qt::QueuedConnection);
 	};
 
-	m_Pool.start(new LoadTask(path, ToRelative(path), material, DataRoot(), std::move(sink)));
+	m_Pool.start(new LoadTask(
+		path,
+		ToRelative(path),
+		material,
+		DataRoot(),
+		m_Desc.dimension * c_TextureSupersample,
+		std::move(sink)));
 }
 
 void
@@ -465,12 +504,12 @@ AssetThumbnailCache::DiscardPendingCapture()
 bgl::MaterialHandle
 AssetThumbnailCache::AcquireMaterial(std::string_view relPath, game::TexturePrefetch* prefetch)
 {
-	if (m_Assets == nullptr || relPath.empty())
+	if (m_ThumbAssets == nullptr || relPath.empty())
 		return m_DefaultMaterial;
 
 	try
 	{
-		const bgl::MaterialHandle material = m_Assets->AcquireMaterial(relPath, prefetch);
+		const bgl::MaterialHandle material = m_ThumbAssets->AcquireMaterial(relPath, prefetch);
 		m_Materials.push_back(material);
 		return material;
 	}
@@ -496,6 +535,10 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 	materials.reserve(mesh.materials.size());
 	for (const std::string& relPath : mesh.materials)
 		materials.push_back(AcquireMaterial(relPath, pending.prefetch.get()));
+
+	const bool hashed = std::ranges::any_of(materials, [](const bgl::MaterialHandle& material) {
+		return material.layerType == bgl::LayerType::kHashed;
+	});
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -537,7 +580,7 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 	const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
 	const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 
-	return Shoot(center, radius);
+	return Shoot(center, radius, hashed);
 }
 
 bgl::CaptureTicket
@@ -554,11 +597,11 @@ AssetThumbnailCache::RenderMaterial(const PendingRender& pending)
 	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
 
-	return Shoot(glm::vec3(0.0f), 1.0f);
+	return Shoot(glm::vec3(0.0f), 1.0f, material.layerType == bgl::LayerType::kHashed);
 }
 
 bgl::CaptureTicket
-AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
+AssetThumbnailCache::Shoot(const glm::vec3& center, float radius, bool hashed)
 {
 	// Pull back far enough that the bounding sphere fits the field of view with a margin. A mesh's
 	// radius is a half-diagonal, so it over-estimates and frames itself loosely; a material's sphere
@@ -584,8 +627,15 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius)
 	job.viewport =
 		bgl::Viewport(static_cast<float>(m_Desc.dimension), static_cast<float>(m_Desc.dimension));
 
-	for (int i = 0; i < c_WarmupFrames; ++i)
-		m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
+	// Off, a shot is one frame. On, it must first go *off*: turning TAA off is what discards the
+	// history, so without the toggle two consecutive hashed assets stay enabled throughout and the
+	// second's warmup starts by reprojecting the first's converged image under a different camera.
+	m_RenderTarget->SetTaaEnabled(false);
+	if (hashed)
+		m_RenderTarget->SetTaaEnabled(true);
+
+	const int warmup = hashed ? c_HashedWarmupFrames : c_WarmupFrames;
+	for (int i = 0; i < warmup; ++i) m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
 
 	return m_Desc.renderer->GetGraphics()->SubmitCapture(m_RenderTarget);
 }
@@ -635,7 +685,7 @@ AssetThumbnailCache::ReleaseGeometry()
 void
 AssetThumbnailCache::ReleaseMaterials()
 {
-	if (m_Assets == nullptr || !IsReady())
+	if (m_ThumbAssets == nullptr || !IsReady())
 	{
 		m_Materials.clear();
 		return;
@@ -646,7 +696,7 @@ AssetThumbnailCache::ReleaseMaterials()
 		{
 			try
 			{
-				m_Assets->ReleaseMaterial(material);
+				m_ThumbAssets->ReleaseMaterial(material);
 			}
 			catch (const std::exception& e)
 			{

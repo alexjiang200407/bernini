@@ -57,13 +57,14 @@ public:
 	~AssetThumbnailCache() override;
 
 	/**
-	 * Points the cache at the editor's asset manager, which owns the project's Data root and is the
-	 * only route from a `.bmaterial` to a scene material. Null (the default, and what a closed project
-	 * means) leaves materials unresolvable, so they get no thumbnail and every mesh draws in the
-	 * neutral default.
+	 * Points the cache at the editor's asset manager, which owns the project's Data root. Null (the
+	 * default, and what a closed project means) leaves materials unresolvable, so they get no
+	 * thumbnail and every mesh draws in the neutral default.
 	 *
-	 * Borrowed, not owned: one manager is shared across the editor so that a material loaded twice is
-	 * one upload and one reference count. It must outlive this cache.
+	 * Borrowed, not owned, and never acquired through: the cache builds a private manager over the
+	 * same scene, because its texture uploads are mip-capped to the thumbnail's size and the shared
+	 * manager keys textures by path -- a capped upload registered there would be served to a
+	 * viewport asking for the same texture at full resolution. It must outlive this cache.
 	 *
 	 * Drops everything already rendered, and everything queued: both were made against the manager
 	 * being replaced.
@@ -138,9 +139,10 @@ private:
 	RenderMaterial(const PendingRender& pending);
 
 	// Frames [center, radius], draws, and submits the readback of the result -- resolved on a
-	// later drain turn, so neither this thread nor the worker waits on the GPU.
+	// later drain turn, so neither this thread nor the worker waits on the GPU. `hashed` runs
+	// temporal AA over a convergence burst of frames; anything else captures a single frame.
 	[[nodiscard]] bgl::CaptureTicket
-	Shoot(const glm::vec3& center, float radius);
+	Shoot(const glm::vec3& center, float radius, bool hashed);
 
 	// The scene material the `.bmaterial` at `relPath` describes, or the neutral default if it cannot
 	// be resolved, uploading its textures from `prefetch` rather than re-reading them.
@@ -191,11 +193,14 @@ private:
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;
 
-	// Turns a `.bmaterial` into a scene material, and owns the textures it names. The editor's only
-	// route to that: the baked/loose branch lives in gamelib and nowhere else.
-	//
-	// Not owned -- see SetAssets. Null until a project is open.
+	// The project's manager, kept for its data root -- see SetAssets. Null until a project is open.
 	game::AssetManager* m_Assets = nullptr;
+
+	// What the cache actually acquires through: a manager of its own over the shared scene, so its
+	// mip-capped texture uploads never sit in the shared cache under the path a viewport would ask
+	// full resolution for. The baked/loose branch lives in gamelib and nowhere else, which is why a
+	// manager is used at all. Lives on the render thread: created, used and destroyed there.
+	std::unique_ptr<game::AssetManager> m_ThumbAssets;
 
 	// Live only for the duration of one render.
 	std::vector<bgl::GeomHandle>         m_Geoms;
