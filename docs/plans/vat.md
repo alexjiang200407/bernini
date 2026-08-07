@@ -364,9 +364,20 @@ and everything under the skinned tier and state machine.
 
 ## 5. Deliberately out of scope
 
-The state machine (VAT units here play one clip from spawn parameters), the skinned tier and the
-skinned→VAT LOD swap, transition/layering/crossfade authoring, GPU consumption of the skeletal
-side-channel (baked now so every rig cooked from day one carries it — re-baking the whole library
-later is the expensive alternative), editor UI and preview, hashed/cutout VAT material variants,
-texture tiling past 16384 in either dimension, a baked tangent texture (D3 records why), and
-compressed texture chunks (D1 records the additive minor-version path).
+The state machine, the skinned tier and the skinned→VAT LOD swap, transition/layering/crossfade
+authoring, GPU consumption of the skeletal side-channel (baked now so every rig cooked from day
+one carries it — re-baking the whole library later is the expensive alternative), editor UI and
+preview, hashed/cutout VAT material variants, texture tiling past 16384 in either dimension, a
+baked tangent texture (D3 records why), and compressed texture chunks (D1 records the additive
+minor-version path).
+
+Two deferrals whose eventual shape is worth recording now. VAT units here play one clip from
+spawn parameters; when the state machine lands, a state resolves to a clip index and phase
+(`ROADMAP.md:127`), and a state with several exits — Run→Walk, Run→Jump — is several short
+transition clips in the same table, one per pair worth the memory (`ROADMAP.md:105`), with the
+phase-matched crossfade covering unbaked pairs. Nothing branches inside the texture: the atlas is
+a table of independent clips (D3), not one long strip, so adding transitions is adding rows. And
+transition/blend authoring is **editor work, not DCC work**: the bake synthesizes a transition
+clip from two `.banim`s plus editor-authored entry/exit data, which joins the bake's inputs as a
+fourth stamped file — additive under D1's chunk format, so nothing in this feature moves to
+accommodate it.
