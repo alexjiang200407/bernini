@@ -56,13 +56,13 @@ from util.gitdiff import SOURCE_ROOTS, changed
 DEFAULT_PRESET = "macos-clang-metal-coverage"
 
 
-def xcrun(tool, args):
+def xcrun(tool, args, stdout=None):
     """Run an LLVM coverage tool via xcrun, so it matches the toolchain that compiled.
 
     A profile is only readable by a matching llvm-profdata, and xcrun resolves against
     the active developer directory -- the same place the build's clang came from.
     """
-    return subprocess.run(["xcrun", tool, *args])
+    return subprocess.run(["xcrun", tool, *args], stdout=stdout)
 
 
 def instrumented_images(build_dir):
@@ -198,10 +198,14 @@ def main():
               "See docs/coverage.md.", file=sys.stderr)
         return 1
 
+    # With --json, stdout is reserved for the JSON object: everything else -- the build,
+    # the runner, the merge -- reports on stderr.
+    aside = sys.stderr if args.json else None
+
     if not args.no_build:
         rc = subprocess.run(
             [sys.executable, os.path.join(ct.REPO_ROOT, "scripts", "build.py"),
-             "--preset", args.preset]).returncode
+             "--preset", args.preset], stdout=aside).returncode
         if rc:
             print(f"build failed (exit {rc}); running no tests.", file=sys.stderr)
             return rc
@@ -229,9 +233,7 @@ def main():
         run_cmd += ["--jobs", str(args.jobs)]
     if forward:
         run_cmd += ["--", *forward]
-    # With --json, stdout carries only the JSON object; the runner reports on stderr.
-    run_stdout = sys.stderr if args.json else None
-    suites_rc = subprocess.run(run_cmd, env=env, stdout=run_stdout).returncode
+    suites_rc = subprocess.run(run_cmd, env=env, stdout=aside).returncode
 
     profiles = sorted(glob.glob(os.path.join(profile_dir, "*.profraw")))
     if not profiles:
@@ -243,7 +245,8 @@ def main():
         return 1
 
     merged = os.path.join(coverage_dir, "bernini.profdata")
-    rc = xcrun("llvm-profdata", ["merge", "-sparse", *profiles, "-o", merged]).returncode
+    rc = xcrun("llvm-profdata", ["merge", "-sparse", *profiles, "-o", merged],
+               stdout=aside).returncode
     if rc:
         print(f"llvm-profdata merge failed (exit {rc}).", file=sys.stderr)
         return rc
