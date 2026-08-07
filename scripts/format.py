@@ -27,6 +27,7 @@ import subprocess
 import sys
 
 import util.config as cfg
+from util.gitdiff import is_generated
 
 
 def is_slang(path):
@@ -43,19 +44,6 @@ CLANG_FORMAT_EXTS = frozenset(
 
 def is_clang_formattable(path):
     return os.path.splitext(path)[1].lower() in CLANG_FORMAT_EXTS
-
-
-# bgl_idlgen stamps this on every file it writes. Formatting those files makes the
-# tree disagree with the generator, so every build dirties them again.
-GENERATED_BANNER = b"DO NOT EDIT MANUALLY"
-
-
-def is_generated(path):
-    try:
-        with open(path, "rb") as f:
-            return GENERATED_BANNER in f.readline()
-    except OSError:
-        return False
 
 
 def slang_assume_filename(path):

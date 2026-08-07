@@ -11,6 +11,9 @@ Usage:
     python scripts/coverage.py --no-build          # run what is already built
     python scripts/coverage.py -j 1                # one process per suite, output streamed live
     python scripts/coverage.py --preset <name>     # a coverage preset other than the default
+    python scripts/coverage.py --diff              # uncovered lines of the staged diff
+    python scripts/coverage.py --diff origin/master  # ... of what this branch changed
+    python scripts/coverage.py --diff --json       # the same, machine-readable
     python scripts/coverage.py -- "[readback]"     # forward a Catch2 filter to every suite
 
 The suites run through run_tests.py against the coverage build directory, so discovery,
@@ -23,19 +26,28 @@ libs/bgl lives in libbgl.dylib.
 The report is filtered to our own source roots. Everything else the profile touches --
 vcpkg headers, FetchContent checkouts, generated code -- is somebody else's number.
 
+`--diff` answers the narrow question this feature exists for: which lines of the diff
+does no test execute. It intersects the merged profile's lcov `DA:` records with the
+diff's line ranges (staged by default, `REF...HEAD` merge-base with a ref -- the same
+semantics as `just tidy --changed`) and prints the added lines whose count is zero.
+Lines with no `DA:` record are not executable (comments, blanks, declarations) and are
+not reported; a changed file with no coverage data at all is named separately rather
+than passing silently. Uncovered lines never fail the command -- coverage is a
+diagnostic, not a gate.
+
 A failing suite does not stop the report: coverage of what did run is still real, and
 the exit code carries the failure.
 """
 
 import argparse
 import glob
+import json
 import os
 import subprocess
 import sys
 
 import util.cmake_tools as ct
-
-from tidy import SOURCE_ROOTS
+from util.gitdiff import SOURCE_ROOTS, changed
 
 # Not config.json's `preset`: that names the machine's dev preset, whose build is
 # deliberately uninstrumented -- running the suites there would write no profiles at
@@ -71,6 +83,91 @@ def instrumented_images(build_dir):
     return images
 
 
+def lcov_counts(merged, objects, files):
+    """{abs path: {line: count}} from an lcov export limited to `files`, or None on failure."""
+    result = subprocess.run(
+        ["xcrun", "llvm-cov", "export", "-format=lcov", *objects,
+         f"-instr-profile={merged}", *files],
+        capture_output=True, text=True)
+    if result.returncode:
+        sys.stderr.write(result.stderr)
+        print(f"llvm-cov export failed (exit {result.returncode}).", file=sys.stderr)
+        return None
+
+    counts = {}
+    current = None
+    for line in result.stdout.splitlines():
+        if line.startswith("SF:"):
+            current = counts.setdefault(os.path.abspath(line[3:]), {})
+        elif line.startswith("DA:") and current is not None:
+            lineno, _, count = line[3:].partition(",")
+            current[int(lineno)] = int(count)
+    return counts
+
+
+def as_ranges(lines):
+    """Consecutive line numbers compressed to (first, last) pairs."""
+    ranges = []
+    for n in lines:
+        if ranges and n == ranges[-1][1] + 1:
+            ranges[-1] = (ranges[-1][0], n)
+        else:
+            ranges.append((n, n))
+    return ranges
+
+
+def diff_report(merged, objects, ref, as_json):
+    """Print the added lines of the diff that no test executed. Returns an exit code.
+
+    Uncovered lines are the answer, not a failure: the exit code reflects only
+    whether the answer could be computed.
+    """
+    spans = changed(ref or None)
+    if spans is None:
+        return 1
+    spans = {
+        path: line_ranges for path, line_ranges in spans.items()
+        if os.path.relpath(path, ct.REPO_ROOT).split(os.sep)[0] in SOURCE_ROOTS
+    }
+
+    counts = lcov_counts(merged, objects, sorted(spans)) if spans else {}
+    if counts is None:
+        return 1
+
+    uncovered = {}
+    no_data = []
+    for path, line_ranges in sorted(spans.items()):
+        rel = os.path.relpath(path, ct.REPO_ROOT)
+        per_line = counts.get(path)
+        if per_line is None:
+            no_data.append(rel)
+            continue
+        cold = [n for first, last in line_ranges
+                for n in range(first, last + 1) if per_line.get(n) == 0]
+        if cold:
+            uncovered[rel] = as_ranges(cold)
+
+    if as_json:
+        print(json.dumps({
+            "uncovered": {rel: [list(r) for r in ranges] for rel, ranges in uncovered.items()},
+            "no_data": no_data,
+        }, indent=2))
+        return 0
+
+    if not spans:
+        print("the diff touches no source under " + ", ".join(SOURCE_ROOTS) + ".")
+        return 0
+    for rel, ranges in uncovered.items():
+        for first, last in ranges:
+            print(f"{rel}:{first}" + (f"-{last}" if last != first else ""))
+    if no_data:
+        print("no coverage data for: " + ", ".join(no_data)
+              + " (not compiled into any instrumented image?)", file=sys.stderr)
+    if not uncovered and not no_data:
+        print("every added line is executed by a test.")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -83,6 +180,11 @@ def main():
                         help=f"Coverage preset to build and report (default: {DEFAULT_PRESET}).")
     parser.add_argument("-j", "--jobs", type=int,
                         help="Shards per suite, forwarded to the test runner.")
+    parser.add_argument("--diff", nargs="?", const="", metavar="REF",
+                        help="Report only the added lines no test executed: of the staged "
+                             "diff, or of REF...HEAD when a ref is given.")
+    parser.add_argument("--json", action="store_true",
+                        help="Emit the --diff result as JSON (implies --diff).")
 
     argv = sys.argv[1:]
     forward = []
@@ -127,7 +229,9 @@ def main():
         run_cmd += ["--jobs", str(args.jobs)]
     if forward:
         run_cmd += ["--", *forward]
-    suites_rc = subprocess.run(run_cmd, env=env).returncode
+    # With --json, stdout carries only the JSON object; the runner reports on stderr.
+    run_stdout = sys.stderr if args.json else None
+    suites_rc = subprocess.run(run_cmd, env=env, stdout=run_stdout).returncode
 
     profiles = sorted(glob.glob(os.path.join(profile_dir, "*.profraw")))
     if not profiles:
@@ -152,6 +256,12 @@ def main():
     objects = [images[0]]
     for image in images[1:]:
         objects += ["-object", image]
+
+    if args.json or args.diff is not None:
+        if suites_rc:
+            print("note: at least one suite failed; the answer covers what did run.",
+                  file=sys.stderr)
+        return diff_report(merged, objects, args.diff, args.json) or suites_rc
 
     roots = [os.path.join(ct.REPO_ROOT, r) for r in SOURCE_ROOTS
              if os.path.isdir(os.path.join(ct.REPO_ROOT, r))]
