@@ -25,8 +25,11 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QStringList>
+#include <QStyle>
+#include <QToolButton>
 #include <QUrl>
 
 #include <assetlib/asset_refs.h>
@@ -130,6 +133,10 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 	m_Ui.splitter->setStretchFactor(1, 1);
 	m_Ui.splitter->setSizes({ 220, 700 });
 
+	m_Ui.BackButton->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+	m_Ui.BackButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	connect(m_Ui.BackButton, &QToolButton::clicked, this, &ContentExplorerWindow::NavigateBack);
+
 	// The hierarchy shows files as well as directories, so an asset can be found and dragged straight
 	// out of the tree without first navigating to its folder in the right-hand view.
 	m_HierarchyModel = new QFileSystemModel(this);
@@ -181,10 +188,62 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	AttachModels();
 	setEnabled(true);
 	m_RootPath = path;
+	m_History.clear();
 
 	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(path));
+	ShowDirectory(path);
+}
+
+void
+ContentExplorerWindow::ShowDirectory(const QString& path)
+{
 	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
+
+	// The tree follows, or it would go on highlighting the folder the grid has left -- and clicking
+	// that row again would be a dead click, setCurrentIndex on the current index emitting nothing.
+	// Cleared rather than set at the top of the tree, which is a root the tree has no row for.
+	const QModelIndex    folder = m_HierarchyModel->index(path);
+	const QSignalBlocker blocked(m_Ui.FileExplorer->selectionModel());
+	m_Ui.FileExplorer->setCurrentIndex(
+		folder == m_Ui.FileExplorer->rootIndex() ? QModelIndex() : folder);
+
+	m_Ui.BackButton->setEnabled(!m_History.isEmpty());
 	UpdateEmptyPlaceholder();
+}
+
+void
+ContentExplorerWindow::NavigateTo(const QString& path)
+{
+	const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
+
+	if (!shown.isEmpty())
+	{
+		// Selecting a file in the tree navigates to the folder holding it, so the folder already
+		// shown arrives here routinely; recording it would make Back a no-op that has to be pressed
+		// twice.
+		if (QDir(shown) == QDir(path))
+			return;
+
+		m_History.push_back(shown);
+	}
+
+	ShowDirectory(path);
+}
+
+void
+ContentExplorerWindow::NavigateBack()
+{
+	while (!m_History.isEmpty())
+	{
+		const QString previous = m_History.takeLast();
+		if (QDir(previous).exists())
+		{
+			ShowDirectory(previous);
+			return;
+		}
+	}
+
+	m_Ui.BackButton->setEnabled(false);
 }
 
 void
@@ -237,9 +296,7 @@ ContentExplorerWindow::AttachModels()
 			if (!folder.isValid())
 				return;
 
-			const auto path = m_HierarchyModel->filePath(folder);
-			m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
-			UpdateEmptyPlaceholder();
+			NavigateTo(m_HierarchyModel->filePath(folder));
 		});
 
 	// Double-clicking a folder on the right opens it.
@@ -250,9 +307,8 @@ ContentExplorerWindow::AttachModels()
 		[this](const QModelIndex& index) {
 			if (!m_FileModel->isDir(index))
 				return;
-			const auto path = m_FileModel->filePath(index);
-			m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
-			UpdateEmptyPlaceholder();
+
+			NavigateTo(m_FileModel->filePath(index));
 		});
 
 	// The model populates directories asynchronously and mutates as folders are added or
@@ -274,6 +330,8 @@ ContentExplorerWindow::Clear()
 	m_Ui.FileExplorer->setModel(nullptr);
 	m_Ui.CurrentDirectoryExplorer->setModel(nullptr);
 	m_EmptyPlaceholder->hide();
+	m_History.clear();
+	m_Ui.BackButton->setEnabled(false);
 	setEnabled(false);
 }
 
@@ -590,8 +648,13 @@ ContentExplorerWindow::DeleteAsset(const QString& asset)
 		{
 			const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
 
+			// The trail led into a folder that is gone, so it is dropped rather than walked back
+			// into -- and going home is not a step Back should offer to undo.
 			if (!QDir(absolute).relativeFilePath(shown).startsWith(".."))
-				m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(m_RootPath));
+			{
+				m_History.clear();
+				ShowDirectory(m_RootPath);
+			}
 		}
 		return;
 

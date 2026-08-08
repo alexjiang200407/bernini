@@ -3,11 +3,13 @@
 #include "Project/Project.h"
 #include "util/QtSupport.h"
 
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QFileSystemModel>
 #include <QListView>
 #include <QMimeData>
 #include <QTemporaryDir>
+#include <QToolButton>
 #include <QTreeView>
 
 namespace
@@ -52,6 +54,22 @@ namespace
 	Files(const ContentExplorerWindow& window)
 	{
 		return window.findChild<QListView*>("CurrentDirectoryExplorer");
+	}
+
+	QToolButton*
+	Back(const ContentExplorerWindow& window)
+	{
+		return window.findChild<QToolButton*>("BackButton");
+	}
+
+	/** The directory the grid is rooted at, or empty before the explorer has a project. */
+	QString
+	Shown(const ContentExplorerWindow& window)
+	{
+		auto* files = Files(window);
+		auto* model = qobject_cast<QFileSystemModel*>(files->model());
+
+		return model == nullptr ? QString() : model->filePath(files->rootIndex());
 	}
 
 	/** Whether the window would take this drag. */
@@ -350,4 +368,90 @@ TEST_CASE("A file outside the project is not an asset of it", "[contentexplorer]
 	const QModelIndex index = IndexFor(model, QString::fromStdString(outside.string()));
 
 	CHECK(ContentExplorerWindow::AssetAt(model, index, sandbox.DataRootPath()).isEmpty());
+}
+
+TEST_CASE("Back has nowhere to go until the explorer has been somewhere", "[contentexplorer]")
+{
+	const Sandbox         sandbox;
+	ContentExplorerWindow window(nullptr, NothingOpen());
+
+	window.SetRootPath(sandbox.DataRootPath());
+
+	// Rooted, but the data root is where the explorer starts: there is nothing behind it.
+	CHECK(!Back(window)->isEnabled());
+}
+
+TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* tree  = Hierarchy(window);
+	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(model != nullptr);
+
+	const QString folder = sandbox.DataRootPath() + "/textures_src/kirk";
+	tree->setCurrentIndex(IndexFor(*model, folder));
+
+	REQUIRE(QDir(Shown(window)) == QDir(folder));
+	REQUIRE(Back(window)->isEnabled());
+
+	Back(window)->click();
+
+	CHECK(QDir(Shown(window)) == QDir(sandbox.DataRootPath()));
+
+	// Back to the start, so there is nothing behind it again.
+	CHECK(!Back(window)->isEnabled());
+}
+
+TEST_CASE("Back skips a folder that has been deleted since it was shown", "[contentexplorer]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
+	Touch(sandbox, "textures_src/spock/tex0.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* tree  = Hierarchy(window);
+	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(model != nullptr);
+
+	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/textures_src/kirk"));
+	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/textures_src/spock"));
+
+	// Removed from underneath the editor, as deleting it in Finder would. Nothing pumps the event
+	// loop between here and the click, so the model has not been told either -- which is the case
+	// this pins: the history is checked against the disk, not against what the model still lists.
+	fs::remove_all(sandbox.DataRoot() / "textures_src" / "kirk");
+
+	Back(window)->click();
+
+	CHECK(QDir(Shown(window)) == QDir(sandbox.DataRootPath()));
+}
+
+TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* tree  = Hierarchy(window);
+	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(model != nullptr);
+
+	const QString parent = sandbox.DataRootPath() + "/textures_src";
+	tree->setCurrentIndex(IndexFor(*model, parent));
+	tree->setCurrentIndex(IndexFor(*model, parent + "/kirk"));
+
+	Back(window)->click();
+
+	// Left behind, the tree would go on highlighting the folder the grid has left -- and clicking
+	// that row again would move nothing, because it is already the current one.
+	CHECK(QDir(model->filePath(tree->currentIndex())) == QDir(parent));
 }
