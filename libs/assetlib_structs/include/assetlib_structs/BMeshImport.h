@@ -5,6 +5,7 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
+#include <core/str/string_pool.h>
 
 namespace assetlib::imp
 {
@@ -28,7 +29,7 @@ namespace assetlib::imp
 
 		std::vector<std::byte> vertexData;  // all interleaved vertex blobs
 		std::vector<std::byte> indexData;   // all index buffers
-		std::vector<char>      stringPool;  // NUL-terminated names; offset 0 is the empty string
+		core::string_pool      stringPool;
 
 		std::vector<ImageData> textures;
 

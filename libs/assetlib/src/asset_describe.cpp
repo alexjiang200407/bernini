@@ -316,7 +316,7 @@ namespace assetlib
 			out += std::format(
 				"\n  mesh [{}] '{}' -- submeshes [{}, {})\n",
 				i,
-				nameFromPool(mesh.stringPool, entry.nameOffset),
+				mesh.stringPool.at(entry.nameOffset),
 				entry.firstSubmesh,
 				entry.firstSubmesh + entry.submeshCount);
 
@@ -335,7 +335,7 @@ namespace assetlib
 				out += std::format(
 					"    submesh [{}] '{}'\n",
 					index,
-					nameFromPool(mesh.stringPool, submesh.nameOffset));
+					mesh.stringPool.at(submesh.nameOffset));
 				out += std::format(
 					"      geometry {} verts, {} indices ({}), {} meshlets\n",
 					submesh.vertexCount,
@@ -460,7 +460,7 @@ namespace assetlib
 			out += std::format(
 				"    [{}] '{}' parent {} bind t{} s{}\n",
 				i,
-				nameFromPool(skeleton.stringPool, bone.nameOffset),
+				skeleton.stringPool.at(bone.nameOffset),
 				bone.parent == c_InvalidIndex ? std::string("(root)") : std::to_string(bone.parent),
 				vec3(bone.bindPose.translation),
 				vec3(bone.bindPose.scale));
@@ -497,10 +497,8 @@ namespace assetlib
 		for (size_t i = 0; i < animations.clips.size(); ++i)
 		{
 			const AnimationClip& clip = animations.clips[i];
-			out += std::format(
-				"\n  clip [{}] '{}'\n",
-				i,
-				nameFromPool(animations.stringPool, clip.nameOffset));
+			out +=
+				std::format("\n  clip [{}] '{}'\n", i, animations.stringPool.at(clip.nameOffset));
 			out += std::format(
 				"    length     {:.3g} s, {} frames at {:.4g} Hz{}\n",
 				clip.duration,

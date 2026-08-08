@@ -21,7 +21,6 @@ namespace
 		constexpr uint16_t c_Stride = 12;
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 		mesh.vertexData.resize(static_cast<size_t>(aabbs.size()) * 3 * c_Stride);
 
 		uint32_t vertexCursor = 0;

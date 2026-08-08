@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/Node.h>
+#include <core/str/string_pool.h>
 
 namespace assetlib
 {
@@ -48,6 +49,6 @@ namespace assetlib
 
 		std::vector<AnimationClip> clips;
 		std::vector<Transform>     samples;
-		std::vector<char> stringPool;  // NUL-terminated names; offset 0 is the empty string
+		core::string_pool          stringPool;
 	};
 }

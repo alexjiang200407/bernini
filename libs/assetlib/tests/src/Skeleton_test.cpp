@@ -16,21 +16,11 @@ namespace
 		return Transform{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
 	}
 
-	uint32_t
-	AddName(std::vector<char>& pool, const char* name)
-	{
-		const auto offset = static_cast<uint32_t>(pool.size());
-		for (const char* c = name; *c != '\0'; ++c) pool.push_back(*c);
-		pool.push_back('\0');
-		return offset;
-	}
-
 	/** A three-bone chain: hips -> spine -> head, each offset one unit up from its parent. */
 	Skeleton
 	MakeChain()
 	{
 		Skeleton skeleton;
-		skeleton.stringPool.push_back('\0');
 
 		const std::array<const char*, 3> names = { { "hips", "spine", "head" } };
 		for (uint32_t i = 0; i < names.size(); ++i)
@@ -41,7 +31,7 @@ namespace
 			bone.inverseBind =
 				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -static_cast<float>(i + 1), 0.0f));
 			bone.parent     = i == 0 ? c_InvalidIndex : i - 1;
-			bone.nameOffset = AddName(skeleton.stringPool, names[i]);
+			bone.nameOffset = skeleton.stringPool.add(names[i]);
 			skeleton.bones.push_back(bone);
 		}
 
@@ -53,13 +43,12 @@ namespace
 	MakeClipSet(const Skeleton& skeleton, uint32_t frames, float distance)
 	{
 		AnimationSet animations;
-		animations.stringPool.push_back('\0');
 		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
 		animations.skeletonSignature = skeletonSignature(skeleton);
 		animations.skeleton          = "Animations/walk.bskel";
 
 		AnimationClip clip{};
-		clip.nameOffset  = AddName(animations.stringPool, "walk");
+		clip.nameOffset  = animations.stringPool.add("walk");
 		clip.firstSample = 0;
 		clip.frameCount  = frames;
 		clip.sampleRate  = 30.0f;
@@ -132,7 +121,7 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 	SECTION("renaming a bone does")
 	{
 		auto renamed                = skeleton;
-		renamed.bones[1].nameOffset = AddName(renamed.stringPool, "chest");
+		renamed.bones[1].nameOffset = renamed.stringPool.add("chest");
 		CHECK(skeletonSignature(renamed) != original);
 	}
 
@@ -149,7 +138,7 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 		Bone extra{};
 		extra.bindPose   = IdentityTransform();
 		extra.parent     = 0;
-		extra.nameOffset = AddName(inserted.stringPool, "tail");
+		extra.nameOffset = inserted.stringPool.add("tail");
 		inserted.bones.push_back(extra);
 		CHECK(skeletonSignature(inserted) != original);
 	}
@@ -205,7 +194,7 @@ TEST_CASE("A clip set cooked against another rig is detected", "[animation]")
 		// The clips' bone indices now name different bones, and nothing about the pose they produce
 		// says so -- this comparison is the only thing that can.
 		auto reordered                = skeleton;
-		reordered.bones[1].nameOffset = AddName(reordered.stringPool, "chest");
+		reordered.bones[1].nameOffset = reordered.stringPool.add("chest");
 		CHECK_FALSE(animationsMatchSkeleton(animations, reordered));
 	}
 

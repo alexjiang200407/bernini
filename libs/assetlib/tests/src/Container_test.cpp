@@ -9,7 +9,6 @@ namespace
 	MakeSampleMesh()
 	{
 		BMesh mesh;
-		mesh.stringPool.push_back('\0');
 
 		Node root{};
 		root.localTransform = { glm::vec3(0.0f),

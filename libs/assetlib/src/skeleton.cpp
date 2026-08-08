@@ -19,7 +19,7 @@ namespace assetlib
 		uint64_t hash = core::hash_seed();
 		for (const Bone& bone : skeleton.bones)
 		{
-			hash = core::hash_string(nameFromPool(skeleton.stringPool, bone.nameOffset), hash);
+			hash = core::hash_string(skeleton.stringPool.at(bone.nameOffset), hash);
 			hash = core::hash_pod(bone.parent, hash);
 		}
 		return hash;
@@ -39,8 +39,8 @@ namespace assetlib
 					i,
 					bone.parent);
 
-			if (bone.nameOffset != 0 && bone.nameOffset >= skeleton.stringPool.size())
-				throw_runtime_error("skeleton: bone {} names an offset past the string pool", i);
+			if (bone.nameOffset != 0 && skeleton.stringPool.at(bone.nameOffset).empty())
+				throw_runtime_error("skeleton: bone {} names nothing in the string pool", i);
 		}
 	}
 
@@ -75,7 +75,7 @@ namespace assetlib
 	findBone(const Skeleton& skeleton, std::string_view name)
 	{
 		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			if (nameFromPool(skeleton.stringPool, skeleton.bones[i].nameOffset) == name)
+			if (skeleton.stringPool.at(skeleton.bones[i].nameOffset) == name)
 				return static_cast<uint32_t>(i);
 
 		return c_InvalidIndex;

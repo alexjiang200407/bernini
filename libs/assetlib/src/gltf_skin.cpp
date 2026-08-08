@@ -12,17 +12,6 @@ namespace assetlib
 
 	namespace
 	{
-		uint32_t
-		addName(std::vector<char>& pool, const std::string& name)
-		{
-			if (name.empty())
-				return 0;
-			const auto offset = static_cast<uint32_t>(pool.size());
-			pool.insert(pool.end(), name.begin(), name.end());
-			pool.push_back('\0');
-			return offset;
-		}
-
 		/**
 		 * The joints' nearest-joint-ancestor forest, emitted parents-first.
 		 *
@@ -310,7 +299,6 @@ namespace assetlib
 		if (!inverseBinds.empty() && inverseBindComponents != 16)
 			throw_runtime_error("bskel: inverseBindMatrices is not a matrix accessor");
 
-		out.skeleton.stringPool.push_back('\0');  // offset 0 == empty string
 		out.skeleton.bones.reserve(order.size());
 
 		for (const uint32_t joint : order)
@@ -331,7 +319,7 @@ namespace assetlib
 			}
 
 			bone.bindPose   = boneLocalTransform(model, node, parentNode, nodeParents);
-			bone.nameOffset = addName(out.skeleton.stringPool, model.nodes[node].name);
+			bone.nameOffset = out.skeleton.stringPool.add(model.nodes[node].name);
 
 			// glTF's default when the accessor is absent: the joints are already in bind pose.
 			bone.inverseBind = glm::mat4(1.0f);
@@ -360,7 +348,6 @@ namespace assetlib
 
 		out.boneCount         = boneCount;
 		out.skeletonSignature = skeletonSignature(skin.skeleton);
-		out.stringPool.push_back('\0');  // offset 0 == empty string
 
 		std::vector<Transform> bindPose(boneCount);
 		for (uint32_t b = 0; b < boneCount; ++b) bindPose[b] = skin.skeleton.bones[b].bindPose;
@@ -441,7 +428,7 @@ namespace assetlib
 			const auto  frameCount = frameCountFor(duration, sampleRate);
 
 			AnimationClip clip{};
-			clip.nameOffset  = addName(out.stringPool, animation.name);
+			clip.nameOffset  = out.stringPool.add(animation.name);
 			clip.firstSample = static_cast<uint32_t>(out.samples.size());
 			clip.frameCount  = frameCount;
 			clip.sampleRate  = sampleRate;

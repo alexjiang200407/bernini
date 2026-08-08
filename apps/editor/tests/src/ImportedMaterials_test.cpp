@@ -66,15 +66,12 @@ namespace
 		std::vector<std::string>                    names)
 	{
 		auto mesh = assetlib::imp::BMeshImport();
-		mesh.stringPool.push_back('\0');  // offset 0 is the empty string
 
 		for (size_t i = 0; i < materials.size(); ++i)
 		{
 			if (!names[i].empty())
 			{
-				materials[i].nameOffset = static_cast<uint32_t>(mesh.stringPool.size());
-				mesh.stringPool.insert(mesh.stringPool.end(), names[i].begin(), names[i].end());
-				mesh.stringPool.push_back('\0');
+				materials[i].nameOffset = mesh.stringPool.add(names[i]);
 			}
 
 			auto submesh     = assetlib::Submesh();

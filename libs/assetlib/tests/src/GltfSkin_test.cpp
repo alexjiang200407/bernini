@@ -214,8 +214,8 @@ TEST_CASE("A glTF skin arrives topologically sorted, not in joint order", "[gltf
 	REQUIRE(import.skeleton.bones.size() == 2);
 
 	// skin.joints is [spine, hips] and spine is hips' child, so the sort has to invert it.
-	CHECK(nameFromPool(import.skeleton.stringPool, import.skeleton.bones[0].nameOffset) == "hips");
-	CHECK(nameFromPool(import.skeleton.stringPool, import.skeleton.bones[1].nameOffset) == "spine");
+	CHECK(import.skeleton.stringPool.at(import.skeleton.bones[0].nameOffset) == "hips");
+	CHECK(import.skeleton.stringPool.at(import.skeleton.bones[1].nameOffset) == "spine");
 	CHECK(import.skeleton.bones[0].parent == c_InvalidIndex);
 	CHECK(import.skeleton.bones[1].parent == 0);
 
@@ -302,7 +302,7 @@ TEST_CASE("A glTF's animations are resampled to a fixed rate", "[gltf][animation
 	CHECK(import.animations.skeletonSignature == skeletonSignature(import.skeleton));
 
 	const AnimationClip& walk = import.animations.clips[0];
-	CHECK(nameFromPool(import.animations.stringPool, walk.nameOffset) == "walk");
+	CHECK(import.animations.stringPool.at(walk.nameOffset) == "walk");
 	CHECK(walk.sampleRate == Catch::Approx(c_DefaultSampleRate));
 	CHECK(walk.duration == Catch::Approx(1.0f));
 

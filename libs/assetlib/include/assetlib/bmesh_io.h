@@ -121,13 +121,6 @@ namespace assetlib
 	isSkinned(const BMesh& mesh) noexcept;
 
 	/**
-	 * The name at `offset` in a mesh's `stringPool` (BMesh's or BMeshImport's -- they pool names the
-	 * same way). Empty for offset 0, which is the empty string, or for an offset past the pool.
-	 */
-	[[nodiscard]] std::string
-	nameFromPool(const std::vector<char>& pool, uint32_t offset);
-
-	/**
 	 * Reports that `done` of `total` textures have been written. Called before each texture, so the
 	 * first call is (0, total) and the last is (total - 1, total).
 	 */

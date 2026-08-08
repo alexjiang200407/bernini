@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/Node.h>
+#include <core/str/string_pool.h>
 
 namespace assetlib
 {
@@ -28,6 +29,6 @@ namespace assetlib
 	struct Skeleton
 	{
 		std::vector<Bone> bones;
-		std::vector<char> stringPool;  // NUL-terminated names; offset 0 is the empty string
+		core::string_pool stringPool;
 	};
 }

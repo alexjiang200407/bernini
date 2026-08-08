@@ -83,7 +83,7 @@ namespace assetlib
 		chunk::Writer writer;
 		writer.Add(ChunkId::kClips, animations.clips);
 		writer.Add(ChunkId::kSamples, animations.samples);
-		writer.Add(ChunkId::kStringPool, animations.stringPool);
+		writer.Add(ChunkId::kStringPool, animations.stringPool.bytes());
 		writer.Add(ChunkId::kSkeletonRef, packSkeletonRef(animations));
 		return writer.Finish(magic::c_BAnim, c_VersionMajor, c_VersionMinor);
 	}
@@ -96,7 +96,7 @@ namespace assetlib
 		AnimationSet animations;
 		animations.clips      = reader.Read<AnimationClip>(ChunkId::kClips);
 		animations.samples    = reader.Read<Transform>(ChunkId::kSamples);
-		animations.stringPool = reader.Read<char>(ChunkId::kStringPool);
+		animations.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
 		unpackSkeletonRef(animations, reader.Read<std::byte>(ChunkId::kSkeletonRef));
 
 		validateAnimationSet(animations);

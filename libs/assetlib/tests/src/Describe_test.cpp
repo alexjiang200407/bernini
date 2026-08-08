@@ -105,8 +105,8 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 {
 	BMesh mesh;
-	mesh.stringPool = { '\0', 'h', 'e', 'a', 'd', '\0' };
-	mesh.materials  = { "Materials/head.bmaterial" };
+	REQUIRE(mesh.stringPool.add("head") == 1);
+	mesh.materials = { "Materials/head.bmaterial" };
 	mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 2, .nameOffset = 0 });
 
 	Submesh named{};

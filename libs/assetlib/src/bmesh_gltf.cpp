@@ -523,17 +523,6 @@ namespace assetlib
 			mesh.submeshes.push_back(submesh);
 		}
 
-		uint32_t
-		addName(BMeshImport& mesh, const std::string& name)
-		{
-			if (name.empty())
-				return 0;
-			const auto offset = static_cast<uint32_t>(mesh.stringPool.size());
-			mesh.stringPool.insert(mesh.stringPool.end(), name.begin(), name.end());
-			mesh.stringPool.push_back('\0');
-			return offset;
-		}
-
 		void
 		buildNodes(BMeshImport& mesh, const tinygltf::Model& model)
 		{
@@ -551,7 +540,7 @@ namespace assetlib
 			{
 				const auto& gltfNode         = model.nodes[i];
 				mesh.nodes[i].localTransform = readNodeTransform(gltfNode);
-				mesh.nodes[i].nameOffset     = addName(mesh, gltfNode.name);
+				mesh.nodes[i].nameOffset     = mesh.stringPool.add(gltfNode.name);
 				if (gltfNode.mesh >= 0)
 					mesh.nodes[i].mesh = static_cast<uint32_t>(gltfNode.mesh);
 
@@ -695,7 +684,7 @@ namespace assetlib
 						static_cast<float>(pbr.baseColorFactor[3]));
 				material.metallicFactor  = static_cast<float>(pbr.metallicFactor);
 				material.roughnessFactor = static_cast<float>(pbr.roughnessFactor);
-				material.nameOffset      = addName(mesh, gltfMat.name);
+				material.nameOffset      = mesh.stringPool.add(gltfMat.name);
 
 				mesh.materials.push_back(material);
 			}
@@ -765,8 +754,6 @@ namespace assetlib
 		loadModel(loader, model, path);
 
 		BMeshImport mesh;
-		mesh.stringPool.push_back('\0');  // offset 0 == empty string
-
 		buildNodes(mesh, model);
 
 		// Before the submeshes: their JOINTS_0 indices are the skin's joint order, and what they must
@@ -781,7 +768,7 @@ namespace assetlib
 
 			Mesh entry{};
 			entry.firstSubmesh = static_cast<uint32_t>(mesh.submeshes.size());
-			entry.nameOffset   = addName(mesh, gltfMesh.name);
+			entry.nameOffset   = mesh.stringPool.add(gltfMesh.name);
 			for (size_t p = 0; p < gltfMesh.primitives.size(); ++p)
 			{
 				const auto& primitive = gltfMesh.primitives[p];
@@ -796,7 +783,7 @@ namespace assetlib
 				std::string submeshName = gltfMesh.name;
 				if (gltfMesh.primitives.size() > 1)
 					submeshName += "[" + std::to_string(p) + "]";
-				mesh.submeshes.back().nameOffset = addName(mesh, submeshName);
+				mesh.submeshes.back().nameOffset = mesh.stringPool.add(submeshName);
 			}
 			entry.submeshCount = static_cast<uint32_t>(mesh.submeshes.size()) - entry.firstSubmesh;
 			mesh.meshes.push_back(entry);

@@ -31,7 +31,7 @@ namespace assetlib
 	{
 		chunk::Writer writer;
 		writer.Add(ChunkId::kBones, skeleton.bones);
-		writer.Add(ChunkId::kStringPool, skeleton.stringPool);
+		writer.Add(ChunkId::kStringPool, skeleton.stringPool.bytes());
 		return writer.Finish(magic::c_BSkel, c_VersionMajor, c_VersionMinor);
 	}
 
@@ -42,7 +42,7 @@ namespace assetlib
 
 		Skeleton skeleton;
 		skeleton.bones      = reader.Require<Bone>(ChunkId::kBones);
-		skeleton.stringPool = reader.Read<char>(ChunkId::kStringPool);
+		skeleton.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
 
 		validateSkeleton(skeleton);
 		return skeleton;

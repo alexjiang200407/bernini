@@ -93,7 +93,6 @@ namespace
 	MakeMesh(const std::vector<std::string>& materials, const std::string& skeleton = {})
 	{
 		BMesh mesh;
-		mesh.stringPool.push_back('\0');
 
 		Node root{};
 		root.localTransform = { glm::vec3(0.0f),
@@ -282,7 +281,6 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	fs::create_directories(root.path / "Animations");
 
 	Skeleton skeleton;
-	skeleton.stringPool.push_back('\0');
 	skeleton.bones.push_back(
 		Bone{ Transform{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) },
 	          glm::mat4(1.0f),
@@ -291,7 +289,6 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	saveSkeleton(skeleton, root.path / "Animations" / "rig.bskel");
 
 	AnimationSet animations;
-	animations.stringPool.push_back('\0');
 	animations.boneCount         = 1;
 	animations.skeleton          = "Animations/rig.bskel";
 	animations.skeletonSignature = skeletonSignature(skeleton);

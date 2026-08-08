@@ -75,7 +75,7 @@ namespace assetlib
 		writer.Add(ChunkId::kMeshletTriangles, mesh.meshletTriangles);
 		writer.Add(ChunkId::kVertexData, mesh.vertexData);
 		writer.Add(ChunkId::kIndexData, mesh.indexData);
-		writer.Add(ChunkId::kStringPool, mesh.stringPool);
+		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
 		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
 		writer.Add(
 			ChunkId::kSkeletonPath,
@@ -98,7 +98,7 @@ namespace assetlib
 		mesh.meshletTriangles = reader.Read<uint8_t>(ChunkId::kMeshletTriangles);
 		mesh.vertexData       = reader.Read<std::byte>(ChunkId::kVertexData);
 		mesh.indexData        = reader.Read<std::byte>(ChunkId::kIndexData);
-		mesh.stringPool       = reader.Read<char>(ChunkId::kStringPool);
+		mesh.stringPool       = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
 		mesh.materials        = chunk::unpackStrings(reader.Read<char>(ChunkId::kMaterialPaths));
 
 		const auto skeleton = reader.Read<char>(ChunkId::kSkeletonPath);
@@ -223,14 +223,6 @@ namespace assetlib
 	textureFileName(size_t index)
 	{
 		return "tex" + std::to_string(index) + ".ktx2";
-	}
-
-	std::string
-	nameFromPool(const std::vector<char>& pool, uint32_t offset)
-	{
-		if (offset == 0 || offset >= pool.size())
-			return {};
-		return std::string(pool.data() + offset);
 	}
 
 	void

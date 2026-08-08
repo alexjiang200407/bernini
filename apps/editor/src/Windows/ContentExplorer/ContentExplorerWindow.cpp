@@ -68,12 +68,13 @@ namespace
 	 * file somewhere other than the import's own folder. `index` names the ones that reduce to nothing.
 	 */
 	QString
-	UniqueMaterialStem(const std::string& name, size_t index, QSet<QString>& taken)
+	UniqueMaterialStem(std::string_view name, size_t index, QSet<QString>& taken)
 	{
 		static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
 
-		QString stem =
-			QString::fromStdString(name).trimmed().replace(c_Unsafe, QStringLiteral("_"));
+		QString stem = QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size()))
+		                   .trimmed()
+		                   .replace(c_Unsafe, QStringLiteral("_"));
 
 		// "." and ".." name a directory rather than a file, and a leading dot hides it.
 		while (stem.startsWith('.')) stem.remove(0, 1);
@@ -786,10 +787,8 @@ ContentExplorerWindow::WriteImportedMaterials(
 		if (!source.isPbr)
 			continue;
 
-		const QString stem = UniqueMaterialStem(
-			assetlib::nameFromPool(imported.stringPool, source.nameOffset),
-			i,
-			taken);
+		const QString stem =
+			UniqueMaterialStem(imported.stringPool.at(source.nameOffset), i, taken);
 		const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
 
 		MaterialGraphModel model(registry);
