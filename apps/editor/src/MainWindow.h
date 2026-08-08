@@ -8,6 +8,7 @@
 
 class QDockWidget;
 class QLabel;
+class QMenu;
 class Project;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
@@ -79,10 +80,13 @@ private:
 	void
 	ReleaseRenderResources() noexcept;
 
-	// The Render menu. Its one entry toggles temporal AA across every viewport, which is how a
-	// temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
+	// The Render menu. Its entries toggle temporal AA and set the viewports' render scale, which is
+	// how a temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void
 	SetUpRenderMenu();
+
+	void
+	SetUpRenderScaleMenu(QMenu* render);
 
 	Ui::MainWindow           m_Ui;
 	std::unique_ptr<Project> m_Project;

@@ -20,6 +20,7 @@
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
+#include <QActionGroup>
 #include <QMenuBar>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
@@ -113,6 +114,10 @@ MainWindow::Build()
 		// it -- it renders single frames, loading hashed alpha as the blend it converges to.
 		levelDesc.taaEnabled = settings["levelEditor"]["temporalAA"].GetOrDefault(true);
 
+		// A starting density, so a machine that must always reproduce another display's can say so
+		// once. The Render menu moves every viewport from here.
+		levelDesc.renderScale = settings["levelEditor"]["renderScale"].GetOrDefault(1.0f);
+
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
 
 		auto matSettings                = settings["materialEditor"];
@@ -120,6 +125,7 @@ MainWindow::Build()
 		matDesc.renderer                = m_Renderer.get();
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
 		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
+		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
@@ -229,6 +235,40 @@ MainWindow::SetUpRenderMenu()
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetTaaEnabled(enabled);
 	});
+
+	SetUpRenderScaleMenu(render);
+}
+
+void
+MainWindow::SetUpRenderScaleMenu(QMenu* render)
+{
+	static constexpr std::array c_Scales = { 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
+
+	QMenu* scale = render->addMenu("Render Scale");
+	scale->setStatusTip(
+		"Render the viewports at a fraction of their window and stretch the result back over it, "
+		"to judge a resolution-dependent artifact on a display that does not have that density.");
+
+	auto* group = new QActionGroup(scale);
+	group->setExclusive(true);
+
+	// The viewports move together, so the checked entry follows whichever was configured first. A
+	// config.json scale outside the list leaves none of them checked, which is honest.
+	const QList<RenderTargetWindow*> views = findChildren<RenderTargetWindow*>();
+	const float current = views.isEmpty() ? 1.0f : views.first()->GetRenderScale();
+
+	for (const float factor : c_Scales)
+	{
+		QAction* action = scale->addAction(QString("%1x").arg(factor));
+		action->setCheckable(true);
+		action->setChecked(qFuzzyCompare(factor, current));
+		group->addAction(action);
+
+		connect(action, &QAction::triggered, this, [this, factor]() {
+			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+				view->SetRenderScale(factor);
+		});
+	}
 }
 
 void

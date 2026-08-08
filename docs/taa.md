@@ -28,6 +28,17 @@ allocated a history and is disabled otherwise — rather than hidden, so the ans
 turn this on" is in the place that asks the question — and a viewport configured without it ignores
 the call instead of throwing.
 
+What TAA leaves behind is **resolution-dependent**: the jitter walks a pixel footprint, so how much
+of an edge or a hashed strand falls inside one pixel decides how much the neighbourhood clamp has to
+throw away, and a flicker that is obvious at 1080p can be invisible on a 4K panel. The editor's
+Render menu carries a **Render Scale** for that: it multiplies each viewport's render resolution on
+top of the display's device pixel ratio, and the result is stretched back over the window on present
+(`DXGI_SCALING_STRETCH`; a `CAMetalLayer` drawable smaller than its bounds). Half scale on a 2×
+display is a 1080p sample grid inside a 4K window, which is what makes the artifact reproducible on
+the machine that does not have the display it was reported on. `renderScale` under `levelEditor` and
+`materialEditor` in `config.json` sets the value the editor starts at; the menu moves every viewport
+from there, live, because the comparison is what shows a temporal artifact.
+
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
 ---
@@ -154,6 +165,7 @@ the call instead of throwing.
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
 | `ViewData::jitter` / `prevJitter` | [forward/ViewData.slang](libs/bgl/shaders/src/forward/ViewData.slang) | What the mesh shader subtracts back out. |
 | History accessors | [gfx/RenderTargetBase.h](libs/bgl/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
+| `RenderTargetWindow::SetRenderScale` | [RenderTargetWindow.h](apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h) | Drives a viewport at another display's pixel density, to reproduce the artifact. |
 
 ---
 

@@ -20,6 +20,12 @@ struct RenderTargetWindowDesc
 	// Whether this viewport allocates temporal-AA resources and starts with it running. False also
 	// frees the history buffers and their RTVs, which a runtime toggle cannot.
 	bool taaEnabled = true;
+
+	// Multiplies the render resolution on top of the display's device pixel ratio. Below 1 the
+	// target is rendered smaller than the window and stretched back over it on present, which puts a
+	// viewport on another display's pixel density -- a resolution-dependent temporal artifact can
+	// then be reproduced on hardware that does not have that display. Clamped to [0.1, 4].
+	float renderScale = 1.0f;
 };
 
 class RenderTargetWindow : public QWidget
@@ -50,6 +56,18 @@ public:
 	IsTaaAvailable() const noexcept
 	{
 		return m_Desc.taaEnabled;
+	}
+
+	// Rescales the render target against the window it fills, so one display can be driven at
+	// another's pixel density without leaving the editor running. Out-of-range values are clamped
+	// and warned about rather than rejected: this arrives from config.json as often as from the menu.
+	void
+	SetRenderScale(float scale);
+
+	[[nodiscard]] float
+	GetRenderScale() const noexcept
+	{
+		return m_RenderScale;
 	}
 
 protected:
@@ -147,6 +165,9 @@ private:
 	// The size the window last reported, compared against by SyncSize. GUI thread.
 	uint32_t m_Width  = 1;
 	uint32_t m_Height = 1;
+
+	// Clamped copy of the desc's, so SyncSize reads one value however it was set. GUI thread.
+	float m_RenderScale = 1.0f;
 
 	// Read by DrawFrame, so written only from the render thread: the GUI thread hands new values over
 	// through the Renderer rather than assigning them here, and no frame sees a half-written camera.
