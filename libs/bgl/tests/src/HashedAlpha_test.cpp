@@ -1384,16 +1384,25 @@ namespace
 	};
 
 	StrandMeasurement
-	MeasureStrands(const Frame& frame, const std::string& name)
+	MeasureStrands(
+		const Frame&       frame,
+		const std::string& name,
+		bgl::LayerType     layer = bgl::LayerType::kHashed)
 	{
 		constexpr float c_CameraZ = 20.0f;
 
+		// The mip policy each layer actually ships with: the bake gives coverage-preserving mips to
+		// the two that read alpha as a threshold and plain box mips to blend
+		// (`groupPreservesCoverage`). Handing blend the mask's chain would compare it against a
+		// texture it never receives.
+		const bool preservesCoverage = layer != bgl::LayerType::kBlend;
+
 		PatchScene card = MakeCardScene(
-			MakeStrandTexture(true, true),
+			MakeStrandTexture(preservesCoverage, preservesCoverage),
 			true,
 			false,
 			c_CameraZ,
-			bgl::LayerType::kHashed,
+			layer,
 			frame);
 
 		for (int i = 0; i < c_ConvergeFrames; ++i)
@@ -1424,6 +1433,20 @@ namespace
 	// 256 is the density every other bound in this file was measured at; the rest are its halvings,
 	// which is what the editor's render scale and a 1080p display do to a 4K viewport.
 	constexpr std::array<uint32_t, 3> c_SweepSizes = { 256, 128, 64 };
+
+	const char*
+	LayerName(bgl::LayerType layer)
+	{
+		switch (layer)
+		{
+		case bgl::LayerType::kMask:
+			return "mask";
+		case bgl::LayerType::kBlend:
+			return "blend";
+		default:
+			return "hashed";
+		}
+	}
 }
 
 // The reproduction, as a number. A viewport rendered at half scale puts the same hair card on half
@@ -1441,6 +1464,31 @@ TEST_CASE(
 		WARN(
 			"content-fixed " << size << "x" << size << ": flicker = " << m.flicker << "  detail = "
 							 << m.detail << "  luma = " << m.luma << "  box = " << m.boxSize);
+	}
+}
+
+// Which of the two mechanisms in the minified path is losing the strands. `kMask` is the alpha test
+// whose far-field look SharpenMinifiedAlpha exists to reproduce, and it reads the same
+// coverage-preserving mips from the same texture -- so a collapse it shares is the mips or the
+// minification itself, and one only hashed suffers is the sharpening. `kBlend` is the energy-true
+// reference the sharpening is deliberately not.
+TEST_CASE(
+	"Each alpha layer is measured across render resolutions",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const bgl::LayerType layer :
+	     { bgl::LayerType::kMask, bgl::LayerType::kBlend, bgl::LayerType::kHashed })
+	{
+		for (const uint32_t size : c_SweepSizes)
+		{
+			const Frame frame{ size, size, 1.0f };
+			const auto  name = std::string(LayerName(layer)) + "_" + std::to_string(size);
+			const auto  m    = MeasureStrands(frame, "layer_" + name, layer);
+
+			WARN(
+				LayerName(layer) << " " << size << "x" << size << ": flicker = " << m.flicker
+								 << "  detail = " << m.detail << "  luma = " << m.luma);
+		}
 	}
 }
 
