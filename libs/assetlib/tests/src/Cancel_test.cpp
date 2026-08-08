@@ -38,7 +38,6 @@ namespace
 	ImportWithTextures(size_t count)
 	{
 		auto mesh = imp::BMeshImport();
-		mesh.stringPool.push_back('\0');  // offset 0 == empty string
 
 		const std::vector<std::byte> rgba(4 * 4 * 4, std::byte{ 128 });
 		for (size_t i = 0; i < count; ++i) mesh.textures.push_back(rgba8ToImage(rgba, 4, 4));

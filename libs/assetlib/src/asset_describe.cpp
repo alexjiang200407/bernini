@@ -1,11 +1,15 @@
 #include <assetlib/asset_describe.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/env_bake.h>
+#include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Skeleton.h>
 
 namespace assetlib
 {
@@ -123,7 +127,7 @@ namespace assetlib
 		}
 
 		std::string
-		texturePathOr(const std::string& path)
+		pathOr(const std::string& path)
 		{
 			return path.empty() ? std::string("(none)") : path;
 		}
@@ -138,8 +142,8 @@ namespace assetlib
 			const std::filesystem::path& dataRoot)
 		{
 			out += std::format("\n  {}\n", label);
-			out += std::format("    source          {}\n", texturePathOr(route.source));
-			out += std::format("    baked           {}\n", texturePathOr(route.baked));
+			out += std::format("    source          {}\n", pathOr(route.source));
+			out += std::format("    baked           {}\n", pathOr(route.baked));
 
 			if (route.source.empty())
 			{
@@ -205,9 +209,9 @@ namespace assetlib
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
 			out += "\n  baked textures\n";
-			out += std::format("    baseColor       {}\n", texturePathOr(pbr.baseColorTexture));
-			out += std::format("    normal          {}\n", texturePathOr(pbr.normalTexture));
-			out += std::format("    orm             {}\n", texturePathOr(pbr.ormTexture));
+			out += std::format("    baseColor       {}\n", pathOr(pbr.baseColorTexture));
+			out += std::format("    normal          {}\n", pathOr(pbr.normalTexture));
+			out += std::format("    orm             {}\n", pathOr(pbr.ormTexture));
 
 			out += "\n  channel routes\n";
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
@@ -284,13 +288,24 @@ namespace assetlib
 		out += std::format("  vertexData   {}\n", byteSize(mesh.vertexData.size()));
 		out += std::format("  indexData    {}\n", byteSize(mesh.indexData.size()));
 
+		// A mesh whose layout carries joints but names no skeleton has joint indices nothing can
+		// resolve, which is invisible until it renders as a heap.
+		if (isSkinned(mesh))
+			out += std::format(
+				"  skeleton     {}\n",
+				mesh.skeleton.empty() ? "(SKINNED, but names none)" : mesh.skeleton);
+		else if (!mesh.skeleton.empty())
+			out += std::format(
+				"  skeleton     {} (unused: no submesh carries joints)\n",
+				mesh.skeleton);
+
 		// Every path is relative to the project's data root, not to this file -- worth saying, since a
 		// path that looks broken relative to the .bmesh is usually correct.
 		out += std::format(
 			"  materials    {} (paths relative to the data root)\n",
 			mesh.materials.size());
 		for (size_t i = 0; i < mesh.materials.size(); ++i)
-			out += std::format("    [{}] {}\n", i, texturePathOr(mesh.materials[i]));
+			out += std::format("    [{}] {}\n", i, pathOr(mesh.materials[i]));
 
 		if (!verbose)
 			return out;
@@ -301,7 +316,7 @@ namespace assetlib
 			out += std::format(
 				"\n  mesh [{}] '{}' -- submeshes [{}, {})\n",
 				i,
-				nameFromPool(mesh.stringPool, entry.nameOffset),
+				mesh.stringPool.at(entry.nameOffset),
 				entry.firstSubmesh,
 				entry.firstSubmesh + entry.submeshCount);
 
@@ -320,7 +335,7 @@ namespace assetlib
 				out += std::format(
 					"    submesh [{}] '{}'\n",
 					index,
-					nameFromPool(mesh.stringPool, submesh.nameOffset));
+					mesh.stringPool.at(submesh.nameOffset));
 				out += std::format(
 					"      geometry {} verts, {} indices ({}), {} meshlets\n",
 					submesh.vertexCount,
@@ -426,6 +441,75 @@ namespace assetlib
 		out += std::format("benv '{}'\n", env.name);
 		out += std::format("  sky               {}\n", referenceOr(env.sky, dataRoot));
 		out += std::format("  lighting          {}\n", referenceOr(env.lighting, dataRoot));
+
+		return out;
+	}
+
+	std::string
+	describe(const Skeleton& skeleton)
+	{
+		std::string out;
+
+		out += "bskel\n";
+		out += std::format("  bones        {}\n", skeleton.bones.size());
+		out += std::format("  signature    {:016x}\n", skeletonSignature(skeleton));
+
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+		{
+			const Bone& bone = skeleton.bones[i];
+			out += std::format(
+				"    [{}] '{}' parent {} bind t{} s{}\n",
+				i,
+				skeleton.stringPool.at(bone.nameOffset),
+				bone.parent == c_InvalidIndex ? std::string("(root)") : std::to_string(bone.parent),
+				vec3(bone.bindPose.translation),
+				vec3(bone.bindPose.scale));
+		}
+
+		return out;
+	}
+
+	std::string
+	describe(const AnimationSet& animations, const Skeleton* skeleton)
+	{
+		std::string out;
+
+		out += "banim\n";
+		out += std::format(
+			"  skeleton     {} (path relative to the data root)\n",
+			pathOr(animations.skeleton));
+		out += std::format("  bones        {}\n", animations.boneCount);
+		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
+
+		if (skeleton != nullptr)
+			out += std::format(
+				"  binding      {}\n",
+				animationsMatchSkeleton(animations, *skeleton) ?
+					"matches the skeleton" :
+					"DOES NOT MATCH the skeleton -- the clips' joint indices name other bones");
+
+		out += std::format("  clips        {}\n", animations.clips.size());
+		out += std::format(
+			"  samples      {} ({})\n",
+			animations.samples.size(),
+			byteSize(animations.samples.size() * sizeof(Transform)));
+
+		for (size_t i = 0; i < animations.clips.size(); ++i)
+		{
+			const AnimationClip& clip = animations.clips[i];
+			out +=
+				std::format("\n  clip [{}] '{}'\n", i, animations.stringPool.at(clip.nameOffset));
+			out += std::format(
+				"    length     {:.3g} s, {} frames at {:.4g} Hz{}\n",
+				clip.duration,
+				clip.frameCount,
+				clip.sampleRate,
+				clip.loop != 0 ? ", looping" : "");
+			out += std::format(
+				"    rootMotion {} ({:.4g} u/s)\n",
+				vec3(clip.rootMotion),
+				clip.locomotionSpeed);
+		}
 
 		return out;
 	}

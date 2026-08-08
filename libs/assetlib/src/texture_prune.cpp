@@ -3,6 +3,7 @@
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BEnv.h>
@@ -12,10 +13,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_MaterialExtension = ".bmaterial";
-		constexpr std::string_view c_SkyExtension      = ".bsky";
-		constexpr std::string_view c_LightingExtension = ".benvl";
-
 		struct LiveSet
 		{
 			std::unordered_set<std::string> maps;
@@ -94,7 +91,7 @@ namespace assetlib
 					}
 					++live.environments;
 				}
-				else if (extension == c_LightingExtension)
+				else if (extension == c_EnvLightingExtension)
 				{
 					try
 					{

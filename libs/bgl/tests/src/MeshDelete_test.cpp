@@ -55,7 +55,6 @@ namespace
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 
 		uint32_t totalVertices = 0;
 		for (const uint32_t count : meshletCounts) totalVertices += count * 3;

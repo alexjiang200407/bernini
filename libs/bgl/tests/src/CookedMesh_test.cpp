@@ -39,7 +39,6 @@ namespace
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 
 		const std::array<glm::vec3, 3> positions = { glm::vec3(-1.0f, -1.0f, 0.0f),
 			                                         glm::vec3(1.0f, -1.0f, 0.0f),
