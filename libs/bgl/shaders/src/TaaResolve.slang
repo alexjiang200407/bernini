@@ -17,6 +17,11 @@ struct TaaResolveData
     // first after a resize -- takes the scene colour whole.
     float blendWeight;
     float historyValid;
+
+    // Whether the unjittered camera matches last frame's. A pixel's own motion cannot stand in
+    // for this: empty pixels report zero velocity under any camera, and treating them as at rest
+    // during a pan banks the passing content's spread as variance.
+    float cameraStill;
 };
 
 ConstantBuffer<TaaResolveData> gTaaResolveData;
@@ -62,16 +67,21 @@ float3 YCoCgToRgb(float3 c)
 }
 
 // Weighting the blend by inverse luma stops one bright sample from dominating the average, and
-// undoing it afterwards keeps the result linear. The clamp keeps the inverse finite for a luma that
-// reaches 1 after the forward step.
+// undoing it afterwards keeps the result linear. Identity below a luma of 1: weighting each
+// operand by its own luma converges a bimodal signal below its true mean, which on stochastic
+// coverage is the strand fading with distance, so only genuine HDR outliers pay the compression.
+// The forward map takes a max channel of m to 2m / (1 + m) above the knee, so it stays below 2
+// and the inverse below stays finite.
 float3 ToneWeight(float3 c)
 {
-    return c / (1.0 + max(max(c.r, c.g), c.b));
+    float m = max(max(c.r, c.g), c.b);
+    return m <= 1.0 ? c : c * (2.0 / (1.0 + m));
 }
 
 float3 UnToneWeight(float3 c)
 {
-    return c / max(1e-4, 1.0 - max(max(c.r, c.g), c.b));
+    float n = max(max(c.r, c.g), c.b);
+    return n <= 1.0 ? c : c / max(1e-4, 2.0 - n);
 }
 
 // Catmull-Rom over the 4x4 around `uv`, folded to five bilinear fetches by pairing the two inner
@@ -171,13 +181,37 @@ float4 PSMain(VSOut input) : SV_Target
     // Branched, not folded into the blend weight below: the history texture is not cleared, so on the
     // first frame it holds whatever the allocation did, which may decode as NaN. `lerp(NaN, c, 1.0)`
     // is NaN -- the zero coefficient does not discard the operand -- and a NaN written into the
-    // accumulation stays there for the life of the target.
+    // accumulation stays there for the life of the target. Alpha starts the variance below at zero.
     if (!onScreen || gTaaResolveData.historyValid == 0.0)
     {
-        return current;
+        return float4(current.rgb, 0.0);
     }
 
     float3 history = SampleHistoryCatmullRom(historyUv, texel);
+
+    // A running average of the 3x3's own *spatial* luma variance, kept in the history's alpha --
+    // free because PostProcess writes the backbuffer opaque. Spatial, not temporal, so a ghost's
+    // wake earns no widening; see docs/taa.md. Bilinear, not Catmull-Rom: a negative lobe could go
+    // below zero.
+    float varPrev = gTaaResolveData.history.SampleLevel(gTaaResolveData.linearSampler, historyUv, 0.0).a;
+
+    // Motion empties the store: the sweep of passing content reads as spread, and a box opened on
+    // it the frame the camera stops re-admits exactly the wake the clamp exists to scrub. Motion
+    // is jitter-free, so rest measures zero up to fma residue -- the threshold admits that residue
+    // and no real motion, which is never a thousandth of a texel per frame.
+    float resting = (gTaaResolveData.cameraStill != 0.0 && tightness < 1e-3) ? 1.0 : 0.0;
+    float variance = lerp(varPrev, sigma.x * sigma.x, gTaaResolveData.blendWeight) * resting;
+
+    // On stochastic coverage a resting pixel's 3x3 sometimes shows no survivor, the box collapses
+    // onto the backdrop, and the accumulated mixture is wiped -- the remembered sigma is what
+    // still knows the mixture is real on those frames. Widen by its excess over this frame's
+    // spread only, at rest only: resting history reprojects onto itself and cannot ghost. The
+    // mechanism is docs/taa.md's.
+    const float c_ChromaWiden = 0.5;
+
+    float widen = max(0.0, sqrt(variance) - sigma.x);
+    boxMin -= float3(widen, c_ChromaWiden * widen, c_ChromaWiden * widen);
+    boxMax += float3(widen, c_ChromaWiden * widen, c_ChromaWiden * widen);
 
     // Clamped rather than rejected: a pixel whose history is merely stale still carries subpixel
     // detail worth keeping once it is pulled inside what this frame could have produced.
@@ -185,5 +219,5 @@ float4 PSMain(VSOut input) : SV_Target
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), gTaaResolveData.blendWeight));
 
-    return float4(resolved, current.a);
+    return float4(resolved, variance);
 }

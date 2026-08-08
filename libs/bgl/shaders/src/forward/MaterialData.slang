@@ -57,6 +57,11 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
     {
         return alphaCutoff;
     }
+
+    float2 GetBaseColorDimensions()
+    {
+        return baseColorTexture.GetDimensions();
+    }
 }
 
 // Selects one component of `v`. Indexing a vector with a runtime value (`v[c]`) makes DXC spill it
@@ -118,6 +123,13 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
     float GetAlphaCutoff()
     {
         return alphaCutoff;
+    }
+
+    // The alpha carrier's resolution: coverage machinery cares about the channel being tested,
+    // and the loose colour channels may come from other maps at other sizes.
+    float2 GetBaseColorDimensions()
+    {
+        return sources[3].texture.GetDimensions();
     }
 }
 
@@ -181,7 +193,13 @@ public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
 
     let baseColor = material.GetBaseColor(wrapSampler, input.uv);
 
-    if (baseColor.a < HashedAlphaThreshold(input.worldPos, materialData.alphaHashSeed))
+    // At minification the sampled alpha is many strands averaged, and coverage that honestly
+    // matches it is a haze the backdrop swallows; sharpening it back toward the cutoff's
+    // isocontour keeps distant strands the crisp features the alpha test would draw, and leaves
+    // magnified alpha -- where hashed earns its keep -- untouched.
+    float alpha = SharpenMinifiedAlpha(baseColor.a, material.GetAlphaCutoff(), input.uv, material.GetBaseColorDimensions());
+
+    if (alpha < HashedAlphaThreshold(input.worldPos, materialData.alphaHashSeed))
     {
         discard;
     }

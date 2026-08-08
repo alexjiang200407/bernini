@@ -17,6 +17,32 @@ float Hash3(float3 v)
 }
 
 /**
+ * Sharpens minified alpha toward the cutoff's isocontour, so distant coverage keeps its shape
+ * instead of its energy.
+ *
+ * Once a strand is sub-texel at the active mip, the sampled alpha is many strands averaged, and
+ * stochastic coverage that honestly reproduces that mean converges to a mixture the backdrop
+ * swallows -- the strand fades where an alpha test would still draw it, because the test's fixed
+ * cutoff turns the same smooth field into a crisp isocontour whose coverage the bake's mips
+ * preserve. Steepening alpha about the cutoff in proportion to the minification hands hashed
+ * coverage that same far-field behaviour while leaving magnification -- where soft self-occluding
+ * coverage is the point of hashed -- exactly alone.
+ *
+ * The minification is the smaller screen axis on purpose: a grazing card minifies along the view
+ * axis at any distance, anisotropic filtering resolves that axis, and sharpening on it would
+ * harden near hair.
+ */
+public float SharpenMinifiedAlpha(float alpha, float cutoff, float2 uv, float2 texDim)
+{
+    float2 dx = ddx(uv) * texDim;
+    float2 dy = ddy(uv) * texDim;
+
+    float texelsPerPixel = min(length(dx), length(dy));
+
+    return saturate((alpha - cutoff) * max(1.0, texelsPerPixel) + cutoff);
+}
+
+/**
  * A per-pixel alpha threshold in (0, 1], stable on the surface rather than on the screen.
  *
  * The hash is taken on the surface at a scale chosen so one hash cell covers about one pixel: a

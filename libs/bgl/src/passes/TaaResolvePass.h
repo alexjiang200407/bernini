@@ -44,6 +44,10 @@ namespace bgl
 			// False on the first frame and the first after a resize; the resolve then takes the
 			// scene colour whole rather than blending against an accumulation that does not exist.
 			bool historyValid = false;
+
+			// Whether the unjittered camera matches last frame's bitwise. Motion vectors cannot
+			// carry this for empty pixels, whose velocity is zero under any camera.
+			bool cameraStill = false;
 		};
 
 		TaaResolvePass() = default;

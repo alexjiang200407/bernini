@@ -146,6 +146,11 @@ namespace bgl
 		// The render target bound by the current BeginFrame (null outside a frame).
 		RenderTargetBase* m_ActiveTarget = nullptr;
 
+		// Whether this frame's Draw saw the same unjittered camera as the frame before. Consumed
+		// by the TAA resolve, which must not treat empty pixels -- whose motion vector is zero
+		// regardless of the camera -- as being at rest during a pan.
+		bool m_CameraStill = false;
+
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 

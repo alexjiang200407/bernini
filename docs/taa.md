@@ -72,9 +72,12 @@ the call instead of throwing.
   have come from, which is what ghosting looks like. History is *clamped* rather than rejected: a
   merely stale sample still carries sub-pixel detail worth keeping once pulled inside the box.
 
-* **The blend is weighted by inverse luma.** A single bright sample would otherwise dominate the
-  average and smear across frames. The weighting is undone afterwards, so what is stored stays
-  linear.
+* **The blend is weighted by inverse luma above a knee of 1, linearly below it.** A single bright
+  sample would otherwise dominate the average and smear across frames. But weighting each operand
+  by its own luma converges a bimodal signal below its true mean — a hashed strand's pixel
+  alternates bright and dark, and the biased average measured as a fifth of the strand's surviving
+  coverage on a distant card — so only genuine HDR outliers pay the compression. The weighting is
+  undone afterwards, so what is stored stays linear.
 
 * **Depth has an SRV now, and the resolve still does not read it.** Depth-based disocclusion
   rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
@@ -116,6 +119,24 @@ the call instead of throwing.
   at rest, short under motion — is the standard answer to wanting both, and measured no better than a
   constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
   clamp already bounds ghosting, so there is no second problem for the weight to solve.
+
+* **At rest the box is widened by remembered stochastic spread.** The min/max box has a second
+  blind spot on stochastic coverage, opposite the smear: on the frames where none of a sparse
+  strand's 3×3 wins its coin flip, the box collapses onto the backdrop and wipes the accumulated
+  mixture — a rebuild cycle that reads as flicker and converges far below the true coverage
+  (measured at 0.23 of an alpha-blended reference of the same texels). The history's alpha channel
+  carries a running average of the 3×3's own luma variance, and the box is widened by its excess
+  over the present frame's sigma: on a no-survivor frame that excess is the whole memory, and at a
+  standing contrast edge — where widening would shelter whatever a pan dragged past — it cancels
+  to zero. Spatial spread averaged over time rather than temporal deviation, because a ghost's
+  history deviates from the frame under it exactly as a real mixture does, but only real
+  stochastic coverage keeps producing spread *inside* single frames. The widening exists only at
+  true rest, gated on the pixel's motion being zero **and** the CPU comparing this frame's
+  unjittered view-projection bitwise against last frame's — a pixel's motion alone cannot gate it,
+  since empty pixels report zero velocity under any camera and would bank a passing edge's
+  contrast during a pan. Resting history reprojects onto itself and cannot ghost, so the widening
+  is free there: converged distant coverage 0.23 → 0.97–0.98 of the blend reference, resting
+  flicker 7× down, and the pan trail bit-identical to the unwidened resolve.
 
 ---
 
@@ -203,6 +224,22 @@ Two couplings worth knowing:
   The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
   does not move.
 
+* **Minified alpha is sharpened toward the cutoff's isocontour before the hash.** Once a strand is
+  sub-texel at the active mip, the sampled alpha is many strands averaged, and stochastic coverage
+  that honestly reproduces that mean converges to exactly what alpha-blending it would show — a
+  mixture the backdrop swallows. The strands *vanish* at distance not because coverage is lost
+  (the resolve above now conserves it to a few percent) but because energy-true rendering of a
+  sub-pixel feature **is** its disappearance; the alpha test keeps distant strands visible
+  precisely by being energy-false, drawing the smooth field's cutoff isocontour crisp. So
+  `ShadeHashedAlpha` steepens alpha about the material's cutoff in proportion to the base colour's
+  minification (`SharpenMinifiedAlpha`): magnified alpha — where soft self-occluding coverage is
+  the point of hashed — is untouched, and far alpha approaches the test's step, whose coverage the
+  bake's mips preserve. The minification is the *smaller* screen axis, since a grazing card
+  minifies along the view axis at any distance and anisotropic filtering resolves that axis. The
+  coverage ladder reads 0.74 near/mid and 1.05 far of the blend reference under it — the mid-band
+  energy traded for far-field crispness — and resting flicker drops another 5×, since sharpened
+  alpha leaves few partial values to flip coins with.
+
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
   from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the trail left
@@ -221,6 +258,12 @@ Two couplings worth knowing:
   accumulation stays for the life of the target. This was live for a while and invisible: the
   neighbourhood clamp happens to launder NaN, since IEEE `min`/`max` return the non-NaN operand.
   Deleting the clamp turned every resolved frame black, which is how it surfaced.
+
+* **The history's alpha is the variance store, not scene alpha.** The resolve writes the running
+  spatial-variance average there and reads it back next frame; nothing downstream ever saw scene
+  alpha through it (`PostProcess` writes the backbuffer opaque). The no-history early return
+  writes it as zero — the store must start empty, and a scene alpha of 1 would decode as a huge
+  variance.
 
 * **The ping-pong is per target, not per frame counter.** `GetCurrentHistoryIndex()` is state the target
   owns and `AdvanceHistory()` flips at `EndFrame`. Deriving it from a context-wide frame counter

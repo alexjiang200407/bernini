@@ -243,7 +243,7 @@ namespace
 	// `alpha` is mip 0, one float per texel; the chain is box-filtered down from it in float so
 	// the rescale is not quantized away.
 	assetlib::ImageData
-	MippedAlphaTexture(std::vector<float> alpha, bool preserveCoverage)
+	MippedAlphaTexture(std::vector<float> alpha, bool preserveCoverage, bool binary = false)
 	{
 		auto image      = assetlib::ImageData();
 		image.width     = c_StrandTexSize;
@@ -304,6 +304,17 @@ namespace
 				}
 			}
 
+			// A hard-painted mask stays 0-or-1 down its whole rescaled chain (angelica's measures
+			// binary at every level); the bisection above instead parks soft content exactly at the
+			// cutoff, a knife edge no real bake produces from such sources.
+			if (binary && mip > 0)
+			{
+				for (float& a : level)
+				{
+					a = a >= 0.5f ? 1.0f : 0.0f;
+				}
+			}
+
 			for (uint32_t y = 0; y < dim; ++y)
 			{
 				for (uint32_t x = 0; x < dim; ++x)
@@ -346,11 +357,29 @@ namespace
 		return image;
 	}
 
+	// Mean alpha of one mip level, read off the image the scene will upload. Under stochastic
+	// coverage this is the fraction of a fully lit patch the ensemble should converge to once the
+	// footprint sits at that level -- whatever the coverage rescale did to it included.
+	float
+	MeanMipAlpha(const assetlib::ImageData& image, uint32_t mip)
+	{
+		const uint32_t dim    = std::max(1u, image.width >> mip);
+		const size_t   offset = image.subresources[mip].offset;
+
+		size_t sum = 0;
+		for (size_t t = 0; t < static_cast<size_t>(dim) * dim; ++t)
+		{
+			sum += static_cast<uint8_t>(image.pixels[offset + t * 4 + 3]);
+		}
+		return static_cast<float>(sum) /
+		       (255.0f * static_cast<float>(dim) * static_cast<float>(dim));
+	}
+
 	// Vertical strands two texels wide every 16, opaque on a transparent background -- a hair
 	// texture's flyaway region, reduced to what matters. The strand covers an eighth of its
 	// period, so plain box mips dilute its alpha by half per level once the strand is sub-texel.
 	assetlib::ImageData
-	MakeStrandTexture(bool preserveCoverage)
+	MakeStrandTexture(bool preserveCoverage, bool binary = false)
 	{
 		std::vector<float> alpha(static_cast<size_t>(c_StrandTexSize) * c_StrandTexSize);
 		for (uint32_t y = 0; y < c_StrandTexSize; ++y)
@@ -362,7 +391,7 @@ namespace
 			}
 		}
 
-		return MippedAlphaTexture(std::move(alpha), preserveCoverage);
+		return MippedAlphaTexture(std::move(alpha), preserveCoverage, binary);
 	}
 
 	// Alpha rising linearly from nothing at either side edge to opaque at the vertical midline --
@@ -401,7 +430,12 @@ namespace
 	constexpr float c_BackdropSize = 40.0f;
 
 	PatchScene
-	MakeCardScene(assetlib::ImageData texture, bool taaEnabled = true, bool withBackdrop = false)
+	MakeCardScene(
+		assetlib::ImageData texture,
+		bool                taaEnabled   = true,
+		bool                withBackdrop = false,
+		float               cameraZ      = 20.0f,
+		bgl::LayerType      layer        = bgl::LayerType::kHashed)
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -436,7 +470,7 @@ namespace
 		desc.baseColorFactor  = glm::vec4(1.0f);
 		desc.metallicFactor   = 0.0f;
 		desc.roughnessFactor  = 0.6f;
-		desc.layerType        = bgl::LayerType::kHashed;
+		desc.layerType        = layer;
 		desc.baseColorTexture = scene->AddTextureAsset(std::move(texture), "strands");
 
 		auto material = scene->CreatePbrMaterial(desc);
@@ -464,8 +498,8 @@ namespace
 		auto camera = bgl::Camera();
 		camera
 			.LookAt(
-				glm::vec3(0.0f, 0.0f, 20.0f),
-				glm::vec3(0.0f, 0.0f, 19.0f),
+				glm::vec3(0.0f, 0.0f, cameraZ),
+				glm::vec3(0.0f, 0.0f, cameraZ - 1.0f),
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(
 				glm::radians(60.0f),
@@ -939,9 +973,11 @@ TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hash
 	// background.
 	CHECK(plainMean.Luma() > 5e-3f);
 
-	// Measured 0.029 against 0.045 -- the preserved chain holds half again the footprint at a
-	// two-mip minification, and the gap widens with distance as the plain chain keeps halving.
-	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.3f);
+	// Measured 0.136 against 0.161. Under a resolve that no longer wipes sparse coverage the gap
+	// is just the chains' mean-alpha ratio at this minification (1.21 at mip 2.2) -- box mips
+	// already preserve a hashed material's expected coverage, and the old half-again gap was the
+	// wipe amplifying the difference nonlinearly.
+	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.1f);
 
 	// Neither chain may flicker beyond the converged-patch scale; this is where a regression in
 	// the accumulation on textured stochastic content would surface.
@@ -1136,4 +1172,145 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 
 	// The sampled alpha around mip 2 is a quarter and below; mip 0's is opaque.
 	CHECK(faded.Luma() < full.Luma() * 0.5f);
+}
+
+// The user-visible report this instruments: hashed hair thins out and boils as the camera backs
+// away, on Metal and D3D12 alike, while the mip probes above clear the texture chain. The ground
+// truth is the same card alpha-*blended*: the analytic composite of the very texels, mips and
+// lighting the stochastic path samples, so the converged hashed card should match it pixel for
+// pixel, and the display curve cancels out of the ratio. `survived` below 1 is coverage the
+// resolve destroyed; the frame-to-frame delta is the flicker where it is being rebuilt.
+TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][taa][render]")
+{
+	struct Rung
+	{
+		float       cameraZ;
+		const char* name;
+	};
+	constexpr std::array<Rung, 3> c_Rungs = { {
+		{ 10.0f, "near" },
+		{ 20.0f, "mid" },
+		{ 40.0f, "far" },
+	} };
+
+	const float tanHalfFov = std::tan(glm::radians(30.0f));
+
+	for (const auto& rung : c_Rungs)
+	{
+		INFO("distance " << rung.cameraZ);
+
+		const float spanPx =
+			c_StrandPlane / (2.0f * rung.cameraZ * tanHalfFov) * static_cast<float>(c_Height);
+		const int box   = static_cast<int>(spanPx * 0.6f);
+		const int boxXY = (static_cast<int>(c_Width) - box) / 2;
+
+		auto strandImage = MakeStrandTexture(true, true);
+
+		// The chain level the footprint asks for, and the coverage the chain holds there.
+		const float    mipF     = std::log2(static_cast<float>(c_StrandTexSize) / spanPx);
+		const uint32_t lo       = static_cast<uint32_t>(std::max(0.0f, std::floor(mipF)));
+		const uint32_t hi       = std::min(lo + 1, strandImage.mipLevels - 1);
+		const float    expected = std::lerp(
+			MeanMipAlpha(strandImage, lo),
+			MeanMipAlpha(strandImage, hi),
+			mipF - std::floor(mipF));
+
+		const auto base = std::string("assets/golden/strand_coverage_") + rung.name;
+
+		PatchScene hashed = MakeCardScene(std::move(strandImage), true, false, rung.cameraZ);
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			hashed.gfx->DrawFrame(hashed.target, hashed.job);
+		}
+		hashed.gfx->ScreenshotPng(hashed.target, base + ".got.png");
+		hashed.gfx->DrawFrame(hashed.target, hashed.job);
+		hashed.gfx->ScreenshotPng(hashed.target, base + "_next.got.png");
+
+		const float flicker = bgl::test::FrameDelta(
+			base + ".got.png",
+			base + "_next.got.png",
+			boxXY,
+			boxXY,
+			box,
+			box);
+		const bgl::test::Rgba strandMean =
+			bgl::test::MeanColor(base + ".got.png", boxXY, boxXY, box, box);
+
+		PatchScene blend = MakeCardScene(
+			MakeStrandTexture(true, true),
+			true,
+			false,
+			rung.cameraZ,
+			bgl::LayerType::kBlend);
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			blend.gfx->DrawFrame(blend.target, blend.job);
+		}
+		blend.gfx->ScreenshotPng(blend.target, base + "_blend.got.png");
+		const bgl::test::Rgba blendMean =
+			bgl::test::MeanColor(base + "_blend.got.png", boxXY, boxXY, box, box);
+
+		// The reference has to be lit, or the ratio below compares noise.
+		REQUIRE(blendMean.Luma() > 0.01f);
+
+		const float survived = strandMean.Luma() / blendMean.Luma();
+
+		// WARN rather than INFO so the figures print on a passing run too: the deficit and its
+		// trend with distance are what this instrument exists to show.
+		WARN(
+			rung.name << ": span " << spanPx << "px  mip " << mipF << "  chain mean alpha "
+					  << expected << "  blend luma " << blendMean.Luma() << "  survived "
+					  << survived << "  flicker " << flicker);
+
+		// 0.74 near and mid, 1.05 far, measured; the wiping resolve scored 0.23. Below 1 is the
+		// minification sharpening trading mid-band energy for far-field crispness -- values under
+		// the cutoff are crushed before the step limit re-conserves coverage -- and the bracket
+		// guards both directions: hair that vanishes and hair that doubles.
+		CHECK(survived > 0.6f);
+		CHECK(survived < 1.4f);
+
+		// 1.8e-5 to 4.4e-5 measured -- sharpened alpha leaves few partial values to flip coins
+		// with. The wiping resolve's rebuild cycle scored 7.5e-4 to 1.8e-3.
+		CHECK(flicker < 2e-4f);
+	}
+}
+
+// The perceptual half of the distance story, which the coverage ladder above cannot see: a mean
+// converged to the blend truth is still a haze the backdrop swallows, while the alpha test draws
+// the same content as crisp strokes whose coverage the bake preserves. Sharpening minified alpha
+// hands hashed that far-field look, and this pins it: adjacent-pixel contrast of the converged
+// far card must sit with the test's figure, not the blend's.
+TEST_CASE("Distant hashed strands stay visible features", "[hashedalpha][taa][render]")
+{
+	constexpr float c_FarZ = 40.0f;
+
+	const float tanHalfFov = std::tan(glm::radians(30.0f));
+	const float spanPx =
+		c_StrandPlane / (2.0f * c_FarZ * tanHalfFov) * static_cast<float>(c_Height);
+	const int box   = static_cast<int>(spanPx * 0.6f);
+	const int boxXY = (static_cast<int>(c_Width) - box) / 2;
+
+	const auto energyOf = [&](const char* name, bgl::LayerType layer) {
+		PatchScene card = MakeCardScene(MakeStrandTexture(true, true), true, false, c_FarZ, layer);
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			card.gfx->DrawFrame(card.target, card.job);
+		}
+		const auto path = std::string("assets/golden/strand_visibility_") + name + ".got.png";
+		card.gfx->ScreenshotPng(card.target, path);
+		return bgl::test::AliasEnergy(path, boxXY, boxXY, box, box);
+	};
+
+	const float hashed = energyOf("hashed", bgl::LayerType::kHashed);
+	const float mask   = energyOf("mask", bgl::LayerType::kMask);
+	const float blend  = energyOf("blend", bgl::LayerType::kBlend);
+
+	WARN(
+		"far strand contrast: hashed = " << hashed << "  mask = " << mask << "  blend = " << blend);
+
+	// The reference look has to have visible strands at all.
+	REQUIRE(mask > 1e-4f);
+
+	CHECK(hashed > blend);
+	CHECK(hashed > mask * 0.5f);
 }
