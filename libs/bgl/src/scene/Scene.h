@@ -146,6 +146,9 @@ namespace bgl
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials) override;
 
+		GeomHandle
+		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) override;
+
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
