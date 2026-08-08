@@ -18,6 +18,43 @@ namespace
 	constexpr uint32_t c_Width  = 256;
 	constexpr uint32_t c_Height = 256;
 
+	constexpr float c_HalfFov = 30.0f;
+
+	/**
+	 * The frame a scene is rendered into, and how much of the world it takes in.
+	 *
+	 * Every bound in this file and in docs/taa.md was measured at one resolution, so nothing here
+	 * could see an artifact that only appears at another -- which is what a 1080p display is next to
+	 * a 4K one. `fovScale` is what separates the two reasons a lower resolution changes the image:
+	 * at 1 the camera is unchanged and the content shrinks in pixels, which is the display; below 1
+	 * the field of view narrows with the frame, so the content keeps its pixel footprint and only
+	 * the frame is smaller, which leaves the resolve as the only thing that varied.
+	 */
+	struct Frame
+	{
+		uint32_t width    = c_Width;
+		uint32_t height   = c_Height;
+		float    fovScale = 1.0f;
+
+		[[nodiscard]] float
+		TanHalfFov() const noexcept
+		{
+			return std::tan(glm::radians(c_HalfFov)) * fovScale;
+		}
+
+		[[nodiscard]] float
+		VerticalFov() const noexcept
+		{
+			return 2.0f * std::atan(TanHalfFov());
+		}
+
+		[[nodiscard]] float
+		Aspect() const noexcept
+		{
+			return static_cast<float>(width) / static_cast<float>(height);
+		}
+	};
+
 	// A box well inside the plane's silhouette, so every pixel in it is a coverage decision rather
 	// than an edge.
 	constexpr int c_BoxX = 88;
@@ -435,7 +472,8 @@ namespace
 		bool                taaEnabled   = true,
 		bool                withBackdrop = false,
 		float               cameraZ      = 20.0f,
-		bgl::LayerType      layer        = bgl::LayerType::kHashed)
+		bgl::LayerType      layer        = bgl::LayerType::kHashed,
+		Frame               frame        = {})
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -446,8 +484,8 @@ namespace
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(c_Width);
-		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.width      = static_cast<int>(frame.width);
+		targetDesc.height     = static_cast<int>(frame.height);
 		targetDesc.headless   = true;
 		targetDesc.taaEnabled = taaEnabled;
 
@@ -501,18 +539,33 @@ namespace
 				glm::vec3(0.0f, 0.0f, cameraZ),
 				glm::vec3(0.0f, 0.0f, cameraZ - 1.0f),
 				glm::vec3(0.0f, 1.0f, 0.0f))
-			.Perspective(
-				glm::radians(60.0f),
-				static_cast<float>(c_Width) / static_cast<float>(c_Height),
-				0.5f,
-				500.0f);
+			.Perspective(frame.VerticalFov(), frame.Aspect(), 0.5f, 500.0f);
 
-		auto job     = bgl::RenderJob();
-		job.view     = view;
-		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		auto job   = bgl::RenderJob();
+		job.view   = view;
+		job.camera = camera;
+		job.viewport =
+			bgl::Viewport(static_cast<float>(frame.width), static_cast<float>(frame.height));
 
 		return PatchScene{ gfx, target, scene, view, job };
+	}
+
+	// The centred box covering 60% of the strand plane's on-screen span, whatever the frame does to
+	// that span. A fraction of the frame would drift off the plane as the field of view narrows.
+	struct StrandBox
+	{
+		int xy   = 0;
+		int size = 0;
+	};
+
+	StrandBox
+	StrandBoxFor(const Frame& frame, float cameraZ)
+	{
+		const float spanPx = c_StrandPlane / (2.0f * cameraZ * frame.TanHalfFov()) *
+		                     static_cast<float>(frame.height);
+
+		const int size = static_cast<int>(spanPx * 0.6f);
+		return StrandBox{ (static_cast<int>(frame.width) - size) / 2, size };
 	}
 
 	// Converges the strand scene, then captures two consecutive frames: the delta is flicker, and
@@ -1313,4 +1366,100 @@ TEST_CASE("Distant hashed strands stay visible features", "[hashedalpha][taa][re
 
 	CHECK(hashed > blend);
 	CHECK(hashed > mask * 0.5f);
+}
+
+namespace
+{
+	// What a distant hair card is at one resolution: how much it flickers, how much strand
+	// structure it still has, and how much of it reached the screen at all.
+	struct StrandMeasurement
+	{
+		float flicker = 0.0f;
+		float detail  = 0.0f;
+		float luma    = 0.0f;
+
+		// Reported because the box shrinks with the frame in the content-fixed sweep: the smallest
+		// rung's statistics rest on a few dozen pixels and should be read as such.
+		int boxSize = 0;
+	};
+
+	StrandMeasurement
+	MeasureStrands(const Frame& frame, const std::string& name)
+	{
+		constexpr float c_CameraZ = 20.0f;
+
+		PatchScene card = MakeCardScene(
+			MakeStrandTexture(true, true),
+			true,
+			false,
+			c_CameraZ,
+			bgl::LayerType::kHashed,
+			frame);
+
+		for (int i = 0; i < c_ConvergeFrames; ++i)
+		{
+			card.gfx->DrawFrame(card.target, card.job);
+		}
+
+		const auto pathA = "assets/golden/taa_res_" + name + "_a.got.png";
+		const auto pathB = "assets/golden/taa_res_" + name + "_b.got.png";
+
+		card.gfx->ScreenshotPng(card.target, pathA);
+		card.gfx->DrawFrame(card.target, card.job);
+		card.gfx->ScreenshotPng(card.target, pathB);
+
+		const StrandBox box = StrandBoxFor(frame, c_CameraZ);
+
+		// Below this the box is a handful of pixels and its statistics are noise, not a measurement.
+		REQUIRE(box.size >= 8);
+
+		return StrandMeasurement{
+			bgl::test::FrameDelta(pathA, pathB, box.xy, box.xy, box.size, box.size),
+			bgl::test::AliasEnergy(pathA, box.xy, box.xy, box.size, box.size),
+			bgl::test::MeanColor(pathA, box.xy, box.xy, box.size, box.size).Luma(),
+			box.size,
+		};
+	}
+
+	// 256 is the density every other bound in this file was measured at; the rest are its halvings,
+	// which is what the editor's render scale and a 1080p display do to a 4K viewport.
+	constexpr std::array<uint32_t, 3> c_SweepSizes = { 256, 128, 64 };
+}
+
+// The reproduction, as a number. A viewport rendered at half scale puts the same hair card on half
+// the pixels, and the report from a 1080p display is that it flickers where a 4K one does not --
+// which no bound above can see, because every one of them is measured at 256 alone.
+TEST_CASE(
+	"A hashed card is measured across render resolutions",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const uint32_t size : c_SweepSizes)
+	{
+		const Frame frame{ size, size, 1.0f };
+		const auto  m = MeasureStrands(frame, "content_" + std::to_string(size));
+
+		WARN(
+			"content-fixed " << size << "x" << size << ": flicker = " << m.flicker << "  detail = "
+							 << m.detail << "  luma = " << m.luma << "  box = " << m.boxSize);
+	}
+}
+
+// The control that says which half is at fault. The field of view narrows with the frame, so a
+// strand keeps the pixel footprint it had at 256 and only the frame is smaller: the coverage the
+// hash generates is unchanged, and the resolve is the sole thing that varied. Flat here with the
+// sweep above rising means the cause is the content going sub-pixel rather than the resolve.
+TEST_CASE(
+	"A hashed card is measured at a fixed footprint",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const uint32_t size : c_SweepSizes)
+	{
+		const Frame frame{ size, size, static_cast<float>(size) / static_cast<float>(c_Height) };
+		const auto  m = MeasureStrands(frame, "footprint_" + std::to_string(size));
+
+		WARN(
+			"footprint-fixed " << size << "x" << size << ": flicker = " << m.flicker
+							   << "  detail = " << m.detail << "  luma = " << m.luma
+							   << "  box = " << m.boxSize);
+	}
 }
