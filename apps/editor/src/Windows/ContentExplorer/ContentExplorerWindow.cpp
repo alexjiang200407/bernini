@@ -35,6 +35,7 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMesh.h>
@@ -94,9 +95,9 @@ namespace
 
 	/**
 	 * Reports that an import would land on an asset that is already there and refuses it -- import
-	 * never overwrites. `replaced` is what it would have written over: an existing `.bmesh`, texture
-	 * folder or material folder all count, each being destructive to import onto and none of it
-	 * recoverable. The user renames or removes the existing files and imports again.
+	 * never overwrites. `replaced` is whatever the import would have written over, each being
+	 * destructive to import onto and none of it recoverable. The user renames or removes the
+	 * existing files and imports again.
 	 *
 	 * @return true when something already exists, so the import must not proceed; false when nothing
 	 *         collides.
@@ -826,7 +827,7 @@ ContentExplorerWindow::WriteImportedRig(
 	const std::filesystem::path&      dataRoot,
 	const std::filesystem::path&      bskelPath,
 	const std::filesystem::path&      banimPath,
-	bool                              animations)
+	bool                              writeClips)
 {
 	if (imported.skeleton.bones.empty())
 		return;
@@ -835,7 +836,7 @@ ContentExplorerWindow::WriteImportedRig(
 	mesh.skeleton =
 		Rebase(QString::fromStdWString(bskelPath.wstring()), dataRoot, true).toStdString();
 
-	if (!animations || imported.animations.clips.empty())
+	if (!writeClips || imported.animations.clips.empty())
 		return;
 
 	// The clip set names the rig by the same path the mesh does, so all three agree on which file
@@ -888,10 +889,14 @@ ContentExplorerWindow::ImportMesh(
 	// The rig lands beside the mesh under the mesh's own name, the way `assetlib::bake` names it.
 	// Sampled unconditionally: whether the source turns out to carry a skin is not known until it is
 	// parsed, and by then a file that was already there cannot be told from one this import wrote.
+	//
+	// So a static import is refused over a rig it would never write, which is the deliberate
+	// direction: the alternative is parsing before asking, and refusing too often is recoverable
+	// where overwriting a rig is not.
 	fs::path bskelPath = bmeshPath;
-	bskelPath.replace_extension(".bskel");
+	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
 	fs::path banimPath = bmeshPath;
-	banimPath.replace_extension(".banim");
+	banimPath.replace_extension(assetlib::c_AnimationExtension);
 
 	const std::array<ImportedFile, 3> files = { {
 		{ bmeshPath, fs::exists(bmeshPath, ec) },

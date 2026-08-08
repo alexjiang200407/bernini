@@ -114,7 +114,7 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*animations*/ false);
+		/*writeClips*/ false);
 
 	REQUIRE(fs::exists(root.Bskel()));
 
@@ -127,10 +127,7 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 	CHECK(restored.stringPool.at(restored.bones[1].nameOffset) == "spine");
 	CHECK(restored.bones[1].parent == 0);
 
-	SECTION("and the clips are declined unless asked for")
-	{
-		CHECK_FALSE(fs::exists(root.Banim()));
-	}
+	CHECK_FALSE(fs::exists(root.Banim()));
 }
 
 TEST_CASE("The clips are written only when the import asked for them", "[importedrig]")
@@ -145,7 +142,7 @@ TEST_CASE("The clips are written only when the import asked for them", "[importe
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*animations*/ true);
+		/*writeClips*/ true);
 
 	REQUIRE(fs::exists(root.Banim()));
 
@@ -170,7 +167,7 @@ TEST_CASE("A static import writes no rig at all", "[importedrig]")
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*animations*/ true);
+		/*writeClips*/ true);
 
 	CHECK(mesh.skeleton.empty());
 	CHECK_FALSE(fs::exists(root.Bskel()));
@@ -197,7 +194,7 @@ TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it"
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*animations*/ true);
+		/*writeClips*/ true);
 
 	REQUIRE(fs::exists(root.Bskel()));
 	REQUIRE(fs::exists(root.Banim()));
@@ -213,4 +210,37 @@ TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it"
 	CHECK_FALSE(fs::exists(root.Bskel()));
 	CHECK_FALSE(fs::exists(root.Banim()));
 	CHECK(fs::exists(kept));
+}
+
+// The rule the whole change exists to satisfy, asserted end to end rather than implied: a mesh
+// carrying joint indices is one `save` refuses until something names its skeleton.
+TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig]")
+{
+	const TempRoot root;
+	const auto     imported  = SkinnedImport();
+	const fs::path bmeshPath = root.Data() / "Meshes" / "unit.bmesh";
+
+	assetlib::BMesh mesh;
+	mesh.meshes.push_back(assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+	assetlib::Submesh submesh{};
+	submesh.indexType                     = assetlib::IndexType::kUint16;
+	submesh.layout.attributeCount         = 1;
+	submesh.layout.attributes[0].semantic = assetlib::VertexSemantic::kJoints0;
+	submesh.layout.attributes[0].format   = assetlib::VertexFormat::kUint16x4;
+	mesh.submeshes.push_back(submesh);
+
+	REQUIRE(assetlib::isSkinned(mesh));
+	REQUIRE_THROWS(assetlib::save(mesh, bmeshPath));
+
+	ContentExplorerWindow::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*writeClips*/ true);
+
+	REQUIRE_NOTHROW(assetlib::save(mesh, bmeshPath));
+	CHECK(assetlib::load(bmeshPath).skeleton == "Meshes/unit.bskel");
 }

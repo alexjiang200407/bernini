@@ -109,7 +109,7 @@ public:
 		const std::filesystem::path&      dataRoot,
 		const std::filesystem::path&      bskelPath,
 		const std::filesystem::path&      banimPath,
-		bool                              animations);
+		bool                              writeClips);
 
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile
