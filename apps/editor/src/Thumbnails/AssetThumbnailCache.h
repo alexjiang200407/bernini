@@ -3,6 +3,7 @@
 #include <QQueue>
 #include <QThreadPool>
 
+#include "Render/Renderer.h"
 #include "Thumbnails/StampedPixmapCache.h"
 
 #include <bgl/GeomHandle.h>
@@ -11,10 +12,11 @@
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <bgl/PreparedStaticMesh.h>
+#include <bgl/RenderJob.h>
 #include <gamelib/AssetManager.h>
 
-class QTimer;
-class Renderer;
+class QImage;
 
 struct AssetThumbnailDesc
 {
@@ -38,10 +40,11 @@ struct AssetThumbnailDesc
  * The twin of TexturePreviewCache, and deliberately the same shape (Lookup / Request / a ready
  * signal, with an mtime stamp deciding staleness), but it cannot render on a worker: bgl has no
  * internal synchronization, so BeginFrame/Draw/EndFrame/Capture are render-thread-only. Only the
- * `.bmesh` read and texture decode run on the pool; the render is drained from the UI thread one
- * asset per event-loop turn, which keeps a folder from freezing the editor while it populates. The
- * readback is split-phase -- submitted on one turn, resolved on a later one -- so no turn blocks
- * the render thread on the GPU.
+ * `.bmesh` read and texture decode run on the pool; the GPU half advances as a state machine
+ * inside the renderer's frame loop -- one supersampled frame per asset, downscaled on resolve --
+ * so a shot is a bounded slice of a tick and the GUI thread never waits on the render thread. The
+ * readback is split-phase -- submitted on one tick, resolved on a later one -- and the finished
+ * image comes back to the GUI thread as a queued call.
  *
  * Geometry is added to the shared scene and torn down again after each shot, so a thumbnail leaves
  * nothing behind for the Level Editor's view to draw.
@@ -66,8 +69,8 @@ public:
 	 * manager keys textures by path -- a capped upload registered there would be served to a
 	 * viewport asking for the same texture at full resolution. It must outlive this cache.
 	 *
-	 * Drops everything already rendered, and everything queued: both were made against the manager
-	 * being replaced.
+	 * Drops everything already rendered, and everything queued or mid-render: all of it was made
+	 * against the manager being replaced.
 	 */
 	void
 	SetAssets(game::AssetManager* assets);
@@ -102,17 +105,34 @@ private:
 		kMaterial,
 	};
 
-	// What a worker produced, waiting its turn on the GPU. `mesh` is null for a material; `prefetch`
-	// holds the decoded textures whatever the kind, and only their upload is left to do.
+	// The worker's CookStaticMesh output for every mesh the nodes reference, keyed by mesh index.
+	// The CPU half of AddStaticMesh, taken off the render thread; the commit consumes the entries.
+	using CookedMeshes = std::unordered_map<uint32_t, bgl::PreparedStaticMesh>;
+
+	// What a worker produced, waiting its turn on the GPU. `mesh` and `cooked` are null for a
+	// material; `prefetch` holds the decoded textures whatever the kind. Only uploads are left.
 	//
-	// Both are shared_ptr because the queue must stay copyable and an ImageData is move-only.
+	// All shared_ptr because the queue must stay copyable and the payloads are not.
 	struct PendingRender
 	{
 		QString                                path;
 		ThumbnailType                          type = ThumbnailType::kMesh;
 		std::shared_ptr<assetlib::BMesh>       mesh;
+		std::shared_ptr<CookedMeshes>          cooked;
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;
+	};
+
+	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a
+	// later one. Render thread only -- installed by PumpQueue's Post, cleared by the tick that
+	// finishes it or by CancelShot's closure.
+	struct Shot
+	{
+		PendingRender      item;
+		uint64_t           epoch = 0;
+		bool               built = false;
+		bgl::RenderJob     job;
+		bgl::CaptureTicket ticket;
 	};
 
 	// Hands a finished read back. Called by a worker via a queued invocation, so it always runs on the
@@ -120,29 +140,62 @@ private:
 	void
 	Enqueue(const QString& path, ThumbnailType type, PendingRender pending);
 
-	// One step of the pipeline per call, so the event loop keeps turning: finish the in-flight
-	// capture if its GPU copy has landed, then render and submit the next queued asset.
+	// Starts the next queued asset if none is mid-render; at the end of a batch, returns the shared
+	// materials and leaves the frame loop.
 	void
-	RenderNextQueued();
+	PumpQueue();
 
-	// Abandons the in-flight capture, if any. For teardown and project switches, where its image
-	// would land under a stale key.
+	// A finished shot arriving back on the UI thread. `image` is null when the render failed; a stale
+	// `epoch` means the shot was cancelled after it completed, and its claim is already gone.
 	void
-	DiscardPendingCapture();
+	OnShotDone(const QString& path, qint64 stamp, uint64_t epoch, const QImage& image);
+
+	// One frame-loop tick of the in-flight shot: build, draw and submit it, or resolve its readback
+	// -- whichever it is up to. Catches everything: a throw here would make the frame loop drop the
+	// hook, stranding the claim.
+	void
+	Advance();
+
+	// Puts the shot's asset in the scene and frames the camera on it. Throws if there is nothing to
+	// draw; Advance abandons the shot.
+	void
+	BuildShot(Shot& shot);
 
 	// Puts the mesh in the scene at each node that references it, wearing the materials it names.
-	[[nodiscard]] bgl::CaptureTicket
-	RenderMesh(const PendingRender& pending);
+	void
+	BuildMesh(Shot& shot);
 
 	// Puts a sphere in the scene wearing the material the request named.
-	[[nodiscard]] bgl::CaptureTicket
-	RenderMaterial(const PendingRender& pending);
+	void
+	BuildMaterial(Shot& shot);
 
-	// Frames [center, radius], draws, and submits the readback of the result -- resolved on a
-	// later drain turn, so neither this thread nor the worker waits on the GPU. `hashed` runs
-	// temporal AA over a convergence burst of frames; anything else captures a single frame.
-	[[nodiscard]] bgl::CaptureTicket
-	Shoot(const glm::vec3& center, float radius, bool hashed);
+	// Frames [center, radius] in the shot's camera and viewport.
+	void
+	FrameShot(Shot& shot, const glm::vec3& center, float radius);
+
+	// Posts the shot's outcome back to the UI thread. The shot is dead afterwards.
+	void
+	FinishShot(const Shot& shot, QImage image);
+
+	// The success path: hands the captured frame to a pool worker to convert and box-filter down to
+	// the tile size, which then posts the outcome to the UI thread. The shot is dead afterwards.
+	void
+	FinishShotOnPool(const Shot& shot, assetlib::ImageData image);
+
+	// A shot's failure path: hands back whatever it held and reports it as a null image.
+	void
+	AbortShot(const Shot& shot);
+
+	// Abandons the in-flight shot, if any, and invalidates any completion already posted. For
+	// teardown and project switches, where its image would land under a stale key.
+	void
+	CancelShot();
+
+	void
+	AttachToFrameLoop();
+
+	void
+	DetachFromFrameLoop();
 
 	// The scene material the `.bmaterial` at `relPath` describes, or the neutral default if it cannot
 	// be resolved, uploading its textures from `prefetch` rather than re-reading them.
@@ -174,19 +227,27 @@ private:
 	[[nodiscard]] std::string
 	ToRelative(const QString& path) const;
 
-	// The one capture whose GPU copy is still in flight, and the cache entry it will become.
-	struct PendingCapture
-	{
-		bgl::CaptureTicket ticket;
-		QString            path;
-		qint64             stamp = 0;
-	};
-
-	std::optional<PendingCapture> m_PendingCapture;
-
 	QQueue<PendingRender> m_Queue;
 	QThreadPool           m_Pool;
-	QTimer*               m_DrainTimer = nullptr;
+
+	// The downscale's own worker: both of m_Pool's threads can be deep in KTX2 decodes, and a
+	// finished capture waiting on them would stall the whole GPU pipeline behind the reads it was
+	// split from. A member, not the global pool, so teardown drains it before the object dies.
+	QThreadPool m_ScalePool;
+
+	// Render thread only; see Shot.
+	std::optional<Shot> m_Shot;
+
+	// A shot has been handed to the render thread and its completion has not come back yet.
+	bool m_ShotInFlight = false;
+
+	// Stale-completion guard: bumped by CancelShot, so a completion posted before the cancel ran is
+	// recognized and dropped rather than stored under a dead claim.
+	uint64_t m_Epoch = 0;
+
+	// The frame-loop registration that drives Advance, held only while a batch renders. 0 when
+	// detached.
+	Renderer::ViewportId m_FrameLoopId = 0;
 
 	AssetThumbnailDesc   m_Desc;
 	bgl::RenderTargetRef m_RenderTarget;

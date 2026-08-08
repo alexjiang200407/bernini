@@ -110,7 +110,7 @@ MainWindow::Build()
 
 		// Per viewport, not graphics-wide: it sizes what this window's render target allocates, the
 		// way initialInstances above sizes its instance buffer. The thumbnail cache is not offered
-		// it -- it decides per asset, paying a TAA warmup burst only for hashed alpha.
+		// it -- it renders single frames, loading hashed alpha as the blend it converges to.
 		levelDesc.taaEnabled = settings["levelEditor"]["temporalAA"].GetOrDefault(true);
 
 		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));

@@ -1,7 +1,6 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 
 #include "Mesh/BMeshUtil.h"
-#include "Render/Renderer.h"
 #include "Render/environment.h"
 
 #include <QDateTime>
@@ -9,7 +8,6 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QRunnable>
-#include <QTimer>
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
@@ -18,26 +16,24 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
-#include <bgl/LayerType.h>
-#include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 
 namespace
 {
-	// The capture reads the backbuffer the last DrawFrame presented, and that frame's Scene::Update
-	// uploads this asset on its own list -- so one drawn frame is enough. Zero captures a blank
-	// backbuffer; the thumbnail goldens catch a too-low count.
-	constexpr int c_WarmupFrames = 1;
+	// The render target is this many times the output edge, and the capture is box-filtered back
+	// down: silhouette antialiasing for a renderer that gets one frame and no accumulation. Any
+	// higher and the readback's conversion becomes a frame-loop stall of its own. Hashed alpha
+	// needs more averaging than this buys, so it is not resolved here at all -- the private manager
+	// loads it as the blend it converges to (AssetManagerOptions::hashedAsBlend).
+	constexpr uint32_t c_Supersample = 2;
 
-	// Three times the TAA resolve's time constant, which is what a hashed material needs before it
-	// is a picture rather than a noise pattern. Measured on the patch grain: 0.000685 at 40 frames,
-	// 0.000676 at 60, 0.000675 at 100 -- so this is where it stops paying. Only a hashed asset pays
-	// it; the render thread is blocked for the whole burst. See docs/taa.md.
-	constexpr int c_HashedWarmupFrames = 60;
+	// A tick that overruns this gets logged with what it did: a slow build points at an asset's
+	// upload, slow draws at the GPU.
+	constexpr double c_SlowTickMs = 8.0;
 
 	// Textures decode to the stored mip tail covering twice the output edge: the sphere and the
-	// three-quarter mesh view never sample denser than that at 256px, and the skipped levels of a
-	// 4K chain are what used to make one thumbnail a multi-megabyte upload burst.
+	// three-quarter mesh view carry no more detail than that at 256px, and the supersampled render
+	// only magnifies the top level it kept.
 	constexpr uint32_t c_TextureSupersample = 2;
 
 	// A three-quarter view reads better than a straight-on one: it shows a silhouette and some depth.
@@ -97,18 +93,24 @@ namespace
 		}
 	}
 
+	using CookedMeshes = std::unordered_map<uint32_t, bgl::PreparedStaticMesh>;
+
 	/**
-	 * Reads an asset and decodes the textures it needs -- everything about a thumbnail that does not
-	 * touch the GPU, which is everything expensive except the draw itself.
+	 * Reads an asset, decodes the textures it needs and cooks its geometry -- everything about a
+	 * thumbnail that does not touch the GPU, which is everything expensive except the uploads and
+	 * the draw itself.
 	 *
-	 * A KTX2 decode transcodes a whole Basis mip chain, and is the single costliest step; the upload
-	 * that follows is the only part that has to be on the render thread. So the split is here.
+	 * The KTX2 decode transcodes a whole Basis mip chain and CookStaticMesh flattens the meshlet
+	 * streams; both are pure CPU, and both dwarf the uploads that must be on the render thread. So
+	 * the split is here.
 	 */
 	class LoadTask : public QRunnable
 	{
 	public:
-		using Sink = std::function<
-			void(std::shared_ptr<assetlib::BMesh>, std::shared_ptr<game::TexturePrefetch>)>;
+		using Sink = std::function<void(
+			std::shared_ptr<assetlib::BMesh>,
+			std::shared_ptr<CookedMeshes>,
+			std::shared_ptr<game::TexturePrefetch>)>;
 
 		LoadTask(
 			QString               path,
@@ -127,6 +129,7 @@ namespace
 		run() override
 		{
 			std::shared_ptr<assetlib::BMesh>       mesh;
+			std::shared_ptr<CookedMeshes>          cooked;
 			std::shared_ptr<game::TexturePrefetch> prefetch;
 
 			try
@@ -145,6 +148,16 @@ namespace
 					if (mesh->meshes.empty())
 						throw std::runtime_error("mesh contains no meshes");
 
+					cooked = std::make_shared<CookedMeshes>();
+					for (const assetlib::Node& node : mesh->nodes)
+					{
+						if (node.mesh == assetlib::c_InvalidIndex ||
+						    node.mesh >= mesh->meshes.size() || cooked->contains(node.mesh))
+							continue;
+
+						cooked->emplace(node.mesh, bgl::CookStaticMesh(*mesh, node.mesh));
+					}
+
 					// Without a data root the mesh's materials cannot be resolved at all, and every
 					// submesh falls back to the neutral default -- so there is nothing to decode.
 					if (!m_DataRoot.empty())
@@ -158,10 +171,11 @@ namespace
 			{
 				qWarning("AssetThumbnail: cannot read '%s': %s", qPrintable(m_Path), e.what());
 				mesh.reset();
+				cooked.reset();
 				prefetch.reset();
 			}
 
-			m_Sink(std::move(mesh), std::move(prefetch));
+			m_Sink(std::move(mesh), std::move(cooked), std::move(prefetch));
 		}
 
 	private:
@@ -181,6 +195,9 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 	// queueing up more decoded meshes than the GPU drain can retire.
 	m_Pool.setMaxThreadCount(2);
 
+	// At most one capture is ever awaiting its downscale; see PumpQueue.
+	m_ScalePool.setMaxThreadCount(1);
+
 	// No device (the editor runs without one in tests): stay inert. Lookup then always misses and
 	// Request is a no-op, so callers need no special case.
 	if (m_Desc.renderer == nullptr)
@@ -189,11 +206,10 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 	m_Desc.renderer->Invoke([&] {
 		try
 		{
-			auto rtDesc       = bgl::RenderTargetDesc();
-			rtDesc.width      = static_cast<int>(m_Desc.dimension);
-			rtDesc.height     = static_cast<int>(m_Desc.dimension);
-			rtDesc.headless   = true;
-			rtDesc.taaEnabled = true;
+			auto rtDesc     = bgl::RenderTargetDesc();
+			rtDesc.width    = static_cast<int>(m_Desc.dimension * c_Supersample);
+			rtDesc.height   = static_cast<int>(m_Desc.dimension * c_Supersample);
+			rtDesc.headless = true;
 
 			m_RenderTarget = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtDesc);
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
@@ -227,19 +243,11 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 		      .metallicFactor  = 0.0f,
 		      .roughnessFactor = 1.0f });
 	});
-
-	// Target creation may have failed inside the closure and left the cache inert.
-	if (!IsReady())
-		return;
-
-	m_DrainTimer = new QTimer(this);
-	m_DrainTimer->setInterval(0);
-	connect(m_DrainTimer, &QTimer::timeout, this, &AssetThumbnailCache::RenderNextQueued);
 }
 
 AssetThumbnailCache::~AssetThumbnailCache()
 {
-	DiscardPendingCapture();
+	CancelShot();
 	ReleaseGeometry();
 	ReleaseMaterials();
 
@@ -276,7 +284,7 @@ AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 		return;
 
 	// Hand the old project's assets back through the manager that acquired them, before it goes.
-	DiscardPendingCapture();
+	CancelShot();
 	ReleaseGeometry();
 	ReleaseMaterials();
 
@@ -289,7 +297,8 @@ AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 			if (m_Assets != nullptr)
 				m_ThumbAssets = std::make_unique<game::AssetManager>(
 					m_Desc.renderer->GetScene(),
-					m_Assets->DataRoot());
+					m_Assets->DataRoot(),
+					game::AssetManagerOptions{ .hashedAsBlend = true });
 		});
 	}
 
@@ -350,6 +359,7 @@ AssetThumbnailCache::Request(const QString& path)
 
 	auto sink = [this, path, material, stamp](
 					std::shared_ptr<assetlib::BMesh>       mesh,
+					std::shared_ptr<CookedMeshes>          cooked,
 					std::shared_ptr<game::TexturePrefetch> prefetch) {
 		QMetaObject::invokeMethod(
 			this,
@@ -357,12 +367,14 @@ AssetThumbnailCache::Request(const QString& path)
 		     path,
 		     material,
 		     mesh     = std::move(mesh),
+		     cooked   = std::move(cooked),
 		     prefetch = std::move(prefetch),
 		     stamp]() mutable {
 				auto pending     = PendingRender();
 				pending.path     = path;
 				pending.type     = material ? ThumbnailType::kMaterial : ThumbnailType::kMesh;
 				pending.mesh     = std::move(mesh);
+				pending.cooked   = std::move(cooked);
 				pending.prefetch = std::move(prefetch);
 				pending.stamp    = stamp;
 
@@ -383,122 +395,242 @@ AssetThumbnailCache::Request(const QString& path)
 void
 AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRender pending)
 {
-	// The worker failed: no prefetch, and for a mesh no mesh either.
-	if (pending.prefetch == nullptr || (type == ThumbnailType::kMesh && pending.mesh == nullptr))
+	// The claim can be gone by the time the read lands: a project switch cleared it, and this asset
+	// was read against the project that closed.
+	if (!IsClaimed(path))
+		return;
+
+	// The worker failed: no prefetch, and for a mesh no mesh or cook either.
+	if (pending.prefetch == nullptr ||
+	    (type == ThumbnailType::kMesh && (pending.mesh == nullptr || pending.cooked == nullptr)))
 	{
 		Abandon(path);
 		return;
 	}
 
 	m_Queue.enqueue(std::move(pending));
-
-	if (!m_DrainTimer->isActive())
-		m_DrainTimer->start();
+	PumpQueue();
 }
 
 void
-AssetThumbnailCache::RenderNextQueued()
+AssetThumbnailCache::PumpQueue()
 {
-	if (m_PendingCapture.has_value())
-	{
-		auto image = std::optional<assetlib::ImageData>();
-		try
-		{
-			image = m_Desc.renderer->Invoke([&] {
-				return m_Desc.renderer->GetGraphics()->TryResolveCapture(m_PendingCapture->ticket);
-			});
-		}
-		catch (const std::exception& e)
-		{
-			qWarning(
-				"AssetThumbnail: cannot resolve '%s': %s",
-				qPrintable(m_PendingCapture->path),
-				e.what());
-			Abandon(m_PendingCapture->path);
-			m_PendingCapture.reset();
-		}
-
-		if (m_PendingCapture.has_value())
-		{
-			if (!image.has_value())
-				return;  // The GPU copy is still in flight; poll again next turn.
-
-			Store(
-				m_PendingCapture->path,
-				QPixmap::fromImage(ToImage(*image)),
-				m_PendingCapture->stamp);
-			m_PendingCapture.reset();
-		}
-	}
+	if (m_ShotInFlight)
+		return;
 
 	if (m_Queue.isEmpty())
 	{
-		// The batch is over, so the materials it shared can go back.
+		// The batch is over, so the materials it shared can go back, and the frame loop no longer
+		// needs to tick for us.
 		ReleaseMaterials();
-		m_DrainTimer->stop();
+		DetachFromFrameLoop();
 		return;
 	}
 
-	// The claim ends when the capture resolves into a cache entry, several turns from now -- not
-	// here. A repaint in between misses on Lookup, and would otherwise restart the read and render.
-	const PendingRender pending = m_Queue.dequeue();
+	// The claim ends when the shot's completion lands in OnShotDone, many frame-loop ticks from
+	// now -- not here. A repaint in between misses on Lookup, and would otherwise restart the read
+	// and render.
+	m_ShotInFlight = true;
+	AttachToFrameLoop();
 
-	auto ticket = bgl::CaptureTicket();
+	m_Desc.renderer->Post([this, pending = m_Queue.dequeue(), epoch = m_Epoch]() mutable {
+		m_Shot.emplace();
+		m_Shot->item  = std::move(pending);
+		m_Shot->epoch = epoch;
+	});
+}
+
+void
+AssetThumbnailCache::OnShotDone(
+	const QString& path,
+	qint64         stamp,
+	uint64_t       epoch,
+	const QImage&  image)
+{
+	// Cancelled after it completed: the claim is gone and the image was rendered against whatever
+	// the cancel replaced.
+	if (epoch != m_Epoch)
+		return;
+
+	if (image.isNull())
+		Abandon(path);
+	else
+		Store(path, QPixmap::fromImage(image), stamp);
+
+	m_ShotInFlight = false;
+	PumpQueue();
+}
+
+void
+AssetThumbnailCache::Advance()
+{
+	if (!m_Shot.has_value())
+		return;
+
+	using Clock = std::chrono::steady_clock;
+
+	const auto tickStart = Clock::now();
+	double     buildMs   = 0.0;
+	double     drawMs    = 0.0;
+	bool       submitted = false;
+
+	const auto msSince = [](Clock::time_point start) {
+		return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+	};
+
+	const auto logIfSlow = [&](const QString& path) {
+		const double ms = msSince(tickStart);
+		if (ms > c_SlowTickMs)
+			qWarning(
+				"AssetThumbnail: %.1f ms tick on '%s' (build %.1f, draw %.1f, submitted %d)",
+				ms,
+				qPrintable(path),
+				buildMs,
+				drawMs,
+				submitted);
+	};
+
+	Shot& shot = *m_Shot;
 	try
 	{
-		ticket = m_Desc.renderer->Invoke([&] {
-			auto t = bgl::CaptureTicket();
-			try
-			{
-				t = pending.type == ThumbnailType::kMesh ? RenderMesh(pending) :
-				                                           RenderMaterial(pending);
-			}
-			catch (const std::exception& e)
-			{
-				qWarning(
-					"AssetThumbnail: cannot render '%s': %s",
-					qPrintable(pending.path),
-					e.what());
-			}
+		if (!shot.built)
+		{
+			const auto buildStart = Clock::now();
+			BuildShot(shot);
+			buildMs = msSince(buildStart);
+
+			// One frame: the capture reads the backbuffer the last DrawFrame presented, and that
+			// frame's Scene::Update uploads this asset on its own list. Zero would capture a blank
+			// backbuffer; the thumbnail goldens catch it.
+			const auto drawStart = Clock::now();
+			m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, shot.job);
+			drawMs = msSince(drawStart);
+
+			shot.ticket = m_Desc.renderer->GetGraphics()->SubmitCapture(m_RenderTarget);
+			shot.built  = true;
+			submitted   = true;
 
 			// Safe with the capture in flight: it copies the presented backbuffer, and the scene's
 			// deletes are fence-deferred behind it.
 			ReleaseGeometry();
-			return t;
-		});
+			logIfSlow(shot.item.path);
+			return;
+		}
+
+		auto image = m_Desc.renderer->GetGraphics()->TryResolveCapture(shot.ticket);
+		if (!image.has_value())
+			return;  // The GPU copy is still in flight; try again next tick.
+
+		const QString path = shot.item.path;
+		FinishShotOnPool(shot, std::move(*image));
+		logIfSlow(path);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("AssetThumbnail: cannot render '%s': %s", qPrintable(shot.item.path), e.what());
+		AbortShot(shot);
 	}
 	catch (...)
 	{
-		// Invoke carries anything the closure's own handler did not back to here, and this runs from
-		// a timer slot -- so it stops here, having first released the claim it would otherwise strand.
-		qWarning(
-			"AssetThumbnail: rendering '%s' threw off the render thread",
-			qPrintable(pending.path));
-		Abandon(pending.path);
-		return;
+		qWarning("AssetThumbnail: cannot render '%s'", qPrintable(shot.item.path));
+		AbortShot(shot);
 	}
 
-	if (ticket.IsValid())
-	{
-		m_PendingCapture = PendingCapture{ ticket, pending.path, pending.stamp };
-		return;
-	}
-
-	// The render threw, so nothing will resolve into a cache entry and end the claim.
-	Abandon(pending.path);
+	m_Shot.reset();
 }
 
 void
-AssetThumbnailCache::DiscardPendingCapture()
+AssetThumbnailCache::AbortShot(const Shot& shot)
 {
-	if (!m_PendingCapture.has_value())
+	// A no-op unless the failure left the readback in flight: resolve frees the slot on its own
+	// throw path, and a shot that never submitted has no ticket.
+	m_Desc.renderer->GetGraphics()->DiscardCapture(shot.ticket);
+	ReleaseGeometry();
+	FinishShot(shot, QImage());
+}
+
+void
+AssetThumbnailCache::FinishShotOnPool(const Shot& shot, assetlib::ImageData image)
+{
+	// The capture is the full supersampled frame; converting and box-filtering it is milliseconds
+	// of CPU, which is a worker's job, not the frame loop's or the GUI thread's.
+	m_ScalePool.start(
+		QRunnable::create([this,
+	                       path      = shot.item.path,
+	                       stamp     = shot.item.stamp,
+	                       epoch     = shot.epoch,
+	                       capture   = std::make_shared<assetlib::ImageData>(std::move(image)),
+	                       dimension = m_Desc.dimension] {
+			const QImage scaled = ToImage(*capture).scaled(
+				static_cast<int>(dimension),
+				static_cast<int>(dimension),
+				Qt::IgnoreAspectRatio,
+				Qt::SmoothTransformation);
+
+			QMetaObject::invokeMethod(
+				this,
+				[this, path, stamp, epoch, scaled] { OnShotDone(path, stamp, epoch, scaled); },
+				Qt::QueuedConnection);
+		}));
+}
+
+void
+AssetThumbnailCache::FinishShot(const Shot& shot, QImage image)
+{
+	QMetaObject::invokeMethod(
+		this,
+		[this,
+	     path  = shot.item.path,
+	     stamp = shot.item.stamp,
+	     epoch = shot.epoch,
+	     image = std::move(image)] { OnShotDone(path, stamp, epoch, image); },
+		Qt::QueuedConnection);
+}
+
+void
+AssetThumbnailCache::CancelShot()
+{
+	if (!IsReady())
 		return;
 
-	m_Desc.renderer->Invoke(
-		[&] { m_Desc.renderer->GetGraphics()->DiscardCapture(m_PendingCapture->ticket); });
+	// A completion already queued to the UI thread carries the old epoch and is dropped on arrival.
+	++m_Epoch;
 
-	Abandon(m_PendingCapture->path);
-	m_PendingCapture.reset();
+	if (m_ShotInFlight)
+	{
+		// Queued behind any pending install, so it cannot race one in.
+		m_Desc.renderer->Invoke([&] {
+			if (!m_Shot.has_value())
+				return;
+
+			m_Desc.renderer->GetGraphics()->DiscardCapture(m_Shot->ticket);
+			m_Shot.reset();
+		});
+
+		ReleaseGeometry();
+		m_ShotInFlight = false;
+	}
+
+	DetachFromFrameLoop();
+}
+
+void
+AssetThumbnailCache::AttachToFrameLoop()
+{
+	if (m_FrameLoopId != 0)
+		return;
+
+	m_FrameLoopId = m_Desc.renderer->AddViewport([this] { Advance(); });
+}
+
+void
+AssetThumbnailCache::DetachFromFrameLoop()
+{
+	if (m_FrameLoopId == 0)
+		return;
+
+	m_Desc.renderer->RemoveViewport(m_FrameLoopId);
+	m_FrameLoopId = 0;
 }
 
 bgl::MaterialHandle
@@ -523,10 +655,19 @@ AssetThumbnailCache::AcquireMaterial(std::string_view relPath, game::TexturePref
 	}
 }
 
-bgl::CaptureTicket
-AssetThumbnailCache::RenderMesh(const PendingRender& pending)
+void
+AssetThumbnailCache::BuildShot(Shot& shot)
 {
-	const assetlib::BMesh& mesh = *pending.mesh;
+	if (shot.item.type == ThumbnailType::kMesh)
+		BuildMesh(shot);
+	else
+		BuildMaterial(shot);
+}
+
+void
+AssetThumbnailCache::BuildMesh(Shot& shot)
+{
+	const assetlib::BMesh& mesh = *shot.item.mesh;
 
 	bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
 	bgl::ISceneView* view  = m_SceneView.Get();
@@ -534,11 +675,7 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 	auto materials = std::vector<bgl::MaterialHandle>();
 	materials.reserve(mesh.materials.size());
 	for (const std::string& relPath : mesh.materials)
-		materials.push_back(AcquireMaterial(relPath, pending.prefetch.get()));
-
-	const bool hashed = std::ranges::any_of(materials, [](const bgl::MaterialHandle& material) {
-		return material.layerType == bgl::LayerType::kHashed;
-	});
+		materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -555,7 +692,8 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 		auto [it, inserted] =
 			geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
 		if (inserted)
-			m_Geoms.push_back(scene->AddStaticMesh(mesh, node.mesh, materials));
+			m_Geoms.push_back(
+				scene->AddStaticMesh(std::move(shot.item.cooked->at(node.mesh)), materials));
 
 		const glm::mat4               world = bmesh::WorldTransform(mesh, nodeIndex);
 		const bgl::MeshInstanceHandle instance =
@@ -580,28 +718,28 @@ AssetThumbnailCache::RenderMesh(const PendingRender& pending)
 	const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
 	const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 
-	return Shoot(center, radius, hashed);
+	FrameShot(shot, center, radius);
 }
 
-bgl::CaptureTicket
-AssetThumbnailCache::RenderMaterial(const PendingRender& pending)
+void
+AssetThumbnailCache::BuildMaterial(Shot& shot)
 {
-	const std::string relPath = ToRelative(pending.path);
+	const std::string relPath = ToRelative(shot.item.path);
 	if (relPath.empty())
 		throw std::runtime_error("material does not lie under the project's data root");
 
 	// The Material Editor previews on a sphere, so a material's thumbnail is the shape the user
 	// authored it against.
-	const bgl::MaterialHandle material = AcquireMaterial(relPath, pending.prefetch.get());
+	const bgl::MaterialHandle material = AcquireMaterial(relPath, shot.item.prefetch.get());
 
 	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
 
-	return Shoot(glm::vec3(0.0f), 1.0f, material.layerType == bgl::LayerType::kHashed);
+	FrameShot(shot, glm::vec3(0.0f), 1.0f);
 }
 
-bgl::CaptureTicket
-AssetThumbnailCache::Shoot(const glm::vec3& center, float radius, bool hashed)
+void
+AssetThumbnailCache::FrameShot(Shot& shot, const glm::vec3& center, float radius)
 {
 	// Pull back far enough that the bounding sphere fits the field of view with a margin. A mesh's
 	// radius is a half-diagonal, so it over-estimates and frames itself loosely; a material's sphere
@@ -621,23 +759,11 @@ AssetThumbnailCache::Shoot(const glm::vec3& center, float radius, bool hashed)
 			std::max(0.001f, radius * 0.01f),
 			distance + radius * 50.0f);
 
-	auto job   = bgl::RenderJob();
-	job.camera = camera;
-	job.view   = m_SceneView;
-	job.viewport =
-		bgl::Viewport(static_cast<float>(m_Desc.dimension), static_cast<float>(m_Desc.dimension));
-
-	// Off, a shot is one frame. On, it must first go *off*: turning TAA off is what discards the
-	// history, so without the toggle two consecutive hashed assets stay enabled throughout and the
-	// second's warmup starts by reprojecting the first's converged image under a different camera.
-	m_RenderTarget->SetTaaEnabled(false);
-	if (hashed)
-		m_RenderTarget->SetTaaEnabled(true);
-
-	const int warmup = hashed ? c_HashedWarmupFrames : c_WarmupFrames;
-	for (int i = 0; i < warmup; ++i) m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
-
-	return m_Desc.renderer->GetGraphics()->SubmitCapture(m_RenderTarget);
+	shot.job.camera   = camera;
+	shot.job.view     = m_SceneView;
+	shot.job.viewport = bgl::Viewport(
+		static_cast<float>(m_Desc.dimension * c_Supersample),
+		static_cast<float>(m_Desc.dimension * c_Supersample));
 }
 
 void
@@ -676,10 +802,10 @@ AssetThumbnailCache::ReleaseGeometry()
 				qWarning("AssetThumbnail: failed to delete a geom: %s", e.what());
 			}
 		}
-	});
 
-	m_Instances.clear();
-	m_Geoms.clear();
+		m_Instances.clear();
+		m_Geoms.clear();
+	});
 }
 
 void
@@ -703,7 +829,7 @@ AssetThumbnailCache::ReleaseMaterials()
 				qWarning("AssetThumbnail: failed to release a material: %s", e.what());
 			}
 		}
-	});
 
-	m_Materials.clear();
+		m_Materials.clear();
+	});
 }
