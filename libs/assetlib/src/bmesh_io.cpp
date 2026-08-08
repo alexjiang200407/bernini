@@ -17,8 +17,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint32_t c_Magic = magic::c_BMesh;
-
 		constexpr uint16_t c_VersionMajor = 3;
 
 		// +1: kSkeletonPath. A chunk is addressed by id and an absent one is not an error, so a v3.0
@@ -82,13 +80,13 @@ namespace assetlib
 		writer.Add(
 			ChunkId::kSkeletonPath,
 			std::vector<char>(mesh.skeleton.begin(), mesh.skeleton.end()));
-		return writer.Finish(c_Magic, c_VersionMajor, c_VersionMinor);
+		return writer.Finish(magic::c_BMesh, c_VersionMajor, c_VersionMinor);
 	}
 
 	BMesh
 	deserialize(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, c_Magic, c_VersionMajor, c_What);
+		const chunk::Reader reader(bytes, magic::c_BMesh, c_VersionMajor, c_What);
 
 		BMesh mesh;
 		mesh.nodes            = reader.Require<Node>(ChunkId::kNodes);
@@ -130,7 +128,7 @@ namespace assetlib
 			                                             ChunkId::kSkeletonPath } };
 
 		const auto chunks =
-			chunk::readChunksFromFile(path, c_Magic, c_VersionMajor, c_Wanted, c_What);
+			chunk::readChunksFromFile(path, magic::c_BMesh, c_VersionMajor, c_Wanted, c_What);
 
 		// Absent, not malformed: both chunks are optional, and a mesh that names neither is exactly
 		// what a static import produces.

@@ -14,9 +14,6 @@ namespace assetlib
 {
 	namespace
 	{
-
-		constexpr uint32_t c_Magic = magic::c_BSkel;
-
 		constexpr uint16_t c_VersionMajor = 1;
 		constexpr uint16_t c_VersionMinor = 0;
 
@@ -35,13 +32,13 @@ namespace assetlib
 		chunk::Writer writer;
 		writer.Add(ChunkId::kBones, skeleton.bones);
 		writer.Add(ChunkId::kStringPool, skeleton.stringPool);
-		return writer.Finish(c_Magic, c_VersionMajor, c_VersionMinor);
+		return writer.Finish(magic::c_BSkel, c_VersionMajor, c_VersionMinor);
 	}
 
 	Skeleton
 	deserializeSkeleton(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, c_Magic, c_VersionMajor, c_What);
+		const chunk::Reader reader(bytes, magic::c_BSkel, c_VersionMajor, c_What);
 
 		Skeleton skeleton;
 		skeleton.bones      = reader.Require<Bone>(ChunkId::kBones);

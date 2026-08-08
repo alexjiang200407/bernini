@@ -452,6 +452,12 @@ A `.bskel` is the first asset held by two different kinds of edge, and
 | mesh → skeleton | `.bmesh` | `BMesh::skeleton` |
 | clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
 
+A clip set names a skeleton for the same reason a mesh does: its samples are stored one per bone per
+frame, in bone order, so a pose is addressed by bone index and nothing else. Detached from the rig
+that fixed that order the samples are unreadable — not wrong, but meaningless, and undetectably so.
+Naming the skeleton is what makes the pairing checkable at all, and `skeletonSignature` is what
+checks it. It is not retargeting: a clip set belongs to one rig.
+
 Both are read without the container's bulk — `loadMeshRefs` and `loadAnimationSkeletonPath` seek to the
 reference chunks, for the reason the material scan does. Nothing produces an edge *into* a `.banim`, so
 a clip set always deletes and leaves its skeleton behind, exactly as a mesh leaves its materials.

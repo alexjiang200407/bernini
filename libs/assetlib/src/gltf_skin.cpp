@@ -243,6 +243,26 @@ namespace assetlib
 
 			return true;
 		}
+
+		/** Frames a clip of `duration` occupies at `sampleRate`, both ends included. */
+		uint32_t
+		frameCountFor(float duration, float sampleRate) noexcept
+		{
+			if (duration <= 0.0f)
+				return 1;
+
+			return static_cast<uint32_t>(std::lround(duration * sampleRate)) + 1u;
+		}
+
+		/** The speed a clip was authored at: how far its root travels along the ground per second. */
+		float
+		locomotionSpeedFor(const glm::vec3& rootMotion, float duration) noexcept
+		{
+			if (duration <= 0.0f)
+				return 0.0f;
+
+			return glm::length(glm::vec2(rootMotion.x, rootMotion.z)) / duration;
+		}
 	}
 
 	SkinImport
@@ -297,14 +317,18 @@ namespace assetlib
 		{
 			const auto node = static_cast<uint32_t>(skin.joints[joint]);
 
-			Bone bone{};
-			bone.parent = jointParents[joint] == c_InvalidIndex ?
-			                  c_InvalidIndex :
-			                  out.jointToBone[jointParents[joint]];
+			Bone     bone{};
+			uint32_t parentNode = c_InvalidIndex;
 
-			const uint32_t parentNode = bone.parent == c_InvalidIndex ?
-			                                c_InvalidIndex :
-			                                static_cast<uint32_t>(skin.joints[jointParents[joint]]);
+			if (jointParents[joint] == c_InvalidIndex)
+			{
+				bone.parent = c_InvalidIndex;
+			}
+			else
+			{
+				bone.parent = out.jointToBone[jointParents[joint]];
+				parentNode  = static_cast<uint32_t>(skin.joints[jointParents[joint]]);
+			}
 
 			bone.bindPose   = boneLocalTransform(model, node, parentNode, nodeParents);
 			bone.nameOffset = addName(out.skeleton.stringPool, model.nodes[node].name);
@@ -413,10 +437,8 @@ namespace assetlib
 			if (samplers.empty())
 				continue;  // nothing in this animation moves the rig, so it is not a clip of it
 
-			const float duration = std::max(0.0f, last - first);
-			const auto  frameCount =
-				duration > 0.0f ? static_cast<uint32_t>(std::lround(duration * sampleRate)) + 1u :
-								  1u;
+			const float duration   = std::max(0.0f, last - first);
+			const auto  frameCount = frameCountFor(duration, sampleRate);
 
 			AnimationClip clip{};
 			clip.nameOffset  = addName(out.stringPool, animation.name);
@@ -465,11 +487,8 @@ namespace assetlib
 					static_cast<size_t>(frameCount - 1) * boneCount,
 				boneCount);
 
-			clip.rootMotion = lastPose[0].translation - firstPose[0].translation;
-			clip.locomotionSpeed =
-				duration > 0.0f ?
-					glm::length(glm::vec2(clip.rootMotion.x, clip.rootMotion.z)) / duration :
-					0.0f;
+			clip.rootMotion      = lastPose[0].translation - firstPose[0].translation;
+			clip.locomotionSpeed = locomotionSpeedFor(clip.rootMotion, duration);
 
 			// glTF has no loop flag, so the only evidence is the data: a clip authored to loop ends on
 			// the pose it started from. A single-frame clip is a pose, not a loop.

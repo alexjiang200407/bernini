@@ -28,6 +28,10 @@ namespace assetlib
 
 	namespace
 	{
+		// JOINTS_0 / WEIGHTS_0 are a vec4 pair, which is what the vertex layout and every consumer
+		// of a skinned vertex assume.
+		constexpr size_t c_InfluencesPerVertex = 4;
+
 		constexpr size_t c_MeshletMaxVertices  = 64;
 		constexpr size_t c_MeshletMaxTriangles = 124;
 		constexpr float  c_MeshletConeWeight   = 0.0f;
@@ -317,39 +321,47 @@ namespace assetlib
 			if (jointToBone.empty() || !jointView.Present() || !weightView.Present())
 				return;
 
-			if (jointToBone.size() > 0xFFFFu)
-				throw std::runtime_error(
-					"bmesh: a skin of more than 65535 joints is not supported");
+			constexpr auto c_MaxJointIndex = std::numeric_limits<uint16_t>::max();
 
-			joints.assign(vertexCount * 4, 0);
-			weights.assign(vertexCount * 4, 0);
+			if (jointToBone.size() > c_MaxJointIndex)
+				throw_runtime_error(
+					"bmesh: a skin of {} joints exceeds the {} a uint16 joint index can name",
+					jointToBone.size(),
+					c_MaxJointIndex);
+
+			joints.assign(vertexCount * c_InfluencesPerVertex, 0);
+			weights.assign(vertexCount * c_InfluencesPerVertex, 0);
+
+			const auto weightComponents = static_cast<size_t>(weightView.components);
+			const auto jointComponents  = static_cast<size_t>(jointView.components);
 
 			for (size_t i = 0; i < vertexCount; ++i)
 			{
-				std::array<float, 4> weight{};
-				float                sum = 0.0f;
-				for (int c = 0; c < 4 && c < weightView.components; ++c)
+				std::array<float, c_InfluencesPerVertex> weight{};
+				float                                    sum = 0.0f;
+				for (size_t c = 0; c < c_InfluencesPerVertex && c < weightComponents; ++c)
 				{
-					weight[static_cast<size_t>(c)] = weightView.FloatAt(i, c);
-					sum += weight[static_cast<size_t>(c)];
+					weight[c] = weightView.FloatAt(i, static_cast<int>(c));
+					sum += weight[c];
 				}
 
-				for (int c = 0; c < 4; ++c)
+				for (size_t c = 0; c < c_InfluencesPerVertex; ++c)
 				{
-					const uint32_t joint = c < jointView.components ? jointView.UintAt(i, c) : 0u;
+					const uint32_t joint =
+						c < jointComponents ? jointView.UintAt(i, static_cast<int>(c)) : 0u;
 					if (joint >= jointToBone.size())
 						throw_runtime_error(
 							"bmesh: a vertex names joint {}, which the skin does not have",
 							joint);
 
-					joints[i * 4 + static_cast<size_t>(c)] =
+					joints[i * c_InfluencesPerVertex + c] =
 						static_cast<uint16_t>(jointToBone[joint]);
 
 					// Renormalized before quantizing: glTF requires the four to sum to 1 and exporters
 					// drift, which a unorm16 round-trip would then compound.
-					const float share = sum > 0.0f ? weight[static_cast<size_t>(c)] / sum : 0.0f;
-					weights[i * 4 + static_cast<size_t>(c)] = static_cast<uint16_t>(
-						std::lround(std::clamp(share, 0.0f, 1.0f) * 65535.0f));
+					const float share                      = sum > 0.0f ? weight[c] / sum : 0.0f;
+					weights[i * c_InfluencesPerVertex + c] = static_cast<uint16_t>(std::lround(
+						std::clamp(share, 0.0f, 1.0f) * std::numeric_limits<uint16_t>::max()));
 				}
 			}
 		}
@@ -452,8 +464,14 @@ namespace assetlib
 
 				if (!joints.empty())
 				{
-					appendBytes(mesh.vertexData, joints.data() + i * 4, 4 * sizeof(uint16_t));
-					appendBytes(mesh.vertexData, weights.data() + i * 4, 4 * sizeof(uint16_t));
+					appendBytes(
+						mesh.vertexData,
+						joints.data() + i * c_InfluencesPerVertex,
+						c_InfluencesPerVertex * sizeof(uint16_t));
+					appendBytes(
+						mesh.vertexData,
+						weights.data() + i * c_InfluencesPerVertex,
+						c_InfluencesPerVertex * sizeof(uint16_t));
 				}
 			}
 

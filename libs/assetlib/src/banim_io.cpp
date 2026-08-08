@@ -18,9 +18,6 @@ namespace assetlib
 
 	namespace
 	{
-
-		constexpr uint32_t c_Magic = magic::c_BAnim;
-
 		constexpr uint16_t c_VersionMajor = 1;
 		constexpr uint16_t c_VersionMinor = 0;
 
@@ -88,13 +85,13 @@ namespace assetlib
 		writer.Add(ChunkId::kSamples, animations.samples);
 		writer.Add(ChunkId::kStringPool, animations.stringPool);
 		writer.Add(ChunkId::kSkeletonRef, packSkeletonRef(animations));
-		return writer.Finish(c_Magic, c_VersionMajor, c_VersionMinor);
+		return writer.Finish(magic::c_BAnim, c_VersionMajor, c_VersionMinor);
 	}
 
 	AnimationSet
 	deserializeAnimations(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, c_Magic, c_VersionMajor, c_What);
+		const chunk::Reader reader(bytes, magic::c_BAnim, c_VersionMajor, c_What);
 
 		AnimationSet animations;
 		animations.clips      = reader.Read<AnimationClip>(ChunkId::kClips);
@@ -124,7 +121,7 @@ namespace assetlib
 		constexpr std::array<uint32_t, 1> c_Wanted = { { ChunkId::kSkeletonRef } };
 
 		const auto chunks =
-			chunk::readChunksFromFile(path, c_Magic, c_VersionMajor, c_Wanted, c_What);
+			chunk::readChunksFromFile(path, magic::c_BAnim, c_VersionMajor, c_Wanted, c_What);
 
 		const auto it = chunks.find(ChunkId::kSkeletonRef);
 		if (it == chunks.end())
