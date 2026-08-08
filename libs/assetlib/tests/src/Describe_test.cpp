@@ -1,9 +1,15 @@
 #include <assetlib/asset_describe.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Skeleton.h>
 
 using namespace assetlib;
 
@@ -22,6 +28,57 @@ namespace
 		material.pbr.routes[1] = { "textures_src/skin.ktx2", 1 };
 		material.pbr.routes[5] = { "textures_src/mask.ktx2", 3 };  // roughness <- mask.a
 		return material;
+	}
+
+	Skeleton
+	TwoBoneRig()
+	{
+		Skeleton skeleton;
+
+		Bone hips{};
+		hips.bindPose    = { glm::vec3(0.0f, 1.0f, 0.0f),
+			                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                 glm::vec3(1.0f) };
+		hips.inverseBind = glm::mat4(1.0f);
+		hips.parent      = c_InvalidIndex;
+		hips.nameOffset  = skeleton.stringPool.add("hips");
+		skeleton.bones.push_back(hips);
+
+		Bone spine{};
+		spine.bindPose    = { glm::vec3(0.0f, 2.0f, 0.0f),
+			                  glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                  glm::vec3(1.0f) };
+		spine.inverseBind = glm::mat4(1.0f);
+		spine.parent      = 0;
+		spine.nameOffset  = skeleton.stringPool.add("spine");
+		skeleton.bones.push_back(spine);
+
+		return skeleton;
+	}
+
+	AnimationSet
+	WalkClip(const Skeleton& skeleton)
+	{
+		AnimationSet animations;
+		animations.skeleton          = "Animations/rig.bskel";
+		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
+		animations.skeletonSignature = skeletonSignature(skeleton);
+
+		AnimationClip walk{};
+		walk.nameOffset      = animations.stringPool.add("walk");
+		walk.firstSample     = 0;
+		walk.frameCount      = 2;
+		walk.duration        = 0.5f;
+		walk.sampleRate      = 30.0f;
+		walk.loop            = 1;
+		walk.rootMotion      = glm::vec3(0.0f, 0.0f, 1.5f);
+		walk.locomotionSpeed = 3.0f;
+		animations.clips.push_back(walk);
+
+		const Transform rest{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		animations.samples.assign(walk.frameCount * animations.boneCount, rest);
+
+		return animations;
 	}
 }
 
@@ -105,8 +162,8 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 {
 	BMesh mesh;
-	mesh.stringPool = { '\0', 'h', 'e', 'a', 'd', '\0' };
-	mesh.materials  = { "Materials/head.bmaterial" };
+	REQUIRE(mesh.stringPool.add("head") == 1);
+	mesh.materials = { "Materials/head.bmaterial" };
 	mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 2, .nameOffset = 0 });
 
 	Submesh named{};
@@ -136,6 +193,110 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 // A .benv holds no pixels at all, so the only thing worth reading out of it is what it names -- and
 // whether those names resolve. A dangling reference renders as an environment that silently loses its
 // sky or its lighting, which is exactly the case a dump has to make visible.
+// A .bskel is a bone array addressed by bare index, so the dump exists to make the two things an
+// index cannot show -- who a bone's parent is, and which rig this is -- readable.
+TEST_CASE("describe(Skeleton) names each bone and its parent", "[describe][skeleton]")
+{
+	const Skeleton    skeleton = TwoBoneRig();
+	const std::string text     = describe(skeleton);
+
+	CHECK(text.find("bones        2") != std::string::npos);
+	CHECK(text.find("'hips'") != std::string::npos);
+	CHECK(text.find("'spine'") != std::string::npos);
+
+	// A root has no parent index to print, and printing c_InvalidIndex as a number would read as a
+	// bone that exists.
+	CHECK(text.find("(root)") != std::string::npos);
+	CHECK(text.find("parent 0") != std::string::npos);
+
+	CHECK(text.find(std::format("{:016x}", skeletonSignature(skeleton))) != std::string::npos);
+}
+
+TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[describe][animation]")
+{
+	const Skeleton     skeleton   = TwoBoneRig();
+	const AnimationSet animations = WalkClip(skeleton);
+
+	SECTION("without a skeleton to check against")
+	{
+		const std::string text = describe(animations);
+
+		CHECK(text.find("Animations/rig.bskel") != std::string::npos);
+		CHECK(text.find("clips        1") != std::string::npos);
+		CHECK(text.find("'walk'") != std::string::npos);
+		CHECK(text.find("2 frames at 30 Hz") != std::string::npos);
+		CHECK(text.find("looping") != std::string::npos);
+
+		// Nothing was passed to check the binding against, so the line must be absent rather than
+		// guessing an answer.
+		CHECK(text.find("binding") == std::string::npos);
+	}
+
+	SECTION("against the skeleton it was cooked from")
+	{
+		const std::string text = describe(animations, &skeleton);
+		CHECK(text.find("matches the skeleton") != std::string::npos);
+	}
+
+	// The case the signature exists for: a bone inserted since the clips were cooked. Nothing about
+	// the samples themselves changes, so this line is the only place it surfaces.
+	SECTION("against a rig that has drifted since")
+	{
+		Skeleton reordered            = skeleton;
+		reordered.bones[1].nameOffset = reordered.stringPool.add("chest");
+
+		const std::string text = describe(animations, &reordered);
+		CHECK(text.find("DOES NOT MATCH") != std::string::npos);
+	}
+
+	SECTION("a clip that does not loop says nothing about looping")
+	{
+		AnimationSet once  = animations;
+		once.clips[0].loop = 0;
+
+		CHECK(describe(once).find("looping") == std::string::npos);
+	}
+}
+
+// A joint index resolves against a bone array or against nothing, and which one is invisible in the
+// geometry -- so the mesh dump has to say when a skinned mesh names no rig.
+TEST_CASE("describe(BMesh) reports the skeleton a skinned mesh names", "[describe][skeleton]")
+{
+	BMesh mesh;
+	mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+	Submesh submesh{};
+	submesh.indexType                     = IndexType::kUint16;
+	submesh.layout.attributeCount         = 1;
+	submesh.layout.attributes[0].semantic = VertexSemantic::kJoints0;
+	submesh.layout.attributes[0].format   = VertexFormat::kUint16x4;
+	mesh.submeshes.push_back(submesh);
+
+	REQUIRE(isSkinned(mesh));
+
+	SECTION("named")
+	{
+		mesh.skeleton = "Meshes/rig.bskel";
+		CHECK(describe(mesh).find("skeleton     Meshes/rig.bskel") != std::string::npos);
+	}
+
+	SECTION("carrying joints but naming none")
+	{
+		CHECK(describe(mesh).find("(SKINNED, but names none)") != std::string::npos);
+	}
+
+	SECTION("a static mesh naming a rig says the rig is unused")
+	{
+		BMesh attachment;
+		attachment.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+		attachment.submeshes.push_back(Submesh{});
+		attachment.skeleton = "Meshes/rig.bskel";
+
+		REQUIRE_FALSE(isSkinned(attachment));
+		CHECK(describe(attachment).find("unused: no submesh carries joints") != std::string::npos);
+	}
+}
+
 TEST_CASE("describe(BEnv) reports whether the files it names are there", "[describe]")
 {
 	const auto root = std::filesystem::temp_directory_path() / "bernini_describe_benv";

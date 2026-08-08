@@ -1,6 +1,8 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMesh.h>
 
+#include "chunk_io.h"
+
 using namespace assetlib;
 
 namespace
@@ -9,7 +11,6 @@ namespace
 	MakeSampleMesh()
 	{
 		BMesh mesh;
-		mesh.stringPool.push_back('\0');
 
 		Node root{};
 		root.localTransform = { glm::vec3(0.0f),
@@ -105,6 +106,79 @@ TEST_CASE("deserialize rejects a truncated stream", "[bmesh][io]")
 	const auto                       bytes = serialize(MakeSampleMesh());
 	const std::span<const std::byte> truncated(bytes.data(), bytes.size() / 2);
 	REQUIRE_THROWS_AS(deserialize(truncated), std::runtime_error);
+}
+
+// The chunk container is shared by .bmesh, .bskel and .banim, so every one of these rejections is
+// the only thing standing between a corrupt file and three different readers.
+TEST_CASE("the chunk reader rejects a malformed container", "[bmesh][io][chunk]")
+{
+	const auto patched = [](auto mutate) {
+		auto bytes  = serialize(MakeSampleMesh());
+		auto header = chunk::Header{};
+		std::memcpy(&header, bytes.data(), sizeof(header));
+		mutate(header, bytes);
+		std::memcpy(bytes.data(), &header, sizeof(header));
+		return bytes;
+	};
+
+	SECTION("an unsupported major version")
+	{
+		const auto bytes = patched([](chunk::Header& h, auto&) { h.versionMajor += 1; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	SECTION("a byte order this build cannot read")
+	{
+		const auto bytes = patched([](chunk::Header& h, auto&) { h.byteOrder = 1; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	SECTION("a chunk table that starts past the end")
+	{
+		const auto bytes =
+			patched([](chunk::Header& h, auto&) { h.chunkTableOffset = 0xFFFF0000u; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	// The entry checks, which need the table itself doctored rather than the header.
+	const auto patchedEntry = [](auto mutate) {
+		auto          bytes = serialize(MakeSampleMesh());
+		chunk::Header header{};
+		std::memcpy(&header, bytes.data(), sizeof(header));
+
+		chunk::Entry entry{};
+		std::memcpy(&entry, bytes.data() + header.chunkTableOffset, sizeof(entry));
+		mutate(entry);
+		std::memcpy(bytes.data() + header.chunkTableOffset, &entry, sizeof(entry));
+		return bytes;
+	};
+
+	SECTION("a chunk whose element size is not what the reader asks for")
+	{
+		const auto bytes = patchedEntry([](chunk::Entry& e) { e.elementSize += 1; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	SECTION("a chunk holding a partial element")
+	{
+		const auto bytes = patchedEntry([](chunk::Entry& e) { e.byteSize -= 1; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	SECTION("a chunk that runs past the end of the stream")
+	{
+		const auto bytes = patchedEntry([](chunk::Entry& e) { e.byteSize *= 1000; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	SECTION("an offset near the top of the range, which must not wrap past the sum")
+	{
+		const auto bytes = patchedEntry([](chunk::Entry& e) {
+			e.offset   = std::numeric_limits<uint64_t>::max() - 8;
+			e.byteSize = 64;
+		});
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
 }
 
 TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
