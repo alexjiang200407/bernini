@@ -64,12 +64,6 @@ namespace core
 			return m_Bytes.empty();
 		}
 
-		void
-		clear() noexcept
-		{
-			m_Bytes.clear();
-		}
-
 		friend bool
 		operator==(const string_pool&, const string_pool&) = default;
 
