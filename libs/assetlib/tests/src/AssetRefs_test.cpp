@@ -1,9 +1,14 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include "RefsSandbox.h"
 #include "bmesh_texture.h"
@@ -22,10 +27,10 @@ namespace
 	namespace fs = std::filesystem;
 }
 
-TEST_CASE("loadMaterialPaths reads what a full load would, without the geometry", "[assetrefs]")
+TEST_CASE("loadMeshRefs reads what a full load would, without the geometry", "[assetrefs]")
 {
 	// The scan surveys every mesh in the project, and a .bmesh is mostly vertex data -- so it seeks to
-	// the material chunk instead of deserializing. This pins the cheap reader against the real one; a
+	// the reference chunks instead of deserializing. This pins the cheap reader against the real one; a
 	// change to the container that broke it would otherwise surface as an asset silently losing its
 	// references.
 	const DataRoot root("bernini_refs_matpaths");
@@ -33,23 +38,25 @@ TEST_CASE("loadMaterialPaths reads what a full load would, without the geometry"
 	const std::vector<std::string> materials = { "Materials/a.bmaterial",
 		                                         "Materials/nested/b.bmaterial",
 		                                         "Materials/a.bmaterial" };
-	SaveMesh(root, "mesh.bmesh", materials);
+	SaveMesh(root, "mesh.bmesh", materials, "Meshes/rig.bskel");
 
 	const fs::path file = root.path / "Meshes" / "mesh.bmesh";
 
-	CHECK(loadMaterialPaths(file) == load(file).materials);
-	CHECK(loadMaterialPaths(file) == materials);
+	CHECK(loadMeshRefs(file).materials == load(file).materials);
+	CHECK(loadMeshRefs(file).materials == materials);
+	CHECK(loadMeshRefs(file).skeleton == "Meshes/rig.bskel");
 
-	SECTION("a mesh that names no material yields none, and is not an error")
+	SECTION("a mesh that names neither yields none, and is not an error")
 	{
 		SaveMesh(root, "bare.bmesh", {});
-		CHECK(loadMaterialPaths(root.path / "Meshes" / "bare.bmesh").empty());
+		CHECK(loadMeshRefs(root.path / "Meshes" / "bare.bmesh").materials.empty());
+		CHECK(loadMeshRefs(root.path / "Meshes" / "bare.bmesh").skeleton.empty());
 	}
 
 	SECTION("a file that is not a mesh is an error, not an empty list")
 	{
 		std::ofstream(root.path / "Meshes" / "junk.bmesh", std::ios::binary) << "not a mesh";
-		CHECK_THROWS_AS(loadMaterialPaths(root.path / "Meshes" / "junk.bmesh"), std::runtime_error);
+		CHECK_THROWS_AS(loadMeshRefs(root.path / "Meshes" / "junk.bmesh"), std::runtime_error);
 	}
 }
 
@@ -150,6 +157,54 @@ TEST_CASE("A material a mesh names cannot be deleted", "[assetrefs]")
 		REQUIRE(plan.Allowed());
 		REQUIRE(plan.assetType == AssetType::kMaterial);
 		CHECK(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+	}
+}
+
+TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][skeleton]")
+{
+	// A skeleton is held by two different kinds of asset, and by neither of the edges the graph had
+	// before. Deleting one out from under a mesh leaves joint indices that resolve to nothing.
+	const DataRoot root("bernini_refs_skeleton");
+	fs::create_directories(root.path / "Animations");
+
+	Skeleton skeleton;
+	skeleton.bones.push_back(
+		Bone{ Transform{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) },
+	          glm::mat4(1.0f),
+	          c_InvalidIndex,
+	          0 });
+	saveSkeleton(skeleton, root.path / "Animations" / "rig.bskel");
+
+	AnimationSet animations;
+	animations.boneCount         = 1;
+	animations.skeleton          = "Animations/rig.bskel";
+	animations.skeletonSignature = skeletonSignature(skeleton);
+	saveAnimations(animations, root.path / "Animations" / "walk.banim");
+
+	SaveMesh(root, "mesh.bmesh", {}, "Animations/rig.bskel");
+
+	const AssetRefGraph graph = root.Scan();
+	CHECK(graph.clipSetsScanned == 1);
+
+	const DeletionPlan plan = planDeletion(graph, "Animations/rig.bskel");
+
+	REQUIRE_FALSE(plan.Allowed());
+	REQUIRE(plan.assetType == AssetType::kSkeleton);
+	CHECK(
+		ReferrerPaths(graph, "Animations/rig.bskel") ==
+		std::vector<std::string>{ "Animations/walk.banim", "Meshes/mesh.bmesh" });
+	CHECK(deleteAsset(plan, root.Desc()).status == DeletionStatus::kRefused);
+
+	SECTION("and a clip set is deletable, because nothing references one")
+	{
+		const DeletionPlan clips = planDeletion(graph, "Animations/walk.banim");
+
+		REQUIRE(clips.Allowed());
+		REQUIRE(clips.assetType == AssetType::kAnimation);
+		CHECK(deleteAsset(clips, root.Desc()).status == DeletionStatus::kDeleted);
+
+		// The skeleton it named outlives it, for the reason a mesh's materials do.
+		CHECK(fs::exists(root.path / "Animations" / "rig.bskel"));
 	}
 }
 

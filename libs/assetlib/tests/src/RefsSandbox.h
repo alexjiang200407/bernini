@@ -82,10 +82,9 @@ namespace assetlib::test
 
 	/** A minimal but loadable mesh whose submeshes name `materials`, one slot each. */
 	inline BMesh
-	MakeMesh(const std::vector<std::string>& materials)
+	MakeMesh(const std::vector<std::string>& materials, const std::string& skeleton = {})
 	{
 		BMesh mesh;
-		mesh.stringPool.push_back('\0');
 
 		Node root{};
 		root.localTransform = { glm::vec3(0.0f),
@@ -109,13 +108,18 @@ namespace assetlib::test
 
 		mesh.meshes    = { Mesh{ 0, static_cast<uint32_t>(materials.size()), 0 } };
 		mesh.materials = materials;
+		mesh.skeleton  = skeleton;
 		return mesh;
 	}
 
 	inline void
-	SaveMesh(const DataRoot& root, const char* name, const std::vector<std::string>& materials)
+	SaveMesh(
+		const DataRoot&                 root,
+		const char*                     name,
+		const std::vector<std::string>& materials,
+		const std::string&              skeleton = {})
 	{
-		save(MakeMesh(materials), root.path / "Meshes" / name);
+		save(MakeMesh(materials, skeleton), root.path / "Meshes" / name);
 	}
 
 	/** The referrers of `asset`, as plain paths, so a test can compare against what it wrote. */

@@ -286,8 +286,9 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					{
 						const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
 
-						auto name = QString::fromStdString(
-							assetlib::nameFromPool(mesh.stringPool, submesh.nameOffset));
+						const std::string_view pooled = mesh.stringPool.at(submesh.nameOffset);
+						auto                   name =
+							QString::fromUtf8(pooled.data(), static_cast<qsizetype>(pooled.size()));
 						if (name.isEmpty())
 							name = QString("Submesh %1").arg(m_SubmeshNames.size());
 						m_SubmeshNames << name;

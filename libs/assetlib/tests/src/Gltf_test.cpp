@@ -70,7 +70,9 @@ namespace
 
 TEST_CASE("loadFromGltf imports geometry and hierarchy from a triangle", "[bmesh][gltf]")
 {
-	const auto path = WriteTempGltf();
+	// A name of its own: the suite is sharded across concurrent processes, so two cases sharing a
+	// temp file race to delete it out from under each other.
+	const auto path = WriteTempGltf(c_TriangleGltf, "bmesh_triangle_geometry_test.gltf");
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
@@ -101,7 +103,7 @@ TEST_CASE("loadFromGltf imports geometry and hierarchy from a triangle", "[bmesh
 
 TEST_CASE("an imported triangle survives a container round-trip", "[bmesh][gltf][io]")
 {
-	const auto path = WriteTempGltf();
+	const auto path = WriteTempGltf(c_TriangleGltf, "bmesh_triangle_roundtrip_test.gltf");
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
