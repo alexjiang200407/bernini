@@ -17,7 +17,7 @@ one.
 ```
 bcp-feature <name> <prompt>
   │
-  ├─ § 1  cut feat/<name> from origin/master, empty, in its own worktree, and publish it
+  ├─ § 1  cut feat/<name> from origin/master, empty, and publish it
   ├─ § 2  plan PR      → watch → revise → user merges
   ├─ § 3  task 1 PR    → watch → revise → user merges
   │       task 2 PR    → watch → revise → user merges       (one at a time)
@@ -34,18 +34,13 @@ bcp-feature <name> <prompt>
 
 ## State
 
-Every feature lives in **its own worktree**, a sibling of the main checkout, named for it:
+Every step below runs **in the current checkout**, which serves this feature and nothing else for
+as long as the feature lives. How the checkout came to be is not this skill's concern: a plain
+clone parks itself on `feat/<name>`; a setup that runs features in parallel prepares one linked
+worktree per feature and starts the session inside it. Either way the checkout has its own
+`./build`, its own tracker, its own Claude session.
 
-```
-~/source/bernini-v2/                    # the main checkout — quick fixes, never a feature
-~/source/bernini-v2.features/<name>/    # feat/<name> and its task branches; § 1 creates, § 5 removes
-```
-
-The main checkout is never parked on a half-done feature, and two features run in parallel — each
-worktree has its own `./build`, its own tracker, its own Claude session. Every step below runs
-**inside the feature's worktree**.
-
-Which feature a worktree serves — worktree-scoped, never committed:
+Which feature a checkout serves — worktree-scoped, never committed:
 
 ```bash
 git config extensions.worktreeConfig true           # once per clone; enables --worktree
@@ -53,9 +48,10 @@ git config --worktree bernini.feature feat/<name>
 git config bernini.feature                          # read: unqualified; unset means "landing on master"
 ```
 
-`--worktree`, not `--local`: local config is one file shared by every worktree of the clone, so two
+`--worktree`, not `--local`: local config is one file shared by every worktree of a clone, so two
 live features would overwrite each other's key and send bcp-precheck diffing against the wrong base.
-There is no unset step — the key dies with the worktree in § 5.
+There is no unset step — the key dies with the checkout when a worktree is removed, and a plain
+clone unsets it after § 5.
 
 The **tracker**, `.claude/features/<name>.md` (git-ignored). The only record that survives the
 session, so rewrite it after every state change — a stale one sends the next session to redo merged
@@ -80,14 +76,11 @@ export PATH="$PATH:/c/Program Files/GitHub CLI"   # gh is often not on PATH
 git fetch origin
 ```
 
-Cut the branch and its worktree in one move — the new tree starts clean by construction, so nothing
-half-done in another checkout can leak into its PRs:
+The checkout must be clean — `git status` empty — so nothing half-done leaks into the feature's
+PRs. Cut the branch from `origin/master` and publish it:
 
 ```bash
-MAIN=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
-git worktree add "$MAIN.features/<name>" -b feat/<name> origin/master
-[ -f "$MAIN/scripts/config.json" ] && cp "$MAIN/scripts/config.json" "$MAIN.features/<name>/scripts/"
-cd "$MAIN.features/<name>"
+git switch -c feat/<name> origin/master     # skip when the checkout is already on feat/<name>
 git push -u origin feat/<name>
 git config extensions.worktreeConfig true
 git config --worktree bernini.feature feat/<name>
@@ -96,10 +89,8 @@ git config --worktree bernini.feature feat/<name>
 It starts **empty**, identical to `master`, and changes only when a PR merges. **Nothing is ever
 committed on it directly.**
 
-If `feat/<name>` already exists, this is a **resume**: `git worktree list` says whether its worktree
-still does too — enter it, or recreate it with `git worktree add "$MAIN.features/<name>" feat/<name>`
-plus the `config.json` copy and the two `git config` lines above. Fast-forward, read the plan and the
-tracker, and reconcile the tracker with reality before anything else — a `[>]` may have merged since.
+If `feat/<name>` already exists, this is a **resume**: fast-forward, read the plan and the tracker,
+and reconcile the tracker with reality before anything else — a `[>]` may have merged since.
 
 ```bash
 gh pr list --base feat/<name> --state all --json number,title,state
@@ -332,18 +323,17 @@ A plan is scaffolding for the feature's review, not documentation; once the feat
 a rebase rewrites the commits those PRs are based on, and each then shows a diff nobody wrote. With
 PRs open, merge them first.
 
-After the feature merges:
+After the feature merges, the checkout's job is done. In a plain clone:
 
 ```bash
-MAIN=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")   # a new session has no $MAIN
-cd "$MAIN"
-git worktree remove "$MAIN.features/<name>"   # the tracker and the worktree config die with it
 git switch master && git pull && git branch -d feat/<name>
+git config --worktree --unset bernini.feature
+rm .claude/features/<name>.md
 ```
 
-The plan went with the landing PR, and the tracker was git-ignored inside the worktree — neither
-needs a separate `rm`. Use `git worktree remove`, never `rm -rf` — a hand-deleted worktree leaves
-stale bookkeeping under `.git/worktrees/` until someone runs `git worktree prune`.
+A checkout that exists only for this feature — a linked worktree — is instead torn down whole by
+whatever created it, and the worktree config and the git-ignored tracker die with it. The plan
+needs no cleanup either way: it went with the landing PR.
 
 ## Rules
 
