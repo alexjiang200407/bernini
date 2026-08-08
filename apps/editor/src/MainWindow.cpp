@@ -166,6 +166,12 @@ MainWindow::Build()
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
 
+	// Not floatable: its title bar sits directly under the separator the user drags to make it
+	// taller, and a grab that lands low would otherwise tear it out into a window of its own -- which
+	// on macOS is a separate top-level that goes behind the editor.
+	m_ContentExplorerDock->setFeatures(
+		QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+
 	// The explorer refuses to delete a material the Material Editor has open, whose next Save would
 	// write it straight back. Asked at each deletion, so there is no copy of the answer to go stale.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
