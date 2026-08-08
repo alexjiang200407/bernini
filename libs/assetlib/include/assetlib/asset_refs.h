@@ -12,6 +12,8 @@ namespace assetlib
 		kEnvironment,  // .benv
 		kSky,          // .bsky
 		kEnvLighting,  // .benvl
+		kSkeleton,     // .bskel
+		kAnimation,    // .banim
 	};
 
 	/** Why one asset holds another alive. */
@@ -22,6 +24,8 @@ namespace assetlib
 		kChannelRoute,     // a .bmaterial routes a channel from a source texture
 		kEnvironmentPart,  // a .benv names the .bsky or .benvl it composes
 		kEnvSource,        // a .bsky or .benvl names the radiance its bake read
+		kMeshSkeleton,     // a .bmesh's joint indices address a .bskel
+		kClipSkeleton,     // a .banim's clips were resampled against a .bskel
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
@@ -53,8 +57,8 @@ namespace assetlib
 	assetTypeFromExtension(const std::filesystem::path& path);
 
 	/**
-	 * Who references what, across a whole project: one walk of the data root, reading each mesh's material
-	 * chunk (never its geometry -- see loadMaterialPaths) and each material whole.
+	 * Who references what, across a whole project: one walk of the data root, reading each mesh's and each
+	 * clip set's reference chunks (never their bulk -- see loadMeshRefs) and each material whole.
 	 *
 	 * A snapshot, not a live view. The data root is shared with the user's file manager, so it is rebuilt
 	 * at the point a question is asked rather than cached -- a cached graph would not merely go stale, it
@@ -117,6 +121,7 @@ namespace assetlib
 		size_t meshesScanned       = 0;
 		size_t materialsScanned    = 0;
 		size_t environmentsScanned = 0;  // .benv, .bsky and .benvl together
+		size_t clipSetsScanned     = 0;
 
 	private:
 		struct Range
