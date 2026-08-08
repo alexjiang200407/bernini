@@ -33,7 +33,7 @@ The base is the feature's integration branch when one is active, `origin/master`
 
 ```bash
 git fetch origin
-FEATURE=$(git config --local bernini.feature || true)
+FEATURE=$(git config bernini.feature || true)   # worktree-scoped when set by bcp-feature; never --local
 BASE="origin/${FEATURE:-master}"        # the caller may override; § 5 of bcp-feature does
 git diff "$BASE"...HEAD                 # the change
 git log "$BASE"..HEAD --oneline         # what the author says it does

@@ -6,9 +6,9 @@ forget, so it is recorded instead: `pr.py create` arms an entry here, watch_pr.p
 disarms it when it starts watching, and the Stop hook refuses to end a turn while
 anything is still armed.
 
-The state lives in .git/, which is per-clone and never committed, and every entry
-carries the session that armed it -- a later session must not inherit a block for
-a PR it knows nothing about.
+The state lives in the git dir, which is per-worktree and never committed, and
+every entry carries the session that armed it -- a later session must not inherit
+a block for a PR it knows nothing about.
 """
 
 import json
@@ -16,7 +16,24 @@ import os
 
 from . import cmake_tools as ct
 
-PATH = os.path.join(ct.REPO_ROOT, ".git", "bernini-pr-watch.json")
+
+def _git_dir():
+    path = os.path.join(ct.REPO_ROOT, ".git")
+    if os.path.isfile(path):  # linked worktree: .git is a pointer file
+        try:
+            with open(path, encoding="utf-8") as fh:
+                head = fh.read().strip()
+        except OSError:
+            return path
+        if head.startswith("gitdir:"):
+            gitdir = head[len("gitdir:") :].strip()
+            if not os.path.isabs(gitdir):
+                gitdir = os.path.normpath(os.path.join(ct.REPO_ROOT, gitdir))
+            return gitdir
+    return path
+
+
+PATH = os.path.join(_git_dir(), "bernini-pr-watch.json")
 
 
 def _session():

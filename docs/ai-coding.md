@@ -144,7 +144,8 @@ its baseline when `--since` is not given. A hand-written timestamp two seconds e
 fire on the agent's own reply and spend the turn reading itself, so the time comes from GitHub's
 response rather than from anyone's judgement.
 
-The list lives in `.git/bernini-pr-watch.json` and is keyed by session, so a later session never
+The list lives in the worktree's git dir as `bernini-pr-watch.json` (`.git/`, or
+`.git/worktrees/<name>/` in a linked worktree) and is keyed by session, so a later session never
 inherits a block for a PR it knows nothing about.
 
 ## Coding agent: commit attribution
