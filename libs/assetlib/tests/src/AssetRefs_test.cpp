@@ -11,10 +11,12 @@
 #include <assetlib/material_bake.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include "bmesh_texture.h"
 

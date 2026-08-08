@@ -62,7 +62,7 @@ namespace assetlib::chunk
 			throw_runtime_error("{}: stream shorter than declared file size", what);
 
 		const auto tableBytes = static_cast<size_t>(header.chunkCount) * sizeof(Entry);
-		if (header.chunkTableOffset + tableBytes > bytes.size())
+		if (tableBytes > bytes.size() || header.chunkTableOffset > bytes.size() - tableBytes)
 			throw_runtime_error("{}: chunk table extends past end of stream", what);
 
 		reader.Seek(header.chunkTableOffset);

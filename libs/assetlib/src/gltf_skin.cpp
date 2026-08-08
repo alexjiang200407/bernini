@@ -378,6 +378,13 @@ namespace assetlib
 					if (sampler.times.empty() || sampler.values.empty())
 						continue;
 
+					// evaluate returns a vec4 and fills one lane per component, so a MAT3 or MAT4
+					// accessor here would run off the end of it.
+					if (sampler.components < 1 || sampler.components > 4)
+						throw_runtime_error(
+							"banim: sampler output has {} components, which is not a TRS channel",
+							sampler.components);
+
 					// Times and values come from independent accessors, so nothing but this ties the
 					// two together -- and evaluate indexes values by key without rechecking.
 					const size_t keyStride =

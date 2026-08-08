@@ -127,7 +127,7 @@ namespace assetlib
 		}
 
 		std::string
-		texturePathOr(const std::string& path)
+		pathOr(const std::string& path)
 		{
 			return path.empty() ? std::string("(none)") : path;
 		}
@@ -142,8 +142,8 @@ namespace assetlib
 			const std::filesystem::path& dataRoot)
 		{
 			out += std::format("\n  {}\n", label);
-			out += std::format("    source          {}\n", texturePathOr(route.source));
-			out += std::format("    baked           {}\n", texturePathOr(route.baked));
+			out += std::format("    source          {}\n", pathOr(route.source));
+			out += std::format("    baked           {}\n", pathOr(route.baked));
 
 			if (route.source.empty())
 			{
@@ -209,9 +209,9 @@ namespace assetlib
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
 			out += "\n  baked textures\n";
-			out += std::format("    baseColor       {}\n", texturePathOr(pbr.baseColorTexture));
-			out += std::format("    normal          {}\n", texturePathOr(pbr.normalTexture));
-			out += std::format("    orm             {}\n", texturePathOr(pbr.ormTexture));
+			out += std::format("    baseColor       {}\n", pathOr(pbr.baseColorTexture));
+			out += std::format("    normal          {}\n", pathOr(pbr.normalTexture));
+			out += std::format("    orm             {}\n", pathOr(pbr.ormTexture));
 
 			out += "\n  channel routes\n";
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
@@ -305,7 +305,7 @@ namespace assetlib
 			"  materials    {} (paths relative to the data root)\n",
 			mesh.materials.size());
 		for (size_t i = 0; i < mesh.materials.size(); ++i)
-			out += std::format("    [{}] {}\n", i, texturePathOr(mesh.materials[i]));
+			out += std::format("    [{}] {}\n", i, pathOr(mesh.materials[i]));
 
 		if (!verbose)
 			return out;
@@ -477,7 +477,7 @@ namespace assetlib
 		out += "banim\n";
 		out += std::format(
 			"  skeleton     {} (path relative to the data root)\n",
-			texturePathOr(animations.skeleton));
+			pathOr(animations.skeleton));
 		out += std::format("  bones        {}\n", animations.boneCount);
 		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
 

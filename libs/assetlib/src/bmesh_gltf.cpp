@@ -16,6 +16,7 @@
 #include "gltf_skin.h"
 #include "gltf_util.h"
 
+#include <core/err/util.h>
 #include <core/type_traits.h>
 
 #include <meshoptimizer.h>
@@ -23,6 +24,7 @@
 namespace assetlib
 {
 	using namespace imp;
+	using core::throw_runtime_error;
 
 	namespace
 	{
@@ -336,9 +338,9 @@ namespace assetlib
 				{
 					const uint32_t joint = c < jointView.components ? jointView.UintAt(i, c) : 0u;
 					if (joint >= jointToBone.size())
-						throw std::runtime_error(
-							"bmesh: a vertex names joint " + std::to_string(joint) +
-							", which the skin does not have");
+						throw_runtime_error(
+							"bmesh: a vertex names joint {}, which the skin does not have",
+							joint);
 
 					joints[i * 4 + static_cast<size_t>(c)] =
 						static_cast<uint16_t>(jointToBone[joint]);

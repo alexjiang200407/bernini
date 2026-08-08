@@ -9,6 +9,7 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
 using namespace assetlib::imp;
@@ -32,14 +33,21 @@ namespace
 		fs::path dir;
 		fs::path gltf;
 
-		explicit SkinnedGltf(const char* name) : dir(fs::temp_directory_path() / name)
+		/**
+		 * @param find Substring of the document to replace before it is written, so a case can
+		 *        doctor one accessor without restating the whole rig. Empty writes it verbatim.
+		 */
+		explicit SkinnedGltf(
+			const char*      name,
+			std::string_view find    = {},
+			std::string_view replace = {}) : dir(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(dir);
 			fs::create_directories(dir);
 			gltf = dir / "rig.gltf";
 
 			WriteBuffer();
-			WriteDocument();
+			WriteDocument(find, replace);
 		}
 
 		~SkinnedGltf() { fs::remove_all(dir); }
@@ -116,10 +124,9 @@ namespace
 		}
 
 		void
-		WriteDocument() const
+		WriteDocument(std::string_view find, std::string_view replace) const
 		{
-			std::ofstream out(gltf, std::ios::binary);
-			out << R"({
+			std::string document = R"({
   "asset": { "version": "2.0" },
   "scene": 0,
   "scenes": [ { "nodes": [ 0, 1 ] } ],
@@ -167,6 +174,16 @@ namespace
     { "bufferView": 8, "componentType": 5126, "count": 3, "type": "VEC4" }
   ]
 })";
+
+			if (!find.empty())
+			{
+				const size_t at = document.find(find);
+				REQUIRE(at != std::string::npos);
+				document.replace(at, find.size(), replace);
+			}
+
+			std::ofstream out(gltf, std::ios::binary);
+			out << document;
 		}
 	};
 
@@ -360,6 +377,38 @@ TEST_CASE("Baking a skinned import writes the rig beside the mesh", "[gltf][skel
 	CHECK(animations.skeleton == "rig.bskel");
 	CHECK(animations.clips.size() == 2);
 	CHECK(animationsMatchSkeleton(animations, skeleton));
+}
+
+TEST_CASE("A malformed animation sampler is rejected, not read past", "[gltf][skin][animation]")
+{
+	// times and values come from two independent accessors, so a file is free to disagree about how
+	// many of each there are. Nothing downstream rechecks, so both are caught at the read.
+
+	SECTION("values that do not cover the keyframe times")
+	{
+		const SkinnedGltf source(
+			"bernini_gltf_sampler_short",
+			R"({ "bufferView": 6, "componentType": 5126, "count": 2, "type": "VEC3" })",
+			R"({ "bufferView": 6, "componentType": 5126, "count": 1, "type": "VEC3" })");
+
+		CHECK_THROWS_WITH(
+			loadFromGltf(source.gltf),
+			Catch::Matchers::ContainsSubstring("values to match them"));
+	}
+
+	SECTION("an output accessor wider than a TRS channel")
+	{
+		// evaluate returns a vec4 and fills one lane per component, so a MAT4 output would run off
+		// the end of it. Accessor 4 is the rig's inverse bind matrices -- real MAT4 data.
+		const SkinnedGltf source(
+			"bernini_gltf_sampler_mat4",
+			R"("input": 5, "output": 6)",
+			R"("input": 5, "output": 4)");
+
+		CHECK_THROWS_WITH(
+			loadFromGltf(source.gltf),
+			Catch::Matchers::ContainsSubstring("which is not a TRS channel"));
+	}
 }
 
 TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]")

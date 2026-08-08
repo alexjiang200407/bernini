@@ -10,7 +10,6 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
-#include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
