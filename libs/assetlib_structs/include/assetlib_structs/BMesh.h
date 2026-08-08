@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
+#include <core/str/string_pool.h>
 
 namespace assetlib
 {
@@ -25,8 +26,10 @@ namespace assetlib
 
 		std::vector<std::byte> vertexData;  // all interleaved vertex blobs
 		std::vector<std::byte> indexData;   // all index buffers
-		std::vector<char>      stringPool;  // NUL-terminated names; offset 0 is the empty string
+		core::string_pool      stringPool;
 
 		std::vector<std::string> materials;
+
+		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 	};
 }

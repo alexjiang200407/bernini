@@ -17,8 +17,6 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint32_t c_Magic = magic::c_BEnvL;
-
 		constexpr uint16_t c_VersionMajor = 1;
 		constexpr uint16_t c_VersionMinor = 0;
 	}
@@ -27,7 +25,7 @@ namespace assetlib
 	serializeEnvLighting(const BEnvLighting& lighting)
 	{
 		ByteWriter writer;
-		writer.WritePod(c_Magic);
+		writer.WritePod(magic::c_BEnvL);
 		writer.WritePod(c_VersionMajor);
 		writer.WritePod(c_VersionMinor);
 
@@ -44,7 +42,7 @@ namespace assetlib
 	{
 		ByteReader reader(bytes);
 
-		if (reader.ReadPod<uint32_t>() != c_Magic)
+		if (reader.ReadPod<uint32_t>() != magic::c_BEnvL)
 			throw std::runtime_error("benvl: bad magic");
 
 		const auto versionMajor = reader.ReadPod<uint16_t>();

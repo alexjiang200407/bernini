@@ -318,8 +318,11 @@ the `.bvat` references them by path).
 Each is one PR into `feat/vat`, in this order.
 
 - **T0 — the animation asset import, cherry-picked from #109** (`assetlib`). The five commits of
-  `feat/animation-asset-import` cherry-picked onto a branch cut from `feat/vat` — conflict-free
-  today, since `feat/vat` equals `master` — after which #109 is closed unmerged. No new code.
+  `feat/animation-asset-import` cherry-picked onto a branch cut from `feat/vat`, after which #109
+  is closed unmerged. No new code, but not conflict-free: `feat/vat` equals `master`, and `master`
+  is not what #109 was cut from. #253 has since renamed `core::io::ByteWriter`/`ByteReader`'s
+  methods and several test helpers to `PascalCase`, against code these commits move or rename
+  themselves, so four files are resolved by hand — #109's side under `master`'s names.
   Gate: the assetlib suite green on the cherry-picked branch.
 - **T1 — pose evaluation and CPU skinning** (`assetlib`). `poseModelTransforms(skeleton, set,
   clip, frame)`, `skinningMatrices`, and a skinned-vertex evaluator that decodes the quantized
