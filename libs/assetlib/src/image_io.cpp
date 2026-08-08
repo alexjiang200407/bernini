@@ -1,5 +1,6 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <core/math.h>
 
 #include <ktx.h>
 
@@ -317,7 +318,7 @@ namespace assetlib
 					const size_t   size = ktxTexture_GetImageSize(base, mip);
 					const uint32_t mipW = (std::max)(1u, texture->baseWidth >> mip);
 					const uint64_t pitch =
-						static_cast<uint64_t>((mipW + block.width - 1) / block.width) * block.bytes;
+						static_cast<uint64_t>(core::div_ceil(mipW, block.width)) * block.bytes;
 
 					std::memcpy(image.pixels.data() + dstOffset, base->pData + srcOffset, size);
 					image.subresources.push_back({ dstOffset, pitch, size });
