@@ -709,131 +709,202 @@ namespace bgl
 		return AddProceduralGeom(planeVerts, planeIndices, material);
 	}
 
+	struct PreparedStaticMesh::Impl
+	{
+		struct Submesh
+		{
+			std::vector<uint32_t>     vertexWords;
+			std::vector<uint32_t>     vertexMap;
+			std::vector<uint32_t>     localIndices;
+			std::vector<idl::Meshlet> meshlets;
+			assetlib::VertexLayout    layout;
+			uint32_t                  vertexCount    = 0;
+			uint32_t                  material       = 0;
+			glm::vec4                 boundingSphere = glm::vec4(0.0f);
+		};
+
+		std::vector<Submesh> submeshes;
+	};
+
+	PreparedStaticMesh::PreparedStaticMesh() noexcept                     = default;
+	PreparedStaticMesh::~PreparedStaticMesh()                             = default;
+	PreparedStaticMesh::PreparedStaticMesh(PreparedStaticMesh&&) noexcept = default;
+	PreparedStaticMesh&
+	PreparedStaticMesh::operator=(PreparedStaticMesh&&) noexcept = default;
+
+	PreparedStaticMesh
+	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex)
+	{
+		if (meshIndex >= mesh.meshes.size())
+		{
+			throw SceneError("CookStaticMesh: meshIndex out of range");
+		}
+
+		const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
+
+		auto impl = std::make_unique<PreparedStaticMesh::Impl>();
+		impl->submeshes.reserve(meshEntry.submeshCount);
+
+		for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+		{
+			const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+
+			if (src.meshletCount == 0 || src.vertexCount == 0)
+			{
+				throw SceneError(std::format("CookStaticMesh: submesh {} has no geometry", s));
+			}
+
+			if (src.meshletCount > c_MaxDispatchMeshGroups)
+			{
+				throw SceneError(
+					std::format(
+						"CookStaticMesh: submesh {} has {} meshlets, more than the {} thread "
+						"groups a mesh dispatch can launch",
+						s,
+						src.meshletCount,
+						c_MaxDispatchMeshGroups));
+			}
+
+			const uint64_t vertexBytes = static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
+
+			// The offsets and counts come from the file, so they are the caller's claim about the
+			// buffers, not a fact about them. Trusting them would read off the end of a truncated
+			// or malformed .bmesh.
+			if (src.vertexByteOffset + vertexBytes > mesh.vertexData.size())
+			{
+				throw SceneError(
+					std::format(
+						"CookStaticMesh: submesh {} claims {} bytes of vertex data at offset {}, "
+						"past the end of the mesh's {}-byte vertex buffer",
+						s,
+						vertexBytes,
+						src.vertexByteOffset,
+						mesh.vertexData.size()));
+			}
+
+			PreparedStaticMesh::Impl::Submesh& out = impl->submeshes.emplace_back();
+			out.layout                             = src.layout;
+			out.vertexCount                        = src.vertexCount;
+			out.material                           = src.material;
+			out.boundingSphere                     = BoundingSphereOf(src.aabbMin, src.aabbMax);
+
+			out.vertexWords.resize(core::div_ceil(vertexBytes, 4u), 0u);
+			std::memcpy(
+				out.vertexWords.data(),
+				mesh.vertexData.data() + src.vertexByteOffset,
+				vertexBytes);
+
+			uint32_t mapCount   = 0;
+			uint32_t indexCount = 0;
+			for (uint32_t m = 0; m < src.meshletCount; ++m)
+			{
+				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+
+				// The counts also bound idl::Meshlet's 16-bit fields: a wider one would truncate
+				// on upload and claim elements its streams do not hold.
+				if (ml.vertexCount > std::numeric_limits<uint16_t>::max() ||
+				    ml.triangleCount > std::numeric_limits<uint16_t>::max() ||
+				    static_cast<uint64_t>(ml.vertexOffset) + ml.vertexCount >
+				        mesh.meshletVertices.size() ||
+				    static_cast<uint64_t>(ml.triangleOffset) + ml.triangleCount * 3ull >
+				        mesh.meshletTriangles.size())
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: submesh {} meshlet {} overflows its streams or the "
+							"meshlet's 16-bit counts",
+							s,
+							m));
+				}
+
+				mapCount += ml.vertexCount;
+				indexCount += ml.triangleCount * 3u;
+			}
+
+			out.vertexMap.reserve(mapCount);
+			out.localIndices.reserve(indexCount);
+			out.meshlets.reserve(src.meshletCount);
+
+			for (uint32_t m = 0; m < src.meshletCount; ++m)
+			{
+				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+
+				auto meshlet                 = idl::Meshlet();
+				meshlet.relativeVertexOffset = static_cast<uint32_t>(out.vertexMap.size());
+				meshlet.relativeIndexOffset  = static_cast<uint32_t>(out.localIndices.size());
+				meshlet.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
+				meshlet.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
+				meshlet.boundingSphere       = glm::vec4(ml.boundingCenter, ml.boundingRadius);
+				out.meshlets.push_back(meshlet);
+
+				out.vertexMap.insert(
+					out.vertexMap.end(),
+					mesh.meshletVertices.begin() + ml.vertexOffset,
+					mesh.meshletVertices.begin() + ml.vertexOffset + ml.vertexCount);
+
+				// Widened one element at a time: the triangle stream is byte-sized.
+				const uint32_t triangleIndices = ml.triangleCount * 3u;
+				for (uint32_t i = 0; i < triangleIndices; ++i)
+				{
+					out.localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
+				}
+			}
+		}
+
+		auto prepared   = PreparedStaticMesh();
+		prepared.m_Impl = std::move(impl);
+		return prepared;
+	}
+
 	GeomHandle
 	Scene::AddStaticMesh(
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials)
 	{
+		return AddStaticMesh(CookStaticMesh(mesh, meshIndex), materials);
+	}
+
+	GeomHandle
+	Scene::AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+	{
 		try
 		{
-			if (meshIndex >= mesh.meshes.size())
+			if (mesh.m_Impl == nullptr || mesh.m_Impl->submeshes.empty())
 			{
-				throw SceneError("AddStaticMesh: meshIndex out of range");
-			}
-
-			const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
-
-			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
-			{
-				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
-
-				if (src.meshletCount == 0 || src.vertexCount == 0)
-				{
-					throw SceneError(std::format("AddStaticMesh: submesh {} has no geometry", s));
-				}
-
-				if (src.meshletCount > c_MaxDispatchMeshGroups)
-				{
-					throw SceneError(
-						std::format(
-							"AddStaticMesh: submesh {} has {} meshlets, more than the {} thread "
-							"groups a mesh dispatch can launch",
-							s,
-							src.meshletCount,
-							c_MaxDispatchMeshGroups));
-				}
+				throw SceneError("AddStaticMesh: the prepared mesh is empty or already consumed");
 			}
 
 			// One GPU submesh per source submesh, in order: callers address geometry by source
 			// submesh index (that is what an asset's material slots are numbered by), so the two
 			// must stay 1:1.
 			std::vector<idl::Submesh> submeshes;
-			submeshes.reserve(meshEntry.submeshCount);
+			submeshes.reserve(mesh.m_Impl->submeshes.size());
 
 			std::vector<MaterialHandle> defaults;
-			defaults.reserve(meshEntry.submeshCount);
+			defaults.reserve(mesh.m_Impl->submeshes.size());
 
 			// Nothing below is the scene's until Commit(); see GeomRollback.
 			auto rollback = GeomRollback();
 
-			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			for (const PreparedStaticMesh::Impl::Submesh& src : mesh.m_Impl->submeshes)
 			{
-				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
-
-				const uint64_t vertexBytes =
-					static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
-
-				// The offset and length come from the file, so they are the caller's claim about the
-				// buffer, not a fact about it. Trusting them would read off the end of a truncated or
-				// malformed .bmesh.
-				if (src.vertexByteOffset + vertexBytes > mesh.vertexData.size())
-				{
-					throw SceneError(
-						std::format(
-							"AddStaticMesh: submesh {} claims {} bytes of vertex data at offset "
-							"{}, "
-							"past the end of the mesh's {}-byte vertex buffer",
-							s,
-							vertexBytes,
-							src.vertexByteOffset,
-							mesh.vertexData.size()));
-				}
-
-				std::vector<uint32_t> vertexWords((vertexBytes + 3u) / 4u, 0u);
-				std::memcpy(
-					vertexWords.data(),
-					mesh.vertexData.data() + src.vertexByteOffset,
-					vertexBytes);
-
-				const MaterialHandle material =
-					src.material < materials.size() ? materials[src.material] : MaterialHandle{};
-
-				std::vector<uint32_t>     vertexMap;
-				std::vector<uint32_t>     localIndices;
-				std::vector<idl::Meshlet> meshlets;
-				meshlets.reserve(src.meshletCount);
-
-				for (uint32_t m = 0; m < src.meshletCount; ++m)
-				{
-					const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
-
-					auto out                 = idl::Meshlet();
-					out.relativeVertexOffset = static_cast<uint32_t>(vertexMap.size());
-					out.relativeIndexOffset  = static_cast<uint32_t>(localIndices.size());
-					out.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
-					out.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
-					out.boundingSphere       = glm::vec4(ml.boundingCenter, ml.boundingRadius);
-
-					for (uint32_t i = 0; i < ml.vertexCount; ++i)
-					{
-						vertexMap.push_back(mesh.meshletVertices[ml.vertexOffset + i]);
-					}
-
-					const uint32_t indexCount = ml.triangleCount * 3u;
-					for (uint32_t i = 0; i < indexCount; ++i)
-					{
-						localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
-					}
-
-					meshlets.push_back(out);
-				}
-
-				auto submesh     = idl::Submesh();
-				submesh.layout   = ConvertLayout(src.layout);
-				submesh.meshlets = rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(meshlets));
+				auto submesh   = idl::Submesh();
+				submesh.layout = ConvertLayout(src.layout);
+				submesh.meshlets =
+					rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(src.meshlets));
 				submesh.vertexMap =
-					rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(vertexMap));
+					rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(src.vertexMap));
 				submesh.vertexData =
-					rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(vertexWords));
-				submesh.indices = rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(localIndices));
-				submesh.vertexCount = src.vertexCount;
-
-				const glm::vec4 sphere = BoundingSphereOf(src.aabbMin, src.aabbMax);
-				submesh.boundingSphere = sphere;
+					rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(src.vertexWords));
+				submesh.indices =
+					rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(src.localIndices));
+				submesh.vertexCount    = src.vertexCount;
+				submesh.boundingSphere = src.boundingSphere;
 
 				submeshes.push_back(submesh);
-				defaults.push_back(material);
+				defaults.push_back(
+					src.material < materials.size() ? materials[src.material] : MaterialHandle{});
 			}
 
 			const auto baseSubmeshGlobal = rollback.Track(

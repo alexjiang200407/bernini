@@ -31,10 +31,27 @@ namespace game
 	 * Hand one of these to AcquireTexture / AcquireMaterial and a matching entry is consumed instead
 	 * of the file being read, leaving only the upload on the render thread.
 	 *
-	 * Entries are moved out as they are used. A path that is not present simply falls back to reading
-	 * the file, so a partial prefetch is a valid one.
+	 * Entries are moved out as they are used. A supplied prefetch is the whole truth: a path it does
+	 * not carry resolves to the scene's default map (with a warning), never to a read of the file --
+	 * so handing one in *is* the guarantee that the acquiring thread does no decode. A texture whose
+	 * decode failed is simply left out, and was reported where it failed.
 	 */
 	using TexturePrefetch = core::str::unordered_str_map<assetlib::ImageData>;
+
+	/**
+	 * Per-manager loading options, fixed at construction: a path maps to one shared material, so an
+	 * option that varied per call would make what everyone shares depend on who asked first.
+	 */
+	struct AssetManagerOptions
+	{
+		/**
+		 * Create every hashed-alpha material as the blend material its coverage converges to.
+		 *
+		 * For a consumer that renders one frame per image -- the thumbnail cache -- hashed coverage
+		 * is speckle without accumulation, and blend is its converged truth. See docs/taa.md.
+		 */
+		bool hashedAsBlend = false;
+	};
 
 	/**
 	 * Owns the lifetime of everything loaded from disk into a `bgl::IScene`: textures, materials,
@@ -60,10 +77,14 @@ namespace game
 		 *                 in, and holds it for as long as the instance lives there.
 		 * @param dataRoot The project's Data directory; every path handed to this manager is relative
 		 *                 to it. A standalone baked model directory is its own data root.
+		 * @param options  See AssetManagerOptions.
 		 *
 		 * @throws bgl::SceneError if `scene` is null.
 		 */
-		AssetManager(bgl::SceneRef scene, std::filesystem::path dataRoot);
+		AssetManager(
+			bgl::SceneRef         scene,
+			std::filesystem::path dataRoot,
+			AssetManagerOptions   options = {});
 
 		/** Releases everything still held, in dependency order. */
 		~AssetManager();
@@ -85,9 +106,11 @@ namespace game
 		 * Uploads the `.ktx2` at `relPath`, or shares the upload from a previous call. An empty path
 		 * yields an invalid handle, which the scene reads as "absent" and replaces with its default.
 		 *
-		 * @param prefetch Optional decoded images to upload instead of reading the file. See
-		 *        TexturePrefetch; a path it does not carry is read from disk as usual.
-		 * @throws std::runtime_error if the file cannot be read or decoded.
+		 * @param prefetch Optional decoded images to upload instead of reading the file. When
+		 *        supplied it is authoritative: a path it does not carry (and no previous call
+		 *        uploaded) yields an invalid handle rather than a read of the file. Null means
+		 *        decode here.
+		 * @throws std::runtime_error if the file cannot be read or decoded (null `prefetch` only).
 		 */
 		bgl::TextureAssetHandle
 		AcquireTexture(std::string_view relPath, TexturePrefetch* prefetch = nullptr);
@@ -97,7 +120,9 @@ namespace game
 		 * previous call, acquiring a reference to every texture it names.
 		 *
 		 * @param prefetch Optional decoded images for the textures it names -- the way to keep their
-		 *        decode off the render thread. MaterialTextures() says what to put in one.
+		 *        decode off the render thread. MaterialTextures() says what to put in one, and
+		 *        AcquireTexture's rule applies per texture: absent from a supplied prefetch means
+		 *        the default map, not a disk read.
 		 * @throws std::runtime_error if the file cannot be read, or the scene cannot allocate.
 		 */
 		bgl::MaterialHandle
@@ -408,6 +433,7 @@ namespace game
 
 		bgl::SceneRef         m_Scene;
 		std::filesystem::path m_DataRoot;
+		AssetManagerOptions   m_Options;
 
 		core::str::unordered_str_map<uint32_t> m_TextureByPath;
 		core::str::unordered_str_map<uint64_t> m_MaterialByPath;

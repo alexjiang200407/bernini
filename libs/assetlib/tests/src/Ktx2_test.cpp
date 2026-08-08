@@ -110,6 +110,72 @@ TEST_CASE("KTX2 bake targets write their block format directly", "[ktx2][io][bak
 	}
 }
 
+// A consumer that displays at a known small size asks for only the tail of the stored chain, so
+// the skipped levels are never copied on the render thread nor uploaded. The 64x64 source stores
+// mips 64..1; the cap selects among them, it does not resample.
+TEST_CASE("KTX2 loads only the mip tail that covers maxDim", "[ktx2][io]")
+{
+	constexpr uint32_t c_Width  = 64;
+	constexpr uint32_t c_Height = 64;
+
+	std::vector<std::byte> rgba(static_cast<size_t>(c_Width) * c_Height * 4, std::byte{ 180 });
+	const ImageData        src  = rgba8ToImage(rgba, c_Width, c_Height);
+	const auto             path = std::filesystem::temp_directory_path() / "bernini_ktx2_tail.ktx2";
+
+	SECTION("the tail of a Basis chain transcodes to BC7 with the capped top level")
+	{
+		writeKTX2(src, path, /*srgb*/ true);
+		const ImageData loaded = loadKTX2(path, Ktx2Decode::kGpu, 16);
+
+		REQUIRE(loaded.width == 16);
+		REQUIRE(loaded.height == 16);
+		REQUIRE(loaded.mipLevels == 5);  // 16, 8, 4, 2, 1
+		REQUIRE(loaded.vkFormat == VkFormat::BC7_SRGB_BLOCK);
+		REQUIRE(loaded.subresources.size() == 5);
+		// BC7 is 4x4 16-byte blocks: top mip row pitch = ceil(16/4) * 16 = 64.
+		REQUIRE(loaded.subresources.front().rowPitch == 64);
+
+		std::filesystem::remove(path);
+	}
+
+	SECTION("an uncompressed chain is capped the same way")
+	{
+		writeKTX2(src, path, /*srgb*/ false, Ktx2Compression::kNone);
+		const ImageData loaded = loadKTX2(path, Ktx2Decode::kGpu, 16);
+
+		REQUIRE(loaded.width == 16);
+		REQUIRE(loaded.mipLevels == 5);
+		REQUIRE(loaded.vkFormat == VkFormat::R8G8B8A8_UNORM);
+		REQUIRE(loaded.subresources.front().rowPitch == 16 * 4);
+
+		std::filesystem::remove(path);
+	}
+
+	SECTION("a block-compressed tail cannot start on an unaligned level")
+	{
+		// The 2x2 mip covers maxDim = 2, but a BC top level must be a multiple of the 4x4 block, so
+		// the tail backs off to the 4x4 level. Uncompressed has no such constraint.
+		writeKTX2(src, path, /*srgb*/ true);
+		REQUIRE(loadKTX2(path, Ktx2Decode::kGpu, 2).width == 4);
+		std::filesystem::remove(path);
+
+		writeKTX2(src, path, /*srgb*/ false, Ktx2Compression::kNone);
+		REQUIRE(loadKTX2(path, Ktx2Decode::kGpu, 2).width == 2);
+		std::filesystem::remove(path);
+	}
+
+	SECTION("a cap the whole image fits under returns it whole")
+	{
+		writeKTX2(src, path, /*srgb*/ true);
+		const ImageData loaded = loadKTX2(path, Ktx2Decode::kGpu, 4096);
+
+		REQUIRE(loaded.width == c_Width);
+		REQUIRE(loaded.mipLevels == src.mipLevels);
+
+		std::filesystem::remove(path);
+	}
+}
+
 // The same Basis payload loadKTX2 turns into BC7 blocks transcodes to RGBA8 instead, so a CPU
 // consumer (an editor thumbnail) needs no block decoder.
 TEST_CASE("KTX2 preview decodes to uncompressed RGBA8", "[ktx2][io][preview]")

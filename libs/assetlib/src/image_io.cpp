@@ -1,5 +1,6 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <core/math.h>
 
 #include <ktx.h>
 
@@ -225,7 +226,11 @@ namespace assetlib
 	// Everything loadKTX2 and decodeKTX2 share once the container is open, so a file and an embedded
 	// blob cannot decode differently. `path` names the source for error messages only.
 	static ImageData
-	imageFromKtx(ktxTexture2* texture, Ktx2Decode decode, const std::filesystem::path& path)
+	imageFromKtx(
+		ktxTexture2*                 texture,
+		Ktx2Decode                   decode,
+		uint32_t                     maxDim,
+		const std::filesystem::path& path)
 	{
 		// Basis-supercompressed textures (LDR material maps) transcode on the way in. The GPU wants a
 		// block format; the material bake wants texels it can composite, so it asks for RGBA32 instead.
@@ -256,17 +261,33 @@ namespace assetlib
 				std::to_string(static_cast<uint32_t>(vk)) + ")");
 		}
 
+		const BlockInfo block = blockInfo(static_cast<VkFormat>(texture->vkFormat));
+
+		// D3D12 requires a block-compressed texture's most-detailed level to be block-aligned, so
+		// the tail may not start on a mip a block does not divide.
+		uint32_t firstMip = 0;
+		if (maxDim > 0)
+		{
+			firstMip = previewMipLevel(
+				texture->baseWidth,
+				texture->baseHeight,
+				texture->numLevels,
+				maxDim);
+			while (firstMip > 0 &&
+			       (((std::max)(1u, texture->baseWidth >> firstMip) % block.width) != 0 ||
+			        ((std::max)(1u, texture->baseHeight >> firstMip) % block.height) != 0))
+				--firstMip;
+		}
+
 		ImageData image;
-		image.width          = texture->baseWidth;
-		image.height         = texture->baseHeight;
-		image.mipLevels      = texture->numLevels;
+		image.width          = (std::max)(1u, texture->baseWidth >> firstMip);
+		image.height         = (std::max)(1u, texture->baseHeight >> firstMip);
+		image.mipLevels      = texture->numLevels - firstMip;
 		image.isCubemap      = texture->isCubemap;
 		const uint32_t faces = texture->isCubemap ? 6u : 1u;
 		image.arraySize      = texture->numLayers * faces;
 		image.vkFormat =
 			static_cast<VkFormat>(texture->vkFormat);  // BC7 after transcode, else as-is
-
-		const BlockInfo block = blockInfo(image.vkFormat);
 
 		ktxTexture* base = ktxTexture(texture);
 
@@ -275,18 +296,18 @@ namespace assetlib
 		size_t totalBytes = 0;
 		for (uint32_t layer = 0; layer < texture->numLayers; ++layer)
 			for (uint32_t face = 0; face < faces; ++face)
-				for (uint32_t mip = 0; mip < texture->numLevels; ++mip)
+				for (uint32_t mip = firstMip; mip < texture->numLevels; ++mip)
 					totalBytes += ktxTexture_GetImageSize(base, mip);
 
 		image.pixels = core::fixed_buffer<std::byte>(totalBytes);
-		image.subresources.reserve(image.arraySize * texture->numLevels);
+		image.subresources.reserve(image.arraySize * image.mipLevels);
 
 		size_t dstOffset = 0;
 		for (uint32_t layer = 0; layer < texture->numLayers; ++layer)
 		{
 			for (uint32_t face = 0; face < faces; ++face)
 			{
-				for (uint32_t mip = 0; mip < texture->numLevels; ++mip)
+				for (uint32_t mip = firstMip; mip < texture->numLevels; ++mip)
 				{
 					ktx_size_t srcOffset = 0;
 					check(
@@ -295,9 +316,9 @@ namespace assetlib
 						path);
 
 					const size_t   size = ktxTexture_GetImageSize(base, mip);
-					const uint32_t mipW = (std::max)(1u, image.width >> mip);
+					const uint32_t mipW = (std::max)(1u, texture->baseWidth >> mip);
 					const uint64_t pitch =
-						static_cast<uint64_t>((mipW + block.width - 1) / block.width) * block.bytes;
+						static_cast<uint64_t>(core::div_ceil(mipW, block.width)) * block.bytes;
 
 					std::memcpy(image.pixels.data() + dstOffset, base->pData + srcOffset, size);
 					image.subresources.push_back({ dstOffset, pitch, size });
@@ -311,7 +332,7 @@ namespace assetlib
 	}
 
 	ImageData
-	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode)
+	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode, uint32_t maxDim)
 	{
 		ktxTexture2* texture = nullptr;
 
@@ -322,7 +343,7 @@ namespace assetlib
 			&texture);
 		check(rc, "assetlib::loadKTX2: failed to load", path);
 
-		return imageFromKtx(texture, decode, path);
+		return imageFromKtx(texture, decode, maxDim, path);
 	}
 
 	ImageData
@@ -337,7 +358,7 @@ namespace assetlib
 			&texture);
 		check(rc, "assetlib::decodeKTX2: failed to read", "<memory>");
 
-		return imageFromKtx(texture, decode, "<memory>");
+		return imageFromKtx(texture, decode, 0, "<memory>");
 	}
 
 	ImageData

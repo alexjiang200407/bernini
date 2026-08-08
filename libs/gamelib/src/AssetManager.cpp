@@ -21,7 +21,7 @@ namespace game
 		// concepts because a layer is free to grow buckets no material ever authors. gamelib is the
 		// only library that links both, so this is the one place they meet.
 		bgl::LayerType
-		ToLayerType(assetlib::AlphaMode mode)
+		ToLayerType(assetlib::AlphaMode mode, bool hashedAsBlend)
 		{
 			switch (mode)
 			{
@@ -30,7 +30,7 @@ namespace game
 			case assetlib::AlphaMode::kBlend:
 				return bgl::LayerType::kBlend;
 			case assetlib::AlphaMode::kHashed:
-				return bgl::LayerType::kHashed;
+				return hashedAsBlend ? bgl::LayerType::kBlend : bgl::LayerType::kHashed;
 			case assetlib::AlphaMode::kOpaque:
 				break;
 			}
@@ -58,8 +58,11 @@ namespace game
 		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 	}
 
-	AssetManager::AssetManager(bgl::SceneRef scene, std::filesystem::path dataRoot) :
-		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot))
+	AssetManager::AssetManager(
+		bgl::SceneRef         scene,
+		std::filesystem::path dataRoot,
+		AssetManagerOptions   options) :
+		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot)), m_Options(options)
 	{
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
 		// still be there -- and with a bare reference that was only true if the caller happened to
@@ -117,22 +120,30 @@ namespace game
 		}
 
 		// Someone decoded this for us off the render thread. Take it; only the upload has to be here.
+		// A supplied prefetch is authoritative: a path it lacks is one whose decode already failed
+		// and was reported there, and re-reading the file would put the decode back on this thread --
+		// the very cost the prefetch exists to keep off it. The invalid handle reads as "absent", so
+		// the scene substitutes its default map.
 		auto decoded = assetlib::ImageData();
-		bool hoisted = false;
 		if (prefetch != nullptr)
 		{
-			if (const auto it = prefetch->find(relPath); it != prefetch->end())
+			const auto it = prefetch->find(relPath);
+			if (it == prefetch->end())
 			{
-				decoded = std::move(it->second);
-				prefetch->erase(it);
-				hoisted = true;
+				logger::warn(
+					"AcquireTexture: '{}' is not in the prefetch; using the default map",
+					relPath);
+				return {};
 			}
+
+			decoded = std::move(it->second);
+			prefetch->erase(it);
 		}
 
 		auto key = std::string(relPath);
 
 		const bgl::TextureAssetHandle handle = m_Scene->AddTextureAsset(
-			hoisted ? std::move(decoded) : assetlib::loadKTX2(m_DataRoot / key),
+			prefetch != nullptr ? std::move(decoded) : assetlib::loadKTX2(m_DataRoot / key),
 			key);
 
 		m_TextureByPath.emplace(key, handle.textureSlot.index);
@@ -689,7 +700,7 @@ namespace game
 		desc.baseColorFactor = pbr.baseColorFactor;
 		desc.metallicFactor  = pbr.metallicFactor;
 		desc.roughnessFactor = pbr.roughnessFactor;
-		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.layerType       = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		desc.baseColorTexture = record.textures[0];
@@ -708,7 +719,7 @@ namespace game
 		desc.baseColorFactor = pbr.baseColorFactor;
 		desc.metallicFactor  = pbr.metallicFactor;
 		desc.roughnessFactor = pbr.roughnessFactor;
-		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.layerType       = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		const auto route = [&](size_t index) {

@@ -8,10 +8,13 @@ each surface *was*, not from where the pixel is.
 It is **opt-in per render target** (`RenderTargetDesc::taaEnabled`) and off by default, because it
 makes a frame depend on the frames before it. A caller that renders a fixed small number of frames —
 a thumbnail, a render test — cannot converge, so it must not silently get an unconverged image. In
-the editor that split is exactly the viewport windows (which redraw continuously) against the
-thumbnail cache (which does not). Each viewport reads its own `temporalAA` key in `config.json` —
-under `levelEditor` and `materialEditor`, beside the other things that size that window's render
-target, rather than under `graphics`, which is where `GraphicsOptions` lives.
+the editor that split is the viewport windows (which redraw continuously) against the thumbnail
+cache, which renders one frame per asset and does not opt in at all: its private asset manager
+loads each hashed-alpha material as the blend material its coverage converges to
+(`AssetManagerOptions::hashedAsBlend`), so the converged look is drawn directly rather than
+accumulated. Each viewport reads its own `temporalAA` key in `config.json` — under `levelEditor`
+and `materialEditor`, beside the other things that size that window's render target, rather than
+under `graphics`, which is where `GraphicsOptions` lives.
 
 The desc flag decides **allocation**; `IRenderTarget::SetTaaEnabled` decides whether it **runs**, so
 a viewport can be compared against itself without recreating anything. Enabling it on a target that

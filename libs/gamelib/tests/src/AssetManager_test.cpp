@@ -161,11 +161,12 @@ namespace
 		bgl::SceneViewRef                 view;
 		std::optional<game::AssetManager> assets;
 
-		explicit Fixture(const char* name) : root(name), gfx(bgl::CreateGraphics(HeadlessOptions()))
+		explicit Fixture(const char* name, game::AssetManagerOptions options = {}) :
+			root(name), gfx(bgl::CreateGraphics(HeadlessOptions()))
 		{
 			scene = gfx->CreateScene(AssetSceneDesc());
 			view  = gfx->CreateSceneView(scene, 16);
-			assets.emplace(scene, root.path);
+			assets.emplace(scene, root.path, options);
 		}
 
 		// The manager is non-copyable, so these would be implicitly deleted anyway; say so, because
@@ -216,6 +217,23 @@ TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[
 		assetlib::AlphaMode::kHashed);
 
 	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kHashed);
+}
+
+TEST_CASE("AssetManager can load hashed alpha as the blend it converges to", "[gamelib][assets]")
+{
+	// The thumbnail cache's option: a renderer that gets one frame per image cannot accumulate
+	// hashed coverage into a surface, so its private manager loads the blend material the coverage
+	// converges to. Only hashed is rerouted -- everything else must keep its authored layer.
+	Fixture fx("bernini_am_hashed_blend", game::AssetManagerOptions{ .hashedAsBlend = true });
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(
+		fx.root.path / "Materials" / "hashed.bmaterial",
+		"Textures/a.ktx2",
+		assetlib::AlphaMode::kHashed);
+	WriteBakedMaterial(fx.root.path / "Materials" / "opaque.bmaterial", "Textures/a.ktx2");
+
+	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kBlend);
+	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")
@@ -696,18 +714,24 @@ TEST_CASE("A prefetched texture is uploaded without its file being read", "[game
 	CHECK(prefetch.empty());
 }
 
-TEST_CASE("A prefetch the texture is missing from falls back to the file", "[gamelib][assets]")
+TEST_CASE(
+	"A texture missing from a supplied prefetch is the default, not a read",
+	"[gamelib][assets]")
 {
-	// A partial prefetch is a valid one -- a texture whose decode failed is simply left out of it.
+	// A supplied prefetch is authoritative. Its reason to exist is keeping the decode off the
+	// acquiring (render) thread, and a fallback read would put a whole-chain transcode right back
+	// on it -- so a path the prefetch lacks resolves to the scene's default map instead. The file
+	// here is real and decodable, which is what proves it was not read.
 	Fixture fx("bernini_am_prefetch_partial");
 	WriteTexture(fx.root.path / "Textures" / "real.ktx2");
 
 	auto prefetch = game::TexturePrefetch();  // empty
 
-	CHECK((*fx).AcquireTexture("Textures/real.ktx2", &prefetch).textureSlot);
+	CHECK(!(*fx).AcquireTexture("Textures/real.ktx2", &prefetch).textureSlot);
 
-	// And a miss in both places is still an error, not a silent default.
-	CHECK_THROWS_AS((*fx).AcquireTexture("Textures/absent.ktx2", &prefetch), std::runtime_error);
+	// No prefetch means decode here: the same path uploads, and a missing file is an error.
+	CHECK((*fx).AcquireTexture("Textures/real.ktx2").textureSlot);
+	CHECK_THROWS_AS((*fx).AcquireTexture("Textures/absent.ktx2"), std::runtime_error);
 }
 
 TEST_CASE("A material's textures come from the prefetch when it carries them", "[gamelib][assets]")

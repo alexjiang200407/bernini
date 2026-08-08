@@ -175,6 +175,10 @@ flowchart TD
   that the GUI thread reaches only through posted closures.
 * **`IScene` and `ISceneView` are externally synchronized** — one owner, one thread, the same thread
   that draws them. They have no internal locking.
+* **`CookStaticMesh` is the one call allowed off the driving thread.** It is a free function over
+  the `BMesh` alone — no scene, no device — and exists so the CPU half of `AddStaticMesh` (the
+  dominant cost of a large mesh) can run on a worker, leaving only the commit overload's uploads on
+  the driving thread.
 * **Only one frame may be active at a time.** `BeginFrame` throws `GraphicsError` if one already is.
   `Resize`, `SubmitCapture` and `ScreenshotToMemory` throw if called between `BeginFrame` and
   `EndFrame`; `TryResolveCapture` is the exception and may be called mid-frame.

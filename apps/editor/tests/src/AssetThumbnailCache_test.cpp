@@ -263,14 +263,16 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 	REQUIRE(DistinctColours(image) > 1);
 }
 
-// What makes a stochastic material safe to thumbnail, and the reason the cache runs temporal AA over
-// a hundred warm-up frames rather than capturing the first frame it draws.
+// What makes a stochastic material safe to thumbnail, and the gate on the cache's reroute: it
+// renders one frame, where hashed coverage cannot accumulate into a surface, so its private
+// manager loads a hashed material as the blend it converges to (hashedAsBlend). This is the test
+// that fails if that reroute is lost.
 //
-// A hashed material's coverage is a per-pixel random decision. One frame of it is a speckle pattern,
-// not a picture of the material, and every assertion the other thumbnail tests make -- it rendered,
-// it has more than one colour -- passes on speckle. Grain is what tells them apart, and the same
-// material at kOpaque is the reference for how smooth a resolved sphere is: it is the same geometry
-// under the same light, differing only in the coverage decision.
+// A hashed material's coverage is a per-pixel random decision. One frame of it is a speckle
+// pattern, not a picture of the material, and every assertion the other thumbnail tests make -- it
+// rendered, it has more than one colour -- passes on speckle. Grain is what tells them apart, and
+// the same material at kOpaque is the reference for how smooth a resolved sphere is: it is the
+// same geometry under the same light, differing only in the coverage decision.
 TEST_CASE("A hashed material thumbnails as a surface rather than as noise", "[thumbnails][render]")
 {
 	Fixture fixture;
@@ -316,6 +318,70 @@ TEST_CASE("A hashed material thumbnails as a surface rather than as noise", "[th
 	// half-covered sphere edge is a busier edge -- without leaving room for an unresolved pattern,
 	// which measures orders of magnitude above this rather than a factor of three.
 	CHECK(hashedGrain < opaqueGrain * 3.0);
+}
+
+TEST_CASE("Tearing the cache down mid-batch leaves the renderer alive", "[thumbnails][render]")
+{
+	// A shot advances inside the renderer's frame loop over many ticks, so teardown routinely
+	// interrupts a batch with one shot mid-warmup and more queued. It must detach from the loop and
+	// hand back what the shot placed in the scene, or the render thread is left ticking a dead
+	// object.
+	Fixture fixture;
+
+	auto paths = std::vector<QString>();
+	for (int i = 0; i < 3; ++i)
+	{
+		const std::string relative = WriteMaterial(
+			"thumb_teardown_" + std::to_string(i),
+			assetlib::AlphaMode::kHashed,
+			0.5f);
+		paths.push_back(QString::fromStdString(std::string(c_DataRoot) + "/" + relative));
+	}
+
+	{
+		AssetThumbnailCache cache(fixture.Desc());
+		REQUIRE(cache.IsReady());
+		cache.SetAssets(&*fixture.assets);
+
+		for (const QString& path : paths) cache.Request(path);
+
+		// Pump long enough for the batch to reach the render thread, so the teardown interrupts
+		// warmups in progress rather than an empty queue.
+		static_cast<void>(WaitFor([] { return false; }, 50));
+	}
+
+	// The renderer outlives the cache and must still be serving closures.
+	REQUIRE(fixture.renderer->Invoke([] { return 42; }) == 42);
+}
+
+TEST_CASE("A read finishing after its project closed does not land", "[thumbnails][render]")
+{
+	// The worker's read always outlives Request's turn of the event loop, so a project switch can
+	// always slip in between -- and the read then resolves against a data root that is gone. Its
+	// render must fail quietly rather than cache an image under the closed project's path.
+	Fixture fixture;
+
+	const std::string hashedPath =
+		WriteMaterial("thumb_switch", assetlib::AlphaMode::kHashed, 0.5f);
+	const QString hashedFile = QString::fromStdString(std::string(c_DataRoot) + "/" + hashedPath);
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetAssets(&*fixture.assets);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+
+	// No pumping in between: the read is still on the worker when the project closes.
+	cache.Request(hashedFile);
+	cache.SetAssets(nullptr);
+
+	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 1000));
+
+	// And the cache still renders once a project is back, so the cancel released everything the
+	// next shot needs.
+	cache.SetAssets(&*fixture.assets);
+	cache.Request(c_MeshPath);
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
 }
 
 TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][render]")

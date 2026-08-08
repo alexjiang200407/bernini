@@ -7,6 +7,7 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <bgl/PreparedStaticMesh.h>
 #include <bgl/PsoType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/api.h>
@@ -167,6 +168,19 @@ namespace bgl
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials) = 0;
+
+		/**
+		 * The commit half of the AddStaticMesh split: uploads a mesh CookStaticMesh flattened,
+		 * consuming it. Cook on a worker, commit here -- the flattening is the dominant cost of a
+		 * large mesh, and the overload above pays it on the calling thread.
+		 *
+		 * @param mesh       From CookStaticMesh. Consumed, even on failure.
+		 * @param materials  Materials parallel to the source BMesh's `materials`, resolved by the
+		 *                   caller; a submesh whose material index is out of range is left unlit.
+		 * @throws SceneError if `mesh` was already consumed, or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

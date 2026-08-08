@@ -33,7 +33,9 @@ here, not in either of them.
 
 **Identity.** A path maps to one texture upload and one material, however many times it is asked for.
 Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes. Cubes and spheres have
-no file, so they are not shared — but they are refcounted like anything else.
+no file, so they are not shared — but they are refcounted like anything else. Loading options
+(`AssetManagerOptions`) are fixed at construction for the same reason: an option that varied per call
+would make the shared material depend on who asked first.
 
 **Lifetime.** References run along the edges the assets themselves have:
 
@@ -65,9 +67,10 @@ Fused, the expensive half is stuck on the render thread.
 `TexturePrefetch` unfuses them. It is a map of already-decoded `ImageData` keyed by the relative path
 it will be asked for; hand one to `AcquireTexture` / `AcquireMaterial` and a matching entry is moved
 out and uploaded instead of the file being read. `MaterialTextures()` is public so a caller can see
-what a material will need *before* acquiring it, and decode that list off-thread. A path the prefetch
-does not carry falls back to reading the file, so a partial prefetch is a valid one — a texture whose
-decode failed is simply left out.
+what a material will need *before* acquiring it, and decode that list off-thread. A supplied prefetch
+is authoritative: a path it does not carry resolves to the scene's default map rather than a read of
+the file, so handing one in *is* the guarantee the acquiring thread does no decode. A texture whose
+decode failed is simply left out, and was reported where it failed.
 
 The editor's `AssetThumbnailCache` is the reason it exists: it decodes on a worker and uploads on the
 UI thread, which is the only way a folder of meshes can populate without freezing the editor.
