@@ -1,6 +1,8 @@
 #include <assetlib/banim_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>
 
@@ -9,13 +11,13 @@ using namespace assetlib;
 namespace
 {
 	Transform
-	identityTransform() noexcept
+	IdentityTransform() noexcept
 	{
 		return Transform{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
 	}
 
 	uint32_t
-	addName(std::vector<char>& pool, const char* name)
+	AddName(std::vector<char>& pool, const char* name)
 	{
 		const auto offset = static_cast<uint32_t>(pool.size());
 		for (const char* c = name; *c != '\0'; ++c) pool.push_back(*c);
@@ -25,7 +27,7 @@ namespace
 
 	/** A three-bone chain: hips -> spine -> head, each offset one unit up from its parent. */
 	Skeleton
-	makeChain()
+	MakeChain()
 	{
 		Skeleton skeleton;
 		skeleton.stringPool.push_back('\0');
@@ -34,12 +36,12 @@ namespace
 		for (uint32_t i = 0; i < names.size(); ++i)
 		{
 			Bone bone{};
-			bone.bindPose               = identityTransform();
+			bone.bindPose               = IdentityTransform();
 			bone.bindPose.translation.y = 1.0f;
 			bone.inverseBind =
 				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -static_cast<float>(i + 1), 0.0f));
 			bone.parent     = i == 0 ? c_InvalidIndex : i - 1;
-			bone.nameOffset = addName(skeleton.stringPool, names[i]);
+			bone.nameOffset = AddName(skeleton.stringPool, names[i]);
 			skeleton.bones.push_back(bone);
 		}
 
@@ -48,7 +50,7 @@ namespace
 
 	/** One clip of `frames` poses over the chain, translating bone 0 along +Z by `distance`. */
 	AnimationSet
-	makeClipSet(const Skeleton& skeleton, uint32_t frames, float distance)
+	MakeClipSet(const Skeleton& skeleton, uint32_t frames, float distance)
 	{
 		AnimationSet animations;
 		animations.stringPool.push_back('\0');
@@ -57,7 +59,7 @@ namespace
 		animations.skeleton          = "Animations/walk.bskel";
 
 		AnimationClip clip{};
-		clip.nameOffset  = addName(animations.stringPool, "walk");
+		clip.nameOffset  = AddName(animations.stringPool, "walk");
 		clip.firstSample = 0;
 		clip.frameCount  = frames;
 		clip.sampleRate  = 30.0f;
@@ -84,7 +86,7 @@ namespace
 
 TEST_CASE("A skeleton survives a container round-trip", "[skeleton][io]")
 {
-	const auto skeleton = makeChain();
+	const auto skeleton = MakeChain();
 	const auto restored = deserializeSkeleton(serializeSkeleton(skeleton));
 
 	REQUIRE(restored.bones.size() == skeleton.bones.size());
@@ -106,7 +108,7 @@ TEST_CASE("A skeleton whose bones are not topologically sorted will not load", "
 	// The whole point of the ordering is that a runtime walks the hierarchy in one forward pass with
 	// no check of its own -- so a file that breaks it has to be rejected here, not tolerated. A parent
 	// after its child would otherwise be read one frame stale, silently.
-	auto skeleton = makeChain();
+	auto skeleton = MakeChain();
 	std::swap(skeleton.bones[0], skeleton.bones[1]);
 
 	const auto bytes = serializeSkeleton(skeleton);
@@ -115,7 +117,7 @@ TEST_CASE("A skeleton whose bones are not topologically sorted will not load", "
 
 TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skeleton]")
 {
-	const auto skeleton = makeChain();
+	const auto skeleton = MakeChain();
 	const auto original = skeletonSignature(skeleton);
 
 	SECTION("re-authoring the rest pose does not invalidate a clip")
@@ -130,7 +132,7 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 	SECTION("renaming a bone does")
 	{
 		auto renamed                = skeleton;
-		renamed.bones[1].nameOffset = addName(renamed.stringPool, "chest");
+		renamed.bones[1].nameOffset = AddName(renamed.stringPool, "chest");
 		CHECK(skeletonSignature(renamed) != original);
 	}
 
@@ -145,9 +147,9 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 	{
 		auto inserted = skeleton;
 		Bone extra{};
-		extra.bindPose   = identityTransform();
+		extra.bindPose   = IdentityTransform();
 		extra.parent     = 0;
-		extra.nameOffset = addName(inserted.stringPool, "tail");
+		extra.nameOffset = AddName(inserted.stringPool, "tail");
 		inserted.bones.push_back(extra);
 		CHECK(skeletonSignature(inserted) != original);
 	}
@@ -155,8 +157,8 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 
 TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 {
-	const auto skeleton   = makeChain();
-	const auto animations = makeClipSet(skeleton, 31, 2.0f);
+	const auto skeleton   = MakeChain();
+	const auto animations = MakeClipSet(skeleton, 31, 2.0f);
 	const auto restored   = deserializeAnimations(serializeAnimations(animations));
 
 	CHECK(restored.skeleton == animations.skeleton);
@@ -179,8 +181,8 @@ TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 TEST_CASE("The skeleton path is readable without the samples", "[animation][io]")
 {
 	// A whole-project reference scan reads this and nothing else -- the samples are megabytes.
-	const auto skeleton   = makeChain();
-	const auto animations = makeClipSet(skeleton, 31, 2.0f);
+	const auto skeleton   = MakeChain();
+	const auto animations = MakeClipSet(skeleton, 31, 2.0f);
 
 	const auto path = std::filesystem::temp_directory_path() / "bernini_banim_refs.banim";
 	saveAnimations(animations, path);
@@ -193,8 +195,8 @@ TEST_CASE("The skeleton path is readable without the samples", "[animation][io]"
 
 TEST_CASE("A clip set cooked against another rig is detected", "[animation]")
 {
-	const auto skeleton   = makeChain();
-	const auto animations = makeClipSet(skeleton, 31, 2.0f);
+	const auto skeleton   = MakeChain();
+	const auto animations = MakeClipSet(skeleton, 31, 2.0f);
 
 	CHECK(animationsMatchSkeleton(animations, skeleton));
 
@@ -203,7 +205,7 @@ TEST_CASE("A clip set cooked against another rig is detected", "[animation]")
 		// The clips' bone indices now name different bones, and nothing about the pose they produce
 		// says so -- this comparison is the only thing that can.
 		auto reordered                = skeleton;
-		reordered.bones[1].nameOffset = addName(reordered.stringPool, "chest");
+		reordered.bones[1].nameOffset = AddName(reordered.stringPool, "chest");
 		CHECK_FALSE(animationsMatchSkeleton(animations, reordered));
 	}
 
@@ -217,8 +219,8 @@ TEST_CASE("A clip set cooked against another rig is detected", "[animation]")
 
 TEST_CASE("A clip that samples past its pool will not load", "[animation][io]")
 {
-	const auto skeleton            = makeChain();
-	auto       animations          = makeClipSet(skeleton, 31, 2.0f);
+	const auto skeleton            = MakeChain();
+	auto       animations          = MakeClipSet(skeleton, 31, 2.0f);
 	animations.clips[0].frameCount = 40;
 
 	const auto bytes = serializeAnimations(animations);
@@ -230,7 +232,7 @@ TEST_CASE("A bind pose resolves to model space in one forward pass", "[skeleton]
 	// Each bone sits one unit above its parent, so the chain's third bone is three units up. This is
 	// only true because parent < index; a walk over an unsorted skeleton would read a parent that had
 	// not been computed yet.
-	const auto model = bindPoseModelTransforms(makeChain());
+	const auto model = bindPoseModelTransforms(MakeChain());
 
 	REQUIRE(model.size() == 3);
 	CHECK(model[0][3].y == Catch::Approx(1.0f));
@@ -240,7 +242,7 @@ TEST_CASE("A bind pose resolves to model space in one forward pass", "[skeleton]
 
 TEST_CASE("findBone names a bone by its pooled name", "[skeleton]")
 {
-	const auto skeleton = makeChain();
+	const auto skeleton = MakeChain();
 
 	CHECK(findBone(skeleton, "hips") == 0);
 	CHECK(findBone(skeleton, "head") == 2);

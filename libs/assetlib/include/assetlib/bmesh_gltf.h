@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/cancel.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMeshImport.h>
 
 namespace assetlib

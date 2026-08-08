@@ -1,8 +1,9 @@
 #pragma once
-#include <assetlib_structs/Skeleton.h>
 
 namespace assetlib
 {
+	struct Skeleton;
+
 	/** Serializes a skeleton into the versioned container. */
 	[[nodiscard]] std::vector<std::byte>
 	serializeSkeleton(const Skeleton& skeleton);

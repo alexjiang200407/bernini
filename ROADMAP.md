@@ -94,8 +94,9 @@ and portability.
     - [ ] Rotation compression (quat+translation, 16 B/bone) — matters most for permanent corpse palettes.
     - [ ] Per-LOD bone sets as index-compatible subsets, with weight-collapse validation.
     - [ ] State machine authoring → flat table export, rejecting graph features the GPU path lacks.
-    - [x] Separate humanoid and equine skeletons and clip sets, both exporting to the same table format
-      — one file is one rig, and a glTF with two skins is rejected rather than half-imported.
+    - [ ] Separate humanoid and equine skeletons and clip sets, both exporting to the same table
+      format — the rigs are separable already (one file is one rig, and a glTF with two skins is
+      rejected rather than half-imported), but the shared table export waits on the line above.
     - [ ] Editor import: the *Import animations* checkbox is inert; the CLI is the only way in.
   - [ ] Vertex Animation Textures (VAT)
     - [ ] Bake pipeline: resampled clip → position texture (+ normal/tangent), unorm-packed in the

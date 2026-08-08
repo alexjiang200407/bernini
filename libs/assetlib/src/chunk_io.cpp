@@ -82,7 +82,8 @@ namespace assetlib::chunk
 			throw_runtime_error(
 				"{}: chunk byte size is not a multiple of the element size",
 				m_What);
-		if (entry.offset + entry.byteSize > m_Bytes.size())
+		// Subtraction rather than addition: a crafted offset near UINT64_MAX would wrap past the sum.
+		if (entry.byteSize > m_Bytes.size() || entry.offset > m_Bytes.size() - entry.byteSize)
 			throw_runtime_error("{}: chunk extends past end of stream", m_What);
 	}
 
@@ -108,11 +109,16 @@ namespace assetlib::chunk
 		if (ec)
 			throw std::runtime_error(fileErrorMessage(prefix + ": cannot size file", path));
 
-		// Every offset below comes out of the file, so each is checked against its real size before it is
-		// seeked to: a corrupt chunkCount would otherwise size an allocation.
-		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
-			if (offset + bytes > fileSize)
+		// Every offset and size below comes out of the file, so each is checked against the real size
+		// before anything is allocated or seeked to. Subtraction rather than addition: a crafted
+		// offset near UINT64_MAX would wrap past the sum.
+		const auto checkRange = [&](uint64_t bytes, uint64_t offset) {
+			if (bytes > fileSize || offset > fileSize - bytes)
 				throw_runtime_error("{}: chunk extends past end of file", what);
+		};
+
+		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
+			checkRange(bytes, offset);
 
 			in.seekg(static_cast<std::streamoff>(offset));
 			in.read(static_cast<char*>(dst), static_cast<std::streamsize>(bytes));
@@ -124,6 +130,10 @@ namespace assetlib::chunk
 		readAt(&header, sizeof(header), 0);
 		checkHeader(header, magic, versionMajor, what);
 
+		checkRange(
+			static_cast<uint64_t>(header.chunkCount) * sizeof(Entry),
+			header.chunkTableOffset);
+
 		std::vector<Entry> table(header.chunkCount);
 		if (!table.empty())
 			readAt(table.data(), table.size() * sizeof(Entry), header.chunkTableOffset);
@@ -133,6 +143,8 @@ namespace assetlib::chunk
 		{
 			if (std::ranges::find(ids, entry.id) == ids.end())
 				continue;
+
+			checkRange(entry.byteSize, entry.offset);
 
 			std::vector<std::byte> chunk(entry.byteSize);
 			if (!chunk.empty())

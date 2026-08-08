@@ -378,6 +378,17 @@ namespace assetlib
 					if (sampler.times.empty() || sampler.values.empty())
 						continue;
 
+					// Times and values come from independent accessors, so nothing but this ties the
+					// two together -- and evaluate indexes values by key without rechecking.
+					const size_t keyStride =
+						sampler.interpolation == Interpolation::kCubicSpline ? 3 : 1;
+					if (sampler.values.size() <
+					    sampler.times.size() * keyStride * static_cast<size_t>(sampler.components))
+						throw_runtime_error(
+							"banim: sampler has {} keyframe times but only {} values to match them",
+							sampler.times.size(),
+							sampler.values.size());
+
 					first = std::min(first, sampler.times.front());
 					last  = std::max(last, sampler.times.back());
 					samplers.emplace(samplerIndex, std::move(sampler));

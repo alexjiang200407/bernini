@@ -1,4 +1,5 @@
 #include <assetlib/bskel_io.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <assetlib/skeleton.h>
 
@@ -53,19 +54,7 @@ namespace assetlib
 	void
 	saveSkeleton(const Skeleton& skeleton, const std::filesystem::path& path)
 	{
-		const auto bytes = serializeSkeleton(skeleton);
-
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("bskel: cannot open file for writing", path));
-
-		out.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-		if (!out)
-			throw std::runtime_error(fileErrorMessage("bskel: failed to write file", path));
+		writeFileBytes(path, serializeSkeleton(skeleton), "bskel");
 	}
 
 	Skeleton

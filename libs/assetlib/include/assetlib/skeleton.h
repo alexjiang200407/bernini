@@ -1,9 +1,11 @@
 #pragma once
-#include <assetlib_structs/Animation.h>
-#include <assetlib_structs/Skeleton.h>
+#include <core/glm.h>
 
 namespace assetlib
 {
+	struct AnimationSet;
+	struct Skeleton;
+
 	/**
 	 * A hash over every bone's name and parent -- everything a joint index means.
 	 *

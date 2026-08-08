@@ -1,41 +1,26 @@
 #include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <assetlib/bmesh_io.h>
 
 #include <core/err/util.h>
+#include <core/hash.h>
 
 namespace assetlib
 {
 	using core::throw_runtime_error;
 
-	namespace
-	{
-		// FNV-1a, so the signature is stable across runs, builds and platforms -- it is written into a
-		// file and compared against one written by a different process.
-		constexpr uint64_t c_FnvOffset = 14695981039346656037ull;
-		constexpr uint64_t c_FnvPrime  = 1099511628211ull;
-
-		void
-		hashBytes(uint64_t& hash, const void* data, size_t size) noexcept
-		{
-			const auto* bytes = static_cast<const uint8_t*>(data);
-			for (size_t i = 0; i < size; ++i)
-			{
-				hash ^= bytes[i];
-				hash *= c_FnvPrime;
-			}
-		}
-	}
-
+	// Persisted in `.banim`, so a change to core's hash invalidates every file already written and
+	// needs a major version bump with it.
 	uint64_t
 	skeletonSignature(const Skeleton& skeleton) noexcept
 	{
-		uint64_t hash = c_FnvOffset;
+		uint64_t hash = core::hash_seed();
 		for (const Bone& bone : skeleton.bones)
 		{
-			const std::string name = nameFromPool(skeleton.stringPool, bone.nameOffset);
-			hashBytes(hash, name.data(), name.size());
-			hashBytes(hash, &bone.parent, sizeof(bone.parent));
+			hash = core::hash_string(nameFromPool(skeleton.stringPool, bone.nameOffset), hash);
+			hash = core::hash_pod(bone.parent, hash);
 		}
 		return hash;
 	}

@@ -1,9 +1,10 @@
 #pragma once
-#include <assetlib_structs/Animation.h>
-#include <assetlib_structs/Skeleton.h>
 
 namespace assetlib
 {
+	struct AnimationSet;
+	struct Skeleton;
+
 	/** Serializes a clip set into the versioned container. */
 	[[nodiscard]] std::vector<std::byte>
 	serializeAnimations(const AnimationSet& animations);
