@@ -1,0 +1,216 @@
+#include "Windows/ContentExplorer/ContentExplorerWindow.h"
+
+#include "util/QtSupport.h"
+
+#include <assetlib/banim_io.h>
+#include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Skeleton.h>
+
+namespace
+{
+	namespace fs = std::filesystem;
+
+	/** A data root that lasts as long as the test, under the OS temp directory. */
+	class TempRoot
+	{
+	public:
+		TempRoot()
+		{
+			m_Root = fs::temp_directory_path() /
+			         ("bernini_rig_test_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+			fs::create_directories(m_Root / "Meshes");
+		}
+
+		~TempRoot()
+		{
+			std::error_code ec;
+			fs::remove_all(m_Root, ec);
+		}
+
+		TempRoot(const TempRoot&) = delete;
+		TempRoot&
+		operator=(const TempRoot&) = delete;
+
+		[[nodiscard]] const fs::path&
+		Data() const
+		{
+			return m_Root;
+		}
+
+		[[nodiscard]] fs::path
+		Bskel() const
+		{
+			return m_Root / "Meshes" / "unit.bskel";
+		}
+
+		[[nodiscard]] fs::path
+		Banim() const
+		{
+			return m_Root / "Meshes" / "unit.banim";
+		}
+
+	private:
+		fs::path m_Root;
+	};
+
+	/** An import carrying a two-bone rig and one clip, as a skinned glTF would arrive. */
+	assetlib::imp::BMeshImport
+	SkinnedImport()
+	{
+		using namespace assetlib;
+
+		imp::BMeshImport imported;
+
+		Bone hips{};
+		hips.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		hips.inverseBind = glm::mat4(1.0f);
+		hips.parent      = c_InvalidIndex;
+		hips.nameOffset  = imported.skeleton.stringPool.add("hips");
+		imported.skeleton.bones.push_back(hips);
+
+		Bone spine{};
+		spine.bindPose    = { glm::vec3(0.0f, 1.0f, 0.0f),
+			                  glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                  glm::vec3(1.0f) };
+		spine.inverseBind = glm::mat4(1.0f);
+		spine.parent      = 0;
+		spine.nameOffset  = imported.skeleton.stringPool.add("spine");
+		imported.skeleton.bones.push_back(spine);
+
+		imported.animations.boneCount         = 2;
+		imported.animations.skeletonSignature = skeletonSignature(imported.skeleton);
+
+		AnimationClip walk{};
+		walk.nameOffset  = imported.animations.stringPool.add("walk");
+		walk.firstSample = 0;
+		walk.frameCount  = 2;
+		walk.duration    = 0.5f;
+		walk.sampleRate  = 30.0f;
+		imported.animations.clips.push_back(walk);
+
+		const Transform rest{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		imported.animations.samples.assign(4, rest);
+
+		return imported;
+	}
+}
+
+// The rig is what makes a skinned import writable at all: assetlib::save refuses a mesh that carries
+// joint indices while naming no skeleton, so before this the editor could not import a rigged glTF.
+TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[importedrig]")
+{
+	const TempRoot  root;
+	const auto      imported = SkinnedImport();
+	assetlib::BMesh mesh;
+
+	ContentExplorerWindow::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*animations*/ false);
+
+	REQUIRE(fs::exists(root.Bskel()));
+
+	// Relative to the data root, like every other path a .bmesh holds -- an absolute one would name
+	// this machine's temp directory and resolve nowhere else.
+	CHECK(mesh.skeleton == "Meshes/unit.bskel");
+
+	const assetlib::Skeleton restored = assetlib::loadSkeleton(root.Bskel());
+	REQUIRE(restored.bones.size() == 2);
+	CHECK(restored.stringPool.at(restored.bones[1].nameOffset) == "spine");
+	CHECK(restored.bones[1].parent == 0);
+
+	SECTION("and the clips are declined unless asked for")
+	{
+		CHECK_FALSE(fs::exists(root.Banim()));
+	}
+}
+
+TEST_CASE("The clips are written only when the import asked for them", "[importedrig]")
+{
+	const TempRoot  root;
+	const auto      imported = SkinnedImport();
+	assetlib::BMesh mesh;
+
+	ContentExplorerWindow::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*animations*/ true);
+
+	REQUIRE(fs::exists(root.Banim()));
+
+	const assetlib::AnimationSet clips = assetlib::loadAnimations(root.Banim());
+	REQUIRE(clips.clips.size() == 1);
+	CHECK(clips.stringPool.at(clips.clips[0].nameOffset) == "walk");
+
+	// The clip set must name the rig by the same path the mesh does, or the two disagree about which
+	// bone array their indices address.
+	CHECK(clips.skeleton == mesh.skeleton);
+	CHECK(assetlib::animationsMatchSkeleton(clips, assetlib::loadSkeleton(root.Bskel())));
+}
+
+TEST_CASE("A static import writes no rig at all", "[importedrig]")
+{
+	const TempRoot  root;
+	assetlib::BMesh mesh;
+
+	ContentExplorerWindow::WriteImportedRig(
+		assetlib::imp::BMeshImport(),
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*animations*/ true);
+
+	CHECK(mesh.skeleton.empty());
+	CHECK_FALSE(fs::exists(root.Bskel()));
+	CHECK_FALSE(fs::exists(root.Banim()));
+}
+
+// A failed or cancelled import may not leave a rig behind, and may not take one that was already
+// there either -- the user was asked before it was overwritten, but only about the files it names.
+TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it", "[importedrig]")
+{
+	const TempRoot root;
+
+	const fs::path kept = root.Data() / "Meshes" / "existing.bskel";
+	{
+		std::ofstream out(kept, std::ios::binary);
+		out << "not really a skeleton";
+	}
+
+	const auto      imported = SkinnedImport();
+	assetlib::BMesh mesh;
+	ContentExplorerWindow::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*animations*/ true);
+
+	REQUIRE(fs::exists(root.Bskel()));
+	REQUIRE(fs::exists(root.Banim()));
+
+	const std::array<ContentExplorerWindow::ImportedFile, 3> files = { {
+		{ root.Bskel(), false },
+		{ root.Banim(), false },
+		{ kept, true },
+	} };
+
+	ContentExplorerWindow::RollBack(files, {});
+
+	CHECK_FALSE(fs::exists(root.Bskel()));
+	CHECK_FALSE(fs::exists(root.Banim()));
+	CHECK(fs::exists(kept));
+}

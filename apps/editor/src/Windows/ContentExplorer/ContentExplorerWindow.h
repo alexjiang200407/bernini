@@ -90,6 +90,53 @@ public:
 		const std::filesystem::path&      materialDir,
 		const std::filesystem::path&      textureDir);
 
+	/**
+	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
+	 * and points `mesh` at the skeleton by a data-root-relative path.
+	 *
+	 * The skeleton is not optional and is deliberately not behind the dialog's checkbox. A joint index
+	 * is a bare number into a bone array, so a mesh carrying joints while naming no skeleton is one
+	 * `assetlib::save` refuses outright; the clips are the half a user can decline.
+	 *
+	 * Does nothing when the import carried no skin, which is what a static mesh is.
+	 *
+	 * @throws std::runtime_error if either file cannot be written.
+	 */
+	static void
+	WriteImportedRig(
+		const assetlib::imp::BMeshImport& imported,
+		assetlib::BMesh&                  mesh,
+		const std::filesystem::path&      dataRoot,
+		const std::filesystem::path&      bskelPath,
+		const std::filesystem::path&      banimPath,
+		bool                              animations);
+
+	/** A file an import writes, and whether the import is the one that made it. */
+	struct ImportedFile
+	{
+		std::filesystem::path path;
+		bool                  existed = false;  // whether it was there before the import started
+	};
+
+	/** A directory an import writes into, and whether the import is the one that made it. */
+	struct ImportedDir
+	{
+		std::filesystem::path path;             // empty when the import writes no such directory
+		bool                  existed = false;  // whether it was there before the import started
+		std::string_view      categoryRoot;  // the category it sits under, never itself removable
+	};
+
+	/**
+	 * Deletes what an import got as far as writing, so a cancelled or failed one leaves nothing behind:
+	 * a `.bmesh` naming textures that were never extracted, or a half-supercompressed texture folder.
+	 *
+	 * Only what the import itself created, and never anything that was already there -- a texture folder
+	 * that predates the import is left alone, files and all, because the user was asked before it was
+	 * written into and its other contents are not ours to delete.
+	 */
+	static void
+	RollBack(std::span<const ImportedFile> files, std::span<const ImportedDir> dirs);
+
 Q_SIGNALS:
 	/**
 	 * A bake rewrote `asset` (data-root-relative) on disk. Anything showing what that file says -- the
@@ -131,6 +178,7 @@ private:
 	{
 		QString textureSubdir;      // folder under c_TextureRoot; empty skips texture extraction
 		bool pbrMaterials = false;  // ignored without textureSubdir -- a material routes at those
+		bool animations = false;  // the clips; the skeleton itself is not optional, see ImportMesh
 	};
 
 	/**
@@ -159,28 +207,6 @@ private:
 	 */
 	[[nodiscard]] ImportOutcome
 	ImportEnvironment(const QString& sourceFile);
-
-	/** A directory an import writes into, and whether the import is the one that made it. */
-	struct ImportedDir
-	{
-		std::filesystem::path path;             // empty when the import writes no such directory
-		bool                  existed = false;  // whether it was there before the import started
-		std::string_view      categoryRoot;  // the category it sits under, never itself removable
-	};
-
-	/**
-	 * Deletes what an import got as far as writing, so a cancelled or failed one leaves nothing behind:
-	 * a `.bmesh` naming textures that were never extracted, or a half-supercompressed texture folder.
-	 *
-	 * Only what the import itself created, and never anything that was already there -- a texture folder
-	 * that predates the import is left alone, files and all, because the user was asked before it was
-	 * written into and its other contents are not ours to delete.
-	 */
-	static void
-	RollBack(
-		const std::filesystem::path& bmeshPath,
-		bool                         bmeshExisted,
-		std::span<const ImportedDir> dirs);
 
 	/** Detaches the models and disables the explorer, leaving both views empty. */
 	void

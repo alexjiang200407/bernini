@@ -437,10 +437,16 @@ Five rules, each of which is a way to get this wrong:
   Only one direction is enforced. **Naming a skeleton while carrying no joints stays legal**, because
   that is how a static attachment — a scabbard, a saddle — hangs off a bone.
 
+**The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` beside the
+`.bmesh` whenever the source carries a skin, and the `.banim` when the importer's *Import animations*
+box is ticked. The skeleton is deliberately **not** behind that box — a mesh carrying joints while
+naming no skeleton is one `save` refuses, so making the rig optional would make a skinned glTF
+unimportable rather than merely rig-less. The clips are the half a user can decline. Both files are
+rolled back with the mesh if the import fails or is cancelled.
+
 Not yet done, and deliberately: rotation/translation compression (samples are full-float `Transform`s
-today — the 16 B/bone form is a runtime palette concern, not an import one), per-LOD bone subsets, state
-machine tables, and an editor surface (the importer's *Import animations* checkbox is still inert; the
-CLI is the way in).
+today — the 16 B/bone form is a runtime palette concern, not an import one), per-LOD bone subsets and
+state machine tables.
 
 ### The reference graph
 

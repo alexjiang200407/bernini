@@ -129,9 +129,10 @@ Two things a test cannot drive, and why:
   called directly on the concrete Qt types, with no injection seam. Triggering one from
   a test hangs it. This is what keeps `ContentExplorerWindow::ImportMesh` and `BakeMaterial`,
   `MainWindow::NewProject`/`OpenProject`/`CleanUnusedTextures`, and
-  `MaterialEditorWindow`'s save/open uncovered — including `RollBack`, which is the
-  code that deletes files when an import fails and is therefore the code most worth
-  testing. Hoisting those rules into a GUI-free header would unlock them.
+  `MaterialEditorWindow`'s save/open uncovered. Hoisting a rule out as a `static` that takes
+  what it needs is what unlocks it, and the import is the worked example: `WriteImportedMaterials`,
+  `WriteImportedRig` and `RollBack` are each driven directly by a test, so what an import
+  *writes* and what a failed one *deletes* are pinned even though the import itself is not.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
