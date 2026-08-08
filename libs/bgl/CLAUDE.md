@@ -74,10 +74,13 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   `CreateGraphics` has built every renderer PSO, because its core module is a few hundred megabytes
   resident. Nothing may retain a `slang::` object past pipeline construction, or the release
   reclaims nothing — see the same doc.
-- At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`), which are
-  staged into each target's output dir by the `bgl_copy_shader_src` / `bgl_copy_shader_tests`
-  targets. A new `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its
-  module name without any CMake change.
+- At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
+  executable. `shaders/src` is staged by a target `bgl` itself depends on — `bgl_copy_shader_src` on
+  D3D12, `bgl_metal_copy_shaders` on Metal — so anything that brings a device up has the sources,
+  and a build that stages none aborts on the first program-cache miss with "cannot open file".
+  `shaders/tests` is the suite's own (`bgl_copy_shader_tests` / `bgl_metal_copy_test_shaders`). A new
+  `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its module name
+  without any CMake change.
 - The `compile_shader(...)` entries in `libs/bgl/shaders/CMakeLists.txt` are now **build-time
   validation only** — they invoke `slangc` per entry point to fail the build on shader errors early;
   the resulting `.dxil` files are not loaded at runtime. Add an entry when you want that validation:
