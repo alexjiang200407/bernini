@@ -97,12 +97,16 @@ namespace bgl
 				"Element count exceeds uint32_t limits");
 
 			// AllocateRange already marked this exact range dirty, and nothing can flush between
-			// there and here, so the writes below are covered without marking it a second time.
+			// there and here, so the write below is covered without marking it a second time.
 			auto handle = AllocateRange(static_cast<uint32_t>(elem.size()));
-			for (auto i = 0u; i < elem.size(); ++i)
-			{
-				m_Data[handle.index + i] = elem[i];
-			}
+
+			// One copy, not per-element writes: operator[] validates every slot, and a large
+			// mesh's vertex stream is millions of elements. The range was allocated contiguous
+			// and live just above, so there is nothing left to validate.
+			std::memcpy(
+				static_cast<T*>(m_Data.data()) + handle.index,
+				elem.data(),
+				elem.size() * sizeof(T));
 
 			return handle;
 		}
