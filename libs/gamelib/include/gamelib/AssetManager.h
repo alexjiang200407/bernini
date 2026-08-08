@@ -39,6 +39,21 @@ namespace game
 	using TexturePrefetch = core::str::unordered_str_map<assetlib::ImageData>;
 
 	/**
+	 * Per-manager loading options, fixed at construction: a path maps to one shared material, so an
+	 * option that varied per call would make what everyone shares depend on who asked first.
+	 */
+	struct AssetManagerOptions
+	{
+		/**
+		 * Create every hashed-alpha material as the blend material its coverage converges to.
+		 *
+		 * For a consumer that renders one frame per image -- the thumbnail cache -- hashed coverage
+		 * is speckle without accumulation, and blend is its converged truth. See docs/taa.md.
+		 */
+		bool hashedAsBlend = false;
+	};
+
+	/**
 	 * Owns the lifetime of everything loaded from disk into a `bgl::IScene`: textures, materials,
 	 * geometry, and the instances placed from it.
 	 */
@@ -62,10 +77,14 @@ namespace game
 		 *                 in, and holds it for as long as the instance lives there.
 		 * @param dataRoot The project's Data directory; every path handed to this manager is relative
 		 *                 to it. A standalone baked model directory is its own data root.
+		 * @param options  See AssetManagerOptions.
 		 *
 		 * @throws bgl::SceneError if `scene` is null.
 		 */
-		AssetManager(bgl::SceneRef scene, std::filesystem::path dataRoot);
+		AssetManager(
+			bgl::SceneRef         scene,
+			std::filesystem::path dataRoot,
+			AssetManagerOptions   options = {});
 
 		/** Releases everything still held, in dependency order. */
 		~AssetManager();
@@ -414,6 +433,7 @@ namespace game
 
 		bgl::SceneRef         m_Scene;
 		std::filesystem::path m_DataRoot;
+		AssetManagerOptions   m_Options;
 
 		core::str::unordered_str_map<uint32_t> m_TextureByPath;
 		core::str::unordered_str_map<uint64_t> m_MaterialByPath;

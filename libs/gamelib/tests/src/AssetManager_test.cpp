@@ -161,11 +161,12 @@ namespace
 		bgl::SceneViewRef                 view;
 		std::optional<game::AssetManager> assets;
 
-		explicit Fixture(const char* name) : root(name), gfx(bgl::CreateGraphics(HeadlessOptions()))
+		explicit Fixture(const char* name, game::AssetManagerOptions options = {}) :
+			root(name), gfx(bgl::CreateGraphics(HeadlessOptions()))
 		{
 			scene = gfx->CreateScene(AssetSceneDesc());
 			view  = gfx->CreateSceneView(scene, 16);
-			assets.emplace(scene, root.path);
+			assets.emplace(scene, root.path, options);
 		}
 
 		// The manager is non-copyable, so these would be implicitly deleted anyway; say so, because
@@ -216,6 +217,23 @@ TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[
 		assetlib::AlphaMode::kHashed);
 
 	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kHashed);
+}
+
+TEST_CASE("AssetManager can load hashed alpha as the blend it converges to", "[gamelib][assets]")
+{
+	// The thumbnail cache's option: a renderer that gets one frame per image cannot accumulate
+	// hashed coverage into a surface, so its private manager loads the blend material the coverage
+	// converges to. Only hashed is rerouted -- everything else must keep its authored layer.
+	Fixture fx("bernini_am_hashed_blend", game::AssetManagerOptions{ .hashedAsBlend = true });
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(
+		fx.root.path / "Materials" / "hashed.bmaterial",
+		"Textures/a.ktx2",
+		assetlib::AlphaMode::kHashed);
+	WriteBakedMaterial(fx.root.path / "Materials" / "opaque.bmaterial", "Textures/a.ktx2");
+
+	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kBlend);
+	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")

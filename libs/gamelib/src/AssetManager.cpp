@@ -21,7 +21,7 @@ namespace game
 		// concepts because a layer is free to grow buckets no material ever authors. gamelib is the
 		// only library that links both, so this is the one place they meet.
 		bgl::LayerType
-		ToLayerType(assetlib::AlphaMode mode)
+		ToLayerType(assetlib::AlphaMode mode, bool hashedAsBlend)
 		{
 			switch (mode)
 			{
@@ -30,7 +30,7 @@ namespace game
 			case assetlib::AlphaMode::kBlend:
 				return bgl::LayerType::kBlend;
 			case assetlib::AlphaMode::kHashed:
-				return bgl::LayerType::kHashed;
+				return hashedAsBlend ? bgl::LayerType::kBlend : bgl::LayerType::kHashed;
 			case assetlib::AlphaMode::kOpaque:
 				break;
 			}
@@ -58,8 +58,11 @@ namespace game
 		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
 	}
 
-	AssetManager::AssetManager(bgl::SceneRef scene, std::filesystem::path dataRoot) :
-		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot))
+	AssetManager::AssetManager(
+		bgl::SceneRef         scene,
+		std::filesystem::path dataRoot,
+		AssetManagerOptions   options) :
+		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot)), m_Options(options)
 	{
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
 		// still be there -- and with a bare reference that was only true if the caller happened to
@@ -697,7 +700,7 @@ namespace game
 		desc.baseColorFactor = pbr.baseColorFactor;
 		desc.metallicFactor  = pbr.metallicFactor;
 		desc.roughnessFactor = pbr.roughnessFactor;
-		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.layerType       = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		desc.baseColorTexture = record.textures[0];
@@ -716,7 +719,7 @@ namespace game
 		desc.baseColorFactor = pbr.baseColorFactor;
 		desc.metallicFactor  = pbr.metallicFactor;
 		desc.roughnessFactor = pbr.roughnessFactor;
-		desc.layerType       = ToLayerType(pbr.alphaMode);
+		desc.layerType       = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff     = pbr.alphaCutoff;
 
 		const auto route = [&](size_t index) {
