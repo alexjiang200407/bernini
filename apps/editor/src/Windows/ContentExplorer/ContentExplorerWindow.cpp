@@ -129,8 +129,7 @@ namespace
 			QString("Cannot import '%1': it would overwrite files already in the project.")
 				.arg(name));
 		message.setInformativeText(
-			"Import never overwrites. Remove the listed files, or choose a different texture "
-			"folder, "
+			"Import never overwrites. Remove the listed files, or choose a different folder, "
 			"then import again.");
 		message.setDetailedText(replaced.join('\n'));
 		message.exec();
@@ -751,8 +750,7 @@ ContentExplorerWindow::dragMoveEvent(QDragMoveEvent* event)
 void
 ContentExplorerWindow::dropEvent(QDropEvent* event)
 {
-	const QString targetDir = ResolveDropDirectory(event->position().toPoint());
-	if (targetDir.isEmpty())
+	if (m_RootPath.isEmpty())
 		return;
 
 	for (const QUrl& url : event->mimeData()->urls())
@@ -786,13 +784,13 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 			qWarning("Import: could not read '%s': %s", qPrintable(file), e.what());
 		}
 
-		AssetImporterDialog dialog(file, targetDir, materials, this);
+		AssetImporterDialog dialog(file, materials, this);
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
 		auto options         = ImportOptions();
 		options.folder       = dialog.DestinationFolder();
-		options.mesh         = dialog.ImportGeometry();
+		options.mesh         = dialog.ImportMesh();
 		options.textures     = dialog.ImportTextures();
 		options.pbrMaterials = dialog.CanImportPbrMaterials();
 		options.animations   = dialog.ImportAnimations();
@@ -806,36 +804,6 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 	}
 
 	event->acceptProposedAction();
-}
-
-QString
-ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
-{
-	const QPoint global = mapToGlobal(windowPos);
-
-	// Dropped over a folder row in the file table -> that folder; otherwise the folder the
-	// table currently shows.
-	auto*        fileViewport = m_Ui.CurrentDirectoryExplorer->viewport();
-	const QPoint fileLocal    = fileViewport->mapFromGlobal(global);
-	if (fileViewport->rect().contains(fileLocal))
-	{
-		const auto index = m_Ui.CurrentDirectoryExplorer->indexAt(fileLocal);
-		if (index.isValid() && m_FileModel->isDir(index))
-			return m_FileModel->filePath(index);
-		return m_FileModel->rootPath();
-	}
-
-	// Dropped over a folder in the hierarchy tree.
-	auto*        treeViewport = m_Ui.FileExplorer->viewport();
-	const QPoint treeLocal    = treeViewport->mapFromGlobal(global);
-	if (treeViewport->rect().contains(treeLocal))
-	{
-		const auto index = m_Ui.FileExplorer->indexAt(treeLocal);
-		if (index.isValid())
-			return m_HierarchyModel->filePath(index);
-	}
-
-	return m_FileModel->rootPath();
 }
 
 void
@@ -947,15 +915,18 @@ ContentExplorerWindow::FindMatchingSkeleton(
 
 	const uint64_t wanted = assetlib::skeletonSignature(skeleton);
 
-	for (const fs::directory_entry& entry : fs::recursive_directory_iterator(root, ec))
+	auto       matches = std::vector<fs::path>();
+	const auto walk    = fs::directory_options::skip_permission_denied;
+
+	for (const fs::directory_entry& entry : fs::recursive_directory_iterator(root, walk, ec))
 	{
-		if (!entry.is_regular_file() || entry.path().extension() != assetlib::c_SkeletonExtension)
+		if (!entry.is_regular_file(ec) || entry.path().extension() != assetlib::c_SkeletonExtension)
 			continue;
 
 		try
 		{
 			if (assetlib::skeletonSignature(assetlib::loadSkeleton(entry.path())) == wanted)
-				return entry.path();
+				matches.push_back(entry.path());
 		}
 		catch (const std::exception&)
 		{
@@ -964,7 +935,28 @@ ContentExplorerWindow::FindMatchingSkeleton(
 		}
 	}
 
-	return {};
+	if (matches.empty())
+		return {};
+
+	// Directory order is unspecified, so choosing one would make the reference written into the
+	// `.banim` depend on the filesystem -- and would scatter one rig's clips across two skeletons,
+	// which is the thing a VAT bake cannot then fit one bounding box around.
+	if (matches.size() > 1)
+	{
+		auto named = QStringList();
+		for (const fs::path& match : matches)
+			named << Rebase(QString::fromStdWString(match.wstring()), dataRoot, true);
+
+		throw std::runtime_error(
+			QString(
+				"this project holds %1 skeletons with the same signature, so which one these "
+				"clips belong to is ambiguous: %2")
+				.arg(matches.size())
+				.arg(named.join(", "))
+				.toStdString());
+	}
+
+	return matches.front();
 }
 
 void
@@ -1004,10 +996,6 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	const fs::path source   = fs::path(sourceFile.toStdWString());
 	const fs::path dataRoot = fs::path(m_RootPath.toStdWString());
 
-	// Where a file lands is decided by *what it is*, never by where the drop happened: a `.bmesh`
-	// belongs under Meshes/, a rig under Skeletons/, and every reference in a project is written
-	// against that layout. The dialog's folder organises inside a category and JoinCategory is what
-	// stops it naming a way out of one.
 	const auto inCategory = [&](const char* category) {
 		return dataRoot / fs::path(editor::JoinCategory(category, options.folder).toStdWString());
 	};
@@ -1015,10 +1003,10 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
 	// own folder or the next one silently overwrites it.
 	const fs::path textureDir =
-		options.textures ? inCategory(AssetImporterDialog::c_TextureRoot) : fs::path();
+		options.textures ? inCategory(Project::c_TexturesSrcDirectoryName) : fs::path();
 
 	// A derived material routes at the extracted textures, so it cannot come across without them.
-	const bool     importMaterials = options.pbrMaterials && options.textures;
+	const bool     importMaterials = options.pbrMaterials && options.textures && options.mesh;
 	const fs::path materialDir =
 		importMaterials ? inCategory(Project::c_MaterialsDirectoryName) : fs::path();
 
@@ -1048,9 +1036,7 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	fs::path banimPath = inCategory(Project::c_AnimationsDirectoryName) / source.filename();
 	banimPath.replace_extension(assetlib::c_AnimationExtension);
 
-	// Only what this import may actually write. A clips-only import must not be refused over the
-	// mesh it is deliberately not writing -- which is the whole point of turning the mesh off, since
-	// the rig it attaches to is already there.
+	// Only what this import may actually write.
 	auto files = std::vector<ImportedFile>();
 	if (options.mesh)
 	{
@@ -1061,7 +1047,7 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 		files.push_back({ banimPath, fs::exists(banimPath, ec) });
 
 	const std::array<ImportedDir, 2> dirs = { {
-		{ textureDir, textureDirExisted, AssetImporterDialog::c_TextureRoot },
+		{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
 		{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
 	} };
 

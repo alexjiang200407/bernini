@@ -12,23 +12,22 @@ class AssetImporterDialog : public QDialog
 	Q_OBJECT
 
 public:
-	// The root every import's textures are written beneath, relative to the project's Data
-	// directory. Shown as a fixed prefix on the destination field.
-	static constexpr auto c_TextureRoot = "textures_src";
-
 	/**
 	 * @param materials What probeGltfMaterials found in `sourceFile`. The dialog only reads it -- the
 	 *        caller probes, so the dialog stays a dialog and a test can pose any answer.
 	 */
 	explicit AssetImporterDialog(
 		const QString&                     sourceFile,
-		const QString&                     targetDir,
 		const assetlib::GltfMaterialProbe& materials = {},
 		QWidget*                           parent    = nullptr);
 
-	/** Whether the mesh itself comes across. Off imports only the other pieces -- see ImportMesh. */
+	/** Whether the geometry comes across. Off imports only the other pieces. */
 	bool
-	ImportGeometry() const;
+	ImportMesh() const;
+
+	/** Whether any piece at all is coming across; what the OK button and the folder field follow. */
+	bool
+	ImportsAnything() const;
 
 	bool
 	ImportTextures() const;
