@@ -24,4 +24,14 @@ namespace assetlib
 		}
 		return 0;
 	}
+
+	int
+	attributeOffset(const VertexLayout& layout, VertexSemantic semantic) noexcept
+	{
+		for (uint32_t i = 0; i < layout.attributeCount; ++i)
+			if (layout.attributes[i].semantic == semantic)
+				return layout.attributes[i].offset;
+
+		return -1;
+	}
 }

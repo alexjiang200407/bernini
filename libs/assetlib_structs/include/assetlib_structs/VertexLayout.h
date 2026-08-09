@@ -52,4 +52,11 @@ namespace assetlib
 	};
 
 	static_assert(sizeof(VertexLayout) == 36);
+
+	/**
+	 * Byte offset of `semantic` within one interleaved vertex, or -1 when the layout does not carry
+	 * it -- which is the ordinary case, since the importer packs only what the source provided.
+	 */
+	[[nodiscard]] int
+	attributeOffset(const VertexLayout& layout, VertexSemantic semantic) noexcept;
 }
