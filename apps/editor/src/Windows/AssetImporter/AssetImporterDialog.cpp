@@ -10,11 +10,11 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 AssetImporterDialog::AssetImporterDialog(
 	const QString&                     sourceFile,
-	const QString&                     targetDir,
 	const assetlib::GltfMaterialProbe& materials,
 	QWidget*                           parent) : QDialog(parent)
 {
@@ -47,7 +47,7 @@ AssetImporterDialog::AssetImporterDialog(
 	layout->addWidget(m_ImportTextures);
 
 	// The category is the fixed part and is shown as an uneditable prefix: what is typed organises
-	// inside `Meshes/`, `Skeletons/`, `Textures/` and the rest, and can never name a way out of one.
+	// inside `Meshes/`, `Skeletons/`, `textures_src/` and the rest, never across them.
 	auto* folderRow = new QHBoxLayout();
 	folderRow->addWidget(new QLabel("<category>/", this));
 
@@ -75,14 +75,17 @@ AssetImporterDialog::AssetImporterDialog(
 			"This file has no PBR material to derive one from.");
 	layout->addWidget(m_ImportPbrMaterials);
 
-	// A derived material routes at the extracted textures, so it cannot come across without them.
-	const auto refreshMaterials = [this](bool importingTextures) {
-		const bool available = m_HasPbrMaterials && importingTextures;
+	// A derived material routes at the extracted textures, and is bound to the submeshes it was cut
+	// from -- so it needs both those things to be coming across.
+	const auto refreshMaterials = [this] {
+		const bool available =
+			m_HasPbrMaterials && m_ImportTextures->isChecked() && m_ImportMesh->isChecked();
 		m_ImportPbrMaterials->setEnabled(available);
 		m_ImportPbrMaterials->setChecked(available);
 	};
 	connect(m_ImportTextures, &QCheckBox::toggled, this, refreshMaterials);
-	refreshMaterials(m_ImportTextures->isChecked());
+	connect(m_ImportMesh, &QCheckBox::toggled, this, refreshMaterials);
+	refreshMaterials();
 
 	m_ImportAnimations = new QCheckBox("Import animations", this);
 	m_ImportAnimations->setObjectName("importAnimations");
@@ -92,12 +95,7 @@ AssetImporterDialog::AssetImporterDialog(
 		"project, matched by signature.");
 	layout->addWidget(m_ImportAnimations);
 
-	// The folder names where every piece lands, so it is dead only when no piece is coming.
-	const auto refreshFolder = [this] {
-		m_Folder->setEnabled(
-			m_ImportMesh->isChecked() || m_ImportTextures->isChecked() ||
-			m_ImportAnimations->isChecked());
-	};
+	const auto refreshFolder = [this] { m_Folder->setEnabled(ImportsAnything()); };
 	connect(m_ImportMesh, &QCheckBox::toggled, this, refreshFolder);
 	connect(m_ImportTextures, &QCheckBox::toggled, this, refreshFolder);
 	connect(m_ImportAnimations, &QCheckBox::toggled, this, refreshFolder);
@@ -107,12 +105,28 @@ AssetImporterDialog::AssetImporterDialog(
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	layout->addWidget(buttons);
+
+	// An import with every box clear parses the whole file behind a loading screen and writes
+	// nothing, which is a success the user cannot tell from a failure.
+	auto*      ok        = buttons->button(QDialogButtonBox::Ok);
+	const auto refreshOk = [this, ok] { ok->setEnabled(ImportsAnything()); };
+	connect(m_ImportMesh, &QCheckBox::toggled, this, refreshOk);
+	connect(m_ImportTextures, &QCheckBox::toggled, this, refreshOk);
+	connect(m_ImportAnimations, &QCheckBox::toggled, this, refreshOk);
+	refreshOk();
 }
 
 bool
-AssetImporterDialog::ImportGeometry() const
+AssetImporterDialog::ImportMesh() const
 {
 	return m_ImportMesh->isChecked();
+}
+
+bool
+AssetImporterDialog::ImportsAnything() const
+{
+	return m_ImportMesh->isChecked() || m_ImportTextures->isChecked() ||
+	       m_ImportAnimations->isChecked();
 }
 
 bool

@@ -140,10 +140,10 @@ public:
 	/**
 	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
 	 *
-	 * What lets an import with the mesh turned off find the rig its clips belong to. The signature
-	 * covers bone names and parents and deliberately not the bind pose, so a second export of the
-	 * same rig matches even where its rest pose drifted -- which is the case that matters here,
-	 * since a clip replaces the pose wholesale and only the hierarchy has to agree.
+	 * What lets an import with the mesh turned off find the rig its clips belong to.
+	 *
+	 * @throws std::runtime_error if more than one rig matches, since which one the clips attach to
+	 *         would otherwise depend on directory order.
 	 */
 	[[nodiscard]] static std::filesystem::path
 	FindMatchingSkeleton(const std::filesystem::path& dataRoot, const assetlib::Skeleton& skeleton);
@@ -204,9 +204,6 @@ private:
 	void
 	NavigateBack();
 
-	QString
-	ResolveDropDirectory(const QPoint& windowPos) const;
-
 	/** What became of an import, so a multi-file drop knows whether to carry on with the next one. */
 	enum class ImportOutcome
 	{
@@ -250,9 +247,6 @@ private:
 	/**
 	 * Converts a dropped Radiance `.hdr` into the environment family: a `.bsky`, the `.benvl`
 	 * convolved from the same radiance, and the `.benv` naming the pair.
-	 *
-	 * No `targetDir`: the three parts each belong in their own category, so where the file was
-	 * dropped says nothing about where they go.
 	 *
 	 * Unlike ImportMesh there is no RollBack here -- `assetlib::importEnvironment` undoes its own
 	 * half-written work, including on a cancel, so the editor has nothing to clean up after.

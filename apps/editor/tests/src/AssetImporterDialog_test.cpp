@@ -9,7 +9,6 @@ namespace
 {
 	/** The glTF a test pretends the user dropped. Nothing reads it, so it need not exist. */
 	constexpr auto c_SourceFile = "C:/Assets/Exports/stone_wall.glb";
-	constexpr auto c_TargetDir  = "C:/Project/Data/Meshes";
 
 	/** A probe result posing as a file with `pbr` PBR materials out of `total`. */
 	assetlib::GltfMaterialProbe
@@ -43,7 +42,7 @@ namespace
 	}
 
 	QLineEdit*
-	SubdirField(const AssetImporterDialog& dialog)
+	FolderField(const AssetImporterDialog& dialog)
 	{
 		return dialog.findChild<QLineEdit*>();
 	}
@@ -51,7 +50,7 @@ namespace
 
 TEST_CASE("The importer offers to bring textures across, but not animations", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
 	// Textures are what a mesh needs to look like anything, so they are on by default.
 	REQUIRE(dialog.ImportTextures());
@@ -63,7 +62,7 @@ TEST_CASE("The importer offers to bring textures across, but not animations", "[
 
 TEST_CASE("PBR materials come across when the file has some", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(2, 2));
+	const AssetImporterDialog dialog(c_SourceFile, Probe(2, 2));
 
 	REQUIRE(MaterialsBox(dialog)->isEnabled());
 	REQUIRE(dialog.CanImportPbrMaterials());
@@ -76,7 +75,7 @@ TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
 		Probe(0, 0),   // no materials at all
 		Probe(3, 0));  // materials, but every one of them unlit or spec/gloss
 
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, probe);
+	const AssetImporterDialog dialog(c_SourceFile, probe);
 
 	REQUIRE(!MaterialsBox(dialog)->isEnabled());
 	REQUIRE(!dialog.CanImportPbrMaterials());
@@ -84,7 +83,7 @@ TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
 
 TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(1, 1));
+	const AssetImporterDialog dialog(c_SourceFile, Probe(1, 1));
 
 	REQUIRE(dialog.CanImportPbrMaterials());
 
@@ -102,7 +101,7 @@ TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]
 
 TEST_CASE("The destination folder defaults to the file's name", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
 	// Every import needs its own folder -- the extracted files are named tex0.ktx2, tex1.ktx2 by
 	// index, so two imports sharing one would overwrite each other. Naming it after the source is the
@@ -114,21 +113,21 @@ TEST_CASE("The destination folder defaults to the file's name", "[assetimporter]
 // Skeletons/ -- so it stops being a question only when no piece is coming across at all.
 TEST_CASE("The folder is dead only when nothing is being imported", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
-	REQUIRE(SubdirField(dialog)->isEnabled());
+	REQUIRE(FolderField(dialog)->isEnabled());
 
 	TexturesBox(dialog)->setChecked(false);
-	REQUIRE(SubdirField(dialog)->isEnabled());  // the mesh still needs somewhere to go
+	REQUIRE(FolderField(dialog)->isEnabled());  // the mesh still needs somewhere to go
 	REQUIRE(!dialog.ImportTextures());
 
 	MeshBox(dialog)->setChecked(false);
-	REQUIRE(!SubdirField(dialog)->isEnabled());
+	REQUIRE(!FolderField(dialog)->isEnabled());
 
 	SECTION("and comes back when a clips-only import needs it")
 	{
 		AnimationsBox(dialog)->setChecked(true);
-		REQUIRE(SubdirField(dialog)->isEnabled());
+		REQUIRE(FolderField(dialog)->isEnabled());
 	}
 }
 
@@ -136,35 +135,35 @@ TEST_CASE("The folder is dead only when nothing is being imported", "[assetimpor
 // clip, each carrying its own copy of the geometry, and only the clips are wanted.
 TEST_CASE("The mesh can be left out of an import", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
-	REQUIRE(dialog.ImportGeometry());
+	REQUIRE(dialog.ImportMesh());
 
 	MeshBox(dialog)->setChecked(false);
-	REQUIRE(!dialog.ImportGeometry());
+	REQUIRE(!dialog.ImportMesh());
 }
 
 TEST_CASE("A typed destination folder is used", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
 	SECTION("as typed")
 	{
-		SubdirField(dialog)->setText("bricks");
+		FolderField(dialog)->setText("bricks");
 
 		REQUIRE(dialog.DestinationFolder() == QString("bricks"));
 	}
 
 	SECTION("trimmed")
 	{
-		SubdirField(dialog)->setText("  bricks  ");
+		FolderField(dialog)->setText("  bricks  ");
 
 		REQUIRE(dialog.DestinationFolder() == QString("bricks"));
 	}
 
 	SECTION("nested, because going deeper is fine -- it is going out that is not")
 	{
-		SubdirField(dialog)->setText("exterior/walls");
+		FolderField(dialog)->setText("exterior/walls");
 
 		REQUIRE(dialog.DestinationFolder() == QString("exterior/walls"));
 	}
@@ -191,8 +190,8 @@ TEST_CASE("A destination folder that escapes the project is refused", "[assetimp
 
 	INFO("typed: " << typed);
 
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
-	SubdirField(dialog)->setText(typed);
+	const AssetImporterDialog dialog(c_SourceFile);
+	FolderField(dialog)->setText(typed);
 
 	REQUIRE(dialog.DestinationFolder() == QString("stone_wall"));
 }

@@ -451,7 +451,8 @@ that layout, so an asset that could move across categories is an asset whose ref
 meaning anything.
 
 **The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` whenever the
-source carries a skin, and a `.banim` when the importer's *Import animations* box is ticked. The
+source carries a skin and the mesh is coming across with it, and a `.banim` when the importer's
+*Import animations* box is ticked. The
 skeleton is deliberately **not** behind that box — a mesh carrying joints while naming no skeleton is
 one `save` refuses, so making the rig optional would make a skinned glTF unimportable rather than
 merely rig-less. The clips are the half a user can decline. Both are rolled back with the mesh if the

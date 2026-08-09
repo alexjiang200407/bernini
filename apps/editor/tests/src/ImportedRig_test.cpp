@@ -268,6 +268,27 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 	const auto found = ContentExplorerWindow::FindMatchingSkeleton(root.Data(), imported.skeleton);
 	CHECK(found == root.Bskel());
 
+	// Directory order is unspecified, so silently picking one would make the .banim's reference
+	// depend on the filesystem -- and scatter one rig's clips across two skeletons, which is exactly
+	// what a VAT bake cannot fit a single bounding box around.
+	SECTION("two rigs with the same signature are ambiguous, not a coin toss")
+	{
+		assetlib::BMesh second;
+		const fs::path twin = root.Data() / Project::c_SkeletonsDirectoryName / "coyote_twin.bskel";
+		ContentExplorerWindow::WriteImportedRig(
+			SkinnedImport(),
+			second,
+			root.Data(),
+			twin,
+			root.Banim(),
+			/*writeClips*/ false);
+
+		REQUIRE(fs::exists(twin));
+		CHECK_THROWS_AS(
+			ContentExplorerWindow::FindMatchingSkeleton(root.Data(), imported.skeleton),
+			std::runtime_error);
+	}
+
 	SECTION("a rig with a bone renamed is not a match")
 	{
 		assetlib::Skeleton other  = imported.skeleton;
