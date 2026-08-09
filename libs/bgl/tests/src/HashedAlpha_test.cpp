@@ -1440,7 +1440,7 @@ namespace
 
 	// 256 is the density every other bound in this file was measured at; the rest are its halvings,
 	// which is what the editor's render scale and a 1080p display do to a 4K viewport.
-	constexpr std::array<uint32_t, 3> c_SweepSizes = { 256, 128, 64 };
+	constexpr std::array<uint32_t, 3> c_SweepSizes = { { 256, 128, 64 } };
 
 	const char*
 	LayerName(bgl::LayerType layer)
@@ -1451,6 +1451,10 @@ namespace
 			return "mask";
 		case bgl::LayerType::kBlend:
 			return "blend";
+		case bgl::LayerType::kInvalid:
+		case bgl::LayerType::kOpaque:
+		case bgl::LayerType::kHashed:
+		case bgl::LayerType::kCount:
 		default:
 			return "hashed";
 		}
