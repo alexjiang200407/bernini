@@ -75,13 +75,13 @@ TEST_CASE("A bind-pose skin reproduces the source vertices exactly", "[skinning]
 	fixture.Add(
 		glm::vec3(1.0f, 2.0f, 3.0f),
 		glm::vec3(0.0f, 1.0f, 0.0f),
-		{ 0, 0, 0, 0 },
-		{ c_Unorm16Max, 0, 0, 0 });
+		{ { 0, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
 	fixture.Add(
 		glm::vec3(-4.0f, 0.5f, 7.25f),
 		glm::vec3(1.0f, 0.0f, 0.0f),
-		{ 1, 0, 0, 0 },
-		{ c_Unorm16Max, 0, 0, 0 });
+		{ { 1, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
 
 	const std::vector<glm::mat4> identity(2, glm::mat4(1.0f));
 	const auto                   skinned = skinSubmesh(fixture.mesh, fixture.submesh, identity);
@@ -126,8 +126,8 @@ TEST_CASE("A rest-pose frame of a clip skins a mesh to itself", "[skinning][pose
 	fixture.Add(
 		glm::vec3(2.0f, -1.0f, 0.5f),
 		glm::vec3(0.0f, 0.0f, 1.0f),
-		{ 0, 0, 0, 0 },
-		{ c_Unorm16Max, 0, 0, 0 });
+		{ { 0, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
 
 	const auto skinning =
 		skinningMatrices(skeleton, poseModelTransforms(skeleton, animations, 0, 0));
@@ -152,8 +152,8 @@ TEST_CASE("Quantized weights still sum to one through the decode", "[skinning]")
 	fixture.Add(
 		glm::vec3(0.0f),
 		glm::vec3(0.0f, 1.0f, 0.0f),
-		{ 1, 1, 1, 1 },
-		{ Quantize(0.1f), Quantize(0.2f), Quantize(0.3f), Quantize(0.4f) });
+		{ { 1, 1, 1, 1 } },
+		{ { Quantize(0.1f), Quantize(0.2f), Quantize(0.3f), Quantize(0.4f) } });
 
 	// Every influence is the same bone, which moves the vertex 12 along X. The result is therefore
 	// 12 times the decoded weights' sum, so the coordinate *is* that sum, scaled -- anything short
@@ -171,7 +171,11 @@ TEST_CASE("Quantized weights still sum to one through the decode", "[skinning]")
 	SECTION("and a whole-weight vertex lands exactly on its bone")
 	{
 		SkinnedMesh single;
-		single.Add(glm::vec3(0.0f), glm::vec3(0.0f), { 1, 0, 0, 0 }, { c_Unorm16Max, 0, 0, 0 });
+		single.Add(
+			glm::vec3(0.0f),
+			glm::vec3(0.0f),
+			{ { 1, 0, 0, 0 } },
+			{ { c_Unorm16Max, 0, 0, 0 } });
 
 		const auto only = skinSubmesh(single.mesh, single.submesh, skinning);
 		CHECK(only[0].position.x == Catch::Approx(12.0f));
@@ -184,8 +188,8 @@ TEST_CASE("Two bones blend a vertex between them", "[skinning]")
 	fixture.Add(
 		glm::vec3(0.0f),
 		glm::vec3(0.0f, 1.0f, 0.0f),
-		{ 0, 1, 0, 0 },
-		{ Quantize(0.25f), Quantize(0.75f), 0, 0 });
+		{ { 0, 1, 0, 0 } },
+		{ { Quantize(0.25f), Quantize(0.75f), 0, 0 } });
 
 	std::vector<glm::mat4> skinning(2, glm::mat4(1.0f));
 	skinning[1] = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 4.0f, 0.0f));
@@ -227,8 +231,8 @@ TEST_CASE("A vertex with no influences stays where it was authored", "[skinning]
 	fixture.Add(
 		glm::vec3(3.0f, 4.0f, 5.0f),
 		glm::vec3(0.0f, 1.0f, 0.0f),
-		{ 0, 0, 0, 0 },
-		{ 0, 0, 0, 0 });
+		{ { 0, 0, 0, 0 } },
+		{ { 0, 0, 0, 0 } });
 
 	const std::vector<glm::mat4> skinning(
 		2,
@@ -246,7 +250,8 @@ TEST_CASE("A vertex with no influences stays where it was authored", "[skinning]
 TEST_CASE("Skinning refuses a submesh it cannot read", "[skinning]")
 {
 	SkinnedMesh fixture;
-	fixture.Add(glm::vec3(0.0f), glm::vec3(0.0f), { 0, 0, 0, 0 }, { c_Unorm16Max, 0, 0, 0 });
+	fixture
+		.Add(glm::vec3(0.0f), glm::vec3(0.0f), { { 0, 0, 0, 0 } }, { { c_Unorm16Max, 0, 0, 0 } });
 
 	const std::vector<glm::mat4> skinning(2, glm::mat4(1.0f));
 
