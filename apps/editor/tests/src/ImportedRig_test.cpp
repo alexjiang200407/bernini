@@ -1,3 +1,4 @@
+#include "Project/Project.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 
 #include "util/QtSupport.h"
@@ -23,7 +24,8 @@ namespace
 		{
 			m_Root = fs::temp_directory_path() /
 			         ("bernini_rig_test_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-			fs::create_directories(m_Root / "Meshes");
+			for (const std::string_view category : Project::c_RequiredDirectories)
+				fs::create_directories(m_Root / category);
 		}
 
 		~TempRoot()
@@ -42,16 +44,17 @@ namespace
 			return m_Root;
 		}
 
+		/** Where the import puts a rig: its own category directory, not beside the mesh. */
 		[[nodiscard]] fs::path
 		Bskel() const
 		{
-			return m_Root / "Meshes" / "unit.bskel";
+			return m_Root / Project::c_SkeletonsDirectoryName / "unit.bskel";
 		}
 
 		[[nodiscard]] fs::path
 		Banim() const
 		{
-			return m_Root / "Meshes" / "unit.banim";
+			return m_Root / Project::c_AnimationsDirectoryName / "unit.banim";
 		}
 
 	private:
@@ -120,7 +123,7 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 
 	// Relative to the data root, like every other path a .bmesh holds -- an absolute one would name
 	// this machine's temp directory and resolve nowhere else.
-	CHECK(mesh.skeleton == "Meshes/unit.bskel");
+	CHECK(mesh.skeleton == "Skeletons/unit.bskel");
 
 	const assetlib::Skeleton restored = assetlib::loadSkeleton(root.Bskel());
 	REQUIRE(restored.bones.size() == 2);
@@ -180,7 +183,7 @@ TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it"
 {
 	const TempRoot root;
 
-	const fs::path kept = root.Data() / "Meshes" / "existing.bskel";
+	const fs::path kept = root.Data() / Project::c_SkeletonsDirectoryName / "existing.bskel";
 	{
 		std::ofstream out(kept, std::ios::binary);
 		out << "not really a skeleton";
@@ -242,5 +245,5 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 		/*writeClips*/ true);
 
 	REQUIRE_NOTHROW(assetlib::save(mesh, bmeshPath));
-	CHECK(assetlib::load(bmeshPath).skeleton == "Meshes/unit.bskel");
+	CHECK(assetlib::load(bmeshPath).skeleton == "Skeletons/unit.bskel");
 }

@@ -832,6 +832,9 @@ ContentExplorerWindow::WriteImportedRig(
 	if (imported.skeleton.bones.empty())
 		return;
 
+	// A project scaffolded before these categories existed has neither directory.
+	std::filesystem::create_directories(bskelPath.parent_path());
+
 	assetlib::saveSkeleton(imported.skeleton, bskelPath);
 	mesh.skeleton =
 		Rebase(QString::fromStdWString(bskelPath.wstring()), dataRoot, true).toStdString();
@@ -841,6 +844,8 @@ ContentExplorerWindow::WriteImportedRig(
 
 	// The clip set names the rig by the same path the mesh does, so all three agree on which file
 	// the joint indices are addressed against.
+	std::filesystem::create_directories(banimPath.parent_path());
+
 	assetlib::AnimationSet clips = imported.animations;
 	clips.skeleton               = mesh.skeleton;
 	assetlib::saveAnimations(clips, banimPath);
@@ -886,16 +891,18 @@ ContentExplorerWindow::ImportMesh(
 	const bool      textureDirExisted  = !textureDir.empty() && fs::exists(textureDir, ec);
 	const bool      materialDirExisted = !materialDir.empty() && fs::exists(materialDir, ec);
 
-	// The rig lands beside the mesh under the mesh's own name, the way `assetlib::bake` names it.
+	// Each lands in its own category directory, like the materials and textures this import also
+	// writes -- not beside the mesh. `assetlib::bake` names them beside it because a baked directory
+	// is its own data root; a project has a layout, and a rig is an asset in it.
+	//
 	// Sampled unconditionally: whether the source turns out to carry a skin is not known until it is
 	// parsed, and by then a file that was already there cannot be told from one this import wrote.
-	//
 	// So a static import is refused over a rig it would never write, which is the deliberate
 	// direction: the alternative is parsing before asking, and refusing too often is recoverable
 	// where overwriting a rig is not.
-	fs::path bskelPath = bmeshPath;
+	fs::path bskelPath = dataRoot / Project::c_SkeletonsDirectoryName / source.filename();
 	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
-	fs::path banimPath = bmeshPath;
+	fs::path banimPath = dataRoot / Project::c_AnimationsDirectoryName / source.filename();
 	banimPath.replace_extension(assetlib::c_AnimationExtension);
 
 	const std::array<ImportedFile, 3> files = { {

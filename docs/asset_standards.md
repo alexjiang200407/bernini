@@ -437,12 +437,19 @@ Five rules, each of which is a way to get this wrong:
   Only one direction is enforced. **Naming a skeleton while carrying no joints stays legal**, because
   that is how a static attachment — a scabbard, a saddle — hangs off a bone.
 
-**The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` beside the
-`.bmesh` whenever the source carries a skin, and the `.banim` when the importer's *Import animations*
-box is ticked. The skeleton is deliberately **not** behind that box — a mesh carrying joints while
-naming no skeleton is one `save` refuses, so making the rig optional would make a skinned glTF
-unimportable rather than merely rig-less. The clips are the half a user can decline. Both files are
-rolled back with the mesh if the import fails or is cancelled.
+**The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` whenever the
+source carries a skin, and a `.banim` when the importer's *Import animations* box is ticked. The
+skeleton is deliberately **not** behind that box — a mesh carrying joints while naming no skeleton is
+one `save` refuses, so making the rig optional would make a skinned glTF unimportable rather than
+merely rig-less. The clips are the half a user can decline. Both are rolled back with the mesh if the
+import fails or is cancelled.
+
+They land in `Skeletons/` and `Animations/`, one category directory each, the way the environment
+family splits across `Environments/` / `Sky/` / `EnvLighting/` — and for the same reason, sharpened:
+a rig outlives its clips. Re-cooking a clip set leaves the skeleton alone, and re-authoring a rest
+pose does not invalidate a clip, which is exactly what `skeletonSignature` is there to check and only
+means anything if the two can move apart. `assetlib_cli bake` still writes both beside the `.bmesh`,
+because a baked directory is its own data root and has no project layout to belong to.
 
 Not yet done, and deliberately: rotation/translation compression (samples are full-float `Transform`s
 today — the 16 B/bone form is a runtime palette concern, not an import one), per-LOD bone subsets and
