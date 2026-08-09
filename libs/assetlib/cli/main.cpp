@@ -13,6 +13,7 @@
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
@@ -203,6 +204,15 @@ main(int argc, char** argv)
 		objRaw,
 		"Emit the raw index buffer instead of the meshlet-reconstructed geometry");
 
+	std::string tangentsInput;
+
+	auto* tangents = app.add_subcommand(
+		"tangents",
+		"Derive a tangent basis for every submesh of a .bmesh that has none, in place");
+	tangents->add_option("input", tangentsInput, "Source .bmesh file")
+		->required()
+		->check(CLI::ExistingFile);
+
 	std::string describeInput;
 	std::string describeDataRoot;
 	bool        describeBrief = false;
@@ -286,7 +296,14 @@ main(int argc, char** argv)
 		try
 		{
 			const auto imported = assetlib::loadFromGltf(input);
-			assetlib::bake(imported, outDir, name);
+			const auto tangents = assetlib::bake(imported, outDir, name);
+
+			if (tangents.skipped > 0)
+				spdlog::warn(
+					"{} submesh(es) have no tangent and no way to derive one (no normals, no UVs, "
+					"or no triangles) -- a normal map on those will not render",
+					tangents.skipped);
+
 			spdlog::info(
 				"Baked '{}' -> {}/{}.bmesh ({} materials, {} textures)",
 				input,
@@ -418,6 +435,31 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("obj dump failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*tangents)
+	{
+		try
+		{
+			assetlib::BMesh mesh   = assetlib::load(tangentsInput);
+			const auto      result = assetlib::generateTangents(mesh);
+
+			if (result.generated > 0)
+				assetlib::save(mesh, tangentsInput);
+
+			spdlog::info(
+				"'{}': {} submesh(es) gained a tangent, {} already had one, {} could not have one "
+				"derived (no normals, no UVs, or no triangles)",
+				tangentsInput,
+				result.generated,
+				result.kept,
+				result.skipped);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("tangent generation failed: {}", e.what());
 			return 1;
 		}
 	}

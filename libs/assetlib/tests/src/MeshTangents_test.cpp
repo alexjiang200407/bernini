@@ -99,6 +99,25 @@ namespace
 	}
 }
 
+// The offsets and counts are the file's claim about its buffers, not a fact about them -- and
+// `assetlib_cli tangents` hands this a .bmesh named on a command line.
+TEST_CASE("A submesh whose ranges run past their pools is refused", "[tangents]")
+{
+	SECTION("indices")
+	{
+		BMesh mesh                   = OneTriangle();
+		mesh.submeshes[0].indexCount = 4096;
+		CHECK_THROWS_AS(generateTangents(mesh), std::runtime_error);
+	}
+
+	SECTION("vertices")
+	{
+		BMesh mesh                    = OneTriangle();
+		mesh.submeshes[0].vertexCount = 4096;
+		CHECK_THROWS_AS(generateTangents(mesh), std::runtime_error);
+	}
+}
+
 TEST_CASE("A generated tangent follows the surface's U direction", "[tangents]")
 {
 	BMesh mesh = OneTriangle();

@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/cancel.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMeshImport.h>
 
 namespace assetlib
@@ -133,10 +134,15 @@ namespace assetlib
 	 * No materials: the mesh lands with its submeshes unassigned, and the textures land beside it for a
 	 * material to be authored against (see toBMesh).
 	 *
+	 * A submesh with no tangent gets one derived (see generateTangents), because a normal map read
+	 * without one renders as nothing at all.
+	 *
+	 * @return What that derivation did. `skipped` is the number that could not have one and will
+	 *         therefore ignore a normal map -- worth reporting, since nothing else says so.
 	 * @throws std::runtime_error if `outDir` cannot be created or a file cannot be written.
 	 * @throws Cancelled if `cancel` is signalled, in which case `outDir` holds a partial bake.
 	 */
-	void
+	TangentGenResult
 	bake(
 		const imp::BMeshImport&      mesh,
 		const std::filesystem::path& outDir,

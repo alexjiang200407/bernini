@@ -1,6 +1,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -387,6 +388,11 @@ TEST_CASE("bake writes a loadable .bmesh and its textures, and no materials", "[
 	REQUIRE_FALSE(mesh.submeshes.empty());
 
 	for (const Submesh& submesh : mesh.submeshes) REQUIRE(submesh.material == c_InvalidIndex);
+
+	// suzanne.glb carries normals and UVs but no tangents, which is the ordinary case for a DCC
+	// export -- and a mesh that reaches disk without one renders its normal map as nothing at all.
+	// The bake derives it, so this is what stops the two importers drifting apart on that.
+	for (const Submesh& submesh : mesh.submeshes) REQUIRE(hasTangent(submesh));
 
 	std::filesystem::remove_all(outDir);
 }

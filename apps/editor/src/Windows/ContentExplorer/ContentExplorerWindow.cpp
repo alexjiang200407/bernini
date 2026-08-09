@@ -37,6 +37,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -953,6 +954,8 @@ ContentExplorerWindow::ImportMesh(
 	// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
 	// freeze the editor for minutes on a large asset. None of it touches bgl, so it runs on a worker.
 	auto imported = std::optional<assetlib::imp::BMeshImport>();
+	auto mesh     = std::optional<assetlib::BMesh>();
+	auto tangents = assetlib::TangentGenResult();
 
 	background::TaskResult result = background::RunWithLoadingScreen(
 		this,
@@ -976,6 +979,12 @@ ContentExplorerWindow::ImportMesh(
 					},
 					cancel);
 			}
+
+			// Rebuilding a whole vertex pool is not instant either, and touches neither Qt nor bgl,
+			// so it belongs beside the parse rather than on the thread drawing the loading screen.
+			progress.Report(0, 0, QString("Deriving tangents..."));
+			mesh     = assetlib::toBMesh(*imported);
+			tangents = assetlib::generateTangents(*mesh);
 		},
 		background::Cancellable::kYes);
 
@@ -985,12 +994,17 @@ ContentExplorerWindow::ImportMesh(
 	{
 		try
 		{
-			assetlib::BMesh mesh = assetlib::toBMesh(*imported);
+			if (tangents.skipped > 0)
+				qWarning(
+					"Import: %u submesh(es) of '%s' have no tangent and no way to derive one; a "
+					"normal map on those will not render",
+					tangents.skipped,
+					qPrintable(name));
 
 			if (importMaterials)
-				WriteImportedMaterials(*imported, mesh, dataRoot, materialDir, textureDir);
+				WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
 
-			assetlib::save(mesh, bmeshPath);
+			assetlib::save(*mesh, bmeshPath);
 			return ImportOutcome::kImported;
 		}
 		catch (const std::exception& e)

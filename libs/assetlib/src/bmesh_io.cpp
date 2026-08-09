@@ -5,6 +5,8 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
+#include <assetlib/mesh_tangents.h>
+
 #include "fs_util.h"
 
 #include <core/file/file.h>
@@ -406,7 +408,7 @@ namespace assetlib
 		}
 	}
 
-	void
+	TangentGenResult
 	bake(
 		const imp::BMeshImport&      mesh,
 		const std::filesystem::path& outDir,
@@ -416,7 +418,12 @@ namespace assetlib
 		createDirectories(outDir);
 
 		writeTextures(mesh, outDir, {}, cancel);
-		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
+
+		BMesh      baked    = toBMesh(mesh);
+		const auto tangents = generateTangents(baked);
+
+		save(baked, outDir / (std::string(name) + ".bmesh"));
+		return tangents;
 	}
 
 	namespace
