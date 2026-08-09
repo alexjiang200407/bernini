@@ -12,7 +12,12 @@
 #include <catch2/catch_approx.hpp>
 
 #include <QDragEnterEvent>
+#include <QGraphicsItem>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsScene>
 #include <QJsonArray>
+#include <QKeyEvent>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
 #include <QSignalSpy>
@@ -36,6 +41,18 @@ namespace
 	Registry()
 	{
 		return MakeMaterialNodeRegistry(nullptr, nullptr);
+	}
+
+	/** The scene's node items: a node's caption and widgets are children of it, and are not nodes. */
+	QList<QGraphicsItem*>
+	TopLevelItems(const QGraphicsScene& scene)
+	{
+		QList<QGraphicsItem*> top;
+		for (QGraphicsItem* item : scene.items())
+			if (item->parentItem() == nullptr)
+				top.push_back(item);
+
+		return top;
 	}
 
 	// QUrl::fromLocalFile round-trips through toLocalFile only for a path that is already absolute
@@ -282,23 +299,19 @@ TEST_CASE("Switching the output type drops a wire whose type no longer fits", "[
 	REQUIRE(model.allConnectionIds(model.OutputNodeId()).empty());
 }
 
-TEST_CASE("The scene menu does not offer a sink", "[materialgraph]")
+TEST_CASE("The graph has no menu to add a node from", "[materialgraph]")
 {
 	MaterialGraphModel model(Registry());
 	MaterialGraphScene scene(model);
 
+	// Both kinds are registered -- the graph creates one by name and loads one from a saved graph --
+	// and neither is offered. A sink is switched rather than added, and a texture node is only worth
+	// anything with a file behind it, which is what dragging one in from the Content Explorer
+	// carries and a menu pick does not.
 	const std::unique_ptr<QMenu> menu(scene.createSceneMenu(QPointF(0.0, 0.0)));
 
-	auto* tree = menu->findChild<QTreeWidget*>();
-	REQUIRE(tree != nullptr);
-
-	// A sink is switched, not added. It stays registered -- the graph creates one by name, and loads
-	// one from a saved graph -- but it must not show up as something to drop on the canvas, or a
-	// graph could end up with two.
-	REQUIRE(tree->findItems(QLatin1String(c_OutputCategory), Qt::MatchExactly).isEmpty());
-
-	// Dropping the sinks must not take the rest of the menu with it.
-	REQUIRE(!tree->findItems("Input", Qt::MatchExactly).isEmpty());
+	CHECK(menu == nullptr);
+	CHECK(model.addNode("Texture") != InvalidNodeId);
 }
 
 TEST_CASE("A texture dragged onto the graph is accepted", "[materialgraph]")
@@ -436,4 +449,93 @@ TEST_CASE("Resizing the view keeps the sink centred", "[materialgraph]")
 	const QPoint offset = view.mapFromScene(*centre) - view.viewport()->rect().center();
 	INFO("sink is " << offset.manhattanLength() << "px off centre after the resize");
 	CHECK(offset.manhattanLength() <= 2);
+}
+
+TEST_CASE("Backspace deletes the selected node, and the sink survives it", "[materialgraph]")
+{
+	MaterialGraphModel model(Registry());
+	MaterialGraphScene scene(model);
+	MaterialGraphView  view;
+	view.setScene(&scene);
+
+	const NodeId sink    = model.addNode("MaterialOutput");
+	const NodeId texture = model.addNode("Texture");
+
+	// Through the scene's own items: what QtNodes' delete walks is the selection, not the model. The
+	// top-level ones are the nodes; a node's caption and widgets are children of it.
+	for (QGraphicsItem* item : TopLevelItems(scene)) item->setSelected(true);
+
+	// A node takes focus the moment it is clicked, so this is the state every real deletion starts
+	// from -- and a guard that asked only whether anything had focus refused all of them.
+	scene.items().front()->setFocus();
+	REQUIRE(scene.focusItem() != nullptr);
+
+	// The key a Mac keyboard labels "delete". QtNodes binds only QKeySequence::Delete, which is the
+	// forward delete most Mac keyboards do not have -- so on a mac nothing deleted anything.
+	QKeyEvent backspace(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+	QCoreApplication::sendEvent(&view, &backspace);
+
+	CHECK_FALSE(model.nodeExists(texture));
+
+	// Selected alongside it, and still there: a material has exactly one sink, and a graph without
+	// one cannot compile.
+	CHECK(model.nodeExists(sink));
+}
+
+TEST_CASE("Backspace deletes a node whose preview holds the focus", "[materialgraph]")
+{
+	MaterialGraphModel model(Registry());
+	MaterialGraphScene scene(model);
+	MaterialGraphView  view;
+	view.setScene(&scene);
+
+	const NodeId texture = model.addNode("Texture");
+
+	// A node's embedded widget covers most of it, so a click lands on the proxy holding that widget
+	// far more often than on the node -- and the proxy takes the focus. This is the state nearly
+	// every real deletion starts from, and a guard that refused whenever a widget had focus refused
+	// nearly every one of them.
+	QGraphicsItem* embedded = nullptr;
+	for (QGraphicsItem* item : scene.items())
+		if (item->isWidget())
+			embedded = item;
+
+	REQUIRE(embedded != nullptr);
+
+	for (QGraphicsItem* item : TopLevelItems(scene)) item->setSelected(true);
+	embedded->setFocus();
+	REQUIRE(scene.focusItem() == embedded);
+
+	QKeyEvent backspace(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+	QCoreApplication::sendEvent(&view, &backspace);
+
+	CHECK_FALSE(model.nodeExists(texture));
+}
+
+TEST_CASE("A field being typed into keeps Backspace", "[materialgraph]")
+{
+	MaterialGraphModel model(Registry());
+	MaterialGraphScene scene(model);
+	MaterialGraphView  view;
+	view.setScene(&scene);
+
+	const NodeId texture = model.addNode("Texture");
+	for (QGraphicsItem* item : TopLevelItems(scene)) item->setSelected(true);
+
+	// A text field, which is what a node embeds when it has a value to edit in place. Backspace
+	// belongs to it while it is being typed into; a keystroke that deleted the node instead would
+	// be a trap. Added to the scene rather than fished out of a node, so the rule is pinned on what
+	// makes it true -- the field consuming the key -- and not on which node happens to carry one.
+	auto* field = new QLineEdit();
+	field->setText(QStringLiteral("0.5"));
+
+	QGraphicsProxyWidget* proxy = scene.addWidget(field);
+	proxy->setFocus();
+	REQUIRE(scene.focusItem() == proxy);
+
+	QKeyEvent backspace(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+	QCoreApplication::sendEvent(&view, &backspace);
+
+	CHECK(model.nodeExists(texture));
+	CHECK(field->text() == QStringLiteral("0."));
 }

@@ -114,6 +114,24 @@ private:
 	void
 	AttachModels();
 
+	/**
+	 * Roots the grid at `path` and moves the tree's selection to match, leaving the history alone.
+	 * Every navigation ends here.
+	 */
+	void
+	ShowDirectory(const QString& path);
+
+	/** Shows `path`, remembering the folder it replaces so Back can return to it. */
+	void
+	NavigateTo(const QString& path);
+
+	/**
+	 * Returns to the folder shown before, skipping any that has been deleted since -- a folder can go
+	 * while it sits in the history, and there is nothing to show of one that is gone.
+	 */
+	void
+	NavigateBack();
+
 	QString
 	ResolveDropDirectory(const QPoint& windowPos) const;
 
@@ -234,5 +252,6 @@ private:
 	AssetFileModel*           m_FileModel;
 	QLabel*                   m_EmptyPlaceholder = nullptr;
 	QString                   m_RootPath;
+	QStringList               m_History;
 	AssetsHeldOpenFn          m_AssetsHeldOpen;
 };

@@ -149,6 +149,31 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
 	enable_strict_compiler(bgl_metal)
 	enable_coverage(bgl_metal)
+
+	# The Metal backend compiles Slang at runtime, so the raw .slang sources must sit beside the
+	# executable -- Device_metal's session resolves modules from "./shaders/src", and a build that
+	# staged none aborts on the first program-cache miss with "cannot open file". Hung off bgl, the
+	# way the D3D12 build hangs bgl_copy_shader_src off it, so every consumer of a device gets them.
+	#
+	# A target of its own rather than a POST_BUILD step: POST_BUILD only runs when the library
+	# relinks, so editing a .slang alone would leave the staged copy stale.
+	file(GLOB_RECURSE BGL_METAL_SHADER_SOURCES CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.slang
+	)
+
+	set(BGL_METAL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_shaders.stamp")
+	add_custom_command(
+		OUTPUT  "${BGL_METAL_SHADER_STAMP}"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_SHADER_STAMP}"
+		DEPENDS ${BGL_METAL_SHADER_SOURCES}
+		COMMENT "Staging Slang sources for runtime Metal compilation"
+		VERBATIM
+	)
+	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
+	add_dependencies(bgl bgl_metal_copy_shaders)
 endif()
 
 # Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
@@ -293,32 +318,26 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 
 	add_dependencies(bgl_tests bgl_idl_generate copy_assets)
 
-	# The Metal backend compiles Slang at runtime, so the raw .slang sources must sit next to the exe
-	# (the session's search paths). The D3D12 build gets this from bgl_copy_shader_src/tests, which
-	# live behind the build-time slangc validation; stage them directly here instead.
-	#
-	# A target of its own rather than a POST_BUILD step: POST_BUILD only runs when the executable
-	# relinks, so editing a .slang alone left the staged copy stale and the test running the old
-	# shader. DEPENDS on the sources makes the copy follow the edit.
-	file(GLOB_RECURSE BGL_METAL_SHADER_SOURCES CONFIGURE_DEPENDS
-		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.slang
+	# Only the test shaders: the src tree beside them is staged by bgl_metal_copy_shaders, which the
+	# suite depends on as well because it links the backend's objects rather than bgl. One writer per
+	# directory -- two targets copying into the same one can run at once.
+	file(GLOB_RECURSE BGL_METAL_TEST_SHADER_SOURCES CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests/*.slang
 	)
 
-	set(BGL_METAL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_shaders.stamp")
+	set(BGL_METAL_TEST_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_test_shaders.stamp")
 	add_custom_command(
-		OUTPUT  "${BGL_METAL_SHADER_STAMP}"
+		OUTPUT  "${BGL_METAL_TEST_SHADER_STAMP}"
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "$<TARGET_FILE_DIR:bgl_tests>/shaders/src"
-		COMMAND ${CMAKE_COMMAND} -E copy_directory
-				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests" "$<TARGET_FILE_DIR:bgl_tests>/shaders/tests"
-		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_SHADER_STAMP}"
-		DEPENDS ${BGL_METAL_SHADER_SOURCES}
-		COMMENT "Staging Slang sources for runtime Metal compilation"
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_TEST_SHADER_STAMP}"
+		DEPENDS ${BGL_METAL_TEST_SHADER_SOURCES}
+		COMMENT "Staging Slang test shaders for runtime Metal compilation"
 		VERBATIM
 	)
-	add_custom_target(bgl_metal_copy_shaders DEPENDS "${BGL_METAL_SHADER_STAMP}")
-	add_dependencies(bgl_tests bgl_metal_copy_shaders)
+	add_custom_target(bgl_metal_copy_test_shaders DEPENDS "${BGL_METAL_TEST_SHADER_STAMP}")
+	add_dependencies(bgl_tests bgl_metal_copy_shaders bgl_metal_copy_test_shaders)
 
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h

@@ -1,26 +1,11 @@
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 
-#include <QMenu>
-#include <QTreeWidget>
-
-#include "Windows/MaterialEditor/MaterialGraphModel.h"
-
 QMenu*
-MaterialGraphScene::createSceneMenu(QPointF scenePos)
+MaterialGraphScene::createSceneMenu(QPointF)
 {
-	QMenu* menu = DataFlowGraphicsScene::createSceneMenu(scenePos);
-
-	// QtNodes builds the menu as a tree of registry categories. Drop the sinks' category whole: they
-	// are still registered (the graph has to be able to create one by name, and to load one from a
-	// saved graph) but they are not nodes you add.
-	if (auto* tree = menu->findChild<QTreeWidget*>())
-	{
-		const QList<QTreeWidgetItem*> sinks =
-			tree->findItems(QLatin1String(c_OutputCategory), Qt::MatchExactly);
-
-		for (QTreeWidgetItem* item : sinks)
-			delete tree->takeTopLevelItem(tree->indexOfTopLevelItem(item));
-	}
-
-	return menu;
+	// Nothing in this graph is added from a menu. A sink is switched rather than added, and a texture
+	// arrives by being dragged in from the Content Explorer -- which is what carries the file it
+	// samples, so a texture node picked off a menu would have nothing to point at. GraphicsView
+	// treats a null menu as "no menu".
+	return nullptr;
 }

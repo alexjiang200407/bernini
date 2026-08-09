@@ -90,6 +90,14 @@ public:
 	uint32_t
 	SourceSubmesh(uint32_t submeshIndex) const noexcept;
 
+	/**
+	 * Whether the submesh carries a tangent, without which a normal map does nothing: the shader
+	 * rebuilds the map's frame from it and falls back to the geometric normal when it is absent.
+	 * True for a submesh that does not exist, which has nothing to warn about.
+	 */
+	[[nodiscard]] bool
+	SubmeshHasTangent(uint32_t submeshIndex) const noexcept;
+
 	// Replaces the preview geometry with a baked mesh; falls back to the sphere if it cannot load.
 	void
 	LoadMesh(const std::filesystem::path& path);
@@ -151,6 +159,7 @@ private:
 		uint32_t geomIndex     = 0;
 		uint32_t localSubmesh  = 0;
 		uint32_t sourceSubmesh = 0;  // index into the .bmesh's submeshes array
+		bool     hasTangent    = false;
 	};
 
 	// A mesh may be instanced by several nodes, so a geom can have more than one instance. An

@@ -17,6 +17,7 @@
 #include <QWheelEvent>
 
 #include <assetlib/bmesh_io.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <bgl/Camera.h>
 #include <bgl/IScene.h>
@@ -162,6 +163,12 @@ MaterialPreviewWindow::SourceSubmesh(uint32_t submeshIndex) const noexcept
 	return m_SubmeshRefs[submeshIndex].sourceSubmesh;
 }
 
+bool
+MaterialPreviewWindow::SubmeshHasTangent(uint32_t submeshIndex) const noexcept
+{
+	return submeshIndex >= m_SubmeshRefs.size() || m_SubmeshRefs[submeshIndex].hasTangent;
+}
+
 void
 MaterialPreviewWindow::ShowDefaultSphere()
 {
@@ -184,8 +191,8 @@ MaterialPreviewWindow::ShowDefaultSphere()
 		return;
 	}
 
-	m_SubmeshRefs.push_back({ 0, 0, 0 });
-	m_SubmeshNames = QStringList{ "Sphere" };  // procedural sphere: a single submesh
+	m_SubmeshRefs.push_back({ 0, 0, 0, true });  // AddSphereGeom writes a tangent
+	m_SubmeshNames = QStringList{ "Sphere" };    // procedural sphere: a single submesh
 
 	m_SubmeshMaterialPaths = QStringList{ QString() };
 	FocusOn(glm::vec3(0.0f), 1.0f);
@@ -276,7 +283,11 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 							name = QString("Submesh %1").arg(m_SubmeshNames.size());
 						m_SubmeshNames << name;
 						m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, m_DataRoot);
-						m_SubmeshRefs.push_back({ it->second, i, entry.firstSubmesh + i });
+						m_SubmeshRefs.push_back(
+							{ it->second,
+						      i,
+						      entry.firstSubmesh + i,
+						      assetlib::hasTangent(submesh) });
 					}
 				}
 

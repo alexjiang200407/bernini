@@ -27,13 +27,67 @@
        </sizepolicy>
       </property>
      </widget>
-     <widget class="QListView" name="CurrentDirectoryExplorer">
+     <widget class="QWidget" name="CurrentDirectoryPane">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
         <horstretch>2</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+      <layout class="QVBoxLayout" name="currentDirectoryLayout">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <layout class="QHBoxLayout" name="navigationLayout">
+         <item>
+          <widget class="QToolButton" name="BackButton">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="toolTip">
+            <string>Back to the folder shown before</string>
+           </property>
+           <property name="text">
+            <string>Back</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="navigationSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QListView" name="CurrentDirectoryExplorer">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>
