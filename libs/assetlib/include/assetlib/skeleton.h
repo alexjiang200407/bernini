@@ -45,4 +45,32 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::vector<glm::mat4>
 	bindPoseModelTransforms(const Skeleton& skeleton);
+
+	/**
+	 * Each bone's model-space transform at `frame` of `clip`, in bone order.
+	 *
+	 * The samples are local to each bone's parent, so this is the same forward pass
+	 * bindPoseModelTransforms makes, over a clip's pose instead of the rest one.
+	 *
+	 * @throws std::runtime_error if `clip` or `frame` is out of range, if `animations` was cooked
+	 *         against a different bone count, or if the clip's samples fall outside the pool.
+	 */
+	[[nodiscard]] std::vector<glm::mat4>
+	poseModelTransforms(
+		const Skeleton&     skeleton,
+		const AnimationSet& animations,
+		uint32_t            clip,
+		uint32_t            frame);
+
+	/**
+	 * The matrix each bone skins a vertex by: its model-space pose times its inverse bind.
+	 *
+	 * The inverse bind is what takes a vertex from model space into the bone's own space, so the
+	 * product is identity for a pose that equals the bind pose -- which is why a rest-pose frame
+	 * reproduces the source mesh exactly rather than approximately.
+	 *
+	 * @throws std::runtime_error if `modelTransforms` is not one per bone.
+	 */
+	[[nodiscard]] std::vector<glm::mat4>
+	skinningMatrices(const Skeleton& skeleton, std::span<const glm::mat4> modelTransforms);
 }
