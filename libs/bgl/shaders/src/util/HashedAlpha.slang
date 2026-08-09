@@ -17,29 +17,57 @@ float Hash3(float3 v)
 }
 
 /**
- * Sharpens minified alpha toward the cutoff's isocontour, so distant coverage keeps its shape
- * instead of its energy.
+ * How many levels coarser than its own footprint a pixel reads its local mean alpha from.
  *
- * Once a strand is sub-texel at the active mip, the sampled alpha is many strands averaged, and
+ * Too close and the mean tracks the very structure being sharpened, so the steepening has nothing to
+ * work against; too far and it averages over content the pixel does not cover, which drags the
+ * centre off the strands and fades them.
+ */
+public static const float c_MinifiedAlphaMeanBias = 1.0;
+
+/**
+ * Steepens minified alpha about the local mean, so distant coverage keeps its shape instead of its
+ * energy.
+ *
+ * Once a strand is sub-texel at the active mip the sampled alpha is many strands averaged, and
  * stochastic coverage that honestly reproduces that mean converges to a mixture the backdrop
- * swallows -- the strand fades where an alpha test would still draw it, because the test's fixed
- * cutoff turns the same smooth field into a crisp isocontour whose coverage the bake's mips
- * preserve. Steepening alpha about the cutoff in proportion to the minification hands hashed
- * coverage that same far-field behaviour while leaving magnification -- where soft self-occluding
- * coverage is the point of hashed -- exactly alone.
+ * swallows. Steepening in proportion to the minification restores the contrast between strand and
+ * gap, and leaves magnified alpha -- where soft self-occluding coverage is the point of hashed --
+ * exactly alone.
+ *
+ * `mean` is the centre it steepens about, and it is the content's own local average rather than the
+ * material's cutoff. A constant centre cannot be right at every level: a chain whose levels average
+ * to a value above it saturates to opaque and the strands bake together into a block, and one that
+ * averages below it collapses to nothing. The local mean is the fixed point of the steepening, so
+ * energy is preserved wherever the result does not clip, and a level the filter has flattened to a
+ * single value -- where there is no shape left to recover -- is left alone rather than pushed to one
+ * side. That degenerate case is a grating's deep mips, which is what hair is.
  *
  * The minification is the smaller screen axis on purpose: a grazing card minifies along the view
  * axis at any distance, anisotropic filtering resolves that axis, and sharpening on it would
  * harden near hair.
  */
-public float SharpenMinifiedAlpha(float alpha, float cutoff, float2 uv, float2 texDim)
+public float SharpenMinifiedAlpha(float alpha, float mean, float2 uv, float2 texDim)
 {
+    // How far past its honest energy distant coverage may be lifted, and the ceiling it may never
+    // pass. Steepening restores contrast but cannot restore a level the filter has flattened to one
+    // value -- there is no shape left in it -- and such a level is exactly where a sub-pixel strand
+    // lives, so it is lifted bodily instead. Bounded on both ends: a multiple of the mean so the
+    // lift scales with what is actually there, and a ceiling so however deep the chain goes a
+    // grating can never reach the solid block that rescaling its mips produced.
+    const float c_MaxCoverageGain = 2.0;
+    const float c_MaxCoverage = 0.5;
+
     float2 dx = ddx(uv) * texDim;
     float2 dy = ddy(uv) * texDim;
 
     float texelsPerPixel = min(length(dx), length(dy));
+    float sharpened = saturate((alpha - mean) * max(1.0, texelsPerPixel) + mean);
 
-    return saturate((alpha - cutoff) * max(1.0, texelsPerPixel) + cutoff);
+    // Magnified content has a gain of exactly 1 and a ceiling at its own alpha, so it is untouched.
+    float gain = clamp(texelsPerPixel, 1.0, c_MaxCoverageGain);
+
+    return min(sharpened * gain, max(alpha, c_MaxCoverage));
 }
 
 /**

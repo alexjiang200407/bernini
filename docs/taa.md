@@ -239,21 +239,33 @@ Two couplings worth knowing:
   The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
   does not move.
 
-* **Minified alpha is sharpened toward the cutoff's isocontour before the hash.** Once a strand is
-  sub-texel at the active mip, the sampled alpha is many strands averaged, and stochastic coverage
-  that honestly reproduces that mean converges to exactly what alpha-blending it would show — a
-  mixture the backdrop swallows. The strands *vanish* at distance not because coverage is lost
-  (the resolve above now conserves it to a few percent) but because energy-true rendering of a
-  sub-pixel feature **is** its disappearance; the alpha test keeps distant strands visible
-  precisely by being energy-false, drawing the smooth field's cutoff isocontour crisp. So
-  `ShadeHashedAlpha` steepens alpha about the material's cutoff in proportion to the base colour's
-  minification (`SharpenMinifiedAlpha`): magnified alpha — where soft self-occluding coverage is
-  the point of hashed — is untouched, and far alpha approaches the test's step, whose coverage the
-  bake's mips preserve. The minification is the *smaller* screen axis, since a grazing card
-  minifies along the view axis at any distance and anisotropic filtering resolves that axis. The
-  coverage ladder reads 0.74 near/mid and 1.05 far of the blend reference under it — the mid-band
-  energy traded for far-field crispness — and resting flicker drops another 5×, since sharpened
-  alpha leaves few partial values to flip coins with.
+* **Minified alpha is steepened about its own local mean before the hash, and the lift is bounded.**
+  Once a strand is sub-texel at the active mip the sampled alpha is many strands averaged, and
+  stochastic coverage that honestly reproduces that mean converges to a mixture the backdrop
+  swallows -- energy-true rendering of a sub-pixel feature *is* its disappearance. `ShadeHashedAlpha`
+  therefore steepens alpha in proportion to the minification (`SharpenMinifiedAlpha`), leaving
+  magnified alpha -- where soft self-occluding coverage is the point of hashed -- alone.
+
+  The centre it steepens about is the content's own local mean, read one level coarser through
+  `TextureHandle::SampleBias` so it inherits the hardware's LOD choice and its anisotropy. A constant
+  centre was tried first and is what the cutoff-based version used: it cannot be right at every
+  level, because a chain whose levels average above it saturates to opaque while one that averages
+  below collapses to nothing, and which of the two happens is a property of the asset rather than of
+  the renderer. The local mean is the steepening's fixed point, so energy survives wherever the
+  result does not clip.
+
+  A level the filter has flattened to one value has no shape left to recover, and that is exactly
+  where a sub-pixel strand lives, so such a level is lifted bodily instead -- bounded at twice the
+  mean and ceilinged at 0.5 coverage, so however deep the chain goes a grating can never reach a
+  solid block. The bounds are what the coverage ladder measures: 0.91 near, 1.11 mid and 1.32 far of
+  the blend reference, inside a [0.6, 1.4] bracket that guards hair which vanishes and hair which
+  doubles.
+
+  The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
+  any distance and anisotropic filtering resolves that axis. The cost is at the reference density,
+  where the lift trades some contrast for the far-field behaviour: frame-to-frame flicker on the
+  distant card measures 7.7e-5 against 3.2e-5 for the cutoff-centred version, inside every pinned
+  bound but not free.
 
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight

@@ -62,6 +62,11 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
     {
         return baseColorTexture.GetDimensions();
     }
+
+    float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
+    {
+        return baseColorTexture.SampleBias(s, uv, bias).a * baseColorFactor.a;
+    }
 }
 
 // Selects one component of `v`. Indexing a vector with a runtime value (`v[c]`) makes DXC spill it
@@ -131,6 +136,11 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
     {
         return sources[3].texture.GetDimensions();
     }
+
+    float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
+    {
+        return SelectComponent(sources[3].texture.SampleBias(s, uv, bias), sources[3].channel) * baseColorFactor.a;
+    }
 }
 
 // The shared tail of both shading paths. Base color is passed in rather than sampled here, so the
@@ -194,10 +204,13 @@ public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
     let baseColor = material.GetBaseColor(wrapSampler, input.uv);
 
     // At minification the sampled alpha is many strands averaged, and coverage that honestly
-    // matches it is a haze the backdrop swallows; sharpening it back toward the cutoff's
-    // isocontour keeps distant strands the crisp features the alpha test would draw, and leaves
-    // magnified alpha -- where hashed earns its keep -- untouched.
-    float alpha = SharpenMinifiedAlpha(baseColor.a, material.GetAlphaCutoff(), input.uv, material.GetBaseColorDimensions());
+    // matches it is a haze the backdrop swallows; steepening it about the local mean restores the
+    // strand-to-gap contrast without moving the average, and leaves magnified alpha -- where hashed
+    // earns its keep -- untouched.
+    let texDim = material.GetBaseColorDimensions();
+    let meanAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_MinifiedAlphaMeanBias);
+
+    float alpha = SharpenMinifiedAlpha(baseColor.a, meanAlpha, input.uv, texDim);
 
     if (alpha < HashedAlphaThreshold(input.worldPos, materialData.alphaHashSeed))
     {

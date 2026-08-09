@@ -193,11 +193,14 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 			VkFormat::BC7_SRGB_BLOCK);
 	}
 
-	SECTION("hashed and blend do not converge on one baked map")
+	SECTION("hashed and blend converge on one baked map")
 	{
-		// Hashed bakes coverage-preserving mips like the cutout: diluted alpha under stochastic
-		// coverage is expected coverage lost, so a distant strand fades out instead of thinning.
-		REQUIRE(bakeBaseColor(AlphaMode::kHashed) != bakeBaseColor(AlphaMode::kBlend));
+		// Both take plain mips, so identical routes bake identical bytes and the content-addressed
+		// name is meant to land on one file. Hashed needs no coverage rescale: it tests alpha against
+		// a uniform random threshold, so a box filter's mean alpha already is the expected coverage,
+		// and rescaling against a cutoff manufactures coverage rather than preserving it. The cutout
+		// above is the one that genuinely needs a map of its own.
+		REQUIRE(bakeBaseColor(AlphaMode::kHashed) == bakeBaseColor(AlphaMode::kBlend));
 	}
 }
 

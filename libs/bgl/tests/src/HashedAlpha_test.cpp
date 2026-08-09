@@ -995,17 +995,17 @@ TEST_CASE("A converged hashed surface stays still at grazing angles", "[hashedal
 }
 
 // The strand regime: geometry whose *texture alpha* is thinner than a pixel, which is the flyaway
-// half of a hair asset. Plain box mips dilute such a strand's alpha, and under stochastic coverage
-// diluted alpha is a strand that fades out of the frame -- its expected coverage falls with every
-// level. The bake's coverage-preserving mips, which kMask always had and kHashed now shares, are
-// what keeps the footprint; this is the renderer-level half of that contract, the same strands
-// drawn under both mip policies.
+// half of a hair asset. What keeps such a strand on screen is `SharpenMinifiedAlpha`, steepening the
+// plain chain's honest mean back into strand-and-gap contrast; this is that contract, measured
+// against the rescaled chain hashed used to be given.
 //
-// What this does *not* claim: that the rescale calms flicker. Measured at parity here (0.0012
-// plain, 0.0014 preserved) -- this grating's diluted alpha lands exactly at the matching cutoff,
-// where a rescaled texel is still a coin flip per frame. The footprint is the win; the flicker on
-// such content is bounded by the accumulation, as elsewhere.
-TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hashedalpha][render]")
+// The rescale is not merely unnecessary here, it is harmful, and this is where that shows. A
+// coverage-preserving level of a grating averages to near-uniform alpha -- no scale lands between
+// "nothing passes" and "everything does", so the bisection takes the whole level over the cutoff --
+// and a level flattened to one value has no shape left for the steepening to recover, so the
+// renderer can no longer tell strand from gap. The plain chain keeps the variation that the
+// steepening needs.
+TEST_CASE("Hashed strands survive the plain mip chain", "[hashedalpha][render]")
 {
 	const auto [plainDelta, plainMean] = StrandFlicker(
 		"assets/golden/hashed_strand_plain_a.got.png",
@@ -1023,14 +1023,14 @@ TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hash
 								   << ", preserved = " << preservedMean.Luma());
 
 	// The strands have to be on screen at all, or the footprint comparison is background against
-	// background.
+	// background. This is also what a broken lift would trip: the plain chain's honest alpha is
+	// below any cutoff at this minification, so without the steepening there is nothing to see.
 	CHECK(plainMean.Luma() > 5e-3f);
 
-	// Measured 0.136 against 0.161. Under a resolve that no longer wipes sparse coverage the gap
-	// is just the chains' mean-alpha ratio at this minification (1.21 at mip 2.2) -- box mips
-	// already preserve a hashed material's expected coverage, and the old half-again gap was the
-	// wipe amplifying the difference nonlinearly.
-	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.1f);
+	// Measured 0.186 plain against 0.109 preserved. The direction is the point -- the chain the bake
+	// now gives hashed carries *more* of the strands to the screen than the rescaled one it used to,
+	// because the rescale flattens away what the steepening works on.
+	CHECK(plainMean.Luma() > preservedMean.Luma());
 
 	// Neither chain may flicker beyond the converged-patch scale; this is where a regression in
 	// the accumulation on textured stochastic content would surface.
@@ -1257,7 +1257,11 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 		const int box   = static_cast<int>(spanPx * 0.6f);
 		const int boxXY = (static_cast<int>(c_Width) - box) / 2;
 
-		auto strandImage = MakeStrandTexture(true, true);
+		// The plain box chain hashed now ships with (`groupPreservesCoverage` is the alpha test's
+		// alone), so the reference below shares it and the ratio isolates the hash from the mips --
+		// and, unlike the coverage-preserved chain this used to hold both sides to, it is the chain
+		// each layer actually receives.
+		auto strandImage = MakeStrandTexture(false, false);
 
 		// The chain level the footprint asks for, and the coverage the chain holds there.
 		const float    mipF     = std::log2(static_cast<float>(c_StrandTexSize) / spanPx);
@@ -1290,7 +1294,7 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 			bgl::test::MeanColor(base + ".got.png", boxXY, boxXY, box, box);
 
 		PatchScene blend = MakeCardScene(
-			MakeStrandTexture(true, true),
+			MakeStrandTexture(false, false),
 			true,
 			false,
 			rung.cameraZ,
@@ -1391,11 +1395,11 @@ namespace
 	{
 		constexpr float c_CameraZ = 20.0f;
 
-		// The mip policy each layer actually ships with: the bake gives coverage-preserving mips to
-		// the two that read alpha as a threshold and plain box mips to blend
-		// (`groupPreservesCoverage`). Handing blend the mask's chain would compare it against a
-		// texture it never receives.
-		const bool preservesCoverage = layer != bgl::LayerType::kBlend;
+		// The mip policy each layer actually ships with: the bake rescales mips only for the alpha
+		// test, whose threshold is a constant (`groupPreservesCoverage`). Hashed and blend take plain
+		// box mips. Handing a layer a chain it never receives would measure a texture that does not
+		// exist.
+		const bool preservesCoverage = layer == bgl::LayerType::kMask;
 
 		PatchScene card = MakeCardScene(
 			MakeStrandTexture(preservesCoverage, preservesCoverage),

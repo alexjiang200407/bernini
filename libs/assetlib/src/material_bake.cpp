@@ -159,18 +159,26 @@ namespace assetlib
 		}
 
 		/**
-		 * Whether this group's mips are coverage-preserving. The alpha test rescales each mip against
-		 * its cutoff so thin geometry does not dissolve. Hashed coverage dissolves the same way --
-		 * averaging pulls a strand's alpha towards zero and its expected coverage with it, so a
-		 * distant strand fades out rather than thinning -- and takes the same correction. Blend keeps
-		 * the channel but uses plain mips: dilution is exactly the prefiltering blending wants at
-		 * distance.
+		 * Whether this group's mips are coverage-preserving, which only a *threshold* on alpha needs.
+		 *
+		 * The alpha test compares alpha against a constant, so averaging a thin mask down pulls it
+		 * under the cutoff and the geometry dissolves; rescaling each level against the cutoff is what
+		 * stops that. Hashed compares alpha against a uniform random threshold instead: a fragment
+		 * survives with probability equal to its alpha, so the mean alpha a box filter produces *is*
+		 * the expected coverage. Rescaling there does not preserve coverage, it manufactures it -- and
+		 * on a grating, whose levels average to near-uniform alpha with no scale landing between
+		 * "nothing passes" and "everything does", it drives the whole level over the cutoff and the
+		 * strands bake into a solid block. Hair is a grating.
+		 *
+		 * What keeps a distant hashed strand from fading is `SharpenMinifiedAlpha`, which steepens
+		 * about the level's own mean and so needs that mean to be true. Blend keeps the channel and
+		 * takes plain mips for the same reason: dilution is the prefiltering blending wants.
 		 */
 		bool
 		groupPreservesCoverage(const PbrParams& pbr, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
-			       (pbr.alphaMode == AlphaMode::kMask || pbr.alphaMode == AlphaMode::kHashed);
+			       pbr.alphaMode == AlphaMode::kMask;
 		}
 
 		/**
