@@ -116,6 +116,22 @@ private:
 	void
 	FrameOnOutput();
 
+	/**
+	 * Shows or hides the "no tangents" warning for the current submesh: a normal map is authored in a
+	 * tangent frame, so one routed onto a submesh without a tangent renders as nothing at all.
+	 */
+	void
+	RefreshTangentWarning();
+
+	/**
+	 * Derives tangents for the previewed `.bmesh`, rewrites it, and reloads the preview from it.
+	 *
+	 * Reloading is what makes the new tangents visible, and it rebuilds the graphs from what the mesh
+	 * names -- so an unsaved edit is lost, which the user is asked about first.
+	 */
+	void
+	GenerateTangents();
+
 	void
 	CompileGraph(int graphIndex);
 
@@ -213,4 +229,6 @@ private:
 	QPushButton*       m_SetDefaultButton   = nullptr;
 	QLabel*            m_MaterialLabel      = nullptr;
 	QLabel*            m_BakedTexturesLabel = nullptr;
+	QLabel*            m_TangentWarning     = nullptr;
+	QPushButton*       m_GenerateTangents   = nullptr;
 };

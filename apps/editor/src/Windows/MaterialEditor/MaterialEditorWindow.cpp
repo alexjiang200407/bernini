@@ -21,9 +21,11 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 
+#include "Async/BackgroundTask.h"
 #include "Project/Project.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/TexturePreviewCache.h"
@@ -65,6 +67,22 @@ namespace
 			break;
 		}
 		return bgl::LayerType::kOpaque;
+	}
+
+	/** Whether the graph routes anything into the sink's normal channels. */
+	bool
+	RoutesNormalMap(const MaterialOutputNode& output)
+	{
+		for (size_t i = 0; i < assetlib::c_NormalChannels.count; ++i)
+		{
+			const unsigned int channel =
+				static_cast<unsigned int>(assetlib::channelIndex(assetlib::c_NormalChannels, i));
+
+			if (!output.Route(channel).path.isEmpty())
+				return true;
+		}
+
+		return false;
 	}
 
 }
@@ -174,6 +192,25 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_BakedTexturesLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	m_BakedTexturesLabel->hide();
 	propertiesLayout->addWidget(m_BakedTexturesLabel);
+
+	// A normal map routed onto a submesh with no tangent renders as nothing: the shader rebuilds the
+	// map's frame from the tangent and falls back to the geometric normal without one. Silent until
+	// this said so.
+	m_TangentWarning = new QLabel(propertiesPanel);
+	m_TangentWarning->setWordWrap(true);
+	m_TangentWarning->setStyleSheet("color: #d08770;");
+	m_TangentWarning->setText(
+		QStringLiteral("This submesh has no tangents, so its normal map is being ignored."));
+	m_TangentWarning->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+	m_TangentWarning->hide();
+	propertiesLayout->addWidget(m_TangentWarning);
+
+	m_GenerateTangents = new QPushButton(QStringLiteral("Generate Tangents"), propertiesPanel);
+	m_GenerateTangents->setToolTip(QStringLiteral(
+		"Derive a tangent for every submesh of this mesh that has none, and rewrite the .bmesh."));
+	m_GenerateTangents->hide();
+	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() { GenerateTangents(); });
+	propertiesLayout->addWidget(m_GenerateTangents);
 
 	propertiesLayout->addStretch(1);
 
@@ -543,6 +580,93 @@ MaterialEditorWindow::ForgetMaterialsOnDisk()
 }
 
 void
+MaterialEditorWindow::RefreshTangentWarning()
+{
+	const int graphIndex = CurrentGraph();
+
+	const MaterialOutputNode* output =
+		graphIndex >= 0 ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode() :
+						  nullptr;
+
+	// Only where it is actionable: a mesh on disk to rewrite, a normal map that is being thrown
+	// away, and a submesh that has no tangent to throw it away with.
+	const bool missing = m_Preview != nullptr && !m_Preview->MeshPath().empty() &&
+	                     m_CurrentSubmesh >= 0 &&
+	                     !m_Preview->SubmeshHasTangent(static_cast<uint32_t>(m_CurrentSubmesh)) &&
+	                     output != nullptr && RoutesNormalMap(*output);
+
+	m_TangentWarning->setVisible(missing);
+	m_GenerateTangents->setVisible(missing);
+}
+
+void
+MaterialEditorWindow::GenerateTangents()
+{
+	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const std::filesystem::path meshPath = m_Preview->MeshPath();
+
+	auto confirm = QMessageBox(this);
+	confirm.setWindowTitle(QStringLiteral("Generate Tangents"));
+	confirm.setIcon(QMessageBox::Question);
+	confirm.setText(QStringLiteral("Derive tangents for '%1'?")
+	                    .arg(QString::fromStdString(meshPath.filename().string())));
+	confirm.setInformativeText(QStringLiteral(
+		"Every submesh that has none gains one, and the mesh is rewritten and reloaded. Unsaved "
+		"graph edits are lost, and a submesh that already has tangents keeps the authored ones."));
+
+	auto* run = confirm.addButton(QStringLiteral("Generate"), QMessageBox::AcceptRole);
+	confirm.addButton(QMessageBox::Cancel);
+	confirm.setDefaultButton(run);
+	confirm.exec();
+
+	if (confirm.clickedButton() != run)
+		return;
+
+	auto result = assetlib::TangentGenResult();
+
+	// Reading, deriving and writing a whole mesh is not instant, and none of it touches bgl.
+	const background::TaskResult done = background::RunWithLoadingScreen(
+		this,
+		QStringLiteral("Generate Tangents"),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Deriving tangents...");
+
+			assetlib::BMesh mesh = assetlib::load(meshPath);
+			result               = assetlib::generateTangents(mesh);
+
+			if (result.generated > 0)
+				assetlib::save(mesh, meshPath);
+		});
+
+	if (!done.Completed())
+	{
+		QMessageBox::warning(
+			this,
+			QStringLiteral("Generate Tangents"),
+			QStringLiteral("Could not rewrite the mesh:\n\n%1").arg(done.error));
+		return;
+	}
+
+	if (result.generated == 0)
+	{
+		QMessageBox::information(
+			this,
+			QStringLiteral("Generate Tangents"),
+			QStringLiteral(
+				"Nothing to do: %1 submeshes already have tangents, and %2 cannot have one derived "
+				"(no normals, no UVs, or no triangles).")
+				.arg(result.kept)
+				.arg(result.skipped));
+		return;
+	}
+
+	// Reloading is what puts the new vertex layout in front of the renderer.
+	m_Preview->LoadMesh(meshPath);
+}
+
+void
 MaterialEditorWindow::RefreshActions()
 {
 	const int  graphIndex = CurrentGraph();
@@ -566,6 +690,8 @@ MaterialEditorWindow::RefreshActions()
 	                              m_Preview->SubmeshMaterialPaths().value(m_CurrentSubmesh) :
 	                              QString();
 	const bool    isDefault = IsAlreadyDefault(boundPath, materialPath);
+
+	RefreshTangentWarning();
 
 	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 	m_SetDefaultButton->setToolTip(

@@ -238,7 +238,7 @@ namespace assetlib
 		// One pass over the pool, rebuilding it submesh by submesh so the offsets can be rewritten as
 		// they are laid down.
 		auto rebuilt = std::vector<std::byte>();
-		rebuilt.reserve(mesh.vertexData.size() + result.generated * 16);
+		rebuilt.reserve(mesh.vertexData.size() + result.generated * 16u);
 
 		for (size_t s = 0; s < mesh.submeshes.size(); ++s)
 		{

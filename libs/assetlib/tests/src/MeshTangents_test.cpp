@@ -78,24 +78,24 @@ namespace
 	{
 		const Submesh& submesh = mesh.submeshes[submeshIndex];
 
+		const VertexAttribute* tangent = nullptr;
 		for (uint8_t a = 0; a < submesh.layout.attributeCount; ++a)
 		{
-			if (submesh.layout.attributes[a].semantic != VertexSemantic::kTangent)
-				continue;
-
-			auto value = glm::vec4();
-			std::memcpy(
-				&value,
-				mesh.vertexData.data() + submesh.vertexByteOffset +
-					static_cast<size_t>(vertex) * submesh.layout.stride +
-					submesh.layout.attributes[a].offset,
-				sizeof(value));
-
-			return value;
+			if (submesh.layout.attributes[a].semantic == VertexSemantic::kTangent)
+				tangent = &submesh.layout.attributes[a];
 		}
 
-		FAIL("submesh " << submeshIndex << " has no tangent attribute");
-		return {};
+		INFO("submesh " << submeshIndex);
+		REQUIRE(tangent != nullptr);
+
+		auto value = glm::vec4();
+		std::memcpy(
+			&value,
+			mesh.vertexData.data() + submesh.vertexByteOffset +
+				static_cast<size_t>(vertex) * submesh.layout.stride + tangent->offset,
+			sizeof(value));
+
+		return value;
 	}
 }
 
