@@ -232,15 +232,17 @@ TEST_CASE("A skinned primitive's joint indices are remapped into bone order", "[
 	REQUIRE(submesh.layout.attributeCount == 3);
 	CHECK(submesh.layout.stride == 28);  // vec3 position + u16x4 joints + unorm16x4 weights
 
-	const int joints  = attributeOffset(submesh.layout, VertexSemantic::kJoints0);
-	const int weights = attributeOffset(submesh.layout, VertexSemantic::kWeights0);
+	const auto joints  = attributeOffset(submesh.layout, VertexSemantic::kJoints0);
+	const auto weights = attributeOffset(submesh.layout, VertexSemantic::kWeights0);
+	REQUIRE(joints);
+	REQUIRE(weights);
 	REQUIRE(joints >= 0);
 	REQUIRE(weights >= 0);
 
 	const auto jointAt = [&](uint32_t vertex, uint32_t component) {
 		return U16At(
 			import.vertexData,
-			static_cast<size_t>(vertex) * submesh.layout.stride + static_cast<size_t>(joints) +
+			static_cast<size_t>(vertex) * submesh.layout.stride + static_cast<size_t>(*joints) +
 				component * sizeof(uint16_t));
 	};
 
@@ -253,7 +255,7 @@ TEST_CASE("A skinned primitive's joint indices are remapped into bone order", "[
 	const auto weightAt = [&](uint32_t vertex, uint32_t component) {
 		return U16At(
 			import.vertexData,
-			static_cast<size_t>(vertex) * submesh.layout.stride + static_cast<size_t>(weights) +
+			static_cast<size_t>(vertex) * submesh.layout.stride + static_cast<size_t>(*weights) +
 				component * sizeof(uint16_t));
 	};
 
@@ -277,8 +279,8 @@ TEST_CASE("A static glTF imports with no rig and no skin attributes", "[gltf][sk
 	CHECK(import.animations.clips.empty());
 	for (const Submesh& submesh : import.submeshes)
 	{
-		CHECK(attributeOffset(submesh.layout, VertexSemantic::kJoints0) == -1);
-		CHECK(attributeOffset(submesh.layout, VertexSemantic::kWeights0) == -1);
+		CHECK_FALSE(attributeOffset(submesh.layout, VertexSemantic::kJoints0).has_value());
+		CHECK_FALSE(attributeOffset(submesh.layout, VertexSemantic::kWeights0).has_value());
 	}
 }
 

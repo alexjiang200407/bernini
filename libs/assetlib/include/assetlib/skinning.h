@@ -11,12 +11,9 @@ namespace assetlib
 	{
 		glm::vec3 position;
 
-		/**
-		 * Zero when the submesh carries no normals, and **not normalized** otherwise: blending two
-		 * rotations shortens the result, and a scaled bone lengthens it. A caller that encodes into
-		 * a unit-range texel normalizes first.
-		 */
-		glm::vec3 normal;
+		// Blended, so not unit length: two rotations shorten it and a scaled bone lengthens it.
+		// Zero when the submesh carries no normals.
+		glm::vec3 blendedNormal;
 	};
 
 	/**

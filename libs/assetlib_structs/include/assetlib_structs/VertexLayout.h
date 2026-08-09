@@ -60,9 +60,9 @@ namespace assetlib
 	inline constexpr size_t c_InfluencesPerVertex = 4;
 
 	/**
-	 * Byte offset of `semantic` within one interleaved vertex, or -1 when the layout does not carry
+	 * Byte offset of `semantic` within one interleaved vertex, empty when the layout does not carry
 	 * it -- which is the ordinary case, since the importer packs only what the source provided.
 	 */
-	[[nodiscard]] int
+	[[nodiscard]] std::optional<uint16_t>
 	attributeOffset(const VertexLayout& layout, VertexSemantic semantic) noexcept;
 }

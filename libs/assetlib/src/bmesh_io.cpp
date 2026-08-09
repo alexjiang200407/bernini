@@ -337,7 +337,7 @@ namespace assetlib
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const Submesh& submesh = mesh.submeshes[meshEntry.firstSubmesh + s];
-				const int posOffset    = attributeOffset(submesh.layout, VertexSemantic::kPosition);
+				const auto posOffset   = attributeOffset(submesh.layout, VertexSemantic::kPosition);
 				const uint32_t stride  = submesh.layout.stride;
 
 				out << "o mesh" << mi << "_submesh" << s << "\n";
@@ -347,8 +347,8 @@ namespace assetlib
 					float            p[3]     = { 0.0f, 0.0f, 0.0f };
 					const std::byte* vertBase = mesh.vertexData.data() + submesh.vertexByteOffset +
 					                            static_cast<size_t>(v) * stride;
-					if (posOffset >= 0)
-						std::memcpy(p, vertBase + posOffset, sizeof(p));
+					if (posOffset)
+						std::memcpy(p, vertBase + *posOffset, sizeof(p));
 					out << "v " << p[0] << ' ' << p[1] << ' ' << p[2] << "\n";
 				}
 
