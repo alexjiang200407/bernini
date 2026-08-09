@@ -19,7 +19,9 @@ namespace bgl
 		// antialiasing converges, *not* against ghosting -- the neighbourhood clamp is what bounds a
 		// trail, and the weight barely moves it. Measured: 0.1 leaves 0.0022 of frame-to-frame noise
 		// on a hashed surface, 0.05 leaves 0.0015, 0.025 leaves 0.0014 but no longer resolves an edge
-		// within the frames a camera actually holds still for.
+		// within the frames a camera actually holds still for. This is the base: the resolve divides
+		// it by remembered stochastic spread at rest (TaaResolve.slang), which is what reaches the
+		// residual a constant weight cannot.
 		constexpr float c_BlendWeight = 0.05f;
 	}
 

@@ -893,10 +893,11 @@ TEST_CASE("A converged hashed patch stops changing between frames", "[hashedalph
 	// The instrument has to be able to read zero, or the bound below is measuring its own noise floor.
 	REQUIRE(opaque < 1e-5f);
 
-	// Measured 0.0049 with a hash cell one to two pixels wide, 0.0020 once it is sub-pixel, and 0.0013
-	// at a blend weight of 0.05. The bound sits between the last two, so neither the correlated pattern
-	// nor a weight raised back to 0.1 can return unnoticed.
-	CHECK(hashed < 1.6e-3f);
+	// Measured 0.0049 with a hash cell one to two pixels wide, 0.0020 once it is sub-pixel, 0.0013
+	// at a blend weight of 0.05, and 2.3e-5 once the resolve deepens the weight where the variance
+	// store remembers stochastic spread. The bound sits well below the fixed-weight figures, so
+	// losing the deepening -- or the correlated pattern returning -- cannot pass unnoticed.
+	CHECK(hashed < 3e-4f);
 }
 
 // The moving half of the flicker contract. A pixel where the hash discarded this frame's fragment

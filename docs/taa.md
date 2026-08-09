@@ -134,6 +134,22 @@ from there, live, because the comparison is what shows a temporal artifact.
   constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
   clamp already bounds ghosting, so there is no second problem for the weight to solve.
 
+* **The weight does deepen where remembered stochastic spread lives.** What a converged stochastic
+  region still flickers by is the accumulation's residual variance, which scales with the blend
+  weight and which no clamp box reaches — and the variance store (below) is a per-pixel map of
+  exactly where that residual lives. The resolve divides the weight by the remembered sigma,
+  floored at a quarter of the base so the accumulation still tracks a change a resting camera is
+  watching. This is not the velocity-scaled ramp rejected above: the gate is the store, not the
+  motion, and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
+  deepening cannot ghost. It is also what makes a lower render resolution stop flickering more
+  than a higher one: the distant strand card measured 7.7e-5 / 1.37e-4 / 2.51e-4 of frame-to-frame
+  noise at 256/128/64 and measures 2.4e-5 / 4.2e-5 / 7.5e-5 with the deepening — every rung below
+  the unaided 256 figure — with the converged still patch at 2.3e-5 against 0.0015, and every
+  resting fixed point (coverage ladder, converged luma) unchanged. The cost is the settling tail:
+  the last of a resting stochastic region's noise drains at up to four times the base time
+  constant, staged behind the store itself filling, so the first frames after a camera stops
+  settle at full speed.
+
 * **At rest the box is widened by remembered stochastic spread.** The min/max box has a second
   blind spot on stochastic coverage, opposite the smear: on the frames where none of a sparse
   strand's 3×3 wins its coin flip, the box collapses onto the backdrop and wipes the accumulated
@@ -273,7 +289,9 @@ Two couplings worth knowing:
   behind a pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
   essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
   actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
-  camera stops. 0.025 is where that starts to show.
+  camera stops. 0.025 is where that starts to show. The variance-guided deepening (above) is how the
+  resolve gets past this trade: only pixels the store already knows are stochastic pay the longer
+  time constant.
 
 ---
 
