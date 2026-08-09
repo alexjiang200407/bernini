@@ -5,6 +5,7 @@
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QKeyEvent;
 class QShowEvent;
 
 class MaterialGraphView : public QtNodes::GraphicsView
@@ -28,6 +29,13 @@ protected:
 	 */
 	void
 	showEvent(QShowEvent* event) override;
+
+	/**
+	 * Deletes the selection on Backspace as well as on Delete, which is all the base class binds --
+	 * and the key a Mac keyboard labels "delete" is Backspace.
+	 */
+	void
+	keyPressEvent(QKeyEvent* event) override;
 
 	void
 	dragEnterEvent(QDragEnterEvent* event) override;
