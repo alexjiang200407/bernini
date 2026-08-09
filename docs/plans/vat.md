@@ -286,9 +286,11 @@ gamelib's test, at the seam that actually joins the layers.
 
 ### D9 — CLI-only, like the import it extends
 
-`assetlib_cli bakevat` (name final at implementation). The editor's animation checkbox is already
-inert under #109 and its import refuses rigged glTFs; wiring editor UI to a runtime that is still
-landing would review nothing. Editor flow is a follow-up feature, and because the bake lives behind
+`assetlib_cli bakevat` (name final at implementation). Wiring editor UI to a runtime that is still
+landing would review nothing. (This decision originally also leaned on the editor being unable to
+import a rigged glTF at all; that is no longer true -- its import writes the `.bskel`, and the clips
+behind the *Import animations* box -- but the VAT runtime not existing yet is the half that carries
+D9 on its own.) Editor flow is a follow-up feature, and because the bake lives behind
 the CLI seam, that feature is a caller — the logic is already testable without the shell.
 
 ---
