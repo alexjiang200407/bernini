@@ -286,7 +286,7 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	if (current)
 	{
 		SyncOutputSelector();
-		CenterOnOutput();
+		FrameOnOutput();
 	}
 
 	return output;
@@ -337,7 +337,7 @@ MaterialEditorWindow::BakedTexturesSummary(const assetlib::BMaterial& material)
 }
 
 void
-MaterialEditorWindow::CenterOnOutput()
+MaterialEditorWindow::FrameOnOutput()
 {
 	const int graphIndex = CurrentGraph();
 	if (graphIndex < 0)
@@ -348,7 +348,14 @@ MaterialEditorWindow::CenterOnOutput()
 		return;
 
 	if (const std::optional<QPointF> centre = OutputCentre(*entry.model))
+	{
+		// 1:1 rather than a fit to the viewport, which is a few dozen pixels wide while the panel is
+		// still being laid out and so measures nothing. Set on every framing, or the graph switched
+		// to would open at whatever zoom the last one was left at. Scale first: centerOn is what
+		// decides where the view sits, and setupScale moves it.
+		m_GraphView->setupScale(1.0);
 		m_GraphView->centerOn(*centre);
+	}
 }
 
 MaterialOutputNode*
@@ -488,7 +495,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 		graphIndex >= 0 ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].scene.get() : nullptr);
 
 	SyncOutputSelector();
-	CenterOnOutput();
+	FrameOnOutput();
 	RefreshActions();
 }
 

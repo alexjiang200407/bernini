@@ -111,10 +111,10 @@ private:
 	class MaterialOutputNode*
 	WatchOutputNode(int graphIndex);
 
-	/** Scrolls the graph view to the current submesh's output node. The sink is what you author back
-	 *  from, so it is where a freshly opened or freshly loaded graph should start. */
+	/** Frames the graph view on the current submesh's output node, at 1:1. The sink is what you author
+	 *  back from, so it is where a freshly opened or freshly loaded graph should start. */
 	void
-	CenterOnOutput();
+	FrameOnOutput();
 
 	void
 	CompileGraph(int graphIndex);

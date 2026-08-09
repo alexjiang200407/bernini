@@ -3,6 +3,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QShowEvent>
 #include <QUrl>
 
 namespace
@@ -32,6 +33,17 @@ MaterialGraphView::MaterialGraphView(QWidget* parent) : QtNodes::GraphicsView(pa
 	// Hold the centre through a resize, so a graph centred while the panel was still being laid out
 	// stays centred once it has its real size.
 	setResizeAnchor(QGraphicsView::AnchorViewCenter);
+}
+
+void
+MaterialGraphView::showEvent(QShowEvent* event)
+{
+	// QGraphicsView's, not QtNodes::GraphicsView's: that one calls centerScene(), which fitInViews
+	// the graph against the viewport it has at this moment -- and a docked panel is still a few
+	// dozen pixels wide when it is first shown. A 275x201 output node measured against a 75x229
+	// viewport leaves the view at scale 0.22, and nothing puts it back: the resize anchor holds the
+	// centre through the panel's growth to full size, not the zoom.
+	QGraphicsView::showEvent(event);
 }
 
 void
