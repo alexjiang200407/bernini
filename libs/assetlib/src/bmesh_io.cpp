@@ -300,17 +300,6 @@ namespace assetlib
 
 	namespace
 	{
-		// Byte offset of a vertex attribute within one interleaved vertex, or -1 if the submesh's
-		// layout does not carry it.
-		int
-		attributeByteOffset(const VertexLayout& layout, VertexSemantic semantic)
-		{
-			for (uint32_t i = 0; i < layout.attributeCount; ++i)
-				if (layout.attributes[i].semantic == semantic)
-					return layout.attributes[i].offset;
-			return -1;
-		}
-
 		// One index from a submesh's raw index buffer, honoring its 16- or 32-bit width.
 		uint32_t
 		rawIndexAt(const BMesh& mesh, const Submesh& submesh, uint32_t i)
@@ -348,9 +337,8 @@ namespace assetlib
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const Submesh& submesh = mesh.submeshes[meshEntry.firstSubmesh + s];
-				const int      posOffset =
-					attributeByteOffset(submesh.layout, VertexSemantic::kPosition);
-				const uint32_t stride = submesh.layout.stride;
+				const int posOffset    = attributeOffset(submesh.layout, VertexSemantic::kPosition);
+				const uint32_t stride  = submesh.layout.stride;
 
 				out << "o mesh" << mi << "_submesh" << s << "\n";
 
