@@ -26,6 +26,10 @@ public:
 		const assetlib::GltfMaterialProbe& materials = {},
 		QWidget*                           parent    = nullptr);
 
+	/** Whether the mesh itself comes across. Off imports only the other pieces -- see ImportMesh. */
+	bool
+	ImportGeometry() const;
+
 	bool
 	ImportTextures() const;
 
@@ -37,22 +41,26 @@ public:
 	ImportAnimations() const;
 
 	/**
-	 * Folder beneath `c_TextureRoot` to write this import's textures into
+	 * Folder this import organises itself into, *inside* each category it writes to -- the mesh under
+	 * `Meshes/`, the rig under `Skeletons/`, and so on. May name nested folders (`animals/coyote`);
+	 * may never escape a category, which JoinCategory enforces.
 	 *
-	 * writeTextures names its output `texN.ktx2` by index, so two imports sharing a directory
-	 * overwrite each other. Each import gets its own, defaulting to the source file's base name.
+	 * Defaults to the source file's base name. Each import wants its own, because `writeTextures`
+	 * names its output `texN.ktx2` by index and two imports sharing a folder would overwrite one
+	 * another.
 	 */
 	QString
-	TextureSubdirectory() const;
+	DestinationFolder() const;
 
 private:
 	// Whether the source has anything to import; separate from the box, which is also off when
 	// textures are.
 	bool m_HasPbrMaterials = false;
 
+	QCheckBox* m_ImportMesh         = nullptr;
 	QCheckBox* m_ImportTextures     = nullptr;
 	QCheckBox* m_ImportPbrMaterials = nullptr;
 	QCheckBox* m_ImportAnimations   = nullptr;
-	QLineEdit* m_TextureSubdir      = nullptr;
-	QString    m_DefaultSubdir;
+	QLineEdit* m_Folder             = nullptr;
+	QString    m_DefaultFolder;
 };
