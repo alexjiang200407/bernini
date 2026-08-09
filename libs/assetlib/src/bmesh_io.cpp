@@ -408,7 +408,7 @@ namespace assetlib
 		}
 	}
 
-	void
+	TangentGenResult
 	bake(
 		const imp::BMeshImport&      mesh,
 		const std::filesystem::path& outDir,
@@ -419,14 +419,11 @@ namespace assetlib
 
 		writeTextures(mesh, outDir, {}, cancel);
 
-		BMesh baked = toBMesh(mesh);
-
-		// The same reason the editor's import does it: a normal map is read in a tangent frame, and
-		// a mesh without one renders with its geometric normal instead. Only where the source gave
-		// none -- an authored basis is kept.
-		generateTangents(baked);
+		BMesh      baked    = toBMesh(mesh);
+		const auto tangents = generateTangents(baked);
 
 		save(baked, outDir / (std::string(name) + ".bmesh"));
+		return tangents;
 	}
 
 	namespace

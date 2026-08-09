@@ -45,8 +45,8 @@ must feed data that matches.
   the editor's to make per import, not a property of the container. See
   [Importing a glTF's materials](#importing-a-gltfs-materials).
 * **Honest vertex layout.** The importer packs *only* the attributes the source primitive provides
-  and never fabricates a normal or tangent. Missing optional attributes decode to defaults on the
-  GPU. **Position is the only required attribute**, and it must be the first one. See
+  and never fabricates a normal. The tangent is the one exception, and the bullet below says why.
+  Missing optional attributes decode to defaults on the GPU. **Position is the only required attribute**, and it must be the first one. See
   [Geometry Layout](docs/geometry_layout.md) for the GPU-side buffer structures this feeds.
 * **An authored tangent is kept; a missing one is derived at import.** A mesh with a normal map but
   no tangent renders with the *geometric* normal (the shader NaN-guards a degenerate tangent), so the
@@ -202,7 +202,7 @@ struct — see `DecodeVertex` in
 | position | `float32x3` | **yes** | must be the **first** attribute (offset 0) — the meshlet builder reads positions at stride intervals from offset 0 |
 | normal | `float32x3` | no | default `(0,0,1)` |
 | texcoord0 | `float32x2` | no | default `(0,0)` |
-| tangent | `float32x4` | no | `xyz` + `w` = bitangent handedness; **authored upstream**; absent/zero → geometric-normal fallback |
+| tangent | `float32x4` | no | `xyz` + `w` = bitangent handedness; authored upstream when the source has one, else **derived at import**; absent only when there are no UVs/normals/triangles to derive from, and then → geometric-normal fallback |
 
 Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLayout.h](libs/assetlib_structs/include/assetlib_structs/VertexLayout.h)
 (CPU) mirror [libs/bgl/src/idl/VertexLayout.h](libs/bgl/src/idl/VertexLayout.h) (GPU) — the enum
@@ -602,7 +602,9 @@ referenced" and "the file is in use" are different things to tell a user, and ar
   `metallicFactor` to 0 for non-metals.
 * **Normal map with no tangents does nothing.** `CalculateNormal` falls back to the geometric normal
   when the tangent is degenerate (guards a `normalize(0)` NaN that would otherwise poison every lit
-  pixel). Generate tangents upstream, or the (BC7) normal map has no effect.
+  pixel). Import derives a tangent, so this now bites only a mesh with no UVs, no normals or no
+  triangles to derive one from — and a mesh imported before that landed, which `assetlib_cli
+  tangents` fixes in place.
 * **Re-bake after the honest-layout change.** A `.bmesh` baked before the importer stopped
   zero-filling still *claims* to have (zero) tangents in its layout. Re-bake to get a truthful layout
   (and so runtime tangent-presence validation can trust it).
@@ -623,6 +625,9 @@ assetlib_cli bake model.glb -o assets/model -n model
 
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
 assetlib_cli obj assets/model/model.bmesh -o model.obj
+
+# Derive a tangent basis in place, for a mesh imported before the importers did it themselves
+assetlib_cli tangents Data/Meshes/model.bmesh
 
 # Convolve an HDRI into a project's split environment set: float sources into textures_src/, a
 # baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair

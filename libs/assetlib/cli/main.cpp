@@ -296,7 +296,14 @@ main(int argc, char** argv)
 		try
 		{
 			const auto imported = assetlib::loadFromGltf(input);
-			assetlib::bake(imported, outDir, name);
+			const auto tangents = assetlib::bake(imported, outDir, name);
+
+			if (tangents.skipped > 0)
+				spdlog::warn(
+					"{} submesh(es) have no tangent and no way to derive one (no normals, no UVs, "
+					"or no triangles) -- a normal map on those will not render",
+					tangents.skipped);
+
 			spdlog::info(
 				"Baked '{}' -> {}/{}.bmesh ({} materials, {} textures)",
 				input,

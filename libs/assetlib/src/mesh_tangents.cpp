@@ -45,6 +45,17 @@ namespace assetlib
 			if (submesh.indexType == IndexType::kNone || submesh.indexCount == 0)
 				return indices;
 
+			// The offset and count are the file's claim about the buffer, not a fact about it, and
+			// this is reachable from a path that names a .bmesh by hand.
+			const size_t width = submesh.indexType == IndexType::kUint16 ? 2 : 4;
+			const size_t end =
+				static_cast<size_t>(submesh.indexByteOffset) + submesh.indexCount * width;
+			if (end > mesh.indexData.size())
+			{
+				throw std::runtime_error(
+					"assetlib::generateTangents: a submesh's index range runs past the pool");
+			}
+
 			indices.reserve(submesh.indexCount);
 			const std::byte* base = mesh.indexData.data() + submesh.indexByteOffset;
 

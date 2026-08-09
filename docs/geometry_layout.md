@@ -96,8 +96,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `StructuredBuffer<Vertex>`. Each submesh's `VertexLayout` (attribute semantics/formats/offsets +
   `stride`) tells the shader how to decode a vertex at a byte offset. `Vertex` is the *full-fat*
   authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g. a
-  mesh import whose source primitive carries no tangent emits a 32-byte position/normal/uv vertex)
-  and describe it with a matching layout. The procedural primitives emit the **full 48-byte**
+  mesh import whose source primitive carries no UVs emits a 24-byte position/normal vertex, there
+  being nothing to derive a tangent from) and describe it with a matching layout. The procedural primitives emit the **full 48-byte**
   pos/normal/uv/tangent — see `VertexGen` in
   [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
   `DecodeVertex` in
