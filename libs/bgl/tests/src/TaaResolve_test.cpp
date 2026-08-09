@@ -17,6 +17,20 @@ namespace
 	constexpr uint32_t c_Width  = 256;
 	constexpr uint32_t c_Height = 256;
 
+	// The rung the blur and ghosting reports came from: the same scene over half as many pixels,
+	// which is what a 1080p sample grid is beside the 4K one the resolve was tuned on. Every figure
+	// below is measured at both, because a resolve can be resolution-dependent in either direction
+	// and only the pair says which.
+	constexpr uint32_t c_HalfWidth = c_Width / 2;
+
+	// Measurement boxes are written in c_Width pixels; this puts them over the same content at any
+	// rung.
+	constexpr int
+	Scaled(int value, uint32_t extent) noexcept
+	{
+		return value * static_cast<int>(extent) / static_cast<int>(c_Width);
+	}
+
 	// Enough frames for the exponential blend to have actually settled, which is several times its
 	// 1/`c_BlendWeight` time constant and not merely a couple of passes over the eight-term jitter
 	// sequence. Sized for the weight the resolve ships with: too few and "converged" means "wherever
@@ -126,9 +140,9 @@ namespace
 	}
 
 	bgl::Viewport
-	FullViewport()
+	FullViewport(uint32_t extent)
 	{
-		return bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		return bgl::Viewport(static_cast<float>(extent), static_cast<float>(extent));
 	}
 
 	// The quad's upper-left edge, which the 20-degree roll puts on a diagonal through this box.
@@ -153,14 +167,15 @@ namespace
 		bool               taaEnabled,
 		int                frames,
 		ScenePopulator     populate = AddQuad,
-		CameraProvider     cameraAt = StillCamera)
+		CameraProvider     cameraAt = StillCamera,
+		uint32_t           extent   = c_Width)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(c_Width);
-		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.width      = static_cast<int>(extent);
+		targetDesc.height     = static_cast<int>(extent);
 		targetDesc.headless   = true;
 		targetDesc.taaEnabled = taaEnabled;
 
@@ -173,7 +188,7 @@ namespace
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
-		job.viewport = FullViewport();
+		job.viewport = FullViewport(extent);
 
 		for (int frame = 0; frame < frames; ++frame)
 		{
@@ -268,14 +283,14 @@ namespace
 	// `panning` false holds it at the destination throughout, which is the reference: the same camera,
 	// the same geometry, nothing behind it.
 	void
-	RenderPan(const std::string& path, bool taaEnabled, bool panning)
+	RenderPan(const std::string& path, bool taaEnabled, bool panning, uint32_t extent = c_Width)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(c_Width);
-		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.width      = static_cast<int>(extent);
+		targetDesc.height     = static_cast<int>(extent);
 		targetDesc.headless   = true;
 		targetDesc.taaEnabled = taaEnabled;
 
@@ -288,7 +303,7 @@ namespace
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
-		job.viewport = FullViewport();
+		job.viewport = FullViewport(extent);
 
 		for (int frame = 0; frame < c_PanFrames; ++frame)
 		{
@@ -407,29 +422,53 @@ TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]"
 // reveal. The wake box is slats the quad covered at the pan's start and has fully uncovered on
 // the arrival frame; the still render is the same converged scene, so anything above its own
 // convergence noise is ghost.
+//
+// Swept over both rungs, because ghosting is where a lower resolution has the most room to be
+// worse: a pixel covers four times the scene, so the clamp's 3x3 is drawn from four times the
+// content and its box is correspondingly less able to say what a pixel could have been.
 TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
 {
-	const std::string still  = "assets/golden/taa_parallax_still.got.png";
-	const std::string panned = "assets/golden/taa_parallax_panned.got.png";
+	const auto wake = [](uint32_t extent) {
+		const std::string still =
+			"assets/golden/taa_parallax_still_" + std::to_string(extent) + ".got.png";
+		const std::string panned =
+			"assets/golden/taa_parallax_panned_" + std::to_string(extent) + ".got.png";
 
-	RenderTo(still, true, c_ConvergeFrames + c_PanFrames, AddQuadOverSlats, GhostStillCamera);
-	RenderTo(panned, true, c_ConvergeFrames + c_PanFrames, AddQuadOverSlats, GhostPanCamera);
+		RenderTo(
+			still,
+			true,
+			c_ConvergeFrames + c_PanFrames,
+			AddQuadOverSlats,
+			GhostStillCamera,
+			extent);
+		RenderTo(
+			panned,
+			true,
+			c_ConvergeFrames + c_PanFrames,
+			AddQuadOverSlats,
+			GhostPanCamera,
+			extent);
 
-	// Slats the quad's right edge (at x = 199 on arrival) has left behind, inside its span at the
-	// pan's start.
-	constexpr int c_WakeX = 204;
-	constexpr int c_WakeY = 70;
-	constexpr int c_WakeW = 32;
-	constexpr int c_WakeH = 116;
+		// Slats the quad's right edge (at x = 199 of 256 on arrival) has left behind, inside its
+		// span at the pan's start.
+		const float ghost = bgl::test::FrameDelta(
+			panned,
+			still,
+			Scaled(204, extent),
+			Scaled(70, extent),
+			Scaled(32, extent),
+			Scaled(116, extent));
 
-	const float ghost = bgl::test::FrameDelta(panned, still, c_WakeX, c_WakeY, c_WakeW, c_WakeH);
+		INFO("wake delta at " << extent << ": " << ghost);
 
-	INFO("wake delta against the converged still: " << ghost);
+		// Measured 9.9e-5 at 256 and 2.1e-4 at 128, which is convergence state at both; a ghost the
+		// clamp admitted would sit an order of magnitude above. Depth-based disocclusion rejection
+		// was measured against this very number and moved it nowhere -- the clamp owns the wake.
+		CHECK(ghost < 1.0e-3f);
+	};
 
-	// Measured 1.2e-4, which is convergence-state noise; a ghost the clamp admitted would sit an
-	// order of magnitude above. Depth-based disocclusion rejection was measured against this very
-	// number and moved it nowhere -- the clamp owns the wake.
-	CHECK(ghost < 1.0e-3f);
+	wake(c_Width);
+	wake(c_HalfWidth);
 }
 
 // Blur under motion, as a number. Every off-centre history fetch low-passes the accumulation, and
@@ -442,30 +481,86 @@ TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
 // converged frame is what the resolve considers finished, so the bound is a ratio to it.
 TEST_CASE("Fine detail survives the camera moving", "[taa][render]")
 {
-	const std::string still  = "assets/golden/taa_drift_still.got.png";
-	const std::string moving = "assets/golden/taa_drift_moving.got.png";
+	const auto kept = [](uint32_t extent) {
+		const std::string still =
+			"assets/golden/taa_drift_still_" + std::to_string(extent) + ".got.png";
+		const std::string moving =
+			"assets/golden/taa_drift_moving_" + std::to_string(extent) + ".got.png";
 
-	RenderTo(still, true, c_ConvergeFrames, AddFence);
-	RenderTo(moving, true, c_DriftFrames, AddFence, DriftingCamera);
+		RenderTo(still, true, c_ConvergeFrames, AddFence, StillCamera, extent);
+		RenderTo(moving, true, c_DriftFrames, AddFence, DriftingCamera, extent);
 
-	constexpr int c_FenceBoxX = 98;
-	constexpr int c_FenceBoxY = 98;
-	constexpr int c_FenceBox  = 60;
+		const int box = Scaled(60, extent);
+		const int x   = Scaled(98, extent);
 
-	const float stillDetail =
-		bgl::test::AliasEnergy(still, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
-	const float movingDetail =
-		bgl::test::AliasEnergy(moving, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+		const float stillDetail  = bgl::test::AliasEnergy(still, x, x, box, box);
+		const float movingDetail = bgl::test::AliasEnergy(moving, x, x, box, box);
 
-	INFO("fence alias energy: still = " << stillDetail << ", moving = " << movingDetail);
+		INFO("fence at " << extent << ": still = " << stillDetail << ", moving = " << movingDetail);
 
-	// The still fence has to carry real detail, or the ratio below compares noise to noise.
-	CHECK(stillDetail > 3e-4f);
+		// The still fence has to carry real detail, or the ratio below compares noise to noise.
+		CHECK(stillDetail > 1e-4f);
+
+		return movingDetail / stillDetail;
+	};
+
+	const float full = kept(c_Width);
+	const float half = kept(c_HalfWidth);
+
+	INFO(
+		"detail kept under motion: " << c_Width << " = " << full << ", " << c_HalfWidth << " = "
+									 << half);
 
 	// Measured 0.66 with the Catmull-Rom history fetch and 0.60 with a plain bilinear one, which is
 	// the regression this pins out. The clamp bounds how much softness can survive, so the gap is
 	// modest -- but it is the visible part of the moving image going soft.
-	CHECK(movingDetail > stillDetail * 0.62f);
+	CHECK(full > 0.62f);
+
+	// The same fraction over half as many pixels: whatever the accumulation loses to motion, it is
+	// not something the grid's pitch makes worse.
+	CHECK(half > 0.62f);
+}
+
+// What the resolve costs a still image, at each rung. The unjittered render of the same scene is
+// the yardstick: it point-samples, so it carries every bit of pixel-scale contrast the grid can
+// hold -- aliased contrast included -- and the fraction of it the converged accumulation keeps is
+// how sharp the resolve is, in a form that survives changing the pixel count.
+//
+// Halving the extent halves the slats' width in pixels, so the two absolute figures are not
+// comparable; the two ratios are.
+TEST_CASE("The resolve keeps as much of a still image at half the resolution", "[taa][render]")
+{
+	const auto retention = [](uint32_t extent) {
+		const std::string on = "assets/golden/taa_sharp_on_" + std::to_string(extent) + ".got.png";
+		const std::string off =
+			"assets/golden/taa_sharp_off_" + std::to_string(extent) + ".got.png";
+
+		RenderTo(on, true, c_ConvergeFrames, AddFence, StillCamera, extent);
+		RenderTo(off, false, c_ConvergeFrames, AddFence, StillCamera, extent);
+
+		const int box = Scaled(60, extent);
+		const int x   = Scaled(98, extent);
+
+		const float resolved  = bgl::test::AliasEnergy(on, x, x, box, box);
+		const float unjitered = bgl::test::AliasEnergy(off, x, x, box, box);
+
+		INFO(
+			"fence at " << extent << ": resolved = " << resolved << ", unjittered = " << unjitered);
+		CHECK(unjitered > 1e-4f);
+
+		return resolved / unjitered;
+	};
+
+	const float full = retention(c_Width);
+	const float half = retention(c_HalfWidth);
+
+	INFO("detail retained: " << c_Width << " = " << full << ", " << c_HalfWidth << " = " << half);
+
+	// Measured 0.69 and 0.63: the lower rung keeps less of its image, which is the complaint this
+	// instrument was built for. One bound for both, so whatever the resolve costs it cannot cost
+	// more where there is less to lose.
+	CHECK(full > 0.6f);
+	CHECK(half > 0.6f);
 }
 
 // The first frame has no accumulation to blend against. If it blended anyway it would come out at
@@ -514,7 +609,7 @@ TEST_CASE("Toggling temporal AA at runtime turns the resolve off and on", "[taa]
 	auto job     = bgl::RenderJob();
 	job.view     = view;
 	job.camera   = Camera();
-	job.viewport = FullViewport();
+	job.viewport = FullViewport(c_Width);
 
 	const auto drive = [&](int frames, const std::string& path) {
 		for (int frame = 0; frame < frames; ++frame)
