@@ -48,10 +48,15 @@ must feed data that matches.
   and never fabricates a normal or tangent. Missing optional attributes decode to defaults on the
   GPU. **Position is the only required attribute**, and it must be the first one. See
   [Geometry Layout](docs/geometry_layout.md) for the GPU-side buffer structures this feeds.
-* **Tangents are authored upstream, never synthesized at import.** Tangent generation is an explicit
-  step in the 3D tool / material editor. A mesh with a normal map but no tangents renders with the
-  *geometric* normal (the shader NaN-guards a degenerate tangent), so normal maps silently do nothing
-  without authored tangents.
+* **An authored tangent is kept; a missing one is derived at import.** A mesh with a normal map but
+  no tangent renders with the *geometric* normal (the shader NaN-guards a degenerate tangent), so the
+  map silently does nothing — no error, no warning, just a flat surface. Leaving that to an explicit
+  step meant every asset arrived broken until someone remembered to run it, which is what a real
+  import found. So both importers — the editor's and `assetlib_cli bake` — call `generateTangents`,
+  which rewrites only the submeshes that have none and leaves an authored basis alone. Deriving is
+  strictly better than the geometric-normal fallback, and never better than a basis the DCC tool
+  exported, so authoring upstream is still the right thing to do. `assetlib_cli tangents <mesh>`
+  applies it to a `.bmesh` already on disk.
 * **All static geometry is meshletized.** Meshes are clustered into meshlets (meshopt) at bake time —
   **64 vertices / 124 triangles** — and drawn through a mesh-shader pipeline, not raw index buffers.
 

@@ -37,6 +37,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -986,6 +987,12 @@ ContentExplorerWindow::ImportMesh(
 		try
 		{
 			assetlib::BMesh mesh = assetlib::toBMesh(*imported);
+
+			// A normal map is read in a tangent frame, and a mesh with no tangent renders with its
+			// geometric normal instead -- so an import that leaves them off produces a mesh whose
+			// normal maps silently do nothing. Only where the source gave none: generateTangents
+			// keeps an authored basis and skips what it cannot derive.
+			assetlib::generateTangents(mesh);
 
 			if (importMaterials)
 				WriteImportedMaterials(*imported, mesh, dataRoot, materialDir, textureDir);

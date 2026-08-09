@@ -5,6 +5,8 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
+#include <assetlib/mesh_tangents.h>
+
 #include "fs_util.h"
 
 #include <core/file/file.h>
@@ -416,7 +418,15 @@ namespace assetlib
 		createDirectories(outDir);
 
 		writeTextures(mesh, outDir, {}, cancel);
-		save(toBMesh(mesh), outDir / (std::string(name) + ".bmesh"));
+
+		BMesh baked = toBMesh(mesh);
+
+		// The same reason the editor's import does it: a normal map is read in a tangent frame, and
+		// a mesh without one renders with its geometric normal instead. Only where the source gave
+		// none -- an authored basis is kept.
+		generateTangents(baked);
+
+		save(baked, outDir / (std::string(name) + ".bmesh"));
 	}
 
 	namespace

@@ -19,8 +19,8 @@ namespace assetlib
 	 *
 	 * A normal map is authored in a tangent frame, and the shader reconstructs that frame from the
 	 * vertex tangent -- so a mesh without one renders with its geometric normal and the map does
-	 * nothing at all (see docs/asset_standards.md). Import deliberately never synthesises a tangent,
-	 * which leaves this as the explicit step that does.
+	 * nothing at all (see docs/asset_standards.md). Both importers call this, so a mesh only reaches
+	 * disk without a tangent when it has no normals, no UVs or no triangles to derive one from.
 	 *
 	 * Derived the standard way: accumulate each triangle's UV-space basis onto its three vertices,
 	 * then orthogonalise against the vertex normal. `w` is the bitangent's handedness, matching what
