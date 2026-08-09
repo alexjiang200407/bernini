@@ -4,6 +4,7 @@
 #include <assetlib_structs/VertexLayout.h>
 
 #include <core/err/util.h>
+#include <core/type_traits.h>
 
 namespace assetlib
 {
@@ -11,7 +12,7 @@ namespace assetlib
 
 	namespace
 	{
-		template <typename T>
+		template <core::type_traits::trivially_copyable T>
 		T
 		readAt(std::span<const std::byte> bytes, size_t offset) noexcept
 		{
@@ -26,12 +27,12 @@ namespace assetlib
 		 * within one, so without this a layout claiming an attribute past its own stride reads off
 		 * the end of the last vertex.
 		 */
-		int
+		std::optional<uint16_t>
 		decodableOffset(const VertexLayout& layout, VertexSemantic semantic, VertexFormat expected)
 		{
-			const int offset = attributeOffset(layout, semantic);
-			if (offset < 0)
-				return -1;
+			const std::optional<uint16_t> offset = attributeOffset(layout, semantic);
+			if (!offset)
+				return std::nullopt;
 
 			for (uint32_t i = 0; i < layout.attributeCount; ++i)
 			{
@@ -44,7 +45,7 @@ namespace assetlib
 						static_cast<int>(semantic));
 			}
 
-			if (static_cast<size_t>(offset) + formatSize(expected) > layout.stride)
+			if (static_cast<size_t>(*offset) + formatSize(expected) > layout.stride)
 				throw_runtime_error(
 					"skinning: attribute {} extends past the vertex stride",
 					static_cast<int>(semantic));
@@ -56,21 +57,21 @@ namespace assetlib
 	std::vector<SkinnedVertex>
 	skinSubmesh(const BMesh& mesh, const Submesh& submesh, std::span<const glm::mat4> skinning)
 	{
-		const int positionOffset =
+		const auto positionOffset =
 			decodableOffset(submesh.layout, VertexSemantic::kPosition, VertexFormat::kFloat32x3);
-		const int normalOffset =
+		const auto normalOffset =
 			decodableOffset(submesh.layout, VertexSemantic::kNormal, VertexFormat::kFloat32x3);
-		const int jointsOffset =
+		const auto jointsOffset =
 			decodableOffset(submesh.layout, VertexSemantic::kJoints0, VertexFormat::kUint16x4);
-		const int weightsOffset =
+		const auto weightsOffset =
 			decodableOffset(submesh.layout, VertexSemantic::kWeights0, VertexFormat::kUnorm16x4);
 
-		if (positionOffset < 0)
+		if (!positionOffset)
 			throw_runtime_error("skinning: a submesh with no position attribute");
 
 		// One without the other is a layout nothing can act on: indices with no share, or shares
 		// naming no bone.
-		if ((jointsOffset < 0) != (weightsOffset < 0))
+		if (jointsOffset.has_value() != weightsOffset.has_value())
 			throw_runtime_error(
 				"skinning: a submesh carrying only one half of its skin attributes");
 
@@ -89,12 +90,12 @@ namespace assetlib
 		{
 			const size_t base = first + static_cast<size_t>(v) * stride;
 
-			const auto position = readAt<glm::vec3>(mesh.vertexData, base + positionOffset);
-			const auto normal   = normalOffset < 0 ?
-			                          glm::vec3(0.0f) :
-			                          readAt<glm::vec3>(mesh.vertexData, base + normalOffset);
+			const auto position = readAt<glm::vec3>(mesh.vertexData, base + *positionOffset);
+			const auto normal   = normalOffset ?
+			                          readAt<glm::vec3>(mesh.vertexData, base + *normalOffset) :
+			                          glm::vec3(0.0f);
 
-			if (jointsOffset < 0)
+			if (!jointsOffset)
 			{
 				out[v] = { position, normal };
 				continue;
@@ -107,9 +108,9 @@ namespace assetlib
 			for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
 			{
 				const auto joint =
-					readAt<uint16_t>(mesh.vertexData, base + jointsOffset + i * sizeof(uint16_t));
+					readAt<uint16_t>(mesh.vertexData, base + *jointsOffset + i * sizeof(uint16_t));
 				const auto quantized =
-					readAt<uint16_t>(mesh.vertexData, base + weightsOffset + i * sizeof(uint16_t));
+					readAt<uint16_t>(mesh.vertexData, base + *weightsOffset + i * sizeof(uint16_t));
 
 				const float weight =
 					static_cast<float>(quantized) / std::numeric_limits<uint16_t>::max();

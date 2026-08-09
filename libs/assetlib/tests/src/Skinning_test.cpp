@@ -92,7 +92,7 @@ TEST_CASE("A bind-pose skin reproduces the source vertices exactly", "[skinning]
 	CHECK(skinned[0].position.z == Catch::Approx(3.0f));
 	CHECK(skinned[1].position.x == Catch::Approx(-4.0f));
 	CHECK(skinned[1].position.z == Catch::Approx(7.25f));
-	CHECK(skinned[0].normal.y == Catch::Approx(1.0f));
+	CHECK(skinned[0].blendedNormal.y == Catch::Approx(1.0f));
 }
 
 // End to end through the real entry points, on a rig whose rest pose is not the identity -- the
@@ -218,7 +218,7 @@ TEST_CASE("A submesh with no joints comes through unskinned", "[skinning]")
 
 	REQUIRE(skinned.size() == 1);
 	CHECK(skinned[0].position.x == Catch::Approx(9.0f));
-	CHECK(skinned[0].normal == glm::vec3(0.0f));
+	CHECK(skinned[0].blendedNormal == glm::vec3(0.0f));
 }
 
 // An exporter writes (0,0,0,0) for a vertex it never assigned, and the importer renormalizes that
@@ -244,7 +244,7 @@ TEST_CASE("A vertex with no influences stays where it was authored", "[skinning]
 	CHECK(skinned[0].position.x == Catch::Approx(3.0f));
 	CHECK(skinned[0].position.y == Catch::Approx(4.0f));
 	CHECK(skinned[0].position.z == Catch::Approx(5.0f));
-	CHECK(skinned[0].normal.y == Catch::Approx(1.0f));
+	CHECK(skinned[0].blendedNormal.y == Catch::Approx(1.0f));
 }
 
 TEST_CASE("Skinning refuses a submesh it cannot read", "[skinning]")

@@ -25,13 +25,13 @@ namespace assetlib
 		return 0;
 	}
 
-	int
+	std::optional<uint16_t>
 	attributeOffset(const VertexLayout& layout, VertexSemantic semantic) noexcept
 	{
 		for (uint32_t i = 0; i < layout.attributeCount; ++i)
 			if (layout.attributes[i].semantic == semantic)
 				return layout.attributes[i].offset;
 
-		return -1;
+		return std::nullopt;
 	}
 }
