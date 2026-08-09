@@ -2,6 +2,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmesh_io.h>
 
 #include <core/err/util.h>
@@ -101,14 +102,19 @@ namespace assetlib
 				frame,
 				entry.frameCount);
 
-		if (animations.boneCount != skeleton.bones.size())
+		// Bone count *and* signature: a rig re-exported with two bones swapped keeps the count and
+		// changes the signature, and a pose evaluated against it is wrong in a way no later check
+		// can see. This is the first place the two files meet per-pose, which is what the signature
+		// was written for.
+		if (!animationsMatchSkeleton(animations, skeleton))
 			throw_runtime_error(
-				"animation: clips cooked for {} bones, skeleton has {}",
+				"animation: clips cooked for {} bones against a different rig than this {}-bone "
+				"skeleton",
 				animations.boneCount,
 				skeleton.bones.size());
 
-		// The caller may have read both files straight off disk, so the pool is checked here rather
-		// than assumed from validateAnimationSet having been run.
+		// Both containers validate on load, so this catches a set built in memory rather than read
+		// from disk -- and costs one comparison against reading past the pool.
 		const size_t base = static_cast<size_t>(entry.firstSample) +
 		                    static_cast<size_t>(frame) * animations.boneCount;
 		if (base + animations.boneCount > animations.samples.size())

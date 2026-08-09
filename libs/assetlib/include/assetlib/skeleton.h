@@ -53,7 +53,8 @@ namespace assetlib
 	 * bindPoseModelTransforms makes, over a clip's pose instead of the rest one.
 	 *
 	 * @throws std::runtime_error if `clip` or `frame` is out of range, if `animations` was cooked
-	 *         against a different bone count, or if the clip's samples fall outside the pool.
+	 *         against a different rig (by animationsMatchSkeleton), or if the clip's samples fall
+	 *         outside the pool.
 	 */
 	[[nodiscard]] std::vector<glm::mat4>
 	poseModelTransforms(

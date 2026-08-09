@@ -146,14 +146,14 @@ TEST_CASE("Quantized weights still sum to one through the decode", "[skinning]")
 {
 	SkinnedMesh fixture;
 
-	// Thirds are the awkward case: none is representable exactly in unorm16, so if the decode loses
-	// anything it loses it here.
-	const float third = 1.0f / 3.0f;
+	// Deliberately not thirds: 65535 = 3 x 5 x 17 x 257, so a third quantizes exactly and three of
+	// them sum to exactly 65535 -- the one split that cannot fail. Tenths do not divide it, so each
+	// rounds and the sum is only 1 to within the residue four roundings can leave.
 	fixture.Add(
 		glm::vec3(0.0f),
 		glm::vec3(0.0f, 1.0f, 0.0f),
 		{ 1, 1, 1, 1 },
-		{ Quantize(third), Quantize(third), Quantize(third), Quantize(1.0f - 3.0f * third) });
+		{ Quantize(0.1f), Quantize(0.2f), Quantize(0.3f), Quantize(0.4f) });
 
 	// Every influence is the same bone, which moves the vertex 12 along X. The result is therefore
 	// 12 times the decoded weights' sum, so the coordinate *is* that sum, scaled -- anything short
@@ -163,8 +163,10 @@ TEST_CASE("Quantized weights still sum to one through the decode", "[skinning]")
 
 	const auto skinned = skinSubmesh(fixture.mesh, fixture.submesh, skinning);
 
+	// Within four roundings of unorm16, and no looser -- 1e-3 would also pass a decode that divided
+	// by 65536 instead of 65535.
 	REQUIRE(skinned.size() == 1);
-	CHECK(skinned[0].position.x == Catch::Approx(12.0f).margin(1e-3));
+	CHECK(skinned[0].position.x == Catch::Approx(12.0f).margin(12.0f * 2.0f / 65535.0f));
 
 	SECTION("and a whole-weight vertex lands exactly on its bone")
 	{
@@ -215,6 +217,32 @@ TEST_CASE("A submesh with no joints comes through unskinned", "[skinning]")
 	CHECK(skinned[0].normal == glm::vec3(0.0f));
 }
 
+// An exporter writes (0,0,0,0) for a vertex it never assigned, and the importer renormalizes that
+// to four zeros rather than refusing the mesh. Blending them would land the vertex on the origin --
+// and since the bake fits one AABB around every clip of a rig, one such vertex drags that box out
+// and costs precision on every other vertex of every frame.
+TEST_CASE("A vertex with no influences stays where it was authored", "[skinning]")
+{
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(3.0f, 4.0f, 5.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ 0, 0, 0, 0 },
+		{ 0, 0, 0, 0 });
+
+	const std::vector<glm::mat4> skinning(
+		2,
+		glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, 0.0f)));
+
+	const auto skinned = skinSubmesh(fixture.mesh, fixture.submesh, skinning);
+
+	REQUIRE(skinned.size() == 1);
+	CHECK(skinned[0].position.x == Catch::Approx(3.0f));
+	CHECK(skinned[0].position.y == Catch::Approx(4.0f));
+	CHECK(skinned[0].position.z == Catch::Approx(5.0f));
+	CHECK(skinned[0].normal.y == Catch::Approx(1.0f));
+}
+
 TEST_CASE("Skinning refuses a submesh it cannot read", "[skinning]")
 {
 	SkinnedMesh fixture;
@@ -242,6 +270,22 @@ TEST_CASE("Skinning refuses a submesh it cannot read", "[skinning]")
 		Submesh halved               = fixture.submesh;
 		halved.layout.attributeCount = 3;
 		CHECK_THROWS_AS(skinSubmesh(fixture.mesh, halved, skinning), std::runtime_error);
+	}
+
+	// The span check bounds whole vertices, not the attributes inside one, so a layout claiming an
+	// attribute past its own stride would read off the end of the last vertex.
+	SECTION("an attribute that extends past the stride")
+	{
+		Submesh overhanging                     = fixture.submesh;
+		overhanging.layout.attributes[3].offset = 36;  // unorm16x4 needs 8, stride is 40
+		CHECK_THROWS_AS(skinSubmesh(fixture.mesh, overhanging, skinning), std::runtime_error);
+	}
+
+	SECTION("an attribute encoded in a format this does not decode")
+	{
+		Submesh repacked                     = fixture.submesh;
+		repacked.layout.attributes[0].format = VertexFormat::kFloat32x2;
+		CHECK_THROWS_AS(skinSubmesh(fixture.mesh, repacked, skinning), std::runtime_error);
 	}
 
 	SECTION("no position at all")
