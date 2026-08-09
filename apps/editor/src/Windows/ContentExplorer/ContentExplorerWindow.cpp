@@ -32,9 +32,12 @@
 #include <QUrl>
 
 #include <assetlib/asset_refs.h>
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
@@ -105,9 +108,9 @@ namespace
 
 	/**
 	 * Reports that an import would land on an asset that is already there and refuses it -- import
-	 * never overwrites. `replaced` is what it would have written over: an existing `.bmesh`, texture
-	 * folder or material folder all count, each being destructive to import onto and none of it
-	 * recoverable. The user renames or removes the existing files and imports again.
+	 * never overwrites. `replaced` is whatever the import would have written over, each being
+	 * destructive to import onto and none of it recoverable. The user renames or removes the
+	 * existing files and imports again.
 	 *
 	 * @return true when something already exists, so the import must not proceed; false when nothing
 	 *         collides.
@@ -1055,6 +1058,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		auto options          = ImportOptions();
 		options.textureSubdir = dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString();
 		options.pbrMaterials  = dialog.CanImportPbrMaterials();
+		options.animations    = dialog.ImportAnimations();
 
 		const ImportOutcome outcome = ImportMesh(file, targetDir, options);
 
@@ -1160,6 +1164,37 @@ ContentExplorerWindow::WriteImportedMaterials(
 	}
 }
 
+void
+ContentExplorerWindow::WriteImportedRig(
+	const assetlib::imp::BMeshImport& imported,
+	assetlib::BMesh&                  mesh,
+	const std::filesystem::path&      dataRoot,
+	const std::filesystem::path&      bskelPath,
+	const std::filesystem::path&      banimPath,
+	bool                              writeClips)
+{
+	if (imported.skeleton.bones.empty())
+		return;
+
+	// A project scaffolded before these categories existed has neither directory.
+	std::filesystem::create_directories(bskelPath.parent_path());
+
+	assetlib::saveSkeleton(imported.skeleton, bskelPath);
+	mesh.skeleton =
+		Rebase(QString::fromStdWString(bskelPath.wstring()), dataRoot, true).toStdString();
+
+	if (!writeClips || imported.animations.clips.empty())
+		return;
+
+	// The clip set names the rig by the same path the mesh does, so all three agree on which file
+	// the joint indices are addressed against.
+	std::filesystem::create_directories(banimPath.parent_path());
+
+	assetlib::AnimationSet clips = imported.animations;
+	clips.skeleton               = mesh.skeleton;
+	assetlib::saveAnimations(clips, banimPath);
+}
+
 ContentExplorerWindow::ImportOutcome
 ContentExplorerWindow::ImportMesh(
 	const QString&       sourceFile,
@@ -1197,9 +1232,28 @@ ContentExplorerWindow::ImportMesh(
 	// with something already there (and must be refused), and -- if it then fails or is cancelled --
 	// what may be deleted to undo it.
 	std::error_code ec;
-	const bool      bmeshExisted       = fs::exists(bmeshPath, ec);
 	const bool      textureDirExisted  = !textureDir.empty() && fs::exists(textureDir, ec);
 	const bool      materialDirExisted = !materialDir.empty() && fs::exists(materialDir, ec);
+
+	// Each lands in its own category directory, like the materials and textures this import also
+	// writes -- not beside the mesh. `assetlib::bake` names them beside it because a baked directory
+	// is its own data root; a project has a layout, and a rig is an asset in it.
+	//
+	// Sampled unconditionally: whether the source turns out to carry a skin is not known until it is
+	// parsed, and by then a file that was already there cannot be told from one this import wrote.
+	// So a static import is refused over a rig it would never write, which is the deliberate
+	// direction: the alternative is parsing before asking, and refusing too often is recoverable
+	// where overwriting a rig is not.
+	fs::path bskelPath = dataRoot / Project::c_SkeletonsDirectoryName / source.filename();
+	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
+	fs::path banimPath = dataRoot / Project::c_AnimationsDirectoryName / source.filename();
+	banimPath.replace_extension(assetlib::c_AnimationExtension);
+
+	const std::array<ImportedFile, 3> files = { {
+		{ bmeshPath, fs::exists(bmeshPath, ec) },
+		{ bskelPath, fs::exists(bskelPath, ec) },
+		{ banimPath, fs::exists(banimPath, ec) },
+	} };
 
 	const std::array<ImportedDir, 2> dirs = { {
 		{ textureDir, textureDirExisted, AssetImporterDialog::c_TextureRoot },
@@ -1207,8 +1261,9 @@ ContentExplorerWindow::ImportMesh(
 	} };
 
 	auto replaced = QStringList();
-	if (bmeshExisted)
-		replaced << QString::fromStdWString(bmeshPath.wstring());
+	for (const ImportedFile& file : files)
+		if (file.existed)
+			replaced << QString::fromStdWString(file.path.wstring());
 	for (const ImportedDir& dir : dirs)
 		if (dir.existed)
 			replaced << QString::fromStdWString(dir.path.wstring());
@@ -1266,6 +1321,8 @@ ContentExplorerWindow::ImportMesh(
 					tangents.skipped,
 					qPrintable(name));
 
+			WriteImportedRig(*imported, mesh, dataRoot, bskelPath, banimPath, options.animations);
+
 			if (importMaterials)
 				WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
 
@@ -1280,7 +1337,7 @@ ContentExplorerWindow::ImportMesh(
 
 	// A cancelled cook throws where it stood, so the textures may be half-written and the mesh may name
 	// materials that never landed. Neither outcome may leave that behind for the user to trip over.
-	RollBack(bmeshPath, bmeshExisted, dirs);
+	RollBack(files, dirs);
 
 	if (result.Cancelled())
 		return ImportOutcome::kCancelled;
@@ -1357,16 +1414,16 @@ ContentExplorerWindow::ImportEnvironment(const QString& sourceFile)
 
 void
 ContentExplorerWindow::RollBack(
-	const std::filesystem::path& bmeshPath,
-	bool                         bmeshExisted,
-	std::span<const ImportedDir> dirs)
+	std::span<const ImportedFile> files,
+	std::span<const ImportedDir>  dirs)
 {
 	namespace fs = std::filesystem;
 
 	std::error_code ec;
 
-	if (!bmeshExisted)
-		fs::remove(bmeshPath, ec);
+	for (const ImportedFile& file : files)
+		if (!file.existed)
+			fs::remove(file.path, ec);
 
 	for (const ImportedDir& dir : dirs)
 	{

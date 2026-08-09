@@ -97,7 +97,8 @@ and portability.
     - [ ] Separate humanoid and equine skeletons and clip sets, both exporting to the same table
       format — the rigs are separable already (one file is one rig, and a glTF with two skins is
       rejected rather than half-imported), but the shared table export waits on the line above.
-    - [ ] Editor import: the *Import animations* checkbox is inert; the CLI is the only way in.
+    - [x] Editor import writes the rig beside the mesh — the skeleton always, the clips behind the
+      *Import animations* box, both rolled back with a failed import.
   - [ ] Vertex Animation Textures (VAT)
     - [ ] Bake pipeline: resampled clip → position texture (+ normal/tangent), unorm-packed in the
       mesh bounding box.
