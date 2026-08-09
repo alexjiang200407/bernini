@@ -25,7 +25,6 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
-#include <QSignalBlocker>
 #include <QSplitter>
 #include <QStringList>
 #include <QStyle>
@@ -43,6 +42,16 @@
 
 namespace
 {
+	/** The folder `index` stands for: itself when it is one, otherwise the folder holding it. */
+	QModelIndex
+	FolderOf(const QFileSystemModel& model, const QModelIndex& index)
+	{
+		if (!index.isValid())
+			return {};
+
+		return model.isDir(index) ? index : index.parent();
+	}
+
 	// Tile geometry: the thumbnail box, and the cell that holds it plus a name beneath.
 	constexpr int c_TileIconDim = 128;
 	constexpr int c_TileWidth   = 168;
@@ -201,11 +210,17 @@ ContentExplorerWindow::ShowDirectory(const QString& path)
 
 	// The tree follows, or it would go on highlighting the folder the grid has left -- and clicking
 	// that row again would be a dead click, setCurrentIndex on the current index emitting nothing.
-	// Cleared rather than set at the top of the tree, which is a root the tree has no row for.
-	const QModelIndex    folder = m_HierarchyModel->index(path);
-	const QSignalBlocker blocked(m_Ui.FileExplorer->selectionModel());
-	m_Ui.FileExplorer->setCurrentIndex(
-		folder == m_Ui.FileExplorer->rootIndex() ? QModelIndex() : folder);
+	// Not when it is already there: the tree is what navigates most of the time, and pulling its
+	// current index onto the folder would take it off the file the user just clicked. Re-entering
+	// through currentChanged is harmless -- the grid is rooted above, so NavigateTo returns early.
+	if (QDir(m_HierarchyModel->filePath(
+			FolderOf(*m_HierarchyModel, m_Ui.FileExplorer->currentIndex()))) != QDir(path))
+	{
+		// Cleared rather than set at the top of the tree, which is a root the tree has no row for.
+		const QModelIndex folder = m_HierarchyModel->index(path);
+		m_Ui.FileExplorer->setCurrentIndex(
+			folder == m_Ui.FileExplorer->rootIndex() ? QModelIndex() : folder);
+	}
 
 	m_Ui.BackButton->setEnabled(!m_History.isEmpty());
 	UpdateEmptyPlaceholder();
@@ -291,8 +306,7 @@ ContentExplorerWindow::AttachModels()
 			if (!current.isValid())
 				return;
 
-			const QModelIndex folder =
-				m_HierarchyModel->isDir(current) ? current : current.parent();
+			const QModelIndex folder = FolderOf(*m_HierarchyModel, current);
 			if (!folder.isValid())
 				return;
 
