@@ -29,6 +29,53 @@ namespace bgl
 	}
 
 	/**
+	 * The sub-pixel offset frame `index` of the sequence renders with, in pixels, about the centre.
+	 *
+	 * The sequence is 1-based: term 0 of every radical inverse is 0, which would spend one frame in
+	 * eight on no jitter at all.
+	 */
+	[[nodiscard]] inline glm::vec2
+	JitterPixels(uint32_t index) noexcept
+	{
+		const auto term = index % c_JitterSequenceLength + 1;
+		return glm::vec2(RadicalInverse(term, 2) - 0.5f, RadicalInverse(term, 3) - 0.5f);
+	}
+
+	/**
+	 * How much of frame `frameCounter`'s sample belongs in the accumulation, from where its jitter
+	 * landed inside the pixel. Scales the resolve's blend weight, and averages to 1 over the
+	 * sequence.
+	 *
+	 * Blending every frame equally converges to the mean of the samples across the footprint --
+	 * a box one pixel wide, which is the softest reconstruction the sequence can produce and is
+	 * what a still TAA image is blurry against. Weighting by a kernel narrower than the footprint
+	 * converges to that kernel instead: the sample nearest the pixel's own centre is the one that
+	 * describes it best, and says so. The mean is normalised out because the weight also sets the
+	 * accumulation's time constant, which is measured against flicker and must not move with it.
+	 */
+	[[nodiscard]] inline float
+	JitterFilterWeight(uint64_t frameCounter) noexcept
+	{
+		// A Gaussian of 0.4 of a pixel: narrow enough to be worth the sharpening, wide enough that
+		// the far corners of the footprint still carry a fifth of the weight rather than being
+		// dropped, which would cost the antialiasing the offsets are there for.
+		constexpr float c_FilterFalloff = 3.0f;
+
+		const auto kernel = [](uint32_t index) {
+			const auto offset = JitterPixels(index);
+			return std::exp(-c_FilterFalloff * glm::dot(offset, offset));
+		};
+
+		float total = 0.0f;
+		for (uint32_t i = 0; i < c_JitterSequenceLength; ++i)
+		{
+			total += kernel(i);
+		}
+
+		return kernel(static_cast<uint32_t>(frameCounter)) * c_JitterSequenceLength / total;
+	}
+
+	/**
 	 * The sub-pixel offset frame `frameCounter` renders with, in NDC, from the Halton(2, 3) sequence.
 	 *
 	 * The offset spans one pixel about the pixel centre, so the sequence walks the sample position
@@ -43,14 +90,7 @@ namespace bgl
 	{
 		gassert(width > 0.0f && height > 0.0f, "Jitter needs a non-degenerate viewport");
 
-		// The sequence is 1-based: term 0 of every radical inverse is 0, which would spend one frame
-		// in eight on no jitter at all.
-		const auto index = static_cast<uint32_t>(frameCounter % c_JitterSequenceLength) + 1;
-
-		const float offsetX = RadicalInverse(index, 2) - 0.5f;
-		const float offsetY = RadicalInverse(index, 3) - 0.5f;
-
 		// NDC spans 2 across the viewport, so one pixel is 2/extent.
-		return glm::vec2(offsetX * 2.0f / width, offsetY * 2.0f / height);
+		return JitterPixels(static_cast<uint32_t>(frameCounter)) * 2.0f / glm::vec2(width, height);
 	}
 }

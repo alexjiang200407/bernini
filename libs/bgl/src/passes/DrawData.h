@@ -37,6 +37,12 @@ namespace bgl
 		// Decorrelates the hashed-alpha pattern between frames. Zero without temporal AA, where a
 		// pattern that changed every frame would be flicker rather than coverage.
 		float alphaHashSeed = 0.0f;
+
+		// Added to every material texture's implicit LOD -- colour, ORM and normal alike, and so to
+		// the alpha an alpha test thresholds. Negative under temporal AA, which resolves finer than
+		// the footprint a single frame point-samples; zero without it, where the extra detail would
+		// be aliasing nothing averages away.
+		float textureLodBias = 0.0f;
 	};
 
 	/** The attachments a draw renders into, all owned by the frame's render target. */

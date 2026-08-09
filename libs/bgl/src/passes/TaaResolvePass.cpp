@@ -128,6 +128,10 @@ namespace bgl
 			{
 				u = c_BlendWeight;
 			}
+			if (auto u = taa["jitterFilterWeight"]; u.IsValid())
+			{
+				u = args.jitterFilterWeight;
+			}
 			if (auto u = taa["historyValid"]; u.IsValid())
 			{
 				u = args.historyValid ? 1.0f : 0.0f;

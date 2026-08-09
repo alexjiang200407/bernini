@@ -18,6 +18,11 @@ struct MaterialData
     // target without temporal AA, where a changing pattern would be flicker rather than coverage.
     float alphaHashSeed;
 
+    // Added to every material texture's implicit LOD. Negative under temporal AA -- the jitter walks
+    // the footprint and the accumulation averages what it gathers, so the resolved image carries
+    // detail a single frame's footprint cannot. Zero without it, where the same read is aliasing.
+    float textureLodBias;
+
     EntryBuffer<PbrMaterial> pbrMaterials;
     EntryBuffer<LoosePbrMaterial> looseMaterials;
 
@@ -40,17 +45,17 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetBaseColor(SamplerState.Handle s, float2 uv)
     {
-        return baseColorTexture.Sample(s, uv) * baseColorFactor;
+        return baseColorTexture.SampleBias(s, uv, materialData.textureLodBias) * baseColorFactor;
     }
 
     float3 GetORM(SamplerState.Handle s, float2 uv)
     {
-        return ormTexture.Sample(s, uv).rgb * float3(1.0, roughnessFactor, metallicFactor);
+        return ormTexture.SampleBias(s, uv, materialData.textureLodBias).rgb * float3(1.0, roughnessFactor, metallicFactor);
     }
 
     float2 GetNormalXY(SamplerState.Handle s, float2 uv)
     {
-        return normalTexture.Sample(s, uv).xy;
+        return normalTexture.SampleBias(s, uv, materialData.textureLodBias).xy;
     }
 
     float GetAlphaCutoff()
@@ -88,7 +93,7 @@ float SelectComponent(float4 v, uint c)
 
 float SampleLooseChannel(ChannelSource cs, SamplerState.Handle s, float2 uv)
 {
-    return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
+    return SelectComponent(cs.texture.SampleBias(s, uv, materialData.textureLodBias), cs.channel);
 }
 
 extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
@@ -209,9 +214,14 @@ public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
     // work against; the mean it steepens about stays one octave coarser than that read, and the
     // sharpening measures its minification in the sampled level's own texels -- the footprint's
     // would be an octave too steep and saturate diluted strands past their area.
-    let texDim = material.GetBaseColorDimensions() * exp2(c_HashedAlphaLodBias);
-    let hashAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_HashedAlphaLodBias);
-    let meanAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_HashedAlphaLodBias + c_MinifiedAlphaMeanBias);
+    //
+    // Measured from the footprint the rest of the shading reads, so the two stay one level apart
+    // whatever the frame's own bias is: a hashed strand has no reason to be coarser relative to its
+    // own colour on a target that resolves finer.
+    let alphaLodBias = c_HashedAlphaLodBias + materialData.textureLodBias;
+    let texDim = material.GetBaseColorDimensions() * exp2(alphaLodBias);
+    let hashAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, alphaLodBias);
+    let meanAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, alphaLodBias + c_MinifiedAlphaMeanBias);
 
     float alpha = SharpenMinifiedAlpha(hashAlpha, meanAlpha, input.uv, texDim);
 

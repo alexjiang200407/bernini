@@ -16,6 +16,12 @@ struct TaaResolveData
     // How much of the resolved pixel comes from this frame. Zero history -- the first frame, or the
     // first after a resize -- takes the scene colour whole.
     float blendWeight;
+
+    // Reshapes what the colour accumulation converges to, from where this frame's jitter landed
+    // inside the pixel (util/jitter.h). The variance store below keeps the unscaled weight: where a
+    // sample fell says nothing about how fast a per-pixel map of stochastic spread should track.
+    float jitterFilterWeight;
+
     float historyValid;
 
     // Whether the unjittered camera matches last frame's. A pixel's own motion cannot stand in
@@ -170,7 +176,8 @@ float4 PSMain(VSOut input) : SV_Target
     float3 sigma = sqrt(max(m2 / 9.0 - mu * mu, 0.0));
     float3 tightMin = clamp(mu - sigma, boxMin, boxMax);
     float3 tightMax = clamp(mu + sigma, boxMin, boxMax);
-    float tightness = saturate(length(motion / texel));
+    float texelMotion = length(motion / texel);
+    float tightness = saturate(texelMotion);
     boxMin = lerp(boxMin, tightMin, tightness);
     boxMax = lerp(boxMax, tightMax, tightness);
 
@@ -225,7 +232,20 @@ float4 PSMain(VSOut input) : SV_Target
     const float c_ConvergeKnee = 8.0;
     const float c_MinWeightScale = 0.25;
 
-    float weight = gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
+    // A moving pixel's history is several frames of somewhere else, resampled once per frame, and
+    // what the clamp cannot pull out of it is the ghost. Leaning further on this frame the faster
+    // the pixel moves is what reaches that residue: the clamp bounds where the history may land,
+    // this bounds how long it stays. Capped, since a frame is one sample and a hashed pixel under a
+    // pan would otherwise resolve to its own coin flips -- at twice this the wake halves again and
+    // the smear across a hashed ramp reaches 1.6e-3, where its own guard stops telling the sigma box
+    // from the min/max one.
+    const float c_MotionWeightGain = 0.5;
+    const float c_MaxMotionWeight = 2.0;
+
+    float motionScale = min(1.0 + c_MotionWeightGain * texelMotion, c_MaxMotionWeight);
+
+    float weight = gTaaResolveData.blendWeight * gTaaResolveData.jitterFilterWeight * motionScale *
+                   max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 

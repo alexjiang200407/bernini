@@ -366,6 +366,10 @@ namespace bgl
 			{
 				u = draw.viewState.alphaHashSeed;
 			}
+			if (auto u = matData["textureLodBias"]; u.IsValid())
+			{
+				u = draw.viewState.textureLodBias;
+			}
 		}
 	}
 

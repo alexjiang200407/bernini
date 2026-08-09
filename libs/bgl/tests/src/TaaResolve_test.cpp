@@ -4,6 +4,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -18,9 +19,9 @@ namespace
 	constexpr uint32_t c_Height = 256;
 
 	// The rung the blur and ghosting reports came from: the same scene over half as many pixels,
-	// which is what a 1080p sample grid is beside the 4K one the resolve was tuned on. Every figure
-	// below is measured at both, because a resolve can be resolution-dependent in either direction
-	// and only the pair says which.
+	// which is what a 1080p sample grid is beside the 4K one the resolve was tuned on. Every case
+	// that measures quality rather than pinning behaviour runs at both, because a resolve can be
+	// resolution-dependent in either direction and only the pair says which.
 	constexpr uint32_t c_HalfWidth = c_Width / 2;
 
 	// Measurement boxes are written in c_Width pixels; this puts them over the same content at any
@@ -79,6 +80,139 @@ namespace
 	// as their difference and a softened history survives inside it.
 	constexpr float c_SlatWidth = 0.5f;
 	constexpr int   c_SlatCount = 76;
+
+	// A checkerboard whose cells are four texels across, box-filtered down in float so the chain is
+	// what a plain bake produces: the pattern is gone by the third level, which is what makes the
+	// level the shader picks visible as contrast rather than as a hue.
+	constexpr uint32_t c_CheckerSize = 256;
+	constexpr uint32_t c_CheckerCell = 4;
+
+	using Texel = std::array<uint8_t, 4>;
+
+	assetlib::ImageData
+	MakeCheckerTexture(assetlib::VkFormat format, const Texel& dark, const Texel& light)
+	{
+		auto image      = assetlib::ImageData();
+		image.width     = c_CheckerSize;
+		image.height    = c_CheckerSize;
+		image.arraySize = 1;
+		image.vkFormat  = format;
+		image.isCubemap = false;
+		image.mipLevels = 1;
+
+		for (uint32_t dim = c_CheckerSize; dim > 1; dim >>= 1)
+		{
+			++image.mipLevels;
+		}
+
+		size_t totalBytes = 0;
+		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
+		{
+			const uint32_t dim = std::max(1u, c_CheckerSize >> mip);
+			totalBytes += static_cast<size_t>(dim) * dim * 4;
+		}
+		image.pixels = core::fixed_buffer<std::byte>(totalBytes);
+
+		std::vector<glm::vec4> level(static_cast<size_t>(c_CheckerSize) * c_CheckerSize);
+		for (uint32_t y = 0; y < c_CheckerSize; ++y)
+		{
+			for (uint32_t x = 0; x < c_CheckerSize; ++x)
+			{
+				const Texel& t =
+					((x / c_CheckerCell) + (y / c_CheckerCell)) % 2 == 0 ? dark : light;
+				level[y * c_CheckerSize + x] = glm::vec4(t[0], t[1], t[2], t[3]) / 255.0f;
+			}
+		}
+
+		size_t offset = 0;
+		for (uint32_t mip = 0; mip < image.mipLevels; ++mip)
+		{
+			const uint32_t dim = std::max(1u, c_CheckerSize >> mip);
+
+			if (mip > 0)
+			{
+				const uint32_t         prev = dim * 2;
+				std::vector<glm::vec4> next(static_cast<size_t>(dim) * dim);
+				for (uint32_t y = 0; y < dim; ++y)
+				{
+					for (uint32_t x = 0; x < dim; ++x)
+					{
+						next[y * dim + x] = 0.25f * (level[(2 * y) * prev + 2 * x] +
+						                             level[(2 * y) * prev + 2 * x + 1] +
+						                             level[(2 * y + 1) * prev + 2 * x] +
+						                             level[(2 * y + 1) * prev + 2 * x + 1]);
+					}
+				}
+				level = std::move(next);
+			}
+
+			for (size_t t = 0; t < static_cast<size_t>(dim) * dim; ++t)
+			{
+				Texel texel{};
+				for (int c = 0; c < 4; ++c)
+				{
+					texel[static_cast<size_t>(c)] =
+						static_cast<uint8_t>(level[t][c] * 255.0f + 0.5f);
+				}
+				std::memcpy(image.pixels.data() + offset + t * 4, texel.data(), 4);
+			}
+
+			image.subresources.push_back(
+				{ offset, static_cast<uint64_t>(dim) * 4, static_cast<uint64_t>(dim) * dim * 4 });
+			offset += static_cast<size_t>(dim) * dim * 4;
+		}
+
+		return image;
+	}
+
+	// Sized so the plane is minified: at c_Width it covers about half the frame, so a 256-texel
+	// texture arrives at some two texels a pixel and the footprint asks for the level where the
+	// checker has already been filtered away.
+	constexpr float c_CheckerPlaneSize = 12.0f;
+
+	// All three maps carry the checker, so the bias is measured on every channel it is applied to
+	// rather than on base colour alone. Roughness alternates low and the tilt is in the normal's X:
+	// a specular lobe that swings with the level the sampler picked is how a bias the accumulation
+	// cannot average shows itself, and a colour map cannot show it.
+	void
+	AddCheckerPlane(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		auto desc            = bgl::PbrMaterialDesc();
+		desc.baseColorFactor = glm::vec4(1.0f);
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 1.0f;
+
+		desc.baseColorTexture = scene->AddTextureAsset(
+			MakeCheckerTexture(
+				assetlib::VkFormat::R8G8B8A8_SRGB,
+				Texel{ { 64, 64, 64, 255 } },
+				Texel{ { 217, 217, 217, 255 } }),
+			"checkerColour");
+
+		desc.ormTexture = scene->AddTextureAsset(
+			MakeCheckerTexture(
+				assetlib::VkFormat::R8G8B8A8_UNORM,
+				Texel{ { 255, 38, 0, 255 } },
+				Texel{ { 255, 115, 0, 255 } }),
+			"checkerOrm");
+
+		desc.normalTexture = scene->AddTextureAsset(
+			MakeCheckerTexture(
+				assetlib::VkFormat::R8G8B8A8_UNORM,
+				Texel{ { 96, 128, 255, 255 } },
+				Texel{ { 160, 128, 255, 255 } }),
+			"checkerNormal");
+
+		auto plane = scene->AddPlaneGeom(
+			1,
+			1,
+			c_CheckerPlaneSize,
+			c_CheckerPlaneSize,
+			scene->CreatePbrMaterial(desc));
+		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+	}
 
 	// Sized so the slats cover the measurement box from the drift's starting camera through its
 	// arrival at x = 0.
@@ -166,9 +300,10 @@ namespace
 		const std::string& path,
 		bool               taaEnabled,
 		int                frames,
-		ScenePopulator     populate = AddQuad,
-		CameraProvider     cameraAt = StillCamera,
-		uint32_t           extent   = c_Width)
+		ScenePopulator     populate     = AddQuad,
+		CameraProvider     cameraAt     = StillCamera,
+		uint32_t           extent       = c_Width,
+		const std::string& previousPath = {})
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
@@ -194,6 +329,11 @@ namespace
 		{
 			job.camera = cameraAt(frame);
 			gfx->DrawFrame(target, job);
+
+			if (!previousPath.empty() && frame == frames - 2)
+			{
+				gfx->ScreenshotPng(target, previousPath);
+			}
 		}
 
 		gfx->ScreenshotPng(target, path);
@@ -283,14 +423,14 @@ namespace
 	// `panning` false holds it at the destination throughout, which is the reference: the same camera,
 	// the same geometry, nothing behind it.
 	void
-	RenderPan(const std::string& path, bool taaEnabled, bool panning, uint32_t extent = c_Width)
+	RenderPan(const std::string& path, bool taaEnabled, bool panning)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(extent);
-		targetDesc.height     = static_cast<int>(extent);
+		targetDesc.width      = static_cast<int>(c_Width);
+		targetDesc.height     = static_cast<int>(c_Height);
 		targetDesc.headless   = true;
 		targetDesc.taaEnabled = taaEnabled;
 
@@ -303,7 +443,7 @@ namespace
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
-		job.viewport = FullViewport(extent);
+		job.viewport = FullViewport(c_Width);
 
 		for (int frame = 0; frame < c_PanFrames; ++frame)
 		{
@@ -461,9 +601,10 @@ TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
 
 		INFO("wake delta at " << extent << ": " << ghost);
 
-		// Measured 9.9e-5 at 256 and 2.1e-4 at 128, which is convergence state at both; a ghost the
-		// clamp admitted would sit an order of magnitude above. Depth-based disocclusion rejection
-		// was measured against this very number and moved it nowhere -- the clamp owns the wake.
+		// Measured 7.7e-5 at 256 and 1.5e-4 at 128, from 9.9e-5 and 2.1e-4 before the weight leaned
+		// on motion. The residue is convergence state; a ghost the clamp admitted would sit an
+		// order of magnitude above. Depth-based disocclusion rejection was measured against this
+		// very number and moved it nowhere -- the clamp owns where the history may land.
 		CHECK(ghost < 1.0e-3f);
 	};
 
@@ -499,7 +640,8 @@ TEST_CASE("Fine detail survives the camera moving", "[taa][render]")
 		INFO("fence at " << extent << ": still = " << stillDetail << ", moving = " << movingDetail);
 
 		// The still fence has to carry real detail, or the ratio below compares noise to noise.
-		CHECK(stillDetail > 1e-4f);
+		// Half the pixels put the slats at half their width, so the floor is the rung's own.
+		CHECK(stillDetail > (extent == c_Width ? 3e-4f : 1e-4f));
 
 		return movingDetail / stillDetail;
 	};
@@ -556,11 +698,64 @@ TEST_CASE("The resolve keeps as much of a still image at half the resolution", "
 
 	INFO("detail retained: " << c_Width << " = " << full << ", " << c_HalfWidth << " = " << half);
 
-	// Measured 0.69 and 0.63: the lower rung keeps less of its image, which is the complaint this
-	// instrument was built for. One bound for both, so whatever the resolve costs it cannot cost
-	// more where there is less to lose.
+	// Measured 0.70 and 0.65, from 0.69 and 0.63 before each frame was weighted by its own jitter.
+	// The lower rung keeps less of its image and that is the complaint this branch came from, so
+	// the bound is one number for both: whatever the resolve costs, it cannot cost more where there
+	// is less to lose.
 	CHECK(full > 0.6f);
 	CHECK(half > 0.6f);
+}
+
+// What the resolve is worth on a *textured* surface, which is most of a scene and none of the
+// geometry above. A minified texture's detail is decided before the resolve ever runs, by which
+// level the sampler picks: the footprint's level is the one a single point-sampled frame can show
+// without aliasing, and a jittered accumulation is not a single frame.
+//
+// The still image's own stability is the other half. Reading finer brings back exactly the
+// frequencies the footprint was protecting against, so a bias the accumulation cannot average away
+// shows here as a converged image that is still moving.
+TEST_CASE("A minified texture keeps detail its footprint would have dropped", "[taa][render]")
+{
+	const auto detail = [](uint32_t extent) {
+		const std::string settled =
+			"assets/golden/taa_texture_" + std::to_string(extent) + ".got.png";
+		const std::string before =
+			"assets/golden/taa_texture_prev_" + std::to_string(extent) + ".got.png";
+
+		RenderTo(settled, true, c_ConvergeFrames, AddCheckerPlane, StillCamera, extent, before);
+
+		// Inside the plane, clear of its edges at either rung.
+		const int box = Scaled(80, extent);
+		const int x   = Scaled(88, extent);
+
+		const float sharpness = bgl::test::AliasEnergy(settled, x, x, box, box);
+		const float unsettled = bgl::test::FrameDelta(settled, before, x, x, box, box);
+
+		// WARN rather than INFO so the figures print on a passing run: the full rung asserts
+		// nothing below, and a measurement nothing observes is not one.
+		WARN(
+			"checker at " << extent << ": detail = " << sharpness
+						  << ", frame delta = " << unsettled);
+
+		// Only the half rung is asserted, and it is the one that matters: reading half a level
+		// finer measures 0.00394 there against 0.00220 sampling the footprint itself, where the
+		// full rung's two states are 0.0394 and 0.0333 -- under a fifth apart. A bound inside that
+		// fifth would be a flake on any GPU that rounds a level differently, and the figure is
+		// reported either way.
+		if (extent != c_Width)
+		{
+			CHECK(sharpness > 3.0e-3f);
+		}
+
+		// A converged still image does not move -- including its specular, which is where reading
+		// a normal or a roughness map finer than the footprint would show up, since the mean of a
+		// shaded footprint is not the shading of its mean. Measured 4e-6, quantization; a level the
+		// accumulation could not settle would sit orders of magnitude above.
+		CHECK(unsettled < 1.0e-4f);
+	};
+
+	detail(c_Width);
+	detail(c_HalfWidth);
 }
 
 // The first frame has no accumulation to blend against. If it blended anyway it would come out at

@@ -511,7 +511,15 @@ namespace bgl
 		draw.viewState.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
 		                                   static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
 		                                   0.0f;
-		draw.lighting.skybox         = view->GetSkybox();
+
+		// Half a level finer than the footprint, which is what a jitter spanning one pixel and an
+		// accumulation over eight of them resolves. Only under temporal AA: the detail it brings
+		// back is aliasing on the frame it arrives in, and nothing without the accumulation removes
+		// it again.
+		constexpr float c_TaaTextureLodBias = -0.5f;
+
+		draw.viewState.textureLodBias = m_ActiveTarget->IsTaaEnabled() ? c_TaaTextureLodBias : 0.0f;
+		draw.lighting.skybox          = view->GetSkybox();
 
 		if (draw.lighting.skybox.has_value())
 		{
@@ -586,6 +594,10 @@ namespace bgl
 			taaArgs.viewport        = viewport;
 			taaArgs.historyValid    = rt.IsHistoryValid();
 			taaArgs.cameraStill     = m_CameraStill;
+
+			// The same frame counter Draw jittered from -- it advances at BeginFrame, so the weight
+			// describes the offset this frame's geometry was actually rendered with.
+			taaArgs.jitterFilterWeight = JitterFilterWeight(m_FrameCounter);
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.

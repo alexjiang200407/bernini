@@ -26,15 +26,18 @@ float Hash3(float3 v)
 public static const float c_MinifiedAlphaMeanBias = 1.0;
 
 /**
- * How many levels finer than the hardware's pick the alpha driving the hash is read at.
+ * How many levels finer than the rest of the shading the alpha driving the hash is read at.
+ *
+ * Relative, not absolute: it is added to the frame's own texture LOD bias (MaterialData), so the
+ * hash's alpha stays this far ahead of the colour it shades with whatever level that colour is read
+ * at.
  *
  * At the footprint level a sub-texel strand is filtered flat -- there is no shape left, only energy,
  * and stochastic coverage of a flat level is dust the sharpening cannot rescue. One level finer the
  * strand still has shape, and shape is what the hash wants: alpha near 0 or 1 makes the survival
  * decision nearly deterministic, so the strand draws as a crisp stroke instead of a coin flip. The
  * aliasing the finer read brings back is exactly what the jitter walks and the accumulation
- * averages, which is the one renderer where a negative alpha bias is free. The shading colour stays
- * at the footprint level: colour aliasing is not paid for by anything.
+ * averages, which is the one renderer where a negative alpha bias is free.
  */
 public static const float c_HashedAlphaLodBias = -1.0;
 

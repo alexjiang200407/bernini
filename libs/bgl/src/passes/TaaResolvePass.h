@@ -48,6 +48,11 @@ namespace bgl
 			// Whether the unjittered camera matches last frame's bitwise. Motion vectors cannot
 			// carry this for empty pixels, whose velocity is zero under any camera.
 			bool cameraStill = false;
+
+			// This frame's share of the blend, from where its jitter landed inside the pixel
+			// (util/jitter.h). One over the sequence's mean, so it reshapes what the accumulation
+			// converges to without moving how long it takes.
+			float jitterFilterWeight = 1.0f;
 		};
 
 		TaaResolvePass() = default;

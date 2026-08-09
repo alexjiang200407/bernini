@@ -39,6 +39,15 @@ the machine that does not have the display it was reported on. `renderScale` und
 `materialEditor` in `config.json` sets the value the editor starts at; the menu moves every viewport
 from there, live, because the comparison is what shows a temporal artifact.
 
+The three quality instruments in `TaaResolve_test.cpp` — detail at rest, the wake behind a pan, and
+the softening under one — are therefore each measured at two rungs, 256 and 128, and reading the
+pair is what separates the resolve from the pixel count. (The remaining cases pin behaviour rather
+than quality and run at one rung.) What the pair says is that the resolve costs a *still* image more
+where there are fewer pixels — 0.65 of the unjittered image's pixel-scale contrast against 0.70 —
+while the wake and the softening come out proportional or better at the lower rung. Detail at rest
+is the resolution-dependent half, and the two entries below about the reconstruction kernel and the
+texture LOD bias are what answer it.
+
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
 ---
@@ -63,6 +72,40 @@ from there, live, because the comparison is what shows a temporal artifact.
   tail stays inside what the blend weight forgives. The sequence is 1-based, because term 0 of every
   radical inverse is 0 — a frame that samples exactly where an unjittered one does contributes
   nothing new.
+
+* **Each frame's share of the blend is weighted by where its jitter landed.** Blending every frame
+  equally converges to the mean of the samples across the footprint — a box one pixel wide, the
+  softest reconstruction the sequence can produce, and the floor a still TAA image is blurry
+  against. `JitterFilterWeight` scales the blend weight by a Gaussian of about 0.4 px on the
+  frame's own offset, so the accumulation converges to that kernel instead: the sample nearest the
+  pixel's own centre is the one that describes it best. The mean over the sequence is normalised
+  out, because the weight is also the accumulation's time constant and that is measured against
+  flicker. It is a trade against the antialiasing, and the trade is what sets the width — the
+  converged fence keeps 0.70 of the unjittered image's pixel-scale contrast against 0.69, and 0.65
+  against 0.63 at half the resolution, while the resolved edge goes from 0.53 of an unjittered
+  edge's alias energy to 0.56. Narrower is available and costs more than it returns: at 0.29 px the
+  fence reaches 0.72 and the edge 0.63, which is most of the antialiasing the jitter is there for.
+
+* **Material textures are read half a level finer than their footprint.** The footprint's level is
+  the finest a single point-sampled frame can show without aliasing, and a jittered accumulation is
+  not a single frame — the detail a negative bias brings back is exactly what the sequence walks and
+  the accumulation averages. `ViewState::textureLodBias` carries it, and is zero on a target without
+  TAA, where the same read is aliasing nothing removes again. Measured on a minified checker: a
+  fifth more pixel-scale contrast at the full rung and four fifths more at half it, with the
+  converged still image no less settled (a frame-to-frame delta of 4e-6 either way, on a plane whose
+  roughness and normal carry the pattern too — the mean of a shaded footprint is not the shading of
+  its mean, so those two channels are measured rather than assumed). Half a level rather than a
+  whole one because a whole one measured *worse* at the half rung — 0.00365 against 0.00394 — the
+  read outruns what eight offsets can average, which is the rung with the least to spare. The hashed path's own bias stacks on top of this
+  rather than replacing it, so its alpha stays one level finer than the colour it shades with.
+
+  **It moves the alpha test's silhouette, and that is the point rather than a side effect.** A
+  cutout material thresholds the same base colour, so a finer read is a coverage change: the far
+  card's strands go from 0.008 of adjacent-pixel contrast to 0.098, and its coverage stops being
+  the blob it was — mean luma 0.22 against an alpha-blended reference's 0.15 at the full rung and
+  0.52 against 0.22 at half it, now 0.15 and 0.34. The bake's coverage-preserving mips are what
+  make that safe: each level is rescaled against the material's own cutoff, so a read between two
+  of them is still a coverage-true one.
 
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
@@ -129,10 +172,17 @@ from there, live, because the comparison is what shows a temporal artifact.
   unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
   otherwise escape.
 
-* **Not velocity-scaled either.** A blend weight ramped by reprojection distance — long accumulation
-  at rest, short under motion — is the standard answer to wanting both, and measured no better than a
-  constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
-  clamp already bounds ghosting, so there is no second problem for the weight to solve.
+* **The weight *is* ramped by the pixel's own motion, and it took the right instrument to see it.**
+  This was measured once against the empty-background pan and rejected — the trail moved
+  0.00669 → 0.00673, which is nothing — and that instrument was the wrong one: over emptiness the
+  clamp's box collapses to the background's own colour and scrubs a trail by itself, so almost all
+  of what it scores is the resolved edge spreading a fraction of a pixel. Measured instead on the
+  wake a receding occluder leaves *over detail*, the ramp is worth a third of the remaining ghost —
+  9.9e-5 → 7.7e-5, and 2.1e-4 → 1.5e-4 at half the render resolution — and takes the leading band of
+  a panned hashed ramp from 2.28e-3 to 1.48e-3, which is convergence lag rather than smear. The
+  clamp bounds *where* an admitted history may land; nothing else bounded how long it stayed. The
+  cap is 2× the base weight: at 4× the wake halves again and the hashed ramp's trailing band reaches
+  1.6e-3, which is where that band's own guard stops telling the sigma box from the min/max one.
 
 * **The weight does deepen where remembered stochastic spread lives.** What a converged stochastic
   region still flickers by is the accumulation's residual variance, which scales with the blend
@@ -177,6 +227,8 @@ from there, live, because the comparison is what shows a temporal artifact.
 | `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
 | `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
 | `HaltonJitter` | [util/jitter.h](libs/bgl/src/util/jitter.h) | The sub-pixel offset for a frame, in NDC. |
+| `JitterFilterWeight` | [util/jitter.h](libs/bgl/src/util/jitter.h) | That frame's share of the blend, from where the offset landed. |
+| `ViewState::textureLodBias` | [passes/DrawData.h](libs/bgl/src/passes/DrawData.h) | The level every material texture is read at, relative to its footprint. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl/src/passes/TaaResolvePass.h) | Reprojects, clamps, blends into the new history. |
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
 | `ViewData::jitter` / `prevJitter` | [forward/ViewData.slang](libs/bgl/shaders/src/forward/ViewData.slang) | What the mesh shader subtracts back out. |
@@ -255,16 +307,17 @@ Two couplings worth knowing:
   The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
   does not move.
 
-* **The alpha driving the hash is read one level finer than the footprint, then steepened about its
-  own local mean.** Once a strand is sub-texel at the active mip the sampled alpha is many strands
-  averaged, and stochastic coverage that honestly reproduces that mean converges to a mixture the
-  backdrop swallows -- energy-true rendering of a sub-pixel feature *is* its disappearance. Two
-  mechanisms answer that. `c_HashedAlphaLodBias` reads the hash's alpha one level finer than the
-  hardware's pick, where the strand still has shape: alpha near 0 or 1 makes the survival decision
+* **The alpha driving the hash is read one level finer than the colour it shades with, then
+  steepened about its own local mean.** Once a strand is sub-texel at the active mip the sampled
+  alpha is many strands averaged, and stochastic coverage that honestly reproduces that mean
+  converges to a mixture the backdrop swallows -- energy-true rendering of a sub-pixel feature *is*
+  its disappearance. Two mechanisms answer that. `c_HashedAlphaLodBias` reads the hash's alpha one
+  level ahead of the rest of the shading -- a relative offset, added to the frame's own texture LOD
+  bias -- where the strand still has shape: alpha near 0 or 1 makes the survival decision
   nearly deterministic, so the strand draws as a crisp stroke instead of a coin flip -- fewer
   flips is also less flicker, still and moving. The aliasing a finer read brings back is exactly
   what the jitter walks and the accumulation averages, which makes this the one renderer where a
-  negative alpha bias is free; the shading colour stays at the footprint level. Then
+  negative alpha bias is free. Then
   `SharpenMinifiedAlpha` steepens that read about the content's own local mean in proportion to the
   minification, measured in the sampled level's own texels -- the footprint's would be an octave
   too steep and saturate diluted strands past their area -- leaving magnified alpha, where soft
@@ -293,15 +346,15 @@ Two couplings worth knowing:
   The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
   any distance and anisotropic filtering resolves that axis.
 
-* **The blend weight trades flicker against settling time, not against ghosting.** This is the
-  opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
-  from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the trail left
-  behind a pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
-  essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
-  actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
-  camera stops. 0.025 is where that starts to show. The variance-guided deepening (above) is how the
-  resolve gets past this trade: only pixels the store already knows are stochastic pay the longer
-  time constant.
+* **The base blend weight trades flicker against settling time, and barely touches ghosting.** At an
+  equal convergence budget, halving the weight from 0.1 to 0.05 takes the frame-to-frame difference
+  from 0.0020 to 0.0013 and moves the trail left behind a pan by 2% — nothing. The clamp is doing
+  essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower
+  weight actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve
+  after the camera stops. 0.025 is where that starts to show. The variance-guided deepening (above)
+  is how the resolve gets past this trade: only pixels the store already knows are stochastic pay the
+  longer time constant. What the *base* cannot do is what the motion ramp (above) does — a constant
+  weight is the same on the pixels that have a ghost and the pixels that cannot.
 
 ---
 
