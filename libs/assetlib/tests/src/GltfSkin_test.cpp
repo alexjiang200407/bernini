@@ -187,16 +187,6 @@ namespace
 		}
 	};
 
-	/** The byte offset of `semantic` within one interleaved vertex, or -1. */
-	int
-	OffsetOf(const VertexLayout& layout, VertexSemantic semantic)
-	{
-		for (uint8_t i = 0; i < layout.attributeCount; ++i)
-			if (layout.attributes[i].semantic == semantic)
-				return layout.attributes[i].offset;
-		return -1;
-	}
-
 	uint16_t
 	U16At(const std::vector<std::byte>& data, size_t offset)
 	{
@@ -242,8 +232,8 @@ TEST_CASE("A skinned primitive's joint indices are remapped into bone order", "[
 	REQUIRE(submesh.layout.attributeCount == 3);
 	CHECK(submesh.layout.stride == 28);  // vec3 position + u16x4 joints + unorm16x4 weights
 
-	const int joints  = OffsetOf(submesh.layout, VertexSemantic::kJoints0);
-	const int weights = OffsetOf(submesh.layout, VertexSemantic::kWeights0);
+	const int joints  = attributeOffset(submesh.layout, VertexSemantic::kJoints0);
+	const int weights = attributeOffset(submesh.layout, VertexSemantic::kWeights0);
 	REQUIRE(joints >= 0);
 	REQUIRE(weights >= 0);
 
@@ -287,8 +277,8 @@ TEST_CASE("A static glTF imports with no rig and no skin attributes", "[gltf][sk
 	CHECK(import.animations.clips.empty());
 	for (const Submesh& submesh : import.submeshes)
 	{
-		CHECK(OffsetOf(submesh.layout, VertexSemantic::kJoints0) == -1);
-		CHECK(OffsetOf(submesh.layout, VertexSemantic::kWeights0) == -1);
+		CHECK(attributeOffset(submesh.layout, VertexSemantic::kJoints0) == -1);
+		CHECK(attributeOffset(submesh.layout, VertexSemantic::kWeights0) == -1);
 	}
 }
 

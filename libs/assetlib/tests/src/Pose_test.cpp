@@ -71,6 +71,12 @@ namespace
 		return animations;
 	}
 
+	glm::vec3
+	TranslationOf(const glm::mat4& matrix) noexcept
+	{
+		return glm::vec3(matrix[3]);
+	}
+
 	void
 	CheckMatrix(const glm::mat4& got, const glm::mat4& want)
 	{
@@ -135,7 +141,7 @@ TEST_CASE("A pose composes parent before child", "[pose]")
 
 	// Spelled out for the one that matters: the root turns +Y onto -X, so the child's local +2 along
 	// Y lands 2 to the left of the root's own translation.
-	const glm::vec3 childOrigin = glm::vec3(model[1] * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	const glm::vec3 childOrigin = TranslationOf(model[1]);
 	CHECK(childOrigin.x == Catch::Approx(3.0f).margin(1e-5));
 	CHECK(childOrigin.y == Catch::Approx(0.0f).margin(1e-5));
 	CHECK(childOrigin.z == Catch::Approx(0.0f).margin(1e-5));
@@ -154,9 +160,14 @@ TEST_CASE("Each frame of a clip evaluates on its own", "[pose]")
 
 	// Frame-major: reading frame 1 must not read frame 0's bone 1, which is the indexing mistake
 	// that produces a rig one bone out of step.
-	CHECK(poseModelTransforms(skeleton, animations, 0, 1)[0][3][1] == Catch::Approx(10.0f));
-	CHECK(poseModelTransforms(skeleton, animations, 0, 2)[0][3][1] == Catch::Approx(0.0f));
-	CHECK(poseModelTransforms(skeleton, animations, 0, 2)[1][3][1] == Catch::Approx(10.0f));
+	CHECK(
+		TranslationOf(poseModelTransforms(skeleton, animations, 0, 1)[0]).y ==
+		Catch::Approx(10.0f));
+	CHECK(
+		TranslationOf(poseModelTransforms(skeleton, animations, 0, 2)[0]).y == Catch::Approx(0.0f));
+	CHECK(
+		TranslationOf(poseModelTransforms(skeleton, animations, 0, 2)[1]).y ==
+		Catch::Approx(10.0f));
 }
 
 TEST_CASE("Pose evaluation refuses what it cannot address", "[pose]")
