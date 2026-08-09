@@ -255,14 +255,22 @@ Two couplings worth knowing:
   The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
   does not move.
 
-* **Minified alpha is steepened about its own local mean before the hash, and the lift is bounded.**
-  Once a strand is sub-texel at the active mip the sampled alpha is many strands averaged, and
-  stochastic coverage that honestly reproduces that mean converges to a mixture the backdrop
-  swallows -- energy-true rendering of a sub-pixel feature *is* its disappearance. `ShadeHashedAlpha`
-  therefore steepens alpha in proportion to the minification (`SharpenMinifiedAlpha`), leaving
-  magnified alpha -- where soft self-occluding coverage is the point of hashed -- alone.
+* **The alpha driving the hash is read one level finer than the footprint, then steepened about its
+  own local mean.** Once a strand is sub-texel at the active mip the sampled alpha is many strands
+  averaged, and stochastic coverage that honestly reproduces that mean converges to a mixture the
+  backdrop swallows -- energy-true rendering of a sub-pixel feature *is* its disappearance. Two
+  mechanisms answer that. `c_HashedAlphaLodBias` reads the hash's alpha one level finer than the
+  hardware's pick, where the strand still has shape: alpha near 0 or 1 makes the survival decision
+  nearly deterministic, so the strand draws as a crisp stroke instead of a coin flip -- fewer
+  flips is also less flicker, still and moving. The aliasing a finer read brings back is exactly
+  what the jitter walks and the accumulation averages, which makes this the one renderer where a
+  negative alpha bias is free; the shading colour stays at the footprint level. Then
+  `SharpenMinifiedAlpha` steepens that read about the content's own local mean in proportion to the
+  minification, measured in the sampled level's own texels -- the footprint's would be an octave
+  too steep and saturate diluted strands past their area -- leaving magnified alpha, where soft
+  self-occluding coverage is the point of hashed, alone.
 
-  The centre it steepens about is the content's own local mean, read one level coarser through
+  The centre it steepens about is the content's own local mean, read one octave coarser through
   `TextureHandle::SampleBias` so it inherits the hardware's LOD choice and its anisotropy. A constant
   centre was tried first and is what the cutoff-based version used: it cannot be right at every
   level, because a chain whose levels average above it saturates to opaque while one that averages
@@ -270,18 +278,20 @@ Two couplings worth knowing:
   the renderer. The local mean is the steepening's fixed point, so energy survives wherever the
   result does not clip.
 
-  A level the filter has flattened to one value has no shape left to recover, and that is exactly
-  where a sub-pixel strand lives, so such a level is lifted bodily instead -- bounded at twice the
-  mean and ceilinged at 0.5 coverage, so however deep the chain goes a grating can never reach a
-  solid block. The bounds are what the coverage ladder measures: 0.91 near, 1.11 mid and 1.32 far of
-  the blend reference, inside a [0.6, 1.4] bracket that guards hair which vanishes and hair which
-  doubles.
+  A level the filter has flattened to one value has no shape left to recover, so such a level is
+  lifted bodily instead -- bounded at twice the mean and ceilinged at 0.5 coverage, so however deep
+  the chain goes a grating can never reach a solid block. The lift is gated on flatness
+  (`c_FlatBand`): a genuinely flattened level sits at the mean up to filtering residue, while a
+  shaped level's aliased partials scatter well outside it, and ungated the lift inflated those
+  partials past the strands' area. Where shape exists the ceiling is the steepened value's own
+  coverage, since capping a restored strand at 0.5 would clip exactly what the steepening
+  recovered. The coverage ladder measures 0.90 near, 0.96 mid and 1.29 far of the blend reference,
+  inside a [0.6, 1.4] bracket that guards hair which vanishes and hair which doubles -- and the
+  far card's adjacent-pixel contrast reads 0.0140 against the alpha test's 0.0078, so the distant
+  strands are sharper features than the crisp look the sharpening was built to chase.
 
   The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
-  any distance and anisotropic filtering resolves that axis. The cost is at the reference density,
-  where the lift trades some contrast for the far-field behaviour: frame-to-frame flicker on the
-  distant card measures 7.7e-5 against 3.2e-5 for the cutoff-centred version, inside every pinned
-  bound but not free.
+  any distance and anisotropic filtering resolves that axis.
 
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight

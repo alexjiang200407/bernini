@@ -1224,8 +1224,11 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 	// Around mip 2 the card reads blue into yellow; at mip 0 it is red and nothing else.
 	CHECK(hue.b > hue.r);
 
-	// The sampled alpha around mip 2 is a quarter and below; mip 0's is opaque.
-	CHECK(faded.Luma() < full.Luma() * 0.5f);
+	// The hash reads alpha one level finer than the footprint (c_HashedAlphaLodBias), around mip
+	// 1.2 here, and this chain's levels disagree by design, so the steepening legitimately pushes
+	// the sampled value about -- the exact figure is the WARN's business. What the bound
+	// discriminates is a chain whose alpha never left mip 0, which reads opaque.
+	CHECK(faded.Luma() < full.Luma() * 0.85f);
 }
 
 // The user-visible report this instruments: hashed hair thins out and boils as the camera backs

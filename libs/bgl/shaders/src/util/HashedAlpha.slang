@@ -26,6 +26,19 @@ float Hash3(float3 v)
 public static const float c_MinifiedAlphaMeanBias = 1.0;
 
 /**
+ * How many levels finer than the hardware's pick the alpha driving the hash is read at.
+ *
+ * At the footprint level a sub-texel strand is filtered flat -- there is no shape left, only energy,
+ * and stochastic coverage of a flat level is dust the sharpening cannot rescue. One level finer the
+ * strand still has shape, and shape is what the hash wants: alpha near 0 or 1 makes the survival
+ * decision nearly deterministic, so the strand draws as a crisp stroke instead of a coin flip. The
+ * aliasing the finer read brings back is exactly what the jitter walks and the accumulation
+ * averages, which is the one renderer where a negative alpha bias is free. The shading colour stays
+ * at the footprint level: colour aliasing is not paid for by anything.
+ */
+public static const float c_HashedAlphaLodBias = -1.0;
+
+/**
  * Steepens minified alpha about the local mean, so distant coverage keeps its shape instead of its
  * energy.
  *
@@ -64,10 +77,20 @@ public float SharpenMinifiedAlpha(float alpha, float mean, float2 uv, float2 tex
     float texelsPerPixel = min(length(dx), length(dy));
     float sharpened = saturate((alpha - mean) * max(1.0, texelsPerPixel) + mean);
 
-    // Magnified content has a gain of exactly 1 and a ceiling at its own alpha, so it is untouched.
-    float gain = clamp(texelsPerPixel, 1.0, c_MaxCoverageGain);
+    // The lift exists only where the level is flat -- where the steepening had nothing to work
+    // with -- and how far alpha sits from the mean is exactly that measure, so the gain fades out
+    // with it. Ungated it fires on the aliased partials a shaped level produces and inflates the
+    // strands past their area; the band is a narrow fraction of the mean because a genuinely
+    // flattened level sits at the mean up to filtering residue, while a shaped one scatters well
+    // outside it. The ceiling is likewise the steepened value's own coverage where shape exists:
+    // capping a restored strand at c_MaxCoverage would clip exactly what the steepening
+    // recovered. Magnified content has a gain of 1 and a ceiling at its own alpha.
+    const float c_FlatBand = 0.25;
 
-    return min(sharpened * gain, max(alpha, c_MaxCoverage));
+    float flatness = 1.0 - saturate(abs(alpha - mean) / (c_FlatBand * max(mean, 1.0e-4)));
+    float gain = lerp(1.0, clamp(texelsPerPixel, 1.0, c_MaxCoverageGain), flatness);
+
+    return min(sharpened * gain, max(sharpened, c_MaxCoverage));
 }
 
 /**

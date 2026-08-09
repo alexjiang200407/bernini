@@ -204,13 +204,16 @@ public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSO
     let baseColor = material.GetBaseColor(wrapSampler, input.uv);
 
     // At minification the sampled alpha is many strands averaged, and coverage that honestly
-    // matches it is a haze the backdrop swallows; steepening it about the local mean restores the
-    // strand-to-gap contrast without moving the average, and leaves magnified alpha -- where hashed
-    // earns its keep -- untouched.
-    let texDim = material.GetBaseColorDimensions();
-    let meanAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_MinifiedAlphaMeanBias);
+    // matches it is a haze the backdrop swallows. The alpha driving the hash is read one level
+    // finer than the footprint, where a sub-texel strand still has shape for the steepening to
+    // work against; the mean it steepens about stays one octave coarser than that read, and the
+    // sharpening measures its minification in the sampled level's own texels -- the footprint's
+    // would be an octave too steep and saturate diluted strands past their area.
+    let texDim = material.GetBaseColorDimensions() * exp2(c_HashedAlphaLodBias);
+    let hashAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_HashedAlphaLodBias);
+    let meanAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_HashedAlphaLodBias + c_MinifiedAlphaMeanBias);
 
-    float alpha = SharpenMinifiedAlpha(baseColor.a, meanAlpha, input.uv, texDim);
+    float alpha = SharpenMinifiedAlpha(hashAlpha, meanAlpha, input.uv, texDim);
 
     if (alpha < HashedAlphaThreshold(input.worldPos, materialData.alphaHashSeed))
     {
