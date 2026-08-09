@@ -217,7 +217,17 @@ float4 PSMain(VSOut input) : SV_Target
     // detail worth keeping once it is pulled inside what this frame could have produced.
     history = YCoCgToRgb(clamp(RgbToYCoCg(history), boxMin, boxMax));
 
-    float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), gTaaResolveData.blendWeight));
+    // What converged stochastic coverage still flickers by is the accumulation's residual variance,
+    // which scales with the blend weight and which no clamp box reaches. The remembered spread is a
+    // per-pixel map of exactly where that residual lives -- and motion empties it, so an edge under
+    // a pan keeps the full weight and the deepening cannot ghost. Floored so the accumulation still
+    // tracks a lighting change a resting camera is watching.
+    const float c_ConvergeKnee = 8.0;
+    const float c_MinWeightScale = 0.25;
+
+    float weight = gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
+
+    float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 
     return float4(resolved, variance);
 }

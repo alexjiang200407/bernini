@@ -6,6 +6,11 @@ public struct TextureHandle
 
     public float4 SampleLevel(SamplerState.Handle s, float2 uv, float level) { return texture.SampleLevel(s, uv, level); }
 
+    // Sampled `bias` levels coarser than the footprint the hardware picked. Distinct from
+    // SampleLevel: the level is chosen from the derivatives as usual, anisotropy included, so a
+    // caller wanting "coarser than this pixel" keeps the filtering the pixel itself got.
+    public float4 SampleBias(SamplerState.Handle s, float2 uv, float bias) { return texture.SampleBias(s, uv, bias); }
+
     // Mip 0 texel counts. A caller relating a UV footprint to texels needs the real size;
     // hardcoding one would silently mis-scale the moment the asset changed.
     public float2 GetDimensions()

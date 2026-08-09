@@ -28,6 +28,17 @@ allocated a history and is disabled otherwise — rather than hidden, so the ans
 turn this on" is in the place that asks the question — and a viewport configured without it ignores
 the call instead of throwing.
 
+What TAA leaves behind is **resolution-dependent**: the jitter walks a pixel footprint, so how much
+of an edge or a hashed strand falls inside one pixel decides how much the neighbourhood clamp has to
+throw away, and a flicker that is obvious at 1080p can be invisible on a 4K panel. The editor's
+Render menu carries a **Render Scale** for that: it multiplies each viewport's render resolution on
+top of the display's device pixel ratio, and the result is stretched back over the window on present
+(`DXGI_SCALING_STRETCH`; a `CAMetalLayer` drawable smaller than its bounds). Half scale on a 2×
+display is a 1080p sample grid inside a 4K window, which is what makes the artifact reproducible on
+the machine that does not have the display it was reported on. `renderScale` under `levelEditor` and
+`materialEditor` in `config.json` sets the value the editor starts at; the menu moves every viewport
+from there, live, because the comparison is what shows a temporal artifact.
+
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
 ---
@@ -123,6 +134,22 @@ the call instead of throwing.
   constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
   clamp already bounds ghosting, so there is no second problem for the weight to solve.
 
+* **The weight does deepen where remembered stochastic spread lives.** What a converged stochastic
+  region still flickers by is the accumulation's residual variance, which scales with the blend
+  weight and which no clamp box reaches — and the variance store (below) is a per-pixel map of
+  exactly where that residual lives. The resolve divides the weight by the remembered sigma,
+  floored at a quarter of the base so the accumulation still tracks a change a resting camera is
+  watching. This is not the velocity-scaled ramp rejected above: the gate is the store, not the
+  motion, and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
+  deepening cannot ghost. It is also what makes a lower render resolution stop flickering more
+  than a higher one: the distant strand card measured 7.7e-5 / 1.37e-4 / 2.51e-4 of frame-to-frame
+  noise at 256/128/64 and measures 2.4e-5 / 4.2e-5 / 7.5e-5 with the deepening — every rung below
+  the unaided 256 figure — with the converged still patch at 2.3e-5 against 0.0015, and every
+  resting fixed point (coverage ladder, converged luma) unchanged. The cost is the settling tail:
+  the last of a resting stochastic region's noise drains at up to four times the base time
+  constant, staged behind the store itself filling, so the first frames after a camera stops
+  settle at full speed.
+
 * **At rest the box is widened by remembered stochastic spread.** The min/max box has a second
   blind spot on stochastic coverage, opposite the smear: on the frames where none of a sparse
   strand's 3×3 wins its coin flip, the box collapses onto the backdrop and wipes the accumulated
@@ -154,6 +181,7 @@ the call instead of throwing.
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
 | `ViewData::jitter` / `prevJitter` | [forward/ViewData.slang](libs/bgl/shaders/src/forward/ViewData.slang) | What the mesh shader subtracts back out. |
 | History accessors | [gfx/RenderTargetBase.h](libs/bgl/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
+| `RenderTargetWindow::SetRenderScale` | [RenderTargetWindow.h](apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h) | Drives a viewport at another display's pixel density, to reproduce the artifact. |
 
 ---
 
@@ -227,21 +255,43 @@ Two couplings worth knowing:
   The cost is single-frame grain — the accumulation removes grain; it cannot remove a pattern that
   does not move.
 
-* **Minified alpha is sharpened toward the cutoff's isocontour before the hash.** Once a strand is
-  sub-texel at the active mip, the sampled alpha is many strands averaged, and stochastic coverage
-  that honestly reproduces that mean converges to exactly what alpha-blending it would show — a
-  mixture the backdrop swallows. The strands *vanish* at distance not because coverage is lost
-  (the resolve above now conserves it to a few percent) but because energy-true rendering of a
-  sub-pixel feature **is** its disappearance; the alpha test keeps distant strands visible
-  precisely by being energy-false, drawing the smooth field's cutoff isocontour crisp. So
-  `ShadeHashedAlpha` steepens alpha about the material's cutoff in proportion to the base colour's
-  minification (`SharpenMinifiedAlpha`): magnified alpha — where soft self-occluding coverage is
-  the point of hashed — is untouched, and far alpha approaches the test's step, whose coverage the
-  bake's mips preserve. The minification is the *smaller* screen axis, since a grazing card
-  minifies along the view axis at any distance and anisotropic filtering resolves that axis. The
-  coverage ladder reads 0.74 near/mid and 1.05 far of the blend reference under it — the mid-band
-  energy traded for far-field crispness — and resting flicker drops another 5×, since sharpened
-  alpha leaves few partial values to flip coins with.
+* **The alpha driving the hash is read one level finer than the footprint, then steepened about its
+  own local mean.** Once a strand is sub-texel at the active mip the sampled alpha is many strands
+  averaged, and stochastic coverage that honestly reproduces that mean converges to a mixture the
+  backdrop swallows -- energy-true rendering of a sub-pixel feature *is* its disappearance. Two
+  mechanisms answer that. `c_HashedAlphaLodBias` reads the hash's alpha one level finer than the
+  hardware's pick, where the strand still has shape: alpha near 0 or 1 makes the survival decision
+  nearly deterministic, so the strand draws as a crisp stroke instead of a coin flip -- fewer
+  flips is also less flicker, still and moving. The aliasing a finer read brings back is exactly
+  what the jitter walks and the accumulation averages, which makes this the one renderer where a
+  negative alpha bias is free; the shading colour stays at the footprint level. Then
+  `SharpenMinifiedAlpha` steepens that read about the content's own local mean in proportion to the
+  minification, measured in the sampled level's own texels -- the footprint's would be an octave
+  too steep and saturate diluted strands past their area -- leaving magnified alpha, where soft
+  self-occluding coverage is the point of hashed, alone.
+
+  The centre it steepens about is the content's own local mean, read one octave coarser through
+  `TextureHandle::SampleBias` so it inherits the hardware's LOD choice and its anisotropy. A constant
+  centre was tried first and is what the cutoff-based version used: it cannot be right at every
+  level, because a chain whose levels average above it saturates to opaque while one that averages
+  below collapses to nothing, and which of the two happens is a property of the asset rather than of
+  the renderer. The local mean is the steepening's fixed point, so energy survives wherever the
+  result does not clip.
+
+  A level the filter has flattened to one value has no shape left to recover, so such a level is
+  lifted bodily instead -- bounded at twice the mean and ceilinged at 0.5 coverage, so however deep
+  the chain goes a grating can never reach a solid block. The lift is gated on flatness
+  (`c_FlatBand`): a genuinely flattened level sits at the mean up to filtering residue, while a
+  shaped level's aliased partials scatter well outside it, and ungated the lift inflated those
+  partials past the strands' area. Where shape exists the ceiling is the steepened value's own
+  coverage, since capping a restored strand at 0.5 would clip exactly what the steepening
+  recovered. The coverage ladder measures 0.90 near, 0.96 mid and 1.29 far of the blend reference,
+  inside a [0.6, 1.4] bracket that guards hair which vanishes and hair which doubles -- and the
+  far card's adjacent-pixel contrast reads 0.0140 against the alpha test's 0.0078, so the distant
+  strands are sharper features than the crisp look the sharpening was built to chase.
+
+  The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
+  any distance and anisotropic filtering resolves that axis.
 
 * **The blend weight trades flicker against settling time, not against ghosting.** This is the
   opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
@@ -249,7 +299,9 @@ Two couplings worth knowing:
   behind a pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
   essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
   actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
-  camera stops. 0.025 is where that starts to show.
+  camera stops. 0.025 is where that starts to show. The variance-guided deepening (above) is how the
+  resolve gets past this trade: only pixels the store already knows are stochastic pay the longer
+  time constant.
 
 ---
 

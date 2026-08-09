@@ -202,6 +202,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		rtDesc.renderer         = m_Desc.renderer;
 		rtDesc.initialInstances = m_Desc.initialPreviewInstances;
 		rtDesc.taaEnabled       = m_Desc.taaEnabled;
+		rtDesc.renderScale      = m_Desc.renderScale;
 
 		m_Preview  = new MaterialPreviewWindow(splitter, std::move(rtDesc), m_Desc.previewEnv);
 		rightPanel = m_Preview;

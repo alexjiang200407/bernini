@@ -19,6 +19,11 @@ namespace
 {
 	constexpr int c_ResizeSettleMs = 200;
 
+	// Below this a viewport is a handful of pixels and above it costs more than any display can
+	// show: either is a typo in config.json rather than an intent.
+	constexpr float c_MinRenderScale = 0.1f;
+	constexpr float c_MaxRenderScale = 4.0f;
+
 	// Qt sizes are logical (device-independent) pixels; the render target and the layer's drawable
 	// are physical ones. Rendering at the logical size leaves the compositor upscaling every frame
 	// on a high-DPI display -- half resolution on a 2x screen, which reads as blur everywhere and
@@ -26,7 +31,20 @@ namespace
 	uint32_t
 	GetPhysicalExtent(int logical, qreal ratio)
 	{
-		return static_cast<uint32_t>(std::lround(std::max(1, logical) * ratio));
+		// The scale can take a narrow window below one physical pixel, which Resize rejects.
+		return std::max<uint32_t>(
+			1,
+			static_cast<uint32_t>(std::lround(std::max(1, logical) * ratio)));
+	}
+
+	float
+	ClampRenderScale(float scale)
+	{
+		const float clamped = std::clamp(scale, c_MinRenderScale, c_MaxRenderScale);
+		if (clamped != scale)
+			qWarning("RenderTarget: render scale %.3f out of range, using %.3f", scale, clamped);
+
+		return clamped;
 	}
 }
 
@@ -37,8 +55,10 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_ResizeTimer->setSingleShot(true);
 	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
 
-	m_Width  = GetPhysicalExtent(width(), devicePixelRatio());
-	m_Height = GetPhysicalExtent(height(), devicePixelRatio());
+	m_RenderScale = ClampRenderScale(m_Desc.renderScale);
+
+	m_Width  = GetPhysicalExtent(width(), devicePixelRatio() * m_RenderScale);
+	m_Height = GetPhysicalExtent(height(), devicePixelRatio() * m_RenderScale);
 
 	auto rtvDesc   = bgl::RenderTargetDesc();
 	rtvDesc.width  = m_Width;
@@ -71,6 +91,15 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	setAttribute(Qt::WA_PaintOnScreen);
 	setAttribute(Qt::WA_NoSystemBackground);
 	setAttribute(Qt::WA_OpaquePaintEvent);
+
+	// The density every temporal artifact is judged at, and the one thing about a viewport that a
+	// screenshot cannot be read back from: SyncSize reports each later change, this reports the first.
+	qWarning(
+		"RenderTarget: created %ux%u (scale %.2f, device pixel ratio %.2f)",
+		m_Width,
+		m_Height,
+		static_cast<double>(m_RenderScale),
+		static_cast<double>(devicePixelRatio()));
 
 	// Deliberately not SyncSize'd here: the frame loop must not chase the window's size, or it would
 	// resize the backbuffers on the very next frame and undo the settle timer above.
@@ -199,6 +228,21 @@ RenderTargetWindow::SetTaaEnabled(bool enabled)
 }
 
 void
+RenderTargetWindow::SetRenderScale(float scale)
+{
+	const float clamped = ClampRenderScale(scale);
+	if (clamped == m_RenderScale)
+		return;
+
+	m_RenderScale = clamped;
+
+	// Not deferred through the settle timer: this is one deliberate step, not a drag, and the point
+	// of it is seeing the new density immediately.
+	m_ResizeTimer->stop();
+	SyncSize(width(), height());
+}
+
+void
 RenderTargetWindow::SetRenderingEnabled(bool enabled)
 {
 	m_RenderingEnabled = enabled;
@@ -245,8 +289,8 @@ RenderTargetWindow::SyncSize(int w, int h)
 		return;
 	}
 
-	const uint32_t width  = GetPhysicalExtent(w, devicePixelRatio());
-	const uint32_t height = GetPhysicalExtent(h, devicePixelRatio());
+	const uint32_t width  = GetPhysicalExtent(w, devicePixelRatio() * m_RenderScale);
+	const uint32_t height = GetPhysicalExtent(h, devicePixelRatio() * m_RenderScale);
 	if (width == m_Width && height == m_Height)
 	{
 		return;

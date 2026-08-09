@@ -25,11 +25,13 @@
     },
     "levelEditor": {
         "initialInstances": 1000,
-        "temporalAA": true
+        "temporalAA": true,
+        "renderScale": 1.0
     },
     "materialEditor": {
         "initialPreviewInstances": 16,
         "temporalAA": true,
+        "renderScale": 1.0,
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },

@@ -18,6 +18,43 @@ namespace
 	constexpr uint32_t c_Width  = 256;
 	constexpr uint32_t c_Height = 256;
 
+	constexpr float c_HalfFov = 30.0f;
+
+	/**
+	 * The frame a scene is rendered into, and how much of the world it takes in.
+	 *
+	 * Every bound in this file and in docs/taa.md was measured at one resolution, so nothing here
+	 * could see an artifact that only appears at another -- which is what a 1080p display is next to
+	 * a 4K one. `fovScale` is what separates the two reasons a lower resolution changes the image:
+	 * at 1 the camera is unchanged and the content shrinks in pixels, which is the display; below 1
+	 * the field of view narrows with the frame, so the content keeps its pixel footprint and only
+	 * the frame is smaller, which leaves the resolve as the only thing that varied.
+	 */
+	struct Frame
+	{
+		uint32_t width    = c_Width;
+		uint32_t height   = c_Height;
+		float    fovScale = 1.0f;
+
+		[[nodiscard]] float
+		TanHalfFov() const noexcept
+		{
+			return std::tan(glm::radians(c_HalfFov)) * fovScale;
+		}
+
+		[[nodiscard]] float
+		VerticalFov() const noexcept
+		{
+			return 2.0f * std::atan(TanHalfFov());
+		}
+
+		[[nodiscard]] float
+		Aspect() const noexcept
+		{
+			return static_cast<float>(width) / static_cast<float>(height);
+		}
+	};
+
 	// A box well inside the plane's silhouette, so every pixel in it is a coverage decision rather
 	// than an edge.
 	constexpr int c_BoxX = 88;
@@ -435,7 +472,8 @@ namespace
 		bool                taaEnabled   = true,
 		bool                withBackdrop = false,
 		float               cameraZ      = 20.0f,
-		bgl::LayerType      layer        = bgl::LayerType::kHashed)
+		bgl::LayerType      layer        = bgl::LayerType::kHashed,
+		Frame               frame        = {})
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -446,8 +484,8 @@ namespace
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(c_Width);
-		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.width      = static_cast<int>(frame.width);
+		targetDesc.height     = static_cast<int>(frame.height);
 		targetDesc.headless   = true;
 		targetDesc.taaEnabled = taaEnabled;
 
@@ -501,18 +539,33 @@ namespace
 				glm::vec3(0.0f, 0.0f, cameraZ),
 				glm::vec3(0.0f, 0.0f, cameraZ - 1.0f),
 				glm::vec3(0.0f, 1.0f, 0.0f))
-			.Perspective(
-				glm::radians(60.0f),
-				static_cast<float>(c_Width) / static_cast<float>(c_Height),
-				0.5f,
-				500.0f);
+			.Perspective(frame.VerticalFov(), frame.Aspect(), 0.5f, 500.0f);
 
-		auto job     = bgl::RenderJob();
-		job.view     = view;
-		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		auto job   = bgl::RenderJob();
+		job.view   = view;
+		job.camera = camera;
+		job.viewport =
+			bgl::Viewport(static_cast<float>(frame.width), static_cast<float>(frame.height));
 
 		return PatchScene{ gfx, target, scene, view, job };
+	}
+
+	// The centred box covering 60% of the strand plane's on-screen span, whatever the frame does to
+	// that span. A fraction of the frame would drift off the plane as the field of view narrows.
+	struct StrandBox
+	{
+		int xy   = 0;
+		int size = 0;
+	};
+
+	StrandBox
+	StrandBoxFor(const Frame& frame, float cameraZ)
+	{
+		const float spanPx = c_StrandPlane / (2.0f * cameraZ * frame.TanHalfFov()) *
+		                     static_cast<float>(frame.height);
+
+		const int size = static_cast<int>(spanPx * 0.6f);
+		return StrandBox{ (static_cast<int>(frame.width) - size) / 2, size };
 	}
 
 	// Converges the strand scene, then captures two consecutive frames: the delta is flicker, and
@@ -840,10 +893,11 @@ TEST_CASE("A converged hashed patch stops changing between frames", "[hashedalph
 	// The instrument has to be able to read zero, or the bound below is measuring its own noise floor.
 	REQUIRE(opaque < 1e-5f);
 
-	// Measured 0.0049 with a hash cell one to two pixels wide, 0.0020 once it is sub-pixel, and 0.0013
-	// at a blend weight of 0.05. The bound sits between the last two, so neither the correlated pattern
-	// nor a weight raised back to 0.1 can return unnoticed.
-	CHECK(hashed < 1.6e-3f);
+	// Measured 0.0049 with a hash cell one to two pixels wide, 0.0020 once it is sub-pixel, 0.0013
+	// at a blend weight of 0.05, and 2.3e-5 once the resolve deepens the weight where the variance
+	// store remembers stochastic spread. The bound sits well below the fixed-weight figures, so
+	// losing the deepening -- or the correlated pattern returning -- cannot pass unnoticed.
+	CHECK(hashed < 3e-4f);
 }
 
 // The moving half of the flicker contract. A pixel where the hash discarded this frame's fragment
@@ -942,17 +996,17 @@ TEST_CASE("A converged hashed surface stays still at grazing angles", "[hashedal
 }
 
 // The strand regime: geometry whose *texture alpha* is thinner than a pixel, which is the flyaway
-// half of a hair asset. Plain box mips dilute such a strand's alpha, and under stochastic coverage
-// diluted alpha is a strand that fades out of the frame -- its expected coverage falls with every
-// level. The bake's coverage-preserving mips, which kMask always had and kHashed now shares, are
-// what keeps the footprint; this is the renderer-level half of that contract, the same strands
-// drawn under both mip policies.
+// half of a hair asset. What keeps such a strand on screen is `SharpenMinifiedAlpha`, steepening the
+// plain chain's honest mean back into strand-and-gap contrast; this is that contract, measured
+// against the rescaled chain hashed used to be given.
 //
-// What this does *not* claim: that the rescale calms flicker. Measured at parity here (0.0012
-// plain, 0.0014 preserved) -- this grating's diluted alpha lands exactly at the matching cutoff,
-// where a rescaled texel is still a coin flip per frame. The footprint is the win; the flicker on
-// such content is bounded by the accumulation, as elsewhere.
-TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hashedalpha][render]")
+// The rescale is not merely unnecessary here, it is harmful, and this is where that shows. A
+// coverage-preserving level of a grating averages to near-uniform alpha -- no scale lands between
+// "nothing passes" and "everything does", so the bisection takes the whole level over the cutoff --
+// and a level flattened to one value has no shape left for the steepening to recover, so the
+// renderer can no longer tell strand from gap. The plain chain keeps the variation that the
+// steepening needs.
+TEST_CASE("Hashed strands survive the plain mip chain", "[hashedalpha][render]")
 {
 	const auto [plainDelta, plainMean] = StrandFlicker(
 		"assets/golden/hashed_strand_plain_a.got.png",
@@ -970,14 +1024,14 @@ TEST_CASE("Coverage-preserving mips keep hashed strands from dissolving", "[hash
 								   << ", preserved = " << preservedMean.Luma());
 
 	// The strands have to be on screen at all, or the footprint comparison is background against
-	// background.
+	// background. This is also what a broken lift would trip: the plain chain's honest alpha is
+	// below any cutoff at this minification, so without the steepening there is nothing to see.
 	CHECK(plainMean.Luma() > 5e-3f);
 
-	// Measured 0.136 against 0.161. Under a resolve that no longer wipes sparse coverage the gap
-	// is just the chains' mean-alpha ratio at this minification (1.21 at mip 2.2) -- box mips
-	// already preserve a hashed material's expected coverage, and the old half-again gap was the
-	// wipe amplifying the difference nonlinearly.
-	CHECK(preservedMean.Luma() > plainMean.Luma() * 1.1f);
+	// Measured 0.186 plain against 0.109 preserved. The direction is the point -- the chain the bake
+	// now gives hashed carries *more* of the strands to the screen than the rescaled one it used to,
+	// because the rescale flattens away what the steepening works on.
+	CHECK(plainMean.Luma() > preservedMean.Luma());
 
 	// Neither chain may flicker beyond the converged-patch scale; this is where a regression in
 	// the accumulation on textured stochastic content would surface.
@@ -1170,8 +1224,11 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 	// Around mip 2 the card reads blue into yellow; at mip 0 it is red and nothing else.
 	CHECK(hue.b > hue.r);
 
-	// The sampled alpha around mip 2 is a quarter and below; mip 0's is opaque.
-	CHECK(faded.Luma() < full.Luma() * 0.5f);
+	// The hash reads alpha one level finer than the footprint (c_HashedAlphaLodBias), around mip
+	// 1.2 here, and this chain's levels disagree by design, so the steepening legitimately pushes
+	// the sampled value about -- the exact figure is the WARN's business. What the bound
+	// discriminates is a chain whose alpha never left mip 0, which reads opaque.
+	CHECK(faded.Luma() < full.Luma() * 0.85f);
 }
 
 // The user-visible report this instruments: hashed hair thins out and boils as the camera backs
@@ -1204,7 +1261,11 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 		const int box   = static_cast<int>(spanPx * 0.6f);
 		const int boxXY = (static_cast<int>(c_Width) - box) / 2;
 
-		auto strandImage = MakeStrandTexture(true, true);
+		// The plain box chain hashed now ships with (`groupPreservesCoverage` is the alpha test's
+		// alone), so the reference below shares it and the ratio isolates the hash from the mips --
+		// and, unlike the coverage-preserved chain this used to hold both sides to, it is the chain
+		// each layer actually receives.
+		auto strandImage = MakeStrandTexture(false, false);
 
 		// The chain level the footprint asks for, and the coverage the chain holds there.
 		const float    mipF     = std::log2(static_cast<float>(c_StrandTexSize) / spanPx);
@@ -1237,7 +1298,7 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 			bgl::test::MeanColor(base + ".got.png", boxXY, boxXY, box, box);
 
 		PatchScene blend = MakeCardScene(
-			MakeStrandTexture(true, true),
+			MakeStrandTexture(false, false),
 			true,
 			false,
 			rung.cameraZ,
@@ -1313,4 +1374,152 @@ TEST_CASE("Distant hashed strands stay visible features", "[hashedalpha][taa][re
 
 	CHECK(hashed > blend);
 	CHECK(hashed > mask * 0.5f);
+}
+
+namespace
+{
+	// What a distant hair card is at one resolution: how much it flickers, how much strand
+	// structure it still has, and how much of it reached the screen at all.
+	struct StrandMeasurement
+	{
+		float flicker = 0.0f;
+		float detail  = 0.0f;
+		float luma    = 0.0f;
+
+		// Reported because the box shrinks with the frame in the content-fixed sweep: the smallest
+		// rung's statistics rest on a few dozen pixels and should be read as such.
+		int boxSize = 0;
+	};
+
+	StrandMeasurement
+	MeasureStrands(
+		const Frame&       frame,
+		const std::string& name,
+		bgl::LayerType     layer = bgl::LayerType::kHashed)
+	{
+		constexpr float c_CameraZ = 20.0f;
+
+		// The mip policy each layer actually ships with: the bake rescales mips only for the alpha
+		// test, whose threshold is a constant (`groupPreservesCoverage`). Hashed and blend take plain
+		// box mips. Handing a layer a chain it never receives would measure a texture that does not
+		// exist.
+		const bool preservesCoverage = layer == bgl::LayerType::kMask;
+
+		PatchScene card = MakeCardScene(
+			MakeStrandTexture(preservesCoverage, preservesCoverage),
+			true,
+			false,
+			c_CameraZ,
+			layer,
+			frame);
+
+		for (int i = 0; i < c_ConvergeFrames; ++i)
+		{
+			card.gfx->DrawFrame(card.target, card.job);
+		}
+
+		const auto pathA = "assets/golden/taa_res_" + name + "_a.got.png";
+		const auto pathB = "assets/golden/taa_res_" + name + "_b.got.png";
+
+		card.gfx->ScreenshotPng(card.target, pathA);
+		card.gfx->DrawFrame(card.target, card.job);
+		card.gfx->ScreenshotPng(card.target, pathB);
+
+		const StrandBox box = StrandBoxFor(frame, c_CameraZ);
+
+		// Below this the box is a handful of pixels and its statistics are noise, not a measurement.
+		REQUIRE(box.size >= 8);
+
+		return StrandMeasurement{
+			bgl::test::FrameDelta(pathA, pathB, box.xy, box.xy, box.size, box.size),
+			bgl::test::AliasEnergy(pathA, box.xy, box.xy, box.size, box.size),
+			bgl::test::MeanColor(pathA, box.xy, box.xy, box.size, box.size).Luma(),
+			box.size,
+		};
+	}
+
+	// 256 is the density every other bound in this file was measured at; the rest are its halvings,
+	// which is what the editor's render scale and a 1080p display do to a 4K viewport.
+	constexpr std::array<uint32_t, 3> c_SweepSizes = { { 256, 128, 64 } };
+
+	const char*
+	LayerName(bgl::LayerType layer)
+	{
+		switch (layer)
+		{
+		case bgl::LayerType::kMask:
+			return "mask";
+		case bgl::LayerType::kBlend:
+			return "blend";
+		case bgl::LayerType::kInvalid:
+		case bgl::LayerType::kOpaque:
+		case bgl::LayerType::kHashed:
+		case bgl::LayerType::kCount:
+		default:
+			return "hashed";
+		}
+	}
+}
+
+// The reproduction, as a number. A viewport rendered at half scale puts the same hair card on half
+// the pixels, and the report from a 1080p display is that it flickers where a 4K one does not --
+// which no bound above can see, because every one of them is measured at 256 alone.
+TEST_CASE(
+	"A hashed card is measured across render resolutions",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const uint32_t size : c_SweepSizes)
+	{
+		const Frame frame{ size, size, 1.0f };
+		const auto  m = MeasureStrands(frame, "content_" + std::to_string(size));
+
+		WARN(
+			"content-fixed " << size << "x" << size << ": flicker = " << m.flicker << "  detail = "
+							 << m.detail << "  luma = " << m.luma << "  box = " << m.boxSize);
+	}
+}
+
+// Which of the two mechanisms in the minified path is losing the strands. `kMask` is the alpha test
+// whose far-field look SharpenMinifiedAlpha exists to reproduce, and it reads the same
+// coverage-preserving mips from the same texture -- so a collapse it shares is the mips or the
+// minification itself, and one only hashed suffers is the sharpening. `kBlend` is the energy-true
+// reference the sharpening is deliberately not.
+TEST_CASE(
+	"Each alpha layer is measured across render resolutions",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const bgl::LayerType layer :
+	     { bgl::LayerType::kMask, bgl::LayerType::kBlend, bgl::LayerType::kHashed })
+	{
+		for (const uint32_t size : c_SweepSizes)
+		{
+			const Frame frame{ size, size, 1.0f };
+			const auto  name = std::string(LayerName(layer)) + "_" + std::to_string(size);
+			const auto  m    = MeasureStrands(frame, "layer_" + name, layer);
+
+			WARN(
+				LayerName(layer) << " " << size << "x" << size << ": flicker = " << m.flicker
+								 << "  detail = " << m.detail << "  luma = " << m.luma);
+		}
+	}
+}
+
+// The control that says which half is at fault. The field of view narrows with the frame, so a
+// strand keeps the pixel footprint it had at 256 and only the frame is smaller: the coverage the
+// hash generates is unchanged, and the resolve is the sole thing that varied. Flat here with the
+// sweep above rising means the cause is the content going sub-pixel rather than the resolve.
+TEST_CASE(
+	"A hashed card is measured at a fixed footprint",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const uint32_t size : c_SweepSizes)
+	{
+		const Frame frame{ size, size, static_cast<float>(size) / static_cast<float>(c_Height) };
+		const auto  m = MeasureStrands(frame, "footprint_" + std::to_string(size));
+
+		WARN(
+			"footprint-fixed " << size << "x" << size << ": flicker = " << m.flicker
+							   << "  detail = " << m.detail << "  luma = " << m.luma
+							   << "  box = " << m.boxSize);
+	}
 }
