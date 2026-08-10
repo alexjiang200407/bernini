@@ -88,7 +88,10 @@ private:
 	void
 	SetUpRenderScaleMenu(QMenu* render);
 
-	Ui::MainWindow           m_Ui;
+	Ui::MainWindow m_Ui;
+
+	QString m_InstanceName;
+
 	std::unique_ptr<Project> m_Project;
 	ContentExplorerWindow*   m_ContentExplorer     = nullptr;
 	LevelEditorWindow*       m_LevelEditor         = nullptr;

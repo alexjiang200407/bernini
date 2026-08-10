@@ -15,6 +15,15 @@ editor imports it (via assetlib) and converts it into the game-ready format.
   Reach for it rather than rebuilding that branch — a material must render the same however
   it was loaded.
 
+## config.json
+
+`config.json` (git-ignored, one per checkout, deployed next to the binary and read once by
+`MainWindow::Build`) is machine-local: `startupProject` names the project to open on launch, and
+`instanceName` names *this* editor. An `instanceName` leads the window title —
+`A — Bernini Editor — Test Project` — so two editors run side by side for an A/B comparison can be
+told apart where every other part of the title is identical. Empty, and the title is what it always
+was. `config.example.json` carries both keys blank.
+
 ## editor_lib
 
 Every editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that
