@@ -14,6 +14,7 @@ namespace assetlib
 		kEnvLighting,  // .benvl
 		kSkeleton,     // .bskel
 		kAnimation,    // .banim
+		kVat,          // .bvat
 	};
 
 	/** Why one asset holds another alive. */
@@ -26,6 +27,7 @@ namespace assetlib
 		kEnvSource,        // a .bsky or .benvl names the radiance its bake read
 		kMeshSkeleton,     // a .bmesh's joint indices address a .bskel
 		kClipSkeleton,     // a .banim's clips were resampled against a .bskel
+		kVatSource,        // a .bvat names the mesh, skeleton or clip set its bake read
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
@@ -122,6 +124,7 @@ namespace assetlib
 		size_t materialsScanned    = 0;
 		size_t environmentsScanned = 0;  // .benv, .bsky and .benvl together
 		size_t clipSetsScanned     = 0;
+		size_t vatsScanned         = 0;
 
 	private:
 		struct Range

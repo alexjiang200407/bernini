@@ -1,0 +1,271 @@
+#include <assetlib/vat_bake.h>
+#include <assetlib_structs/BVat.h>
+
+#include <assetlib/banim_io.h>
+#include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/image_io.h>
+#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Skeleton.h>
+
+#include <core/err/util.h>
+
+namespace assetlib
+{
+	using core::throw_runtime_error;
+
+	namespace
+	{
+		constexpr uint32_t c_PositionTexelBytes = 8;  // R16G16B16A16_UNORM
+		constexpr uint32_t c_NormalTexelBytes   = 4;  // R8G8B8A8_UNORM
+
+		ImageData
+		makeTexture(uint32_t width, uint32_t height, VkFormat format, uint32_t texelBytes)
+		{
+			ImageData image;
+			image.width    = width;
+			image.height   = height;
+			image.vkFormat = format;
+
+			const uint64_t pitch = uint64_t(width) * texelBytes;
+			image.pixels         = core::fixed_buffer<std::byte>(pitch * height);
+			image.subresources.push_back({ 0, pitch, pitch * height });
+			return image;
+		}
+
+		/**
+		 * One frame's texel row in both textures. The box extent is zero on an axis every frame
+		 * agrees on; such a coordinate packs to 0 and unpacks to the bound itself, exact.
+		 */
+		void
+		packRow(
+			ImageData&                     positions,
+			ImageData&                     normals,
+			uint32_t                       row,
+			std::span<const SkinnedVertex> vertices,
+			const glm::vec3&               boundsMin,
+			const glm::vec3&               extent) noexcept
+		{
+			auto* position = reinterpret_cast<uint16_t*>(
+				positions.pixels.data() + uint64_t(row) * positions.subresources[0].rowPitch);
+			auto* normal = normals.pixels.data() + uint64_t(row) * normals.subresources[0].rowPitch;
+
+			for (const SkinnedVertex& vertex : vertices)
+			{
+				for (int axis = 0; axis < 3; ++axis)
+				{
+					const float span = extent[axis];
+					position[axis] =
+						span > 0.0f ?
+							glm::packUnorm1x16((vertex.position[axis] - boundsMin[axis]) / span) :
+							0;
+				}
+				position[3] = 65535;
+				position += 4;
+
+				// Blending shortens a normal, so it is re-unit here; one a submesh never carried
+				// stays zero, which packs to mid-grey -- the degenerate the shader's guard reads.
+				glm::vec3   n    = vertex.blendedNormal;
+				const float len2 = glm::dot(n, n);
+				if (len2 > 0.0f)
+					n /= std::sqrt(len2);
+
+				normal[0] = std::byte(glm::packUnorm1x8(n.x * 0.5f + 0.5f));
+				normal[1] = std::byte(glm::packUnorm1x8(n.y * 0.5f + 0.5f));
+				normal[2] = std::byte(glm::packUnorm1x8(n.z * 0.5f + 0.5f));
+				normal[3] = std::byte(255);
+				normal += 4;
+			}
+		}
+
+		void
+		duplicateRow(ImageData& image, uint32_t from, uint32_t to) noexcept
+		{
+			const uint64_t pitch = image.subresources[0].rowPitch;
+			std::memcpy(
+				image.pixels.data() + uint64_t(to) * pitch,
+				image.pixels.data() + uint64_t(from) * pitch,
+				pitch);
+		}
+
+		std::string
+		normalizePath(std::string_view path)
+		{
+			return std::filesystem::path(path).lexically_normal().generic_string();
+		}
+	}
+
+	BVat
+	bakeVat(const BMesh& mesh, const Skeleton& skeleton, const AnimationSet& animations)
+	{
+		validateSkeleton(skeleton);
+		validateAnimationSet(animations);
+
+		if (!isSkinned(mesh))
+			throw_runtime_error(
+				"vat: no submesh carries joint indices, so there is nothing to animate");
+
+		if (!animationsMatchSkeleton(animations, skeleton))
+			throw_runtime_error(
+				"vat: the clips were resampled against a different rig (clip signature {:016x}, "
+				"skeleton {:016x})",
+				animations.skeletonSignature,
+				skeletonSignature(skeleton));
+
+		if (animations.clips.empty())
+			throw_runtime_error("vat: the clip set holds no clips, so there is nothing to bake");
+
+		BVat vat;
+		vat.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
+		vat.skeletonSignature = animations.skeletonSignature;
+
+		uint64_t columns = 0;
+		for (const Submesh& submesh : mesh.submeshes)
+		{
+			vat.columns.push_back({ static_cast<uint32_t>(columns), submesh.vertexCount });
+			columns += submesh.vertexCount;
+		}
+
+		uint64_t rows   = 0;
+		uint64_t frames = 0;
+		for (const AnimationClip& clip : animations.clips)
+		{
+			VatClip baked{};
+			baked.nameOffset   = vat.stringPool.add(animations.stringPool.at(clip.nameOffset));
+			baked.firstRow     = static_cast<uint32_t>(rows);
+			baked.frameCount   = clip.frameCount;
+			baked.firstPalette = static_cast<uint32_t>(frames * vat.boneCount);
+			baked.sampleRate   = clip.sampleRate;
+			baked.duration     = clip.duration;
+			baked.loop         = clip.loop;
+			vat.clips.push_back(baked);
+
+			rows += clip.frameCount + 1;
+			frames += clip.frameCount;
+		}
+
+		if (columns > c_MaxVatTextureDim)
+			throw_runtime_error(
+				"vat: {} vertex columns exceed the {} a texture can hold -- bake from a mesh with "
+				"fewer vertices",
+				columns,
+				c_MaxVatTextureDim);
+
+		if (rows > c_MaxVatTextureDim)
+			throw_runtime_error(
+				"vat: {} padded frame rows across {} clip(s) exceed the {} a texture can hold -- "
+				"bake fewer or shorter clips",
+				rows,
+				animations.clips.size(),
+				c_MaxVatTextureDim);
+
+		vat.width  = static_cast<uint32_t>(columns);
+		vat.height = static_cast<uint32_t>(rows);
+
+		// Every frame is skinned once and kept: the AABB must close over all of them before the
+		// first texel can be quantized against it.
+		auto skinnedFrames = std::vector<std::vector<SkinnedVertex>>();
+		skinnedFrames.reserve(frames);
+		vat.palettes.reserve(frames * vat.boneCount);
+
+		vat.boundsMin = glm::vec3(std::numeric_limits<float>::max());
+		vat.boundsMax = glm::vec3(std::numeric_limits<float>::lowest());
+
+		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+		{
+			for (uint32_t frame = 0; frame < animations.clips[clip].frameCount; ++frame)
+			{
+				const auto palette = skinningMatrices(
+					skeleton,
+					poseModelTransforms(skeleton, animations, clip, frame));
+
+				auto row = std::vector<SkinnedVertex>();
+				row.reserve(vat.width);
+				for (const Submesh& submesh : mesh.submeshes)
+				{
+					const auto skinned = skinSubmesh(mesh, submesh, palette);
+					row.insert(row.end(), skinned.begin(), skinned.end());
+				}
+
+				for (const SkinnedVertex& vertex : row)
+				{
+					vat.boundsMin = glm::min(vat.boundsMin, vertex.position);
+					vat.boundsMax = glm::max(vat.boundsMax, vertex.position);
+				}
+
+				vat.palettes.insert(vat.palettes.end(), palette.begin(), palette.end());
+				skinnedFrames.push_back(std::move(row));
+			}
+		}
+
+		ImageData positions =
+			makeTexture(vat.width, vat.height, VkFormat::R16G16B16A16_UNORM, c_PositionTexelBytes);
+		ImageData normals =
+			makeTexture(vat.width, vat.height, VkFormat::R8G8B8A8_UNORM, c_NormalTexelBytes);
+
+		const glm::vec3 extent = vat.boundsMax - vat.boundsMin;
+
+		size_t frameIndex = 0;
+		for (const VatClip& clip : vat.clips)
+		{
+			for (uint32_t frame = 0; frame < clip.frameCount; ++frame, ++frameIndex)
+				packRow(
+					positions,
+					normals,
+					clip.firstRow + frame,
+					skinnedFrames[frameIndex],
+					vat.boundsMin,
+					extent);
+
+			const uint32_t last = clip.firstRow + clip.frameCount - 1;
+			duplicateRow(positions, last, last + 1);
+			duplicateRow(normals, last, last + 1);
+		}
+
+		vat.positionsKtx2 = encodeKTX2(positions);
+		vat.normalsKtx2   = encodeKTX2(normals);
+		return vat;
+	}
+
+	BVat
+	bakeVat(const VatBakeDesc& desc)
+	{
+		const std::filesystem::path meshPath = desc.dataRoot / desc.mesh;
+		const BMesh                 mesh     = load(meshPath);
+
+		// A static mesh fails the in-memory bake anyway; refusing here names the actual gap --
+		// there is no rig to load -- instead of failing to open a file with no name.
+		if (mesh.skeleton.empty())
+			throw_runtime_error(
+				"vat: '{}' names no skeleton, so there is no rig to bake",
+				desc.mesh);
+
+		const std::filesystem::path animationsPath = desc.dataRoot / desc.animations;
+
+		BVat vat = bakeVat(
+			mesh,
+			loadSkeleton(desc.dataRoot / mesh.skeleton),
+			loadAnimations(animationsPath));
+
+		vat.mesh            = normalizePath(desc.mesh);
+		vat.skeleton        = normalizePath(mesh.skeleton);
+		vat.animations      = normalizePath(desc.animations);
+		vat.meshStamp       = stampOf(meshPath);
+		vat.skeletonStamp   = stampOf(desc.dataRoot / mesh.skeleton);
+		vat.animationsStamp = stampOf(animationsPath);
+		return vat;
+	}
+
+	bool
+	vatIsStale(const BVat& vat, const std::filesystem::path& dataRoot)
+	{
+		return stampOf(dataRoot / vat.mesh) != vat.meshStamp ||
+		       stampOf(dataRoot / vat.skeleton) != vat.skeletonStamp ||
+		       stampOf(dataRoot / vat.animations) != vat.animationsStamp;
+	}
+}

@@ -100,11 +100,13 @@ and portability.
     - [x] Editor import writes the rig beside the mesh — the skeleton always, the clips behind the
       *Import animations* box, both rolled back with a failed import.
   - [ ] Vertex Animation Textures (VAT)
-    - [ ] Bake pipeline: resampled clip → position texture (+ normal/tangent), unorm-packed in the
-      mesh bounding box.
-    - [ ] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
-    - [ ] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
-      for the death handoff, the cavalry saddle transform, and attachments.
+    - [x] Bake pipeline: resampled clip → position texture (+ normal), unorm-packed in the mesh
+      bounding box — `assetlib_cli bakevat`, one `.bvat` per rig with both textures embedded. A
+      tangent is deliberately not baked (docs/plans/vat.md D3).
+    - [x] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
+    - [x] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
+      for the death handoff, the cavalry saddle transform, and attachments. Baked and tested; no
+      GPU consumer yet.
     - [ ] Motion vectors (see above).
     - [ ] Free inter-frame interpolation — vertex index along U at exact texel centre, frame along V
       fractional, linear sampler; pad each clip with a duplicate end frame to stop bleed.
