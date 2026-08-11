@@ -23,4 +23,5 @@ namespace assetlib
 	inline constexpr std::string_view c_EnvLightingExtension = ".benvl";
 	inline constexpr std::string_view c_SkeletonExtension    = ".bskel";
 	inline constexpr std::string_view c_AnimationExtension   = ".banim";
+	inline constexpr std::string_view c_VatExtension         = ".bvat";
 }
