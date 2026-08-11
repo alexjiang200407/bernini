@@ -22,6 +22,8 @@ namespace bgl
 			{ "scene.meshInstanceBuffer" },
 		} };
 
+		constexpr std::string_view c_SelectedInstancesName = "scene.selectedInstances";
+
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
 		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
 		// which both the histogram and the compaction skip.
@@ -81,6 +83,15 @@ namespace bgl
 
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
+
+		{
+			auto desc = ComputeBufferDesc();
+			desc.SetElement<uint32_t>()
+				.SetInitialCount(paddedInstances)
+				.SetDebugName("Selected Instances");
+
+			m_SelectedInstances.Init(std::move(desc), m_ResourceManager);
+		}
 	}
 
 	void
@@ -120,6 +131,13 @@ namespace bgl
 		}
 
 		m_TransparentSort.Resize(padded);
+
+		if (padded > m_SelectedInstances.GetDesc().initialCount)
+		{
+			// Resize discards the GPU contents; the CPU list is still current, so re-upload it.
+			m_SelectedInstances.Resize(padded);
+			m_SelectionUploadPending = true;
+		}
 	}
 
 	SceneView::~SceneView() noexcept
@@ -139,6 +157,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
+		m_SelectedInstances.Release();
 
 		logger::trace("~SceneView");
 	}
@@ -194,6 +213,7 @@ namespace bgl
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
 			meta.overrides.assign(submeshCount, MaterialHandle{});
+			meta.selected.assign(submeshCount, 0);
 
 			for (uint32_t s = 0; s < submeshCount; ++s)
 			{
@@ -244,6 +264,101 @@ namespace bgl
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
+
+		// The erases above can move any dense index, selected or not -- but with no mark
+		// anywhere, there is no list to stale.
+		if (m_SelectionDirty || !m_SelectedList.empty())
+		{
+			m_SelectionDirty = true;
+		}
+	}
+
+	void
+	SceneView::SetSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex, bool selected)
+	{
+		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshSelected");
+
+		const uint8_t value = selected ? 1 : 0;
+		if (meta.selected[submeshIndex] == value)
+		{
+			return;
+		}
+
+		meta.selected[submeshIndex] = value;
+		m_SelectionDirty            = true;
+	}
+
+	void
+	SceneView::ClearSelection() noexcept
+	{
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			for (uint8_t& selected : m_MeshBuffer.MetaAt(meshIndex).selected)
+			{
+				if (selected != 0)
+				{
+					selected         = 0;
+					m_SelectionDirty = true;
+				}
+			}
+		}
+	}
+
+	bool
+	SceneView::IsSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex) const
+	{
+		const MeshMeta& meta = MetaFor(instance, submeshIndex, "IsSubmeshSelected");
+
+		return meta.selected[submeshIndex] != 0;
+	}
+
+	std::span<const uint32_t>
+	SceneView::GetSelectedInstances()
+	{
+		if (m_SelectionDirty)
+		{
+			RebuildSelectedList();
+		}
+
+		return m_SelectedList;
+	}
+
+	void
+	SceneView::RebuildSelectedList()
+	{
+		m_SelectedList.clear();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
+
+			for (uint32_t s = 0; s < meta.selected.size(); ++s)
+			{
+				if (meta.selected[s] == 0)
+				{
+					continue;
+				}
+
+				const core::slot_handle handle = meta.submeshInstances[s];
+				if (m_InstanceBuffer.IsValid(handle))
+				{
+					m_SelectedList.push_back(m_InstanceBuffer.DenseIndexOf(handle));
+				}
+			}
+		}
+
+		m_SelectionDirty         = false;
+		m_SelectionUploadPending = true;
 	}
 
 	MeshMeta&
@@ -437,6 +552,24 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
+		m_SelectedInstances.Update(cmdList);
+		if (m_SelectionDirty)
+		{
+			RebuildSelectedList();
+		}
+		if (m_SelectionUploadPending)
+		{
+			if (!m_SelectedList.empty())
+			{
+				cmdList->WriteBuffer(
+					m_SelectedInstances.GetBufferHandle(),
+					m_SelectedList.data(),
+					m_SelectedList.size() * sizeof(uint32_t));
+			}
+
+			m_SelectionUploadPending = false;
+		}
+
 		auto buffers = GetInstanceBuffers();
 		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
 
@@ -492,6 +625,12 @@ namespace bgl
 			buffers);
 
 		m_TransparentSort.ImportResources(fg, resourceNames);
+
+		{
+			auto name = std::string(c_SelectedInstancesName);
+			fg.ImportBuffer(name, m_SelectedInstances.GetBufferHandle());
+			resourceNames.push_back(std::move(name));
+		}
 
 		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the
 		// same names without aliasing. The view's own imports stay outside, shared by all of them.
