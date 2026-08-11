@@ -122,6 +122,18 @@ namespace assetlib
 	isSkinned(const BMesh& mesh) noexcept;
 
 	/**
+	 * The same question asked of one entry of `mesh.meshes`, which is the granularity a node needs:
+	 * a document holds a skinned character and the static attachments that hang off its bones, and
+	 * the two are placed by different rules (see the editor's GetInstanceTransform).
+	 *
+	 * @return false for a `meshIndex` that names no mesh, or a mesh whose submesh range is out of
+	 *         bounds -- a caller asking about geometry that is not there gets "not skinned" rather
+	 *         than a throw, since it has nothing to draw either way.
+	 */
+	[[nodiscard]] bool
+	isSkinned(const BMesh& mesh, uint32_t meshIndex) noexcept;
+
+	/**
 	 * Reports that `done` of `total` textures have been written. Called before each texture, so the
 	 * first call is (0, total) and the last is (total - 1, total).
 	 */
