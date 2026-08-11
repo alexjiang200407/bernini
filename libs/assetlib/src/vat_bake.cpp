@@ -68,7 +68,7 @@ namespace assetlib
 				// Alpha is padding -- three-channel texture formats do not exist -- and written a
 				// constant because the pixel buffer arrives uninitialized, and two machines baking
 				// the same rig must cook identical bytes.
-				texel[3] = uint16_t(65535);
+				texel[3] = std::numeric_limits<uint16_t>::max();
 				texel += 4;
 			}
 		}
@@ -94,7 +94,7 @@ namespace assetlib
 				texel[0] = std::byte(glm::packUnorm1x8(n.x * 0.5f + 0.5f));
 				texel[1] = std::byte(glm::packUnorm1x8(n.y * 0.5f + 0.5f));
 				texel[2] = std::byte(glm::packUnorm1x8(n.z * 0.5f + 0.5f));
-				texel[3] = std::byte(255);  // padding, as for a position texel
+				texel[3] = std::byte(std::numeric_limits<uint8_t>::max());  // padding, as above
 				texel += 4;
 			}
 		}
