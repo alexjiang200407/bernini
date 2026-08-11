@@ -140,6 +140,7 @@ namespace bgl
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
 		m_PostProcess.Init(m_Device);
+		m_OutlineMask.Init(m_Device);
 		m_TaaResolve.Init(m_Device);
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
@@ -191,6 +192,7 @@ namespace bgl
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
+		m_OutlineMask.Release();
 		m_TaaResolve.Release();
 		if (!m_PointClampSampler.IsNull())
 		{
@@ -379,12 +381,13 @@ namespace bgl
 #endif
 
 		m_FrameGraph.Reset();
-		m_DrawCount   = 0;
-		m_CameraStill = true;
+		m_DrawCount        = 0;
+		m_CameraStill      = true;
+		m_OutlineMaskDrawn = false;
 		++m_FrameCounter;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
-			std::string(c_BackbufferName),
+			c_BackbufferName,
 			rt.GetBackbufferTexture(index),
 			AccessState{ BarrierSyncFlag::kNone,
 		                 BarrierAccessFlag::kNone,
@@ -392,9 +395,10 @@ namespace bgl
 
 		// Resumes the state the graph tracked last frame; the target creates them in
 		// render-target / depth-write.
-		m_FrameGraph.ImportTexture(std::string(c_MotionVectorsName), rt.GetMotionVectorTexture());
-		m_FrameGraph.ImportTexture(std::string(c_SceneColorName), rt.GetSceneColorTexture());
-		m_FrameGraph.ImportTexture(std::string(c_DepthName), rt.GetDepthTexture());
+		m_FrameGraph.ImportTexture(c_MotionVectorsName, rt.GetMotionVectorTexture());
+		m_FrameGraph.ImportTexture(c_SceneColorName, rt.GetSceneColorTexture());
+		m_FrameGraph.ImportTexture(c_DepthName, rt.GetDepthTexture());
+		m_FrameGraph.ImportTexture(c_OutlineMaskName, rt.GetOutlineMaskTexture());
 
 		if (rt.IsTaaEnabled())
 		{
@@ -407,10 +411,13 @@ namespace bgl
 		// The backbuffer is not cleared: the tonemap covers it whole, and it is the only pass that
 		// writes it. Zero motion is "this pixel did not move", which is what an untouched pixel
 		// should read as.
-		const std::array<ClearPass::ColorTarget, 2> colorTargets{
+		const std::array<ClearPass::ColorTarget, 3> colorTargets{
 			{ { std::string(c_SceneColorName), rt.GetSceneColorRtv(), { 0.0f, 0.0f, 0.0f, 1.0f } },
 			  { std::string(c_MotionVectorsName),
 			    rt.GetMotionVectorRtv(),
+			    { 0.0f, 0.0f, 0.0f, 0.0f } },
+			  { std::string(c_OutlineMaskName),
+			    rt.GetOutlineMaskRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
 		ClearPass().AttachToFrameGraph(
@@ -480,20 +487,22 @@ namespace bgl
 		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw                   = DrawData();
-		draw.drawIdx                = drawIdx;
-		draw.view                   = job.view;
-		draw.cullIdx                = c_CameraCullIdx;
-		draw.cullState              = &view->GetCullState(c_CameraCullIdx);
-		draw.viewState.viewport     = viewport;
-		draw.viewState.viewProj     = viewProj;
-		draw.viewState.prevViewProj = prevCamera.viewProj;
-		draw.viewState.jitter       = jitter;
-		draw.viewState.prevJitter   = prevCamera.jitter;
-		draw.viewState.cullView     = BuildCullView(viewProj);
-		draw.targets.sceneColor     = m_ActiveTarget->GetSceneColorRtv();
-		draw.targets.depth          = m_ActiveTarget->GetDepthDsv();
-		draw.targets.motionVector   = m_ActiveTarget->GetMotionVectorRtv();
+		auto draw                         = DrawData();
+		draw.drawIdx                      = drawIdx;
+		draw.view                         = job.view;
+		draw.cullIdx                      = c_CameraCullIdx;
+		draw.cullState                    = &view->GetCullState(c_CameraCullIdx);
+		draw.viewState.viewport           = viewport;
+		draw.viewState.viewProj           = viewProj;
+		draw.viewState.prevViewProj       = prevCamera.viewProj;
+		draw.viewState.jitter             = jitter;
+		draw.viewState.prevJitter         = prevCamera.jitter;
+		draw.viewState.cullView           = BuildCullView(viewProj);
+		draw.viewState.unjitteredViewProj = camera.unjitteredViewProj;
+		draw.targets.sceneColor           = m_ActiveTarget->GetSceneColorRtv();
+		draw.targets.depth                = m_ActiveTarget->GetDepthDsv();
+		draw.targets.motionVector         = m_ActiveTarget->GetMotionVectorRtv();
+		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
 
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
@@ -545,6 +554,15 @@ namespace bgl
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
+
+		if (const auto selected = view->GetSelectedInstances(); !selected.empty())
+		{
+			m_OutlineMask.AttachToFrameGraph(
+				m_FrameGraph,
+				draw,
+				static_cast<uint32_t>(selected.size()));
+			m_OutlineMaskDrawn = true;
+		}
 	}
 
 	void
@@ -569,6 +587,15 @@ namespace bgl
 		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
 		postProcessArgs.sampler    = m_PointClampSampler;
 		postProcessArgs.viewport   = viewport;
+
+		if (m_OutlineMaskDrawn)
+		{
+			postProcessArgs.outlineMask    = rt.GetOutlineMaskSrv();
+			postProcessArgs.outlineEnabled = true;
+			postProcessArgs.maskTexelSize  = glm::vec2(
+				1.0f / static_cast<float>(rt.GetWidth()),
+				1.0f / static_cast<float>(rt.GetHeight()));
+		}
 
 		if (rt.IsTaaEnabled())
 		{

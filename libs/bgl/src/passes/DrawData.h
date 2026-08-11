@@ -25,6 +25,9 @@ namespace bgl
 		glm::mat4 viewProj{ 1.0f };
 		glm::mat4 prevViewProj{ 1.0f };
 
+		// viewProj without the TAA sample offset, for overlays that must not shimmer with it.
+		glm::mat4 unjitteredViewProj{ 1.0f };
+
 		// Sub-pixel offsets baked into the projections above. Zero without temporal AA.
 		glm::vec2 jitter{ 0.0f };
 		glm::vec2 prevJitter{ 0.0f };
@@ -45,6 +48,7 @@ namespace bgl
 		RtvHandle sceneColor;
 		RtvHandle motionVector;
 		DsvHandle depth;
+		RtvHandle outlineMask;
 	};
 
 	/** What a draw shades against: the image-based environment, and the sky behind it. */

@@ -110,6 +110,20 @@ namespace bgl
 		GetMotionVectorSrv() const noexcept = 0;
 
 		/**
+		 * The R8 coverage mask the outline-mask pass draws the outlined submesh instances into,
+		 * and the post-process dilates into the outline. Cleared to zero each frame; sized with
+		 * the target like every other attachment.
+		 */
+		[[nodiscard]] virtual TextureHandle
+		GetOutlineMaskTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual RtvHandle
+		GetOutlineMaskRtv() const noexcept = 0;
+
+		[[nodiscard]] virtual SrvHandle
+		GetOutlineMaskSrv() const noexcept = 0;
+
+		/**
 		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
 		 * this frame's resolve writes, the other is the one it reads. Null on a target without TAA,
 		 * which allocates neither.

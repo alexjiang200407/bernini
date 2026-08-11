@@ -163,6 +163,8 @@ namespace bgl
 		// Alpha is carried because the blend state writes destination alpha and the capture path
 		// reads it, which rules out the packed three-channel float formats.
 		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
+
+		constexpr auto c_OutlineMaskFormat = Format::R8_UNORM;
 	}
 
 	void
@@ -259,6 +261,36 @@ namespace bgl
 
 			m_MotionVectorSrv =
 				m_ResourceManager->CreateSrv(m_MotionVectors.textureHandle, srvDesc);
+		}
+
+		{
+			auto maskDesc      = TextureDesc();
+			maskDesc.format    = c_OutlineMaskFormat;
+			maskDesc.width     = static_cast<uint32_t>(m_Width);
+			maskDesc.height    = static_cast<uint32_t>(m_Height);
+			maskDesc.dimension = TextureDimension::kTexture2D;
+			maskDesc.debugName = "Outline Mask";
+			maskDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			maskDesc.initialLayout = BarrierLayout::kRenderTarget;
+
+			maskDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+			m_OutlineMask.textureHandle = m_ResourceManager->CreateTexture(maskDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = c_OutlineMaskFormat;
+			rtvDesc.debugName = "Outline Mask RTV";
+
+			m_OutlineMask.rtvHandle =
+				m_ResourceManager->CreateRtv(m_OutlineMask.textureHandle, rtvDesc);
+
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = c_OutlineMaskFormat;
+			srvDesc.debugName = "Outline Mask SRV";
+
+			m_OutlineMask.srvHandle =
+				m_ResourceManager->CreateSrv(m_OutlineMask.textureHandle, srvDesc);
 		}
 
 		if (!m_TaaAllocated)
@@ -376,6 +408,11 @@ namespace bgl
 
 		m_ResourceManager->DestroySrv(m_MotionVectorSrv, false);
 		m_MotionVectorSrv = {};
+
+		m_ResourceManager->DestroySrv(m_OutlineMask.srvHandle, false);
+		m_ResourceManager->DestroyRtv(m_OutlineMask.rtvHandle, false);
+		m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
+		m_OutlineMask = {};
 
 		for (TextureRtvSrvHandle& history : m_History)
 		{

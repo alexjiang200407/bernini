@@ -155,6 +155,24 @@ namespace bgl
 			return m_MotionSrv;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetOutlineMaskTexture() const noexcept override
+		{
+			return m_OutlineMaskTexture;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetOutlineMaskRtv() const noexcept override
+		{
+			return m_OutlineMaskRtv;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetOutlineMaskSrv() const noexcept override
+		{
+			return m_OutlineMaskSrv;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
@@ -279,6 +297,9 @@ namespace bgl
 		RtvHandle     m_SceneColorRtv;
 		SrvHandle     m_SceneColorSrv;
 		SrvHandle     m_MotionSrv;
+		TextureHandle m_OutlineMaskTexture;
+		RtvHandle     m_OutlineMaskRtv;
+		SrvHandle     m_OutlineMaskSrv;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

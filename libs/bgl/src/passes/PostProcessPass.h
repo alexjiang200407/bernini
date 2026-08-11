@@ -35,6 +35,12 @@ namespace bgl
 			RtvHandle     backBuffer;
 			SamplerHandle sampler;
 			Viewport      viewport;
+
+			// Set only when an outline-mask pass ran this frame; the shader samples the mask
+			// behind the flag, so a disabled frame binds nothing.
+			SrvHandle outlineMask;
+			glm::vec2 maskTexelSize{ 0.0f };
+			bool      outlineEnabled = false;
 		};
 
 		PostProcessPass() = default;
