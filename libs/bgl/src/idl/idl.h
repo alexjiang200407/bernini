@@ -14,4 +14,7 @@
 #include "idl/Range.h"
 #include "idl/RangeWithCount.h"
 #include "idl/Submesh.h"
+#include "idl/VatClip.h"
+#include "idl/VatGeom.h"
+#include "idl/VatState.h"
 #include "idl/VertexLayout.h"
