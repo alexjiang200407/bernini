@@ -74,15 +74,15 @@ TEST_CASE("A skinned mesh is placed in the skin's space, not the armature's", "[
 	// either way.
 	REQUIRE(bmesh::WorldTransform(mesh, 1) != glm::mat4(1.0f));
 
-	REQUIRE(bmesh::InstanceTransform(mesh, 1) == glm::mat4(1.0f));
+	REQUIRE(bmesh::GetInstanceTransform(mesh, 1) == glm::mat4(1.0f));
 }
 
 TEST_CASE("A static attachment still hangs off the bone it is parented to", "[bmesh]")
 {
 	const assetlib::BMesh mesh = MakeRig();
 
-	REQUIRE(bmesh::InstanceTransform(mesh, 2) == bmesh::WorldTransform(mesh, 2));
-	REQUIRE(bmesh::InstanceTransform(mesh, 2) != glm::mat4(1.0f));
+	REQUIRE(bmesh::GetInstanceTransform(mesh, 2) == bmesh::WorldTransform(mesh, 2));
+	REQUIRE(bmesh::GetInstanceTransform(mesh, 2) != glm::mat4(1.0f));
 }
 
 TEST_CASE("Only the skinned mesh's own node is exempt", "[bmesh]")
@@ -97,5 +97,5 @@ TEST_CASE("Only the skinned mesh's own node is exempt", "[bmesh]")
 	// a mesh index that is not there answers "not skinned" rather than throwing.
 	REQUIRE_FALSE(assetlib::isSkinned(mesh, assetlib::c_InvalidIndex));
 	REQUIRE_FALSE(assetlib::isSkinned(mesh, 2));
-	REQUIRE(bmesh::InstanceTransform(mesh, 0) == bmesh::WorldTransform(mesh, 0));
+	REQUIRE(bmesh::GetInstanceTransform(mesh, 0) == bmesh::WorldTransform(mesh, 0));
 }

@@ -19,7 +19,7 @@ namespace bmesh
 	}
 
 	glm::mat4
-	InstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
+	GetInstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
 	{
 		if (nodeIndex < mesh.nodes.size() && assetlib::isSkinned(mesh, mesh.nodes[nodeIndex].mesh))
 			return glm::mat4(1.0f);

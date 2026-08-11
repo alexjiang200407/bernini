@@ -21,7 +21,7 @@ namespace bmesh
 	 * This is the rule for both bind pose and animation: a pose evaluates into the same space.
 	 */
 	glm::mat4
-	InstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
+	GetInstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
 
 	// Grows [outMin,outMax] to contain the box after `transform`, corner by corner (the box is not
 	// axis-aligned once rotated).

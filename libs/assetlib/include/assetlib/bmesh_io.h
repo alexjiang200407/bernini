@@ -123,7 +123,7 @@ namespace assetlib
 	/**
 	 * The same question asked of one entry of `mesh.meshes`, which is the granularity a node needs:
 	 * a document holds a skinned character and the static attachments that hang off its bones, and
-	 * the two are placed by different rules (see the editor's InstanceTransform).
+	 * the two are placed by different rules (see the editor's GetInstanceTransform).
 	 *
 	 * @return false for a `meshIndex` that names no mesh, or a mesh whose submesh range is out of
 	 *         bounds -- a caller asking about geometry that is not there gets "not skinned" rather
