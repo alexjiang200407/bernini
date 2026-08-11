@@ -695,7 +695,7 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 			m_Geoms.push_back(
 				scene->AddStaticMesh(std::move(shot.item.cooked->at(node.mesh)), materials));
 
-		const glm::mat4               world = bmesh::WorldTransform(mesh, nodeIndex);
+		const glm::mat4               world = bmesh::InstanceTransform(mesh, nodeIndex);
 		const bgl::MeshInstanceHandle instance =
 			view->CreateStaticMeshInstance(m_Geoms[it->second], world);
 		m_Instances.push_back(instance);

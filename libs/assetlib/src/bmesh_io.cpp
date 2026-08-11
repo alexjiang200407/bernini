@@ -41,6 +41,16 @@ namespace assetlib
 			kSkeletonPath
 		};
 
+		bool
+		carriesJoints(const Submesh& submesh) noexcept
+		{
+			return std::ranges::any_of(
+				std::span(submesh.layout.attributes.data(), submesh.layout.attributeCount),
+				[](const VertexAttribute& attribute) {
+					return attribute.semantic == VertexSemantic::kJoints0;
+				});
+		}
+
 		/**
 		 * Joint indices address a bone array, so a mesh carrying them and naming no skeleton is a mesh
 		 * whose vertices point at nothing -- and nothing downstream can tell, because a joint index is
@@ -170,13 +180,23 @@ namespace assetlib
 	bool
 	isSkinned(const BMesh& mesh) noexcept
 	{
-		return std::ranges::any_of(mesh.submeshes, [](const Submesh& submesh) {
-			return std::ranges::any_of(
-				std::span(submesh.layout.attributes.data(), submesh.layout.attributeCount),
-				[](const VertexAttribute& attribute) {
-					return attribute.semantic == VertexSemantic::kJoints0;
-				});
-		});
+		return std::ranges::any_of(mesh.submeshes, carriesJoints);
+	}
+
+	bool
+	isSkinned(const BMesh& mesh, uint32_t meshIndex) noexcept
+	{
+		if (meshIndex >= mesh.meshes.size())
+			return false;
+
+		const Mesh& entry = mesh.meshes[meshIndex];
+		if (entry.firstSubmesh > mesh.submeshes.size() ||
+		    entry.submeshCount > mesh.submeshes.size() - entry.firstSubmesh)
+			return false;
+
+		return std::ranges::any_of(
+			std::span(mesh.submeshes).subspan(entry.firstSubmesh, entry.submeshCount),
+			carriesJoints);
 	}
 
 	bool
