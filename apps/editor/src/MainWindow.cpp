@@ -19,6 +19,7 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/window_title.h"
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -65,7 +66,10 @@ MainWindow::Build()
 		const auto     configPath = core::file::get_executable_path().parent_path() / "config.json";
 		core::Settings settings(configPath);
 
-		startupProject         = settings["startupProject"].GetOrDefault(std::string());
+		startupProject = settings["startupProject"].GetOrDefault(std::string());
+		m_InstanceName =
+			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
+
 		const auto gfxSettings = settings["graphics"];
 
 		auto gfxOpts             = bgl::GraphicsOptions();
@@ -502,7 +506,7 @@ MainWindow::SetActiveProject(Project project)
 	ShowProjectState();
 
 	setWindowTitle(
-		QString("Bernini Editor — %1").arg(QString::fromStdString(m_Project->GetName())));
+		editor::WindowTitle(m_InstanceName, QString::fromStdString(m_Project->GetName())));
 	statusBar()->showMessage(
 		QString("Project data: %1")
 			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
@@ -563,6 +567,8 @@ MainWindow::SetUpFrameStats()
 void
 MainWindow::ShowEmptyState()
 {
+	setWindowTitle(editor::WindowTitle(m_InstanceName, QString()));
+
 	m_LevelEditorDock->hide();
 	m_MaterialEditorDock->hide();
 	m_ContentExplorerDock->hide();

@@ -1,5 +1,6 @@
 {
     "startupProject": "",
+    "instanceName": "",
     "graphics": {
         "enableDebugLayer": true,
         "enableGPUBasedValidation": false,
