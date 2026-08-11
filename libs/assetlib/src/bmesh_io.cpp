@@ -43,6 +43,16 @@ namespace assetlib
 			kSkeletonPath
 		};
 
+		bool
+		carriesJoints(const Submesh& submesh) noexcept
+		{
+			return std::ranges::any_of(
+				std::span(submesh.layout.attributes.data(), submesh.layout.attributeCount),
+				[](const VertexAttribute& attribute) {
+					return attribute.semantic == VertexSemantic::kJoints0;
+				});
+		}
+
 		/**
 		 * Joint indices address a bone array, so a mesh carrying them and naming no skeleton is a mesh
 		 * whose vertices point at nothing -- and nothing downstream can tell, because a joint index is
@@ -172,13 +182,23 @@ namespace assetlib
 	bool
 	isSkinned(const BMesh& mesh) noexcept
 	{
-		return std::ranges::any_of(mesh.submeshes, [](const Submesh& submesh) {
-			return std::ranges::any_of(
-				std::span(submesh.layout.attributes.data(), submesh.layout.attributeCount),
-				[](const VertexAttribute& attribute) {
-					return attribute.semantic == VertexSemantic::kJoints0;
-				});
-		});
+		return std::ranges::any_of(mesh.submeshes, carriesJoints);
+	}
+
+	bool
+	isSkinned(const BMesh& mesh, uint32_t meshIndex) noexcept
+	{
+		if (meshIndex >= mesh.meshes.size())
+			return false;
+
+		const Mesh& entry = mesh.meshes[meshIndex];
+		if (entry.firstSubmesh > mesh.submeshes.size() ||
+		    entry.submeshCount > mesh.submeshes.size() - entry.firstSubmesh)
+			return false;
+
+		return std::ranges::any_of(
+			std::span(mesh.submeshes).subspan(entry.firstSubmesh, entry.submeshCount),
+			carriesJoints);
 	}
 
 	bool
@@ -304,17 +324,6 @@ namespace assetlib
 
 	namespace
 	{
-		// Byte offset of a vertex attribute within one interleaved vertex, or -1 if the submesh's
-		// layout does not carry it.
-		int
-		attributeByteOffset(const VertexLayout& layout, VertexSemantic semantic)
-		{
-			for (uint32_t i = 0; i < layout.attributeCount; ++i)
-				if (layout.attributes[i].semantic == semantic)
-					return layout.attributes[i].offset;
-			return -1;
-		}
-
 		// One index from a submesh's raw index buffer, honoring its 16- or 32-bit width.
 		uint32_t
 		rawIndexAt(const BMesh& mesh, const Submesh& submesh, uint32_t i)
@@ -352,9 +361,8 @@ namespace assetlib
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
 			{
 				const Submesh& submesh = mesh.submeshes[meshEntry.firstSubmesh + s];
-				const int      posOffset =
-					attributeByteOffset(submesh.layout, VertexSemantic::kPosition);
-				const uint32_t stride = submesh.layout.stride;
+				const auto posOffset   = attributeOffset(submesh.layout, VertexSemantic::kPosition);
+				const uint32_t stride  = submesh.layout.stride;
 
 				out << "o mesh" << mi << "_submesh" << s << "\n";
 
@@ -363,8 +371,8 @@ namespace assetlib
 					float            p[3]     = { 0.0f, 0.0f, 0.0f };
 					const std::byte* vertBase = mesh.vertexData.data() + submesh.vertexByteOffset +
 					                            static_cast<size_t>(v) * stride;
-					if (posOffset >= 0)
-						std::memcpy(p, vertBase + posOffset, sizeof(p));
+					if (posOffset)
+						std::memcpy(p, vertBase + *posOffset, sizeof(p));
 					out << "v " << p[0] << ' ' << p[1] << ' ' << p[2] << "\n";
 				}
 

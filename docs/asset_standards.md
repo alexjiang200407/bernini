@@ -442,12 +442,30 @@ Five rules, each of which is a way to get this wrong:
   Only one direction is enforced. **Naming a skeleton while carrying no joints stays legal**, because
   that is how a static attachment — a scabbard, a saddle — hangs off a bone.
 
+**Where an import's output lands is decided by what it is, never by where the file was dropped.** A
+`.bmesh` goes under `Meshes/`, a rig under `Skeletons/`, its clips under `Animations/`, textures
+under `textures_src/` and materials under `Materials/`. The importer's *Folder* field organises
+*inside* those categories — it may name nested folders (`animals/coyote`) and can never name a way
+out of one, which `editor::JoinCategory` enforces. Every reference in a project is written against
+that layout, so an asset that could move across categories is an asset whose references stop
+meaning anything.
+
 **The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` whenever the
-source carries a skin, and a `.banim` when the importer's *Import animations* box is ticked. The
+source carries a skin and the mesh is coming across with it, and a `.banim` when the importer's
+*Import animations* box is ticked. The
 skeleton is deliberately **not** behind that box — a mesh carrying joints while naming no skeleton is
 one `save` refuses, so making the rig optional would make a skinned glTF unimportable rather than
 merely rig-less. The clips are the half a user can decline. Both are rolled back with the mesh if the
 import fails or is cancelled.
+
+**One rig, many clip sets.** Artists routinely ship one file per animation, each carrying its own
+copy of the skeleton and the geometry. Turning the importer's *Import mesh* box **off** brings only
+the clips across: no second `.bmesh`, no second `.bskel`, and the `.banim` names the rig already in
+the project — found by `skeletonSignature`, not by filename. The signature covers bone names and
+parents and deliberately not the bind pose, which is what makes this sound: a per-animation export
+whose rest pose drifted still matches, because a clip replaces the pose wholesale and only the
+hierarchy has to agree. An import with no matching rig is refused rather than left naming a file
+that does not exist.
 
 They land in `Skeletons/` and `Animations/`, one category directory each, the way the environment
 family splits across `Environments/` / `Sky/` / `EnvLighting/` — and for the same reason, sharpened:

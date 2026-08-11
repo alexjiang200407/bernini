@@ -294,7 +294,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					}
 				}
 
-				const glm::mat4 world = bmesh::WorldTransform(mesh, nodeIndex);
+				const glm::mat4 world = bmesh::GetInstanceTransform(mesh, nodeIndex);
 				m_Instances.push_back(
 					{ GetPreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
 				      it->second });

@@ -28,10 +28,6 @@ namespace assetlib
 
 	namespace
 	{
-		// JOINTS_0 / WEIGHTS_0 are a vec4 pair, which is what the vertex layout and every consumer
-		// of a skinned vertex assume.
-		constexpr size_t c_InfluencesPerVertex = 4;
-
 		constexpr size_t c_MeshletMaxVertices  = 64;
 		constexpr size_t c_MeshletMaxTriangles = 124;
 		constexpr float  c_MeshletConeWeight   = 0.0f;
