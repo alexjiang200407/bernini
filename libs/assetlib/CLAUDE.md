@@ -13,7 +13,7 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
-`.bmesh`, `.bskel` and `.banim` are one chunked container format, in `src/chunk_io.h`. A chunk is
+`.bmesh`, `.bskel`, `.banim` and `.bvat` are one chunked container format, in `src/chunk_io.h`. A chunk is
 addressed by id and an absent one is not an error, so adding data is a **minor** version bump and
 leaves what is already on disk readable. `.bmaterial` is deliberately not one of them: it is a flat,
 string-heavy stream with no bulk POD pools to chunk.
