@@ -113,7 +113,9 @@ once `feat/culling` exists no ref may begin `feat/culling/`. The push fails with
 
 Read the code first — the docs the change touches (index in [CLAUDE.md](CLAUDE.md)) and the real
 source. A decomposition invented from the prompt text splits along the words rather than the seams,
-and every task then fights the last.
+and every task then fights the last. [`bcp-docmap`](.claude/agents/bcp-docmap.md) does the docs half
+of that survey — spawn it with `subagent_type: bcp-docmap` and it returns the answer plus the lines
+it rests on, which is what the plan's *what the survey found* section wants anyway.
 
 Write `docs/plans/<name>.md`:
 
