@@ -515,13 +515,14 @@ namespace bgl
 
 		if (draw.lighting.skybox.has_value())
 		{
+			const float rotationY = draw.lighting.skybox->rotationY;
+
+			draw.lighting.envRotation = glm::vec2(std::sin(rotationY), std::cos(rotationY));
+
 			auto skyRotation = glm::mat4(1.0f);
-			if (draw.lighting.skybox->rotationY != 0.0f)
+			if (rotationY != 0.0f)
 			{
-				skyRotation = glm::rotate(
-					glm::mat4(1.0f),
-					draw.lighting.skybox->rotationY,
-					glm::vec3(0.0f, 1.0f, 0.0f));
+				skyRotation = glm::rotate(glm::mat4(1.0f), rotationY, glm::vec3(0.0f, 1.0f, 0.0f));
 			}
 
 			draw.lighting.skyboxClipToWorld =

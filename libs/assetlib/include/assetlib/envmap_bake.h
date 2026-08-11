@@ -50,14 +50,13 @@ namespace assetlib
 	irradianceSh(const ImageData& source, uint32_t faceSize = 128);
 
 	/**
-	 * Convolves a cube map with the GGX lobe at one fixed roughness -- a defocus blur with a
-	 * physically shaped kernel rather than a Gaussian.
+	 * Convolves a cube map with the GGX lobe at one fixed roughness, into a single mip -- a defocus
+	 * blur with a physically shaped kernel rather than a Gaussian.
 	 *
-	 * For the skybox this is a deliberate effect, not a compromise: a material editor wants the eye on
-	 * the material, and a blurred backdrop reads as depth of field where a sharp one competes for
-	 * attention. It also decouples the background from the source's resolution -- an equirectangular
-	 * `.hdr` only carries `width / 4` texels across a face's 90 degrees, and blurring past that makes
-	 * the limit invisible instead of pixelated.
+	 * **Not the skybox path.** A backdrop's defocus is presentation, and burned into one mip it stops
+	 * being authorable -- the sky a level viewport wants sharp no longer exists in the file. `skyChain`
+	 * is what the sky is baked with; this remains for a caller that genuinely wants one fixed
+	 * convolution and nothing else, and has no caller in the tree today.
 	 *
 	 * Because the result has no high angular frequencies left, `faceSize` can be small: storing detail
 	 * the kernel has already removed costs bytes and buys nothing.
@@ -73,6 +72,41 @@ namespace assetlib
 		float            roughness,
 		uint32_t         samples = 256,
 		uint32_t         threads = 0);
+
+	/**
+	 * The sky as a defocus chain: mip 0 is the sharp projection, and every level below it is the same
+	 * environment convolved to the width its own texel subtends.
+	 *
+	 * The alternative -- blurCube into a single mip -- burns a presentation choice into the pixels,
+	 * and it is the wrong place for one. How defocused a backdrop should be depends on what the
+	 * viewport is for; a material editor wants the eye on the material where a level viewport wants
+	 * the world it is building. Baked as a chain, that becomes `BSky::mipLevel`, which is a container
+	 * edit rather than minutes of convolution, and reversible.
+	 *
+	 * Each level is band-limited to its own resolution rather than to a roughness, so the chain is
+	 * also the mip chain a sampler would want anyway: nothing here aliases when minified.
+	 *
+	 * @param faceSize Face size of mip 0.
+	 * @param mipLevels Levels in the chain. `faceSize >> (mipLevels - 1)` must be at least 1.
+	 * @throws std::runtime_error if `source` is not a float cube map, or any count is 0.
+	 */
+	[[nodiscard]] ImageData
+	skyChain(
+		const ImageData& source,
+		uint32_t         faceSize,
+		uint32_t         mipLevels,
+		uint32_t         samples = 256,
+		uint32_t         threads = 0);
+
+	/**
+	 * The GGX roughness skyChain convolves `mip` at -- 0 for mip 0, which its own texel already band
+	 * limits.
+	 *
+	 * Exposed so a caller can say what a `BSky::mipLevel` will actually look like: the shipped
+	 * `--skybox-blur 0.15` is about mip 3 of a 512 chain.
+	 */
+	[[nodiscard]] float
+	skyMipRoughness(uint32_t faceSize, uint32_t mip) noexcept;
 
 	/**
 	 * The exposure an environment should render at, from its irradiance map.

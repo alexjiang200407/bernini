@@ -46,6 +46,20 @@ public float3 CalculateNormal(float3 worldNormal, float4 worldTangent, float2 sa
     return normalize(mul(tangentNormal, TBN));
 }
 
+/**
+ * Turns a world direction into the direction that names the same light in the environment's cubes.
+ *
+ * The skybox spins its clip-to-world ray by BSky::rotationY, so the sky a camera sees along `dir`
+ * is the texel at the rotated direction. The IBL cubes are the same environment, so a normal has to
+ * be carried through the same rotation or the model is lit from where the sky used to be.
+ *
+ * @param envRotation (sin, cos) of the rotation about the up axis.
+ */
+float3 ToEnvSpace(float3 dir, float2 envRotation)
+{
+    return float3(envRotation.y * dir.x + envRotation.x * dir.z, dir.y, envRotation.y * dir.z - envRotation.x * dir.x);
+}
+
 public float4 ShadeSurface(
     ForwardVSOut input,
     float4 baseColor,
@@ -57,7 +71,8 @@ public float4 ShadeSurface(
     TextureCubeHandle prefilterMap,
     TextureHandle brdfLUT,
     SamplerState.Handle clampSampler,
-    float exposure
+    float exposure,
+    float2 envRotation
 )
 {
     float3 albedo = baseColor.rgb;
@@ -81,7 +96,7 @@ public float4 ShadeSurface(
     float3 kD = 1.0 - kS;
     kD *= 1.0 - metallic;
 
-    let irradiance = irradianceMap.SampleCube(clampSampler, N).rgb;
+    let irradiance = irradianceMap.SampleCube(clampSampler, ToEnvSpace(N, envRotation)).rgb;
     let diffuse = irradiance * albedo;
 
     const float MAX_REFLECTION_LOD = 6.0f; // Highest mip index of the 7-level prefilter cube
@@ -124,7 +139,7 @@ public float4 ShadeSurface(
     const float areaLod = min(sqrt(excess) * MAX_REFLECTION_LOD, c_AreaLodCap);
 
     const float lod = min(max(roughness * MAX_REFLECTION_LOD, areaLod), MAX_REFLECTION_LOD);
-    let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, R, lod).rgb;
+    let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, ToEnvSpace(R, envRotation), lod).rgb;
     float2 envBRDF = brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 
     float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);

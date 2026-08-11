@@ -234,6 +234,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			m_Desc.environmentMap,
 			m_Desc.dataRoot,
 			m_Desc.exposureOverride,
+			m_Desc.skyMipLevelOverride,
 			"AssetThumbnail"));
 
 		// What a submesh gets when the mesh names no material, or names one that will not load. A

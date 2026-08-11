@@ -31,6 +31,10 @@ struct AssetThumbnailDesc
 	std::filesystem::path dataRoot;
 
 	std::optional<float> exposureOverride;
+
+	// Matches the material preview's default, so a thumbnail and the preview it was generated from
+	// stand against the same backdrop. See MaterialPreviewEnv::skyMipLevelOverride.
+	std::optional<uint32_t> skyMipLevelOverride = 3;
 };
 
 /**

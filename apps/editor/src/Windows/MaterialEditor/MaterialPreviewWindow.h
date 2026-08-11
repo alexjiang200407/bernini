@@ -27,6 +27,11 @@ struct MaterialPreviewEnv
 	// Absent means the exposure the `.benv` carries, which is the value derived from those maps.
 	// Set it only to overrule that deliberately.
 	std::optional<float> exposureOverride;
+
+	// A material editor wants the eye on the material, and a defocused backdrop reads as depth of
+	// field where a sharp one competes for attention -- so this viewport overrules the `.bsky`'s own
+	// presentation by default. A sky baked as a single mip cannot honour it and stays as it is.
+	std::optional<uint32_t> skyMipLevelOverride = 3;
 };
 
 // The right-hand model preview: a lit sphere by default, or a `.bmesh` dropped onto it, shown
@@ -183,6 +188,7 @@ private:
 	// What the last ApplyEnvironment bound, so the next one can release it.
 	editor::AppliedEnvironment m_Environment;
 	std::optional<float>       m_ExposureOverride;
+	std::optional<uint32_t>    m_SkyMipLevelOverride;
 	std::filesystem::path      m_ConfiguredRoot;  // stands in until a project is opened
 
 	glm::vec3 m_FocusCenter = glm::vec3(0.0f);

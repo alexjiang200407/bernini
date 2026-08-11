@@ -33,6 +33,11 @@ namespace editor
 	 *        subfolder, or a file dropped from anywhere -- and guessing lands on the wrong root
 	 *        without saying so.
 	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
+	 * @param skyMipLevelOverride Overrules how defocused the `.bsky` says its backdrop is drawn.
+	 *        How much depth of field a backdrop wants is a property of the viewport and not of the
+	 *        environment -- a material preview wants the eye on the material where a level viewport
+	 *        wants the world. Clamped by the sampler to the mips the cube actually has, so asking a
+	 *        single-mip sky to defocus is a no-op rather than an error.
 	 * @param who Prefix for warnings, naming the caller.
 	 * @return What was bound. Applying twice over one view leaks the first set's slots unless the
 	 *         caller releases them -- pass both to ReplaceEnvironment.
@@ -44,6 +49,7 @@ namespace editor
 		const std::string&           benvPath,
 		const std::filesystem::path& dataRoot,
 		std::optional<float>         exposureOverride,
+		std::optional<uint32_t>      skyMipLevelOverride,
 		const char*                  who);
 
 	/**

@@ -657,6 +657,65 @@ namespace assetlib
 		return out;
 	}
 
+	ImageData
+	unpackRgb9e5(const ImageData& image)
+	{
+		if (image.vkFormat != VkFormat::E5B9G9R9_UFLOAT_PACK32)
+			throw std::runtime_error(
+				"assetlib::unpackRgb9e5: source must be E5B9G9R9_UFLOAT_PACK32");
+
+		constexpr int c_Mantissa = 9;
+		constexpr int c_Bias     = 15;
+
+		ImageData out;
+		out.width     = image.width;
+		out.height    = image.height;
+		out.mipLevels = image.mipLevels;
+		out.arraySize = image.arraySize;
+		out.isCubemap = image.isCubemap;
+		out.vkFormat  = VkFormat::R32G32B32A32_SFLOAT;
+
+		size_t texels = 0;
+		for (const ImageSubresource& sub : image.subresources)
+			texels += static_cast<size_t>(sub.slicePitch) / sizeof(uint32_t);
+
+		out.pixels = core::fixed_buffer<std::byte>(texels * sizeof(float) * 4);
+
+		size_t dst = 0;
+		for (const ImageSubresource& sub : image.subresources)
+		{
+			const auto count = static_cast<size_t>(sub.slicePitch) / sizeof(uint32_t);
+			const auto rows =
+				sub.rowPitch > 0 ? static_cast<size_t>(sub.slicePitch / sub.rowPitch) : 1u;
+			const size_t width = rows > 0 ? count / rows : count;
+
+			out.subresources.push_back(
+				{ dst * sizeof(float) * 4,
+			      static_cast<uint64_t>(width) * sizeof(float) * 4,
+			      static_cast<uint64_t>(count) * sizeof(float) * 4 });
+
+			const auto* src = reinterpret_cast<const uint32_t*>(image.pixels.data() + sub.offset);
+			auto*       target = reinterpret_cast<float*>(out.pixels.data()) + dst * 4;
+
+			for (size_t t = 0; t < count; ++t)
+			{
+				const uint32_t packed = src[t];
+				const auto     exp    = static_cast<int>(packed >> 27);
+				const float    scale =
+					static_cast<float>(std::exp2(static_cast<double>(exp - c_Bias - c_Mantissa)));
+
+				target[t * 4 + 0] = static_cast<float>(packed & 0x1FFu) * scale;
+				target[t * 4 + 1] = static_cast<float>((packed >> 9) & 0x1FFu) * scale;
+				target[t * 4 + 2] = static_cast<float>((packed >> 18) & 0x1FFu) * scale;
+				target[t * 4 + 3] = 1.0f;
+			}
+
+			dst += count;
+		}
+
+		return out;
+	}
+
 	std::vector<std::byte>
 	encodeKTX2(const ImageData& image, bool srgb, Ktx2Compression compression)
 	{

@@ -175,19 +175,25 @@ namespace assetlib
 		{
 			throwIfCancelled(cancel);
 
-			// Blurred, the backdrop is its own convolution of the environment; sharp, it is the
-			// projection itself. Either way the lighting below still reads `source`.
-			const ImageData blurred =
-				desc.skyBlur > 0.0f ?
-					blurCube(source, desc.skyFaceSize, desc.skyBlur, 256, desc.threads) :
-					ImageData();
+			// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it
+			// belongs in `mipLevel` where a viewer can change it. The lighting still reads `source`.
+			//
+			// Clamped rather than refused: a sky too small for the requested chain is a small sky,
+			// not a bad request, and the levels it can carry are still the ones a viewer would ask
+			// for.
+			const auto maxMips =
+				static_cast<uint32_t>(std::bit_width(std::max(desc.skyFaceSize, 1u)));
+			const uint32_t skyMips = std::clamp(desc.skyMips, 1u, maxMips);
+
+			const ImageData chain = skyChain(source, desc.skyFaceSize, skyMips, 256, desc.threads);
 
 			const std::string ref = assetRef(desc.sourceDir, desc.name, "_sky.ktx2");
-			writeSource(desc.dataRoot, created, ref, desc.skyBlur > 0.0f ? blurred : source);
+			writeSource(desc.dataRoot, created, ref, chain);
 
 			auto bsky       = BSky();
 			bsky.name       = desc.name;
 			bsky.sky.source = ref;
+			bsky.mipLevel   = std::min(desc.skyMipLevel, skyMips - 1);
 
 			throwIfCancelled(cancel);
 			bakeSky(bsky, { desc.dataRoot });

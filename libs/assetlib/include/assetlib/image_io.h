@@ -71,6 +71,22 @@ namespace assetlib
 	packRgb9e5(const ImageData& image);
 
 	/**
+	 * Unpacks an `E5B9G9R9_UFLOAT_PACK32` image back to `R32G32B32A32_SFLOAT`, alpha 1.
+	 *
+	 * Exact: the shared exponent and the three mantissas are a subset of what a float can hold, so
+	 * this recovers the values `packRgb9e5` stored -- not the ones it was given, which it quantized.
+	 *
+	 * Exists because the CPU bake path reads float and a shipped map is RGB9E5, which is the only
+	 * form left when a route's float source is gone. Re-convolving a baked map costs a generation of
+	 * quantization, so prefer the source where there is one.
+	 *
+	 * @param image An `E5B9G9R9_UFLOAT_PACK32` image; geometry, mips and faces are preserved.
+	 * @throws std::runtime_error if `image` is not that format.
+	 */
+	[[nodiscard]] ImageData
+	unpackRgb9e5(const ImageData& image);
+
+	/**
 	 * writeKTX2 into a buffer instead of a file, for embedding in a container.
 	 *
 	 * @throws std::runtime_error if the image cannot be encoded.
