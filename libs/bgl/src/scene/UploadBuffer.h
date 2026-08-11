@@ -82,9 +82,13 @@ namespace bgl
 		{
 			gassert(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 
+			// Empty short-circuits before the memcmp: two empty spans may both be null, which
+			// memcmp's nonnull contract forbids.
 			const auto equal = [&] {
 				return m_Values.size() == values.size() &&
-				       std::memcmp(m_Values.data(), values.data(), values.size() * sizeof(T)) == 0;
+				       (values.empty() ||
+				        std::memcmp(m_Values.data(), values.data(), values.size() * sizeof(T)) ==
+				            0);
 			};
 
 			if (equal())

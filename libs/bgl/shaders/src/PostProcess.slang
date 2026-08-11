@@ -14,10 +14,10 @@ ConstantBuffer<PostProcessData> gPostProcessData;
 
 // Display-space: the outline is editor feedback, composited after the tonemap so exposure and the
 // display curve cannot shift it.
-static const float3 cOutlineColor = float3(1.0, 0.5, 0.0);
-static const int cOutlineWidthPx = 2;
+static const float3 c_OutlineColor = float3(1.0, 0.5, 0.0);
+static const int c_OutlineWidthPx = 2;
 
-// A pixel is outline when it is outside the mask but within cOutlineWidthPx of it -- a dilate of
+// A pixel is outline when it is outside the mask but within c_OutlineWidthPx of it -- a dilate of
 // the mask minus the mask itself, which contours the silhouette without tinting the surface.
 float SampleOutline(float2 uv)
 {
@@ -29,10 +29,10 @@ float SampleOutline(float2 uv)
     float covered = 0.0;
 
     [unroll]
-    for (int dy = -cOutlineWidthPx; dy <= cOutlineWidthPx; ++dy)
+    for (int dy = -c_OutlineWidthPx; dy <= c_OutlineWidthPx; ++dy)
     {
         [unroll]
-        for (int dx = -cOutlineWidthPx; dx <= cOutlineWidthPx; ++dx)
+        for (int dx = -c_OutlineWidthPx; dx <= c_OutlineWidthPx; ++dx)
         {
             float2 offset = float2(dx, dy) * gPostProcessData.maskTexelSize;
             covered = max(covered, gPostProcessData.outlineMask.SampleLevel(gPostProcessData.sampler, uv + offset, 0.0).r);
@@ -82,7 +82,7 @@ float4 PSMain(VSOut input) : SV_Target
 
     if (gPostProcessData.outlineEnabled != 0)
     {
-        color = lerp(color, cOutlineColor, SampleOutline(input.uv));
+        color = lerp(color, c_OutlineColor, SampleOutline(input.uv));
     }
 
     return float4(color, 1.0);

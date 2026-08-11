@@ -11,6 +11,8 @@
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
 #include "types/RenderState.h"
+
+// The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
 #include <bgl/ISceneView.h>
 
 namespace bgl
