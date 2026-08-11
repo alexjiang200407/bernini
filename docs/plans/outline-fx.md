@@ -48,17 +48,34 @@ per-instance-per-submesh mutator; `SceneView::MeshMeta` holds the parallel CPU-s
 
 ## Design decisions
 
-**Screen-space mask + dilation, not geometry extrusion, not stencil, not blur.**
-- *Inverted hull rejected:* extrusion along vertex normals breaks on hard edges and non-manifold
-  meshes, its width varies with depth and FOV, and it would thread a new PSO bucket through the
-  GPU cull/compact path (`c_Psos` is positionally coupled to `PsoType`).
-- *Stencil rejected:* blocked on the D3D12 `OMSetStencilRef` gap above; an RHI change buys nothing
-  a mask target doesn't already give, since a wide outline needs a screen-space dilate anyway.
-- *Gaussian blur on a cutout rejected:* produces a soft glow whose width and opacity vary with
-  silhouette shape; a selection outline wants a crisp constant-width contour. Blur also needs two
-  extra fullscreen passes (H+V) against dilation's one loop.
-- *Jump flooding rejected:* JFA earns its cost for outlines tens of pixels wide; for a 2–3 px
-  editor outline a small fixed neighborhood sample is fewer passes and no ping-pong textures.
+**Screen-space cutout + dilation.** The techniques fall into two families: re-draw the geometry
+bigger (inverted hull), or render the selection into a screen-space cutout and spread it outward
+(blur, dilation, jump flooding — stencil is just a cutout stored in the stencil plane). The cutout
+family wins here: its width is constant in pixels regardless of depth and FOV, it is immune to the
+mesh's normal quality, and it composites as one fullscreen step instead of threading a second
+geometry path through the GPU cull/compact pipeline. Within the family, the spread step is a
+**dilate** — each pixel samples the mask in a small fixed neighborhood and turns on if any tap
+hits — rather than a gaussian blur.
+
+Visually this is the *best* of the options, not a compromise: a crisp, constant-width contour
+hugging the silhouette — the look of selection outlines in Blender, Unity and Godot. The
+alternatives each look worse for this job, which is what rejects them:
+
+- *Gaussian blur on the cutout:* a soft halo, not a contour — its apparent width and opacity vary
+  with silhouette shape (thin features glow faintly, concave corners bloom), where a dilate is
+  all-or-nothing at every pixel. Right for a "glow" effect, wrong for precise selection feedback,
+  and it costs two extra fullscreen passes (H+V) against dilation's single loop inside
+  `PostProcess`.
+- *Inverted hull:* visibly artifact-prone — the shell splits open at hard edges and non-manifold
+  seams where vertex normals disagree, and the width grows as the camera nears. Also structurally
+  expensive here: a new PSO bucket through the cull/compact path (`c_Psos` is positionally
+  coupled to `PsoType`).
+- *Stencil-stored cutout:* same look as the mask, but blocked on the D3D12 `OMSetStencilRef` gap
+  above — an RHI change that buys nothing over an R8 target, since a wide outline needs the
+  screen-space dilate either way.
+- *Jump flooding:* identical look to the dilate at small widths; JFA earns its ping-pong passes
+  only for outlines tens of pixels wide. For a 2–3 px editor outline the fixed neighborhood is
+  fewer passes for the same image.
 
 **Selection is per `(instance, submeshIndex)` on `ISceneView`,** mirroring
 `SetSubmeshMaterialOverride` — same granularity the prompt asks for, same granularity the renderer
