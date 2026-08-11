@@ -118,7 +118,16 @@ MainWindow::Build()
 		// once. The Render menu moves every viewport from here.
 		levelDesc.renderScale = settings["levelEditor"]["renderScale"].GetOrDefault(1.0f);
 
-		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc));
+		auto levelEnv = LevelEditorEnv();
+		levelEnv.environmentMap =
+			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
+		levelEnv.dataRoot = settings["levelEditor"]["dataRoot"].GetOrDefault(std::string());
+
+		// Absent, and the .benv's own exposure stands -- which is the correct one for its maps.
+		if (auto exposure = settings["levelEditor"]["exposure"])
+			levelEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+
+		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc), std::move(levelEnv));
 
 		auto matSettings                = settings["materialEditor"];
 		auto matDesc                    = MaterialEditorWindowDesc();

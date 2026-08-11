@@ -109,7 +109,7 @@ namespace bgl
 			}
 			if (auto u = skybox["exposure"]; u.IsValid())
 			{
-				u = draw.lighting.skybox->exposure;
+				u = draw.lighting.SkyExposure();
 			}
 			if (auto u = skybox["mipLevel"]; u.IsValid())
 			{

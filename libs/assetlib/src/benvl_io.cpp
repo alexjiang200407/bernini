@@ -20,7 +20,10 @@ namespace assetlib
 		constexpr uint32_t c_Magic = magic::c_BEnvL;
 
 		constexpr uint16_t c_VersionMajor = 1;
-		constexpr uint16_t c_VersionMinor = 0;
+
+		// 1 appended the authored exposure override. Minor 0 files carry none, and read back with
+		// none, which is exactly what "nobody has tuned this" means.
+		constexpr uint16_t c_VersionMinor = 1;
 	}
 
 	std::vector<std::byte>
@@ -36,6 +39,9 @@ namespace assetlib
 		writeRoute(writer, lighting.irradiance);
 		writer.WritePod(lighting.exposure);
 
+		writer.WritePod(static_cast<uint8_t>(lighting.exposureOverride.has_value() ? 1 : 0));
+		writer.WritePod(lighting.exposureOverride.value_or(0.0f));
+
 		return writer.Take();
 	}
 
@@ -48,8 +54,7 @@ namespace assetlib
 			throw std::runtime_error("benvl: bad magic");
 
 		const auto versionMajor = reader.ReadPod<uint16_t>();
-		// The minor version is additive within a major, and nothing here is optional yet.
-		static_cast<void>(reader.ReadPod<uint16_t>());
+		const auto versionMinor = reader.ReadPod<uint16_t>();
 
 		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
@@ -61,6 +66,17 @@ namespace assetlib
 		lighting.prefilter  = readRoute(reader);
 		lighting.irradiance = readRoute(reader);
 		lighting.exposure   = reader.ReadPod<float>();
+
+		// Minor versions are additive, so a newer writer's tail is read only when this file claims
+		// to carry it -- and a minor 0 file simply has no authored exposure.
+		if (versionMinor >= 1)
+		{
+			const auto authored = reader.ReadPod<uint8_t>();
+			const auto value    = reader.ReadPod<float>();
+			if (authored != 0)
+				lighting.exposureOverride = value;
+		}
+
 		return lighting;
 	}
 

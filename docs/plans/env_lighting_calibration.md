@@ -41,6 +41,10 @@ irradiance is near-neutral at `(0.754, 0.771, 0.809)`), so it is a correctness n
 
 ### 1.3 The environment is strongly directional; the render is not
 
+> **Superseded — see §1.8.** The conclusion drawn here, that the IBL lookup has lost world space,
+> was measured directly in the renderer and does not hold. The screenshot analysis below is left
+> as written, because what it got wrong is instructive.
+
 **This is the main finding, and it is the one worth acting on first.**
 
 The two reference screenshots are the same model from opposite sides. Fitting each render's
@@ -147,23 +151,73 @@ Recorded so nobody re-opens them:
   irradiance 0.778 against mean prefilter radiance 0.824.
 - **Double gamma after the tone map**, and **auto-exposure drift** (there is none in the repo).
 
+### 1.8 The IBL lookup is world-locked — measured in the renderer
+
+§1.3's conclusion was wrong, and the way it was wrong is worth keeping: **every number in it came
+from screenshots**, and a screenshot is downstream of AgX, which compresses hard enough to make a
+large scene-linear swing look like a small one. Nothing there measured the lookup itself.
+
+`EnvOrientation_test` does. It builds a synthetic environment — radiance 1 where a direction has a
+positive `x`, 0 elsewhere — runs it through the real `irradianceSh` and `prefilterRadiance`, and
+renders a matte white sphere against it from `+Z` and from `-Z`. The assertions are on where the
+brightness lands *on screen*, which is the one ground truth outside the cube convention: a test that
+built its faces the same wrong way the bake does would fail rather than agree with itself.
+
+Display luma, from the boxes the test samples:
+
+| | sphere left | sphere right | backdrop left | backdrop right |
+|---|---|---|---|---|
+| camera at `+Z` (world `+X` is screen right) | 0.506 | **0.759** | 0.000 | **0.792** |
+| camera at `-Z` (world `+X` is screen left) | **0.757** | 0.493 | **0.792** | 0.000 |
+
+The bright side crosses the frame with the camera, in step with the backdrop. **The lookup tracks
+world space.** It is not mirrored, not view-following, and not rotated.
+
+The magnitudes hold up too. Those boxes sit 50 px off a 66 px silhouette, so the normal there is
+about 41° off the lit axis and a half-lit environment gives irradiance `(1 ± cos 41°)/2` — 0.879
+against 0.121, a **7.2x scene-linear ratio, 2.9 EV**. Evaluating AgX on paper over that predicts
+display 0.767 against 0.460; measured 0.759 against 0.506. The bright end lands within a percent;
+the dark end is the looser of the two because the flat specular term dominates there and this
+arithmetic only estimates it.
+
+**So the "1.4 EV of missing directionality" is largely AgX doing its job.** A tone map that places
+0.18 at 0.5 while holding 16.5 EV of range turns that 2.9 EV scene difference into 1.5x of display
+luma. Reading EV off a screenshot and comparing it against EV computed off an irradiance map
+compares two different quantities, and the compression between them is most of the discrepancy §1.3
+reported.
+
+What §1.3 could not have caught, and what the probe did: **a rotated sky did not rotate the
+lighting.** `BSky::rotationY` spun the backdrop's ray while `PbrShading` sampled the IBL cubes with a
+raw world normal. With `rotationY = π` the backdrop's lit side crossed the frame and the sphere's
+did not move at all. `forest` has `rotationY = 0`, so this was latent — but it is a real defect, it
+is the one §3's T0 predicted, and it is fixed.
+
+The residual mismatch against Blender is therefore not directional. It is exposure (§1.2), the
+backdrop (§1.4), and whatever remains after those.
+
 ---
 
 ## 2. Root causes, ranked
 
-1. **The IBL lookup does not track world space the way the skybox does** (§1.3) — ~1.4 EV of missing
-   directionality. Dominates, and it is why the model reads flat and washed out from the front and
-   "more correct" from behind.
+*Revised after §1.8.*
+
+1. ~~**The IBL lookup does not track world space the way the skybox does**~~ — **disproven**. The
+   lookup is world-locked and its magnitudes match theory. What was real in this area is that a
+   rotated sky did not rotate the lighting, which no shipped environment triggered.
 2. **The backdrop is baked pre-blurred** (§1.4), lifting its darkest percentiles ~1.9 EV and putting
    our background +0.56 EV above Blender's.
 3. **Every environment is renormalized to middle grey** (§1.2), +0.42 EV here. Small, but
    structural: while `exposureFor`'s output is used unconditionally, no environment can match a
-   reference renderer, because dim and bright environments are forced to the same average.
+   reference renderer, because dim and bright environments are forced to the same average. With #1
+   gone this is the largest real term.
 4. **Sky and geometry disagree about exposure** (§1.5). Cosmetic today, a trap after (3).
 
 ---
 
 ## 3. The plan
+
+> **Status.** T0, T1, T2, T3 and T5 have landed; the assets themselves are deliberately untouched,
+> so nothing below has re-baked `forest` or moved a golden. T4 is not attempted. See §5.
 
 ### T0 — Find and fix the IBL orientation defect
 
@@ -277,3 +331,34 @@ Worth adding as it goes:
 For the qualitative check, the comparison that started this: one model, one HDRI, our viewport
 against Blender's with AgX and world strength 1.0. Expect the model's *form* to come back after T0,
 the backdrop after T3, and the overall level after T2.
+
+---
+
+## 5. What landed
+
+Every item is code and tests only. **No asset under `assets/` was rewritten**, so no golden moved
+and `forest_sky.ktx2` is still the single-mip, pre-blurred cube §1.4 measured. That is why the
+qualitative comparison above is not yet closed: T2 and T3 built the mechanisms, and the re-author
+and re-bake that use them are a deliberate next step.
+
+| | What landed |
+|---|---|
+| **T0** | The orientation defect does not exist (§1.8). The rotation defect it predicted did: `PbrShading::ToEnvSpace` now carries `BSky::rotationY` into both IBL lookups, bound through `MaterialData::envRotation`. Three cases in `EnvOrientation_test` pin the world-lock, the sky/IBL agreement, and the rotation. |
+| **T1** | `DrawLighting::SkyExposure()` folds the view's exposure into what `SkyboxPass` writes, so `SkyboxDesc::exposure` is an *additional* per-sky gain and every call site's `1.0f` means "no extra gain". No call site changed. |
+| **T2** | `BEnvLighting::exposureOverride` beside the derivation, `EffectiveExposure()` as what a renderer reads, a `.benvl` minor bump to 1 (minor 0 files still load, with no override), `assetlib_cli exposure --set/--clear` to author it, and `exposureFor` switched to Rec.709 luminance. |
+| **T3** | `assetlib::skyChain` bakes the sky as a defocus chain — mip 0 sharp, each level convolved to its own texel — replacing the destructive `blurCube` in both the import and the CLI. `editor::ApplyEnvironment` takes a `skyMipLevelOverride`; the material preview and thumbnails default to mip 3, a level viewport to the file's own. |
+| **T5** | `LevelEditorWindow` takes a `LevelEditorEnv` and binds it, driven by `levelEditor.environmentMap` / `dataRoot` / `exposure` in `config.json` — now in `config.example.json`, where none of these keys were documented before. |
+| **T4** | Not attempted. |
+
+### Still open
+
+- **Re-author `forest.benvl` toward 1.0 and re-bake `forest_sky.ktx2` sharp with a chain.** The
+  mechanisms are in; using them rewrites LFS binaries and invalidates goldens, which §4 asks be done
+  one task at a time.
+- **An editor control for the authored exposure.** There is no environment inspector to host one —
+  the import dialog only chooses what to write and where. The CLI and the per-viewport `exposure`
+  config key are the authoring surfaces today.
+- **T4, occlusion.** Untouched, and by §1.6 not part of this mismatch.
+- **A test that a bright and a dim version of one environment yield different exposures.** `exposureFor`
+  still normalizes both to middle grey by design; what changed is that an override can now say
+  otherwise. The test §4 asks for belongs with the re-author above.

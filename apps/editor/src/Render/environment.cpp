@@ -15,6 +15,7 @@ namespace editor
 		const std::string&           benvPath,
 		const std::filesystem::path& dataRoot,
 		std::optional<float>         exposureOverride,
+		std::optional<uint32_t>      skyMipLevelOverride,
 		const char*                  who)
 	{
 		auto applied = AppliedEnvironment();
@@ -61,7 +62,11 @@ namespace editor
 			if (const auto skybox = scene->AddTextureAsset(std::move(env.maps.skybox));
 			    skybox.textureSlot)
 			{
-				view->SetSkyBox({ skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
+				view->SetSkyBox(
+					{ skybox,
+				      skyMipLevelOverride.value_or(env.skyMipLevel),
+				      1.0f,
+				      env.skyRotationY });
 				applied.skybox = skybox;
 			}
 		}

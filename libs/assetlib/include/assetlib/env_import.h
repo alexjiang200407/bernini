@@ -37,9 +37,12 @@ namespace assetlib
 
 		uint32_t skyFaceSize = 512;
 
-		// GGX roughness to defocus the backdrop by; 0 keeps the projection sharp. The lighting still
-		// convolves the *unblurred* source, so a defocused sky never reaches it.
-		float skyBlur = 0.0f;
+		// Levels in the sky's defocus chain -- see skyChain. The backdrop is always baked sharp at
+		// mip 0; how defocused it is drawn is `skyMipLevel`, which a viewer may overrule.
+		uint32_t skyMips = 6;
+
+		// Which level the written `.bsky` presents. 0 is the sharp projection.
+		uint32_t skyMipLevel = 0;
 
 		uint32_t prefilterFaceSize  = 256;
 		uint32_t prefilterMips      = 7;  // must match the shader's MAX_REFLECTION_LOD + 1

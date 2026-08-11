@@ -424,3 +424,82 @@ TEST_CASE("a non-float or non-cube source is rejected", "[envmap]")
 
 	CHECK_THROWS_AS(equirectToCube(ConstantCube(8, 1.0f), 8), std::runtime_error);
 }
+
+// The backdrop's defocus used to be convolved into a single mip, which made it unauthorable: the
+// only way back to a sharp sky was to re-import. A chain moves the choice into `BSky::mipLevel`,
+// which is what these pin -- mip 0 must still be the environment itself, and no level may invent
+// energy the source did not have.
+TEST_CASE("the sky chain keeps mip 0 sharp and conserves energy", "[envmap][sky]")
+{
+	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.6f, 0.5f, 300.0f), 64);
+
+	const ImageData chain = skyChain(cube, 64, 6, 256, 0);
+
+	REQUIRE(chain.mipLevels == 6);
+	REQUIRE(chain.width == 64);
+
+	// Roughness 0 at mip 0, so the sharp projection survives the bake -- the defect the destructive
+	// blur had, where the sky a level viewport wants no longer existed in the file.
+	CHECK(MeanRadiance(chain, 0) == Catch::Approx(MeanRadiance(cube, 0)).epsilon(0.02));
+	CHECK(Angle(DominantDirection(chain, 0), DominantDirection(cube, 0)) < 2.0f);
+
+	const double base = MeanRadiance(chain, 0);
+	for (uint32_t mip = 1; mip < chain.mipLevels; ++mip)
+	{
+		INFO("mip " << mip);
+		CHECK(MeanRadiance(chain, mip) / base < 1.10);
+		CHECK(MeanRadiance(chain, mip) / base > 0.90);
+
+		// Every level stays the same environment seen through a wider lobe, so the light still
+		// arrives from where it did. A level that drifted would light a rotated world.
+		CHECK(Angle(DominantDirection(chain, mip), DominantDirection(cube, 0)) < 4.0f);
+	}
+}
+
+// Mip 0 is band-limited by its own texel, so convolving it again would blur a sky nobody asked to
+// blur -- and each level below must widen, or `mipLevel` would not be a defocus control at all.
+TEST_CASE("sky mip roughness starts at zero and increases", "[envmap][sky]")
+{
+	CHECK(skyMipRoughness(512, 0) == 0.0f);
+
+	float previous = 0.0f;
+	for (uint32_t mip = 1; mip < 6; ++mip)
+	{
+		INFO("mip " << mip);
+		const float roughness = skyMipRoughness(512, mip);
+		CHECK(roughness > previous);
+		previous = roughness;
+	}
+
+	// The shipped `--skybox-blur 0.15` is about mip 3 of a 512 chain, which is what makes the
+	// material preview's default a like-for-like replacement rather than a new look.
+	CHECK(skyMipRoughness(512, 3) == Catch::Approx(0.157f).margin(0.02f));
+}
+
+TEST_CASE("sky chain geometry is rejected when it cannot hold the chain", "[envmap][sky]")
+{
+	const ImageData cube = ConstantCube(8, 1.0f);
+
+	CHECK_THROWS_AS(skyChain(cube, 4, 7, 64, 0), std::runtime_error);
+	CHECK_THROWS_AS(skyChain(cube, 32, 0, 64, 0), std::runtime_error);
+	CHECK_THROWS_AS(skyChain(cube, 32, 4, 0, 0), std::runtime_error);
+}
+
+// exposureFor divided by three across the channels, which reads a tinted environment as brighter or
+// dimmer than it looks. The maps shipped today are near-neutral, so the change is worth 0.015 EV
+// there and nothing catches it -- this is the case where the two answers genuinely diverge.
+TEST_CASE("the exposure a tinted environment derives follows its luminance", "[envmap][exposure]")
+{
+	// Pure blue: the channel mean calls this a third of white, Rec.709 calls it 0.0722 of it.
+	ImageData blue = ConstantCube(16, 0.0f);
+	for (uint32_t face = 0; face < 6; ++face)
+	{
+		auto* p = const_cast<float*>(FaceMip(blue, face, 0));
+		for (uint32_t t = 0; t < 16 * 16; ++t) p[t * 4 + 2] = 1.0f;
+	}
+
+	const float exposure = exposureFor(blue);
+
+	// 0.18 / (0.96 * 0.0722 * 0.18), the luminance answer. The channel mean would give about 3.0.
+	CHECK(exposure == Catch::Approx(1.0f / (0.96f * 0.0722f)).epsilon(0.02));
+}

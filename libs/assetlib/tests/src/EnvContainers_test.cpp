@@ -203,3 +203,32 @@ TEST_CASE("an environment container from a future major version is refused", "[b
 	lightingBytes[5]   = std::byte{ 0 };
 	CHECK_THROWS_AS(deserializeEnvLighting(lightingBytes), std::runtime_error);
 }
+
+// The derived exposure normalizes every environment to middle grey, so on its own no environment
+// can be dimmer or brighter than another. The override is what says otherwise, and it has to
+// survive both a round-trip and a re-bake -- a bake that refreshed the derivation and discarded the
+// authored value would take a tuned environment back to the average with nothing to show for it.
+TEST_CASE("an authored exposure survives a round-trip beside the derived one", "[benvl][io]")
+{
+	BEnvLighting lighting     = SampleLighting();
+	lighting.exposure         = 1.25f;
+	lighting.exposureOverride = 0.5f;
+
+	const BEnvLighting restored = deserializeEnvLighting(serializeEnvLighting(lighting));
+
+	CHECK(restored.exposure == Catch::Approx(1.25f));
+	REQUIRE(restored.exposureOverride.has_value());
+	CHECK(*restored.exposureOverride == Catch::Approx(0.5f));
+	CHECK(restored.EffectiveExposure() == Catch::Approx(0.5f));
+}
+
+TEST_CASE("an unauthored exposure renders at what the bake derived", "[benvl][io]")
+{
+	BEnvLighting lighting = SampleLighting();
+	lighting.exposure     = 1.25f;
+
+	const BEnvLighting restored = deserializeEnvLighting(serializeEnvLighting(lighting));
+
+	CHECK_FALSE(restored.exposureOverride.has_value());
+	CHECK(restored.EffectiveExposure() == Catch::Approx(1.25f));
+}

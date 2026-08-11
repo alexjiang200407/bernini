@@ -25,6 +25,10 @@ struct MaterialData
     TextureCubeHandle prefilterMap;
     TextureHandle brdfLUT;
 
+    // (sin, cos) of the environment's rotation about the up axis -- the same spin the skybox pass
+    // puts on its ray. See PbrShading::ToEnvSpace.
+    float2 envRotation;
+
     SamplerState.Handle anisoLinearWrapSampler;
     SamplerState.Handle linearClampSampler;
 };
@@ -160,7 +164,8 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
         materialData.prefilterMap,
         materialData.brdfLUT,
         materialData.linearClampSampler,
-        materialData.exposure
+        materialData.exposure,
+        materialData.envRotation
     );
 }
 

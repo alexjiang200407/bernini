@@ -70,10 +70,29 @@ namespace assetlib
 		EnvMapRoute irradiance;  // clamped-cosine convolution, one mip
 
 		/**
-		 * The exposure this environment renders at. An HDR environment's absolute scale is arbitrary,
-		 * so this is a property of the maps rather than of the scene, and it has to be re-derived
-		 * whenever they change -- which is why it lives in the file and not in config.
+		 * The exposure `exposureFor` derived from these maps, rewritten by every bake. An HDR
+		 * environment's absolute scale is arbitrary, so this has to move whenever the maps do --
+		 * which is why it lives in the file and not in config.
+		 *
+		 * A proposal, not the answer: it normalizes every environment to middle grey, so on its own
+		 * no environment can be dimmer or brighter than another. `exposureOverride` is what says so.
 		 */
 		float exposure = 1.0f;
+
+		/**
+		 * What a person decided this environment renders at, overruling the derivation.
+		 *
+		 * Kept beside `exposure` rather than replacing it so a re-bake can refresh the proposal
+		 * without discarding a tuned value -- the reason a bake may not simply write one number.
+		 * Unset until somebody authors it.
+		 */
+		std::optional<float> exposureOverride;
+
+		/** The exposure to render at: what was authored, or the derivation until something is. */
+		[[nodiscard]] float
+		EffectiveExposure() const noexcept
+		{
+			return exposureOverride.value_or(exposure);
+		}
 	};
 }

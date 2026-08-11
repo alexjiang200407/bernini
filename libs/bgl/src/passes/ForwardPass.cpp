@@ -362,6 +362,10 @@ namespace bgl
 			{
 				u = draw.lighting.exposure;
 			}
+			if (auto u = matData["envRotation"]; u.IsValid())
+			{
+				u = draw.lighting.envRotation;
+			}
 			if (auto u = matData["alphaHashSeed"]; u.IsValid())
 			{
 				u = draw.viewState.alphaHashSeed;

@@ -37,7 +37,7 @@ namespace assetlib
 			const BEnvLighting lighting = loadEnvLighting(dataRoot / env.lighting);
 			resolved.maps.prefilter     = loadRoute(dataRoot, lighting.prefilter);
 			resolved.maps.irradiance    = loadRoute(dataRoot, lighting.irradiance);
-			resolved.maps.exposure      = lighting.exposure;
+			resolved.maps.exposure      = lighting.EffectiveExposure();
 		}
 
 		return resolved;

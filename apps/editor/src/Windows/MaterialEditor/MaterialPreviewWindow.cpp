@@ -88,8 +88,9 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.
 	setFocusPolicy(Qt::StrongFocus);
 
-	m_ExposureOverride = env.exposureOverride;
-	m_ConfiguredRoot   = env.dataRoot;
+	m_ExposureOverride    = env.exposureOverride;
+	m_SkyMipLevelOverride = env.skyMipLevelOverride;
+	m_ConfiguredRoot      = env.dataRoot;
 
 	m_DefaultMaterial = GetRenderer()->Invoke([&] {
 		bgl::IScene*     scene = PreviewScene();
@@ -101,6 +102,7 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 			env.environmentMap,
 			env.dataRoot,
 			env.exposureOverride,
+			env.skyMipLevelOverride,
 			"MaterialPreview");
 
 		return scene->CreatePbrMaterial(
@@ -415,6 +417,7 @@ MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
 			benvPath,
 			m_DataRoot.empty() ? m_ConfiguredRoot : m_DataRoot,
 			m_ExposureOverride,
+			m_SkyMipLevelOverride,
 			"MaterialPreview");
 
 		// After the new one is bound, never before: releasing first would leave the view naming a

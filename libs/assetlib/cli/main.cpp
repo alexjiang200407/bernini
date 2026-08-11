@@ -141,7 +141,8 @@ main(int argc, char** argv)
 	std::string envIem;
 	uint32_t    envIemSize    = 128;
 	uint32_t    envSkyboxSize = 512;
-	float       envSkyboxBlur = 0.0f;
+	uint32_t    envSkyboxMips = 6;
+	uint32_t    envSkyboxMip  = 0;
 	uint32_t    envSize       = 256;
 	uint32_t    envMips       = 7;
 	uint32_t    envSamples    = 128;
@@ -170,10 +171,15 @@ main(int argc, char** argv)
 		"Skybox face size (default: 512). Seen directly at viewport resolution, so it wants more "
 		"than the prefilter -- but no more than the source can supply, and less if it is blurred");
 	envmap->add_option(
-		"--skybox-blur",
-		envSkyboxBlur,
-		"GGX roughness to defocus the skybox by (0 = sharp). Reads as depth of field, and hides a "
-		"source that cannot fill the face");
+		"--skybox-mips",
+		envSkyboxMips,
+		"Levels in the skybox's defocus chain (default: 6). Mip 0 is the sharp projection; each "
+		"level below it is convolved to the width its own texel subtends");
+	envmap->add_option(
+		"--skybox-mip",
+		envSkyboxMip,
+		"Which level the written .bsky presents (default: 0 = sharp). Reads as depth of field, and "
+		"hides a source that cannot fill the face -- and unlike a baked blur it is reversible");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
 	envmap->add_option(
@@ -279,6 +285,21 @@ main(int argc, char** argv)
 		"recoverable, so prefer this over stripping a material you still intend to author");
 	strip->add_flag("-y,--yes", stripYes, "Rewrite the input without asking for confirmation");
 
+	std::string expInput;
+	float       expSet   = 0.0f;
+	bool        expClear = false;
+
+	auto* exposure = app.add_subcommand(
+		"exposure",
+		"Show or author the exposure a .benvl renders at, overruling the value its bake derived");
+	exposure->add_option("input", expInput, "A .benvl file")->required()->check(CLI::ExistingFile);
+	auto* expSetOpt = exposure->add_option(
+		"-s,--set",
+		expSet,
+		"Author this exposure. Survives a re-bake, which refreshes only the derivation");
+	exposure->add_flag("-c,--clear", expClear, "Drop the authored value and fall back to the bake")
+		->excludes(expSetOpt);
+
 	CLI11_PARSE(app, argc, argv);
 
 	if (*bake)
@@ -319,19 +340,31 @@ main(int argc, char** argv)
 													std::max(envSkyboxSize, envSize)) :
 			                                    assetlib::loadKTX2(envInput);
 
-			// Blurred, the skybox is a separate convolution of the same environment; sharp, it is
-			// the projection itself. Either way the prefilter and irradiance still read `src`, so a
-			// defocused background never reaches the lighting.
-			assetlib::ImageData sky =
-				envSkyboxBlur > 0.0f ?
-					assetlib::blurCube(src, envSkyboxSize, envSkyboxBlur, 256, envThreads) :
-					assetlib::ImageData();
+			// A shipped map is RGB9E5, and that is the only form left when a route's float source
+			// has gone. Re-convolving one costs a generation of quantization, so it is a recovery
+			// path and not the one to reach for when the source is still there.
+			if (src.vkFormat == assetlib::VkFormat::E5B9G9R9_UFLOAT_PACK32)
+			{
+				spdlog::warn(
+					"'{}' is RGB9E5; unpacking it to float. Re-convolving a baked map quantizes "
+					"twice -- prefer the source it was baked from",
+					envInput);
+				src = assetlib::unpackRgb9e5(src);
+			}
 
 			if (!envCube.empty())
 			{
-				const assetlib::ImageData& cube = envSkyboxBlur > 0.0f ? sky : src;
+				// A defocus chain rather than one blurred mip: which level the backdrop draws is a
+				// viewer's choice, so it must survive the bake. The prefilter and irradiance still
+				// read `src`, so nothing the backdrop does reaches the lighting.
+				const assetlib::ImageData cube =
+					assetlib::skyChain(src, envSkyboxSize, envSkyboxMips, 256, envThreads);
 				assetlib::writeKTX2(cube, envCube, false, assetlib::Ktx2Compression::kNone);
-				spdlog::info("Wrote the skybox cube to '{}' ({}^2)", envCube, cube.width);
+				spdlog::info(
+					"Wrote the skybox cube to '{}' ({}^2 x {} mips)",
+					envCube,
+					cube.width,
+					envSkyboxMips);
 			}
 
 			assetlib::ImageData iem = assetlib::irradianceSh(src, envIemSize);
@@ -376,7 +409,8 @@ main(int argc, char** argv)
 				importDesc.source             = envInput;
 				importDesc.name               = envName;
 				importDesc.skyFaceSize        = envSkyboxSize;
-				importDesc.skyBlur            = envSkyboxBlur;
+				importDesc.skyMips            = envSkyboxMips;
+				importDesc.skyMipLevel        = envSkyboxMip;
 				importDesc.prefilterFaceSize  = envSize;
 				importDesc.prefilterMips      = envMips;
 				importDesc.prefilterSamples   = envSamples;
@@ -621,6 +655,37 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("prune failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*exposure)
+	{
+		try
+		{
+			assetlib::BEnvLighting lighting = assetlib::loadEnvLighting(expInput);
+
+			if (*expSetOpt || expClear)
+			{
+				if (expClear)
+					lighting.exposureOverride.reset();
+				else
+					lighting.exposureOverride = expSet;
+
+				assetlib::saveEnvLighting(lighting, expInput);
+			}
+
+			spdlog::info(
+				"'{}': derived {:.6g}, authored {}, rendering at {:.6g}",
+				expInput,
+				lighting.exposure,
+				lighting.exposureOverride ? std::format("{:.6g}", *lighting.exposureOverride) :
+											std::string("(none)"),
+				lighting.EffectiveExposure());
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("exposure failed: {}", e.what());
 			return 1;
 		}
 	}

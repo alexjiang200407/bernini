@@ -37,6 +37,16 @@ disagrees, trust the header, then fix this doc.
 * **Exposure belongs to the maps, not to the scene.** An HDR environment's absolute scale is
   arbitrary, so `bakeEnvLighting` derives an exposure from the irradiance it produced and stores it in
   the `.benvl`. It has to be re-derived whenever the maps change, which is why it lives in the file.
+* **The derivation proposes; `exposureOverride` decides.** `exposureFor` normalizes every environment
+  to middle grey, which means that used alone, no environment can be dimmer or brighter than another —
+  a dusk and a noon are forced to the same average. `BEnvLighting::exposureOverride` is the authored
+  answer, kept *beside* the derivation rather than replacing it so a re-bake can refresh the proposal
+  without discarding a tuned value. `EffectiveExposure()` is what a renderer reads. Author it with
+  `assetlib_cli exposure <file.benvl> --set <v>`, or `--clear` to go back to the bake.
+* **The backdrop's defocus is presentation, not pixels.** The sky is baked as a chain by `skyChain`:
+  mip 0 is the sharp projection, and each level below it is convolved to the width its own texel
+  subtends. Which level is drawn is `BSky::mipLevel`, a container edit rather than minutes of
+  convolution — and reversible, which a blur convolved into a single mip is not.
 * **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
   environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
   not of any environment. bgl renders its own 256² `RG16_FLOAT` copy once at device init
@@ -50,7 +60,7 @@ disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `BSky` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | One radiance route, plus how the backdrop presents it (`mipLevel`, `rotationY`) |
-| `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair and the exposure they were measured at |
+| `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair, the exposure they were measured at, and the authored one that overrules it |
 | `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | Paths to a `.bsky` and a `.benvl`; no pixels |
 | `EnvMapRoute` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | source + baked + stamp, the same shape as a material's channel route |
 
@@ -60,7 +70,7 @@ disagrees, trust the header, then fix this doc.
 |---|---|
 | [libs/assetlib/include/assetlib/env_import.h](libs/assetlib/include/assetlib/env_import.h) | `importEnvironment` — one `.hdr` or float cube into the whole family, with selectable parts, cancellation and rollback. `environmentImportTargets` names what it *would* write |
 | [libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h) | `bakeSky` / `bakeEnvLighting`, the staleness checks, and `isBakedEnvMapName` for the prune |
-| [libs/assetlib/include/assetlib/envmap_bake.h](libs/assetlib/include/assetlib/envmap_bake.h) | The convolutions themselves: `equirectToCube`, `prefilterRadiance`, `irradianceSh`, `blurCube` |
+| [libs/assetlib/include/assetlib/envmap_bake.h](libs/assetlib/include/assetlib/envmap_bake.h) | The convolutions themselves: `equirectToCube`, `prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube` |
 | [libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h) | `resolveEnvironment` — a `.benv` followed to decoded pixels. What the editor consumes |
 | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
 | [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h), [benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h), [benv_io.h](libs/assetlib/include/assetlib/benv_io.h) | Serialize / load each container |
@@ -170,6 +180,8 @@ if (env.HasLighting())
 if (env.HasSky())
     view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
 
+// One exposure for the whole view. SkyboxDesc::exposure above is an *additional* per-sky gain that
+// the pass multiplies onto this, so 1.0f means "no extra gain" rather than "ignore the environment".
 view->SetExposure(env.exposure);
 ```
 
@@ -179,7 +191,7 @@ From a command line, `--project` does the import and both bakes:
 
 ```bash
 assetlib_cli envmap forest.hdr -p Project/Data --name forest \
-    --size 256 --skybox-size 256 --skybox-blur 0.15 --irradiance-size 128 \
+    --size 256 --skybox-size 512 --skybox-mips 6 --irradiance-size 128 \
     --mips 7 --samples 2048
 ```
 
@@ -200,23 +212,40 @@ a face's 90°, so a 1024×512 source carries about 256 — and a 512² face is a
 further buys smoothness, not detail: raising the skybox from 256² to 512² did not move a single golden
 image. Size it from the source, not from the screen.
 
-### The skybox is deliberately defocused
+### The skybox is defocused at draw time, not at bake time
 
-`--skybox-blur` convolves it with a GGX lobe; 0.15 is the shipped value. This is an effect, not a
-concession. A material editor wants the eye on the material, and a soft backdrop reads as depth of
-field where a sharp one competes for attention. It also decouples the background from the source's
-resolution, so the ceiling above stops showing as pixelation.
+A material editor wants the eye on the material, and a soft backdrop reads as depth of field where a
+sharp one competes for attention. It also decouples the background from the source's resolution, so
+the ceiling above stops showing as pixelation.
 
-0.08 leaves a fence and path legible enough to distract. 0.35 flattens the environment to one wash.
-0.15 keeps the colour variation that makes it read as a real place, out of focus.
+That is an effect, and it belongs to the **viewport** rather than to the environment: a level viewport
+is judged on the world it is building and wants the same sky sharp. So the bake writes the whole
+range — `skyChain`, mip 0 sharp, each level below convolved to its own texel — and `BSky::mipLevel`
+picks one. `--skybox-mips` sets how many levels; `--skybox-mip` sets which one the `.bsky` presents,
+and `editor::ApplyEnvironment`'s `skyMipLevelOverride` lets a viewport overrule even that. The
+material preview and the thumbnail cache default to mip 3; the level viewport takes the file's own.
+
+Mip 3 of a **512** chain is a lobe of about roughness 0.157, which is where `--skybox-blur 0.15` used
+to put it — the level that was chosen by eye when the blur was destructive, and why the preview's
+default is 3 against the 512 sky `EnvImportDesc` bakes. Mip 1 leaves a fence and path legible enough
+to distract; mip 5 flattens the environment to one wash.
+
+**A level is not a fixed amount of blur** — it is a fraction of the chain, so the same index means
+different things on different-sized skies. On a 256² chain, roughness 0.157 is mip **2**; mip 3 there
+is 0.222 and visibly softer. A viewport that wants a particular look on an arbitrary sky has to pick
+the level from the cube's face size rather than hardcode one, and the defaults here do not yet.
 
 **Only the skybox.** The prefilter and the irradiance convolve the sharp projection, so nothing about
 the background reaches the lighting — the shipped map keeps the source's full 1092 peak in prefilter
-mip 0 while the skybox's is crushed to 91. Blurring the maps that light the scene would be the gamma
-mistake in another costume.
+mip 0 while a defocused backdrop is crushed to 91. Blurring the maps that light the scene would be the
+gamma mistake in another costume.
 
-Because the blur removes everything above the face's Nyquist, a blurred skybox wants *fewer* texels,
-not more: 256² is indistinguishable from 512² at half the size.
+### A rotated sky rotates the lighting
+
+`BSky::rotationY` spins the backdrop's clip-to-world ray, and the IBL lookup carries the same spin
+(`PbrShading::ToEnvSpace`). It has to: the cubes are one environment, and a normal that skipped the
+rotation would be lit from where the sky used to be. Nothing caught this for as long as it was wrong,
+because the only environment shipped has `rotationY` 0 — `EnvOrientation_test` is what catches it now.
 
 ## Verifying
 

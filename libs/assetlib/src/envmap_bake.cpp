@@ -688,6 +688,89 @@ namespace assetlib
 		return out;
 	}
 
+	ImageData
+	skyChain(
+		const ImageData& source,
+		uint32_t         faceSize,
+		uint32_t         mipLevels,
+		uint32_t         samples,
+		uint32_t         threads)
+	{
+		if (faceSize == 0 || mipLevels == 0)
+			throw std::runtime_error("assetlib::skyChain: faceSize and mipLevels must be > 0");
+		if (samples == 0)
+			throw std::runtime_error("assetlib::skyChain: samples must be > 0");
+		if ((faceSize >> (mipLevels - 1)) == 0)
+			throw std::runtime_error(
+				"assetlib::skyChain: faceSize is too small for that many mips");
+
+		const CubePyramid pyramid(source);
+		ImageData         out = makeCubeImage(faceSize, mipLevels);
+
+		const float srcSize = static_cast<float>(pyramid.BaseSize());
+		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
+
+		const uint32_t threadCount =
+			threads != 0 ? threads : std::max(1u, std::thread::hardware_concurrency());
+
+		struct Job
+		{
+			uint32_t face = 0;
+			uint32_t mip  = 0;
+		};
+
+		std::vector<Job> jobs;
+		for (uint32_t mip = 0; mip < mipLevels; ++mip)
+			for (uint32_t face = 0; face < 6; ++face) jobs.push_back({ face, mip });
+
+		std::atomic<uint32_t> nextJob{ 0 };
+
+		auto worker = [&]() {
+			for (;;)
+			{
+				const uint32_t jobIndex = nextJob.fetch_add(1);
+				if (jobIndex >= jobs.size())
+					return;
+
+				const Job      job  = jobs[jobIndex];
+				const uint32_t size = std::max(1u, faceSize >> job.mip);
+
+				const size_t subIndex = static_cast<size_t>(job.face) * mipLevels + job.mip;
+				auto*        dst =
+					reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
+
+				convolveFace(
+					pyramid,
+					job.face,
+					size,
+					skyMipRoughness(faceSize, job.mip),
+					samples,
+					saTexel,
+					dst);
+			}
+		};
+
+		std::vector<std::thread> pool;
+		pool.reserve(threadCount);
+		for (uint32_t i = 0; i < threadCount; ++i) pool.emplace_back(worker);
+		for (std::thread& t : pool) t.join();
+
+		return out;
+	}
+
+	float
+	skyMipRoughness(uint32_t faceSize, uint32_t mip) noexcept
+	{
+		if (mip == 0 || faceSize == 0)
+			return 0.0f;
+
+		// A texel of the mip subtends (pi/2 / size) radians, and a GGX lobe's half-angle is roughly
+		// roughness^2 -- the same relation PbrShading inverts to pick a mip from a screen footprint.
+		const auto  size  = static_cast<float>(std::max(1u, faceSize >> mip));
+		const float angle = (c_Pi * 0.5f) / size;
+		return std::sqrt(angle);
+	}
+
 	float
 	exposureFor(const ImageData& irradiance)
 	{
@@ -712,7 +795,11 @@ namespace assetlib
 					// over-count the corners and read the environment as brighter than it is.
 					const double     w = texelSolidAngle(u, v, map.size);
 					const glm::vec3& c = map.faces[face][static_cast<size_t>(row) * map.size + col];
-					sum += static_cast<double>(c.x + c.y + c.z) / 3.0 * w;
+
+					// Rec.709 luminance, not the channel mean: a strongly tinted environment
+					// reflects off grey by how bright it looks, and the two disagree by most in
+					// exactly that case.
+					sum += static_cast<double>(0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z) * w;
 					wsum += w;
 				}
 			}

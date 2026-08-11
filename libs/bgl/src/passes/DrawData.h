@@ -53,9 +53,21 @@ namespace bgl
 		EnvironmentMap env;
 		float          exposure = 1.0f;
 
+		// (sin, cos) of the sky's rotation about the up axis. The IBL cubes carry it too, or a
+		// rotated sky lights the scene from where it used to be.
+		glm::vec2 envRotation{ 0.0f, 1.0f };
+
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
 		glm::mat4                 skyboxPrevWorldToClip{ 1.0f };
+
+		// What the skybox pass draws at: the view's exposure with the sky's own gain on top, so the
+		// backdrop and the geometry are exposed alike.
+		[[nodiscard]] float
+		SkyExposure() const noexcept
+		{
+			return exposure * (skybox.has_value() ? skybox->exposure : 1.0f);
+		}
 	};
 
 	/** The scene's standard samplers, resolved once per draw so a pass need not reach for them. */
