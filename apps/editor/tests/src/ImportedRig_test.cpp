@@ -247,3 +247,123 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 	REQUIRE_NOTHROW(assetlib::save(mesh, bmeshPath));
 	CHECK(assetlib::load(bmeshPath).skeleton == "Skeletons/unit.bskel");
 }
+
+// The mechanism a clips-only import runs on: a second export of the same rig hashes to the same
+// signature, so the clips can find the skeleton they belong to without the user tracking it.
+TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
+{
+	const TempRoot root;
+	const auto     imported = SkinnedImport();
+
+	assetlib::BMesh mesh;
+	ContentExplorerWindow::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*writeClips*/ false);
+
+	// The same rig, under a name nothing could guess from the animation file.
+	const auto found = ContentExplorerWindow::FindMatchingSkeleton(root.Data(), imported.skeleton);
+	CHECK(found == root.Bskel());
+
+	// Directory order is unspecified, so silently picking one would make the .banim's reference
+	// depend on the filesystem -- and scatter one rig's clips across two skeletons, which is exactly
+	// what a VAT bake cannot fit a single bounding box around.
+	SECTION("two rigs with the same signature are ambiguous, not a coin toss")
+	{
+		assetlib::BMesh second;
+		const fs::path twin = root.Data() / Project::c_SkeletonsDirectoryName / "coyote_twin.bskel";
+		ContentExplorerWindow::WriteImportedRig(
+			SkinnedImport(),
+			second,
+			root.Data(),
+			twin,
+			root.Banim(),
+			/*writeClips*/ false);
+
+		REQUIRE(fs::exists(twin));
+		CHECK_THROWS_AS(
+			ContentExplorerWindow::FindMatchingSkeleton(root.Data(), imported.skeleton),
+			std::runtime_error);
+	}
+
+	SECTION("a rig with a bone renamed is not a match")
+	{
+		assetlib::Skeleton other  = imported.skeleton;
+		other.bones[1].nameOffset = other.stringPool.add("tail");
+
+		CHECK(ContentExplorerWindow::FindMatchingSkeleton(root.Data(), other).empty());
+	}
+
+	// The signature covers names and parents and deliberately not the bind pose, which is what lets
+	// a per-animation export whose rest pose drifted still attach: a clip replaces the pose whole.
+	SECTION("a rig whose rest pose moved is still a match")
+	{
+		assetlib::Skeleton rebound            = imported.skeleton;
+		rebound.bones[1].bindPose.translation = glm::vec3(0.0f, 99.0f, 0.0f);
+
+		CHECK(ContentExplorerWindow::FindMatchingSkeleton(root.Data(), rebound) == root.Bskel());
+	}
+}
+
+// The multi-file workflow end to end: the rig arrives with the first file, and a second file's clips
+// attach to it without a second copy of the mesh or the skeleton.
+TEST_CASE("Clips import on their own, attached to the rig already there", "[importedrig]")
+{
+	const TempRoot root;
+	const auto     imported = SkinnedImport();
+
+	assetlib::BMesh mesh;
+	ContentExplorerWindow::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*writeClips*/ false);
+
+	const fs::path runPath = root.Data() / Project::c_AnimationsDirectoryName / "coyote_run.banim";
+	ContentExplorerWindow::WriteImportedClips(imported, root.Data(), runPath);
+
+	REQUIRE(fs::exists(runPath));
+
+	const assetlib::AnimationSet clips = assetlib::loadAnimations(runPath);
+	CHECK(clips.skeleton == mesh.skeleton);
+	CHECK(assetlib::animationsMatchSkeleton(clips, assetlib::loadSkeleton(root.Bskel())));
+
+	// The point of the exercise: one rig, one mesh, many clip sets.
+	CHECK_FALSE(fs::exists(root.Data() / Project::c_MeshesDirectoryName / "coyote_run.bmesh"));
+}
+
+TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
+{
+	const TempRoot root;
+	const auto     imported = SkinnedImport();
+
+	// Nothing has been imported yet, so there is no skeleton these clips could address. Writing them
+	// anyway would leave a .banim naming a file that does not exist.
+	CHECK_THROWS_AS(
+		ContentExplorerWindow::WriteImportedClips(imported, root.Data(), root.Banim()),
+		std::runtime_error);
+
+	SECTION("and so is a file carrying no clips")
+	{
+		assetlib::BMesh mesh;
+		ContentExplorerWindow::WriteImportedRig(
+			imported,
+			mesh,
+			root.Data(),
+			root.Bskel(),
+			root.Banim(),
+			/*writeClips*/ false);
+
+		auto clipless = SkinnedImport();
+		clipless.animations.clips.clear();
+
+		CHECK_THROWS_AS(
+			ContentExplorerWindow::WriteImportedClips(clipless, root.Data(), root.Banim()),
+			std::runtime_error);
+	}
+}
