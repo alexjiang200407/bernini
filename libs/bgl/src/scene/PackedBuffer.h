@@ -153,7 +153,7 @@ namespace bgl
 
 		// The dense (GPU) index `handle` occupies right now; any Erase can move it.
 		[[nodiscard]] uint32_t
-		DenseIndexOf(Handle handle) const
+		GetDenseIndex(Handle handle) const
 		{
 			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			gassert(IsValid(handle), "Invalid PackedBuffer handle");

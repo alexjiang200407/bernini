@@ -90,7 +90,7 @@ namespace bgl
 				.SetInitialCount(paddedInstances)
 				.SetDebugName("Selected Instances");
 
-			m_SelectedInstances.Init(std::move(desc), m_ResourceManager);
+			m_CurrentSelectedInstances.Init(std::move(desc), m_ResourceManager);
 		}
 	}
 
@@ -132,10 +132,10 @@ namespace bgl
 
 		m_TransparentSort.Resize(padded);
 
-		if (padded > m_SelectedInstances.GetDesc().initialCount)
+		if (padded > m_CurrentSelectedInstances.GetDesc().initialCount)
 		{
 			// Resize discards the GPU contents; the CPU list is still current, so re-upload it.
-			m_SelectedInstances.Resize(padded);
+			m_CurrentSelectedInstances.Resize(padded);
 			m_SelectionUploadPending = true;
 		}
 	}
@@ -157,7 +157,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
-		m_SelectedInstances.Release();
+		m_CurrentSelectedInstances.Release();
 
 		logger::trace("~SceneView");
 	}
@@ -352,7 +352,7 @@ namespace bgl
 				const core::slot_handle handle = meta.submeshInstances[s];
 				if (m_InstanceBuffer.IsValid(handle))
 				{
-					m_SelectedList.push_back(m_InstanceBuffer.DenseIndexOf(handle));
+					m_SelectedList.push_back(m_InstanceBuffer.GetDenseIndex(handle));
 				}
 			}
 		}
@@ -552,7 +552,7 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
-		m_SelectedInstances.Update(cmdList);
+		m_CurrentSelectedInstances.Update(cmdList);
 		if (m_SelectionDirty)
 		{
 			RebuildSelectedList();
@@ -562,7 +562,7 @@ namespace bgl
 			if (!m_SelectedList.empty())
 			{
 				cmdList->WriteBuffer(
-					m_SelectedInstances.GetBufferHandle(),
+					m_CurrentSelectedInstances.GetBufferHandle(),
 					m_SelectedList.data(),
 					m_SelectedList.size() * sizeof(uint32_t));
 			}
@@ -628,7 +628,7 @@ namespace bgl
 
 		{
 			auto name = std::string(c_SelectedInstancesName);
-			fg.ImportBuffer(name, m_SelectedInstances.GetBufferHandle());
+			fg.ImportBuffer(name, m_CurrentSelectedInstances.GetBufferHandle());
 			resourceNames.push_back(std::move(name));
 		}
 

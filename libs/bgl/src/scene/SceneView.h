@@ -172,7 +172,7 @@ namespace bgl
 		[[nodiscard]] const ComputeBuffer&
 		GetSelectedInstanceBuffer() const noexcept
 		{
-			return m_SelectedInstances;
+			return m_CurrentSelectedInstances;
 		}
 
 		/**
@@ -278,7 +278,7 @@ namespace bgl
 		// The dense indices of the selected submesh instances, and their GPU copy. Any Erase on
 		// m_InstanceBuffer can move a dense index, so a deletion staleness-marks the list exactly
 		// like a selection change does.
-		ComputeBuffer         m_SelectedInstances;
+		ComputeBuffer         m_CurrentSelectedInstances;
 		std::vector<uint32_t> m_SelectedList;
 		bool                  m_SelectionDirty         = false;
 		bool                  m_SelectionUploadPending = false;
