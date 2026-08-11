@@ -1,11 +1,11 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
 #include "scene/CullState.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/TransparentSortState.h"
+#include "scene/UploadBuffer.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -169,7 +169,7 @@ namespace bgl
 		[[nodiscard]] std::span<const uint32_t>
 		GetSelectedInstances();
 
-		[[nodiscard]] const ComputeBuffer&
+		[[nodiscard]] const UploadBuffer<uint32_t>&
 		GetSelectedInstanceBuffer() const noexcept
 		{
 			return m_CurrentSelectedInstances;
@@ -275,13 +275,11 @@ namespace bgl
 		// Per view, not per frustum: only the camera sorts transparents.
 		TransparentSortState m_TransparentSort;
 
-		// The dense indices of the selected submesh instances, and their GPU copy. Any Erase on
-		// m_InstanceBuffer can move a dense index, so a deletion staleness-marks the list exactly
-		// like a selection change does.
-		ComputeBuffer         m_CurrentSelectedInstances;
-		std::vector<uint32_t> m_SelectedList;
-		bool                  m_SelectionDirty         = false;
-		bool                  m_SelectionUploadPending = false;
+		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
+		// move a dense index, so a deletion staleness-marks the list exactly like a selection
+		// change does.
+		UploadBuffer<uint32_t> m_CurrentSelectedInstances;
+		bool                   m_SelectionDirty = false;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;

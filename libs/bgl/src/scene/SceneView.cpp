@@ -85,10 +85,8 @@ namespace bgl
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
 		{
-			auto desc = ComputeBufferDesc();
-			desc.SetElement<uint32_t>()
-				.SetInitialCount(paddedInstances)
-				.SetDebugName("Selected Instances");
+			auto desc      = UploadBufferDesc();
+			desc.debugName = "Selected Instances";
 
 			m_CurrentSelectedInstances.Init(std::move(desc), m_ResourceManager);
 		}
@@ -131,13 +129,6 @@ namespace bgl
 		}
 
 		m_TransparentSort.Resize(padded);
-
-		if (padded > m_CurrentSelectedInstances.GetDesc().initialCount)
-		{
-			// Resize discards the GPU contents; the CPU list is still current, so re-upload it.
-			m_CurrentSelectedInstances.Resize(padded);
-			m_SelectionUploadPending = true;
-		}
 	}
 
 	SceneView::~SceneView() noexcept
@@ -267,7 +258,7 @@ namespace bgl
 
 		// The erases above can move any dense index, selected or not -- but with no mark
 		// anywhere, there is no list to stale.
-		if (m_SelectionDirty || !m_SelectedList.empty())
+		if (m_SelectionDirty || m_CurrentSelectedInstances.Size() != 0)
 		{
 			m_SelectionDirty = true;
 		}
@@ -325,13 +316,13 @@ namespace bgl
 			RebuildSelectedList();
 		}
 
-		return m_SelectedList;
+		return m_CurrentSelectedInstances.Values();
 	}
 
 	void
 	SceneView::RebuildSelectedList()
 	{
-		m_SelectedList.clear();
+		auto list = std::vector<uint32_t>();
 
 		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
 		{
@@ -352,13 +343,13 @@ namespace bgl
 				const core::slot_handle handle = meta.submeshInstances[s];
 				if (m_InstanceBuffer.IsValid(handle))
 				{
-					m_SelectedList.push_back(m_InstanceBuffer.GetDenseIndex(handle));
+					list.push_back(m_InstanceBuffer.GetDenseIndex(handle));
 				}
 			}
 		}
 
-		m_SelectionDirty         = false;
-		m_SelectionUploadPending = true;
+		m_CurrentSelectedInstances.Assign(list);
+		m_SelectionDirty = false;
 	}
 
 	MeshMeta&
@@ -552,23 +543,11 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
-		m_CurrentSelectedInstances.Update(cmdList);
 		if (m_SelectionDirty)
 		{
 			RebuildSelectedList();
 		}
-		if (m_SelectionUploadPending)
-		{
-			if (!m_SelectedList.empty())
-			{
-				cmdList->WriteBuffer(
-					m_CurrentSelectedInstances.GetBufferHandle(),
-					m_SelectedList.data(),
-					m_SelectedList.size() * sizeof(uint32_t));
-			}
-
-			m_SelectionUploadPending = false;
-		}
+		m_CurrentSelectedInstances.Update(cmdList);
 
 		auto buffers = GetInstanceBuffers();
 		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
