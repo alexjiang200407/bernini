@@ -528,6 +528,9 @@ MaterialEditorWindow::SelectSubmesh(int index)
 	// material have in common.
 	m_CurrentSubmesh = index;
 
+	if (m_Preview != nullptr)
+		m_Preview->SetSelectedSubmesh(static_cast<uint32_t>(index));
+
 	const int graphIndex = m_GraphForSubmesh[static_cast<size_t>(index)];
 	m_GraphView->setScene(
 		graphIndex >= 0 ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].scene.get() : nullptr);

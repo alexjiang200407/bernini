@@ -350,20 +350,61 @@ MaterialPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHa
 			// An override on the instances, not Scene::SetSubmeshMaterial on the geom. The geom's
 			// default is the *asset's* material: rewriting it here would edit the .bmesh's binding as
 			// a side effect of typing.
-			for (const InstanceRef& instance : m_Instances)
+			for (const SubmeshTarget& target :
+			     InstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
 			{
-				if (instance.geomIndex == ref.geomIndex && instance.handle.IsValid())
-				{
-					PreviewView()->SetSubmeshMaterialOverride(
-						instance.handle,
-						ref.localSubmesh,
-						material);
-				}
+				PreviewView()->SetSubmeshMaterialOverride(
+					target.instance,
+					target.submeshIndex,
+					material);
 			}
 		}
 		catch (const std::exception& e)
 		{
 			qWarning("MaterialPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
+		}
+	});
+}
+
+std::vector<MaterialPreviewWindow::SubmeshTarget>
+MaterialPreviewWindow::InstanceTargets(
+	std::span<const SubmeshRef>  refs,
+	std::span<const InstanceRef> instances,
+	uint32_t                     submeshIndex)
+{
+	auto targets = std::vector<SubmeshTarget>();
+
+	if (submeshIndex >= refs.size())
+		return targets;
+
+	const SubmeshRef& ref = refs[submeshIndex];
+	for (const InstanceRef& instance : instances)
+	{
+		if (instance.geomIndex == ref.geomIndex && instance.handle.IsValid())
+			targets.push_back({ instance.handle, ref.localSubmesh });
+	}
+
+	return targets;
+}
+
+void
+MaterialPreviewWindow::SetSelectedSubmesh(uint32_t submeshIndex)
+{
+	// Fire-and-forget like SetSubmeshMaterial: the selection needs no result back.
+	GetRenderer()->Post([this, submeshIndex] {
+		try
+		{
+			PreviewView()->ClearSelection();
+
+			for (const SubmeshTarget& target :
+			     InstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
+			{
+				PreviewView()->SetSubmeshSelected(target.instance, target.submeshIndex, true);
+			}
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialPreview: SetSelectedSubmesh(%u) failed: %s", submeshIndex, e.what());
 		}
 	});
 }
