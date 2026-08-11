@@ -6,6 +6,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -123,6 +124,30 @@ namespace assetlib
 			}
 
 			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
+		}
+
+		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
+		void
+		collectVatEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			VatRefs refs;
+			try
+			{
+				refs = loadVatRefs(file);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the VAT bake '" + file.string() +
+					"', so the assets it was baked from cannot be known: " + e.what());
+			}
+
+			addEdge(edges, referrer, refs.mesh, RefKind::kVatSource);
+			addEdge(edges, referrer, refs.skeleton, RefKind::kVatSource);
+			addEdge(edges, referrer, refs.animations, RefKind::kVatSource);
 		}
 
 		/** The baked triplet a `.bmaterial` names, and the sources its channels route from. */
@@ -260,6 +285,8 @@ namespace assetlib
 			return AssetType::kSkeleton;
 		if (ext == c_AnimationExtension)
 			return AssetType::kAnimation;
+		if (ext == c_VatExtension)
+			return AssetType::kVat;
 
 		return std::nullopt;
 	}
@@ -317,6 +344,11 @@ namespace assetlib
 			{
 				collectAnimationEdges(edges, file, referrer);
 				++graph.clipSetsScanned;
+			}
+			else if (kind == c_VatExtension)
+			{
+				collectVatEdges(edges, file, referrer);
+				++graph.vatsScanned;
 			}
 		}
 

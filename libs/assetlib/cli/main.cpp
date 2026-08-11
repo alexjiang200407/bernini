@@ -10,6 +10,8 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
@@ -18,9 +20,11 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
@@ -36,6 +40,7 @@ namespace
 		kEnvLighting,
 		kSkeleton,
 		kAnimation,
+		kVat,
 	};
 
 	std::string
@@ -89,6 +94,8 @@ namespace
 			return "skins to";
 		case assetlib::RefKind::kClipSkeleton:
 			return "was resampled against";
+		case assetlib::RefKind::kVatSource:
+			return "was baked from";
 		}
 
 		return "references";
@@ -121,11 +128,13 @@ namespace
 			return ContainerType::kSkeleton;
 		case assetlib::magic::c_BAnim:
 			return ContainerType::kAnimation;
+		case assetlib::magic::c_BVat:
+			return ContainerType::kVat;
 		}
 
 		core::throw_runtime_error(
 			"{} is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
-			".benvl, .bskel or .banim)",
+			".benvl, .bskel, .banim or .bvat)",
 			path.string());
 	}
 
@@ -178,6 +187,33 @@ main(int argc, char** argv)
 			sampleRate,
 			"Hz every animation clip is resampled to (default: 30)")
 		->check(CLI::PositiveNumber);
+
+	std::string vatDataRoot;
+	std::string vatMesh;
+	std::string vatAnimations;
+	std::string vatOut;
+
+	auto* bakevat = app.add_subcommand(
+		"bakevat",
+		"Bake a rig's clips into a .bvat: every skinned vertex at every frame, as a position and a "
+		"normal texture the crowd tier fetches instead of skinning");
+	bakevat
+		->add_option(
+			"-d,--data-root",
+			vatDataRoot,
+			"Directory the mesh's asset paths resolve "
+			"against: the project's Data directory, or the baked directory itself for assetlib_cli "
+			"bake output")
+		->required()
+		->check(CLI::ExistingDirectory);
+	bakevat->add_option("mesh", vatMesh, "A .bmesh, relative to the data root")->required();
+	bakevat
+		->add_option("animations", vatAnimations, "The .banim to bake, relative to the data root")
+		->required();
+	bakevat->add_option(
+		"-o,--out",
+		vatOut,
+		"Output .bvat (default: beside the mesh, its extension swapped)");
 
 	std::string envInput;
 	std::string envOut;
@@ -389,6 +425,45 @@ main(int argc, char** argv)
 		}
 	}
 
+	if (*bakevat)
+	{
+		try
+		{
+			auto desc       = assetlib::VatBakeDesc();
+			desc.dataRoot   = vatDataRoot;
+			desc.mesh       = vatMesh;
+			desc.animations = vatAnimations;
+
+			const assetlib::BVat vat = assetlib::bakeVat(desc);
+
+			const std::filesystem::path out = vatOut.empty() ?
+			                                      (std::filesystem::path(vatDataRoot) / vatMesh)
+			                                          .replace_extension(assetlib::c_VatExtension) :
+			                                      std::filesystem::path(vatOut);
+			assetlib::saveVat(vat, out);
+
+			spdlog::info(
+				"Baked '{}' + '{}' -> '{}': {} x {} texels, {} clip(s), {} bones",
+				vatMesh,
+				vatAnimations,
+				out.string(),
+				vat.width,
+				vat.height,
+				vat.clips.size(),
+				vat.boneCount);
+			spdlog::info(
+				"  positions {}, normals {}, palettes {}",
+				formatBytes(vat.positionsKtx2.size()),
+				formatBytes(vat.normalsKtx2.size()),
+				formatBytes(vat.palettes.size() * sizeof(glm::mat4)));
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("bakevat failed: {}", e.what());
+			return 1;
+		}
+	}
+
 	if (*envmap)
 	{
 		try
@@ -584,6 +659,10 @@ main(int argc, char** argv)
 				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
+			case ContainerType::kVat:
+				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
+				std::cout << assetlib::describe(assetlib::loadVatTables(path), dataRoot);
+				break;
 			}
 		}
 		catch (const std::exception& e)
@@ -638,12 +717,13 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(desc);
 
 			spdlog::info(
-				"Scanned {} meshes, {} materials, {} environment assets and {} clip sets: {} "
-				"references",
+				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets and {} VAT "
+				"bakes: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
 				graph.environmentsScanned,
 				graph.clipSetsScanned,
+				graph.vatsScanned,
 				graph.Edges().size());
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.
