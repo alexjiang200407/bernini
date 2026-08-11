@@ -133,6 +133,21 @@ namespace assetlib
 		std::filesystem::path m_DataRoot;
 	};
 
+	/**
+	 * Whether a deletion takes only its target, or also what the target alone was holding alive.
+	 *
+	 * kCascade frees the target's references the way dropping a row resolves its foreign keys: an
+	 * asset the deleted set references is deleted with it **only when nothing outside the set
+	 * references it too**, applied transitively -- a material freed by its last mesh frees the
+	 * textures it alone routed. It never reaches *up*: what references the target still blocks the
+	 * deletion in either mode.
+	 */
+	enum class DeletionMode
+	{
+		kSingle,
+		kCascade,
+	};
+
 	/** What a deletion would destroy, and what stands in its way. */
 	struct DeletionPlan
 	{
@@ -149,6 +164,13 @@ namespace assetlib
 		 * single asset, which takes nothing with it.
 		 */
 		std::vector<std::string> contents;
+
+		/**
+		 * What DeletionMode::kCascade adds: every asset that nothing would reference once the target
+		 * (and the rest of this list) is gone, sorted. Always empty for kSingle, and for a plan that
+		 * is not Allowed() -- a blocked deletion frees nothing.
+		 */
+		std::vector<std::string> cascade;
 
 		[[nodiscard]] bool
 		IsDirectory() const noexcept
@@ -176,11 +198,17 @@ namespace assetlib
 	 * material routes from does not. Whether a directory is one the *project* needs is not a question this
 	 * can answer -- the caller owns its own layout.
 	 *
+	 * `mode` decides what goes with an allowed deletion: kSingle takes the target alone, kCascade also
+	 * fills `cascade` with what the target alone was holding alive -- see DeletionMode.
+	 *
 	 * @throws std::runtime_error if `target` is a file of no kind this project stores anything about, or
 	 *         does not resolve to somewhere inside the data root.
 	 */
 	[[nodiscard]] DeletionPlan
-	planDeletion(const AssetRefGraph& graph, std::string_view target);
+	planDeletion(
+		const AssetRefGraph& graph,
+		std::string_view     target,
+		DeletionMode         mode = DeletionMode::kSingle);
 
 	enum class DeletionStatus
 	{
@@ -205,11 +233,83 @@ namespace assetlib
 	 * removal fails part-way through is reported kFailed, with whatever came off already gone -- there is
 	 * no undo, and pretending otherwise would be worse than saying so.
 	 *
-	 * Deletion is not cascading. Deleting a material leaves the baked maps it alone named on disk; they are
-	 * what findUnusedBakedTextures then sweeps.
+	 * A plan carrying a `cascade` takes those files too, after the target. A kSingle deletion of a
+	 * material still leaves the baked maps it alone named on disk; they are what
+	 * findUnusedBakedTextures then sweeps.
 	 *
 	 * Pass the `desc` the plan's graph was scanned with -- the path is relative to its `dataRoot`.
 	 */
 	DeletionResult
 	deleteAsset(const DeletionPlan& plan, const AssetRefScanDesc& desc);
+
+	/** What a rename would move, and every stored reference that must follow it. */
+	struct RenamePlan
+	{
+		std::string from;  // relative to the data root: an asset file, or a directory
+		std::string to;
+
+		/** What `from` is, or nullopt when it is a directory -- which is not an asset. */
+		std::optional<AssetType> assetType;
+
+		/**
+		 * The edges whose stored path must be rewritten: every reference to `from`, or -- for a
+		 * directory -- to anything beneath it, wherever the referrer sits. An edge from inside a renamed
+		 * directory counts too: its referrer moves with the directory, but the target path it stores
+		 * does not rewrite itself.
+		 */
+		std::vector<AssetRef> referrers;
+
+		[[nodiscard]] bool
+		IsDirectory() const noexcept
+		{
+			return !assetType.has_value();
+		}
+	};
+
+	/**
+	 * What renaming `from` to `to` (both relative to the data root) would touch. A rename is never
+	 * blocked by references the way a deletion is -- they are rewritten to follow -- so the plan's
+	 * `referrers` are work, not blockers.
+	 *
+	 * @throws std::runtime_error if either path does not resolve to somewhere inside the data root, if
+	 *         they name the same thing, if `from` does not exist or is a file of no kind this project
+	 *         stores anything about, if the rename would change what kind of asset the file is, if a
+	 *         directory would move into itself, if `to` already exists (a rename never overwrites --
+	 *         except for the same file spelled in a different case, which is how a case-insensitive
+	 *         filesystem answers a case-only rename), or if `to`'s parent directory does not exist.
+	 */
+	[[nodiscard]] RenamePlan
+	planRename(const AssetRefGraph& graph, std::string_view from, std::string_view to);
+
+	enum class RenameStatus
+	{
+		kRenamed,  // moved, and every referrer rewritten
+		kFailed,   // nothing changed: whatever had been rewritten was put back before reporting
+	};
+
+	struct RenameResult
+	{
+		RenameStatus status = RenameStatus::kFailed;
+		std::string  error;  // non-empty only when status == kFailed
+	};
+
+	/**
+	 * Renames what `plan` names and rewrites every referrer it lists, so no reference is left pointing
+	 * at the old path.
+	 *
+	 * The referrers are all read and rewritten in memory before anything is written -- one that cannot
+	 * be read or parsed fails the rename while the project is still untouched -- the files are then
+	 * saved, and the rename itself comes last: it is the step most likely to be refused (Windows will
+	 * not move a file another process holds open), and by then it is the only step left to undo. A
+	 * failure anywhere writes the original bytes back over whatever had already been saved, so kFailed
+	 * means the project is as it was; that restore is best-effort, and a machine that fails the restore
+	 * too is reported with the first error rather than a pretense of atomicity.
+	 *
+	 * Pass the `desc` the plan's graph was scanned with -- the paths are relative to its `dataRoot`.
+	 *
+	 * @throws std::runtime_error if a referrer in `plan` is not a container that stores references --
+	 *         a plan built by planRename never holds one, so that is a caller error, not weather.
+	 */
+	RenameResult
+	renameAsset(const RenamePlan& plan, const AssetRefScanDesc& desc);
 }

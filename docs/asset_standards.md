@@ -540,8 +540,18 @@ From those edges, three rules:
 * **A material deletes only if no mesh names it.**
 * **A texture deletes only if no material names it** — as either a baked map or a routed source.
 
-Deletion is **not cascading**. The maps a deleted material leaves behind are precisely what the prune
-already collects, so the two compose instead of duplicating each other.
+Deletion is **not cascading by default**. The maps a deleted material leaves behind are precisely what
+the prune already collects, so the two compose instead of duplicating each other.
+
+### Delete Cascade
+
+`DeletionMode::kCascade` (the Content Explorer's **Delete Cascade**) asks the opposite of the prune,
+per deletion: *what would nothing reference once this is gone?* `DeletionPlan::cascade` lists every
+asset the deleted set references whose **every** referrer is itself in the set, applied transitively —
+a material freed by its last mesh frees the baked maps and sources it alone named. It never reaches
+*up*: what references the target blocks the deletion in either mode, exactly as before. A blocked plan
+carries no cascade, and `deleteAsset` removes the cascade only after the target, so a failure part-way
+never leaves a referenced asset missing.
 
 ### Deleting a directory
 
@@ -587,6 +597,23 @@ Three things the implementation must get right, each of which is a real failure 
 `deleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
 decodes `.ktx2` thumbnails on a thread pool, and Windows will not unlink a file that is open. "Still
 referenced" and "the file is in use" are different things to tell a user, and are different statuses.
+
+## Renaming assets
+
+Identity is the data-root-relative path, so a rename is a reference rewrite or it is a break. `planRename`
+/ `renameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
+rewrite every referrer to follow, so a rename is **never blocked by references** the way a deletion is.
+Three rules of its own:
+
+* **A rename never overwrites**: a destination that exists refuses the plan, the same stance import
+  takes. The one exception is the same file spelled in a different case, which is how a
+  case-insensitive filesystem answers a case-only rename.
+* **A rename cannot change what kind of asset a file is** — the extension stays, because every consumer
+  of the path dispatches on it.
+* **The move comes last.** Every referrer is read and rewritten in memory first, then saved, and the
+  `rename` itself — the step Windows refuses while another process holds the file — runs when it is the
+  only step left to undo. Any failure writes the original bytes back, so `kFailed` means the project is
+  as it was.
 
 ---
 
