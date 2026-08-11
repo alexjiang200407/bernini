@@ -240,6 +240,12 @@ to end the turn until a watcher is running on it. The watcher claims the PR as i
 is satisfied while it runs rather than only after it exits. If the user has to decide something
 before it can be watched, say so and release it with `just pr unwatch <n>`.
 
+**One watcher per PR, and it is the script that guarantees it** — started again on a PR someone is
+already watching, `just watch-pr` names the pid holding it and exits. So a turn that posts a reply
+while a watch is running needs no new watcher: the running one polls the PR and will report whatever
+arrives next. Start one when the hook asks for one, and take the refusal as the answer rather than
+working around it.
+
 It baselines the PR's current activity, polls, and blocks until something actionable happens, printing
 one JSON event. Do not poll `gh` yourself while it runs — it is the wait, not a hint, and that includes
 `gh pr checks`. Only *submitted* reviews fire it; a reviewer's pending draft stays invisible until they
