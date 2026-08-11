@@ -2,6 +2,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmesh_io.h>
 
 #include <core/err/util.h>
@@ -79,6 +80,70 @@ namespace assetlib
 				return static_cast<uint32_t>(i);
 
 		return c_InvalidIndex;
+	}
+
+	std::vector<glm::mat4>
+	poseModelTransforms(
+		const Skeleton&     skeleton,
+		const AnimationSet& animations,
+		uint32_t            clip,
+		uint32_t            frame)
+	{
+		if (clip >= animations.clips.size())
+			throw_runtime_error(
+				"animation: clip {} of a set that holds {}",
+				clip,
+				animations.clips.size());
+
+		const AnimationClip& entry = animations.clips[clip];
+		if (frame >= entry.frameCount)
+			throw_runtime_error(
+				"animation: frame {} of a clip that holds {}",
+				frame,
+				entry.frameCount);
+
+		// Bone count *and* signature: a rig re-exported with two bones swapped keeps the count and
+		// changes the signature, and a pose evaluated against it is wrong in a way no later check
+		// can see. This is the first place the two files meet per-pose, which is what the signature
+		// was written for.
+		if (!animationsMatchSkeleton(animations, skeleton))
+			throw_runtime_error(
+				"animation: clips cooked for {} bones against a different rig than this {}-bone "
+				"skeleton",
+				animations.boneCount,
+				skeleton.bones.size());
+
+		// Both containers validate on load, so this catches a set built in memory rather than read
+		// from disk -- and costs one comparison against reading past the pool.
+		const size_t base = static_cast<size_t>(entry.firstSample) +
+		                    static_cast<size_t>(frame) * animations.boneCount;
+		if (base + animations.boneCount > animations.samples.size())
+			throw_runtime_error("animation: clip {} samples past the end of the pool", clip);
+
+		std::vector<glm::mat4> model(skeleton.bones.size());
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+		{
+			const auto     local  = toMatrix(animations.samples[base + i]);
+			const uint32_t parent = skeleton.bones[i].parent;
+			model[i]              = parent == c_InvalidIndex ? local : model[parent] * local;
+		}
+		return model;
+	}
+
+	std::vector<glm::mat4>
+	skinningMatrices(const Skeleton& skeleton, std::span<const glm::mat4> modelTransforms)
+	{
+		if (modelTransforms.size() != skeleton.bones.size())
+			throw_runtime_error(
+				"skeleton: {} model transforms for {} bones",
+				modelTransforms.size(),
+				skeleton.bones.size());
+
+		std::vector<glm::mat4> skinning(skeleton.bones.size());
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			skinning[i] = modelTransforms[i] * skeleton.bones[i].inverseBind;
+
+		return skinning;
 	}
 
 	std::vector<glm::mat4>

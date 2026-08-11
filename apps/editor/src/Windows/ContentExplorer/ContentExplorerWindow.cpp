@@ -6,6 +6,7 @@
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "util/asset_paths.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -41,6 +42,7 @@
 #include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/skeleton.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -128,8 +130,7 @@ namespace
 			QString("Cannot import '%1': it would overwrite files already in the project.")
 				.arg(name));
 		message.setInformativeText(
-			"Import never overwrites. Remove the listed files, or choose a different texture "
-			"folder, "
+			"Import never overwrites. Remove the listed files, or choose a different folder, "
 			"then import again.");
 		message.setDetailedText(replaced.join('\n'));
 		message.exec();
@@ -1016,8 +1017,7 @@ ContentExplorerWindow::dragMoveEvent(QDragMoveEvent* event)
 void
 ContentExplorerWindow::dropEvent(QDropEvent* event)
 {
-	const QString targetDir = ResolveDropDirectory(event->position().toPoint());
-	if (targetDir.isEmpty())
+	if (m_RootPath.isEmpty())
 		return;
 
 	for (const QUrl& url : event->mimeData()->urls())
@@ -1051,16 +1051,18 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 			qWarning("Import: could not read '%s': %s", qPrintable(file), e.what());
 		}
 
-		AssetImporterDialog dialog(file, targetDir, materials, this);
+		AssetImporterDialog dialog(file, materials, this);
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
-		auto options          = ImportOptions();
-		options.textureSubdir = dialog.ImportTextures() ? dialog.TextureSubdirectory() : QString();
-		options.pbrMaterials  = dialog.CanImportPbrMaterials();
-		options.animations    = dialog.ImportAnimations();
+		auto options         = ImportOptions();
+		options.folder       = dialog.DestinationFolder();
+		options.mesh         = dialog.ImportMesh();
+		options.textures     = dialog.ImportTextures();
+		options.pbrMaterials = dialog.CanImportPbrMaterials();
+		options.animations   = dialog.ImportAnimations();
 
-		const ImportOutcome outcome = ImportMesh(file, targetDir, options);
+		const ImportOutcome outcome = ImportMesh(file, options);
 
 		// Cancelling one import of a multi-file drop abandons the drop. Carrying on would answer the
 		// user's "stop" by immediately putting the next options dialog in front of them.
@@ -1069,36 +1071,6 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 	}
 
 	event->acceptProposedAction();
-}
-
-QString
-ContentExplorerWindow::ResolveDropDirectory(const QPoint& windowPos) const
-{
-	const QPoint global = mapToGlobal(windowPos);
-
-	// Dropped over a folder row in the file table -> that folder; otherwise the folder the
-	// table currently shows.
-	auto*        fileViewport = m_Ui.CurrentDirectoryExplorer->viewport();
-	const QPoint fileLocal    = fileViewport->mapFromGlobal(global);
-	if (fileViewport->rect().contains(fileLocal))
-	{
-		const auto index = m_Ui.CurrentDirectoryExplorer->indexAt(fileLocal);
-		if (index.isValid() && m_FileModel->isDir(index))
-			return m_FileModel->filePath(index);
-		return m_FileModel->rootPath();
-	}
-
-	// Dropped over a folder in the hierarchy tree.
-	auto*        treeViewport = m_Ui.FileExplorer->viewport();
-	const QPoint treeLocal    = treeViewport->mapFromGlobal(global);
-	if (treeViewport->rect().contains(treeLocal))
-	{
-		const auto index = m_Ui.FileExplorer->indexAt(treeLocal);
-		if (index.isValid())
-			return m_HierarchyModel->filePath(index);
-	}
-
-	return m_FileModel->rootPath();
 }
 
 void
@@ -1195,35 +1167,117 @@ ContentExplorerWindow::WriteImportedRig(
 	assetlib::saveAnimations(clips, banimPath);
 }
 
+std::filesystem::path
+ContentExplorerWindow::FindMatchingSkeleton(
+	const std::filesystem::path& dataRoot,
+	const assetlib::Skeleton&    skeleton)
+{
+	namespace fs = std::filesystem;
+
+	const fs::path root = dataRoot / Project::c_SkeletonsDirectoryName;
+
+	std::error_code ec;
+	if (!fs::exists(root, ec))
+		return {};
+
+	const uint64_t wanted = assetlib::skeletonSignature(skeleton);
+
+	auto       matches = std::vector<fs::path>();
+	const auto walk    = fs::directory_options::skip_permission_denied;
+
+	for (const fs::directory_entry& entry : fs::recursive_directory_iterator(root, walk, ec))
+	{
+		if (!entry.is_regular_file(ec) || entry.path().extension() != assetlib::c_SkeletonExtension)
+			continue;
+
+		try
+		{
+			if (assetlib::skeletonSignature(assetlib::loadSkeleton(entry.path())) == wanted)
+				matches.push_back(entry.path());
+		}
+		catch (const std::exception&)
+		{
+			// A `.bskel` that will not load is not the rig we are looking for; the asset scan is
+			// where a broken one gets reported.
+		}
+	}
+
+	if (matches.empty())
+		return {};
+
+	// Directory order is unspecified, so choosing one would make the reference written into the
+	// `.banim` depend on the filesystem -- and would scatter one rig's clips across two skeletons,
+	// which is the thing a VAT bake cannot then fit one bounding box around.
+	if (matches.size() > 1)
+	{
+		auto named = QStringList();
+		for (const fs::path& match : matches)
+			named << Rebase(QString::fromStdWString(match.wstring()), dataRoot, true);
+
+		throw std::runtime_error(
+			QString(
+				"this project holds %1 skeletons with the same signature, so which one these "
+				"clips belong to is ambiguous: %2")
+				.arg(matches.size())
+				.arg(named.join(", "))
+				.toStdString());
+	}
+
+	return matches.front();
+}
+
+void
+ContentExplorerWindow::WriteImportedClips(
+	const assetlib::imp::BMeshImport& imported,
+	const std::filesystem::path&      dataRoot,
+	const std::filesystem::path&      banimPath)
+{
+	if (imported.animations.clips.empty())
+		throw std::runtime_error("this file carries no animation to import");
+
+	// The clips are per-bone samples addressed by index, so without the rig they were authored
+	// against there is nothing to say which bone each one drives.
+	if (imported.skeleton.bones.empty())
+		throw std::runtime_error("this file carries no rig, so its clips address nothing");
+
+	const std::filesystem::path rig = FindMatchingSkeleton(dataRoot, imported.skeleton);
+	if (rig.empty())
+	{
+		throw std::runtime_error(
+			"no skeleton in this project matches this file's rig. Import one of these files with "
+			"the mesh turned on first, which writes the rig these clips attach to.");
+	}
+
+	std::filesystem::create_directories(banimPath.parent_path());
+
+	assetlib::AnimationSet clips = imported.animations;
+	clips.skeleton = Rebase(QString::fromStdWString(rig.wstring()), dataRoot, true).toStdString();
+	assetlib::saveAnimations(clips, banimPath);
+}
+
 ContentExplorerWindow::ImportOutcome
-ContentExplorerWindow::ImportMesh(
-	const QString&       sourceFile,
-	const QString&       targetDir,
-	const ImportOptions& options)
+ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions& options)
 {
 	namespace fs = std::filesystem;
 
 	const fs::path source   = fs::path(sourceFile.toStdWString());
-	const fs::path meshDir  = fs::path(targetDir.toStdWString());
 	const fs::path dataRoot = fs::path(m_RootPath.toStdWString());
-	const fs::path subdir   = fs::path(options.textureSubdir.toStdWString());
+
+	const auto inCategory = [&](const char* category) {
+		return dataRoot / fs::path(editor::JoinCategory(category, options.folder).toStdWString());
+	};
 
 	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
-	// own folder or the next one silently overwrites it. m_RootPath is the project's Data directory.
-	//
-	// Left empty when no textures are being extracted, and it must stay that way: joining an empty
-	// subdirectory would name the texture root itself, which RollBack would then happily delete.
-	const bool     importTextures = !options.textureSubdir.isEmpty();
+	// own folder or the next one silently overwrites it.
 	const fs::path textureDir =
-		importTextures ? dataRoot / AssetImporterDialog::c_TextureRoot / subdir : fs::path();
+		options.textures ? inCategory(Project::c_TexturesSrcDirectoryName) : fs::path();
 
-	// The materials mirror the textures' folder under the Materials category, and for the same reason:
-	// they are named from the glTF, so two imports sharing a folder would collide.
-	const bool     importMaterials = options.pbrMaterials && importTextures;
+	// A derived material routes at the extracted textures, so it cannot come across without them.
+	const bool     importMaterials = options.pbrMaterials && options.textures && options.mesh;
 	const fs::path materialDir =
-		importMaterials ? dataRoot / Project::c_MaterialsDirectoryName / subdir : fs::path();
+		importMaterials ? inCategory(Project::c_MaterialsDirectoryName) : fs::path();
 
-	fs::path bmeshPath = meshDir / source.filename();
+	fs::path bmeshPath = inCategory(Project::c_MeshesDirectoryName) / source.filename();
 	bmeshPath.replace_extension(".bmesh");
 
 	const QString name = QFileInfo(sourceFile).fileName();
@@ -1244,19 +1298,23 @@ ContentExplorerWindow::ImportMesh(
 	// So a static import is refused over a rig it would never write, which is the deliberate
 	// direction: the alternative is parsing before asking, and refusing too often is recoverable
 	// where overwriting a rig is not.
-	fs::path bskelPath = dataRoot / Project::c_SkeletonsDirectoryName / source.filename();
+	fs::path bskelPath = inCategory(Project::c_SkeletonsDirectoryName) / source.filename();
 	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
-	fs::path banimPath = dataRoot / Project::c_AnimationsDirectoryName / source.filename();
+	fs::path banimPath = inCategory(Project::c_AnimationsDirectoryName) / source.filename();
 	banimPath.replace_extension(assetlib::c_AnimationExtension);
 
-	const std::array<ImportedFile, 3> files = { {
-		{ bmeshPath, fs::exists(bmeshPath, ec) },
-		{ bskelPath, fs::exists(bskelPath, ec) },
-		{ banimPath, fs::exists(banimPath, ec) },
-	} };
+	// Only what this import may actually write.
+	auto files = std::vector<ImportedFile>();
+	if (options.mesh)
+	{
+		files.push_back({ bmeshPath, fs::exists(bmeshPath, ec) });
+		files.push_back({ bskelPath, fs::exists(bskelPath, ec) });
+	}
+	if (options.animations)
+		files.push_back({ banimPath, fs::exists(banimPath, ec) });
 
 	const std::array<ImportedDir, 2> dirs = { {
-		{ textureDir, textureDirExisted, AssetImporterDialog::c_TextureRoot },
+		{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
 		{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
 	} };
 
@@ -1286,7 +1344,7 @@ ContentExplorerWindow::ImportMesh(
 			progress.Report(0, 0, QString("Parsing %1...").arg(name));
 			imported = assetlib::loadFromGltf(source, cancel);
 
-			if (importTextures)
+			if (options.textures)
 			{
 				assetlib::writeTextures(
 					*imported,
@@ -1302,9 +1360,12 @@ ContentExplorerWindow::ImportMesh(
 
 			// Rebuilding a whole vertex pool is not instant either, and touches neither Qt nor bgl,
 			// so it belongs beside the parse rather than on the thread drawing the loading screen.
-			progress.Report(0, 0, QString("Deriving tangents..."));
-			mesh     = assetlib::toBMesh(*imported);
-			tangents = assetlib::generateTangents(*mesh);
+			if (options.mesh)
+			{
+				progress.Report(0, 0, QString("Deriving tangents..."));
+				mesh     = assetlib::toBMesh(*imported);
+				tangents = assetlib::generateTangents(*mesh);
+			}
 		},
 		background::Cancellable::kYes);
 
@@ -1314,19 +1375,33 @@ ContentExplorerWindow::ImportMesh(
 	{
 		try
 		{
-			if (tangents.skipped > 0)
-				qWarning(
-					"Import: %u submesh(es) of '%s' have no tangent and no way to derive one; a "
-					"normal map on those will not render",
-					tangents.skipped,
-					qPrintable(name));
+			if (options.mesh)
+			{
+				if (tangents.skipped > 0)
+					qWarning(
+						"Import: %u submesh(es) of '%s' have no tangent and no way to derive one; "
+						"a normal map on those will not render",
+						tangents.skipped,
+						qPrintable(name));
 
-			WriteImportedRig(*imported, mesh, dataRoot, bskelPath, banimPath, options.animations);
+				WriteImportedRig(
+					*imported,
+					*mesh,
+					dataRoot,
+					bskelPath,
+					banimPath,
+					options.animations);
 
-			if (importMaterials)
-				WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
+				if (importMaterials)
+					WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
 
-			assetlib::save(*mesh, bmeshPath);
+				assetlib::save(*mesh, bmeshPath);
+			}
+			else if (options.animations)
+			{
+				WriteImportedClips(*imported, dataRoot, banimPath);
+			}
+
 			return ImportOutcome::kImported;
 		}
 		catch (const std::exception& e)
