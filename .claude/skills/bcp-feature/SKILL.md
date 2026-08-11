@@ -114,7 +114,8 @@ once `feat/culling` exists no ref may begin `feat/culling/`. The push fails with
 Read the code first — the docs the change touches (index in [CLAUDE.md](CLAUDE.md)) and the real
 source. A decomposition invented from the prompt text splits along the words rather than the seams,
 and every task then fights the last. [`bcp-docmap`](.claude/agents/bcp-docmap.md) does the docs half
-of that survey — spawn it with `subagent_type: bcp-docmap` and it returns the answer plus the lines
+of that survey — spawn it with `subagent_type: bcp-docmap`, one tier below your own model, and it
+returns the answer plus the lines
 it rests on, which is what the plan's *what the survey found* section wants anyway.
 
 Write `docs/plans/<name>.md`:
@@ -197,9 +198,9 @@ just pr create --base feat/<name> --body-file <file>
 ```
 
 **Every PR this skill opens is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) first**, the
-plan's and § 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, after the last
-verification step and before the push — § 2 has no rebase to hang it on, § 5 needs its base named
-explicitly. It reads the diff against the base for code that already exists in `core`, a design
+plan's and § 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below
+your own model, after the last verification step and before the push — § 2 has no rebase to hang it
+on, § 5 needs its base named explicitly. It reads the diff against the base for code that already exists in `core`, a design
 that fights `ROADMAP.md`, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does
 not open on one. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for the full loop.
 

@@ -30,7 +30,8 @@ Read the docs that touch the area **before** designing anything. The index is in
 | debugging a GPU problem | [docs/gfx_debug.md](docs/gfx_debug.md) |
 
 When the area spans more than one doc, spawn [`bcp-docmap`](.claude/agents/bcp-docmap.md) with the
-Agent tool, `subagent_type: bcp-docmap`, and ask it the question you actually have. It starts at the
+Agent tool, `subagent_type: bcp-docmap`, one tier below your own model, and ask it the question you
+actually have. It starts at the
 index, follows the links the docs carry into further docs and into the headers they defer to, and
 reports the answer with the line behind each claim — so the survey costs a paragraph of context
 instead of a subsystem's worth. It reads only.
@@ -133,7 +134,7 @@ takes about a second", "X is the only place that branch lives"). Those sentences
 It reads the diff against the base, so it runs *inside* § 9's sequence — after the format, the commit
 and the rebase, and before the push. This section is what it does; § 9's block is where it goes.
 
-Spawn it with the Agent tool, `subagent_type: bcp-precheck`:
+Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below your own model:
 
 > Review the diff against the base. Be as critical as the evidence allows.
 
