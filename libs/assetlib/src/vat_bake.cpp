@@ -39,35 +39,51 @@ namespace assetlib
 		}
 
 		/**
-		 * One frame's texel row in both textures. The box extent is zero on an axis every frame
-		 * agrees on; such a coordinate packs to 0 and unpacks to the bound itself, exact.
+		 * One frame's positions into row `row` of the position texture. The box extent is zero on
+		 * an axis every frame agrees on; such a coordinate packs to 0 and unpacks to the bound
+		 * itself, exact.
 		 */
 		void
-		packRow(
+		packPositionRow(
 			ImageData&                     positions,
-			ImageData&                     normals,
 			uint32_t                       row,
 			std::span<const SkinnedVertex> vertices,
 			const glm::vec3&               boundsMin,
 			const glm::vec3&               extent) noexcept
 		{
-			auto* position = reinterpret_cast<uint16_t*>(
+			auto* texel = reinterpret_cast<uint16_t*>(
 				positions.pixels.data() + uint64_t(row) * positions.subresources[0].rowPitch);
-			auto* normal = normals.pixels.data() + uint64_t(row) * normals.subresources[0].rowPitch;
 
 			for (const SkinnedVertex& vertex : vertices)
 			{
 				for (int axis = 0; axis < 3; ++axis)
 				{
 					const float span = extent[axis];
-					position[axis] =
+					texel[axis] =
 						span > 0.0f ?
 							glm::packUnorm1x16((vertex.position[axis] - boundsMin[axis]) / span) :
 							uint16_t(0);
 				}
-				position[3] = uint16_t(65535);
-				position += 4;
 
+				// Alpha is padding -- three-channel texture formats do not exist -- and written a
+				// constant because the pixel buffer arrives uninitialized, and two machines baking
+				// the same rig must cook identical bytes.
+				texel[3] = uint16_t(65535);
+				texel += 4;
+			}
+		}
+
+		/** One frame's normals into row `row` of the normal texture, re-unit and biased to unorm. */
+		void
+		packNormalRow(
+			ImageData&                     normals,
+			uint32_t                       row,
+			std::span<const SkinnedVertex> vertices) noexcept
+		{
+			auto* texel = normals.pixels.data() + uint64_t(row) * normals.subresources[0].rowPitch;
+
+			for (const SkinnedVertex& vertex : vertices)
+			{
 				// Blending shortens a normal, so it is re-unit here; one a submesh never carried
 				// stays zero, which packs to mid-grey -- the degenerate the shader's guard reads.
 				glm::vec3   n    = vertex.blendedNormal;
@@ -75,11 +91,11 @@ namespace assetlib
 				if (len2 > 0.0f)
 					n /= std::sqrt(len2);
 
-				normal[0] = std::byte(glm::packUnorm1x8(n.x * 0.5f + 0.5f));
-				normal[1] = std::byte(glm::packUnorm1x8(n.y * 0.5f + 0.5f));
-				normal[2] = std::byte(glm::packUnorm1x8(n.z * 0.5f + 0.5f));
-				normal[3] = std::byte(255);
-				normal += 4;
+				texel[0] = std::byte(glm::packUnorm1x8(n.x * 0.5f + 0.5f));
+				texel[1] = std::byte(glm::packUnorm1x8(n.y * 0.5f + 0.5f));
+				texel[2] = std::byte(glm::packUnorm1x8(n.z * 0.5f + 0.5f));
+				texel[3] = std::byte(255);  // padding, as for a position texel
+				texel += 4;
 			}
 		}
 
@@ -214,13 +230,11 @@ namespace assetlib
 		for (const VatClip& clip : vat.clips)
 		{
 			for (uint32_t frame = 0; frame < clip.frameCount; ++frame, ++frameIndex)
-				packRow(
-					positions,
-					normals,
-					clip.firstRow + frame,
-					skinnedFrames[frameIndex],
-					vat.boundsMin,
-					extent);
+			{
+				const uint32_t row = clip.firstRow + frame;
+				packPositionRow(positions, row, skinnedFrames[frameIndex], vat.boundsMin, extent);
+				packNormalRow(normals, row, skinnedFrames[frameIndex]);
+			}
 
 			const uint32_t last = clip.firstRow + clip.frameCount - 1;
 			duplicateRow(positions, last, last + 1);
