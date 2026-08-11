@@ -63,9 +63,9 @@ namespace assetlib
 					position[axis] =
 						span > 0.0f ?
 							glm::packUnorm1x16((vertex.position[axis] - boundsMin[axis]) / span) :
-							0;
+							uint16_t(0);
 				}
-				position[3] = 65535;
+				position[3] = uint16_t(65535);
 				position += 4;
 
 				// Blending shortens a normal, so it is re-unit here; one a submesh never carried
