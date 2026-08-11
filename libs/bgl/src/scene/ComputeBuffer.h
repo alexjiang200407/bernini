@@ -7,7 +7,7 @@ namespace bgl
 {
 	/**
 	 * A ComputeBuffer is a GPU-only structured buffer that compute shaders fill via
-	 * UAV writes.
+	 * UAV writes. A list the CPU authors for shaders to read is an UploadBuffer instead.
 	 */
 	class ComputeBuffer
 	{

@@ -82,6 +82,33 @@ namespace bgl
 		GetInstanceCount() const noexcept = 0;
 
 		/**
+		 * Marks one submesh of ONE instance as selected, or unmarks it. Selection is visual
+		 * state for editor feedback -- the selection-outline effect draws from it -- and
+		 * changes no shading or geometry. It dies with the instance: DeleteMeshInstance
+		 * drops the instance's marks with it.
+		 *
+		 * @throws SceneError if the instance handle is invalid, or `submeshIndex` is out of
+		 *         range for the instance's geometry.
+		 */
+		virtual void
+		SetSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex, bool selected) = 0;
+
+		/**
+		 * Unmarks every selection in this view.
+		 */
+		virtual void
+		ClearSelection() noexcept = 0;
+
+		/**
+		 * Whether SetSubmeshSelected has marked that submesh of that instance.
+		 *
+		 * @throws SceneError if the instance handle is invalid, or `submeshIndex` is out of
+		 *         range for the instance's geometry.
+		 */
+		virtual bool
+		IsSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex) const = 0;
+
+		/**
 		 * Binds the three precomputed IBL maps (two cubemaps + a 2D BRDF LUT) as this
 		 * view's environment for the PBR pass. Replaces any previously set environment.
 		 * Lighting is a per-view concern, so it lives here rather than on the shared Scene.

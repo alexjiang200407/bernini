@@ -5,6 +5,7 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/TransparentSortState.h"
+#include "scene/UploadBuffer.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -22,6 +23,7 @@ namespace bgl
 	{
 		std::vector<core::slot_handle> submeshInstances;
 		std::vector<MaterialHandle>    overrides;
+		std::vector<uint8_t>           selected;
 	};
 
 	/**
@@ -66,6 +68,16 @@ namespace bgl
 
 		void
 		ClearSubmeshMaterialOverride(MeshInstanceHandle instance, uint32_t submeshIndex) override;
+
+		void
+		SetSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex, bool selected)
+			override;
+
+		void
+		ClearSelection() noexcept override;
+
+		bool
+		IsSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex) const override;
 
 		void
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
@@ -150,6 +162,20 @@ namespace bgl
 		}
 
 		/**
+		 * The selected submesh instances as dense indices into the instance buffer -- what the
+		 * selection-mask draw dispatches over. Rebuilt here if a selection change or an instance
+		 * deletion left it stale, so the indices are current when read.
+		 */
+		[[nodiscard]] std::span<const uint32_t>
+		GetSelectedInstances();
+
+		[[nodiscard]] const UploadBuffer<uint32_t>&
+		GetSelectedInstanceBuffer() const noexcept
+		{
+			return m_CurrentSelectedInstances;
+		}
+
+		/**
 		 * Records `current` as this view's camera for frame `frameCounter` and returns the matrices it
 		 * was drawn with on the previous frame -- what motion vectors reproject through.
 		 *
@@ -205,6 +231,16 @@ namespace bgl
 		[[nodiscard]] MeshMeta&
 		MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what);
 
+		[[nodiscard]] const MeshMeta&
+		MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what) const
+		{
+			return const_cast<SceneView*>(this)->MetaFor(instance, submeshIndex, what);
+		}
+
+		/** Recollects the selected dense indices; every index is re-resolved, none is cached. */
+		void
+		RebuildSelectedList();
+
 		/**
 		 * Sizes every per-view buffer to its starting point.
 		 *
@@ -238,6 +274,12 @@ namespace bgl
 
 		// Per view, not per frustum: only the camera sorts transparents.
 		TransparentSortState m_TransparentSort;
+
+		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
+		// move a dense index, so a deletion staleness-marks the list exactly like a selection
+		// change does.
+		UploadBuffer<uint32_t> m_CurrentSelectedInstances;
+		bool                   m_SelectionDirty = false;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;

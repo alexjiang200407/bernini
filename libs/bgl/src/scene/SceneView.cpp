@@ -22,6 +22,8 @@ namespace bgl
 			{ "scene.meshInstanceBuffer" },
 		} };
 
+		constexpr std::string_view c_SelectedInstancesName = "scene.selectedInstances";
+
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
 		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
 		// which both the histogram and the compaction skip.
@@ -81,6 +83,13 @@ namespace bgl
 
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
+
+		{
+			auto desc      = UploadBufferDesc();
+			desc.debugName = "Selected Instances";
+
+			m_CurrentSelectedInstances.Init(std::move(desc), m_ResourceManager);
+		}
 	}
 
 	void
@@ -139,6 +148,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
+		m_CurrentSelectedInstances.Release();
 
 		logger::trace("~SceneView");
 	}
@@ -194,6 +204,7 @@ namespace bgl
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
 			meta.overrides.assign(submeshCount, MaterialHandle{});
+			meta.selected.assign(submeshCount, 0);
 
 			for (uint32_t s = 0; s < submeshCount; ++s)
 			{
@@ -244,6 +255,101 @@ namespace bgl
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
+
+		// The erases above can move any dense index, selected or not -- but with no mark
+		// anywhere, there is no list to stale.
+		if (m_SelectionDirty || m_CurrentSelectedInstances.Size() != 0)
+		{
+			m_SelectionDirty = true;
+		}
+	}
+
+	void
+	SceneView::SetSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex, bool selected)
+	{
+		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshSelected");
+
+		const uint8_t value = selected ? 1 : 0;
+		if (meta.selected[submeshIndex] == value)
+		{
+			return;
+		}
+
+		meta.selected[submeshIndex] = value;
+		m_SelectionDirty            = true;
+	}
+
+	void
+	SceneView::ClearSelection() noexcept
+	{
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			for (uint8_t& selected : m_MeshBuffer.MetaAt(meshIndex).selected)
+			{
+				if (selected != 0)
+				{
+					selected         = 0;
+					m_SelectionDirty = true;
+				}
+			}
+		}
+	}
+
+	bool
+	SceneView::IsSubmeshSelected(MeshInstanceHandle instance, uint32_t submeshIndex) const
+	{
+		const MeshMeta& meta = MetaFor(instance, submeshIndex, "IsSubmeshSelected");
+
+		return meta.selected[submeshIndex] != 0;
+	}
+
+	std::span<const uint32_t>
+	SceneView::GetSelectedInstances()
+	{
+		if (m_SelectionDirty)
+		{
+			RebuildSelectedList();
+		}
+
+		return m_CurrentSelectedInstances.Values();
+	}
+
+	void
+	SceneView::RebuildSelectedList()
+	{
+		auto list = std::vector<uint32_t>();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
+
+			for (uint32_t s = 0; s < meta.selected.size(); ++s)
+			{
+				if (meta.selected[s] == 0)
+				{
+					continue;
+				}
+
+				const core::slot_handle handle = meta.submeshInstances[s];
+				if (m_InstanceBuffer.IsValid(handle))
+				{
+					list.push_back(m_InstanceBuffer.GetDenseIndex(handle));
+				}
+			}
+		}
+
+		m_CurrentSelectedInstances.Assign(list);
+		m_SelectionDirty = false;
 	}
 
 	MeshMeta&
@@ -437,6 +543,12 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
+		if (m_SelectionDirty)
+		{
+			RebuildSelectedList();
+		}
+		m_CurrentSelectedInstances.Update(cmdList);
+
 		auto buffers = GetInstanceBuffers();
 		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
 
@@ -492,6 +604,12 @@ namespace bgl
 			buffers);
 
 		m_TransparentSort.ImportResources(fg, resourceNames);
+
+		{
+			auto name = std::string(c_SelectedInstancesName);
+			fg.ImportBuffer(name, m_CurrentSelectedInstances.GetBufferHandle());
+			resourceNames.push_back(std::move(name));
+		}
 
 		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the
 		// same names without aliasing. The view's own imports stay outside, shared by all of them.

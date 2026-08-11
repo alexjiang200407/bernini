@@ -151,6 +151,15 @@ namespace bgl
 			return m_Entries[m_HandleToIndex[handle.index]];
 		}
 
+		// The dense (GPU) index `handle` occupies right now; any Erase can move it.
+		[[nodiscard]] uint32_t
+		GetDenseIndex(Handle handle) const
+		{
+			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			gassert(IsValid(handle), "Invalid PackedBuffer handle");
+			return m_HandleToIndex[handle.index];
+		}
+
 		void
 		Erase(Handle handle)
 		{

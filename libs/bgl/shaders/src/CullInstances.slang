@@ -3,6 +3,7 @@ import types.PackedBuffer;
 import types.EntryBuffer;
 import types.RangeBuffer;
 import types.ComputeBuffer;
+import types.UploadBuffer;
 import idl.Mesh;
 import idl.Submesh;
 import idl.CullView;
@@ -17,7 +18,7 @@ import debug.dbg;
 
 struct Uniforms
 {
-    ComputeBuffer<CullView> cullView;
+    UploadBuffer<CullView> cullView;
     PackedBuffer<SubmeshInstance> instanceBuffer;
     EntryBuffer<Mesh> meshBuffer;
     RangeBuffer<Submesh> submeshBuffer;
