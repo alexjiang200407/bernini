@@ -578,15 +578,27 @@ namespace bgl
 		const VatGeomDesc&         desc,
 		MaterialHandle             material)
 	{
-		if (!desc.positions.textureSlot || !desc.normals.textureSlot)
+		if (!m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.positions)) ||
+		    !m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.normals)))
 		{
-			throw SceneError("AddVatGeom: both VAT textures are required");
+			throw SceneError(
+				"AddVatGeom: both VAT textures are required, live, from this scene's "
+				"AddTextureAsset");
 		}
 		if (desc.clips.empty())
 		{
 			throw SceneError(
 				"AddVatGeom: the clip table is empty; a VAT with no clips draws "
 				"nothing");
+		}
+		for (const VatClipDesc& clip : desc.clips)
+		{
+			// The shader clamps the frame to frameCount - 1, and on a uint that underflows a
+			// zero to 4 billion rows of out-of-bounds fetches.
+			if (clip.frameCount == 0)
+			{
+				throw SceneError("AddVatGeom: a clip with no frames has no row to fetch");
+			}
 		}
 		if (!material.IsValid() || material.materialType != MaterialType::kPBR ||
 		    material.layerType != LayerType::kOpaque)
@@ -654,6 +666,13 @@ namespace bgl
 			// accepts.
 			DeleteGeom(base);
 			throw SceneError(e.what());
+		}
+		catch (...)
+		{
+			// Not everything the block can raise is a runtime_error -- an allocation failure is
+			// not -- and the cleanup must run on every path.
+			DeleteGeom(base);
+			throw;
 		}
 	}
 

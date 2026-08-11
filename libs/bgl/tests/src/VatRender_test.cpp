@@ -272,9 +272,20 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 		broken.clips.clear();
 		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, broken, pbr), bgl::SceneError);
 
+		// The shader clamps the frame to frameCount - 1, so a zero would underflow a uint.
+		auto emptyClip                = desc;
+		emptyClip.clips[1].frameCount = 0;
+		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, emptyClip, pbr), bgl::SceneError);
+
 		auto noTexture      = desc;
 		noTexture.positions = bgl::TextureAssetHandle{};
 		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, noTexture, pbr), bgl::SceneError);
+
+		// Deleted is as unusable as never-created: the record would bake a dead descriptor.
+		auto dead    = desc;
+		dead.normals = scene->AddTextureAsset(MakeNormalTexture(), "vat-doomed");
+		scene->DeleteTextureAsset(dead.normals);
+		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, dead, pbr), bgl::SceneError);
 
 		CHECK_THROWS_AS(
 			scene->AddVatGeom(verts, indices, desc, bgl::MaterialHandle{}),
@@ -284,6 +295,30 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 		cutout.layerType     = bgl::LayerType::kMask;
 		const auto cutoutPbr = scene->CreatePbrMaterial(cutout);
 		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, desc, cutoutPbr), bgl::SceneError);
+	}
+
+	SECTION("an override cannot smuggle a cutout onto a VAT instance")
+	{
+		const auto instance = view->CreateVatMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+
+		auto cutout          = bgl::PbrMaterialDesc();
+		cutout.layerType     = bgl::LayerType::kMask;
+		const auto cutoutPbr = scene->CreatePbrMaterial(cutout);
+
+		// Refused with an exception, never resolved: SubmeshPso(kVat, cutout) is a gfatal, so the
+		// door has to close here, on the caller's thread, as an ordinary argument error.
+		CHECK_THROWS_AS(view->SetSubmeshMaterialOverride(instance, 0, cutoutPbr), bgl::SceneError);
+		CHECK_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, cutoutPbr), bgl::SceneError);
+
+		// An opaque PBR override is the supported skin path and must still work.
+		auto skinDesc            = bgl::PbrMaterialDesc();
+		skinDesc.baseColorFactor = glm::vec4(0.2f, 0.6f, 0.9f, 1.0f);
+		const auto skin          = scene->CreatePbrMaterial(skinDesc);
+		view->SetSubmeshMaterialOverride(instance, 0, skin);
+		gfx->DrawFrame(target, job);
 	}
 
 	SECTION("deleting the instance and the geom leaves the scene clean")

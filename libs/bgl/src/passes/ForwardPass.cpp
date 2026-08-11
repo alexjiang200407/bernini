@@ -93,10 +93,7 @@ namespace bgl
 			bool             depthWrite;
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
-
-			// The AS/MS pair -- the geometry stage is per row now that VAT fetches its vertices
-			// from a texture instead of skinning nothing.
-			std::string_view geomSrc = c_GeomSrc;
+			std::string_view geomSrc   = c_GeomSrc;
 		};
 
 		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).

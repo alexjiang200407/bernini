@@ -463,6 +463,14 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
+		if (meta.geomType == GeomType::kVat && (material.materialType != MaterialType::kPBR ||
+		                                        material.layerType != LayerType::kOpaque))
+		{
+			throw SceneError(
+				"SetSubmeshMaterialOverride: a VAT instance takes only an opaque kPBR material -- "
+				"the VAT pipeline has no other variant yet");
+		}
+
 		meta.overrides[submeshIndex] = material;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
