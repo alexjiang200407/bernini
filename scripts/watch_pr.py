@@ -334,7 +334,12 @@ def main():
     # the wait, so the Stop hook must see it as satisfied while it runs in the
     # background. emit() re-arms when it exits with the PR still needing an answer.
     if not args.once:
-        watchlist.disarm(args.pr)
+        running = watchlist.watcher(args.pr)
+        if running:
+            print(f"PR #{args.pr} is already watched by pid {running}; not starting a second watcher.",
+                  file=sys.stderr)
+            return
+        watchlist.claim(args.pr)
 
     gh = find_gh()
     rest_repo = repo_path(gh, args.repo)

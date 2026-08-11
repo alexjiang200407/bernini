@@ -131,13 +131,26 @@ Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) clo
   naming the `just pr` command to use instead. Reads — `gh pr view`, `gh api … --jq` — are untouched.
 - [`pr_watch_guard.py`](../.claude/hooks/pr_watch_guard.py) (`Stop`) refuses to end a turn while a PR
   this session wrote to has no watcher. `pr.py` arms the list; [`watch_pr.py`](../scripts/watch_pr.py)
-  claims the PR as it starts and re-arms it on a review, a comment or a red build — which is exactly
-  when the PR is waiting on the agent again — and drops it for good once the PR merges or closes.
-  `just pr unwatch <n>` releases one deliberately.
+  claims the PR as it starts, refuses to start where another watcher already holds it, re-arms it on a
+  review, a comment or a red build — which is exactly when the PR is waiting on the agent again — and
+  drops it for good once the PR merges or closes. `just pr unwatch <n>` releases one deliberately.
 
 The watcher claims the PR at startup rather than at exit so that it can run **in the background**: the
 hook is satisfied by a watch that is *running*, the turn ends, and the developer keeps their session
 instead of watching a blocked prompt for an hour.
+
+**One watcher per PR.** The claim is the watcher's pid, so the list answers *is anyone watching this*
+rather than *has anyone ever watched it*: a PR with a live watcher is not pending however many times
+it is armed again, and `just watch-pr` on it says who holds it and exits instead of starting a second.
+A claim recording only that someone had started would let the halves fight — every `pr.py` write arms,
+so a reply posted mid-watch blocks the turn, the agent starts another watcher, and each duplicate then
+wakes it for the same comment.
+
+The armed entry is left in place for as long as the watch runs rather than being removed by it, which
+is what makes a watcher's death safe: liveness is decided on every read, so a claim whose process is
+gone stops counting and the PR is pending again. Disarming at startup instead would lose the PR
+outright whenever a watcher exits before reporting anything — a failed first poll, a timeout, a
+`kill` — leaving it neither watched nor pending, which is the silence the hook exists to prevent.
 
 Each entry also carries the timestamp of the last thing posted, which is what `just watch-pr` uses as
 its baseline when `--since` is not given. A hand-written timestamp two seconds early makes the watcher
@@ -145,8 +158,10 @@ fire on the agent's own reply and spend the turn reading itself, so the time com
 response rather than from anyone's judgement.
 
 The list lives in the worktree's git dir as `bernini-pr-watch.json` (`.git/`, or
-`.git/worktrees/<name>/` in a linked worktree) and is keyed by session, so a later session never
-inherits a block for a PR it knows nothing about.
+`.git/worktrees/<name>/` in a linked worktree), under two keys: `pending`, keyed by session so a later
+session never inherits a block for a PR it knows nothing about, and `watching`, keyed by pid and
+deliberately not by session — a watcher started by one session still counts for another, because the
+PR is being watched either way.
 
 ## Coding agent: commit attribution
 
