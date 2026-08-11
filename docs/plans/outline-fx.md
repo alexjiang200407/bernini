@@ -129,10 +129,10 @@ level editor grows a selection.
   instance's selection with it.
 - `libs/bgl/src/gfx/RenderTargetBase.*`, `d3d12/RenderTarget_d3d12.*`, `metal/RenderTarget_metal.*`
   — the R8 selection-mask texture + RTV/SRV, cleared/resized with the target.
-- `libs/bgl/src/passes/SelectionMaskPass.{h,cpp}` (new) — clears the mask and draws the selected
-  list; kernel = `Forward_StaticMesh` AS/MS + new `SelectionMask.slang` PS (writes 1.0, one R8
+- `libs/bgl/src/passes/OutlineMaskPass.{h,cpp}` (new) — clears the mask and draws the selected
+  list; kernel = `Forward_StaticMesh` AS/MS + new `OutlineMask.slang` PS (writes 1.0, one R8
   RTV, no depth). Attached per `Draw` when the view has a selection.
-- `libs/bgl/shaders/src/SelectionMask.slang` (new), `PostProcess.slang` — mask PS; outline
+- `libs/bgl/shaders/src/OutlineMask.slang` (new), `PostProcess.slang` — mask PS; outline
   neighborhood sample + composite behind an enable flag in `gPostProcessData`.
 - `libs/bgl/src/gfx/RenderContext.{h,cpp}` — own/init/release the pass, attach it in `Draw` with
   the unjittered matrices, feed the mask + style into `postProcessArgs` in `EndFrame`.
@@ -158,7 +158,7 @@ count-match contract in docs/passes.md.
    stale handle or out-of-range submesh, selection dropped on `DeleteMeshInstance`, list survives
    an unrelated delete (packed-index re-resolve).*
 3. **bgl: the mask pass and the outline composite** — mask texture on the render target,
-   `SelectionMaskPass`, `SelectionMask.slang`, the `PostProcess` extension, `RenderContext`
+   `OutlineMaskPass`, `OutlineMask.slang`, the `PostProcess` extension, `RenderContext`
    wiring. *Gate: a golden-image test (`SelectionOutline_test.cpp`, modeled on the TAA/PBR render
    tests) — sphere with one selected submesh shows the contour, nothing selected reproduces the
    old image; `just run bgl_tests -- --gpu-validation` clean.*

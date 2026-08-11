@@ -59,6 +59,15 @@ namespace bgl
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget });
 
+		if (args.outlineEnabled)
+		{
+			desc.AddTextureArg(
+				TextureArg{ std::string(c_OutlineMaskName),
+			                BarrierSyncFlag::kPixelShader,
+			                BarrierAccessFlag::kShaderResource,
+			                BarrierLayout::kShaderResource });
+		}
+
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -85,6 +94,21 @@ namespace bgl
 			if (auto u = tonemap["sampler"]; u.IsValid())
 			{
 				u = args.sampler;
+			}
+			if (auto u = tonemap["outlineEnabled"]; u.IsValid())
+			{
+				u = args.outlineEnabled ? 1u : 0u;
+			}
+			if (args.outlineEnabled)
+			{
+				if (auto u = tonemap["outlineMask"]; u.IsValid())
+				{
+					u = args.outlineMask;
+				}
+				if (auto u = tonemap["maskTexelSize"]; u.IsValid())
+				{
+					u = args.maskTexelSize;
+				}
 			}
 		}
 		else

@@ -606,6 +606,14 @@ namespace bgl
 		m_TransparentSort.ImportResources(fg, resourceNames);
 
 		{
+			// Rebuilt before the handle is read: a stale list can grow the buffer, and growth mints
+			// a new handle -- importing the old one would hand the mask pass a retired resource
+			// that this frame's upload never reaches.
+			if (m_SelectionDirty)
+			{
+				RebuildSelectedList();
+			}
+
 			auto name = std::string(c_SelectedInstancesName);
 			fg.ImportBuffer(name, m_CurrentSelectedInstances.GetBufferHandle());
 			resourceNames.push_back(std::move(name));
