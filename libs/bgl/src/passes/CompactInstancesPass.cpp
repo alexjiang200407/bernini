@@ -102,7 +102,7 @@ namespace bgl
 					.AddBufferArg(
 						"cull.view",
 						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+						BarrierAccessFlag::kShaderResource)
 					.AddBufferArg(
 						"scene.instanceVisibility",
 						BarrierSyncFlag::kComputeShader,
@@ -169,10 +169,10 @@ namespace bgl
 		draw.cullState->GetPsoPrefixSum().Clear(cmd);
 		m_CullStats.Clear(cmd);
 
-		cmd->WriteBuffer(
-			draw.cullState->GetCullView().GetBufferHandle(),
-			&draw.viewState.cullView,
-			sizeof(idl::CullView));
+		// Assigned here rather than at attach time: a view drawn twice in one frame shares this
+		// state, and each draw's cull must run against its own matrices.
+		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
+		draw.cullState->GetCullView().Update(cmd);
 
 		static constexpr std::array<idl::DispatchArgs, c_PsoCount> c_Seed = [] {
 			std::array<idl::DispatchArgs, c_PsoCount> seed{};

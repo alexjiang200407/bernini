@@ -1,5 +1,7 @@
 #pragma once
+#include "idl/CullView.h"
 #include "scene/ComputeBuffer.h"
+#include "scene/UploadBuffer.h"
 
 namespace bgl
 {
@@ -68,8 +70,8 @@ namespace bgl
 			std::string_view          scope,
 			std::vector<std::string>& updateArgs) const;
 
-		// Non-const: the cull pass seeds these through ComputeBuffer::Clear / WriteBuffer, which
-		// need the object rather than the handle the frame graph hands back.
+		// Non-const: the cull pass seeds these through Clear / Assign+Update, which need the
+		// object rather than the handle the frame graph hands back.
 		[[nodiscard]] ComputeBuffer&
 		GetPsoPrefixSum() noexcept
 		{
@@ -82,7 +84,7 @@ namespace bgl
 			return m_CompactedDispatchArgs;
 		}
 
-		[[nodiscard]] ComputeBuffer&
+		[[nodiscard]] UploadBuffer<idl::CullView>&
 		GetCullView() noexcept
 		{
 			return m_CullView;
@@ -102,7 +104,7 @@ namespace bgl
 		ComputeBuffer m_PsoPrefixSum;
 		ComputeBuffer m_CompactedDispatchArgs;
 
-		// This frustum's planes, uploaded per draw and read by the cull dispatch.
-		ComputeBuffer m_CullView;
+		// This frustum's planes, assigned per draw and read by the cull dispatch.
+		UploadBuffer<idl::CullView> m_CullView;
 	};
 }
