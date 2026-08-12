@@ -22,5 +22,9 @@ namespace bgl
 		// viewProj before the jitter, kept so consecutive frames can be compared for camera
 		// stillness bitwise -- stripping the jitter back out of viewProj is not float-exact.
 		glm::mat4 unjitteredViewProj{ 1.0f };
+
+		// The animation clock the frame was drawn at. Kept beside the matrices so a VAT motion
+		// vector reprojects the pose and the camera from the same frame.
+		float time = 0.0f;
 	};
 }

@@ -285,6 +285,8 @@ namespace bgl
 			viewData["prevViewProj"] = draw.viewState.prevViewProj;
 			viewData["jitter"]       = draw.viewState.jitter;
 			viewData["prevJitter"]   = draw.viewState.prevJitter;
+			viewData["time"]         = draw.viewState.time;
+			viewData["prevTime"]     = draw.viewState.prevTime;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
