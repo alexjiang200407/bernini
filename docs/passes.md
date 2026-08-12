@@ -365,6 +365,13 @@ not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The
 the stage rather than those steps: everything between a resolved scene and the screen — bloom,
 grading, exposure adaptation — belongs here as it lands.
 
+The outline width is **4 px at a 2160-line target, scaled by the mask's height** — not a fixed texel
+count. A target rendered below its window's resolution (`RenderTargetWindow`'s render scale) is
+stretched back up on present, so a texel-count outline thickens on screen as the scale drops. It is
+floored at one texel, so a small viewport still shows a selection, and capped at eight, because the
+dilate is a `(2r+1)^2` tap loop and a supersampled target would otherwise pay quadratically for a
+contour no thicker on screen.
+
 * **In:** whatever the last HDR stage produced — `sceneColor`, or the freshly resolved history on a
   TAA target — through the `SrvHandle` the render target owns; the outline mask as a shader
   resource, declared and sampled only on a frame whose `outlineEnabled` is set; its own
