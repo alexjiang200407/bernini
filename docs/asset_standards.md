@@ -545,11 +545,11 @@ the prune already collects, so the two compose instead of duplicating each other
 
 ### Delete Cascade
 
-`DeletionMode::kCascade` (the Content Explorer's **Delete Cascade**) asks the opposite of the prune,
+`planCascadeDeletion` (the Content Explorer's **Delete Cascade**) asks the opposite of the prune,
 per deletion: *what would nothing reference once this is gone?* `DeletionPlan::cascade` lists every
 asset the deleted set references whose **every** referrer is itself in the set, applied transitively —
 a material freed by its last mesh frees the baked maps and sources it alone named. It never reaches
-*up*: what references the target blocks the deletion in either mode, exactly as before. A blocked plan
+*up*: what references the target blocks the deletion either way, exactly as before. A blocked plan
 carries no cascade, and `deleteAsset` removes the cascade only after the target, so a failure part-way
 never leaves a referenced asset missing.
 

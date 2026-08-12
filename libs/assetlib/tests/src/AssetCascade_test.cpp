@@ -23,8 +23,7 @@ TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[ass
 	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
 	SaveMesh(root, "mesh.bmesh", { "Materials/mat.bmaterial" });
 
-	const DeletionPlan plan =
-		planDeletion(root.Scan(), "Meshes/mesh.bmesh", DeletionMode::kCascade);
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/mesh.bmesh");
 
 	REQUIRE(plan.Allowed());
 
@@ -54,8 +53,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 		SaveMesh(root, "gone.bmesh", { "Materials/mat.bmaterial" });
 		SaveMesh(root, "stays.bmesh", { "Materials/mat.bmaterial" });
 
-		const DeletionPlan plan =
-			planDeletion(root.Scan(), "Meshes/gone.bmesh", DeletionMode::kCascade);
+		const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/gone.bmesh");
 
 		CHECK(plan.cascade.empty());
 
@@ -72,8 +70,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 		const BMaterial stays = BakeAndSave(root, "stays.bmaterial", "textures_src/shared.ktx2");
 		SaveMesh(root, "mesh.bmesh", { "Materials/gone.bmaterial" });
 
-		const DeletionPlan plan =
-			planDeletion(root.Scan(), "Meshes/mesh.bmesh", DeletionMode::kCascade);
+		const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/mesh.bmesh");
 
 		CHECK(plan.cascade == std::vector<std::string>{ "Materials/gone.bmaterial" });
 
@@ -94,8 +91,7 @@ TEST_CASE("An asset two cascading referrers share goes when both do", "[assetcas
 	BakeAndSave(root, "b.bmaterial", "textures_src/shared.ktx2");
 	SaveMesh(root, "mesh.bmesh", { "Materials/a.bmaterial", "Materials/b.bmaterial" });
 
-	const DeletionPlan plan =
-		planDeletion(root.Scan(), "Meshes/mesh.bmesh", DeletionMode::kCascade);
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/mesh.bmesh");
 
 	REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
 
@@ -104,10 +100,10 @@ TEST_CASE("An asset two cascading referrers share goes when both do", "[assetcas
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "shared.ktx2"));
 }
 
-TEST_CASE("The default deletion still takes the target alone", "[assetcascade]")
+TEST_CASE("A plain deletion still takes the target alone", "[assetcascade]")
 {
-	// kSingle is the mode every existing caller means, so the cascade must be something a caller asks
-	// for rather than something that starts happening to them.
+	// planDeletion is what every existing caller uses, so the cascade must be something a caller
+	// asks for by name rather than something that starts happening to them.
 	const DataRoot root("bernini_cascade_default");
 
 	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
@@ -131,8 +127,7 @@ TEST_CASE("A blocked deletion plans no cascade", "[assetcascade]")
 	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
 	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
 
-	const DeletionPlan plan =
-		planDeletion(root.Scan(), "textures_src/a.ktx2", DeletionMode::kCascade);
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "textures_src/a.ktx2");
 
 	CHECK_FALSE(plan.Allowed());
 	CHECK(plan.cascade.empty());
@@ -157,7 +152,7 @@ TEST_CASE("A directory cascade counts every referrer under it as deleted", "[ass
 		root.path / "Meshes" / "props" / "b.bmesh");
 	SaveMesh(root, "outside.bmesh", { "Materials/held.bmaterial" });
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "Meshes/props", DeletionMode::kCascade);
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/props");
 
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.IsDirectory());
@@ -180,8 +175,7 @@ TEST_CASE("A cascade file already gone counts as deleted", "[assetcascade]")
 	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
 	SaveMesh(root, "mesh.bmesh", { "Materials/mat.bmaterial" });
 
-	const DeletionPlan plan =
-		planDeletion(root.Scan(), "Meshes/mesh.bmesh", DeletionMode::kCascade);
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/mesh.bmesh");
 
 	REQUIRE_FALSE(plan.cascade.empty());
 	fs::remove(root.path / "Materials" / "mat.bmaterial");

@@ -133,21 +133,6 @@ namespace assetlib
 		std::filesystem::path m_DataRoot;
 	};
 
-	/**
-	 * Whether a deletion takes only its target, or also what the target alone was holding alive.
-	 *
-	 * kCascade frees the target's references the way dropping a row resolves its foreign keys: an
-	 * asset the deleted set references is deleted with it **only when nothing outside the set
-	 * references it too**, applied transitively -- a material freed by its last mesh frees the
-	 * textures it alone routed. It never reaches *up*: what references the target still blocks the
-	 * deletion in either mode.
-	 */
-	enum class DeletionMode
-	{
-		kSingle,
-		kCascade,
-	};
-
 	/** What a deletion would destroy, and what stands in its way. */
 	struct DeletionPlan
 	{
@@ -166,9 +151,9 @@ namespace assetlib
 		std::vector<std::string> contents;
 
 		/**
-		 * What DeletionMode::kCascade adds: every asset that nothing would reference once the target
-		 * (and the rest of this list) is gone, sorted. Always empty for kSingle, and for a plan that
-		 * is not Allowed() -- a blocked deletion frees nothing.
+		 * What planCascadeDeletion adds: every asset that nothing would reference once the target
+		 * (and the rest of this list) is gone, sorted. Always empty from planDeletion, and for a
+		 * plan that is not Allowed() -- a blocked deletion frees nothing.
 		 */
 		std::vector<std::string> cascade;
 
@@ -198,17 +183,23 @@ namespace assetlib
 	 * material routes from does not. Whether a directory is one the *project* needs is not a question this
 	 * can answer -- the caller owns its own layout.
 	 *
-	 * `mode` decides what goes with an allowed deletion: kSingle takes the target alone, kCascade also
-	 * fills `cascade` with what the target alone was holding alive -- see DeletionMode.
-	 *
 	 * @throws std::runtime_error if `target` is a file of no kind this project stores anything about, or
 	 *         does not resolve to somewhere inside the data root.
 	 */
 	[[nodiscard]] DeletionPlan
-	planDeletion(
-		const AssetRefGraph& graph,
-		std::string_view     target,
-		DeletionMode         mode = DeletionMode::kSingle);
+	planDeletion(const AssetRefGraph& graph, std::string_view target);
+
+	/**
+	 * planDeletion, with `cascade` also filled: everything the target alone was holding alive, freed
+	 * the way dropping a row resolves its foreign keys. An asset the deleted set references goes with
+	 * it **only when nothing outside the set references it too**, applied transitively -- a material
+	 * freed by its last mesh frees the textures it alone routed. It never reaches *up*: what
+	 * references the target blocks this plan exactly as it blocks planDeletion's.
+	 *
+	 * @throws std::runtime_error as planDeletion does.
+	 */
+	[[nodiscard]] DeletionPlan
+	planCascadeDeletion(const AssetRefGraph& graph, std::string_view target);
 
 	enum class DeletionStatus
 	{
@@ -233,7 +224,7 @@ namespace assetlib
 	 * removal fails part-way through is reported kFailed, with whatever came off already gone -- there is
 	 * no undo, and pretending otherwise would be worse than saying so.
 	 *
-	 * A plan carrying a `cascade` takes those files too, after the target. A kSingle deletion of a
+	 * A plan carrying a `cascade` takes those files too, after the target. A plain planDeletion of a
 	 * material still leaves the baked maps it alone named on disk; they are what
 	 * findUnusedBakedTextures then sweeps.
 	 *

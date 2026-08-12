@@ -244,13 +244,25 @@ private:
 	 * Deletes `asset` (data-root-relative), having first established that nothing references it: no
 	 * material samples the texture, no mesh names the material.
 	 *
-	 * Deleting a mesh is never refused -- the materials it named are shareable assets. With
-	 * DeletionMode::kSingle they stay where they are, and the maps a deleted material leaves behind
-	 * are what Clean Unused Textures sweeps; kCascade also takes every asset that nothing would
-	 * reference once the target is gone, listed in the confirmation first.
+	 * Deleting a mesh is never refused -- the materials it named are shareable assets. They stay
+	 * where they are, and the maps a deleted material leaves behind are what Clean Unused Textures
+	 * sweeps.
 	 */
 	void
-	DeleteAsset(const QString& asset, assetlib::DeletionMode mode);
+	DeleteAsset(const QString& asset);
+
+	/**
+	 * DeleteAsset, taking also every asset that nothing would reference once the target is gone --
+	 * listed in the confirmation first, and blocked by the Material Editor holding any of it open.
+	 */
+	void
+	DeleteAssetCascade(const QString& asset);
+
+	/** The body Delete and Delete Cascade share; `planner` is the one thing they differ by. */
+	void
+	DeleteWithPlanner(
+		const QString& asset,
+		assetlib::DeletionPlan (*planner)(const assetlib::AssetRefGraph&, std::string_view));
 
 	/**
 	 * Renames `asset` (data-root-relative) in place, rewriting every asset that references it so the

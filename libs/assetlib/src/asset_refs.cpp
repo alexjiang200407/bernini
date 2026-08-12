@@ -360,7 +360,8 @@ namespace assetlib
 
 			auto cascade = std::vector<std::string>();
 
-			for (bool grew = true; grew;)
+			bool grew = true;
+			while (grew)
 			{
 				grew = false;
 				for (const AssetRef& edge : graph.Edges())
@@ -390,7 +391,7 @@ namespace assetlib
 	}
 
 	DeletionPlan
-	planDeletion(const AssetRefGraph& graph, std::string_view target, DeletionMode mode)
+	planDeletion(const AssetRefGraph& graph, std::string_view target)
 	{
 		auto plan   = DeletionPlan();
 		plan.target = normalizeRef(target);
@@ -415,8 +416,16 @@ namespace assetlib
 			plan.blockers.assign(referrers.begin(), referrers.end());
 		}
 
+		return plan;
+	}
+
+	DeletionPlan
+	planCascadeDeletion(const AssetRefGraph& graph, std::string_view target)
+	{
+		DeletionPlan plan = planDeletion(graph, target);
+
 		// A blocked deletion frees nothing, so there is no cascade to compute for one.
-		if (mode == DeletionMode::kCascade && plan.Allowed())
+		if (plan.Allowed())
 			plan.cascade = cascadeOf(graph, plan);
 
 		return plan;

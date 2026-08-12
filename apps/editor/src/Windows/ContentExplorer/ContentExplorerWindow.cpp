@@ -444,9 +444,9 @@ ContentExplorerWindow::ShowAssetMenu(
 	else if (rename != nullptr && chosen == rename)
 		RenameAsset(asset);
 	else if (remove != nullptr && chosen == remove)
-		DeleteAsset(asset, assetlib::DeletionMode::kSingle);
+		DeleteAsset(asset);
 	else if (removeCascade != nullptr && chosen == removeCascade)
-		DeleteAsset(asset, assetlib::DeletionMode::kCascade);
+		DeleteAssetCascade(asset);
 }
 
 bool
@@ -559,7 +559,21 @@ ContentExplorerWindow::IsHeldOpen(const QString& absolute, bool isDirectory) con
 }
 
 void
-ContentExplorerWindow::DeleteAsset(const QString& asset, assetlib::DeletionMode mode)
+ContentExplorerWindow::DeleteAsset(const QString& asset)
+{
+	DeleteWithPlanner(asset, assetlib::planDeletion);
+}
+
+void
+ContentExplorerWindow::DeleteAssetCascade(const QString& asset)
+{
+	DeleteWithPlanner(asset, assetlib::planCascadeDeletion);
+}
+
+void
+ContentExplorerWindow::DeleteWithPlanner(
+	const QString& asset,
+	assetlib::DeletionPlan (*planner)(const assetlib::AssetRefGraph&, std::string_view))
 {
 	const QString absolute    = QDir(m_RootPath).absoluteFilePath(asset);
 	const bool    isDirectory = QFileInfo(absolute).isDir();
@@ -604,7 +618,7 @@ ContentExplorerWindow::DeleteAsset(const QString& asset, assetlib::DeletionMode 
 		return;
 	}
 
-	const assetlib::DeletionPlan plan = assetlib::planDeletion(*graph, asset.toStdString(), mode);
+	const assetlib::DeletionPlan plan = planner(*graph, asset.toStdString());
 
 	if (!plan.Allowed())
 	{
