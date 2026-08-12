@@ -1,13 +1,16 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 
 #include "Project/Project.h"
+#include "Thumbnails/TexturePreviewCache.h"
 #include "util/QtSupport.h"
+#include "util/asset_paths.h"
 
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileSystemModel>
 #include <QListView>
 #include <QMimeData>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QTreeView>
@@ -154,6 +157,34 @@ TEST_CASE("A root path gives the content explorer something to show", "[contente
 	REQUIRE(window.isEnabled());
 	REQUIRE(Hierarchy(window)->model() != nullptr);
 	REQUIRE(Files(window)->model() != nullptr);
+}
+
+TEST_CASE("The explorer previews a texture with no outside wiring", "[contentexplorer]")
+{
+	const Sandbox sandbox;
+	const QString texture = Touch(sandbox, "Textures/albedo.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto*             model = qobject_cast<QFileSystemModel*>(Files(window)->model());
+	const QModelIndex tile  = IndexFor(*model, texture);
+	REQUIRE(tile.isValid());
+
+	QImage preview(64, 64, QImage::Format_RGBA8888);
+	preview.fill(Qt::red);
+
+	// Delivered through the cache the explorer stands itself -- no MainWindow wiring exists to fake.
+	QSignalSpy repaint(model, &QAbstractItemModel::dataChanged);
+	window.GetTexturePreviews().Deliver(texture, preview, editor::FileStamp(texture));
+
+	const bool tileRepainted = std::ranges::any_of(repaint, [&](const QList<QVariant>& emission) {
+		return emission.at(0).toModelIndex() == tile;
+	});
+	REQUIRE(tileRepainted);
+
+	const QIcon icon = model->data(tile, Qt::DecorationRole).value<QIcon>();
+	REQUIRE(icon.pixmap(64).toImage().convertToFormat(QImage::Format_RGBA8888) == preview);
 }
 
 TEST_CASE("The content explorer is rooted at the project's data directory", "[contentexplorer]")

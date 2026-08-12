@@ -154,6 +154,7 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 
 	m_FileModel = new AssetFileModel(this);
 	m_FileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
+	m_FileModel->SetTexturePreviews(&m_TexturePreviews);
 
 	m_Ui.FileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(

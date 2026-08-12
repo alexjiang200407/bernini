@@ -25,11 +25,11 @@ public:
 	// Decodes `path` unless a current copy is cached or one is already being decoded. Emits Ready on
 	// success.
 	void
-	Request(const QString& path);
+	Request(const QString& path) override;
 
 	// Hands a finished decode back. Called by a worker via a queued invocation, so it always runs
 	// on the UI thread -- QPixmap may only be touched there, which is why the worker yields a
-	// QImage. A null `image` means the decode failed, and only ends the claim.
+	// QImage. A null `image` means the decode failed, which is remembered until the file changes.
 	void
 	Deliver(const QString& path, const QImage& image, qint64 stamp);
 

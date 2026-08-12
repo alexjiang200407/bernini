@@ -15,6 +15,12 @@ namespace editor
 	}
 
 	bool
+	IsTextureFile(const QString& path)
+	{
+		return path.endsWith(QStringLiteral(".ktx2"), Qt::CaseInsensitive);
+	}
+
+	bool
 	IsPlainFileStem(const QString& name)
 	{
 		if (name.isEmpty())

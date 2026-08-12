@@ -12,11 +12,12 @@
  *
  * The half TexturePreviewCache and AssetThumbnailCache have in common. A subclass supplies the
  * production -- a decode on a worker for one, a GPU render for the other -- claiming a path with
- * BeginRequest and ending the claim with Store or Abandon. A path stays claimed for everything in
- * between, which is what stops a repaint part-way through from starting the same work again: a miss
- * on Lookup does not mean nothing is coming.
+ * BeginRequest and ending the claim with Store, Abandon or Reject. A path stays claimed for
+ * everything in between, which is what stops a repaint part-way through from starting the same work
+ * again: a miss on Lookup does not mean nothing is coming.
  *
- * Every failure path owes an Abandon. A claim that is never ended is never producible again.
+ * Every failure path owes an Abandon or a Reject. A claim that is never ended is never producible
+ * again.
  */
 class StampedPixmapCache : public QObject
 {
@@ -27,6 +28,11 @@ public:
 	// the file changed on disk since it was made.
 	[[nodiscard]] QPixmap
 	Lookup(const QString& path) const;
+
+	// Produces `path` unless a current copy is cached, one is already being produced, or producing
+	// it has already failed and the file has not changed since. Emits Ready on success.
+	virtual void
+	Request(const QString& path) = 0;
 
 Q_SIGNALS:
 	void
@@ -55,6 +61,17 @@ protected:
 	// Ends the claim with nothing cached, so a later request may try again.
 	void
 	Abandon(const QString& path) noexcept;
+
+	/**
+	 * Ends the claim remembering that `stamp`'s content produced nothing, so BeginRequest refuses
+	 * the path until the file changes on disk. For failures deterministic on the content -- with
+	 * requests arriving from paint, an Abandon there would retry the same failure on every repaint.
+	 *
+	 * The memory is one cache entry, so eviction under budget pressure can forget it: a wasted
+	 * retry, not a correctness problem. A success already stored under `stamp` is kept.
+	 */
+	void
+	Reject(const QString& path, qint64 stamp);
 
 	// Drops every cached pixmap and every claim.
 	void

@@ -105,7 +105,8 @@ TexturePreviewCache::Deliver(const QString& path, const QImage& image, qint64 st
 {
 	if (image.isNull())
 	{
-		Abandon(path);
+		// A baked block format has no CPU decode path at all: the same content fails the same way.
+		Reject(path, stamp);
 		return;
 	}
 

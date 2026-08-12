@@ -86,7 +86,7 @@ public:
 	// Renders `path` unless a current copy is cached or one is already being rendered. Emits Ready on
 	// success.
 	void
-	Request(const QString& path);
+	Request(const QString& path) override;
 
 	// True if the cache has a working render target, i.e. thumbnails are possible at all.
 	[[nodiscard]] bool

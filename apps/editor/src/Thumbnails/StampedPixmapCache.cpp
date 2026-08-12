@@ -62,6 +62,19 @@ StampedPixmapCache::Abandon(const QString& path) noexcept
 }
 
 void
+StampedPixmapCache::Reject(const QString& path, qint64 stamp)
+{
+	m_Claimed.remove(path);
+
+	// A late failure must not take down a success that already landed for the same content.
+	if (const Entry* entry = m_Cache.object(path);
+	    entry != nullptr && entry->stamp == stamp && !entry->pixmap.isNull())
+		return;
+
+	m_Cache.insert(path, new Entry{ QPixmap(), stamp }, 1);
+}
+
+void
 StampedPixmapCache::Clear()
 {
 	m_Cache.clear();

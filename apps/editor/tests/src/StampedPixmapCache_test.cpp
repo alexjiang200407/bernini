@@ -23,7 +23,12 @@ namespace
 		using StampedPixmapCache::BeginRequest;
 		using StampedPixmapCache::Clear;
 		using StampedPixmapCache::IsClaimed;
+		using StampedPixmapCache::Reject;
 		using StampedPixmapCache::Store;
+
+		void
+		Request(const QString&) override
+		{}
 	};
 
 	QPixmap
@@ -164,6 +169,56 @@ TEST_CASE("Storing nothing caches nothing and announces nothing", "[thumbnails]"
 	REQUIRE_FALSE(cache.IsClaimed(path));
 	REQUIRE(cache.Lookup(path).isNull());
 	REQUIRE(ready.count() == 0);
+}
+
+TEST_CASE("A rejected file is not produced again until it changes", "[thumbnails]")
+{
+	// A producer that fails on a file's content will fail on it again -- a baked block-format
+	// texture has no CPU decode at all -- and requests arrive from paint, so an Abandon here would
+	// re-run the failure on every repaint for the rest of the session.
+	const Sandbox sandbox;
+	TestCache     cache;
+
+	const QString path = sandbox.Write("baked.ktx2");
+
+	const std::optional<qint64> stamp = cache.BeginRequest(path);
+	REQUIRE(stamp.has_value());
+	cache.Reject(path, *stamp);
+
+	REQUIRE_FALSE(cache.IsClaimed(path));
+	REQUIRE(cache.Lookup(path).isNull());
+	REQUIRE_FALSE(cache.BeginRequest(path).has_value());
+}
+
+TEST_CASE("A rejection is forgotten once its file changes", "[thumbnails]")
+{
+	const Sandbox sandbox;
+	TestCache     cache;
+
+	const QString path = sandbox.Write("baked.ktx2");
+
+	// Rejected under a stamp that is no longer the file's -- a texture re-baked since the failure.
+	// New content deserves a new attempt.
+	cache.Reject(path, editor::FileStamp(path) - 1);
+
+	REQUIRE(cache.BeginRequest(path).has_value());
+}
+
+TEST_CASE("A late rejection does not evict what already landed", "[thumbnails]")
+{
+	const Sandbox sandbox;
+	TestCache     cache;
+
+	const QString path = sandbox.Write("apples.bmesh");
+
+	const std::optional<qint64> stamp = cache.BeginRequest(path);
+	REQUIRE(stamp.has_value());
+	cache.Store(path, Produced(), *stamp);
+
+	// A second producer's failure coming back after a success landed for the same content.
+	cache.Reject(path, *stamp);
+
+	REQUIRE_FALSE(cache.Lookup(path).isNull());
 }
 
 TEST_CASE("A change of project drops what was cached and what was claimed", "[thumbnails]")

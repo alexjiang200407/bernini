@@ -7,6 +7,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
+#include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "ui_ContentExplorerWindow.h"
@@ -50,6 +51,12 @@ public:
 	// Supplies the grid's thumbnails. Without one the tiles keep their shell icons.
 	void
 	SetThumbnails(AssetThumbnailCache* thumbnails);
+
+	[[nodiscard]] TexturePreviewCache&
+	GetTexturePreviews() noexcept
+	{
+		return m_TexturePreviews;
+	}
 
 	/**
 	 * The data-root-relative path of the thing at `index` that may be deleted -- an asset file, or a
@@ -299,4 +306,8 @@ private:
 	QString                   m_RootPath;
 	QStringList               m_History;
 	AssetsHeldOpenFn          m_AssetsHeldOpen;
+
+	// A pure-CPU decode with no renderer behind it, so the explorer stands its own cache instead of
+	// being handed one the way the GPU-backed AssetThumbnailCache is.
+	TexturePreviewCache m_TexturePreviews;
 };

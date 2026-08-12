@@ -1,6 +1,8 @@
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "Thumbnails/TexturePreviewCache.h"
+#include "util/asset_paths.h"
 
 #include <QIcon>
 
@@ -9,36 +11,61 @@ AssetFileModel::AssetFileModel(QObject* parent) : QFileSystemModel(parent) {}
 void
 AssetFileModel::SetThumbnails(AssetThumbnailCache* thumbnails)
 {
-	if (m_Thumbnails != nullptr)
-		disconnect(m_Thumbnails, nullptr, this, nullptr);
+	Rebind(m_Thumbnails, thumbnails);
+}
 
-	m_Thumbnails = thumbnails;
+void
+AssetFileModel::SetTexturePreviews(TexturePreviewCache* previews)
+{
+	Rebind(m_TexturePreviews, previews);
+}
 
-	if (m_Thumbnails == nullptr)
-		return;
+template <typename Cache>
+void
+AssetFileModel::Rebind(Cache*& member, Cache* to)
+{
+	if (member != nullptr)
+		disconnect(member, nullptr, this, nullptr);
 
-	connect(
-		m_Thumbnails,
-		&StampedPixmapCache::Ready,
-		this,
-		[this](const QString& path, const QPixmap&) { OnThumbnailReady(path); });
+	member = to;
+
+	if (member != nullptr)
+		connect(
+			member,
+			&StampedPixmapCache::Ready,
+			this,
+			[this](const QString& path, const QPixmap&) { OnThumbnailReady(path); });
+}
+
+StampedPixmapCache*
+AssetFileModel::CacheFor(const QString& path) const
+{
+	if (m_Thumbnails != nullptr && AssetThumbnailCache::CanThumbnail(path))
+		return m_Thumbnails;
+
+	if (m_TexturePreviews != nullptr && editor::IsTextureFile(path))
+		return m_TexturePreviews;
+
+	return nullptr;
 }
 
 QVariant
 AssetFileModel::data(const QModelIndex& index, int role) const
 {
-	if (role != Qt::DecorationRole || index.column() != 0 || m_Thumbnails == nullptr)
+	// A directory is never an asset, whatever its name ends in.
+	if (role != Qt::DecorationRole || index.column() != 0 || isDir(index))
 		return QFileSystemModel::data(index, role);
 
-	const QString path = filePath(index);
-	if (!AssetThumbnailCache::CanThumbnail(path))
+	const QString       path  = filePath(index);
+	StampedPixmapCache* cache = CacheFor(path);
+	if (cache == nullptr)
 		return QFileSystemModel::data(index, role);
 
-	if (const QPixmap thumbnail = m_Thumbnails->Lookup(path); !thumbnail.isNull())
-		return QIcon(thumbnail);
+	if (const QPixmap pixmap = cache->Lookup(path); !pixmap.isNull())
+		return QIcon(pixmap);
 
-	// A miss: the shell icon stands in until the render lands and OnThumbnailReady repaints the tile.
-	m_Thumbnails->Request(path);
+	// A miss: the shell icon stands in until the work lands and OnThumbnailReady repaints the tile.
+	cache->Request(path);
 	return QFileSystemModel::data(index, role);
 }
 
