@@ -1,5 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 
+#include "util/asset_paths.h"
+
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QGraphicsItem>
@@ -22,7 +24,7 @@ namespace
 			if (!url.isLocalFile())
 				continue;
 			const QString file = url.toLocalFile();
-			if (file.endsWith(".ktx2", Qt::CaseInsensitive))
+			if (editor::IsTextureFile(file))
 				return file;
 		}
 		return {};

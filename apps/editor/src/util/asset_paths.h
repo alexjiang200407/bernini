@@ -15,6 +15,13 @@ namespace editor
 	FileStamp(const QString& path);
 
 	/**
+	 * Whether `path` names a texture asset (`.ktx2`, case-insensitively), whatever the file's
+	 * contents turn out to be.
+	 */
+	[[nodiscard]] bool
+	IsTextureFile(const QString& path);
+
+	/**
 	 * Whether `name` is a plain file stem -- letters, digits, `_`, `.` and `-`, and not `.` or `..`.
 	 *
 	 * An import joins a typed name onto a category directory and a suffix, so anything that could
