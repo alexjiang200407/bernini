@@ -87,3 +87,56 @@ TEST_CASE("Selection targets skip what cannot be selected", "[materialeditor][se
 		CHECK(targets[0].instance.handle.index == 11);
 	}
 }
+
+TEST_CASE(
+	"A pick lands back on the selector entry that fans out to it",
+	"[materialeditor][selection]")
+{
+	// The inverse of GetInstanceTargets: what a raycast hit -- (geom, local submesh), via the hit
+	// instance -- must map to so the combo box, the graph swap and the outline all agree.
+	const std::vector<SubmeshRef> refs = {
+		{ .geomIndex = 0, .localSubmesh = 0 },
+		{ .geomIndex = 0, .localSubmesh = 1 },
+		{ .geomIndex = 1, .localSubmesh = 0 },
+	};
+
+	SECTION("Each (geom, submesh) pair finds its own selector entry")
+	{
+		CHECK(MaterialPreviewWindow::SelectorIndexOf(refs, 0, 0) == 0);
+		CHECK(MaterialPreviewWindow::SelectorIndexOf(refs, 0, 1) == 1);
+		CHECK(MaterialPreviewWindow::SelectorIndexOf(refs, 1, 0) == 2);
+	}
+
+	SECTION("A hit nothing tracks -- a stale or foreign pair -- selects nothing")
+	{
+		CHECK(MaterialPreviewWindow::SelectorIndexOf(refs, 2, 0) == -1);
+		CHECK(MaterialPreviewWindow::SelectorIndexOf(refs, 0, 2) == -1);
+	}
+
+	SECTION("The round trip through the fan-out returns home")
+	{
+		const std::vector<InstanceRef> instances = {
+			{ .handle = Handle(10), .geomIndex = 0 },
+			{ .handle = Handle(11), .geomIndex = 1 },
+		};
+
+		for (uint32_t selector = 0; selector < refs.size(); ++selector)
+		{
+			for (const auto& target :
+			     MaterialPreviewWindow::GetInstanceTargets(refs, instances, selector))
+			{
+				const auto instance =
+					std::find_if(instances.begin(), instances.end(), [&](const InstanceRef& ref) {
+						return ref.handle.handle.index == target.instance.handle.index;
+					});
+				REQUIRE(instance != instances.end());
+
+				CHECK(
+					MaterialPreviewWindow::SelectorIndexOf(
+						refs,
+						instance->geomIndex,
+						target.submeshIndex) == static_cast<int>(selector));
+			}
+		}
+	}
+}
