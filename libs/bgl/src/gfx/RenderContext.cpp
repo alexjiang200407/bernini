@@ -383,6 +383,7 @@ namespace bgl
 		m_FrameGraph.Reset();
 		m_DrawCount        = 0;
 		m_CameraStill      = true;
+		m_ShadingChanged   = false;
 		m_OutlineMaskDrawn = false;
 		++m_FrameCounter;
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
@@ -479,6 +480,8 @@ namespace bgl
 		// threshold would have to know the scene's scale. ANDed across the frame's draws -- one
 		// panning view must veto the widening for all of them, or its pixels bank a passing edge.
 		m_CameraStill &= camera.unjitteredViewProj == prevCamera.unjitteredViewProj;
+
+		m_ShadingChanged |= view->AdvanceShading();
 
 		const uint32_t drawIdx = m_DrawCount++;
 
@@ -612,7 +615,7 @@ namespace bgl
 			taaArgs.pointSampler    = m_PointClampSampler;
 			taaArgs.linearSampler   = m_LinearClampSampler;
 			taaArgs.viewport        = viewport;
-			taaArgs.historyValid    = rt.IsHistoryValid();
+			taaArgs.historyValid    = rt.IsHistoryValid() && !m_ShadingChanged;
 			taaArgs.cameraStill     = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 

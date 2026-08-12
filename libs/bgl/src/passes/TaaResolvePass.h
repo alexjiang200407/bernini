@@ -41,8 +41,9 @@ namespace bgl
 			SamplerHandle linearSampler;
 			Viewport      viewport;
 
-			// False on the first frame and the first after a resize; the resolve then takes the
-			// scene colour whole rather than blending against an accumulation that does not exist.
+			// False on the first frame, the first after a resize, and the first after the scene's
+			// shading changed; the resolve then takes the scene colour whole rather than blending
+			// against an accumulation that describes something else.
 			bool historyValid = false;
 
 			// Whether the unjittered camera matches last frame's bitwise. Motion vectors cannot

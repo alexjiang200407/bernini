@@ -93,6 +93,24 @@ from there, live, because the comparison is what shows a temporal artifact.
   coverage on a distant card — so only genuine HDR outliers pay the compression. The weighting is
   undone afterwards, so what is stored stays linear.
 
+* **A change to how the scene *shades* drops the accumulation, because no motion vector describes
+  it.** Reprojection answers "where was this surface last frame", and a material rewritten, rebound
+  or deleted moves nothing — the pixel's velocity is zero and the history is fetched from exactly
+  where it was written, so the resolve blends the old material with the new one for as long as the
+  clamp lets it. At rest that is a long time: the box is *widened* by remembered spread, which is
+  what the material editor's texture edits ghost through. `Scene::GetShadingEpoch` and its per-view
+  counterpart count those changes, `SceneView::AdvanceShading` reports one to the frame that draws
+  after it, and the resolve then takes the scene colour whole exactly as the first frame does. The
+  cost is one unaccumulated frame per edit; the alternative is a ghost lasting tens.
+
+  It counts **discrete rebinds only** — a material's contents, a submesh's binding, a texture's
+  release, an environment map. Anything a caller moves every frame (the camera, a transform, the
+  exposure) stays out of it: reprojection already follows that, and an epoch that moved with it
+  would leave a moving scene permanently unaccumulated. A rewrite that lands on the bytes already
+  there still counts, since the entries are GPU-layout mirrors whose padding no comparison can
+  trust — a material editor rewriting on every keystroke pays one unaccumulated frame per rewrite,
+  which is a frame it was going to pay anyway for the edits that did change something.
+
 * **Depth has an SRV now, and the resolve still does not read it.** Depth-based disocclusion
   rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
   surface nearer than the neighbourhood shows — was built and measured once the SRV existed, and
@@ -178,6 +196,8 @@ from there, live, because the comparison is what shows a temporal artifact.
 | `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
 | `HaltonJitter` | [util/jitter.h](libs/bgl/src/util/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl/src/passes/TaaResolvePass.h) | Reprojects, clamps, blends into the new history. |
+| `Scene::GetShadingEpoch` | [scene/Scene.h](libs/bgl/src/scene/Scene.h) | Counts the changes to how the scene shades that no motion vector can carry. |
+| `SceneView::AdvanceShading` | [scene/SceneView.h](libs/bgl/src/scene/SceneView.h) | Reports one to the frame drawing this view, and records that it has. |
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
 | `ViewData::jitter` / `prevJitter` | [forward/ViewData.slang](libs/bgl/shaders/src/forward/ViewData.slang) | What the mesh shader subtracts back out. |
 | History accessors | [gfx/RenderTargetBase.h](libs/bgl/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
@@ -329,6 +349,12 @@ Two couplings worth knowing:
   have to bridge are never rendered, so resuming across the gap would reproject a stale image. The
   first frame after turning it back on takes the scene colour whole, exactly as the first frame ever
   does.
+
+* **A shading change is recorded on the view, so the target that draws first consumes it.** The
+  epoch sits beside the previous frame's camera, which is per-view for the same reason, and
+  `AdvanceShading` reports the change once. One view drawn to two targets therefore leaves the
+  second still holding the old material. Every viewport in the editor owns its view, which is what
+  makes that fine; sharing one would mean moving the record onto the target.
 
 * **A resize discards the accumulation.** The buffers are screen-sized and the history cannot be
   rescaled into, so the backend's attachment teardown clears `m_HistoryValid` and the next frame

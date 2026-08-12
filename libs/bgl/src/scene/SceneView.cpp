@@ -171,6 +171,16 @@ namespace bgl
 		return m_PrevCamera;
 	}
 
+	bool
+	SceneView::AdvanceShading() noexcept
+	{
+		const uint64_t epoch = m_ShadingEpoch + m_SceneRaw->GetShadingEpoch();
+		const bool     moved = epoch != m_DrawnShadingEpoch;
+
+		m_DrawnShadingEpoch = epoch;
+		return moved;
+	}
+
 	MeshInstanceHandle
 	SceneView::CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform)
 	{
@@ -385,6 +395,7 @@ namespace bgl
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
 		meta.overrides[submeshIndex] = material;
+		++m_ShadingEpoch;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
@@ -395,6 +406,7 @@ namespace bgl
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "ClearSubmeshMaterialOverride");
 
 		meta.overrides[submeshIndex] = MaterialHandle{};
+		++m_ShadingEpoch;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
@@ -419,6 +431,7 @@ namespace bgl
 
 		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance", true);
 		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter", true);
+		++m_ShadingEpoch;
 	}
 
 	void
@@ -451,6 +464,7 @@ namespace bgl
 		}
 
 		m_Skybox = std::make_optional(std::move(desc));
+		++m_ShadingEpoch;
 	}
 
 	void
