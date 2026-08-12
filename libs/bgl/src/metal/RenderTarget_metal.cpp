@@ -18,6 +18,8 @@ namespace bgl
 		// reads it, which rules out the packed three-channel float formats.
 		constexpr Format c_SceneColorFormat = Format::RGBA16_FLOAT;
 
+		constexpr Format c_OutlineMaskFormat = Format::R8_UNORM;
+
 		// Holds a presented frame on screen for at least this long, which is what caps the loop at
 		// 60Hz: a plain present rides every refresh, and on a ProMotion panel that is 120.
 		constexpr CFTimeInterval c_MinPresentInterval = 1.0 / 60.0;
@@ -166,6 +168,29 @@ namespace bgl
 
 		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);
 
+		auto maskDesc   = TextureDesc();
+		maskDesc.width  = m_Width;
+		maskDesc.height = m_Height;
+		maskDesc.format = c_OutlineMaskFormat;
+		maskDesc.usage  = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+		maskDesc.initialLayout = BarrierLayout::kRenderTarget;
+		maskDesc.debugName     = "Outline Mask";
+		maskDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+		m_OutlineMaskTexture = m_ResourceManager->CreateTexture(maskDesc);
+
+		auto maskRtvDesc      = RtvDesc();
+		maskRtvDesc.format    = c_OutlineMaskFormat;
+		maskRtvDesc.debugName = "Outline Mask RTV";
+
+		m_OutlineMaskRtv = m_ResourceManager->CreateRtv(m_OutlineMaskTexture, maskRtvDesc);
+
+		auto maskSrvDesc      = SrvDesc();
+		maskSrvDesc.format    = c_OutlineMaskFormat;
+		maskSrvDesc.debugName = "Outline Mask SRV";
+
+		m_OutlineMaskSrv = m_ResourceManager->CreateSrv(m_OutlineMaskTexture, maskSrvDesc);
+
 		if (!m_TaaAllocated)
 		{
 			return;
@@ -226,6 +251,12 @@ namespace bgl
 		m_HistoryValid        = false;
 		m_CurrentHistoryIndex = 0;
 
+		if (!m_OutlineMaskSrv.IsNull())
+			m_ResourceManager->DestroySrv(m_OutlineMaskSrv, false);
+		if (!m_OutlineMaskRtv.IsNull())
+			m_ResourceManager->DestroyRtv(m_OutlineMaskRtv, false);
+		if (!m_OutlineMaskTexture.IsNull())
+			m_ResourceManager->DestroyTexture(m_OutlineMaskTexture, false);
 		if (!m_DepthSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_DepthSrv, false);
 		if (!m_MotionSrv.IsNull())
@@ -244,6 +275,10 @@ namespace bgl
 			m_ResourceManager->DestroyDsv(m_DepthDsv, false);
 		if (!m_DepthTexture.IsNull())
 			m_ResourceManager->DestroyTexture(m_DepthTexture, false);
+
+		m_OutlineMaskSrv     = {};
+		m_OutlineMaskRtv     = {};
+		m_OutlineMaskTexture = {};
 
 		m_DepthSrv          = {};
 		m_MotionSrv         = {};

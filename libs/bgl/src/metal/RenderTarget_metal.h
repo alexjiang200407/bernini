@@ -155,10 +155,40 @@ namespace bgl
 			return m_MotionSrv;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetOutlineMaskTexture() const noexcept override
+		{
+			return m_OutlineMaskTexture;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetOutlineMaskRtv() const noexcept override
+		{
+			return m_OutlineMaskRtv;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetOutlineMaskSrv() const noexcept override
+		{
+			return m_OutlineMaskSrv;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
 			return m_TaaEnabled;
+		}
+
+		[[nodiscard]] bool
+		IsOutlineEnabled() const noexcept override
+		{
+			return m_OutlineEnabled;
+		}
+
+		void
+		SetOutlineEnabled(bool enabled) noexcept override
+		{
+			m_OutlineEnabled = enabled;
 		}
 
 		void
@@ -261,10 +291,11 @@ namespace bgl
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
 
-		uint32_t m_Width        = 0;
-		uint32_t m_Height       = 0;
-		bool     m_TaaEnabled   = false;
-		bool     m_TaaAllocated = false;
+		uint32_t m_Width          = 0;
+		uint32_t m_Height         = 0;
+		bool     m_TaaEnabled     = false;
+		bool     m_OutlineEnabled = true;
+		bool     m_TaaAllocated   = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};
@@ -279,6 +310,9 @@ namespace bgl
 		RtvHandle     m_SceneColorRtv;
 		SrvHandle     m_SceneColorSrv;
 		SrvHandle     m_MotionSrv;
+		TextureHandle m_OutlineMaskTexture;
+		RtvHandle     m_OutlineMaskRtv;
+		SrvHandle     m_OutlineMaskSrv;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

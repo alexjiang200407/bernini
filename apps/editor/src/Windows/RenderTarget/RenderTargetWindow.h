@@ -51,6 +51,11 @@ public:
 	void
 	SetTaaEnabled(bool enabled);
 
+	// Turns the selection outline on or off for this viewport. Selection state is untouched, so
+	// re-enabling shows the current selection again.
+	void
+	SetOutlineEnabled(bool enabled);
+
 	// Whether this viewport allocated temporal-AA resources, and so has anything to toggle.
 	[[nodiscard]] bool
 	IsTaaAvailable() const noexcept
@@ -92,14 +97,14 @@ protected:
 
 	// The shared Scene. Only valid to touch on the render thread, i.e. inside a Post/Invoke closure.
 	bgl::IScene*
-	PreviewScene() const noexcept
+	GetPreviewScene() const noexcept
 	{
 		return m_Desc.renderer != nullptr ? m_Desc.renderer->GetScene().Get() : nullptr;
 	}
 
-	// This window's view of the shared Scene. Render-thread-only, as PreviewScene.
+	// This window's view of the shared Scene. Render-thread-only, as GetPreviewScene.
 	bgl::ISceneView*
-	PreviewView() const noexcept
+	GetPreviewView() const noexcept
 	{
 		return m_SceneView.Get();
 	}

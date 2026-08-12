@@ -521,7 +521,15 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 void
 MaterialEditorWindow::SelectSubmesh(int index)
 {
-	if (index < 0 || index >= static_cast<int>(m_GraphForSubmesh.size()))
+	// int with Qt's -1 sentinel at the slot boundary (currentIndexChanged's signature); it becomes
+	// an optional here, so a cleared selector explicitly clears the outline too.
+	const bool valid = index >= 0 && index < static_cast<int>(m_GraphForSubmesh.size());
+
+	if (m_Preview != nullptr)
+		m_Preview->SetSelectedSubmesh(
+			valid ? std::optional(static_cast<uint32_t>(index)) : std::nullopt);
+
+	if (!valid)
 		return;
 
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a

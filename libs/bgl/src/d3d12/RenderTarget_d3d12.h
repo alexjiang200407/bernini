@@ -178,10 +178,40 @@ namespace bgl
 			return m_MotionVectorSrv;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetOutlineMaskTexture() const noexcept override
+		{
+			return m_OutlineMask.textureHandle;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetOutlineMaskRtv() const noexcept override
+		{
+			return m_OutlineMask.rtvHandle;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetOutlineMaskSrv() const noexcept override
+		{
+			return m_OutlineMask.srvHandle;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
 			return m_TaaEnabled;
+		}
+
+		[[nodiscard]] bool
+		IsOutlineEnabled() const noexcept override
+		{
+			return m_OutlineEnabled;
+		}
+
+		void
+		SetOutlineEnabled(bool enabled) noexcept override
+		{
+			m_OutlineEnabled = enabled;
 		}
 
 		void
@@ -270,13 +300,14 @@ namespace bgl
 		CommandQueueRef    m_CommandQueue;
 		ResourceManagerRef m_ResourceManager;
 
-		bool  m_Headless     = false;
-		bool  m_TaaEnabled   = false;
-		bool  m_TaaAllocated = false;
-		bool  m_EnableDebug  = false;
-		void* m_Wnd          = nullptr;
-		int   m_Width        = 0;
-		int   m_Height       = 0;
+		bool  m_Headless       = false;
+		bool  m_TaaEnabled     = false;
+		bool  m_OutlineEnabled = true;
+		bool  m_TaaAllocated   = false;
+		bool  m_EnableDebug    = false;
+		void* m_Wnd            = nullptr;
+		int   m_Width          = 0;
+		int   m_Height         = 0;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 
@@ -287,6 +318,7 @@ namespace bgl
 		TextureRtvHandle    m_MotionVectors;
 		TextureRtvSrvHandle m_SceneColor;
 		SrvHandle           m_MotionVectorSrv;
+		TextureRtvSrvHandle m_OutlineMask;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

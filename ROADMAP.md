@@ -272,7 +272,7 @@ and portability.
   - [ ] WBOIT — order-independent transparency; supersedes the alpha-blend CPU sort (see Materials)
   - [ ] GPU Compute Particle System
   - [ ] HZB-based Particle Collision
-  - [ ] Outline Shader
+  - [x] Outline Shader
   - [ ] Render Axis
 - [ ] Decals
   - [ ] Material parameters for regular units — a packed `uint32` (amount 8b / dryness 8b /

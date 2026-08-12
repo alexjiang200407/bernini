@@ -54,8 +54,9 @@ namespace bgl
 		}
 
 		{
-			auto desc = ComputeBufferDesc();
-			desc.SetElement<idl::CullView>().SetInitialCount(1).SetDebugName("Cull View");
+			auto desc         = UploadBufferDesc();
+			desc.initialCount = 1;
+			desc.debugName    = "Cull View";
 
 			m_CullView.Init(std::move(desc), std::move(resourceManager));
 		}

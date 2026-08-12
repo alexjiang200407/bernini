@@ -10,6 +10,7 @@
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
+#include "passes/OutlineMaskPass.h"
 #include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/SkyboxPass.h"
@@ -151,6 +152,10 @@ namespace bgl
 		// regardless of the camera -- as being at rest during a pan.
 		bool m_CameraStill = false;
 
+		// Whether any of this frame's draws attached an outline-mask pass; what tells the
+		// post-process the mask holds this frame's content rather than a cleared texture.
+		bool m_OutlineMaskDrawn = false;
+
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 
@@ -166,6 +171,7 @@ namespace bgl
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
 		PostProcessPass      m_PostProcess;
+		OutlineMaskPass      m_OutlineMask;
 		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;
 		TransparentSortPass  m_TransparentSort;

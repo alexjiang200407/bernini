@@ -16,23 +16,24 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_Forward`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_PreparePresentPass`); `Graphics` owns one context and forwards the frame
-methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
+`m_CompactInstances`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
+forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + depth)"]
+    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
         SKY --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
+        FWD --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
-    TAA --> PPX["PostProcess (-> backbuffer)"]
+    TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
     PPX --> PP["PreparePresent (transition backbuffer to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
@@ -310,6 +311,27 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
 
+### Outline Mask — [passes/OutlineMaskPass.{h,cpp}](libs/bgl/src/passes/OutlineMaskPass.cpp)
+
+Draws the view's selected submesh instances (`ISceneView::SetSubmeshSelected`) into the target's
+R8 outline mask, which `PostProcess` dilates into the editor's selection outline. The kernel is
+the shared `Forward_StaticMesh` amplification/mesh shaders with a trivial coverage pixel shader
+(`OutlineMask.slang`), dispatched **directly** — `DispatchMesh(count, 1, 1)` over the view's
+CPU-built selected list with `baseTable = kDepthSorted`, the same expansion shape as the
+transparent phase, so no culling and no indirect args are involved.
+
+* **No depth and no culling:** the mask is the full silhouette, through occluders, whichever way
+  its triangles face — selection feedback answers "where is the thing I selected".
+* **Unjittered:** its `viewData` carries `unjitteredViewProj` and zero jitter. The mask is
+  consumed after the TAA resolve and never accumulated, so a jittered contour would shimmer by
+  half a pixel.
+* Attached per draw, after `Forward`, **only when the view's selection is non-empty and the
+  target's outline is enabled** (`IRenderTarget::SetOutlineEnabled`); several
+  views drawing into one target union their masks, cleared once in `BeginFrame`.
+* **In:** `scene.selectedInstances` (the view's dense selected-drawable list) and the seven
+  forward geometry tables.
+* **Out:** the outline mask.
+
 ### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl/src/passes/TaaResolvePass.cpp)
 
 Accumulates the jittered scene colour into the temporal history: reprojects the previous accumulation
@@ -335,12 +357,17 @@ Turns the linear HDR scene colour into the displayed image, as a single full-scr
 the `PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
-Today it applies `AgX` and nothing else. It is named for the stage rather than that one step:
-everything between a resolved scene and the screen — bloom, grading, exposure adaptation — belongs
-here as it lands.
+Today it applies `AgX`, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
+composites the selection outline: a pixel outside the mask but within the outline width of it
+takes the display-space outline colour instead of the tonemapped result. Compositing after the
+curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
+not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
+the stage rather than those steps: everything between a resolved scene and the screen — bloom,
+grading, exposure adaptation — belongs here as it lands.
 
 * **In:** whatever the last HDR stage produced — `sceneColor`, or the freshly resolved history on a
-  TAA target — through the `SrvHandle` the render target owns; its own
+  TAA target — through the `SrvHandle` the render target owns; the outline mask as a shader
+  resource, declared and sampled only on a frame whose `outlineEnabled` is set; its own
   point-clamp sampler, created by `RenderContext` because the pass runs outside any `Draw` and the
   per-scene samplers are not reachable there. The `gPostProcessData` cbuffer name is matched
   against Slang reflection, so it must track the declaration in `PostProcess.slang`.

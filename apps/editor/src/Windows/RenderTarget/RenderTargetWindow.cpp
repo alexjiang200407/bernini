@@ -228,6 +228,15 @@ RenderTargetWindow::SetTaaEnabled(bool enabled)
 }
 
 void
+RenderTargetWindow::SetOutlineEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetOutlineEnabled(enabled); });
+}
+
+void
 RenderTargetWindow::SetRenderScale(float scale)
 {
 	const float clamped = ClampRenderScale(scale);

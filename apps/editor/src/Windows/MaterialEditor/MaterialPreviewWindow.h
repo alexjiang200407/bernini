@@ -61,6 +61,49 @@ public:
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);
 
+	struct SubmeshRef
+	{
+		uint32_t geomIndex     = 0;
+		uint32_t localSubmesh  = 0;
+		uint32_t sourceSubmesh = 0;  // index into the .bmesh's submeshes array
+		bool     hasTangent    = false;
+	};
+
+	// A mesh may be instanced by several nodes, so a geom can have more than one instance. An
+	// override is per instance, so applying one to a submesh means applying it to every instance of
+	// the geom that owns it -- which needs the edge back.
+	struct InstanceRef
+	{
+		bgl::MeshInstanceHandle handle;
+		uint32_t                geomIndex = 0;
+	};
+
+	struct SubmeshTarget
+	{
+		bgl::MeshInstanceHandle instance;
+		uint32_t                submeshIndex = 0;
+	};
+
+	/**
+	 * The (instance, submesh) pairs selector index `submeshIndex` acts on: every placed
+	 * instance of the geom owning that submesh. Empty when the index is out of range. What a
+	 * material override and the selection outline both fan out over. Static so the mapping is
+	 * pinnable without a preview window or a device.
+	 */
+	[[nodiscard]] static std::vector<SubmeshTarget>
+	GetInstanceTargets(
+		std::span<const SubmeshRef>  refs,
+		std::span<const InstanceRef> instances,
+		uint32_t                     submeshIndex);
+
+	/**
+	 * Makes `submeshIndex` the selection the outline effect contours: every instance of the geom
+	 * owning it is marked, anything previously marked is cleared. nullopt -- the editor's
+	 * "nothing selected" -- just clears.
+	 */
+	void
+	SetSelectedSubmesh(std::optional<uint32_t> submeshIndex);
+
 	// The `.bmaterial` each submesh is bound to in the `.bmesh`, absolute. Empty where the mesh names
 	// none -- which is what tells a first Save to bind it from a later one that must not.
 	const QStringList&
@@ -158,23 +201,6 @@ private:
 
 	void
 	ClearGeometry();
-
-	struct SubmeshRef
-	{
-		uint32_t geomIndex     = 0;
-		uint32_t localSubmesh  = 0;
-		uint32_t sourceSubmesh = 0;  // index into the .bmesh's submeshes array
-		bool     hasTangent    = false;
-	};
-
-	// A mesh may be instanced by several nodes, so a geom can have more than one instance. An
-	// override is per instance, so applying one to a submesh means applying it to every instance of
-	// the geom that owns it -- which needs the edge back.
-	struct InstanceRef
-	{
-		bgl::MeshInstanceHandle handle;
-		uint32_t                geomIndex = 0;
-	};
 
 	std::vector<bgl::GeomHandle> m_Geoms;
 	std::vector<InstanceRef>     m_Instances;
