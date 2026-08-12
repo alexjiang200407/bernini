@@ -99,12 +99,31 @@ TEST_CASE("A failed decode caches nothing and announces nothing", "[thumbnails]"
 
 	const QString path = sandbox.WriteTexture("broken.ktx2");
 
-	// A null image is how a worker reports that it could not decode the file. Caching that would be
-	// caching a failure.
+	// A null image is how a worker reports that it could not decode the file.
 	cache.Deliver(path, QImage(), editor::FileStamp(path));
 
 	REQUIRE(cache.Lookup(path).isNull());
 	REQUIRE(ready.count() == 0);
+}
+
+TEST_CASE("A failed decode is not retried until the file changes", "[thumbnails]")
+{
+	// The Content Explorer requests from paint, and a baked block-format texture fails its decode
+	// deterministically -- so a failure the cache forgot would be re-run on every repaint of the
+	// folder, re-reading the file from disk each time.
+	class OpenCache : public TexturePreviewCache
+	{
+	public:
+		using StampedPixmapCache::BeginRequest;
+	};
+
+	const Sandbox sandbox;
+	OpenCache     cache;
+
+	const QString path = sandbox.WriteTexture("baked_bc7.ktx2");
+	cache.Deliver(path, QImage(), editor::FileStamp(path));
+
+	REQUIRE_FALSE(cache.BeginRequest(path).has_value());
 }
 
 TEST_CASE("A late failed decode does not evict what already landed", "[thumbnails]")
