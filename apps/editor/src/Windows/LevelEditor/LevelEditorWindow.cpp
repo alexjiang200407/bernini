@@ -12,8 +12,8 @@ LevelEditorWindow::LevelEditorWindow(
 		// No mip override: a level viewport shows the world sharp, where the material preview
 		// defocuses its backdrop on purpose.
 		m_Environment = editor::ApplyEnvironment(
-			PreviewScene(),
-			PreviewView(),
+			GetPreviewScene(),
+			GetPreviewView(),
 			env.environmentMap,
 			env.dataRoot,
 			env.exposureOverride,

@@ -91,7 +91,7 @@ public:
 	 * pinnable without a preview window or a device.
 	 */
 	[[nodiscard]] static std::vector<SubmeshTarget>
-	InstanceTargets(
+	GetInstanceTargets(
 		std::span<const SubmeshRef>  refs,
 		std::span<const InstanceRef> instances,
 		uint32_t                     submeshIndex);

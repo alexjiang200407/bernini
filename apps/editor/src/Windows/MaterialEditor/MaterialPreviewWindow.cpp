@@ -93,8 +93,8 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	m_ConfiguredRoot      = env.dataRoot;
 
 	m_DefaultMaterial = GetRenderer()->Invoke([&] {
-		bgl::IScene*     scene = PreviewScene();
-		bgl::ISceneView* view  = PreviewView();
+		bgl::IScene*     scene = GetPreviewScene();
+		bgl::ISceneView* view  = GetPreviewView();
 
 		m_Environment = editor::ApplyEnvironment(
 			scene,
@@ -125,7 +125,7 @@ MaterialPreviewWindow::ClearGeometry()
 
 			try
 			{
-				PreviewView()->DeleteMeshInstance(instance.handle);
+				GetPreviewView()->DeleteMeshInstance(instance.handle);
 			}
 			catch (const std::exception& e)
 			{
@@ -140,7 +140,7 @@ MaterialPreviewWindow::ClearGeometry()
 
 			try
 			{
-				PreviewScene()->DeleteGeom(geom);
+				GetPreviewScene()->DeleteGeom(geom);
 			}
 			catch (const std::exception& e)
 			{
@@ -179,9 +179,9 @@ MaterialPreviewWindow::ShowDefaultSphere()
 	try
 	{
 		GetRenderer()->Invoke([&] {
-			m_Geoms.push_back(PreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
+			m_Geoms.push_back(GetPreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
 			m_Instances.push_back(
-				{ PreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+				{ GetPreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
 		});
 	}
 	catch (const std::exception& e)
@@ -245,7 +245,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 		const Focus focus = GetRenderer()->Invoke([&] {
 			ClearGeometry();
 
-			bgl::IScene* scene = PreviewScene();
+			bgl::IScene* scene = GetPreviewScene();
 
 			// The preview authors a material, so bind the same neutral material to every source
 			// material slot; the graph then rebinds it per submesh.
@@ -295,7 +295,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 				const glm::mat4 world = bmesh::WorldTransform(mesh, nodeIndex);
 				m_Instances.push_back(
-					{ PreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
+					{ GetPreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
 				      it->second });
 
 				const assetlib::Mesh& entry = mesh.meshes[node.mesh];
@@ -351,9 +351,9 @@ MaterialPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHa
 			// default is the *asset's* material: rewriting it here would edit the .bmesh's binding as
 			// a side effect of typing.
 			for (const SubmeshTarget& target :
-			     InstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
+			     GetInstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
 			{
-				PreviewView()->SetSubmeshMaterialOverride(
+				GetPreviewView()->SetSubmeshMaterialOverride(
 					target.instance,
 					target.submeshIndex,
 					material);
@@ -367,7 +367,7 @@ MaterialPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHa
 }
 
 std::vector<MaterialPreviewWindow::SubmeshTarget>
-MaterialPreviewWindow::InstanceTargets(
+MaterialPreviewWindow::GetInstanceTargets(
 	std::span<const SubmeshRef>  refs,
 	std::span<const InstanceRef> instances,
 	uint32_t                     submeshIndex)
@@ -376,6 +376,8 @@ MaterialPreviewWindow::InstanceTargets(
 
 	if (submeshIndex >= refs.size())
 		return targets;
+
+	targets.reserve(instances.size());
 
 	const SubmeshRef& ref = refs[submeshIndex];
 	for (const InstanceRef& instance : instances)
@@ -394,12 +396,12 @@ MaterialPreviewWindow::SetSelectedSubmesh(uint32_t submeshIndex)
 	GetRenderer()->Post([this, submeshIndex] {
 		try
 		{
-			PreviewView()->ClearSelection();
+			GetPreviewView()->ClearSelection();
 
 			for (const SubmeshTarget& target :
-			     InstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
+			     GetInstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
 			{
-				PreviewView()->SetSubmeshSelected(target.instance, target.submeshIndex, true);
+				GetPreviewView()->SetSubmeshSelected(target.instance, target.submeshIndex, true);
 			}
 		}
 		catch (const std::exception& e)
@@ -448,13 +450,13 @@ void
 MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
 {
 	GetRenderer()->Invoke([&] {
-		bgl::IScene* scene = PreviewScene();
+		bgl::IScene* scene = GetPreviewScene();
 
 		// A dropped `.benv` belongs to the open project, so its own data root is the one that
 		// resolves it. The configured root only stands in before a project is opened.
 		const editor::AppliedEnvironment applied = editor::ApplyEnvironment(
 			scene,
-			PreviewView(),
+			GetPreviewView(),
 			benvPath,
 			m_DataRoot.empty() ? m_ConfiguredRoot : m_DataRoot,
 			m_ExposureOverride,
