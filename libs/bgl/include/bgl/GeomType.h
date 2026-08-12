@@ -6,6 +6,7 @@ namespace bgl
 	{
 		kInvalid    = static_cast<uint8_t>(-1),
 		kStaticMesh = 0,
+		kVatMesh,
 		//kSkinnedMesh,
 		kCount
 	};

@@ -95,6 +95,44 @@ namespace bgl
 		uint16_t           channel = 0;  // 0 = R, 1 = G, 2 = B, 3 = A
 	};
 
+	/** One vertex of a VAT geom's bind-pose mesh -- the full procedural layout, tightly packed. */
+	struct VatVertex
+	{
+		glm::vec3 position;
+		glm::vec3 normal;
+		glm::vec2 uv;
+		glm::vec4 tangent;
+	};
+
+	/** One clip's rows of the VAT texture pair; see VatGeomDesc. */
+	struct VatClipDesc
+	{
+		uint32_t firstRow   = 0;  // texture V of frame 0
+		uint32_t frameCount = 0;  // real frames; the bake pads a duplicate row after the last
+		float    sampleRate = 30.0f;
+		bool     loop       = false;
+	};
+
+	/**
+	 * A rig's baked clip set, as textures already uploaded through AddTextureAsset: positions
+	 * `R16G16B16A16_UNORM` unorm-packed in [boundsMin, boundsMax] -- one box over every frame of
+	 * every clip -- and normals `R8G8B8A8_UNORM` as unit object-space `xyz * 0.5 + 0.5`. Columns
+	 * are geometry-local vertex indices; frame `f` of clip `c` is row `clips[c].firstRow + f`.
+	 *
+	 * bgl never reads a `.bvat` (it stays codec-free); whoever decodes one -- gamelib, or a test
+	 * synthesizing textures from scratch -- fills this in.
+	 */
+	struct VatGeomDesc
+	{
+		TextureAssetHandle positions;
+		TextureAssetHandle normals;
+
+		glm::vec3 boundsMin = glm::vec3(0.0f);
+		glm::vec3 boundsMax = glm::vec3(1.0f);
+
+		std::vector<VatClipDesc> clips;
+	};
+
 	struct LoosePbrMaterialDesc
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
@@ -188,6 +226,27 @@ namespace bgl
 		 */
 		virtual GeomHandle
 		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
+
+		/**
+		 * Adds VAT geometry: the bind-pose mesh whose meshlets and UVs every instance draws, bound
+		 * to the baked texture pair its vertices are fetched from (see VatGeomDesc). The submesh's
+		 * culling bounds come from the desc's box, not the bind pose -- they must hold under every
+		 * frame of every clip.
+		 *
+		 * `material` is required, opaque `kPBR` only: the VAT pipeline shades through the PBR pixel
+		 * stage, and no other variant of it exists yet. The same constraint holds for
+		 * SetSubmeshMaterial on this geom.
+		 *
+		 * @throws SceneError if a texture handle or the material is invalid or of the wrong kind,
+		 *         `clips` is empty, the primitive needs more meshlets than one dispatch can launch,
+		 *         or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddVatGeom(
+			std::span<const VatVertex> verts,
+			std::span<const uint32_t>  indices,
+			const VatGeomDesc&         desc,
+			MaterialHandle             material) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;
