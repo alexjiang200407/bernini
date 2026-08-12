@@ -111,6 +111,16 @@ public:
 		const std::filesystem::path&      banimPath,
 		bool                              writeClips);
 
+	/**
+	 * Writes `mesh` to `bmeshPath`, creating the directory the path names first: an import aimed
+	 * at a subfolder lands at `Meshes/<folder>/`, which nothing else creates -- `assetlib::save`
+	 * opens the file where it stands.
+	 *
+	 * @throws std::runtime_error if the file cannot be written.
+	 */
+	static void
+	WriteImportedMesh(const assetlib::BMesh& mesh, const std::filesystem::path& bmeshPath);
+
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile
 	{
