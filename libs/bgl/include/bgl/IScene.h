@@ -127,6 +127,11 @@ namespace bgl
 		glm::vec3 boundsMax = glm::vec3(1.0f);
 
 		std::vector<VatClipDesc> clips;
+
+		// Where each submesh's vertex columns start along U, in submesh order -- the bake's
+		// VatColumns::columnBase values. Empty means a single submesh at column 0, which is what
+		// AddVatGeom uploads; AddVatMesh requires one entry per submesh.
+		std::vector<uint32_t> columnBases;
 	};
 
 	struct LoosePbrMaterialDesc
@@ -240,6 +245,30 @@ namespace bgl
 			std::span<const uint32_t>  indices,
 			const VatGeomDesc&         desc,
 			MaterialHandle             material) = 0;
+
+		/**
+		 * Adds one mesh of a loaded BMesh as VAT geometry: the bind-pose submeshes upload exactly
+		 * as AddStaticMesh does -- cooked meshlets, one GPU submesh per source submesh, materials
+		 * resolved by each submesh's material index -- and every instance fetches position and
+		 * normal from the desc's texture pair instead of the vertex bytes. Every submesh's culling
+		 * sphere comes from the desc's all-clips box, not its bind pose: the bind pose's bounds do
+		 * not hold once a limb moves.
+		 *
+		 * `desc.columnBases` must carry one entry per submesh of `meshes[meshIndex]`, in submesh
+		 * order -- the bake's per-submesh column bases. Every submesh must resolve to a valid
+		 * opaque `kPBR` material: the VAT pipeline has no null or cutout variant for an unlit or
+		 * masked submesh to ride.
+		 *
+		 * @throws SceneError for anything AddStaticMesh or AddVatGeom refuses, a columnBases count
+		 *         that does not match the submesh count, or a submesh whose material does not
+		 *         resolve to opaque kPBR.
+		 */
+		virtual GeomHandle
+		AddVatMesh(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const VatGeomDesc&              desc) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

@@ -128,6 +128,126 @@ namespace
 		}
 		return verts;
 	}
+
+	// --- The AddVatMesh fixture: a two-submesh BMesh whose triangles live only in the texture. ---
+
+	// Each submesh is one CCW triangle; the texture places submesh 0's at x ~ -1.25 and submesh 1's
+	// at x ~ +1.25. The vertex *bytes* hold no positions worth reading -- the fetch is what is
+	// under test, so all signal is in the texture and the column bases.
+	const std::array<glm::vec3, 6> c_TwoTriangles = { {
+		{ -2.0f, -1.0f, 0.0f },
+		{ -0.5f, -1.0f, 0.0f },
+		{ -1.25f, 1.0f, 0.0f },
+		{ 0.5f, -1.0f, 0.0f },
+		{ 2.0f, -1.0f, 0.0f },
+		{ 1.25f, 1.0f, 0.0f },
+	} };
+
+	const glm::vec3 c_TriBoundsMin(-2.0f, -1.5f, -1.0f);
+	const glm::vec3 c_TriBoundsMax(2.0f, 1.5f, 1.0f);
+
+	assetlib::ImageData
+	MakeTriImage(assetlib::VkFormat format, uint32_t texelBytes)
+	{
+		auto image      = assetlib::ImageData();
+		image.width     = 6;
+		image.height    = 2;  // frame 0 and its pad
+		image.mipLevels = 1;
+		image.arraySize = 1;
+		image.vkFormat  = format;
+
+		const uint64_t pitch = uint64_t(image.width) * texelBytes;
+		image.pixels         = core::fixed_buffer<std::byte>(pitch * image.height);
+		image.subresources.push_back({ 0, pitch, pitch * image.height });
+		return image;
+	}
+
+	assetlib::ImageData
+	MakeTriPositionTexture()
+	{
+		auto image = MakeTriImage(assetlib::VkFormat::R16G16B16A16_UNORM, 8);
+
+		const glm::vec3 extent = c_TriBoundsMax - c_TriBoundsMin;
+		for (uint32_t row = 0; row < image.height; ++row)
+		{
+			auto* texel = reinterpret_cast<uint16_t*>(
+				image.pixels.data() + uint64_t(row) * image.subresources[0].rowPitch);
+			for (const glm::vec3& corner : c_TwoTriangles)
+			{
+				const glm::vec3 packed = (corner - c_TriBoundsMin) / extent;
+				texel[0]               = PackUnorm16(packed.x);
+				texel[1]               = PackUnorm16(packed.y);
+				texel[2]               = PackUnorm16(packed.z);
+				texel[3]               = 65535;
+				texel += 4;
+			}
+		}
+		return image;
+	}
+
+	assetlib::ImageData
+	MakeTriNormalTexture()
+	{
+		auto image = MakeTriImage(assetlib::VkFormat::R8G8B8A8_UNORM, 4);
+		for (size_t i = 0; i < image.pixels.size(); i += 4)
+		{
+			image.pixels[i + 0] = std::byte{ 128 };
+			image.pixels[i + 1] = std::byte{ 128 };
+			image.pixels[i + 2] = std::byte{ 255 };
+			image.pixels[i + 3] = std::byte{ 255 };
+		}
+		return image;
+	}
+
+	// Two submeshes of one triangle each, materials 0 and 1. Vertex data is position-only zeros:
+	// a VAT draw never reads it, and the culling sphere comes from the desc's box.
+	assetlib::BMesh
+	MakeTwoSubmeshMesh()
+	{
+		constexpr uint16_t c_Stride = 12;
+
+		auto mesh = assetlib::BMesh();
+		mesh.vertexData.resize(size_t(6) * c_Stride);
+
+		for (uint32_t s = 0; s < 2; ++s)
+		{
+			auto meshlet           = assetlib::Meshlet();
+			meshlet.vertexOffset   = static_cast<uint32_t>(mesh.meshletVertices.size());
+			meshlet.triangleOffset = static_cast<uint32_t>(mesh.meshletTriangles.size());
+			meshlet.vertexCount    = 3;
+			meshlet.triangleCount  = 1;
+			meshlet.boundingCenter = glm::vec3(0.0f);
+			meshlet.boundingRadius = 3.0f;
+			mesh.meshlets.push_back(meshlet);
+
+			for (uint32_t v = 0; v < 3; ++v) mesh.meshletVertices.push_back(v);
+			for (uint8_t t = 0; t < 3; ++t) mesh.meshletTriangles.push_back(t);
+
+			auto submesh                  = assetlib::Submesh();
+			submesh.layout.attributeCount = 1;
+			submesh.layout.stride         = c_Stride;
+			submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+				                              assetlib::VertexFormat::kFloat32x3,
+				                              0 };
+			submesh.vertexByteOffset      = s * 3 * c_Stride;
+			submesh.vertexCount           = 3;
+			submesh.firstMeshlet          = s;
+			submesh.meshletCount          = 1;
+			submesh.material              = s;
+			submesh.aabbMin               = glm::vec3(-2.0f);
+			submesh.aabbMax               = glm::vec3(2.0f);
+			submesh.nameOffset            = 0;
+			mesh.submeshes.push_back(submesh);
+		}
+
+		auto entry         = assetlib::Mesh();
+		entry.firstSubmesh = 0;
+		entry.submeshCount = 2;
+		entry.nameOffset   = 0;
+		mesh.meshes.push_back(entry);
+
+		return mesh;
+	}
 }
 
 TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
@@ -336,5 +456,140 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 
 		// A frame after the teardown: nothing left referencing the freed VAT ranges may draw.
 		gfx->DrawFrame(target, job);
+	}
+}
+
+TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 64;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 65536;
+	sceneDesc.initialIndices              = 1024;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	const auto positions = scene->AddTextureAsset(MakeTriPositionTexture(), "vat-tri-positions");
+	const auto normals   = scene->AddTextureAsset(MakeTriNormalTexture(), "vat-tri-normals");
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(0.85f, 0.45f, 0.15f, 1.0f);
+	const auto pbrA          = scene->CreatePbrMaterial(material);
+	material.baseColorFactor = glm::vec4(0.2f, 0.6f, 0.9f, 1.0f);
+	const auto pbrB          = scene->CreatePbrMaterial(material);
+	const auto materials     = std::array<bgl::MaterialHandle, 2>{ { pbrA, pbrB } };
+
+	auto desc      = bgl::VatGeomDesc();
+	desc.positions = positions;
+	desc.normals   = normals;
+	desc.boundsMin = c_TriBoundsMin;
+	desc.boundsMax = c_TriBoundsMax;
+	desc.clips     = { { 0, 1, 30.0f, false } };
+
+	const auto mesh = MakeTwoSubmeshMesh();
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 10.0f),
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			100.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	// ~52 px per world unit, centre (400, 300): the triangles' lower halves straddle
+	// world (-1.25, -0.5) and (+1.25, -0.5).
+	const auto probe = [](const char* png, float worldX) {
+		const int px = static_cast<int>(std::lround(400.0f + 51.96f * worldX));
+		return bgl::test::MeanColor(png, px - 6, 320, 12, 12).Luma();
+	};
+
+	SECTION("each submesh fetches from its own column base")
+	{
+		desc.columnBases = { 0, 3 };
+		const auto geom  = scene->AddVatMesh(mesh, 0, materials, desc);
+		REQUIRE(geom.geomType == bgl::GeomType::kVatMesh);
+
+		view->CreateVatMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+
+		gfx->DrawFrame(target, job);
+		const auto* png = "assets/golden/vat_mesh_columns.got.png";
+		gfx->ScreenshotPng(target, png);
+
+		CHECK(probe(png, -1.25f) > 0.05f);
+		CHECK(probe(png, 1.25f) > 0.05f);
+		CHECK(probe(png, 0.0f) < 0.01f);
+	}
+
+	SECTION("the bases are consumed, not assumed: base 0 twice draws both triangles left")
+	{
+		desc.columnBases = { 0, 0 };
+		const auto geom  = scene->AddVatMesh(mesh, 0, materials, desc);
+
+		view->CreateVatMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+
+		gfx->DrawFrame(target, job);
+		const auto* png = "assets/golden/vat_mesh_columns_zero.got.png";
+		gfx->ScreenshotPng(target, png);
+
+		CHECK(probe(png, -1.25f) > 0.05f);
+		CHECK(probe(png, 1.25f) < 0.01f);
+	}
+
+	SECTION("a columnBases count that does not match the submeshes is refused")
+	{
+		desc.columnBases = { 0 };
+		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, materials, desc), bgl::SceneError);
+
+		desc.columnBases.clear();
+		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, materials, desc), bgl::SceneError);
+	}
+
+	SECTION("a submesh without an opaque PBR material is refused")
+	{
+		desc.columnBases = { 0, 3 };
+
+		auto cutout          = bgl::PbrMaterialDesc();
+		cutout.layerType     = bgl::LayerType::kMask;
+		const auto cutoutPbr = scene->CreatePbrMaterial(cutout);
+
+		const auto mixed = std::array<bgl::MaterialHandle, 2>{ { pbrA, cutoutPbr } };
+		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, mixed, desc), bgl::SceneError);
+
+		const auto missing = std::array<bgl::MaterialHandle, 1>{ { pbrA } };
+		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, missing, desc), bgl::SceneError);
+
+		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 1, materials, desc), bgl::SceneError);
 	}
 }

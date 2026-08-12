@@ -571,24 +571,20 @@ namespace bgl
 		}
 	}
 
-	GeomHandle
-	Scene::AddVatGeom(
-		std::span<const VatVertex> verts,
-		std::span<const uint32_t>  indices,
-		const VatGeomDesc&         desc,
-		MaterialHandle             material)
+	void
+	Scene::ValidateVatDesc(const VatGeomDesc& desc) const
 	{
 		if (!m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.positions)) ||
 		    !m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.normals)))
 		{
 			throw SceneError(
-				"AddVatGeom: both VAT textures are required, live, from this scene's "
+				"VAT geometry: both VAT textures are required, live, from this scene's "
 				"AddTextureAsset");
 		}
 		if (desc.clips.empty())
 		{
 			throw SceneError(
-				"AddVatGeom: the clip table is empty; a VAT with no clips draws "
+				"VAT geometry: the clip table is empty; a VAT with no clips draws "
 				"nothing");
 		}
 		for (const VatClipDesc& clip : desc.clips)
@@ -597,40 +593,19 @@ namespace bgl
 			// zero to 4 billion rows of out-of-bounds fetches.
 			if (clip.frameCount == 0)
 			{
-				throw SceneError("AddVatGeom: a clip with no frames has no row to fetch");
+				throw SceneError("VAT geometry: a clip with no frames has no row to fetch");
 			}
 		}
-		if (!material.IsValid() || material.materialType != MaterialType::kPBR ||
-		    material.layerType != LayerType::kOpaque)
-		{
-			throw SceneError(
-				"AddVatGeom: an opaque kPBR material is required -- the VAT pipeline has no other "
-				"variant yet");
-		}
+	}
 
-		// Same fields, same packing: the bind-pose vertices go down the procedural path verbatim.
-		static_assert(
-			sizeof(VatVertex) == sizeof(VertexGen) &&
-			offsetof(VatVertex, position) == offsetof(VertexGen, pos) &&
-			offsetof(VatVertex, normal) == offsetof(VertexGen, normal) &&
-			offsetof(VatVertex, uv) == offsetof(VertexGen, uv) &&
-			offsetof(VatVertex, tangent) == offsetof(VertexGen, tangent));
-
-		const auto asGen = std::span<const VertexGen>(
-			reinterpret_cast<const VertexGen*>(verts.data()),
-			verts.size());
-
-		GeomHandle base = AddProceduralGeom(
-			asGen,
-			indices,
-			material,
-			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
-
+	GeomHandle
+	Scene::AttachVatRecords(
+		GeomHandle                base,
+		const VatGeomDesc&        desc,
+		std::span<const uint32_t> columnBases)
+	{
 		try
 		{
-			// One submesh, so one column base: the procedural path never splits a primitive.
-			constexpr std::array<uint32_t, 1> c_ColumnBases = { { 0 } };
-
 			auto clips = std::vector<idl::VatClip>();
 			clips.reserve(desc.clips.size());
 			for (const VatClipDesc& clip : desc.clips)
@@ -647,8 +622,7 @@ namespace bgl
 			record.boundsMin = glm::vec4(desc.boundsMin, 0.0f);
 			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
 			record.clips        = rollback.Track(m_VatClips, m_VatClips.Add(std::span(clips)));
-			record.columnBases =
-				rollback.Track(m_VatColumns, m_VatColumns.Add(std::span(c_ColumnBases)));
+			record.columnBases  = rollback.Track(m_VatColumns, m_VatColumns.Add(columnBases));
 
 			GeomRecord& geom  = m_Geoms[base.handle.index];
 			geom.vatGeom      = m_VatGeoms.Add(record);
@@ -674,6 +648,99 @@ namespace bgl
 			DeleteGeom(base);
 			throw;
 		}
+	}
+
+	GeomHandle
+	Scene::AddVatGeom(
+		std::span<const VatVertex> verts,
+		std::span<const uint32_t>  indices,
+		const VatGeomDesc&         desc,
+		MaterialHandle             material)
+	{
+		ValidateVatDesc(desc);
+
+		if (!material.IsValid() || material.materialType != MaterialType::kPBR ||
+		    material.layerType != LayerType::kOpaque)
+		{
+			throw SceneError(
+				"AddVatGeom: an opaque kPBR material is required -- the VAT pipeline has no other "
+				"variant yet");
+		}
+		// The procedural path never splits a primitive, so there is exactly one submesh to base.
+		if (desc.columnBases.size() > 1)
+		{
+			throw SceneError("AddVatGeom: a procedural VAT is one submesh; columnBases names more");
+		}
+
+		// Same fields, same packing: the bind-pose vertices go down the procedural path verbatim.
+		static_assert(
+			sizeof(VatVertex) == sizeof(VertexGen) &&
+			offsetof(VatVertex, position) == offsetof(VertexGen, pos) &&
+			offsetof(VatVertex, normal) == offsetof(VertexGen, normal) &&
+			offsetof(VatVertex, uv) == offsetof(VertexGen, uv) &&
+			offsetof(VatVertex, tangent) == offsetof(VertexGen, tangent));
+
+		const auto asGen = std::span<const VertexGen>(
+			reinterpret_cast<const VertexGen*>(verts.data()),
+			verts.size());
+
+		GeomHandle base = AddProceduralGeom(
+			asGen,
+			indices,
+			material,
+			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
+
+		constexpr std::array<uint32_t, 1> c_SingleBase = { { 0 } };
+		return AttachVatRecords(
+			base,
+			desc,
+			desc.columnBases.empty() ? std::span<const uint32_t>(c_SingleBase) :
+									   std::span<const uint32_t>(desc.columnBases));
+	}
+
+	GeomHandle
+	Scene::AddVatMesh(
+		const assetlib::BMesh&          mesh,
+		uint32_t                        meshIndex,
+		std::span<const MaterialHandle> materials,
+		const VatGeomDesc&              desc)
+	{
+		ValidateVatDesc(desc);
+
+		if (meshIndex >= mesh.meshes.size())
+		{
+			throw SceneError("AddVatMesh: meshIndex out of range");
+		}
+
+		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
+		if (desc.columnBases.size() != entry.submeshCount)
+		{
+			throw SceneError(
+				"AddVatMesh: columnBases must carry one entry per submesh, in submesh order");
+		}
+
+		// The check every VAT door makes, per submesh here: no null or cutout VAT variant exists
+		// for an unlit or masked submesh to ride.
+		for (uint32_t s = 0; s < entry.submeshCount; ++s)
+		{
+			const uint32_t       index = mesh.submeshes[entry.firstSubmesh + s].material;
+			const MaterialHandle bound =
+				index < materials.size() ? materials[index] : MaterialHandle{};
+			if (!bound.IsValid() || bound.materialType != MaterialType::kPBR ||
+			    bound.layerType != LayerType::kOpaque)
+			{
+				throw SceneError(
+					"AddVatMesh: every submesh needs an opaque kPBR material -- the VAT pipeline "
+					"has no other variant yet");
+			}
+		}
+
+		GeomHandle base = AddCookedMesh(
+			CookStaticMesh(mesh, meshIndex),
+			materials,
+			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
+
+		return AttachVatRecords(base, desc, desc.columnBases);
 	}
 
 	GeomHandle
@@ -1009,6 +1076,15 @@ namespace bgl
 	GeomHandle
 	Scene::AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
 	{
+		return AddCookedMesh(std::move(mesh), materials, std::nullopt);
+	}
+
+	GeomHandle
+	Scene::AddCookedMesh(
+		PreparedStaticMesh              mesh,
+		std::span<const MaterialHandle> materials,
+		const std::optional<glm::vec4>  sphereOverride)
+	{
 		try
 		{
 			if (mesh.m_Impl == nullptr || mesh.m_Impl->submeshes.empty())
@@ -1041,7 +1117,7 @@ namespace bgl
 				submesh.indices =
 					rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(src.localIndices));
 				submesh.vertexCount    = src.vertexCount;
-				submesh.boundingSphere = src.boundingSphere;
+				submesh.boundingSphere = sphereOverride.value_or(src.boundingSphere);
 
 				submeshes.push_back(submesh);
 				defaults.push_back(
