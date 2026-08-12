@@ -593,9 +593,8 @@ namespace bgl
 		{
 			postProcessArgs.outlineMask    = rt.GetOutlineMaskSrv();
 			postProcessArgs.outlineEnabled = true;
-			postProcessArgs.maskTexelSize  = glm::vec2(
-				1.0f / static_cast<float>(rt.GetWidth()),
-				1.0f / static_cast<float>(rt.GetHeight()));
+			postProcessArgs.maskSize =
+				glm::vec2(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
 		}
 
 		if (rt.IsTaaEnabled())

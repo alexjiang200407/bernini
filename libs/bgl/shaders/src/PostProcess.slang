@@ -6,7 +6,7 @@ struct PostProcessData
     TextureHandle sceneColor;
     SamplerState.Handle sampler;
     TextureHandle outlineMask;
-    float2 maskTexelSize;
+    float2 maskSize;
     uint outlineEnabled;
 };
 
@@ -15,9 +15,19 @@ ConstantBuffer<PostProcessData> gPostProcessData;
 // Display-space: the outline is editor feedback, composited after the tonemap so exposure and the
 // display curve cannot shift it.
 static const float3 c_OutlineColor = float3(1.0, 0.5, 0.0);
-static const int c_OutlineWidthPx = 4;
 
-// A pixel is outline when it is outside the mask but within c_OutlineWidthPx of it -- a dilate of
+// The width is authored at c_OutlineRefHeightPx and scaled by the mask's height, so the outline
+// keeps its share of the frame rather than a texel count: a viewport rendered below its window's
+// resolution is stretched back up to it, and a fixed texel count would arrive proportionally
+// thicker.
+static const float c_OutlineWidthPx = 4.0;
+static const float c_OutlineRefHeightPx = 2160.0;
+
+// The dilate costs (2r+1)^2 taps, so past this the outline stops thickening rather than the frame
+// paying quadratically for a supersampled target.
+static const int c_MaxOutlineWidthPx = 8;
+
+// A pixel is outline when it is outside the mask but within the outline width of it -- a dilate of
 // the mask minus the mask itself, which contours the silhouette without tinting the surface.
 float SampleOutline(float2 uv)
 {
@@ -26,15 +36,20 @@ float SampleOutline(float2 uv)
         return 0.0;
     }
 
+    const float2 texelSize = 1.0 / gPostProcessData.maskSize;
+    const float width = c_OutlineWidthPx * gPostProcessData.maskSize.y / c_OutlineRefHeightPx;
+
+    // Floored at one texel: below it the outline would disappear, and selection feedback nobody can
+    // see is worse than one that is a touch thick.
+    const int radius = clamp(int(round(width)), 1, c_MaxOutlineWidthPx);
+
     float covered = 0.0;
 
-    [unroll]
-    for (int dy = -c_OutlineWidthPx; dy <= c_OutlineWidthPx; ++dy)
+    for (int dy = -radius; dy <= radius; ++dy)
     {
-        [unroll]
-        for (int dx = -c_OutlineWidthPx; dx <= c_OutlineWidthPx; ++dx)
+        for (int dx = -radius; dx <= radius; ++dx)
         {
-            float2 offset = float2(dx, dy) * gPostProcessData.maskTexelSize;
+            float2 offset = float2(dx, dy) * texelSize;
             covered = max(covered, gPostProcessData.outlineMask.SampleLevel(gPostProcessData.sampler, uv + offset, 0.0).r);
         }
     }

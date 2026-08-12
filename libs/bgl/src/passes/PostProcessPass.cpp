@@ -105,9 +105,9 @@ namespace bgl
 				{
 					u = args.outlineMask;
 				}
-				if (auto u = tonemap["maskTexelSize"]; u.IsValid())
+				if (auto u = tonemap["maskSize"]; u.IsValid())
 				{
-					u = args.maskTexelSize;
+					u = args.maskSize;
 				}
 			}
 		}
