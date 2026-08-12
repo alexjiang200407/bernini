@@ -5,8 +5,9 @@ public struct VatClip
     public uint firstRow;
     public uint frameCount;
 
-    // Unread until playback lands: a frozen frame needs no clock, but a layout bump later would
-    // stale every baked record for two fields whose meaning is already fixed.
+    // Authored frames per second; an instance's rate multiplies it.
     public float sampleRate;
+
+    // Nonzero wraps phase over the clip; zero holds the last frame.
     public uint loop;
 };

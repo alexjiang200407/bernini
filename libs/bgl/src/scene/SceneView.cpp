@@ -239,8 +239,8 @@ namespace bgl
 		auto state  = idl::VatState();
 		state.geom  = vat.record;
 		state.clip  = desc.clip;
-		state.phase = desc.frame;
-		state.rate  = 0.0f;
+		state.phase = desc.phase;
+		state.rate  = desc.rate;
 
 		const core::slot_handle stateHandle = m_VatStates.Add(state);
 		try

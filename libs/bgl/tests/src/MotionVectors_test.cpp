@@ -11,6 +11,7 @@
 #include "util/HalfFloat.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include "util/VelocityReadback.h"
 #include "util/jitter.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -84,15 +85,11 @@ namespace
 	// Drives frames against one target and reads its velocity buffer back as floats.
 	struct MotionFixture
 	{
-		bgl::GraphicsRef         gfx;
-		bgl::RenderTargetRef     target;
-		bgl::SceneRef            scene;
-		bgl::SceneViewRef        view;
-		bgl::ResourceManagerRef  resourceManager;
-		bgl::RenderTargetBase*   targetBase = nullptr;
-		bgl::CommandAllocatorRef cmdAllocator;
-		bgl::CommandListRef      cmdList;
-		bgl::CommandQueueRef     cmdQueue;
+		bgl::GraphicsRef       gfx;
+		bgl::RenderTargetRef   target;
+		bgl::SceneRef          scene;
+		bgl::SceneViewRef      view;
+		bgl::RenderTargetBase* targetBase = nullptr;
 
 		explicit MotionFixture(bool taaEnabled = false)
 		{
@@ -125,17 +122,6 @@ namespace
 
 			scene = gfx->CreateScene(sceneDesc);
 			view  = gfx->CreateSceneView(scene, 4);
-
-			auto* gfxBase   = gfx->As<bgl::GraphicsBase>();
-			resourceManager = gfxBase->GetResourceManagerCpy();
-
-			auto cmdListDesc = bgl::CommandListDesc();
-			cmdListDesc.type = bgl::QueueType::kGraphics;
-
-			auto* device = gfxBase->GetDevice();
-			cmdAllocator = device->CreateCommandAllocator();
-			cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-			cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 		}
 
 		// A quad facing the camera, spanning c_QuadExtent about the origin -- wide enough to cover
@@ -168,72 +154,10 @@ namespace
 			gfx->DrawFrame(target, job);
 		}
 
-		// The velocity buffer as one float2 per pixel, row-major and tightly packed. The forward pass
-		// leaves it in render-target, so it is walked back there after the copy.
 		std::vector<glm::vec2>
 		ReadMotionVectors()
 		{
-			const bgl::TextureHandle texture = targetBase->GetMotionVectorTexture();
-			const auto               layout  = resourceManager->GetTextureReadbackLayout(texture);
-
-			auto rbDesc      = bgl::ReadbackBufferDesc();
-			rbDesc.byteSize  = layout.totalBytes;
-			rbDesc.debugName = "Motion Vector Readback";
-
-			auto readback = resourceManager->CreateReadbackBuffer(rbDesc);
-
-			// This copy rides its own queue, which nothing orders against the renderer's. Without the
-			// drain it reads the texture as it stood before the frame it is meant to measure.
-			gfx->As<bgl::GraphicsBase>()->WaitIdle();
-
-			cmdAllocator->ResetAllocator();
-			cmdList->Open(cmdQueue, cmdAllocator);
-
-			const auto transition = [&](bgl::BarrierLayout before, bgl::BarrierLayout after) {
-				auto barrier = bgl::TextureBarrierDesc();
-				barrier.AddSyncBefore(bgl::BarrierSyncFlag::kAllCommands)
-					.AddAccessBefore(
-						before == bgl::BarrierLayout::kRenderTarget ?
-							bgl::BarrierAccessFlag::kRenderTarget :
-							bgl::BarrierAccessFlag::kCopySource)
-					.SetLayoutBefore(before)
-					.AddSyncAfter(bgl::BarrierSyncFlag::kAllCommands)
-					.AddAccessAfter(
-						after == bgl::BarrierLayout::kRenderTarget ?
-							bgl::BarrierAccessFlag::kRenderTarget :
-							bgl::BarrierAccessFlag::kCopySource)
-					.SetLayoutAfter(after);
-				cmdList->Barrier(texture, barrier);
-			};
-
-			transition(bgl::BarrierLayout::kRenderTarget, bgl::BarrierLayout::kCopySource);
-			cmdList->CopyTextureToReadback(readback, texture);
-			transition(bgl::BarrierLayout::kCopySource, bgl::BarrierLayout::kRenderTarget);
-
-			cmdList->Close();
-			cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
-
-			const auto* base = static_cast<const uint8_t*>(resourceManager->MapReadback(readback));
-			REQUIRE(base != nullptr);
-
-			auto motion = std::vector<glm::vec2>(static_cast<size_t>(c_Width) * c_Height);
-			for (uint32_t y = 0; y < c_Height; ++y)
-			{
-				const auto* row =
-					reinterpret_cast<const uint16_t*>(base + layout.offset + y * layout.rowPitch);
-
-				for (uint32_t x = 0; x < c_Width; ++x)
-				{
-					motion[static_cast<size_t>(y) * c_Width + x] = glm::vec2(
-						bgl::test::HalfToFloat(row[x * 2]),
-						bgl::test::HalfToFloat(row[x * 2 + 1]));
-				}
-			}
-
-			resourceManager->UnmapReadback(readback);
-			resourceManager->DestroyReadbackBuffer(readback, false);
-
-			return motion;
+			return bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), c_Width, c_Height);
 		}
 	};
 

@@ -38,14 +38,20 @@ namespace bgl
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
 
 		/**
-		 * Places an instance of a kVatMesh geom, frozen at `frame` of clip `clip` -- there is no clock
-		 * yet, so what an instance is spawned showing is what it shows. Written once here and
-		 * never per frame, which is the tier's whole bargain.
+		 * The playback record an instance is spawned with, written once here and never per frame --
+		 * the tier's whole bargain. The pose at RenderJob::time `t` is frame
+		 * `phase + t * rate * sampleRate`, wrapped over the clip when it loops and clamped to its
+		 * last frame when it does not; fractional frames blend the two rows they fall between.
+		 *
+		 * `phase` staggers identical units for free, `rate` de-syncs their stride; `rate = 0` holds
+		 * an instance on `phase` under any clock, which is also what a caller that never sets
+		 * RenderJob::time gets.
 		 */
 		struct VatInstanceDesc
 		{
 			uint32_t clip  = 0;
-			float    frame = 0.0f;
+			float    phase = 0.0f;  // frames, may be fractional
+			float    rate  = 1.0f;  // multiplier on the clip's authored sampleRate
 		};
 
 		/**

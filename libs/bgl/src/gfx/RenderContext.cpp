@@ -473,6 +473,7 @@ namespace bgl
 		camera.rotationOnlyViewProj = projection * viewNoTranslation;
 		camera.jitter               = jitter;
 		camera.unjitteredViewProj   = job.camera.GetProjection() * job.camera.GetView();
+		camera.time                 = job.time;
 
 		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
 
@@ -500,6 +501,8 @@ namespace bgl
 		draw.viewState.prevViewProj       = prevCamera.viewProj;
 		draw.viewState.jitter             = jitter;
 		draw.viewState.prevJitter         = prevCamera.jitter;
+		draw.time                         = job.time;
+		draw.prevTime                     = prevCamera.time;
 		draw.viewState.cullView           = BuildCullView(viewProj);
 		draw.viewState.unjitteredViewProj = camera.unjitteredViewProj;
 		draw.targets.sceneColor           = m_ActiveTarget->GetSceneColorRtv();
