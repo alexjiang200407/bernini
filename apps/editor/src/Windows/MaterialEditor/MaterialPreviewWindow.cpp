@@ -390,7 +390,7 @@ MaterialPreviewWindow::GetInstanceTargets(
 }
 
 void
-MaterialPreviewWindow::SetSelectedSubmesh(uint32_t submeshIndex)
+MaterialPreviewWindow::SetSelectedSubmesh(std::optional<uint32_t> submeshIndex)
 {
 	// Fire-and-forget like SetSubmeshMaterial: the selection needs no result back.
 	GetRenderer()->Post([this, submeshIndex] {
@@ -398,15 +398,21 @@ MaterialPreviewWindow::SetSelectedSubmesh(uint32_t submeshIndex)
 		{
 			GetPreviewView()->ClearSelection();
 
+			if (!submeshIndex.has_value())
+				return;
+
 			for (const SubmeshTarget& target :
-			     GetInstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
+			     GetInstanceTargets(m_SubmeshRefs, m_Instances, *submeshIndex))
 			{
 				GetPreviewView()->SetSubmeshSelected(target.instance, target.submeshIndex, true);
 			}
 		}
 		catch (const std::exception& e)
 		{
-			qWarning("MaterialPreview: SetSelectedSubmesh(%u) failed: %s", submeshIndex, e.what());
+			qWarning(
+				"MaterialPreview: SetSelectedSubmesh(%u) failed: %s",
+				submeshIndex.value_or(0xFFFFFFFFu),
+				e.what());
 		}
 	});
 }

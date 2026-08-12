@@ -98,11 +98,11 @@ public:
 
 	/**
 	 * Makes `submeshIndex` the selection the outline effect contours: every instance of the geom
-	 * owning it is marked, anything previously marked is cleared. An out-of-range index -- the
-	 * editor's "nothing selected" -- just clears.
+	 * owning it is marked, anything previously marked is cleared. nullopt -- the editor's
+	 * "nothing selected" -- just clears.
 	 */
 	void
-	SetSelectedSubmesh(uint32_t submeshIndex);
+	SetSelectedSubmesh(std::optional<uint32_t> submeshIndex);
 
 	// The `.bmaterial` each submesh is bound to in the `.bmesh`, absolute. Empty where the mesh names
 	// none -- which is what tells a first Save to bind it from a later one that must not.
