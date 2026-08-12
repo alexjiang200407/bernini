@@ -137,7 +137,7 @@ Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) clo
 
 The watcher claims the PR at startup rather than at exit so that it can run **in the background**: the
 hook is satisfied by a watch that is *running*, the turn ends, and the developer keeps their session
-instead of watching a blocked prompt for an hour.
+instead of watching a blocked prompt until the PR moves.
 
 **One watcher per PR.** The claim is the watcher's pid, so the list answers *is anyone watching this*
 rather than *has anyone ever watched it*: a PR with a live watcher is not pending however many times
