@@ -121,6 +121,24 @@ TEST_CASE("Selection outline contours the selected instance", "[selection][rende
 	CHECK(std::abs(centerOn.r - centerOn.b) < 0.05f);
 	CHECK(std::abs(centerOn.Luma() - centerOff.Luma()) < 0.05f);
 
+	// The target toggle is presentation only: the marks survive it, so re-enabling restores the
+	// outline without the selection being re-applied.
+	const std::string disabledPath  = "assets/golden/selection_outline_disabled.got.png";
+	const std::string reenabledPath = "assets/golden/selection_outline_reenabled.got.png";
+
+	target->SetOutlineEnabled(false);
+	capture(disabledPath);
+
+	const auto edgeDisabled = EdgeProbe(disabledPath);
+	CHECK(edgeDisabled.r - edgeDisabled.b < 0.05f);
+	CHECK(view->IsSubmeshSelected(instance, 0));
+
+	target->SetOutlineEnabled(true);
+	capture(reenabledPath);
+
+	const auto edgeReenabled = EdgeProbe(reenabledPath);
+	CHECK(edgeReenabled.r - edgeReenabled.b > 0.2f);
+
 	view->ClearSelection();
 	capture(clearPath);
 
@@ -130,6 +148,8 @@ TEST_CASE("Selection outline contours the selected instance", "[selection][rende
 	std::remove(offPath.c_str());
 	std::remove(onPath.c_str());
 	std::remove(clearPath.c_str());
+	std::remove(disabledPath.c_str());
+	std::remove(reenabledPath.c_str());
 }
 
 TEST_CASE(

@@ -555,7 +555,8 @@ namespace bgl
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 
-		if (const auto selected = view->GetSelectedInstances(); !selected.empty())
+		if (const auto selected = view->GetSelectedInstances();
+		    !selected.empty() && m_ActiveTarget->IsOutlineEnabled())
 		{
 			m_OutlineMask.AttachToFrameGraph(
 				m_FrameGraph,

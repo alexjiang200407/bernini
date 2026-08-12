@@ -61,6 +61,18 @@ namespace bgl
 		virtual void
 		SetTaaEnabled(bool enabled) = 0;
 
+		/** Whether the selection outline is drawn on this target. On by default. */
+		[[nodiscard]] virtual bool
+		IsOutlineEnabled() const noexcept = 0;
+
+		/**
+		 * Turns the selection outline on or off for subsequent frames. The views' selection marks
+		 * are untouched -- the toggle is presentation, not state -- so re-enabling shows the
+		 * current selection again.
+		 */
+		virtual void
+		SetOutlineEnabled(bool enabled) noexcept = 0;
+
 	protected:
 		IRenderTarget() noexcept = default;
 	};

@@ -255,6 +255,16 @@ MainWindow::SetUpRenderMenu()
 			view->SetTaaEnabled(enabled);
 	});
 
+	auto* outline = render->addAction("Selection Outline");
+	outline->setCheckable(true);
+	outline->setChecked(true);
+	outline->setStatusTip("Contour the selected submesh in the viewports.");
+
+	connect(outline, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetOutlineEnabled(enabled);
+	});
+
 	SetUpRenderScaleMenu(render);
 }
 
