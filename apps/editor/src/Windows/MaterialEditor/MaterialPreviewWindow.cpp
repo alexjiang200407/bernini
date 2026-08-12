@@ -5,6 +5,7 @@
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 
+#include <QApplication>
 #include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -149,6 +150,7 @@ MaterialPreviewWindow::ClearGeometry()
 		}
 	});
 
+	m_Raycaster.Clear();
 	m_Instances.clear();
 	m_Geoms.clear();
 	m_SubmeshRefs.clear();
@@ -182,6 +184,9 @@ MaterialPreviewWindow::ShowDefaultSphere()
 			m_Geoms.push_back(GetPreviewScene()->AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
 			m_Instances.push_back(
 				{ GetPreviewView()->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+
+			// The sphere's triangles never exist on the CPU, so its raycast shadow is analytic.
+			m_Raycaster.AddInstance(m_Raycaster.AddSphere(1.0f), glm::mat4(1.0f));
 		});
 	}
 	catch (const std::exception& e)
@@ -258,8 +263,9 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			// instance for every node that references one, at that node's world transform.
 			auto geomForMesh =
 				std::unordered_map<uint32_t, uint32_t>();  // mesh index -> m_Geoms index
-			auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
-			auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
+			auto raycastGeoms = std::vector<uint32_t>();   // m_Geoms index -> raycaster geometry
+			auto aabbMin      = glm::vec3(std::numeric_limits<float>::max());
+			auto aabbMax      = glm::vec3(std::numeric_limits<float>::lowest());
 
 			for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
 			{
@@ -272,6 +278,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				if (inserted)
 				{
 					m_Geoms.push_back(scene->AddStaticMesh(mesh, node.mesh, materials));
+					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
 
 					// Name each of this mesh's submeshes once, in the order the selector shows them.
 					const assetlib::Mesh& entry = mesh.meshes[node.mesh];
@@ -297,6 +304,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				m_Instances.push_back(
 					{ GetPreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
 				      it->second });
+				m_Raycaster.AddInstance(raycastGeoms[it->second], world);
 
 				const assetlib::Mesh& entry = mesh.meshes[node.mesh];
 				for (uint32_t i = 0; i < entry.submeshCount; ++i)
@@ -501,11 +509,17 @@ MaterialPreviewWindow::mousePressEvent(QMouseEvent* event)
 {
 	m_DragButton   = event->button();
 	m_LastMousePos = event->position().toPoint();
+	m_PressPos     = m_LastMousePos;
+	m_Dragged      = false;
 }
 
 void
-MaterialPreviewWindow::mouseReleaseEvent(QMouseEvent*)
+MaterialPreviewWindow::mouseReleaseEvent(QMouseEvent* event)
 {
+	// A press the camera never followed is a click: pick what it landed on.
+	if (event->button() == Qt::LeftButton && m_DragButton == Qt::LeftButton && !m_Dragged)
+		PickAt(event->position());
+
 	m_DragButton = Qt::NoButton;
 }
 
@@ -515,6 +529,10 @@ MaterialPreviewWindow::mouseMoveEvent(QMouseEvent* event)
 	const QPoint pos   = event->position().toPoint();
 	const QPoint delta = pos - m_LastMousePos;
 	m_LastMousePos     = pos;
+
+	if (m_DragButton != Qt::NoButton &&
+	    (pos - m_PressPos).manhattanLength() > QApplication::startDragDistance())
+		m_Dragged = true;
 
 	if (m_DragButton == Qt::LeftButton)
 	{
@@ -584,5 +602,44 @@ MaterialPreviewWindow::UpdateCamera()
 			aspect,
 			std::max(0.001f, m_FocusRadius * 0.01f),
 			m_Distance + m_FocusRadius * 50.0f);
+	m_Camera = cam;
 	SetCamera(cam);
+}
+
+void
+MaterialPreviewWindow::PickAt(const QPointF& pixel)
+{
+	if (width() <= 0 || height() <= 0)
+		return;
+
+	// Logical pixels against the logical size: NDC is scale-invariant, so the device pixel ratio
+	// and the render scale never enter into it.
+	const game::Ray ray = game::RayThroughPixel(
+		m_Camera.GetViewProjection(),
+		glm::vec2(pixel.x(), pixel.y()),
+		glm::vec2(width(), height()));
+
+	int index = -1;
+	if (const auto hit = m_Raycaster.Raycast(ray);
+	    hit.has_value() && hit->instance < m_Instances.size())
+	{
+		index =
+			SelectorIndexOf(m_SubmeshRefs, m_Instances[hit->instance].geomIndex, hit->submeshIndex);
+	}
+
+	Q_EMIT SubmeshPicked(index);
+}
+
+int
+MaterialPreviewWindow::SelectorIndexOf(
+	std::span<const SubmeshRef> refs,
+	uint32_t                    geomIndex,
+	uint32_t                    localSubmesh)
+{
+	for (size_t i = 0; i < refs.size(); ++i)
+	{
+		if (refs[i].geomIndex == geomIndex && refs[i].localSubmesh == localSubmesh)
+			return static_cast<int>(i);
+	}
+	return -1;
 }

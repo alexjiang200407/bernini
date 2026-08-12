@@ -6,9 +6,11 @@
 
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
+#include <bgl/Camera.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <gamelib/Raycaster.h>
 
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -104,6 +106,14 @@ public:
 	void
 	SetSelectedSubmesh(std::optional<uint32_t> submeshIndex);
 
+	/**
+	 * The selector index that owns (`geomIndex`, `localSubmesh`): the inverse of
+	 * GetInstanceTargets' fan-out, for a pick that lands on one instance. -1 when nothing
+	 * matches. Static so the mapping is pinnable without a preview window or a device.
+	 */
+	[[nodiscard]] static int
+	SelectorIndexOf(std::span<const SubmeshRef> refs, uint32_t geomIndex, uint32_t localSubmesh);
+
 	// The `.bmaterial` each submesh is bound to in the `.bmesh`, absolute. Empty where the mesh names
 	// none -- which is what tells a first Save to bind it from a later one that must not.
 	const QStringList&
@@ -159,6 +169,11 @@ Q_SIGNALS:
 	void
 	GeometryChanged();
 
+	// A click landed on this selector index (-1: empty space). Not applied here: the editor's
+	// submesh selector owns the selection, and routing the pick through it keeps the two agreeing.
+	void
+	SubmeshPicked(int submeshIndex);
+
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
@@ -193,6 +208,10 @@ private:
 	void
 	UpdateCamera();
 
+	// Raycasts the pixel and emits SubmeshPicked with what it found.
+	void
+	PickAt(const QPointF& pixel);
+
 	glm::vec3
 	EyePosition() const;
 
@@ -223,6 +242,14 @@ private:
 	float     m_Yaw         = 0.0f;
 	float     m_Pitch       = 0.0f;
 
+	// The preview geometry's CPU shadow, rebuilt with it. Its instance i is m_Instances[i]: every
+	// CreateStaticMeshInstance is paired with an AddInstance, and ClearGeometry resets both.
+	game::Raycaster m_Raycaster;
+
+	bgl::Camera m_Camera;  // the GUI thread's copy; m_RenderCamera lives on the render thread
+
 	QPoint          m_LastMousePos;
+	QPoint          m_PressPos;
+	bool            m_Dragged    = false;  // the press moved too far to still be a click
 	Qt::MouseButton m_DragButton = Qt::NoButton;
 };

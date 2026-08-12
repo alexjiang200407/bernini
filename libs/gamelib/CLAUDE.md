@@ -22,6 +22,12 @@ here, not in either of them.
 
 ## Contents
 
+- `Raycaster` — CPU picking: register geometry (a `BMesh`'s meshlet streams, or an analytic
+  sphere for procedural shapes), place instances of it, and ask which (instance, submesh) a
+  world-space `game::Ray` meets first. It keeps its own compact copy of positions and triangles,
+  because nothing retains CPU geometry after the GPU upload — feed it while the `BMesh` is still
+  in scope. Pure CPU, no bgl involvement; the editor's material preview drives click-to-select
+  with it.
 - `AssetManager` — constructed with an `IScene` and the project's **Data directory**. Textures,
   materials and geometry belong to the scene and are shared across every view drawn from it, so the
   manager is one per scene, and `CreateInstance` names the view each instance is placed in (holding it

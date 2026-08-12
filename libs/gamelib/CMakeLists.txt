@@ -39,8 +39,7 @@ target_link_libraries(gamelib
 enable_strict_compiler(gamelib)
 enable_coverage(gamelib)
 
-# The suite drives a real scene through IGraphics, which needs a backend.
-if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
+if (BUILD_TESTS)
 	find_package(Catch2 CONFIG REQUIRED)
 
 	file(GLOB_RECURSE GAMELIB_TESTS_SOURCES CONFIGURE_DEPENDS

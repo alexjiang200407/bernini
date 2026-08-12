@@ -248,6 +248,12 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		connect(m_Preview, &MaterialPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
 		});
+
+		// A click in the preview picks through the selector, so the graph swap and the outline
+		// both follow; -1 -- empty space -- clears it, and the placeholder reads "No submesh".
+		connect(m_Preview, &MaterialPreviewWindow::SubmeshPicked, this, [this](int index) {
+			m_SubmeshSelector->setCurrentIndex(index);
+		});
 	}
 	else
 	{

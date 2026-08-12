@@ -29,6 +29,13 @@ namespace assetlib
 	[[nodiscard]] uint32_t
 	formatSize(VertexFormat format) noexcept;
 
+	struct VertexAttribute;
+	struct VertexLayout;
+
+	/** The attribute carrying `semantic`, or nullptr when the layout has none. */
+	[[nodiscard]] const VertexAttribute*
+	findAttribute(const VertexLayout& layout, VertexSemantic semantic) noexcept;
+
 	struct VertexAttribute
 	{
 		VertexSemantic semantic;

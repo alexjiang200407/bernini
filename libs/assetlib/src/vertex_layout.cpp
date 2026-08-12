@@ -24,4 +24,15 @@ namespace assetlib
 		}
 		return 0;
 	}
+
+	const VertexAttribute*
+	findAttribute(const VertexLayout& layout, VertexSemantic semantic) noexcept
+	{
+		for (uint8_t i = 0; i < layout.attributeCount; ++i)
+		{
+			if (layout.attributes[i].semantic == semantic)
+				return &layout.attributes[i];
+		}
+		return nullptr;
+	}
 }
