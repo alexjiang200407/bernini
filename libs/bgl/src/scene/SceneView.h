@@ -24,6 +24,13 @@ namespace bgl
 		std::vector<core::slot_handle> submeshInstances;
 		std::vector<MaterialHandle>    overrides;
 		std::vector<uint8_t>           selected;
+
+		// What the placement was created as -- the epoch re-resolve must rebuild each instance's
+		// pso for the pipeline family it actually draws through.
+		GeomType geomType = GeomType::kStaticMesh;
+
+		// kVatMesh only: the instance's playback record, freed with the instance.
+		core::slot_handle vatState;
 	};
 
 	/**
@@ -56,6 +63,10 @@ namespace bgl
 
 		MeshInstanceHandle
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) override;
+
+		MeshInstanceHandle
+		CreateVatMeshInstance(GeomHandle geom, glm::mat4 transform, const VatInstanceDesc& desc)
+			override;
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
@@ -158,7 +169,7 @@ namespace bgl
 		auto
 		GetInstanceBuffers()
 		{
-			return std::tie(m_InstanceBuffer, m_MeshBuffer);
+			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_VatStates);
 		}
 
 		/**
@@ -213,11 +224,20 @@ namespace bgl
 		ResolveShading(
 			SubmeshInstance& instance,
 			uint32_t         submeshRoot,
-			MaterialHandle   materialOverride) const;
+			MaterialHandle   materialOverride,
+			GeomType         geomType) const;
 
 		/** Re-resolves one submesh instance of `meshIndex` and uploads it if it moved. */
 		void
 		RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex);
+
+		/**
+		 * The body both instance creators share: copies the geom's submesh range, writes the
+		 * per-placement Mesh (with `vatState`, null for a static one) and one resolved
+		 * SubmeshInstance per submesh. The caller has already validated the geom.
+		 */
+		MeshInstanceHandle
+		CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState);
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
@@ -268,6 +288,7 @@ namespace bgl
 
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
+		EntryBuffer<idl::VatState>       m_VatStates;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;

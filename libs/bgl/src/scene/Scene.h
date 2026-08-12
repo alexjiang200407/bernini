@@ -15,6 +15,22 @@ namespace bgl
 	class ICommandList;
 	class FrameGraph;
 
+	/**
+	 * One live geom. Every geom has a submesh range; a kVatMesh one additionally owns its VatGeom
+	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees) and records its
+	 * clip count for instance-creation validation.
+	 *
+	 * Namespace-scope rather than nested in Scene: a nested class's default member initializers
+	 * only resolve once the enclosing class is complete, which would leave this
+	 * not-default-constructible right where slot_vector's concept checks it.
+	 */
+	struct GeomRecord
+	{
+		idl::RangeWithCount submeshes;
+		core::slot_handle   vatGeom;
+		uint32_t            vatClipCount = 0;
+	};
+
 	class Scene : public core::RefCounter<IScene>
 	{
 	public:
@@ -52,7 +68,10 @@ namespace bgl
 				m_VertexDataBuffer,
 				m_IndexBuffer,
 				m_Pbr,
-				m_Loose);
+				m_Loose,
+				m_VatGeoms,
+				m_VatClips,
+				m_VatColumns);
 		}
 
 		// --- SceneView support -------------------------------------------------
@@ -63,7 +82,7 @@ namespace bgl
 		[[nodiscard]] bool
 		IsGeomAlive(GeomHandle geom) const noexcept override
 		{
-			return geom.IsValid() && m_GeomSubmeshes.valid(geom.handle);
+			return geom.IsValid() && m_Geoms.valid(geom.handle);
 		}
 
 		// The submesh range a SceneView copies into a per-placement Mesh at instance-creation time.
@@ -71,7 +90,25 @@ namespace bgl
 		[[nodiscard]] const idl::RangeWithCount&
 		GetGeomSubmeshes(uint32_t index) const noexcept
 		{
-			return m_GeomSubmeshes[index];
+			return m_Geoms[index].submeshes;
+		}
+
+		/**
+		 * The kVatMesh half of a geom record: the VatGeom entry a VatState points at, and the clip
+		 * count instance creation validates against. The handle is invalid on a static geom.
+		 * Only valid while the geom is alive; check IsGeomAlive first.
+		 */
+		struct VatGeomInfo
+		{
+			core::slot_handle record;
+			uint32_t          clipCount = 0;
+		};
+
+		[[nodiscard]] VatGeomInfo
+		GetGeomVatInfo(uint32_t index) const noexcept
+		{
+			const GeomRecord& geom = m_Geoms[index];
+			return { geom.vatGeom, geom.vatClipCount };
 		}
 
 		/**
@@ -149,6 +186,13 @@ namespace bgl
 		GeomHandle
 		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) override;
 
+		GeomHandle
+		AddVatGeom(
+			std::span<const VatVertex> verts,
+			std::span<const uint32_t>  indices,
+			const VatGeomDesc&         desc,
+			MaterialHandle             material) override;
+
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
@@ -189,9 +233,10 @@ namespace bgl
 		 */
 		GeomHandle
 		AddProceduralGeom(
-			std::span<const VertexGen> verts,
-			std::span<const uint32_t>  indices,
-			MaterialHandle             material);
+			std::span<const VertexGen>     verts,
+			std::span<const uint32_t>      indices,
+			MaterialHandle                 material,
+			const std::optional<glm::vec4> boundingSphere = std::nullopt);
 
 		/**
 		 * Sizes every GPU-mirrored buffer to its SceneDesc starting point.
@@ -205,7 +250,7 @@ namespace bgl
 		// Claims a geom slot, growing the table when it is full. Unlike the GPU arenas this is a
 		// pure CPU side table, so it cannot fail on device memory.
 		[[nodiscard]] core::slot_handle
-		AllocateGeomSlot(const idl::RangeWithCount& submeshes);
+		AllocateGeomSlot(const GeomRecord& record);
 
 		// The desc -> GPU-struct conversion, shared by Create* and Update*, so a material built by
 		// either route is byte-identical (including the default-texture fallbacks for absent maps).
@@ -227,9 +272,10 @@ namespace bgl
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
-		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer. The slot generation is
-		// what makes a GeomHandle expire when its geom is deleted (see IsGeomAlive).
-		core::slot_vector<idl::RangeWithCount> m_GeomSubmeshes;
+		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer, plus the kVatMesh extras.
+		// The slot generation is what makes a GeomHandle expire when its geom is deleted (see
+		// IsGeomAlive).
+		core::slot_vector<GeomRecord> m_Geoms;
 
 		// Moves whenever a submesh's default material does. SceneViews poll it; see MaterialEpoch.
 		uint64_t m_MaterialEpoch = 0;
@@ -246,6 +292,10 @@ namespace bgl
 
 		EntryBuffer<idl::PbrMaterial>      m_Pbr;
 		EntryBuffer<idl::LoosePbrMaterial> m_Loose;
+
+		EntryBuffer<idl::VatGeom> m_VatGeoms;
+		RangeBuffer<idl::VatClip> m_VatClips;
+		RangeBuffer<uint32_t>     m_VatColumns;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 

@@ -132,6 +132,16 @@ namespace bgl
 			case MaterialType::kCount:
 				gfatal("Invalid MaterialType");
 			}
+
+		// One opaque PBR bucket; alpha variants arrive when a use case does. The material is
+		// constrained to kPBR/kOpaque at every door that binds one to VAT geometry (AddVatGeom,
+		// SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type reaching here is
+		// bgl's own bug.
+		case GeomType::kVatMesh:
+			if (material != MaterialType::kPBR || cutout || blend || hashed)
+				gfatal("VAT geometry is only drawable with an opaque kPBR material");
+			return PsoType::kOpaque_VatMesh_PBR;
+
 		case GeomType::kInvalid:
 		case GeomType::kCount:
 		default:

@@ -47,6 +47,25 @@ namespace bgl
 			},
 		} };
 
+		static constexpr std::array<SceneBuffer, 4> c_VatBuffers = {
+			{ { "scene.vatGeomBuffer",
+			    "vatGeomBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vatStateBuffer",
+			    "vatStateBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vatClipBuffer",
+			    "vatClipBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vatColumnBuffer",
+			    "vatColumnBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader } }
+		};
+
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
 		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
@@ -56,6 +75,7 @@ namespace bgl
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
 		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
+		constexpr auto c_VatGeomSrc          = "Forward_Vat"sv;
 		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
 		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
@@ -73,6 +93,7 @@ namespace bgl
 			bool             depthWrite;
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
+			std::string_view geomSrc   = c_GeomSrc;
 		};
 
 		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).
@@ -97,6 +118,13 @@ namespace bgl
 			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
+			// kOpaque_VatMesh_PBR
+			{ c_PbrPixelSrc,
+			  RasterCullMode::kBack,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_VatGeomSrc },
 		} };
 
 		static_assert(
@@ -109,8 +137,8 @@ namespace bgl
 		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
-			pipelineDesc.ampShader  = device->CreateShader(std::string(c_GeomSrc), "ASMain");
-			pipelineDesc.meshShader = device->CreateShader(std::string(c_GeomSrc), "MSMain");
+			pipelineDesc.ampShader  = device->CreateShader(std::string(cfg.geomSrc), "ASMain");
+			pipelineDesc.meshShader = device->CreateShader(std::string(cfg.geomSrc), "MSMain");
 
 			pipelineDesc.pixelShader = device->CreateShader(std::string(cfg.pixelSrc), "PSMain");
 
@@ -219,6 +247,11 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		for (const auto& binding : c_VatBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -238,6 +271,11 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
+		}
+
+		if (auto foundVatData = kernel.FindUniforms("vatData"))
+		{
+			BindSceneBuffers(*foundVatData, c_VatBuffers, resources);
 		}
 
 		if (auto foundViewData = kernel.FindUniforms("viewData"))

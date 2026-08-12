@@ -38,6 +38,9 @@ set(IDL_CPP_SOURCES
     ErrorCode.slang
     DispatchArgs.slang
     BaseTable.slang
+    VatClip.slang
+    VatGeom.slang
+    VatState.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public
