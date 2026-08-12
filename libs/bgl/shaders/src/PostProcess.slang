@@ -15,7 +15,7 @@ ConstantBuffer<PostProcessData> gPostProcessData;
 // Display-space: the outline is editor feedback, composited after the tonemap so exposure and the
 // display curve cannot shift it.
 static const float3 c_OutlineColor = float3(1.0, 0.5, 0.0);
-static const int c_OutlineWidthPx = 2;
+static const int c_OutlineWidthPx = 4;
 
 // A pixel is outline when it is outside the mask but within c_OutlineWidthPx of it -- a dilate of
 // the mask minus the mask itself, which contours the silhouette without tinting the surface.

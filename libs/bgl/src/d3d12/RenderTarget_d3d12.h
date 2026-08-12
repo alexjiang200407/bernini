@@ -202,6 +202,18 @@ namespace bgl
 			return m_TaaEnabled;
 		}
 
+		[[nodiscard]] bool
+		IsOutlineEnabled() const noexcept override
+		{
+			return m_OutlineEnabled;
+		}
+
+		void
+		SetOutlineEnabled(bool enabled) noexcept override
+		{
+			m_OutlineEnabled = enabled;
+		}
+
 		void
 		SetTaaEnabled(bool enabled) override
 		{
@@ -288,13 +300,14 @@ namespace bgl
 		CommandQueueRef    m_CommandQueue;
 		ResourceManagerRef m_ResourceManager;
 
-		bool  m_Headless     = false;
-		bool  m_TaaEnabled   = false;
-		bool  m_TaaAllocated = false;
-		bool  m_EnableDebug  = false;
-		void* m_Wnd          = nullptr;
-		int   m_Width        = 0;
-		int   m_Height       = 0;
+		bool  m_Headless       = false;
+		bool  m_TaaEnabled     = false;
+		bool  m_OutlineEnabled = true;
+		bool  m_TaaAllocated   = false;
+		bool  m_EnableDebug    = false;
+		void* m_Wnd            = nullptr;
+		int   m_Width          = 0;
+		int   m_Height         = 0;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 

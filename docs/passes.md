@@ -325,7 +325,8 @@ transparent phase, so no culling and no indirect args are involved.
 * **Unjittered:** its `viewData` carries `unjitteredViewProj` and zero jitter. The mask is
   consumed after the TAA resolve and never accumulated, so a jittered contour would shimmer by
   half a pixel.
-* Attached per draw, after `Forward`, **only when the view's selection is non-empty**; several
+* Attached per draw, after `Forward`, **only when the view's selection is non-empty and the
+  target's outline is enabled** (`IRenderTarget::SetOutlineEnabled`); several
   views drawing into one target union their masks, cleared once in `BeginFrame`.
 * **In:** `scene.selectedInstances` (the view's dense selected-drawable list) and the seven
   forward geometry tables.
