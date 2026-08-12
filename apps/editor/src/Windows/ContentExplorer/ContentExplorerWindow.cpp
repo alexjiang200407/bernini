@@ -1167,6 +1167,15 @@ ContentExplorerWindow::WriteImportedRig(
 	assetlib::saveAnimations(clips, banimPath);
 }
 
+void
+ContentExplorerWindow::WriteImportedMesh(
+	const assetlib::BMesh&       mesh,
+	const std::filesystem::path& bmeshPath)
+{
+	std::filesystem::create_directories(bmeshPath.parent_path());
+	assetlib::save(mesh, bmeshPath);
+}
+
 std::filesystem::path
 ContentExplorerWindow::FindMatchingSkeleton(
 	const std::filesystem::path& dataRoot,
@@ -1395,7 +1404,7 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 				if (importMaterials)
 					WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
 
-				assetlib::save(*mesh, bmeshPath);
+				WriteImportedMesh(*mesh, bmeshPath);
 			}
 			else if (options.animations)
 			{
