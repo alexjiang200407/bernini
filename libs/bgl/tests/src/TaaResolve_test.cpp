@@ -70,20 +70,37 @@ namespace
 	// arrival at x = 0.
 	constexpr float c_FenceStartX = -34.0f;
 
-	void
-	AddSlatWall(const bgl::SceneRef& scene, const bgl::SceneViewRef& view, int count, float startX)
-	{
-		const auto grey = [&scene](float value) {
-			auto desc            = bgl::PbrMaterialDesc();
-			desc.baseColorFactor = glm::vec4(value, value, value, 1.0f);
-			desc.metallicFactor  = 0.0f;
-			desc.roughnessFactor = 0.6f;
-			return scene->CreatePbrMaterial(desc);
-		};
+	constexpr float c_SlatLight = 0.62f;
+	constexpr float c_SlatDark  = 0.38f;
 
+	// What the light slats are edited to mid-run: far enough from both to move the fence's mean well
+	// clear of the frame-to-frame noise, and still inside the range the display curve resolves.
+	constexpr float c_SlatEdited = 0.20f;
+
+	bgl::PbrMaterialDesc
+	Grey(float value)
+	{
+		auto desc            = bgl::PbrMaterialDesc();
+		desc.baseColorFactor = glm::vec4(value, value, value, 1.0f);
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 0.6f;
+		return desc;
+	}
+
+	// Takes the two materials rather than creating them, so a caller that means to edit one of them
+	// mid-run holds its handle.
+	void
+	AddSlatWall(
+		const bgl::SceneRef&     scene,
+		const bgl::SceneViewRef& view,
+		int                      count,
+		float                    startX,
+		bgl::MaterialHandle      light,
+		bgl::MaterialHandle      dark)
+	{
 		const bgl::GeomHandle slats[] = {
-			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, grey(0.62f)),
-			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, grey(0.38f)),
+			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, light),
+			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, dark),
 		};
 
 		for (int i = 0; i < count; ++i)
@@ -93,6 +110,18 @@ namespace
 				slats[i % 2],
 				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
 		}
+	}
+
+	void
+	AddSlatWall(const bgl::SceneRef& scene, const bgl::SceneViewRef& view, int count, float startX)
+	{
+		AddSlatWall(
+			scene,
+			view,
+			count,
+			startX,
+			scene->CreatePbrMaterial(Grey(c_SlatLight)),
+			scene->CreatePbrMaterial(Grey(c_SlatDark)));
 	}
 
 	void
@@ -578,4 +607,85 @@ TEST_CASE("Enabling temporal AA on a target without it is an error", "[taa][rend
 
 	// Turning it off on a target that never had it is the caller asking for what it already has.
 	CHECK_NOTHROW(target->SetTaaEnabled(false));
+}
+
+// A material's contents change with nothing on screen moving, and no motion vector describes that:
+// the accumulation holds the surface as it was, and the resolve goes on reprojecting onto it.
+//
+// Fine detail is where that survives, which is why this measures the fence rather than the quad:
+// over a uniform colour the neighbourhood box collapses onto the new colour and drags the
+// accumulation across by itself, but between two greys the box is as wide as their difference and
+// the old grey sits inside it -- and at rest the remembered spread widens it further.
+TEST_CASE(
+	"A material edit lands whole rather than fading in over the frames after it",
+	"[taa][render]")
+{
+	auto gfx = bgl::CreateGraphics(TestOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc       = bgl::RenderTargetDesc();
+	targetDesc.width      = static_cast<int>(c_Width);
+	targetDesc.height     = static_cast<int>(c_Height);
+	targetDesc.headless   = true;
+	targetDesc.taaEnabled = true;
+
+	auto target = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto scene = gfx->CreateScene(QuadSceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 128);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	const bgl::MaterialHandle edited = scene->CreatePbrMaterial(Grey(c_SlatLight));
+	AddSlatWall(
+		scene,
+		view,
+		c_SlatCount,
+		c_FenceStartX,
+		edited,
+		scene->CreatePbrMaterial(Grey(c_SlatDark)));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = Camera();
+	job.viewport = FullViewport();
+
+	// Slats, several pixels wide, across the middle of the frame.
+	constexpr int c_FenceBoxX = 96;
+	constexpr int c_FenceBoxY = 96;
+	constexpr int c_FenceBox  = 48;
+
+	const auto drive = [&](int frames, const std::string& path) {
+		for (int frame = 0; frame < frames; ++frame)
+		{
+			gfx->DrawFrame(target, job);
+		}
+		gfx->ScreenshotPng(target, path);
+		return path;
+	};
+
+	const std::string before = drive(c_ConvergeFrames, "assets/golden/taa_material_before.got.png");
+
+	scene->UpdatePbrMaterial(edited, Grey(c_SlatEdited));
+	const std::string edit  = drive(1, "assets/golden/taa_material_edit.got.png");
+	const std::string after = drive(c_ConvergeFrames, "assets/golden/taa_material_after.got.png");
+
+	const float lightBefore =
+		bgl::test::MeanColor(before, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox).Luma();
+	const float lightEdit =
+		bgl::test::MeanColor(edit, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox).Luma();
+	const float lightAfter =
+		bgl::test::MeanColor(after, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox).Luma();
+
+	INFO(
+		"fence luma: before the edit = " << lightBefore << ", one frame after = " << lightEdit
+										 << ", converged after = " << lightAfter);
+
+	// The edit is worth measuring only if it moved the region at all.
+	REQUIRE(std::abs(lightBefore - lightAfter) > 0.05f);
+
+	// Antialiasing changes across the box's edges, not its mean, so the frame the edit lands on
+	// reads as the converged one does -- unless it is still carrying the old material.
+	CHECK(
+		lightEdit == Catch::Approx(lightAfter).margin(std::abs(lightBefore - lightAfter) * 0.15f));
 }

@@ -347,7 +347,9 @@ and why the resolve writes history rather than the backbuffer.
   for the two read 1:1 and a linear one for the reprojected history, both owned by `RenderContext`.
 * **Out:** the current history. `PostProcess` is then pointed at it instead of `sceneColor`.
 * **The first frame, and the first after a resize, take the scene colour whole** — `historyValid` is
-  false and there is no accumulation to blend against.
+  false and there is no accumulation to blend against. So does the first frame after the scene's
+  shading changed, where the accumulation exists but describes a material that is gone; see
+  [Temporal Antialiasing](docs/taa.md).
 * The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
   declaration in `TaaResolve.slang`.
 

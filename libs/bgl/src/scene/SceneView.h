@@ -186,6 +186,15 @@ namespace bgl
 		[[nodiscard]] ViewMatrices
 		AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept;
 
+		/**
+		 * Whether what this view shades with -- a material's contents, a submesh's binding, the
+		 * environment -- has changed since the previous call, and records this draw as having seen
+		 * it. Nothing moved, so no motion vector describes such a change: a frame that sees it true
+		 * cannot reproject the frames before it and has to drop them.
+		 */
+		[[nodiscard]] bool
+		AdvanceShading() noexcept;
+
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
@@ -265,6 +274,11 @@ namespace bgl
 
 		// The Scene material epoch these instances were resolved against. See Scene::MaterialEpoch.
 		uint64_t m_SceneEpoch = 0;
+
+		// This view's own shading epoch, and the sum of it and the Scene's that the last draw saw.
+		// A sum, so either half moving moves it. See AdvanceShading.
+		uint64_t m_ShadingEpoch      = 0;
+		uint64_t m_DrawnShadingEpoch = 0;
 
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
