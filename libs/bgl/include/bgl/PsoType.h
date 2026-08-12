@@ -16,7 +16,7 @@ namespace bgl
 		kHashedAlpha_StaticMesh_PBR = 7,
 		kHashedAlpha_StaticMesh_LoosePbr = 8,
 		kAssert_StaticMesh = 9,
-		kOpaque_Vat_PBR = 10,
+		kOpaque_VatMesh_PBR = 10,
 		kCount = 11,
 	};
 

@@ -656,7 +656,7 @@ namespace bgl
 
 			rollback.Commit();
 
-			base.geomType = GeomType::kVat;
+			base.geomType = GeomType::kVatMesh;
 			return base;
 		}
 		catch (const std::runtime_error& e)
@@ -1263,10 +1263,10 @@ namespace bgl
 	void
 	Scene::SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
 	{
-		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVat)
+		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVatMesh)
 		{
 			throw SceneError(
-				"GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh or kVat");
+				"GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh or kVatMesh");
 		}
 		if (!IsGeomAlive(geom))
 		{
@@ -1276,8 +1276,8 @@ namespace bgl
 		{
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
-		if (geom.geomType == GeomType::kVat && (material.materialType != MaterialType::kPBR ||
-		                                        material.layerType != LayerType::kOpaque))
+		if (geom.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
+		                                            material.layerType != LayerType::kOpaque))
 		{
 			throw SceneError(
 				"SetSubmeshMaterial: VAT geometry takes only an opaque kPBR material -- the VAT "
@@ -1298,9 +1298,10 @@ namespace bgl
 	void
 	Scene::DeleteGeom(GeomHandle geom)
 	{
-		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVat)
+		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVatMesh)
 		{
-			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh or kVat");
+			throw SceneError(
+				"GeomHandle passed to DeleteGeom must be of type kStaticMesh or kVatMesh");
 		}
 
 		if (!IsGeomAlive(geom))

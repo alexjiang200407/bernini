@@ -29,7 +29,7 @@ namespace bgl
 		// pso for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
-		// kVat only: the instance's playback record, freed with the instance.
+		// kVatMesh only: the instance's playback record, freed with the instance.
 		core::slot_handle vatState;
 	};
 
@@ -237,7 +237,7 @@ namespace bgl
 		 * SubmeshInstance per submesh. The caller has already validated the geom.
 		 */
 		MeshInstanceHandle
-		PlaceInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState);
+		CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState);
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting

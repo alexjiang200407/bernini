@@ -38,7 +38,7 @@ namespace bgl
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
 
 		/**
-		 * Places an instance of a kVat geom, frozen at `frame` of clip `clip` -- there is no clock
+		 * Places an instance of a kVatMesh geom, frozen at `frame` of clip `clip` -- there is no clock
 		 * yet, so what an instance is spawned showing is what it shows. Written once here and
 		 * never per frame, which is the tier's whole bargain.
 		 */
@@ -49,10 +49,10 @@ namespace bgl
 		};
 
 		/**
-		 * The kVat counterpart of CreateStaticMeshInstance. Deleted through the same
+		 * The kVatMesh counterpart of CreateStaticMeshInstance. Deleted through the same
 		 * DeleteMeshInstance as any other placement.
 		 *
-		 * @throws SceneError if `geom` is not a live kVat geom, or `desc.clip` is out of range.
+		 * @throws SceneError if `geom` is not a live kVatMesh geom, or `desc.clip` is out of range.
 		 */
 		virtual MeshInstanceHandle
 		CreateVatMeshInstance(

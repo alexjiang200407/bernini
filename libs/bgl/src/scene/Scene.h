@@ -16,7 +16,7 @@ namespace bgl
 	class FrameGraph;
 
 	/**
-	 * One live geom. Every geom has a submesh range; a kVat one additionally owns its VatGeom
+	 * One live geom. Every geom has a submesh range; a kVatMesh one additionally owns its VatGeom
 	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees) and records its
 	 * clip count for instance-creation validation.
 	 *
@@ -94,7 +94,7 @@ namespace bgl
 		}
 
 		/**
-		 * The kVat half of a geom record: the VatGeom entry a VatState points at, and the clip
+		 * The kVatMesh half of a geom record: the VatGeom entry a VatState points at, and the clip
 		 * count instance creation validates against. The handle is invalid on a static geom.
 		 * Only valid while the geom is alive; check IsGeomAlive first.
 		 */
@@ -272,7 +272,7 @@ namespace bgl
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
-		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer, plus the kVat extras.
+		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer, plus the kVatMesh extras.
 		// The slot generation is what makes a GeomHandle expire when its geom is deleted (see
 		// IsGeomAlive).
 		core::slot_vector<GeomRecord> m_Geoms;

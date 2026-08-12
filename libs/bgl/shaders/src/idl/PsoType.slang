@@ -13,7 +13,7 @@ public enum PsoType : uint32_t
     kHashedAlpha_StaticMesh_PBR,
     kHashedAlpha_StaticMesh_LoosePbr,
     kAssert_StaticMesh,
-    kOpaque_Vat_PBR,
+    kOpaque_VatMesh_PBR,
     kCount,
 }
 ;

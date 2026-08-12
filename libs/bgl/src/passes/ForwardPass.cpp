@@ -118,7 +118,7 @@ namespace bgl
 			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
-			// kOpaque_Vat_PBR
+			// kOpaque_VatMesh_PBR
 			{ c_PbrPixelSrc,
 			  RasterCullMode::kBack,
 			  true,

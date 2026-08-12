@@ -198,7 +198,7 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
-		return PlaceInstance(geom, transform, core::slot_handle{});
+		return CreateInstance(geom, transform, core::slot_handle{});
 	}
 
 	MeshInstanceHandle
@@ -207,9 +207,9 @@ namespace bgl
 		glm::mat4              transform,
 		const VatInstanceDesc& desc)
 	{
-		if (geom.geomType != GeomType::kVat)
+		if (geom.geomType != GeomType::kVatMesh)
 		{
-			throw SceneError("GeomHandle passed to CreateVatMeshInstance must be of type kVat");
+			throw SceneError("GeomHandle passed to CreateVatMeshInstance must be of type kVatMesh");
 		}
 
 		if (!m_SceneRaw->IsGeomAlive(geom))
@@ -235,7 +235,7 @@ namespace bgl
 		const core::slot_handle stateHandle = m_VatStates.Add(state);
 		try
 		{
-			return PlaceInstance(geom, transform, stateHandle);
+			return CreateInstance(geom, transform, stateHandle);
 		}
 		catch (...)
 		{
@@ -245,7 +245,7 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::PlaceInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState)
+	SceneView::CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState)
 	{
 		try
 		{
@@ -463,8 +463,8 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
-		if (meta.geomType == GeomType::kVat && (material.materialType != MaterialType::kPBR ||
-		                                        material.layerType != LayerType::kOpaque))
+		if (meta.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
+		                                            material.layerType != LayerType::kOpaque))
 		{
 			throw SceneError(
 				"SetSubmeshMaterialOverride: a VAT instance takes only an opaque kPBR material -- "

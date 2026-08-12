@@ -179,7 +179,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 	const auto verts   = MakeQuadVertices();
 	const auto indices = std::array<uint32_t, 6>{ { 0, 1, 2, 2, 1, 3 } };
 	const auto geom    = scene->AddVatGeom(verts, indices, desc, pbr);
-	REQUIRE(geom.geomType == bgl::GeomType::kVat);
+	REQUIRE(geom.geomType == bgl::GeomType::kVatMesh);
 
 	auto camera = bgl::Camera();
 	camera
@@ -308,7 +308,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 		cutout.layerType     = bgl::LayerType::kMask;
 		const auto cutoutPbr = scene->CreatePbrMaterial(cutout);
 
-		// Refused with an exception, never resolved: SubmeshPso(kVat, cutout) is a gfatal, so the
+		// Refused with an exception, never resolved: SubmeshPso(kVatMesh, cutout) is a gfatal, so the
 		// door has to close here, on the caller's thread, as an ordinary argument error.
 		CHECK_THROWS_AS(view->SetSubmeshMaterialOverride(instance, 0, cutoutPbr), bgl::SceneError);
 		CHECK_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, cutoutPbr), bgl::SceneError);
