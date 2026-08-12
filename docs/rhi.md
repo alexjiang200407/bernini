@@ -244,6 +244,11 @@ Everything else is self-explanatory from the header.
 
 ### ICommandList
 
+* **The stencil reference is honored only on Metal.** `DepthStencilState` carries
+  `stencilRefValue` / `dynamicStencilRef` and both backends build the stencil ops, but the D3D12
+  command list never calls `OMSetStencilRef`, so a stencil-ref design silently runs with ref 0
+  there. A stencil-based effect starts with closing that gap — which is why the outline effect
+  masks into an R8 target instead.
 * **`Open` / `Close` ordering.** Record only between them (`IsOpen()` reports state). `Open`
   requires a non-null queue and allocator; the **allocator must already be reset** if reused.
   **Every `Open` of a given list must pass the same queue** (asserted): the list's upload ring
