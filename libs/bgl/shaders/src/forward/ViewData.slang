@@ -10,4 +10,9 @@ public struct ViewData
     // rather than the sample pattern.
     public float2 jitter;
     public float2 prevJitter;
+
+    // The animation clock each of the two matrices' frames ran at, in seconds. VAT playback
+    // derives its pose from `time` and its motion vector from the pose at `prevTime`.
+    public float time;
+    public float prevTime;
 };

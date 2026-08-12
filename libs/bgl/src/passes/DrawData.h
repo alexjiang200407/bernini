@@ -105,5 +105,10 @@ namespace bgl
 		DrawTargets  targets;
 		DrawLighting lighting;
 		DrawSamplers samplers;
+
+		// The animation clock this draw and the previous one ran at; the VAT pose and its motion
+		// vector are derived from the pair.
+		float time     = 0.0f;
+		float prevTime = 0.0f;
 	};
 }

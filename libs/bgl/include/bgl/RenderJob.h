@@ -11,5 +11,8 @@ namespace bgl
 		core::SharedRef<ISceneView> view = nullptr;
 		Camera                      camera;
 		Viewport                    viewport;
+
+		// The animation clock, in seconds.
+		float time = 0.0f;
 	};
 }

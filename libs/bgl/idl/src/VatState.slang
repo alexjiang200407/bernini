@@ -13,7 +13,6 @@ public struct VatState
     // shows; under playback it becomes the spawn phase offset.
     public float phase;
 
-    // Play-rate multiplier; unread until playback lands, stored now for the same reason
-    // VatClip::sampleRate is.
+    // Play-rate multiplier on the clip's authored sampleRate.
     public float rate;
 };
