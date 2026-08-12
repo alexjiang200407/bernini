@@ -305,6 +305,32 @@ TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
 	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset(""));
 }
 
+TEST_CASE("A rename accepts only names every platform can round-trip", "[contentexplorer]")
+{
+	// The rule behind the Rename dialog, lifted out because the dialog is modal and cannot be driven
+	// from a test. The project's data root is shared across platforms, so the strictest one -- Windows
+	// -- decides: its reserved characters, and the trailing dot or space it silently strips. A leading
+	// dot is refused because it hides the file on the others.
+	CHECK(ContentExplorerWindow::IsValidAssetFileName("tree"));
+	CHECK(ContentExplorerWindow::IsValidAssetFileName("tree_02 final"));
+	CHECK(ContentExplorerWindow::IsValidAssetFileName("tree_v1.2"));  // a dot inside is a name
+	CHECK(ContentExplorerWindow::IsValidAssetFileName("console"));    // reserved only when exact
+	CHECK(ContentExplorerWindow::IsValidAssetFileName("com10"));      // the devices stop at 9
+
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName(""));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName(".hidden"));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("tree."));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("tree "));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a/b"));  // one component, not a path
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a\\b"));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a:b"));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a?b"));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName(QString("a%1b").arg(QChar(0x07))));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("NUL"));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("nul.ktx2"));
+	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("Com3"));
+}
+
 TEST_CASE("The directories the project is scaffolded with cannot be deleted", "[contentexplorer]")
 {
 	// Every asset path in the project is written against this layout, and Project::Open puts a missing

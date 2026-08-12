@@ -8,6 +8,8 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
+#include "ref_paths.h"
+
 namespace assetlib
 {
 	namespace
@@ -18,17 +20,6 @@ namespace assetlib
 		constexpr std::string_view c_EnvironmentExtension = ".benv";
 		constexpr std::string_view c_SkyExtension         = ".bsky";
 		constexpr std::string_view c_EnvLightingExtension = ".benvl";
-
-		/**
-		 * The one form every path in the graph is keyed and stored in, so that the two sides of a reference
-		 * -- one written by a bake, one clicked in a file browser -- meet. Identity in this project is the
-		 * data-root-relative path, and `Textures/x.ktx2` and `./Meshes/../Textures/x.ktx2` are one asset.
-		 */
-		std::string
-		normalizeRef(std::string_view path)
-		{
-			return std::filesystem::path(path).lexically_normal().generic_string();
-		}
 
 		std::string
 		lowerExtension(const std::filesystem::path& path)
@@ -51,14 +42,6 @@ namespace assetlib
 				return;
 
 			edges.push_back(AssetRef{ referrer, normalizeRef(target), kind });
-		}
-
-		/** Whether `path` lies beneath `directory`. Both normalized, and neither is inside itself. */
-		bool
-		isUnder(std::string_view path, std::string_view directory)
-		{
-			return path.size() > directory.size() + 1 && path.starts_with(directory) &&
-			       path[directory.size()] == '/';
 		}
 
 		/** Every file beneath `directory`, relative to the data root -- all of which it takes with it. */
@@ -359,36 +342,91 @@ namespace assetlib
 		return out;
 	}
 
+	namespace
+	{
+		/**
+		 * The closure of what deleting `plan`'s target frees: every asset the deleted set references
+		 * whose every referrer is itself in the set, repeated until nothing more qualifies -- a
+		 * material freed by its last mesh frees the textures it alone routed.
+		 */
+		std::vector<std::string>
+		cascadeOf(const AssetRefGraph& graph, const DeletionPlan& plan)
+		{
+			auto deleted = std::unordered_set<std::string>();
+			if (plan.IsDirectory())
+				deleted.insert(plan.contents.begin(), plan.contents.end());
+			else
+				deleted.insert(plan.target);
+
+			auto cascade = std::vector<std::string>();
+
+			bool grew = true;
+			while (grew)
+			{
+				grew = false;
+				for (const AssetRef& edge : graph.Edges())
+				{
+					if (!deleted.contains(edge.referrer) || deleted.contains(edge.target))
+						continue;
+
+					const std::span<const AssetRef> holders = graph.ReferrersOf(edge.target);
+					if (!std::ranges::all_of(holders, [&](const AssetRef& holder) {
+							return deleted.contains(holder.referrer);
+						}))
+						continue;
+
+					// A target that is not on disk is a broken edge, not something to delete.
+					if (!std::filesystem::exists(graph.DataRoot() / edge.target))
+						continue;
+
+					cascade.push_back(edge.target);
+					deleted.insert(edge.target);
+					grew = true;
+				}
+			}
+
+			std::ranges::sort(cascade);
+			return cascade;
+		}
+	}
+
 	DeletionPlan
 	planDeletion(const AssetRefGraph& graph, std::string_view target)
 	{
 		auto plan   = DeletionPlan();
 		plan.target = normalizeRef(target);
 
-		// The data root is not a thing inside the data root, and neither is anything above it.
-		if (plan.target.empty() || plan.target == "." || plan.target == ".." ||
-		    plan.target.starts_with("../"))
-			throw std::runtime_error(
-				"assetlib::planDeletion: '" + std::string(target) +
-				"' does not name something inside the data root");
+		requireInsideDataRoot("assetlib::planDeletion", plan.target);
 
 		// A directory is not an asset, and has no kind: that is what nullopt says.
 		if (std::filesystem::is_directory(graph.DataRoot() / plan.target))
 		{
 			plan.contents = filesUnder(graph.DataRoot(), plan.target);
 			plan.blockers = graph.ReferrersInto(plan.target);
+		}
+		else
+		{
+			plan.assetType = assetTypeFromExtension(plan.target);
+			if (!plan.assetType)
+				throw std::runtime_error(
+					"assetlib::planDeletion: '" + plan.target +
+					"' is not an asset this project stores anything about");
 
-			return plan;
+			const std::span<const AssetRef> referrers = graph.ReferrersOf(plan.target);
+			plan.blockers.assign(referrers.begin(), referrers.end());
 		}
 
-		plan.assetType = assetTypeFromExtension(plan.target);
-		if (!plan.assetType)
-			throw std::runtime_error(
-				"assetlib::planDeletion: '" + plan.target +
-				"' is not an asset this project stores anything about");
+		return plan;
+	}
 
-		const std::span<const AssetRef> referrers = graph.ReferrersOf(plan.target);
-		plan.blockers.assign(referrers.begin(), referrers.end());
+	DeletionPlan
+	planCascadeDeletion(const AssetRefGraph& graph, std::string_view target)
+	{
+		DeletionPlan plan = planDeletion(graph, target);
+
+		// A blocked deletion frees nothing, so there is no cascade to compute for one.
+		if (plan.Allowed())
+			plan.cascade = cascadeOf(graph, plan);
 
 		return plan;
 	}
@@ -412,6 +450,15 @@ namespace assetlib
 		// and is reported as one even though some of it is now gone; there is no undo to offer instead.
 		if (ec)
 			return DeletionResult{ DeletionStatus::kFailed, ec.message() };
+
+		// The cascade comes after the target: what it frees is only free once the referrer is gone, so
+		// a failure part-way never leaves a referenced asset missing.
+		for (const std::string& freed : plan.cascade)
+		{
+			std::filesystem::remove(desc.dataRoot / freed, ec);
+			if (ec)
+				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
+		}
 
 		return DeletionResult{ DeletionStatus::kDeleted, {} };
 	}

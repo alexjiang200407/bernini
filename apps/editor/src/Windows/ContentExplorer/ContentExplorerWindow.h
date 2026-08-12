@@ -3,6 +3,7 @@
 #include <QStringList>
 #include <QWidget>
 
+#include <assetlib/asset_refs.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -67,6 +68,19 @@ public:
 	 */
 	[[nodiscard]] static bool
 	IsMaterialAsset(const QString& asset);
+
+	/**
+	 * Whether `name` can be the name of an asset or folder: one path component, usable on every
+	 * platform a project is shared between. Windows refuses `<>:"/\|?*`, control characters and the
+	 * DOS device names (`NUL`, `COM1`, ... -- with or without an extension), and silently strips a
+	 * trailing dot or space; a leading dot hides the file elsewhere. Any of these would make a name
+	 * the project cannot round-trip.
+	 *
+	 * `static` for the reason AssetAt is: the dialog that collects the name cannot be driven from a
+	 * test, and this is the rule worth pinning.
+	 */
+	[[nodiscard]] static bool
+	IsValidAssetFileName(const QString& name);
 
 	/**
 	 * Derives a `.bmaterial` from every PBR material `imported` carries, writes it under `materialDir`,
@@ -211,22 +225,53 @@ private:
 	ShowFileMenu(const QPoint& pos);
 
 	/**
-	 * The right-click menu both views share: Add Directory, and Delete on an asset. The tree lists files
-	 * as well as folders, so an asset can be deleted from either side without navigating to it first.
+	 * The right-click menu both views share: Add Directory, and Rename / Delete / Delete Cascade on an
+	 * asset. The tree lists files as well as folders, so an asset can be acted on from either side
+	 * without navigating to it first.
 	 */
 	void
 	ShowAssetMenu(QAbstractItemView& view, QFileSystemModel& model, const QPoint& pos);
 
 	/**
+	 * Whether the Material Editor holds `absolute` -- or, when it is a directory, anything beneath it
+	 * -- open. What every on-disk operation here is gated on, because an open graph's next Save would
+	 * write the old state straight back.
+	 */
+	[[nodiscard]] bool
+	IsHeldOpen(const QString& absolute, bool isDirectory) const;
+
+	/**
 	 * Deletes `asset` (data-root-relative), having first established that nothing references it: no
 	 * material samples the texture, no mesh names the material.
 	 *
-	 * Deleting a mesh is never refused and never cascades -- the materials it named are shareable assets
-	 * and stay where they are. The maps a deleted material leaves behind are what Clean Unused Textures
+	 * Deleting a mesh is never refused -- the materials it named are shareable assets. They stay
+	 * where they are, and the maps a deleted material leaves behind are what Clean Unused Textures
 	 * sweeps.
 	 */
 	void
 	DeleteAsset(const QString& asset);
+
+	/**
+	 * DeleteAsset, taking also every asset that nothing would reference once the target is gone --
+	 * listed in the confirmation first, and blocked by the Material Editor holding any of it open.
+	 */
+	void
+	DeleteAssetCascade(const QString& asset);
+
+	/** The body Delete and Delete Cascade share; `planner` is the one thing they differ by. */
+	void
+	DeleteWithPlanner(
+		const QString& asset,
+		assetlib::DeletionPlan (*planner)(const assetlib::AssetRefGraph&, std::string_view));
+
+	/**
+	 * Renames `asset` (data-root-relative) in place, rewriting every asset that references it so the
+	 * rename never breaks an edge -- which is why it is not blocked by references the way Delete is.
+	 * The dialog edits a file's stem alone: the extension says what the asset is, and renaming must
+	 * not change that.
+	 */
+	void
+	RenameAsset(const QString& asset);
 
 	/**
 	 * Composites the material at `asset` (data-root-relative) down to its baked triplet and rewrites it,

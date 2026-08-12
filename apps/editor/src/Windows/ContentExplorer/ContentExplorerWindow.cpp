@@ -421,14 +421,18 @@ ContentExplorerWindow::ShowAssetMenu(
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
 
-	QAction* bake   = nullptr;
-	QAction* remove = nullptr;
+	QAction* bake          = nullptr;
+	QAction* rename        = nullptr;
+	QAction* remove        = nullptr;
+	QAction* removeCascade = nullptr;
 	if (!asset.isEmpty())
 	{
 		menu.addSeparator();
 		if (IsMaterialAsset(asset))
 			bake = menu.addAction("Bake");
-		remove = menu.addAction("Delete");
+		rename        = menu.addAction("Rename");
+		remove        = menu.addAction("Delete");
+		removeCascade = menu.addAction("Delete Cascade");
 	}
 
 	QAction* const chosen = menu.exec(view.viewport()->mapToGlobal(pos));
@@ -437,8 +441,12 @@ ContentExplorerWindow::ShowAssetMenu(
 		AddDirectory(&model, parentPath);
 	else if (bake != nullptr && chosen == bake)
 		BakeMaterial(asset);
+	else if (rename != nullptr && chosen == rename)
+		RenameAsset(asset);
 	else if (remove != nullptr && chosen == remove)
 		DeleteAsset(asset);
+	else if (removeCascade != nullptr && chosen == removeCascade)
+		DeleteAssetCascade(asset);
 }
 
 bool
@@ -447,6 +455,21 @@ ContentExplorerWindow::IsMaterialAsset(const QString& asset)
 	const std::optional<assetlib::AssetType> type =
 		assetlib::assetTypeFromExtension(asset.toStdWString());
 	return type && *type == assetlib::AssetType::kMaterial;
+}
+
+bool
+ContentExplorerWindow::IsValidAssetFileName(const QString& name)
+{
+	static const QRegularExpression c_Invalid(QStringLiteral(R"([<>:"/\\|?*\x00-\x1f])"));
+
+	// The DOS device names, which Windows reserves with or without an extension: NUL.ktx2 opens a
+	// device, not a file.
+	static const QRegularExpression c_Reserved(
+		QStringLiteral(R"(^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$)"),
+		QRegularExpression::CaseInsensitiveOption);
+
+	return !name.isEmpty() && !name.startsWith('.') && !name.endsWith('.') && !name.endsWith(' ') &&
+	       !name.contains(c_Invalid) && !c_Reserved.match(name).hasMatch();
 }
 
 void
@@ -522,24 +545,41 @@ ContentExplorerWindow::AssetAt(
 	return assetlib::assetTypeFromExtension(path.toStdWString()) ? relative : QString();
 }
 
-void
-ContentExplorerWindow::DeleteAsset(const QString& asset)
+bool
+ContentExplorerWindow::IsHeldOpen(const QString& absolute, bool isDirectory) const
 {
-	const QString absolute    = QDir(m_RootPath).absoluteFilePath(asset);
-	const bool    isDirectory = QFileInfo(absolute).isDir();
-
-	const auto holdsOpen = [&](const QString& open) {
+	const auto holds = [&](const QString& open) {
 		if (!isDirectory)
 			return QFileInfo(open) == QFileInfo(absolute);
 
 		return !QDir(absolute).relativeFilePath(open).startsWith("..");
 	};
 
-	for (const QString& open : m_AssetsHeldOpen())
-	{
-		if (!holdsOpen(open))
-			continue;
+	return std::ranges::any_of(m_AssetsHeldOpen(), holds);
+}
 
+void
+ContentExplorerWindow::DeleteAsset(const QString& asset)
+{
+	DeleteWithPlanner(asset, assetlib::planDeletion);
+}
+
+void
+ContentExplorerWindow::DeleteAssetCascade(const QString& asset)
+{
+	DeleteWithPlanner(asset, assetlib::planCascadeDeletion);
+}
+
+void
+ContentExplorerWindow::DeleteWithPlanner(
+	const QString& asset,
+	assetlib::DeletionPlan (*planner)(const assetlib::AssetRefGraph&, std::string_view))
+{
+	const QString absolute    = QDir(m_RootPath).absoluteFilePath(asset);
+	const bool    isDirectory = QFileInfo(absolute).isDir();
+
+	if (IsHeldOpen(absolute, isDirectory))
+	{
 		QMessageBox::warning(
 			this,
 			"Delete",
@@ -578,7 +618,7 @@ ContentExplorerWindow::DeleteAsset(const QString& asset)
 		return;
 	}
 
-	const assetlib::DeletionPlan plan = assetlib::planDeletion(*graph, asset.toStdString());
+	const assetlib::DeletionPlan plan = planner(*graph, asset.toStdString());
 
 	if (!plan.Allowed())
 	{
@@ -611,8 +651,29 @@ ContentExplorerWindow::DeleteAsset(const QString& asset)
 		return;
 	}
 
+	// The cascade takes files the user did not click, so an open one blocks it for the reason the
+	// target itself would: the Material Editor's next Save would write a deleted material back.
+	for (const std::string& freed : plan.cascade)
+	{
+		const QString member = QString::fromStdString(freed);
+		if (!IsHeldOpen(QDir(m_RootPath).absoluteFilePath(member), false))
+			continue;
+
+		QMessageBox::warning(
+			this,
+			"Delete",
+			QString(
+				"'%1' would be deleted with '%2', but it is open in the Material "
+				"Editor.\n\nClose it there first, or saving it would write it back.")
+				.arg(member, asset));
+		return;
+	}
+
 	auto contents = QStringList();
 	for (const std::string& file : plan.contents) contents << QString::fromStdString(file);
+
+	auto cascade = QStringList();
+	for (const std::string& file : plan.cascade) cascade << QString::fromStdString(file);
 
 	auto confirm = QMessageBox(this);
 	confirm.setWindowTitle("Delete");
@@ -621,14 +682,31 @@ ContentExplorerWindow::DeleteAsset(const QString& asset)
 	if (plan.IsDirectory())
 	{
 		confirm.setText(QString("Delete '%1' and everything in it?").arg(asset));
+
+		QString info = contents.isEmpty() ?
+		                   QString("The folder is empty.") :
+		                   QString(
+							   "%1 file(s) will be deleted. Nothing outside the folder references "
+							   "any of them.")
+		                       .arg(contents.size());
+		if (!cascade.isEmpty())
+			info += QString(
+						"\n\n%1 asset(s) outside the folder are referenced only from inside it, "
+						"and will be deleted too.")
+			            .arg(cascade.size());
+
+		confirm.setInformativeText(info + "\n\nThis cannot be undone.");
+		confirm.setDetailedText((contents + cascade).join('\n'));
+	}
+	else if (!cascade.isEmpty())
+	{
+		confirm.setText(QString("Delete '%1'?").arg(asset));
 		confirm.setInformativeText(
-			contents.isEmpty() ?
-				QString("The folder is empty.\n\nThis cannot be undone.") :
-				QString(
-					"%1 file(s) will be deleted. Nothing outside the folder references any of "
-					"them.\n\nThis cannot be undone.")
-					.arg(contents.size()));
-		confirm.setDetailedText(contents.join('\n'));
+			QString(
+				"Nothing references it. %1 asset(s) that nothing else references will be deleted "
+				"with it.\n\nThis cannot be undone.")
+				.arg(cascade.size()));
+		confirm.setDetailedText(cascade.join('\n'));
 	}
 	else if (plan.assetType == assetlib::AssetType::kMesh)
 	{
@@ -688,6 +766,193 @@ ContentExplorerWindow::DeleteAsset(const QString& asset)
 			"Delete",
 			QString("'%1' is referenced again, and was not deleted.").arg(asset));
 		return;
+	}
+}
+
+void
+ContentExplorerWindow::RenameAsset(const QString& asset)
+{
+	const QString   absolute = QDir(m_RootPath).absoluteFilePath(asset);
+	const QFileInfo info(absolute);
+	const bool      isDirectory = info.isDir();
+
+	// The extension is not offered for editing: it says what the asset is, and every stored
+	// reference and menu action dispatches on it.
+	const QString stem = isDirectory ? info.fileName() : info.completeBaseName();
+
+	bool    ok      = false;
+	QString entered = QInputDialog::getText(
+						  this,
+						  "Rename",
+						  isDirectory ? "Directory name:" : "Name:",
+						  QLineEdit::Normal,
+						  stem,
+						  &ok)
+	                      .trimmed();
+
+	// The dialog edits the stem, but a user asked for a file's name types the extension back readily
+	// enough -- taken literally that would yield 'Body.bmaterial.bmaterial'.
+	const QString suffix = isDirectory ? QString() : "." + info.suffix();
+	if (!suffix.isEmpty() && entered.endsWith(suffix, Qt::CaseInsensitive))
+		entered.chop(suffix.size());
+
+	if (!ok || entered.isEmpty() || entered == stem)
+		return;
+
+	if (!IsValidAssetFileName(entered))
+	{
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString("'%1' is not a name every platform this project is shared with can use.")
+				.arg(entered));
+		return;
+	}
+
+	if (IsHeldOpen(absolute, isDirectory))
+	{
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString(
+				"%1 is open in the Material Editor.\n\nClose it there first, or saving it "
+				"would write the old name straight back.")
+				.arg(
+					isDirectory ? QString("'%1' holds a material that").arg(asset) :
+								  QString("'%1'").arg(asset)));
+		return;
+	}
+
+	const QString newName = isDirectory ? entered : entered + "." + info.suffix();
+	const int     slash   = asset.lastIndexOf('/');
+	const QString to      = slash < 0 ? newName : asset.left(slash + 1) + newName;
+
+	auto desc     = assetlib::AssetRefScanDesc();
+	desc.dataRoot = m_RootPath.toStdWString();
+
+	auto graph = std::optional<assetlib::AssetRefGraph>();
+
+	// Off the UI thread for the reason Delete's scan is: it parses every mesh and material in the
+	// project, reading assetlib alone.
+	const background::TaskResult scanned =
+		background::RunWithLoadingScreen(this, "Rename", [&](background::Progress& progress) {
+			progress.Report(0, 0, "Checking references...");
+			graph = assetlib::AssetRefGraph::Scan(desc);
+		});
+
+	if (!scanned.Completed())
+	{
+		// A mesh or material that will not parse aborts the scan: its references cannot be known, and
+		// one of them may name the file about to move -- and would then be left pointing at nothing.
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString("Could not work out what references '%1', so it was not renamed:\n\n%2")
+				.arg(asset, scanned.error));
+		return;
+	}
+
+	auto plan = assetlib::RenamePlan();
+	try
+	{
+		plan = assetlib::planRename(*graph, asset.toStdString(), to.toStdString());
+	}
+	catch (const std::exception& e)
+	{
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString("'%1' cannot be renamed:\n\n%2").arg(asset, QString::fromUtf8(e.what())));
+		return;
+	}
+
+	// The rewrite touches files the user did not click, and an open one would be re-saved by the
+	// Material Editor with the old path back in it.
+	auto referrers = QStringList();
+	for (const assetlib::AssetRef& ref : plan.referrers)
+		referrers << QString::fromStdString(ref.referrer);
+	referrers.removeDuplicates();
+	referrers.sort();
+
+	for (const QString& referrer : referrers)
+	{
+		if (!IsHeldOpen(QDir(m_RootPath).absoluteFilePath(referrer), false))
+			continue;
+
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString(
+				"'%1' references it and is open in the Material Editor.\n\nClose it there "
+				"first, or saving it would write the old name straight back.")
+				.arg(referrer));
+		return;
+	}
+
+	if (!referrers.isEmpty())
+	{
+		auto confirm = QMessageBox(this);
+		confirm.setWindowTitle("Rename");
+		confirm.setIcon(QMessageBox::Question);
+		confirm.setText(QString("Rename '%1' to '%2'?").arg(asset, to));
+		confirm.setInformativeText(
+			QString("%1 asset(s) reference it, and will be rewritten to the new name.")
+				.arg(referrers.size()));
+		confirm.setDetailedText(referrers.join('\n'));
+
+		auto* apply = confirm.addButton("Rename", QMessageBox::AcceptRole);
+		confirm.addButton(QMessageBox::Cancel);
+		confirm.setDefaultButton(apply);
+		confirm.exec();
+
+		if (confirm.clickedButton() != apply)
+			return;
+	}
+
+	auto result = assetlib::RenameResult();
+
+	// A worker for the reason the scan gets one, only more so: rewriting a referrer round-trips the
+	// whole mesh, geometry and all, where the scan read its material chunk alone. Files only, no bgl.
+	const background::TaskResult renamed = background::RunWithLoadingScreen(
+		this,
+		QString("Renaming %1").arg(QFileInfo(asset).fileName()),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Rewriting references...");
+			result = assetlib::renameAsset(plan, desc);
+		});
+
+	if (!renamed.Completed())
+	{
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString("'%1' could not be renamed:\n\n%2").arg(asset, renamed.error));
+		return;
+	}
+
+	if (result.status == assetlib::RenameStatus::kFailed)
+	{
+		QMessageBox::warning(
+			this,
+			"Rename",
+			QString("'%1' could not be renamed:\n\n%2\n\nIt may be open in another program.")
+				.arg(asset, QString::fromStdString(result.error)));
+		return;
+	}
+
+	// A grid rooted at or inside the renamed folder is left showing a path that no longer exists;
+	// follow the rename rather than dumping the user at the root. The history is left alone -- Back
+	// already skips a folder that is gone.
+	if (isDirectory)
+	{
+		const QString shown  = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
+		const QString inside = QDir(absolute).relativeFilePath(shown);
+
+		if (!inside.startsWith(".."))
+		{
+			const QString moved = QDir(m_RootPath).absoluteFilePath(to);
+			ShowDirectory(inside == "." ? moved : moved + "/" + inside);
+		}
 	}
 }
 
