@@ -92,14 +92,14 @@ protected:
 
 	// The shared Scene. Only valid to touch on the render thread, i.e. inside a Post/Invoke closure.
 	bgl::IScene*
-	PreviewScene() const noexcept
+	GetPreviewScene() const noexcept
 	{
 		return m_Desc.renderer != nullptr ? m_Desc.renderer->GetScene().Get() : nullptr;
 	}
 
-	// This window's view of the shared Scene. Render-thread-only, as PreviewScene.
+	// This window's view of the shared Scene. Render-thread-only, as GetPreviewScene.
 	bgl::ISceneView*
-	PreviewView() const noexcept
+	GetPreviewView() const noexcept
 	{
 		return m_SceneView.Get();
 	}
