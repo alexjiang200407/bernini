@@ -40,11 +40,6 @@ namespace bgl
 		// Decorrelates the hashed-alpha pattern between frames. Zero without temporal AA, where a
 		// pattern that changed every frame would be flicker rather than coverage.
 		float alphaHashSeed = 0.0f;
-
-		// The animation clock this draw and the previous one ran at; the VAT pose and its motion
-		// vector are derived from the pair.
-		float time     = 0.0f;
-		float prevTime = 0.0f;
 	};
 
 	/** The attachments a draw renders into, all owned by the frame's render target. */
@@ -110,5 +105,10 @@ namespace bgl
 		DrawTargets  targets;
 		DrawLighting lighting;
 		DrawSamplers samplers;
+
+		// The animation clock this draw and the previous one ran at; the VAT pose and its motion
+		// vector are derived from the pair.
+		float time     = 0.0f;
+		float prevTime = 0.0f;
 	};
 }

@@ -12,8 +12,7 @@ namespace bgl
 		Camera                      camera;
 		Viewport                    viewport;
 
-		// The animation clock, in seconds; VAT playback derives its pose from it. A caller that
-		// never sets it draws every instance at its spawn phase.
+		// The animation clock, in seconds.
 		float time = 0.0f;
 	};
 }

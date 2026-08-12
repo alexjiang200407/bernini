@@ -117,8 +117,8 @@ namespace bgl
 			viewData["prevJitter"]   = glm::vec2(0.0f);
 
 			// Both the same clock, like the matrices: the mask has no motion vector to feed.
-			viewData["time"]     = draw.viewState.time;
-			viewData["prevTime"] = draw.viewState.time;
+			viewData["time"]     = draw.time;
+			viewData["prevTime"] = draw.time;
 		}
 
 		if (auto foundExpansion = m_Kernel.FindUniforms("expansionData"))
