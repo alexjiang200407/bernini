@@ -51,6 +51,11 @@ public:
 	void
 	SetTaaEnabled(bool enabled);
 
+	// Turns the selection outline on or off for this viewport. Selection state is untouched, so
+	// re-enabling shows the current selection again.
+	void
+	SetOutlineEnabled(bool enabled);
+
 	// Whether this viewport allocated temporal-AA resources, and so has anything to toggle.
 	[[nodiscard]] bool
 	IsTaaAvailable() const noexcept
