@@ -231,9 +231,14 @@ the background**, as the last action of the turn:
 just watch-pr <n>        # python scripts/watch_pr.py <n>  -- run it in the background
 ```
 
-Run it in the foreground and the session is parked for up to an hour: the user cannot type, and
+Run it in the foreground and the session is parked until the PR moves: the user cannot type, and
 reaching you means killing the wait. Backgrounded, the turn ends, they keep their session, and the
 event wakes you when it arrives. In Claude Code that is the Bash tool's `run_in_background`.
+
+**It waits indefinitely, and that is the point.** The watcher only exits on something you can act
+on. Do not give it a `--timeout` to "check in" with: a timeout wakes the session to report that
+nothing happened, re-arms the watchlist, and makes the Stop hook demand another watcher — an hourly
+cycle that notifies the user every lap and never converges.
 
 This is not optional and not remembered: `just pr create` records the PR, and the `Stop` hook refuses
 to end the turn until a watcher is running on it. The watcher claims the PR as it starts, so the hook
@@ -257,7 +262,7 @@ send it.
 | `ci_failure` | fix the build on the same branch, push, restart the watcher — see below |
 | `review` / `comment` | [bcp-revise](.claude/skills/bcp-revise/SKILL.md) on the same branch, push more commits, restart the watcher |
 | `closed` | stop and ask — the user rejected something |
-| `timeout` (exit 3) | say you are still waiting, restart the watcher |
+| `timeout` (exit 3) | only when you passed `--timeout`, which you should not — say you are still waiting, restart the watcher |
 
 **A red build is fixed before the review is answered.** Each failed check in a `ci_failure` event
 carries the diagnostics lifted out of its job log, so the compiler errors are already in hand — read

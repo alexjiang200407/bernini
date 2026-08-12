@@ -18,6 +18,15 @@ Events, in the order they are checked each poll:
     comment     an issue or inline comment arrived after it    -> exit 0
     timeout     --timeout elapsed with no activity             -> exit 3
 
+A `timeout` is off by default, because the only thing it can report is that nothing
+happened -- and the caller cannot act on that. It re-arms the watchlist, so the Stop
+hook blocks the turn until the agent starts another watcher, which times out in turn:
+an unattended feature wakes its session once an hour, forever, to learn nothing and
+re-arm. Waiting indefinitely costs a sleeping process instead. Pass `--timeout <secs>`
+where a bounded wait is actually wanted; a watcher that dies with it stops holding its
+claim (`util/watchlist._alive`), so the hook asks for a fresh one rather than going
+quiet.
+
 `ci_failure` is checked ahead of the human events because a review of code that
 does not compile is answered by fixing the build first. Nothing is lost by that
 order: the event carries whatever review or comment was also waiting, and each of
@@ -52,7 +61,7 @@ Transient `gh` failures are tolerated up to 5 in a row before erroring (exit 1).
 
 Usage:
     python scripts/watch_pr.py 118                  # wait with the defaults
-    python scripts/watch_pr.py 118 --interval 60 --timeout 0   # poll forever
+    python scripts/watch_pr.py 118 --interval 60 --timeout 3600  # give up after an hour
     python scripts/watch_pr.py 118 --once           # snapshot, no waiting
     python scripts/watch_pr.py 118 --repo owner/name
 """
@@ -318,8 +327,8 @@ def main():
     parser.add_argument("--repo", help="owner/name (default: the repo of the cwd)")
     parser.add_argument("--interval", type=float, default=30, help="seconds between polls (default 30)")
     parser.add_argument(
-        "--timeout", type=float, default=3600,
-        help="give up after this many seconds; 0 waits forever (default 3600)")
+        "--timeout", type=float, default=0,
+        help="give up after this many seconds; 0 waits forever (default 0)")
     parser.add_argument("--once", action="store_true", help="print a snapshot and exit")
     parser.add_argument(
         "--since",
