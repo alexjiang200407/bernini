@@ -79,6 +79,19 @@ namespace bgl
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		/**
+		 * What `baseColorFactor.a` means on a `kBlend` surface, and read by no other layer.
+		 *
+		 * At 0 the alpha is coverage: how much surface is there, so it thins the reflection along
+		 * with everything else. That is what a hair card, a leaf or a dissolve wants. At 1 it is
+		 * transmission: the surface fully covers the pixel and the alpha says how much light passes
+		 * through it, so the reflection stays at full strength however clear the surface is -- glass,
+		 * a lens, water. Between the two is a lerp.
+		 *
+		 * glTF's `KHR_materials_transmission` is the same quantity.
+		 */
+		float transmissionFactor = 0.0f;
+
 		// Optional material maps, from AddTextureAsset.
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
@@ -101,6 +114,9 @@ namespace bgl
 		// so unlike a baked one it can always sample a real alpha channel.
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
+
+		// Coverage against transmission; see PbrMaterialDesc.
+		float transmissionFactor = 0.0f;
 
 		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
 		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic

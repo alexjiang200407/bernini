@@ -107,6 +107,36 @@ the shader cannot see.
 
 ---
 
+## Blended surfaces
+
+`LayerType::kBlend` resolves to the two `kTransparent_*` buckets, whose PSOs blend
+**premultiplied** — `SrcBlend = One`, `DestBlend = InvSrcAlpha`. `Forward_Transparent` therefore
+returns radiance already weighted by its own coverage, rather than radiance the blend then scales,
+and the alpha it returns is coverage rather than the material's own.
+
+That is what lets base-colour alpha mean two different things, which one number under a `SrcAlpha`
+blend cannot. `MaterialData::transmissionFactor` says which:
+
+* **At 0 the alpha is coverage** — how much surface is in the pixel — so it thins the diffuse and
+  specular lobes alike. Hair, foliage, a dissolve. The arithmetic collapses to `alpha * (diffuse +
+  specular)` against `1 - alpha`, which is exactly what a `SrcAlpha` blend of the unweighted colour
+  produces; this end of the range is the behaviour that predates the factor, and it is the default.
+* **At 1 the alpha is transmission** — the surface covers the pixel and the alpha says how much light
+  passes through it. The diffuse lobe is what is transmitted, so alpha still governs that, while the
+  reflection is light coming back off the surface and does not thin with it. Coverage rises with the
+  Fresnel reflectance instead, because a reflection replaces the backdrop it sits on: at a grazing
+  angle, where Fresnel returns nearly everything, the surface has to hide what is behind it or the
+  environment would be added to a backdrop still showing through in full.
+
+The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
+(diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
+the callers weight it. `ShadeWithBaseColor` sums the pair, which is the opaque answer;
+`ShadeBlended` is the only thing that weights them apart.
+
+**Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
+at all, so their pixel shaders keep returning the plain sum and the material's own alpha — a cutout
+fragment that survives is fully opaque, and scaling its diffuse by a texture alpha would be wrong.
+
 ## Hashed alpha
 
 `LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/LayerType.h)) is stochastic coverage:
@@ -292,7 +322,9 @@ colour/velocity/depth framebuffer), and calls
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
 `sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Both transparent
 PSOs share one pipeline and the list is drawn whole, so the transparent phase is **one
-`DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees.
+`DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees. Their blend state is
+premultiplied and their pixel shader returns premultiplied colour to match — see
+[Blended surfaces](#blended-surfaces).
 
 A surface that has to hide its own back layers uses `kHashed` ([Hashed alpha](#hashed-alpha)) rather
 than blending: stochastic coverage writes real depth, so it self-occludes in the opaque phase with no
@@ -414,6 +446,11 @@ in `EndFrame`, after all draws.
 * **`c_Psos` (Forward) is coupled to `PsoType` by position.** The rows are ordered to match the
   enum and indexed by it; a reordering is not caught by the `static_assert`, which only rejects an
   empty pixel-shader row.
+* **The transparent blend factor and `Forward_Transparent`'s return value are one decision made in
+  two files.** `SrcBlend = One` is only correct because the shader premultiplies; either one changed
+  alone is silently wrong rather than a build error — a `SrcAlpha` factor against premultiplied
+  colour squares the alpha, and `One` against unweighted colour ignores it. `PsoConfig::blend` is
+  what selects the state, and it selects the shader too, so the pair moves together.
 * **`Skybox` and `Forward` cbuffer keys are matched against Slang reflection by name.** A rename on
   one side of the CPU/GPU boundary silently unbinds the resource for the `materialData`/skybox
   optional keys (no assert), so keep the string and the shader declaration in step.

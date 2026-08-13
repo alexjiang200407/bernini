@@ -136,6 +136,9 @@ namespace bgl
 				.SetDepthFunc(cfg.depthFunc)
 				.SetStencilEnable(false);
 
+			// Premultiplied: Forward_Transparent returns radiance already weighted by its own
+			// coverage, so the reflection reaches the film undimmed by the material's alpha while
+			// the transmitted lobe is thinned in the shader. kSrcAlpha here would scale both.
 			auto blend = BlendState{};
 			if (cfg.blend)
 			{
@@ -143,7 +146,7 @@ namespace bgl
 					0,
 					BlendState::RenderTarget{}
 						.EnableBlend()
-						.SetSrcBlend(BlendFactor::kSrcAlpha)
+						.SetSrcBlend(BlendFactor::kOne)
 						.SetDestBlend(BlendFactor::kInvSrcAlpha)
 						.SetBlendOp(BlendOp::kAdd)
 						.SetSrcBlendAlpha(BlendFactor::kOne)

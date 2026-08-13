@@ -60,7 +60,21 @@ float3 ToEnvSpace(float3 dir, float2 envRotation)
     return float3(envRotation.y * dir.x + envRotation.x * dir.z, dir.y, envRotation.y * dir.z - envRotation.x * dir.x);
 }
 
-public float4 ShadeSurface(
+/**
+ * The two ambient lobes of a surface, kept apart because a blended surface weights them differently
+ * (docs/passes.md#blended-surfaces). Summed, the pair is the opaque answer.
+ */
+public struct SurfaceLobes
+{
+    public float3 diffuse;
+    public float3 specular;
+
+    /// The fraction of the environment the specular lobe returns, per channel. Exposure is not in it
+    /// -- it is a ratio, not radiance.
+    public float3 reflectance;
+};
+
+public SurfaceLobes EvaluateSurface(
     ForwardVSOut input,
     float4 baseColor,
     float3 orm,
@@ -142,11 +156,10 @@ public float4 ShadeSurface(
     let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, ToEnvSpace(R, envRotation), lod).rgb;
     float2 envBRDF = brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 
-    float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+    SurfaceLobes lobes;
+    lobes.reflectance = (F * envBRDF.x + envBRDF.y) * ao;
+    lobes.diffuse = kD * diffuse * ao * exposure;
+    lobes.specular = prefilteredColor * lobes.reflectance * exposure;
 
-    float3 ambient = (kD * diffuse + specular) * ao;
-
-    float3 color = ambient * exposure;
-
-    return float4(color, baseColor.a);
+    return lobes;
 }
