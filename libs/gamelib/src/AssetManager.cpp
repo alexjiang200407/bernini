@@ -14,6 +14,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/ImageData.h>
+#include <core/err/util.h>
 
 namespace game
 {
@@ -369,24 +370,18 @@ namespace game
 
 		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);
 
-		if (meshIndex >= mesh.meshes.size())
-		{
-			throw std::runtime_error(
-				std::format(
-					"AssetManager: mesh index {} out of range in '{}'",
-					meshIndex,
-					relPath));
-		}
+		core::throw_runtime_error_if(
+			meshIndex >= mesh.meshes.size(),
+			"AssetManager: mesh index {} out of range in '{}'",
+			meshIndex,
+			relPath);
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-		if (size_t(entry.firstSubmesh) + entry.submeshCount > vat.columns.size())
-		{
-			throw std::runtime_error(
-				std::format(
-					"AssetManager: '{}' does not cover mesh {}'s submeshes",
-					bvatRel.string(),
-					meshIndex));
-		}
+		core::throw_runtime_error_if(
+			size_t(entry.firstSubmesh) + entry.submeshCount > vat.columns.size(),
+			"AssetManager: '{}' does not cover mesh {}'s submeshes",
+			bvatRel.string(),
+			meshIndex);
 
 		// Everything taken below is given back if any later step throws: a failed acquire owns
 		// nothing.

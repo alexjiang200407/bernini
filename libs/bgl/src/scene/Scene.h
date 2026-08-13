@@ -251,7 +251,7 @@ namespace bgl
 		 * once its clips move it.
 		 */
 		GeomHandle
-		AddCookedMesh(
+		AddPreparedMesh(
 			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
 			const std::optional<glm::vec4>  sphereOverride);

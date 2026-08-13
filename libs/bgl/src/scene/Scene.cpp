@@ -735,7 +735,7 @@ namespace bgl
 			}
 		}
 
-		GeomHandle base = AddCookedMesh(
+		GeomHandle base = AddPreparedMesh(
 			CookStaticMesh(mesh, meshIndex),
 			materials,
 			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
@@ -1076,11 +1076,11 @@ namespace bgl
 	GeomHandle
 	Scene::AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
 	{
-		return AddCookedMesh(std::move(mesh), materials, std::nullopt);
+		return AddPreparedMesh(std::move(mesh), materials, std::nullopt);
 	}
 
 	GeomHandle
-	Scene::AddCookedMesh(
+	Scene::AddPreparedMesh(
 		PreparedStaticMesh              mesh,
 		std::span<const MaterialHandle> materials,
 		const std::optional<glm::vec4>  sphereOverride)
