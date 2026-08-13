@@ -63,7 +63,9 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   map to `glm` (`float3`→`glm::vec3`, `float4x4`→`glm::mat4`, glm being column-major); a struct/enum
   field keeps its *declared* type name (the host layout would otherwise lower an enum field to its
   underlying scalar and erase the name). An `import`ed type pulls in the corresponding generated
-  `#include`.
+  `#include`. A `float3` field in a C++-mirrored struct is **refused** outright — MSL sizes it 16
+  where C++ says 12, so no shared layout exists; carry a `float4` (VAT's bounds are min + extent
+  for exactly this reason).
 
 * **The C++ headers are generated into the build tree, and are not committed.** A struct's layout
   follows the backend it was generated for — MSL aligns a resource handle to 8 where the C/C++ scalar

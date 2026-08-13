@@ -104,7 +104,7 @@ and portability.
     [docs/vat.md](docs/vat.md); the lines below the fold are authoring policy still open.
     - [x] Bake pipeline: resampled clip → position texture (+ normal), unorm-packed in the mesh
       bounding box — `assetlib_cli bakevat`, one `.bvat` per rig with both textures embedded. A
-      tangent is deliberately not baked (docs/plans/vat.md D3).
+      tangent is deliberately not baked ([docs/vat.md](docs/vat.md)).
     - [x] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
     - [x] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
       for the death handoff, the cavalry saddle transform, and attachments. Baked and tested; no

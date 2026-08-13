@@ -197,4 +197,4 @@ runnable reference: rig synthesized to disk, baked on demand, drawn and asserted
 ---
 
 Maintenance: the file links above rot silently if files move — re-check them when the layout
-changes. The plan this shipped from is [docs/plans/vat.md](docs/plans/vat.md).
+changes.
