@@ -694,7 +694,7 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 			geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
 		if (inserted)
 			m_Geoms.push_back(
-				scene->AddStaticMesh(std::move(shot.item.cooked->at(node.mesh)), materials));
+				scene->AddStaticMeshGeom(std::move(shot.item.cooked->at(node.mesh)), materials));
 
 		const glm::mat4               world = bmesh::GetInstanceTransform(mesh, nodeIndex);
 		const bgl::MeshInstanceHandle instance =

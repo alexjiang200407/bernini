@@ -277,7 +277,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
 				if (inserted)
 				{
-					m_Geoms.push_back(scene->AddStaticMesh(mesh, node.mesh, materials));
+					m_Geoms.push_back(scene->AddStaticMeshGeom(mesh, node.mesh, materials));
 					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
 
 					// Name each of this mesh's submeshes once, in the order the selector shows them.

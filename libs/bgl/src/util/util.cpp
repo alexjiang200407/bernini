@@ -134,7 +134,7 @@ namespace bgl
 			}
 
 		// One opaque PBR bucket; alpha variants arrive when a use case does. The material is
-		// constrained to kPBR/kOpaque at every door that binds one to VAT geometry (AddVatGeom,
+		// constrained to kPBR/kOpaque at every door that binds one to VAT geometry (AddVatMeshGeom,
 		// SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type reaching here is
 		// bgl's own bug.
 		case GeomType::kVatMesh:

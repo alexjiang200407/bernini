@@ -193,20 +193,28 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		GeomHandle
-		AddStaticMesh(
+		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials) override;
 
 		GeomHandle
-		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) override;
+		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+			override;
 
 		GeomHandle
-		AddVatGeom(
+		AddVatMeshGeom(
 			std::span<const VatVertex> verts,
 			std::span<const uint32_t>  indices,
 			const VatGeomDesc&         desc,
 			MaterialHandle             material) override;
+
+		GeomHandle
+		AddVatMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const VatGeomDesc&              desc) override;
 
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
@@ -252,6 +260,35 @@ namespace bgl
 			std::span<const uint32_t>      indices,
 			MaterialHandle                 material,
 			const std::optional<glm::vec4> boundingSphere = std::nullopt);
+
+		/**
+		 * AddStaticMeshGeom's body, with the one knob VAT needs: `sphereOverride` replaces every
+		 * submesh's cooked bounding sphere, because a VAT submesh's bind-pose bounds do not hold
+		 * once its clips move it.
+		 */
+		GeomHandle
+		AddPreparedMesh(
+			PreparedStaticMesh              mesh,
+			std::span<const MaterialHandle> materials,
+			const std::optional<glm::vec4>  sphereOverride);
+
+		/**
+		 * Refuses a VatGeomDesc whose textures are not live scene assets, whose clip table is
+		 * empty, or that carries a zero-frame clip.
+		 */
+		void
+		ValidateVatDesc(const VatGeomDesc& desc) const;
+
+		/**
+		 * The tail AddVatMeshGeom and AddVatMeshGeom share: allocates the clip and column ranges plus the
+		 * VatGeom record onto `base` and flips it to kVatMesh. On any failure the geometry half is
+		 * taken back down (DeleteGeom) so a failed VAT add leaks nothing.
+		 */
+		GeomHandle
+		AttachVatRecords(
+			GeomHandle                base,
+			const VatGeomDesc&        desc,
+			std::span<const uint32_t> columnBases);
 
 		/**
 		 * Sizes every GPU-mirrored buffer to its SceneDesc starting point.

@@ -33,7 +33,7 @@ disagrees, trust the header, then fix this doc.
   are stored once and instanced cheaply. A view keeps its scene alive. `RenderJob::view` is a
   `SceneViewRef` — there is no way to draw a scene directly.
 
-* **Scene mutations are staged, not immediate.** `AddTextureAsset`, `AddStaticMesh`,
+* **Scene mutations are staged, not immediate.** `AddTextureAsset`, `AddStaticMeshGeom`,
   `CreatePbrMaterial` and friends record CPU-side state and queue the GPU upload; the upload runs as a
   frame-graph pass (`Scene Update <n>`) that `Draw` schedules. **Nothing reaches the GPU until a frame
   that draws this scene is submitted.** Capturing the backbuffer before any frame has drawn the new
@@ -148,7 +148,7 @@ flowchart TD
     IG -- "CreateSceneView(scene, initialInstances)" --> SV[ISceneView]
 
     SV -- "keeps alive" --> SC
-    SC -- "AddStaticMesh / AddSphereGeom / ..." --> GH[GeomHandle]
+    SC -- "AddStaticMeshGeom / AddSphereGeom / ..." --> GH[GeomHandle]
     SC -- "CreatePbrMaterial / CreateLoosePbrMaterial" --> MH[MaterialHandle]
     SC -- "AddTextureAsset(ImageData)" --> TH[TextureAssetHandle]
 
@@ -176,7 +176,7 @@ flowchart TD
 * **`IScene` and `ISceneView` are externally synchronized** — one owner, one thread, the same thread
   that draws them. They have no internal locking.
 * **`CookStaticMesh` is the one call allowed off the driving thread.** It is a free function over
-  the `BMesh` alone — no scene, no device — and exists so the CPU half of `AddStaticMesh` (the
+  the `BMesh` alone — no scene, no device — and exists so the CPU half of `AddStaticMeshGeom` (the
   dominant cost of a large mesh) can run on a worker, leaving only the commit overload's uploads on
   the driving thread.
 * **Only one frame may be active at a time.** `BeginFrame` throws `GraphicsError` if one already is.
@@ -232,7 +232,7 @@ flowchart TD
 * **`UpdatePbrMaterial` / `UpdateLoosePbrMaterial`** — rewrites in place, keeping the handle and slot,
   so every submesh already bound picks the change up with no rebinding. The material's *type* cannot
   change, so the PSO bucket is unaffected. @throws `SceneError` on a type mismatch.
-* **`AddStaticMesh(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
+* **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
   baked-vs-loose branch that does it, so reach for it rather than rebuilding it.
