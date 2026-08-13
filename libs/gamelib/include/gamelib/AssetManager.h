@@ -137,6 +137,44 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
+		/** One clip of an acquired VAT mesh; its index in VatMesh::clips is what an instance names. */
+		struct VatClipInfo
+		{
+			std::string name;
+			uint32_t    frameCount = 0;
+			float       sampleRate = 30.0f;
+			float       duration   = 0.0f;
+			bool        loop       = false;
+		};
+
+		/** An acquired VAT mesh: the geom to instance, and the clips its instances can play. */
+		struct VatMesh
+		{
+			bgl::GeomHandle          geom;
+			std::vector<VatClipInfo> clips;
+		};
+
+		/**
+		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as VAT geometry -- pose fetched
+		 * from the rig's baked texture pair instead of skinned -- or shares it from a previous
+		 * call, acquiring its materials like AcquireMesh does.
+		 *
+		 * The `.bvat` lives beside the mesh and is never trusted stale: missing, or out of date
+		 * against the stamps of the three inputs it was baked from, it is re-baked here from
+		 * `relPath` + `animationsRelPath` and rewritten in place. It is a derived build product --
+		 * a bake is seconds of CPU skinning, and the file is never committed.
+		 *
+		 * @throws std::runtime_error if an input cannot be read or the bake refuses it, or
+		 *         bgl::SceneError if a submesh's material does not resolve to opaque kPBR -- the
+		 *         VAT pipeline has no other variant, so a mesh with cutout or loose materials
+		 *         cannot be acquired as VAT. A failed acquire owns nothing.
+		 */
+		VatMesh
+		AcquireVatMesh(
+			std::string_view relPath,
+			std::string_view animationsRelPath,
+			uint32_t         meshIndex = 0);
+
 		/**
 		 * A `.benv` followed to its uploads: one texture reference per baked map it references, plus
 		 * the parameters that travel with them. A value, not a resource -- the three references are
@@ -215,6 +253,21 @@ namespace game
 		 */
 		bgl::MeshInstanceHandle
 		CreateInstance(bgl::SceneViewRef view, bgl::GeomHandle geom, const glm::mat4& transform);
+
+		/**
+		 * The VAT counterpart of CreateInstance: places a geom AcquireVatMesh returned, spawned on
+		 * `desc`'s clip, phase and rate. The same references are taken and the same
+		 * DestroyInstance releases them.
+		 *
+		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has
+		 *         expired, or `desc.clip` is out of the geom's clip table.
+		 */
+		bgl::MeshInstanceHandle
+		CreateVatInstance(
+			bgl::SceneViewRef                       view,
+			bgl::GeomHandle                         geom,
+			const glm::mat4&                        transform,
+			const bgl::ISceneView::VatInstanceDesc& desc);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was
@@ -346,6 +399,12 @@ namespace game
 			// One per submesh: the material that submesh is bound to, and holds a reference to.
 			std::vector<bgl::MaterialHandle> submeshMaterials;
 
+			// VAT only: the embedded texture pair this geom fetches from (each holding a
+			// reference), and the clip table a shared acquire hands back without re-reading the
+			// container.
+			std::vector<bgl::TextureAssetHandle> vatTextures;
+			std::vector<VatClipInfo>             vatClips;
+
 			uint32_t refCount = 0;
 		};
 
@@ -415,6 +474,20 @@ namespace game
 		// on the scene -- is not counted, and releasing it is a no-op, which is the same bargain.
 		void
 		AddMaterialRef(bgl::MaterialHandle material);
+
+		// Uploads an already-decoded image as a refcounted texture record, or shares it by `key` --
+		// how a texture embedded in a container (no file of its own) joins the same identity scheme
+		// as one loaded from a path.
+		bgl::TextureAssetHandle
+		AddEmbeddedTexture(std::string key, assetlib::ImageData image);
+
+		// The record-keeping tail CreateInstance and CreateVatInstance share: takes the geom
+		// reference and files the InstanceRecord.
+		void
+		RegisterInstance(
+			bgl::SceneViewRef       view,
+			uint32_t                geomSlot,
+			bgl::MeshInstanceHandle instance);
 
 		// Rebuilds `record`'s scene material from its (just-edited) `source`, swapping the texture
 		// references it holds to match. Used by both swap entry points.

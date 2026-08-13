@@ -185,7 +185,7 @@ TEST_CASE("VAT playback follows the clock", "[vat][playback][render]")
 
 	const auto verts   = MakeQuadVertices();
 	const auto indices = std::array<uint32_t, 6>{ { 0, 1, 2, 2, 1, 3 } };
-	const auto geom    = scene->AddVatGeom(verts, indices, desc, pbr);
+	const auto geom    = scene->AddVatMeshGeom(verts, indices, desc, pbr);
 
 	auto camera = bgl::Camera();
 	camera

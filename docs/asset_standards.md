@@ -257,7 +257,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
 * **A submesh's meshlet count is unbounded**, up to the 65535 thread groups one `DispatchMesh` can
-  launch. `Scene::AddStaticMesh`
+  launch. `Scene::AddStaticMeshGeom`
   ([libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp)) emits one GPU submesh per source
   submesh and rejects anything past that limit; it never splits a submesh.
 * The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and
@@ -519,7 +519,7 @@ flowchart TD
     TEX -- "loadKTX2" --> SCENE
 
     subgraph SCENE["Scene (runtime)"]
-        AM["AddStaticMesh (meshlet upload, ≤64/submesh)"]
+        AM["AddStaticMeshGeom (meshlet upload, ≤64/submesh)"]
         AT["AddTextureAsset (bindless SRV)"]
         CM["CreatePbrMaterial (handles → idl::PbrMaterial)"]
     end

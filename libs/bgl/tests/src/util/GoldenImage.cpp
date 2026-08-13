@@ -6,8 +6,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <spdlog/spdlog.h>
+
 namespace bgl::test
 {
+	// Not taken from a PCH: this file is also compiled into suites whose PCH aliases logger in a
+	// different namespace.
+	namespace logger = spdlog;
+
 	bool
 	MatchesGolden(const std::string& expectedPath, const std::string& gotPath, float tolerance)
 	{

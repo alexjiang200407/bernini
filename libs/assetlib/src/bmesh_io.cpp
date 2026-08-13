@@ -383,7 +383,7 @@ namespace assetlib
 
 				if (fromMeshlets)
 				{
-					// Same reconstruction the GPU (and Scene::AddStaticMesh) performs: meshlet-local
+					// Same reconstruction the GPU (and Scene::AddStaticMeshGeom) performs: meshlet-local
 					// triangle indices -> submesh-local vertex indices via the meshlet vertex map.
 					for (uint32_t m = 0; m < submesh.meshletCount; ++m)
 					{

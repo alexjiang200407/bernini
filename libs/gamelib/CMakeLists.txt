@@ -39,16 +39,27 @@ target_link_libraries(gamelib
 enable_strict_compiler(gamelib)
 enable_coverage(gamelib)
 
-# The suite drives a real scene through IGraphics, which needs a backend.
-if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
+# The suite drives a real scene through IGraphics, which needs a backend -- either backend:
+# the DX12-only gate predated the Metal one being able to stand a device up.
+if (BUILD_TESTS)
 	find_package(Catch2 CONFIG REQUIRED)
 
 	file(GLOB_RECURSE GAMELIB_TESTS_SOURCES CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
 	)
 
+	# bgl's golden-image, environment and shader-cache helpers, borrowed rather than re-grown:
+	# they speak only the public bgl API plus assetlib, both of which this target links. A list of
+	# their own so source_group's TREE only sees files under this directory.
+	set(GAMELIB_TESTS_BORROWED
+		${CMAKE_SOURCE_DIR}/libs/bgl/tests/src/util/GoldenImage.cpp
+		${CMAKE_SOURCE_DIR}/libs/bgl/tests/src/util/TestEnvironment.cpp
+		${CMAKE_SOURCE_DIR}/libs/bgl/tests/src/util/TestOptions.cpp
+	)
+
 	add_executable(gamelib_tests
 		${GAMELIB_TESTS_SOURCES}
+		${GAMELIB_TESTS_BORROWED}
 	)
 
 	target_include_directories(gamelib_tests
@@ -56,6 +67,7 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 			${CMAKE_CURRENT_SOURCE_DIR}/include
 			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+			${CMAKE_SOURCE_DIR}/libs/bgl/tests/src
 	)
 
 	target_force_include(gamelib_tests
@@ -79,6 +91,10 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${GAMELIB_TESTS_SOURCES})
+
+	# The pixel test lights its view from "assets/Environments/forest.benv", resolved from the
+	# runtime output directory like every bgl test asset; copy_assets is what stages it there.
+	add_dependencies(gamelib_tests copy_assets)
 
 	enable_strict_compiler(gamelib_tests)
 	enable_coverage(gamelib_tests)
