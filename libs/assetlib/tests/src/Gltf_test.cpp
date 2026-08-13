@@ -37,13 +37,14 @@ namespace
 	 */
 	constexpr const char* c_MaterialsGltf = R"({
   "asset": { "version": "2.0" },
-  "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness" ],
+  "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness", "KHR_materials_transmission" ],
   "materials": [
     { "name": "plain", "pbrMetallicRoughness": { "metallicFactor": 0.25, "roughnessFactor": 0.5 } },
     { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3 },
     { "name": "glass", "alphaMode": "BLEND" },
     { "name": "sign", "extensions": { "KHR_materials_unlit": {} } },
-    { "name": "old", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } }
+    { "name": "old", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } },
+    { "name": "lens", "alphaMode": "BLEND", "extensions": { "KHR_materials_transmission": { "transmissionFactor": 0.85 } } }
   ]
 })";
 
@@ -191,7 +192,7 @@ TEST_CASE(
 TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 {
 	const auto mesh = LoadMaterialsGltf();
-	REQUIRE(mesh.materials.size() == 5);
+	REQUIRE(mesh.materials.size() == 6);
 
 	// Each of glTF's three alpha modes maps to its own: OPAQUE, MASK (alpha test), BLEND (alpha blend).
 	CHECK(mesh.materials[0].alphaMode == AlphaMode::kOpaque);
@@ -203,10 +204,28 @@ TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 	CHECK(mesh.materials[0].alphaCutoff == Catch::Approx(0.5f));
 }
 
+// A lens and a hair card both export as BLEND, and the alpha means something different in each: how
+// much light the surface passes, against how much of the pixel it covers. KHR_materials_transmission
+// is the only thing in the file that tells them apart, and without it the engine reads every blended
+// material as coverage -- which costs the lens its reflection.
+TEST_CASE("A glTF's transmission factor comes across", "[bmesh][gltf]")
+{
+	const auto mesh = LoadMaterialsGltf();
+	REQUIRE(mesh.materials.size() == 6);
+
+	CHECK(mesh.materials[5].alphaMode == AlphaMode::kBlend);
+	CHECK(mesh.materials[5].transmissionFactor == Catch::Approx(0.85f));
+
+	// glTF's own default, and the reading BLEND has always had here: a blended material that does
+	// not declare the extension is coverage, not glass.
+	CHECK(mesh.materials[2].alphaMode == AlphaMode::kBlend);
+	CHECK(mesh.materials[2].transmissionFactor == 0.0f);
+}
+
 TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf]")
 {
 	const auto mesh = LoadMaterialsGltf();
-	REQUIRE(mesh.materials.size() == 5);
+	REQUIRE(mesh.materials.size() == 6);
 
 	// Metallic-roughness is glTF's shading model, so a material is PBR unless it says otherwise. The
 	// two that do say otherwise carry fields that are glTF's defaults rather than the author's intent,
@@ -224,8 +243,8 @@ TEST_CASE("probeGltfMaterials counts the PBR materials", "[bmesh][gltf]")
 	const auto probe = probeGltfMaterials(path);
 	std::filesystem::remove(path);
 
-	CHECK(probe.materialCount == 5);
-	CHECK(probe.pbrMaterialCount == 3);
+	CHECK(probe.materialCount == 6);
+	CHECK(probe.pbrMaterialCount == 4);
 }
 
 TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")

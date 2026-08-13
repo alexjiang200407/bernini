@@ -18,7 +18,7 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = magic::c_BMaterial;
 
-		constexpr uint16_t c_VersionMajor = 8;
+		constexpr uint16_t c_VersionMajor = 9;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		void
@@ -42,6 +42,7 @@ namespace assetlib
 			}
 			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
 			writer.WritePod(pbr.alphaCutoff);
+			writer.WritePod(pbr.transmissionFactor);
 		}
 
 		PbrParams
@@ -64,8 +65,9 @@ namespace assetlib
 				stamp.size  = reader.ReadPod<uint64_t>();
 				stamp.mtime = reader.ReadPod<int64_t>();
 			}
-			pbr.alphaMode   = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
-			pbr.alphaCutoff = reader.ReadPod<float>();
+			pbr.alphaMode          = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
+			pbr.alphaCutoff        = reader.ReadPod<float>();
+			pbr.transmissionFactor = reader.ReadPod<float>();
 			return pbr;
 		}
 

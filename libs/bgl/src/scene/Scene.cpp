@@ -950,13 +950,14 @@ namespace bgl
 		};
 
 		idl::PbrMaterial material{};
-		material.baseColorTexture = resolve(desc.baseColorTexture, white);
-		material.normalTexture    = resolve(desc.normalTexture, flatNormal);
-		material.ormTexture       = resolve(desc.ormTexture, white);
-		material.baseColorFactor  = desc.baseColorFactor;
-		material.metallicFactor   = desc.metallicFactor;
-		material.roughnessFactor  = desc.roughnessFactor;
-		material.alphaCutoff      = desc.alphaCutoff;
+		material.baseColorTexture   = resolve(desc.baseColorTexture, white);
+		material.normalTexture      = resolve(desc.normalTexture, flatNormal);
+		material.ormTexture         = resolve(desc.ormTexture, white);
+		material.baseColorFactor    = desc.baseColorFactor;
+		material.metallicFactor     = desc.metallicFactor;
+		material.roughnessFactor    = desc.roughnessFactor;
+		material.transmissionFactor = desc.transmissionFactor;
+		material.alphaCutoff        = desc.alphaCutoff;
 
 		return material;
 	}
@@ -1054,10 +1055,11 @@ namespace bgl
 		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalY)] =
 			resolve(desc.normal[1], flatNormal, 1);
 
-		material.baseColorFactor = desc.baseColorFactor;
-		material.metallicFactor  = desc.metallicFactor;
-		material.roughnessFactor = desc.roughnessFactor;
-		material.alphaCutoff     = desc.alphaCutoff;
+		material.baseColorFactor    = desc.baseColorFactor;
+		material.metallicFactor     = desc.metallicFactor;
+		material.roughnessFactor    = desc.roughnessFactor;
+		material.transmissionFactor = desc.transmissionFactor;
+		material.alphaCutoff        = desc.alphaCutoff;
 
 		return material;
 	}

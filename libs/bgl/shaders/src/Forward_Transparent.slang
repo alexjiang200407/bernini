@@ -11,7 +11,7 @@ float4 PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
 {
     if (input.materialIsLoose != 0u)
     {
-        return Shade<LoosePbrMaterial>(input, isFrontFace);
+        return ShadeBlended<LoosePbrMaterial>(input, isFrontFace);
     }
-    return Shade<PbrMaterial>(input, isFrontFace);
+    return ShadeBlended<PbrMaterial>(input, isFrontFace);
 }

@@ -79,6 +79,10 @@ namespace bgl
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// What baseColorFactor.a means on a kBlend surface, and read by no other layer: 0 coverage
+		// (hair, foliage), 1 transmission (glass). glTF's KHR_materials_transmission.
+		float transmissionFactor = 0.0f;
+
 		// Optional material maps, from AddTextureAsset.
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
@@ -101,6 +105,9 @@ namespace bgl
 		// so unlike a baked one it can always sample a real alpha channel.
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
+
+		// Coverage against transmission; see PbrMaterialDesc.
+		float transmissionFactor = 0.0f;
 
 		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
 		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic

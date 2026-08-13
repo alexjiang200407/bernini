@@ -129,6 +129,52 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 	CHECK(Route(material, PbrChannel::kBaseColorA).channel == 3);
 }
 
+// The import's transmission has to survive the trip out through the graph and back, because the
+// graph is what the compile reads -- a factor the sink dropped would leave a lens importing as the
+// coverage material it is not, and no later edit would say why.
+TEST_CASE("A blend import carries its transmission through the graph", "[materialimport]")
+{
+	auto imported               = assetlib::imp::BMaterialImport();
+	imported.alphaMode          = assetlib::AlphaMode::kBlend;
+	imported.transmissionFactor = 0.85f;
+
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	BuildImportedMaterialGraph(model, imported, AllMaps());
+
+	REQUIRE(model.OutputNode() != nullptr);
+	CHECK(model.OutputNode()->GetTransmission() == Catch::Approx(0.85f));
+
+	const assetlib::BMaterial material =
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
+
+	CHECK(material.pbr.transmissionFactor == Catch::Approx(0.85f));
+}
+
+// Every sink but the blend one compiles to a mode that never reads transmission, and a graph saved
+// before the factor existed carries no key for it. Both must land on 0 rather than on whatever the
+// sink happened to hold -- that is what leaves hair, foliage and every material baked so far
+// rendering as they did.
+TEST_CASE("A material with no transmission of its own compiles to none", "[materialimport]")
+{
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId id     = model.addNode(QStringLiteral("BlendedMaterialOutput"));
+	auto*                 output = model.delegateModel<MaterialOutputNode>(id);
+	REQUIRE(output != nullptr);
+
+	// A graph from before the factor: the key is simply absent.
+	REQUIRE_NOTHROW(output->load(QJsonObject()));
+	CHECK(output->GetTransmission() == 0.0f);
+
+	const assetlib::BMaterial compiled = CompileMaterial(model, QStringLiteral("m"), c_DataRoot);
+	CHECK(compiled.pbr.transmissionFactor == 0.0f);
+
+	// And the opaque sink has no transmission to give at all.
+	MaterialGraphModel    opaque(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId opaqueId = opaque.addNode(QStringLiteral("MaterialOutput"));
+	REQUIRE(opaque.delegateModel<MaterialOutputNode>(opaqueId) != nullptr);
+	CHECK(opaque.delegateModel<MaterialOutputNode>(opaqueId)->GetTransmission() == 0.0f);
+}
+
 // A graph saved while the blend sink still had an Occlude toggle carries `occlude` and
 // `alphaCutoff` keys. Loading one must not fail or resurrect the setting -- the pre-pass it selected
 // no longer exists, and hashed alpha is what a self-occluding surface uses now.

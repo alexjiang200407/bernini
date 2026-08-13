@@ -62,6 +62,11 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return alphaCutoff;
     }
 
+    float GetTransmission()
+    {
+        return transmissionFactor;
+    }
+
     float2 GetBaseColorDimensions()
     {
         return baseColorTexture.GetDimensions();
@@ -134,6 +139,11 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return alphaCutoff;
     }
 
+    float GetTransmission()
+    {
+        return transmissionFactor;
+    }
+
     // The alpha carrier's resolution: coverage machinery cares about the channel being tested,
     // and the loose colour channels may come from other maps at other sizes.
     float2 GetBaseColorDimensions()
@@ -149,11 +159,11 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
 // The shared tail of both shading paths. Base color is passed in rather than sampled here, so the
 // alpha-tested path can test it without sampling the texture a second time.
-float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
+SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
-    return ShadeSurface(
+    return EvaluateSurface(
         input,
         baseColor,
         material.GetORM(wrapSampler, input.uv),
@@ -169,6 +179,13 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
     );
 }
 
+float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
+{
+    let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
+
+    return float4(lobes.diffuse + lobes.specular, baseColor.a);
+}
+
 public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
@@ -176,6 +193,34 @@ public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
     M material = M.Load(input.materialIndex);
 
     return ShadeWithBaseColor(input, material, material.GetBaseColor(wrapSampler, input.uv), isFrontFace);
+}
+
+/**
+ * A blended surface, as premultiplied colour and the coverage that goes with it.
+ *
+ * The returned colour is already weighted by its own coverage, which is correct only against the
+ * transparent PSOs' SrcBlend = One (ForwardPass's c_Psos): either side changed alone is silently
+ * wrong rather than a build error. What the transmission factor selects between, and why coverage
+ * rises with the reflectance, is in docs/passes.md#blended-surfaces.
+ */
+public float4 ShadeBlended<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
+{
+    let wrapSampler = materialData.anisoLinearWrapSampler;
+
+    M material = M.Load(input.materialIndex);
+
+    let baseColor = material.GetBaseColor(wrapSampler, input.uv);
+    let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
+
+    let alpha = baseColor.a;
+    let transmission = saturate(material.GetTransmission());
+
+    let reflected = max(max(lobes.reflectance.r, lobes.reflectance.g), lobes.reflectance.b);
+
+    let specularWeight = lerp(alpha, 1.0, transmission);
+    let coverage = lerp(alpha, alpha + (1.0 - alpha) * reflected, transmission);
+
+    return float4(lobes.diffuse * alpha + lobes.specular * specularWeight, saturate(coverage));
 }
 
 public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)

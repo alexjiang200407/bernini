@@ -96,6 +96,14 @@ public:
 		return 0.5f;
 	}
 
+	// What base-color alpha means on this material: 0 coverage, 1 transmission. Only the blend sink
+	// offers the choice, and only a blended material reads it.
+	[[nodiscard]] virtual float
+	GetTransmission() const noexcept
+	{
+		return 0.0f;
+	}
+
 	[[nodiscard]] glm::vec4
 	BaseColorFactor() const noexcept
 	{

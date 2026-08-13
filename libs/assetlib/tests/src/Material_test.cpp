@@ -33,6 +33,28 @@ TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
 	REQUIRE(restored.pbr.roughnessFactor == Catch::Approx(0.25f));
 }
 
+// Transmission is what separates a lens from a hair card, and both are AlphaMode::kBlend -- so a
+// factor lost in the container is a material that reloads as the wrong one of the two, with the
+// alpha mode still agreeing and nothing to say which was meant.
+TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name                   = "lens";
+	mat.pbr.alphaMode          = AlphaMode::kBlend;
+	mat.pbr.transmissionFactor = 0.85f;
+
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
+
+	CHECK(restored.pbr.alphaMode == AlphaMode::kBlend);
+	CHECK(restored.pbr.transmissionFactor == Catch::Approx(0.85f));
+
+	// The default is what every material baked before the factor re-bakes to, and it is the reading
+	// blend has always had.
+	BMaterial coverage;
+	coverage.pbr.alphaMode = AlphaMode::kBlend;
+	CHECK(deserializeMaterial(serializeMaterial(coverage)).pbr.transmissionFactor == 0.0f);
+}
+
 TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 {
 	BMaterial mat;

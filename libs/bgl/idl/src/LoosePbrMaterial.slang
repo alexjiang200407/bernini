@@ -23,6 +23,10 @@ public struct LoosePbrMaterial
     public float metallicFactor;
     public float roughnessFactor;
 
+    // What baseColorFactor.a means on a blended surface: 0 for coverage, 1 for transmission. Only
+    // read by the transparent PSO. See MaterialData::ShadeBlended.
+    public float transmissionFactor;
+
     // Cutout threshold. Only read by the alpha-test PSOs; an opaque material never samples it.
     public float alphaCutoff;
 };

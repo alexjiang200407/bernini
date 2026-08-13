@@ -7,4 +7,5 @@ public interface IPbrMaterial
     float4 GetBaseColor(SamplerState.Handle s, float2 uv);
     float3 GetORM(SamplerState.Handle s, float2 uv);
     float2 GetNormalXY(SamplerState.Handle s, float2 uv);
+    float GetTransmission();
 };
