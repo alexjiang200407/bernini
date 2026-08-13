@@ -77,8 +77,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	const auto addInstance = [&](uint32_t bucketIdx) {
 		auto instance = bgl::SubmeshInstance();
 
-		// Any non-null mesh entry: the shader only tests it against the padding sentinel.
-		instance.meshInstance.offset = 0u;
+		// Any non-null mesh entry: the shader only tests it against the padding sentinel. Offset 0
+		// is the null one, so the first element past it will do.
+		instance.meshInstance.offset = 1;
 		instance.submeshIndex        = 0u;
 		instance.pso                 = static_cast<uint32_t>(c_Buckets[bucketIdx]);
 
@@ -92,12 +93,10 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		addInstance(b);
 		expectedHistogram[static_cast<size_t>(c_Buckets[b])] += 1;
 	}
-	// Padding slots carry a null meshInstance sentinel; the shader skips them.
+	// A default SubmeshInstance names no mesh; the shader skips it.
 	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
-		auto instance                = bgl::SubmeshInstance();
-		instance.meshInstance.offset = 0xFFFFFFFFu;
-		instanceBuffer.Add(instance);
+		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
 	std::array<uint32_t, bgl::c_PsoCount> expectedPrefixSum{};

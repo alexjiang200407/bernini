@@ -9,7 +9,8 @@ namespace bgl
 	struct RangeBufferDesc
 	{
 		// Where the arena starts, not where it ends: it grows on demand and is bounded only by
-		// device memory.
+		// device memory. The reserved null element is carried on top of this, so a caller's budget
+		// is entirely its own.
 		uint32_t    initialCount = 0;
 		uint32_t    blockSize    = 65536;  // Default to the sweet spot 64KB
 		std::string debugName;
@@ -22,6 +23,9 @@ namespace bgl
 	/**
 	 * A GPU-mirrored buffer of variable-length ranges of trivially-copyable
 	 * elements.
+	 *
+	 * Element 0 is reserved and never allocated, so the start index in every live
+	 * `idl::Range` is distinguishable from a null one.
 	 */
 	template <RangeBufferConcept T, typename Meta = void>
 	class RangeBuffer
@@ -57,22 +61,22 @@ namespace bgl
 
 			m_Desc = std::move(desc);
 
-			m_Storage.Init(
-				std::move(resourceManager),
-				m_Desc.debugName,
-				sizeof(T),
-				m_Desc.initialCount,
-				false);
+			const uint32_t capacity = m_Desc.initialCount + 1;
 
-			m_Data.reset(m_Desc.initialCount);
+			m_Storage
+				.Init(std::move(resourceManager), m_Desc.debugName, sizeof(T), capacity, false);
+
+			m_Data.reset(capacity);
 
 			if constexpr (c_HasMeta)
 			{
-				m_Metadata.assign(m_Desc.initialCount, Meta{});
+				m_Metadata.assign(capacity, Meta{});
 			}
 
-			ResizeDirtyBlocks(m_Desc.initialCount);
+			ResizeDirtyBlocks(capacity);
 			m_HasAnyDirtyBlocks = false;
+
+			ReserveNullRange();
 		}
 
 		// True once Init() has created the GPU buffer and before Release().
@@ -170,11 +174,12 @@ namespace bgl
 		}
 
 		// Reports whether a live range starts at `rootIndex`, used when only the
-		// GPU-side index is known (db structs store indices, not generations).
+		// GPU-side index is known (db structs store indices, not generations). The reserved null
+		// element is allocated but belongs to no caller, so a null offset answers false.
 		[[nodiscard]] bool
 		IsIndexValid(uint32_t rootIndex) const noexcept
 		{
-			return m_Data.is_allocated_root(rootIndex);
+			return rootIndex != 0 && m_Data.is_allocated_root(rootIndex);
 		}
 
 		void
@@ -345,6 +350,16 @@ namespace bgl
 		}
 
 	private:
+		// Held for the buffer's lifetime so no caller is handed the offset that means null. Marked
+		// dirty so the GPU sees a zeroed element there rather than whatever the allocation held.
+		void
+		ReserveNullRange()
+		{
+			const core::multi_slot_handle handle = m_Data.allocate_slots(1);
+			gassert(handle.index == 0, "The null range must own the first element");
+			MarkRangeDirty(handle.index, handle.count);
+		}
+
 		[[nodiscard]] core::multi_slot_handle
 		TryAllocateSlots(uint32_t count) noexcept
 		{

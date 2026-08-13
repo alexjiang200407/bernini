@@ -331,4 +331,144 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	gfx->SetGpuAssertionHandler(nullptr);
 }
 
+// Offset 0 is the reserved null element, so dereferencing a null Entry/Range is an in-bounds read
+// that returns zeroes -- the failure mode the 0xFFFFFFFF sentinel used to make loud. Nothing but the
+// dbg_assert inside Get() can report it, so this pins that it does. A test that only checked the
+// returned zeroes would pass just as well with the asserts deleted.
+TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][compute][idl]")
+{
+	constexpr uint32_t c_Capacity = 16;
+
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto resourceManager = gfxBase->GetResourceManagerCpy();
+	REQUIRE(resourceManager != nullptr);
+
+	auto device = gfxBase->GetDevice();
+
+	auto cmdListDesc  = bgl::CommandListDesc();
+	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	auto debugBuffer = bgl::DebugBuffer();
+	debugBuffer.Init(c_Capacity, resourceManager);
+
+	auto kernel = device->CreateComputeKernel(
+		bgl::ComputePipelineDesc()
+			.SetShader(device->CreateShader("CSNullDerefTest"))
+			.SetDebugName("Null Deref Test"));
+	REQUIRE(kernel.pipeline != nullptr);
+
+	// The asserts live inside EntryBuffer/RangeBuffer's Get, so reaching them at all depends on
+	// gDebug surviving into a shader that never mentions dbg_ itself.
+	REQUIRE(kernel.uniforms.contains("gDebug"));
+
+	const auto makeBuffer = [&](const char* name) {
+		auto desc = bgl::ComputeBufferDesc();
+		desc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName(name);
+		return resourceManager->CreateComputeBuffer(desc);
+	};
+
+	const bgl::BufferHandle entryBuf = makeBuffer("Null Deref Entries");
+	const bgl::BufferHandle rangeBuf = makeBuffer("Null Deref Ranges");
+	const bgl::BufferHandle outBuf   = makeBuffer("Null Deref Out");
+
+	kernel["gUniforms"]["entries"]["entryBuffer"] = entryBuf;
+	kernel["gUniforms"]["ranges"]["rangeBuffer"]  = rangeBuf;
+	kernel["gUniforms"]["outBuffer"]              = outBuf;
+
+	auto rbDesc      = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize  = debugBuffer.ByteSize();
+	rbDesc.debugName = "Null Deref Readback";
+	auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
+	                              bgl::BarrierAccessFlag accessBefore,
+	                              bgl::BarrierSyncFlag   syncAfter,
+	                              bgl::BarrierAccessFlag accessAfter) {
+		return bgl::BufferBarrierDesc()
+		    .AddSyncBefore(syncBefore)
+		    .AddAccessBefore(accessBefore)
+		    .AddSyncAfter(syncAfter)
+		    .AddAccessAfter(accessAfter);
+	};
+
+	cmdList->Open(cmdQueue, cmdAllocator);
+
+	debugBuffer.Reset(cmdList);
+	cmdList->Barrier(
+		debugBuffer.GetBufferHandle(),
+		bufferBarrier(
+			bgl::BarrierSyncFlag::kCopy,
+			bgl::BarrierAccessFlag::kCopyDest,
+			bgl::BarrierSyncFlag::kComputeShader,
+			bgl::BarrierAccessFlag::kUnorderedAccess));
+
+	auto computeState   = bgl::ComputeState();
+	computeState.kernel = &kernel;
+	cmdList->SetComputeState(computeState);
+	cmdList->SetActiveDebugBuffer(debugBuffer.GetBufferHandle());
+	cmdList->Dispatch(1, 1, 1);
+
+	cmdList->Barrier(
+		debugBuffer.GetBufferHandle(),
+		bufferBarrier(
+			bgl::BarrierSyncFlag::kComputeShader,
+			bgl::BarrierAccessFlag::kUnorderedAccess,
+			bgl::BarrierSyncFlag::kCopy,
+			bgl::BarrierAccessFlag::kCopySource));
+	cmdList->CopyBufferToReadback(rb, debugBuffer.GetBufferHandle());
+
+	cmdList->Close();
+
+	auto fence = cmdQueue->ExecuteCommandList(cmdList);
+	cmdQueue->WaitForFenceCPUBlocking(fence);
+
+	const auto* mapped = resourceManager->MapReadback(rb);
+	REQUIRE(mapped != nullptr);
+
+	const auto report = bgl::InspectDebugReadback(mapped, c_Capacity);
+	REQUIRE(report.has_value());
+
+	// One thread, one null Entry and one null Range, so exactly one of each.
+	CHECK(report->count == 2);
+	CHECK_FALSE(report->overflow);
+
+	auto raised = std::vector<uint32_t>();
+	for (const auto& record : report->records)
+	{
+		raised.push_back(record.errcode);
+	}
+
+	CHECK(
+		std::count(
+			raised.begin(),
+			raised.end(),
+			static_cast<uint32_t>(bgl::idl::ErrorCode::kNullEntryDeref)) == 1);
+	CHECK(
+		std::count(
+			raised.begin(),
+			raised.end(),
+			static_cast<uint32_t>(bgl::idl::ErrorCode::kNullRangeDeref)) == 1);
+
+	resourceManager->UnmapReadback(rb);
+
+	debugBuffer.Release(false);
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(entryBuf);
+	resourceManager->DestroyBuffer(rangeBuf);
+	resourceManager->DestroyBuffer(outBuf);
+}
+
 #endif  // BERNINI_GPU_DEBUG

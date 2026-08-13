@@ -347,9 +347,13 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 	auto geom = scene->AddCubeGeom(nullMat);
 	REQUIRE(geom.IsValid());
 
-	// The cube is the first geom, so its single submesh is at global index 0.
+	// The defaults are keyed by the root of the geom's submesh range, not by a fixed index: element
+	// 0 of the submesh buffer is the reserved null.
 	const auto psoOfDefault = [&]() {
-		return bgl::SubmeshPso(bgl::GeomType::kStaticMesh, scene->GetSubmeshDefaultMaterial(0, 0));
+		const uint32_t root = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
+		return bgl::SubmeshPso(
+			bgl::GeomType::kStaticMesh,
+			scene->GetSubmeshDefaultMaterial(root, 0));
 	};
 
 	CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));

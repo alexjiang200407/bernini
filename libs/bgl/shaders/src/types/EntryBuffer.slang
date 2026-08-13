@@ -1,4 +1,5 @@
 import idl.Entry;
+import debug.dbg;
 
 public struct EntryBuffer<T>
 {
@@ -7,7 +8,12 @@ public struct EntryBuffer<T>
     // structured-buffer layout 16-byte-aligns nested handle structs, which the mirror does not.
     StructuredBuffer<T, ScalarDataLayout>.Handle entryBuffer;
 
-    public T Get(Entry<T> entry) { return entryBuffer[entry.GetOffset()]; }
+    // A null entry reads the reserved element 0: defined, but never what the caller meant.
+    public T Get(Entry<T> entry)
+    {
+        dbg_assert(!entry.Null(), ErrorCode.kNullEntryDeref);
+        return entryBuffer[entry.GetOffset()];
+    }
 
     public T Get(uint index) { return entryBuffer[index]; }
 

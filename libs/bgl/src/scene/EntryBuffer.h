@@ -12,7 +12,8 @@ namespace bgl
 	struct EntryBufferDesc
 	{
 		// Where the arena starts, not where it ends: it grows on demand and is bounded only by
-		// device memory.
+		// device memory. The reserved null element is carried on top of this, so a caller's budget
+		// is entirely its own.
 		uint32_t    initialCount = 0;
 		uint32_t    blockSize    = 65536;
 		std::string debugName;
@@ -24,6 +25,9 @@ namespace bgl
 
 	/**
 	 * A GPU-mirrored slot buffer of trivially-copyable elements.
+	 *
+	 * Element 0 is reserved and never allocated, so the index in every live
+	 * `idl::Entry` is distinguishable from a null one.
 	 */
 	template <EntryBufferConcept T, typename Meta = void>
 	class EntryBuffer
@@ -58,22 +62,22 @@ namespace bgl
 
 			m_Desc = std::move(desc);
 
-			m_Storage.Init(
-				std::move(resourceManager),
-				m_Desc.debugName,
-				sizeof(T),
-				m_Desc.initialCount,
-				false);
+			const uint32_t capacity = m_Desc.initialCount + 1;
 
-			m_Entries.reset(m_Desc.initialCount);
+			m_Storage
+				.Init(std::move(resourceManager), m_Desc.debugName, sizeof(T), capacity, false);
+
+			m_Entries.reset(capacity);
 
 			if constexpr (c_HasMeta)
 			{
-				m_Metadata.assign(m_Desc.initialCount, Meta{});
+				m_Metadata.assign(capacity, Meta{});
 			}
 
-			ResizeDirtyBlocks(m_Desc.initialCount);
+			ResizeDirtyBlocks(capacity);
 			m_HasAnyDirtyBlocks = false;
+
+			ReserveNullEntry();
 		}
 
 		// True once Init() has created the GPU buffer and before Release().
@@ -89,10 +93,12 @@ namespace bgl
 			return m_Entries.valid(handle.index, handle.generation);
 		}
 
+		// The reserved null element is allocated but belongs to no caller, so an offset read back
+		// from a GPU-side struct answers false for it rather than resolving to element 0.
 		[[nodiscard]] bool
 		IsIndexValid(uint32_t index) const noexcept
 		{
-			return m_Entries.allocated(index);
+			return index != 0 && m_Entries.allocated(index);
 		}
 
 		[[nodiscard]] uint32_t
@@ -294,6 +300,16 @@ namespace bgl
 		}
 
 	private:
+		// Held for the buffer's lifetime so no caller is handed the offset that means null. Marked
+		// dirty so the GPU sees a zeroed element there rather than whatever the allocation held.
+		void
+		ReserveNullEntry()
+		{
+			const core::slot_handle slot = m_Entries.try_allocate_and_emplace();
+			gassert(slot.index == 0, "The null entry must own the first element");
+			MarkDirty(slot.index);
+		}
+
 		void
 		Grow()
 		{

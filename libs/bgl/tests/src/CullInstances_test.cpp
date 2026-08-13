@@ -134,9 +134,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	}
 	for (uint32_t i = c_LiveCount; i < padded; ++i)
 	{
-		auto padding                = bgl::SubmeshInstance();
-		padding.meshInstance.offset = 0xFFFFFFFFu;
-		instanceBuffer.Add(padding);
+		// A default SubmeshInstance names no mesh; the shader skips it.
+		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
 	const auto makeCompute = [&](auto element, uint32_t count, const char* name) {

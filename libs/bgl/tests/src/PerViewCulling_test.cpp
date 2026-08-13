@@ -126,11 +126,15 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 
 	auto  sceneBuffers  = scene->GetBuffers();
 	auto& submeshBuffer = std::get<0>(sceneBuffers);
-	REQUIRE(submeshBuffer.IsIndexValid(0));
+
+	// Element 0 of the submesh buffer is the reserved null, so the cube's submesh is found through
+	// its geom's range rather than at a fixed index.
+	const uint32_t submeshRoot = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
+	REQUIRE(submeshBuffer.IsIndexValid(submeshRoot));
 
 	// Whatever radius the scene cooked for the cube, so the reference cull tests the sphere the
 	// shader tests rather than one this file assumed.
-	const glm::vec4       bounds      = submeshBuffer.AtIndex(0).boundingSphere;
+	const glm::vec4       bounds      = submeshBuffer.AtIndex(submeshRoot).boundingSphere;
 	const glm::vec3       localCenter = glm::vec3(bounds);
 	const float           localRadius = bounds.w;
 	const glm::mat4       viewProj[2] = { FrustumLookingDownZ(0.0f), FrustumLookingDownZ(-50.0f) };
