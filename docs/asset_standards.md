@@ -289,6 +289,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
+* **`.bvat`** — a rig's clips baked to a position/normal texture pair, embedded as KTX2 payload
+  chunks (positions `R16G16B16A16_UNORM` unorm-packed in one all-clips AABB; normals
+  `R8G8B8A8_UNORM` as `xyz * 0.5 + 0.5`), plus the clip/column tables and the per-frame skinning
+  palettes. **A derived build product, never committed**: it stamps its three inputs and is re-baked
+  in place when any of them moves — see [VAT](docs/vat.md). Struct:
+  [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
+  I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
+  bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
 * **`.bmaterial`** (v8) — **a shading-model tag plus that model's parameters**. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
