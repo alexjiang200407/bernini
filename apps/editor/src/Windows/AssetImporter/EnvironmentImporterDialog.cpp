@@ -1,5 +1,6 @@
 #include "EnvironmentImporterDialog.h"
 
+#include "Windows/AssetImporter/folder_row.h"
 #include "util/asset_paths.h"
 
 #include <QCheckBox>
@@ -7,7 +8,6 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFormLayout>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -16,31 +16,7 @@
 
 namespace
 {
-	/** A folder field behind its category, shown as an uneditable prefix so the layout is obvious. */
-	QLineEdit*
-	AddFolderRow(
-		QVBoxLayout*   layout,
-		QWidget*       parent,
-		const char*    label,
-		const char*    category,
-		const char*    objectName,
-		const QString& tip)
-	{
-		auto* row = new QHBoxLayout();
-		row->addWidget(new QLabel(QString("%1/").arg(category), parent));
-
-		auto* field = new QLineEdit(parent);
-		field->setObjectName(objectName);
-		field->setPlaceholderText("(optional subfolder)");
-		field->setToolTip(tip);
-		row->addWidget(field, 1);
-
-		auto* form = new QFormLayout();
-		form->addRow(label, row);
-		layout->addLayout(form);
-
-		return field;
-	}
+	constexpr auto c_OptionalPlaceholder = "(optional subfolder)";
 }
 
 EnvironmentImporterDialog::EnvironmentImporterDialog(
@@ -77,15 +53,15 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	m_ImportSky->setToolTip("The backdrop: one radiance cube map, projected from the source.");
 	layout->addWidget(m_ImportSky);
 
-	m_SkyDir = AddFolderRow(
+	m_SkyDir = editor::AddFolderRow(
 		layout,
 		this,
-		"Sky folder:",
-		"Sky",
-		"skyDirectory",
-		"Subfolder of Sky/ to write the .bsky into. The category itself is fixed: every reference "
-		"in "
-		"the project is written against it.");
+		{ .label       = "Sky folder:",
+	      .category    = "Sky",
+	      .objectName  = "skyDirectory",
+	      .placeholder = c_OptionalPlaceholder,
+	      .tip = "Subfolder of Sky/ to write the .bsky into. The category itself is fixed: every "
+	             "reference in the project is written against it." });
 	connect(m_ImportSky, &QCheckBox::toggled, m_SkyDir, &QWidget::setEnabled);
 
 	m_ImportLighting = new QCheckBox("Environment lighting", this);
@@ -97,13 +73,14 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		"paying for the lighting again.");
 	layout->addWidget(m_ImportLighting);
 
-	m_LightingDir = AddFolderRow(
+	m_LightingDir = editor::AddFolderRow(
 		layout,
 		this,
-		"Lighting folder:",
-		"EnvLighting",
-		"lightingDirectory",
-		"Subfolder of EnvLighting/ to write the .benvl into.");
+		{ .label       = "Lighting folder:",
+	      .category    = "EnvLighting",
+	      .objectName  = "lightingDirectory",
+	      .placeholder = c_OptionalPlaceholder,
+	      .tip         = "Subfolder of EnvLighting/ to write the .benvl into." });
 	connect(m_ImportLighting, &QCheckBox::toggled, m_LightingDir, &QWidget::setEnabled);
 
 	m_ImportEnvironment = new QCheckBox("Environment (composes the two above)", this);
@@ -115,14 +92,15 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		"one of them.");
 	layout->addWidget(m_ImportEnvironment);
 
-	m_SourceDir = AddFolderRow(
+	m_SourceDir = editor::AddFolderRow(
 		layout,
 		this,
-		"Sources folder:",
-		"textures_src",
-		"sourceDirectory",
-		"Subfolder of textures_src/ for the float intermediates each part is baked from. They are "
-		"what a re-bake reads, so they are kept rather than being scratch.");
+		{ .label       = "Sources folder:",
+	      .category    = "textures_src",
+	      .objectName  = "sourceDirectory",
+	      .placeholder = c_OptionalPlaceholder,
+	      .tip = "Subfolder of textures_src/ for the float intermediates each part is baked from. "
+	             "They are what a re-bake reads, so they are kept rather than being scratch." });
 
 	// It composes the other two, so with neither there is nothing for it to name. Disabled rather
 	// than left tickable, so the refusal is visible before OK rather than as an error afterwards.
