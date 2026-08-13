@@ -506,6 +506,28 @@ namespace assetlib
 			       !material.extensions.contains("KHR_materials_pbrSpecularGlossiness");
 		}
 
+		/**
+		 * KHR_materials_transmission's `transmissionFactor`, or 0 when the extension is absent --
+		 * glTF's own default, and the coverage reading BLEND has always had here.
+		 *
+		 * Transmission is what separates a lens from a hair card, both of which export as BLEND.
+		 * Without this the engine has no signal to tell them apart and reads every blended material
+		 * as coverage, which costs a lens its reflection.
+		 */
+		float
+		toTransmission(const tinygltf::Material& material)
+		{
+			const auto it = material.extensions.find("KHR_materials_transmission");
+			if (it == material.extensions.end() || !it->second.Has("transmissionFactor"))
+				return 0.0f;
+
+			const tinygltf::Value& factor = it->second.Get("transmissionFactor");
+			if (!factor.IsNumber())
+				return 0.0f;
+
+			return std::clamp(static_cast<float>(factor.GetNumberAsDouble()), 0.0f, 1.0f);
+		}
+
 		AlphaMode
 		toAlphaMode(const std::string& gltfAlphaMode)
 		{
@@ -528,9 +550,10 @@ namespace assetlib
 				const auto& pbr = gltfMat.pbrMetallicRoughness;
 
 				BMaterialImport material{};
-				material.isPbr       = isPbrMaterial(gltfMat);
-				material.alphaMode   = toAlphaMode(gltfMat.alphaMode);
-				material.alphaCutoff = static_cast<float>(gltfMat.alphaCutoff);
+				material.isPbr              = isPbrMaterial(gltfMat);
+				material.alphaMode          = toAlphaMode(gltfMat.alphaMode);
+				material.alphaCutoff        = static_cast<float>(gltfMat.alphaCutoff);
+				material.transmissionFactor = toTransmission(gltfMat);
 				material.baseColorTexture =
 					mapTexture(model, pbr.baseColorTexture.index, imageToTexture);
 				material.ormTexture =

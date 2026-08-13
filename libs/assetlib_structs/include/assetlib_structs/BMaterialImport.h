@@ -23,6 +23,10 @@ namespace assetlib::imp
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// KHR_materials_transmission's transmissionFactor; see PbrParams. Absent extension means 0,
+		// which is glTF's own default and the coverage reading BLEND has always had here.
+		float transmissionFactor = 0.0f;
+
 		/**
 		 * Whether metallic-roughness is really this material's shading model. False when it declares one
 		 * the engine cannot represent (KHR_materials_unlit, KHR_materials_pbrSpecularGlossiness), whose
