@@ -107,7 +107,7 @@ namespace assetlib
 		};
 
 		Interpolation
-		toInterpolation(const std::string& name)
+		toInterpolation(std::string_view name)
 		{
 			if (name == "STEP")
 				return Interpolation::kStep;
@@ -200,12 +200,12 @@ namespace assetlib
 			return glm::vec4(0.0f);
 		}
 
-		/** Which sampler drives each of a bone's three channels, or c_InvalidIndex. */
+		/** The sampler index driving each of a bone's three channels, or c_InvalidIndex. */
 		struct BoneChannels
 		{
-			uint32_t translation = c_InvalidIndex;
-			uint32_t rotation    = c_InvalidIndex;
-			uint32_t scale       = c_InvalidIndex;
+			uint32_t translationSampler = c_InvalidIndex;
+			uint32_t rotationSampler    = c_InvalidIndex;
+			uint32_t scaleSampler       = c_InvalidIndex;
 		};
 
 		bool
@@ -413,11 +413,11 @@ namespace assetlib
 				}
 
 				if (channel.target_path == "translation")
-					channels[bone].translation = samplerIndex;
+					channels[bone].translationSampler = samplerIndex;
 				else if (channel.target_path == "rotation")
-					channels[bone].rotation = samplerIndex;
+					channels[bone].rotationSampler = samplerIndex;
 				else if (channel.target_path == "scale")
-					channels[bone].scale = samplerIndex;
+					channels[bone].scaleSampler = samplerIndex;
 				// "weights" drives morph targets, which this pipeline has no representation for.
 			}
 
@@ -446,19 +446,20 @@ namespace assetlib
 				{
 					Transform pose = bindPose[b];
 
-					if (channels[b].translation != c_InvalidIndex)
+					if (channels[b].translationSampler != c_InvalidIndex)
 					{
-						const auto value = evaluate(samplers.at(channels[b].translation), time);
+						const auto value =
+							evaluate(samplers.at(channels[b].translationSampler), time);
 						pose.translation = glm::vec3(value);
 					}
-					if (channels[b].rotation != c_InvalidIndex)
+					if (channels[b].rotationSampler != c_InvalidIndex)
 					{
-						const auto value = evaluate(samplers.at(channels[b].rotation), time);
+						const auto value = evaluate(samplers.at(channels[b].rotationSampler), time);
 						pose.rotation    = glm::quat(value.w, value.x, value.y, value.z);
 					}
-					if (channels[b].scale != c_InvalidIndex)
+					if (channels[b].scaleSampler != c_InvalidIndex)
 					{
-						const auto value = evaluate(samplers.at(channels[b].scale), time);
+						const auto value = evaluate(samplers.at(channels[b].scaleSampler), time);
 						pose.scale       = glm::vec3(value);
 					}
 

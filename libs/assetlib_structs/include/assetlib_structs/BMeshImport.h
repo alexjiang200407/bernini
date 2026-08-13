@@ -33,8 +33,10 @@ namespace assetlib::imp
 
 		std::vector<ImageData> textures;
 
-		// Empty unless the source carries a skin. The submeshes' joint indices are already expressed
-		// in this skeleton's bone order, which is not the source's joint order.
+		// Empty unless the source carries a skin -- `skeleton.bones.empty()` is the "no rig" test,
+		// and `animations.clips.empty()` the "no clips" one; neither is ever half-filled. The
+		// submeshes' joint indices are already expressed in this skeleton's bone order, which is
+		// not the source's joint order.
 		Skeleton     skeleton;
 		AnimationSet animations;
 	};

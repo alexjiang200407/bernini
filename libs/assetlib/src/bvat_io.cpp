@@ -20,7 +20,7 @@ namespace assetlib
 
 		constexpr std::string_view c_What = "bvat";
 
-		enum ChunkId : uint32_t
+		enum class ChunkId : uint32_t
 		{
 			kInfo = 1,
 			kClips,
@@ -200,12 +200,12 @@ namespace assetlib
 
 			template <typename T>
 			std::vector<T>
-			Read(uint32_t id) const
+			Read(ChunkId id) const
 			{
 				if (reader != nullptr)
 					return reader->Read<T>(id);
 
-				const auto it = chunks->find(id);
+				const auto it = chunks->find(static_cast<uint32_t>(id));
 				if (it == chunks->end())
 					return {};
 
@@ -273,12 +273,12 @@ namespace assetlib
 	BVat
 	loadVatTables(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 6> c_Wanted = { { ChunkId::kInfo,
-			                                             ChunkId::kClips,
-			                                             ChunkId::kColumns,
-			                                             ChunkId::kPalettes,
-			                                             ChunkId::kInputs,
-			                                             ChunkId::kStringPool } };
+		constexpr std::array<uint32_t, 6> c_Wanted = { { uint32_t(ChunkId::kInfo),
+			                                             uint32_t(ChunkId::kClips),
+			                                             uint32_t(ChunkId::kColumns),
+			                                             uint32_t(ChunkId::kPalettes),
+			                                             uint32_t(ChunkId::kInputs),
+			                                             uint32_t(ChunkId::kStringPool) } };
 
 		const auto chunks =
 			chunk::readChunksFromFile(path, magic::c_BVat, c_VersionMajor, c_Wanted, c_What);
@@ -289,12 +289,12 @@ namespace assetlib
 	VatRefs
 	loadVatRefs(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 1> c_Wanted = { { ChunkId::kInputs } };
+		constexpr std::array<uint32_t, 1> c_Wanted = { { uint32_t(ChunkId::kInputs) } };
 
 		const auto chunks =
 			chunk::readChunksFromFile(path, magic::c_BVat, c_VersionMajor, c_Wanted, c_What);
 
-		const auto it = chunks.find(ChunkId::kInputs);
+		const auto it = chunks.find(uint32_t(ChunkId::kInputs));
 		if (it == chunks.end())
 			throw_runtime_error("bvat: the inputs chunk is missing");
 

@@ -14,7 +14,9 @@ namespace assetlib
 		kEnvLighting,  // .benvl
 		kSkeleton,     // .bskel
 		kAnimation,    // .banim
-		kVat,          // .bvat
+		// .bvat. Derived and never committed, but still in the graph: rename and delete must see
+		// its recorded inputs, or a moved mesh would leave every bake pointing at nothing.
+		kVat,
 	};
 
 	/** Why one asset holds another alive. */

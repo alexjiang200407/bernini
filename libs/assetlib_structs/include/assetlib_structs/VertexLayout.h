@@ -64,7 +64,7 @@ namespace assetlib
 	 * Influences a skinned vertex carries: `kJoints0` and `kWeights0` are a vec4 pair, so both the
 	 * importer that writes them and anything that decodes them work in fours.
 	 */
-	inline constexpr size_t c_InfluencesPerVertex = 4;
+	inline constexpr uint32_t c_InfluencesPerVertex = 4;
 
 	/**
 	 * Byte offset of `semantic` within one interleaved vertex, empty when the layout does not carry

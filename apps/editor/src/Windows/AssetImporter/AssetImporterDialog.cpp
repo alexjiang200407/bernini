@@ -117,7 +117,7 @@ AssetImporterDialog::AssetImporterDialog(
 }
 
 bool
-AssetImporterDialog::ImportMesh() const
+AssetImporterDialog::GetImportMesh() const
 {
 	return m_ImportMesh->isChecked();
 }
@@ -130,7 +130,7 @@ AssetImporterDialog::ImportsAnything() const
 }
 
 bool
-AssetImporterDialog::ImportTextures() const
+AssetImporterDialog::GetImportTextures() const
 {
 	return m_ImportTextures->isChecked();
 }
@@ -143,13 +143,13 @@ AssetImporterDialog::CanImportPbrMaterials() const
 }
 
 bool
-AssetImporterDialog::ImportAnimations() const
+AssetImporterDialog::GetImportAnimations() const
 {
 	return m_ImportAnimations->isChecked();
 }
 
 QString
-AssetImporterDialog::DestinationFolder() const
+AssetImporterDialog::GetDestinationFolder() const
 {
 	const QString typed = m_Folder->text().trimmed();
 	if (!editor::IsContainedRelativePath(typed))

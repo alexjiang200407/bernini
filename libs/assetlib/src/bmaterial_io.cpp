@@ -16,8 +16,6 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint32_t c_Magic = magic::c_BMaterial;
-
 		constexpr uint16_t c_VersionMajor = 9;
 		constexpr uint16_t c_VersionMinor = 0;
 

@@ -1056,11 +1056,11 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 			continue;
 
 		auto options         = ImportOptions();
-		options.folder       = dialog.DestinationFolder();
-		options.mesh         = dialog.ImportMesh();
-		options.textures     = dialog.ImportTextures();
+		options.folder       = dialog.GetDestinationFolder();
+		options.mesh         = dialog.GetImportMesh();
+		options.textures     = dialog.GetImportTextures();
 		options.pbrMaterials = dialog.CanImportPbrMaterials();
-		options.animations   = dialog.ImportAnimations();
+		options.animations   = dialog.GetImportAnimations();
 
 		const ImportOutcome outcome = ImportMesh(file, options);
 

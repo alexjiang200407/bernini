@@ -117,6 +117,14 @@ namespace assetlib
 			}
 		};
 
+		/** glTF's stride rule: an explicit byteStride, or tightly packed when the view has none. */
+		size_t
+		effectiveStride(const tinygltf::BufferView& view, int components, size_t componentSize)
+		{
+			return view.byteStride != 0 ? view.byteStride :
+			                              static_cast<size_t>(components) * componentSize;
+		}
+
 		/**
 		 * @param allowInteger When false, a non-float attribute throws -- the geometry attributes must
 		 *        be float, and reading an integer POSITION as floats would silently produce garbage.
@@ -151,8 +159,7 @@ namespace assetlib
 			AttributeView out;
 			out.base   = reinterpret_cast<const std::byte*>(buffer.data.data()) + view.byteOffset +
 			             accessor.byteOffset;
-			out.stride = view.byteStride != 0 ? view.byteStride :
-			                                    static_cast<size_t>(components) * componentSize;
+			out.stride = effectiveStride(view, components, componentSize);
 			out.components    = components;
 			out.componentType = accessor.componentType;
 			out.normalized    = accessor.normalized;
@@ -220,6 +227,14 @@ namespace assetlib
 		{
 			const auto* first = static_cast<const std::byte*>(data);
 			dst.insert(dst.end(), first, first + size);
+		}
+
+		/** The typed form: `count` elements of a pool from `first`, no byte arithmetic in sight. */
+		template <typename T>
+		void
+		appendValues(std::vector<std::byte>& dst, const T* first, size_t count)
+		{
+			appendBytes(dst, first, count * sizeof(T));
 		}
 
 		void
@@ -460,14 +475,14 @@ namespace assetlib
 
 				if (!joints.empty())
 				{
-					appendBytes(
+					appendValues(
 						mesh.vertexData,
 						joints.data() + i * c_InfluencesPerVertex,
-						c_InfluencesPerVertex * sizeof(uint16_t));
-					appendBytes(
+						c_InfluencesPerVertex);
+					appendValues(
 						mesh.vertexData,
 						weights.data() + i * c_InfluencesPerVertex,
-						c_InfluencesPerVertex * sizeof(uint16_t));
+						c_InfluencesPerVertex);
 				}
 			}
 

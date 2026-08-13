@@ -5,7 +5,7 @@
 namespace bmesh
 {
 	glm::mat4
-	WorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
+	GetWorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
 	{
 		auto     world = glm::mat4(1.0f);
 		uint32_t index = nodeIndex;
@@ -24,7 +24,7 @@ namespace bmesh
 		if (nodeIndex < mesh.nodes.size() && assetlib::isSkinned(mesh, mesh.nodes[nodeIndex].mesh))
 			return glm::mat4(1.0f);
 
-		return WorldTransform(mesh, nodeIndex);
+		return GetWorldTransform(mesh, nodeIndex);
 	}
 
 	void

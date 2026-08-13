@@ -21,13 +21,13 @@ namespace assetlib
 	{
 		constexpr uint16_t c_VersionMajor = 3;
 
-		// +1: kSkeletonPath. A chunk is addressed by id and an absent one is not an error, so a v3.0
-		// mesh still reads -- it simply names no skeleton, which is what a static mesh is.
-		constexpr uint16_t c_VersionMinor = 1;
+		// A chunk is addressed by id and an absent one is not an error, so a mesh without the
+		// skeleton chunk still reads -- it simply names no skeleton, which is what a static mesh is.
+		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "bmesh";
 
-		enum ChunkId : uint32_t
+		enum class ChunkId : uint32_t
 		{
 			kNodes = 1,
 			kRoots,
@@ -136,8 +136,8 @@ namespace assetlib
 	MeshRefs
 	loadMeshRefs(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 2> c_Wanted = { { ChunkId::kMaterialPaths,
-			                                             ChunkId::kSkeletonPath } };
+		constexpr std::array<uint32_t, 2> c_Wanted = { { uint32_t(ChunkId::kMaterialPaths),
+			                                             uint32_t(ChunkId::kSkeletonPath) } };
 
 		const auto chunks =
 			chunk::readChunksFromFile(path, magic::c_BMesh, c_VersionMajor, c_Wanted, c_What);
@@ -145,13 +145,13 @@ namespace assetlib
 		// Absent, not malformed: both chunks are optional, and a mesh that names neither is exactly
 		// what a static import produces.
 		MeshRefs refs;
-		if (const auto it = chunks.find(ChunkId::kMaterialPaths); it != chunks.end())
+		if (const auto it = chunks.find(uint32_t(ChunkId::kMaterialPaths)); it != chunks.end())
 			refs.materials = chunk::unpackStrings(
 				std::span<const char>(
 					reinterpret_cast<const char*>(it->second.data()),
 					it->second.size()));
 
-		if (const auto it = chunks.find(ChunkId::kSkeletonPath); it != chunks.end())
+		if (const auto it = chunks.find(uint32_t(ChunkId::kSkeletonPath)); it != chunks.end())
 			refs.skeleton.assign(
 				reinterpret_cast<const char*>(it->second.data()),
 				it->second.size());
@@ -280,13 +280,13 @@ namespace assetlib
 	std::string
 	skeletonFileName(std::string_view name)
 	{
-		return std::string(name) + ".bskel";
+		return std::format("{}.bskel", name);
 	}
 
 	std::string
 	animationFileName(std::string_view name)
 	{
-		return std::string(name) + ".banim";
+		return std::format("{}.banim", name);
 	}
 
 	TangentGenResult

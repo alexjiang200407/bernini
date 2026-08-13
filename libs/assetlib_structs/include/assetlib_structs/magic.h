@@ -12,13 +12,23 @@ namespace assetlib
 	 */
 	namespace magic
 	{
-		constexpr uint32_t c_BMesh     = 0x48534D42u;  // 'B','M','S','H' little-endian
-		constexpr uint32_t c_BMaterial = 0x54414D42u;  // 'B','M','A','T'
-		constexpr uint32_t c_BEnv      = 0x564E4542u;  // 'B','E','N','V'
-		constexpr uint32_t c_BSky      = 0x594B5342u;  // 'B','S','K','Y'
-		constexpr uint32_t c_BEnvL     = 0x4C4E4542u;  // 'B','E','N','L'
-		constexpr uint32_t c_BSkel     = 0x4C4B5342u;  // 'B','S','K','L'
-		constexpr uint32_t c_BAnim     = 0x4D4E4142u;  // 'B','A','N','M'
-		constexpr uint32_t c_BVat      = 0x54415642u;  // 'B','V','A','T'
+		/** The tag's bytes as the little-endian uint32 a reader compares against. */
+		constexpr uint32_t
+		fourCC(const char (&tag)[5])
+		{
+			return static_cast<uint32_t>(static_cast<uint8_t>(tag[0])) |
+			       static_cast<uint32_t>(static_cast<uint8_t>(tag[1])) << 8 |
+			       static_cast<uint32_t>(static_cast<uint8_t>(tag[2])) << 16 |
+			       static_cast<uint32_t>(static_cast<uint8_t>(tag[3])) << 24;
+		}
+
+		constexpr uint32_t c_BMesh     = fourCC("BMSH");
+		constexpr uint32_t c_BMaterial = fourCC("BMAT");
+		constexpr uint32_t c_BEnv      = fourCC("BENV");
+		constexpr uint32_t c_BSky      = fourCC("BSKY");
+		constexpr uint32_t c_BEnvL     = fourCC("BENL");
+		constexpr uint32_t c_BSkel     = fourCC("BSKL");
+		constexpr uint32_t c_BAnim     = fourCC("BANM");
+		constexpr uint32_t c_BVat      = fourCC("BVAT");
 	}
 }

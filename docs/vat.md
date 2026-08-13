@@ -35,7 +35,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   clip is row `firstRow + f`; the pad row exists so fractional-frame blending never bleeds into
   the clip stacked below. It is clamp-shaped: a looping clip's seam must **wrap the upper row
   index onto frame 0**, never read the pad — which the `Load`-based fetch makes a one-index
-  select ([Forward_Vat.slang](libs/bgl/shaders/src/Forward_Vat.slang)).
+  select ([Forward_VatMesh.slang](libs/bgl/shaders/src/Forward_VatMesh.slang)).
 * **Fetch is `TextureHandle::Load` by exact texel, not a sampler.** A vertex's column is always
   exact, so filtering buys nothing along U — and a `SamplerState.Handle` inside a mesh-stage
   cbuffer creates a Mixed-category parameter Metal's stage-binding path mis-indexes. Fractional
@@ -56,9 +56,10 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **Culling bounds come from the bake's box, not the bind pose.** Every submesh's sphere is the
   all-clips AABB's — conservative for any frame of any clip; bind-pose bounds pop the moment a
   limb moves.
-* **No baked tangent.** A bind-pose basis is wrong the moment a limb rotates, so the VAT vertex
-  output emits the degenerate tangent and the pixel guard falls back to the geometric normal —
-  normal maps are inert on this tier by design.
+* **No baked tangent.** The import does derive bind-pose tangents into the mesh's vertex bytes,
+  but a bind-pose basis is wrong the moment a limb rotates — so the VAT path deliberately ignores
+  them, emits the degenerate tangent, and the pixel guard falls back to the geometric normal.
+  Normal maps are inert on this tier by design.
 * **The skeletal side-channel ships in the container.** Each real frame's skinning palette is
   baked (`BVat::palettes`, addressed per clip) for future attachments/GPU consumers; nothing on
   the GPU reads it yet.
@@ -120,7 +121,7 @@ flowchart TD
     subgraph bgl
         SCENE["IScene::AddVatMeshGeom (geom + clip/column tables + texture pair)"]
         VIEW["ISceneView::CreateVatMeshInstance (VatState: clip, phase, rate)"]
-        MS["Forward_Vat mesh shader (Load x2, lerp; prev pose at prevTime)"]
+        MS["Forward_VatMesh mesh shader (Load x2, lerp; prev pose at prevTime)"]
     end
 
     BMESH & BSKEL & BANIM -- "inputs, stamped" --> BAKE

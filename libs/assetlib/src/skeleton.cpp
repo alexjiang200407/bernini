@@ -72,14 +72,14 @@ namespace assetlib
 		}
 	}
 
-	uint32_t
+	std::optional<uint32_t>
 	findBone(const Skeleton& skeleton, std::string_view name)
 	{
 		for (size_t i = 0; i < skeleton.bones.size(); ++i)
 			if (skeleton.stringPool.at(skeleton.bones[i].nameOffset) == name)
 				return static_cast<uint32_t>(i);
 
-		return c_InvalidIndex;
+		return std::nullopt;
 	}
 
 	std::vector<glm::mat4>

@@ -501,8 +501,8 @@ namespace bgl
 		draw.viewState.prevViewProj       = prevCamera.viewProj;
 		draw.viewState.jitter             = jitter;
 		draw.viewState.prevJitter         = prevCamera.jitter;
-		draw.time                         = job.time;
-		draw.prevTime                     = prevCamera.time;
+		draw.clock.time                   = job.time;
+		draw.clock.prevTime               = prevCamera.time;
 		draw.viewState.cullView           = BuildCullView(viewProj);
 		draw.viewState.unjitteredViewProj = camera.unjitteredViewProj;
 		draw.targets.sceneColor           = m_ActiveTarget->GetSceneColorRtv();

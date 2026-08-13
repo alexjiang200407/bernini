@@ -23,21 +23,21 @@ public:
 
 	/** Whether the geometry comes across. Off imports only the other pieces. */
 	bool
-	ImportMesh() const;
+	GetImportMesh() const;
 
 	/** Whether any piece at all is coming across; what the OK button and the folder field follow. */
 	bool
 	ImportsAnything() const;
 
 	bool
-	ImportTextures() const;
+	GetImportTextures() const;
 
 	/** Whether to derive a `.bmaterial` from each of the glTF's PBR materials and bind it. */
 	bool
 	CanImportPbrMaterials() const;
 
 	bool
-	ImportAnimations() const;
+	GetImportAnimations() const;
 
 	/**
 	 * Folder this import organises itself into, *inside* each category it writes to -- the mesh under
@@ -49,7 +49,7 @@ public:
 	 * another.
 	 */
 	QString
-	DestinationFolder() const;
+	GetDestinationFolder() const;
 
 private:
 	// Whether the source has anything to import; separate from the box, which is also off when

@@ -19,7 +19,6 @@ namespace
 		constexpr uint16_t c_Stride = sizeof(glm::vec3);
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 		mesh.materials.emplace_back();
 
 		for (const TestSubmesh& src : submeshes)

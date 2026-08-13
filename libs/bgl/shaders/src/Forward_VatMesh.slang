@@ -102,9 +102,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 {
     uint vertexIdx = forwardData.vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + v];
 
-#if defined(BERNINI_GPU_DEBUG)
     dbg_assert(vertexIdx < submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, submesh.vertexCount, instance.submeshIndex);
-#endif
 
     uint vertexByteBase = submesh.vertexData.GetStart() * 4 + vertexIdx * submesh.layout.stride;
     DecodedVertex vertex = DecodeVertex(forwardData.vertexDataBuffer, submesh.layout, vertexByteBase);

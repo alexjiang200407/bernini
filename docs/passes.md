@@ -304,7 +304,7 @@ many instances turn out to be transparent; only the sort itself is bounded.
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
 raster/depth/blend state + mesh-shader source). Each row names its amplification/mesh module —
-`Forward_StaticMesh` for the static family, `Forward_Vat` for `kOpaque_VatMesh_PBR`, which fetches
+`Forward_StaticMesh` for the static family, `Forward_VatMesh` for `kOpaque_VatMesh_PBR`, which fetches
 position and normal from the baked texture pair by (column, frame) instead of the vertex bytes
 (see [VAT](docs/vat.md)); the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
 `Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,

@@ -235,5 +235,5 @@ TEST_CASE("findBone names a bone by its pooled name", "[skeleton]")
 
 	CHECK(findBone(skeleton, "hips") == 0);
 	CHECK(findBone(skeleton, "head") == 2);
-	CHECK(findBone(skeleton, "tail") == c_InvalidIndex);
+	CHECK_FALSE(findBone(skeleton, "tail").has_value());
 }

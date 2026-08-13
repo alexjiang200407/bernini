@@ -427,6 +427,11 @@ A skeleton and its clips are cooked from the same glTF as the mesh, by the same 
 a mesh's `JOINTS_0` and a clip's samples are both bare indices into one bone array — they are only
 meaningful together.
 
+**The word is *bone*.** The sorted array a `.bskel` stores is bones, and so is everything derived
+from it — bone order, bone count, bone parent. *Joint* appears only when quoting glTF, whose skin
+speaks `skin.joints` and `JOINTS_0`; after the import's remap a joint index **is** a bone index, and
+prose that mixes the two words outside a glTF quote is wrong by this rule.
+
 **One file is one rig.** The skeleton comes from the glTF's `skins[0]`, and a file with two skins is
 **rejected** rather than silently taking the first, which would bind a mesh to another rig's bones. A
 file with no skin is not a rig with an empty skeleton — it is a static mesh, and its animations, if any,

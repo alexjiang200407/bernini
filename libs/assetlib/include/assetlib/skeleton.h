@@ -35,8 +35,8 @@ namespace assetlib
 	void
 	validateAnimationSet(const AnimationSet& animations);
 
-	/** The index of the bone named `name`, or c_InvalidIndex. Linear: only tooling asks. */
-	[[nodiscard]] uint32_t
+	/** The index of the bone named `name`, or nullopt. Linear: only tooling asks. */
+	[[nodiscard]] std::optional<uint32_t>
 	findBone(const Skeleton& skeleton, std::string_view name);
 
 	/**

@@ -7,10 +7,10 @@ namespace bmesh
 {
 	// A node's transform composed with all of its ancestors'.
 	glm::mat4
-	WorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
+	GetWorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
 
 	/**
-	 * Where to place an instance of the mesh `nodeIndex` references. WorldTransform for ordinary
+	 * Where to place an instance of the mesh `nodeIndex` references. GetWorldTransform for ordinary
 	 * geometry; identity when that mesh is skinned.
 	 *
 	 * A skinned mesh's vertices are in the skin's space, and glTF 3.7.4 has the node's own transform

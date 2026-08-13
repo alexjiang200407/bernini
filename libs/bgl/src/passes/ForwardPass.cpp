@@ -50,11 +50,8 @@ namespace bgl
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
 		// the code that writes them so ValidateBinderNames catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
-		constexpr std::array<std::string_view, 4> c_ViewDataFields = {
-			"viewProj"sv,
-			"prevViewProj"sv,
-			"jitter"sv,
-			"prevJitter"sv,
+		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
+			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
 		};
 
 		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
@@ -103,7 +100,7 @@ namespace bgl
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
 		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
-		constexpr auto c_VatGeomSrc          = "Forward_Vat"sv;
+		constexpr auto c_VatGeomSrc          = "Forward_VatMesh"sv;
 		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
 		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
@@ -284,6 +281,7 @@ namespace bgl
 		ValidateBinderNames(m_Kernels, "viewData"sv, c_ViewDataFields);
 		ValidateBinderNames(m_Kernels, "materialData"sv, UniformKeys(c_MaterialBuffers));
 		ValidateBinderNames(m_Kernels, "materialData"sv, c_MaterialDataFields);
+		ValidateBinderNames(m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
 	}
 
 	void
@@ -373,8 +371,8 @@ namespace bgl
 			viewData["prevViewProj"] = draw.viewState.prevViewProj;
 			viewData["jitter"]       = draw.viewState.jitter;
 			viewData["prevJitter"]   = draw.viewState.prevJitter;
-			viewData["time"]         = draw.time;
-			viewData["prevTime"]     = draw.prevTime;
+			viewData["time"]         = draw.clock.time;
+			viewData["prevTime"]     = draw.clock.prevTime;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))

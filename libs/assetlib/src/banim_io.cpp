@@ -23,7 +23,7 @@ namespace assetlib
 
 		constexpr std::string_view c_What = "banim";
 
-		enum ChunkId : uint32_t
+		enum class ChunkId : uint32_t
 		{
 			kClips = 1,
 			kSamples,
@@ -118,12 +118,12 @@ namespace assetlib
 	std::string
 	loadAnimationSkeletonPath(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 1> c_Wanted = { { ChunkId::kSkeletonRef } };
+		constexpr std::array<uint32_t, 1> c_Wanted = { { uint32_t(ChunkId::kSkeletonRef) } };
 
 		const auto chunks =
 			chunk::readChunksFromFile(path, magic::c_BAnim, c_VersionMajor, c_Wanted, c_What);
 
-		const auto it = chunks.find(ChunkId::kSkeletonRef);
+		const auto it = chunks.find(uint32_t(ChunkId::kSkeletonRef));
 		if (it == chunks.end())
 			return {};
 

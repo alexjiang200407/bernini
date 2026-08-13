@@ -14,6 +14,10 @@ namespace assetlib::chunk
 
 	inline constexpr size_t c_Align = 16;
 
+	/** A container's scoped ChunkId enum; the id stored on disk is its underlying value. */
+	template <typename Id>
+	concept ChunkIdType = std::is_enum_v<Id> && std::same_as<std::underlying_type_t<Id>, uint32_t>;
+
 	struct Header
 	{
 		uint32_t magic;
@@ -43,6 +47,13 @@ namespace assetlib::chunk
 	{
 	public:
 		Writer() { m_Bytes.WritePod(Header{}); }
+
+		template <typename T, ChunkIdType Id>
+		void
+		Add(Id id, const std::vector<T>& values)
+		{
+			Add(static_cast<uint32_t>(id), values);
+		}
 
 		template <typename T>
 		void
@@ -83,6 +94,13 @@ namespace assetlib::chunk
 			std::string_view           what);
 
 		/** The chunk's elements, or an empty vector when the container does not carry it. */
+		template <typename T, ChunkIdType Id>
+		[[nodiscard]] std::vector<T>
+		Read(Id id) const
+		{
+			return Read<T>(static_cast<uint32_t>(id));
+		}
+
 		template <typename T>
 		[[nodiscard]] std::vector<T>
 		Read(uint32_t id) const
@@ -92,6 +110,13 @@ namespace assetlib::chunk
 		}
 
 		/** @throws std::runtime_error if the chunk is absent. */
+		template <typename T, ChunkIdType Id>
+		[[nodiscard]] std::vector<T>
+		Require(Id id) const
+		{
+			return Require<T>(static_cast<uint32_t>(id));
+		}
+
 		template <typename T>
 		[[nodiscard]] std::vector<T>
 		Require(uint32_t id) const

@@ -53,8 +53,8 @@ TEST_CASE("The importer offers to bring textures across, but not animations", "[
 	const AssetImporterDialog dialog(c_SourceFile);
 
 	// Textures are what a mesh needs to look like anything, so they are on by default.
-	REQUIRE(dialog.ImportTextures());
-	REQUIRE(!dialog.ImportAnimations());
+	REQUIRE(dialog.GetImportTextures());
+	REQUIRE(!dialog.GetImportAnimations());
 
 	REQUIRE(TexturesBox(dialog) != nullptr);
 	REQUIRE(AnimationsBox(dialog) != nullptr);
@@ -106,7 +106,7 @@ TEST_CASE("The destination folder defaults to the file's name", "[assetimporter]
 	// Every import needs its own folder -- the extracted files are named tex0.ktx2, tex1.ktx2 by
 	// index, so two imports sharing one would overwrite each other. Naming it after the source is the
 	// default that makes that collision unlikely.
-	REQUIRE(dialog.DestinationFolder() == QString("stone_wall"));
+	REQUIRE(dialog.GetDestinationFolder() == QString("stone_wall"));
 }
 
 // The folder is where *every* piece of the import lands -- the mesh under Meshes/, the rig under
@@ -119,7 +119,7 @@ TEST_CASE("The folder is dead only when nothing is being imported", "[assetimpor
 
 	TexturesBox(dialog)->setChecked(false);
 	REQUIRE(FolderField(dialog)->isEnabled());  // the mesh still needs somewhere to go
-	REQUIRE(!dialog.ImportTextures());
+	REQUIRE(!dialog.GetImportTextures());
 
 	MeshBox(dialog)->setChecked(false);
 	REQUIRE(!FolderField(dialog)->isEnabled());
@@ -137,10 +137,10 @@ TEST_CASE("The mesh can be left out of an import", "[assetimporter]")
 {
 	const AssetImporterDialog dialog(c_SourceFile);
 
-	REQUIRE(dialog.ImportMesh());
+	REQUIRE(dialog.GetImportMesh());
 
 	MeshBox(dialog)->setChecked(false);
-	REQUIRE(!dialog.ImportMesh());
+	REQUIRE(!dialog.GetImportMesh());
 }
 
 TEST_CASE("A typed destination folder is used", "[assetimporter]")
@@ -151,21 +151,21 @@ TEST_CASE("A typed destination folder is used", "[assetimporter]")
 	{
 		FolderField(dialog)->setText("bricks");
 
-		REQUIRE(dialog.DestinationFolder() == QString("bricks"));
+		REQUIRE(dialog.GetDestinationFolder() == QString("bricks"));
 	}
 
 	SECTION("trimmed")
 	{
 		FolderField(dialog)->setText("  bricks  ");
 
-		REQUIRE(dialog.DestinationFolder() == QString("bricks"));
+		REQUIRE(dialog.GetDestinationFolder() == QString("bricks"));
 	}
 
 	SECTION("nested, because going deeper is fine -- it is going out that is not")
 	{
 		FolderField(dialog)->setText("exterior/walls");
 
-		REQUIRE(dialog.DestinationFolder() == QString("exterior/walls"));
+		REQUIRE(dialog.GetDestinationFolder() == QString("exterior/walls"));
 	}
 }
 
@@ -193,5 +193,5 @@ TEST_CASE("A destination folder that escapes the project is refused", "[assetimp
 	const AssetImporterDialog dialog(c_SourceFile);
 	FolderField(dialog)->setText(typed);
 
-	REQUIRE(dialog.DestinationFolder() == QString("stone_wall"));
+	REQUIRE(dialog.GetDestinationFolder() == QString("stone_wall"));
 }

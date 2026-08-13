@@ -33,7 +33,7 @@ compile_shader(
 )
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Vat.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_VatMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "as_6_6"
@@ -42,7 +42,7 @@ compile_shader(
 )
 
 compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Vat.slang"
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_VatMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "ms_6_6"

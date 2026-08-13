@@ -19,7 +19,7 @@ namespace assetlib
 
 		constexpr std::string_view c_What = "bskel";
 
-		enum ChunkId : uint32_t
+		enum class ChunkId : uint32_t
 		{
 			kBones = 1,
 			kStringPool
