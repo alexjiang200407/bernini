@@ -30,14 +30,17 @@ scan into a full read of every mesh on disk.
 ([ref_paths.h](../../libs/assetlib/src/ref_paths.h)) reduces every stored reference to one
 data-root-relative generic-form path, and `requireInsideDataRoot` rejects anything that escapes the
 root. `AssetManager` resolves those against one `m_DataRoot`
-([AssetManager.h:78](../../libs/gamelib/include/gamelib/AssetManager.h)). Nothing stores an absolute
+([AssetManager.h:508](../../libs/gamelib/include/gamelib/AssetManager.h)). Nothing stores an absolute
 path. That is the key that an archive can be indexed by, unchanged.
 
-**`bgl` never reads an asset.** Its only filesystem use is the shader cache
+**`bgl` never reads an asset.** It touches the filesystem twice, and neither is a read that a mount
+could serve: the shader cache
 ([ShaderCache_d3d12.cpp](../../libs/bgl/src/d3d12/shadercache/ShaderCache_d3d12.cpp),
 [ShaderCache_metal.cpp](../../libs/bgl/src/metal/shadercache/ShaderCache_metal.cpp)), a per-machine
-write-back cache of driver PSOs. The layering rule holds without effort: this feature does not touch
-`bgl`.
+write-back cache of driver PSOs; and `WritePng`
+([RenderContext.cpp:92](../../libs/bgl/src/gfx/RenderContext.cpp)) behind the public
+`IGraphics::ScreenshotPng`, which writes captures outward for the golden-image suite. The layering
+rule holds without effort: this feature does not touch `bgl`.
 
 **Staleness is `stat`.** `stampOf` is size + last-write-time
 ([bmaterial_io.h:43](../../libs/assetlib/include/assetlib/bmaterial_io.h)), and `bakeIsStale`,
@@ -141,10 +144,10 @@ default is one.
 ### A mount is an interface in `core`; the archive implements it in `assetlib`.
 
 ```
-core::file::IFileSystem          Exists / Stat / Read / ReadRange / Enumerate
+core::file::IFileSystem          Exists / Stat / Read / ReadRange / Enumerate / IsReadOnly
   ├── core::file::LooseFileSystem   a directory, what everything does today
   ├── core::file::SearchPath        an ordered list of mounts, first hit wins
-  └── assetlib::PakFile             a .bpak
+  └── assetlib::PakFile             a .bpak — always read-only
 ```
 
 `core` because `assetlib` (the loaders), `gamelib` (the seam) and `assetlib_cli` all link it and all
@@ -155,10 +158,46 @@ need it, while `bgl` links it and must not grow a dependency on an asset contain
 `AssetRefGraph::Scan` becomes a full read of every mesh in the project. The interface carries a
 ranged read from the first commit, and `LooseFileSystem` implements it with the seek it already does.
 
-**`Stat` returns the `SourceStamp` the bake compares** — size and modification time. `PakFile`
-stores the stamp each entry had when it was packed, so `drawsLoose` and `bakeIsStale` return the
-same verdict against an archive that they returned against the tree it was packed from. A packed
-project must not silently change which material representation it draws.
+**`IsReadOnly` is on the interface, not discovered later.** `AcquireVatMesh` needs it to decide
+whether a `.bvat` is re-bakeable, and `SearchPath` reports it for the mount that answered rather
+than for itself — a loose-over-archive search path is writable for one path and not for the next.
+Six members, fixed at the first commit: a capability bolted on after `LooseFileSystem` and
+`SearchPath` have landed with tests against a five-member shape is a rewrite of a merged task.
+
+**`Stat` returns `core::file::FileStamp` — a size and an mtime, and *not* `assetlib::SourceStamp`.**
+The two are structurally identical, which is the trap: `SourceStamp` lives in `assetlib_structs`
+([SourceStamp.h](../../libs/assetlib_structs/include/assetlib_structs/SourceStamp.h)), which links
+`core` ([CMakeLists.txt:13](../../libs/assetlib_structs/CMakeLists.txt)), so `core` returning one
+would invert the dependency edge. `assetlib::stampOf` becomes the conversion and stays the only
+place that knows the two are the same shape — `SourceStamp` is serialized into `.bmaterial`,
+`.bsky` and `.benvl`, so it is a format type and could not follow `core`'s definition anyway.
+
+That makes three stamps in the tree: `core::file::FileStamp` (the seam), `assetlib::SourceStamp`
+(on disk, in containers), and the editor's `editor::FileStamp()`
+([asset_paths.h:15](../../apps/editor/src/util/asset_paths.h) — a Qt-side millisecond mtime for the
+thumbnail caches). They are deliberately not merged: the first is new and unavoidable, the second is
+a file format, the third is a different resolution on a different string type.
+
+`PakFile` stores the stamp each entry had when it was packed, so `drawsLoose` and `bakeIsStale`
+return the same verdict against an archive that they returned against the tree it was packed from.
+A packed project must not silently change which material representation it draws.
+
+### Reads are concurrent, so `PakFile` holds no seek position.
+
+The editor's `AssetThumbnailCache` decodes on a `QThreadPool` with both workers "deep in KTX2
+decodes" at once
+([AssetThumbnailCache.h:235](../../apps/editor/src/Thumbnails/AssetThumbnailCache.h)), through the
+same loaders task 4 routes into the seam. That is safe today only because `readChunksFromFile` and
+`ktxTexture2_CreateFromNamedFile` each open their own handle per call.
+
+A `.bpak` is the obvious place to keep one handle open across reads instead — and a shared handle
+has a shared seek position, which two decode threads would race on. `IFileSystem::Read` and
+`ReadRange` are therefore const and **safe for concurrent calls**, and `PakFile` reads positionally
+(`pread`, or `ReadFile` with an explicit `OVERLAPPED` offset) rather than seek-then-read. Its entry
+table is built once at mount and immutable after.
+
+**Rejected: a mutex around the handle.** It serialises exactly the case `TexturePrefetch` exists to
+parallelise — two workers decoding two textures — and buys nothing a positional read does not.
 
 ### Both archived and non-archived, always, and loose wins.
 
@@ -185,7 +224,16 @@ and `core::io::ByteReader`/`ByteWriter`, not the code.
 
 The shader cache is a keyed cache of derived, disposable artifacts whose invalidation is
 content-hash-miss-and-recompile ([docs/shader_cache.md](../shader_cache.md)). An archive is
-authoritative and versioned. Nothing to share beyond the atomic-write helper.
+authoritative and versioned. Nothing to share — including its atomic write, which is
+`bgl::WriteFileAtomic` in `bgl`'s **`src/`**
+([shadercache/util.h:33](../../libs/bgl/src/shadercache/util.h)) and so unreachable from `assetlib`,
+which must never link `bgl`.
+
+`pack` needs one anyway, and needs it more than the shader cache does. A cache entry truncated by a
+crash is a miss and recompiles; a `.bpak` truncated at the target path is the shipped artifact, and
+the next run mounts it and fails to find half the project. So task 1 adds `core::file::write_atomic`
+— write to a sibling temp, `fsync`, rename — and `bgl`'s copy is left where it is rather than
+migrated, which is a cleanup this feature has no reason to carry.
 
 ```
 +--------------------------------------------------+
@@ -229,7 +277,7 @@ build spend seconds skinning on first load.
 | subsystem | change | risk |
 |---|---|---|
 | `bgl` | none | — |
-| `core` | new `core::file::IFileSystem`, `LooseFileSystem`, `SearchPath` | none; additive |
+| `core` | new `core::file::IFileSystem`, `FileStamp`, `LooseFileSystem`, `SearchPath`, `write_atomic` | none; additive |
 | `assetlib` | every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; `stampOf` and the four staleness predicates take a filesystem; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
 | `gamelib` | `AssetManager` takes a `SearchPath`; the path-taking constructor stays and builds a loose mount, so every existing caller compiles unchanged; `AcquireVatMesh` respects a read-only mount | moderate |
 | `apps/editor` | none | — |
@@ -245,13 +293,17 @@ readable.
 
 Bottom-up by layer, one PR each.
 
-**1. `core::file::IFileSystem`, `LooseFileSystem`, `SearchPath`.**
-The interface with `Exists`, `Stat`, `Read`, `ReadRange`, `Enumerate`; a directory-backed
-implementation; an ordered mount list that takes the first hit and reports which mount answered.
-Nothing calls it yet — dead scaffolding at the bottom layer, justified by its tests.
+**1. `core::file::IFileSystem`, `LooseFileSystem`, `SearchPath`, `write_atomic`.**
+All six interface members — `Exists`, `Stat`, `Read`, `ReadRange`, `Enumerate`, `IsReadOnly` — plus
+`core::file::FileStamp`; a directory-backed implementation; an ordered mount list that takes the
+first hit and reports both which mount answered and whether *that* mount is read-only; and
+`write_atomic`, which task 6 needs and nothing in the tree currently offers below `bgl`.
+Nothing calls any of it yet — dead scaffolding at the bottom layer, justified by its tests.
 *Gate:* new `core_tests` cases — a `LooseFileSystem` over a temp tree round-trips whole and ranged
-reads and reports stamps matching `std::filesystem`; a two-mount `SearchPath` resolves to the first,
-falls through on a miss, and enumerates the union without duplicates.
+reads and reports stamps matching `std::filesystem`; a ranged read past EOF throws rather than
+returning short; a two-mount `SearchPath` resolves to the first, falls through on a miss, enumerates
+the union without duplicates, and reports the answering mount's `IsReadOnly` rather than its own;
+`write_atomic` leaves no partial file at the target when the write fails.
 
 **2. `.bpak`: `PakWriter` and `PakFile`.**
 The format above, in `assetlib`. `PakFile` implements `core::file::IFileSystem` and reports itself
@@ -260,7 +312,8 @@ against the real size by subtraction before anything is allocated.
 *Gate:* new `assetlib_tests` — pack a generated tree, read every entry back byte-identical through
 both `Read` and `ReadRange`; stamps survive the round trip; `Enumerate` returns exactly what went in;
 a truncated, a corrupt-magic and an offset-past-EOF archive each throw rather than read out of
-bounds.
+bounds; and N threads reading N different entries off one mounted `PakFile` concurrently each get
+their own bytes, which is the test that fails if the reader ever grows a shared seek position.
 
 **3. Route the chunked containers through the seam.**
 `readChunksFromFile(path, …)` → `readChunks(IFileSystem&, path, …)` using `ReadRange`, and
@@ -283,11 +336,13 @@ packed out of that directory, and one that reads baked reads baked; a source tou
 flips the verdict on the loose mount and not on the archive.
 
 **6. `assetlib_cli pack` (and `list`).**
-Walks a data root, applies the exclusion rule, bakes `.bvat` fresh, writes one `.bpak`. `list` prints
-the entry table for debugging.
+Walks a data root, applies the exclusion rule, bakes `.bvat` fresh, writes one `.bpak` through
+`core::file::write_atomic` — a half-written archive at the target path is a shipped artifact missing
+half the project, not a cache miss. `list` prints the entry table for debugging.
 *Gate:* `assetlib_tests` — packing the test project's data root and enumerating the result excludes
 `textures_src/` and the project file and includes every asset type; a round trip through
-`pack` then `PakFile` reproduces every input byte-for-byte.
+`pack` then `PakFile` reproduces every input byte-for-byte; a `pack` interrupted before it finishes
+leaves the previous archive at the target intact.
 
 **7. `AssetManager` mounts a `SearchPath`.**
 New constructor taking a mount list; the existing path-taking one builds a `LooseFileSystem` and
