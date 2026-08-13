@@ -106,4 +106,26 @@ TEST_CASE("Uniforms write a handle's bindless index", "[uniforms][bindless]")
 
 		resourceManager->DestroyBuffer(buffer);
 	}
+
+	// The mirror is zero-filled, so a handle field nobody wrote reads index 0. If anything were
+	// allocated there, "never bound" and "bound to the first resource the manager handed out" would
+	// be the same eight bytes -- and the shader would sample a live resource instead of nothing.
+	// A fresh manager, not the graphics one: on that one the scene's own buffers have already
+	// consumed the low indices, so the very first allocation is what has to be checked. Without the
+	// reservation this manager would hand index 0 straight out and the check would fail.
+	SECTION("and never hands the sentinel index to a real resource")
+	{
+		auto resourceManager = device->CreateResourceManager(bgl::ResourceManagerDesc());
+		REQUIRE(resourceManager != nullptr);
+
+		auto bufDesc = bgl::ComputeBufferDesc();
+		bufDesc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName("Sentinel Probe");
+
+		const bgl::BufferHandle first = resourceManager->CreateComputeBuffer(bufDesc);
+		REQUIRE(resourceManager->ValidBufferHandle(first));
+
+		CHECK(first.bindlessIndex != bgl::c_UnboundDescriptorIndex);
+
+		resourceManager->DestroyBuffer(first);
+	}
 }

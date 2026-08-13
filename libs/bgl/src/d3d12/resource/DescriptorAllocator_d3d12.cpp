@@ -1,4 +1,5 @@
 #include "d3d12/resource/DescriptorAllocator_d3d12.h"
+#include "constants/constants.h"
 #include <core/err/util.h>
 
 namespace bgl
@@ -21,6 +22,13 @@ namespace bgl
 		m_HeapStart     = m_Heap->GetCPUDescriptorHandleForHeapStart();
 		m_IncrementSize = device->GetDescriptorHandleIncrementSize(type);
 		m_FreeIndices.reserve(capacity);
+
+		// c_UnboundDescriptorIndex is never handed out, so a zero-filled uniform mirror addresses a
+		// descriptor no resource occupies rather than the first one allocated. Marked allocated so
+		// Free would assert rather than release it into the free list.
+		gassert(capacity > c_UnboundDescriptorIndex, "The heap must have room for the sentinel");
+		m_NextUntouched                       = c_UnboundDescriptorIndex + 1;
+		m_Allocated[c_UnboundDescriptorIndex] = true;
 	}
 
 	uint32_t
