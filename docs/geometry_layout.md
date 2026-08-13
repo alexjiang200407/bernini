@@ -18,10 +18,17 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 
 * **All cross-references are `uint` offsets, not pointers.** A struct never holds a GPU address.
   It holds a `Range<T>` / `RangeWithCount<T>` / `Entry<T>` — each a bare `uint` offset into a
-  global `StructuredBuffer<T>`. `0xFFFFFFFF` is the null sentinel (`Null()`). The GPU dereferences
-  by indexing the matching buffer; the CPU assigns these offsets from container handles (see
-  *CPU-side mirror buffers*). This is the same bindless, index-as-descriptor philosophy as the
-  [RHI](docs/rhi.md).
+  global `StructuredBuffer<T>`. **Offset `0` is the null sentinel** (`Null()`), and every
+  `EntryBuffer`/`RangeBuffer` reserves element 0 for it rather than handing it out. Two things fall
+  out of that: a zero-initialized struct is already null, and a shader that dereferences a null
+  offset without checking lands on a live, zeroed element instead of reading out of bounds. The GPU
+  dereferences by indexing the matching buffer; the CPU assigns these offsets from container handles
+  (see *CPU-side mirror buffers*). This is the same bindless, index-as-descriptor philosophy as the
+  [RHI](docs/rhi.md), and now the same sentinel: `c_UnboundDescriptorIndex` is `0` for the same
+  reason, reserved by every backend's descriptor allocator so a zero-filled uniform mirror addresses
+  a descriptor no resource occupies. What keeps `0xFFFFFFFF` is the *CPU-side* handle —
+  `slot_handle::invalid_index`, and the `BufferHandle::bindlessIndex` that mirrors it — which never
+  reaches a shader.
 
 * **One IDL, two generated targets, guaranteed layout parity.** The `.slang` structs
   ([Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) etc.) and the C++ `bgl::idl::*` structs are both
@@ -149,7 +156,7 @@ copies must be kept in step by hand:
 
 | Type | File | Role |
 |---|---|---|
-| `Range<T>` | [Range.slang](libs/bgl/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0xFFFFFFFF`. |
+| `Range<T>` | [Range.slang](libs/bgl/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0`. |
 | `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
 | `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a material record). |
 
@@ -253,8 +260,21 @@ green channel.
 * **The vertex buffer is bytes, not `Vertex`.** Never index it as `StructuredBuffer<Vertex>`;
   always decode through the submesh's `VertexLayout` and `stride`. A producer may emit a packed
   subset (e.g. 32-byte pos/normal/uv, no tangent) rather than the full 48-byte `Vertex`.
-* **`Range` / `RangeWithCount` / `Entry` default to `0xFFFFFFFF` (null).** Check `Null()` before
-  dereferencing; a zero-initialized struct is *not* a valid range.
+* **`Range` / `RangeWithCount` / `Entry` default to `0` (null), and element 0 is reserved.** A
+  zero-initialized struct is null, and no allocation is ever handed offset 0 — so `IsIndexValid(0)`
+  is false and dereferencing a null offset reads a zeroed element rather than running off the buffer.
+  Check `Null()` anyway: a zeroed element is defined, not meaningful. The reserved element is carried
+  on top of `initialCount`, so a caller's budget stays entirely its own.
+* **A null dereference is defined, so it is reported rather than felt.** Reading zeroes instead of
+  faulting costs the loud failure the old out-of-bounds sentinel gave, so `EntryBuffer::Get` and
+  `RangeBuffer::Get` carry a `dbg_assert` raising `kNullEntryDeref` / `kNullRangeDeref` (see
+  [Graphics Debug](docs/gfx_debug.md)). Loud in a debug build, compiled out in Release.
+* **A container handle's null is not this null.** `slot_handle`/`multi_slot_handle` are null at
+  `invalid_index` (`0xFFFFFFFF`); the `operator=` on each offset primitive maps that to `0` on the
+  way in. Never assign `handle.index` to an offset by hand.
+* **Every index a shader reads is null at `0`.** These offsets and `c_UnboundDescriptorIndex` are
+  the same reservation, one layer apart: reserve element 0 so the zero-filled default means
+  "nothing" rather than "the first thing allocated". A new GPU-visible index should follow it.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*

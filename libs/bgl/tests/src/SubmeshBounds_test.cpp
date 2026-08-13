@@ -122,13 +122,18 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 	const float offBoxRadius = glm::length(glm::vec3(1.0f, 2.0f, 3.0f));
 	const float cubeRadius   = glm::length(glm::vec3(1.0f));
 
-	// CPU mirror first: this is what Update uploads. Validity is tracked at range roots, so index 1
-	// -- interior to the two-submesh range -- has no root of its own; AtIndex still reads it.
-	REQUIRE(submeshBuffer.IsIndexValid(0));
-	REQUIRE(submeshBuffer.IsIndexValid(2));
-	CheckSphere(submeshBuffer.AtIndex(0), glm::vec3(0.0f), bigBoxRadius);
-	CheckSphere(submeshBuffer.AtIndex(1), glm::vec3(3.0f, 5.0f, 7.0f), offBoxRadius);
-	CheckSphere(submeshBuffer.AtIndex(2), glm::vec3(0.0f), cubeRadius);
+	// Element 0 is the reserved null, so each geom's submeshes are found through its own range.
+	const uint32_t boxRoot  = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
+	const uint32_t cubeRoot = scene->GetGeomSubmeshes(cubeGeom.handle.index).range.offsetStart;
+
+	// CPU mirror first: this is what Update uploads. Validity is tracked at range roots, so
+	// boxRoot + 1 -- interior to the two-submesh range -- has no root of its own; AtIndex still
+	// reads it.
+	REQUIRE(submeshBuffer.IsIndexValid(boxRoot));
+	REQUIRE(submeshBuffer.IsIndexValid(cubeRoot));
+	CheckSphere(submeshBuffer.AtIndex(boxRoot), glm::vec3(0.0f), bigBoxRadius);
+	CheckSphere(submeshBuffer.AtIndex(boxRoot + 1), glm::vec3(3.0f, 5.0f, 7.0f), offBoxRadius);
+	CheckSphere(submeshBuffer.AtIndex(cubeRoot), glm::vec3(0.0f), cubeRadius);
 
 	// Then the GPU buffer itself, after an Update: the bytes a cull kernel would read.
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -143,8 +148,8 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	auto rbDesc     = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize = static_cast<uint64_t>(sceneDesc.initialSubmeshes) * sizeof(bgl::idl::Submesh);
+	auto rbDesc      = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize  = static_cast<uint64_t>(submeshBuffer.Capacity()) * sizeof(bgl::idl::Submesh);
 	rbDesc.debugName = "Submesh Readback";
 	auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -170,9 +175,9 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 		static_cast<const bgl::idl::Submesh*>(resourceManager->MapReadback(readback));
 	REQUIRE(uploaded != nullptr);
 
-	CheckSphere(uploaded[0], glm::vec3(0.0f), bigBoxRadius);
-	CheckSphere(uploaded[1], glm::vec3(3.0f, 5.0f, 7.0f), offBoxRadius);
-	CheckSphere(uploaded[2], glm::vec3(0.0f), cubeRadius);
+	CheckSphere(uploaded[boxRoot], glm::vec3(0.0f), bigBoxRadius);
+	CheckSphere(uploaded[boxRoot + 1], glm::vec3(3.0f, 5.0f, 7.0f), offBoxRadius);
+	CheckSphere(uploaded[cubeRoot], glm::vec3(0.0f), cubeRadius);
 
 	resourceManager->UnmapReadback(readback);
 	resourceManager->DestroyReadbackBuffer(readback, false);

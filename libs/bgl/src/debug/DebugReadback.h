@@ -38,6 +38,10 @@ namespace bgl
 			return "InvalidSubmeshInstance";
 		case idl::ErrorCode::kInvalidPsoType:
 			return "InvalidPsoType";
+		case idl::ErrorCode::kNullEntryDeref:
+			return "NullEntryDeref";
+		case idl::ErrorCode::kNullRangeDeref:
+			return "NullRangeDeref";
 		}
 
 		return std::to_string(errcode);

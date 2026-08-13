@@ -6,19 +6,20 @@ namespace bgl::idl
 	struct Range
 	{
 	public:
-		uint32_t offsetStart = 0xFFFFFFFF;
+		uint32_t offsetStart = 0;
 
 		[[nodiscard]]
 		bool
 		Null() const noexcept
 		{
-			return offsetStart == 0xFFFFFFFF;
+			return offsetStart == 0;
 		}
 
+		// A null handle carries multi_slot_handle's own sentinel, which is not this one.
 		Range&
 		operator=(core::multi_slot_handle handle) noexcept
 		{
-			offsetStart = handle.index;
+			offsetStart = handle.is_null() ? 0 : handle.index;
 			return *this;
 		}
 	};

@@ -83,8 +83,9 @@ TEST_CASE(
 	{
 		const auto pso = static_cast<uint32_t>(c_Buckets[i % c_BucketCount]);
 
+		// Any non-null mesh entry: offset 0 is the null one, so the first element past it will do.
 		auto instance                = bgl::SubmeshInstance();
-		instance.meshInstance.offset = 0u;
+		instance.meshInstance.offset = 1;
 		instance.submeshIndex        = 0u;
 		instance.pso                 = pso;
 		instanceBuffer.Add(instance);
@@ -94,9 +95,8 @@ TEST_CASE(
 	}
 	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
-		auto padding                = bgl::SubmeshInstance();
-		padding.meshInstance.offset = 0xFFFFFFFFu;
-		instanceBuffer.Add(padding);
+		// A default SubmeshInstance names no mesh; the shader skips it.
+		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
 	// Exclusive base of each bucket -- where the compaction should have put it.

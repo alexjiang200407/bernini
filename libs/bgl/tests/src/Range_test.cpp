@@ -59,21 +59,27 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
+		// Construction reserves element 0 and leaves its block dirty; flushing it leaves the counts
+		// below the caller's writes alone.
+		CHECK(dirtyCount(rb.GetDirtyBlocks()) == 1);
+		CHECK(blockDirty(rb.GetDirtyBlocks(), 0));
+		rb.Update(cmdList);
+
 		auto handle = rb.AllocateRange(3);
 		CHECK_FALSE(handle.is_null());
-		CHECK(handle.index == 0);
+		CHECK(handle.index == 1);
 		CHECK(handle.count == 3);
 		CHECK(handle.generation == 0);
 
 		CHECK(dirtyCount(rb.GetDirtyBlocks()) == 3);
-		CHECK(blockDirty(rb.GetDirtyBlocks(), 0));
 		CHECK(blockDirty(rb.GetDirtyBlocks(), 1));
 		CHECK(blockDirty(rb.GetDirtyBlocks(), 2));
-		CHECK_FALSE(blockDirty(rb.GetDirtyBlocks(), 3));
+		CHECK(blockDirty(rb.GetDirtyBlocks(), 3));
+		CHECK_FALSE(blockDirty(rb.GetDirtyBlocks(), 4));
 
 		// A second allocation continues after the first range.
 		auto handle2 = rb.AllocateRange(2);
-		CHECK(handle2.index == 3);
+		CHECK(handle2.index == 4);
 		CHECK(handle2.count == 2);
 
 		rb.Update(cmdList);
@@ -92,11 +98,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.debugName    = "RangeBuffer Add";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		rb.Update(cmdList);  // Flushes the reserved null element.
 
 		const int values[] = { 10, 20, 30 };
 		auto      handle   = rb.Add(std::span<const int>(values, 3));
 
-		CHECK(handle.index == 0);
+		CHECK(handle.index == 1);
 		CHECK(handle.count == 3);
 		CHECK(rb.Get(handle, 0) == 10);
 		CHECK(rb.Get(handle, 1) == 20);
@@ -126,8 +133,8 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		// Only the touched element's block is dirty.
 		CHECK(dirtyCount(rb.GetDirtyBlocks()) == 1);
-		CHECK(blockDirty(rb.GetDirtyBlocks(), 1));
-		CHECK_FALSE(blockDirty(rb.GetDirtyBlocks(), 0));
+		CHECK(blockDirty(rb.GetDirtyBlocks(), 2));
+		CHECK_FALSE(blockDirty(rb.GetDirtyBlocks(), 1));
 	}
 
 	SECTION("Erase frees the range and reallocation bumps generation")
@@ -140,7 +147,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
 		auto handle = rb.AllocateRange(4);
-		CHECK(handle.index == 0);
+		CHECK(handle.index == 1);
 		CHECK(handle.generation == 0);
 
 		rb.Update(cmdList);
@@ -151,7 +158,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		// The coalesced free space is reused, with a bumped generation.
 		auto reused = rb.AllocateRange(4);
-		CHECK(reused.index == 0);
+		CHECK(reused.index == 1);
 		CHECK(reused.count == 4);
 		CHECK(reused.generation == 1);
 	}
@@ -164,8 +171,9 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.debugName    = "RangeBuffer Spanning";
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		rb.Update(cmdList);  // Flushes the reserved null element.
 
-		// A 5-element range straddles block 0 (elems 0-3) and block 1 (elem 4).
+		// A 5-element range straddles block 0 (elems 1-3) and block 1 (elems 4-5).
 		auto handle = rb.AllocateRange(5);
 		CHECK(handle.count == 5);
 		CHECK(dirtyCount(rb.GetDirtyBlocks()) == 2);
@@ -182,16 +190,22 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
 
+		// The reserved element is not a live range, so a null offset read back from a GPU-side
+		// struct resolves to nothing rather than to element 0.
+		CHECK_FALSE(rb.IsIndexValid(0));
+
 		auto handle = rb.AllocateRange(3);
+		CHECK(handle.index != 0);
 		CHECK(rb.IsValid(handle));
+		CHECK(rb.IsIndexValid(handle.index));
 
 		rb.Erase(handle);
 		CHECK_FALSE(rb.IsValid(handle));
 
-		// Reallocating reuses index 0 with a bumped generation; the old handle
+		// Reallocating reuses index 1 with a bumped generation; the old handle
 		// stays invalid while the new one is valid.
 		auto reused = rb.AllocateRange(3);
-		CHECK(reused.index == 0);
+		CHECK(reused.index == 1);
 		CHECK(reused.generation == handle.generation + 1);
 		CHECK(rb.IsValid(reused));
 		CHECK_FALSE(rb.IsValid(handle));
@@ -223,11 +237,11 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		const uint32_t high[]     = { 200, 201, 202, 203 };
 		auto           highHandle = rb.Add(std::span<const uint32_t>(high, std::size(high)));
-		REQUIRE(highHandle.index == 8);  // Entirely inside block 2.
+		REQUIRE(highHandle.index == 9);  // Entirely inside block 2.
 		rb.Update(cmdList);
 
 		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = desc.initialCount * sizeof(uint32_t);
+		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
 		rbDesc.debugName = "RangeBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -272,22 +286,24 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.debugName    = "RangeBuffer Grow";
 
 		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
-		REQUIRE(rb.Capacity() == 4);
+
+		// initialCount is the caller's budget; the reserved null element rides on top of it.
+		REQUIRE(rb.Capacity() == desc.initialCount + 1);
 
 		const uint32_t first[]     = { 10, 20, 30, 40 };
 		auto           firstHandle = rb.Add(std::span<const uint32_t>(first, std::size(first)));
-		REQUIRE(rb.Capacity() == 4);
+		REQUIRE(rb.Capacity() == desc.initialCount + 1);
 
 		// One past the initial ceiling: the old contract threw here.
 		const uint32_t second[]     = { 50, 60 };
 		auto           secondHandle = rb.Add(std::span<const uint32_t>(second, std::size(second)));
 
-		CHECK(rb.Capacity() >= 6);
+		CHECK(rb.Capacity() >= 7);
 		CHECK(rb.IsValid(firstHandle));
 		CHECK(rb.IsValid(secondHandle));
 
 		// The pre-growth handle still addresses the same slots -- growth must not renumber.
-		CHECK(firstHandle.index == 0);
+		CHECK(firstHandle.index == 1);
 
 		rb.Release(false);
 	}
@@ -440,7 +456,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		const uint32_t low[]     = { 111, 222 };
 		auto           lowHandle = rb.Add(std::span<const uint32_t>(low, std::size(low)));
 
-		// Forces the growth while low[] is still pending. The forward copy's [0, 16B) region covers
+		// Forces the growth while low[] is still pending. The forward copy's [0, 20B) region covers
 		// lowHandle's slots.
 		const uint32_t high[]     = { 333, 444, 555, 666 };
 		auto           highHandle = rb.Add(std::span<const uint32_t>(high, std::size(high)));
