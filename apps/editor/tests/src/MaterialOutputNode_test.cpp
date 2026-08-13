@@ -3,8 +3,10 @@
 
 #include "util/QtSupport.h"
 
+#include <QFormLayout>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QLabel>
 #include <QSignalSpy>
 
 namespace
@@ -245,6 +247,29 @@ TEST_CASE("A material output has sensible default factors", "[materialoutput]")
 	REQUIRE(node.RoughnessFactor() == 0.2f);
 	REQUIRE(!node.IsAlphaTested());
 	REQUIRE(node.name() == QString("MaterialOutput"));
+}
+
+TEST_CASE("A material output names its factors as factors", "[materialoutput]")
+{
+	MaterialOutputNode node;
+
+	auto* form = node.embeddedWidget()->findChild<QFormLayout*>();
+	REQUIRE(form != nullptr);
+
+	// A label naming the quantity would be a lie the moment a texture is wired in: the shader
+	// multiplies these into their routed channels unconditionally, and the base colour swatch covers
+	// four channels that can be routed one at a time -- so no label conditioned on wiring is honest
+	// either.
+	const auto labelAt = [form](int row) {
+		QLayoutItem* item = form->itemAt(row, QFormLayout::LabelRole);
+		auto*        label =
+			item != nullptr ? qobject_cast<QLabel*>(item->widget()) : static_cast<QLabel*>(nullptr);
+		return label != nullptr ? label->text() : QString();
+	};
+
+	REQUIRE(labelAt(0) == QString("Base Color Factor"));
+	REQUIRE(labelAt(1) == QString("Metallic Factor"));
+	REQUIRE(labelAt(2) == QString("Roughness Factor"));
 }
 
 TEST_CASE("A material output round-trips its factors and its splits", "[materialoutput]")

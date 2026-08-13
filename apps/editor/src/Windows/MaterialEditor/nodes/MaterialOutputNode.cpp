@@ -220,13 +220,15 @@ MaterialOutputNode::embeddedWidget()
 	m_ColorButton->setFlat(true);
 	m_ColorButton->setAutoFillBackground(true);
 	RefreshColorSwatch();
-	form->addRow(QStringLiteral("Base Color"), m_ColorButton);
+	// "Factor", not the quantity: the shader multiplies these into the routed channels
+	// unconditionally, and an unrouted channel samples white.
+	form->addRow(QStringLiteral("Base Color Factor"), m_ColorButton);
 
 	m_Metallic = MakeFactorSpin(m_Widget, m_MetallicFactor);
-	form->addRow(QStringLiteral("Metallic"), m_Metallic);
+	form->addRow(QStringLiteral("Metallic Factor"), m_Metallic);
 
 	m_Roughness = MakeFactorSpin(m_Widget, m_RoughnessFactor);
-	form->addRow(QStringLiteral("Roughness"), m_Roughness);
+	form->addRow(QStringLiteral("Roughness Factor"), m_Roughness);
 
 	AddExtraRows(m_Widget, form);
 
