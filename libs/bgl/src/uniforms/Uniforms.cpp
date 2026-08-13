@@ -269,29 +269,55 @@ namespace bgl
 	Uniforms::Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
-
-		UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(cbufferName);
-
-		gassert(entry.layout != nullptr, "Pipeline must have a valid uniform layout");
-
-		m_Size           = entry.size;
-		m_RootParamIndex = entry.rootParamIndex;
-		m_Root           = BuildNode(*entry.layout);
-		m_Buffer.resize(entry.size, std::byte{ 0 });
+		Adopt(pipeline->GetUniformLayoutEntry(cbufferName));
 	}
 
 	Uniforms::Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName)
 	{
 		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+		Adopt(pipeline->GetUniformLayoutEntry(cbufferName));
+	}
 
-		UniformLayoutEntry entry = pipeline->GetUniformLayoutEntry(cbufferName);
-
+	void
+	Uniforms::Adopt(UniformLayoutEntry entry)
+	{
 		gassert(entry.layout != nullptr, "Pipeline must have a valid uniform layout");
 
 		m_Size           = entry.size;
 		m_RootParamIndex = entry.rootParamIndex;
 		m_Root           = BuildNode(*entry.layout);
-		m_Buffer.resize(entry.size, std::byte{ 0 });
+		m_Layout         = std::move(entry.layout);
+		m_Buffer.resize(m_Size, std::byte{ 0 });
+	}
+
+	bool
+	Uniforms::HasMember(std::string_view name) const
+	{
+		if (m_Root == nullptr)
+			return false;
+
+		return m_Root->Traverse(0, name).node->GetType() != UniformType::kNull;
+	}
+
+	std::vector<std::string_view>
+	FindUnknownMembers(
+		std::span<const Uniforms* const>  variants,
+		std::span<const std::string_view> names)
+	{
+		std::vector<std::string_view> unknown;
+
+		for (const std::string_view name : names)
+		{
+			const bool knownSomewhere =
+				std::ranges::any_of(variants, [name](const Uniforms* variant) {
+					return variant != nullptr && variant->HasMember(name);
+				});
+
+			if (!knownSomewhere)
+				unknown.push_back(name);
+		}
+
+		return unknown;
 	}
 
 	std::unique_ptr<detail::UniformsNode>

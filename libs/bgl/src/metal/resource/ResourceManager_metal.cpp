@@ -15,6 +15,21 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// Burns the pool's first slot so nothing is ever allocated at c_UnboundDescriptorIndex. The
+		// slot is never retired, so the index stays unreachable for the manager's whole life.
+		template <typename T>
+		void
+		ReserveUnboundSlot(core::slot_vector<T>& pool) noexcept
+		{
+			const core::slot_handle reserved = pool.allocate_slot();
+			gassert(
+				reserved.index == c_UnboundDescriptorIndex,
+				"The unbound sentinel must be the first slot a pool hands out");
+		}
+	}
+
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc) :
 		m_Device(device), m_Buffers(desc.maxBuffers), m_Readbacks(desc.maxReadbackBuffers),
 		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_Rtvs(desc.maxRtvs),
@@ -30,6 +45,12 @@ namespace bgl
 		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
 		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
 		gassert(desc.maxSamplers > 0, "maxSamplers must be greater than zero");
+
+		// The three pools a bindless handle in a cbuffer resolves through -- an SRV carries its
+		// texture's slot, so reserving the texture pool covers it too.
+		ReserveUnboundSlot(m_Buffers);
+		ReserveUnboundSlot(m_Textures);
+		ReserveUnboundSlot(m_Samplers);
 	}
 
 	BufferHandle

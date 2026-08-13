@@ -13,9 +13,10 @@ namespace bgl
 
 	namespace
 	{
-		// Bump when the on-disk format below changes; folded into every key so old files are missed
-		// rather than misread.
-		constexpr uint32_t c_CacheFormatVersion = 1;
+		// Bump when the on-disk format below changes -- or when MetalizeLayout's rules do, since the
+		// layout it computed is what CachedCbuffer stores. Folded into every key so old files are
+		// missed rather than misread.
+		constexpr uint32_t c_CacheFormatVersion = 2;
 
 		// Named as on D3D12: one file per backend holding whatever its driver calls a pipeline
 		// library, so a cache directory reads the same whichever backend wrote it.

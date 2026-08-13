@@ -7,6 +7,7 @@
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
 #include "uniforms/ReflectedLayout.h"
+#include "uniforms/UniformLayoutEntry.h"
 #include "uniforms/UniformValueType.h"
 #include <core/err/util.h>
 
@@ -348,6 +349,17 @@ namespace bgl
 			return m_Root == nullptr;
 		}
 
+		/** Whether `name` resolves to a member of this constant buffer. False for an empty mirror. */
+		[[nodiscard]] bool
+		HasMember(std::string_view name) const;
+
+		/** The reflected layout this mirror was built from. Null for an empty mirror. */
+		[[nodiscard]] const ReflectedLayout*
+		GetLayout() const
+		{
+			return m_Layout.get();
+		}
+
 		[[nodiscard]] size_t
 		GetSize() const
 		{
@@ -375,15 +387,37 @@ namespace bgl
 		}
 
 	private:
+		void
+		Adopt(UniformLayoutEntry entry);
+
 		static std::unique_ptr<detail::UniformsNode>
 		BuildNode(const ReflectedLayout& layout);
 
 	private:
-		std::unique_ptr<detail::UniformsNode> m_Root           = nullptr;
-		size_t                                m_Size           = 0;
-		uint32_t                              m_RootParamIndex = 0xFFFFFFFF;
+		std::unique_ptr<detail::UniformsNode>  m_Root = nullptr;
+		std::shared_ptr<const ReflectedLayout> m_Layout;
+		size_t                                 m_Size           = 0;
+		uint32_t                               m_RootParamIndex = 0xFFFFFFFF;
 
 		// flat CPU-side mirror
 		std::vector<std::byte> m_Buffer;
 	};
+
+	/**
+	 * The names that resolve in none of `variants` -- the members a binder names but no PSO in the
+	 * family declares.
+	 *
+	 * A name absent from one variant is ordinary: variants declare different subsets of a constant
+	 * buffer, which is what a reflected mirror exists to absorb. A name absent from *every* variant
+	 * is a typo or a shader rename, and is the case `Accessor::IsValid()` cannot distinguish on its
+	 * own. Call it once when the family is built, not per draw.
+	 *
+	 * @param variants One family's mirrors of the same constant buffer. Null and empty entries are
+	 *                 skipped, so a variant that does not declare the buffer at all costs nothing.
+	 * @return The offending names, in the order given. Empty when every name resolves somewhere.
+	 */
+	[[nodiscard]] std::vector<std::string_view>
+	FindUnknownMembers(
+		std::span<const Uniforms* const>  variants,
+		std::span<const std::string_view> names);
 }

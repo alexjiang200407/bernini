@@ -315,9 +315,13 @@ Everything else is self-explanatory from the header.
 
 ### Uniforms / Kernel
 
-* **`operator[]` throws** on an unknown member/cbuffer or a type mismatch
-  (`std::runtime_error`); `Kernel::operator[]` throws `std::out_of_range` for a cbuffer the
-  shader doesn't declare. Guard optional members with `Accessor::IsValid()`.
+* **`Uniforms::operator[]` does not throw on an unknown member** — it yields an accessor over a
+  null node, and only the subsequent read or assignment throws (`std::runtime_error`, as does a
+  type mismatch). A name that resolves to nothing is therefore silent until it is used. Guard
+  optional members with `Accessor::IsValid()`, and note that a false result cannot distinguish
+  "this PSO variant has no such field" from a wrong name. `Kernel::operator[]` *does* throw
+  `std::out_of_range` for a cbuffer the shader doesn't declare; `MeshletKernel::FindUniforms` is
+  the non-throwing form. See [Uniforms](docs/uniforms.md).
 * **Assigning a `BufferHandle`** writes a descriptor index, not data: for a "smart buffer"
   struct the index lands in whichever of `entryBuffer` / `packedBuffer` / `rangeBuffer` exists;
   for a `kDescriptorHandle` value it is written directly; otherwise it throws.
