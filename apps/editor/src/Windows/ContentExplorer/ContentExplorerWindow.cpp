@@ -1056,7 +1056,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 			continue;
 
 		auto options         = ImportOptions();
-		options.folder       = dialog.GetDestinationFolder();
+		options.destinations = dialog.GetDestinations();
 		options.mesh         = dialog.GetImportMesh();
 		options.textures     = dialog.GetImportTextures();
 		options.pbrMaterials = dialog.CanImportPbrMaterials();
@@ -1272,21 +1272,22 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	const fs::path source   = fs::path(sourceFile.toStdWString());
 	const fs::path dataRoot = fs::path(m_RootPath.toStdWString());
 
-	const auto inCategory = [&](const char* category) {
-		return dataRoot / fs::path(editor::JoinCategory(category, options.folder).toStdWString());
+	// Already category-relative; the dialog is what binds a typed folder to its category.
+	const auto under = [&](const QString& destination) {
+		return dataRoot / fs::path(destination.toStdWString());
 	};
 
 	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
 	// own folder or the next one silently overwrites it.
 	const fs::path textureDir =
-		options.textures ? inCategory(Project::c_TexturesSrcDirectoryName) : fs::path();
+		options.textures ? under(options.destinations.textures) : fs::path();
 
 	// A derived material routes at the extracted textures, so it cannot come across without them.
 	const bool     importMaterials = options.pbrMaterials && options.textures && options.mesh;
 	const fs::path materialDir =
-		importMaterials ? inCategory(Project::c_MaterialsDirectoryName) : fs::path();
+		importMaterials ? under(options.destinations.materials) : fs::path();
 
-	fs::path bmeshPath = inCategory(Project::c_MeshesDirectoryName) / source.filename();
+	fs::path bmeshPath = under(options.destinations.mesh) / source.filename();
 	bmeshPath.replace_extension(".bmesh");
 
 	const QString name = QFileInfo(sourceFile).fileName();
@@ -1307,9 +1308,9 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	// So a static import is refused over a rig it would never write, which is the deliberate
 	// direction: the alternative is parsing before asking, and refusing too often is recoverable
 	// where overwriting a rig is not.
-	fs::path bskelPath = inCategory(Project::c_SkeletonsDirectoryName) / source.filename();
+	fs::path bskelPath = under(options.destinations.skeleton) / source.filename();
 	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
-	fs::path banimPath = inCategory(Project::c_AnimationsDirectoryName) / source.filename();
+	fs::path banimPath = under(options.destinations.animations) / source.filename();
 	banimPath.replace_extension(assetlib::c_AnimationExtension);
 
 	// Only what this import may actually write.

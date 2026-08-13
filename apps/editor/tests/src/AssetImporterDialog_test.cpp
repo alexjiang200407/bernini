@@ -42,9 +42,9 @@ namespace
 	}
 
 	QLineEdit*
-	FolderField(const AssetImporterDialog& dialog)
+	Field(const AssetImporterDialog& dialog, const char* objectName)
 	{
-		return dialog.findChild<QLineEdit*>();
+		return dialog.findChild<QLineEdit*>(objectName);
 	}
 }
 
@@ -99,35 +99,73 @@ TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]
 	REQUIRE(dialog.CanImportPbrMaterials());
 }
 
-TEST_CASE("The destination folder defaults to the file's name", "[assetimporter]")
+TEST_CASE("Every category's destination defaults to the file's name", "[assetimporter]")
 {
 	const AssetImporterDialog dialog(c_SourceFile);
 
-	// Every import needs its own folder -- the extracted files are named tex0.ktx2, tex1.ktx2 by
+	// Every import needs a folder of its own -- the extracted files are named tex0.ktx2, tex1.ktx2 by
 	// index, so two imports sharing one would overwrite each other. Naming it after the source is the
-	// default that makes that collision unlikely.
-	REQUIRE(dialog.GetDestinationFolder() == QString("stone_wall"));
+	// default that makes that collision unlikely, and it is what the single shared folder used to do.
+	const ImportDestinations destinations = dialog.GetDestinations();
+
+	REQUIRE(destinations.mesh == QString("Meshes/stone_wall"));
+	REQUIRE(destinations.skeleton == QString("Skeletons/stone_wall"));
+	REQUIRE(destinations.animations == QString("Animations/stone_wall"));
+	REQUIRE(destinations.materials == QString("Materials/stone_wall"));
+	REQUIRE(destinations.textures == QString("textures_src/stone_wall"));
 }
 
-// The folder is where *every* piece of the import lands -- the mesh under Meshes/, the rig under
-// Skeletons/ -- so it stops being a question only when no piece is coming across at all.
-TEST_CASE("The folder is dead only when nothing is being imported", "[assetimporter]")
+// The whole point of a field per category: retyping one must not drag the others along with it.
+TEST_CASE("A category's destination moves on its own", "[assetimporter]")
 {
 	const AssetImporterDialog dialog(c_SourceFile);
 
-	REQUIRE(FolderField(dialog)->isEnabled());
+	Field(dialog, "animationFolder")->setText("shared/locomotion");
 
-	TexturesBox(dialog)->setChecked(false);
-	REQUIRE(FolderField(dialog)->isEnabled());  // the mesh still needs somewhere to go
-	REQUIRE(!dialog.GetImportTextures());
+	const ImportDestinations destinations = dialog.GetDestinations();
 
-	MeshBox(dialog)->setChecked(false);
-	REQUIRE(!FolderField(dialog)->isEnabled());
+	REQUIRE(destinations.animations == QString("Animations/shared/locomotion"));
+	REQUIRE(destinations.mesh == QString("Meshes/stone_wall"));
+	REQUIRE(destinations.skeleton == QString("Skeletons/stone_wall"));
+	REQUIRE(destinations.materials == QString("Materials/stone_wall"));
+	REQUIRE(destinations.textures == QString("textures_src/stone_wall"));
+}
 
-	SECTION("and comes back when a clips-only import needs it")
+// A field is a question about where a piece goes, so it stops being one when that piece is not
+// coming across.
+TEST_CASE("A destination field is dead when its piece is not imported", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile, Probe(1, 1));
+
+	REQUIRE(Field(dialog, "meshFolder")->isEnabled());
+	REQUIRE(Field(dialog, "skeletonFolder")->isEnabled());
+	REQUIRE(Field(dialog, "textureFolder")->isEnabled());
+	REQUIRE(Field(dialog, "materialFolder")->isEnabled());
+	REQUIRE(!Field(dialog, "animationFolder")->isEnabled());  // animations are off by default
+
+	SECTION("the rig's folder follows the mesh, because the rig rides with it")
 	{
+		MeshBox(dialog)->setChecked(false);
+
+		REQUIRE(!Field(dialog, "meshFolder")->isEnabled());
+		REQUIRE(!Field(dialog, "skeletonFolder")->isEnabled());
+		REQUIRE(Field(dialog, "textureFolder")->isEnabled());
+	}
+
+	SECTION("and the materials' folder follows whether one can be derived at all")
+	{
+		TexturesBox(dialog)->setChecked(false);
+
+		REQUIRE(!Field(dialog, "materialFolder")->isEnabled());
+		REQUIRE(!Field(dialog, "textureFolder")->isEnabled());
+	}
+
+	SECTION("a clips-only import still asks where the clips go")
+	{
+		MeshBox(dialog)->setChecked(false);
 		AnimationsBox(dialog)->setChecked(true);
-		REQUIRE(FolderField(dialog)->isEnabled());
+
+		REQUIRE(Field(dialog, "animationFolder")->isEnabled());
 	}
 }
 
@@ -149,27 +187,27 @@ TEST_CASE("A typed destination folder is used", "[assetimporter]")
 
 	SECTION("as typed")
 	{
-		FolderField(dialog)->setText("bricks");
+		Field(dialog, "meshFolder")->setText("bricks");
 
-		REQUIRE(dialog.GetDestinationFolder() == QString("bricks"));
+		REQUIRE(dialog.GetDestinations().mesh == QString("Meshes/bricks"));
 	}
 
 	SECTION("trimmed")
 	{
-		FolderField(dialog)->setText("  bricks  ");
+		Field(dialog, "meshFolder")->setText("  bricks  ");
 
-		REQUIRE(dialog.GetDestinationFolder() == QString("bricks"));
+		REQUIRE(dialog.GetDestinations().mesh == QString("Meshes/bricks"));
 	}
 
 	SECTION("nested, because going deeper is fine -- it is going out that is not")
 	{
-		FolderField(dialog)->setText("exterior/walls");
+		Field(dialog, "meshFolder")->setText("exterior/walls");
 
-		REQUIRE(dialog.GetDestinationFolder() == QString("exterior/walls"));
+		REQUIRE(dialog.GetDestinations().mesh == QString("Meshes/exterior/walls"));
 	}
 }
 
-TEST_CASE("A destination folder that escapes the project is refused", "[assetimporter]")
+TEST_CASE("A destination folder that escapes its category is refused", "[assetimporter]")
 {
 	// Every one of these would put the import's textures somewhere other than inside the project's
 	// texture root. The dialog falls back to the default rather than honouring any of it.
@@ -191,7 +229,7 @@ TEST_CASE("A destination folder that escapes the project is refused", "[assetimp
 	INFO("typed: " << typed);
 
 	const AssetImporterDialog dialog(c_SourceFile);
-	FolderField(dialog)->setText(typed);
+	Field(dialog, "textureFolder")->setText(typed);
 
-	REQUIRE(dialog.GetDestinationFolder() == QString("stone_wall"));
+	REQUIRE(dialog.GetDestinations().textures == QString("textures_src/stone_wall"));
 }
