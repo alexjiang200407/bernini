@@ -273,8 +273,10 @@ many instances turn out to be transparent; only the sort itself is bounded.
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
-raster/depth/blend state). The amplification and mesh shaders are always the shared
-`Forward_StaticMesh` module; the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
+raster/depth/blend state + mesh-shader source). Each row names its amplification/mesh module —
+`Forward_StaticMesh` for the static family, `Forward_Vat` for `kOpaque_VatMesh_PBR`, which fetches
+position and normal from the baked texture pair by (column, frame) instead of the vertex bytes
+(see [VAT](docs/vat.md)); the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
 `Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
 `Forward_PBR_HashedAlpha`, `Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`,
 `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a `static_assert` catches an empty row
@@ -282,8 +284,10 @@ but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
-view-proj), `expansionData` (`psoIndex` and the instance-list tables), and `materialData` (samplers,
-IBL maps, camera position, exposure) — binds the meshlet state (viewport +
+view-proj, plus the animation clock `time`/`prevTime` that VAT playback and its motion vectors
+derive the pose from), `expansionData` (`psoIndex` and the instance-list tables), `materialData`
+(samplers, IBL maps, camera position, exposure), and — where the kernel declares it — `vatData`
+(the VAT geom/state/clip/column buffers) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.

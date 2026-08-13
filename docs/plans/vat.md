@@ -386,3 +386,39 @@ transition/blend authoring is **editor work, not DCC work**: the bake synthesize
 clip from two `.banim`s plus editor-authored entry/exit data, which joins the bake's inputs as a
 fourth stamped file — additive under D1's chunk format, so nothing in this feature moves to
 accommodate it.
+
+---
+
+## Shipped: where the implementation corrected this plan
+
+The feature landed as T0–T6 (#305, #306, #307, #317, #321, #331, #334). The design above held;
+these are the points where the code knows better than the text:
+
+- **D7's sampler trick was replaced by `Load`.** A `SamplerState.Handle` inside a mesh-stage
+  cbuffer creates a Mixed-category parameter that Metal's stage-binding path mis-indexes (GPU
+  validation: an 8-byte buffer bound where the 40-byte `vatData` belongs). U is always an exact
+  column, so filtering bought nothing there anyway; fractional frames are two `Load`s and a lerp.
+  Consequence for the pad row: it still stops inter-clip bleed, but a **looping clip's seam wraps
+  the upper row index onto frame 0** rather than relying on addressing — the pad duplicates the
+  *last* frame and is clamp-shaped.
+- **`VatGeom`'s bounds are `float4` min + extent**, not `float3` min/max: the IDL generator
+  refuses `float3` (MSL sizes it 16 where C++ says 12).
+- **Names**: `GeomType::kVat` shipped as `kVatMesh` and `PsoType::kVatOpaque` as
+  `kOpaque_VatMesh_PBR` (the PSO's middle token is the geometry source); the scene doors are
+  `AddStaticMeshGeom` / `AddVatMeshGeom` — every geometry door is `Add<GeomType>Geom`, the
+  procedural VAT door an overload.
+- **The clock is `RenderJob::time`**, riding `ViewMatrices` so `AdvanceCamera`'s frame-dedup keeps
+  `time`/`prevTime` paired with the matrices; the spawn record is `VatInstanceDesc{clip, phase,
+  rate}` with `rate = 0` (or an unset clock) reproducing the frozen tier.
+- **bgl grew a second VAT door for real meshes**: `AddVatMeshGeom(BMesh, meshIndex, materials,
+  desc)` — cooked meshlets, per-submesh `columnBases` (the GPU consumed them from T3; only the
+  procedural door was single-submesh), every culling sphere replaced by the all-clips box, and
+  the opaque-`kPBR` rule enforced per submesh.
+- **gamelib's acquire returns the clip table** (`VatMesh{geom, clips}`) so callers can pick clips
+  by name, and the embedded texture pair joins the manager's refcounts under synthetic
+  `<bvat>#positions/#normals` keys. Bake-on-demand loads the container whole — the fresh path
+  needs the pixels anyway — and re-bakes when `vatIsStale` says so.
+- **`gamelib_tests` lost its DX12-only gate** (it predated the Metal backend being able to stand a
+  device up) and carries the end-to-end gate this plan reserved for the seam.
+
+The living reference is [docs/vat.md](../vat.md).

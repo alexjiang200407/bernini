@@ -86,6 +86,12 @@ The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are 
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
+**[Vertex Animation Textures](./docs/vat.md)**
+
+A rig's clips baked to a position/normal texture pair and drawn as crowds: the `.bvat`
+container and bake (assetlib), the `Forward_Vat` draw path and the clock (bgl), and the
+bake-on-demand load (gamelib). Time is the only per-frame input.
+
 **[Temporal Antialiasing](./docs/taa.md)**
 
 The jitter, the history ping-pong and the resolve: why the client's camera never sees the offset, why
