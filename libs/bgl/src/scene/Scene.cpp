@@ -651,7 +651,7 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddVatGeom(
+	Scene::AddVatMeshGeom(
 		std::span<const VatVertex> verts,
 		std::span<const uint32_t>  indices,
 		const VatGeomDesc&         desc,
@@ -663,13 +663,15 @@ namespace bgl
 		    material.layerType != LayerType::kOpaque)
 		{
 			throw SceneError(
-				"AddVatGeom: an opaque kPBR material is required -- the VAT pipeline has no other "
+				"AddVatMeshGeom: an opaque kPBR material is required -- the VAT pipeline has no "
+				"other "
 				"variant yet");
 		}
 		// The procedural path never splits a primitive, so there is exactly one submesh to base.
 		if (desc.columnBases.size() > 1)
 		{
-			throw SceneError("AddVatGeom: a procedural VAT is one submesh; columnBases names more");
+			throw SceneError(
+				"AddVatMeshGeom: a procedural VAT is one submesh; columnBases names more");
 		}
 
 		// Same fields, same packing: the bind-pose vertices go down the procedural path verbatim.
@@ -699,7 +701,7 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddVatMesh(
+	Scene::AddVatMeshGeom(
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials,
@@ -709,14 +711,14 @@ namespace bgl
 
 		if (meshIndex >= mesh.meshes.size())
 		{
-			throw SceneError("AddVatMesh: meshIndex out of range");
+			throw SceneError("AddVatMeshGeom: meshIndex out of range");
 		}
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
 		if (desc.columnBases.size() != entry.submeshCount)
 		{
 			throw SceneError(
-				"AddVatMesh: columnBases must carry one entry per submesh, in submesh order");
+				"AddVatMeshGeom: columnBases must carry one entry per submesh, in submesh order");
 		}
 
 		// The check every VAT door makes, per submesh here: no null or cutout VAT variant exists
@@ -730,7 +732,8 @@ namespace bgl
 			    bound.layerType != LayerType::kOpaque)
 			{
 				throw SceneError(
-					"AddVatMesh: every submesh needs an opaque kPBR material -- the VAT pipeline "
+					"AddVatMeshGeom: every submesh needs an opaque kPBR material -- the VAT "
+					"pipeline "
 					"has no other variant yet");
 			}
 		}
@@ -1065,16 +1068,16 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddStaticMesh(
+	Scene::AddStaticMeshGeom(
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials)
 	{
-		return AddStaticMesh(CookStaticMesh(mesh, meshIndex), materials);
+		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials);
 	}
 
 	GeomHandle
-	Scene::AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+	Scene::AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
 	{
 		return AddPreparedMesh(std::move(mesh), materials, std::nullopt);
 	}
@@ -1089,7 +1092,8 @@ namespace bgl
 		{
 			if (mesh.m_Impl == nullptr || mesh.m_Impl->submeshes.empty())
 			{
-				throw SceneError("AddStaticMesh: the prepared mesh is empty or already consumed");
+				throw SceneError(
+					"AddStaticMeshGeom: the prepared mesh is empty or already consumed");
 			}
 
 			// One GPU submesh per source submesh, in order: callers address geometry by source

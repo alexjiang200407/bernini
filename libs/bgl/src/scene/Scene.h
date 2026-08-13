@@ -178,23 +178,24 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		GeomHandle
-		AddStaticMesh(
+		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials) override;
 
 		GeomHandle
-		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) override;
+		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+			override;
 
 		GeomHandle
-		AddVatGeom(
+		AddVatMeshGeom(
 			std::span<const VatVertex> verts,
 			std::span<const uint32_t>  indices,
 			const VatGeomDesc&         desc,
 			MaterialHandle             material) override;
 
 		GeomHandle
-		AddVatMesh(
+		AddVatMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
@@ -246,7 +247,7 @@ namespace bgl
 			const std::optional<glm::vec4> boundingSphere = std::nullopt);
 
 		/**
-		 * AddStaticMesh's body, with the one knob VAT needs: `sphereOverride` replaces every
+		 * AddStaticMeshGeom's body, with the one knob VAT needs: `sphereOverride` replaces every
 		 * submesh's cooked bounding sphere, because a VAT submesh's bind-pose bounds do not hold
 		 * once its clips move it.
 		 */
@@ -264,7 +265,7 @@ namespace bgl
 		ValidateVatDesc(const VatGeomDesc& desc) const;
 
 		/**
-		 * The tail AddVatGeom and AddVatMesh share: allocates the clip and column ranges plus the
+		 * The tail AddVatMeshGeom and AddVatMeshGeom share: allocates the clip and column ranges plus the
 		 * VatGeom record onto `base` and flips it to kVatMesh. On any failure the geometry half is
 		 * taken back down (DeleteGeom) so a failed VAT add leaks nothing.
 		 */

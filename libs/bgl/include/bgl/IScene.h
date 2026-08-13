@@ -130,7 +130,7 @@ namespace bgl
 
 		// Where each submesh's vertex columns start along U, in submesh order -- the bake's
 		// VatColumns::columnBase values. Empty means a single submesh at column 0, which is what
-		// AddVatGeom uploads; AddVatMesh requires one entry per submesh.
+		// AddVatMeshGeom uploads; AddVatMeshGeom requires one entry per submesh.
 		std::vector<uint32_t> columnBases;
 	};
 
@@ -207,13 +207,13 @@ namespace bgl
 		 * @throws SceneError if `meshIndex` is out of range or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMesh(
+		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials) = 0;
 
 		/**
-		 * The commit half of the AddStaticMesh split: uploads a mesh CookStaticMesh flattened,
+		 * The commit half of the AddStaticMeshGeom split: uploads a mesh CookStaticMesh flattened,
 		 * consuming it. Cook on a worker, commit here -- the flattening is the dominant cost of a
 		 * large mesh, and the overload above pays it on the calling thread.
 		 *
@@ -223,7 +223,7 @@ namespace bgl
 		 * @throws SceneError if `mesh` was already consumed, or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
+		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
 
 		/**
 		 * Adds VAT geometry: the bind-pose mesh whose meshlets and UVs every instance draws, bound
@@ -240,7 +240,7 @@ namespace bgl
 		 *         or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddVatGeom(
+		AddVatMeshGeom(
 			std::span<const VatVertex> verts,
 			std::span<const uint32_t>  indices,
 			const VatGeomDesc&         desc,
@@ -248,7 +248,7 @@ namespace bgl
 
 		/**
 		 * Adds one mesh of a loaded BMesh as VAT geometry: the bind-pose submeshes upload exactly
-		 * as AddStaticMesh does -- cooked meshlets, one GPU submesh per source submesh, materials
+		 * as AddStaticMeshGeom does -- cooked meshlets, one GPU submesh per source submesh, materials
 		 * resolved by each submesh's material index -- and every instance fetches position and
 		 * normal from the desc's texture pair instead of the vertex bytes. Every submesh's culling
 		 * sphere comes from the desc's all-clips box, not its bind pose: the bind pose's bounds do
@@ -259,12 +259,12 @@ namespace bgl
 		 * opaque `kPBR` material: the VAT pipeline has no null or cutout variant for an unlit or
 		 * masked submesh to ride.
 		 *
-		 * @throws SceneError for anything AddStaticMesh or AddVatGeom refuses, a columnBases count
+		 * @throws SceneError for anything AddStaticMeshGeom or AddVatMeshGeom refuses, a columnBases count
 		 *         that does not match the submesh count, or a submesh whose material does not
 		 *         resolve to opaque kPBR.
 		 */
 		virtual GeomHandle
-		AddVatMesh(
+		AddVatMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,

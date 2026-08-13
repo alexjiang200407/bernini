@@ -287,9 +287,9 @@ namespace game
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
 
-		// AddStaticMesh wants a list parallel to the .bmesh's own material list, but only the
+		// AddStaticMeshGeom wants a list parallel to the .bmesh's own material list, but only the
 		// materials *this* mesh's submeshes name are worth loading -- another mesh in the same file
-		// may name others. Anything left invalid renders unlit, which is what AddStaticMesh does with
+		// may name others. Anything left invalid renders unlit, which is what AddStaticMeshGeom does with
 		// an out-of-range material index anyway.
 		auto materials = std::vector<bgl::MaterialHandle>(mesh.materials.size());
 
@@ -310,7 +310,7 @@ namespace game
 		}
 
 		auto record             = GeomRecord();
-		record.handle           = m_Scene->AddStaticMesh(mesh, meshIndex, materials);
+		record.handle           = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
 		record.key              = key;
 		record.submeshMaterials = std::move(submeshMaterials);
 		record.refCount         = 1;
@@ -440,7 +440,7 @@ namespace game
 				desc.columnBases.push_back(vat.columns[entry.firstSubmesh + i].columnBase);
 
 			auto record             = GeomRecord();
-			record.handle           = m_Scene->AddVatMesh(mesh, meshIndex, materials, desc);
+			record.handle           = m_Scene->AddVatMeshGeom(mesh, meshIndex, materials, desc);
 			record.key              = key;
 			record.submeshMaterials = std::move(submeshMaterials);
 			record.vatTextures      = acquiredTextures;

@@ -48,7 +48,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **A `Submesh` is pure geometry, and is 1:1 with a source submesh.** It carries one vertex layout,
   its meshlet/vertex/index ranges, and a local-space bounding sphere — and *nothing about shading*.
   The sphere circumscribes the submesh's AABB: the cooked `assetlib::Submesh` AABB for an asset, a
-  fold over the generated vertices for a procedural geom. `Scene::AddStaticMesh` emits
+  fold over the generated vertices for a procedural geom. `Scene::AddStaticMeshGeom` emits
   exactly one per source submesh, in source order. Its meshlet count is *unbounded* — up to the 65535
   thread groups a `DispatchMesh` can launch — and is a dispatch dimension, never a partitioning
   criterion. Nothing may split a submesh on meshlet count: doing so duplicates the partition's
@@ -260,7 +260,7 @@ green channel.
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,
   and a `SceneView` resolves each `SubmeshInstance` from the same index. Any change that makes
-  `AddStaticMesh` emit a number of submeshes other than `meshEntry.submeshCount` silently breaks every
+  `AddStaticMeshGeom` emit a number of submeshes other than `meshEntry.submeshCount` silently breaks every
   such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
   triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
   expand it at the *instance* level, not in the geometry buffers — which is exactly where the

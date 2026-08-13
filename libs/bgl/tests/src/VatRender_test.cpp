@@ -129,7 +129,7 @@ namespace
 		return verts;
 	}
 
-	// --- The AddVatMesh fixture: a two-submesh BMesh whose triangles live only in the texture. ---
+	// --- The AddVatMeshGeom fixture: a two-submesh BMesh whose triangles live only in the texture. ---
 
 	// Each submesh is one CCW triangle; the texture places submesh 0's at x ~ -1.25 and submesh 1's
 	// at x ~ +1.25. The vertex *bytes* hold no positions worth reading -- the fetch is what is
@@ -298,7 +298,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 
 	const auto verts   = MakeQuadVertices();
 	const auto indices = std::array<uint32_t, 6>{ { 0, 1, 2, 2, 1, 3 } };
-	const auto geom    = scene->AddVatGeom(verts, indices, desc, pbr);
+	const auto geom    = scene->AddVatMeshGeom(verts, indices, desc, pbr);
 	REQUIRE(geom.geomType == bgl::GeomType::kVatMesh);
 
 	auto camera = bgl::Camera();
@@ -390,31 +390,31 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 	{
 		auto broken = desc;
 		broken.clips.clear();
-		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, broken, pbr), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, broken, pbr), bgl::SceneError);
 
 		// The shader clamps the frame to frameCount - 1, so a zero would underflow a uint.
 		auto emptyClip                = desc;
 		emptyClip.clips[1].frameCount = 0;
-		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, emptyClip, pbr), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, emptyClip, pbr), bgl::SceneError);
 
 		auto noTexture      = desc;
 		noTexture.positions = bgl::TextureAssetHandle{};
-		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, noTexture, pbr), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, noTexture, pbr), bgl::SceneError);
 
 		// Deleted is as unusable as never-created: the record would bake a dead descriptor.
 		auto dead    = desc;
 		dead.normals = scene->AddTextureAsset(MakeNormalTexture(), "vat-doomed");
 		scene->DeleteTextureAsset(dead.normals);
-		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, dead, pbr), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, dead, pbr), bgl::SceneError);
 
 		CHECK_THROWS_AS(
-			scene->AddVatGeom(verts, indices, desc, bgl::MaterialHandle{}),
+			scene->AddVatMeshGeom(verts, indices, desc, bgl::MaterialHandle{}),
 			bgl::SceneError);
 
 		auto cutout          = bgl::PbrMaterialDesc();
 		cutout.layerType     = bgl::LayerType::kMask;
 		const auto cutoutPbr = scene->CreatePbrMaterial(cutout);
-		CHECK_THROWS_AS(scene->AddVatGeom(verts, indices, desc, cutoutPbr), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, desc, cutoutPbr), bgl::SceneError);
 	}
 
 	SECTION("an override cannot smuggle a cutout onto a VAT instance")
@@ -532,7 +532,7 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 	SECTION("each submesh fetches from its own column base")
 	{
 		desc.columnBases = { 0, 3 };
-		const auto geom  = scene->AddVatMesh(mesh, 0, materials, desc);
+		const auto geom  = scene->AddVatMeshGeom(mesh, 0, materials, desc);
 		REQUIRE(geom.geomType == bgl::GeomType::kVatMesh);
 
 		view->CreateVatMeshInstance(
@@ -552,7 +552,7 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 	SECTION("the bases are consumed, not assumed: base 0 twice draws both triangles left")
 	{
 		desc.columnBases = { 0, 0 };
-		const auto geom  = scene->AddVatMesh(mesh, 0, materials, desc);
+		const auto geom  = scene->AddVatMeshGeom(mesh, 0, materials, desc);
 
 		view->CreateVatMeshInstance(
 			geom,
@@ -570,10 +570,10 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 	SECTION("a columnBases count that does not match the submeshes is refused")
 	{
 		desc.columnBases = { 0 };
-		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, materials, desc), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, materials, desc), bgl::SceneError);
 
 		desc.columnBases.clear();
-		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, materials, desc), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, materials, desc), bgl::SceneError);
 	}
 
 	SECTION("a submesh without an opaque PBR material is refused")
@@ -585,11 +585,11 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 		const auto cutoutPbr = scene->CreatePbrMaterial(cutout);
 
 		const auto mixed = std::array<bgl::MaterialHandle, 2>{ { pbrA, cutoutPbr } };
-		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, mixed, desc), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, mixed, desc), bgl::SceneError);
 
 		const auto missing = std::array<bgl::MaterialHandle, 1>{ { pbrA } };
-		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 0, missing, desc), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, missing, desc), bgl::SceneError);
 
-		CHECK_THROWS_AS(scene->AddVatMesh(mesh, 1, materials, desc), bgl::SceneError);
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 1, materials, desc), bgl::SceneError);
 	}
 }

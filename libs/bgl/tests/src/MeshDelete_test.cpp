@@ -48,7 +48,7 @@ namespace
 
 	// A BMesh with one source submesh per entry of `meshletCounts`, each meshlet a single triangle.
 	// A submesh's meshlet count is a dispatch dimension, never a partitioning criterion, so however
-	// large a count is fed in, AddStaticMesh must still produce exactly one GPU submesh for it.
+	// large a count is fed in, AddStaticMeshGeom must still produce exactly one GPU submesh for it.
 	assetlib::BMesh
 	MakeMeshletMesh(std::span<const uint32_t> meshletCounts)
 	{
@@ -228,7 +228,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 }
 
 // A submesh is the unit of pipeline state, so its meshlet count -- however large -- must not split
-// it. AddStaticMesh once chunked a submesh past 64 meshlets into several GPU submeshes, which made
+// it. AddStaticMeshGeom once chunked a submesh past 64 meshlets into several GPU submeshes, which made
 // the source and GPU submesh indices disagree and left the chunks sharing one vertexData range.
 TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[scene]")
 {
@@ -246,7 +246,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 	const std::array<uint32_t, 2> counts = { { c_LargeMeshletCount, 1 } };
 	const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
 
-	auto geom = scene->AddStaticMesh(mesh, 0, {});
+	auto geom = scene->AddStaticMeshGeom(mesh, 0, {});
 	REQUIRE(geom.IsValid());
 
 	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
@@ -272,7 +272,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 	REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 
 	// The freed ranges are reusable: re-adding the same mesh succeeds (the drop-the-same-mesh path).
-	auto geom2 = scene->AddStaticMesh(mesh, 0, {});
+	auto geom2 = scene->AddStaticMeshGeom(mesh, 0, {});
 	REQUIRE(geom2.IsValid());
 }
 
@@ -311,7 +311,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 	SECTION("Materialing a submesh covers it and leaves its neighbour alone")
 	{
-		auto geom = scene->AddStaticMesh(mesh, 0, {});
+		auto geom = scene->AddStaticMeshGeom(mesh, 0, {});
 		REQUIRE(geom.IsValid());
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 1, pbr));
@@ -323,7 +323,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 	SECTION("One past the last source submesh throws")
 	{
-		auto geom = scene->AddStaticMesh(mesh, 0, {});
+		auto geom = scene->AddStaticMeshGeom(mesh, 0, {});
 		REQUIRE(geom.IsValid());
 
 		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 2, pbr), bgl::SceneError);
