@@ -16,8 +16,6 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint32_t c_Magic = magic::c_BMaterial;
-
 		constexpr uint16_t c_VersionMajor = 9;
 		constexpr uint16_t c_VersionMinor = 0;
 
@@ -77,7 +75,7 @@ namespace assetlib
 	serializeMaterial(const BMaterial& material)
 	{
 		ByteWriter writer;
-		writer.WritePod(c_Magic);
+		writer.WritePod(magic::c_BMaterial);
 		writer.WritePod(c_VersionMajor);
 		writer.WritePod(c_VersionMinor);
 
@@ -105,7 +103,7 @@ namespace assetlib
 	{
 		ByteReader reader(bytes);
 
-		if (reader.ReadPod<uint32_t>() != c_Magic)
+		if (reader.ReadPod<uint32_t>() != magic::c_BMaterial)
 			throw std::runtime_error("bmaterial: bad magic");
 
 		const auto versionMajor = reader.ReadPod<uint16_t>();

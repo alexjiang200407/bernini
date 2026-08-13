@@ -42,6 +42,16 @@ namespace bgl
 		float alphaHashSeed = 0.0f;
 	};
 
+	/**
+	 * The animation clock this draw and the previous one ran at; the VAT pose and its motion
+	 * vector are derived from the pair.
+	 */
+	struct TimeData
+	{
+		float time     = 0.0f;
+		float prevTime = 0.0f;
+	};
+
 	/** The attachments a draw renders into, all owned by the frame's render target. */
 	struct DrawTargets
 	{
@@ -105,5 +115,6 @@ namespace bgl
 		DrawTargets  targets;
 		DrawLighting lighting;
 		DrawSamplers samplers;
+		TimeData     clock;
 	};
 }

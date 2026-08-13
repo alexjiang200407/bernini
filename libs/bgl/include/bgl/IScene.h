@@ -95,6 +95,49 @@ namespace bgl
 		uint16_t           channel = 0;  // 0 = R, 1 = G, 2 = B, 3 = A
 	};
 
+	/** One vertex of a VAT geom's bind-pose mesh -- the full procedural layout, tightly packed. */
+	struct VatVertex
+	{
+		glm::vec3 position;
+		glm::vec3 normal;
+		glm::vec2 uv;
+		glm::vec4 tangent;
+	};
+
+	/** One clip's rows of the VAT texture pair; see VatGeomDesc. */
+	struct VatClipDesc
+	{
+		uint32_t firstRow   = 0;  // texture V of frame 0
+		uint32_t frameCount = 0;  // real frames; the bake pads a duplicate row after the last
+		float    sampleRate = 30.0f;
+		bool     loop       = false;
+	};
+
+	/**
+	 * A rig's baked clip set, as textures already uploaded through AddTextureAsset: positions
+	 * `R16G16B16A16_UNORM` unorm-packed in [boundsMin, boundsMax] -- one box over every frame of
+	 * every clip -- and normals `R8G8B8A8_UNORM` as unit object-space `xyz * 0.5 + 0.5`. Columns
+	 * are geometry-local vertex indices; frame `f` of clip `c` is row `clips[c].firstRow + f`.
+	 *
+	 * bgl never reads a `.bvat` (it stays codec-free); whoever decodes one -- gamelib, or a test
+	 * synthesizing textures from scratch -- fills this in.
+	 */
+	struct VatGeomDesc
+	{
+		TextureAssetHandle positions;
+		TextureAssetHandle normals;
+
+		glm::vec3 boundsMin = glm::vec3(0.0f);
+		glm::vec3 boundsMax = glm::vec3(1.0f);
+
+		std::vector<VatClipDesc> clips;
+
+		// Where each submesh's vertex columns start along U, in submesh order -- the bake's
+		// VatColumns::columnBase values. Empty means a single submesh at column 0, which is what
+		// AddVatMeshGeom uploads; AddVatMeshGeom requires one entry per submesh.
+		std::vector<uint32_t> columnBases;
+	};
+
 	struct LoosePbrMaterialDesc
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
@@ -171,13 +214,13 @@ namespace bgl
 		 * @throws SceneError if `meshIndex` is out of range or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMesh(
+		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials) = 0;
 
 		/**
-		 * The commit half of the AddStaticMesh split: uploads a mesh CookStaticMesh flattened,
+		 * The commit half of the AddStaticMeshGeom split: uploads a mesh CookStaticMesh flattened,
 		 * consuming it. Cook on a worker, commit here -- the flattening is the dominant cost of a
 		 * large mesh, and the overload above pays it on the calling thread.
 		 *
@@ -187,7 +230,52 @@ namespace bgl
 		 * @throws SceneError if `mesh` was already consumed, or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
+		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
+
+		/**
+		 * Adds VAT geometry: the bind-pose mesh whose meshlets and UVs every instance draws, bound
+		 * to the baked texture pair its vertices are fetched from (see VatGeomDesc). The submesh's
+		 * culling bounds come from the desc's box, not the bind pose -- they must hold under every
+		 * frame of every clip.
+		 *
+		 * `material` is required, opaque `kPBR` only: the VAT pipeline shades through the PBR pixel
+		 * stage, and no other variant of it exists yet. The same constraint holds for
+		 * SetSubmeshMaterial on this geom.
+		 *
+		 * @throws SceneError if a texture handle or the material is invalid or of the wrong kind,
+		 *         `clips` is empty, the primitive needs more meshlets than one dispatch can launch,
+		 *         or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddVatMeshGeom(
+			std::span<const VatVertex> verts,
+			std::span<const uint32_t>  indices,
+			const VatGeomDesc&         desc,
+			MaterialHandle             material) = 0;
+
+		/**
+		 * Adds one mesh of a loaded BMesh as VAT geometry: the bind-pose submeshes upload exactly
+		 * as AddStaticMeshGeom does -- cooked meshlets, one GPU submesh per source submesh, materials
+		 * resolved by each submesh's material index -- and every instance fetches position and
+		 * normal from the desc's texture pair instead of the vertex bytes. Every submesh's culling
+		 * sphere comes from the desc's all-clips box, not its bind pose: the bind pose's bounds do
+		 * not hold once a limb moves.
+		 *
+		 * `desc.columnBases` must carry one entry per submesh of `meshes[meshIndex]`, in submesh
+		 * order -- the bake's per-submesh column bases. Every submesh must resolve to a valid
+		 * opaque `kPBR` material: the VAT pipeline has no null or cutout variant for an unlit or
+		 * masked submesh to ride.
+		 *
+		 * @throws SceneError for anything AddStaticMeshGeom or AddVatMeshGeom refuses, a columnBases count
+		 *         that does not match the submesh count, or a submesh whose material does not
+		 *         resolve to opaque kPBR.
+		 */
+		virtual GeomHandle
+		AddVatMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const VatGeomDesc&              desc) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

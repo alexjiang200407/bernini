@@ -1,13 +1,17 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BVat.h>
 #include <core/file/file.h>
 
 #include "fs_util.h"
@@ -50,7 +54,26 @@ namespace assetlib
 			{
 				BMesh mesh = deserialize(bytes);
 				for (std::string& material : mesh.materials) material = mapTarget(plan, material);
+				mesh.skeleton = mapTarget(plan, mesh.skeleton);
 				return serialize(mesh);
+			}
+
+			case AssetType::kAnimation:
+			{
+				AnimationSet clips = deserializeAnimations(bytes);
+				clips.skeleton     = mapTarget(plan, clips.skeleton);
+				return serializeAnimations(clips);
+			}
+
+			case AssetType::kVat:
+			{
+				// The stamps survive untouched: a rename moves the file but keeps its size and
+				// mtime, so rewriting the paths keeps the bake fresh rather than forcing one.
+				BVat vat       = deserializeVat(bytes);
+				vat.mesh       = mapTarget(plan, vat.mesh);
+				vat.skeleton   = mapTarget(plan, vat.skeleton);
+				vat.animations = mapTarget(plan, vat.animations);
+				return serializeVat(vat);
 			}
 
 			case AssetType::kMaterial:
@@ -92,6 +115,7 @@ namespace assetlib
 			}
 
 			case AssetType::kTexture:
+			case AssetType::kSkeleton:
 				break;
 			}
 

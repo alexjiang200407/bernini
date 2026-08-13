@@ -1,9 +1,11 @@
 #include "Mesh/BMeshUtil.h"
 
+#include <assetlib/bmesh_io.h>
+
 namespace bmesh
 {
 	glm::mat4
-	WorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
+	GetWorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
 	{
 		auto     world = glm::mat4(1.0f);
 		uint32_t index = nodeIndex;
@@ -14,6 +16,15 @@ namespace bmesh
 			index                      = node.parent;
 		}
 		return world;
+	}
+
+	glm::mat4
+	GetInstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
+	{
+		if (nodeIndex < mesh.nodes.size() && assetlib::isSkinned(mesh, mesh.nodes[nodeIndex].mesh))
+			return glm::mat4(1.0f);
+
+		return GetWorldTransform(mesh, nodeIndex);
 	}
 
 	void

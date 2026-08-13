@@ -2,11 +2,13 @@
 
 namespace assetlib
 {
+	struct AnimationSet;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
 	struct BMesh;
 	struct BSky;
+	struct Skeleton;
 
 	/**
 	 * Renders the contents of an asset as human-readable text -- the counterpart of writeObj for the
@@ -67,4 +69,31 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	describe(const BEnv& env, const std::filesystem::path& dataRoot = {});
+
+	/** Describes a skeleton: its signature, and each bone's parent and bind pose. */
+	[[nodiscard]] std::string
+	describe(const Skeleton& skeleton);
+
+	/**
+	 * Describes a clip set: the skeleton it addresses, and per clip its length, rate, root motion and
+	 * loop flag.
+	 *
+	 * Pass the skeleton the set names to have its bone names printed, and its signature checked -- a
+	 * mismatch is the failure this format is hardest to see by eye.
+	 */
+	[[nodiscard]] std::string
+	describe(const AnimationSet& animations, const Skeleton* skeleton = nullptr);
+
+	struct BVat;
+
+	/**
+	 * Describes a VAT bake: its texture pair's dimensions and bounds, each clip's rows, each
+	 * submesh's columns, and the three inputs it was baked from with their stamps.
+	 *
+	 * Given a `dataRoot`, each input is stat'd and compared against the stamp the bake recorded, so
+	 * a stale bake is reported. Pass the tables-only form (loadVatTables) -- nothing here reads the
+	 * pixels, and a whole-project survey must not pay for them.
+	 */
+	[[nodiscard]] std::string
+	describe(const BVat& vat, const std::filesystem::path& dataRoot = {});
 }

@@ -1,10 +1,13 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
@@ -14,13 +17,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_MeshExtension        = ".bmesh";
-		constexpr std::string_view c_MaterialExtension    = ".bmaterial";
-		constexpr std::string_view c_TextureExtension     = ".ktx2";
-		constexpr std::string_view c_EnvironmentExtension = ".benv";
-		constexpr std::string_view c_SkyExtension         = ".bsky";
-		constexpr std::string_view c_EnvLightingExtension = ".benvl";
-
 		std::string
 		lowerExtension(const std::filesystem::path& path)
 		{
@@ -64,17 +60,17 @@ namespace assetlib
 			return out;
 		}
 
-		/** Every material a `.bmesh` names, in `mesh.materials` order. */
+		/** Every material a `.bmesh` names, in `mesh.materials` order, and the skeleton it skins to. */
 		void
 		collectMeshEdges(
 			std::vector<AssetRef>&       edges,
 			const std::filesystem::path& file,
 			const std::string&           referrer)
 		{
-			std::vector<std::string> materials;
+			MeshRefs refs;
 			try
 			{
-				materials = loadMaterialPaths(file);
+				refs = loadMeshRefs(file);
 			}
 			catch (const std::exception& e)
 			{
@@ -82,11 +78,59 @@ namespace assetlib
 				// see, and we would then delete one of them out from under it.
 				throw std::runtime_error(
 					"assetlib::AssetRefGraph: cannot read the mesh '" + file.string() +
-					"', so the materials it references cannot be known: " + e.what());
+					"', so the assets it references cannot be known: " + e.what());
 			}
 
-			for (const std::string& material : materials)
+			for (const std::string& material : refs.materials)
 				addEdge(edges, referrer, material, RefKind::kSubmeshMaterial);
+
+			addEdge(edges, referrer, refs.skeleton, RefKind::kMeshSkeleton);
+		}
+
+		/** The skeleton a `.banim`'s clips were resampled against. */
+		void
+		collectAnimationEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			std::string skeleton;
+			try
+			{
+				skeleton = loadAnimationSkeletonPath(file);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the clip set '" + file.string() +
+					"', so the skeleton it references cannot be known: " + e.what());
+			}
+
+			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
+		}
+
+		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
+		void
+		collectVatEdges(
+			std::vector<AssetRef>&       edges,
+			const std::filesystem::path& file,
+			const std::string&           referrer)
+		{
+			VatRefs refs;
+			try
+			{
+				refs = loadVatRefs(file);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the VAT bake '" + file.string() +
+					"', so the assets it was baked from cannot be known: " + e.what());
+			}
+
+			addEdge(edges, referrer, refs.mesh, RefKind::kVatSource);
+			addEdge(edges, referrer, refs.skeleton, RefKind::kVatSource);
+			addEdge(edges, referrer, refs.animations, RefKind::kVatSource);
 		}
 
 		/** The baked triplet a `.bmaterial` names, and the sources its channels route from. */
@@ -220,6 +264,12 @@ namespace assetlib
 			return AssetType::kSky;
 		if (ext == c_EnvLightingExtension)
 			return AssetType::kEnvLighting;
+		if (ext == c_SkeletonExtension)
+			return AssetType::kSkeleton;
+		if (ext == c_AnimationExtension)
+			return AssetType::kAnimation;
+		if (ext == c_VatExtension)
+			return AssetType::kVat;
 
 		return std::nullopt;
 	}
@@ -272,6 +322,16 @@ namespace assetlib
 			{
 				collectEnvironmentEdges(edges, file, referrer);
 				++graph.environmentsScanned;
+			}
+			else if (kind == c_AnimationExtension)
+			{
+				collectAnimationEdges(edges, file, referrer);
+				++graph.clipSetsScanned;
+			}
+			else if (kind == c_VatExtension)
+			{
+				collectVatEdges(edges, file, referrer);
+				++graph.vatsScanned;
 			}
 		}
 

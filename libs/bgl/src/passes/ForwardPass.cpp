@@ -50,11 +50,8 @@ namespace bgl
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
 		// the code that writes them so ValidateBinderNames catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
-		constexpr std::array<std::string_view, 4> c_ViewDataFields = {
-			"viewProj"sv,
-			"prevViewProj"sv,
-			"jitter"sv,
-			"prevJitter"sv,
+		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
+			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
 		};
 
 		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
@@ -75,6 +72,25 @@ namespace bgl
 			"compactedInstances"sv,
 		};
 
+		static constexpr std::array<SceneBuffer, 4> c_VatBuffers = {
+			{ { "scene.vatGeomBuffer",
+			    "vatGeomBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vatStateBuffer",
+			    "vatStateBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vatClipBuffer",
+			    "vatClipBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.vatColumnBuffer",
+			    "vatColumnBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader } }
+		};
+
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
 		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
@@ -84,6 +100,7 @@ namespace bgl
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
 		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
+		constexpr auto c_VatGeomSrc          = "Forward_VatMesh"sv;
 		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
 		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
@@ -101,6 +118,7 @@ namespace bgl
 			bool             depthWrite;
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
+			std::string_view geomSrc   = c_GeomSrc;
 		};
 
 		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).
@@ -125,6 +143,13 @@ namespace bgl
 			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
+			// kOpaque_VatMesh_PBR
+			{ c_PbrPixelSrc,
+			  RasterCullMode::kBack,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_VatGeomSrc },
 		} };
 
 		static_assert(
@@ -137,8 +162,8 @@ namespace bgl
 		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
-			pipelineDesc.ampShader  = device->CreateShader(std::string(c_GeomSrc), "ASMain");
-			pipelineDesc.meshShader = device->CreateShader(std::string(c_GeomSrc), "MSMain");
+			pipelineDesc.ampShader  = device->CreateShader(std::string(cfg.geomSrc), "ASMain");
+			pipelineDesc.meshShader = device->CreateShader(std::string(cfg.geomSrc), "MSMain");
 
 			pipelineDesc.pixelShader = device->CreateShader(std::string(cfg.pixelSrc), "PSMain");
 
@@ -256,6 +281,7 @@ namespace bgl
 		ValidateBinderNames(m_Kernels, "viewData"sv, c_ViewDataFields);
 		ValidateBinderNames(m_Kernels, "materialData"sv, UniformKeys(c_MaterialBuffers));
 		ValidateBinderNames(m_Kernels, "materialData"sv, c_MaterialDataFields);
+		ValidateBinderNames(m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
 	}
 
 	void
@@ -307,6 +333,11 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		for (const auto& binding : c_VatBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -328,6 +359,11 @@ namespace bgl
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
 		}
 
+		if (auto foundVatData = kernel.FindUniforms("vatData"))
+		{
+			BindSceneBuffers(*foundVatData, c_VatBuffers, resources);
+		}
+
 		if (auto foundViewData = kernel.FindUniforms("viewData"))
 		{
 			auto& viewData           = *foundViewData;
@@ -335,6 +371,8 @@ namespace bgl
 			viewData["prevViewProj"] = draw.viewState.prevViewProj;
 			viewData["jitter"]       = draw.viewState.jitter;
 			viewData["prevJitter"]   = draw.viewState.prevJitter;
+			viewData["time"]         = draw.clock.time;
+			viewData["prevTime"]     = draw.clock.prevTime;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))

@@ -80,28 +80,40 @@ and portability.
     skybox passes. Instance transforms are immutable, so this is camera motion only; the mesh shader
     hands the pixel stage both clip positions, which is the seam the skinned and VAT paths extend.
   - [ ] Skinned motion vectors (needs double-buffered bone palette) — hero and near tiers only.
-  - [ ] VAT motion vectors — sample previous frame's VAT UV; not optional since VAT is the majority path.
+  - [x] VAT motion vectors — the pose re-evaluated at `prevTime` through the previous
+    view-projection, substituted at the mesh-shader seam; real velocity from the first playback PR.
   - [ ] Corpses use the static MV path — the palette is unique but constant, so camera motion only.
   - [ ] TAA
     - [ ] Hashed (dithered) alpha — stochastic alpha test resolved by TAA
 - [ ] Animation
   - [ ] Animation Asset Import (clips, skeleton, etc)
-    - [ ] Resample all clips to a fixed rate (30/60 Hz) — no runtime keyframe search.
-    - [ ] Topological bone sort (`parent(i) < i`), validated at import.
-    - [ ] Per-clip metadata: authored locomotion speed, root motion delta, duration, loop flag.
+    - [x] `.bskel` / `.banim` containers, and skin binding (`JOINTS_0` / `WEIGHTS_0`) on the `.bmesh`.
+    - [x] Resample all clips to a fixed rate (30/60 Hz) — no runtime keyframe search.
+    - [x] Topological bone sort (`parent(i) < i`), validated at import.
+    - [x] Per-clip metadata: authored locomotion speed, root motion delta, duration, loop flag.
+    - [x] Skeleton signature, so a clip set cooked against a since-reordered rig is caught.
     - [ ] Rotation compression (quat+translation, 16 B/bone) — matters most for permanent corpse palettes.
     - [ ] Per-LOD bone sets as index-compatible subsets, with weight-collapse validation.
     - [ ] State machine authoring → flat table export, rejecting graph features the GPU path lacks.
-    - [ ] Separate humanoid and equine skeletons and clip sets, both exporting to the same table format.
-  - [ ] Vertex Animation Textures (VAT)
-    - [ ] Bake pipeline: resampled clip → position texture (+ normal/tangent), unorm-packed in the
-      mesh bounding box.
-    - [ ] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
-    - [ ] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
-      for the death handoff, the cavalry saddle transform, and attachments.
-    - [ ] Motion vectors (see above).
-    - [ ] Free inter-frame interpolation — vertex index along U at exact texel centre, frame along V
-      fractional, linear sampler; pad each clip with a duplicate end frame to stop bleed.
+    - [ ] Separate humanoid and equine skeletons and clip sets, both exporting to the same table
+      format — the rigs are separable already (one file is one rig, and a glTF with two skins is
+      rejected rather than half-imported), but the shared table export waits on the line above.
+    - [x] Editor import writes the rig beside the mesh — the skeleton always, the clips behind the
+      *Import animations* box, both rolled back with a failed import.
+  - [ ] Vertex Animation Textures (VAT) — the bake/draw/load core shipped, see
+    [docs/vat.md](docs/vat.md); the lines below the fold are authoring policy still open.
+    - [x] Bake pipeline: resampled clip → position texture (+ normal), unorm-packed in the mesh
+      bounding box — `assetlib_cli bakevat`, one `.bvat` per rig with both textures embedded. A
+      tangent is deliberately not baked ([docs/vat.md](docs/vat.md)).
+    - [x] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
+    - [x] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
+      for the death handoff, the cavalry saddle transform, and attachments. Baked and tested; no
+      GPU consumer yet.
+    - [x] Motion vectors (see above).
+    - [x] Free inter-frame interpolation — fractional frames blend the two rows they fall between
+      as two `Load`s and a lerp (a mesh-stage sampler breaks Metal's stage binding, and U is
+      always an exact column); the pad row duplicates each clip's end frame to stop bleed, and a
+      looping clip's seam wraps the upper row onto frame 0 rather than reading it.
     - [ ] **Bake transitions instead of blending them** — explicit idle→run, run→attack clips as
       ordinary states with exit-time transitions; better motion than a crossfade and memory is cheap.
     - [ ] Per-vertex masked layering for upper/lower split — a baked vertex mask, near-free, and the

@@ -1,8 +1,11 @@
 #pragma once
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
+#include <core/str/string_pool.h>
 
 namespace assetlib::imp
 {
@@ -26,8 +29,15 @@ namespace assetlib::imp
 
 		std::vector<std::byte> vertexData;  // all interleaved vertex blobs
 		std::vector<std::byte> indexData;   // all index buffers
-		std::vector<char>      stringPool;  // NUL-terminated names; offset 0 is the empty string
+		core::string_pool      stringPool;
 
 		std::vector<ImageData> textures;
+
+		// Empty unless the source carries a skin -- `skeleton.bones.empty()` is the "no rig" test,
+		// and `animations.clips.empty()` the "no clips" one; neither is ever half-filled. The
+		// submeshes' joint indices are already expressed in this skeleton's bone order, which is
+		// not the source's joint order.
+		Skeleton     skeleton;
+		AnimationSet animations;
 	};
 }

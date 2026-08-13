@@ -21,7 +21,6 @@ namespace
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 
 		uint32_t totalVertices = 0;
 		for (const uint32_t count : meshletCounts) totalVertices += count * 3;
@@ -109,18 +108,18 @@ TEST_CASE("A mesh larger than the scene's initial arenas still loads", "[scene][
 	SECTION("the initial sizes are a starting point, not a ceiling")
 	{
 		bgl::GeomHandle geom;
-		REQUIRE_NOTHROW(geom = scene->AddStaticMesh(bigMesh, 0, {}));
+		REQUIRE_NOTHROW(geom = scene->AddStaticMeshGeom(bigMesh, 0, {}));
 		CHECK(scene->IsGeomAlive(geom));
 	}
 
 	SECTION("geometry loaded before a growth stays alive and addressable")
 	{
 		bgl::GeomHandle first;
-		REQUIRE_NOTHROW(first = scene->AddStaticMesh(smallMesh, 0, {}));
+		REQUIRE_NOTHROW(first = scene->AddStaticMeshGeom(smallMesh, 0, {}));
 
 		// Forces every arena past the capacity `first` was allocated in.
 		bgl::GeomHandle second;
-		REQUIRE_NOTHROW(second = scene->AddStaticMesh(bigMesh, 0, {}));
+		REQUIRE_NOTHROW(second = scene->AddStaticMeshGeom(bigMesh, 0, {}));
 
 		CHECK(scene->IsGeomAlive(first));
 		CHECK(scene->IsGeomAlive(second));
@@ -137,7 +136,7 @@ TEST_CASE("A mesh larger than the scene's initial arenas still loads", "[scene][
 		for (int i = 0; i < 8; ++i)
 		{
 			bgl::GeomHandle geom;
-			REQUIRE_NOTHROW(geom = scene->AddStaticMesh(smallMesh, 0, {}));
+			REQUIRE_NOTHROW(geom = scene->AddStaticMeshGeom(smallMesh, 0, {}));
 			geoms.push_back(geom);
 		}
 
@@ -154,7 +153,7 @@ TEST_CASE("A mesh larger than the scene's initial arenas still loads", "[scene][
 		CHECK(scene->IsGeomAlive(sphere));
 
 		bgl::GeomHandle mesh;
-		REQUIRE_NOTHROW(mesh = scene->AddStaticMesh(bigMesh, 0, {}));
+		REQUIRE_NOTHROW(mesh = scene->AddStaticMeshGeom(bigMesh, 0, {}));
 		CHECK(scene->IsGeomAlive(mesh));
 		CHECK(scene->IsGeomAlive(sphere));
 	}
@@ -174,5 +173,5 @@ TEST_CASE("A mesh past the DispatchMesh group cap is still refused", "[scene][ca
 	const std::array<uint32_t, 1> overCap = { { 70000 } };
 	const assetlib::BMesh         mesh    = MakeMeshletMesh(overCap);
 
-	REQUIRE_THROWS_AS(scene->AddStaticMesh(mesh, 0, {}), bgl::SceneError);
+	REQUIRE_THROWS_AS(scene->AddStaticMeshGeom(mesh, 0, {}), bgl::SceneError);
 }

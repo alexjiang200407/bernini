@@ -2,23 +2,31 @@
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
+#include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
+#include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -30,6 +38,9 @@ namespace
 		kEnv,
 		kSky,
 		kEnvLighting,
+		kSkeleton,
+		kAnimation,
+		kVat,
 	};
 
 	std::string
@@ -79,6 +90,12 @@ namespace
 			return "composes";
 		case assetlib::RefKind::kEnvSource:
 			return "bakes its radiance from";
+		case assetlib::RefKind::kMeshSkeleton:
+			return "skins to";
+		case assetlib::RefKind::kClipSkeleton:
+			return "was resampled against";
+		case assetlib::RefKind::kVatSource:
+			return "was baked from";
 		}
 
 		return "references";
@@ -93,7 +110,7 @@ namespace
 		std::ifstream in(path, std::ios::binary);
 		uint32_t      magic = 0;
 		if (!in.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
-			throw std::runtime_error("cannot read the file header of " + path.string());
+			core::throw_runtime_error("cannot read the file header of {}", path.string());
 
 		switch (magic)
 		{
@@ -107,12 +124,40 @@ namespace
 			return ContainerType::kSky;
 		case assetlib::magic::c_BEnvL:
 			return ContainerType::kEnvLighting;
+		case assetlib::magic::c_BSkel:
+			return ContainerType::kSkeleton;
+		case assetlib::magic::c_BAnim:
+			return ContainerType::kAnimation;
+		case assetlib::magic::c_BVat:
+			return ContainerType::kVat;
 		}
 
-		throw std::runtime_error(
-			path.string() +
-			" is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky or "
-			".benvl)");
+		core::throw_runtime_error(
+			"{} is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
+			".benvl, .bskel, .banim or .bvat)",
+			path.string());
+	}
+
+	// A clip set's signature only means something next to the rig it names, so describe resolves it --
+	// against the data root when one is given, and beside the file otherwise, which is how a standalone
+	// baked directory is laid out.
+	std::optional<assetlib::Skeleton>
+	resolveSkeleton(
+		const std::filesystem::path& animationFile,
+		const std::string&           skeleton,
+		const std::filesystem::path& dataRoot)
+	{
+		if (skeleton.empty())
+			return std::nullopt;
+
+		const std::filesystem::path base =
+			dataRoot.empty() ? animationFile.parent_path() : dataRoot;
+
+		std::error_code ec;
+		if (!std::filesystem::exists(base / skeleton, ec))
+			return std::nullopt;
+
+		return assetlib::loadSkeleton(base / skeleton);
 	}
 }
 
@@ -125,16 +170,50 @@ main(int argc, char** argv)
 
 	std::string input;
 	std::string outDir;
-	std::string name = "mesh";
+	std::string name       = "mesh";
+	float       sampleRate = assetlib::c_DefaultSampleRate;
 
 	auto* bake = app.add_subcommand(
 		"bake",
-		"Convert a glTF (.glb/.gltf) into a modular .bmesh + .bmaterial + .ktx2 texture set");
+		"Convert a glTF (.glb/.gltf) into a modular .bmesh + .ktx2 texture set, plus a .bskel and "
+		".banim when it carries a skin");
 	bake->add_option("input", input, "Source .glb/.gltf file")
 		->required()
 		->check(CLI::ExistingFile);
 	bake->add_option("-o,--out", outDir, "Output directory")->required();
 	bake->add_option("-n,--name", name, "Base name for the .bmesh (default: mesh)");
+	bake->add_option(
+			"-r,--sample-rate",
+			sampleRate,
+			"Hz every animation clip is resampled to (default: 30)")
+		->check(CLI::PositiveNumber);
+
+	std::string vatDataRoot;
+	std::string vatMesh;
+	std::string vatAnimations;
+	std::string vatOut;
+
+	auto* bakevat = app.add_subcommand(
+		"bakevat",
+		"Bake a rig's clips into a .bvat: every skinned vertex at every frame, as a position and a "
+		"normal texture the crowd tier fetches instead of skinning");
+	bakevat
+		->add_option(
+			"-d,--data-root",
+			vatDataRoot,
+			"Directory the mesh's asset paths resolve "
+			"against: the project's Data directory, or the baked directory itself for assetlib_cli "
+			"bake output")
+		->required()
+		->check(CLI::ExistingDirectory);
+	bakevat->add_option("mesh", vatMesh, "A .bmesh, relative to the data root")->required();
+	bakevat
+		->add_option("animations", vatAnimations, "The .banim to bake, relative to the data root")
+		->required();
+	bakevat->add_option(
+		"-o,--out",
+		vatOut,
+		"Output .bvat (default: beside the mesh, its extension swapped)");
 
 	std::string envInput;
 	std::string envOut;
@@ -225,11 +304,7 @@ main(int argc, char** argv)
 
 	auto* describe =
 		app.add_subcommand("describe", "Print the contents of an asset container as text");
-	describe
-		->add_option(
-			"input",
-			describeInput,
-			"Source .bmesh, .bmaterial, .benv, .bsky or .benvl file")
+	describe->add_option("input", describeInput, "Source container file")
 		->required()
 		->check(CLI::ExistingFile);
 	describe->add_option(
@@ -237,7 +312,8 @@ main(int argc, char** argv)
 		describeDataRoot,
 		"Project data directory the asset's paths resolve against. For a material, a sky or a "
 		"lighting this also stats each routed source, so a stale bake is reported; for an "
-		"environment it reports whether the files it names are there");
+		"environment it reports whether the files it names are there, and for a clip set it is "
+		"where its skeleton is looked up");
 	describe->add_flag(
 		"-b,--brief",
 		describeBrief,
@@ -316,7 +392,7 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const auto imported = assetlib::loadFromGltf(input);
+			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
 			const auto tangents = assetlib::bake(imported, outDir, name);
 
 			if (tangents.skipped > 0)
@@ -332,10 +408,58 @@ main(int argc, char** argv)
 				name,
 				imported.materials.size(),
 				imported.textures.size());
+
+			if (!imported.skeleton.bones.empty())
+				spdlog::info(
+					"Baked the rig -> {}/{} ({} bones, {} clips at {} Hz)",
+					outDir,
+					assetlib::skeletonFileName(name),
+					imported.skeleton.bones.size(),
+					imported.animations.clips.size(),
+					sampleRate);
 		}
 		catch (const std::exception& e)
 		{
 			spdlog::error("bake failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*bakevat)
+	{
+		try
+		{
+			auto desc       = assetlib::VatBakeDesc();
+			desc.dataRoot   = vatDataRoot;
+			desc.mesh       = vatMesh;
+			desc.animations = vatAnimations;
+
+			const assetlib::BVat vat = assetlib::bakeVat(desc);
+
+			const std::filesystem::path out = vatOut.empty() ?
+			                                      (std::filesystem::path(vatDataRoot) / vatMesh)
+			                                          .replace_extension(assetlib::c_VatExtension) :
+			                                      std::filesystem::path(vatOut);
+			assetlib::saveVat(vat, out);
+
+			spdlog::info(
+				"Baked '{}' + '{}' -> '{}': {} x {} texels, {} clip(s), {} bones",
+				vatMesh,
+				vatAnimations,
+				out.string(),
+				vat.width,
+				vat.height,
+				vat.clips.size(),
+				vat.boneCount);
+			spdlog::info(
+				"  positions {}, normals {}, palettes {}",
+				formatBytes(vat.positionsKtx2.size()),
+				formatBytes(vat.normalsKtx2.size()),
+				formatBytes(vat.palettes.size() * sizeof(glm::mat4)));
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("bakevat failed: {}", e.what());
 			return 1;
 		}
 	}
@@ -525,6 +649,20 @@ main(int argc, char** argv)
 			case ContainerType::kEnvLighting:
 				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), dataRoot);
 				break;
+			case ContainerType::kSkeleton:
+				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
+				break;
+			case ContainerType::kAnimation:
+			{
+				const auto animations = assetlib::loadAnimations(path);
+				const auto skeleton   = resolveSkeleton(path, animations.skeleton, dataRoot);
+				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
+				break;
+			}
+			case ContainerType::kVat:
+				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
+				std::cout << assetlib::describe(assetlib::loadVatTables(path), dataRoot);
+				break;
 			}
 		}
 		catch (const std::exception& e)
@@ -579,10 +717,13 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(desc);
 
 			spdlog::info(
-				"Scanned {} meshes, {} materials and {} environment assets: {} references",
+				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets and {} VAT "
+				"bakes: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
 				graph.environmentsScanned,
+				graph.clipSetsScanned,
+				graph.vatsScanned,
 				graph.Edges().size());
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.

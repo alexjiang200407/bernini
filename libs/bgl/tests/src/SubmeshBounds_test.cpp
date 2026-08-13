@@ -21,7 +21,6 @@ namespace
 		constexpr uint16_t c_Stride = 12;
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 		mesh.vertexData.resize(static_cast<size_t>(aabbs.size()) * 3 * c_Stride);
 
 		uint32_t vertexCursor = 0;
@@ -108,7 +107,7 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 		{ glm::vec3(2.0f, 3.0f, 4.0f), glm::vec3(4.0f, 7.0f, 10.0f) },
 	};
 
-	const auto geom = scene->AddStaticMesh(MakeTwoSubmeshMesh(aabbs), 0, {});
+	const auto geom = scene->AddStaticMeshGeom(MakeTwoSubmeshMesh(aabbs), 0, {});
 	REQUIRE(geom.IsValid());
 
 	// Procedural path: bounds fold over the generated vertices instead of a cooked AABB. The cube

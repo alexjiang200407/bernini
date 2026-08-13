@@ -1,13 +1,21 @@
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
+#include <assetlib/skeleton.h>
+#include <assetlib/vat_bake.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BVat.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include "RefsSandbox.h"
 
@@ -65,12 +73,12 @@ TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrenam
 	CHECK(fs::exists(root.path / "Materials" / "new.bmaterial"));
 
 	CHECK(
-		loadMaterialPaths(root.path / "Meshes" / "one.bmesh") ==
+		loadMeshRefs(root.path / "Meshes" / "one.bmesh").materials ==
 		std::vector<std::string>{ "Materials/new.bmaterial" });
 
 	// Only the slot that named it moves; the sibling is untouched.
 	CHECK(
-		loadMaterialPaths(root.path / "Meshes" / "two.bmesh") ==
+		loadMeshRefs(root.path / "Meshes" / "two.bmesh").materials ==
 		std::vector<std::string>{ "Materials/other.bmaterial", "Materials/new.bmaterial" });
 
 	SECTION("and the rewritten project has no reference to the old name")
@@ -335,4 +343,89 @@ TEST_CASE("A destination taken since the plan fails the rename", "[assetrename]"
 
 	CHECK(renameAsset(plan, root.Desc()).status == RenameStatus::kFailed);
 	CHECK(fs::exists(root.path / "textures_src" / "a.ktx2"));
+}
+
+TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_rig");
+
+	// The smallest rig a .bvat can be baked from -- one bone, one skinned vertex, one single-frame
+	// clip -- so every kind of skeleton referrer exists to be re-pointed: the mesh names it, the
+	// clip set names it, and the bake stamps all three.
+	auto skeleton = Skeleton();
+
+	auto bone       = Bone();
+	bone.bindPose   = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+	bone.parent     = c_InvalidIndex;
+	bone.nameOffset = skeleton.stringPool.add("root");
+	skeleton.bones.push_back(bone);
+	skeleton.bones[0].inverseBind = glm::inverse(bindPoseModelTransforms(skeleton)[0]);
+
+	fs::create_directories(root.path / "Skeletons");
+	saveSkeleton(skeleton, root.path / "Skeletons/rig.bskel");
+
+	auto animations              = AnimationSet();
+	animations.skeleton          = "Skeletons/rig.bskel";
+	animations.skeletonSignature = skeletonSignature(skeleton);
+	animations.boneCount         = 1;
+
+	auto clip        = AnimationClip();
+	clip.nameOffset  = animations.stringPool.add("rest");
+	clip.firstSample = 0;
+	clip.frameCount  = 1;
+	clip.sampleRate  = 30.0f;
+	animations.clips.push_back(clip);
+	animations.samples.push_back(bone.bindPose);
+
+	fs::create_directories(root.path / "Animations");
+	saveAnimations(animations, root.path / "Animations/rig.banim");
+
+	auto mesh = BMesh();
+
+	auto submesh                  = Submesh();
+	submesh.layout.attributeCount = 3;
+	submesh.layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
+	submesh.layout.attributes[1]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 12 };
+	submesh.layout.attributes[2]  = { VertexSemantic::kWeights0, VertexFormat::kUnorm16x4, 20 };
+	submesh.layout.stride         = 28;
+
+	const glm::vec3               position(1.0f, 0.0f, 0.0f);
+	const std::array<uint16_t, 4> joints  = { { 0, 0, 0, 0 } };
+	const std::array<uint16_t, 4> weights = { { 65535, 0, 0, 0 } };
+	mesh.vertexData.resize(28);
+	std::memcpy(mesh.vertexData.data(), &position, 12);
+	std::memcpy(mesh.vertexData.data() + 12, joints.data(), 8);
+	std::memcpy(mesh.vertexData.data() + 20, weights.data(), 8);
+	submesh.vertexCount = 1;
+	mesh.submeshes.push_back(submesh);
+
+	mesh.meshes   = { Mesh{ 0, 1, 0 } };
+	mesh.skeleton = "Skeletons/rig.bskel";
+	save(mesh, root.path / "Meshes/rig.bmesh");
+
+	saveVat(
+		bakeVat(VatBakeDesc{ root.path, "Meshes/rig.bmesh", "Animations/rig.banim" }),
+		root.path / "Meshes/rig.bvat");
+
+	REQUIRE(
+		Rename(root, "Skeletons/rig.bskel", "Skeletons/hero.bskel").status ==
+		RenameStatus::kRenamed);
+
+	CHECK(loadMeshRefs(root.path / "Meshes/rig.bmesh").skeleton == "Skeletons/hero.bskel");
+	CHECK(loadAnimationSkeletonPath(root.path / "Animations/rig.banim") == "Skeletons/hero.bskel");
+
+	const VatRefs refs = loadVatRefs(root.path / "Meshes/rig.bvat");
+	CHECK(refs.skeleton == "Skeletons/hero.bskel");
+	CHECK(refs.mesh == "Meshes/rig.bmesh");
+
+	// The stamps record size and mtime, both of which a rename preserves: the rewritten .bvat is
+	// still fresh, not a re-bake waiting to happen.
+	CHECK_FALSE(vatIsStale(loadVatTables(root.path / "Meshes/rig.bvat"), root.path));
+
+	// An input only the .bvat references follows too.
+	REQUIRE(
+		Rename(root, "Animations/rig.banim", "Animations/hero.banim").status ==
+		RenameStatus::kRenamed);
+	CHECK(loadVatRefs(root.path / "Meshes/rig.bvat").animations == "Animations/hero.banim");
+	CHECK_FALSE(vatIsStale(loadVatTables(root.path / "Meshes/rig.bvat"), root.path));
 }

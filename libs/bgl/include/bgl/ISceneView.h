@@ -38,6 +38,35 @@ namespace bgl
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
 
 		/**
+		 * The playback record an instance is spawned with, written once here and never per frame --
+		 * the tier's whole bargain. The pose at RenderJob::time `t` is frame
+		 * `phase + t * rate * sampleRate`, wrapped over the clip when it loops and clamped to its
+		 * last frame when it does not; fractional frames blend the two rows they fall between.
+		 *
+		 * `phase` staggers identical units for free, `rate` de-syncs their stride; `rate = 0` holds
+		 * an instance on `phase` under any clock, which is also what a caller that never sets
+		 * RenderJob::time gets.
+		 */
+		struct VatInstanceDesc
+		{
+			uint32_t clip  = 0;
+			float    phase = 0.0f;  // frames, may be fractional
+			float    rate  = 1.0f;  // multiplier on the clip's authored sampleRate
+		};
+
+		/**
+		 * The kVatMesh counterpart of CreateStaticMeshInstance. Deleted through the same
+		 * DeleteMeshInstance as any other placement.
+		 *
+		 * @throws SceneError if `geom` is not a live kVatMesh geom, or `desc.clip` is out of range.
+		 */
+		virtual MeshInstanceHandle
+		CreateVatMeshInstance(
+			GeomHandle             geom,
+			glm::mat4              transform,
+			const VatInstanceDesc& desc) = 0;
+
+		/**
 		 * Removes a mesh instance from this view. The geometry it referenced is left
 		 * intact; the shared Scene's reference count for that geometry is decremented
 		 * so the geometry can later be removed by Scene::DeleteGeom.

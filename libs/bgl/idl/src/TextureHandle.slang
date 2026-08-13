@@ -6,6 +6,10 @@ public struct TextureHandle
 
     public float4 SampleLevel(SamplerState.Handle s, float2 uv, float level) { return texture.SampleLevel(s, uv, level); }
 
+    // A texel by integer coordinate, no sampler in the loop. What a fetch keyed on an exact texel
+    // (a VAT column) wants -- and what a stage with no sampler bound can still do.
+    public float4 Load(uint2 coord, uint mip = 0) { return texture.Load(int3(coord, mip)); }
+
     // Sampled `bias` levels coarser than the footprint the hardware picked. Distinct from
     // SampleLevel: the level is chosen from the derivatives as usual, anisotropy included, so a
     // caller wanting "coarser than this pixel" keeps the filtering the pixel itself got.

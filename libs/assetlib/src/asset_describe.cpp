@@ -1,11 +1,16 @@
 #include <assetlib/asset_describe.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/env_bake.h>
+#include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BVat.h>
+#include <assetlib_structs/Skeleton.h>
 
 namespace assetlib
 {
@@ -123,7 +128,7 @@ namespace assetlib
 		}
 
 		std::string
-		texturePathOr(const std::string& path)
+		pathOr(const std::string& path)
 		{
 			return path.empty() ? std::string("(none)") : path;
 		}
@@ -138,8 +143,8 @@ namespace assetlib
 			const std::filesystem::path& dataRoot)
 		{
 			out += std::format("\n  {}\n", label);
-			out += std::format("    source          {}\n", texturePathOr(route.source));
-			out += std::format("    baked           {}\n", texturePathOr(route.baked));
+			out += std::format("    source          {}\n", pathOr(route.source));
+			out += std::format("    baked           {}\n", pathOr(route.baked));
 
 			if (route.source.empty())
 			{
@@ -206,9 +211,9 @@ namespace assetlib
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
 			out += "\n  baked textures\n";
-			out += std::format("    baseColor       {}\n", texturePathOr(pbr.baseColorTexture));
-			out += std::format("    normal          {}\n", texturePathOr(pbr.normalTexture));
-			out += std::format("    orm             {}\n", texturePathOr(pbr.ormTexture));
+			out += std::format("    baseColor       {}\n", pathOr(pbr.baseColorTexture));
+			out += std::format("    normal          {}\n", pathOr(pbr.normalTexture));
+			out += std::format("    orm             {}\n", pathOr(pbr.ormTexture));
 
 			out += "\n  channel routes\n";
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
@@ -285,13 +290,24 @@ namespace assetlib
 		out += std::format("  vertexData   {}\n", byteSize(mesh.vertexData.size()));
 		out += std::format("  indexData    {}\n", byteSize(mesh.indexData.size()));
 
+		// A mesh whose layout carries joints but names no skeleton has joint indices nothing can
+		// resolve, which is invisible until it renders as a heap.
+		if (isSkinned(mesh))
+			out += std::format(
+				"  skeleton     {}\n",
+				mesh.skeleton.empty() ? "(SKINNED, but names none)" : mesh.skeleton);
+		else if (!mesh.skeleton.empty())
+			out += std::format(
+				"  skeleton     {} (unused: no submesh carries joints)\n",
+				mesh.skeleton);
+
 		// Every path is relative to the project's data root, not to this file -- worth saying, since a
 		// path that looks broken relative to the .bmesh is usually correct.
 		out += std::format(
 			"  materials    {} (paths relative to the data root)\n",
 			mesh.materials.size());
 		for (size_t i = 0; i < mesh.materials.size(); ++i)
-			out += std::format("    [{}] {}\n", i, texturePathOr(mesh.materials[i]));
+			out += std::format("    [{}] {}\n", i, pathOr(mesh.materials[i]));
 
 		if (!verbose)
 			return out;
@@ -302,7 +318,7 @@ namespace assetlib
 			out += std::format(
 				"\n  mesh [{}] '{}' -- submeshes [{}, {})\n",
 				i,
-				nameFromPool(mesh.stringPool, entry.nameOffset),
+				mesh.stringPool.at(entry.nameOffset),
 				entry.firstSubmesh,
 				entry.firstSubmesh + entry.submeshCount);
 
@@ -321,7 +337,7 @@ namespace assetlib
 				out += std::format(
 					"    submesh [{}] '{}'\n",
 					index,
-					nameFromPool(mesh.stringPool, submesh.nameOffset));
+					mesh.stringPool.at(submesh.nameOffset));
 				out += std::format(
 					"      geometry {} verts, {} indices ({}), {} meshlets\n",
 					submesh.vertexCount,
@@ -427,6 +443,168 @@ namespace assetlib
 		out += std::format("benv '{}'\n", env.name);
 		out += std::format("  sky               {}\n", referenceOr(env.sky, dataRoot));
 		out += std::format("  lighting          {}\n", referenceOr(env.lighting, dataRoot));
+
+		return out;
+	}
+
+	std::string
+	describe(const Skeleton& skeleton)
+	{
+		std::string out;
+
+		out += "bskel\n";
+		out += std::format("  bones        {}\n", skeleton.bones.size());
+		out += std::format("  signature    {:016x}\n", skeletonSignature(skeleton));
+
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+		{
+			const Bone& bone = skeleton.bones[i];
+			out += std::format(
+				"    [{}] '{}' parent {} bind t{} s{}\n",
+				i,
+				skeleton.stringPool.at(bone.nameOffset),
+				bone.parent == c_InvalidIndex ? std::string("(root)") : std::to_string(bone.parent),
+				vec3(bone.bindPose.translation),
+				vec3(bone.bindPose.scale));
+		}
+
+		return out;
+	}
+
+	std::string
+	describe(const AnimationSet& animations, const Skeleton* skeleton)
+	{
+		std::string out;
+
+		out += "banim\n";
+		out += std::format(
+			"  skeleton     {} (path relative to the data root)\n",
+			pathOr(animations.skeleton));
+		out += std::format("  bones        {}\n", animations.boneCount);
+		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
+
+		if (skeleton != nullptr)
+			out += std::format(
+				"  binding      {}\n",
+				animationsMatchSkeleton(animations, *skeleton) ?
+					"matches the skeleton" :
+					"DOES NOT MATCH the skeleton -- the clips' joint indices name other bones");
+
+		out += std::format("  clips        {}\n", animations.clips.size());
+		out += std::format(
+			"  samples      {} ({})\n",
+			animations.samples.size(),
+			byteSize(animations.samples.size() * sizeof(Transform)));
+
+		for (size_t i = 0; i < animations.clips.size(); ++i)
+		{
+			const AnimationClip& clip = animations.clips[i];
+			out +=
+				std::format("\n  clip [{}] '{}'\n", i, animations.stringPool.at(clip.nameOffset));
+			out += std::format(
+				"    length     {:.3g} s, {} frames at {:.4g} Hz{}\n",
+				clip.duration,
+				clip.frameCount,
+				clip.sampleRate,
+				clip.loop != 0 ? ", looping" : "");
+			out += std::format(
+				"    rootMotion {} ({:.4g} u/s)\n",
+				vec3(clip.rootMotion),
+				clip.locomotionSpeed);
+		}
+
+		return out;
+	}
+
+	namespace
+	{
+		// One input of a VAT bake: the path, the stamp the bake recorded, and -- against a data
+		// root -- whether the file still matches it.
+		void
+		describeVatInput(
+			std::string&                 out,
+			const char*                  label,
+			const std::string&           path,
+			const SourceStamp&           baked,
+			const std::filesystem::path& dataRoot)
+		{
+			out += std::format("    {:<10} {}\n", label, pathOr(path));
+
+			if (dataRoot.empty() || path.empty())
+				return;
+
+			const SourceStamp live = stampOf(dataRoot / path);
+			if (live.size == 0)
+				out += "               MISSING: the file is not on disk\n";
+			else if (live != baked)
+				out += std::format(
+					"               STALE: source is {} B / mtime {}, baked from {} B / mtime {}\n",
+					live.size,
+					live.mtime,
+					baked.size,
+					baked.mtime);
+		}
+	}
+
+	std::string
+	describe(const BVat& vat, const std::filesystem::path& dataRoot)
+	{
+		std::string out;
+
+		out += "bvat\n";
+		out += std::format(
+			"  textures     {} x {} (vertex columns x padded frame rows)\n",
+			vat.width,
+			vat.height);
+		// Empty payloads mean a tables-only read, not an empty texture -- serializeVat refuses those.
+		const auto payload = [](const std::vector<std::byte>& bytes) {
+			return bytes.empty() ? std::string("(not read)") : byteSize(bytes.size());
+		};
+		out += std::format(
+			"  positions    {} (RGBA16 unorm in bounds), normals {} (RGBA8 unorm)\n",
+			payload(vat.positionsKtx2),
+			payload(vat.normalsKtx2));
+		out += std::format(
+			"  bounds       {} .. {} (all clips)\n",
+			vec3(vat.boundsMin),
+			vec3(vat.boundsMax));
+		out += std::format(
+			"  palettes     {} ({} bones x {} frames)\n",
+			vat.palettes.size(),
+			vat.boneCount,
+			vat.boneCount != 0 ? vat.palettes.size() / vat.boneCount : 0);
+
+		out += std::format("  inputs       (paths relative to the data root)\n");
+		describeVatInput(out, "mesh", vat.mesh, vat.meshStamp, dataRoot);
+		describeVatInput(out, "skeleton", vat.skeleton, vat.skeletonStamp, dataRoot);
+		describeVatInput(out, "animations", vat.animations, vat.animationsStamp, dataRoot);
+		out += std::format("    signature  {:016x}\n", vat.skeletonSignature);
+
+		out += std::format("  submeshes    {}\n", vat.columns.size());
+		for (size_t i = 0; i < vat.columns.size(); ++i)
+			out += std::format(
+				"    [{}] columns [{}, {})\n",
+				i,
+				vat.columns[i].columnBase,
+				vat.columns[i].columnBase + vat.columns[i].vertexCount);
+
+		out += std::format("  clips        {}\n", vat.clips.size());
+		for (size_t i = 0; i < vat.clips.size(); ++i)
+		{
+			const VatClip& clip = vat.clips[i];
+			out += std::format("\n  clip [{}] '{}'\n", i, vat.stringPool.at(clip.nameOffset));
+			out += std::format(
+				"    length     {:.3g} s, {} frames at {:.4g} Hz{}\n",
+				clip.duration,
+				clip.frameCount,
+				clip.sampleRate,
+				clip.loop != 0 ? ", looping" : "");
+			out += std::format(
+				"    rows       [{}, {}] + padding row {}\n",
+				clip.firstRow,
+				clip.firstRow + clip.frameCount - 1,
+				clip.firstRow + clip.frameCount);
+		}
 
 		return out;
 	}

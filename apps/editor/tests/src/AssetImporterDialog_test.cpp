@@ -9,7 +9,6 @@ namespace
 {
 	/** The glTF a test pretends the user dropped. Nothing reads it, so it need not exist. */
 	constexpr auto c_SourceFile = "C:/Assets/Exports/stone_wall.glb";
-	constexpr auto c_TargetDir  = "C:/Project/Data/Meshes";
 
 	/** A probe result posing as a file with `pbr` PBR materials out of `total`. */
 	assetlib::GltfMaterialProbe
@@ -25,6 +24,12 @@ namespace
 	}
 
 	QCheckBox*
+	MeshBox(const AssetImporterDialog& dialog)
+	{
+		return dialog.findChild<QCheckBox*>("importMesh");
+	}
+
+	QCheckBox*
 	MaterialsBox(const AssetImporterDialog& dialog)
 	{
 		return dialog.findChild<QCheckBox*>("importPbrMaterials");
@@ -37,7 +42,7 @@ namespace
 	}
 
 	QLineEdit*
-	SubdirField(const AssetImporterDialog& dialog)
+	FolderField(const AssetImporterDialog& dialog)
 	{
 		return dialog.findChild<QLineEdit*>();
 	}
@@ -45,11 +50,11 @@ namespace
 
 TEST_CASE("The importer offers to bring textures across, but not animations", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
 	// Textures are what a mesh needs to look like anything, so they are on by default.
-	REQUIRE(dialog.ImportTextures());
-	REQUIRE(!dialog.ImportAnimations());
+	REQUIRE(dialog.GetImportTextures());
+	REQUIRE(!dialog.GetImportAnimations());
 
 	REQUIRE(TexturesBox(dialog) != nullptr);
 	REQUIRE(AnimationsBox(dialog) != nullptr);
@@ -57,7 +62,7 @@ TEST_CASE("The importer offers to bring textures across, but not animations", "[
 
 TEST_CASE("PBR materials come across when the file has some", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(2, 2));
+	const AssetImporterDialog dialog(c_SourceFile, Probe(2, 2));
 
 	REQUIRE(MaterialsBox(dialog)->isEnabled());
 	REQUIRE(dialog.CanImportPbrMaterials());
@@ -70,7 +75,7 @@ TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
 		Probe(0, 0),   // no materials at all
 		Probe(3, 0));  // materials, but every one of them unlit or spec/gloss
 
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, probe);
+	const AssetImporterDialog dialog(c_SourceFile, probe);
 
 	REQUIRE(!MaterialsBox(dialog)->isEnabled());
 	REQUIRE(!dialog.CanImportPbrMaterials());
@@ -78,7 +83,7 @@ TEST_CASE("A file with no PBR material cannot import one", "[assetimporter]")
 
 TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir, Probe(1, 1));
+	const AssetImporterDialog dialog(c_SourceFile, Probe(1, 1));
 
 	REQUIRE(dialog.CanImportPbrMaterials());
 
@@ -94,56 +99,77 @@ TEST_CASE("Turning textures off takes the materials with them", "[assetimporter]
 	REQUIRE(dialog.CanImportPbrMaterials());
 }
 
-TEST_CASE("The texture folder defaults to the file's name", "[assetimporter]")
+TEST_CASE("The destination folder defaults to the file's name", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
 	// Every import needs its own folder -- the extracted files are named tex0.ktx2, tex1.ktx2 by
 	// index, so two imports sharing one would overwrite each other. Naming it after the source is the
 	// default that makes that collision unlikely.
-	REQUIRE(dialog.TextureSubdirectory() == QString("stone_wall"));
+	REQUIRE(dialog.GetDestinationFolder() == QString("stone_wall"));
 }
 
-TEST_CASE("Turning textures off disables the folder to put them in", "[assetimporter]")
+// The folder is where *every* piece of the import lands -- the mesh under Meshes/, the rig under
+// Skeletons/ -- so it stops being a question only when no piece is coming across at all.
+TEST_CASE("The folder is dead only when nothing is being imported", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
 
-	REQUIRE(SubdirField(dialog)->isEnabled());
+	REQUIRE(FolderField(dialog)->isEnabled());
 
-	// A destination for textures that are not being extracted is not a question worth asking.
 	TexturesBox(dialog)->setChecked(false);
+	REQUIRE(FolderField(dialog)->isEnabled());  // the mesh still needs somewhere to go
+	REQUIRE(!dialog.GetImportTextures());
 
-	REQUIRE(!SubdirField(dialog)->isEnabled());
-	REQUIRE(!dialog.ImportTextures());
+	MeshBox(dialog)->setChecked(false);
+	REQUIRE(!FolderField(dialog)->isEnabled());
+
+	SECTION("and comes back when a clips-only import needs it")
+	{
+		AnimationsBox(dialog)->setChecked(true);
+		REQUIRE(FolderField(dialog)->isEnabled());
+	}
 }
 
-TEST_CASE("A typed texture folder is used", "[assetimporter]")
+// Unchecking the mesh is how a rig's other animation files come in: the artist exported one file per
+// clip, each carrying its own copy of the geometry, and only the clips are wanted.
+TEST_CASE("The mesh can be left out of an import", "[assetimporter]")
 {
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
+	const AssetImporterDialog dialog(c_SourceFile);
+
+	REQUIRE(dialog.GetImportMesh());
+
+	MeshBox(dialog)->setChecked(false);
+	REQUIRE(!dialog.GetImportMesh());
+}
+
+TEST_CASE("A typed destination folder is used", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile);
 
 	SECTION("as typed")
 	{
-		SubdirField(dialog)->setText("bricks");
+		FolderField(dialog)->setText("bricks");
 
-		REQUIRE(dialog.TextureSubdirectory() == QString("bricks"));
+		REQUIRE(dialog.GetDestinationFolder() == QString("bricks"));
 	}
 
 	SECTION("trimmed")
 	{
-		SubdirField(dialog)->setText("  bricks  ");
+		FolderField(dialog)->setText("  bricks  ");
 
-		REQUIRE(dialog.TextureSubdirectory() == QString("bricks"));
+		REQUIRE(dialog.GetDestinationFolder() == QString("bricks"));
 	}
 
 	SECTION("nested, because going deeper is fine -- it is going out that is not")
 	{
-		SubdirField(dialog)->setText("exterior/walls");
+		FolderField(dialog)->setText("exterior/walls");
 
-		REQUIRE(dialog.TextureSubdirectory() == QString("exterior/walls"));
+		REQUIRE(dialog.GetDestinationFolder() == QString("exterior/walls"));
 	}
 }
 
-TEST_CASE("A texture folder that escapes the project is refused", "[assetimporter]")
+TEST_CASE("A destination folder that escapes the project is refused", "[assetimporter]")
 {
 	// Every one of these would put the import's textures somewhere other than inside the project's
 	// texture root. The dialog falls back to the default rather than honouring any of it.
@@ -164,8 +190,8 @@ TEST_CASE("A texture folder that escapes the project is refused", "[assetimporte
 
 	INFO("typed: " << typed);
 
-	const AssetImporterDialog dialog(c_SourceFile, c_TargetDir);
-	SubdirField(dialog)->setText(typed);
+	const AssetImporterDialog dialog(c_SourceFile);
+	FolderField(dialog)->setText(typed);
 
-	REQUIRE(dialog.TextureSubdirectory() == QString("stone_wall"));
+	REQUIRE(dialog.GetDestinationFolder() == QString("stone_wall"));
 }

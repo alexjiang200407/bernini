@@ -17,9 +17,10 @@ namespace bgl
 
 		// Paired positionally with SceneView::GetInstanceBuffers(); shorten one and you must
 		// shorten the other.
-		static constexpr std::array<BufferInfo, 2> c_InstanceBufferInfo = { {
+		static constexpr std::array<BufferInfo, 3> c_InstanceBufferInfo = { {
 			{ "scene.instanceBuffer" },
 			{ "scene.meshInstanceBuffer" },
+			{ "scene.vatStateBuffer" },
 		} };
 
 		constexpr std::string_view c_SelectedInstancesName = "scene.selectedInstances";
@@ -79,6 +80,16 @@ namespace bgl
 			meshBufferDesc.blockSize    = sizeof(idl::Mesh) * 256;
 
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
+		}
+
+		{
+			// One entry, not m_InitialInstances: most views place no VAT instances at all, and the
+			// arena grows on the first that does.
+			auto vatStateBufferDesc         = EntryBufferDesc();
+			vatStateBufferDesc.initialCount = 1;
+			vatStateBufferDesc.debugName    = "Vat State Buffer";
+
+			m_VatStates.Init(std::move(vatStateBufferDesc), m_ResourceManager);
 		}
 
 		EnsureCullStateCount(1);
@@ -141,6 +152,7 @@ namespace bgl
 		// Deferred: frames recorded against this view may still be in flight.
 		m_InstanceBuffer.Release();
 		m_MeshBuffer.Release();
+		m_VatStates.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -196,6 +208,55 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
+		return CreateInstance(geom, transform, core::slot_handle{});
+	}
+
+	MeshInstanceHandle
+	SceneView::CreateVatMeshInstance(
+		GeomHandle             geom,
+		glm::mat4              transform,
+		const VatInstanceDesc& desc)
+	{
+		if (geom.geomType != GeomType::kVatMesh)
+		{
+			throw SceneError("GeomHandle passed to CreateVatMeshInstance must be of type kVatMesh");
+		}
+
+		if (!m_SceneRaw->IsGeomAlive(geom))
+		{
+			throw SceneError(
+				"GeomHandle passed to CreateVatMeshInstance has expired or is invalid");
+		}
+
+		const Scene::VatGeomInfo vat = m_SceneRaw->GetGeomVatInfo(geom.handle.index);
+		if (desc.clip >= vat.clipCount)
+		{
+			throw SceneError(
+				"VatInstanceDesc::clip passed to CreateVatMeshInstance is out of "
+				"range for the geom's clip table");
+		}
+
+		auto state  = idl::VatState();
+		state.geom  = vat.record;
+		state.clip  = desc.clip;
+		state.phase = desc.phase;
+		state.rate  = desc.rate;
+
+		const core::slot_handle stateHandle = m_VatStates.Add(state);
+		try
+		{
+			return CreateInstance(geom, transform, stateHandle);
+		}
+		catch (...)
+		{
+			m_VatStates.Erase(stateHandle);
+			throw;
+		}
+	}
+
+	MeshInstanceHandle
+	SceneView::CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState)
+	{
 		try
 		{
 			// Copied by value, and never revisited: from here the instance no longer refers to the
@@ -207,9 +268,18 @@ namespace bgl
 			mesh.transform = transform;
 			mesh.submeshes = submeshes;
 
+			// Only a real handle: assigning a null one would write its index over the null
+			// sentinel the Entry defaults to.
+			if (vatState)
+			{
+				mesh.vatState = vatState;
+			}
+
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
-			auto& meta = m_MeshBuffer.MetaAt(meshHandle.index);
+			auto& meta    = m_MeshBuffer.MetaAt(meshHandle.index);
+			meta.geomType = geom.geomType;
+			meta.vatState = vatState;
 
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
@@ -222,7 +292,11 @@ namespace bgl
 				instance.meshInstance = meshHandle;
 				instance.submeshIndex = s;
 
-				ResolveShading(instance, submeshes.range.offsetStart, MaterialHandle{});
+				ResolveShading(
+					instance,
+					submeshes.range.offsetStart,
+					MaterialHandle{},
+					geom.geomType);
 
 				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
@@ -262,6 +336,11 @@ namespace bgl
 			{
 				m_InstanceBuffer.Erase(submeshInstance);
 			}
+		}
+
+		if (meta.vatState)
+		{
+			m_VatStates.Erase(meta.vatState);
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
@@ -394,6 +473,14 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
+		if (meta.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
+		                                            material.layerType != LayerType::kOpaque))
+		{
+			throw SceneError(
+				"SetSubmeshMaterialOverride: a VAT instance takes only an opaque kPBR material -- "
+				"the VAT pipeline has no other variant yet");
+		}
+
 		meta.overrides[submeshIndex] = material;
 		++m_ShadingEpoch;
 
@@ -471,7 +558,8 @@ namespace bgl
 	SceneView::ResolveShading(
 		SubmeshInstance& instance,
 		uint32_t         submeshRoot,
-		MaterialHandle   materialOverride) const
+		MaterialHandle   materialOverride,
+		GeomType         geomType) const
 	{
 		const MaterialHandle material =
 			materialOverride.IsValid() ?
@@ -484,7 +572,7 @@ namespace bgl
 			instance.material = material.handle;
 		}
 
-		instance.pso = SubmeshPso(GeomType::kStaticMesh, material);
+		instance.pso = SubmeshPso(geomType, material);
 	}
 
 	void
@@ -504,7 +592,11 @@ namespace bgl
 		const idl::Entry material = instance.material;
 		const uint32_t   pso      = instance.pso;
 
-		ResolveShading(instance, mesh.submeshes.range.offsetStart, meta.overrides[submeshIndex]);
+		ResolveShading(
+			instance,
+			mesh.submeshes.range.offsetStart,
+			meta.overrides[submeshIndex],
+			meta.geomType);
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.

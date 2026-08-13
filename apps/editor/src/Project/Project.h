@@ -18,14 +18,21 @@ public:
 	static constexpr auto c_EnvLightingDirectoryName  = "EnvLighting";
 	static constexpr auto c_SkyDirectoryName          = "Sky";
 
+	// Split for the same reason, and a sharper one: a rig outlives its clips. Re-cooking a clip set
+	// leaves the skeleton untouched, and re-authoring a rest pose does not invalidate a clip -- which
+	// is what skeletonSignature exists to check, and only means anything if the two can move apart.
+	static constexpr auto c_SkeletonsDirectoryName  = "Skeletons";
+	static constexpr auto c_AnimationsDirectoryName = "Animations";
+
 	/**
 	 * Every category Create scaffolds and IsRequiredDirectory protects, in one place -- anything that
 	 * needs to know the layout reads it here rather than restating it and drifting.
 	 */
-	static constexpr std::array<std::string_view, 8> c_RequiredDirectories = {
+	static constexpr std::array<std::string_view, 10> c_RequiredDirectories = {
 		c_MeshesDirectoryName,      c_TexturesDirectoryName, c_TexturesSrcDirectoryName,
 		c_MaterialsDirectoryName,   c_LevelsDirectoryName,   c_EnvironmentsDirectoryName,
-		c_EnvLightingDirectoryName, c_SkyDirectoryName,
+		c_EnvLightingDirectoryName, c_SkyDirectoryName,      c_SkeletonsDirectoryName,
+		c_AnimationsDirectoryName,
 	};
 
 	/**

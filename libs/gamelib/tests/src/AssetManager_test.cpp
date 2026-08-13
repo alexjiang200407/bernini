@@ -95,7 +95,6 @@ namespace
 		constexpr uint16_t kStride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 		mesh.materials.assign(materials.begin(), materials.end());
 
 		mesh.vertexData.resize(materialIndices.size() * 3 * kStride);

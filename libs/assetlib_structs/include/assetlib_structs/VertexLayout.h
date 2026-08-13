@@ -59,4 +59,17 @@ namespace assetlib
 	};
 
 	static_assert(sizeof(VertexLayout) == 36);
+
+	/**
+	 * Influences a skinned vertex carries: `kJoints0` and `kWeights0` are a vec4 pair, so both the
+	 * importer that writes them and anything that decodes them work in fours.
+	 */
+	inline constexpr uint32_t c_InfluencesPerVertex = 4;
+
+	/**
+	 * Byte offset of `semantic` within one interleaved vertex, empty when the layout does not carry
+	 * it -- which is the ordinary case, since the importer packs only what the source provided.
+	 */
+	[[nodiscard]] std::optional<uint16_t>
+	attributeOffset(const VertexLayout& layout, VertexSemantic semantic) noexcept;
 }

@@ -39,7 +39,6 @@ namespace
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
-		mesh.stringPool.push_back('\0');
 
 		const std::array<glm::vec3, 3> positions = { glm::vec3(-1.0f, -1.0f, 0.0f),
 			                                         glm::vec3(1.0f, -1.0f, 0.0f),
@@ -163,14 +162,15 @@ TEST_CASE("A mesh cooked on a worker draws what the direct path draws", "[scene]
 		return image;
 	};
 
-	const assetlib::ImageData direct = shoot(scene->AddStaticMesh(mesh, 0, materials));
+	const assetlib::ImageData direct = shoot(scene->AddStaticMeshGeom(mesh, 0, materials));
 
 	// The cook must not need the driving thread; this is the one bgl call allowed off it.
 	auto prepared = bgl::PreparedStaticMesh();
 	auto worker   = std::thread([&] { prepared = bgl::CookStaticMesh(mesh, 0); });
 	worker.join();
 
-	const assetlib::ImageData cooked = shoot(scene->AddStaticMesh(std::move(prepared), materials));
+	const assetlib::ImageData cooked =
+		shoot(scene->AddStaticMeshGeom(std::move(prepared), materials));
 
 	// The triangle actually drew -- a culled or empty commit would make the comparison vacuous.
 	REQUIRE(DistinctColours(direct) > 1);
@@ -189,10 +189,10 @@ TEST_CASE("A prepared mesh is single-spend", "[scene][cook]")
 	const assetlib::BMesh mesh = MakeTriangleMesh();
 
 	auto prepared = bgl::CookStaticMesh(mesh, 0);
-	scene->DeleteGeom(scene->AddStaticMesh(std::move(prepared), {}));
+	scene->DeleteGeom(scene->AddStaticMeshGeom(std::move(prepared), {}));
 
 	// Moved-from: the commit consumed it, so a second commit has nothing to upload.
-	CHECK_THROWS_AS(scene->AddStaticMesh(std::move(prepared), {}), bgl::SceneError);
+	CHECK_THROWS_AS(scene->AddStaticMeshGeom(std::move(prepared), {}), bgl::SceneError);
 
 	CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 1), bgl::SceneError);
 }

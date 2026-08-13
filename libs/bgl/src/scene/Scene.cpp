@@ -25,14 +25,17 @@ namespace bgl
 
 		// Order MUST stay in lockstep with Scene::GetBuffers() and with
 		// ForwardPass's c_ForwardDataBuffers.
-		static constexpr std::array<BufferInfo, 7> c_BufferInfo = {
+		static constexpr std::array<BufferInfo, 10> c_BufferInfo = {
 			{ { "scene.submeshBuffer" },
 			  { "scene.meshletBuffer" },
 			  { "scene.vertexMapBuffer" },
 			  { "scene.vertexDataBuffer" },
 			  { "scene.indexBuffer" },
 			  { "scene.pbrMaterialBuffer" },
-			  { "scene.looseMaterialBuffer" } }
+			  { "scene.looseMaterialBuffer" },
+			  { "scene.vatGeomBuffer" },
+			  { "scene.vatClipBuffer" },
+			  { "scene.vatColumnBuffer" } }
 		};
 
 		// The interleaved vertex layout the procedural geometry emits: position,
@@ -286,7 +289,7 @@ namespace bgl
 		// rounded up to whole 4-byte words.
 		const uint32_t initialVertexWords = (m_Desc.initialVertexBufferByteSize + 3u) / 4u;
 
-		m_GeomSubmeshes.reset(atLeastOne(m_Desc.initialGeom));
+		m_Geoms.reset(atLeastOne(m_Desc.initialGeom));
 
 		{
 			auto submeshBufferDesc         = RangeBufferDesc();
@@ -343,16 +346,42 @@ namespace bgl
 
 			m_Loose.Init(std::move(looseBufferDesc), m_ResourceManager);
 		}
+
+		// The VAT buffers start at one entry each rather than from a SceneDesc knob: most scenes
+		// hold no VAT geometry at all, and the arenas grow on the first that does.
+		{
+			auto vatGeomBufferDesc         = EntryBufferDesc();
+			vatGeomBufferDesc.initialCount = 1;
+			vatGeomBufferDesc.debugName    = "Vat Geom Buffer";
+
+			m_VatGeoms.Init(std::move(vatGeomBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto vatClipBufferDesc         = RangeBufferDesc();
+			vatClipBufferDesc.initialCount = 1;
+			vatClipBufferDesc.debugName    = "Vat Clip Buffer";
+
+			m_VatClips.Init(std::move(vatClipBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto vatColumnBufferDesc         = RangeBufferDesc();
+			vatColumnBufferDesc.initialCount = 1;
+			vatColumnBufferDesc.debugName    = "Vat Column Buffer";
+
+			m_VatColumns.Init(std::move(vatColumnBufferDesc), m_ResourceManager);
+		}
 	}
 
 	core::slot_handle
-	Scene::AllocateGeomSlot(const idl::RangeWithCount& submeshes)
+	Scene::AllocateGeomSlot(const GeomRecord& record)
 	{
-		auto slot = m_GeomSubmeshes.try_allocate_and_emplace(submeshes);
+		auto slot = m_Geoms.try_allocate_and_emplace(record);
 		if (slot.is_null())
 		{
-			m_GeomSubmeshes.grow(m_GeomSubmeshes.capacity() * 2);
-			slot = m_GeomSubmeshes.allocate_and_emplace(submeshes);
+			m_Geoms.grow(m_Geoms.capacity() * 2);
+			slot = m_Geoms.allocate_and_emplace(record);
 		}
 
 		return slot;
@@ -455,9 +484,10 @@ namespace bgl
 
 	GeomHandle
 	Scene::AddProceduralGeom(
-		std::span<const VertexGen> verts,
-		std::span<const uint32_t>  indices,
-		MaterialHandle             material)
+		std::span<const VertexGen>     verts,
+		std::span<const uint32_t>      indices,
+		MaterialHandle                 material,
+		const std::optional<glm::vec4> boundingSphere)
 	{
 		const auto build = BuildMeshlets(verts, indices);
 
@@ -497,7 +527,13 @@ namespace bgl
 			submesh.indices     = baseIndexGlobal;
 			submesh.vertexCount = static_cast<uint32_t>(verts.size());
 
-			if (!verts.empty())
+			// A VAT geom overrides the fold: its vertices move every frame, so the sphere must
+			// come from the bake's all-clips box rather than the bind pose uploaded here.
+			if (boundingSphere.has_value())
+			{
+				submesh.boundingSphere = *boundingSphere;
+			}
+			else if (!verts.empty())
 			{
 				auto minBound = glm::vec3(std::numeric_limits<float>::max());
 				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
@@ -521,7 +557,7 @@ namespace bgl
 			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = AllocateGeomSlot(submeshRange);
+			retVal.handle   = AllocateGeomSlot(GeomRecord{ .submeshes = submeshRange });
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
@@ -533,6 +569,181 @@ namespace bgl
 		{
 			throw SceneError(e.what());
 		}
+	}
+
+	void
+	Scene::ValidateVatDesc(const VatGeomDesc& desc) const
+	{
+		if (!m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.positions)) ||
+		    !m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.normals)))
+		{
+			throw SceneError(
+				"VAT geometry: both VAT textures are required, live, from this scene's "
+				"AddTextureAsset");
+		}
+		if (desc.clips.empty())
+		{
+			throw SceneError(
+				"VAT geometry: the clip table is empty; a VAT with no clips draws "
+				"nothing");
+		}
+		for (const VatClipDesc& clip : desc.clips)
+		{
+			// The shader clamps the frame to frameCount - 1, and on a uint that underflows a
+			// zero to 4 billion rows of out-of-bounds fetches.
+			if (clip.frameCount == 0)
+			{
+				throw SceneError("VAT geometry: a clip with no frames has no row to fetch");
+			}
+		}
+	}
+
+	GeomHandle
+	Scene::AttachVatRecords(
+		GeomHandle                base,
+		const VatGeomDesc&        desc,
+		std::span<const uint32_t> columnBases)
+	{
+		try
+		{
+			auto clips = std::vector<idl::VatClip>();
+			clips.reserve(desc.clips.size());
+			for (const VatClipDesc& clip : desc.clips)
+			{
+				clips.push_back(
+					{ clip.firstRow, clip.frameCount, clip.sampleRate, clip.loop ? 1u : 0u });
+			}
+
+			auto rollback = GeomRollback();
+
+			auto record      = idl::VatGeom();
+			record.positions = idl::TextureHandle{ SrvDescriptorFor(desc.positions.textureSlot) };
+			record.normals   = idl::TextureHandle{ SrvDescriptorFor(desc.normals.textureSlot) };
+			record.boundsMin = glm::vec4(desc.boundsMin, 0.0f);
+			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
+			record.clips        = rollback.Track(m_VatClips, m_VatClips.Add(std::span(clips)));
+			record.columnBases  = rollback.Track(m_VatColumns, m_VatColumns.Add(columnBases));
+
+			GeomRecord& geom  = m_Geoms[base.handle.index];
+			geom.vatGeom      = m_VatGeoms.Add(record);
+			geom.vatClipCount = static_cast<uint32_t>(clips.size());
+
+			rollback.Commit();
+
+			base.geomType = GeomType::kVatMesh;
+			return base;
+		}
+		catch (const std::runtime_error& e)
+		{
+			// The geometry half committed above; take it back down so a failed VAT add leaks
+			// nothing. The handle is still the kStaticMesh one here, which is what DeleteGeom
+			// accepts.
+			DeleteGeom(base);
+			throw SceneError(e.what());
+		}
+		catch (...)
+		{
+			// Not everything the block can raise is a runtime_error -- an allocation failure is
+			// not -- and the cleanup must run on every path.
+			DeleteGeom(base);
+			throw;
+		}
+	}
+
+	GeomHandle
+	Scene::AddVatMeshGeom(
+		std::span<const VatVertex> verts,
+		std::span<const uint32_t>  indices,
+		const VatGeomDesc&         desc,
+		MaterialHandle             material)
+	{
+		ValidateVatDesc(desc);
+
+		if (!material.IsValid() || material.materialType != MaterialType::kPBR ||
+		    material.layerType != LayerType::kOpaque)
+		{
+			throw SceneError(
+				"AddVatMeshGeom: an opaque kPBR material is required -- the VAT pipeline has no "
+				"other "
+				"variant yet");
+		}
+		// The procedural path never splits a primitive, so there is exactly one submesh to base.
+		if (desc.columnBases.size() > 1)
+		{
+			throw SceneError(
+				"AddVatMeshGeom: a procedural VAT is one submesh; columnBases names more");
+		}
+
+		// Same fields, same packing: the bind-pose vertices go down the procedural path verbatim.
+		static_assert(
+			sizeof(VatVertex) == sizeof(VertexGen) &&
+			offsetof(VatVertex, position) == offsetof(VertexGen, pos) &&
+			offsetof(VatVertex, normal) == offsetof(VertexGen, normal) &&
+			offsetof(VatVertex, uv) == offsetof(VertexGen, uv) &&
+			offsetof(VatVertex, tangent) == offsetof(VertexGen, tangent));
+
+		const auto asGen = std::span<const VertexGen>(
+			reinterpret_cast<const VertexGen*>(verts.data()),
+			verts.size());
+
+		GeomHandle base = AddProceduralGeom(
+			asGen,
+			indices,
+			material,
+			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
+
+		constexpr std::array<uint32_t, 1> c_SingleBase = { { 0 } };
+		return AttachVatRecords(
+			base,
+			desc,
+			desc.columnBases.empty() ? std::span<const uint32_t>(c_SingleBase) :
+									   std::span<const uint32_t>(desc.columnBases));
+	}
+
+	GeomHandle
+	Scene::AddVatMeshGeom(
+		const assetlib::BMesh&          mesh,
+		uint32_t                        meshIndex,
+		std::span<const MaterialHandle> materials,
+		const VatGeomDesc&              desc)
+	{
+		ValidateVatDesc(desc);
+
+		if (meshIndex >= mesh.meshes.size())
+		{
+			throw SceneError("AddVatMeshGeom: meshIndex out of range");
+		}
+
+		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
+		if (desc.columnBases.size() != entry.submeshCount)
+		{
+			throw SceneError(
+				"AddVatMeshGeom: columnBases must carry one entry per submesh, in submesh order");
+		}
+
+		// The check every VAT door makes, per submesh here: no null or cutout VAT variant exists
+		// for an unlit or masked submesh to ride.
+		for (uint32_t s = 0; s < entry.submeshCount; ++s)
+		{
+			const uint32_t       index = mesh.submeshes[entry.firstSubmesh + s].material;
+			const MaterialHandle bound =
+				index < materials.size() ? materials[index] : MaterialHandle{};
+			if (!bound.IsValid() || bound.materialType != MaterialType::kPBR ||
+			    bound.layerType != LayerType::kOpaque)
+			{
+				throw SceneError(
+					"AddVatMeshGeom: every submesh needs an opaque kPBR material -- the VAT "
+					"pipeline "
+					"has no other variant yet");
+			}
+		}
+
+		GeomHandle base = AddPreparedMesh(
+			CookStaticMesh(mesh, meshIndex),
+			materials,
+			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
+
+		return AttachVatRecords(base, desc, desc.columnBases);
 	}
 
 	GeomHandle
@@ -857,22 +1068,32 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddStaticMesh(
+	Scene::AddStaticMeshGeom(
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials)
 	{
-		return AddStaticMesh(CookStaticMesh(mesh, meshIndex), materials);
+		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials);
 	}
 
 	GeomHandle
-	Scene::AddStaticMesh(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+	Scene::AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+	{
+		return AddPreparedMesh(std::move(mesh), materials, std::nullopt);
+	}
+
+	GeomHandle
+	Scene::AddPreparedMesh(
+		PreparedStaticMesh              mesh,
+		std::span<const MaterialHandle> materials,
+		const std::optional<glm::vec4>  sphereOverride)
 	{
 		try
 		{
 			if (mesh.m_Impl == nullptr || mesh.m_Impl->submeshes.empty())
 			{
-				throw SceneError("AddStaticMesh: the prepared mesh is empty or already consumed");
+				throw SceneError(
+					"AddStaticMeshGeom: the prepared mesh is empty or already consumed");
 			}
 
 			// One GPU submesh per source submesh, in order: callers address geometry by source
@@ -900,7 +1121,7 @@ namespace bgl
 				submesh.indices =
 					rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(src.localIndices));
 				submesh.vertexCount    = src.vertexCount;
-				submesh.boundingSphere = src.boundingSphere;
+				submesh.boundingSphere = sphereOverride.value_or(src.boundingSphere);
 
 				submeshes.push_back(submesh);
 				defaults.push_back(
@@ -919,7 +1140,7 @@ namespace bgl
 			submeshRange      = baseSubmeshGlobal;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = AllocateGeomSlot(submeshRange);
+			retVal.handle   = AllocateGeomSlot(GeomRecord{ .submeshes = submeshRange });
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
@@ -1131,9 +1352,10 @@ namespace bgl
 	void
 	Scene::SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
 	{
-		if (geom.geomType != GeomType::kStaticMesh)
+		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVatMesh)
 		{
-			throw SceneError("GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh");
+			throw SceneError(
+				"GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh or kVatMesh");
 		}
 		if (!IsGeomAlive(geom))
 		{
@@ -1143,8 +1365,15 @@ namespace bgl
 		{
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
+		if (geom.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
+		                                            material.layerType != LayerType::kOpaque))
+		{
+			throw SceneError(
+				"SetSubmeshMaterial: VAT geometry takes only an opaque kPBR material -- the VAT "
+				"pipeline has no other variant yet");
+		}
 
-		const idl::RangeWithCount& submeshes = m_GeomSubmeshes[geom.handle.index];
+		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;
 		if (submeshIndex >= submeshes.count)
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
@@ -1159,9 +1388,10 @@ namespace bgl
 	void
 	Scene::DeleteGeom(GeomHandle geom)
 	{
-		if (geom.geomType != GeomType::kStaticMesh)
+		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVatMesh)
 		{
-			throw SceneError("GeomHandle passed to DeleteGeom must be of type kStaticMesh");
+			throw SceneError(
+				"GeomHandle passed to DeleteGeom must be of type kStaticMesh or kVatMesh");
 		}
 
 		if (!IsGeomAlive(geom))
@@ -1169,7 +1399,19 @@ namespace bgl
 			throw SceneError("GeomHandle passed to DeleteGeom refers to a deleted or unknown geom");
 		}
 
-		const auto& submeshes = m_GeomSubmeshes[geom.handle.index];
+		const GeomRecord& record = m_Geoms[geom.handle.index];
+
+		// The VAT tables ride on the record; the textures do not -- they were the caller's
+		// AddTextureAsset handles, and remain the caller's to delete.
+		if (record.vatGeom)
+		{
+			const idl::VatGeom vat = m_VatGeoms[record.vatGeom];
+			m_VatClips.EraseByIndex(vat.clips.range.offsetStart);
+			m_VatColumns.EraseByIndex(vat.columnBases.offsetStart);
+			m_VatGeoms.Erase(record.vatGeom);
+		}
+
+		const auto& submeshes = record.submeshes;
 
 		// The geometry's per-part ranges live on each Submesh, and each submesh owns its own, so
 		// free them per submesh before releasing the submesh range itself.
@@ -1186,7 +1428,7 @@ namespace bgl
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);
-		m_GeomSubmeshes.release_slot(geom.handle.index);
+		m_Geoms.release_slot(geom.handle.index);
 	}
 
 	DescriptorHandle

@@ -2,8 +2,21 @@
 
 assetlib is a static library that contains a set of asset-related utilities. These include:
 
-- Parsing glTF (.glb / .gltf, via tinygltf) and retrieving all the assets
+- Parsing glTF (.glb / .gltf, via tinygltf) and retrieving all the assets — geometry, materials,
+  textures, and the skin and animations, which are cooked into `.bskel` / `.banim` beside the mesh
 - Provide shared structures that both bgl and editor can use to communicate
+
+Pose evaluation and CPU skinning live here, not in `bgl`: `poseModelTransforms` walks a clip frame
+from local into model space, `skinningMatrices` composes each with its inverse bind
+(`include/assetlib/skeleton.h`), and `skinSubmesh` blends four influences per vertex
+(`include/assetlib/skinning.h`). The bake is offline and assetlib never links `bgl`, so this is
+plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
+deliberately the unoptimised form.
+
+`.bmesh`, `.bskel`, `.banim` and `.bvat` are one chunked container format, in `src/chunk_io.h`. A chunk is
+addressed by id and an absent one is not an error, so adding data is a **minor** version bump and
+leaves what is already on disk readable. `.bmaterial` is deliberately not one of them: it is a flat,
+string-heavy stream with no bulk POD pools to chunk.
 
 ## Headers forward declare
 
