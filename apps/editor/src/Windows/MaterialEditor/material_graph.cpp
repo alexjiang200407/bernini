@@ -107,8 +107,9 @@ CompileMaterial(
 		pbr.metallicFactor  = output->MetallicFactor();
 		pbr.roughnessFactor = output->RoughnessFactor();
 
-		pbr.alphaMode   = output->GetAlphaMode();
-		pbr.alphaCutoff = output->GetAlphaCutoff();
+		pbr.alphaMode          = output->GetAlphaMode();
+		pbr.alphaCutoff        = output->GetAlphaCutoff();
+		pbr.transmissionFactor = output->GetTransmission();
 
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
 		{
@@ -160,14 +161,15 @@ BuildImportedMaterialGraph(
 	// The sink's own deserialization path is what carries the factors in; restoring a saved graph sets
 	// them the same way. `alphaCutoff` is ignored by the opaque sink, and `split` is absent, which
 	// leaves every group collapsed to the one wide port each map wires into below.
-	auto factors           = QJsonObject();
-	factors["baseColorR"]  = material.baseColorFactor.r;
-	factors["baseColorG"]  = material.baseColorFactor.g;
-	factors["baseColorB"]  = material.baseColorFactor.b;
-	factors["baseColorA"]  = material.baseColorFactor.a;
-	factors["metallic"]    = material.metallicFactor;
-	factors["roughness"]   = material.roughnessFactor;
-	factors["alphaCutoff"] = material.alphaCutoff;
+	auto factors            = QJsonObject();
+	factors["baseColorR"]   = material.baseColorFactor.r;
+	factors["baseColorG"]   = material.baseColorFactor.g;
+	factors["baseColorB"]   = material.baseColorFactor.b;
+	factors["baseColorA"]   = material.baseColorFactor.a;
+	factors["metallic"]     = material.metallicFactor;
+	factors["roughness"]    = material.roughnessFactor;
+	factors["alphaCutoff"]  = material.alphaCutoff;
+	factors["transmission"] = material.transmissionFactor;
 	output->load(factors);
 
 	struct Wire

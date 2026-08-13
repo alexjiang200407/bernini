@@ -124,6 +124,26 @@ function of the *material*, not a constant:
 sinks — **Material Output**, **Alpha Tested**, **Alpha Blend** or **Hashed Alpha** — and the alpha port
 exists on every one but the first, along with a cutoff on the two that have a threshold to author.
 
+### What a blended material's alpha means
+
+`kBlend` alone does not say *which* of two things the alpha is, and the difference decides whether the
+surface reflects. **Transmission** (`PbrParams::transmissionFactor`, the Alpha Blend sink's one extra
+row) is what says:
+
+| transmission | the alpha is | authored on | the reflection |
+|---|---|---|---|
+| `0` (default) | coverage — how much surface is in the pixel | hair, foliage, a dissolve | thins with the alpha, like everything else |
+| `1` | transmission — how much light passes through a surface that covers the pixel | glass, a lens, water | stays at full strength however clear the surface is |
+
+Read by `kBlend` and by nothing else. **0 is the default and is bit-for-bit what the renderer did
+before the factor existed**, so a material baked without one is unaffected — see
+[Passes § Blended surfaces](docs/passes.md#blended-surfaces) for the shading.
+
+glTF carries it as `KHR_materials_transmission`, which the importer reads; a `BLEND` material with no
+such extension imports at 0, which is glTF's own default. It is appended to the `.bmaterial`
+**minor** version rather than breaking the major, so materials baked before it load and read 0
+instead of demanding a re-bake.
+
 `kHashed` is the one mode **no import can produce**: glTF has only `OPAQUE`, `MASK` and `BLEND`, so it
 is reachable solely by picking that sink. It turns alpha into stochastic coverage rather than a
 threshold, which is what lets a self-occluding surface keep every layer — and it resolves only under
@@ -473,6 +493,8 @@ Five rules, each of which is a way to get this wrong:
   sink and wires base colour RGBA, `OPAQUE` builds the 3-wide one and wires RGB with the alpha left
   unrouted, and `BLEND` builds a *Blended* sink — base colour RGBA like the cutout, but its alpha is
   kept for the blend (`AlphaMode::kBlend` → `LayerType::kBlend`) rather than tested against a cutoff.
+  `KHR_materials_transmission` rides along with it, because `BLEND` is what both a lens and a hair
+  card export as and the extension is the only thing in the file that separates them.
 * **Materials cannot come across without textures.** They route at the extracted `texN.ktx2` files, so
   the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
   dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.

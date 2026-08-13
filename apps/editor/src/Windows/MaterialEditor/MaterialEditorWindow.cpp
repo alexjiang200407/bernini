@@ -1051,13 +1051,14 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	// routes name textures but not how the artist arranged the nodes that produced them.
 	if (graph.isEmpty() && output != nullptr)
 	{
-		auto seed          = QJsonObject();
-		seed["baseColorR"] = material.pbr.baseColorFactor.r;
-		seed["baseColorG"] = material.pbr.baseColorFactor.g;
-		seed["baseColorB"] = material.pbr.baseColorFactor.b;
-		seed["baseColorA"] = material.pbr.baseColorFactor.a;
-		seed["metallic"]   = material.pbr.metallicFactor;
-		seed["roughness"]  = material.pbr.roughnessFactor;
+		auto seed            = QJsonObject();
+		seed["baseColorR"]   = material.pbr.baseColorFactor.r;
+		seed["baseColorG"]   = material.pbr.baseColorFactor.g;
+		seed["baseColorB"]   = material.pbr.baseColorFactor.b;
+		seed["baseColorA"]   = material.pbr.baseColorFactor.a;
+		seed["metallic"]     = material.pbr.metallicFactor;
+		seed["roughness"]    = material.pbr.roughnessFactor;
+		seed["transmission"] = material.pbr.transmissionFactor;
 		output->load(seed);
 	}
 
@@ -1085,8 +1086,9 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	desc.metallicFactor  = output->MetallicFactor();
 	desc.roughnessFactor = output->RoughnessFactor();
 
-	desc.layerType   = ToLayerType(output->GetAlphaMode());
-	desc.alphaCutoff = output->GetAlphaCutoff();
+	desc.layerType          = ToLayerType(output->GetAlphaMode());
+	desc.alphaCutoff        = output->GetAlphaCutoff();
+	desc.transmissionFactor = output->GetTransmission();
 
 	const auto route = [&](unsigned int channel) {
 		const ChannelData::Route wired = output->Route(channel);
