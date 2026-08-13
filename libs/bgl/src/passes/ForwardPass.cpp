@@ -47,6 +47,34 @@ namespace bgl
 			},
 		} };
 
+		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
+		// the code that writes them so ValidateBinderNames catches a shader rename at startup: a
+		// stale name is indistinguishable from an absent one once binding reaches IsValid().
+		constexpr std::array<std::string_view, 4> c_ViewDataFields = {
+			"viewProj"sv,
+			"prevViewProj"sv,
+			"jitter"sv,
+			"prevJitter"sv,
+		};
+
+		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
+			"anisoLinearWrapSampler"sv,
+			"linearClampSampler"sv,
+			"irradianceMap"sv,
+			"prefilterMap"sv,
+			"brdfLUT"sv,
+			"cameraPos"sv,
+			"exposure"sv,
+			"envRotation"sv,
+			"alphaHashSeed"sv,
+		};
+
+		constexpr std::array<std::string_view, 3> c_ExpansionDataFields = {
+			"psoIndex"sv,
+			"baseTable"sv,
+			"compactedInstances"sv,
+		};
+
 		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
 
 		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
@@ -159,6 +187,56 @@ namespace bgl
 		}
 	}
 
+	namespace
+	{
+		template <typename Bindings>
+		std::vector<std::string_view>
+		UniformKeys(const Bindings& bindings)
+		{
+			std::vector<std::string_view> keys;
+			keys.reserve(bindings.size());
+			for (const auto& binding : bindings)
+			{
+				keys.push_back(binding.uniformKey);
+			}
+			return keys;
+		}
+
+		// Resolves the names the binder uses against the whole PSO family at once. A variant that
+		// omits a member is ordinary and stays silent; a name *no* variant declares is a typo or a
+		// shader rename, which binding cannot report because IsValid() reads the same either way.
+		void
+		ValidateBinderNames(
+			std::span<const MeshletKernel>    kernels,
+			std::string_view                  cbuffer,
+			std::span<const std::string_view> names)
+		{
+			std::vector<const Uniforms*> variants;
+			variants.reserve(kernels.size());
+
+			for (const MeshletKernel& kernel : kernels)
+			{
+				const auto found = kernel.uniforms.find(cbuffer);
+				variants.push_back(found != kernel.uniforms.end() ? &found->second : nullptr);
+			}
+
+			const std::vector<std::string_view> unknown = FindUnknownMembers(variants, names);
+			if (unknown.empty())
+			{
+				return;
+			}
+
+			std::string joined;
+			for (const std::string_view name : unknown)
+			{
+				joined += joined.empty() ? "" : ", ";
+				joined += name;
+			}
+
+			gfatal("ForwardPass binds '{}' members no forward PSO declares: {}", cbuffer, joined);
+		}
+	}
+
 	void
 	ForwardPass::Init(IDevice* device)
 	{
@@ -168,6 +246,13 @@ namespace bgl
 		{
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
 		}
+
+		ValidateBinderNames(m_Kernels, "forwardData"sv, UniformKeys(c_ForwardDataBuffers));
+		ValidateBinderNames(m_Kernels, "expansionData"sv, UniformKeys(c_ExpansionBuffers));
+		ValidateBinderNames(m_Kernels, "expansionData"sv, c_ExpansionDataFields);
+		ValidateBinderNames(m_Kernels, "viewData"sv, c_ViewDataFields);
+		ValidateBinderNames(m_Kernels, "materialData"sv, UniformKeys(c_MaterialBuffers));
+		ValidateBinderNames(m_Kernels, "materialData"sv, c_MaterialDataFields);
 	}
 
 	void

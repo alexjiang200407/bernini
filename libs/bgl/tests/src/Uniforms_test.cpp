@@ -1,5 +1,6 @@
 #include "device/Device.h"
 #include "gfx/GraphicsBase.h"
+#include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
@@ -281,4 +282,52 @@ TEST_CASE("Uniforms", "[uniforms]")
 	SECTION("Array") {}
 
 	SECTION("Struct") {}
+}
+
+// Binding cannot tell a member this PSO variant omits from a member that no longer exists: both
+// leave the accessor invalid. Resolving the binder's names against the whole family once is what
+// separates them, so a shader rename fails loudly instead of silently binding nothing.
+TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
+{
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto device = gfx->As<bgl::GraphicsBase>()->GetDevice();
+	REQUIRE(device != nullptr);
+
+	auto kernel = device->CreateComputeKernel(
+		bgl::ComputePipelineDesc()
+			.SetShader(device->CreateShader("CSComputeBufferTest"))
+			.SetDebugName("CSComputeBufferTest"));
+
+	const bgl::Uniforms* variants[] = { &kernel["gUniforms"] };
+
+	SECTION("a declared member resolves")
+	{
+		CHECK(kernel["gUniforms"].HasMember("outBuffer"));
+		CHECK_FALSE(kernel["gUniforms"].HasMember("noSuchMember"));
+	}
+
+	SECTION("only the undeclared name comes back")
+	{
+		constexpr std::array c_Names = { "outBuffer"sv, "noSuchMember"sv };
+
+		const auto unknown = bgl::FindUnknownMembers(variants, c_Names);
+
+		REQUIRE(unknown.size() == 1);
+		CHECK(unknown.front() == "noSuchMember"sv);
+	}
+
+	SECTION("a variant that does not declare the buffer at all is skipped, not counted against it")
+	{
+		const bgl::Uniforms* withAbsent[] = { nullptr, &kernel["gUniforms"] };
+		constexpr std::array c_Names      = { "outBuffer"sv };
+
+		CHECK(bgl::FindUnknownMembers(withAbsent, c_Names).empty());
+	}
 }
