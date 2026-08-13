@@ -18,11 +18,8 @@ namespace assetlib
 	{
 		constexpr uint32_t c_Magic = magic::c_BMaterial;
 
-		constexpr uint16_t c_VersionMajor = 8;
-
-		// 1 appended transmissionFactor. A minor is additive, so every field it introduces is written
-		// after the ones a lower minor knows, and readPbr defaults what it does not find.
-		constexpr uint16_t c_VersionMinor = 1;
+		constexpr uint16_t c_VersionMajor = 9;
+		constexpr uint16_t c_VersionMinor = 0;
 
 		void
 		writePbr(ByteWriter& writer, const PbrParams& pbr)
@@ -45,11 +42,11 @@ namespace assetlib
 			}
 			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
 			writer.WritePod(pbr.alphaCutoff);
-			writer.WritePod(pbr.transmissionFactor);  // minor 1
+			writer.WritePod(pbr.transmissionFactor);
 		}
 
 		PbrParams
-		readPbr(ByteReader& reader, uint16_t versionMinor)
+		readPbr(ByteReader& reader)
 		{
 			PbrParams pbr;
 			pbr.baseColorFactor  = reader.ReadPod<glm::vec4>();
@@ -68,14 +65,9 @@ namespace assetlib
 				stamp.size  = reader.ReadPod<uint64_t>();
 				stamp.mtime = reader.ReadPod<int64_t>();
 			}
-			pbr.alphaMode   = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
-			pbr.alphaCutoff = reader.ReadPod<float>();
-
-			// A material baked before the factor existed is one authored as coverage, which is the
-			// default -- so an older minor is read by not reading, not by re-baking.
-			if (versionMinor >= 1)
-				pbr.transmissionFactor = reader.ReadPod<float>();
-
+			pbr.alphaMode          = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
+			pbr.alphaCutoff        = reader.ReadPod<float>();
+			pbr.transmissionFactor = reader.ReadPod<float>();
 			return pbr;
 		}
 
@@ -117,7 +109,7 @@ namespace assetlib
 			throw std::runtime_error("bmaterial: bad magic");
 
 		const auto versionMajor = reader.ReadPod<uint16_t>();
-		const auto versionMinor = reader.ReadPod<uint16_t>();  // additive within a major
+		static_cast<void>(reader.ReadPod<uint16_t>());  // minor; additive within a major
 
 		if (versionMajor != c_VersionMajor)
 			throw std::runtime_error(
@@ -138,7 +130,7 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			material.pbr = readPbr(reader, versionMinor);
+			material.pbr = readPbr(reader);
 			break;
 
 		// Already excluded by the range check above; the case exists so a new model cannot be added

@@ -33,33 +33,26 @@ TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
 	REQUIRE(restored.pbr.roughnessFactor == Catch::Approx(0.25f));
 }
 
-// The minor version is what lets a field be appended without invalidating every material already
-// baked -- the major is a hard break that makes the loader demand a re-bake. A file written before
-// the transmission factor has neither the bytes nor a reason to: it was authored when a blended
-// material could only mean coverage, which is what 0 is, so it must load rather than be rejected.
-TEST_CASE("a .bmaterial baked before the transmission factor still loads", "[bmaterial][io]")
+// Transmission is what separates a lens from a hair card, and both are AlphaMode::kBlend -- so a
+// factor lost in the container is a material that reloads as the wrong one of the two, with the
+// alpha mode still agreeing and nothing to say which was meant.
+TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.name                   = "lens";
 	mat.pbr.alphaMode          = AlphaMode::kBlend;
 	mat.pbr.transmissionFactor = 0.85f;
 
-	std::vector<std::byte> bytes = serializeMaterial(mat);
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
 
-	REQUIRE(deserializeMaterial(bytes).pbr.transmissionFactor == Catch::Approx(0.85f));
+	CHECK(restored.pbr.alphaMode == AlphaMode::kBlend);
+	CHECK(restored.pbr.transmissionFactor == Catch::Approx(0.85f));
 
-	// What the previous minor wrote: the same bytes without the factor it did not know to append,
-	// stamped with its own minor. The minor sits at byte 6, after the magic and the major.
-	REQUIRE(bytes.size() > sizeof(float) + 8);
-	bytes.resize(bytes.size() - sizeof(float));
-	bytes[6] = std::byte{ 0 };
-	bytes[7] = std::byte{ 0 };
-
-	const BMaterial old = deserializeMaterial(bytes);
-
-	CHECK(old.name == "lens");
-	CHECK(old.pbr.alphaMode == AlphaMode::kBlend);
-	CHECK(old.pbr.transmissionFactor == 0.0f);
+	// The default is what every material baked before the factor re-bakes to, and it is the reading
+	// blend has always had.
+	BMaterial coverage;
+	coverage.pbr.alphaMode = AlphaMode::kBlend;
+	CHECK(deserializeMaterial(serializeMaterial(coverage)).pbr.transmissionFactor == 0.0f);
 }
 
 TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")

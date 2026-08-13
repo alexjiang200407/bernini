@@ -140,9 +140,9 @@ before the factor existed**, so a material baked without one is unaffected — s
 [Passes § Blended surfaces](docs/passes.md#blended-surfaces) for the shading.
 
 glTF carries it as `KHR_materials_transmission`, which the importer reads; a `BLEND` material with no
-such extension imports at 0, which is glTF's own default. It is appended to the `.bmaterial`
-**minor** version rather than breaking the major, so materials baked before it load and read 0
-instead of demanding a re-bake.
+such extension imports at 0, which is glTF's own default. It takes `.bmaterial` to **major 9**, so
+every material baked before it is rejected until re-baked — the container reads a version, not a
+schema, and a field appended silently would be read as whatever bytes followed it.
 
 `kHashed` is the one mode **no import can produce**: glTF has only `OPAQUE`, `MASK` and `BLEND`, so it
 is reachable solely by picking that sink. It turns alpha into stochastic coverage rather than a

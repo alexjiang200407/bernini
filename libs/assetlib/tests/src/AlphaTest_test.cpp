@@ -301,7 +301,7 @@ TEST_CASE("a material from before the format break is rejected, not misread", "[
 	// The major sits right after the magic. Stamping the previous one is what a file baked before
 	// the break looks like.
 	REQUIRE(bytes.size() > 6);
-	bytes[4] = std::byte{ 7 };
+	bytes[4] = std::byte{ 8 };
 	bytes[5] = std::byte{ 0 };
 
 	CHECK_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
