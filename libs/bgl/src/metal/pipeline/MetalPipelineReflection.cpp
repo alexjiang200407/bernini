@@ -41,6 +41,14 @@ namespace bgl
 				case UniformValueType::kInt2:
 				case UniformValueType::kUInt2:  // == kDescriptorHandle
 					return 8;
+
+				// Slang's MSL bool ABI is unverified here, and guessing wrong displaces every member
+				// after it rather than just this one. Declare the field `uint` or `float` instead;
+				// lifting this needs a test that pins the emitted offsets against the GPU.
+				case UniformValueType::kBool:
+					gfatal(
+						"A bool in a constant buffer is unsupported on Metal -- use uint or float");
+
 				default:
 					return 4;
 				}
