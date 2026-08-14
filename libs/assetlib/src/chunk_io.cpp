@@ -1,5 +1,6 @@
 #include "chunk_io.h"
 
+#include "checked_read.h"
 #include "fs_util.h"
 
 #include <core/err/util.h>
@@ -95,48 +96,18 @@ namespace assetlib::chunk
 		std::span<const uint32_t>    ids,
 		std::string_view             what)
 	{
-		const std::string prefix(what);
-
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ifstream in(path, std::ios::binary);
-		if (!in)
-			throw std::runtime_error(
-				fileErrorMessage(prefix + ": cannot open file for reading", path));
-
-		std::error_code ec;
-		const auto      fileSize = std::filesystem::file_size(path, ec);
-		if (ec)
-			throw std::runtime_error(fileErrorMessage(prefix + ": cannot size file", path));
-
-		// Every offset and size below comes out of the file, so each is checked against the real size
-		// before anything is allocated or seeked to. Subtraction rather than addition: a crafted
-		// offset near UINT64_MAX would wrap past the sum.
-		const auto checkRange = [&](uint64_t bytes, uint64_t offset) {
-			if (bytes > fileSize || offset > fileSize - bytes)
-				throw_runtime_error("{}: chunk extends past end of file", what);
-		};
-
-		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
-			checkRange(bytes, offset);
-
-			in.seekg(static_cast<std::streamoff>(offset));
-			in.read(static_cast<char*>(dst), static_cast<std::streamsize>(bytes));
-			if (!in)
-				throw std::runtime_error(fileErrorMessage(prefix + ": failed to read file", path));
-		};
+		CheckedFileReader in(path, what);
 
 		Header header{};
-		readAt(&header, sizeof(header), 0);
+		in.ReadAt(&header, sizeof(header), 0);
 		checkHeader(header, magic, versionMajor, what);
 
-		checkRange(
-			static_cast<uint64_t>(header.chunkCount) * sizeof(Entry),
-			header.chunkTableOffset);
+		const uint64_t tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(Entry);
+		in.CheckRange(tableBytes, header.chunkTableOffset);
 
 		std::vector<Entry> table(header.chunkCount);
 		if (!table.empty())
-			readAt(table.data(), table.size() * sizeof(Entry), header.chunkTableOffset);
+			in.ReadAt(table.data(), tableBytes, header.chunkTableOffset);
 
 		std::unordered_map<uint32_t, std::vector<std::byte>> out;
 		for (const Entry& entry : table)
@@ -144,11 +115,11 @@ namespace assetlib::chunk
 			if (std::ranges::find(ids, entry.id) == ids.end())
 				continue;
 
-			checkRange(entry.byteSize, entry.offset);
+			in.CheckRange(entry.byteSize, entry.offset);
 
 			std::vector<std::byte> chunk(entry.byteSize);
 			if (!chunk.empty())
-				readAt(chunk.data(), chunk.size(), entry.offset);
+				in.ReadAt(chunk.data(), chunk.size(), entry.offset);
 
 			out.emplace(entry.id, std::move(chunk));
 		}
