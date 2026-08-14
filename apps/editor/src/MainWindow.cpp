@@ -15,6 +15,7 @@
 #include "Project/Project.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
@@ -158,8 +159,24 @@ MainWindow::Build()
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		m_MaterialEditor = new MaterialEditorWindow(this, std::move(matDesc));
-		m_Thumbnails     = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
+		auto animSettings = settings["animationEditor"];
+		auto animDesc     = AnimationEditorWindowDesc();
+		animDesc.renderer = m_Renderer.get();
+		animDesc.initialPreviewInstances =
+			animSettings["initialPreviewInstances"].GetOrDefault(16u);
+		animDesc.taaEnabled  = animSettings["temporalAA"].GetOrDefault(true);
+		animDesc.renderScale = animSettings["renderScale"].GetOrDefault(1.0f);
+		animDesc.previewEnv.environmentMap =
+			animSettings["environmentMap"].GetOrDefault(std::string());
+		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(std::string());
+
+		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
+		if (auto exposure = animSettings["exposure"])
+			animDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+
+		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
+		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
+		m_Thumbnails      = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
 	}
 
 	setDockNestingEnabled(true);
@@ -181,6 +198,14 @@ MainWindow::Build()
 	addDockWidget(Qt::TopDockWidgetArea, m_MaterialEditorDock);
 
 	tabifyDockWidget(m_LevelEditorDock, m_MaterialEditorDock);
+
+	m_AnimationEditorDock = new QDockWidget("Animation Editor", this);
+	m_AnimationEditorDock->setObjectName("AnimationEditorDock");
+	m_AnimationEditorDock->setWidget(m_AnimationEditor);
+	m_AnimationEditorDock->setTitleBarWidget(new QWidget(m_AnimationEditorDock));
+	addDockWidget(Qt::TopDockWidgetArea, m_AnimationEditorDock);
+
+	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
@@ -212,9 +237,11 @@ MainWindow::Build()
 
 	DriveViewportsFromTab(m_LevelEditorDock);
 	DriveViewportsFromTab(m_MaterialEditorDock);
+	DriveViewportsFromTab(m_AnimationEditorDock);
 
 	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
+	m_Ui.menuWindow->addAction(m_AnimationEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
 
 	SetUpRenderMenu();
@@ -327,6 +354,10 @@ MainWindow::ReleaseRenderResources() noexcept
 		m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
+	// Its acquisitions release through the manager, so they go before m_Assets does.
+	if (m_AnimationEditor != nullptr)
+		m_AnimationEditor->SetAssets(nullptr);
+
 	// After the thumbnails, which release their materials back through it, and before the viewports,
 	// so the instances it deletes leave views that are still standing.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
@@ -336,6 +367,9 @@ MainWindow::ReleaseRenderResources() noexcept
 
 	delete m_MaterialEditor;
 	m_MaterialEditor = nullptr;
+
+	delete m_AnimationEditor;
+	m_AnimationEditor = nullptr;
 }
 
 void
@@ -496,6 +530,8 @@ MainWindow::SetActiveProject(Project project)
 	// consumers below borrow it, so it has to be replaced before any of them are told about it.
 	if (m_Thumbnails)
 		m_Thumbnails->SetAssets(nullptr);
+	if (m_AnimationEditor)
+		m_AnimationEditor->SetAssets(nullptr);
 
 	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
 	// thread like any other scene mutation -- the viewports are still drawing at this point.
@@ -520,6 +556,12 @@ MainWindow::SetActiveProject(Project project)
 		// paths it finds against the data root.
 		m_MaterialEditor->SetDataRoot(dataDir);
 		m_MaterialEditor->Reset();
+	}
+
+	if (m_AnimationEditor)
+	{
+		m_AnimationEditor->SetDataRoot(dataDir);
+		m_AnimationEditor->SetAssets(m_Assets.get());
 	}
 
 	ShowProjectState();
