@@ -293,6 +293,7 @@ send it.
 | `merged` | mark `[x]` in the tracker; next task (§ 3), or § 5 if that was the last |
 | `ci_failure` | fix the build on the same branch, push, restart the watcher — see below |
 | `review` / `comment` | [bcp-revise](.claude/skills/bcp-revise/SKILL.md) on the same branch, push more commits, restart the watcher |
+| `base_moved` | rebase onto the base it names, rebuild, re-test, force-push, restart the watcher — see below |
 | `closed` | stop and ask — the user rejected something |
 | `timeout` (exit 3) | only when you passed `--timeout`, which you should not — say you are still waiting, restart the watcher |
 
@@ -303,6 +304,23 @@ them rather than opening the `url`. Reproduce locally where the runner's toolcha
 does not — a warning only MSVC emits, a macOS-only failure — say in chat that the fix is unverified
 locally and that the next CI run is the gate. The event also carries any review or comment that was
 waiting; answer those in the same turn, then restart the watcher once.
+
+**A moved base is a rebuild, not a rebase.** `base_moved` says the branch this PR merges into has
+commits the PR was never compiled against, so the green CI run it is sitting on was measured against
+a base that no longer exists. GitHub will still merge it — being behind blocks nothing — which is
+exactly why nothing else reports this:
+
+```bash
+git fetch origin && git rebase origin/<the event's base>
+just build && just test                             # a rebase is a real merge
+git push --force-with-lease
+```
+
+Then restart the watcher, which re-baselines the base as it starts. A conflict here is the same
+conflict a hand rebase would have hit, only earlier; resolve it, and if the resolution is a judgement
+call rather than a mechanical one, say so in chat rather than picking a side silently. The force-push
+marks any inline review comment as outdated, which is why the event ranks below `review` and
+`comment` — answer the human first, and their answer carries the rebase anyway.
 
 **Just restart it.** The baseline is not yours to compute:
 
