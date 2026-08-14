@@ -13,8 +13,9 @@ rather than get a second one.
 
 - **ADR-1 — the viewer opens on the animated mesh.** A rigged `.bmesh` is dropped or opened; it
   names its rig by path (`BMesh::skeleton`), and every `.banim` records the same path and a
-  signature (`assetlib_structs/Animation.h:46-47`), so its clips resolve by comparing those over
-  `Animations/` — no hashing, no ambiguity. *Rejected:* opening `.bvat` directly — it is a
+  signature (`assetlib_structs/Animation.h:46-47`), so its clips resolve as a query over the
+  reference graph assetlib already scans (`AssetRefGraph`'s `kClipSkeleton` edges) — no hashing,
+  no ambiguity, one home for matching and error policy. *Rejected:* opening `.bvat` directly — it is a
   git-ignored build product (`docs/vat.md`), not an asset; *rejected:* opening the `.banim` — a
   clip names no mesh, so the reverse lookup would have to be invented; *rejected:* reusing
   `ContentExplorerWindow::FindMatchingSkeleton` — it exists for the import case that holds no path,
