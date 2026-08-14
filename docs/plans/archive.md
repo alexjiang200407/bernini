@@ -273,12 +273,19 @@ same loaders task 4 routes into the seam. That is safe today only because `readC
 
 A `.bpak` is the obvious place to keep one handle open across reads instead — and a shared handle
 has a shared seek position, which two decode threads would race on. `IFileSystem::Read` and
-`ReadRange` are therefore const and **safe for concurrent calls**, and `PakFile` reads positionally
-(`pread`, or `ReadFile` with an explicit `OVERLAPPED` offset) rather than seek-then-read. Its entry
-table is built once at mount and immutable after.
+`ReadRange` are therefore const and **safe for concurrent calls**. `PakFile`'s entry table is built
+once at mount and immutable after; only the payload read touches the file.
 
 **Rejected: a mutex around the handle.** It serialises exactly the case `TexturePrefetch` exists to
 parallelise — two workers decoding two textures — and buys nothing a positional read does not.
+
+**Corrected by task 2:** `PakFile` holds no handle at all. It opens a stream per payload read, the
+way `LooseFileSystem` does, which satisfies the contract with no lock and no platform code. Holding
+one handle and reading positionally (`pread`, `ReadFile` with an explicit `OVERLAPPED` offset) is
+the optimization behind that contract, not the contract itself — it needs a positional-read
+primitive in `core` on three platforms, and there is no measurement yet to justify one. The table
+lookup, which is what happens most often, is already in memory. The concurrency test lands either
+way and is what would catch a shared cursor being introduced later.
 
 ### Both archived and non-archived, always, and loose wins.
 
@@ -327,9 +334,9 @@ migrated, which is a cleanup this feature has no reason to carry.
 +--------------------------------------------------+
 | Payloads, each aligned to 16                      |   <- ReadRange lands here
 +--------------------------------------------------+
-| Entry table, sorted by pathHash                   |   <- binary search, then verify the string
-|   pathHash u64 | pathOffset u32 | pathSize u32    |
-|   offset u64   | size u64       | stamp (16 B)    |
+| Entry table, sorted by path                       |   <- 48 B each; the mount builds a map from it
+|   pathOffset u32 | pathSize u32 | offset u64      |
+|   size u64 | stamp (16 B) | flags u32 | pad u32   |
 +--------------------------------------------------+
 | String pool: every path, NUL-terminated           |
 +--------------------------------------------------+
@@ -341,6 +348,17 @@ measurement to choose it with, and it defeats the `mmap` path the aligned layout
 
 Paths are stored in `normalizeRef` form — the same string `AssetManager` keys on — so lookup is the
 identity function, not a translation.
+
+**Corrected by task 2.** The table was to be sorted by a stored path hash and binary-searched. It is
+sorted by *path* instead, and there is no hash field: the mount reads the table once and builds a
+`core::str::unordered_str_map`, which answers in O(1) and makes a stored hash dead weight. Sorting by
+path still earns its place — packing one tree twice produces identical bytes, and `list` comes out
+ordered.
+
+The writer streams, too, rather than building the archive in memory the way `chunk::Writer` does:
+each `Add` writes its payload to a temp straight away and only the table and pool are held. An
+archive is the whole project's cooked output, and a writer that had to hold one would put a ceiling
+on how large a project can be packed.
 
 **Rejected: `.zip`.** It is the closest call in this plan, and the honest summary is that it costs
 about as much code as it saves and gives up two properties the design rests on.
