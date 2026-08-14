@@ -15,9 +15,9 @@ The four the feature was asked, with the short answer and where it is argued:
 |---|---|
 | **How does this affect the workflow?** | Barely, by construction. Drag-and-drop, import, save and delete all still write loose files. What changes is that the Content Explorer shows the union of the archive and the loose overlay, and gains a *Sync* action. See [the editor is a copy-on-write overlay](#the-editor-mounts-the-archive-writes-loose-and-syncs). |
 | **Can we still drag and drop and write, after the editor uses the archive?** | Yes — and nothing is ever written *into* the archive. A write lands as a loose file that takes precedence over its packed twin; *Sync* repacks. That is the same first-hit-wins mount the runtime uses, so the editor is not a special case. |
-| **How should the archives be organised?** | One `Data.bpak` per project by default, indexed by the same `normalizeRef` data-root-relative path everything already keys on. Splitting is an argument to `pack`, not a rule. See [one archive per project](#one-archive-per-project-by-default-databpak-mounted-as-one-search-path-entry). |
+| **How should the archives be organised?** | One `Data.bpak` per project by default, indexed by the same `normalizeRef` data-root-relative path everything already keys on. Splitting is an argument to `pack`, not a rule. See [one archive per project](#one-archive-per-project-by-default-databpak-mounted-as-one-layer). |
 | **What shouldn't be archived?** | *An archive carries what the runtime reads and nothing that produces it* — out go `textures_src/`, unimported source art, the `.berniniproject` and the shader cache. See [the exclusion table](#what-should-not-be-archived). |
-| **Should we support archived and non-archived?** | Yes, permanently, and loose always wins. It is one ordered `SearchPath`, and that single rule is the debug workflow, the editor overlay, patching and modding. See [both, always](#both-archived-and-non-archived-always-and-loose-wins). |
+| **Should we support archived and non-archived?** | Yes, permanently, and loose always wins. It is one ordered `LayeredFileSystem`, and that single rule is the debug workflow, the editor overlay, patching and modding. See [both, always](#both-archived-and-non-archived-always-and-loose-wins). |
 
 ---
 
@@ -141,7 +141,7 @@ rots.
 from it that the loose-only design did not need:
 
 - **Deletion needs a tombstone.** A packed entry cannot be unlinked. The overlay carries a deletion
-  set, `SearchPath` treats a tombstoned path as absent, and *Sync* drops those entries from the
+  set, `LayeredFileSystem` treats a tombstoned path as absent, and *Sync* drops those entries from the
   repack. This is the same mechanism patch archives would want later, now with a consumer.
 - **`AssetRefGraph::Scan` and the texture prune must walk the union**, not
   `recursive_directory_iterator` over the data root
@@ -163,7 +163,7 @@ read the same file:
 { "version": 1, "deleted": ["Materials/kirk.bmaterial", "Textures/kirk_orm.ktx2"] }
 ```
 
-Paths in `normalizeRef` form, like every other reference. `SearchPath` takes the set as its mask;
+Paths in `normalizeRef` form, like every other reference. `LayeredFileSystem` takes the set as its mask;
 `Sync` drops those entries from the repack and then deletes the manifest. Its lifetime is one
 editing session's worth of deletions — created on the first delete of a packed asset, gone at the
 next sync — so it is small, short-lived and hand-editable when something goes wrong.
@@ -207,7 +207,7 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 an explicit directory exclusion for `textures_src/`, so a new container type joins the archive by
 being registered once rather than by editing a list here.
 
-### One archive per project by default, `Data.bpak`, mounted as one search path entry.
+### One archive per project by default, `Data.bpak`, mounted as one layer.
 
 **Rejected: one archive per category** (`Meshes.bpak`, `Textures.bpak`, …). It buys nothing — an
 entry table lookup is a hash regardless of how many files the entries are spread over — and it costs
@@ -227,7 +227,7 @@ default is one.
 ```
 core::file::IFileSystem          Exists / Stat / Read / ReadRange / Enumerate / IsReadOnly
   ├── core::file::LooseFileSystem   a directory, what everything does today
-  ├── core::file::SearchPath        an ordered list of mounts, first hit wins
+  ├── core::file::LayeredFileSystem        an ordered list of mounts, first hit wins
   └── assetlib::PakFile             a .bpak — always read-only
 ```
 
@@ -240,10 +240,10 @@ need it, while `bgl` links it and must not grow a dependency on an asset contain
 ranged read from the first commit, and `LooseFileSystem` implements it with the seek it already does.
 
 **`IsReadOnly` is on the interface, not discovered later.** `AcquireVatMesh` needs it to decide
-whether a `.bvat` is re-bakeable, and `SearchPath` reports it for the mount that answered rather
+whether a `.bvat` is re-bakeable, and `LayeredFileSystem` reports it for the mount that answered rather
 than for itself — a loose-over-archive search path is writable for one path and not for the next.
 Six members, fixed at the first commit: a capability bolted on after `LooseFileSystem` and
-`SearchPath` have landed with tests against a five-member shape is a rewrite of a merged task.
+`LayeredFileSystem` have landed with tests against a five-member shape is a rewrite of a merged task.
 
 **`Stat` returns `core::file::FileStamp` — a size and an mtime, and *not* `assetlib::SourceStamp`.**
 The two are structurally identical, which is the trap: `SourceStamp` lives in `assetlib_structs`
@@ -286,7 +286,7 @@ Yes, permanently, and not as a transitional state. Consumers that need loose for
 overlay, the golden-image tests, and a standalone baked model directory
 ([AssetManager.h:508](../../libs/gamelib/include/gamelib/AssetManager.h)).
 
-`SearchPath` resolves in order and takes the first hit, loose-first and archive-second, so an
+`LayeredFileSystem` resolves in order and takes the first hit, loose-first and archive-second, so an
 unpacked file shadows its packed twin. That one rule is four features:
 
 - the **editor overlay** — every edit is a loose file that wins over what is packed;
@@ -399,9 +399,9 @@ build spend seconds skinning on first load.
 | subsystem | change | risk |
 |---|---|---|
 | `bgl` | none | — |
-| `core` | new `core::file::IFileSystem`, `FileStamp`, `LooseFileSystem`, `SearchPath`, `write_atomic` | none; additive |
+| `core` | new `core::file::IFileSystem`, `FileStamp`, `LooseFileSystem`, `LayeredFileSystem`, `write_atomic` | none; additive |
 | `assetlib` | every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; `stampOf` and the four staleness predicates take a filesystem; `AssetRefGraph::Scan` and the texture prune walk the mount union instead of the data root; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
-| `gamelib` | `AssetManager` takes a `SearchPath`; the path-taking constructor stays and builds a loose mount, so every existing caller compiles unchanged; `AcquireVatMesh` respects a read-only mount | moderate |
+| `gamelib` | `AssetManager` takes a `LayeredFileSystem`; the path-taking constructor stays and builds a loose mount, so every existing caller compiles unchanged; `AcquireVatMesh` respects a read-only mount | moderate |
 | `apps/editor` | `Project` opens a mount rather than a data root; the Content Explorer comes off `QFileSystemModel` to show the union; delete writes a tombstone; a *Sync* action repacks | **high, and the largest single task.** The Content Explorer indexes straight into its model in a dozen places |
 | docs | new `docs/archives.md`; `ROADMAP.md` line under Asset Streaming Pipeline | — |
 
@@ -415,7 +415,7 @@ readable.
 
 Bottom-up by layer, one PR each.
 
-**1. `core::file::IFileSystem`, `LooseFileSystem`, `SearchPath`, `write_atomic`.**
+**1. `core::file::IFileSystem`, `LooseFileSystem`, `LayeredFileSystem`, `write_atomic`.**
 All six interface members — `Exists`, `Stat`, `Read`, `ReadRange`, `Enumerate`, `IsReadOnly` — plus
 `core::file::FileStamp`; a directory-backed implementation; an ordered mount list that takes the
 first hit and reports both which mount answered and whether *that* mount is read-only; a mask set on
@@ -424,7 +424,7 @@ honours one); and `write_atomic`, which task 6 needs and nothing in the tree off
 Nothing calls any of it yet — dead scaffolding at the bottom layer, justified by its tests.
 *Gate:* new `core_tests` cases — a `LooseFileSystem` over a temp tree round-trips whole and ranged
 reads and reports stamps matching `std::filesystem`; a ranged read past EOF throws rather than
-returning short; a two-mount `SearchPath` resolves to the first, falls through on a miss, enumerates
+returning short; a two-mount `LayeredFileSystem` resolves to the first, falls through on a miss, enumerates
 the union without duplicates, and reports the answering mount's `IsReadOnly` rather than its own; a
 masked path reads absent from `Exists`, `Read` and `Enumerate` alike even when a mount carries it;
 `write_atomic` leaves no partial file at the target when the write fails.
@@ -477,12 +477,12 @@ and the scan is still rebuilt per question.
 scanned once, from the loose copy; a prune over a mount union never proposes deleting a packed
 texture that only a loose material references.
 
-**8. `AssetManager` mounts a `SearchPath`.**
+**8. `AssetManager` mounts a `LayeredFileSystem`.**
 New constructor taking a mount list; the existing path-taking one builds a `LooseFileSystem` and
 delegates, so no caller changes. `AcquireVatMesh` skips the staleness check on a read-only mount.
 *Gate:* `gamelib_tests` — the whole existing suite passes through the loose mount unchanged; a new
 case acquires a mesh, its materials and its textures out of a `.bpak` and gets handles equal to the
-loose acquire; a loose-over-archive `SearchPath` resolves an overridden `.bmaterial` to the loose
+loose acquire; a loose-over-archive `LayeredFileSystem` resolves an overridden `.bmaterial` to the loose
 one; `VatAcquire_test` acquires from a read-only mount without re-baking.
 
 **9. The editor opens a mount, and the Content Explorer shows the union.**
