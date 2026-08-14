@@ -18,9 +18,10 @@ namespace core::file
 	get_executable_path();
 
 	/**
-	 * Writes `bytes` to `path` via a sibling temp file and a rename, so a crash mid-write leaves
-	 * either the previous contents or the new ones and never a truncated file that still looks
-	 * readable.
+	 * Writes `bytes` to `path` via a sibling temp file, flushed to the device and then renamed, so a
+	 * crash mid-write leaves either the previous contents or the new ones and never a truncated file
+	 * that still looks readable. The flush is what extends that from a process crash to a power
+	 * loss: closing a stream only hands the bytes to the OS cache.
 	 *
 	 * The temp name carries the process id and a counter, because several processes may write to
 	 * one directory at once.

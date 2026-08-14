@@ -56,13 +56,26 @@ namespace core::file
 
 			if (!out)
 			{
+				// Read before the remove below, whose own unlink would overwrite errno on failure.
+				const std::string reason = std::strerror(errno);
+
 				std::error_code ec;
 				std::filesystem::remove(tmp, ec);
 				core::throw_runtime_error(
 					"write_atomic: failed to write '{}': {}",
 					tmp.string(),
-					std::strerror(errno));
+					reason);
 			}
+		}
+
+		// Closing the stream only hands the bytes to the OS cache. Without this the rename can
+		// commit a name whose contents a power loss has not yet reached the device -- which is the
+		// truncated-but-plausible file this function exists to make impossible.
+		if (!core::sync_file(tmp))
+		{
+			std::error_code ec;
+			std::filesystem::remove(tmp, ec);
+			core::throw_runtime_error("write_atomic: cannot flush '{}'", tmp.string());
 		}
 
 		std::error_code ec;
@@ -76,5 +89,10 @@ namespace core::file
 				path.string(),
 				ec.message());
 		}
+
+		// A durable file under a directory entry that is not durable is still a lost write. Failure
+		// here is not fatal: the rename has happened, and what is at risk is only its ordering
+		// against an unrelated crash.
+		(void)core::sync_directory(path.parent_path());
 	}
 }
