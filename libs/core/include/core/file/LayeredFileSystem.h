@@ -9,12 +9,18 @@ namespace core::file
 	 *
 	 * One rule, four uses: the editor's loose overlay shadowing the archive it was opened from, a
 	 * debug build reading an unpacked file dropped beside the executable, a patch shipped ahead of
-	 * a base archive, and a mod doing the same. Which is why this is a list and not a flag.
+	 * a base archive, and a mod doing the same.
+	 *
+	 * A list rather than a loose/archive pair, even though two is the only shape anything mounts
+	 * today. A pair puts the policy in the type: a standalone baked model directory and the
+	 * golden-image tests have no archive, so one half would be empty, and every consumer would then
+	 * branch on which halves are present. A list of one is a directory, a list of two is the
+	 * editor, and the patch and mod cases need no new type.
 	 *
 	 * Itself an IFileSystem, so a consumer takes one thing and neither knows nor cares how many
 	 * mounts are behind it.
 	 */
-	class SearchPath final : public IFileSystem
+	class LayeredFileSystem final : public IFileSystem
 	{
 	public:
 		/** Appends `mount` as the *lowest* priority. Null is ignored. */

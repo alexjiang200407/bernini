@@ -1,5 +1,5 @@
+#include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
-#include <core/file/SearchPath.h>
 #include <core/file/file.h>
 
 namespace
@@ -157,7 +157,7 @@ TEST_CASE("LooseFileSystem enumerates recursively and by prefix", "[filesystem]"
 	CHECK(fs.Enumerate("Nothing").empty());
 }
 
-TEST_CASE("SearchPath resolves to the first mount that carries a path", "[filesystem]")
+TEST_CASE("LayeredFileSystem resolves to the first mount that carries a path", "[filesystem]")
 {
 	const TempDir over("fs_path_over");
 	const TempDir under("fs_path_under");
@@ -169,7 +169,7 @@ TEST_CASE("SearchPath resolves to the first mount that carries a path", "[filesy
 	const auto overFs  = std::make_shared<core::file::LooseFileSystem>(over.Path());
 	const auto underFs = std::make_shared<core::file::LooseFileSystem>(under.Path(), true);
 
-	core::file::SearchPath path;
+	core::file::LayeredFileSystem path;
 	path.Mount(overFs);
 	path.Mount(underFs);
 
@@ -201,12 +201,12 @@ TEST_CASE("SearchPath resolves to the first mount that carries a path", "[filesy
 	}
 }
 
-TEST_CASE("SearchPath is read-only when every mount is", "[filesystem]")
+TEST_CASE("LayeredFileSystem is read-only when every mount is", "[filesystem]")
 {
 	const TempDir a("fs_path_ro_a");
 	const TempDir b("fs_path_ro_b");
 
-	core::file::SearchPath path;
+	core::file::LayeredFileSystem path;
 	CHECK(path.IsReadOnly());  // nothing mounted: nothing can be written
 
 	path.Mount(std::make_shared<core::file::LooseFileSystem>(a.Path(), true));
@@ -216,7 +216,7 @@ TEST_CASE("SearchPath is read-only when every mount is", "[filesystem]")
 	CHECK_FALSE(path.IsReadOnly());
 }
 
-TEST_CASE("SearchPath masks a path every mount still carries", "[filesystem]")
+TEST_CASE("LayeredFileSystem masks a path every mount still carries", "[filesystem]")
 {
 	const TempDir over("fs_mask_over");
 	const TempDir under("fs_mask_under");
@@ -225,7 +225,7 @@ TEST_CASE("SearchPath masks a path every mount still carries", "[filesystem]")
 	under.Write("gone.txt", "packed copy");
 	under.Write("kept.txt", "kept");
 
-	core::file::SearchPath path;
+	core::file::LayeredFileSystem path;
 	path.Mount(std::make_shared<core::file::LooseFileSystem>(over.Path()));
 	path.Mount(std::make_shared<core::file::LooseFileSystem>(under.Path(), true));
 

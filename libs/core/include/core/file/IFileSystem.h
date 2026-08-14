@@ -14,8 +14,8 @@ namespace core::file
 		uint64_t size  = 0;
 		int64_t  mtime = 0;  // seconds since the filesystem clock's epoch
 
-		friend bool
-		operator==(const FileStamp&, const FileStamp&) = default;
+		[[nodiscard]] bool
+		operator==(const FileStamp&) const noexcept = default;
 	};
 
 	/**
