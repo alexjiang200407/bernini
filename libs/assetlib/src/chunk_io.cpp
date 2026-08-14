@@ -96,18 +96,41 @@ namespace assetlib::chunk
 		std::span<const uint32_t>    ids,
 		std::string_view             what)
 	{
-		CheckedFileReader in(path, what);
+		CheckedFileReader source(path, what);
+		return readChunks(source, magic, versionMajor, ids, what);
+	}
 
+	std::unordered_map<uint32_t, std::vector<std::byte>>
+	readChunksFrom(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		uint32_t                       magic,
+		uint16_t                       versionMajor,
+		std::span<const uint32_t>      ids,
+		std::string_view               what)
+	{
+		MountedFileReader source(fileSystem, path, what);
+		return readChunks(source, magic, versionMajor, ids, what);
+	}
+
+	std::unordered_map<uint32_t, std::vector<std::byte>>
+	readChunks(
+		IRangeReader&             source,
+		uint32_t                  magic,
+		uint16_t                  versionMajor,
+		std::span<const uint32_t> ids,
+		std::string_view          what)
+	{
 		Header header{};
-		in.ReadAt(&header, sizeof(header), 0);
+		source.ReadAt(&header, sizeof(header), 0);
 		checkHeader(header, magic, versionMajor, what);
 
 		const uint64_t tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(Entry);
-		in.CheckRange(tableBytes, header.chunkTableOffset);
+		source.CheckRange(tableBytes, header.chunkTableOffset);
 
 		std::vector<Entry> table(header.chunkCount);
 		if (!table.empty())
-			in.ReadAt(table.data(), tableBytes, header.chunkTableOffset);
+			source.ReadAt(table.data(), tableBytes, header.chunkTableOffset);
 
 		std::unordered_map<uint32_t, std::vector<std::byte>> out;
 		for (const Entry& entry : table)
@@ -115,11 +138,11 @@ namespace assetlib::chunk
 			if (std::ranges::find(ids, entry.id) == ids.end())
 				continue;
 
-			in.CheckRange(entry.byteSize, entry.offset);
+			source.CheckRange(entry.byteSize, entry.offset);
 
 			std::vector<std::byte> chunk(entry.byteSize);
 			if (!chunk.empty())
-				in.ReadAt(chunk.data(), chunk.size(), entry.offset);
+				source.ReadAt(chunk.data(), chunk.size(), entry.offset);
 
 			out.emplace(entry.id, std::move(chunk));
 		}
