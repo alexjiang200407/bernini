@@ -28,6 +28,10 @@ here, not in either of them.
   because nothing retains CPU geometry after the GPU upload — feed it while the `BMesh` is still
   in scope. Pure CPU, no bgl involvement; the editor's material preview drives click-to-select
   with it.
+- `EnsureVatBaked` (`vat_freshness.h`) — the `.bvat` freshness rule in one place: return the container
+  fresh, re-baking in place when a stamp moved *or* it was baked from a different `.banim` than the
+  one asked for. Pure assetlib, so a caller can pay the bake on a worker thread and acquire after;
+  `AcquireVatMesh` runs the same function.
 - `AssetManager` — constructed with an `IScene` and the project's **Data directory**. Textures,
   materials and geometry belong to the scene and are shared across every view drawn from it, so the
   manager is one per scene, and `CreateInstance` names the view each instance is placed in (holding it
