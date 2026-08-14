@@ -153,6 +153,41 @@ from it that the loose-only design did not need:
   show packed entries alongside loose ones with the loose one winning. Its own task, and the largest
   single one in the feature.
 
+### The tombstone manifest: one JSON file, cleared by every Sync.
+
+`Data/.overlay.json`, written by `assetlib` (which already links `nlohmann_json`
+[CMakeLists.txt:35](../../libs/assetlib/CMakeLists.txt)) so that both the editor and a CLI `sync`
+read the same file:
+
+```json
+{ "version": 1, "deleted": ["Materials/kirk.bmaterial", "Textures/kirk_orm.ktx2"] }
+```
+
+Paths in `normalizeRef` form, like every other reference. `SearchPath` takes the set as its mask;
+`Sync` drops those entries from the repack and then deletes the manifest. Its lifetime is one
+editing session's worth of deletions — created on the first delete of a packed asset, gone at the
+next sync — so it is small, short-lived and hand-editable when something goes wrong.
+
+Three rules that are not obvious and are each a bug if missed:
+
+- **A tombstone is written only when the path still resolves after the loose copy is unlinked** —
+  i.e. only when something packed is underneath. Deleting a loose-only asset just unlinks, as today.
+  Tombstoning unconditionally would grow the manifest forever with entries that mask nothing.
+- **Writing a path clears its tombstone.** Importing an asset at a path that was deleted earlier in
+  the session must not leave the new file masked by its own tombstone.
+- **It is written through `write_atomic`, and it is excluded from packing.** It is overlay state, not
+  runtime data; a shipped archive that carried it would mask its own contents.
+
+**Rejected: a marker file per deletion** (`Materials/kirk.bmaterial.deleted` beside the asset). It
+cannot desync from the tree the way one central file can, and it merges better under version
+control — but it scatters state through every category directory, needs a suffix reserved forever,
+and puts an extension-filtering rule in front of every `Enumerate` in the project. For a set that is
+emptied at each sync, one file is easier to reason about than N.
+
+**Rejected: keeping the deletion set in the `.berniniproject` file.** It is editor metadata that
+travels with the project; the overlay is working state that dies at the next sync. Different
+lifetimes should not share a file.
+
 ### What should not be archived
 
 | excluded | why |
@@ -161,6 +196,7 @@ from it that the loose-only design did not need:
 | `.glb` / `.hdr` and anything else awaiting import | same |
 | the `.berniniproject` file | editor metadata, not runtime data |
 | the shader cache (`.bsc`, `pipelines.psolib`) | per-machine, write-back, disposable — an archive entry would be write-once and wrong |
+| `Data/.overlay.json` | overlay working state; packed, it would mask the archive's own contents |
 | `Levels/` | **included** — levels are runtime data |
 | `Textures/` (baked) | **included**, and it is most of the bytes |
 | `.bvat` | **included**, and packed fresh — see below |
@@ -461,15 +497,16 @@ asset that has no packed twin, and lists a shadowed pair exactly once resolving 
 the existing import and thumbnail suites pass unchanged.
 
 **10. Delete writes a tombstone, and *Sync* repacks.**
-The overlay's deletion set persists as a manifest beside the loose tree; delete of a packed asset
+`Data/.overlay.json` in `assetlib` — read, write, and the three rules above. Delete of a packed asset
 writes a tombstone rather than failing; `Sync` repacks archive ∪ overlay − tombstones through
-`PakWriter` and `write_atomic`, then removes the absorbed loose files and clears the manifest.
+`PakWriter` and `write_atomic`, then removes the absorbed loose files and the manifest.
 Ordering matters and is the risk: the new archive is committed *before* any loose file is removed,
 so an interrupted sync leaves redundant loose files rather than lost work.
-*Gate:* `editor_tests` — deleting a packed asset makes it absent from the model and from
-`AssetRefGraph`, and it is gone from the archive after a sync; a sync interrupted after the repack
-and before the cleanup loses nothing and is idempotent when re-run; an asset edited, synced and
-edited again round-trips its content both times.
+*Gate:* `assetlib_tests` — the manifest round-trips, a tombstone is not written for a loose-only
+delete, and writing a tombstoned path clears its entry. `editor_tests` — deleting a packed asset
+makes it absent from the model and from `AssetRefGraph`, and it is gone from the archive after a
+sync; a sync interrupted after the repack and before the cleanup loses nothing and is idempotent
+when re-run; an asset edited, synced and edited again round-trips its content both times.
 
 **11. Docs and roadmap.**
 `docs/archives.md` — the format, the mount model, the exclusion rule, the read-only `.bvat` rule, and
