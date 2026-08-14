@@ -28,7 +28,7 @@ namespace core::file
 		operator=(LooseFileSystem&&) = delete;
 
 		[[nodiscard]] const std::filesystem::path&
-		Root() const noexcept
+		GetRoot() const noexcept
 		{
 			return m_Root;
 		}
