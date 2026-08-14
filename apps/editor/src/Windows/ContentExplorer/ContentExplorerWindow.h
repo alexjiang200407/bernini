@@ -8,6 +8,7 @@
 #include <assetlib_structs/BMeshImport.h>
 
 #include "Thumbnails/TexturePreviewCache.h"
+#include "Windows/AssetImporter/AssetImporterDialog.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "ui_ContentExplorerWindow.h"
@@ -247,8 +248,8 @@ private:
 	/** What the import dialog asked for. */
 	struct ImportOptions
 	{
-		// Organises this import inside each category it writes to; never escapes one.
-		QString folder;
+		// Where each piece lands, already inside its own category.
+		ImportDestinations destinations;
 
 		bool mesh         = true;  // off imports only the pieces below -- see ImportMesh
 		bool textures     = false;
@@ -259,10 +260,10 @@ private:
 	/**
 	 * Converts a dropped glTF/glb into the engine's on-disk form.
 	 *
-	 * Where each piece lands is decided by what it is, not by where the drop happened: the mesh
-	 * under `Meshes/`, the rig under `Skeletons/`, the clips under `Animations/`, each inside
-	 * `options.folder`. A project's references are written against that layout, so an import may
-	 * organise within a category and never across one.
+	 * Which category each piece lands in is decided by what it is, not by where the drop happened: the
+	 * mesh under `Meshes/`, the rig under `Skeletons/`, the clips under `Animations/`.
+	 * `options.destinations` says where inside each -- a project's references are written against that
+	 * layout, so an import may organise within a category and never across one.
 	 *
 	 * Parsing and supercompressing the textures run on a worker thread behind a cancellable loading
 	 * screen: they take long enough to freeze the editor. Nothing there touches bgl. The material
