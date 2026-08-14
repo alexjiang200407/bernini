@@ -36,7 +36,7 @@ namespace core::file
 		Mount(std::shared_ptr<IFileSystem> mount);
 
 		[[nodiscard]] std::span<const std::shared_ptr<IFileSystem>>
-		Mounts() const noexcept
+		GetMounts() const noexcept
 		{
 			return m_Mounts;
 		}
