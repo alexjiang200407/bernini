@@ -47,7 +47,7 @@ namespace core::file
 				core::throw_runtime_error(
 					"write_atomic: cannot open '{}': {}",
 					tmp.string(),
-					std::strerror(errno));
+					std::generic_category().message(errno));
 
 			out.write(
 				reinterpret_cast<const char*>(bytes.data()),
@@ -57,7 +57,7 @@ namespace core::file
 			if (!out)
 			{
 				// Read before the remove below, whose own unlink would overwrite errno on failure.
-				const std::string reason = std::strerror(errno);
+				const std::string reason = std::generic_category().message(errno);
 
 				std::error_code ec;
 				std::filesystem::remove(tmp, ec);

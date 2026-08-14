@@ -20,6 +20,13 @@ namespace core::file
 		/** `root` need not exist; every path is then simply absent. */
 		explicit LooseFileSystem(std::filesystem::path root, bool readOnly = false) noexcept;
 
+		LooseFileSystem(const LooseFileSystem&) = delete;
+		LooseFileSystem(LooseFileSystem&&)      = delete;
+		LooseFileSystem&
+		operator=(const LooseFileSystem&) = delete;
+		LooseFileSystem&
+		operator=(LooseFileSystem&&) = delete;
+
 		[[nodiscard]] const std::filesystem::path&
 		Root() const noexcept
 		{

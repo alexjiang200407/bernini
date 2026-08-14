@@ -36,10 +36,16 @@ namespace core::file
 	public:
 		virtual ~IFileSystem() = default;
 
+		// Held by pointer and never by value, so all four are declared rather than left implicit --
+		// MSVC warns (as an error here) about every special member a derived class inherits as
+		// implicitly deleted.
 		IFileSystem()                   = default;
 		IFileSystem(const IFileSystem&) = delete;
+		IFileSystem(IFileSystem&&)      = delete;
 		IFileSystem&
 		operator=(const IFileSystem&) = delete;
+		IFileSystem&
+		operator=(IFileSystem&&) = delete;
 
 		[[nodiscard]] virtual bool
 		Exists(std::string_view path) const noexcept = 0;

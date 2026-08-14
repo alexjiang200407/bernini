@@ -29,7 +29,7 @@ namespace core::file
 				core::throw_runtime_error(
 					"LooseFileSystem: cannot open '{}': {}",
 					path,
-					std::strerror(errno));
+					std::generic_category().message(errno));
 
 			return in;
 		}

@@ -23,6 +23,14 @@ namespace core::file
 	class LayeredFileSystem final : public IFileSystem
 	{
 	public:
+		LayeredFileSystem()                         = default;
+		LayeredFileSystem(const LayeredFileSystem&) = delete;
+		LayeredFileSystem(LayeredFileSystem&&)      = delete;
+		LayeredFileSystem&
+		operator=(const LayeredFileSystem&) = delete;
+		LayeredFileSystem&
+		operator=(LayeredFileSystem&&) = delete;
+
 		/** Appends `mount` as the *lowest* priority. Null is ignored. */
 		void
 		Mount(std::shared_ptr<IFileSystem> mount);
