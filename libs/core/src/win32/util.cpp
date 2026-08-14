@@ -59,4 +59,31 @@ namespace core
 	{
 		return static_cast<uint32_t>(GetCurrentProcessId());
 	}
+
+	bool
+	sync_file(const std::filesystem::path& path) noexcept
+	{
+		// FlushFileBuffers needs write access even though nothing is written through this handle.
+		const HANDLE file = CreateFileW(
+			path.c_str(),
+			GENERIC_WRITE,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			nullptr,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			nullptr);
+
+		if (file == INVALID_HANDLE_VALUE)
+			return false;
+
+		const BOOL ok = FlushFileBuffers(file);
+		CloseHandle(file);
+		return ok != FALSE;
+	}
+
+	bool
+	sync_directory(const std::filesystem::path&) noexcept
+	{
+		return true;
+	}
 }
