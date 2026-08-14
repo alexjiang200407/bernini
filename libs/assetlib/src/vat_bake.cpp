@@ -109,11 +109,12 @@ namespace assetlib
 				pitch);
 		}
 
-		std::string
-		normalizePath(std::string_view path)
-		{
-			return std::filesystem::path(path).lexically_normal().generic_string();
-		}
+	}
+
+	std::string
+	normalizePath(std::string_view path)
+	{
+		return std::filesystem::path(path).lexically_normal().generic_string();
 	}
 
 	BVat

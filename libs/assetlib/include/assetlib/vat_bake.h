@@ -49,4 +49,11 @@ namespace assetlib
 	 */
 	[[nodiscard]] bool
 	vatIsStale(const BVat& vat, const std::filesystem::path& dataRoot);
+
+	/**
+	 * The path form the bake records in the container: lexically normal, generic separators.
+	 * Compare a requested path against a `BVat`'s recorded one through this, never raw.
+	 */
+	[[nodiscard]] std::string
+	normalizePath(std::string_view path);
 }

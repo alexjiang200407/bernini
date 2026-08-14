@@ -28,8 +28,9 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   every frame of every clip**; normals `R8G8B8A8_UNORM` as `xyz * 0.5 + 0.5`.
 * **A `.bvat` is a build product, not an asset.** Wholly derived from the three inputs it stamps
   (`.bmesh`, `.bskel`, `.banim`), git-ignored, written beside its mesh (swap the extension), and
-  re-baked — never errored — when `vatIsStale` says an input moved. `SourceStamp` is
-  `{size, mtime-in-seconds}` by deliberate cheapness: a same-second, same-size rewrite reads as
+  re-baked — never errored — when `vatIsStale` says an input moved *or* it was baked from a
+  different `.banim` than the one requested (`game::EnsureVatBaked` owns that rule). `SourceStamp`
+  is `{size, mtime-in-seconds}` by deliberate cheapness: a same-second, same-size rewrite reads as
   fresh.
 * **Clips stack along V; each is padded with a duplicate of its *last* frame.** Frame `f` of a
   clip is row `firstRow + f`; the pad row exists so fractional-frame blending never bleeds into
@@ -70,7 +71,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Interface | File | Role |
 |---|---|---|
 | `bakeVat` (in-memory + `VatBakeDesc` overloads) | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | CPU-skin every vertex at every frame; pack, pad and encode the texture pair |
-| `vatIsStale` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Compare the container's input stamps against the disk — the bake-on-demand trigger |
+| `vatIsStale` / `normalizePath` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Compare the container's input stamps against the disk — the stamp half of the bake-on-demand trigger — and the path form the container records |
 | `saveVat` / `loadVat` / `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h) | Container round-trip; tables-only and refs-only seek reads for scans |
 | `assetlib_cli bakevat` | [libs/assetlib/cli](libs/assetlib/cli) | The CLI door over `bakeVat` + `saveVat` |
 
@@ -86,6 +87,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Interface | File | Role |
 |---|---|---|
 | `AssetManager::AcquireVatMesh` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | Load the `.bvat` beside a mesh — or bake it there — and stand the geom up with its materials |
+| `EnsureVatBaked` / `VatPathFor` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | The freshness rule's one home: return the `.bvat` fresh, re-baking in place when stale — pure assetlib, safe off the render thread — and where a mesh's `.bvat` lives |
 | `AssetManager::CreateVatInstance` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `CreateInstance`'s VAT twin; same reference edges, same `DestroyInstance` |
 
 ### Supporting types
@@ -115,6 +117,7 @@ flowchart TD
 
     subgraph gamelib
         ACQ[AssetManager::AcquireVatMesh]
+        ENSURE["EnsureVatBaked (fresh = stamps hold AND recorded .banim is the one asked for)"]
         INST[AssetManager::CreateVatInstance]
     end
 
@@ -126,9 +129,11 @@ flowchart TD
 
     BMESH & BSKEL & BANIM -- "inputs, stamped" --> BAKE
     BAKE -- "saveVat, beside the mesh" --> BVAT
-    ACQ -- "stale or missing?" --> STALE
-    STALE -- "re-bake" --> BAKE
-    BVAT -- "loadVat, decodeKTX2" --> ACQ
+    ACQ --> ENSURE
+    ENSURE -- "stamp check" --> STALE
+    ENSURE -- "stale or missing: re-bake" --> BAKE
+    BVAT -- "loadVat" --> ENSURE
+    ENSURE -- "fresh container (decodeKTX2 in the acquire)" --> ACQ
     ACQ -- "AddTextureAsset x2 + AddVatMeshGeom" --> SCENE
     INST --> VIEW
     SCENE -- "VatGeom / clip / column buffers" --> MS
@@ -164,7 +169,12 @@ flowchart TD
 ### `AssetManager::AcquireVatMesh`
 * **Bake-on-demand writes to the data root** — @post a missing or stale `.bvat` is baked from
   `relPath` + `animationsRelPath` and saved beside the mesh. The bake is seconds of CPU skinning;
-  call it accordingly (load screens, not per-frame).
+  call it accordingly (load screens, not per-frame). `game::EnsureVatBaked` is that step alone —
+  no upload, no bgl — for a caller that wants the bake on a worker thread first and the acquire
+  after.
+* **Stale includes the animations path** — a `.bvat` whose recorded `.banim` is not the one named
+  is re-baked even with every stamp intact; the container answers for exactly one clip set at a
+  time, and which one is part of fresh.
 * **A mesh with non-opaque or loose materials cannot be acquired as VAT** — the per-submesh
   opaque-`kPBR` rule surfaces here as a throw *after* the bake and material acquires; the unwind
   releases everything taken, so a failed acquire owns nothing.
