@@ -1,6 +1,6 @@
 ---
 name: bcp-precheck
-description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
+description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap, work that crosses a non-goal agreed in the grill, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -101,7 +101,37 @@ Then ask the question the roadmap makes answerable: **does this design survive t
 abstraction that fits today and has to be torn out for a roadmap item two lines down is worth saying
 so now, while it is three files instead of thirty. Name the roadmap item that breaks it.
 
-## 4. Style
+## 4. Does it cross a boundary that was already agreed?
+
+Before a line of this change was written it was grilled
+([bcp-grill](.claude/skills/bcp-grill/SKILL.md)), and the agreement is the head of the plan:
+**Context**, **Decisions** (ADRs, each with the alternative it rejected), **Non-goals**,
+**Acceptance**. Find it and read it:
+
+```bash
+FEATURE=$(git config bernini.feature || true)
+ls docs/plans/                                        # the feature's plan, when one is set
+git diff --name-only "$BASE"...HEAD -- docs/plans/    # a one-shot adds its plan in this very diff
+```
+
+Two findings live here, and nothing else in the pipeline can see either — the roadmap is too coarse
+and the reviewer was not in the conversation:
+
+- **Work outside the non-goals.** A diff that implements what the plan says it is explicitly not
+  doing is scope that was already ruled out once. It is a finding even when the code is good. Quote
+  the non-goal.
+- **A decision contradicted.** The ADR puts the seam in `gamelib` and the diff puts it in `bgl`; the
+  ADR rejected a cache and the diff adds one. Name the ADR and the line that breaks it.
+
+Neither is automatically blocking. A boundary can move, and the author may have moved it knowingly —
+so report it as `revise`, which makes the answer either a fix or an amended ADR **in this PR**. What
+is not acceptable is the boundary quietly ceasing to hold.
+
+**No plan, no finding.** If the change has no Context & ADR head to check against, say so in one line
+and move on. Do not infer the boundaries yourself: invented non-goals are the noise that teaches an
+author to skim this gate.
+
+## 5. Style
 
 `STYLE.md` is in context. The two that recur, in the author's own words:
 
@@ -122,7 +152,7 @@ What no tool owns: whether every function is marked `noexcept` or deliberately i
 
 Do not flag formatting. `just format` owns it, and the same hook has already run it.
 
-## 5. Verify, then report
+## 6. Verify, then report
 
 Every finding, before it goes in: name the line that makes it true, then try to refute it — ask what
 would have to hold for the code to be right as written, and check whether it does. Most first-pass
@@ -137,6 +167,11 @@ VERDICT: block | revise | clean
 [blocking] libs/bgl/src/scene/Foo.cpp:112
   Re-rolls align() from core/math.h.
   Fix: core::align(offset, 256).
+
+[revise] libs/gamelib/src/vat/Loader.cpp:61
+  Adds an LRU cache. docs/plans/vat.md ADR-3 rejected caching
+  (bake-on-demand is already idempotent).
+  Fix: drop it, or amend ADR-3 in this PR and say why.
 
 [minor] libs/assetlib/src/Bar.h:44
   `m_Count` holds a byte size, not a count.

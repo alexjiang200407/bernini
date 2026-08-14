@@ -17,6 +17,7 @@ one.
 ```
 bcp-feature <name> <prompt>
   │
+  ├─ § 0  grill the request → consensus the user confirms  (nothing is created yet)
   ├─ § 1  cut feat/<name> from origin/master, empty, and publish it
   ├─ § 2  plan PR      → watch → revise → user merges
   ├─ § 3  task 1 PR    → watch → revise → user merges
@@ -69,6 +70,24 @@ plan: docs/plans/culling.md
 
 `[ ]` pending, `[>]` PR open, `[x]` merged.
 
+## 0. Grill before you cut
+
+**Nothing is created until the request has been grilled** — not the branch, not the tracker, not the
+plan. Run [bcp-grill](.claude/skills/bcp-grill/SKILL.md) on the prompt and close on a consensus the
+user has confirmed. With nobody at the keyboard it stops and waits rather than answering itself.
+
+It runs ahead of § 1 because it is allowed to conclude that this feature should not exist: that the
+work is one PR to `master` after all ([bcp-implement](.claude/skills/bcp-implement/SKILL.md)), that
+it duplicates something already in `core`, or that the premise did not survive the survey. A branch
+cut first is a branch that then has to be explained away.
+
+Its output is the head of § 2's plan — Context, Decisions, Non-goals, Acceptance — so the feature's
+boundaries are agreed before its decomposition is invented, rather than discovered by reviewing one.
+
+On a **resume**, the grill already happened and its consensus is the head of
+`docs/plans/<name>.md`. Read it; do not re-grill. Re-grill only the point a task disproved, and
+amend that ADR in the task's own PR (§ 3).
+
 ## 1. Cut the branch
 
 ```bash
@@ -118,12 +137,21 @@ of that survey — spawn it with `subagent_type: bcp-docmap`, one tier below you
 returns the answer plus the lines
 it rests on, which is what the plan's *what the survey found* section wants anyway.
 
-Write `docs/plans/<name>.md`:
+Write `docs/plans/<name>.md`. The first four sections are § 0's confirmed consensus and the rest is
+the working-out beneath it — the order matters, because a reader who disagrees with the boundaries
+should find that out before reading the decomposition that assumes them:
 
+- **Context** — what breaks today, and why now.
+- **Decisions** — the ADRs, each with its reason and *the alternative rejected*. A decision with no
+  rejected alternative recorded is one the next reader re-litigates. Decisions the plan makes that
+  the grill did not reach get the same one-line treatment; one that crosses a stated non-goal goes
+  back to § 0 instead of into this list.
+- **Non-goals** — what the feature is explicitly not doing. [`bcp-precheck`](.claude/agents/bcp-precheck.md)
+  § 4 reads every task's diff against these, so a boundary written vaguely is a boundary that does
+  not hold.
+- **Acceptance** — the gate that proves the feature as a whole.
 - **What the survey found** — the state of the code the feature must work with, as facts with file
   references. This is what stops the next session re-reading the same forty files.
-- **Each design decision, with its reason and the alternative rejected.** A decision with no rejected
-  alternative recorded is one the next reader re-litigates.
 - **What changes**, per file or subsystem, and what could break.
 - **The tasks in order, each with the gate that proves it** — the suite, the golden image, the
   assertion. "It builds" is not a gate.
@@ -179,6 +207,9 @@ behaviour, build, **read the logs**, docs updated in the same commit.
 
 Two things apply only inside a feature:
 
+- **A task does not re-grill.** § 0 grilled the feature; the reference is
+  [bcp-implement](.claude/skills/bcp-implement/SKILL.md) **§1–§7**, not § 0. The exception is a task
+  that disproves an ADR — grill that one point, and amend the plan in this task's PR.
 - **Depend on what already landed on `feat/<name>`, not on master.** The helper an earlier task added
   is in `origin/feat/<name>`. Do not write a second one.
 - **Hold the task boundary.** Work belonging to a later task goes in that task, even when it is three
@@ -200,9 +231,10 @@ just pr create --base feat/<name> --body-file <file>
 **Every PR this skill opens is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) first**, the
 plan's and § 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below
 your own model, after the last verification step and before the push — § 2 has no rebase to hang it
-on, § 5 needs its base named explicitly. It reads the diff against the base for code that already exists in `core`, a design
-that fights `ROADMAP.md`, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does
-not open on one. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for the full loop.
+on, § 5 needs its base named explicitly. It reads the diff against the base for code that already
+exists in `core`, a design that fights `ROADMAP.md`, work that crosses a non-goal or contradicts an
+ADR in the plan, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does not open
+on one. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for the full loop.
 
 `bernini.feature` is what tells the precheck its base, so a slice reviewed while that config is unset
 gets diffed against `master` and reports the whole feature. § 1 sets it; check it is still set.
@@ -352,8 +384,11 @@ needs no cleanup either way: it went with the landing PR.
 ## Rules
 
 - **Never merge a PR.** Continuous review is the entire point, and it only works if a human approves.
+- **Never cut the branch before the grill closes.** § 0 comes first, and it may end the feature.
 - **Never commit directly onto `feat/<name>` or `master`.** Everything arrives by PR.
 - **Never cut a task branch before the plan PR has merged.**
+- **Never let a task quietly cross a non-goal.** Either it goes back to the grill and the ADR is
+  amended in that PR, or the work is cut.
 - **Never open a PR without `--base`.** The default is `master` and it will be wrong.
 - **Never let a task land broken.** "Fixed in the next PR" defeats bisecting and wastes the review.
 - **Never claim a test passed without running it.** If a step was skipped, say so.

@@ -9,13 +9,64 @@ The goal is a **reviewable PR**: a chain of commits that each build and pass, te
 behaviour, docs that still tell the truth, and no comments that a better name would have made
 redundant.
 
-Work in the order below. Do not skip to coding — step 1 routinely changes the design.
+Work in the order below. Do not skip to coding — § 0 routinely destroys the design and § 1 routinely
+changes it.
 
 This is for a change that lands on `master` as **one** PR. If it is too large for that — or if
 `git config bernini.feature` is already set — use
 [bcp-feature](.claude/skills/bcp-feature/SKILL.md), which splits the work into slices and lands each
-as its own PR into a feature branch. Steps 1–7 below are the same either way; only the branch cut
-from and the PR base differ.
+as its own PR into a feature branch. Steps 1–7 below are the same either way; § 0 runs once per unit
+of agreement — per PR here, per *feature* there, not per task — and only the branch cut from and the
+PR base differ.
+
+## 0. Grill first
+
+**No work starts until the request has been grilled.** Run
+[bcp-grill](.claude/skills/bcp-grill/SKILL.md) on the prompt: survey narrowly, interrogate the
+intent, and close on a consensus the user has confirmed. Every invocation, including a two-line fix
+— the grill scales down, it is never skipped, and with nobody at the keyboard it stops and waits
+rather than answering itself.
+
+It decides what this skill cannot: whether the change is wanted at all, which layer owns it, what it
+is explicitly *not* doing, and what proves it works. It is also where *this is too big for one PR*
+surfaces, which sends the work to [bcp-feature](.claude/skills/bcp-feature/SKILL.md) before anything
+is cut.
+
+Once the consensus is confirmed, write it into `docs/plans/<name>.md` as the document's head — an
+Architecture Decision Record, one entry per decision:
+
+```markdown
+# <name> — implementation plan
+
+## Context
+What breaks today, and why now.
+
+## Decisions
+- **ADR-1 — <the decision>.** <why>. *Rejected: <the alternative>, because <why not>.*
+
+## Non-goals
+- <the adjacent thing this is explicitly not doing>
+
+## Acceptance
+- <the suite, tag, golden image or assertion that proves it>
+```
+
+Decisions and boundaries only — **no implementation steps**. § 3 appends the commit slices below it,
+and that is the whole document.
+
+The plan is the **first commit of the PR**, so a reviewer reads the boundaries before the diff, and
+[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 4 later reads the diff back against them.
+
+It is **kept**, where a feature's plan is deleted at landing
+([bcp-feature § 5](.claude/skills/bcp-feature/SKILL.md)) — and the difference is what is in it, not
+the lifetime rule. A feature's plan carries a survey, a what-changes and a task list, all of which
+mirror code and therefore rot. This one carries a conversation that happened on a date, which cannot.
+Keep that true by keeping the file thin: anything describing how the code now **behaves** moves into
+`docs/` under § 7, and what stays is the decision and the alternative it rejected.
+
+**An ADR is amended only by a change that reverses it**, in that change's own PR. Never edit one to
+match code that drifted — that is precisely what turns it into a second source of truth, and it is
+why a feature's plan is deleted rather than maintained.
 
 ## 1. Read before writing
 
@@ -48,7 +99,10 @@ disagreeing.
 ## 2. Plan, if asked to
 
 If plan mode is on, or the prompt asks for a plan, produce the plan and stop. Say what you will
-change, per file, and what could break. Name the trade-off you chose and the one you rejected.
+change, per file, and what could break. § 0's ADRs already hold the decisions that were *agreed*;
+what belongs here is the working-out below them — the trade-offs the grill did not reach, each with
+the alternative rejected. A decision that crosses a stated non-goal is not a trade-off to record, it
+is a reason to reopen the grill.
 
 ## 3. Slice into verifiable commits
 
@@ -58,6 +112,15 @@ they are the units a reviewer bisects with.
 The natural seam is the **layer**: one commit per `bgl` / `assetlib` / `gamelib` / `apps/editor`
 slice, bottom-up, so each rests on the one below. A refactor that enables the feature is its own
 commit, ahead of the feature.
+
+Append them to `docs/plans/<name>.md` under the § 0 head, each with the gate that proves it — the
+suite, the tag, the golden image, the assertion. "It builds" is not a gate.
+
+```markdown
+## Commits
+1. `refactor(bgl): …` — <what it moves>. Gate: `just test bgl`.
+2. `feat(gamelib): …` — <what it adds>. Gate: `just run gamelib_tests -- "[vat]"`.
+```
 
 ## 4. Implement
 
@@ -138,9 +201,10 @@ Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below your
 
 > Review the diff against the base. Be as critical as the evidence allows.
 
-It answers three questions the author is worst placed to answer about their own diff: has this code
-already been written in `core`, does the design fight `ROADMAP.md`, and does it break `STYLE.md`. It
-reports back; it posts nothing and edits nothing.
+It answers four questions the author is worst placed to answer about their own diff: has this code
+already been written in `core`, does the design fight `ROADMAP.md`, does it cross a non-goal or
+contradict an ADR agreed in § 0's grill, and does it break `STYLE.md`. It reports back; it posts
+nothing and edits nothing.
 
 Act on its verdict before pushing:
 
@@ -161,6 +225,9 @@ a trivial PR never needs it.
 just format <files...>          # in place
 just format --check <files...>  # verify only
 ```
+
+`docs/plans/<name>.md` is the **first** commit — `docs(plans): plan <what it delivers>` — ahead of
+every slice, so the boundaries are the first thing in the log and the first thing in the diff.
 
 Commit each slice with a message that says **why**, not what — the diff already says what. Subject
 line `type(scope): imperative summary`. Attribution is not your job: `.githooks/prepare-commit-msg`
@@ -189,8 +256,14 @@ The PR body should say what changed, **why**, how it was verified (name the suit
 validation ran), and what was deliberately left out. Known follow-ups belong there too — a reviewer
 should not have to discover them.
 
+Link `docs/plans/<name>.md` rather than restating it. Its non-goals are the *deliberately left out*
+section already, agreed with the user before the code existed, and a reviewer who reads the same
+sentence twice starts skimming both.
+
 ## Rules
 
+- **Never start without the grill.** § 0 has no size threshold and no escape hatch, and an
+  unconfirmed consensus is not one.
 - **Never claim a test passed without running it.** If a step was skipped, say so.
 - **Do not commit unprompted.** The user reviews the diff first unless they asked for the PR.
 - **Push back.** If the request is wrong, or a shortcut would break a layering rule or a documented

@@ -128,6 +128,15 @@ authoring traps — gamma, cube-seam edge fixup, resampling — that still bite 
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
+**[Plans and Decision Records](./docs/plans/)**
+
+One file per change: the context it was written in, the decisions with the alternative each rejected,
+what it was explicitly *not* doing, and the gate that accepted it. These are the **exception to the
+rule above** — a record of a conversation on a date, not a description of the code, so a change that
+touches the same area does **not** update them. An ADR is amended only by a change that *reverses*
+it, in that change's own PR. A feature's plan additionally carries a survey and a task list and is
+deleted when the feature lands.
+
 # Directory Structure
 
 ## Debug
