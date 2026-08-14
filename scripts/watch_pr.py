@@ -16,6 +16,7 @@ Events, in the order they are checked each poll:
     ci_failure  a check on the head commit concluded red       -> exit 0
     review      a review was submitted after the baseline      -> exit 0
     comment     an issue or inline comment arrived after it    -> exit 0
+    base_moved  the base branch moved past the PR              -> exit 0
     timeout     --timeout elapsed with no activity             -> exit 3
 
 A `timeout` is off by default, because the only thing it can report is that nothing
@@ -39,6 +40,19 @@ event rather than one already behind the baseline. A cancelled check is never
 reported: `ci.yml` sets `cancel-in-progress`, so every push past the first cancels
 the run it superseded. A build already red when the watch starts is baselined away
 like any other prior activity; `--once` is what reports the current state.
+
+`base_moved` is the one event nothing on the PR announces: GitHub does not block a
+squash-merge for being behind, so a PR whose base has moved keeps reporting the green
+CI run it got against a base it was never built on. The tip is baselined when the
+watch starts and read on each poll from `git/ref/heads/<base>` -- not from
+`baseRefOid`, which on a merged PR reports the oid the base had at merge time and so
+cannot be shown to track a live branch.
+
+The watcher does not rebase. It runs detached, in a checkout its session is still
+working in, and a rebase pushed from here is a merge nothing compiled -- so the event
+wakes the agent, which rebases, rebuilds, re-tests and pushes. It is checked last:
+a human waiting on an answer outranks mechanical drift, and answering them rebases
+anyway.
 
 Only *submitted* reviews count -- a PENDING review is a draft the author has
 not sent, so acting on it would read half-written feedback. Inline (thread)
@@ -84,10 +98,11 @@ MAX_CONSECUTIVE_FAILURES = 5
 
 # Events after which the PR is again waiting on nobody, so the Stop hook must ask
 # for another watch. `merged` and `closed` are the two that end the loop for good.
-REARMING = ("ci_failure", "review", "comment", "timeout")
+REARMING = ("ci_failure", "review", "comment", "base_moved", "timeout")
 
 # Fields per object as `gh pr view --json` spells them.
-PR_FIELDS = "state,mergedAt,reviews,comments,url,title,headRefOid,statusCheckRollup"
+PR_FIELDS = ("state,mergedAt,reviews,comments,url,title,headRefOid,baseRefName,"
+             "statusCheckRollup")
 
 # CANCELLED is deliberately absent -- see the module docstring. SKIPPED and NEUTRAL
 # are not failures either.
@@ -182,13 +197,26 @@ def failed_checks(view):
     return out
 
 
+def base_tip(gh, rest_repo, ref):
+    """The base branch's current head oid; None when the PR names no base.
+
+    Raises like any other poll call, so a transient failure is counted by the
+    caller's retry rather than silently reading as "the base has not moved".
+    """
+    if not ref:
+        return None
+    data = run_gh(gh, ["api", f"repos/{rest_repo}/git/ref/heads/{ref}"], None)
+    return (data.get("object") or {}).get("sha")
+
+
 def fetch(gh, pr, repo, rest_repo):
-    """One poll: PR state + failed checks + submitted reviews + issue and inline comments."""
+    """One poll: PR state + base tip + failed checks + submitted reviews + comments."""
     view = run_gh(gh, ["pr", "view", str(pr), "--json", PR_FIELDS], repo)
     reviews = [r for r in view.get("reviews") or [] if r.get("state") != "PENDING"]
     comments = view.get("comments") or []
     inline = run_gh(gh, ["api", f"repos/{rest_repo}/pulls/{pr}/comments"], None)
-    return view, reviews, comments, inline, failed_checks(view)
+    base = base_tip(gh, rest_repo, view.get("baseRefName")) if view["state"] == "OPEN" else None
+    return view, reviews, comments, inline, failed_checks(view), base
 
 
 def key(item):
@@ -354,7 +382,7 @@ def main():
     rest_repo = repo_path(gh, args.repo)
 
     try:
-        view, reviews, comments, inline, checks = fetch(gh, args.pr, args.repo, rest_repo)
+        view, reviews, comments, inline, checks, base = fetch(gh, args.pr, args.repo, rest_repo)
     except RuntimeError as e:
         sys.exit(f"error: {e}")
 
@@ -364,6 +392,8 @@ def main():
             "pr": args.pr,
             "state": view["state"],
             "url": view["url"],
+            "base": view.get("baseRefName"),
+            "baseTip": base,
             "checks": [summarize_check(gh, c, args.repo) for c in checks],
             "reviews": [summarize_review(r) for r in reviews],
             "comments": [summarize_comment(c) for c in comments]
@@ -381,13 +411,15 @@ def main():
 
     items = reviews + comments + inline + checks
     seen = {key(x) for x in items if baselined(x)}
+    base_at_start = base
     print(
         f"watching PR #{args.pr} ({view['title']}) every {args.interval:g}s; "
-        f"baseline: {len(seen)} of {len(items)} items"
+        f"baseline: {len(seen)} of {len(items)} items, "
+        f"{view.get('baseRefName')} at {(base_at_start or '?')[:7]}"
         + (f", since {since}" if since else ""),
         file=sys.stderr, flush=True)
 
-    def actionable(view, reviews, comments, inline, checks):
+    def actionable(view, reviews, comments, inline, checks, base):
         """Emits and reports True when the poll holds an event; the caller then exits."""
         if view["state"] == "MERGED":
             emit({"event": "merged", "pr": args.pr, "url": view["url"]})
@@ -428,10 +460,20 @@ def main():
                 "comments": [summarize_comment(c) for c in new_comments],
             })
             return True
+        if base and base != base_at_start:
+            emit({
+                "event": "base_moved",
+                "pr": args.pr,
+                "url": view["url"],
+                "base": view.get("baseRefName"),
+                "from": base_at_start,
+                "to": base,
+            })
+            return True
         return False
 
     # With a baseline time, the race-window items are already in hand -- fire before sleeping.
-    if actionable(view, reviews, comments, inline, checks):
+    if actionable(view, reviews, comments, inline, checks, base):
         return
 
     start = time.monotonic()
@@ -445,7 +487,8 @@ def main():
         time.sleep(args.interval)
 
         try:
-            view, reviews, comments, inline, checks = fetch(gh, args.pr, args.repo, rest_repo)
+            view, reviews, comments, inline, checks, base = fetch(gh, args.pr, args.repo,
+                                                                  rest_repo)
             failures = 0
         except RuntimeError as e:
             failures += 1
@@ -455,7 +498,7 @@ def main():
                 sys.exit(f"error: {MAX_CONSECUTIVE_FAILURES} consecutive poll failures")
             continue
 
-        if actionable(view, reviews, comments, inline, checks):
+        if actionable(view, reviews, comments, inline, checks, base):
             return
 
 

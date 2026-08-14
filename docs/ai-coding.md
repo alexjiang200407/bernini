@@ -132,8 +132,8 @@ Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) clo
 - [`pr_watch_guard.py`](../.claude/hooks/pr_watch_guard.py) (`Stop`) refuses to end a turn while a PR
   this session wrote to has no watcher. `pr.py` arms the list; [`watch_pr.py`](../scripts/watch_pr.py)
   claims the PR as it starts, refuses to start where another watcher already holds it, re-arms it on a
-  review, a comment or a red build — which is exactly when the PR is waiting on the agent again — and
-  drops it for good once the PR merges or closes. `just pr unwatch <n>` releases one deliberately.
+  review, a comment, a red build or a moved base — which is exactly when the PR is waiting on the
+  agent again — and drops it for good once the PR merges or closes. `just pr unwatch <n>` releases one deliberately.
 
 The watcher claims the PR at startup rather than at exit so that it can run **in the background**: the
 hook is satisfied by a watch that is *running*, the turn ends, and the developer keeps their session
