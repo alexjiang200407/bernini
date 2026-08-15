@@ -19,6 +19,8 @@
 
 #include "RefsSandbox.h"
 
+#include "MountAt.h"
+
 using namespace assetlib;
 using namespace assetlib::test;
 
@@ -420,7 +422,7 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 
 	// The stamps record size and mtime, both of which a rename preserves: the rewritten .bvat is
 	// still fresh, not a re-bake waiting to happen.
-	CHECK_FALSE(vatIsStale(loadVatTables(baked), root.path));
+	CHECK_FALSE(vatIsStale(loadVatTables(baked), MountAt(root.path)));
 
 	// An input only the .bvat references follows too -- and this one is part of the derived name,
 	// so the bake moves to where the runtime will now look, still fresh.
@@ -432,5 +434,5 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	CHECK_FALSE(fs::exists(baked));
 	REQUIRE(fs::exists(moved));
 	CHECK(loadVatRefs(moved).animations == "Animations/hero.banim");
-	CHECK_FALSE(vatIsStale(loadVatTables(moved), root.path));
+	CHECK_FALSE(vatIsStale(loadVatTables(moved), MountAt(root.path)));
 }

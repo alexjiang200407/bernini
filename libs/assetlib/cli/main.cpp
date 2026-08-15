@@ -27,6 +27,7 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
+#include <core/file/LooseFileSystem.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -633,22 +634,29 @@ main(int argc, char** argv)
 			// a file or a diff without spdlog's timestamps and level prefixes in the way.
 			const auto dataRoot = std::filesystem::path(describeDataRoot);
 
+			// Optional: a container describes on its own, and only a root lets the stamps be checked
+			// against what is actually there.
+			std::optional<core::file::LooseFileSystem> mount;
+			if (!dataRoot.empty())
+				mount.emplace(dataRoot);
+			const core::file::IFileSystem* fileSystem = mount.has_value() ? &*mount : nullptr;
+
 			switch (sniff(path))
 			{
 			case ContainerType::kMesh:
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << assetlib::describe(assetlib::loadMaterial(path), dataRoot);
+				std::cout << assetlib::describe(assetlib::loadMaterial(path), fileSystem);
 				break;
 			case ContainerType::kEnv:
-				std::cout << assetlib::describe(assetlib::loadEnv(path), dataRoot);
+				std::cout << assetlib::describe(assetlib::loadEnv(path), fileSystem);
 				break;
 			case ContainerType::kSky:
-				std::cout << assetlib::describe(assetlib::loadSky(path), dataRoot);
+				std::cout << assetlib::describe(assetlib::loadSky(path), fileSystem);
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), dataRoot);
+				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), fileSystem);
 				break;
 			case ContainerType::kSkeleton:
 				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
@@ -662,7 +670,7 @@ main(int argc, char** argv)
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << assetlib::describe(assetlib::loadVatTables(path), dataRoot);
+				std::cout << assetlib::describe(assetlib::loadVatTables(path), fileSystem);
 				break;
 			}
 		}

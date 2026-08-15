@@ -17,6 +17,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/Viewport.h>
+#include <core/file/LooseFileSystem.h>
 
 namespace
 {
@@ -71,8 +72,10 @@ namespace
 
 		const assetlib::BMaterial material = assetlib::loadMaterial(dataRoot / relPath);
 
+		const core::file::LooseFileSystem files(dataRoot);
+
 		for (const std::string& texture :
-		     game::MaterialTextures(material, assetlib::drawsLoose(material, dataRoot)))
+		     game::MaterialTextures(material, assetlib::drawsLoose(material, files)))
 		{
 			if (texture.empty() || out.contains(texture))
 				continue;

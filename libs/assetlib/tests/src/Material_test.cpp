@@ -7,6 +7,8 @@
 
 #include <catch2/catch_approx.hpp>
 
+#include "MountAt.h"
+
 using namespace assetlib;
 
 TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
@@ -184,22 +186,25 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 	{
 		BMaterial imported;
 		imported.pbr.baseColorTexture = "tex0.ktx2";
-		REQUIRE_FALSE(bakeIsStale(imported, dir));
+		REQUIRE_FALSE(bakeIsStale(imported, MountAt(dir)));
 	}
 
-	SECTION("routed but unstamped means it was never baked") { REQUIRE(bakeIsStale(mat, dir)); }
+	SECTION("routed but unstamped means it was never baked")
+	{
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
+	}
 
 	SECTION("a matching stamp is fresh")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
-		REQUIRE_FALSE(bakeIsStale(mat, dir));
+		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir)));
 	}
 
 	SECTION("a source that changed size is stale")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
 		write(source, "aaaaaaaa");  // different size
-		REQUIRE(bakeIsStale(mat, dir));
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
 	}
 
 	SECTION("a deleted baked map is stale, however fresh the sources are")
@@ -209,21 +214,21 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 		// silhouette rather than a visible error.
 		mat.pbr.routeStamps[0] = stampOf(source);
 		std::filesystem::remove(baked);
-		REQUIRE(bakeIsStale(mat, dir));
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
 	}
 
 	SECTION("a deleted source is stale, not silently unchanged")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
 		std::filesystem::remove(source);
-		REQUIRE(bakeIsStale(mat, dir));
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
 	}
 
 	SECTION("fresh sources but no bake output is stale")
 	{
 		mat.pbr.routeStamps[0]   = stampOf(source);
 		mat.pbr.baseColorTexture = "";
-		REQUIRE(bakeIsStale(mat, dir));
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
 	}
 
 	std::filesystem::remove_all(dir);
@@ -252,19 +257,19 @@ TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmateria
 	SECTION("a current bake draws its triplet")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
-		REQUIRE_FALSE(drawsLoose(mat, dir));
+		REQUIRE_FALSE(drawsLoose(mat, MountAt(dir)));
 	}
 
 	SECTION("an edited source draws the routes it drifted from")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
 		write(source, "aaaaaaaa");
-		REQUIRE(drawsLoose(mat, dir));
+		REQUIRE(drawsLoose(mat, MountAt(dir)));
 	}
 
 	SECTION("never baked draws its routes")
 	{
-		REQUIRE(drawsLoose(mat, dir));  // no stamp
+		REQUIRE(drawsLoose(mat, MountAt(dir)));  // no stamp
 	}
 
 	// The regression: a shipped material keeps the routes it was composited from, but not the sources
@@ -274,15 +279,15 @@ TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmateria
 		mat.pbr.routeStamps[0] = stampOf(source);
 		std::filesystem::remove(source);
 
-		REQUIRE(bakeIsStale(mat, dir));
-		REQUIRE_FALSE(drawsLoose(mat, dir));
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
+		REQUIRE_FALSE(drawsLoose(mat, MountAt(dir)));
 	}
 
 	SECTION("a deleted baked map still draws its routes while they are readable")
 	{
 		mat.pbr.routeStamps[0] = stampOf(source);
 		std::filesystem::remove(baked);
-		REQUIRE(drawsLoose(mat, dir));
+		REQUIRE(drawsLoose(mat, MountAt(dir)));
 	}
 
 	SECTION("neither representation readable falls back to the triplet")
@@ -290,7 +295,7 @@ TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmateria
 		mat.pbr.routeStamps[0] = stampOf(source);
 		std::filesystem::remove(source);
 		std::filesystem::remove(baked);
-		REQUIRE_FALSE(drawsLoose(mat, dir));
+		REQUIRE_FALSE(drawsLoose(mat, MountAt(dir)));
 	}
 
 	std::filesystem::remove_all(dir);
