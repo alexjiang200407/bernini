@@ -75,6 +75,19 @@ namespace assetlib
 			return m_DataRoot;
 		}
 
+		/**
+		 * Whether nothing in the mount can be written.
+		 *
+		 * The whole mount's answer, not one path's: the question a caller asks is "is there anywhere
+		 * to put a rebuilt derived file", and a loose overlay over an archive answers yes even for a
+		 * path only the archive currently carries -- the rebuild lands in the overlay.
+		 */
+		[[nodiscard]] bool
+		IsReadOnly() const noexcept
+		{
+			return m_Files->IsReadOnly();
+		}
+
 		/** Whether the mount answers for `path` at all. */
 		[[nodiscard]] bool
 		Exists(std::string_view path) const

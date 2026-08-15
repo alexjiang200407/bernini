@@ -456,11 +456,10 @@ main(int argc, char** argv)
 		try
 		{
 			auto desc       = assetlib::VatBakeDesc();
-			desc.dataRoot   = vatDataRoot;
 			desc.mesh       = vatMesh;
 			desc.animations = vatAnimations;
 
-			const assetlib::BVat vat = assetlib::bakeVat(desc);
+			const assetlib::BVat vat = assetlib::bakeVat(assetlib::AssetStore(vatDataRoot), desc);
 
 			const std::filesystem::path out = vatOut.empty() ?
 			                                      std::filesystem::path(vatDataRoot) /

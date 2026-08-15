@@ -5,20 +5,27 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
+#include <assetlib/bvat_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib/pak_io.h>
+#include <assetlib/pak_pack.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <core/file/LayeredFileSystem.h>
+#include <core/file/LooseFileSystem.h>
 
 // The end-to-end gate the plan reserves for gamelib: .gltf-shaped data synthesized to disk, baked
 // through the assetlib API on demand, loaded, drawn, and asserted on pixels -- the one test that
@@ -445,6 +452,126 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		CHECK(march.clips[0].frameCount == 3);
 		assets.ReleaseGeom(march.geom);
 	}
+
+	/**
+	 * A shipped mount has nowhere to put a re-bake, so the staleness question is not asked and the
+	 * `.bvat` is used as it is.
+	 *
+	 * Proving that needs an archive whose `.bvat` reads *stale*, which `packProject` will not
+	 * produce -- it re-bakes a stale one as it packs. So the entries are written by hand, with the
+	 * clip set re-authored after the bake: that is an archive assembled by something other than our
+	 * packer, and the rule is what makes it draw rather than die.
+	 */
+	SECTION("a read-only mount is trusted even when its .bvat has drifted")
+	{
+		const auto bvatRel = assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+		const auto bvat    = root.path / bvatRel;
+		REQUIRE(fs::exists(bvat));
+
+		// Re-author the clip set so its stamp no longer matches what the bake recorded. Longer, not
+		// merely rewritten: the stamp is size + whole seconds.
+		const auto banimPath = root.path / "Animations/rig.banim";
+		auto       drifted   = assetlib::loadAnimations(banimPath);
+		drifted.stringPool.add("padding-so-the-size-moves");
+		assetlib::saveAnimations(drifted, banimPath);
+
+		{
+			const core::file::LooseFileSystem loose(root.path);
+
+			assetlib::PakWriter writer(root.path / "Drifted.bpak");
+			for (const std::string& entry : loose.Enumerate())
+				writer.Add(entry, loose.Read(entry), loose.Stat(entry).value());
+			writer.Finish();
+		}
+
+		// Read through the archive alone, and confirm the drift is really visible there -- without
+		// this the section would pass for the wrong reason.
+		const auto archive = std::make_shared<assetlib::PakFile>(root.path / "Drifted.bpak");
+		REQUIRE(
+			assetlib::vatIsStale(
+				assetlib::loadVatTables(*archive, bvatRel.generic_string()),
+				*archive));
+
+		// A data root that does not exist: a re-bake would have nowhere to write and would throw.
+		const auto nowhere = root.path / "nowhere";
+
+		auto packed = game::AssetManager(scene, assetlib::AssetStore(nowhere, archive));
+
+		const auto fromArchive = packed.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+
+		CHECK(fromArchive.geom.IsValid());
+		CHECK(fromArchive.clips.size() == vat.clips.size());
+		CHECK_FALSE(fs::exists(nowhere));
+	}
+
+	/**
+	 * The case the whole-mount rule exists for, and the one that catches a bake reading past the
+	 * seam: an overlay over an archive, with the rig itself only in the archive and no `.bvat`
+	 * anywhere.
+	 *
+	 * The mount is writable, so this is not trusted and a bake is run -- and the bake has to read
+	 * its mesh, skeleton and clip set out of the archive, because the overlay holds none of them.
+	 * A bake that read the writable layer alone would fail to open files that are plainly there.
+	 */
+	SECTION("a rig only the archive holds is baked into the overlay")
+	{
+		fs::remove(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim"));
+
+		const auto archivePath = root.path / "Rig.bpak";
+		{
+			const core::file::LooseFileSystem loose(root.path);
+
+			assetlib::PakWriter writer(archivePath);
+			for (const std::string& entry : loose.Enumerate())
+				writer.Add(entry, loose.Read(entry), loose.Stat(entry).value());
+			writer.Finish();
+		}
+
+		// An empty overlay: everything the rig needs resolves out of the archive alone.
+		const auto overlay = root.path / "overlay";
+		fs::create_directories(overlay);
+
+		auto mount = std::make_shared<core::file::LayeredFileSystem>();
+		mount->Mount(std::make_shared<core::file::LooseFileSystem>(overlay));
+		mount->Mount(std::make_shared<assetlib::PakFile>(archivePath));
+
+		auto overlaid = game::AssetManager(scene, assetlib::AssetStore(overlay, std::move(mount)));
+
+		const auto baked = overlaid.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+
+		CHECK(baked.geom.IsValid());
+		CHECK(baked.clips.size() == vat.clips.size());
+
+		// And it landed in the writable layer, which is the half the archive cannot provide.
+		CHECK(
+			fs::exists(overlay / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim")));
+	}
+
+	// The other half of the same rule: what a read-only mount does not carry, it cannot be made to.
+	// Better a plain sentence than `saveVat` failing on a directory that was never there.
+	SECTION("a .bvat missing from a read-only mount is an error, not a bake")
+	{
+		fs::remove(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim"));
+
+		{
+			const core::file::LooseFileSystem loose(root.path);
+
+			assetlib::PakWriter writer(root.path / "NoVat.bpak");
+			for (const std::string& entry : loose.Enumerate())
+				writer.Add(entry, loose.Read(entry), loose.Stat(entry).value());
+			writer.Finish();
+		}
+
+		auto packed = game::AssetManager(
+			scene,
+			assetlib::AssetStore(
+				root.path / "nowhere",
+				std::make_shared<assetlib::PakFile>(root.path / "NoVat.bpak")));
+
+		CHECK_THROWS_AS(
+			packed.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
+			std::runtime_error);
+	}
 }
 
 TEST_CASE("A VAT acquire that cannot stand leaves nothing behind", "[vat]")
@@ -480,7 +607,10 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 	const auto bvat = root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
 
 	// Missing: baked in place, recording what it was baked from.
-	const auto first = game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	const auto first = game::EnsureVatBaked(
+		assetlib::AssetStore(root.path),
+		"Meshes/rig.bmesh",
+		"Animations/rig.banim");
 	REQUIRE(fs::exists(bvat));
 	CHECK(first.animations == "Animations/rig.banim");
 	REQUIRE(first.clips.size() == 1);
@@ -488,13 +618,18 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 
 	// Fresh: returned from disk, not rewritten.
 	const auto written = fs::last_write_time(bvat);
-	(void)game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	(void)game::EnsureVatBaked(
+		assetlib::AssetStore(root.path),
+		"Meshes/rig.bmesh",
+		"Animations/rig.banim");
 	CHECK((fs::last_write_time(bvat) == written));
 
 	// A different clip file is its own bake file: the first one is left standing untouched.
 	WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
-	const auto march =
-		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig_march.banim");
+	const auto march = game::EnsureVatBaked(
+		assetlib::AssetStore(root.path),
+		"Meshes/rig.bmesh",
+		"Animations/rig_march.banim");
 	CHECK(march.animations == "Animations/rig_march.banim");
 	REQUIRE(march.clips.size() == 1);
 	CHECK(march.stringPool.at(march.clips[0].nameOffset) == "march");
@@ -504,7 +639,10 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 	CHECK((fs::last_write_time(bvat) == written));
 
 	// And back: the first file is still fresh, so the switch costs a load, not a bake.
-	const auto back = game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	const auto back = game::EnsureVatBaked(
+		assetlib::AssetStore(root.path),
+		"Meshes/rig.bmesh",
+		"Animations/rig.banim");
 	CHECK(back.animations == "Animations/rig.banim");
 	CHECK((fs::last_write_time(bvat) == written));
 
@@ -514,8 +652,10 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 	const auto banim = root.path / "Animations/rig.banim";
 	fs::last_write_time(banim, fs::last_write_time(banim) + std::chrono::seconds(2));
 
-	const auto restamped =
-		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	const auto restamped = game::EnsureVatBaked(
+		assetlib::AssetStore(root.path),
+		"Meshes/rig.bmesh",
+		"Animations/rig.banim");
 	REQUIRE(restamped.clips.size() == 1);
 	CHECK(restamped.clips[0].frameCount == 4);
 }
