@@ -331,6 +331,28 @@ namespace assetlib
 		return image;
 	}
 
+	// Returns an owned texture the caller must destroy; `path` names the source for error messages
+	// only. libktx copies the payload under LOAD_IMAGE_DATA_BIT, so `bytes` need not outlive this.
+	static ktxTexture2*
+	openKtxFromMemory(
+		std::span<const std::byte>   bytes,
+		const char*                  what,
+		const std::filesystem::path& path)
+	{
+		ktxTexture2* texture = nullptr;
+
+		check(
+			ktxTexture2_CreateFromMemory(
+				reinterpret_cast<const ktx_uint8_t*>(bytes.data()),
+				bytes.size(),
+				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+				&texture),
+			what,
+			path);
+
+		return texture;
+	}
+
 	ImageData
 	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode, uint32_t maxDim)
 	{
@@ -347,37 +369,35 @@ namespace assetlib
 	}
 
 	ImageData
-	decodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode)
+	loadKTX2(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		Ktx2Decode                     decode,
+		uint32_t                       maxDim)
 	{
-		ktxTexture2* texture = nullptr;
-
-		const ktx_error_code_e rc = ktxTexture2_CreateFromMemory(
-			reinterpret_cast<const ktx_uint8_t*>(bytes.data()),
-			bytes.size(),
-			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-			&texture);
-		check(rc, "assetlib::decodeKTX2: failed to read", "<memory>");
-
-		return imageFromKtx(texture, decode, 0, "<memory>");
+		const std::vector<std::byte> bytes = fileSystem.Read(path);
+		return imageFromKtx(
+			openKtxFromMemory(bytes, "assetlib::loadKTX2: failed to read", path),
+			decode,
+			maxDim,
+			path);
 	}
 
 	ImageData
-	loadKTX2Preview(const std::filesystem::path& path, uint32_t maxDim)
+	decodeKTX2(std::span<const std::byte> bytes, Ktx2Decode decode)
 	{
-		if (maxDim == 0)
-			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
+		return imageFromKtx(
+			openKtxFromMemory(bytes, "assetlib::decodeKTX2: failed to read", "<memory>"),
+			decode,
+			0,
+			"<memory>");
+	}
 
-		Ktx2Owner owner;
-
-		errno = 0;  // so check() reads this call's reason, not a stale one
-		check(
-			ktxTexture2_CreateFromNamedFile(
-				path.string().c_str(),
-				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-				&owner.tex),
-			"assetlib::loadKTX2Preview: failed to load",
-			path);
-
+	// Everything the two loadKTX2Preview overloads share once the container is open, so a file and a
+	// mounted entry cannot preview differently. `path` names the source for error messages only.
+	static ImageData
+	previewFromKtx(Ktx2Owner& owner, uint32_t maxDim, const std::filesystem::path& path)
+	{
 		// loadKTX2 asks the same Basis payload for BC7 because that is what the GPU samples. A CPU
 		// consumer cannot read a block, so ask for RGBA8 instead.
 		if (ktxTexture2_NeedsTranscoding(owner.tex))
@@ -445,6 +465,43 @@ namespace assetlib
 
 		image.subresources.push_back({ 0, dstPitch, totalBytes });
 		return image;
+	}
+
+	ImageData
+	loadKTX2Preview(const std::filesystem::path& path, uint32_t maxDim)
+	{
+		if (maxDim == 0)
+			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
+
+		Ktx2Owner owner;
+
+		errno = 0;  // so check() reads this call's reason, not a stale one
+		check(
+			ktxTexture2_CreateFromNamedFile(
+				path.string().c_str(),
+				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+				&owner.tex),
+			"assetlib::loadKTX2Preview: failed to load",
+			path);
+
+		return previewFromKtx(owner, maxDim, path);
+	}
+
+	ImageData
+	loadKTX2Preview(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		uint32_t                       maxDim)
+	{
+		if (maxDim == 0)
+			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
+
+		const std::vector<std::byte> bytes = fileSystem.Read(path);
+
+		Ktx2Owner owner;
+		owner.tex = openKtxFromMemory(bytes, "assetlib::loadKTX2Preview: failed to read", path);
+
+		return previewFromKtx(owner, maxDim, path);
 	}
 
 	// Everything writeKTX2 and encodeKTX2 share up to the point of emitting bytes. Returns an owned

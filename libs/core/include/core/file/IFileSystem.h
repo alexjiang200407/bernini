@@ -26,6 +26,10 @@ namespace core::file
 	 * form). An implementation does not normalize what it is given: two spellings of one path are
 	 * two paths here, which is why every producer of a path funnels through one normalizer.
 	 *
+	 * They are `std::string_view` and never `std::filesystem::path` for that reason -- a key that has
+	 * been through `path` arrives `\`-separated on Windows, which an archive's byte-for-byte lookup
+	 * misses while a directory still resolves it. See STYLE.md's Paths section.
+	 *
 	 * **Every method is safe to call concurrently on one instance.** An archive is a plausible place
 	 * to keep a file handle open across reads, and the editor already decodes two textures on two
 	 * threads at once, so an implementation that keeps a handle must read positionally rather than
