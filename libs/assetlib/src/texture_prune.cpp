@@ -1,5 +1,6 @@
 #include <assetlib/texture_prune.h>
 
+#include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
 
 #include "ref_paths.h"
@@ -116,20 +117,18 @@ namespace assetlib
 	}
 
 	TexturePruneScan
-	findUnusedBakedTextures(const TexturePruneDesc& desc)
+	findUnusedBakedTextures(const AssetStore& store, const TexturePruneDesc& desc)
 	{
-		if (!std::filesystem::is_directory(desc.dataRoot))
-			throw std::runtime_error(
-				"assetlib::findUnusedBakedTextures: the data root '" + desc.dataRoot.string() +
-				"' is not a directory");
+		// Checked even though a source built from a path already was: this one may have been built
+		// over a mount, whose constructor cannot check a writable layer that is allowed not to exist
+		// yet. The sweep unlinks files, and a data root that is not there would report a clean
+		// project instead of the caller error it is.
+		if (!std::filesystem::is_directory(store.GetDataRoot()))
+			core::throw_runtime_error(
+				"assetlib::findUnusedBakedTextures: the data root '{}' is not a directory",
+				store.GetDataRoot().string());
 
-		// Without a mount the data root is one, matching AssetRefGraph::Scan.
-		std::optional<core::file::LooseFileSystem> loose;
-		if (desc.fileSystem == nullptr)
-			loose.emplace(desc.dataRoot);
-
-		const core::file::IFileSystem& files =
-			desc.fileSystem != nullptr ? *desc.fileSystem : *loose;
+		const core::file::IFileSystem& files = store.GetFiles();
 
 		auto scan = TexturePruneScan();
 
@@ -140,7 +139,7 @@ namespace assetlib
 
 		// The sweep stays on the writable layer while the mark read the whole mount: a packed entry
 		// cannot be unlinked, so proposing one would be proposing a deletion nobody can carry out.
-		const std::filesystem::path textureDir = desc.dataRoot / desc.textureDir;
+		const std::filesystem::path textureDir = store.GetDataRoot() / desc.textureDir;
 		if (!std::filesystem::is_directory(textureDir))
 			return scan;
 
@@ -172,14 +171,14 @@ namespace assetlib
 	}
 
 	TexturePruneResult
-	deleteUnusedBakedTextures(const TexturePruneScan& scan, const TexturePruneDesc& desc)
+	deleteUnusedBakedTextures(const TexturePruneScan& scan, const AssetStore& store)
 	{
 		auto result = TexturePruneResult();
 
 		for (const UnusedTexture& texture : scan.unused)
 		{
 			std::error_code ec;
-			const bool      removed = std::filesystem::remove(desc.dataRoot / texture.path, ec);
+			const bool removed = std::filesystem::remove(store.GetDataRoot() / texture.path, ec);
 
 			// One locked map must not abandon the rest of the sweep.
 			if (ec)

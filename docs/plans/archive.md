@@ -263,7 +263,7 @@ a file format, the third is a different resolution on a different string type.
 return the same verdict against an archive that they returned against the tree it was packed from.
 A packed project must not silently change which material representation it draws.
 
-### The loaders stay free functions; a `dataRoot` parameter becomes the mount.
+### `AssetStore` carries the read mount and the writable root together.
 
 Every `load*` that names a single file gains an `IFileSystem&` overload beside the path-taking one,
 because both callers are real and neither can be deleted. Every function that takes a `dataRoot`
@@ -294,6 +294,28 @@ tombstone masking on `LayeredFileSystem`, the archive handle inside `PakFile`.
 What would reverse this: a decoded-asset cache keyed by mount. A cache needs an owner with a
 lifetime and a free function cannot be one — but that owner is `AssetManager`, which is also where
 the question would first be asked.
+
+**Reversed, 2026-08-15.** Not by the cache, and not by the argument above being wrong — a loader
+class *with methods* over the free functions is still the thing that argument rejects, and the
+path-taking overloads did stay. What it missed is that the question was never only about loaders.
+
+The reviewer asked for an object holding **the filesystem and the data root**. By the end of task 7
+that pair had been written out by hand in nine places: seven descs carrying a `dataRoot`
+(`PackDesc`, `VatBakeDesc`, `TexturePruneDesc`, `EnvBakeDesc`, `AssetRefScanDesc`,
+`MaterialBakeDesc`, `EnvImportDesc`), two of them grown a parallel `fileSystem` with a paragraph
+each explaining which half meant what, `AssetManager`'s two members, and five call sites building a
+throwaway `LooseFileSystem` from a root they already held. Nine hand-written copies of a pair is a
+type, and the doc comment kept being rewritten instead of the type being named.
+
+`assetlib::AssetStore` is that type, and the loaders came with it as methods since the object
+exists anyway. `AssetRefScanDesc` disappears; `TexturePruneDesc` keeps only `textureDir` and
+`PackDesc` only `target`. The free functions stay in two roles rather than three: path-taking for
+arbitrary host files no project owns, and mount-taking as the primitive the methods forward to.
+
+The `is_directory` guard that `AssetRefGraph::Scan` and `findUnusedBakedTextures` each kept for
+themselves moves to the loose constructor. A mount over a directory that is not there enumerates
+*empty* rather than failing, so with the guard nowhere a mistyped root reads as a project with
+nothing in it — a scan reporting no assets, a prune reporting nothing to sweep.
 
 ### Reads are concurrent, so `PakFile` holds no seek position.
 
@@ -450,7 +472,7 @@ build spend seconds skinning on first load.
 |---|---|---|
 | `bgl` | none | — |
 | `core` | new `core::file::IFileSystem`, `FileStamp`, `LooseFileSystem`, `LayeredFileSystem`, `write_atomic` | none; additive |
-| `assetlib` | every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; the staleness predicates have their `dataRoot` parameter replaced by a filesystem; `AssetRefGraph::Scan` and the texture prune walk the mount union instead of the data root; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
+| `assetlib` | new `AssetStore`, the read mount and the writable root as one, with the loaders as methods; every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; the staleness predicates have their `dataRoot` parameter replaced by a filesystem; `AssetRefGraph::Scan` and the texture prune walk the mount union instead of the data root; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
 | `gamelib` | `AssetManager` takes a `LayeredFileSystem`; the path-taking constructor stays and builds a loose mount, so every existing caller compiles unchanged; `AcquireVatMesh` respects a read-only mount | moderate |
 | `apps/editor` | `Project` opens a mount rather than a data root; the Content Explorer comes off `QFileSystemModel` to show the union; delete writes a tombstone; a *Sync* action repacks | **high, and the largest single task.** The Content Explorer indexes straight into its model in a dozen places |
 | docs | new `docs/archives.md`; `ROADMAP.md` line under Asset Streaming Pipeline | — |
@@ -555,6 +577,16 @@ and the scan is still rebuilt per question.
 `.bpak` packed from it, edge for edge; an asset packed and then shadowed by an edited loose copy is
 scanned once, from the loose copy; a prune over a mount union never proposes deleting a packed
 texture that only a loose material references.
+
+**7a. `AssetStore`.**
+The read mount and the writable root as one value, with the loaders and staleness predicates as
+methods. Inserted after task 7 on review; see the decision above for what it replaces and why the
+original decision was reversed. Must precede task 8, or the editor and `AssetManager` get written
+against the shape it removes.
+*Gate:* `assetlib_tests` — a loose source reads and writes one directory; a source over a directory
+that is not there is a caller error, and so is one with no mount; reads widen to the mount while
+`GetDataRoot` stays on the writable layer; the staleness methods answer exactly as the free
+functions they forward to.
 
 **8. `AssetManager` mounts a `LayeredFileSystem`.**
 New constructor taking a mount list; the existing path-taking one builds a `LooseFileSystem` and

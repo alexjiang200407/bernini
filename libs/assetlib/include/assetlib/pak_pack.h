@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <core/str/str.h>
 
 namespace assetlib
@@ -37,8 +38,6 @@ namespace assetlib
 
 	struct PackDesc
 	{
-		std::filesystem::path dataRoot;
-
 		/** The `.bpak` to write. Replaced only once the whole archive is on disk. */
 		std::filesystem::path target;
 	};
@@ -48,7 +47,7 @@ namespace assetlib
 	 *
 	 * What goes in is derived from `assetTypeFromExtension` rather than from a list kept here, so a
 	 * new container type joins the archive by being registered once. On top of that, one explicit
-	 * exclusion: any path with a `textures_src` component is authoring source, which the bake reads
+	 * exclusion: any path with a `textures_src` component is authoring store, which the bake reads
 	 * and the runtime never does. Everything else without a registered extension -- the
 	 * `.berniniproject`, a `.glb` awaiting import, the shader cache, `.overlay.json` -- falls out of
 	 * the same rule and is counted in `skippedByExtension`.
@@ -66,5 +65,5 @@ namespace assetlib
 	 *         stale `.bvat` cannot be re-baked, or if the archive cannot be written.
 	 */
 	[[nodiscard]] PackReport
-	packProject(const PackDesc& desc);
+	packProject(const AssetStore& store, const PackDesc& desc);
 }
