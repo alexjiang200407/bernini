@@ -1,5 +1,9 @@
 #include <assetlib/texture_prune.h>
 
+#include <core/file/LooseFileSystem.h>
+
+#include "ref_paths.h"
+
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bsky_io.h>
@@ -28,34 +32,35 @@ namespace assetlib
 		}
 
 		/**
-		 * The mark phase: the name of every baked map that some material, sky or lighting asset below
-		 * `dataRoot` still points at. An unreadable asset is fatal, and deliberately so -- its maps
+		 * The mark phase: the name of every baked map that some material, sky or lighting asset in
+		 * `files` still points at. An unreadable asset is fatal, and deliberately so -- its maps
 		 * cannot be marked, and they would then be swept as garbage.
+		 *
+		 * Reads the whole mount and not only the writable layer: a packed material holds a loose map
+		 * alive exactly as a loose one does, and marking only what can be deleted would sweep the maps
+		 * that the archive is the sole referrer of.
 		 */
 		LiveSet
-		markLiveMaps(const std::filesystem::path& dataRoot)
+		markLiveMaps(const core::file::IFileSystem& files)
 		{
 			auto live = LiveSet();
 
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(dataRoot))
+			for (const std::string& key : files.Enumerate())
 			{
-				if (!entry.is_regular_file())
-					continue;
-
-				const auto unreadable = [&entry](const char* what, const std::exception& e) {
+				const auto unreadable = [&key](const char* what, const std::exception& e) {
 					return std::runtime_error(
 						"assetlib::findUnusedBakedTextures: cannot read the " + std::string(what) +
-						" '" + entry.path().string() +
+						" '" + key +
 						"', so the baked maps it references cannot be known: " + e.what());
 				};
 
-				const auto extension = entry.path().extension();
+				const std::string extension = extensionOf(key);
 				if (extension == c_MaterialExtension)
 				{
 					auto material = BMaterial();
 					try
 					{
-						material = loadMaterial(entry.path());
+						material = loadMaterial(files, key);
 					}
 					catch (const std::exception& e)
 					{
@@ -74,8 +79,7 @@ namespace assetlib
 
 					case ShadingModel::kCount:
 						throw std::runtime_error(
-							"assetlib::findUnusedBakedTextures: the material '" +
-							entry.path().string() +
+							"assetlib::findUnusedBakedTextures: the material '" + key +
 							"' names an unknown shading model, so its baked maps cannot be known");
 					}
 				}
@@ -83,7 +87,7 @@ namespace assetlib
 				{
 					try
 					{
-						markMap(live, loadSky(entry.path()).sky.baked);
+						markMap(live, loadSky(files, key).sky.baked);
 					}
 					catch (const std::exception& e)
 					{
@@ -95,7 +99,7 @@ namespace assetlib
 				{
 					try
 					{
-						const BEnvLighting lighting = loadEnvLighting(entry.path());
+						const BEnvLighting lighting = loadEnvLighting(files, key);
 						markMap(live, lighting.prefilter.baked);
 						markMap(live, lighting.irradiance.baked);
 					}
@@ -119,14 +123,23 @@ namespace assetlib
 				"assetlib::findUnusedBakedTextures: the data root '" + desc.dataRoot.string() +
 				"' is not a directory");
 
+		// Without a mount the data root is one, matching AssetRefGraph::Scan.
+		std::optional<core::file::LooseFileSystem> loose;
+		if (desc.fileSystem == nullptr)
+			loose.emplace(desc.dataRoot);
+
+		const core::file::IFileSystem& files =
+			desc.fileSystem != nullptr ? *desc.fileSystem : *loose;
+
 		auto scan = TexturePruneScan();
 
-		const LiveSet live       = markLiveMaps(desc.dataRoot);
+		const LiveSet live       = markLiveMaps(files);
 		scan.materialsScanned    = live.materials;
 		scan.environmentsScanned = live.environments;
 		scan.liveMaps            = live.maps.size();
 
-		// Nothing has ever been baked here, so nothing can have been orphaned.
+		// The sweep stays on the writable layer while the mark read the whole mount: a packed entry
+		// cannot be unlinked, so proposing one would be proposing a deletion nobody can carry out.
 		const std::filesystem::path textureDir = desc.dataRoot / desc.textureDir;
 		if (!std::filesystem::is_directory(textureDir))
 			return scan;
