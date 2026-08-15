@@ -60,6 +60,25 @@ void ProcessData(const std::vector<int>& data) const; // west const reference fo
 
 ```
 
+# Paths
+
+Two types, and the one you choose says **who resolves the string**.
+
+| Type | What it addresses |
+|---|---|
+| `std::filesystem::path` | a location on the host filesystem, resolved by the OS: may be absolute, carries the native separator, composes with `/` |
+| `std::string_view` (`std::string` where it is stored) | a key into a mounted `core::file::IFileSystem`: always data-root-relative, always `/`-separated, never absolute |
+
+So a `LooseFileSystem`'s root, a `.bpak` on disk and `write_atomic`'s target are `path`; every
+`IFileSystem` method, every `load*` overload that takes a mount, and every reference a container
+stores are `string_view`.
+
+They are not interchangeable, and on Windows the failure is silent. A mount key is matched
+byte-for-byte — `PakFile` resolves one through a hash map keyed on the string the archive stored — so
+a key that has passed through `std::filesystem::path` arrives `\`-separated and misses. The same key
+still resolves through `LooseFileSystem`, because the OS accepts either separator. Loose works,
+packed does not, and nothing reports a problem.
+
 # Classes
 
 ```cpp

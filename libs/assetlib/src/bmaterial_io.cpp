@@ -153,6 +153,12 @@ namespace assetlib
 		return deserializeMaterial(bytes);
 	}
 
+	BMaterial
+	loadMaterial(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeMaterial(fileSystem.Read(path));
+	}
+
 	namespace
 	{
 		// What a path hashed to, and the size and mtime it had when it did. mtime is not part of the
