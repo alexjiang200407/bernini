@@ -239,14 +239,14 @@ TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf
 	CHECK_FALSE(mesh.materials[4].isPbr);  // KHR_materials_pbrSpecularGlossiness
 }
 
-TEST_CASE("probeGltfMaterials counts the PBR materials", "[bmesh][gltf]")
+TEST_CASE("probeGltfMaterials reports the PBR materials", "[bmesh][gltf]")
 {
-	const auto path  = WriteTempGltf(c_MaterialsGltf, "bmesh_probe_test.gltf");
-	const auto probe = probeGltfMaterials(path);
+	const auto path   = WriteTempGltf(c_MaterialsGltf, "bmesh_probe_test.gltf");
+	const auto probed = probeGltfMaterials(path);
 	std::filesystem::remove(path);
 
-	CHECK(probe.materialCount == 6);
-	CHECK(probe.pbrMaterialCount == 4);
+	CHECK(probed.size() == 6);
+	CHECK(std::ranges::count_if(probed, &GltfMaterial::isPbr) == 4);
 }
 
 TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")
@@ -259,16 +259,19 @@ TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")
 	REQUIRE(std::filesystem::exists(glb));
 
 	const auto import = loadFromGltf(glb);
-	const auto probe  = probeGltfMaterials(glb);
+	const auto probed = probeGltfMaterials(glb);
 
 	REQUIRE_FALSE(import.textures.empty());
-	CHECK(probe.materialCount == import.materials.size());
-	CHECK(
-		probe.pbrMaterialCount ==
-		static_cast<size_t>(
-			std::ranges::count_if(import.materials, [](const BMaterialImport& material) {
-				return material.isPbr;
-			})));
+	REQUIRE(probed.size() == import.materials.size());
+
+	// Index for index, not merely in bulk: a caller names the file each material will be written to
+	// before the import runs, so an entry that lines up with a different material names the wrong file.
+	for (size_t i = 0; i < probed.size(); ++i)
+	{
+		INFO("material " << i);
+		CHECK(probed[i].isPbr == import.materials[i].isPbr);
+		CHECK(probed[i].name == import.stringPool.at(import.materials[i].nameOffset));
+	}
 }
 
 TEST_CASE("A glTF that will not parse is reported, not guessed at", "[bmesh][gltf]")

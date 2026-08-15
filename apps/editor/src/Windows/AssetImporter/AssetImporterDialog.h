@@ -29,13 +29,14 @@ class AssetImporterDialog : public QDialog
 
 public:
 	/**
-	 * @param materials What probeGltfMaterials found in `sourceFile`. The dialog only reads it -- the
-	 *        caller probes, so the dialog stays a dialog and a test can pose any answer.
+	 * @param materials What probeGltfMaterials found in `sourceFile`, read only for the duration of
+	 *        the constructor. The caller probes, so the dialog stays a dialog and a test can pose any
+	 *        answer.
 	 */
 	explicit AssetImporterDialog(
-		const QString&                     sourceFile,
-		const assetlib::GltfMaterialProbe& materials = {},
-		QWidget*                           parent    = nullptr);
+		const QString&                          sourceFile,
+		std::span<const assetlib::GltfMaterial> materials = {},
+		QWidget*                                parent    = nullptr);
 
 	/** Whether the geometry comes across. Off imports only the other pieces. */
 	bool

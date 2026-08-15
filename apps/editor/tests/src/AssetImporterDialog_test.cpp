@@ -11,10 +11,16 @@ namespace
 	constexpr auto c_SourceFile = "C:/Assets/Exports/stone_wall.glb";
 
 	/** A probe result posing as a file with `pbr` PBR materials out of `total`. */
-	assetlib::GltfMaterialProbe
+	std::vector<assetlib::GltfMaterial>
 	Probe(size_t total, size_t pbr)
 	{
-		return assetlib::GltfMaterialProbe{ total, pbr };
+		auto probed = std::vector<assetlib::GltfMaterial>(total);
+		for (size_t i = 0; i < total; ++i)
+		{
+			probed[i].name  = "material" + std::to_string(i);
+			probed[i].isPbr = i < pbr;
+		}
+		return probed;
 	}
 
 	QCheckBox*

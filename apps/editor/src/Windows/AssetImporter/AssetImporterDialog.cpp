@@ -14,15 +14,15 @@
 #include <QVBoxLayout>
 
 AssetImporterDialog::AssetImporterDialog(
-	const QString&                     sourceFile,
-	const assetlib::GltfMaterialProbe& materials,
-	QWidget*                           parent) : QDialog(parent)
+	const QString&                          sourceFile,
+	std::span<const assetlib::GltfMaterial> materials,
+	QWidget*                                parent) : QDialog(parent)
 {
 	setWindowTitle("Import Asset");
 	setModal(true);
 
 	m_DefaultFolder   = QFileInfo(sourceFile).completeBaseName();
-	m_HasPbrMaterials = materials.pbrMaterialCount > 0;
+	m_HasPbrMaterials = std::ranges::any_of(materials, &assetlib::GltfMaterial::isPbr);
 
 	auto* layout = new QVBoxLayout(this);
 

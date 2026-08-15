@@ -1041,7 +1041,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 
 		// What the file's materials are decides what the dialog may offer, so it is read before the
 		// dialog is built. A file that will not parse is left to the import to report.
-		auto materials = assetlib::GltfMaterialProbe();
+		auto materials = std::vector<assetlib::GltfMaterial>();
 		try
 		{
 			materials = assetlib::probeGltfMaterials(std::filesystem::path(file.toStdWString()));
