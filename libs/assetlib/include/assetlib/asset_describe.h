@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -33,23 +34,24 @@ namespace assetlib
 	 * Describes a material: its mode, factors, the baked texture triplet, and the per-channel routing
 	 * table with each route's bake provenance.
 	 *
-	 * Routes are reported against `dataRoot` when one is given: each routed source is stat'd and its
-	 * live stamp compared with the one recorded at bake time, so a stale bake is visible here. Passing
-	 * an empty path skips that and reports the recorded stamps alone.
+	 * Routes are reported against `fileSystem` when one is given: each routed source is stat'd and
+	 * its live stamp compared with the one recorded at bake time, so a stale bake is visible here.
+	 * A null mount skips that and reports the recorded stamps alone -- optional because a container
+	 * can be described on its own, with no project around it.
 	 */
 	[[nodiscard]] std::string
-	describe(const BMaterial& material, const std::filesystem::path& dataRoot = {});
+	describe(const BMaterial& material, const core::file::IFileSystem* fileSystem = nullptr);
 
 	/**
 	 * Describes a sky: how the backdrop presents it, and its one radiance route with that route's bake
 	 * provenance.
 	 *
-	 * `dataRoot` is used exactly as it is for a material -- given one, each routed source is stat'd and
-	 * compared against the stamp the bake recorded, so a stale bake is visible here. Passing an empty
-	 * path reports the recorded stamps alone.
+	 * `fileSystem` is used exactly as it is for a material -- given one, each routed source is stat'd
+	 * and compared against the stamp the bake recorded, so a stale bake is visible here. A null mount
+	 * reports the recorded stamps alone.
 	 */
 	[[nodiscard]] std::string
-	describe(const BSky& sky, const std::filesystem::path& dataRoot = {});
+	describe(const BSky& sky, const core::file::IFileSystem* fileSystem = nullptr);
 
 	/**
 	 * Describes the lighting derived from a sky: the exposure it was measured at, and the prefilter and
@@ -59,16 +61,16 @@ namespace assetlib
 	 * makes both untrustworthy.
 	 */
 	[[nodiscard]] std::string
-	describe(const BEnvLighting& lighting, const std::filesystem::path& dataRoot = {});
+	describe(const BEnvLighting& lighting, const core::file::IFileSystem* fileSystem = nullptr);
 
 	/**
 	 * Describes an environment: the `.bsky` and `.benvl` it composes.
 	 *
-	 * A `.benv` holds no pixels, so with a `dataRoot` the useful question is whether what it names is
-	 * actually there -- each reference is resolved against the root and reported missing if it is not.
+	 * A `.benv` holds no pixels, so with a mount the useful question is whether what it names is
+	 * actually there -- each reference is resolved through it and reported missing if it is not.
 	 */
 	[[nodiscard]] std::string
-	describe(const BEnv& env, const std::filesystem::path& dataRoot = {});
+	describe(const BEnv& env, const core::file::IFileSystem* fileSystem = nullptr);
 
 	/** Describes a skeleton: its signature, and each bone's parent and bind pose. */
 	[[nodiscard]] std::string
@@ -90,10 +92,10 @@ namespace assetlib
 	 * Describes a VAT bake: its texture pair's dimensions and bounds, each clip's rows, each
 	 * submesh's columns, and the three inputs it was baked from with their stamps.
 	 *
-	 * Given a `dataRoot`, each input is stat'd and compared against the stamp the bake recorded, so
-	 * a stale bake is reported. Pass the tables-only form (loadVatTables) -- nothing here reads the
+	 * Given a mount, each input is stat'd and compared against the stamp the bake recorded, so a
+	 * stale bake is reported. Pass the tables-only form (loadVatTables) -- nothing here reads the
 	 * pixels, and a whole-project survey must not pay for them.
 	 */
 	[[nodiscard]] std::string
-	describe(const BVat& vat, const std::filesystem::path& dataRoot = {});
+	describe(const BVat& vat, const core::file::IFileSystem* fileSystem = nullptr);
 }

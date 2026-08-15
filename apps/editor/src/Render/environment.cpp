@@ -5,6 +5,7 @@
 #include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
+#include <core/file/LooseFileSystem.h>
 
 namespace editor
 {
@@ -26,7 +27,9 @@ namespace editor
 		auto env = assetlib::ResolvedEnvironment();
 		try
 		{
-			env = assetlib::resolveEnvironment(std::filesystem::path(benvPath), dataRoot);
+			env = assetlib::resolveEnvironment(
+				std::filesystem::path(benvPath),
+				core::file::LooseFileSystem(dataRoot));
 		}
 		catch (const std::exception& e)
 		{

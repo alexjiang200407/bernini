@@ -180,17 +180,27 @@ namespace assetlib
 		return SourceStamp{ static_cast<uint64_t>(size), static_cast<int64_t>(seconds) };
 	}
 
+	SourceStamp
+	stampOf(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		const std::optional<core::file::FileStamp> stamp = fileSystem.Stat(path);
+		if (!stamp.has_value())
+			return {};
+
+		return SourceStamp{ stamp->size, stamp->mtime };
+	}
+
 	namespace
 	{
 		// Whether every map the triplet names is still on disk. An empty entry names no map: a group
 		// with nothing routed is never baked, and the runtime substitutes white / flat normal for it.
 		bool
-		tripletIsOnDisk(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		tripletIsOnDisk(const PbrParams& pbr, const core::file::IFileSystem& fileSystem)
 		{
 			for (const std::string* map :
 			     { &pbr.baseColorTexture, &pbr.normalTexture, &pbr.ormTexture })
 			{
-				if (!map->empty() && stampOf(dataRoot / *map).size == 0)
+				if (!map->empty() && stampOf(fileSystem, *map).size == 0)
 					return false;
 			}
 			return true;
@@ -199,12 +209,12 @@ namespace assetlib
 		// Whether every source the routes name is still on disk, i.e. whether loose is a representation
 		// this material could actually sample.
 		bool
-		routesAreOnDisk(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		routesAreOnDisk(const PbrParams& pbr, const core::file::IFileSystem& fileSystem)
 		{
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
 			{
 				const std::string& texture = pbr.routes[i].texture;
-				if (!texture.empty() && stampOf(dataRoot / texture).size == 0)
+				if (!texture.empty() && stampOf(fileSystem, texture).size == 0)
 					return false;
 			}
 			return true;
@@ -212,7 +222,7 @@ namespace assetlib
 	}
 
 	bool
-	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot)
+	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
 		if (material.shadingModel != ShadingModel::kPbr)
 			return false;
@@ -231,7 +241,7 @@ namespace assetlib
 
 			// A zeroed stamp means this route was never baked; stampOf zeroes a missing file. Neither
 			// can equal a live source's stamp, so both fall out of this comparison as stale.
-			if (stampOf(dataRoot / route.texture) != pbr.routeStamps[i])
+			if (stampOf(fileSystem, route.texture) != pbr.routeStamps[i])
 				return true;
 		}
 
@@ -241,13 +251,13 @@ namespace assetlib
 
 		// Routed and every source matches -- but a bake that produced no base colour never ran, and a
 		// map deleted since leaves the triplet naming a file that is not there to sample.
-		return pbr.baseColorTexture.empty() || !tripletIsOnDisk(pbr, dataRoot);
+		return pbr.baseColorTexture.empty() || !tripletIsOnDisk(pbr, fileSystem);
 	}
 
 	bool
-	drawsLoose(const BMaterial& material, const std::filesystem::path& dataRoot)
+	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
 		// bakeIsStale is false for every non-PBR model, so `pbr` is only read once it means something.
-		return bakeIsStale(material, dataRoot) && routesAreOnDisk(material.pbr, dataRoot);
+		return bakeIsStale(material, fileSystem) && routesAreOnDisk(material.pbr, fileSystem);
 	}
 }

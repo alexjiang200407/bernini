@@ -3,6 +3,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <core/file/LooseFileSystem.h>
 #include <core/str/str.h>
 
 namespace game
@@ -506,7 +507,12 @@ namespace game
 
 		bgl::SceneRef         m_Scene;
 		std::filesystem::path m_DataRoot;
-		AssetManagerOptions   m_Options;
+
+		// The staleness predicates resolve through a mount rather than a root. Loose over the data
+		// root is what a manager built from a path is: task 8 is where the mount becomes the caller's.
+		core::file::LooseFileSystem m_Files;
+
+		AssetManagerOptions m_Options;
 
 		core::str::unordered_str_map<uint32_t> m_TextureByPath;
 		core::str::unordered_str_map<uint64_t> m_MaterialByPath;
