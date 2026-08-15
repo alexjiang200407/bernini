@@ -1,4 +1,5 @@
 #include <core/err/util.h>
+#include <core/file/IFileSystem.h>
 #include <core/file/file.h>
 #include <core/platform/util.h>
 
@@ -55,6 +56,38 @@ namespace core::file
 		// the prefix would compare equal to nothing meaningful.
 		if (!fileStream.eof())
 			return std::nullopt;
+
+		return hash;
+	}
+
+	std::optional<uint64_t>
+	hash_file(const IFileSystem& fileSystem, std::string_view path)
+	{
+		const std::optional<FileStamp> stamp = fileSystem.Stat(path);
+		if (!stamp.has_value())
+			return std::nullopt;
+
+		uint64_t hash = hash_seed();
+
+		// ReadRange reports a failure by throwing, where the path overload has a stream to ask -- so
+		// the contract the two share, nullopt for a file that could not be read whole, is restored
+		// here rather than let through.
+		try
+		{
+			for (uint64_t offset = 0; offset < stamp->size;)
+			{
+				const uint64_t taken = std::min<uint64_t>(c_HashChunkBytes, stamp->size - offset);
+
+				const std::vector<std::byte> chunk = fileSystem.ReadRange(path, offset, taken);
+				hash = hash_bytes(chunk.data(), chunk.size(), hash);
+
+				offset += taken;
+			}
+		}
+		catch (const std::exception&)
+		{
+			return std::nullopt;
+		}
 
 		return hash;
 	}

@@ -68,7 +68,8 @@ namespace game
 		bgl::SceneRef         scene,
 		std::filesystem::path dataRoot,
 		AssetManagerOptions   options) :
-		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot)), m_Options(options)
+		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot)), m_Files(m_DataRoot),
+		m_Options(options)
 	{
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
 		// still be there -- and with a bare reference that was only true if the caller happened to
@@ -164,7 +165,7 @@ namespace game
 		const assetlib::BEnv env = assetlib::loadEnv(m_DataRoot / relPath);
 
 		const auto acquireRoute = [this](const assetlib::EnvMapRoute& route) {
-			return AcquireTexture(assetlib::envMapToDraw(route, m_DataRoot));
+			return AcquireTexture(assetlib::envMapToDraw(route, m_Files));
 		};
 
 		Environment out;
@@ -235,7 +236,7 @@ namespace game
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
 		// cannot be sampled, so the material falls back to the routes that produced it -- when those
 		// are still there to fall back to.
-		const bool loose = assetlib::drawsLoose(material, m_DataRoot);
+		const bool loose = assetlib::drawsLoose(material, m_Files);
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
 		const std::vector<std::string> paths = MaterialTextures(material, loose);

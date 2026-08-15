@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -48,7 +49,7 @@ namespace assetlib
 	 * of CPU skinning away from fresh.
 	 */
 	[[nodiscard]] bool
-	vatIsStale(const BVat& vat, const std::filesystem::path& dataRoot);
+	vatIsStale(const BVat& vat, const core::file::IFileSystem& fileSystem);
 
 	/**
 	 * The path form the bake records in the container: lexically normal, generic separators.

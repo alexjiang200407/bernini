@@ -57,9 +57,21 @@ namespace assetlib
 	stampOf(const std::filesystem::path& path);
 
 	/**
+	 * The mounted overload: the bytes are hashed as `fileSystem` serves them, so a source stamps the
+	 * same loose or packed. A path absent from `fileSystem` yields the same zeroed stamp a missing
+	 * file does, rather than propagating the empty optional Stat returns: every caller here is
+	 * asking a staleness question, and "not there" is an answer to it.
+	 *
+	 * Memoized only when the mount is a directory, by resolving to the host path and going through
+	 * the overload above: nothing on the interface identifies a mount well enough to cache against.
+	 */
+	[[nodiscard]] SourceStamp
+	stampOf(const core::file::IFileSystem& fileSystem, std::string_view path);
+
+	/**
 	 * Whether `material`'s baked triplet no longer reflects the source textures its routes name.
-	 * `dataRoot` is the project's Data directory: every texture path a material stores is relative to
-	 * it, not to the material file.
+	 * Every texture path a material stores is a key into `fileSystem`, relative to the project's
+	 * Data directory rather than to the material file.
 	 *
 	 * True when a routed source has changed, gone missing, or was never stamped (i.e. the material
 	 * has routes but has never been baked), or when a map the triplet names is no longer on disk.
@@ -70,7 +82,7 @@ namespace assetlib
 	 * This is the rebake question, not the draw question: see drawsLoose.
 	 */
 	[[nodiscard]] bool
-	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot);
+	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem);
 
 	/**
 	 * Whether `material` draws from its authoring routes rather than its baked triplet. Derived from
@@ -82,5 +94,5 @@ namespace assetlib
 	 * missing, rather than failing to open a file that does not exist.
 	 */
 	[[nodiscard]] bool
-	drawsLoose(const BMaterial& material, const std::filesystem::path& dataRoot);
+	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem);
 }

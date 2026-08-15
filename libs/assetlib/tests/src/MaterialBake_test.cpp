@@ -8,6 +8,8 @@
 
 #include <catch2/catch_approx.hpp>
 
+#include "MountAt.h"
+
 using namespace assetlib;
 
 namespace
@@ -97,7 +99,7 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 
 	SECTION("it fills the triplet, and the bake it wrote reads as current")
 	{
-		REQUIRE_FALSE(bakeIsStale(mat, dir.path));
+		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
 		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.baseColorTexture));
 		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.ormTexture));
 	}
@@ -141,13 +143,13 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 		REQUIRE(mat.pbr.routeStamps[0] == stampOf(dir.path / "albedo.ktx2"));
 		REQUIRE(mat.pbr.routeStamps[5] == stampOf(dir.path / "packed.ktx2"));
 		REQUIRE(mat.pbr.routeStamps[3] == SourceStamp{});  // base A is unrouted
-		REQUIRE_FALSE(bakeIsStale(mat, dir.path));
+		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
 	}
 
 	SECTION("editing a source makes the bake stale")
 	{
 		WriteSource(dir.path / "albedo.ktx2", 32, { { 1, 2, 3, 255 } });  // different size
-		REQUIRE(bakeIsStale(mat, dir.path));
+		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
 	}
 }
 

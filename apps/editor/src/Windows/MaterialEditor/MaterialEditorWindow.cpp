@@ -36,6 +36,7 @@
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include <core/file/LooseFileSystem.h>
 
 namespace
 {
@@ -732,7 +733,7 @@ MaterialEditorWindow::RefreshActions()
 	if (const assetlib::BMaterial* material =
 	        m_MaterialGraphs[static_cast<size_t>(graphIndex)].onDisk.Get(materialPath))
 	{
-		stale        = assetlib::bakeIsStale(*material, m_DataRoot);
+		stale        = assetlib::bakeIsStale(*material, core::file::LooseFileSystem(m_DataRoot));
 		bakedSummary = BakedTexturesSummary(*material);
 	}
 

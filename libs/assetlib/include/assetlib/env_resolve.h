@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/benv_io.h>
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -35,13 +36,15 @@ namespace assetlib
 	 * source control -- they are regenerated per platform -- so a fresh checkout has the sources and
 	 * not the bakes, and would otherwise resolve nothing at all.
 	 *
-	 * @param benvPath The `.benv` file itself.
-	 * @param dataRoot What every path stored in the chain is relative to.
+	 * @param benvPath The `.benv` itself, as a file on the host: the editor applies one dropped from
+	 *        anywhere, so it is not necessarily a key into `fileSystem` and is not resolved as one.
+	 * @param fileSystem What everything the `.benv` names is resolved through -- the `.bsky`, the
+	 *        `.benvl` and every map their routes draw are data-root-relative keys.
 	 * @throws std::runtime_error if any referenced file is missing or malformed, or a referenced
 	 *         route has neither a baked map nor a source on disk.
 	 */
 	[[nodiscard]] ResolvedEnvironment
 	resolveEnvironment(
-		const std::filesystem::path& benvPath,
-		const std::filesystem::path& dataRoot);
+		const std::filesystem::path&   benvPath,
+		const core::file::IFileSystem& fileSystem);
 }

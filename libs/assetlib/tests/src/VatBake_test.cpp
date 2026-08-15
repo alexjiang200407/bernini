@@ -18,6 +18,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "MountAt.h"
+
 using namespace assetlib;
 
 namespace
@@ -391,7 +393,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	CHECK(vat.meshStamp == stampOf(root / "Meshes/rig.bmesh"));
 	CHECK(vat.skeletonStamp == stampOf(root / "Skeletons/rig.bskel"));
 	CHECK(vat.animationsStamp == stampOf(root / "Animations/rig.banim"));
-	CHECK_FALSE(vatIsStale(vat, root));
+	CHECK_FALSE(vatIsStale(vat, MountAt(root)));
 
 	// The bug the content stamp exists for, on the VAT path: a checkout rewrites the inputs' mtimes
 	// without changing a byte, and a `.bvat` that noticed would be re-baked on every acquire.
@@ -405,20 +407,20 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 		}
 
 		CHECK(vat.meshStamp == stampOf(root / "Meshes/rig.bmesh"));
-		CHECK_FALSE(vatIsStale(vat, root));
+		CHECK_FALSE(vatIsStale(vat, MountAt(root)));
 	}
 
 	SECTION("a changed input reads as stale")
 	{
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
 		saveAnimations(fixture.animations, root / "Animations/rig.banim");
-		CHECK(vatIsStale(vat, root));
+		CHECK(vatIsStale(vat, MountAt(root)));
 	}
 
 	SECTION("a deleted input reads as stale, not as unchanged")
 	{
 		fs::remove(root / "Animations/rig.banim");
-		CHECK(vatIsStale(vat, root));
+		CHECK(vatIsStale(vat, MountAt(root)));
 	}
 
 	SECTION("the refs scan reports the three edges")
@@ -478,7 +480,8 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
 		saveAnimations(fixture.animations, root / "Animations/rig.banim");
 
-		const std::string text = describe(loadVatTables(root / "Meshes/rig.bvat"), root);
+		const core::file::LooseFileSystem files(root);
+		const std::string text = describe(loadVatTables(root / "Meshes/rig.bvat"), &files);
 		CHECK(text.find("bvat") != std::string::npos);
 		CHECK(text.find("slide") != std::string::npos);
 		CHECK(text.find("(not read)") != std::string::npos);
