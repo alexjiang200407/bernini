@@ -320,6 +320,48 @@ TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
 	CHECK(mesh.submeshes[1].material == assetlib::c_InvalidIndex);
 }
 
+TEST_CASE(
+	"A failed import into a shared folder takes only its own materials",
+	"[importedmaterials]")
+{
+	const TempProject project;
+
+	// An import that has already landed in the folder.
+	const auto first     = ImportWith({ PbrMaterial() }, { "Fur" });
+	auto       firstMesh = assetlib::toBMesh(first);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		first,
+		firstMesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		QStringList{ "fur_brown" });
+
+	// A second one into the same folder -- what naming the files is for -- which then fails.
+	const auto second     = ImportWith({ PbrMaterial() }, { "Fur" });
+	auto       secondMesh = assetlib::toBMesh(second);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		second,
+		secondMesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		QStringList{ "fur_grey" });
+
+	const std::array<ContentExplorerWindow::ImportedFile, 1> written = { {
+		{ project.MaterialDir() / "fur_grey.bmaterial", false },
+	} };
+
+	ContentExplorerWindow::RollBack(written, {});
+
+	// The folder is not this import's to take down, so undoing it means removing exactly the files it
+	// wrote -- the other import's work has to survive a failure that had nothing to do with it.
+	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "fur_grey.bmaterial"));
+	CHECK(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
+}
+
 TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedmaterials]")
 {
 	const TempProject project;

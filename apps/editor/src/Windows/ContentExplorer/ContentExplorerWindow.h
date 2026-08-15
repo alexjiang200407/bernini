@@ -172,6 +172,10 @@ public:
 	 * Only what the import itself created, and never anything that was already there -- a texture folder
 	 * that predates the import is left alone, files and all, because the user was asked before it was
 	 * written into and its other contents are not ours to delete.
+	 *
+	 * A materials folder shared with another import is why the material files are listed in `files`
+	 * one by one: the folder cannot be taken down, so the only way to leave the other import intact is
+	 * to remove exactly the files this one wrote.
 	 */
 	static void
 	RollBack(std::span<const ImportedFile> files, std::span<const ImportedDir> dirs);
@@ -277,8 +281,13 @@ private:
 	 * graphs are built afterwards, back on the UI thread -- their nodes own QPixmaps, which belong to
 	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
 	 *
-	 * Asks before overwriting anything, reports a failure to the user, and on either a failure or a
-	 * cancel removes the half-written files it had produced -- see RollBack.
+	 * Refuses to overwrite anything, reports a failure to the user, and on either a failure or a cancel
+	 * removes the half-written files it had produced -- see RollBack.
+	 *
+	 * What counts as a collision differs by category. A materials folder may be shared with another
+	 * import, since `options.outputs` names each file, so only a colliding *file* refuses this one. A
+	 * texture folder may not: `writeTextures` names its output by index, so one already there is
+	 * another import's and writing into it would overwrite that import's files.
 	 */
 	[[nodiscard]] ImportOutcome
 	ImportMesh(const QString& sourceFile, const ImportOptions& options);

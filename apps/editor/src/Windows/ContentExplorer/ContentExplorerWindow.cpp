@@ -1298,6 +1298,21 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	if (options.animations)
 		files.push_back({ banimPath, fs::exists(banimPath, ec) });
 
+	// Named one by one rather than by the folder holding them, because two imports sharing a materials
+	// folder is what the dialog's per-file names are for: only a material file that is already there
+	// may refuse this import, and it is also the only thing a failure may delete.
+	if (importMaterials)
+	{
+		for (const QString& stem : options.outputs.materialStems)
+		{
+			if (stem.isEmpty())
+				continue;
+
+			const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
+			files.push_back({ file, fs::exists(file, ec) });
+		}
+	}
+
 	const std::array<ImportedDir, 2> dirs = { {
 		{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
 		{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
@@ -1307,9 +1322,12 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	for (const ImportedFile& file : files)
 		if (file.existed)
 			replaced << QString::fromStdWString(file.path.wstring());
-	for (const ImportedDir& dir : dirs)
-		if (dir.existed)
-			replaced << QString::fromStdWString(dir.path.wstring());
+
+	// Only the texture folder: it is named tex0.ktx2 by index, so one already there belongs to another
+	// import and sharing it would overwrite that import's files. A materials folder is shareable, and
+	// its files are checked above.
+	if (textureDirExisted)
+		replaced << QString::fromStdWString(textureDir.wstring());
 
 	if (ReportImportConflict(this, name, replaced))
 		return ImportOutcome::kBlocked;
