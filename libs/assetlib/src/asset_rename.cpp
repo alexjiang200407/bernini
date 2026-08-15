@@ -7,6 +7,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -69,6 +70,8 @@ namespace assetlib
 			{
 				// The stamps survive untouched: a rename moves the file but keeps its size and
 				// mtime, so rewriting the paths keeps the bake fresh rather than forcing one.
+				// renameAsset then moves the file to the name vatPathFor derives from these
+				// rewritten inputs, or the runtime would never look under the old one.
 				BVat vat       = deserializeVat(bytes);
 				vat.mesh       = mapTarget(plan, vat.mesh);
 				vat.skeleton   = mapTarget(plan, vat.skeleton);
@@ -276,6 +279,30 @@ namespace assetlib
 			putBack(files.size());
 			return { RenameStatus::kFailed,
 				     "could not rename '" + plan.from + "': " + ec.message() };
+		}
+
+		// A bake's file name is derived from its inputs (vatPathFor), so a rewritten .bvat may now
+		// sit under a name the runtime will never ask for. Move each to its derived name -- what
+		// keeps a rename a load, not a re-bake. Best effort, after the rename is already done: a
+		// bake left behind is re-baked and later swept, never wrong.
+		for (const PendingReferrer& file : files)
+		{
+			if (file.type != AssetType::kVat)
+				continue;
+
+			try
+			{
+				const VatRefs               refs = loadVatRefs(file.path);
+				const std::filesystem::path derived =
+					desc.dataRoot / vatPathFor(refs.mesh, refs.animations);
+				if (!std::filesystem::equivalent(file.path, derived, ec) &&
+				    !std::filesystem::exists(derived))
+					std::filesystem::rename(file.path, derived, ec);
+			}
+			catch (const std::exception&)
+			{
+				// Already reported where it mattered; the orphan re-bakes.
+			}
 		}
 
 		return { RenameStatus::kRenamed, {} };

@@ -5,19 +5,13 @@
 
 namespace game
 {
-	std::filesystem::path
-	VatPathFor(std::string_view meshRelPath)
-	{
-		return std::filesystem::path(meshRelPath).replace_extension(".bvat");
-	}
-
 	assetlib::BVat
 	EnsureVatBaked(
 		const std::filesystem::path& dataRoot,
 		std::string_view             meshRelPath,
 		std::string_view             animationsRelPath)
 	{
-		const auto bvatAbs = dataRoot / VatPathFor(meshRelPath);
+		const auto bvatAbs = dataRoot / assetlib::vatPathFor(meshRelPath, animationsRelPath);
 
 		// Loaded whole before the staleness check: the fresh path needs the pixel chunks anyway,
 		// so one read serves both, and only the rare stale case pays for pixels it then discards.

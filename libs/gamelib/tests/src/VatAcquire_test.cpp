@@ -11,6 +11,7 @@
 #include <assetlib/bskel_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skeleton.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
@@ -287,8 +288,8 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 
 	const auto vat = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 
-	// Bake-on-demand's receipt: the derived product now sits beside its mesh.
-	CHECK(fs::exists(root.path / "Meshes/rig.bvat"));
+	// Bake-on-demand's receipt: the derived product now sits beside its mesh, named for the pair.
+	CHECK(fs::exists(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim")));
 
 	REQUIRE(vat.clips.size() == 1);
 	CHECK(vat.clips[0].name == "slide");
@@ -359,7 +360,9 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		// frames. The extra frame changes the .banim's size, and the mtime is pushed forward past
 		// the stamp's one-second granularity -- a same-second, same-size rewrite is *correctly*
 		// read as fresh, so the test has to change what the stamp can see.
-		const auto original = fs::last_write_time(root.path / "Meshes/rig.bvat");
+		const auto bvat =
+			root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+		const auto original = fs::last_write_time(bvat);
 
 		WriteClips(root.path, "Animations/rig.banim", "slide", 2.0f, 3);
 		const auto banim = root.path / "Animations/rig.banim";
@@ -384,7 +387,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		CHECK(LumaAtWorldX(png, 0.5f) < 0.01f);
 
 		// Parenthesized so Catch2 sees one bool: it cannot stringify file_time_type's duration.
-		CHECK((fs::last_write_time(root.path / "Meshes/rig.bvat") != original));
+		CHECK((fs::last_write_time(bvat) != original));
 	}
 
 	SECTION("a live geom refuses a different .banim rather than returning the wrong clips")
@@ -445,7 +448,7 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 {
 	DataRoot root("bernini_vat_ensure");
 	WriteRig(root.path);
-	const auto bvat = root.path / "Meshes/rig.bvat";
+	const auto bvat = root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
 
 	// Missing: baked in place, recording what it was baked from.
 	const auto first = game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
@@ -459,17 +462,22 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 	(void)game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
 	CHECK((fs::last_write_time(bvat) == written));
 
-	// Untouched stamps, different clip file: stale by path alone.
+	// A different clip file is its own bake file: the first one is left standing untouched.
 	WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
 	const auto march =
 		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig_march.banim");
 	CHECK(march.animations == "Animations/rig_march.banim");
 	REQUIRE(march.clips.size() == 1);
 	CHECK(march.stringPool.at(march.clips[0].nameOffset) == "march");
+	CHECK(
+		fs::exists(
+			root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig_march.banim")));
+	CHECK((fs::last_write_time(bvat) == written));
 
-	// And back: the container now records rig_march, so the original .banim is the stale case.
+	// And back: the first file is still fresh, so the switch costs a load, not a bake.
 	const auto back = game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
 	CHECK(back.animations == "Animations/rig.banim");
+	CHECK((fs::last_write_time(bvat) == written));
 
 	// A moved input stamp re-bakes through the same door. The re-authored file changes size and
 	// its mtime is pushed past the stamp's one-second granularity, as the acquire-level test does.

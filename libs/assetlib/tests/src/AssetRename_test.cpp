@@ -403,9 +403,8 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	mesh.skeleton = "Skeletons/rig.bskel";
 	save(mesh, root.path / "Meshes/rig.bmesh");
 
-	saveVat(
-		bakeVat(VatBakeDesc{ root.path, "Meshes/rig.bmesh", "Animations/rig.banim" }),
-		root.path / "Meshes/rig.bvat");
+	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+	saveVat(bakeVat(VatBakeDesc{ root.path, "Meshes/rig.bmesh", "Animations/rig.banim" }), baked);
 
 	REQUIRE(
 		Rename(root, "Skeletons/rig.bskel", "Skeletons/hero.bskel").status ==
@@ -414,18 +413,24 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	CHECK(loadMeshRefs(root.path / "Meshes/rig.bmesh").skeleton == "Skeletons/hero.bskel");
 	CHECK(loadAnimationSkeletonPath(root.path / "Animations/rig.banim") == "Skeletons/hero.bskel");
 
-	const VatRefs refs = loadVatRefs(root.path / "Meshes/rig.bvat");
+	// A skeleton rename does not change the bake's derived name, so the file stays put.
+	const VatRefs refs = loadVatRefs(baked);
 	CHECK(refs.skeleton == "Skeletons/hero.bskel");
 	CHECK(refs.mesh == "Meshes/rig.bmesh");
 
 	// The stamps record size and mtime, both of which a rename preserves: the rewritten .bvat is
 	// still fresh, not a re-bake waiting to happen.
-	CHECK_FALSE(vatIsStale(loadVatTables(root.path / "Meshes/rig.bvat"), root.path));
+	CHECK_FALSE(vatIsStale(loadVatTables(baked), root.path));
 
-	// An input only the .bvat references follows too.
+	// An input only the .bvat references follows too -- and this one is part of the derived name,
+	// so the bake moves to where the runtime will now look, still fresh.
 	REQUIRE(
 		Rename(root, "Animations/rig.banim", "Animations/hero.banim").status ==
 		RenameStatus::kRenamed);
-	CHECK(loadVatRefs(root.path / "Meshes/rig.bvat").animations == "Animations/hero.banim");
-	CHECK_FALSE(vatIsStale(loadVatTables(root.path / "Meshes/rig.bvat"), root.path));
+
+	const fs::path moved = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/hero.banim");
+	CHECK_FALSE(fs::exists(baked));
+	REQUIRE(fs::exists(moved));
+	CHECK(loadVatRefs(moved).animations == "Animations/hero.banim");
+	CHECK_FALSE(vatIsStale(loadVatTables(moved), root.path));
 }
