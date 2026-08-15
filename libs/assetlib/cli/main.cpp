@@ -213,7 +213,8 @@ main(int argc, char** argv)
 	bakevat->add_option(
 		"-o,--out",
 		vatOut,
-		"Output .bvat (default: beside the mesh, its extension swapped)");
+		"Output .bvat (default: beside the mesh, named for the (mesh, clip set) pair -- where the "
+		"runtime loads from)");
 
 	std::string envInput;
 	std::string envOut;
@@ -437,8 +438,8 @@ main(int argc, char** argv)
 			const assetlib::BVat vat = assetlib::bakeVat(desc);
 
 			const std::filesystem::path out = vatOut.empty() ?
-			                                      (std::filesystem::path(vatDataRoot) / vatMesh)
-			                                          .replace_extension(assetlib::c_VatExtension) :
+			                                      std::filesystem::path(vatDataRoot) /
+			                                          assetlib::vatPathFor(vatMesh, vatAnimations) :
 			                                      std::filesystem::path(vatOut);
 			assetlib::saveVat(vat, out);
 

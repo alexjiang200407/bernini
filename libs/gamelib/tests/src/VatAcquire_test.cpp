@@ -1,4 +1,5 @@
 #include <gamelib/AssetManager.h>
+#include <gamelib/vat_freshness.h>
 
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
@@ -10,6 +11,7 @@
 #include <assetlib/bskel_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skeleton.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
@@ -209,6 +211,44 @@ namespace
 		WriteMaterial(dataRoot / "Materials/skin.bmaterial", alphaMode);
 	}
 
+	/**
+	 * A clip set for the same rig, written to `banimRel`: one clip `name` of `frameCount` frames,
+	 * the bone at `frame * strideX` -- so frame f puts the quad on [f * strideX - 1, f * strideX + 1].
+	 */
+	void
+	WriteClips(
+		const fs::path&  dataRoot,
+		const fs::path&  banimRel,
+		std::string_view name,
+		float            strideX,
+		uint32_t         frameCount)
+	{
+		const auto skeleton = assetlib::loadSkeleton(dataRoot / "Skeletons/rig.bskel");
+
+		auto animations              = assetlib::AnimationSet();
+		animations.skeleton          = "Skeletons/rig.bskel";
+		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.boneCount         = 1;
+
+		auto clip        = assetlib::AnimationClip();
+		clip.nameOffset  = animations.stringPool.add(name);
+		clip.firstSample = 0;
+		clip.frameCount  = frameCount;
+		clip.sampleRate  = 30.0f;
+		clip.duration    = static_cast<float>(frameCount - 1) / 30.0f;
+		animations.clips.push_back(clip);
+
+		for (uint32_t frame = 0; frame < frameCount; ++frame)
+		{
+			animations.samples.push_back(
+				{ glm::vec3(static_cast<float>(frame) * strideX, 0.0f, 0.0f),
+			      glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			      glm::vec3(1.0f) });
+		}
+
+		assetlib::saveAnimations(animations, dataRoot / banimRel);
+	}
+
 	// ~52 px per world unit at 10 units under a 60-degree, 800x600 projection.
 	float
 	LumaAtWorldX(const char* png, float worldX)
@@ -248,8 +288,8 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 
 	const auto vat = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 
-	// Bake-on-demand's receipt: the derived product now sits beside its mesh.
-	CHECK(fs::exists(root.path / "Meshes/rig.bvat"));
+	// Bake-on-demand's receipt: the derived product now sits beside its mesh, named for the pair.
+	CHECK(fs::exists(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim")));
 
 	REQUIRE(vat.clips.size() == 1);
 	CHECK(vat.clips[0].name == "slide");
@@ -299,6 +339,35 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		gfx->DrawFrame(target, job);
 	}
 
+	SECTION("the source files can die under a live geom: frames read the GPU, not the disk")
+	{
+		const auto instance = assets.CreateVatInstance(
+			view,
+			vat.geom,
+			glm::mat4(1.0f),
+			bgl::ISceneView::VatInstanceDesc{ 0, 1.0f, 0.0f });
+
+		// The editor's held-open guard refuses this; a file manager cannot be refused.
+		fs::remove(root.path / "Animations/rig.banim");
+		fs::remove(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim"));
+
+		gfx->DrawFrame(target, job);
+		const auto* png = "assets/golden/vat_acquire_deleted.got.png";
+		gfx->ScreenshotPng(target, png);
+
+		// Frame 1's pose is still on screen: nothing reads the files after the acquire.
+		CHECK(LumaAtWorldX(png, 1.5f) > 0.05f);
+		CHECK(LumaAtWorldX(png, -0.5f) < 0.01f);
+
+		// Released to zero, a re-acquire has nothing to bake from and says so.
+		assets.DestroyInstance(view, instance);
+		assets.ReleaseGeom(vat.geom);
+		CHECK(assets.GeomRefCount(vat.geom) == 0);
+		CHECK_THROWS_AS(
+			assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
+			std::runtime_error);
+	}
+
 	SECTION("a second acquire shares the upload; release unwinds it fully")
 	{
 		const auto again = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
@@ -320,31 +389,12 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		// frames. The extra frame changes the .banim's size, and the mtime is pushed forward past
 		// the stamp's one-second granularity -- a same-second, same-size rewrite is *correctly*
 		// read as fresh, so the test has to change what the stamp can see.
-		const auto original = fs::last_write_time(root.path / "Meshes/rig.bvat");
+		const auto bvat =
+			root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+		const auto original = fs::last_write_time(bvat);
 
-		auto skeleton = assetlib::loadSkeleton(root.path / "Skeletons/rig.bskel");
-
-		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Skeletons/rig.bskel";
-		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
-		animations.boneCount         = 1;
-
-		auto slide        = assetlib::AnimationClip();
-		slide.nameOffset  = animations.stringPool.add("slide");
-		slide.firstSample = 0;
-		slide.frameCount  = 3;
-		slide.sampleRate  = 30.0f;
-		slide.duration    = 2.0f / 30.0f;
-		animations.clips.push_back(slide);
-		for (uint32_t frame = 0; frame < 3; ++frame)
-		{
-			animations.samples.push_back(
-				{ glm::vec3(static_cast<float>(frame) * 2.0f, 0.0f, 0.0f),
-			      glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-			      glm::vec3(1.0f) });
-		}
+		WriteClips(root.path, "Animations/rig.banim", "slide", 2.0f, 3);
 		const auto banim = root.path / "Animations/rig.banim";
-		assetlib::saveAnimations(animations, banim);
 		fs::last_write_time(banim, fs::last_write_time(banim) + std::chrono::seconds(2));
 
 		const auto rebaked = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
@@ -366,7 +416,34 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		CHECK(LumaAtWorldX(png, 0.5f) < 0.01f);
 
 		// Parenthesized so Catch2 sees one bool: it cannot stringify file_time_type's duration.
-		CHECK((fs::last_write_time(root.path / "Meshes/rig.bvat") != original));
+		CHECK((fs::last_write_time(bvat) != original));
+	}
+
+	SECTION("a live geom refuses a different .banim rather than returning the wrong clips")
+	{
+		WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
+
+		CHECK_THROWS_AS(
+			assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig_march.banim"),
+			std::runtime_error);
+
+		// The refusal took nothing: the live geom still counts only its original acquire.
+		CHECK(assets.GeomRefCount(vat.geom) == 1);
+		assets.ReleaseGeom(vat.geom);
+	}
+
+	SECTION("naming a different .banim re-bakes: the container is stale by path alone")
+	{
+		assets.ReleaseGeom(vat.geom);
+
+		// A second clip file for the same rig; nothing the first bake was stamped against moves.
+		WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
+
+		const auto march = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig_march.banim");
+		REQUIRE(march.clips.size() == 1);
+		CHECK(march.clips[0].name == "march");
+		CHECK(march.clips[0].frameCount == 3);
+		assets.ReleaseGeom(march.geom);
 	}
 }
 
@@ -394,4 +471,51 @@ TEST_CASE("A VAT acquire that cannot stand leaves nothing behind", "[vat]")
 	const auto material = assets.AcquireMaterial("Materials/skin.bmaterial");
 	CHECK(assets.MaterialRefCount(material) == 1);
 	assets.ReleaseMaterial(material);
+}
+
+TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
+{
+	DataRoot root("bernini_vat_ensure");
+	WriteRig(root.path);
+	const auto bvat = root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+
+	// Missing: baked in place, recording what it was baked from.
+	const auto first = game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	REQUIRE(fs::exists(bvat));
+	CHECK(first.animations == "Animations/rig.banim");
+	REQUIRE(first.clips.size() == 1);
+	CHECK(first.stringPool.at(first.clips[0].nameOffset) == "slide");
+
+	// Fresh: returned from disk, not rewritten.
+	const auto written = fs::last_write_time(bvat);
+	(void)game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	CHECK((fs::last_write_time(bvat) == written));
+
+	// A different clip file is its own bake file: the first one is left standing untouched.
+	WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
+	const auto march =
+		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig_march.banim");
+	CHECK(march.animations == "Animations/rig_march.banim");
+	REQUIRE(march.clips.size() == 1);
+	CHECK(march.stringPool.at(march.clips[0].nameOffset) == "march");
+	CHECK(
+		fs::exists(
+			root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig_march.banim")));
+	CHECK((fs::last_write_time(bvat) == written));
+
+	// And back: the first file is still fresh, so the switch costs a load, not a bake.
+	const auto back = game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	CHECK(back.animations == "Animations/rig.banim");
+	CHECK((fs::last_write_time(bvat) == written));
+
+	// A moved input stamp re-bakes through the same door. The re-authored file changes size and
+	// its mtime is pushed past the stamp's one-second granularity, as the acquire-level test does.
+	WriteClips(root.path, "Animations/rig.banim", "slide", 1.0f, 4);
+	const auto banim = root.path / "Animations/rig.banim";
+	fs::last_write_time(banim, fs::last_write_time(banim) + std::chrono::seconds(2));
+
+	const auto restamped =
+		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	REQUIRE(restamped.clips.size() == 1);
+	CHECK(restamped.clips[0].frameCount == 4);
 }

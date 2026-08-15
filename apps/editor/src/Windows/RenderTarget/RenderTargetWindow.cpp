@@ -127,6 +127,7 @@ RenderTargetWindow::DrawFrame()
 {
 	auto job     = bgl::RenderJob();
 	job.camera   = m_RenderCamera;
+	job.time     = m_RenderTime;
 	job.view     = m_SceneView;
 	job.viewport = bgl::Viewport(m_RenderWidth, m_RenderHeight);
 
@@ -137,6 +138,12 @@ void
 RenderTargetWindow::SetCamera(const bgl::Camera& cam)
 {
 	m_Desc.renderer->Post([this, cam] { m_RenderCamera = cam; });
+}
+
+void
+RenderTargetWindow::SetTime(const float seconds)
+{
+	m_Desc.renderer->Post([this, seconds] { m_RenderTime = seconds; });
 }
 
 void

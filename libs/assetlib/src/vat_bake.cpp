@@ -14,6 +14,9 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
+#include <core/hash.h>
+
+#include "ref_paths.h"
 
 namespace assetlib
 {
@@ -109,11 +112,30 @@ namespace assetlib
 				pitch);
 		}
 
-		std::string
-		normalizePath(std::string_view path)
-		{
-			return std::filesystem::path(path).lexically_normal().generic_string();
-		}
+	}
+
+	std::string
+	normalizePath(std::string_view path)
+	{
+		// The public alias of normalizeRef: one body, so the recorded form and the reference
+		// graph's keyed form can never drift.
+		return normalizeRef(path);
+	}
+
+	std::filesystem::path
+	vatPathFor(std::string_view meshRelPath, std::string_view animationsRelPath)
+	{
+		const std::string normalized = normalizePath(animationsRelPath);
+		const uint64_t    hash       = core::hash_string(normalized, core::hash_seed());
+
+		auto path = std::filesystem::path(meshRelPath);
+		path.replace_filename(
+			std::format(
+				"{}@{}-{:08x}.bvat",
+				path.stem().string(),
+				std::filesystem::path(normalized).stem().string(),
+				static_cast<uint32_t>(hash ^ (hash >> 32))));
+		return path;
 	}
 
 	BVat

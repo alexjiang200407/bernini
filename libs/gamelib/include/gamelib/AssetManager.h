@@ -159,12 +159,20 @@ namespace game
 		 * from the rig's baked texture pair instead of skinned -- or shares it from a previous
 		 * call, acquiring its materials like AcquireMesh does.
 		 *
-		 * The `.bvat` lives beside the mesh and is never trusted stale: missing, or out of date
-		 * against the stamps of the three inputs it was baked from, it is re-baked here from
-		 * `relPath` + `animationsRelPath` and rewritten in place. It is a derived build product --
-		 * a bake is seconds of CPU skinning, and the file is never committed.
+		 * The pair's `.bvat` (assetlib::vatPathFor: beside the mesh, one file per clip set) is never
+		 * trusted stale: missing, or out of date against the stamps of the three inputs it was
+		 * baked from, it is re-baked from `relPath` + `animationsRelPath` and rewritten in place
+		 * (see EnsureVatBaked, which owns the rule and can run the bake off the render thread).
+		 * It is a derived build product -- a bake is seconds of CPU skinning, and the file is
+		 * never committed.
 		 *
-		 * @throws std::runtime_error if an input cannot be read or the bake refuses it, or
+		 * While the geom is live, every acquire must name the `.banim` it was first acquired
+		 * with: a shared acquire returns the cached clip table without reading the container, so
+		 * switching clip sets means releasing the geom to zero first -- the eviction is what lets
+		 * the freshness check see the new request.
+		 *
+		 * @throws std::runtime_error if an input cannot be read or the bake refuses it, or if the
+		 *         geom is live with clips from a different `.banim` than the one named, or
 		 *         bgl::SceneError if a submesh's material does not resolve to opaque kPBR -- the
 		 *         VAT pipeline has no other variant, so a mesh with cutout or loose materials
 		 *         cannot be acquired as VAT. A failed acquire owns nothing.
@@ -400,10 +408,12 @@ namespace game
 			std::vector<bgl::MaterialHandle> submeshMaterials;
 
 			// VAT only: the embedded texture pair this geom fetches from (each holding a
-			// reference), and the clip table a shared acquire hands back without re-reading the
-			// container.
+			// reference), the clip table a shared acquire hands back without re-reading the
+			// container, and the normalized .banim path those clips came from -- what a shared
+			// acquire is checked against.
 			std::vector<bgl::TextureAssetHandle> vatTextures;
 			std::vector<VatClipInfo>             vatClips;
+			std::string                          vatAnimations;
 
 			uint32_t refCount = 0;
 		};

@@ -1,5 +1,7 @@
 #include <gamelib/AssetManager.h>
 
+#include <gamelib/vat_freshness.h>
+
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
@@ -338,35 +340,19 @@ namespace game
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
 		{
 			GeomRecord& record = m_Geoms.at(it->second);
+			core::throw_runtime_error_if(
+				record.vatAnimations != assetlib::normalizePath(animationsRelPath),
+				"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
+				"acquiring with '{}'",
+				key,
+				record.vatAnimations,
+				animationsRelPath);
 			++record.refCount;
 			return VatMesh{ record.handle, record.vatClips };
 		}
 
-		// The .bvat lives beside its mesh, and stale is not an error: it is wholly derived, so
-		// missing or out of date against its input stamps it is re-baked in place -- a build
-		// product, never committed. Loaded whole before the staleness check: the fresh path needs
-		// the pixel chunks anyway, so one read serves both, and only the rare stale case pays for
-		// pixels it then discards.
-		const auto bvatRel = std::filesystem::path(relPath).replace_extension(".bvat");
-		const auto bvatAbs = m_DataRoot / bvatRel;
-
-		std::error_code ec;
-		auto            vat   = assetlib::BVat();
-		bool            fresh = false;
-		if (std::filesystem::exists(bvatAbs, ec))
-		{
-			vat   = assetlib::loadVat(bvatAbs);
-			fresh = !assetlib::vatIsStale(vat, m_DataRoot);
-		}
-
-		if (!fresh)
-		{
-			vat = assetlib::bakeVat(
-				assetlib::VatBakeDesc{ m_DataRoot,
-			                           std::string(relPath),
-			                           std::string(animationsRelPath) });
-			assetlib::saveVat(vat, bvatAbs);
-		}
+		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
+		const auto vat     = EnsureVatBaked(m_DataRoot, relPath, animationsRelPath);
 
 		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);
 
@@ -389,13 +375,13 @@ namespace game
 		auto acquiredMaterials = std::vector<bgl::MaterialHandle>();
 		try
 		{
-			// The pair is keyed on the container, not the geom: two meshes of one .bvat share the
-			// same uploads.
+			// The pair is keyed on the container and the bake it holds: two meshes of one .bvat
+			// share the uploads, but a rebake from another .banim must not inherit the old pixels.
 			acquiredTextures.push_back(AddEmbeddedTexture(
-				bvatRel.string() + "#positions",
+				bvatRel.string() + "#" + vat.animations + "#positions",
 				assetlib::decodeKTX2(vat.positionsKtx2)));
 			acquiredTextures.push_back(AddEmbeddedTexture(
-				bvatRel.string() + "#normals",
+				bvatRel.string() + "#" + vat.animations + "#normals",
 				assetlib::decodeKTX2(vat.normalsKtx2)));
 
 			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
@@ -445,6 +431,7 @@ namespace game
 			record.submeshMaterials = std::move(submeshMaterials);
 			record.vatTextures      = acquiredTextures;
 			record.vatClips         = clipInfo;
+			record.vatAnimations    = vat.animations;
 			record.refCount         = 1;
 
 			const uint32_t slot = record.handle.handle.index;

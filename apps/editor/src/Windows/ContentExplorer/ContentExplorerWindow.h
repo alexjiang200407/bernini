@@ -32,9 +32,11 @@ public:
 
 	/**
 	 * `assetsHeldOpen` has no default because it guards a deletion. An open graph holds a material in
-	 * memory, and its next Save would write a deleted one straight back -- nothing on disk records that,
-	 * so the reference graph cannot see it and only this can. A guard that could be left unwired would
-	 * fail open, silently, and MainWindow is not covered by a test that would notice.
+	 * memory, and its next Save would write a deleted one straight back; the Animation panel holds the
+	 * mesh and clip files its source dropdown offers, which a deletion would turn into dead entries --
+	 * nothing on disk records either, so the reference graph cannot see them and only this can. A guard
+	 * that could be left unwired would fail open, silently, and MainWindow is not covered by a test
+	 * that would notice.
 	 *
 	 * A caller with genuinely nothing open says so: `[] { return QStringList(); }`.
 	 */
@@ -228,6 +230,21 @@ protected:
 private:
 	void
 	AttachModels();
+
+	/**
+	 * Hides every build product (.bvat) among `parent`'s rows [`first`, `last`] of `model` in
+	 * `view` -- the whole parent when `last` is -1. Row-hiding is per view and resets with the
+	 * model attachment, so this runs from rowsInserted (the lazy scan's arrivals, which pass their
+	 * batch), from the tree's expanded signal and after each grid re-root (rows already cached in
+	 * the model fire neither, and scan whole).
+	 */
+	static void
+	HideBuildProductRows(
+		QAbstractItemView*      view,
+		const QFileSystemModel& model,
+		const QModelIndex&      parent,
+		int                     first = 0,
+		int                     last  = -1);
 
 	/**
 	 * Roots the grid at `path` and moves the tree's selection to match, leaving the history alone.

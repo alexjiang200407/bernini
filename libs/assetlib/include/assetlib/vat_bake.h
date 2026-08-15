@@ -49,4 +49,22 @@ namespace assetlib
 	 */
 	[[nodiscard]] bool
 	vatIsStale(const BVat& vat, const std::filesystem::path& dataRoot);
+
+	/**
+	 * The path form the bake records in the container: lexically normal, generic separators.
+	 * Compare a requested path against a `BVat`'s recorded one through this, never raw.
+	 */
+	[[nodiscard]] std::string
+	normalizePath(std::string_view path);
+
+	/**
+	 * Where the bake of `meshRelPath` + `animationsRelPath` lives: beside the mesh, named
+	 * `<mesh>@<clips>-<hash>.bvat` -- one file per (mesh, clip set), so switching clip sets never
+	 * re-bakes what an earlier switch already paid for. The hash is core::hash_string over the
+	 * normalized clip-set path; a collision (or a hand-copied file) falls through the recorded-path
+	 * check in the freshness rule and re-bakes, never loads wrong clips. renameAsset moves a bake
+	 * here when a rename changes its derived name, which is what keeps a rename a load, not a bake.
+	 */
+	[[nodiscard]] std::filesystem::path
+	vatPathFor(std::string_view meshRelPath, std::string_view animationsRelPath);
 }
