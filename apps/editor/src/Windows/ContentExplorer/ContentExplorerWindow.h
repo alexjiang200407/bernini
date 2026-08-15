@@ -219,6 +219,21 @@ private:
 	AttachModels();
 
 	/**
+	 * Hides every build product (.bvat) among `parent`'s rows [`first`, `last`] of `model` in
+	 * `view` -- the whole parent when `last` is -1. Row-hiding is per view and resets with the
+	 * model attachment, so this runs from rowsInserted (the lazy scan's arrivals, which pass their
+	 * batch), from the tree's expanded signal and after each grid re-root (rows already cached in
+	 * the model fire neither, and scan whole).
+	 */
+	static void
+	HideBuildProductRows(
+		QAbstractItemView*      view,
+		const QFileSystemModel& model,
+		const QModelIndex&      parent,
+		int                     first = 0,
+		int                     last  = -1);
+
+	/**
 	 * Roots the grid at `path` and moves the tree's selection to match, leaving the history alone.
 	 * Every navigation ends here.
 	 */
