@@ -1,4 +1,5 @@
 #pragma once
+#include "checked_read.h"
 #include <core/err/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
@@ -151,14 +152,24 @@ namespace assetlib::chunk
 	};
 
 	/**
-	 * The bytes of the named chunks of `path`, and nothing else: the header, the chunk table and
+	 * The bytes of the named chunks of `source`, and nothing else: the header, the chunk table and
 	 * each requested chunk are the only reads. A survey of every container in a project has to come
-	 * through here -- the chunks it wants are a few hundred bytes of a file of many megabytes.
+	 * through here -- the chunks it wants are a few hundred bytes of a file of many megabytes, and
+	 * a reader that fetched whole files would turn that survey into a full read of the project.
 	 *
-	 * Chunks the file does not carry are simply absent from the result.
+	 * Chunks the source does not carry are simply absent from the result.
 	 *
-	 * @throws std::runtime_error if the file cannot be read, or is malformed.
+	 * @throws std::runtime_error if the source cannot be read, or is malformed.
 	 */
+	[[nodiscard]] std::unordered_map<uint32_t, std::vector<std::byte>>
+	readChunks(
+		IRangeReader&             source,
+		uint32_t                  magic,
+		uint16_t                  versionMajor,
+		std::span<const uint32_t> ids,
+		std::string_view          what);
+
+	/** readChunks against a file on disk: one open, one seek per chunk. */
 	[[nodiscard]] std::unordered_map<uint32_t, std::vector<std::byte>>
 	readChunksFromFile(
 		const std::filesystem::path& path,
@@ -166,6 +177,16 @@ namespace assetlib::chunk
 		uint16_t                     versionMajor,
 		std::span<const uint32_t>    ids,
 		std::string_view             what);
+
+	/** readChunks against a mounted filesystem, which may be an archive. */
+	[[nodiscard]] std::unordered_map<uint32_t, std::vector<std::byte>>
+	readChunksFrom(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		uint32_t                       magic,
+		uint16_t                       versionMajor,
+		std::span<const uint32_t>      ids,
+		std::string_view               what);
 
 	/** A list of strings as one blob of NUL-terminated bytes (one terminator per string). */
 	[[nodiscard]] std::vector<char>
