@@ -154,6 +154,15 @@ namespace assetlib
 		std::vector<AssetRef> blockers;
 
 		/**
+		 * Derived files swept with the target: the `.bvat` bakes whose `kVatSource` edges name it
+		 * (or reach into the directory). A bake never blocks its own inputs -- one that outlived
+		 * them is stale by definition -- so those edges land here instead of `blockers`, and
+		 * deleteAsset removes them *before* the target, so no step ever leaves a bake standing on
+		 * inputs that are gone.
+		 */
+		std::vector<std::string> derived;
+
+		/**
 		 * For a directory: every file beneath it, which all go with it -- including files of no kind this
 		 * project stores anything about, because removing a directory removes what is in it. Empty for a
 		 * single asset, which takes nothing with it.

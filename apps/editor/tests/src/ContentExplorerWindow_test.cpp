@@ -512,3 +512,42 @@ TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 	// that row again would move nothing, because it is already the current one.
 	CHECK(QDir(model->filePath(tree->currentIndex())) == QDir(parent));
 }
+
+TEST_CASE("A .bvat is a build product the explorer does not list", "[contentexplorer]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "Meshes/unit.bmesh");
+	Touch(sandbox, "Meshes/unit.bvat");
+	Touch(sandbox, "Meshes/UNIT2.BVAT");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* files = Files(window);
+	auto* grid  = qobject_cast<QFileSystemModel*>(files->model());
+	REQUIRE(grid != nullptr);
+
+	// Root the grid at Meshes/ the way the user does: through the tree.
+	auto* tree      = Hierarchy(window);
+	auto* hierarchy = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(hierarchy != nullptr);
+	const QString meshes = QString::fromStdString((sandbox.DataRoot() / "Meshes").string());
+	tree->setCurrentIndex(IndexFor(*hierarchy, meshes));
+	REQUIRE(WaitFor([&] { return Shown(window) == meshes; }));
+
+	const QModelIndex bmesh = IndexFor(*grid, Touch(sandbox, "Meshes/unit.bmesh"));
+	const QModelIndex bvat  = IndexFor(*grid, Touch(sandbox, "Meshes/unit.bvat"));
+	const QModelIndex upper = IndexFor(*grid, Touch(sandbox, "Meshes/UNIT2.BVAT"));
+
+	// Rows arrive asynchronously; the hider runs off rowsInserted, so wait for its verdicts.
+	CHECK(WaitFor([&] { return files->isRowHidden(bvat.row()); }));
+	CHECK(WaitFor([&] { return files->isRowHidden(upper.row()); }));
+	CHECK_FALSE(files->isRowHidden(bmesh.row()));
+
+	// The tree hides them too, under the expanded folder.
+	tree->expand(IndexFor(*hierarchy, meshes));
+	const QModelIndex treeBvat = IndexFor(*hierarchy, meshes + "/unit.bvat");
+	CHECK(WaitFor([&] { return tree->isRowHidden(treeBvat.row(), treeBvat.parent()); }));
+	const QModelIndex treeBmesh = IndexFor(*hierarchy, meshes + "/unit.bmesh");
+	CHECK_FALSE(tree->isRowHidden(treeBmesh.row(), treeBmesh.parent()));
+}

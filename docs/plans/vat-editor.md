@@ -64,7 +64,13 @@ rather than get a second one.
   VAT through the static kernel — that is the "editor viewport playback" follow-up.
 - No blend authoring, and no clip editing of any kind.
 - No skinned runtime work; `GeomType::kSkinnedMesh` stays commented out.
-- No change to `.bvat`'s build-product status, and no `.bvat` thumbnails or import category.
+- No change to `.bvat`'s build-product status, and no `.bvat` thumbnails or import category. The
+  Content Explorer *hides* `.bvat` files outright (decided with the user during panel review,
+  2026-08-15): a derived file offered for rename or delete implies an authorship it does not have.
+  Because a hidden bake could otherwise block deleting its own inputs unseen, the deletion planner
+  treats `kVatSource` edges as a sweep, never a blocker (`DeletionPlan::derived`): the bake goes
+  with the input, deleted first so nothing ever stands on inputs that are gone. *Rejected:* the
+  editor deleting the blocking `.bvat` itself — a workaround one layer above the rule.
 - No double-click open routing in the Content Explorer; the panel is fed by drag-drop and an Open
   button, like the Material Editor.
 - No headless seam for `RenderTargetWindowDesc`; the viewport family stays manual-only for now.
