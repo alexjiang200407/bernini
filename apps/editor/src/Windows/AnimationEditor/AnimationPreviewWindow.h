@@ -57,6 +57,8 @@ public:
 
 	// The project's Data directory: what a dropped absolute path is resolved against, and the
 	// root the manager's relative paths mean.
+	// TODO: feat/archive mounts will stand behind these paths; the drop containment check and the
+	// drawsLoose probe both assume a loose filesystem today.
 	void
 	SetDataRoot(const std::filesystem::path& dataRoot)
 	{

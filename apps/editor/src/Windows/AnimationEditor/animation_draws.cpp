@@ -12,7 +12,7 @@ namespace editor
 		for (const bmesh::InstancePlacement& placement : bmesh::PlanInstances(mesh))
 		{
 			if (assetlib::isSkinned(mesh, placement.meshIndex))
-				plan.vat.push_back(placement);
+				plan.animated.push_back(placement);
 			else
 				plan.statics.push_back(placement);
 		}

@@ -20,6 +20,9 @@ namespace editor
 
 		// What the paths inside that `.benv` resolve against. Configured rather than derived from
 		// the file: an environment is not always two levels under the root it belongs to.
+		// TODO: resolve through feat/archive's IFileSystem mount once it lands -- a raw data root
+		// cannot see into a .bpak, and the archive branch already moves the staleness predicates
+		// onto that seam.
 		std::filesystem::path dataRoot;
 
 		// Absent means the exposure the `.benv` carries, which is the value derived from those
