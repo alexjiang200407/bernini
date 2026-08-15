@@ -5,6 +5,10 @@
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
+class QStackedWidget;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -48,6 +52,24 @@ public:
 	SetAssets(game::AssetManager* assets);
 
 	/**
+	 * Leaving the panel closes what it was showing: the dock's tab switching away (or the dock
+	 * closing) clears the preview, which releases the acquired assets and every held-open path.
+	 * MainWindow drives this from QDockWidget::visibilityChanged -- a tabified dock's widget gets
+	 * no hideEvent on a tab switch.
+	 */
+	void
+	SetDockVisible(bool visible);
+
+	/**
+	 * The assets this panel is offering right now, absolute: the shown mesh and every `.banim` in
+	 * the source dropdown. What the Content Explorer's held-open guard consults -- deleting or
+	 * renaming one of these would leave the panel offering a file that is gone, and nothing on
+	 * disk records that the panel has it.
+	 */
+	[[nodiscard]] QStringList
+	HeldOpenPaths() const;
+
+	/**
 	 * The timeline slider position for a clock reading, and back: the slider is `tickCount`
 	 * integer ticks over the clip's period. Static so the mapping is pinnable without a window.
 	 */
@@ -58,6 +80,15 @@ public:
 	TimelineSeconds(int ticks, float periodSeconds, int tickCount) noexcept;
 
 protected:
+	// A dropped .bmesh lands here while the empty-state prompt is up; the preview handles its own
+	// drops once it is the visible page.
+	void
+	dragEnterEvent(QDragEnterEvent* event) override;
+	void
+	dragMoveEvent(QDragMoveEvent* event) override;
+	void
+	dropEvent(QDropEvent* event) override;
+
 	// A hidden panel stops its clock: the viewport is parked by MainWindow anyway, and a timer
 	// advancing an unseen animation is sixty wasted posts a second. Re-showing resumes from where
 	// the clock stopped.
@@ -95,6 +126,7 @@ private:
 	SelectClip(int index);
 
 	AnimationPreviewWindow* m_Preview = nullptr;
+	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
 
 	QLabel*      m_MeshLabel      = nullptr;
 	QComboBox*   m_SourceSelector = nullptr;

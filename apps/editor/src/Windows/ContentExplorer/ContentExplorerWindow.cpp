@@ -622,10 +622,10 @@ ContentExplorerWindow::DeleteWithPlanner(
 			this,
 			"Delete",
 			QString(
-				"%1 is open in the Material Editor.\n\nClose it there first, or saving it "
-				"would write it back.")
+				"%1 is open in an editor panel.\n\nClose it there first: the Material Editor's "
+				"next Save would write it back, and the Animation panel would go on offering it.")
 				.arg(
-					isDirectory ? QString("'%1' holds a material that").arg(asset) :
+					isDirectory ? QString("'%1' holds an asset that").arg(asset) :
 								  QString("'%1'").arg(asset)));
 		return;
 	}
@@ -690,7 +690,7 @@ ContentExplorerWindow::DeleteWithPlanner(
 	}
 
 	// The cascade takes files the user did not click, so an open one blocks it for the reason the
-	// target itself would: the Material Editor's next Save would write a deleted material back.
+	// target itself would: a panel still holding it would write it back or go on offering it.
 	for (const std::string& freed : plan.cascade)
 	{
 		const QString member = QString::fromStdString(freed);
@@ -701,8 +701,8 @@ ContentExplorerWindow::DeleteWithPlanner(
 			this,
 			"Delete",
 			QString(
-				"'%1' would be deleted with '%2', but it is open in the Material "
-				"Editor.\n\nClose it there first, or saving it would write it back.")
+				"'%1' would be deleted with '%2', but it is open in an editor "
+				"panel.\n\nClose it there first.")
 				.arg(member, asset));
 		return;
 	}
@@ -853,10 +853,11 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 			this,
 			"Rename",
 			QString(
-				"%1 is open in the Material Editor.\n\nClose it there first, or saving it "
-				"would write the old name straight back.")
+				"%1 is open in an editor panel.\n\nClose it there first: the Material Editor's "
+				"next Save would write the old name back, and the Animation panel would go on "
+				"offering it.")
 				.arg(
-					isDirectory ? QString("'%1' holds a material that").arg(asset) :
+					isDirectory ? QString("'%1' holds an asset that").arg(asset) :
 								  QString("'%1'").arg(asset)));
 		return;
 	}
@@ -904,8 +905,8 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 		return;
 	}
 
-	// The rewrite touches files the user did not click, and an open one would be re-saved by the
-	// Material Editor with the old path back in it.
+	// The rewrite touches files the user did not click, and an open one is held for the reason the
+	// target itself would be: a re-save or a stale offer under the old path.
 	auto referrers = QStringList();
 	for (const assetlib::AssetRef& ref : plan.referrers)
 		referrers << QString::fromStdString(ref.referrer);
@@ -921,8 +922,8 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 			this,
 			"Rename",
 			QString(
-				"'%1' references it and is open in the Material Editor.\n\nClose it there "
-				"first, or saving it would write the old name straight back.")
+				"'%1' references it and is open in an editor panel.\n\nClose it there "
+				"first.")
 				.arg(referrer));
 		return;
 	}
