@@ -38,6 +38,13 @@
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },
+    "animationEditor": {
+        "initialPreviewInstances": 16,
+        "temporalAA": true,
+        "renderScale": 1.0,
+        "environmentMap": "assets/Environments/forest.benv",
+        "dataRoot": "assets"
+    },
     "thumbnails": {
         "dimension": 256,
         "initialInstances": 256,

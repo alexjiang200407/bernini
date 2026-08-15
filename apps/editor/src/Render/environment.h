@@ -13,6 +13,26 @@ namespace editor
 		bgl::TextureAssetHandle skybox;
 	};
 
+	/** ApplyEnvironment's value parameters, as the block a window's desc embeds or aliases. */
+	struct EnvironmentApplyDesc
+	{
+		std::string environmentMap;
+
+		// What the paths inside that `.benv` resolve against. Configured rather than derived from
+		// the file: an environment is not always two levels under the root it belongs to.
+		std::filesystem::path dataRoot;
+
+		// Absent means the exposure the `.benv` carries, which is the value derived from those
+		// maps. Set it only to overrule that deliberately.
+		std::optional<float> exposureOverride;
+
+		// A preview wants the eye on its subject, and a defocused backdrop reads as depth of field
+		// where a sharp one competes for attention -- so these viewports overrule the `.bsky`'s
+		// own presentation by default. A sky baked as a single mip cannot honour it and stays as
+		// it is.
+		std::optional<uint32_t> skyMipLevelOverride = 3;
+	};
+
 	/**
 	 * Puts a `.benv`'s image-based lighting onto a view: the IBL pair, the skybox, and the exposure.
 	 *
