@@ -16,6 +16,8 @@
 #include <core/err/util.h>
 #include <core/hash.h>
 
+#include "ref_paths.h"
+
 namespace assetlib
 {
 	using core::throw_runtime_error;
@@ -115,7 +117,9 @@ namespace assetlib
 	std::string
 	normalizePath(std::string_view path)
 	{
-		return std::filesystem::path(path).lexically_normal().generic_string();
+		// The public alias of normalizeRef: one body, so the recorded form and the reference
+		// graph's keyed form can never drift.
+		return normalizeRef(path);
 	}
 
 	std::filesystem::path

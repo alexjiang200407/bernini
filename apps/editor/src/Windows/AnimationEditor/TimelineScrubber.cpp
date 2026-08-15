@@ -5,9 +5,9 @@
 
 namespace
 {
-	constexpr int c_GrooveHeight  = 4;
-	constexpr int c_HandleRadius  = 7;
-	constexpr int c_PreferredWide = 200;
+	constexpr int c_GrooveHeight   = 4;
+	constexpr int c_HandleRadius   = 7;
+	constexpr int c_PreferredWidth = 200;
 }
 
 TimelineScrubber::TimelineScrubber(QWidget* parent) : QWidget(parent)
@@ -53,7 +53,7 @@ TimelineScrubber::ValueForX(const int x, const int width, const int tickCount) n
 QSize
 TimelineScrubber::sizeHint() const
 {
-	return QSize(c_PreferredWide, 2 * c_HandleRadius + 6);
+	return QSize(c_PreferredWidth, 2 * c_HandleRadius + 6);
 }
 
 void

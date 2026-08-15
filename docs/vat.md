@@ -111,7 +111,7 @@ until placement playback gives it a clock of its own.
 | Interface | File | Role |
 |---|---|---|
 | `RenderTargetWindow::SetTime` | [apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h](apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h) | The `RenderJob::time` seam a panel clocks its viewport through |
-| `ResolveAnimationBindings` | [apps/editor/src/Windows/AnimationEditor/AnimationBindings.h](apps/editor/src/Windows/AnimationEditor/AnimationBindings.h) | A mesh's `.banim` candidates, as a query over the reference graph's `kClipSkeleton` edges |
+| `ResolveAnimationBindings` | [apps/editor/src/Windows/AnimationEditor/animation_bindings.h](apps/editor/src/Windows/AnimationEditor/animation_bindings.h) | A mesh's `.banim` candidates, as a query over the reference graph's `kClipSkeleton` edges |
 | `AnimationPreviewWindow` | [apps/editor/src/Windows/AnimationEditor/AnimationPreviewWindow.h](apps/editor/src/Windows/AnimationEditor/AnimationPreviewWindow.h) | The viewport: skinned entries as VAT instances, statics beside them, bind pose when no clip file resolves or the pipeline refuses one |
 
 ### Supporting types

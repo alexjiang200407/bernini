@@ -7,6 +7,7 @@ namespace assetlib
 	 * -- one written by a bake, one clicked in a file browser -- meet. Identity in this project is the
 	 * data-root-relative path, and `Textures/x.ktx2` and `./Meshes/../Textures/x.ktx2` are one asset.
 	 */
+	// assetlib::normalizePath (vat_bake.h) is this function's public alias -- one body between them.
 	[[nodiscard]] inline std::string
 	normalizeRef(std::string_view path)
 	{
