@@ -3,10 +3,6 @@
 
 namespace game
 {
-	/** Where the `.bvat` derived from `meshRelPath` lives: beside the mesh, extension swapped. */
-	[[nodiscard]] std::filesystem::path
-	VatPathFor(std::string_view meshRelPath);
-
 	/**
 	 * The `.bvat` beside the mesh at `meshRelPath`, fresh: loaded when it is up to date, otherwise
 	 * re-baked from `meshRelPath` + `animationsRelPath` and rewritten in place. Fresh means the

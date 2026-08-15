@@ -351,7 +351,7 @@ namespace game
 			return VatMesh{ record.handle, record.vatClips };
 		}
 
-		const auto bvatRel = VatPathFor(relPath);
+		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
 		const auto vat     = EnsureVatBaked(m_DataRoot, relPath, animationsRelPath);
 
 		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);

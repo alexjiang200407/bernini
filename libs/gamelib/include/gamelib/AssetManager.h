@@ -159,12 +159,12 @@ namespace game
 		 * from the rig's baked texture pair instead of skinned -- or shares it from a previous
 		 * call, acquiring its materials like AcquireMesh does.
 		 *
-		 * The `.bvat` lives beside the mesh and is never trusted stale: missing, out of date
-		 * against the stamps of the three inputs it was baked from, or baked from a different
-		 * `.banim` than the one named here, it is re-baked from `relPath` + `animationsRelPath`
-		 * and rewritten in place (see EnsureVatBaked, which owns the rule and can run the bake off
-		 * the render thread). It is a derived build product -- a bake is seconds of CPU skinning,
-		 * and the file is never committed.
+		 * The pair's `.bvat` (assetlib::vatPathFor: beside the mesh, one file per clip set) is never
+		 * trusted stale: missing, or out of date against the stamps of the three inputs it was
+		 * baked from, it is re-baked from `relPath` + `animationsRelPath` and rewritten in place
+		 * (see EnsureVatBaked, which owns the rule and can run the bake off the render thread).
+		 * It is a derived build product -- a bake is seconds of CPU skinning, and the file is
+		 * never committed.
 		 *
 		 * While the geom is live, every acquire must name the `.banim` it was first acquired
 		 * with: a shared acquire returns the cached clip table without reading the container, so
