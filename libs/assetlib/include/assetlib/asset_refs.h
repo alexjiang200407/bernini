@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 #include <core/str/str.h>
 
 namespace assetlib
@@ -45,7 +46,14 @@ namespace assetlib
 
 	struct AssetRefScanDesc
 	{
-		std::filesystem::path dataRoot;  // the project's Data directory
+		/** The writable layer: where a rename moves a file and a delete unlinks one. */
+		std::filesystem::path dataRoot;
+
+		/**
+		 * What the scan reads, which may be wider than `dataRoot` -- a loose overlay over an archive.
+		 * Null reads `dataRoot` alone, which is what a project with no archive is.
+		 */
+		const core::file::IFileSystem* fileSystem = nullptr;
 	};
 
 	/**
@@ -120,12 +128,31 @@ namespace assetlib
 			return m_Edges;
 		}
 
-		/** What the graph was scanned against; every path in it is relative to this. */
+		/** Where a rename or a delete writes; every path in the graph is relative to this. */
 		[[nodiscard]] const std::filesystem::path&
 		DataRoot() const noexcept
 		{
 			return m_DataRoot;
 		}
+
+		/**
+		 * Whether the scan saw `path` as a file.
+		 *
+		 * Answered from the snapshot rather than from the disk, so it agrees with the edges beside it:
+		 * a plan built from this graph describes the project as the scan found it, and re-stat'ing one
+		 * path at plan time would make that one answer newer than the rest.
+		 */
+		[[nodiscard]] bool
+		Contains(std::string_view path) const;
+
+		/**
+		 * Every file the scan saw beneath `directory`, sorted, and empty when there are none.
+		 *
+		 * A mount enumerates files and not directories, so a directory *is* what is under it: one that
+		 * holds nothing does not exist to ask about, however it looks in a file browser.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		GetFilesUnder(std::string_view directory) const;
 
 		std::vector<AssetRef> broken;  // `target` is named by `referrer`, but is not on disk
 
@@ -148,6 +175,9 @@ namespace assetlib
 		core::str::unordered_str_map<Range> m_ByTarget;
 
 		std::filesystem::path m_DataRoot;
+
+		// Every file the scan enumerated, sorted: what Contains and GetFilesUnder answer from.
+		std::vector<std::string> m_Files;
 	};
 
 	/** What a deletion would destroy, and what stands in its way. */

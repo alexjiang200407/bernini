@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -10,8 +11,16 @@ namespace assetlib
 	 */
 	struct TexturePruneDesc
 	{
-		std::filesystem::path dataRoot;  // the project's Data directory
+		/** The writable layer: what the sweep looks at, because only a loose file can be unlinked. */
+		std::filesystem::path dataRoot;
+
 		std::filesystem::path textureDir = "Textures";
+
+		/**
+		 * What the mark phase reads, which may be wider than `dataRoot` -- a loose overlay over an
+		 * archive. Null reads `dataRoot` alone.
+		 */
+		const core::file::IFileSystem* fileSystem = nullptr;
 	};
 
 	struct UnusedTexture

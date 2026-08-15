@@ -366,6 +366,20 @@ TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")
 	}
 }
 
+// A mount enumerates files, so an empty folder is invisible to the scan -- but it is still there on
+// the writable layer, and removing one is an ordinary thing to do in the Content Explorer.
+TEST_CASE("an empty directory is still a deletable target", "[assetrefs]")
+{
+	const DataRoot root("bernini_refs_empty_dir");
+	std::filesystem::create_directories(root.path / "Materials/empty");
+
+	const DeletionPlan plan = planDeletion(root.Scan(), "Materials/empty");
+
+	CHECK(plan.IsDirectory());
+	CHECK(plan.contents.empty());
+	CHECK(plan.Allowed());
+}
+
 TEST_CASE("planDeletion refuses a file that is not an asset", "[assetrefs]")
 {
 	const DataRoot      root("bernini_refs_kind");
