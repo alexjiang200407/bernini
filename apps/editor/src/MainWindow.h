@@ -12,6 +12,7 @@ class QMenu;
 class Project;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
+class AnimationEditorWindow;
 class LevelEditorWindow;
 class MaterialEditorWindow;
 class Renderer;
@@ -96,8 +97,10 @@ private:
 	ContentExplorerWindow*   m_ContentExplorer     = nullptr;
 	LevelEditorWindow*       m_LevelEditor         = nullptr;
 	MaterialEditorWindow*    m_MaterialEditor      = nullptr;
+	AnimationEditorWindow*   m_AnimationEditor     = nullptr;
 	QDockWidget*             m_LevelEditorDock     = nullptr;
 	QDockWidget*             m_MaterialEditorDock  = nullptr;
+	QDockWidget*             m_AnimationEditorDock = nullptr;
 	QDockWidget*             m_ContentExplorerDock = nullptr;
 	QLabel*                  m_FrameStats          = nullptr;
 

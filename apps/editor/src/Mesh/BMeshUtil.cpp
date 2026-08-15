@@ -47,4 +47,43 @@ namespace bmesh
 			outMax           = glm::max(outMax, world);
 		}
 	}
+
+	void
+	GrowBoundsForMesh(
+		const assetlib::BMesh& mesh,
+		const uint32_t         meshIndex,
+		const glm::mat4&       transform,
+		glm::vec3&             outMin,
+		glm::vec3&             outMax)
+	{
+		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
+		for (uint32_t i = 0; i < entry.submeshCount; ++i)
+		{
+			const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+			GrowBounds(transform, submesh.aabbMin, submesh.aabbMax, outMin, outMax);
+		}
+	}
+
+	bool
+	ReferencesMesh(const assetlib::BMesh& mesh, const assetlib::Node& node) noexcept
+	{
+		return node.mesh != assetlib::c_InvalidIndex && node.mesh < mesh.meshes.size();
+	}
+
+	std::vector<InstancePlacement>
+	PlanInstances(const assetlib::BMesh& mesh)
+	{
+		auto placements = std::vector<InstancePlacement>();
+
+		for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
+		{
+			const assetlib::Node& node = mesh.nodes[nodeIndex];
+			if (!ReferencesMesh(mesh, node))
+				continue;
+
+			placements.push_back({ node.mesh, GetInstanceTransform(mesh, nodeIndex) });
+		}
+
+		return placements;
+	}
 }

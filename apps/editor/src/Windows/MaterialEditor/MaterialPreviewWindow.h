@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/OrbitCamera.h"
 #include "Render/environment.h"
 
 #include <QStringList>
@@ -18,23 +19,7 @@ class QDropEvent;
 class QMouseEvent;
 class QWheelEvent;
 
-struct MaterialPreviewEnv
-{
-	std::string environmentMap;
-
-	// What the paths inside that `.benv` resolve against. Configured rather than derived from the
-	// file: an environment is not always two levels under the root it belongs to.
-	std::filesystem::path dataRoot;
-
-	// Absent means the exposure the `.benv` carries, which is the value derived from those maps.
-	// Set it only to overrule that deliberately.
-	std::optional<float> exposureOverride;
-
-	// A material editor wants the eye on the material, and a defocused backdrop reads as depth of
-	// field where a sharp one competes for attention -- so this viewport overrules the `.bsky`'s own
-	// presentation by default. A sky baked as a single mip cannot honour it and stays as it is.
-	std::optional<uint32_t> skyMipLevelOverride = 3;
-};
+using MaterialPreviewEnv = editor::EnvironmentApplyDesc;
 
 // The right-hand model preview: a lit sphere by default, or a `.bmesh` dropped onto it, shown
 // against the configured skybox + IBL with the material being authored applied to it.
@@ -212,9 +197,6 @@ private:
 	void
 	PickAt(const QPointF& pixel);
 
-	glm::vec3
-	EyePosition() const;
-
 	void
 	FocusOn(const glm::vec3& center, float radius);
 
@@ -236,11 +218,7 @@ private:
 	std::optional<uint32_t>    m_SkyMipLevelOverride;
 	std::filesystem::path      m_ConfiguredRoot;  // stands in until a project is opened
 
-	glm::vec3 m_FocusCenter = glm::vec3(0.0f);
-	float     m_FocusRadius = 1.0f;
-	float     m_Distance    = 3.0f;
-	float     m_Yaw         = 0.0f;
-	float     m_Pitch       = 0.0f;
+	editor::OrbitCamera m_Orbit;
 
 	// The preview geometry's CPU shadow, rebuilt with it. Its instance i is m_Instances[i]: every
 	// CreateStaticMeshInstance is paired with an AddInstance, and ClearGeometry resets both.

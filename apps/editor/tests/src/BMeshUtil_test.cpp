@@ -99,3 +99,38 @@ TEST_CASE("Only the skinned mesh's own node is exempt", "[bmesh]")
 	REQUIRE_FALSE(assetlib::isSkinned(mesh, 2));
 	REQUIRE(bmesh::GetInstanceTransform(mesh, 0) == bmesh::GetWorldTransform(mesh, 0));
 }
+
+TEST_CASE("PlanInstances places one instance per node that references a mesh", "[bmesh]")
+{
+	auto mesh = assetlib::BMesh();
+	mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 0, .nameOffset = 0 });
+	mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 0, .nameOffset = 0 });
+
+	const auto makeNode = [](uint32_t meshIndex, const glm::vec3& translation, uint32_t parent) {
+		auto node           = assetlib::Node();
+		node.localTransform = { translation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		node.parent         = parent;
+		node.firstChild     = assetlib::c_InvalidIndex;
+		node.nextSibling    = assetlib::c_InvalidIndex;
+		node.mesh           = meshIndex;
+		node.nameOffset     = 0;
+		return node;
+	};
+
+	mesh.nodes.push_back(makeNode(0, glm::vec3(1.0f, 0.0f, 0.0f), assetlib::c_InvalidIndex));
+	mesh.nodes.push_back(
+		makeNode(assetlib::c_InvalidIndex, glm::vec3(0.0f), assetlib::c_InvalidIndex));  // no mesh
+	mesh.nodes.push_back(makeNode(5, glm::vec3(0.0f), assetlib::c_InvalidIndex));  // out of range
+	mesh.nodes.push_back(makeNode(1, glm::vec3(0.0f, 2.0f, 0.0f), /*parent*/ 0));
+
+	const auto placements = bmesh::PlanInstances(mesh);
+
+	REQUIRE(placements.size() == 2);
+	CHECK(placements[0].meshIndex == 0);
+	CHECK(placements[0].world[3].x == 1.0f);
+
+	// The child composes its parent's transform.
+	CHECK(placements[1].meshIndex == 1);
+	CHECK(placements[1].world[3].x == 1.0f);
+	CHECK(placements[1].world[3].y == 2.0f);
+}

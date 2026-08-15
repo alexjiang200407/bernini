@@ -32,4 +32,28 @@ namespace bmesh
 		const glm::vec3& boxMax,
 		glm::vec3&       outMin,
 		glm::vec3&       outMax);
+
+	// GrowBounds over every submesh box of mesh entry `meshIndex`.
+	void
+	GrowBoundsForMesh(
+		const assetlib::BMesh& mesh,
+		uint32_t               meshIndex,
+		const glm::mat4&       transform,
+		glm::vec3&             outMin,
+		glm::vec3&             outMax);
+
+	// Whether `node` references a mesh entry that exists in `mesh` -- not every node carries one.
+	[[nodiscard]] bool
+	ReferencesMesh(const assetlib::BMesh& mesh, const assetlib::Node& node) noexcept;
+
+	/** One mesh entry a node references, and the world transform an instance of it stands at. */
+	struct InstancePlacement
+	{
+		uint32_t  meshIndex = 0;
+		glm::mat4 world     = glm::mat4(1.0f);
+	};
+
+	// One entry per node of `mesh` that references a mesh entry, via GetInstanceTransform.
+	[[nodiscard]] std::vector<InstancePlacement>
+	PlanInstances(const assetlib::BMesh& mesh);
 }
