@@ -25,11 +25,15 @@ namespace editor
 		own->setContentsMargins(0, 0, 0, 0);
 
 		m_Toggle = new QToolButton(this);
+		m_Toggle->setObjectName(desc.objectName + "Toggle");
 		m_Toggle->setAutoRaise(true);
 		m_Toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 		m_Toggle->setToolTip("Show the files this import will write here.");
 		m_Toggle->hide();
-		connect(m_Toggle, &QToolButton::clicked, this, [this] { SetExpanded(m_Body->isHidden()); });
+		connect(m_Toggle, &QToolButton::clicked, this, [this] {
+			SetExpanded(m_Body->isHidden());
+			Q_EMIT Expanded();
+		});
 
 		m_Folder = AddFolderRow(own, this, desc, m_Toggle);
 
@@ -39,9 +43,9 @@ namespace editor
 		// Indented under the folder it belongs to, so a file row is visibly a detail of the row above
 		// rather than another category.
 		m_Files->setContentsMargins(24, 0, 0, 0);
-		m_Body->hide();
 		own->addWidget(m_Body);
 
+		SetExpanded(false);
 		layout->addWidget(this);
 	}
 
@@ -61,7 +65,6 @@ namespace editor
 
 		m_Toggle->setText(FileCount(m_Files->rowCount()));
 		m_Toggle->show();
-		SetExpanded(!m_Body->isHidden());
 
 		return field;
 	}

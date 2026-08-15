@@ -34,6 +34,8 @@ namespace editor
 	 */
 	class ImportSection : public QWidget
 	{
+		Q_OBJECT
+
 	public:
 		ImportSection(QVBoxLayout* layout, QWidget* parent, const FolderRowDesc& desc);
 
@@ -52,6 +54,11 @@ namespace editor
 		/** The folder field, to read and to enable alongside the piece of the import that writes here. */
 		[[nodiscard]] QLineEdit*
 		GetFolder() const;
+
+	Q_SIGNALS:
+		/** The fold-out was opened or closed, so whatever holds this section is now the wrong size. */
+		void
+		Expanded();
 
 	private:
 		void

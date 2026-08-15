@@ -255,8 +255,8 @@ private:
 	/** What the import dialog asked for. */
 	struct ImportOptions
 	{
-		// Where each piece lands, already inside its own category.
-		ImportDestinations destinations;
+		// Every file to write, already inside its own category.
+		ImportOutputs outputs;
 
 		bool mesh         = true;  // off imports only the pieces below -- see ImportMesh
 		bool textures     = false;
