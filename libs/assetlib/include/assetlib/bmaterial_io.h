@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -33,6 +34,15 @@ namespace assetlib
 	 */
 	[[nodiscard]] BMaterial
 	loadMaterial(const std::filesystem::path& path);
+
+	/**
+	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
+	 * container may equally be a loose file or an entry in an archive.
+	 *
+	 * @throws std::runtime_error if the container is absent, cannot be read, or is malformed.
+	 */
+	[[nodiscard]] BMaterial
+	loadMaterial(const core::file::IFileSystem& fileSystem, std::string_view path);
 
 	/**
 	 * The size + last-write-time of `path`, as the bake records it. A file that does not exist (or

@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -43,6 +44,22 @@ namespace assetlib
 		const std::filesystem::path& path,
 		Ktx2Decode                   decode = Ktx2Decode::kGpu,
 		uint32_t                     maxDim = 0);
+
+	/**
+	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
+	 * texture may equally be a loose file or an entry in an archive.
+	 *
+	 * Reads the whole container, unlike the chunked loaders: a `.ktx2` is decoded end to end, and
+	 * `maxDim` selects among mips that libktx has already loaded rather than deciding what to fetch.
+	 *
+	 * @throws std::runtime_error if the texture is absent, cannot be read, or cannot be decoded.
+	 */
+	[[nodiscard]] ImageData
+	loadKTX2(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		Ktx2Decode                     decode = Ktx2Decode::kGpu,
+		uint32_t                       maxDim = 0);
 
 	/**
 	 * loadKTX2 over a `.ktx2` already in memory, for a container that embeds one.
@@ -118,6 +135,13 @@ namespace assetlib
 	 */
 	[[nodiscard]] ImageData
 	loadKTX2Preview(const std::filesystem::path& path, uint32_t maxDim = 128);
+
+	/** The mounted overload of loadKTX2Preview; see loadKTX2's. */
+	[[nodiscard]] ImageData
+	loadKTX2Preview(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		uint32_t                       maxDim = 128);
 
 	/**
 	 * Encodes an ImageData (its mips and array/cube faces) into a `.ktx2` file on disk. The inverse of
