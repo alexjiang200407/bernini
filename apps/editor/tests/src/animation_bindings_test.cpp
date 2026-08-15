@@ -1,5 +1,5 @@
 #include "Project/Project.h"
-#include "Windows/AnimationEditor/AnimationBindings.h"
+#include "Windows/AnimationEditor/animation_bindings.h"
 
 #include <assetlib/banim_io.h>
 #include <assetlib/bmesh_io.h>

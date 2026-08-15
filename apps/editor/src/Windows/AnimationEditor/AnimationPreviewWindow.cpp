@@ -3,7 +3,7 @@
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
-#include "Windows/AnimationEditor/AnimationBindings.h"
+#include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "util/mime_files.h"
 
@@ -275,8 +275,6 @@ AnimationPreviewWindow::LoadMesh(
 					continue;
 				}
 
-				// The camera frames the bake's box, not the bind pose: it closes over every
-				// frame, so a clip with root motion stays in view wherever it travels.
 				if (vatBounded)
 					bmesh::GrowBounds(
 						placement.world,

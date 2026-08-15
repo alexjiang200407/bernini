@@ -1,4 +1,4 @@
-#include "AnimationBindings.h"
+#include "animation_bindings.h"
 
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh_io.h>
