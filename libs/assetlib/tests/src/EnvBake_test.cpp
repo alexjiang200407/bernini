@@ -11,6 +11,7 @@
 #include <catch2/catch_approx.hpp>
 
 #include "MountAt.h"
+#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 
@@ -220,8 +221,8 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 
 	BSky sky = RoutedSky(root);
 	bakeSky(sky, { root.path });
-	const std::string source = sky.sky.source;
-	const std::string baked  = sky.sky.baked;
+	const std::string store = sky.sky.source;
+	const std::string baked = sky.sky.baked;
 
 	SECTION("a current bake is what is drawn")
 	{
@@ -233,7 +234,7 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	SECTION("a baked map that was never written falls back to the source")
 	{
 		std::filesystem::remove(root.path / baked);
-		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == store);
 
 		BSky unbaked = RoutedSky(root);
 		CHECK(envMapToDraw(unbaked.sky, MountAt(root.path)) == unbaked.sky.source);
@@ -243,7 +244,7 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	// baked map is kept even though the stamp says it no longer reflects anything.
 	SECTION("a deleted source keeps the baked map")
 	{
-		std::filesystem::remove(root.path / source);
+		std::filesystem::remove(root.path / store);
 		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
 	}
 
@@ -251,12 +252,12 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	{
 		root.AddSource("sky_src.ktx2", 16, 1.0f);
 		REQUIRE(isSkyBakeStale(sky, MountAt(root.path)));
-		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == store);
 	}
 
 	SECTION("neither on disk throws, naming both")
 	{
-		std::filesystem::remove(root.path / source);
+		std::filesystem::remove(root.path / store);
 		std::filesystem::remove(root.path / baked);
 		CHECK_THROWS_AS(envMapToDraw(sky.sky, MountAt(root.path)), std::runtime_error);
 
@@ -331,14 +332,14 @@ TEST_CASE(
 	const auto orphan = root.path / "Textures" / "sky_00000000deadbeef.ktx2";
 	writeKTX2(ConstantCube(4, 1.0f), orphan, false, Ktx2Compression::kNone);
 
-	const auto scan = findUnusedBakedTextures({ root.path });
+	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
 	CHECK(scan.environmentsScanned == 2);
 	CHECK(scan.liveMaps == 3);
 	REQUIRE(scan.unused.size() == 1);
 	CHECK(scan.unused.front().path == "Textures/sky_00000000deadbeef.ktx2");
 
-	deleteUnusedBakedTextures(scan, { root.path });
+	deleteUnusedBakedTextures(scan, AssetStore(root.path));
 	CHECK(!std::filesystem::exists(orphan));
 	CHECK(std::filesystem::exists(root.path / sky.sky.baked));
 	CHECK(std::filesystem::exists(root.path / lighting.prefilter.baked));
@@ -352,9 +353,9 @@ TEST_CASE("the prune refuses to scan past an unreadable environment asset", "[en
 	const DataRoot root("bernini_envbake_prune_bad");
 
 	std::ofstream(root.path / "broken.bsky") << "not a container";
-	CHECK_THROWS_AS(findUnusedBakedTextures({ root.path }), std::runtime_error);
+	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
 
 	std::filesystem::remove(root.path / "broken.bsky");
 	std::ofstream(root.path / "broken.benvl") << "not a container";
-	CHECK_THROWS_AS(findUnusedBakedTextures({ root.path }), std::runtime_error);
+	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
 }

@@ -1,9 +1,11 @@
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
+#include <core/file/LooseFileSystem.h>
 
 #include "bmesh_texture.h"
 
@@ -43,10 +45,10 @@ namespace
 
 	// Bakes a material whose base colour reads `source`, and saves it as `<root>/Materials/<name>`.
 	BMaterial
-	BakeAndSave(const DataRoot& root, const char* name, const char* source)
+	BakeAndSave(const DataRoot& root, const char* name, const char* store)
 	{
 		BMaterial material;
-		material.pbr.routes[0] = { source, 0 };
+		material.pbr.routes[0] = { store, 0 };
 
 		bakeMaterial(material, MaterialBakeDesc{ root.path });
 		saveMaterial(material, root.path / "Materials" / name);
@@ -103,7 +105,7 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 	REQUIRE(first.pbr.baseColorTexture != second.pbr.baseColorTexture);
 	REQUIRE(CountMaps(root.Textures()) == 2);
 
-	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
+	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
 	SECTION("the abandoned map is reported, and only it")
 	{
@@ -122,7 +124,7 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 
 	SECTION("deleting removes exactly the orphan")
 	{
-		const auto result = deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
+		const auto result = deleteUnusedBakedTextures(scan, AssetStore(root.path));
 
 		CHECK(result.deleted == 1);
 		CHECK(result.bytes == scan.bytes);
@@ -135,9 +137,9 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 
 	SECTION("a second scan finds nothing left to do")
 	{
-		deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
+		deleteUnusedBakedTextures(scan, AssetStore(root.path));
 
-		const auto again = findUnusedBakedTextures(TexturePruneDesc{ root.path });
+		const auto again = findUnusedBakedTextures(AssetStore(root.path));
 		CHECK(again.unused.empty());
 		CHECK(again.candidates == 1);
 	}
@@ -161,13 +163,13 @@ TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "
 	rebaked = BakeAndSave(root, "rebaked.bmaterial", "other.ktx2");
 	REQUIRE(rebaked.pbr.baseColorTexture != keeper.pbr.baseColorTexture);
 
-	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
+	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
 	// The shared map is still named by `keeper`, so it is live even though `rebaked` walked away.
 	CHECK(scan.materialsScanned == 2);
 	CHECK(scan.unused.empty());
 
-	deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
+	deleteUnusedBakedTextures(scan, AssetStore(root.path));
 	CHECK(std::filesystem::exists(root.path / keeper.pbr.baseColorTexture));
 }
 
@@ -186,7 +188,7 @@ TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[te
 	material.pbr.routeStamps[0] = SourceStamp{ 1, 1 };
 	saveMaterial(material, root.path / "Materials" / "loose.bmaterial");
 
-	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
+	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
 	CHECK(scan.liveMaps == 1);
 	CHECK(scan.unused.empty());
@@ -204,12 +206,12 @@ TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_pr
 	WriteSource(root.Textures() / "skybox.ktx2", 8, { { 1, 2, 3, 255 } });
 	WriteSource(root.Textures() / "logo.ktx2", 8, { { 4, 5, 6, 255 } });
 
-	const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
+	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
 	CHECK(scan.candidates == 1);  // the baked base colour, and nothing else
 	CHECK(scan.unused.empty());
 
-	deleteUnusedBakedTextures(scan, TexturePruneDesc{ root.path });
+	deleteUnusedBakedTextures(scan, AssetStore(root.path));
 
 	CHECK(std::filesystem::exists(root.Textures() / "skybox.ktx2"));
 	CHECK(std::filesystem::exists(root.Textures() / "logo.ktx2"));
@@ -227,7 +229,7 @@ TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[
 	std::ofstream(root.path / "Materials" / "broken.bmaterial", std::ios::binary)
 		<< "not a material";
 
-	REQUIRE_THROWS_AS(findUnusedBakedTextures(TexturePruneDesc{ root.path }), std::runtime_error);
+	REQUIRE_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
 	CHECK(std::filesystem::exists(root.path / material.pbr.baseColorTexture));
 }
 
@@ -237,7 +239,7 @@ TEST_CASE("findUnusedBakedTextures handles a project with nothing baked", "[text
 
 	SECTION("no texture directory is not an error: nothing baked, nothing orphaned")
 	{
-		const auto scan = findUnusedBakedTextures(TexturePruneDesc{ root.path });
+		const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
 		CHECK(scan.unused.empty());
 		CHECK(scan.candidates == 0);
@@ -246,9 +248,19 @@ TEST_CASE("findUnusedBakedTextures handles a project with nothing baked", "[text
 
 	SECTION("a data root that does not exist is a caller error")
 	{
-		REQUIRE_THROWS_AS(
-			findUnusedBakedTextures(TexturePruneDesc{ root.path / "nope" }),
-			std::runtime_error);
+		REQUIRE_THROWS_AS(AssetStore(root.path / "nope"), std::runtime_error);
+	}
+
+	// A source built over a mount cannot check its writable layer -- an overlay's may legitimately
+	// not exist yet -- so the sweep, which unlinks files there, checks for itself. Without it a
+	// stale writable root reports a clean project rather than the caller error it is.
+	SECTION("nor when the source was built over a mount, which cannot check for it")
+	{
+		const AssetStore store(
+			root.path / "nope",
+			std::make_shared<core::file::LooseFileSystem>(root.path));
+
+		REQUIRE_THROWS_AS(findUnusedBakedTextures(store), std::runtime_error);
 	}
 }
 
@@ -259,7 +271,7 @@ TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[textur
 	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
 	WriteSource(root.path / "b.ktx2", 16, { { 0, 200, 0, 255 } });
 
-	auto desc       = TexturePruneDesc{ root.path };
+	auto desc       = TexturePruneDesc();
 	desc.textureDir = "cooked";
 
 	auto bake       = MaterialBakeDesc{ root.path };
@@ -274,12 +286,12 @@ TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[textur
 	bakeMaterial(material, bake);
 	saveMaterial(material, root.path / "Materials" / "mat.bmaterial");
 
-	const auto scan = findUnusedBakedTextures(desc);
+	const auto scan = findUnusedBakedTextures(AssetStore(root.path), desc);
 
 	REQUIRE(scan.unused.size() == 1);
 	CHECK(scan.unused.front().path == orphan);
 	CHECK(orphan.starts_with("cooked/"));
 
-	CHECK(deleteUnusedBakedTextures(scan, desc).deleted == 1);
+	CHECK(deleteUnusedBakedTextures(scan, AssetStore(root.path)).deleted == 1);
 	CHECK_FALSE(std::filesystem::exists(root.path / orphan));
 }

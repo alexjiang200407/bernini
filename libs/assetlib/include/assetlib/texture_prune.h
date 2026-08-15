@@ -1,5 +1,5 @@
 #pragma once
-#include <core/file/IFileSystem.h>
+#include <assetlib/AssetStore.h>
 
 namespace assetlib
 {
@@ -11,16 +11,7 @@ namespace assetlib
 	 */
 	struct TexturePruneDesc
 	{
-		/** The writable layer: what the sweep looks at, because only a loose file can be unlinked. */
-		std::filesystem::path dataRoot;
-
 		std::filesystem::path textureDir = "Textures";
-
-		/**
-		 * What the mark phase reads, which may be wider than `dataRoot` -- a loose overlay over an
-		 * archive. Null reads `dataRoot` alone.
-		 */
-		const core::file::IFileSystem* fileSystem = nullptr;
 	};
 
 	struct UnusedTexture
@@ -54,7 +45,7 @@ namespace assetlib
 	 *         as garbage.
 	 */
 	[[nodiscard]] TexturePruneScan
-	findUnusedBakedTextures(const TexturePruneDesc& desc);
+	findUnusedBakedTextures(const AssetStore& store, const TexturePruneDesc& desc = {});
 
 	struct TexturePruneResult
 	{
@@ -75,5 +66,5 @@ namespace assetlib
 	 * or editing a material between the scan and this call invalidates the scan -- take a fresh one.
 	 */
 	TexturePruneResult
-	deleteUnusedBakedTextures(const TexturePruneScan& scan, const TexturePruneDesc& desc);
+	deleteUnusedBakedTextures(const TexturePruneScan& scan, const AssetStore& store);
 }

@@ -29,7 +29,7 @@ namespace
 	void
 	Pack(const DataRoot& root)
 	{
-		static_cast<void>(packProject(PackDesc{ root.path, root.path / "Data.bpak" }));
+		static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
 	}
 
 	bool
@@ -38,6 +38,24 @@ namespace
 		return std::ranges::any_of(scan.unused, [&map](const UnusedTexture& unused) {
 			return unused.path == map;
 		});
+	}
+
+	// AssetStore takes its mount by shared_ptr, so a test builds one rather than pointing at a local.
+	AssetStore
+	Archived(const DataRoot& root)
+	{
+		return AssetStore(root.path, std::make_shared<PakFile>(root.path / "Data.bpak"));
+	}
+
+	// The overlay the editor writes: loose over the archive, writes landing loose.
+	AssetStore
+	Overlaid(const DataRoot& root)
+	{
+		auto mount = std::make_shared<core::file::LayeredFileSystem>();
+		mount->Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
+		mount->Mount(std::make_shared<PakFile>(root.path / "Data.bpak"));
+
+		return AssetStore(root.path, std::move(mount));
 	}
 
 	std::vector<AssetRef>
@@ -62,10 +80,9 @@ TEST_CASE(
 	StageProject(root);
 	Pack(root);
 
-	const AssetRefGraph direct = AssetRefGraph::Scan(AssetRefScanDesc{ root.path });
+	const AssetRefGraph direct = AssetRefGraph::Scan(AssetStore(root.path));
 
-	const PakFile       pak(root.path / "Data.bpak");
-	const AssetRefGraph packed = AssetRefGraph::Scan(AssetRefScanDesc{ root.path, &pak });
+	const AssetRefGraph packed = AssetRefGraph::Scan(Archived(root));
 
 	CHECK(EdgesOf(packed) == EdgesOf(direct));
 
@@ -106,7 +123,7 @@ TEST_CASE("GetFilesUnder names a directory's contents and nothing beside it", "[
 	WriteSource(root.path / "textures_src/kirk/a.ktx2", { { 1, 2, 3, 255 } });
 	WriteSource(root.path / "textures_src/kirk2/b.ktx2", { { 4, 5, 6, 255 } });
 
-	const AssetRefGraph graph = AssetRefGraph::Scan(AssetRefScanDesc{ root.path });
+	const AssetRefGraph graph = AssetRefGraph::Scan(AssetStore(root.path));
 
 	const std::vector<std::string> kirk = { "textures_src/kirk/a.ktx2" };
 
@@ -137,19 +154,13 @@ TEST_CASE("deleting an asset that only the archive holds is refused", "[refseam]
 
 	fs::remove(root.path / "Materials/skin.bmaterial");
 
-	core::file::LayeredFileSystem mount;
-	mount.Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
-	mount.Mount(std::make_shared<PakFile>(root.path / "Data.bpak"));
+	const AssetStore store = Overlaid(root);
 
-	auto desc       = AssetRefScanDesc();
-	desc.dataRoot   = root.path;
-	desc.fileSystem = &mount;
-
-	const AssetRefGraph graph = AssetRefGraph::Scan(desc);
+	const AssetRefGraph graph = AssetRefGraph::Scan(store);
 	const DeletionPlan  plan  = planDeletion(graph, "Materials/skin.bmaterial");
 	REQUIRE(plan.Allowed());
 
-	const DeletionResult result = deleteAsset(plan, desc);
+	const DeletionResult result = deleteAsset(plan, store);
 	CHECK(result.status == DeletionStatus::kFailed);
 }
 
@@ -168,21 +179,15 @@ TEST_CASE("deleting a directory the archive alone holds is refused", "[refseam]"
 
 	fs::remove_all(root.path / "Materials/kirk");
 
-	core::file::LayeredFileSystem mount;
-	mount.Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
-	mount.Mount(std::make_shared<PakFile>(root.path / "Data.bpak"));
+	const AssetStore store = Overlaid(root);
 
-	auto desc       = AssetRefScanDesc();
-	desc.dataRoot   = root.path;
-	desc.fileSystem = &mount;
-
-	const AssetRefGraph graph = AssetRefGraph::Scan(desc);
+	const AssetRefGraph graph = AssetRefGraph::Scan(store);
 	const DeletionPlan  plan  = planDeletion(graph, "Materials/kirk");
 
 	REQUIRE(plan.IsDirectory());
 	REQUIRE(plan.contents == std::vector<std::string>{ "Materials/kirk/Body.bmaterial" });
 
-	CHECK(deleteAsset(plan, desc).status == DeletionStatus::kFailed);
+	CHECK(deleteAsset(plan, store).status == DeletionStatus::kFailed);
 }
 
 // The overlay the editor writes: a packed asset and an edited loose copy of it are one asset, not
@@ -200,7 +205,7 @@ TEST_CASE("a loose copy shadows its packed twin, and is scanned once", "[refseam
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
 	mount.Mount(std::make_shared<PakFile>(root.path / "Data.bpak"));
 
-	const AssetRefGraph graph = AssetRefGraph::Scan(AssetRefScanDesc{ root.path, &mount });
+	const AssetRefGraph graph = AssetRefGraph::Scan(Overlaid(root));
 
 	CHECK(graph.meshesScanned == 1);
 
@@ -226,20 +231,12 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 		BakeAndSave(root, "packed.bmaterial", "textures_src/skin.ktx2");
 	Pack(root);
 
-	core::file::LayeredFileSystem mount;
-	mount.Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
-	mount.Mount(std::make_shared<PakFile>(root.path / "Data.bpak"));
-
 	SECTION("a map held alive only by a packed material is not swept")
 	{
 		// The material is deleted from the loose tree; only the archive still names its triplet.
 		fs::remove(root.path / "Materials/packed.bmaterial");
 
-		auto desc       = TexturePruneDesc();
-		desc.dataRoot   = root.path;
-		desc.fileSystem = &mount;
-
-		const TexturePruneScan scan = findUnusedBakedTextures(desc);
+		const TexturePruneScan scan = findUnusedBakedTextures(Overlaid(root));
 
 		// The archive still names it, so it is live however the loose tree looks.
 		CHECK_FALSE(Proposes(scan, packedMaterial.pbr.baseColorTexture));
@@ -254,10 +251,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 	{
 		fs::remove(root.path / "Materials/packed.bmaterial");
 
-		auto desc     = TexturePruneDesc();
-		desc.dataRoot = root.path;
-
-		const TexturePruneScan scan = findUnusedBakedTextures(desc);
+		const TexturePruneScan scan = findUnusedBakedTextures(AssetStore(root.path));
 
 		CHECK(Proposes(scan, packedMaterial.pbr.baseColorTexture));
 	}
@@ -282,12 +276,12 @@ TEST_CASE("scanning a project reads references and not geometry", "[refseam]")
 	const uint64_t meshBytes = std::filesystem::file_size(root.path / "Meshes/heavy.bmesh");
 	REQUIRE(meshBytes > 512u * 1024u);
 
-	const core::file::LooseFileSystem loose(root.path);
-	const CountingFileSystem          counting(loose);
+	const auto loose    = std::make_shared<core::file::LooseFileSystem>(root.path);
+	const auto counting = std::make_shared<CountingFileSystem>(*loose);
 
-	static_cast<void>(AssetRefGraph::Scan(AssetRefScanDesc{ root.path, &counting }));
+	static_cast<void>(AssetRefGraph::Scan(AssetStore(root.path, counting)));
 
 	// Every other asset in the project is a few hundred bytes, so the mesh's geometry would dominate
 	// this total if it were being read at all.
-	CHECK(counting.bytesRead < meshBytes / 4);
+	CHECK(counting->bytesRead < meshBytes / 4);
 }

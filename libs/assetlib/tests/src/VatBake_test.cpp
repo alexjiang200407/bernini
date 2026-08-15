@@ -20,6 +20,7 @@
 
 #include "MountAt.h"
 #include "VatFixture.h"
+#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 using namespace assetlib::test;
@@ -304,7 +305,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	{
 		saveVat(vat, root / "Meshes/rig.bvat");
 
-		const auto graph = AssetRefGraph::Scan(AssetRefScanDesc{ root });
+		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 		CHECK(graph.vatsScanned == 1);
 
 		const auto edges = graph.ReferencesOf("Meshes/rig.bvat");

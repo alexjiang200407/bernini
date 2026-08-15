@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QRunnable>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
@@ -17,7 +18,6 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/Viewport.h>
-#include <core/file/LooseFileSystem.h>
 
 namespace
 {
@@ -70,12 +70,11 @@ namespace
 		if (relPath.empty())
 			return;
 
-		const assetlib::BMaterial material = assetlib::loadMaterial(dataRoot / relPath);
-
-		const core::file::LooseFileSystem files(dataRoot);
+		const assetlib::AssetStore store(dataRoot);
+		const assetlib::BMaterial  material = store.LoadMaterial(relPath);
 
 		for (const std::string& texture :
-		     game::MaterialTextures(material, assetlib::drawsLoose(material, files)))
+		     game::MaterialTextures(material, store.DrawsLoose(material)))
 		{
 			if (texture.empty() || out.contains(texture))
 				continue;
@@ -84,10 +83,7 @@ namespace
 			{
 				out.emplace(
 					texture,
-					assetlib::loadKTX2(
-						dataRoot / texture,
-						assetlib::Ktx2Decode::kGpu,
-						textureMaxDim));
+					store.LoadTexture(texture, assetlib::Ktx2Decode::kGpu, textureMaxDim));
 			}
 			catch (const std::exception& e)
 			{

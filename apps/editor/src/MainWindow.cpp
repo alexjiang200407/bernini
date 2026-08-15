@@ -25,6 +25,7 @@
 
 #include <QActionGroup>
 #include <QMenuBar>
+#include <assetlib/AssetStore.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/file/file.h>
@@ -453,10 +454,10 @@ MainWindow::CleanUnusedTextures()
 	if (!m_Project)
 		return;
 
-	auto desc     = assetlib::TexturePruneDesc();
-	desc.dataRoot = m_Project->GetDataDirectory();
-
-	auto scan = assetlib::TexturePruneScan();
+	// Built inside the worker, not beside it: an AssetStore over a data directory that has gone
+	// throws, and out here that would leave a Qt slot rather than the loading screen's error.
+	auto store = std::optional<assetlib::AssetStore>();
+	auto scan  = assetlib::TexturePruneScan();
 
 	// Scanning parses every .bmaterial in the project, so it runs off the UI thread. It reads assetlib
 	// only, never bgl, which is what the loading screen requires of its worker. findUnusedBakedTextures
@@ -466,7 +467,8 @@ MainWindow::CleanUnusedTextures()
 		"Clean Unused Textures",
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Scanning materials...");
-			scan = assetlib::findUnusedBakedTextures(desc);
+			store.emplace(m_Project->GetDataDirectory());
+			scan = assetlib::findUnusedBakedTextures(*store);
 		});
 
 	if (!scanned.Completed())
@@ -522,7 +524,7 @@ MainWindow::CleanUnusedTextures()
 		return;
 
 	// Unlinking is fast, so it stays on the UI thread; the scan is what was slow.
-	const auto result = assetlib::deleteUnusedBakedTextures(scan, desc);
+	const auto result = assetlib::deleteUnusedBakedTextures(scan, *store);
 
 	if (!result.failed.empty())
 	{
