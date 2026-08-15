@@ -14,6 +14,33 @@ namespace assetlib
 		return std::filesystem::path(path).lexically_normal().generic_string();
 	}
 
+	/**
+	 * The lower-cased extension of a mount key, `.` included, or empty when it has none.
+	 *
+	 * On the key itself rather than through `std::filesystem::path`: a key is `/`-separated by
+	 * contract, and routing one through a path to read its extension is the conversion STYLE.md's
+	 * Paths section warns turns a key into something an archive lookup misses on Windows.
+	 */
+	[[nodiscard]] inline std::string
+	extensionOf(std::string_view key)
+	{
+		const size_t slash = key.find_last_of('/');
+		const size_t dot   = key.find_last_of('.');
+		if (dot == std::string_view::npos || (slash != std::string_view::npos && dot < slash))
+			return {};
+
+		// A leading dot names the file, it does not extend it: `.gitignore` has no extension, which
+		// is what std::filesystem::path::extension answers too.
+		if (dot == 0 || (slash != std::string_view::npos && dot == slash + 1))
+			return {};
+
+		std::string ext(key.substr(dot));
+		std::ranges::transform(ext, ext.begin(), [](unsigned char c) {
+			return static_cast<char>(std::tolower(c));
+		});
+		return ext;
+	}
+
 	/** Whether `path` lies beneath `directory`. Both normalized, and neither is inside itself. */
 	[[nodiscard]] inline bool
 	isUnder(std::string_view path, std::string_view directory) noexcept
