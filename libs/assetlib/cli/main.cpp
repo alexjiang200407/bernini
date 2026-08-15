@@ -18,6 +18,8 @@
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/pak_io.h>
+#include <assetlib/pak_pack.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib/vat_bake.h>
@@ -353,6 +355,27 @@ main(int argc, char** argv)
 		"Directory the material bake writes into, relative to the data root (default: Textures)");
 	prune->add_flag("--dry-run", pruneDryRun, "List what would be deleted and delete nothing");
 	prune->add_flag("-y,--yes", pruneYes, "Delete without asking for confirmation");
+
+	std::string packDataRoot;
+	std::string packTarget;
+
+	auto* pack = app.add_subcommand(
+		"pack",
+		"Write a project's data root into one .bpak archive of everything the runtime reads");
+	pack->add_option("-d,--data-root", packDataRoot, "Project data directory to pack")
+		->required()
+		->check(CLI::ExistingDirectory);
+	pack->add_option(
+		"-o,--out",
+		packTarget,
+		"Archive to write (default: Data.bpak beside the data root)");
+
+	std::string listArchive;
+
+	auto* list = app.add_subcommand("list", "Print the entry table of a .bpak");
+	list->add_option("archive", listArchive, "The .bpak to read")
+		->required()
+		->check(CLI::ExistingFile);
 
 	std::string stripInput;
 	std::string stripOut;
@@ -779,6 +802,83 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("refs failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*pack)
+	{
+		try
+		{
+			auto desc     = assetlib::PackDesc();
+			desc.dataRoot = packDataRoot;
+			desc.target   = packTarget.empty() ?
+			                    std::filesystem::path(packDataRoot).parent_path() / "Data.bpak" :
+			                    std::filesystem::path(packTarget);
+
+			const assetlib::PackReport report = assetlib::packProject(desc);
+
+			if (report.vatsRebaked != 0)
+				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
+
+			spdlog::info(
+				"Packed {} entries, {} MB of payload, into '{}'",
+				report.entries,
+				report.payloadBytes / (1024ull * 1024),
+				desc.target.string());
+
+			if (!report.materialsDrawingLoose.empty())
+			{
+				spdlog::warn(
+					"{} of the packed materials still draw from authoring sources, which an "
+					"archive does not carry -- bake them or they ship untextured:",
+					report.materialsDrawingLoose.size());
+
+				for (const std::string& material : report.materialsDrawingLoose)
+					spdlog::warn("  {}", material);
+			}
+
+			// Said rather than left implicit: an extension nothing claims is an extension the
+			// archive does not carry, and a runtime container missing from every archive is a
+			// failure that would otherwise surface as a missing asset at load.
+			std::vector<std::pair<std::string, uint32_t>> skipped(
+				report.skippedByExtension.begin(),
+				report.skippedByExtension.end());
+			std::ranges::sort(skipped);
+
+			for (const auto& [extension, count] : skipped)
+			{
+				spdlog::info(
+					"  skipped {:>4} x '{}' -- no asset type claims it",
+					count,
+					extension.empty() ? "(no extension)" : extension);
+			}
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("pack failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*list)
+	{
+		try
+		{
+			const assetlib::PakFile archive{ std::filesystem::path(listArchive) };
+
+			// Straight to stdout: this is the command's output, and it is meant to diff.
+			for (const std::string& entry : archive.Enumerate())
+			{
+				const core::file::FileStamp stamp = archive.Stat(entry).value();
+				std::cout << std::format("{:>12}  {:>12}  {}\n", stamp.size, stamp.mtime, entry);
+			}
+
+			std::cout << std::flush;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("list failed: {}", e.what());
 			return 1;
 		}
 	}

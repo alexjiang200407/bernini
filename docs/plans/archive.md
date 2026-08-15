@@ -197,7 +197,7 @@ lifetimes should not share a file.
 | the `.berniniproject` file | editor metadata, not runtime data |
 | the shader cache (`.bsc`, `pipelines.psolib`) | per-machine, write-back, disposable — an archive entry would be write-once and wrong |
 | `Data/.overlay.json` | overlay working state; packed, it would mask the archive's own contents |
-| `Levels/` | **included** — levels are runtime data |
+| `Levels/` | **included** when they exist — no `.blevel` type is registered yet, so today the rule below would skip them; `pack` counts unclaimed extensions so that stays visible |
 | `Textures/` (baked) | **included**, and it is most of the bytes |
 | `.bvat` | **included**, and packed fresh — see below |
 
@@ -529,9 +529,19 @@ over the same file by path, and a path absent from the mount yields the zeroed s
 throwing.
 
 **6. `assetlib_cli pack` (and `list`).**
-Walks a data root, applies the exclusion rule, bakes `.bvat` fresh, writes one `.bpak` through
-`core::file::write_atomic` — a half-written archive at the target path is a shipped artifact missing
-half the project, not a cache miss. `list` prints the entry table for debugging.
+Walks a data root, applies the exclusion rule, bakes stale `.bvat` fresh, writes one `.bpak`. The
+walk and the rule live in `assetlib` (`packProject`), not in the CLI, because the gate is an
+`assetlib_tests` gate and the editor's *Sync* calls the same thing in task 10.
+
+Not through `core::file::write_atomic`, as this plan first said: `PakWriter` landed in task 2 as a
+*streaming* writer that already syncs a temp beside the target and renames, so an interrupted pack
+leaves the previous archive intact without ever holding a whole archive in memory. `write_atomic`
+would mean buffering hundreds of megabytes to gain nothing.
+
+`pack` reports what it left out — extensions no asset type claims, and materials that still draw
+from authoring routes the archive does not carry. Both are cases where the archive is *valid* and
+what it names is missing, which is otherwise discovered as an untextured surface on someone else's
+machine. `list` prints the entry table for debugging.
 *Gate:* `assetlib_tests` — packing the test project's data root and enumerating the result excludes
 `textures_src/` and the project file and includes every asset type; a round trip through
 `pack` then `PakFile` reproduces every input byte-for-byte; a `pack` interrupted before it finishes
