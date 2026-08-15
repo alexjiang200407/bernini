@@ -32,9 +32,11 @@ public:
 
 	/**
 	 * `assetsHeldOpen` has no default because it guards a deletion. An open graph holds a material in
-	 * memory, and its next Save would write a deleted one straight back -- nothing on disk records that,
-	 * so the reference graph cannot see it and only this can. A guard that could be left unwired would
-	 * fail open, silently, and MainWindow is not covered by a test that would notice.
+	 * memory, and its next Save would write a deleted one straight back; the Animation panel holds the
+	 * mesh and clip files its source dropdown offers, which a deletion would turn into dead entries --
+	 * nothing on disk records either, so the reference graph cannot see them and only this can. A guard
+	 * that could be left unwired would fail open, silently, and MainWindow is not covered by a test
+	 * that would notice.
 	 *
 	 * A caller with genuinely nothing open says so: `[] { return QStringList(); }`.
 	 */

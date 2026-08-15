@@ -340,9 +340,12 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	const QString&               name,
 	const QString&               refusal)
 {
-	// The materials the bake could fix: routed but never composited. A material with no routes
-	// (factors only) has nothing to bake, and one already baked was refused for another reason.
-	auto unbaked = std::vector<std::string>();
+	// The materials the bake could fix, by the same verdict gamelib routes on: drawsLoose covers
+	// never-baked *and* stale-by-stamp -- a git pull rewrites source mtimes, so a bake committed
+	// on another machine reads stale everywhere else, and only a local re-bake refreshes the
+	// stamps. A material with no routes has nothing to bake; one drawing its baked triplet was
+	// refused for another reason.
+	auto loose = std::vector<std::string>();
 	for (const std::string& relPath : mesh.materials)
 	{
 		if (relPath.empty())
@@ -351,15 +354,8 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 		try
 		{
 			const assetlib::BMaterial material = assetlib::loadMaterial(m_DataRoot / relPath);
-			const bool                routed =
-				std::ranges::any_of(material.pbr.routes, [](const assetlib::ChannelRoute& route) {
-					return !route.texture.empty();
-				});
-			const bool baked = !material.pbr.baseColorTexture.empty() ||
-			                   !material.pbr.normalTexture.empty() ||
-			                   !material.pbr.ormTexture.empty();
-			if (routed && !baked)
-				unbaked.push_back(relPath);
+			if (assetlib::drawsLoose(material, m_DataRoot))
+				loose.push_back(relPath);
 		}
 		catch (const std::exception& e)
 		{
@@ -374,14 +370,15 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	                .arg(name, refusal));
 
 	QPushButton* bakeButton = nullptr;
-	if (!unbaked.empty())
+	if (!loose.empty())
 	{
 		box.setInformativeText(
 			QStringLiteral(
-				"%1 of its materials %2 routed but never baked, and the VAT pipeline "
-				"draws baked materials only.")
-				.arg(unbaked.size())
-				.arg(unbaked.size() == 1 ? "is" : "are"));
+				"%1 of its materials %2 drawing unbaked (never baked, or the bake is stale "
+				"-- a git pull makes every bake stale here), and the VAT pipeline draws "
+				"baked materials only.")
+				.arg(loose.size())
+				.arg(loose.size() == 1 ? "is" : "are"));
 		bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);
 	}
 	box.addButton(QMessageBox::Ok);
@@ -400,7 +397,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 		this,
 		QStringLiteral("Baking materials"),
 		[&](background::Progress& progress) {
-			for (const std::string& relPath : unbaked)
+			for (const std::string& relPath : loose)
 			{
 				progress.Report(0, 0, QStringLiteral("Baking %1...").arg(relPath.c_str()));
 				auto material = assetlib::loadMaterial(m_DataRoot / relPath);
@@ -424,8 +421,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 
 	// The Material Editor reads its panel off the file; MainWindow routes this the same way it
 	// routes the Content Explorer's bakes.
-	for (const std::string& relPath : unbaked)
-		Q_EMIT MaterialBaked(QString::fromStdString(relPath));
+	for (const std::string& relPath : loose) Q_EMIT MaterialBaked(QString::fromStdString(relPath));
 
 	LoadMesh(absolutePath, animations);
 }

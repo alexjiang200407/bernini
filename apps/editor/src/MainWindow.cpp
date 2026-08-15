@@ -221,10 +221,13 @@ MainWindow::Build()
 	m_ContentExplorerDock->setFeatures(
 		QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
-	// The explorer refuses to delete a material the Material Editor has open, whose next Save would
-	// write it straight back. Asked at each deletion, so there is no copy of the answer to go stale.
+	// The explorer refuses to delete what a panel still holds: a material the Material Editor has
+	// open (its next Save would write it straight back), and the mesh and clip files the Animation
+	// panel is offering. Asked at each deletion, so there is no copy of the answer to go stale.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
-		return m_MaterialEditor->OpenMaterialPaths();
+		auto held = m_MaterialEditor->OpenMaterialPaths();
+		held += m_AnimationEditor->HeldOpenPaths();
+		return held;
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
 
@@ -250,6 +253,15 @@ MainWindow::Build()
 	DriveViewportsFromTab(m_LevelEditorDock);
 	DriveViewportsFromTab(m_MaterialEditorDock);
 	DriveViewportsFromTab(m_AnimationEditorDock);
+
+	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
+	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
+	// on a tab switch.
+	m_TabVisibility.push_back(connect(
+		m_AnimationEditorDock,
+		&QDockWidget::visibilityChanged,
+		m_AnimationEditor,
+		&AnimationEditorWindow::SetDockVisible));
 
 	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
