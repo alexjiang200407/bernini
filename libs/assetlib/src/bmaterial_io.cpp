@@ -153,6 +153,12 @@ namespace assetlib
 		return deserializeMaterial(bytes);
 	}
 
+	BMaterial
+	loadMaterial(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeMaterial(fileSystem.Read(path));
+	}
+
 	SourceStamp
 	stampOf(const std::filesystem::path& path)
 	{

@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/ImageData.h>
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -70,4 +71,13 @@ namespace assetlib
 	 */
 	[[nodiscard]] BEnv
 	loadEnv(const std::filesystem::path& path);
+
+	/**
+	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
+	 * container may equally be a loose file or an entry in an archive.
+	 *
+	 * @throws std::runtime_error if the container is absent, cannot be read, or is malformed.
+	 */
+	[[nodiscard]] BEnv
+	loadEnv(const core::file::IFileSystem& fileSystem, std::string_view path);
 }
