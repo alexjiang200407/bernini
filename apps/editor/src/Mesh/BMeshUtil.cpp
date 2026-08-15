@@ -81,7 +81,7 @@ namespace bmesh
 			if (!ReferencesMesh(mesh, node))
 				continue;
 
-			placements.push_back({ node.mesh, GetInstanceTransform(mesh, nodeIndex) });
+			placements.emplace_back(node.mesh, GetInstanceTransform(mesh, nodeIndex));
 		}
 
 		return placements;

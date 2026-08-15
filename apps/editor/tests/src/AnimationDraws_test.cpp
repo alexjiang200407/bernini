@@ -55,8 +55,8 @@ TEST_CASE("A skinned entry plays as VAT; a static one stands beside it", "[anima
 
 	const auto plan = editor::PlanAnimationDraws(mesh);
 
-	REQUIRE(plan.vat.size() == 1);
-	CHECK(plan.vat[0].meshIndex == skinned);
+	REQUIRE(plan.animated.size() == 1);
+	CHECK(plan.animated[0].meshIndex == skinned);
 	REQUIRE(plan.statics.size() == 1);
 	CHECK(plan.statics[0].meshIndex == prop);
 }

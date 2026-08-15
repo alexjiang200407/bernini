@@ -215,7 +215,7 @@ AnimationPreviewWindow::LoadMesh(
 		};
 
 		const auto plan = editor::PlanAnimationDraws(mesh);
-		if (plan.vat.empty() && plan.statics.empty())
+		if (plan.animated.empty() && plan.statics.empty())
 			throw std::runtime_error("no node references a mesh");
 
 		const Loaded loaded = GetRenderer()->Invoke([&] {
@@ -240,7 +240,7 @@ AnimationPreviewWindow::LoadMesh(
 
 			for (const bmesh::InstancePlacement& placement : plan.statics) acquireStatic(placement);
 
-			for (const bmesh::InstancePlacement& placement : plan.vat)
+			for (const bmesh::InstancePlacement& placement : plan.animated)
 			{
 				// A rig with no clip file anywhere falls back to bind pose as static geometry --
 				// and so does one the VAT pipeline refuses (an unbaked or non-opaque material): a

@@ -9,7 +9,10 @@ namespace game
 	 * three input stamps hold (vatIsStale) *and* the container was baked from the `.banim` asked
 	 * for -- one baked from a different clip set is stale, never silently returned.
 	 *
-	 * Pure assetlib -- no bgl, safe off the render thread. The step AcquireVatMesh runs before it
+	 * Pure assetlib -- no bgl, safe off the render thread.
+	 *
+	 * TODO: take feat/archive's IFileSystem instead of a raw data root once it lands -- the
+	 * archive branch moves vatIsStale onto that seam, and a bake inside a .bpak has no path. The step AcquireVatMesh runs before it
 	 * uploads, exposed so a caller can pay the seconds of CPU skinning on a worker and acquire
 	 * afterwards.
 	 *

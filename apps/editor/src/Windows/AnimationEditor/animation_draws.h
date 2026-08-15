@@ -8,13 +8,13 @@
 namespace editor
 {
 	/**
-	 * PlanInstances split by how each placement draws: a skinned mesh entry plays as VAT, anything
-	 * else stands as static geometry. One mesh can hold both -- a rigged character with a static
-	 * prop node.
+	 * PlanInstances split by how each placement draws: a skinned mesh entry animates (as VAT
+	 * today; the skinned tier will fill the same vector), anything else stands as static
+	 * geometry. One mesh can hold both -- a rigged character with a static prop node.
 	 */
 	struct AnimationDrawPlan
 	{
-		std::vector<bmesh::InstancePlacement> vat;
+		std::vector<bmesh::InstancePlacement> animated;
 		std::vector<bmesh::InstancePlacement> statics;
 	};
 
