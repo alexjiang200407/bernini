@@ -133,30 +133,62 @@ namespace assetlib
 		return deserialize(bytes);
 	}
 
+	BMesh
+	load(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserialize(fileSystem.Read(path));
+	}
+
+	namespace
+	{
+		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
+			{ uint32_t(ChunkId::kMaterialPaths), uint32_t(ChunkId::kSkeletonPath) }
+		};
+
+		MeshRefs
+		refsFromChunks(const std::unordered_map<uint32_t, std::vector<std::byte>>& chunks)
+		{
+			// Absent, not malformed: both chunks are optional, and a mesh that names neither is
+			// exactly what a static import produces.
+			MeshRefs refs;
+			if (const auto it = chunks.find(uint32_t(ChunkId::kMaterialPaths)); it != chunks.end())
+				refs.materials = chunk::unpackStrings(
+					std::span<const char>(
+						reinterpret_cast<const char*>(it->second.data()),
+						it->second.size()));
+
+			if (const auto it = chunks.find(uint32_t(ChunkId::kSkeletonPath)); it != chunks.end())
+				refs.skeleton.assign(
+					reinterpret_cast<const char*>(it->second.data()),
+					it->second.size());
+
+			return refs;
+		}
+	}
+
 	MeshRefs
 	loadMeshRefs(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 2> c_Wanted = { { uint32_t(ChunkId::kMaterialPaths),
-			                                             uint32_t(ChunkId::kSkeletonPath) } };
+		return refsFromChunks(
+			chunk::readChunksFromFile(
+				path,
+				magic::c_BMesh,
+				c_VersionMajor,
+				c_WantedRefChunks,
+				c_What));
+	}
 
-		const auto chunks =
-			chunk::readChunksFromFile(path, magic::c_BMesh, c_VersionMajor, c_Wanted, c_What);
-
-		// Absent, not malformed: both chunks are optional, and a mesh that names neither is exactly
-		// what a static import produces.
-		MeshRefs refs;
-		if (const auto it = chunks.find(uint32_t(ChunkId::kMaterialPaths)); it != chunks.end())
-			refs.materials = chunk::unpackStrings(
-				std::span<const char>(
-					reinterpret_cast<const char*>(it->second.data()),
-					it->second.size()));
-
-		if (const auto it = chunks.find(uint32_t(ChunkId::kSkeletonPath)); it != chunks.end())
-			refs.skeleton.assign(
-				reinterpret_cast<const char*>(it->second.data()),
-				it->second.size());
-
-		return refs;
+	MeshRefs
+	loadMeshRefs(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return refsFromChunks(
+			chunk::readChunksFrom(
+				fileSystem,
+				path,
+				magic::c_BMesh,
+				c_VersionMajor,
+				c_WantedRefChunks,
+				c_What));
 	}
 
 	BMesh

@@ -5,8 +5,16 @@
 
 namespace assetlib
 {
+	void
+	IRangeReader::CheckRange(uint64_t bytes, uint64_t offset) const
+	{
+		const uint64_t size = GetSize();
+		if (bytes > size || offset > size - bytes)
+			core::throw_runtime_error("{}: a range extends past the end of the source", m_What);
+	}
+
 	CheckedFileReader::CheckedFileReader(std::filesystem::path path, std::string_view what) :
-		m_Path(std::move(path)), m_What(what)
+		IRangeReader(what), m_Path(std::move(path))
 	{
 		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call.
 		errno = 0;
@@ -22,13 +30,6 @@ namespace assetlib
 	}
 
 	void
-	CheckedFileReader::CheckRange(uint64_t bytes, uint64_t offset) const
-	{
-		if (bytes > m_Size || offset > m_Size - bytes)
-			core::throw_runtime_error("{}: a range extends past the end of file", m_What);
-	}
-
-	void
 	CheckedFileReader::ReadAt(void* destination, uint64_t bytes, uint64_t offset)
 	{
 		CheckRange(bytes, offset);
@@ -37,5 +38,26 @@ namespace assetlib
 		m_In.read(static_cast<char*>(destination), static_cast<std::streamsize>(bytes));
 		if (!m_In)
 			throw std::runtime_error(fileErrorMessage(m_What + ": failed to read file", m_Path));
+	}
+
+	MountedFileReader::MountedFileReader(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		std::string_view what) : IRangeReader(what), m_FileSystem(&fileSystem), m_Path(path)
+	{
+		const std::optional<core::file::FileStamp> stamp = m_FileSystem->Stat(m_Path);
+		if (!stamp.has_value())
+			core::throw_runtime_error("{}: '{}' is not in the mounted filesystem", m_What, m_Path);
+
+		m_Size = stamp->size;
+	}
+
+	void
+	MountedFileReader::ReadAt(void* destination, uint64_t bytes, uint64_t offset)
+	{
+		CheckRange(bytes, offset);
+
+		const std::vector<std::byte> range = m_FileSystem->ReadRange(m_Path, offset, bytes);
+		std::copy_n(range.data(), bytes, static_cast<std::byte*>(destination));
 	}
 }
