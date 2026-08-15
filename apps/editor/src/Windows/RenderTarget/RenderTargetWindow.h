@@ -69,6 +69,13 @@ public:
 	void
 	SetRenderScale(float scale);
 
+	// Hands the animation clock to the render thread, as SetCamera hands the camera: what this
+	// window's frames carry as RenderJob::time. Public because the clock is the *panel's* policy,
+	// not the viewport's -- the Animation panel's transport drives its preview from outside. A
+	// window nobody clocks draws at time zero, which freezes VAT instances on their phase.
+	void
+	SetTime(float seconds);
+
 	[[nodiscard]] float
 	GetRenderScale() const noexcept
 	{
@@ -185,6 +192,7 @@ private:
 	// Read by DrawFrame, so written only from the render thread: the GUI thread hands new values over
 	// through the Renderer rather than assigning them here, and no frame sees a half-written camera.
 	bgl::Camera m_RenderCamera;
+	float       m_RenderTime   = 0.0f;
 	uint32_t    m_RenderWidth  = 1;
 	uint32_t    m_RenderHeight = 1;
 

@@ -3,6 +3,8 @@
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
+#include "Windows/AnimationEditor/AnimationBindings.h"
+#include "Windows/AnimationEditor/animation_draws.h"
 #include "util/mime_files.h"
 
 #include <QDragEnterEvent>
@@ -16,6 +18,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <gamelib/AssetManager.h>
+#include <gamelib/vat_freshness.h>
 
 AnimationPreviewWindow::AnimationPreviewWindow(
 	QWidget*                     parent,
@@ -58,15 +61,30 @@ void
 AnimationPreviewWindow::Clear()
 {
 	ClearGeometry();
+	SetTime(0.0f);
 	Q_EMIT MeshChanged(QString());
+	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
+	Q_EMIT ClipsChanged({});
 }
 
 void
 AnimationPreviewWindow::ClearGeometry()
 {
-	if (m_Assets != nullptr && (!m_Instances.empty() || !m_Geoms.empty()))
+	if (m_Assets != nullptr && (!m_Instances.empty() || !m_Geoms.empty() || !m_VatDraws.empty()))
 	{
 		GetRenderer()->Invoke([&] {
+			for (const VatDraw& draw : m_VatDraws)
+			{
+				try
+				{
+					m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("AnimationPreview: failed to destroy a VAT instance: %s", e.what());
+				}
+			}
+
 			for (const bgl::MeshInstanceHandle& instance : m_Instances)
 			{
 				try
@@ -93,12 +111,15 @@ AnimationPreviewWindow::ClearGeometry()
 		});
 	}
 
+	m_VatDraws.clear();
 	m_Instances.clear();
 	m_Geoms.clear();
 }
 
 void
-AnimationPreviewWindow::LoadMesh(const std::filesystem::path& absolutePath)
+AnimationPreviewWindow::LoadMesh(
+	const std::filesystem::path& absolutePath,
+	const std::string&           animationsRelPath)
 {
 	const QString name = QString::fromStdString(absolutePath.filename().string());
 
@@ -122,8 +143,13 @@ AnimationPreviewWindow::LoadMesh(const std::filesystem::path& absolutePath)
 		return;
 	}
 
-	assetlib::BMesh mesh;
+	assetlib::BMesh           mesh;
+	editor::AnimationBindings bindings;
+	std::string               animations = animationsRelPath;
 
+	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
+	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
+	// uploads.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QString("Loading %1").arg(name),
@@ -132,6 +158,17 @@ AnimationPreviewWindow::LoadMesh(const std::filesystem::path& absolutePath)
 			mesh = assetlib::load(absolutePath);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
+
+			progress.Report(0, 0, "Resolving animations...");
+			bindings = editor::ResolveAnimationBindings(m_DataRoot, rel);
+			if (animations.empty() && !bindings.animations.empty())
+				animations = bindings.animations.front();
+
+			if (!animations.empty())
+			{
+				progress.Report(0, 0, "Baking animation textures...");
+				(void)game::EnsureVatBaked(m_DataRoot, rel, animations);
+			}
 		});
 
 	if (!result.Completed())
@@ -145,29 +182,62 @@ AnimationPreviewWindow::LoadMesh(const std::filesystem::path& absolutePath)
 
 	try
 	{
-		struct Focus
+		struct Loaded
 		{
-			glm::vec3 center;
-			float     radius;
+			glm::vec3                                    center;
+			float                                        radius;
+			std::vector<game::AssetManager::VatClipInfo> clips;
+			QString                                      vatRefusal;  // empty when VAT stood up
 		};
 
-		const auto placements = bmesh::PlanInstances(mesh);
-		if (placements.empty())
+		const auto plan = editor::PlanAnimationDraws(mesh);
+		if (plan.vat.empty() && plan.statics.empty())
 			throw std::runtime_error("no node references a mesh");
 
-		const Focus focus = GetRenderer()->Invoke([&] {
+		const Loaded loaded = GetRenderer()->Invoke([&] {
 			ClearGeometry();
 
+			auto out     = Loaded();
 			auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
 			auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
 
-			for (const bmesh::InstancePlacement& placement : placements)
-			{
+			const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
 				const bgl::GeomHandle geom = m_Assets->AcquireMesh(rel, placement.meshIndex);
 				m_Geoms.push_back(geom);
 				m_Instances.push_back(
 					m_Assets->CreateInstance(GetPreviewViewRef(), geom, placement.world));
+				bmesh::GrowBoundsForMesh(
+					mesh,
+					placement.meshIndex,
+					placement.world,
+					aabbMin,
+					aabbMax);
+			};
 
+			for (const bmesh::InstancePlacement& placement : plan.statics) acquireStatic(placement);
+
+			for (const bmesh::InstancePlacement& placement : plan.vat)
+			{
+				// A rig with no clip file anywhere falls back to bind pose as static geometry.
+				if (animations.empty())
+				{
+					acquireStatic(placement);
+					continue;
+				}
+
+				const game::AssetManager::VatMesh vat =
+					m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
+				m_Geoms.push_back(vat.geom);
+				m_VatDraws.push_back(
+					{ vat.geom,
+				      placement.world,
+				      m_Assets->CreateVatInstance(
+						  GetPreviewViewRef(),
+						  vat.geom,
+						  placement.world,
+						  bgl::ISceneView::VatInstanceDesc{ 0, 0.0f, 1.0f }) });
+				out.clips    = vat.clips;
+				m_ActiveClip = 0;
 				bmesh::GrowBoundsForMesh(
 					mesh,
 					placement.meshIndex,
@@ -176,15 +246,34 @@ AnimationPreviewWindow::LoadMesh(const std::filesystem::path& absolutePath)
 					aabbMax);
 			}
 
-			const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
-			const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
-			return Focus{ center, radius };
+			out.center = (aabbMin + aabbMax) * 0.5f;
+			out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
+			return out;
 		});
 
-		m_Orbit.FocusOn(focus.center, focus.radius);
+		m_Orbit.FocusOn(loaded.center, loaded.radius);
 		UpdateCamera();
+		SetTime(0.0f);
+
+		auto candidates = QStringList();
+		for (const std::string& candidate : bindings.animations)
+			candidates << QString::fromStdString(candidate);
+		const auto active = static_cast<int>(std::distance(
+			bindings.animations.begin(),
+			std::find(bindings.animations.begin(), bindings.animations.end(), animations)));
 
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
+		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
+		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
+
+		if (!loaded.vatRefusal.isEmpty())
+		{
+			QMessageBox::information(
+				window(),
+				QStringLiteral("Open Mesh"),
+				QStringLiteral("'%1' is shown in bind pose -- its clips cannot play:\n\n%2")
+					.arg(name, loaded.vatRefusal));
+		}
 	}
 	catch (const std::exception& e)
 	{
@@ -200,6 +289,37 @@ AnimationPreviewWindow::LoadMesh(const std::filesystem::path& absolutePath)
 
 		Clear();
 	}
+}
+
+void
+AnimationPreviewWindow::SetActiveClip(const uint32_t index)
+{
+	if (m_Assets == nullptr || m_VatDraws.empty() || index == m_ActiveClip)
+		return;
+
+	// There is no mutate-instance API by design: a clip switch is destroy + recreate, and the
+	// caller rewinds its transport so the new clip starts from its first frame.
+	GetRenderer()->Invoke([&] {
+		for (VatDraw& draw : m_VatDraws)
+		{
+			try
+			{
+				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				draw.instance = bgl::MeshInstanceHandle();
+				draw.instance = m_Assets->CreateVatInstance(
+					GetPreviewViewRef(),
+					draw.geom,
+					draw.world,
+					bgl::ISceneView::VatInstanceDesc{ index, 0.0f, 1.0f });
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to switch a VAT instance's clip: %s", e.what());
+			}
+		}
+	});
+
+	m_ActiveClip = index;
 }
 
 void
