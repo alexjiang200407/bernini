@@ -14,6 +14,7 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
+#include <core/hash.h>
 
 namespace assetlib
 {
@@ -115,6 +116,22 @@ namespace assetlib
 	normalizePath(std::string_view path)
 	{
 		return std::filesystem::path(path).lexically_normal().generic_string();
+	}
+
+	std::filesystem::path
+	vatPathFor(std::string_view meshRelPath, std::string_view animationsRelPath)
+	{
+		const std::string normalized = normalizePath(animationsRelPath);
+		const uint64_t    hash       = core::hash_string(normalized, core::hash_seed());
+
+		auto path = std::filesystem::path(meshRelPath);
+		path.replace_filename(
+			std::format(
+				"{}@{}-{:08x}.bvat",
+				path.stem().string(),
+				std::filesystem::path(normalized).stem().string(),
+				static_cast<uint32_t>(hash ^ (hash >> 32))));
+		return path;
 	}
 
 	BVat
