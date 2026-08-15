@@ -18,8 +18,9 @@
 
 namespace
 {
-	constexpr int c_TimelineTicks   = 1000;
-	constexpr int c_ClockIntervalMs = 16;
+	constexpr int c_TimelineTicks           = 1000;
+	constexpr int c_ClockIntervalMs         = 16;
+	constexpr int c_RevealRepaintDelaysMs[] = { 0, 300 };
 }
 
 AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWindowDesc desc) :
@@ -279,9 +280,10 @@ AnimationEditorWindow::Tick()
 	const float dt = static_cast<float>(m_ClockDelta.restart()) / 1000.0f;
 	m_Transport.Advance(dt);
 
-	// A one-shot that reached its end is done, not playing a frozen frame; Play rewinds it.
+	// A one-shot that reached either end is done, not playing a frozen frame; Play rewinds it.
 	if (m_Transport.HasClips() && !m_Transport.GetActiveClip().loop &&
-	    m_Transport.GetTimeSeconds() >= m_Transport.GetPeriodSeconds())
+	    (m_Transport.GetTimeSeconds() >= m_Transport.GetPeriodSeconds() ||
+	     (m_Transport.GetSpeed() < 0.0f && m_Transport.GetTimeSeconds() <= 0.0f)))
 	{
 		m_Transport.Pause();
 		m_Clock->stop();
@@ -406,7 +408,7 @@ AnimationEditorWindow::showEvent(QShowEvent* event)
 	// window next repaints wholesale (which is why switching away and back "fixed" it). Do what
 	// that tab switch does: a full-window repaint, deferred twice -- once for the reveal's own
 	// layout pass, once after the viewport's resize settle.
-	for (const int delayMs : { 0, 300 })
+	for (const int delayMs : c_RevealRepaintDelaysMs)
 		QTimer::singleShot(delayMs, this, [this] { window()->update(); });
 
 	if (m_Transport.IsPlaying())
