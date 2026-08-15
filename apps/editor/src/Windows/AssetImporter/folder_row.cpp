@@ -9,9 +9,11 @@
 namespace editor
 {
 	QLineEdit*
-	AddFolderRow(QVBoxLayout* layout, QWidget* parent, const FolderRowDesc& desc)
+	AddFolderRow(QVBoxLayout* layout, QWidget* parent, const FolderRowDesc& desc, QWidget* leading)
 	{
 		auto* row = new QHBoxLayout();
+		if (leading != nullptr)
+			row->addWidget(leading);
 		row->addWidget(new QLabel(QString("%1/").arg(desc.category), parent));
 
 		auto* field = new QLineEdit(desc.text, parent);

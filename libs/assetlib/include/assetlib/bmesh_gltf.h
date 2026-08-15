@@ -31,11 +31,11 @@ namespace assetlib
 		const CancelToken&           cancel     = {},
 		float                        sampleRate = c_DefaultSampleRate);
 
-	/** What a file's material table holds, without the cost of importing it. See probeGltfMaterials. */
-	struct GltfMaterialProbe
+	/** One entry of a glTF's material table, as probeGltfMaterials reports it. */
+	struct GltfMaterial
 	{
-		size_t materialCount    = 0;
-		size_t pbrMaterialCount = 0;
+		std::string name;           // free text, and frequently empty
+		bool        isPbr = false;  // whether an import derives a material from it
 	};
 
 	/**
@@ -43,8 +43,11 @@ namespace assetlib
 	 * import. No image is decoded: the parse runs with a stubbed image loader, which is what makes this
 	 * cheap enough to call from a UI thread. The file is still read in full, so the cost is its size.
 	 *
+	 * @return The table in file order, index for index with the `imp::BMeshImport::materials` that
+	 *         loading the same file produces -- which is what lets a caller name the files an import
+	 *         will write before it runs.
 	 * @throws std::runtime_error if the file cannot be read or is not valid glTF.
 	 */
-	[[nodiscard]] GltfMaterialProbe
+	[[nodiscard]] std::vector<GltfMaterial>
 	probeGltfMaterials(const std::filesystem::path& path);
 }

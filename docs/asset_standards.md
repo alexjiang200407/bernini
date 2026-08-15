@@ -477,11 +477,27 @@ Five rules, each of which is a way to get this wrong:
 
 **Where an import's output lands is decided by what it is, never by where the file was dropped.** A
 `.bmesh` goes under `Meshes/`, a rig under `Skeletons/`, its clips under `Animations/`, textures
-under `textures_src/` and materials under `Materials/`. The importer's *Folder* field organises
-*inside* those categories — it may name nested folders (`animals/coyote`) and can never name a way
-out of one, which `editor::JoinCategory` enforces. Every reference in a project is written against
+under `textures_src/` and materials under `Materials/`. Each category has its own folder field, which
+organises *inside* its category — it may name nested folders (`animals/coyote`) and can never name a
+way out of one, which `editor::JoinCategory` enforces. Every reference in a project is written against
 that layout, so an asset that could move across categories is an asset whose references stop
 meaning anything.
+
+**Each folder field folds out into the files it will write**, one editable name apiece — the `.bmesh`,
+the `.bskel`, the `.banim`, and one per PBR material. Without them every output took the source file's
+name, so two imports that belonged in one folder collided and each had to be given a subfolder to keep
+them apart; naming the files is what lets `animals/coyote/` hold both skins rather than
+`animals/coyote/skin1/` and `animals/coyote/skin2/`. Textures are the exception and stay folder-only:
+`writeTextures` names its output `tex0.ktx2` by index, so an import can neither name them nor share
+their folder with another. The sections start **collapsed**, so a dialog nobody touches is the
+folder-per-category one it has always been, and every name starts at the source's own — an untouched
+import lands exactly where it used to.
+
+A *folder* that cannot be honoured falls back to the source's name. A *file name* does not: it
+disables OK and states the reason, because discarding a name someone deliberately typed writes a file
+they did not ask for and cannot see coming. Names are also checked against the project as they are
+typed — importing into a folder another import already owns is the case this exists for, and finding
+the clash out after OK would mean filling the form in twice.
 
 **The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` whenever the
 source carries a skin and the mesh is coming across with it, and a `.banim` when the importer's
@@ -615,7 +631,11 @@ materials becomes one `.bmaterial` under `Materials/<subdir>/`, bound to the sub
 The box is disabled when the file has nothing to derive one from — `probeGltfMaterials`
 ([libs/assetlib/include/assetlib/bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h)) reads the
 material table with a **stubbed image loader**, so the dialog can ask the question without paying for
-the decode that dominates an import.
+the decode that dominates an import. It returns the table itself, name and PBR flag per entry and
+**index for index** with the one a full import produces, which is what lets the dialog offer a name
+for each file before committing to the import. `editor::MaterialStems` turns those names into the
+default stems, and the writer is handed whatever the fields then hold rather than deriving them a
+second time — two copies of that rule is how a preview and a file come to disagree.
 
 Five rules, each of which is a way to get this wrong:
 
@@ -641,7 +661,10 @@ Five rules, each of which is a way to get this wrong:
   the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
   dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.
 * **Every `.bmaterial` is written before any submesh names one.** A failure part-way through therefore
-  leaves a mesh naming only materials that exist, and the rollback takes the whole folder.
+  leaves a mesh naming only materials that exist, and the rollback removes the files this import wrote
+  **by name** rather than taking the folder — the folder may be another import's as well, since each
+  names its own files. For the same reason the conflict check that refuses an import is per *file*
+  here, where the texture folder's is per *directory*.
 
 The import runs no bake, so there is no triplet, and the maps are sampled straight from the routes until
 someone bakes it.

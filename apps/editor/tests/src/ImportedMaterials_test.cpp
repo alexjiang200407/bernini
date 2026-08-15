@@ -1,6 +1,8 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 
+#include "Windows/AssetImporter/material_stems.h"
 #include "util/QtSupport.h"
+#include "util/asset_paths.h"
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
@@ -83,6 +85,24 @@ namespace
 		return mesh;
 	}
 
+	/**
+	 * The stems the importer dialog would show for `imported`, and therefore the ones a real import
+	 * hands the writer. A test that wants to pin a name types its own instead.
+	 */
+	QStringList
+	StemsFor(const assetlib::imp::BMeshImport& imported)
+	{
+		auto probed = std::vector<assetlib::GltfMaterial>();
+		probed.reserve(imported.materials.size());
+
+		for (const assetlib::imp::BMaterialImport& source : imported.materials)
+			probed.push_back(
+				{ .name  = std::string(imported.stringPool.at(source.nameOffset)),
+			      .isPbr = source.isPbr });
+
+		return editor::MaterialStems(probed);
+	}
+
 	assetlib::imp::BMaterialImport
 	PbrMaterial()
 	{
@@ -106,7 +126,8 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 		mesh,
 		project.Data(),
 		project.MaterialDir(),
-		project.TextureDir());
+		project.TextureDir(),
+		StemsFor(imported));
 
 	// Named from the glTF, not by index: matN.bmaterial tells nobody anything.
 	const std::filesystem::path file = project.MaterialDir() / "Rust.bmaterial";
@@ -148,7 +169,8 @@ TEST_CASE("A non-PBR material is left behind, and its submesh unassigned", "[imp
 		mesh,
 		project.Data(),
 		project.MaterialDir(),
-		project.TextureDir());
+		project.TextureDir(),
+		StemsFor(imported));
 
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Metal.bmaterial"));
 
@@ -157,6 +179,40 @@ TEST_CASE("A non-PBR material is left behind, and its submesh unassigned", "[imp
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Sign.bmaterial"));
 	CHECK(mesh.submeshes[1].material == assetlib::c_InvalidIndex);
 	CHECK(mesh.materials.size() == 1);
+}
+
+TEST_CASE("Every derived material stem is one the dialog would accept", "[importedmaterials]")
+{
+	// The dialog seeds its name fields with these and then validates what they hold. Were the two to
+	// disagree, a default name would open the dialog with OK already dead and nothing typed to fix.
+	const auto probed = std::vector<assetlib::GltfMaterial>{
+		{ .name = "Rust", .isPbr = true },
+		{ .name = "Rust", .isPbr = true },
+		{ .name = "", .isPbr = true },
+		{ .name = "wood/oak", .isPbr = true },
+		{ .name = "..", .isPbr = true },
+		{ .name = "  spaced  ", .isPbr = true },
+		{ .name = ".hidden", .isPbr = true },
+		{ .name = "caf\xc3\xa9 noir", .isPbr = true },
+		{ .name = "C:\\Windows", .isPbr = true },
+		{ .name = "unlit", .isPbr = false },
+	};
+
+	const QStringList stems = editor::MaterialStems(probed);
+	REQUIRE(stems.size() == static_cast<qsizetype>(probed.size()));
+
+	for (qsizetype i = 0; i < stems.size(); ++i)
+	{
+		INFO("material " << i << " -> '" << stems[i].toStdString() << "'");
+
+		if (!probed[static_cast<size_t>(i)].isPbr)
+		{
+			CHECK(stems[i].isEmpty());
+			continue;
+		}
+
+		CHECK(editor::IsPlainFileStem(stems[i]));
+	}
 }
 
 TEST_CASE("Imported material names are made safe and unique", "[importedmaterials]")
@@ -175,7 +231,8 @@ TEST_CASE("Imported material names are made safe and unique", "[importedmaterial
 		mesh,
 		project.Data(),
 		project.MaterialDir(),
-		project.TextureDir());
+		project.TextureDir(),
+		StemsFor(imported));
 
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Rust.bmaterial"));
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Rust_2.bmaterial"));
@@ -190,6 +247,119 @@ TEST_CASE("Imported material names are made safe and unique", "[importedmaterial
 	                            .size());
 	CHECK(count == 5);
 	CHECK(mesh.materials.size() == 5);
+}
+
+TEST_CASE("A stem list that no longer fits the source is refused", "[importedmaterials]")
+{
+	const TempProject project;
+
+	// The stems are chosen against a table probed before the dialog opens; the materials come from a
+	// second parse after it closes. An artist re-exporting in between leaves them out of step, and
+	// writing files named from the old table would bind materials to the wrong submeshes. Release
+	// builds compile asserts out, so this has to be a refusal the import can report and roll back.
+	const auto imported = ImportWith({ PbrMaterial(), PbrMaterial() }, { "Fur", "Eyes" });
+	auto       mesh     = assetlib::toBMesh(imported);
+
+	CHECK_THROWS_AS(
+		ContentExplorerWindow::WriteImportedMaterials(
+			imported,
+			mesh,
+			project.Data(),
+			project.MaterialDir(),
+			project.TextureDir(),
+			QStringList{ "fur_brown" }),
+		std::runtime_error);
+
+	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
+}
+
+TEST_CASE("A material is written under the stem it was handed", "[importedmaterials]")
+{
+	const TempProject project;
+
+	const auto imported = ImportWith({ PbrMaterial() }, { "Rust" });
+	auto       mesh     = assetlib::toBMesh(imported);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		imported,
+		mesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		QStringList{ "fur_brown" });
+
+	// The name the dialog showed, not the one the glTF carried. Deriving it here as well is what
+	// would let a preview and a file disagree, so the derived name must not appear at all.
+	CHECK(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
+	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Rust.bmaterial"));
+
+	CHECK(mesh.materials[0] == "Materials/hydrant/fur_brown.bmaterial");
+	CHECK(
+		assetlib::loadMaterial(project.MaterialDir() / "fur_brown.bmaterial").name == "fur_brown");
+}
+
+TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
+{
+	const TempProject project;
+
+	// What the dialog produces for a material it does not offer to write. The submesh is left
+	// unassigned, exactly as a non-PBR one is.
+	const auto imported = ImportWith({ PbrMaterial(), PbrMaterial() }, { "Kept", "Dropped" });
+	auto       mesh     = assetlib::toBMesh(imported);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		imported,
+		mesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		QStringList{ "Kept", QString() });
+
+	CHECK(std::filesystem::exists(project.MaterialDir() / "Kept.bmaterial"));
+	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Dropped.bmaterial"));
+	CHECK(mesh.submeshes[1].material == assetlib::c_InvalidIndex);
+}
+
+TEST_CASE(
+	"A failed import into a shared folder takes only its own materials",
+	"[importedmaterials]")
+{
+	const TempProject project;
+
+	// An import that has already landed in the folder.
+	const auto first     = ImportWith({ PbrMaterial() }, { "Fur" });
+	auto       firstMesh = assetlib::toBMesh(first);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		first,
+		firstMesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		QStringList{ "fur_brown" });
+
+	// A second one into the same folder -- what naming the files is for -- which then fails.
+	const auto second     = ImportWith({ PbrMaterial() }, { "Fur" });
+	auto       secondMesh = assetlib::toBMesh(second);
+
+	ContentExplorerWindow::WriteImportedMaterials(
+		second,
+		secondMesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		QStringList{ "fur_grey" });
+
+	const std::array<ContentExplorerWindow::ImportedFile, 1> written = { {
+		{ project.MaterialDir() / "fur_grey.bmaterial", false },
+	} };
+
+	ContentExplorerWindow::RollBack(written, {});
+
+	// The folder is not this import's to take down, so undoing it means removing exactly the files it
+	// wrote -- the other import's work has to survive a failure that had nothing to do with it.
+	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "fur_grey.bmaterial"));
+	CHECK(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
 }
 
 TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedmaterials]")
@@ -210,7 +380,8 @@ TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedm
 		mesh,
 		project.Data(),
 		project.MaterialDir(),
-		project.TextureDir());
+		project.TextureDir(),
+		StemsFor(imported));
 
 	// One material, named once: attachMaterial shares the slot rather than appending a duplicate, which
 	// is what keeps the reference graph from reporting the mesh twice.
@@ -235,7 +406,8 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 		mesh,
 		project.Data(),
 		project.MaterialDir(),
-		project.TextureDir());
+		project.TextureDir(),
+		StemsFor(imported));
 
 	const assetlib::BMaterial material =
 		assetlib::loadMaterial(project.MaterialDir() / "Leaves.bmaterial");
@@ -270,7 +442,8 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 		mesh,
 		project.Data(),
 		project.MaterialDir(),
-		project.TextureDir());
+		project.TextureDir(),
+		StemsFor(imported));
 
 	const assetlib::BMaterial material =
 		assetlib::loadMaterial(project.MaterialDir() / "Shared.bmaterial");

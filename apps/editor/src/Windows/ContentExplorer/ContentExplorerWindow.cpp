@@ -80,35 +80,6 @@ namespace
 	}
 
 	/**
-	 * A file stem for a glTF material called `name`, unique among `taken`, which it is added to.
-	 *
-	 * A glTF material name is free text: it can be empty, repeat, or hold separators that would send the
-	 * file somewhere other than the import's own folder. `index` names the ones that reduce to nothing.
-	 */
-	QString
-	UniqueMaterialStem(std::string_view name, size_t index, QSet<QString>& taken)
-	{
-		static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
-
-		QString stem = QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size()))
-		                   .trimmed()
-		                   .replace(c_Unsafe, QStringLiteral("_"));
-
-		// "." and ".." name a directory rather than a file, and a leading dot hides it.
-		while (stem.startsWith('.')) stem.remove(0, 1);
-		if (stem.isEmpty())
-			stem = QStringLiteral("material%1").arg(index);
-
-		// Case-insensitively: two materials called "Rust" and "rust" are one file on Windows.
-		QString unique = stem;
-		for (int n = 2; taken.contains(unique.toLower()); ++n)
-			unique = QStringLiteral("%1_%2").arg(stem).arg(n);
-
-		taken.insert(unique.toLower());
-		return unique;
-	}
-
-	/**
 	 * Reports that an import would land on an asset that is already there and refuses it -- import
 	 * never overwrites. `replaced` is whatever the import would have written over, each being
 	 * destructive to import onto and none of it recoverable. The user renames or removes the
@@ -1041,7 +1012,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 
 		// What the file's materials are decides what the dialog may offer, so it is read before the
 		// dialog is built. A file that will not parse is left to the import to report.
-		auto materials = assetlib::GltfMaterialProbe();
+		auto materials = std::vector<assetlib::GltfMaterial>();
 		try
 		{
 			materials = assetlib::probeGltfMaterials(std::filesystem::path(file.toStdWString()));
@@ -1051,12 +1022,12 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 			qWarning("Import: could not read '%s': %s", qPrintable(file), e.what());
 		}
 
-		AssetImporterDialog dialog(file, materials, this);
+		AssetImporterDialog dialog(file, materials, m_RootPath, this);
 		if (dialog.exec() != QDialog::Accepted)
 			continue;
 
 		auto options         = ImportOptions();
-		options.destinations = dialog.GetDestinations();
+		options.outputs      = dialog.GetOutputs();
 		options.mesh         = dialog.GetImportMesh();
 		options.textures     = dialog.GetImportTextures();
 		options.pbrMaterials = dialog.CanImportPbrMaterials();
@@ -1079,9 +1050,20 @@ ContentExplorerWindow::WriteImportedMaterials(
 	assetlib::BMesh&                  mesh,
 	const std::filesystem::path&      dataRoot,
 	const std::filesystem::path&      materialDir,
-	const std::filesystem::path&      textureDir)
+	const std::filesystem::path&      textureDir,
+	std::span<const QString>          stems)
 {
 	namespace fs = std::filesystem;
+
+	// The stems were chosen against a material table probed before the dialog opened; this one comes
+	// from a second parse of the same file after it closed. A source re-exported while the dialog sat
+	// open has a different table, and stems taken from the old one would name files after materials
+	// that are no longer at those indices.
+	if (stems.size() != imported.materials.size())
+	{
+		throw std::runtime_error(
+			"this file's materials changed while the import dialog was open; import it again");
+	}
 
 	fs::create_directories(materialDir);
 
@@ -1095,7 +1077,6 @@ ContentExplorerWindow::WriteImportedMaterials(
 					   (textureDir / assetlib::textureFileName(index)).wstring());
 	};
 
-	auto taken    = QSet<QString>();
 	auto relative = std::vector<std::string>(imported.materials.size());
 
 	for (size_t i = 0; i < imported.materials.size(); ++i)
@@ -1103,12 +1084,11 @@ ContentExplorerWindow::WriteImportedMaterials(
 		const assetlib::imp::BMaterialImport& source = imported.materials[i];
 
 		// A material whose shading model the engine has no payload for is left behind rather than
-		// stamped into a PBR one it never was.
-		if (!source.isPbr)
+		// stamped into a PBR one it never was, and carries no stem to be written under.
+		if (!source.isPbr || stems[i].isEmpty())
 			continue;
 
-		const QString stem =
-			UniqueMaterialStem(imported.stringPool.at(source.nameOffset), i, taken);
+		const QString& stem = stems[i];
 		const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
 
 		MaterialGraphModel model(registry);
@@ -1272,23 +1252,20 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	const fs::path source   = fs::path(sourceFile.toStdWString());
 	const fs::path dataRoot = fs::path(m_RootPath.toStdWString());
 
-	// Already category-relative; the dialog is what binds a typed folder to its category.
-	const auto under = [&](const QString& destination) {
-		return dataRoot / fs::path(destination.toStdWString());
+	// Already category-relative; the dialog is what binds a typed folder or name to its category.
+	const auto under = [&](const QString& output) {
+		return dataRoot / fs::path(output.toStdWString());
 	};
 
 	// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
 	// own folder or the next one silently overwrites it.
-	const fs::path textureDir =
-		options.textures ? under(options.destinations.textures) : fs::path();
+	const fs::path textureDir = options.textures ? under(options.outputs.textureDir) : fs::path();
 
 	// A derived material routes at the extracted textures, so it cannot come across without them.
 	const bool     importMaterials = options.pbrMaterials && options.textures && options.mesh;
-	const fs::path materialDir =
-		importMaterials ? under(options.destinations.materials) : fs::path();
+	const fs::path materialDir = importMaterials ? under(options.outputs.materialDir) : fs::path();
 
-	fs::path bmeshPath = under(options.destinations.mesh) / source.filename();
-	bmeshPath.replace_extension(".bmesh");
+	const fs::path bmeshPath = under(options.outputs.mesh);
 
 	const QString name = QFileInfo(sourceFile).fileName();
 
@@ -1308,10 +1285,8 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	// So a static import is refused over a rig it would never write, which is the deliberate
 	// direction: the alternative is parsing before asking, and refusing too often is recoverable
 	// where overwriting a rig is not.
-	fs::path bskelPath = under(options.destinations.skeleton) / source.filename();
-	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
-	fs::path banimPath = under(options.destinations.animations) / source.filename();
-	banimPath.replace_extension(assetlib::c_AnimationExtension);
+	const fs::path bskelPath = under(options.outputs.skeleton);
+	const fs::path banimPath = under(options.outputs.animations);
 
 	// Only what this import may actually write.
 	auto files = std::vector<ImportedFile>();
@@ -1323,6 +1298,21 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	if (options.animations)
 		files.push_back({ banimPath, fs::exists(banimPath, ec) });
 
+	// Named one by one rather than by the folder holding them, because two imports sharing a materials
+	// folder is what the dialog's per-file names are for: only a material file that is already there
+	// may refuse this import, and it is also the only thing a failure may delete.
+	if (importMaterials)
+	{
+		for (const QString& stem : options.outputs.materialStems)
+		{
+			if (stem.isEmpty())
+				continue;
+
+			const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
+			files.push_back({ file, fs::exists(file, ec) });
+		}
+	}
+
 	const std::array<ImportedDir, 2> dirs = { {
 		{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
 		{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
@@ -1332,9 +1322,12 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	for (const ImportedFile& file : files)
 		if (file.existed)
 			replaced << QString::fromStdWString(file.path.wstring());
-	for (const ImportedDir& dir : dirs)
-		if (dir.existed)
-			replaced << QString::fromStdWString(dir.path.wstring());
+
+	// Only the texture folder: it is named tex0.ktx2 by index, so one already there belongs to another
+	// import and sharing it would overwrite that import's files. A materials folder is shareable, and
+	// its files are checked above.
+	if (textureDirExisted)
+		replaced << QString::fromStdWString(textureDir.wstring());
 
 	if (ReportImportConflict(this, name, replaced))
 		return ImportOutcome::kBlocked;
@@ -1403,7 +1396,13 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 					options.animations);
 
 				if (importMaterials)
-					WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
+					WriteImportedMaterials(
+						*imported,
+						*mesh,
+						dataRoot,
+						materialDir,
+						textureDir,
+						options.outputs.materialStems);
 
 				WriteImportedMesh(*mesh, bmeshPath);
 			}

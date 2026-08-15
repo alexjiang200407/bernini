@@ -750,7 +750,7 @@ namespace assetlib
 		}
 	}
 
-	GltfMaterialProbe
+	std::vector<GltfMaterial>
 	probeGltfMaterials(const std::filesystem::path& path)
 	{
 		tinygltf::TinyGLTF loader;
@@ -772,11 +772,12 @@ namespace assetlib
 
 		loadModel(loader, model, path);
 
-		GltfMaterialProbe probe{};
-		probe.materialCount = model.materials.size();
-		probe.pbrMaterialCount =
-			static_cast<size_t>(std::ranges::count_if(model.materials, isPbrMaterial));
-		return probe;
+		auto probed = std::vector<GltfMaterial>();
+		probed.reserve(model.materials.size());
+		for (const auto& gltfMat : model.materials)
+			probed.push_back({ .name = gltfMat.name, .isPbr = isPbrMaterial(gltfMat) });
+
+		return probed;
 	}
 
 	BMeshImport

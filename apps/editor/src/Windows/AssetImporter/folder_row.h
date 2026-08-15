@@ -22,9 +22,15 @@ namespace editor
 	/**
 	 * Adds a folder field behind its category, shown as an uneditable prefix so the layout is obvious.
 	 *
+	 * @param leading Placed ahead of the category prefix, or nothing when null. An ImportSection puts
+	 *        its fold-out toggle there, so a section header and a plain folder row stay the same row.
 	 * @return The field, parented to `parent`, for the caller to read and to enable alongside whichever
 	 *         piece of the import writes into it.
 	 */
 	QLineEdit*
-	AddFolderRow(QVBoxLayout* layout, QWidget* parent, const FolderRowDesc& desc);
+	AddFolderRow(
+		QVBoxLayout*         layout,
+		QWidget*             parent,
+		const FolderRowDesc& desc,
+		QWidget*             leading = nullptr);
 }

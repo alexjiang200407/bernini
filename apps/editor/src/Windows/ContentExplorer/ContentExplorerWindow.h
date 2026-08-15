@@ -102,7 +102,13 @@ public:
 	 * Public, and taking everything it needs, because the import that calls it cannot be driven from a
 	 * test -- it is behind a modal dialog -- and this is the half worth pinning.
 	 *
-	 * @throws std::runtime_error if a file cannot be written.
+	 * @param stems The file stem to write each material under, index-aligned with
+	 *        `imported.materials` and empty where no file is wanted. The dialog shows these before the
+	 *        import runs, so they are given rather than derived -- deriving them here as well is how a
+	 *        preview and a file come to disagree. See editor::MaterialStems for the defaults.
+	 * @throws std::runtime_error if a file cannot be written, or if `stems` does not cover
+	 *         `imported.materials` -- which means the source was rewritten between the probe that
+	 *         named them and the parse that produced these materials.
 	 */
 	static void
 	WriteImportedMaterials(
@@ -110,7 +116,8 @@ public:
 		assetlib::BMesh&                  mesh,
 		const std::filesystem::path&      dataRoot,
 		const std::filesystem::path&      materialDir,
-		const std::filesystem::path&      textureDir);
+		const std::filesystem::path&      textureDir,
+		std::span<const QString>          stems);
 
 	/**
 	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
@@ -165,6 +172,10 @@ public:
 	 * Only what the import itself created, and never anything that was already there -- a texture folder
 	 * that predates the import is left alone, files and all, because the user was asked before it was
 	 * written into and its other contents are not ours to delete.
+	 *
+	 * A materials folder shared with another import is why the material files are listed in `files`
+	 * one by one: the folder cannot be taken down, so the only way to leave the other import intact is
+	 * to remove exactly the files this one wrote.
 	 */
 	static void
 	RollBack(std::span<const ImportedFile> files, std::span<const ImportedDir> dirs);
@@ -248,8 +259,8 @@ private:
 	/** What the import dialog asked for. */
 	struct ImportOptions
 	{
-		// Where each piece lands, already inside its own category.
-		ImportDestinations destinations;
+		// Every file to write, already inside its own category.
+		ImportOutputs outputs;
 
 		bool mesh         = true;  // off imports only the pieces below -- see ImportMesh
 		bool textures     = false;
@@ -270,8 +281,13 @@ private:
 	 * graphs are built afterwards, back on the UI thread -- their nodes own QPixmaps, which belong to
 	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
 	 *
-	 * Asks before overwriting anything, reports a failure to the user, and on either a failure or a
-	 * cancel removes the half-written files it had produced -- see RollBack.
+	 * Refuses to overwrite anything, reports a failure to the user, and on either a failure or a cancel
+	 * removes the half-written files it had produced -- see RollBack.
+	 *
+	 * What counts as a collision differs by category. A materials folder may be shared with another
+	 * import, since `options.outputs` names each file, so only a colliding *file* refuses this one. A
+	 * texture folder may not: `writeTextures` names its output by index, so one already there is
+	 * another import's and writing into it would overwrite that import's files.
 	 */
 	[[nodiscard]] ImportOutcome
 	ImportMesh(const QString& sourceFile, const ImportOptions& options);
