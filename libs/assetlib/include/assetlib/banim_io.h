@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -29,6 +30,15 @@ namespace assetlib
 	loadAnimations(const std::filesystem::path& path);
 
 	/**
+	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
+	 * clip set may equally be a loose file or an entry in an archive.
+	 *
+	 * @throws std::runtime_error if the container is absent, cannot be read, or is malformed.
+	 */
+	[[nodiscard]] AnimationSet
+	loadAnimations(const core::file::IFileSystem& fileSystem, std::string_view path);
+
+	/**
 	 * The skeleton path `path` names, read without its samples: the header, the chunk table and the
 	 * reference chunk alone. A whole-project reference scan comes through here -- the samples are
 	 * megabytes and the path is a few dozen bytes.
@@ -37,6 +47,10 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	loadAnimationSkeletonPath(const std::filesystem::path& path);
+
+	/** The mounted overload of loadAnimationSkeletonPath, and just as seek-only. */
+	[[nodiscard]] std::string
+	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path);
 
 	/**
 	 * Whether `animations` was resampled against `skeleton`, by signature. A mismatch means the rig

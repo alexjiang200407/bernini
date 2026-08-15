@@ -263,6 +263,38 @@ a file format, the third is a different resolution on a different string type.
 return the same verdict against an archive that they returned against the tree it was packed from.
 A packed project must not silently change which material representation it draws.
 
+### The loaders stay free functions; a `dataRoot` parameter becomes the mount.
+
+Every `load*` that names a single file gains an `IFileSystem&` overload beside the path-taking one,
+because both callers are real and neither can be deleted. Every function that takes a `dataRoot`
+instead has that parameter *replaced*: `bakeIsStale`, `drawsLoose`, `vatIsStale`, `envMapToDraw`,
+`isSkyBakeStale`, `isEnvLightingBakeStale` and `describe` use `dataRoot` as `dataRoot / relative` and
+for nothing else, at every site. A data root is already a mount spelled as a path, so there is no
+second overload to add — the signature count stays at one and the resolution moves to the seam.
+
+**Rejected: an `assetlib` loader class composing an `IFileSystem&`** — `AssetReader::LoadMesh(path)`
+in place of `loadMesh(fileSystem, path)`, currying the mount once rather than threading it through
+every call.
+
+It would not replace the free functions, it would join them. Of 41 production call sites, 6 curry a
+data root (`AssetManager` ×5, each spelled `m_DataRoot / x`); 11 hold an absolute path with no root
+to mount — `assetlib_cli` on whatever was typed at the command line
+([main.cpp:641](../../libs/assetlib/cli/main.cpp)), and the Material Editor on Qt paths off a file
+dialog ([MaterialEditorWindow.cpp:1006](../../apps/editor/src/Windows/MaterialEditor/MaterialEditorWindow.cpp)).
+A loader serves the first group and cannot serve the second; routing the second through a throwaway
+`LooseFileSystem(path.parent_path())` plus `path.filename()` is worse at the call site than the
+overload it replaced.
+
+And the object it would be already exists one layer up. `AssetManager` holds `m_DataRoot` and is
+what gamelib hands around to load a project's assets; task 8 swaps that one field for a
+`LayeredFileSystem`. A loader would be a second composition object beneath a composition object over
+the same mount, owning nothing — the state that would justify one is already placed elsewhere:
+tombstone masking on `LayeredFileSystem`, the archive handle inside `PakFile`.
+
+What would reverse this: a decoded-asset cache keyed by mount. A cache needs an owner with a
+lifetime and a free function cannot be one — but that owner is `AssetManager`, which is also where
+the question would first be asked.
+
 ### Reads are concurrent, so `PakFile` holds no seek position.
 
 The editor's `AssetThumbnailCache` decodes on a `QThreadPool` with both workers "deep in KTX2
@@ -418,14 +450,16 @@ build spend seconds skinning on first load.
 |---|---|---|
 | `bgl` | none | — |
 | `core` | new `core::file::IFileSystem`, `FileStamp`, `LooseFileSystem`, `LayeredFileSystem`, `write_atomic` | none; additive |
-| `assetlib` | every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; `stampOf` and the four staleness predicates take a filesystem; `AssetRefGraph::Scan` and the texture prune walk the mount union instead of the data root; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
+| `assetlib` | every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; the staleness predicates have their `dataRoot` parameter replaced by a filesystem; `AssetRefGraph::Scan` and the texture prune walk the mount union instead of the data root; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
 | `gamelib` | `AssetManager` takes a `LayeredFileSystem`; the path-taking constructor stays and builds a loose mount, so every existing caller compiles unchanged; `AcquireVatMesh` respects a read-only mount | moderate |
 | `apps/editor` | `Project` opens a mount rather than a data root; the Content Explorer comes off `QFileSystemModel` to show the union; delete writes a tombstone; a *Sync* action repacks | **high, and the largest single task.** The Content Explorer indexes straight into its model in a dozen places |
 | docs | new `docs/archives.md`; `ROADMAP.md` line under Asset Streaming Pipeline | — |
 
-The path-taking `load*` overloads are all kept, resolving through a process-default loose filesystem.
-Roughly a hundred call sites across the CLI and the test suites do not move, and the diff stays
-readable.
+The path-taking `load*` overloads are all kept, reading the file directly rather than through a
+mount — a directory served through `IFileSystem::ReadRange` costs an open per range where a held
+handle costs one for the whole container, so the two forms are two readers behind one parser, not a
+wrapper over a default mount. Roughly a hundred call sites across the CLI and the test suites do not
+move, and the diff stays readable.
 
 ---
 
@@ -472,10 +506,27 @@ deserializers they already have.
 load, mip count and format included.
 
 **5. Staleness through the seam.**
-`stampOf`, `bakeIsStale`, `drawsLoose`, `vatIsStale` and `envMapToDraw` take an `IFileSystem&`.
+The predicates that take a `dataRoot` — `bakeIsStale`, `drawsLoose`, `vatIsStale`, `envMapToDraw`,
+`isSkyBakeStale`, `isEnvLightingBakeStale`, and the file-local `routeIsStale`, `tripletIsOnDisk`,
+`routesAreOnDisk` — have that parameter **replaced** by an `IFileSystem&` rather than overloaded,
+per the decision above; `describe` follows for the same reason. `stampOf` gains an `IFileSystem&`
+overload and keeps its path-taking form for the CLI. It stays the one place that knows
+`core::file::FileStamp` and `assetlib::SourceStamp` are the same two numbers, and it keeps its
+missing-file contract by mapping `Stat`'s empty optional onto the zeroed stamp that never compares
+equal.
+Replacing rather than overloading does ripple, and the ripple is the cost of this task: five
+production call sites outside `assetlib` pass a `dataRoot` today — `AssetManager` ×3
+([AssetManager.cpp:165,236,359](../../libs/gamelib/src/AssetManager.cpp)), `AssetThumbnailCache` and
+`MaterialEditorWindow` one each — plus roughly forty-five in `assetlib_tests`. Each of the five
+already holds a data root that tasks 8 and 9 convert to a mount regardless, so this task gives them
+a `LooseFileSystem` member built from the root they hold and those tasks change only what it is
+built *from*. The alternative is an overload pair carried across four merged tasks and deleted in
+the fifth, which is more churn spread over more PRs.
 *Gate:* `assetlib_tests` — a material that reads loose from a directory reads loose from an archive
 packed out of that directory, and one that reads baked reads baked; a source touched after packing
-flips the verdict on the loose mount and not on the archive.
+flips the verdict on the loose mount and not on the archive; `stampOf` over a mount equals `stampOf`
+over the same file by path, and a path absent from the mount yields the zeroed stamp rather than
+throwing.
 
 **6. `assetlib_cli pack` (and `list`).**
 Walks a data root, applies the exclusion rule, bakes `.bvat` fresh, writes one `.bpak` through

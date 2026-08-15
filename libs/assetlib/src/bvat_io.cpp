@@ -271,17 +271,59 @@ namespace assetlib
 	}
 
 	BVat
+	loadVat(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeVat(fileSystem.Read(path));
+	}
+
+	namespace
+	{
+		constexpr std::array<uint32_t, 6> c_WantedTableChunks = { { uint32_t(ChunkId::kInfo),
+			                                                        uint32_t(ChunkId::kClips),
+			                                                        uint32_t(ChunkId::kColumns),
+			                                                        uint32_t(ChunkId::kPalettes),
+			                                                        uint32_t(ChunkId::kInputs),
+			                                                        uint32_t(
+																		ChunkId::kStringPool) } };
+
+		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(ChunkId::kInputs) } };
+
+		VatRefs
+		refsFromChunks(const std::unordered_map<uint32_t, std::vector<std::byte>>& chunks)
+		{
+			const auto it = chunks.find(uint32_t(ChunkId::kInputs));
+			if (it == chunks.end())
+				throw_runtime_error("bvat: the inputs chunk is missing");
+
+			BVat vat;
+			unpackInputs(vat, it->second);
+			return VatRefs{ vat.mesh, vat.skeleton, vat.animations };
+		}
+	}
+
+	BVat
 	loadVatTables(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 6> c_Wanted = { { uint32_t(ChunkId::kInfo),
-			                                             uint32_t(ChunkId::kClips),
-			                                             uint32_t(ChunkId::kColumns),
-			                                             uint32_t(ChunkId::kPalettes),
-			                                             uint32_t(ChunkId::kInputs),
-			                                             uint32_t(ChunkId::kStringPool) } };
+		const auto chunks = chunk::readChunksFromFile(
+			path,
+			magic::c_BVat,
+			c_VersionMajor,
+			c_WantedTableChunks,
+			c_What);
 
-		const auto chunks =
-			chunk::readChunksFromFile(path, magic::c_BVat, c_VersionMajor, c_Wanted, c_What);
+		return readTables(TableSource{ nullptr, &chunks });
+	}
+
+	BVat
+	loadVatTables(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		const auto chunks = chunk::readChunksFrom(
+			fileSystem,
+			path,
+			magic::c_BVat,
+			c_VersionMajor,
+			c_WantedTableChunks,
+			c_What);
 
 		return readTables(TableSource{ nullptr, &chunks });
 	}
@@ -289,17 +331,25 @@ namespace assetlib
 	VatRefs
 	loadVatRefs(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 1> c_Wanted = { { uint32_t(ChunkId::kInputs) } };
+		return refsFromChunks(
+			chunk::readChunksFromFile(
+				path,
+				magic::c_BVat,
+				c_VersionMajor,
+				c_WantedRefChunks,
+				c_What));
+	}
 
-		const auto chunks =
-			chunk::readChunksFromFile(path, magic::c_BVat, c_VersionMajor, c_Wanted, c_What);
-
-		const auto it = chunks.find(uint32_t(ChunkId::kInputs));
-		if (it == chunks.end())
-			throw_runtime_error("bvat: the inputs chunk is missing");
-
-		BVat vat;
-		unpackInputs(vat, it->second);
-		return VatRefs{ vat.mesh, vat.skeleton, vat.animations };
+	VatRefs
+	loadVatRefs(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return refsFromChunks(
+			chunk::readChunksFrom(
+				fileSystem,
+				path,
+				magic::c_BVat,
+				c_VersionMajor,
+				c_WantedRefChunks,
+				c_What));
 	}
 }

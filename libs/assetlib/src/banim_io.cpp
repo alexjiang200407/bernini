@@ -115,21 +115,53 @@ namespace assetlib
 		return deserializeAnimations(core::file::read_file_bytes(path.string()));
 	}
 
+	AnimationSet
+	loadAnimations(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeAnimations(fileSystem.Read(path));
+	}
+
+	namespace
+	{
+		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(
+			ChunkId::kSkeletonRef) } };
+
+		std::string
+		skeletonPathFromChunks(const std::unordered_map<uint32_t, std::vector<std::byte>>& chunks)
+		{
+			const auto it = chunks.find(uint32_t(ChunkId::kSkeletonRef));
+			if (it == chunks.end())
+				return {};
+
+			AnimationSet animations;
+			unpackSkeletonRef(animations, it->second);
+			return animations.skeleton;
+		}
+	}
+
 	std::string
 	loadAnimationSkeletonPath(const std::filesystem::path& path)
 	{
-		constexpr std::array<uint32_t, 1> c_Wanted = { { uint32_t(ChunkId::kSkeletonRef) } };
+		return skeletonPathFromChunks(
+			chunk::readChunksFromFile(
+				path,
+				magic::c_BAnim,
+				c_VersionMajor,
+				c_WantedRefChunks,
+				c_What));
+	}
 
-		const auto chunks =
-			chunk::readChunksFromFile(path, magic::c_BAnim, c_VersionMajor, c_Wanted, c_What);
-
-		const auto it = chunks.find(uint32_t(ChunkId::kSkeletonRef));
-		if (it == chunks.end())
-			return {};
-
-		AnimationSet animations;
-		unpackSkeletonRef(animations, it->second);
-		return animations.skeleton;
+	std::string
+	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return skeletonPathFromChunks(
+			chunk::readChunksFrom(
+				fileSystem,
+				path,
+				magic::c_BAnim,
+				c_VersionMajor,
+				c_WantedRefChunks,
+				c_What));
 	}
 
 	bool
