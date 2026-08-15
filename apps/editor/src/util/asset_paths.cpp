@@ -32,6 +32,12 @@ namespace editor
 	}
 
 	bool
+	IsHiddenBuildProductFile(const QString& path)
+	{
+		return path.endsWith(QStringLiteral(".bvat"), Qt::CaseInsensitive);
+	}
+
+	bool
 	IsPlainFileStem(const QString& name)
 	{
 		if (name.isEmpty())

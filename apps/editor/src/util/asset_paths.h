@@ -22,6 +22,15 @@ namespace editor
 	IsTextureFile(const QString& path);
 
 	/**
+	 * Whether `path` names a derived build product (`.bvat`, case-insensitively) -- a file the
+	 * editor's views hide: it is wholly re-bakeable from its inputs, never committed, and offering
+	 * it for rename or delete implies an authorship it does not have. The reference graph still
+	 * reads it from the filesystem directly, so rename/delete cascades of its *inputs* see it.
+	 */
+	[[nodiscard]] bool
+	IsHiddenBuildProductFile(const QString& path);
+
+	/**
 	 * Whether `name` is a plain file stem -- letters, digits, `_`, `.` and `-`, and not `.` or `..`.
 	 *
 	 * An import joins a typed name onto a category directory and a suffix, so anything that could

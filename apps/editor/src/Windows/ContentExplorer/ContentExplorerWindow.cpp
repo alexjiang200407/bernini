@@ -22,6 +22,7 @@
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
@@ -30,6 +31,7 @@
 #include <QStringList>
 #include <QStyle>
 #include <QToolButton>
+#include <QTreeView>
 #include <QUrl>
 
 #include <assetlib/asset_refs.h>
@@ -132,6 +134,21 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 	m_FileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
 	m_FileModel->SetTexturePreviews(&m_TexturePreviews);
 
+	connect(
+		m_HierarchyModel,
+		&QAbstractItemModel::rowsInserted,
+		this,
+		[this](const QModelIndex& parent, int first, int last) {
+			HideBuildProductRows(m_Ui.FileExplorer, *m_HierarchyModel, parent, first, last);
+		});
+	connect(
+		m_FileModel,
+		&QAbstractItemModel::rowsInserted,
+		this,
+		[this](const QModelIndex& parent, int first, int last) {
+			HideBuildProductRows(m_Ui.CurrentDirectoryExplorer, *m_FileModel, parent, first, last);
+		});
+
 	m_Ui.FileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(
 		m_Ui.FileExplorer,
@@ -185,6 +202,10 @@ void
 ContentExplorerWindow::ShowDirectory(const QString& path)
 {
 	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
+	HideBuildProductRows(
+		m_Ui.CurrentDirectoryExplorer,
+		*m_FileModel,
+		m_Ui.CurrentDirectoryExplorer->rootIndex());
 
 	// The tree follows, or it would go on highlighting the folder the grid has left -- and clicking
 	// that row again would be a dead click, setCurrentIndex on the current index emitting nothing.
@@ -240,6 +261,35 @@ ContentExplorerWindow::NavigateBack()
 }
 
 void
+ContentExplorerWindow::HideBuildProductRows(
+	QAbstractItemView*      view,
+	const QFileSystemModel& model,
+	const QModelIndex&      parent,
+	const int               first,
+	const int               last)
+{
+	auto* tree = qobject_cast<QTreeView*>(view);
+	auto* list = qobject_cast<QListView*>(view);
+
+	// A list's rows are its root's children; anything else that arrives is not on screen.
+	if (list != nullptr && parent != list->rootIndex())
+		return;
+
+	const int end =
+		last < 0 ? model.rowCount(parent) - 1 : std::min(last, model.rowCount(parent) - 1);
+	for (int row = first; row <= end; ++row)
+	{
+		if (!editor::IsHiddenBuildProductFile(model.filePath(model.index(row, 0, parent))))
+			continue;
+
+		if (tree != nullptr)
+			tree->setRowHidden(row, parent, true);
+		else if (list != nullptr)
+			list->setRowHidden(row, true);
+	}
+}
+
+void
 ContentExplorerWindow::AttachModels()
 {
 	if (m_Ui.FileExplorer->model() == m_HierarchyModel)
@@ -247,6 +297,9 @@ ContentExplorerWindow::AttachModels()
 
 	m_Ui.FileExplorer->setModel(m_HierarchyModel);
 	m_Ui.FileExplorer->setHeaderHidden(true);
+	connect(m_Ui.FileExplorer, &QTreeView::expanded, this, [this](const QModelIndex& parent) {
+		HideBuildProductRows(m_Ui.FileExplorer, *m_HierarchyModel, parent);
+	});
 	for (auto column = 1; column < m_HierarchyModel->columnCount(); ++column)
 		m_Ui.FileExplorer->hideColumn(column);
 
@@ -334,9 +387,17 @@ ContentExplorerWindow::UpdateEmptyPlaceholder()
 
 	// Only meaningful once a folder is shown; and while the model is still fetching the
 	// directory's contents we can't yet tell whether it's empty, so wait for the reload.
-	const auto root  = m_Ui.CurrentDirectoryExplorer->rootIndex();
+	const auto root = m_Ui.CurrentDirectoryExplorer->rootIndex();
+
+	// Counting what the view shows, not what the model holds: a folder of nothing but hidden
+	// build products is empty to the user.
+	auto visibleRows = 0;
+	for (int row = 0; row < m_FileModel->rowCount(root); ++row)
+		if (!m_Ui.CurrentDirectoryExplorer->isRowHidden(row))
+			++visibleRows;
+
 	const bool empty = m_Ui.CurrentDirectoryExplorer->model() == m_FileModel &&
-	                   !m_FileModel->canFetchMore(root) && m_FileModel->rowCount(root) == 0;
+	                   !m_FileModel->canFetchMore(root) && visibleRows == 0;
 
 	if (empty)
 	{

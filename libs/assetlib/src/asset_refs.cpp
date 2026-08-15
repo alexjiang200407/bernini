@@ -418,6 +418,9 @@ namespace assetlib
 			else
 				deleted.insert(plan.target);
 
+			// The swept bakes go too, so what only they referenced can come free.
+			deleted.insert(plan.derived.begin(), plan.derived.end());
+
 			auto cascade = std::vector<std::string>();
 
 			bool grew = true;
@@ -459,10 +462,11 @@ namespace assetlib
 		requireInsideDataRoot("assetlib::planDeletion", plan.target);
 
 		// A directory is not an asset, and has no kind: that is what nullopt says.
+		auto referrers = std::vector<AssetRef>();
 		if (std::filesystem::is_directory(graph.DataRoot() / plan.target))
 		{
 			plan.contents = filesUnder(graph.DataRoot(), plan.target);
-			plan.blockers = graph.ReferrersInto(plan.target);
+			referrers     = graph.ReferrersInto(plan.target);
 		}
 		else
 		{
@@ -472,9 +476,20 @@ namespace assetlib
 					"assetlib::planDeletion: '" + plan.target +
 					"' is not an asset this project stores anything about");
 
-			const std::span<const AssetRef> referrers = graph.ReferrersOf(plan.target);
-			plan.blockers.assign(referrers.begin(), referrers.end());
+			const std::span<const AssetRef> held = graph.ReferrersOf(plan.target);
+			referrers.assign(held.begin(), held.end());
 		}
+
+		// A bake's edges sweep the bake rather than block: see DeletionPlan::derived.
+		for (const AssetRef& ref : referrers)
+		{
+			if (ref.kind == RefKind::kVatSource)
+				plan.derived.push_back(ref.referrer);
+			else
+				plan.blockers.push_back(ref);
+		}
+		std::ranges::sort(plan.derived);
+		plan.derived.erase(std::ranges::unique(plan.derived).begin(), plan.derived.end());
 
 		return plan;
 	}
@@ -499,7 +514,16 @@ namespace assetlib
 
 		const std::filesystem::path path = desc.dataRoot / plan.target;
 
+		// The bakes first: they reference the target, so no failure below leaves one standing on
+		// inputs that are gone. Already-vanished ones count as deleted, as the target itself does.
 		std::error_code ec;
+		for (const std::string& bake : plan.derived)
+		{
+			std::filesystem::remove(desc.dataRoot / bake, ec);
+			if (ec)
+				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
+		}
+
 		if (plan.IsDirectory())
 			std::filesystem::remove_all(path, ec);
 		else
