@@ -2,6 +2,7 @@
 
 #include "Render/OrbitCamera.h"
 #include "Render/environment.h"
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include <bgl/GeomHandle.h>
@@ -20,12 +21,15 @@ class QWheelEvent;
 
 /**
  * The Animation panel's viewport: a dropped or opened `.bmesh` shown wearing its own materials
- * against the configured environment, under an orbit camera. A rigged mesh with no clips to play
- * stands in its bind pose.
+ * against the configured environment, under an orbit camera. A rigged mesh with clips plays as
+ * VAT -- its skinned entries acquired through AcquireVatMesh, its static entries beside them --
+ * and one with none stands in its bind pose.
  *
- * Geometry and materials are acquired through `game::AssetManager`, so a mesh renders here exactly
- * as it does anywhere else the manager serves; SetAssets(nullptr) releases everything held, and
- * MainWindow calls it before the manager itself is torn down.
+ * Everything is acquired through `game::AssetManager`, so a mesh renders here exactly as it does
+ * anywhere else the manager serves; SetAssets(nullptr) releases everything held, and MainWindow
+ * calls it before the manager itself is torn down.
+ *
+ * The window has no clock of its own: the panel owns the transport and feeds SetTime.
  */
 class AnimationPreviewWindow : public RenderTargetWindow
 {
@@ -53,9 +57,19 @@ public:
 		m_DataRoot = dataRoot;
 	}
 
-	/** Replaces the preview with the mesh at `absolutePath`; must live under the data root. */
+	/**
+	 * Replaces the preview with the mesh at `absolutePath` (which must live under the data root),
+	 * played from `animationsRelPath` -- or from the first resolved candidate when empty. A rig
+	 * whose clips are stale re-bakes under the loading screen before anything is uploaded.
+	 *
+	 * What ends up shown is announced by the signals below; a failure warns and clears.
+	 */
 	void
-	LoadMesh(const std::filesystem::path& absolutePath);
+	LoadMesh(const std::filesystem::path& absolutePath, const std::string& animationsRelPath = {});
+
+	/** Respawns the VAT instances on clip `index`; the caller's transport is the clock. */
+	void
+	SetActiveClip(uint32_t index);
 
 	/** Back to the empty state: geometry released, environment kept. */
 	void
@@ -65,6 +79,14 @@ Q_SIGNALS:
 	/** The preview now shows the mesh at this data-root-relative path (empty: cleared). */
 	void
 	MeshChanged(const QString& relPath);
+
+	/** The `.banim` candidates for the shown mesh, and which one is playing (-1: none). */
+	void
+	AnimationSourcesChanged(const QStringList& candidates, int activeIndex);
+
+	/** The clip table now playable (empty: bind pose only). Feed it to the transport. */
+	void
+	ClipsChanged(const std::vector<editor::ClipInfo>& clips);
 
 protected:
 	void
@@ -94,10 +116,20 @@ private:
 	void
 	ClearGeometry();
 
-	game::AssetManager* m_Assets = nullptr;
+	// One VAT placement's live state: respawned in place on a clip switch.
+	struct VatDraw
+	{
+		bgl::GeomHandle         geom;
+		glm::mat4               world = glm::mat4(1.0f);
+		bgl::MeshInstanceHandle instance;
+	};
 
-	std::vector<bgl::MeshInstanceHandle> m_Instances;
-	std::vector<bgl::GeomHandle>         m_Geoms;  // one entry per acquire, repeats included
+	game::AssetManager* m_Assets     = nullptr;
+	uint32_t            m_ActiveClip = 0;  // what the live VAT instances were spawned on
+
+	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
+	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included
+	std::vector<VatDraw>                 m_VatDraws;
 	std::filesystem::path                m_DataRoot;
 
 	// What the constructor's ApplyEnvironment bound; released only by scene teardown today.
