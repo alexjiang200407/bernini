@@ -10,7 +10,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
-class QSlider;
+class TimelineScrubber;
 class QTimer;
 class QToolButton;
 
@@ -101,13 +101,13 @@ private:
 	QListWidget* m_ClipList       = nullptr;
 	QLabel*      m_ClipMetadata   = nullptr;
 
-	QWidget*        m_TransportBar = nullptr;
-	QToolButton*    m_PlayButton   = nullptr;
-	QToolButton*    m_StepBack     = nullptr;
-	QToolButton*    m_StepForward  = nullptr;
-	QSlider*        m_Timeline     = nullptr;
-	QDoubleSpinBox* m_Speed        = nullptr;
-	QLabel*         m_TimeReadout  = nullptr;
+	QWidget*          m_TransportBar = nullptr;
+	QToolButton*      m_PlayButton   = nullptr;
+	QToolButton*      m_StepBack     = nullptr;
+	QToolButton*      m_StepForward  = nullptr;
+	TimelineScrubber* m_Timeline     = nullptr;
+	QDoubleSpinBox*   m_Speed        = nullptr;
+	QLabel*           m_TimeReadout  = nullptr;
 
 	editor::PlaybackTransport m_Transport;
 	QTimer*                   m_Clock = nullptr;
