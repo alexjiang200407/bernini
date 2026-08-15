@@ -276,10 +276,10 @@ namespace assetlib
 	}
 
 	bool
-	vatIsStale(const BVat& vat, const std::filesystem::path& dataRoot)
+	vatIsStale(const BVat& vat, const core::file::IFileSystem& fileSystem)
 	{
-		return stampOf(dataRoot / vat.mesh) != vat.meshStamp ||
-		       stampOf(dataRoot / vat.skeleton) != vat.skeletonStamp ||
-		       stampOf(dataRoot / vat.animations) != vat.animationsStamp;
+		return stampOf(fileSystem, vat.mesh) != vat.meshStamp ||
+		       stampOf(fileSystem, vat.skeleton) != vat.skeletonStamp ||
+		       stampOf(fileSystem, vat.animations) != vat.animationsStamp;
 	}
 }

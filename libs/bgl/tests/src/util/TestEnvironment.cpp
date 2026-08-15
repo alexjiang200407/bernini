@@ -2,13 +2,16 @@
 
 #include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
+#include <core/file/LooseFileSystem.h>
 
 namespace bgl::test
 {
 	void
 	ApplyEnvironment(bgl::IScene* scene, bgl::ISceneView* view)
 	{
-		auto env = assetlib::resolveEnvironment("assets/Environments/forest.benv", "assets");
+		auto env = assetlib::resolveEnvironment(
+			"assets/Environments/forest.benv",
+			core::file::LooseFileSystem("assets"));
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(std::move(env.maps.irradiance)),
@@ -21,6 +24,9 @@ namespace bgl::test
 	LoadSkybox(bgl::IScene* scene)
 	{
 		return scene->AddTextureAsset(
-			assetlib::resolveEnvironment("assets/Environments/forest.benv", "assets").maps.skybox);
+			assetlib::resolveEnvironment(
+				"assets/Environments/forest.benv",
+				core::file::LooseFileSystem("assets"))
+				.maps.skybox);
 	}
 }

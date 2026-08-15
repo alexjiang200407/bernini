@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <core/file/LooseFileSystem.h>
 
 using namespace assetlib;
 
@@ -113,6 +114,8 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	const auto root = std::filesystem::temp_directory_path() / "bernini_describe";
 	std::filesystem::create_directories(root / "textures_src");
 
+	const core::file::LooseFileSystem files(root);
+
 	const auto source = root / "textures_src" / "skin.ktx2";
 	{
 		std::ofstream out(source, std::ios::binary);
@@ -125,7 +128,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	SECTION("a source that has drifted from its stamp is STALE")
 	{
 		// The stamp is left zeroed: this route was never baked, so it cannot match the live source.
-		const std::string text = describe(material, root);
+		const std::string text = describe(material, &files);
 		CHECK(text.find("STALE") != std::string::npos);
 	}
 
@@ -141,7 +144,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 			out << "baked bytes";
 		}
 
-		const std::string text = describe(material, root);
+		const std::string text = describe(material, &files);
 		CHECK(text.find("up to date") != std::string::npos);
 		CHECK(text.find("STALE") == std::string::npos);
 	}
@@ -150,7 +153,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	{
 		material.pbr.routes[0] = { "textures_src/gone.ktx2", 0 };
 
-		const std::string text = describe(material, root);
+		const std::string text = describe(material, &files);
 		CHECK(text.find("source is missing") != std::string::npos);
 	}
 
@@ -303,6 +306,8 @@ TEST_CASE("describe(BEnv) reports whether the files it names are there", "[descr
 	std::filesystem::remove_all(root);
 	std::filesystem::create_directories(root / "Sky");
 
+	const core::file::LooseFileSystem files(root);
+
 	{
 		std::ofstream out(root / "Sky" / "forest.bsky", std::ios::binary);
 		out << "x";
@@ -319,14 +324,14 @@ TEST_CASE("describe(BEnv) reports whether the files it names are there", "[descr
 	CHECK(bare.find("Sky/forest.bsky") != std::string::npos);
 	CHECK(bare.find("(missing)") == std::string::npos);
 
-	const std::string text = describe(env, root);
+	const std::string text = describe(env, &files);
 	CHECK(text.find("Sky/forest.bsky\n") != std::string::npos);  // present: unannotated
 	CHECK(text.find("EnvLighting/forest.benvl (missing)") != std::string::npos);
 
 	// An unset half is not the same as a missing one, and must not read as a broken reference.
 	BEnv skyless;
 	skyless.lighting            = "EnvLighting/forest.benvl";
-	const std::string unsetText = describe(skyless, root);
+	const std::string unsetText = describe(skyless, &files);
 	CHECK(unsetText.find("sky               (unset)") != std::string::npos);
 
 	std::filesystem::remove_all(root);
@@ -340,6 +345,8 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	const auto root = std::filesystem::temp_directory_path() / "bernini_describe_env";
 	std::filesystem::remove_all(root);
 	std::filesystem::create_directories(root / "textures_src");
+
+	const core::file::LooseFileSystem files(root);
 
 	std::filesystem::create_directories(root / "Textures");
 
@@ -365,7 +372,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 
 	SECTION("a sky reports its presentation and a current bake")
 	{
-		const std::string text = describe(sky, root);
+		const std::string text = describe(sky, &files);
 
 		CHECK(text.find("bsky 'forest'") != std::string::npos);
 		CHECK(text.find("mipLevel          2") != std::string::npos);
@@ -382,7 +389,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		std::filesystem::remove(baked);
 
-		const std::string text = describe(sky, root);
+		const std::string text = describe(sky, &files);
 		CHECK(text.find("baked map is missing") != std::string::npos);
 		CHECK(text.find("bake              STALE") != std::string::npos);
 	}
@@ -391,7 +398,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		write(source, "aaaaaaaa");  // different size
 
-		const std::string text = describe(sky, root);
+		const std::string text = describe(sky, &files);
 		CHECK(text.find("STALE") != std::string::npos);
 	}
 
@@ -399,7 +406,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		std::filesystem::remove(source);
 
-		const std::string text = describe(sky, root);
+		const std::string text = describe(sky, &files);
 		CHECK(text.find("source is missing") != std::string::npos);
 	}
 
@@ -415,7 +422,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 
 	SECTION("a lighting names both halves and its exposure")
 	{
-		const std::string text = describe(lighting, root);
+		const std::string text = describe(lighting, &files);
 
 		CHECK(text.find("benvl 'forest'") != std::string::npos);
 		CHECK(text.find("exposure          1.25") != std::string::npos);
@@ -430,7 +437,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		lighting.irradiance.stamp = SourceStamp{ 1, 1 };
 
-		const std::string text = describe(lighting, root);
+		const std::string text = describe(lighting, &files);
 		CHECK(text.find("bake              STALE") != std::string::npos);
 	}
 
