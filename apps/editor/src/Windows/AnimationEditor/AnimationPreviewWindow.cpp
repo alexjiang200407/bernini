@@ -12,10 +12,13 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib_structs/BMesh.h>
 #include <gamelib/AssetManager.h>
 #include <gamelib/vat_freshness.h>
@@ -147,6 +150,13 @@ AnimationPreviewWindow::LoadMesh(
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
 
+	// The bake's box, kept for the camera: it closes over every frame of every clip, so a clip
+	// with root motion frames wherever the animation travels -- the bind-pose box goes stale the
+	// moment the rig walks off it, which is the same reason the engine culls VAT by this box.
+	auto vatBoundsMin = glm::vec3(0.0f);
+	auto vatBoundsMax = glm::vec3(0.0f);
+	bool vatBounded   = false;
+
 	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
 	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
 	// uploads.
@@ -167,7 +177,10 @@ AnimationPreviewWindow::LoadMesh(
 			if (!animations.empty())
 			{
 				progress.Report(0, 0, "Baking animation textures...");
-				(void)game::EnsureVatBaked(m_DataRoot, rel, animations);
+				const assetlib::BVat vat = game::EnsureVatBaked(m_DataRoot, rel, animations);
+				vatBoundsMin             = vat.boundsMin;
+				vatBoundsMax             = vat.boundsMax;
+				vatBounded               = true;
 			}
 		});
 
@@ -177,6 +190,17 @@ AnimationPreviewWindow::LoadMesh(
 			window(),
 			QStringLiteral("Open Mesh"),
 			QStringLiteral("Could not load '%1':\n\n%2").arg(name, result.error));
+		return;
+	}
+
+	// This panel animates; a static mesh has nothing to animate, and silently previewing one
+	// reads as the panel being broken. The Material Editor's preview is the place to look at it.
+	if (mesh.skeleton.empty())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Open Mesh"),
+			QStringLiteral("'%1' has no rig -- nothing to animate.").arg(name));
 		return;
 	}
 
@@ -218,32 +242,55 @@ AnimationPreviewWindow::LoadMesh(
 
 			for (const bmesh::InstancePlacement& placement : plan.vat)
 			{
-				// A rig with no clip file anywhere falls back to bind pose as static geometry.
+				// A rig with no clip file anywhere falls back to bind pose as static geometry --
+				// and so does one the VAT pipeline refuses (an unbaked or non-opaque material): a
+				// mesh standing still beats a viewport cleared to nothing, and the refusal is
+				// surfaced once the load completes.
 				if (animations.empty())
 				{
 					acquireStatic(placement);
 					continue;
 				}
 
-				const game::AssetManager::VatMesh vat =
-					m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
-				m_Geoms.push_back(vat.geom);
-				m_VatDraws.push_back(
-					{ vat.geom,
-				      placement.world,
-				      m_Assets->CreateVatInstance(
-						  GetPreviewViewRef(),
-						  vat.geom,
-						  placement.world,
-						  bgl::ISceneView::VatInstanceDesc{ 0, 0.0f, 1.0f }) });
-				out.clips    = vat.clips;
-				m_ActiveClip = 0;
-				bmesh::GrowBoundsForMesh(
-					mesh,
-					placement.meshIndex,
-					placement.world,
-					aabbMin,
-					aabbMax);
+				try
+				{
+					const game::AssetManager::VatMesh vat =
+						m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
+					m_Geoms.push_back(vat.geom);
+					m_VatDraws.push_back(
+						{ vat.geom,
+					      placement.world,
+					      m_Assets->CreateVatInstance(
+							  GetPreviewViewRef(),
+							  vat.geom,
+							  placement.world,
+							  bgl::ISceneView::VatInstanceDesc{ 0, 0.0f, 1.0f }) });
+					out.clips    = vat.clips;
+					m_ActiveClip = 0;
+				}
+				catch (const std::exception& e)
+				{
+					out.vatRefusal = QString::fromUtf8(e.what());
+					acquireStatic(placement);  // grows the bind-pose bounds itself
+					continue;
+				}
+
+				// The camera frames the bake's box, not the bind pose: it closes over every
+				// frame, so a clip with root motion stays in view wherever it travels.
+				if (vatBounded)
+					bmesh::GrowBounds(
+						placement.world,
+						vatBoundsMin,
+						vatBoundsMax,
+						aabbMin,
+						aabbMax);
+				else
+					bmesh::GrowBoundsForMesh(
+						mesh,
+						placement.meshIndex,
+						placement.world,
+						aabbMin,
+						aabbMax);
 			}
 
 			out.center = (aabbMin + aabbMax) * 0.5f;
@@ -251,7 +298,9 @@ AnimationPreviewWindow::LoadMesh(
 			return out;
 		});
 
-		m_Orbit.FocusOn(loaded.center, loaded.radius);
+		// The 3/4 hero view: authoring conventions disagree on which axis a rig faces, so a
+		// straight-on default shows a profile as often as a face; the diagonal reads either way.
+		m_Orbit.FocusOn(loaded.center, loaded.radius, glm::radians(45.0f), glm::radians(15.0f));
 		UpdateCamera();
 		SetTime(0.0f);
 
@@ -267,13 +316,7 @@ AnimationPreviewWindow::LoadMesh(
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
 
 		if (!loaded.vatRefusal.isEmpty())
-		{
-			QMessageBox::information(
-				window(),
-				QStringLiteral("Open Mesh"),
-				QStringLiteral("'%1' is shown in bind pose -- its clips cannot play:\n\n%2")
-					.arg(name, loaded.vatRefusal));
-		}
+			OfferBakeForRefusal(mesh, absolutePath, animations, name, loaded.vatRefusal);
 	}
 	catch (const std::exception& e)
 	{
@@ -289,6 +332,104 @@ AnimationPreviewWindow::LoadMesh(
 
 		Clear();
 	}
+}
+
+void
+AnimationPreviewWindow::OfferBakeForRefusal(
+	const assetlib::BMesh&       mesh,
+	const std::filesystem::path& absolutePath,
+	const std::string&           animations,
+	const QString&               name,
+	const QString&               refusal)
+{
+	// The materials the bake could fix: routed but never composited. A material with no routes
+	// (factors only) has nothing to bake, and one already baked was refused for another reason.
+	auto unbaked = std::vector<std::string>();
+	for (const std::string& relPath : mesh.materials)
+	{
+		if (relPath.empty())
+			continue;
+
+		try
+		{
+			const assetlib::BMaterial material = assetlib::loadMaterial(m_DataRoot / relPath);
+			const bool                routed =
+				std::ranges::any_of(material.pbr.routes, [](const assetlib::ChannelRoute& route) {
+					return !route.texture.empty();
+				});
+			const bool baked = !material.pbr.baseColorTexture.empty() ||
+			                   !material.pbr.normalTexture.empty() ||
+			                   !material.pbr.ormTexture.empty();
+			if (routed && !baked)
+				unbaked.push_back(relPath);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("AnimationPreview: could not read '%s': %s", relPath.c_str(), e.what());
+		}
+	}
+
+	auto box = QMessageBox(window());
+	box.setIcon(QMessageBox::Information);
+	box.setWindowTitle(QStringLiteral("Open Mesh"));
+	box.setText(QStringLiteral("'%1' is shown in bind pose -- its clips cannot play:\n\n%2")
+	                .arg(name, refusal));
+
+	QPushButton* bakeButton = nullptr;
+	if (!unbaked.empty())
+	{
+		box.setInformativeText(
+			QStringLiteral(
+				"%1 of its materials %2 routed but never baked, and the VAT pipeline "
+				"draws baked materials only.")
+				.arg(unbaked.size())
+				.arg(unbaked.size() == 1 ? "is" : "are"));
+		bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);
+	}
+	box.addButton(QMessageBox::Ok);
+	box.exec();
+
+	if (bakeButton == nullptr || box.clickedButton() != bakeButton)
+		return;
+
+	auto desc     = assetlib::MaterialBakeDesc();
+	desc.dataRoot = m_DataRoot;
+
+	// One loading screen over all of them; compositing is file-only, so it runs off the UI
+	// thread like the Content Explorer's bake. Baking reads each material off disk, so the
+	// routes composited are the ones last saved.
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		this,
+		QStringLiteral("Baking materials"),
+		[&](background::Progress& progress) {
+			for (const std::string& relPath : unbaked)
+			{
+				progress.Report(0, 0, QStringLiteral("Baking %1...").arg(relPath.c_str()));
+				auto material = assetlib::loadMaterial(m_DataRoot / relPath);
+				assetlib::bakeMaterial(material, desc, progress.Cancellation());
+				assetlib::saveMaterial(material, m_DataRoot / relPath);
+			}
+		},
+		background::Cancellable::kYes);
+
+	if (result.Cancelled())
+		return;
+
+	if (result.Failed())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake Material"),
+			QStringLiteral("Could not bake:\n\n%1").arg(result.error));
+		return;
+	}
+
+	// The Material Editor reads its panel off the file; MainWindow routes this the same way it
+	// routes the Content Explorer's bakes.
+	for (const std::string& relPath : unbaked)
+		Q_EMIT MaterialBaked(QString::fromStdString(relPath));
+
+	LoadMesh(absolutePath, animations);
 }
 
 void

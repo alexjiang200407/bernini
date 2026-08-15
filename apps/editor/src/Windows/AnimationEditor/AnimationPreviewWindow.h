@@ -8,6 +8,11 @@
 #include <bgl/GeomHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 
+namespace assetlib
+{
+	struct BMesh;
+}
+
 namespace game
 {
 	class AssetManager;
@@ -20,10 +25,11 @@ class QMouseEvent;
 class QWheelEvent;
 
 /**
- * The Animation panel's viewport: a dropped or opened `.bmesh` shown wearing its own materials
- * against the configured environment, under an orbit camera. A rigged mesh with clips plays as
- * VAT -- its skinned entries acquired through AcquireVatMesh, its static entries beside them --
- * and one with none stands in its bind pose.
+ * The Animation panel's viewport: a dropped or opened rigged `.bmesh` shown wearing its own
+ * materials against the configured environment, under an orbit camera. A rigged mesh with clips
+ * plays as VAT -- its skinned entries acquired through AcquireVatMesh, its static entries beside
+ * them -- and one with none stands in its bind pose. A mesh with no rig at all is refused:
+ * nothing to animate.
  *
  * Everything is acquired through `game::AssetManager`, so a mesh renders here exactly as it does
  * anywhere else the manager serves; SetAssets(nullptr) releases everything held, and MainWindow
@@ -80,6 +86,14 @@ Q_SIGNALS:
 	void
 	MeshChanged(const QString& relPath);
 
+	/**
+	 * Bake Now rewrote `relPath` on disk. Anything showing what that file says -- the Material
+	 * Editor's properties panel -- has to re-read it; MainWindow routes this the way it routes the
+	 * Content Explorer's bakes.
+	 */
+	void
+	MaterialBaked(const QString& relPath);
+
 	/** The `.banim` candidates for the shown mesh, and which one is playing (-1: none). */
 	void
 	AnimationSourcesChanged(const QStringList& candidates, int activeIndex);
@@ -109,6 +123,19 @@ protected:
 	wheelEvent(QWheelEvent* event) override;
 
 private:
+	/**
+	 * The refusal dialog, with a Bake Now button when the cause is fixable here: materials the
+	 * mesh names that are routed but never composited. Baking runs like the Content Explorer's --
+	 * off the UI thread, cancellable -- and a completed bake reloads the mesh.
+	 */
+	void
+	OfferBakeForRefusal(
+		const assetlib::BMesh&       mesh,
+		const std::filesystem::path& absolutePath,
+		const std::string&           animations,
+		const QString&               name,
+		const QString&               refusal);
+
 	void
 	UpdateCamera();
 
