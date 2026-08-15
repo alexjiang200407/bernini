@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 
 #include <assetlib/benv_io.h>
@@ -38,16 +39,16 @@ namespace assetlib::test
 		}
 		~DataRoot() { fs::remove_all(path); }
 
-		AssetRefScanDesc
-		Desc() const
+		AssetStore
+		Source() const
 		{
-			return AssetRefScanDesc{ path };
+			return AssetStore(path);
 		}
 
 		AssetRefGraph
 		Scan() const
 		{
-			return AssetRefGraph::Scan(Desc());
+			return AssetRefGraph::Scan(Source());
 		}
 	};
 
@@ -70,10 +71,10 @@ namespace assetlib::test
 	 * `Materials/<name>`, and returns it -- so a test can name the maps the bake wrote.
 	 */
 	inline BMaterial
-	BakeAndSave(const DataRoot& root, const char* name, const char* source)
+	BakeAndSave(const DataRoot& root, const char* name, const char* store)
 	{
 		BMaterial material;
-		material.pbr.routes[0] = { source, 0 };
+		material.pbr.routes[0] = { store, 0 };
 
 		bakeMaterial(material, MaterialBakeDesc{ root.path });
 		saveMaterial(material, root.path / "Materials" / name);

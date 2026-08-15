@@ -279,25 +279,12 @@ namespace assetlib
 	}
 
 	AssetRefGraph
-	AssetRefGraph::Scan(const AssetRefScanDesc& desc)
+	AssetRefGraph::Scan(const AssetStore& store)
 	{
-		// Without a mount the data root is one, which is what a project with no archive is.
-		std::optional<core::file::LooseFileSystem> loose;
-		if (desc.fileSystem == nullptr)
-		{
-			if (!std::filesystem::is_directory(desc.dataRoot))
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: the data root '" + desc.dataRoot.string() +
-					"' is not a directory");
-
-			loose.emplace(desc.dataRoot);
-		}
-
-		const core::file::IFileSystem& files =
-			desc.fileSystem != nullptr ? *desc.fileSystem : *loose;
+		const core::file::IFileSystem& files = store.GetFiles();
 
 		auto graph       = AssetRefGraph();
-		graph.m_DataRoot = desc.dataRoot;
+		graph.m_DataRoot = store.GetDataRoot();
 		graph.m_Files    = files.Enumerate();
 		std::ranges::sort(graph.m_Files);
 
@@ -506,39 +493,37 @@ namespace assetlib
 	}
 
 	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetRefScanDesc& desc)
+	deleteAsset(const DeletionPlan& plan, const AssetStore& store)
 	{
 		if (!plan.Allowed())
 			return DeletionResult{ DeletionStatus::kRefused, {} };
 
-		const std::filesystem::path path = desc.dataRoot / plan.target;
+		const std::filesystem::path path = store.GetDataRoot() / plan.target;
 
-		// A plan built over a mount can name assets only the archive holds -- the target, a member of
-		// the directory it names, or something its cascade frees. `remove` reports no error for a
-		// path that was never there, so each would come back kDeleted having touched nothing while
-		// staying readable through the mount. Task 10's tombstone is what answers this.
-		if (desc.fileSystem != nullptr)
-		{
-			const auto onlyInMount = [&desc](const std::string& key) {
-				return !std::filesystem::exists(desc.dataRoot / key) &&
-				       desc.fileSystem->Exists(key);
-			};
+		// A plan can name assets only the archive holds -- the target, a member of the directory it
+		// names, or something its cascade frees. `remove` reports no error for a path that was never
+		// there, so each would come back kDeleted having touched nothing while staying readable
+		// through the mount. Task 10's tombstone is what answers this.
+		//
+		// Inert on a loose store, where the mount is the data root: what is not on disk is not in
+		// the mount either.
+		const auto onlyInMount = [&store](const std::string& key) {
+			return !std::filesystem::exists(store.GetDataRoot() / key) && store.Exists(key);
+		};
 
-			auto unreachable = std::vector<std::string>();
+		auto unreachable = std::vector<std::string>();
 
-			if (plan.IsDirectory())
-				std::ranges::copy_if(plan.contents, std::back_inserter(unreachable), onlyInMount);
-			else if (onlyInMount(plan.target))
-				unreachable.push_back(plan.target);
+		if (plan.IsDirectory())
+			std::ranges::copy_if(plan.contents, std::back_inserter(unreachable), onlyInMount);
+		else if (onlyInMount(plan.target))
+			unreachable.push_back(plan.target);
 
-			std::ranges::copy_if(plan.cascade, std::back_inserter(unreachable), onlyInMount);
+		std::ranges::copy_if(plan.cascade, std::back_inserter(unreachable), onlyInMount);
 
-			if (!unreachable.empty())
-				return DeletionResult{ DeletionStatus::kFailed,
-					                   "'" + unreachable.front() +
-					                       "' is only in a read-only mount, so it cannot be "
-					                       "unlinked" };
-		}
+		if (!unreachable.empty())
+			return DeletionResult{ DeletionStatus::kFailed,
+				                   "'" + unreachable.front() +
+				                       "' is only in a read-only mount, so it cannot be unlinked" };
 
 		std::error_code ec;
 		if (plan.IsDirectory())
@@ -556,7 +541,7 @@ namespace assetlib
 		// a failure part-way never leaves a referenced asset missing.
 		for (const std::string& freed : plan.cascade)
 		{
-			std::filesystem::remove(desc.dataRoot / freed, ec);
+			std::filesystem::remove(store.GetDataRoot() / freed, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}

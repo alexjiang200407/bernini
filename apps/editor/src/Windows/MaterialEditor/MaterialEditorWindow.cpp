@@ -19,6 +19,7 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/NodeDelegateModelRegistry>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
@@ -36,7 +37,6 @@
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
-#include <core/file/LooseFileSystem.h>
 
 namespace
 {
@@ -733,7 +733,17 @@ MaterialEditorWindow::RefreshActions()
 	if (const assetlib::BMaterial* material =
 	        m_MaterialGraphs[static_cast<size_t>(graphIndex)].onDisk.Get(materialPath))
 	{
-		stale        = assetlib::bakeIsStale(*material, core::file::LooseFileSystem(m_DataRoot));
+		// This is a UI refresh, called from a dozen places and never from inside a handler, so a
+		// data root that has gone leaves the pessimistic default rather than throwing out of a slot.
+		try
+		{
+			stale = assetlib::AssetStore(m_DataRoot).BakeIsStale(*material);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
+		}
+
 		bakedSummary = BakedTexturesSummary(*material);
 	}
 
@@ -890,13 +900,13 @@ MaterialEditorWindow::IsAlreadyDefault(const QString& boundPath, const QString& 
 	// weakly_canonical resolves the part of the path that does exist and normalises the rest, so it
 	// works either way. Case-insensitively, because this is a Windows tool (see the editor CLAUDE.md).
 	const auto normalise = [](const QString& path) {
-		const auto source = std::filesystem::path(path.toStdWString());
+		const auto store = std::filesystem::path(path.toStdWString());
 
 		std::error_code ec;
-		const auto      resolved = std::filesystem::weakly_canonical(source, ec);
+		const auto      resolved = std::filesystem::weakly_canonical(store, ec);
 
 		return QString::fromStdWString(
-			ec ? source.lexically_normal().wstring() : resolved.wstring());
+			ec ? store.lexically_normal().wstring() : resolved.wstring());
 	};
 
 	return normalise(boundPath).compare(normalise(materialPath), Qt::CaseInsensitive) == 0;
@@ -961,8 +971,8 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 	if (meshPath.empty())
 		return;
 
-	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
-	if (source == assetlib::c_InvalidIndex)
+	const uint32_t store = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
+	if (store == assetlib::c_InvalidIndex)
 		return;
 
 	try
@@ -972,7 +982,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
 
-		if (assetlib::attachMaterial(mesh, source, relative))
+		if (assetlib::attachMaterial(mesh, store, relative))
 			assetlib::save(mesh, meshPath);
 
 		// The mesh names it now, so the preview's cached bindings must say so too -- otherwise the

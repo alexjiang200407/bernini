@@ -32,6 +32,7 @@
 #include <QToolButton>
 #include <QUrl>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
@@ -598,9 +599,9 @@ ContentExplorerWindow::DeleteWithPlanner(
 		return;
 	}
 
-	auto desc     = assetlib::AssetRefScanDesc();
-	desc.dataRoot = m_RootPath.toStdWString();
-
+	// Built inside the worker, not beside it: an AssetStore over a root that has gone throws, and
+	// out here that would leave a Qt slot rather than the loading screen's error.
+	auto store = std::optional<assetlib::AssetStore>();
 	auto graph = std::optional<assetlib::AssetRefGraph>();
 
 	// The scan parses every mesh and material in the project, so it runs off the UI thread. It reads
@@ -609,7 +610,8 @@ ContentExplorerWindow::DeleteWithPlanner(
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Delete", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking references...");
-			graph = assetlib::AssetRefGraph::Scan(desc);
+			store.emplace(std::filesystem::path(m_RootPath.toStdWString()));
+			graph = assetlib::AssetRefGraph::Scan(*store);
 		});
 
 	if (!scanned.Completed())
@@ -736,7 +738,7 @@ ContentExplorerWindow::DeleteWithPlanner(
 	if (confirm.clickedButton() != remove)
 		return;
 
-	const assetlib::DeletionResult result = assetlib::deleteAsset(plan, desc);
+	const assetlib::DeletionResult result = assetlib::deleteAsset(plan, *store);
 
 	switch (result.status)
 	{
@@ -833,9 +835,9 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 	const int     slash   = asset.lastIndexOf('/');
 	const QString to      = slash < 0 ? newName : asset.left(slash + 1) + newName;
 
-	auto desc     = assetlib::AssetRefScanDesc();
-	desc.dataRoot = m_RootPath.toStdWString();
-
+	// Built inside the worker, not beside it: an AssetStore over a root that has gone throws, and
+	// out here that would leave a Qt slot rather than the loading screen's error.
+	auto store = std::optional<assetlib::AssetStore>();
 	auto graph = std::optional<assetlib::AssetRefGraph>();
 
 	// Off the UI thread for the reason Delete's scan is: it parses every mesh and material in the
@@ -843,7 +845,8 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Rename", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking references...");
-			graph = assetlib::AssetRefGraph::Scan(desc);
+			store.emplace(std::filesystem::path(m_RootPath.toStdWString()));
+			graph = assetlib::AssetRefGraph::Scan(*store);
 		});
 
 	if (!scanned.Completed())
@@ -924,7 +927,7 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 		QString("Renaming %1").arg(QFileInfo(asset).fileName()),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Rewriting references...");
-			result = assetlib::renameAsset(plan, desc);
+			result = assetlib::renameAsset(plan, *store);
 		});
 
 	if (!renamed.Completed())
@@ -1100,24 +1103,23 @@ ContentExplorerWindow::WriteImportedMaterials(
 
 	for (size_t i = 0; i < imported.materials.size(); ++i)
 	{
-		const assetlib::imp::BMaterialImport& source = imported.materials[i];
+		const assetlib::imp::BMaterialImport& store = imported.materials[i];
 
 		// A material whose shading model the engine has no payload for is left behind rather than
 		// stamped into a PBR one it never was.
-		if (!source.isPbr)
+		if (!store.isPbr)
 			continue;
 
-		const QString stem =
-			UniqueMaterialStem(imported.stringPool.at(source.nameOffset), i, taken);
+		const QString stem = UniqueMaterialStem(imported.stringPool.at(store.nameOffset), i, taken);
 		const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
 
 		MaterialGraphModel model(registry);
 		BuildImportedMaterialGraph(
 			model,
-			source,
-			ImportedMaterialMaps{ texturePath(source.baseColorTexture),
-		                          texturePath(source.normalTexture),
-		                          texturePath(source.ormTexture) });
+			store,
+			ImportedMaterialMaps{ texturePath(store.baseColorTexture),
+		                          texturePath(store.normalTexture),
+		                          texturePath(store.ormTexture) });
 
 		assetlib::saveMaterial(CompileMaterial(model, stem, dataRoot), file);
 
@@ -1269,7 +1271,7 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 {
 	namespace fs = std::filesystem;
 
-	const fs::path source   = fs::path(sourceFile.toStdWString());
+	const fs::path store    = fs::path(sourceFile.toStdWString());
 	const fs::path dataRoot = fs::path(m_RootPath.toStdWString());
 
 	// Already category-relative; the dialog is what binds a typed folder to its category.
@@ -1287,7 +1289,7 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	const fs::path materialDir =
 		importMaterials ? under(options.destinations.materials) : fs::path();
 
-	fs::path bmeshPath = under(options.destinations.mesh) / source.filename();
+	fs::path bmeshPath = under(options.destinations.mesh) / store.filename();
 	bmeshPath.replace_extension(".bmesh");
 
 	const QString name = QFileInfo(sourceFile).fileName();
@@ -1308,9 +1310,9 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 	// So a static import is refused over a rig it would never write, which is the deliberate
 	// direction: the alternative is parsing before asking, and refusing too often is recoverable
 	// where overwriting a rig is not.
-	fs::path bskelPath = under(options.destinations.skeleton) / source.filename();
+	fs::path bskelPath = under(options.destinations.skeleton) / store.filename();
 	bskelPath.replace_extension(assetlib::c_SkeletonExtension);
-	fs::path banimPath = under(options.destinations.animations) / source.filename();
+	fs::path banimPath = under(options.destinations.animations) / store.filename();
 	banimPath.replace_extension(assetlib::c_AnimationExtension);
 
 	// Only what this import may actually write.
@@ -1352,7 +1354,7 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 			const assetlib::CancelToken cancel = progress.Cancellation();
 
 			progress.Report(0, 0, QString("Parsing %1...").arg(name));
-			imported = assetlib::loadFromGltf(source, cancel);
+			imported = assetlib::loadFromGltf(store, cancel);
 
 			if (options.textures)
 			{

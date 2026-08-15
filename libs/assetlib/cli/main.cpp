@@ -1,4 +1,5 @@
 #include <CLI/CLI.hpp>
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -314,7 +315,7 @@ main(int argc, char** argv)
 		"-d,--data-root",
 		describeDataRoot,
 		"Project data directory the asset's paths resolve against. For a material, a sky or a "
-		"lighting this also stats each routed source, so a stale bake is reported; for an "
+		"lighting this also stats each routed store, so a stale bake is reported; for an "
 		"environment it reports whether the files it names are there, and for a clip set it is "
 		"where its skeleton is looked up");
 	describe->add_flag(
@@ -608,7 +609,7 @@ main(int argc, char** argv)
 			const auto mesh = assetlib::load(objInput);
 			assetlib::writeObj(mesh, objOut, !objRaw);
 			spdlog::info(
-				"Wrote '{}' from '{}' ({} submeshes, {} source)",
+				"Wrote '{}' from '{}' ({} submeshes, {} store)",
 				objOut,
 				objInput,
 				mesh.submeshes.size(),
@@ -742,10 +743,9 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			auto desc     = assetlib::AssetRefScanDesc();
-			desc.dataRoot = refsDataRoot;
+			const assetlib::AssetStore store{ std::filesystem::path(refsDataRoot) };
 
-			const auto graph = assetlib::AssetRefGraph::Scan(desc);
+			const auto graph = assetlib::AssetRefGraph::Scan(store);
 
 			spdlog::info(
 				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets and {} VAT "
@@ -810,13 +810,14 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			auto desc     = assetlib::PackDesc();
-			desc.dataRoot = packDataRoot;
-			desc.target   = packTarget.empty() ?
-			                    std::filesystem::path(packDataRoot).parent_path() / "Data.bpak" :
-			                    std::filesystem::path(packTarget);
+			const assetlib::AssetStore store{ std::filesystem::path(packDataRoot) };
 
-			const assetlib::PackReport report = assetlib::packProject(desc);
+			auto desc   = assetlib::PackDesc();
+			desc.target = packTarget.empty() ?
+			                  std::filesystem::path(packDataRoot).parent_path() / "Data.bpak" :
+			                  std::filesystem::path(packTarget);
+
+			const assetlib::PackReport report = assetlib::packProject(store, desc);
 
 			if (report.vatsRebaked != 0)
 				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
@@ -887,11 +888,12 @@ main(int argc, char** argv)
 	{
 		try
 		{
+			const assetlib::AssetStore store{ std::filesystem::path(pruneDataRoot) };
+
 			auto desc       = assetlib::TexturePruneDesc();
-			desc.dataRoot   = pruneDataRoot;
 			desc.textureDir = pruneTextureDir;
 
-			const auto scan = assetlib::findUnusedBakedTextures(desc);
+			const auto scan = assetlib::findUnusedBakedTextures(store, desc);
 
 			spdlog::info(
 				"Scanned {} materials and {} environment assets: {} baked maps still referenced, "
@@ -929,7 +931,7 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			const auto result = assetlib::deleteUnusedBakedTextures(scan, desc);
+			const auto result = assetlib::deleteUnusedBakedTextures(scan, store);
 
 			spdlog::info(
 				"Deleted {} textures, reclaiming {}",

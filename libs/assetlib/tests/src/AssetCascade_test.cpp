@@ -33,7 +33,7 @@ TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[ass
 	std::ranges::sort(expected);
 	CHECK(plan.cascade == expected);
 
-	REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Meshes" / "mesh.bmesh"));
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "mat.bmaterial"));
@@ -57,7 +57,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 
 		CHECK(plan.cascade.empty());
 
-		REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+		REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 		CHECK(fs::exists(root.path / "Materials" / "mat.bmaterial"));
 	}
 
@@ -74,7 +74,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 
 		CHECK(plan.cascade == std::vector<std::string>{ "Materials/gone.bmaterial" });
 
-		REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+		REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 		CHECK(fs::exists(root.path / "textures_src" / "shared.ktx2"));
 		CHECK(fs::exists(root.path / stays.pbr.baseColorTexture));
 	}
@@ -93,7 +93,7 @@ TEST_CASE("An asset two cascading referrers share goes when both do", "[assetcas
 
 	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/mesh.bmesh");
 
-	REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "a.bmaterial"));
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "b.bmaterial"));
@@ -114,7 +114,7 @@ TEST_CASE("A plain deletion still takes the target alone", "[assetcascade]")
 
 	CHECK(plan.cascade.empty());
 
-	REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 	CHECK(fs::exists(root.path / "Materials" / "mat.bmaterial"));
 }
 
@@ -131,7 +131,7 @@ TEST_CASE("A blocked deletion plans no cascade", "[assetcascade]")
 
 	CHECK_FALSE(plan.Allowed());
 	CHECK(plan.cascade.empty());
-	CHECK(deleteAsset(plan, root.Desc()).status == DeletionStatus::kRefused);
+	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kRefused);
 }
 
 TEST_CASE("A directory cascade counts every referrer under it as deleted", "[assetcascade]")
@@ -157,7 +157,7 @@ TEST_CASE("A directory cascade counts every referrer under it as deleted", "[ass
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.IsDirectory());
 
-	REQUIRE(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Meshes" / "props"));
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "freed.bmaterial"));
@@ -180,5 +180,5 @@ TEST_CASE("A cascade file already gone counts as deleted", "[assetcascade]")
 	REQUIRE_FALSE(plan.cascade.empty());
 	fs::remove(root.path / "Materials" / "mat.bmaterial");
 
-	CHECK(deleteAsset(plan, root.Desc()).status == DeletionStatus::kDeleted);
+	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
 }

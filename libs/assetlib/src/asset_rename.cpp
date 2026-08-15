@@ -187,10 +187,10 @@ namespace assetlib
 	}
 
 	RenameResult
-	renameAsset(const RenamePlan& plan, const AssetRefScanDesc& desc)
+	renameAsset(const RenamePlan& plan, const AssetStore& store)
 	{
-		const std::filesystem::path fromPath = desc.dataRoot / plan.from;
-		const std::filesystem::path toPath   = desc.dataRoot / plan.to;
+		const std::filesystem::path fromPath = store.GetDataRoot() / plan.from;
+		const std::filesystem::path toPath   = store.GetDataRoot() / plan.to;
 
 		// Unlike a deletion, a rename cannot shrug at a file that has vanished since the plan: there is
 		// nothing to move, and rewriting the referrers anyway would break every one of them.
@@ -219,7 +219,7 @@ namespace assetlib
 					"' is not a container that stores references");
 
 			auto file = PendingReferrer();
-			file.path = desc.dataRoot / referrer;
+			file.path = store.GetDataRoot() / referrer;
 			file.type = *type;
 
 			// Ordinary weather, not a caller error: the file may be locked, gone since the scan, or --
