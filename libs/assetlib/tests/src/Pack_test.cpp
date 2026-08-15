@@ -12,6 +12,7 @@
 #include "MountAt.h"
 #include "RefsSandbox.h"
 #include "VatFixture.h"
+#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 using namespace assetlib::test;
@@ -53,7 +54,8 @@ namespace
 	std::vector<std::string>
 	PackAndEnumerate(const DataRoot& root, PackReport* report = nullptr)
 	{
-		const PackReport packed = packProject(PackDesc{ root.path, root.path / "Data.bpak" });
+		const PackReport packed =
+			packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
 		if (report != nullptr)
 			*report = packed;
 
@@ -125,7 +127,8 @@ TEST_CASE("every packed entry reads back byte-for-byte", "[pack]")
 	const DataRoot root("pack_roundtrip");
 	StageProject(root);
 
-	const PackReport packed = packProject(PackDesc{ root.path, root.path / "Data.bpak" });
+	const PackReport packed =
+		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
 
 	const core::file::LooseFileSystem loose(root.path);
 	const PakFile                     pak(root.path / "Data.bpak");
@@ -148,8 +151,8 @@ TEST_CASE("packing the same tree twice produces identical bytes", "[pack]")
 	const DataRoot root("pack_determinism");
 	StageProject(root);
 
-	static_cast<void>(packProject(PackDesc{ root.path, root.path / "a.bpak" }));
-	static_cast<void>(packProject(PackDesc{ root.path, root.path / "b.bpak" }));
+	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "a.bpak" }));
+	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "b.bpak" }));
 
 	CHECK(
 		core::file::read_file_bytes((root.path / "a.bpak").string()) ==
@@ -170,7 +173,7 @@ TEST_CASE("an interrupted pack leaves the previous archive intact", "[pack]")
 	StageProject(root);
 
 	const auto target = root.path / "Data.bpak";
-	static_cast<void>(packProject(PackDesc{ root.path, target }));
+	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ target }));
 
 	const std::vector<std::byte>   before  = core::file::read_file_bytes(target.string());
 	const std::vector<std::string> entries = PakFile(target).Enumerate();
@@ -283,6 +286,6 @@ TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
 	fs::remove(root.path / "Skeletons/rig.bskel");
 
 	CHECK_THROWS_AS(
-		packProject(PackDesc{ root.path, root.path / "Data.bpak" }),
+		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
 		std::runtime_error);
 }

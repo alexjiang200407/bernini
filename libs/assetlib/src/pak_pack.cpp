@@ -77,24 +77,28 @@ namespace assetlib
 	}
 
 	PackReport
-	packProject(const PackDesc& desc)
+	packProject(const AssetStore& store, const PackDesc& desc)
 	{
-		if (!std::filesystem::is_directory(desc.dataRoot))
+		// The walk and the rebake address the writable layer: packing reads what is on disk under
+		// the data root, not what a wider mount would also answer for.
+		const std::filesystem::path& dataRoot = store.GetDataRoot();
+
+		if (!std::filesystem::is_directory(dataRoot))
 			core::throw_runtime_error(
 				"assetlib::packProject: '{}' is not a directory",
-				desc.dataRoot.string());
+				dataRoot.string());
 
-		const std::vector<std::filesystem::path> files = filesUnder(desc.dataRoot);
+		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
 
 		PackReport report;
-		report.vatsRebaked = rebakeStaleVats(desc.dataRoot, files);
+		report.vatsRebaked = rebakeStaleVats(dataRoot, files);
 
-		const core::file::LooseFileSystem loose(desc.dataRoot);
+		const core::file::LooseFileSystem loose(dataRoot);
 
 		PakWriter writer(desc.target);
 		for (const std::filesystem::path& file : files)
 		{
-			const std::filesystem::path relative = file.lexically_relative(desc.dataRoot);
+			const std::filesystem::path relative = file.lexically_relative(dataRoot);
 			if (isAuthoringSource(relative))
 				continue;
 
@@ -105,7 +109,7 @@ namespace assetlib
 				continue;
 			}
 
-			const std::string                          key   = relativeKey(file, desc.dataRoot);
+			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::vector<std::byte>               bytes = loose.Read(key);
 			const std::optional<core::file::FileStamp> stamp = loose.Stat(key);
 			if (!stamp.has_value())

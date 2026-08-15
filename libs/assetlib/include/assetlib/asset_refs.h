@@ -1,5 +1,5 @@
 #pragma once
-#include <core/file/IFileSystem.h>
+#include <assetlib/AssetStore.h>
 #include <core/str/str.h>
 
 namespace assetlib
@@ -44,18 +44,6 @@ namespace assetlib
 		operator==(const AssetRef&, const AssetRef&) = default;
 	};
 
-	struct AssetRefScanDesc
-	{
-		/** The writable layer: where a rename moves a file and a delete unlinks one. */
-		std::filesystem::path dataRoot;
-
-		/**
-		 * What the scan reads, which may be wider than `dataRoot` -- a loose overlay over an archive.
-		 * Null reads `dataRoot` alone, which is what a project with no archive is.
-		 */
-		const core::file::IFileSystem* fileSystem = nullptr;
-	};
-
 	/**
 	 * The asset kind `path`'s extension names, or nullopt for anything this project stores no assets of --
 	 * a `.txt`, a `.glb` waiting to be imported, a directory.
@@ -95,7 +83,7 @@ namespace assetlib
 		 *         delete through.
 		 */
 		[[nodiscard]] static AssetRefGraph
-		Scan(const AssetRefScanDesc& desc);
+		Scan(const AssetStore& store);
 
 		/** The edges naming `asset`. Empty means nothing holds it, and it can be deleted. */
 		[[nodiscard]] std::span<const AssetRef>
@@ -287,7 +275,7 @@ namespace assetlib
 	 * Pass the `desc` the plan's graph was scanned with -- the path is relative to its `dataRoot`.
 	 */
 	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetRefScanDesc& desc);
+	deleteAsset(const DeletionPlan& plan, const AssetStore& store);
 
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
@@ -358,5 +346,5 @@ namespace assetlib
 	 *         a plan built by planRename never holds one, so that is a caller error, not weather.
 	 */
 	RenameResult
-	renameAsset(const RenamePlan& plan, const AssetRefScanDesc& desc);
+	renameAsset(const RenamePlan& plan, const AssetStore& store);
 }

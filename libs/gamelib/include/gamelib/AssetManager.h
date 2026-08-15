@@ -1,9 +1,9 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <core/file/LooseFileSystem.h>
 #include <core/str/str.h>
 
 namespace game
@@ -94,11 +94,18 @@ namespace game
 		AssetManager&
 		operator=(const AssetManager&) = delete;
 
-		/** The Data directory this manager resolves against. */
+		/** The Data directory this manager writes to. */
 		[[nodiscard]] const std::filesystem::path&
 		DataRoot() const noexcept
 		{
-			return m_DataRoot;
+			return m_Store.GetDataRoot();
+		}
+
+		/** Where it reads: a directory, an archive, or a loose overlay over one. */
+		[[nodiscard]] const assetlib::AssetStore&
+		GetStore() const noexcept
+		{
+			return m_Store;
 		}
 
 		// --- Acquire: load, or share what is already loaded. Each call takes a reference. --------
@@ -515,14 +522,9 @@ namespace game
 		void
 		DestroyGeom(GeomRecord& record);
 
-		bgl::SceneRef         m_Scene;
-		std::filesystem::path m_DataRoot;
-
-		// The staleness predicates resolve through a mount rather than a root. Loose over the data
-		// root is what a manager built from a path is: task 8 is where the mount becomes the caller's.
-		core::file::LooseFileSystem m_Files;
-
-		AssetManagerOptions m_Options;
+		bgl::SceneRef        m_Scene;
+		assetlib::AssetStore m_Store;
+		AssetManagerOptions  m_Options;
 
 		core::str::unordered_str_map<uint32_t> m_TextureByPath;
 		core::str::unordered_str_map<uint64_t> m_MaterialByPath;

@@ -2,10 +2,10 @@
 
 #include <QLoggingCategory>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
-#include <core/file/LooseFileSystem.h>
 
 namespace editor
 {
@@ -27,9 +27,8 @@ namespace editor
 		auto env = assetlib::ResolvedEnvironment();
 		try
 		{
-			env = assetlib::resolveEnvironment(
-				std::filesystem::path(benvPath),
-				core::file::LooseFileSystem(dataRoot));
+			env =
+				assetlib::AssetStore(dataRoot).ResolveEnvironment(std::filesystem::path(benvPath));
 		}
 		catch (const std::exception& e)
 		{
