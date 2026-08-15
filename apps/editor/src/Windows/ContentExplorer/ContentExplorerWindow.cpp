@@ -4,6 +4,7 @@
 #include "Project/Project.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
+#include "Windows/AssetImporter/material_stems.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "util/asset_paths.h"
@@ -77,35 +78,6 @@ namespace
 	IsImportableEnvironment(const QString& localFile)
 	{
 		return QFileInfo(localFile).suffix().toLower() == "hdr";
-	}
-
-	/**
-	 * A file stem for a glTF material called `name`, unique among `taken`, which it is added to.
-	 *
-	 * A glTF material name is free text: it can be empty, repeat, or hold separators that would send the
-	 * file somewhere other than the import's own folder. `index` names the ones that reduce to nothing.
-	 */
-	QString
-	UniqueMaterialStem(std::string_view name, size_t index, QSet<QString>& taken)
-	{
-		static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
-
-		QString stem = QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size()))
-		                   .trimmed()
-		                   .replace(c_Unsafe, QStringLiteral("_"));
-
-		// "." and ".." name a directory rather than a file, and a leading dot hides it.
-		while (stem.startsWith('.')) stem.remove(0, 1);
-		if (stem.isEmpty())
-			stem = QStringLiteral("material%1").arg(index);
-
-		// Case-insensitively: two materials called "Rust" and "rust" are one file on Windows.
-		QString unique = stem;
-		for (int n = 2; taken.contains(unique.toLower()); ++n)
-			unique = QStringLiteral("%1_%2").arg(stem).arg(n);
-
-		taken.insert(unique.toLower());
-		return unique;
 	}
 
 	/**
@@ -1079,9 +1051,20 @@ ContentExplorerWindow::WriteImportedMaterials(
 	assetlib::BMesh&                  mesh,
 	const std::filesystem::path&      dataRoot,
 	const std::filesystem::path&      materialDir,
-	const std::filesystem::path&      textureDir)
+	const std::filesystem::path&      textureDir,
+	std::span<const QString>          stems)
 {
 	namespace fs = std::filesystem;
+
+	// The stems were chosen against a material table probed before the dialog opened; this one comes
+	// from a second parse of the same file after it closed. A source re-exported while the dialog sat
+	// open has a different table, and stems taken from the old one would name files after materials
+	// that are no longer at those indices.
+	if (stems.size() != imported.materials.size())
+	{
+		throw std::runtime_error(
+			"this file's materials changed while the import dialog was open; import it again");
+	}
 
 	fs::create_directories(materialDir);
 
@@ -1095,7 +1078,6 @@ ContentExplorerWindow::WriteImportedMaterials(
 					   (textureDir / assetlib::textureFileName(index)).wstring());
 	};
 
-	auto taken    = QSet<QString>();
 	auto relative = std::vector<std::string>(imported.materials.size());
 
 	for (size_t i = 0; i < imported.materials.size(); ++i)
@@ -1103,12 +1085,11 @@ ContentExplorerWindow::WriteImportedMaterials(
 		const assetlib::imp::BMaterialImport& source = imported.materials[i];
 
 		// A material whose shading model the engine has no payload for is left behind rather than
-		// stamped into a PBR one it never was.
-		if (!source.isPbr)
+		// stamped into a PBR one it never was, and carries no stem to be written under.
+		if (!source.isPbr || stems[i].isEmpty())
 			continue;
 
-		const QString stem =
-			UniqueMaterialStem(imported.stringPool.at(source.nameOffset), i, taken);
+		const QString& stem = stems[i];
 		const fs::path file = materialDir / (stem + ".bmaterial").toStdWString();
 
 		MaterialGraphModel model(registry);
@@ -1403,7 +1384,22 @@ ContentExplorerWindow::ImportMesh(const QString& sourceFile, const ImportOptions
 					options.animations);
 
 				if (importMaterials)
-					WriteImportedMaterials(*imported, *mesh, dataRoot, materialDir, textureDir);
+				{
+					auto probed = std::vector<assetlib::GltfMaterial>();
+					probed.reserve(imported->materials.size());
+					for (const assetlib::imp::BMaterialImport& source : imported->materials)
+						probed.push_back(
+							{ .name  = std::string(imported->stringPool.at(source.nameOffset)),
+						      .isPbr = source.isPbr });
+
+					WriteImportedMaterials(
+						*imported,
+						*mesh,
+						dataRoot,
+						materialDir,
+						textureDir,
+						editor::MaterialStems(probed));
+				}
 
 				WriteImportedMesh(*mesh, bmeshPath);
 			}

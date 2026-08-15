@@ -20,18 +20,38 @@ namespace editor
 		return path.endsWith(QStringLiteral(".ktx2"), Qt::CaseInsensitive);
 	}
 
+	namespace
+	{
+		/** The one statement of which characters a file stem may hold. */
+		const QRegularExpression&
+		UnsafeStemCharacters()
+		{
+			static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
+			return c_Unsafe;
+		}
+	}
+
 	bool
 	IsPlainFileStem(const QString& name)
 	{
 		if (name.isEmpty())
 			return false;
 
-		static const QRegularExpression c_Unsafe(QStringLiteral("[^A-Za-z0-9_.-]"));
-		if (name.contains(c_Unsafe))
+		if (name.contains(UnsafeStemCharacters()))
 			return false;
 
 		// "." and ".." survive the character check and are not names.
 		return name != "." && name != "..";
+	}
+
+	QString
+	ToPlainFileStem(const QString& name)
+	{
+		QString stem = name.trimmed().replace(UnsafeStemCharacters(), QStringLiteral("_"));
+
+		while (stem.startsWith('.')) stem.remove(0, 1);
+
+		return stem;
 	}
 
 	bool

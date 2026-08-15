@@ -31,6 +31,17 @@ namespace editor
 	IsPlainFileStem(const QString& name);
 
 	/**
+	 * `name` reduced to something IsPlainFileStem accepts: trimmed, every character it rejects replaced
+	 * with `_`, and leading dots dropped -- they would hide the file, or name a directory.
+	 *
+	 * Empty when nothing survives, which a caller names by some other means. Free text from a source
+	 * asset goes through here rather than being checked for the same characters again, so a name that
+	 * is derived cannot fail the validation a typed one is held to.
+	 */
+	[[nodiscard]] QString
+	ToPlainFileStem(const QString& name);
+
+	/**
 	 * Whether `path` is a relative folder that cannot climb out of whatever it is joined onto.
 	 *
 	 * Rejects an absolute path, a leading separator, a drive-relative `D:` -- which
