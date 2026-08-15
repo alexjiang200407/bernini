@@ -4,12 +4,12 @@
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
+#include "util/mime_files.h"
 
 #include <QApplication>
 #include <QDebug>
 #include <QDragEnterEvent>
 #include <QDropEvent>
-#include <QFileInfo>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -26,12 +26,6 @@
 
 namespace
 {
-	bool
-	IsPreviewMesh(const QString& localFile)
-	{
-		return localFile.endsWith(".bmesh", Qt::CaseInsensitive);
-	}
-
 	QString
 	ResolveMaterialPath(
 		const assetlib::BMesh&       mesh,
@@ -49,33 +43,16 @@ namespace
 		return QString::fromStdWString(resolved.wstring());
 	}
 
-	// The first local `.bmesh` in a drag's payload, or an empty string.
 	QString
 	FirstMeshUrl(const QMimeData* mime)
 	{
-		if (mime == nullptr || !mime->hasUrls())
-			return {};
-		for (const QUrl& url : mime->urls())
-		{
-			if (url.isLocalFile() && IsPreviewMesh(url.toLocalFile()))
-				return url.toLocalFile();
-		}
-		return {};
+		return editor::FirstLocalFileWithSuffix(mime, u".bmesh");
 	}
 
-	// The first local `.benv` in a drag's payload, or an empty string.
 	QString
 	FirstEnvironmentUrl(const QMimeData* mime)
 	{
-		if (mime == nullptr || !mime->hasUrls())
-			return {};
-		for (const QUrl& url : mime->urls())
-		{
-			if (url.isLocalFile() &&
-			    QFileInfo(url.toLocalFile()).suffix().compare("benv", Qt::CaseInsensitive) == 0)
-				return url.toLocalFile();
-		}
-		return {};
+		return editor::FirstLocalFileWithSuffix(mime, u".benv");
 	}
 }
 
@@ -270,7 +247,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
 			{
 				const assetlib::Node& node = mesh.nodes[nodeIndex];
-				if (node.mesh == assetlib::c_InvalidIndex || node.mesh >= mesh.meshes.size())
+				if (!bmesh::ReferencesMesh(mesh, node))
 					continue;
 
 				auto [it, inserted] =
@@ -307,12 +284,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				      it->second });
 				m_Raycaster.AddInstance(raycastGeoms[it->second], world);
 
-				const assetlib::Mesh& entry = mesh.meshes[node.mesh];
-				for (uint32_t i = 0; i < entry.submeshCount; ++i)
-				{
-					const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-					bmesh::GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
-				}
+				bmesh::GrowBoundsForMesh(mesh, node.mesh, world, aabbMin, aabbMax);
 			}
 
 			if (m_Geoms.empty())
@@ -494,14 +466,7 @@ MaterialPreviewWindow::resizeEvent(QResizeEvent* event)
 void
 MaterialPreviewWindow::FocusOn(const glm::vec3& center, float radius)
 {
-	m_FocusCenter = center;
-	m_FocusRadius = radius;
-
-	// Pull back far enough that the focus sphere fits the field of view, with some margin.
-	m_Distance = radius * 3.0f;
-	m_Yaw      = 0.0f;
-	m_Pitch    = 0.0f;
-
+	m_Orbit.FocusOn(center, radius);
 	UpdateCamera();
 }
 
@@ -537,26 +502,11 @@ MaterialPreviewWindow::mouseMoveEvent(QMouseEvent* event)
 
 	if (m_DragButton == Qt::LeftButton)
 	{
-		// Orbit. Clamp the pitch just short of the poles so the view never flips over.
-		constexpr float c_RadiansPerPixel = 0.01f;
-		constexpr float c_PitchLimit      = 1.55f;  // just under 90 degrees
-
-		m_Yaw -= static_cast<float>(delta.x()) * c_RadiansPerPixel;
-		m_Pitch = std::clamp(
-			m_Pitch + static_cast<float>(delta.y()) * c_RadiansPerPixel,
-			-c_PitchLimit,
-			c_PitchLimit);
+		m_Orbit.Orbit(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
 	}
 	else if (m_DragButton == Qt::MiddleButton || m_DragButton == Qt::RightButton)
 	{
-		// Pan: slide the focus point across the view plane, scaled so the model tracks the cursor.
-		const glm::vec3 forward = glm::normalize(m_FocusCenter - EyePosition());
-		const glm::vec3 right   = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-		const glm::vec3 up      = glm::cross(right, forward);
-
-		const float scale = m_Distance * 0.002f;
-		m_FocusCenter += right * (-static_cast<float>(delta.x()) * scale);
-		m_FocusCenter += up * (static_cast<float>(delta.y()) * scale);
+		m_Orbit.Pan(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
 	}
 	else
 	{
@@ -569,23 +519,9 @@ MaterialPreviewWindow::mouseMoveEvent(QMouseEvent* event)
 void
 MaterialPreviewWindow::wheelEvent(QWheelEvent* event)
 {
-	// Dolly geometrically so each notch feels the same at any distance.
-	const float steps = static_cast<float>(event->angleDelta().y()) / 120.0f;
-	m_Distance =
-		std::clamp(m_Distance * std::pow(0.9f, steps), m_FocusRadius * 0.1f, m_FocusRadius * 50.0f);
-
+	m_Orbit.Dolly(static_cast<float>(event->angleDelta().y()) / 120.0f);
 	UpdateCamera();
 	event->accept();
-}
-
-glm::vec3
-MaterialPreviewWindow::EyePosition() const
-{
-	const glm::vec3 direction(
-		std::cos(m_Pitch) * std::sin(m_Yaw),
-		std::sin(m_Pitch),
-		std::cos(m_Pitch) * std::cos(m_Yaw));
-	return m_FocusCenter + direction * m_Distance;
 }
 
 void
@@ -594,17 +530,8 @@ MaterialPreviewWindow::UpdateCamera()
 	const float aspect =
 		height() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
 
-	const glm::vec3 eye = EyePosition();
-
-	auto cam = bgl::Camera();
-	cam.LookAt(eye, m_FocusCenter, glm::vec3(0.0f, 1.0f, 0.0f))
-		.Perspective(
-			glm::radians(45.0f),
-			aspect,
-			std::max(0.001f, m_FocusRadius * 0.01f),
-			m_Distance + m_FocusRadius * 50.0f);
-	m_Camera = cam;
-	SetCamera(cam);
+	m_Camera = m_Orbit.GetCamera(aspect);
+	SetCamera(m_Camera);
 }
 
 void

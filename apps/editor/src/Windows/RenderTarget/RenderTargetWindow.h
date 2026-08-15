@@ -109,6 +109,14 @@ protected:
 		return m_SceneView.Get();
 	}
 
+	// The owning reference to that view, for APIs that keep one -- gamelib's AssetManager names
+	// the view each instance is placed in. Render-thread-only, as above.
+	const bgl::SceneViewRef&
+	GetPreviewViewRef() const noexcept
+	{
+		return m_SceneView;
+	}
+
 	// The renderer that owns the bgl objects. A subclass reaches the shared Scene and this window's
 	// SceneView only through it -- every bgl call goes inside a Post/Invoke closure so it runs on the
 	// render thread.
