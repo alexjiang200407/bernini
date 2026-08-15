@@ -339,6 +339,35 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		gfx->DrawFrame(target, job);
 	}
 
+	SECTION("the source files can die under a live geom: frames read the GPU, not the disk")
+	{
+		const auto instance = assets.CreateVatInstance(
+			view,
+			vat.geom,
+			glm::mat4(1.0f),
+			bgl::ISceneView::VatInstanceDesc{ 0, 1.0f, 0.0f });
+
+		// The editor's held-open guard refuses this; a file manager cannot be refused.
+		fs::remove(root.path / "Animations/rig.banim");
+		fs::remove(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim"));
+
+		gfx->DrawFrame(target, job);
+		const auto* png = "assets/golden/vat_acquire_deleted.got.png";
+		gfx->ScreenshotPng(target, png);
+
+		// Frame 1's pose is still on screen: nothing reads the files after the acquire.
+		CHECK(LumaAtWorldX(png, 1.5f) > 0.05f);
+		CHECK(LumaAtWorldX(png, -0.5f) < 0.01f);
+
+		// Released to zero, a re-acquire has nothing to bake from and says so.
+		assets.DestroyInstance(view, instance);
+		assets.ReleaseGeom(vat.geom);
+		CHECK(assets.GeomRefCount(vat.geom) == 0);
+		CHECK_THROWS_AS(
+			assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
+			std::runtime_error);
+	}
+
 	SECTION("a second acquire shares the upload; release unwinds it fully")
 	{
 		const auto again = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");

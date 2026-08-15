@@ -2,15 +2,21 @@
 
 #include "Project/Project.h"
 #include "Windows/AnimationEditor/TimelineScrubber.h"
+#include "util/mime_files.h"
 
 #include <QComboBox>
+#include <QDir>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QMimeData>
 #include <QPushButton>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStyle>
 #include <QTimer>
 #include <QToolButton>
@@ -43,9 +49,19 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 	viewportLayout->addWidget(m_Preview, /*stretch*/ 1);
 	viewportLayout->addWidget(BuildTransportBar());
 
+	// A page, not an overlay: a label floated over the native Metal surface is at the mercy of
+	// its compositing, and a hidden viewport leaves the frame loop entirely.
+	auto* prompt = new QLabel(QStringLiteral("Drop a rigged mesh here\n\nor   Open Mesh..."), this);
+	prompt->setAlignment(Qt::AlignCenter);
+	prompt->setEnabled(false);
+
+	m_Stage = new QStackedWidget(this);
+	m_Stage->addWidget(prompt);
+	m_Stage->addWidget(viewportSide);
+
 	auto* splitter = new QSplitter(Qt::Horizontal, this);
 	splitter->addWidget(BuildPropertiesColumn());
-	splitter->addWidget(viewportSide);
+	splitter->addWidget(m_Stage);
 	splitter->setStretchFactor(0, 0);
 	splitter->setStretchFactor(1, 1);
 
@@ -55,8 +71,8 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 
 	connect(m_Preview, &AnimationPreviewWindow::MeshChanged, this, [this](const QString& relPath) {
 		m_MeshRelPath = relPath;
-		m_MeshLabel->setText(
-			relPath.isEmpty() ? QStringLiteral("Drop a rigged mesh here") : relPath);
+		m_MeshLabel->setText(relPath.isEmpty() ? QStringLiteral("No mesh open") : relPath);
+		m_Stage->setCurrentIndex(relPath.isEmpty() ? 0 : 1);
 	});
 
 	connect(
@@ -78,6 +94,8 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 		this,
 		&AnimationEditorWindow::SetClips);
 
+	setAcceptDrops(true);
+
 	m_Clock = new QTimer(this);
 	m_Clock->setInterval(c_ClockIntervalMs);
 	connect(m_Clock, &QTimer::timeout, this, &AnimationEditorWindow::Tick);
@@ -92,9 +110,25 @@ AnimationEditorWindow::BuildPropertiesColumn()
 
 	auto* openButton = new QPushButton(QStringLiteral("Open Mesh..."), column);
 	connect(openButton, &QPushButton::clicked, this, &AnimationEditorWindow::OpenMeshDialog);
-	layout->addWidget(openButton);
 
-	m_MeshLabel = new QLabel(QStringLiteral("Drop a rigged mesh here"), column);
+	// The way to let go of the held assets: the explorer refuses to delete or rename what this
+	// panel is offering, and "close it first" needs a close to point at.
+	auto* closeButton = new QPushButton(QStringLiteral("Close"), column);
+	closeButton->setEnabled(false);
+	connect(closeButton, &QPushButton::clicked, this, [this] { m_Preview->Clear(); });
+	connect(
+		m_Preview,
+		&AnimationPreviewWindow::MeshChanged,
+		closeButton,
+		[closeButton](const QString& relPath) { closeButton->setEnabled(!relPath.isEmpty()); });
+
+	auto* fileRow = new QHBoxLayout();
+	fileRow->setContentsMargins(0, 0, 0, 0);
+	fileRow->addWidget(openButton, /*stretch*/ 1);
+	fileRow->addWidget(closeButton);
+	layout->addLayout(fileRow);
+
+	m_MeshLabel = new QLabel(QStringLiteral("No mesh open"), column);
 	m_MeshLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	m_MeshLabel->setWordWrap(true);
 	layout->addWidget(m_MeshLabel);
@@ -201,11 +235,58 @@ AnimationEditorWindow::BuildTransportBar()
 }
 
 void
+AnimationEditorWindow::SetDockVisible(const bool visible)
+{
+	if (!visible)
+		m_Preview->Clear();
+}
+
+void
+AnimationEditorWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+	if (!editor::FirstLocalFileWithSuffix(event->mimeData(), u".bmesh").isEmpty())
+		event->acceptProposedAction();
+}
+
+void
+AnimationEditorWindow::dragMoveEvent(QDragMoveEvent* event)
+{
+	if (!editor::FirstLocalFileWithSuffix(event->mimeData(), u".bmesh").isEmpty())
+		event->acceptProposedAction();
+}
+
+void
+AnimationEditorWindow::dropEvent(QDropEvent* event)
+{
+	const QString file = editor::FirstLocalFileWithSuffix(event->mimeData(), u".bmesh");
+	if (file.isEmpty())
+		return;
+
+	m_Preview->LoadMesh(std::filesystem::path(file.toStdWString()));
+	event->acceptProposedAction();
+}
+
+void
 AnimationEditorWindow::SetDataRoot(const QString& dataRoot)
 {
 	m_DataRoot = dataRoot;
 	m_Preview->SetDataRoot(std::filesystem::path(dataRoot.toStdWString()));
 	m_Preview->Clear();
+}
+
+QStringList
+AnimationEditorWindow::HeldOpenPaths() const
+{
+	if (m_DataRoot.isEmpty() || m_MeshRelPath.isEmpty())
+		return {};
+
+	const QDir root(m_DataRoot);
+
+	auto held = QStringList();
+	held << root.absoluteFilePath(m_MeshRelPath);
+	for (int i = 0; i < m_SourceSelector->count(); ++i)
+		held << root.absoluteFilePath(m_SourceSelector->itemText(i));
+	return held;
 }
 
 void
