@@ -12,9 +12,16 @@ namespace editor
 	class OrbitCamera
 	{
 	public:
-		/** Re-centres on `center`, framing a sphere of `radius`: view reset, pulled back to 3x. */
+		/**
+		 * Re-centres on `center`, framing a sphere of `radius`: pulled back to 3x, the view reset
+		 * to `yaw`/`pitch` (radians; positive pitch puts the eye above the center).
+		 */
 		void
-		FocusOn(const glm::vec3& center, float radius) noexcept;
+		FocusOn(
+			const glm::vec3& center,
+			float            radius,
+			float            yaw   = 0.0f,
+			float            pitch = 0.0f) noexcept;
 
 		/** Rotates by a mouse delta in pixels; pitch is clamped just short of the poles. */
 		void

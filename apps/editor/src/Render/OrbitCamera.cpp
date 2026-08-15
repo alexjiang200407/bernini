@@ -9,15 +9,19 @@ namespace editor
 	}
 
 	void
-	OrbitCamera::FocusOn(const glm::vec3& center, const float radius) noexcept
+	OrbitCamera::FocusOn(
+		const glm::vec3& center,
+		const float      radius,
+		const float      yaw,
+		const float      pitch) noexcept
 	{
 		m_FocusCenter = center;
 		m_FocusRadius = radius;
 
 		// Pull back far enough that the focus sphere fits the field of view, with some margin.
 		m_Distance = radius * 3.0f;
-		m_Yaw      = 0.0f;
-		m_Pitch    = 0.0f;
+		m_Yaw      = yaw;
+		m_Pitch    = std::clamp(pitch, -c_PitchLimit, c_PitchLimit);
 	}
 
 	void

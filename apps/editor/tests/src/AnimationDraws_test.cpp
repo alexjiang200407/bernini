@@ -1,4 +1,5 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
+#include "Windows/AnimationEditor/TimelineScrubber.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 
 #include <assetlib_structs/BMesh.h>
@@ -92,4 +93,18 @@ TEST_CASE("Timeline ticks round-trip the clock inside the period", "[animation]"
 	CHECK(
 		AnimationEditorWindow::TimelineSeconds(ticks, 2.2f, 1000) ==
 		Catch::Approx(0.733f).margin(0.0023f));  // one tick of slack
+}
+
+TEST_CASE("The scrubber's press-to-tick mapping spans the groove exactly", "[animation]")
+{
+	// The handle's center travels [radius, width - radius]; presses outside clamp to the ends.
+	CHECK(TimelineScrubber::ValueForX(0, 200, 1000) == 0);
+	CHECK(TimelineScrubber::ValueForX(200, 200, 1000) == 1000);
+	CHECK(TimelineScrubber::ValueForX(100, 200, 1000) == 500);
+	CHECK(TimelineScrubber::ValueForX(-50, 200, 1000) == 0);
+	CHECK(TimelineScrubber::ValueForX(500, 200, 1000) == 1000);
+
+	// Degenerate widths never divide by zero.
+	CHECK(TimelineScrubber::ValueForX(5, 0, 1000) == 0);
+	CHECK(TimelineScrubber::ValueForX(5, 10, 1000) == 0);
 }

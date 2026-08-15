@@ -97,9 +97,9 @@ for anything Qt does off-thread, like `QFileSystemModel` scanning a directory) a
 
 What blocks coverage is the **window**, not the device. `RenderTargetWindow`'s constructor
 calls `CreateRenderTarget` with `winId()` and `headless = false`, and does not guard a null
-device — so `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow` and
-`MainWindow` (whose constructor creates the device) are **not covered**. Covering them needs
-a seam first: a `headless` flag on `RenderTargetWindowDesc`.
+device — so `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow`,
+`AnimationPreviewWindow` and `MainWindow` (whose constructor creates the device) are **not
+covered**. Covering them needs a seam first: a `headless` flag on `RenderTargetWindowDesc`.
 
 A fake `IGraphics` is **not** that seam. `MaterialEditorWindow`, `AssetThumbnailCache` and
 `TextureNode` each degrade when their `Renderer` is null, and no shipping path produces one —

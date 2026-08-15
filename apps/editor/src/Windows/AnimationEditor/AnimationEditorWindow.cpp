@@ -1,6 +1,7 @@
 #include "AnimationEditorWindow.h"
 
 #include "Project/Project.h"
+#include "Windows/AnimationEditor/TimelineScrubber.h"
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -9,7 +10,6 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
-#include <QSlider>
 #include <QSplitter>
 #include <QStyle>
 #include <QTimer>
@@ -170,9 +170,9 @@ AnimationEditorWindow::BuildTransportBar()
 	});
 	layout->addWidget(m_StepForward);
 
-	m_Timeline = new QSlider(Qt::Horizontal, bar);
-	m_Timeline->setRange(0, c_TimelineTicks);
-	connect(m_Timeline, &QSlider::valueChanged, this, [this](int ticks) {
+	m_Timeline = new TimelineScrubber(bar);
+	m_Timeline->SetTickCount(c_TimelineTicks);
+	connect(m_Timeline, &TimelineScrubber::ValueChanged, this, [this](int ticks) {
 		if (m_SyncingUi)
 			return;
 		m_Transport.Scrub(TimelineSeconds(ticks, m_Transport.GetPeriodSeconds(), c_TimelineTicks));
@@ -182,6 +182,7 @@ AnimationEditorWindow::BuildTransportBar()
 	layout->addWidget(m_Timeline, /*stretch*/ 1);
 
 	m_TimeReadout = new QLabel(bar);
+	m_TimeReadout->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 	layout->addWidget(m_TimeReadout);
 
 	m_Speed = new QDoubleSpinBox(bar);
@@ -298,10 +299,13 @@ AnimationEditorWindow::SyncTransportUi()
 	m_PlayButton->setIcon(
 		style()->standardIcon(
 			m_Transport.IsPlaying() ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay));
-	m_Timeline->setValue(TimelineTicks(
-		m_Transport.GetTimeSeconds(),
-		m_Transport.GetPeriodSeconds(),
-		c_TimelineTicks));
+	// Not while the user holds the handle: a loop's last tick wraps to zero, and writing that
+	// back mid-drag snaps the scrubber out from under the cursor.
+	if (!m_Timeline->IsScrubbing())
+		m_Timeline->SetValue(TimelineTicks(
+			m_Transport.GetTimeSeconds(),
+			m_Transport.GetPeriodSeconds(),
+			c_TimelineTicks));
 
 	if (m_Transport.HasClips())
 	{
@@ -373,6 +377,15 @@ AnimationEditorWindow::SelectClip(const int index)
 	                            .arg(clip.sampleRate)
 	                            .arg(clip.duration, 0, 'f', 3)
 	                            .arg(clip.loop ? QStringLiteral(", loops") : QString()));
+
+	// Pin the readout to this clip's widest string (its end values, in SyncTransportUi's own
+	// formats): a label that grows with the digits resizes the slider beside it every tick, and
+	// the groove's fill then repaints for geometry the handle has already left.
+	const QString widest = QStringLiteral("%1s / frame %2")
+	                           .arg(m_Transport.GetPeriodSeconds(), 0, 'f', 2)
+	                           .arg(static_cast<double>(clip.frameCount), 0, 'f', 1);
+	m_TimeReadout->setMinimumWidth(m_TimeReadout->fontMetrics().horizontalAdvance(widest) + 8);
+
 	SyncTransportUi();
 }
 
@@ -387,6 +400,15 @@ void
 AnimationEditorWindow::showEvent(QShowEvent* event)
 {
 	QWidget::showEvent(event);
+
+	// A tabified dock is revealed by being moved in from its parked geometry, and the raster
+	// content beside the preview's native Metal view can keep its pre-reveal pixels until the
+	// window next repaints wholesale (which is why switching away and back "fixed" it). Do what
+	// that tab switch does: a full-window repaint, deferred twice -- once for the reveal's own
+	// layout pass, once after the viewport's resize settle.
+	for (const int delayMs : { 0, 300 })
+		QTimer::singleShot(delayMs, this, [this] { window()->update(); });
+
 	if (m_Transport.IsPlaying())
 	{
 		m_ClockDelta.restart();

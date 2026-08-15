@@ -16,6 +16,7 @@
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
+#include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
@@ -166,9 +167,13 @@ MainWindow::Build()
 			animSettings["initialPreviewInstances"].GetOrDefault(16u);
 		animDesc.taaEnabled  = animSettings["temporalAA"].GetOrDefault(true);
 		animDesc.renderScale = animSettings["renderScale"].GetOrDefault(1.0f);
-		animDesc.previewEnv.environmentMap =
-			animSettings["environmentMap"].GetOrDefault(std::string());
-		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(std::string());
+		// Falls back to the material editor's environment: both are asset previews wanting the
+		// same neutral look, and a config predating this panel would otherwise light it with
+		// nothing -- which draws black and says nothing.
+		animDesc.previewEnv.environmentMap = animSettings["environmentMap"].GetOrDefault(
+			matSettings["environmentMap"].GetOrDefault(std::string()));
+		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(
+			matSettings["dataRoot"].GetOrDefault(std::string()));
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = animSettings["exposure"])
@@ -224,12 +229,19 @@ MainWindow::Build()
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
 
 	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
-	// staleness marker and the baked-texture listing from.
+	// staleness marker and the baked-texture listing from. The Animation panel's Bake Now goes the
+	// same way.
 	connect(
 		m_ContentExplorer,
 		&ContentExplorerWindow::MaterialBaked,
 		m_MaterialEditor,
 		&MaterialEditorWindow::RefreshMaterialState);
+	for (auto* preview : m_AnimationEditor->findChildren<AnimationPreviewWindow*>())
+		connect(
+			preview,
+			&AnimationPreviewWindow::MaterialBaked,
+			m_MaterialEditor,
+			&MaterialEditorWindow::RefreshMaterialState);
 
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
@@ -632,6 +644,7 @@ MainWindow::ShowEmptyState()
 
 	m_LevelEditorDock->hide();
 	m_MaterialEditorDock->hide();
+	m_AnimationEditorDock->hide();
 	m_ContentExplorerDock->hide();
 
 	m_Ui.actionSave->setEnabled(false);
@@ -656,6 +669,7 @@ MainWindow::ShowProjectState()
 
 	m_LevelEditorDock->show();
 	m_MaterialEditorDock->show();
+	m_AnimationEditorDock->show();
 	m_ContentExplorerDock->show();
 	m_LevelEditorDock->raise();
 

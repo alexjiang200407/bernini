@@ -70,3 +70,20 @@ TEST_CASE("Pan slides the focus across the view plane", "[animation]")
 	orbit.Pan(0.0f, 10.0f);
 	CHECK(orbit.GetFocusCenter().y == Approx(0.06f));
 }
+
+TEST_CASE("FocusOn takes an opening view; pitch is clamped like Orbit's", "[animation]")
+{
+	auto orbit = OrbitCamera();
+	orbit.FocusOn(glm::vec3(0.0f), 2.0f, glm::radians(45.0f), glm::radians(15.0f));
+
+	CHECK(orbit.GetPitch() == Approx(glm::radians(15.0f)));
+
+	// yaw 45, pitch 15 at distance 6: the eye sits on the diagonal, above the center.
+	const glm::vec3 eye = orbit.GetEyePosition();
+	CHECK(eye.x == Approx(6.0f * std::cos(glm::radians(15.0f)) * std::sin(glm::radians(45.0f))));
+	CHECK(eye.y == Approx(6.0f * std::sin(glm::radians(15.0f))));
+	CHECK(eye.z == Approx(6.0f * std::cos(glm::radians(15.0f)) * std::cos(glm::radians(45.0f))));
+
+	orbit.FocusOn(glm::vec3(0.0f), 1.0f, 0.0f, 10.0f);
+	CHECK(orbit.GetPitch() == Approx(1.55f));  // clamped short of the pole
+}
