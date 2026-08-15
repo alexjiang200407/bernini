@@ -137,10 +137,10 @@ namespace assetlib
 		// Shared by the sky and both halves of the lighting, so the three read alike.
 		void
 		describeEnvRoute(
-			std::string&                 out,
-			const char*                  label,
-			const EnvMapRoute&           route,
-			const std::filesystem::path& dataRoot)
+			std::string&                   out,
+			const char*                    label,
+			const EnvMapRoute&             route,
+			const core::file::IFileSystem* fileSystem)
 		{
 			out += std::format("\n  {}\n", label);
 			out += std::format("    source          {}\n", pathOr(route.source));
@@ -152,7 +152,7 @@ namespace assetlib
 				return;
 			}
 
-			if (dataRoot.empty())
+			if (fileSystem == nullptr)
 			{
 				out += std::format(
 					"    baked from {} B, hash {:016x}\n",
@@ -164,10 +164,10 @@ namespace assetlib
 			// A map that is named but gone is what makes the route stale even when its source has not
 			// moved, so it has to be said here -- otherwise the route reads "up to date" beside a
 			// verdict of STALE and the two look like a contradiction.
-			if (!route.baked.empty() && stampOf(dataRoot / route.baked).size == 0)
+			if (!route.baked.empty() && stampOf(*fileSystem, route.baked).size == 0)
 				out += "    baked map is missing\n";
 
-			const SourceStamp live = stampOf(dataRoot / route.source);
+			const SourceStamp live = stampOf(*fileSystem, route.source);
 			if (live == SourceStamp{})
 				out += "    source is missing\n";
 			else if (live == route.stamp)
@@ -184,19 +184,21 @@ namespace assetlib
 		// A `.benv` names files rather than holding them, so whether the name resolves is the question
 		// worth answering. Without a root there is nothing to resolve against.
 		std::string
-		referenceOr(const std::string& path, const std::filesystem::path& dataRoot)
+		referenceOr(const std::string& path, const core::file::IFileSystem* fileSystem)
 		{
 			if (path.empty())
 				return "(unset)";
-			if (dataRoot.empty())
+			if (fileSystem == nullptr)
 				return path;
 
-			return std::filesystem::exists(dataRoot / path) ? path :
-			                                                  std::format("{} (missing)", path);
+			return fileSystem->Exists(path) ? path : std::format("{} (missing)", path);
 		}
 
 		void
-		describePbr(std::string& out, const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		describePbr(
+			std::string&                   out,
+			const PbrParams&               pbr,
+			const core::file::IFileSystem* fileSystem)
 		{
 			out += std::format(
 				"  baseColorFactor   ({:.3g}, {:.3g}, {:.3g}, {:.3g})\n",
@@ -234,7 +236,7 @@ namespace assetlib
 				// Compare the source as it is now against the stamp taken when the bake ran. Without a
 				// data root there is nothing to stat, so only the recorded stamp is reported.
 				const SourceStamp& baked = pbr.routeStamps[i];
-				if (dataRoot.empty())
+				if (fileSystem == nullptr)
 				{
 					out += std::format(
 						"                    baked from {} B, hash {:016x}\n",
@@ -243,7 +245,7 @@ namespace assetlib
 					continue;
 				}
 
-				const SourceStamp live = stampOf(dataRoot / route.texture);
+				const SourceStamp live = stampOf(*fileSystem, route.texture);
 				if (live == SourceStamp{})
 					out += "                    source is missing\n";
 				else if (live == baked)
@@ -358,7 +360,7 @@ namespace assetlib
 	}
 
 	std::string
-	describe(const BMaterial& material, const std::filesystem::path& dataRoot)
+	describe(const BMaterial& material, const core::file::IFileSystem* fileSystem)
 	{
 		std::string out;
 
@@ -368,7 +370,7 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			describePbr(out, material.pbr, dataRoot);
+			describePbr(out, material.pbr, fileSystem);
 			break;
 
 		case ShadingModel::kCount:
@@ -376,12 +378,12 @@ namespace assetlib
 			break;
 		}
 
-		if (!dataRoot.empty())
+		if (fileSystem != nullptr)
 		{
 			out += std::format(
 				"\n  bake              {}\n  draws from        {}\n",
-				bakeIsStale(material, dataRoot) ? "STALE" : "up to date",
-				drawsLoose(material, dataRoot) ? "routes (loose)" : "baked triplet");
+				bakeIsStale(material, *fileSystem) ? "STALE" : "up to date",
+				drawsLoose(material, *fileSystem) ? "routes (loose)" : "baked triplet");
 		}
 
 		out += std::format(
@@ -394,7 +396,7 @@ namespace assetlib
 	}
 
 	std::string
-	describe(const BSky& sky, const std::filesystem::path& dataRoot)
+	describe(const BSky& sky, const core::file::IFileSystem* fileSystem)
 	{
 		std::string out;
 
@@ -405,45 +407,45 @@ namespace assetlib
 			sky.rotationY,
 			glm::degrees(sky.rotationY));
 
-		describeEnvRoute(out, "sky", sky.sky, dataRoot);
+		describeEnvRoute(out, "sky", sky.sky, fileSystem);
 
-		if (!dataRoot.empty())
+		if (fileSystem != nullptr)
 			out += std::format(
 				"\n  bake              {}\n",
-				isSkyBakeStale(sky, dataRoot) ? "STALE" : "up to date");
+				isSkyBakeStale(sky, *fileSystem) ? "STALE" : "up to date");
 
 		return out;
 	}
 
 	std::string
-	describe(const BEnvLighting& lighting, const std::filesystem::path& dataRoot)
+	describe(const BEnvLighting& lighting, const core::file::IFileSystem* fileSystem)
 	{
 		std::string out;
 
 		out += std::format("benvl '{}'\n", lighting.name);
 		out += std::format("  exposure          {:.3g}\n", lighting.exposure);
 
-		describeEnvRoute(out, "prefilter", lighting.prefilter, dataRoot);
-		describeEnvRoute(out, "irradiance", lighting.irradiance, dataRoot);
+		describeEnvRoute(out, "prefilter", lighting.prefilter, fileSystem);
+		describeEnvRoute(out, "irradiance", lighting.irradiance, fileSystem);
 
 		// One verdict, not one per route: the two are convolutions of the same radiance, so either
 		// having drifted makes the pair untrustworthy.
-		if (!dataRoot.empty())
+		if (fileSystem != nullptr)
 			out += std::format(
 				"\n  bake              {}\n",
-				isEnvLightingBakeStale(lighting, dataRoot) ? "STALE" : "up to date");
+				isEnvLightingBakeStale(lighting, *fileSystem) ? "STALE" : "up to date");
 
 		return out;
 	}
 
 	std::string
-	describe(const BEnv& env, const std::filesystem::path& dataRoot)
+	describe(const BEnv& env, const core::file::IFileSystem* fileSystem)
 	{
 		std::string out;
 
 		out += std::format("benv '{}'\n", env.name);
-		out += std::format("  sky               {}\n", referenceOr(env.sky, dataRoot));
-		out += std::format("  lighting          {}\n", referenceOr(env.lighting, dataRoot));
+		out += std::format("  sky               {}\n", referenceOr(env.sky, fileSystem));
+		out += std::format("  lighting          {}\n", referenceOr(env.lighting, fileSystem));
 
 		return out;
 	}
@@ -523,18 +525,18 @@ namespace assetlib
 		// root -- whether the file still matches it.
 		void
 		describeVatInput(
-			std::string&                 out,
-			const char*                  label,
-			const std::string&           path,
-			const SourceStamp&           baked,
-			const std::filesystem::path& dataRoot)
+			std::string&                   out,
+			const char*                    label,
+			const std::string&             path,
+			const SourceStamp&             baked,
+			const core::file::IFileSystem* fileSystem)
 		{
 			out += std::format("    {:<10} {}\n", label, pathOr(path));
 
-			if (dataRoot.empty() || path.empty())
+			if (fileSystem == nullptr || path.empty())
 				return;
 
-			const SourceStamp live = stampOf(dataRoot / path);
+			const SourceStamp live = stampOf(*fileSystem, path);
 			if (live.size == 0)
 				out += "               MISSING: the file is not on disk\n";
 			else if (live != baked)
@@ -549,7 +551,7 @@ namespace assetlib
 	}
 
 	std::string
-	describe(const BVat& vat, const std::filesystem::path& dataRoot)
+	describe(const BVat& vat, const core::file::IFileSystem* fileSystem)
 	{
 		std::string out;
 
@@ -577,9 +579,9 @@ namespace assetlib
 			vat.boneCount != 0 ? vat.palettes.size() / vat.boneCount : 0);
 
 		out += std::format("  inputs       (paths relative to the data root)\n");
-		describeVatInput(out, "mesh", vat.mesh, vat.meshStamp, dataRoot);
-		describeVatInput(out, "skeleton", vat.skeleton, vat.skeletonStamp, dataRoot);
-		describeVatInput(out, "animations", vat.animations, vat.animationsStamp, dataRoot);
+		describeVatInput(out, "mesh", vat.mesh, vat.meshStamp, fileSystem);
+		describeVatInput(out, "skeleton", vat.skeleton, vat.skeletonStamp, fileSystem);
+		describeVatInput(out, "animations", vat.animations, vat.animationsStamp, fileSystem);
 		out += std::format("    signature  {:016x}\n", vat.skeletonSignature);
 
 		out += std::format("  submeshes    {}\n", vat.columns.size());

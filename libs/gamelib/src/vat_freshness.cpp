@@ -3,6 +3,8 @@
 #include <assetlib/bvat_io.h>
 #include <assetlib/vat_bake.h>
 
+#include <core/file/LooseFileSystem.h>
+
 namespace game
 {
 	assetlib::BVat
@@ -24,7 +26,7 @@ namespace game
 			try
 			{
 				auto vat = assetlib::loadVat(bvatAbs);
-				if (!assetlib::vatIsStale(vat, dataRoot) &&
+				if (!assetlib::vatIsStale(vat, core::file::LooseFileSystem(dataRoot)) &&
 				    assetlib::normalizePath(vat.animations) ==
 				        assetlib::normalizePath(animationsRelPath))
 					return vat;

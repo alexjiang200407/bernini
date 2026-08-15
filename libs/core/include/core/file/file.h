@@ -2,6 +2,8 @@
 
 namespace core::file
 {
+	class IFileSystem;
+
 	std::vector<std::byte>
 	read_file_bytes(const std::string& filePath);
 
@@ -16,6 +18,17 @@ namespace core::file
 	 */
 	[[nodiscard]] std::optional<uint64_t>
 	hash_file(const std::filesystem::path& filePath);
+
+	/**
+	 * The same hash of the same bytes, read through a mount rather than off the host filesystem, in
+	 * the same fixed-size chunks -- so an entry in an archive larger than memory still hashes, and a
+	 * file hashes to the same value loose or packed.
+	 *
+	 * @param path A mount key: data-root-relative, `/`-separated, already normalized.
+	 * @return Nullopt if the mount does not carry `path`, or if a read fails partway through it.
+	 */
+	[[nodiscard]] std::optional<uint64_t>
+	hash_file(const IFileSystem& fileSystem, std::string_view path);
 
 	std::filesystem::path
 	get_library_path();

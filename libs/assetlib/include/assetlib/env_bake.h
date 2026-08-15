@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/cancel.h>
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -58,11 +59,11 @@ namespace assetlib
 	 * not there to sample, so a deleted one reads as stale rather than as up to date.
 	 */
 	[[nodiscard]] bool
-	isSkyBakeStale(const BSky& sky, const std::filesystem::path& dataRoot);
+	isSkyBakeStale(const BSky& sky, const core::file::IFileSystem& fileSystem);
 
 	/** isSkyBakeStale over the lighting pair: stale when either route is. */
 	[[nodiscard]] bool
-	isEnvLightingBakeStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot);
+	isEnvLightingBakeStale(const BEnvLighting& lighting, const core::file::IFileSystem& fileSystem);
 
 	/**
 	 * The map a consumer draws for `route`, data-root relative: the baked RGB9E5 while that is on
@@ -77,7 +78,7 @@ namespace assetlib
 	 *         draw at all.
 	 */
 	[[nodiscard]] const std::string&
-	envMapToDraw(const EnvMapRoute& route, const std::filesystem::path& dataRoot);
+	envMapToDraw(const EnvMapRoute& route, const core::file::IFileSystem& fileSystem);
 
 	/**
 	 * Whether `fileName` is a name bakeSky or bakeEnvLighting could have written:

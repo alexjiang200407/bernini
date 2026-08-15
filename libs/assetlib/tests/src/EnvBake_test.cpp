@@ -10,6 +10,8 @@
 
 #include <catch2/catch_approx.hpp>
 
+#include "MountAt.h"
+
 using namespace assetlib;
 
 namespace
@@ -139,22 +141,22 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 
 	SECTION("unrouted is never stale; routed-but-never-baked always is")
 	{
-		CHECK_FALSE(isSkyBakeStale(BSky{}, root.path));
-		CHECK_FALSE(isEnvLightingBakeStale(BEnvLighting{}, root.path));
+		CHECK_FALSE(isSkyBakeStale(BSky{}, MountAt(root.path)));
+		CHECK_FALSE(isEnvLightingBakeStale(BEnvLighting{}, MountAt(root.path)));
 
-		CHECK(isSkyBakeStale(RoutedSky(root), root.path));
-		CHECK(isEnvLightingBakeStale(RoutedLighting(root), root.path));
+		CHECK(isSkyBakeStale(RoutedSky(root), MountAt(root.path)));
+		CHECK(isEnvLightingBakeStale(RoutedLighting(root), MountAt(root.path)));
 	}
 
 	SECTION("a bake settles it; editing the source unsettles it")
 	{
 		BSky sky = RoutedSky(root);
 		bakeSky(sky, { root.path });
-		CHECK_FALSE(isSkyBakeStale(sky, root.path));
+		CHECK_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
 
 		// A different face size gives the source different bytes, which is all the stamp compares.
 		root.AddSource("sky_src.ktx2", 16, 1.0f);
-		CHECK(isSkyBakeStale(sky, root.path));
+		CHECK(isSkyBakeStale(sky, MountAt(root.path)));
 	}
 
 	// The same rule the material path is pinned on: a checkout moves every source's mtime, and a
@@ -176,8 +178,8 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 				std::filesystem::last_write_time(path) + std::chrono::seconds(5));
 		}
 
-		CHECK_FALSE(isSkyBakeStale(sky, root.path));
-		CHECK_FALSE(isEnvLightingBakeStale(lighting, root.path));
+		CHECK_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
+		CHECK_FALSE(isEnvLightingBakeStale(lighting, MountAt(root.path)));
 	}
 
 	SECTION("a deleted source reads as stale rather than as unchanged")
@@ -185,7 +187,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 		BSky sky = RoutedSky(root);
 		bakeSky(sky, { root.path });
 		std::filesystem::remove(root.path / sky.sky.source);
-		CHECK(isSkyBakeStale(sky, root.path));
+		CHECK(isSkyBakeStale(sky, MountAt(root.path)));
 	}
 
 	// The other half of "mirror the material's": naming a map is not the same as having one. A route
@@ -194,10 +196,10 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	{
 		BSky sky = RoutedSky(root);
 		bakeSky(sky, { root.path });
-		REQUIRE_FALSE(isSkyBakeStale(sky, root.path));
+		REQUIRE_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
 
 		std::filesystem::remove(root.path / sky.sky.baked);
-		CHECK(isSkyBakeStale(sky, root.path));
+		CHECK(isSkyBakeStale(sky, MountAt(root.path)));
 	}
 
 	// The pair is one verdict, so either map going missing has to carry it.
@@ -205,10 +207,10 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	{
 		BEnvLighting lighting = RoutedLighting(root);
 		bakeEnvLighting(lighting, { root.path });
-		REQUIRE_FALSE(isEnvLightingBakeStale(lighting, root.path));
+		REQUIRE_FALSE(isEnvLightingBakeStale(lighting, MountAt(root.path)));
 
 		std::filesystem::remove(root.path / lighting.irradiance.baked);
-		CHECK(isEnvLightingBakeStale(lighting, root.path));
+		CHECK(isEnvLightingBakeStale(lighting, MountAt(root.path)));
 	}
 }
 
@@ -221,17 +223,20 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	const std::string source = sky.sky.source;
 	const std::string baked  = sky.sky.baked;
 
-	SECTION("a current bake is what is drawn") { CHECK(envMapToDraw(sky.sky, root.path) == baked); }
+	SECTION("a current bake is what is drawn")
+	{
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
+	}
 
 	// The case a fresh checkout is in: Textures/ is regenerated per platform and kept out of source
 	// control, so the sources arrive and the bakes do not.
 	SECTION("a baked map that was never written falls back to the source")
 	{
 		std::filesystem::remove(root.path / baked);
-		CHECK(envMapToDraw(sky.sky, root.path) == source);
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
 
 		BSky unbaked = RoutedSky(root);
-		CHECK(envMapToDraw(unbaked.sky, root.path) == unbaked.sky.source);
+		CHECK(envMapToDraw(unbaked.sky, MountAt(root.path)) == unbaked.sky.source);
 	}
 
 	// The material's rule: loose is not a representation a route with no source can draw, so the
@@ -239,24 +244,24 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	SECTION("a deleted source keeps the baked map")
 	{
 		std::filesystem::remove(root.path / source);
-		CHECK(envMapToDraw(sky.sky, root.path) == baked);
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
 	}
 
 	SECTION("a stale bake is displaced by the source it drifted from")
 	{
 		root.AddSource("sky_src.ktx2", 16, 1.0f);
-		REQUIRE(isSkyBakeStale(sky, root.path));
-		CHECK(envMapToDraw(sky.sky, root.path) == source);
+		REQUIRE(isSkyBakeStale(sky, MountAt(root.path)));
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
 	}
 
 	SECTION("neither on disk throws, naming both")
 	{
 		std::filesystem::remove(root.path / source);
 		std::filesystem::remove(root.path / baked);
-		CHECK_THROWS_AS(envMapToDraw(sky.sky, root.path), std::runtime_error);
+		CHECK_THROWS_AS(envMapToDraw(sky.sky, MountAt(root.path)), std::runtime_error);
 
 		// An unrouted route names nothing at all, which is the same verdict by a different path.
-		CHECK_THROWS_AS(envMapToDraw(EnvMapRoute{}, root.path), std::runtime_error);
+		CHECK_THROWS_AS(envMapToDraw(EnvMapRoute{}, MountAt(root.path)), std::runtime_error);
 	}
 }
 
