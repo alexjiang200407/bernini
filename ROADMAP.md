@@ -101,19 +101,30 @@ and portability.
     - [x] Editor import writes the rig beside the mesh — the skeleton always, the clips behind the
       *Import animations* box, both rolled back with a failed import.
   - [ ] Vertex Animation Textures (VAT) — the bake/draw/load core shipped, see
-    [docs/vat.md](docs/vat.md); the lines below the fold are authoring policy still open.
+    [docs/vat.md](docs/vat.md); the lines below the fold are editor tooling and authoring policy still open.
     - [x] Bake pipeline: resampled clip → position texture (+ normal), unorm-packed in the mesh
-      bounding box — `assetlib_cli bakevat`, one `.bvat` per rig with both textures embedded. A
+      bounding box — `assetlib_cli bakevat`, one `.bvat` per (rig, clip set) with both textures embedded. A
       tangent is deliberately not baked ([docs/vat.md](docs/vat.md)).
     - [x] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
     - [x] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
       for the death handoff, the cavalry saddle transform, and attachments. Baked and tested; no
       GPU consumer yet.
     - [x] Motion vectors (see above).
+    - [x] Editor preview — the Animation panel: a rigged mesh's clips resolved and played with
+      full transport (clip list, scrub, step, speed) against its own clock; the `.bvat` hidden as
+      the build product it is. See [docs/vat.md](docs/vat.md).
+    - [ ] Editor viewport playback — VAT instances placed and playing in the level viewport, which
+      needs a clock; the outline mask still draws VAT through the static kernel, so a selected
+      instance contours its bind pose until it gets a VAT variant.
     - [x] Free inter-frame interpolation — fractional frames blend the two rows they fall between
       as two `Load`s and a lerp (a mesh-stage sampler breaks Metal's stage binding, and U is
       always an exact column); the pad row duplicates each clip's end frame to stop bleed, and a
       looping clip's seam wraps the upper row onto frame 0 rather than reading it.
+    - [ ] **In-place bake policy** — a clip authored with travel in the joints bakes that travel
+      into the textures (the coyote's box spans ~130 units), but ground contact and locomotion are
+      the game's: decide whether `bakeVat` subtracts root translation and hands it to gameplay as
+      metadata (`AnimationClip::rootMotion` / `locomotionSpeed` already exist), or authoring simply
+      requires in-place, ground-relative clips.
     - [ ] **Bake transitions instead of blending them** — explicit idle→run, run→attack clips as
       ordinary states with exit-time transitions; better motion than a crossfade and memory is cheap.
     - [ ] Per-vertex masked layering for upper/lower split — a baked vertex mask, near-free, and the
