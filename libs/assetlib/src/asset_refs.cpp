@@ -121,11 +121,10 @@ namespace assetlib
 			{
 				refs = loadVatRefs(file);
 			}
-			catch (const std::exception& e)
+			catch (const std::exception&)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the VAT bake '" + file.string() +
-					"', so the assets it was baked from cannot be known: " + e.what());
+				// Skipped rather than fatal, unlike every other referrer here -- see Scan's docstring.
+				return;
 			}
 
 			addEdge(edges, referrer, refs.mesh, RefKind::kVatSource);

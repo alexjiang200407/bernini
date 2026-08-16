@@ -75,9 +75,16 @@ namespace assetlib
 	{
 	public:
 		/**
+		 * A `.bvat` that cannot be read is **skipped**, not fatal. Its edges are `kVatSource`, which
+		 * planDeletion routes to `derived` and never to `blockers`, so they cannot hold anything alive
+		 * and losing them cannot widen what a deletion takes. What it costs is an orphan bake that
+		 * nothing here collects -- worth it, because one written before a major bump would otherwise
+		 * make a project unopenable.
+		 *
 		 * @throws std::runtime_error if `dataRoot` is not a directory, or if a *referrer* -- a `.bmesh`,
-		 *         `.bmaterial`, `.benv`, `.bsky` or `.benvl` -- below it cannot be read. Fatal on purpose,
-		 *         and for the reason the prune is: edges we cannot see are edges we would delete through.
+		 *         `.bmaterial`, `.banim`, `.benv`, `.bsky` or `.benvl` -- below it cannot be read. Fatal
+		 *         on purpose, and for the reason the prune is: edges we cannot see are edges we would
+		 *         delete through.
 		 */
 		[[nodiscard]] static AssetRefGraph
 		Scan(const AssetRefScanDesc& desc);
