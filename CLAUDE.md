@@ -128,6 +128,13 @@ authoring traps — gamma, cube-seam edge fixup, resampling — that still bite 
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
+**[Specs](./docs/specs/)**
+
+One file per problem we have decided **not** to solve yet: what it is, the trigger that makes it
+urgent, and the design already settled on so nobody re-derives it. Unlike a doc above, a spec
+describes code that does not exist; unlike a plan, it is not tied to a change that happened. Read one
+before building the thing it describes, and delete it when that thing lands.
+
 **[Plans and Decision Records](./docs/plans/)**
 
 One file per change: the context it was written in, the decisions with the alternative each rejected,
