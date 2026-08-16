@@ -266,66 +266,44 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 }
 
 /**
- * A packed project reads the same asset set as the loose one it was packed from -- that is the whole
- * promise of the mount, seen from the editor's end.
+ * The editor's store is the loose tree and only ever the loose tree.
  *
- * The archive sits beside `Data/`, not inside it: an archive of a tree is not a member of it, and
- * one packed into the tree it came from would be a candidate for the next pack.
+ * An archive is what `pack` makes from this tree to ship, and what a shipped game mounts. Reading
+ * one back here would list assets the editor cannot write, and would make the version-tracked unit
+ * a single packed blob rather than the separate files it wants to be.
  */
-TEST_CASE("A project opens over its archive when one has been packed", "[project][archive]")
+TEST_CASE("A project reads and writes the loose tree, archive or not", "[project]")
 {
 	const Sandbox sandbox;
 	const auto    file = sandbox.ProjectFile();
 
 	Project created = Project::Create(file, "MyGame");
 
-	// One asset of a kind packing carries, written loose.
 	auto material                 = assetlib::BMaterial();
 	material.name                 = "skin";
 	material.pbr.baseColorTexture = "Textures/skin.ktx2";
 	assetlib::saveMaterial(material, created.GetDataDirectory() / "Materials/skin.bmaterial");
 
-	SECTION("with no archive, the loose tree is the whole project")
-	{
-		created.ReloadStore();
+	created.ReloadStore();
 
-		CHECK_FALSE(fs::exists(created.GetArchiveFile()));
-		CHECK(created.GetStore().Exists("Materials/skin.bmaterial"));
-		CHECK(created.GetStore().GetDataRoot() == created.GetDataDirectory());
-	}
+	CHECK(created.GetStore().GetDataRoot() == created.GetDataDirectory());
+	CHECK(created.GetStore().Exists("Materials/skin.bmaterial"));
 
-	SECTION("with one, the same assets read back, and the loose layer still takes writes")
+	// Everything the store answers for is writable, which is the property that lets the editor act
+	// on anything it lists.
+	CHECK_FALSE(created.GetStore().IsReadOnly());
+
+	SECTION("an archive beside the project changes nothing about what it reads")
 	{
 		static_cast<void>(assetlib::packProject(
 			assetlib::AssetStore(created.GetDataDirectory()),
-			assetlib::PackDesc{ created.GetArchiveFile() }));
+			assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
 
-		// Removed from the loose tree: only the archive can answer for it now.
+		// Gone from the tree: the archive still holds it, and that is deliberately not consulted.
 		fs::remove(created.GetDataDirectory() / "Materials/skin.bmaterial");
 
 		Project reopened = Project::Open(file);
 
-		CHECK(reopened.GetStore().Exists("Materials/skin.bmaterial"));
-		CHECK(reopened.GetStore().LoadMaterial("Materials/skin.bmaterial").name == "skin");
-
-		// Writes still address `Data/`: an archive entry cannot be replaced in place.
-		CHECK(reopened.GetStore().GetDataRoot() == reopened.GetDataDirectory());
-		CHECK_FALSE(reopened.GetStore().IsReadOnly());
-	}
-
-	SECTION("a loose asset shadows its packed twin")
-	{
-		static_cast<void>(assetlib::packProject(
-			assetlib::AssetStore(created.GetDataDirectory()),
-			assetlib::PackDesc{ created.GetArchiveFile() }));
-
-		material.name = "edited_after_packing";
-		assetlib::saveMaterial(material, created.GetDataDirectory() / "Materials/skin.bmaterial");
-
-		Project reopened = Project::Open(file);
-
-		CHECK(
-			reopened.GetStore().LoadMaterial("Materials/skin.bmaterial").name ==
-			"edited_after_packing");
+		CHECK_FALSE(reopened.GetStore().Exists("Materials/skin.bmaterial"));
 	}
 }
