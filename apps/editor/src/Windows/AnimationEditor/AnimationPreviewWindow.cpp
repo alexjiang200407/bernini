@@ -16,8 +16,8 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
-#include <core/file/LooseFileSystem.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMesh.h>
@@ -345,8 +345,6 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	// never-baked *and* stale-by-stamp -- an edited source drifts from the triplet baked off it, and
 	// only a re-bake closes the gap. A material with no routes has nothing to bake; one drawing its
 	// baked triplet was refused for another reason.
-	const core::file::LooseFileSystem files(m_DataRoot);
-
 	auto loose = std::vector<std::string>();
 	for (const std::string& relPath : mesh.materials)
 	{
@@ -355,8 +353,10 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 
 		try
 		{
-			const assetlib::BMaterial material = assetlib::loadMaterial(m_DataRoot / relPath);
-			if (assetlib::drawsLoose(material, files))
+			const assetlib::AssetStore store(m_DataRoot);
+
+			const assetlib::BMaterial material = store.LoadMaterial(relPath);
+			if (store.DrawsLoose(material))
 				loose.push_back(relPath);
 		}
 		catch (const std::exception& e)

@@ -298,13 +298,13 @@ namespace assetlib
 				// The baked tables did not change, so re-reading the inputs here is what keeps the
 				// rename a load. Only now are they all in their final place.
 				BVat vat            = loadVat(file.path);
-				vat.meshStamp       = stampOf(desc.dataRoot / vat.mesh);
-				vat.skeletonStamp   = stampOf(desc.dataRoot / vat.skeleton);
-				vat.animationsStamp = stampOf(desc.dataRoot / vat.animations);
+				vat.meshStamp       = stampOf(store.GetDataRoot() / vat.mesh);
+				vat.skeletonStamp   = stampOf(store.GetDataRoot() / vat.skeleton);
+				vat.animationsStamp = stampOf(store.GetDataRoot() / vat.animations);
 				saveVat(vat, file.path);
 
 				const std::filesystem::path derived =
-					desc.dataRoot / vatPathFor(vat.mesh, vat.animations);
+					store.GetDataRoot() / vatPathFor(vat.mesh, vat.animations);
 				if (!std::filesystem::equivalent(file.path, derived, ec) &&
 				    !std::filesystem::exists(derived))
 					std::filesystem::rename(file.path, derived, ec);

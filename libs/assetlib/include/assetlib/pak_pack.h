@@ -47,7 +47,7 @@ namespace assetlib
 	 *
 	 * What goes in is derived from `assetTypeFromExtension` rather than from a list kept here, so a
 	 * new container type joins the archive by being registered once. On top of that, one explicit
-	 * exclusion: any path with a `textures_src` component is authoring store, which the bake reads
+	 * exclusion: any path with a `textures_src` component is authoring source, which the bake reads
 	 * and the runtime never does. Everything else without a registered extension -- the
 	 * `.berniniproject`, a `.glb` awaiting import, the shader cache, `.overlay.json` -- falls out of
 	 * the same rule and is counted in `skippedByExtension`.

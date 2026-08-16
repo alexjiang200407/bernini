@@ -900,13 +900,13 @@ MaterialEditorWindow::IsAlreadyDefault(const QString& boundPath, const QString& 
 	// weakly_canonical resolves the part of the path that does exist and normalises the rest, so it
 	// works either way. Case-insensitively, because this is a Windows tool (see the editor CLAUDE.md).
 	const auto normalise = [](const QString& path) {
-		const auto store = std::filesystem::path(path.toStdWString());
+		const auto source = std::filesystem::path(path.toStdWString());
 
 		std::error_code ec;
-		const auto      resolved = std::filesystem::weakly_canonical(store, ec);
+		const auto      resolved = std::filesystem::weakly_canonical(source, ec);
 
 		return QString::fromStdWString(
-			ec ? store.lexically_normal().wstring() : resolved.wstring());
+			ec ? source.lexically_normal().wstring() : resolved.wstring());
 	};
 
 	return normalise(boundPath).compare(normalise(materialPath), Qt::CaseInsensitive) == 0;
@@ -971,8 +971,8 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 	if (meshPath.empty())
 		return;
 
-	const uint32_t store = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
-	if (store == assetlib::c_InvalidIndex)
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
+	if (source == assetlib::c_InvalidIndex)
 		return;
 
 	try
@@ -982,7 +982,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
 
-		if (assetlib::attachMaterial(mesh, store, relative))
+		if (assetlib::attachMaterial(mesh, source, relative))
 			assetlib::save(mesh, meshPath);
 
 		// The mesh names it now, so the preview's cached bindings must say so too -- otherwise the

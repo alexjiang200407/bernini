@@ -546,7 +546,7 @@ namespace assetlib
 		std::error_code ec;
 		for (const std::string& bake : plan.derived)
 		{
-			std::filesystem::remove(desc.dataRoot / bake, ec);
+			std::filesystem::remove(store.GetDataRoot() / bake, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}

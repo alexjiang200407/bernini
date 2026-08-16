@@ -50,7 +50,7 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	m_ImportSky = new QCheckBox("Sky", this);
 	m_ImportSky->setObjectName("importSky");
 	m_ImportSky->setChecked(true);
-	m_ImportSky->setToolTip("The backdrop: one radiance cube map, projected from the store.");
+	m_ImportSky->setToolTip("The backdrop: one radiance cube map, projected from the source.");
 	layout->addWidget(m_ImportSky);
 
 	m_SkyDir = editor::AddFolderRow(
