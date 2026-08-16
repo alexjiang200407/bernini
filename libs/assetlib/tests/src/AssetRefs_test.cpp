@@ -350,6 +350,20 @@ TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")
 
 		CHECK_THROWS_AS(root.Scan(), std::runtime_error);
 	}
+
+	// The exception to the rule above, and the reason it is one: a `.bvat` is wholly derived. It is
+	// swept when an input goes rather than being the thing that holds one, so edges we cannot see
+	// cost an orphan bake instead of a delete straight through them. Letting it stop the scan is
+	// what once made a whole project unopenable over one stale bake.
+	SECTION("an unreadable VAT bake is skipped, and the rest of the graph still scans")
+	{
+		std::ofstream(root.path / "Meshes" / "stale.bvat", std::ios::binary) << "not a bvat";
+
+		AssetRefGraph graph = root.Scan();
+
+		CHECK(graph.ReferencesOf("Meshes/stale.bvat").empty());
+		CHECK(graph.IsReferenced("textures_src/a.ktx2"));  // the readable half is still there
+	}
 }
 
 TEST_CASE("planDeletion refuses a file that is not an asset", "[assetrefs]")
