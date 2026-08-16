@@ -1,5 +1,8 @@
 #include "Project/Project.h"
 
+#include <assetlib/pak_io.h>
+#include <core/file/LayeredFileSystem.h>
+#include <core/file/LooseFileSystem.h>
 #include <nlohmann/json.hpp>
 
 bool
@@ -36,6 +39,7 @@ Project::Create(const std::filesystem::path& projectFile, std::string_view name)
 	project.m_ProjectFile   = projectFile;
 	project.m_FormatVersion = c_FormatVersion;
 	project.Save();
+	project.ReloadStore();
 
 	return project;
 }
@@ -85,6 +89,8 @@ Project::Open(const std::filesystem::path& projectFile)
 			throw std::runtime_error("Failed to create data directory: " + std::string(category));
 	}
 
+	project.ReloadStore();
+
 	return project;
 }
 
@@ -102,4 +108,28 @@ Project::Save() const
 		throw std::runtime_error("Cannot write project file: " + m_ProjectFile.string());
 
 	stream << json.dump(4);
+}
+
+void
+Project::ReloadStore()
+{
+	const std::filesystem::path dataRoot = GetDataDirectory();
+	const std::filesystem::path archive  = GetArchiveFile();
+
+	std::error_code ec;
+	if (!std::filesystem::is_regular_file(archive, ec) || ec)
+	{
+		// No archive packed: the loose tree is the whole project, which is every project until
+		// somebody ships one.
+		m_Store.emplace(dataRoot);
+		return;
+	}
+
+	// Loose first: an edited asset shadows its packed twin, which is what makes the loose tree an
+	// overlay. PakFile reports itself read-only, so the store's writable layer stays `Data/`.
+	auto mount = std::make_shared<core::file::LayeredFileSystem>();
+	mount->Mount(std::make_shared<core::file::LooseFileSystem>(dataRoot));
+	mount->Mount(std::make_shared<assetlib::PakFile>(archive));
+
+	m_Store.emplace(dataRoot, std::move(mount));
 }

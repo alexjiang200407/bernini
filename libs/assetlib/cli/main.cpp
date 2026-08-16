@@ -818,9 +818,9 @@ main(int argc, char** argv)
 			const assetlib::AssetStore store{ std::filesystem::path(packDataRoot) };
 
 			auto desc   = assetlib::PackDesc();
-			desc.target = packTarget.empty() ?
-			                  std::filesystem::path(packDataRoot).parent_path() / "Data.bpak" :
-			                  std::filesystem::path(packTarget);
+			desc.target = packTarget.empty() ? std::filesystem::path(packDataRoot).parent_path() /
+			                                       assetlib::c_DefaultArchiveName :
+			                                   std::filesystem::path(packTarget);
 
 			const assetlib::PackReport report = assetlib::packProject(store, desc);
 
