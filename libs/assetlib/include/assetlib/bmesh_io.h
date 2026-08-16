@@ -2,7 +2,6 @@
 #include <assetlib/cancel.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMeshImport.h>
-#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -46,15 +45,6 @@ namespace assetlib
 	[[nodiscard]] BMesh
 	load(const std::filesystem::path& path);
 
-	/**
-	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
-	 * container may equally be a loose file or an entry in an archive.
-	 *
-	 * @throws std::runtime_error if the container is absent, cannot be read, or is malformed.
-	 */
-	[[nodiscard]] BMesh
-	load(const core::file::IFileSystem& fileSystem, std::string_view path);
-
 	/** Every asset a `.bmesh` names. See loadMeshRefs. */
 	struct MeshRefs
 	{
@@ -77,13 +67,6 @@ namespace assetlib
 	 */
 	[[nodiscard]] MeshRefs
 	loadMeshRefs(const std::filesystem::path& path);
-
-	/**
-	 * The mounted overload of loadMeshRefs. Reads the same few hundred bytes -- an archive serves a
-	 * range as readily as a file does, which is why the seam carries a ranged read at all.
-	 */
-	[[nodiscard]] MeshRefs
-	loadMeshRefs(const core::file::IFileSystem& fileSystem, std::string_view path);
 
 	/**
 	 * Bakes a flattened import into its modular file form: the geometry is copied verbatim and every

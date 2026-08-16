@@ -12,6 +12,7 @@
 
 #include "RefsSandbox.h"
 #include "bmesh_texture.h"
+#include "mounted_io.h"
 #include <assetlib/AssetStore.h>
 
 #ifdef _WIN32

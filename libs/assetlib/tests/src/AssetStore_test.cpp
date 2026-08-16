@@ -11,6 +11,7 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "RefsSandbox.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 using namespace assetlib::test;

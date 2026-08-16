@@ -8,6 +8,7 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "CountingFileSystem.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 using namespace assetlib::test;

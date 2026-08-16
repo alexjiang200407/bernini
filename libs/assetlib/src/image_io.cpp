@@ -4,6 +4,8 @@
 
 #include <ktx.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace

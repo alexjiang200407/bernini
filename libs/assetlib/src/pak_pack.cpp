@@ -13,6 +13,8 @@
 
 #include "ref_paths.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace

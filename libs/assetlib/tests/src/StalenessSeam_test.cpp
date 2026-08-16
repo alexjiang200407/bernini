@@ -4,6 +4,7 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "MountAt.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 

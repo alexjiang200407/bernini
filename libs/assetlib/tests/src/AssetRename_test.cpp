@@ -20,6 +20,7 @@
 #include "RefsSandbox.h"
 
 #include "MountAt.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 using namespace assetlib::test;

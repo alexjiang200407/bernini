@@ -1,5 +1,4 @@
 #pragma once
-#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -29,12 +28,4 @@ namespace assetlib
 	[[nodiscard]] Skeleton
 	loadSkeleton(const std::filesystem::path& path);
 
-	/**
-	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
-	 * rig may equally be a loose file or an entry in an archive.
-	 *
-	 * @throws std::runtime_error if the container is absent, cannot be read, or is malformed.
-	 */
-	[[nodiscard]] Skeleton
-	loadSkeleton(const core::file::IFileSystem& fileSystem, std::string_view path);
 }
