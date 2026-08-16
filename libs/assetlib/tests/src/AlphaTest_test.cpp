@@ -6,6 +6,7 @@
 
 #include "bmesh_texture.h"
 
+#include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 
 using namespace assetlib;

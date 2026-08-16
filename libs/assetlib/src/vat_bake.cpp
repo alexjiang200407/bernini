@@ -18,6 +18,8 @@
 
 #include "ref_paths.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	using core::throw_runtime_error;

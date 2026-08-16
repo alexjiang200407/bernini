@@ -9,6 +9,8 @@
 #include "fs_util.h"
 #include "string_io.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace

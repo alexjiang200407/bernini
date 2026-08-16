@@ -14,6 +14,8 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace

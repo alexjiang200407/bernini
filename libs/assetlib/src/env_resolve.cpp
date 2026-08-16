@@ -6,6 +6,8 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace
