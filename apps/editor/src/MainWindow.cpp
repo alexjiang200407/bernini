@@ -28,6 +28,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
@@ -454,10 +455,7 @@ MainWindow::CleanUnusedTextures()
 	if (!m_Project)
 		return;
 
-	// Built inside the worker, not beside it: an AssetStore over a data directory that has gone
-	// throws, and out here that would leave a Qt slot rather than the loading screen's error.
-	auto store = std::optional<assetlib::AssetStore>();
-	auto scan  = assetlib::TexturePruneScan();
+	auto scan = assetlib::TexturePruneScan();
 
 	// Scanning parses every .bmaterial in the project, so it runs off the UI thread. It reads assetlib
 	// only, never bgl, which is what the loading screen requires of its worker. findUnusedBakedTextures
@@ -467,8 +465,18 @@ MainWindow::CleanUnusedTextures()
 		"Clean Unused Textures",
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Scanning materials...");
-			store.emplace(m_Project->GetDataDirectory());
-			scan = assetlib::findUnusedBakedTextures(*store);
+
+			// The project's store was mounted when the project opened, and a data directory can go
+			// away after that -- renamed from a file manager, or on a volume that unmounted. Asked
+			// here rather than left to the sweep, which enumerates an absent root as empty and would
+			// report a clean project. Inside the worker, so the answer reaches the loading screen's
+			// error rather than leaving a Qt slot.
+			core::throw_runtime_error_if(
+				!std::filesystem::is_directory(m_Project->GetDataDirectory()),
+				"the data directory '{}' is not there any more",
+				m_Project->GetDataDirectory().string());
+
+			scan = assetlib::findUnusedBakedTextures(m_Project->GetStore());
 		});
 
 	if (!scanned.Completed())
@@ -524,7 +532,7 @@ MainWindow::CleanUnusedTextures()
 		return;
 
 	// Unlinking is fast, so it stays on the UI thread; the scan is what was slow.
-	const auto result = assetlib::deleteUnusedBakedTextures(scan, *store);
+	const auto result = assetlib::deleteUnusedBakedTextures(scan, m_Project->GetStore());
 
 	if (!result.failed.empty())
 	{
@@ -566,8 +574,7 @@ MainWindow::SetActiveProject(Project project)
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
 	// shares is one upload and one reference count no matter which view shows it. Each view names itself
 	// when it places an instance.
-	m_Assets =
-		std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetDataDirectory());
+	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
 	// asks for a render straight away -- a material cannot be resolved without a manager.
