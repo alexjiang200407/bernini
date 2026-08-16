@@ -15,7 +15,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 1;
+		constexpr uint16_t c_VersionMajor = 2;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "bvat";

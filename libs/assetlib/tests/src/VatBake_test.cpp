@@ -393,6 +393,21 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	CHECK(vat.animationsStamp == stampOf(root / "Animations/rig.banim"));
 	CHECK_FALSE(vatIsStale(vat, root));
 
+	// The bug the content stamp exists for, on the VAT path: a checkout rewrites the inputs' mtimes
+	// without changing a byte, and a `.bvat` that noticed would be re-baked on every acquire.
+	SECTION("an input whose mtime moved but whose bytes did not is not stale")
+	{
+		for (const char* input :
+		     { "Meshes/rig.bmesh", "Skeletons/rig.bskel", "Animations/rig.banim" })
+		{
+			const fs::path path = root / input;
+			fs::last_write_time(path, fs::last_write_time(path) + std::chrono::seconds(5));
+		}
+
+		CHECK(vat.meshStamp == stampOf(root / "Meshes/rig.bmesh"));
+		CHECK_FALSE(vatIsStale(vat, root));
+	}
+
 	SECTION("a changed input reads as stale")
 	{
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
