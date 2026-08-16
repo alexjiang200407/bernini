@@ -551,8 +551,12 @@ namespace bgl
 				skyRotation = glm::rotate(glm::mat4(1.0f), rotationY, glm::vec3(0.0f, 1.0f, 0.0f));
 			}
 
+			// Composed from the pieces, the jitter as an exact translation: inverting their product
+			// folds the jitter into the rotation and a still sky reports motion (docs/passes.md).
 			draw.lighting.skyboxClipToWorld =
-				skyRotation * glm::inverse(camera.rotationOnlyViewProj);
+				skyRotation * glm::transpose(viewNoTranslation) *
+				glm::inverse(job.camera.GetProjection()) *
+				glm::translate(glm::mat4(1.0f), glm::vec3(-jitter, 0.0f));
 
 			// Undoes the spin the ray direction was baked with before reprojecting, so a rotated
 			// skybox reports the camera's motion and not its own offset. rotationY is authoring

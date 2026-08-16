@@ -8,6 +8,9 @@ are far more visible at a 1080p sample grid (Render Scale 0.5 on a 2× display) 
 motion vectors are correct — `Forward_VatMesh.slang` re-evaluates the pose at `prevTime` through the
 previous camera, `RenderContext` keeps `prevTime` per view beside the previous camera, and
 `VatPlayback_test` pins the displacement — so the failure is in the resolve, not the reprojection.
+(The reviewer's eyes at that render scale later found an older cause beside it, in the *sky's*
+reprojection rather than the mesh's — commit 6 below; the resolve findings stand on their own
+measurements.)
 
 Read from `TaaResolve.slang`, two things a still camera and a moving mesh produce that no pan can:
 
@@ -94,3 +97,9 @@ under motion, which at 1080p a limb crosses more texels per frame to reach.
    `[hashedalpha]` figures identical to master's.
 5. `fix(bgl): walk the jitter sequence per target` — the frame count on `RenderTargetBase`, the
    two uses in `RenderContext`, the case. Gate: (c) red before, bit-identical after.
+6. `fix(bgl): unproject the sky's ray through the two inverses, not the inverse of the product` —
+   found by the reviewer's eyes at half render scale on a 1080p panel, where the report's jaggies
+   survived commits 4 and 5: a still sky reported up to half a texel of motion between jitter
+   phases, so every silhouette against it was fetched off-texel each frame. One line in
+   `RenderContext`, the case in `MotionVectors_test`, `docs/passes.md`. Gate: the case red before,
+   green after; every `[taa]` and `[hashedalpha]` figure identical.

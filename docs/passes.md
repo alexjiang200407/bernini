@@ -221,6 +221,13 @@ culling, so it fills only where nothing has been drawn.
 * `prevWorldToClip` is last frame's rotation-only view-projection with the skybox's own `rotationY`
   divided back out, so a rotated sky reports the camera's motion and not its own offset. `rotationY`
   is authoring state, so last frame's spin is taken to be this frame's.
+* `clipToWorld` is composed from the transposed view rotation (the view is rigid, so its transpose
+  is its inverse), the inverse of the *unjittered* projection, and the jitter as an exact
+  translation — never the inverse of the jittered product. Inverting the composed matrix mixes the
+  projection's near-scaled rows into the rotation, and how the residue rounds depends on the jitter
+  folded in — at a 960×540 target with a 45° field of view a still sky reported 0.25 texel of
+  motion on average and 0.5 at worst, phase by phase, which the TAA resolve turned into a blur along
+  every silhouette against it. `MotionVectors_test` pins the composed form at that size.
 * Attached per draw, before `Compact Instances` and `Forward`.
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)
