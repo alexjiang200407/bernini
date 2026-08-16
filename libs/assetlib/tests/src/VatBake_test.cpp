@@ -321,7 +321,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	{
 		saveVat(vat, root / "Meshes/rig.bvat");
 
-		const auto graph = AssetRefGraph::Scan(AssetRefScanDesc{ root });
+		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
 		// The clip set: referenced only by the bake, so deletable, and the bake goes with it.
 		const DeletionPlan plan = planDeletion(graph, "Animations/rig.banim");
@@ -329,14 +329,14 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 		REQUIRE(plan.derived.size() == 1);
 		CHECK(plan.derived[0] == "Meshes/rig.bvat");
 
-		const DeletionResult result = deleteAsset(plan, AssetRefScanDesc{ root });
+		const DeletionResult result = deleteAsset(plan, AssetStore(root));
 		CHECK(result.status == DeletionStatus::kDeleted);
 		CHECK_FALSE(fs::exists(root / "Animations/rig.banim"));
 		CHECK_FALSE(fs::exists(root / "Meshes/rig.bvat"));
 
 		// A real referrer still blocks: the mesh is held by nothing now (the bake is gone), but
 		// the skeleton is held by the mesh, whose kMeshSkeleton edge is not a bake's.
-		const auto after = AssetRefGraph::Scan(AssetRefScanDesc{ root });
+		const auto after = AssetRefGraph::Scan(AssetStore(root));
 		CHECK_FALSE(planDeletion(after, "Skeletons/rig.bskel").Allowed());
 	}
 
@@ -344,7 +344,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	{
 		saveVat(vat, root / "Meshes/rig.bvat");
 
-		const auto graph = AssetRefGraph::Scan(AssetRefScanDesc{ root });
+		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
 		const DeletionPlan plan = planDeletion(graph, "Animations");
 		CHECK(plan.Allowed());

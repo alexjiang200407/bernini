@@ -316,7 +316,7 @@ main(int argc, char** argv)
 		"-d,--data-root",
 		describeDataRoot,
 		"Project data directory the asset's paths resolve against. For a material, a sky or a "
-		"lighting this also stats each routed store, so a stale bake is reported; for an "
+		"lighting this also stats each routed source, so a stale bake is reported; for an "
 		"environment it reports whether the files it names are there, and for a clip set it is "
 		"where its skeleton is looked up");
 	describe->add_flag(
@@ -610,7 +610,7 @@ main(int argc, char** argv)
 			const auto mesh = assetlib::load(objInput);
 			assetlib::writeObj(mesh, objOut, !objRaw);
 			spdlog::info(
-				"Wrote '{}' from '{}' ({} submeshes, {} store)",
+				"Wrote '{}' from '{}' ({} submeshes, {} source)",
 				objOut,
 				objInput,
 				mesh.submeshes.size(),
