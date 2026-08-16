@@ -144,9 +144,16 @@ TEST_CASE("every packed entry reads back byte-for-byte", "[pack]")
 	}
 }
 
-// Packing one tree twice gives one archive: the entry table is sorted by path, so nothing about
-// directory-iteration order reaches the bytes. A shipped artifact that differed run to run would
-// defeat every downstream check that compares builds.
+/**
+ * Packing one tree twice gives one archive. A shipped artifact that differed run to run would defeat
+ * every downstream check that compares builds.
+ *
+ * It is the *walk* that is sorted, not just the entry table. Sorting the table alone would not be
+ * enough: `PakWriter` streams each payload as it arrives, so Add order is payload order, and two
+ * walks that met the same files in a different order would record different offsets for every path.
+ * Two runs on one machine agree either way, which is the limit of what this can reach from here --
+ * the case it is really written against is two filesystems disagreeing about iteration order.
+ */
 TEST_CASE("packing the same tree twice produces identical bytes", "[pack]")
 {
 	const DataRoot root("pack_determinism");

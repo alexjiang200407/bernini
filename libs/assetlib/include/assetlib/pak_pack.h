@@ -56,8 +56,8 @@ namespace assetlib
 	 * new container type joins the archive by being registered once. On top of that, one explicit
 	 * exclusion: any path with a `textures_src` component is authoring source, which the bake reads
 	 * and the runtime never does. Everything else without a registered extension -- the
-	 * `.berniniproject`, a `.glb` awaiting import, the shader cache, `.overlay.json` -- falls out of
-	 * the same rule and is counted in `skippedByExtension`.
+	 * `.berniniproject`, a `.glb` awaiting import, the shader cache -- falls out of the same rule and
+	 * is counted in `skippedByExtension`.
 	 *
 	 * A stale `.bvat` is re-baked before it is packed. It is a derived build product whose inputs
 	 * may be packed beside it with no writable place to regenerate it, so what ships has to be

@@ -2,6 +2,7 @@
 
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
+#include <core/file/file.h>
 
 namespace
 {
@@ -130,14 +131,21 @@ TEST_CASE("a bpak enumerates exactly what went in", "[pak]")
 	CHECK(pak.Enumerate("Nothing").empty());
 }
 
-TEST_CASE("packing one tree twice produces identical bytes", "[pak]")
+/**
+ * The writer sorts its table, so what it was told in which order stops mattering to a reader.
+ *
+ * It does *not* make the two files byte-identical, and this pins that too: payloads are streamed as
+ * they arrive, so Add order is payload order and the offsets recorded for one path differ between
+ * these two archives. Reproducible bytes are a property of a caller that adds in a fixed order --
+ * see packProject and `Pack_test.cpp`.
+ */
+TEST_CASE("a bpak reads the same however its entries were added", "[pak]")
 {
 	const Scratch scratch("pak_deterministic");
 
 	const fs::path first  = scratch.path / "first.bpak";
 	const fs::path second = scratch.path / "second.bpak";
 
-	// Added in a different order, so only the sort makes these agree.
 	{
 		assetlib::PakWriter writer(first);
 		writer.Add("b.bin", Bytes("bbb"), { 3, 2 });
@@ -157,6 +165,10 @@ TEST_CASE("packing one tree twice produces identical bytes", "[pak]")
 	CHECK(firstPak.Enumerate() == secondPak.Enumerate());
 	CHECK(Text(firstPak.Read("a.bin")) == Text(secondPak.Read("a.bin")));
 	CHECK(Text(firstPak.Read("b.bin")) == Text(secondPak.Read("b.bin")));
+
+	CHECK(
+		core::file::read_file_bytes(first.string()) !=
+		core::file::read_file_bytes(second.string()));
 }
 
 TEST_CASE("PakWriter refuses what a reader could not key on", "[pak]")

@@ -119,6 +119,12 @@ write it, and why the agent's git config keys cannot be committed.
 
 PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.
 
+**[Asset Archives](./docs/archives.md)**
+
+The `core::file::IFileSystem` read seam, the `.bpak` format and what `pack` puts in one, and
+`AssetStore` — the mount and the writable data root as one object. Why the editor authors the loose
+tree and never reads an archive back, and why a mount key is a `string_view` and never a `path`.
+
 **[Environment Maps](./docs/envmaps.md)**
 
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the

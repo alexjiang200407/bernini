@@ -129,7 +129,9 @@ namespace assetlib
 		if (m_Finished)
 			core::throw_runtime_error("bpak: Finish called twice");
 
-		// Sorted by path so that packing one tree twice produces identical bytes. Lookup is the
+		// Sorted by path, so the entry table and the string pool do not depend on the order Add was
+		// called in. Payloads do -- they were streamed as they arrived -- so byte-for-byte identical
+		// archives are packProject's guarantee (it walks sorted), not this writer's. Lookup is the
 		// map a reader builds at mount, so the order is for determinism and for `list`, not speed.
 		std::ranges::sort(m_Entries, {}, &PendingEntry::path);
 

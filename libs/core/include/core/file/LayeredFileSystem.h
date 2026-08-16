@@ -63,9 +63,10 @@ namespace core::file
 		 * one only the archive does.
 		 *
 		 * Not the question a caller regenerating a derived file asks -- that one wants "is there
-		 * anywhere at all to write", which is IsReadOnly(); see the `.bvat` decision in
-		 * docs/plans/archive.md. This is for a caller deciding what to do about *this* path, which
-		 * is what a delete does when it chooses between unlinking and tombstoning.
+		 * anywhere at all to write", which is IsReadOnly(); see the `.bvat` rule in
+		 * docs/archives.md. This is for a caller acting on *this* path, and nothing in the tree asks
+		 * it today: it is kept with Resolve as the pair a search path owes a caller that needs to
+		 * know which layer answered.
 		 *
 		 * Falls back to IsReadOnly() when nothing answers.
 		 */
