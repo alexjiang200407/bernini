@@ -310,6 +310,12 @@ namespace assetlib
 		// Whether `target` already holds this map's output: it exists and no source has been touched
 		// since it was written. Re-encoding a 4K map costs seconds, and a shared map is asked for once
 		// per material that references it.
+		//
+		// Mtime ordering, and deliberately not a SourceStamp comparison: the target records nothing
+		// about what produced it, and `pbr.routeStamps` is empty for a bake composed from a graph --
+		// so a stamp test would re-encode a map another material had just written. What it costs is a
+		// needless re-encode after a checkout moves every mtime; the output is byte-identical, so
+		// nothing downstream is dirtied by it.
 		bool
 		isUpToDate(
 			const std::filesystem::path& target,
@@ -317,9 +323,12 @@ namespace assetlib
 			const Group&                 group,
 			const std::filesystem::path& dataRoot)
 		{
-			const SourceStamp stamp = stampOf(target);
-			if (stamp.size == 0)
+			if (stampOf(target).size == 0)
 				return false;  // missing, or empty and so not a real map
+
+			const std::optional<std::filesystem::file_time_type> written = mtimeOf(target);
+			if (!written)
+				return false;
 
 			for (size_t i = channelIndex(group.channels, 0);
 			     i < channelIndex(group.channels, group.channels.count);
@@ -329,8 +338,12 @@ namespace assetlib
 				if (route.texture.empty())
 					continue;
 
-				const SourceStamp source = stampOf(dataRoot / route.texture);
-				if (source.size == 0 || source.mtime > stamp.mtime)
+				const std::filesystem::path source = dataRoot / route.texture;
+				if (stampOf(source).size == 0)
+					return false;
+
+				const std::optional<std::filesystem::file_time_type> touched = mtimeOf(source);
+				if (!touched || *touched > *written)
 					return false;
 			}
 			return true;

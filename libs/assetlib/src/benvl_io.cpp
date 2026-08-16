@@ -17,7 +17,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 1;
+		constexpr uint16_t c_VersionMajor = 2;
 
 		// 1 appended the authored exposure override. Minor 0 files carry none, and read back with
 		// none, which is exactly what "nobody has tuned this" means.

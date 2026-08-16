@@ -55,9 +55,16 @@ namespace assetlib
 			createDirectories(outDir);
 			const std::filesystem::path target = outDir / name;
 
-			const SourceStamp sourceStamp = stampOf(desc.dataRoot / route.source);
-			const SourceStamp targetStamp = stampOf(target);
-			if (targetStamp.size == 0 || sourceStamp.mtime > targetStamp.mtime)
+			// Mtime ordering rather than a stamp comparison, for the reason material_bake's isUpToDate
+			// gives: the target records nothing about what produced it, and two environments sharing a
+			// source share the target, so a stamp test would re-encode what the other just wrote.
+			const std::filesystem::path sourcePath  = desc.dataRoot / route.source;
+			const SourceStamp           sourceStamp = stampOf(sourcePath);
+
+			const std::optional<std::filesystem::file_time_type> written = mtimeOf(target);
+			const std::optional<std::filesystem::file_time_type> touched = mtimeOf(sourcePath);
+
+			if (stampOf(target).size == 0 || !written || !touched || *touched > *written)
 				writeKTX2(packRgb9e5(source), target, false, Ktx2Compression::kNone);
 
 			EnvMapRoute baked = route;

@@ -68,10 +68,11 @@ namespace assetlib
 
 			case AssetType::kVat:
 			{
-				// The stamps survive untouched: a rename moves the file but keeps its size and
-				// mtime, so rewriting the paths keeps the bake fresh rather than forcing one.
-				// renameAsset then moves the file to the name vatPathFor derives from these
-				// rewritten inputs, or the runtime would never look under the old one.
+				// The stamps are left alone here and recomputed by renameAsset once every input is
+				// in its final place -- a rename rewrites the references inside a `.bmesh` and a
+				// `.banim`, so their contents, and their stamps, do move. renameAsset then puts the
+				// file under the name vatPathFor derives from these rewritten inputs, or the runtime
+				// would never look for it.
 				BVat vat       = deserializeVat(bytes);
 				vat.mesh       = mapTarget(plan, vat.mesh);
 				vat.skeleton   = mapTarget(plan, vat.skeleton);
@@ -292,9 +293,18 @@ namespace assetlib
 
 			try
 			{
-				const VatRefs               refs = loadVatRefs(file.path);
+				// Re-stamp before moving: a rename rewrites the path references inside the `.bmesh`
+				// and `.banim` this was baked from, which changes their contents and so their stamps.
+				// The baked tables did not change, so re-reading the inputs here is what keeps the
+				// rename a load. Only now are they all in their final place.
+				BVat vat            = loadVat(file.path);
+				vat.meshStamp       = stampOf(desc.dataRoot / vat.mesh);
+				vat.skeletonStamp   = stampOf(desc.dataRoot / vat.skeleton);
+				vat.animationsStamp = stampOf(desc.dataRoot / vat.animations);
+				saveVat(vat, file.path);
+
 				const std::filesystem::path derived =
-					desc.dataRoot / vatPathFor(refs.mesh, refs.animations);
+					desc.dataRoot / vatPathFor(vat.mesh, vat.animations);
 				if (!std::filesystem::equivalent(file.path, derived, ec) &&
 				    !std::filesystem::exists(derived))
 					std::filesystem::rename(file.path, derived, ec);

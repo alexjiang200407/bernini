@@ -15,6 +15,18 @@ namespace assetlib
 				"assetlib: cannot create directory '" + dir.string() + "': " + ec.message());
 	}
 
+	std::optional<std::filesystem::file_time_type>
+	mtimeOf(const std::filesystem::path& path)
+	{
+		std::error_code ec;
+
+		const auto written = std::filesystem::last_write_time(path, ec);
+		if (ec)
+			return std::nullopt;
+
+		return written;
+	}
+
 	std::string
 	fileErrorMessage(std::string_view what, const std::filesystem::path& path)
 	{

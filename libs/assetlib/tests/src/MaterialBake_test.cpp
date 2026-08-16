@@ -384,7 +384,7 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 	const auto baked = dir.path / mat.pbr.baseColorTexture;
 
 	// Overwrite the baked map with a sentinel. Whether the next bake rewrites it is then observable
-	// directly, rather than through an mtime whose resolution is only one second.
+	// directly, rather than inferred from the timestamps isUpToDate itself compares.
 	const auto writeSentinel = [&]() {
 		std::ofstream out(baked, std::ios::binary | std::ios::trunc);
 		out << "SENTINEL";

@@ -155,9 +155,9 @@ namespace assetlib
 			if (dataRoot.empty())
 			{
 				out += std::format(
-					"    baked from {} B, mtime {}\n",
+					"    baked from {} B, hash {:016x}\n",
 					route.stamp.size,
-					route.stamp.mtime);
+					route.stamp.hash);
 				return;
 			}
 
@@ -174,11 +174,11 @@ namespace assetlib
 				out += std::format("    source up to date ({} B)\n", live.size);
 			else
 				out += std::format(
-					"    STALE: source is {} B / mtime {}, baked from {} B / mtime {}\n",
+					"    STALE: source is {} B / hash {:016x}, baked from {} B / hash {:016x}\n",
 					live.size,
-					live.mtime,
+					live.hash,
 					route.stamp.size,
-					route.stamp.mtime);
+					route.stamp.hash);
 		}
 
 		// A `.benv` names files rather than holding them, so whether the name resolves is the question
@@ -237,9 +237,9 @@ namespace assetlib
 				if (dataRoot.empty())
 				{
 					out += std::format(
-						"                    baked from {} B, mtime {}\n",
+						"                    baked from {} B, hash {:016x}\n",
 						baked.size,
-						baked.mtime);
+						baked.hash);
 					continue;
 				}
 
@@ -250,12 +250,13 @@ namespace assetlib
 					out += std::format("                    up to date ({} B)\n", live.size);
 				else
 					out += std::format(
-						"                    STALE: source is {} B / mtime {}, baked from {} B / "
-						"mtime {}\n",
+						"                    STALE: source is {} B / hash {:016x}, baked from {} B "
+						"/ "
+						"hash {:016x}\n",
 						live.size,
-						live.mtime,
+						live.hash,
 						baked.size,
-						baked.mtime);
+						baked.hash);
 			}
 		}
 
@@ -538,11 +539,12 @@ namespace assetlib
 				out += "               MISSING: the file is not on disk\n";
 			else if (live != baked)
 				out += std::format(
-					"               STALE: source is {} B / mtime {}, baked from {} B / mtime {}\n",
+					"               STALE: source is {} B / hash {:016x}, baked from {} B / hash "
+					"{:016x}\n",
 					live.size,
-					live.mtime,
+					live.hash,
 					baked.size,
-					baked.mtime);
+					baked.hash);
 		}
 	}
 

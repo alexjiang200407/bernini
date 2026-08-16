@@ -418,8 +418,9 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	CHECK(refs.skeleton == "Skeletons/hero.bskel");
 	CHECK(refs.mesh == "Meshes/rig.bmesh");
 
-	// The stamps record size and mtime, both of which a rename preserves: the rewritten .bvat is
-	// still fresh, not a re-bake waiting to happen.
+	// A rename rewrites the path references inside the .bmesh and .banim, so their stamps do move --
+	// renameAsset re-stamps the .bvat from them afterwards, and the rewritten bake is still fresh
+	// rather than a re-bake waiting to happen.
 	CHECK_FALSE(vatIsStale(loadVatTables(baked), root.path));
 
 	// An input only the .bvat references follows too -- and this one is part of the derived name,

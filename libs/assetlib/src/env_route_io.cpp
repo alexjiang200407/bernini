@@ -14,17 +14,17 @@ namespace assetlib
 		writeString(writer, route.source);
 		writeString(writer, route.baked);
 		writer.WritePod(route.stamp.size);
-		writer.WritePod(route.stamp.mtime);
+		writer.WritePod(route.stamp.hash);
 	}
 
 	EnvMapRoute
 	readRoute(core::io::ByteReader& reader)
 	{
 		EnvMapRoute route;
-		route.source      = readString(reader);
-		route.baked       = readString(reader);
-		route.stamp.size  = reader.ReadPod<uint64_t>();
-		route.stamp.mtime = reader.ReadPod<int64_t>();
+		route.source     = readString(reader);
+		route.baked      = readString(reader);
+		route.stamp.size = reader.ReadPod<uint64_t>();
+		route.stamp.hash = reader.ReadPod<uint64_t>();
 		return route;
 	}
 }

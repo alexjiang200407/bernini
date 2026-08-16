@@ -4,6 +4,7 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <core/hash.h>
 
 #include <catch2/catch_approx.hpp>
 
@@ -110,14 +111,16 @@ TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.pbr.routes[0]      = { "albedo.ktx2", 0 };
-	mat.pbr.routeStamps[0] = { 4096, 1752000000 };
-	mat.pbr.routeStamps[8] = { 1, -5 };  // mtime is signed: pre-epoch timestamps must survive
+	mat.pbr.routeStamps[0] = { 4096, 0x0123456789abcdefull };
+	// The hash uses the whole 64-bit range: one with the top bit set must not be sign-mangled on
+	// the way through, which is what the field being unsigned buys.
+	mat.pbr.routeStamps[8] = { 1, 0xffffffffffffffffull };
 
 	const auto restored = deserializeMaterial(serializeMaterial(mat));
 
 	REQUIRE(restored.pbr.routeStamps[0].size == 4096);
-	REQUIRE(restored.pbr.routeStamps[0].mtime == 1752000000);
-	REQUIRE(restored.pbr.routeStamps[8].mtime == -5);
+	REQUIRE(restored.pbr.routeStamps[0].hash == 0x0123456789abcdefull);
+	REQUIRE(restored.pbr.routeStamps[8].hash == 0xffffffffffffffffull);
 	REQUIRE(restored.pbr.routeStamps[3] == SourceStamp{});  // unstamped routes stay zeroed
 }
 
@@ -144,18 +147,71 @@ TEST_CASE("stampOf measures a file and zeroes a missing one", "[bmaterial][bake]
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
+	const auto write = [](const std::filesystem::path& path, std::string_view bytes) {
+		std::ofstream out(path, std::ios::binary);
+		out << bytes;
+	};
+
 	const auto file = dir / "src.bin";
-	{
-		std::ofstream out(file, std::ios::binary);
-		out << "hello";
-	}
+	write(file, "hello");
 
 	const SourceStamp stamp = stampOf(file);
 	REQUIRE(stamp.size == 5);
-	REQUIRE(stamp.mtime != 0);
+	REQUIRE(stamp.hash == core::hash_bytes("hello", 5, core::hash_seed()));
 	REQUIRE(stampOf(file) == stamp);  // stable across calls
 
 	REQUIRE(stampOf(dir / "absent.bin") == SourceStamp{});
+
+	// Two files with the same bytes stamp identically, wherever they sit: the stamp is a statement
+	// about content and nothing else. This is what makes a bake reproducible across machines.
+	const auto copy = dir / "elsewhere.bin";
+	write(copy, "hello");
+	REQUIRE(stampOf(copy) == stamp);
+
+	std::filesystem::remove_all(dir);
+}
+
+// The bug the content stamp exists for. A git pull or checkout rewrites source mtimes without
+// changing a byte; a stamp that noticed would report every bake stale and re-bake it, rewriting
+// containers that are tracked in git.
+TEST_CASE("A source whose mtime moved but whose bytes did not is not stale", "[bmaterial][bake]")
+{
+	const auto dir = std::filesystem::temp_directory_path() / "bernini_stamp_mtime_test";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+
+	const auto write = [](const std::filesystem::path& path, std::string_view bytes) {
+		std::ofstream out(path, std::ios::binary);
+		out << bytes;
+	};
+
+	const auto source = dir / "albedo.ktx2";
+	write(source, "aaaa");
+	write(dir / "mat_basecolor.ktx2", "bbbb");
+
+	BMaterial mat;
+	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
+	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
+	mat.pbr.routeStamps[0]   = stampOf(source);
+
+	REQUIRE_FALSE(bakeIsStale(mat, dir));
+
+	std::filesystem::last_write_time(
+		source,
+		std::filesystem::last_write_time(source) + std::chrono::seconds(5));
+
+	REQUIRE(stampOf(source) == mat.pbr.routeStamps[0]);
+	REQUIRE_FALSE(bakeIsStale(mat, dir));
+	REQUIRE_FALSE(drawsLoose(mat, dir));
+
+	// The other half of the same rule: content that did change is still caught, even at the same
+	// size, where an mtime stamp with one-second granularity could miss it.
+	write(source, "aaab");
+	std::filesystem::last_write_time(
+		source,
+		std::filesystem::last_write_time(source) + std::chrono::seconds(5));
+
+	REQUIRE(bakeIsStale(mat, dir));
 
 	std::filesystem::remove_all(dir);
 }

@@ -152,10 +152,32 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 		bakeSky(sky, { root.path });
 		CHECK_FALSE(isSkyBakeStale(sky, root.path));
 
-		// A different face size changes the file's byte size, so the stamp moves even inside the
-		// same mtime second.
+		// A different face size gives the source different bytes, which is all the stamp compares.
 		root.AddSource("sky_src.ktx2", 16, 1.0f);
 		CHECK(isSkyBakeStale(sky, root.path));
+	}
+
+	// The same rule the material path is pinned on: a checkout moves every source's mtime, and a
+	// bake that read that as an edit would re-bake and rewrite a committed container.
+	SECTION("a source whose mtime moved but whose bytes did not is not stale")
+	{
+		BSky sky = RoutedSky(root);
+		bakeSky(sky, { root.path });
+
+		BEnvLighting lighting = RoutedLighting(root);
+		bakeEnvLighting(lighting, { root.path });
+
+		for (const std::string& source :
+		     { sky.sky.source, lighting.prefilter.source, lighting.irradiance.source })
+		{
+			const std::filesystem::path path = root.path / source;
+			std::filesystem::last_write_time(
+				path,
+				std::filesystem::last_write_time(path) + std::chrono::seconds(5));
+		}
+
+		CHECK_FALSE(isSkyBakeStale(sky, root.path));
+		CHECK_FALSE(isEnvLightingBakeStale(lighting, root.path));
 	}
 
 	SECTION("a deleted source reads as stale rather than as unchanged")

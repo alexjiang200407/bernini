@@ -14,6 +14,16 @@ namespace assetlib
 	createDirectories(const std::filesystem::path& dir);
 
 	/**
+	 * `path`'s last-write time, or nullopt if it cannot be stat'd.
+	 *
+	 * The one question left to mtime: whether a derived file postdates the sources it was encoded
+	 * from. A SourceStamp cannot answer it -- it says what a file holds, not when it was written --
+	 * so a bake that only wants to skip re-encoding an unchanged map asks here.
+	 */
+	[[nodiscard]] std::optional<std::filesystem::file_time_type>
+	mtimeOf(const std::filesystem::path& path);
+
+	/**
 	 * Message for a std::ofstream that would not open or write `path`, ending in the OS's reason:
 	 * "permission denied" for a read-only or locked file, "no such file or directory" for a missing
 	 * parent. The stream itself reports only that it failed, and that is not something a user can act

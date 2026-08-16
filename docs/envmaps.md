@@ -15,7 +15,7 @@ disagrees, trust the header, then fix this doc.
 
 * **The environment family mirrors `.bmaterial`'s authoring/baked split.** A `.bsky` and a `.benvl`
   hold `EnvMapRoute`s — a *source* under `textures_src/`, a *baked* map under `Textures/`, and the
-  source's size+mtime stamp as it measured at bake time. The same shape, the same staleness question,
+  source's size + content-hash stamp as it measured at bake time. The same shape, the same staleness question,
   and the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
 * **A `.benv` holds no pixels.** It names a `.bsky` and a `.benvl` by path. Composing by reference is
   what lets a sky be re-authored without touching the lighting that minutes of convolution produced,

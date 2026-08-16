@@ -341,10 +341,9 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	const QString&               refusal)
 {
 	// The materials the bake could fix, by the same verdict gamelib routes on: drawsLoose covers
-	// never-baked *and* stale-by-stamp -- a git pull rewrites source mtimes, so a bake committed
-	// on another machine reads stale everywhere else, and only a local re-bake refreshes the
-	// stamps. A material with no routes has nothing to bake; one drawing its baked triplet was
-	// refused for another reason.
+	// never-baked *and* stale-by-stamp -- an edited source drifts from the triplet baked off it, and
+	// only a re-bake closes the gap. A material with no routes has nothing to bake; one drawing its
+	// baked triplet was refused for another reason.
 	auto loose = std::vector<std::string>();
 	for (const std::string& relPath : mesh.materials)
 	{

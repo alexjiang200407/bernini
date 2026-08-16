@@ -33,8 +33,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   *or* it was baked from a different `.banim` than the one requested (`game::EnsureVatBaked` owns
   that rule). The editor's Content Explorer does not list it, and deleting any of its inputs
   sweeps it rather than being blocked by it (`DeletionPlan::derived`). `SourceStamp` is
-  `{size, mtime-in-seconds}` by deliberate cheapness: a same-second, same-size rewrite reads as
-  fresh.
+  `{size, content-hash}`, so a checkout that rewrites mtimes without changing bytes re-bakes
+  nothing.
 * **Clips stack along V; each is padded with a duplicate of its *last* frame.** Frame `f` of a
   clip is row `firstRow + f`; the pad row exists so fractional-frame blending never bleeds into
   the clip stacked below. It is clamp-shaped: a looping clip's seam must **wrap the upper row

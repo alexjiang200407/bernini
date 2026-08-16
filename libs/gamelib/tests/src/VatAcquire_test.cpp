@@ -386,16 +386,13 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		assets.ReleaseGeom(vat.geom);
 
 		// Re-author the clip set: the same rig, but the bone now slides +2 X per frame, over three
-		// frames. The extra frame changes the .banim's size, and the mtime is pushed forward past
-		// the stamp's one-second granularity -- a same-second, same-size rewrite is *correctly*
-		// read as fresh, so the test has to change what the stamp can see.
+		// frames. What the stamp sees is the rewritten .banim's contents, so no timestamp has to be
+		// forced for the bake to notice.
 		const auto bvat =
 			root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
 		const auto original = fs::last_write_time(bvat);
 
 		WriteClips(root.path, "Animations/rig.banim", "slide", 2.0f, 3);
-		const auto banim = root.path / "Animations/rig.banim";
-		fs::last_write_time(banim, fs::last_write_time(banim) + std::chrono::seconds(2));
 
 		const auto rebaked = assets.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 
@@ -508,11 +505,9 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 	CHECK(back.animations == "Animations/rig.banim");
 	CHECK((fs::last_write_time(bvat) == written));
 
-	// A moved input stamp re-bakes through the same door. The re-authored file changes size and
-	// its mtime is pushed past the stamp's one-second granularity, as the acquire-level test does.
+	// A moved input stamp re-bakes through the same door: the re-authored .banim holds different
+	// bytes, which is the whole of what the stamp compares.
 	WriteClips(root.path, "Animations/rig.banim", "slide", 1.0f, 4);
-	const auto banim = root.path / "Animations/rig.banim";
-	fs::last_write_time(banim, fs::last_write_time(banim) + std::chrono::seconds(2));
 
 	const auto restamped =
 		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");

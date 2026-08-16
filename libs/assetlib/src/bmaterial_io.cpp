@@ -16,7 +16,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 9;
+		constexpr uint16_t c_VersionMajor = 10;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		void
@@ -36,7 +36,7 @@ namespace assetlib
 			for (const SourceStamp& stamp : pbr.routeStamps)
 			{
 				writer.WritePod(stamp.size);
-				writer.WritePod(stamp.mtime);
+				writer.WritePod(stamp.hash);
 			}
 			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
 			writer.WritePod(pbr.alphaCutoff);
@@ -60,8 +60,8 @@ namespace assetlib
 			}
 			for (SourceStamp& stamp : pbr.routeStamps)
 			{
-				stamp.size  = reader.ReadPod<uint64_t>();
-				stamp.mtime = reader.ReadPod<int64_t>();
+				stamp.size = reader.ReadPod<uint64_t>();
+				stamp.hash = reader.ReadPod<uint64_t>();
 			}
 			pbr.alphaMode          = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
 			pbr.alphaCutoff        = reader.ReadPod<float>();
@@ -153,6 +153,24 @@ namespace assetlib
 		return deserializeMaterial(bytes);
 	}
 
+	namespace
+	{
+		// What a path hashed to, and the size and mtime it had when it did. mtime is not part of the
+		// stamp any more, but it is still the cheapest evidence that a file has not been rewritten --
+		// so it survives here as a cache key, where being wrong costs a re-hash rather than a wrong
+		// answer. A staleness check runs per material and sources are shared between them, so
+		// without this a project describe would re-read the same texture once per material.
+		struct HashedFile
+		{
+			uint64_t                        size;
+			std::filesystem::file_time_type mtime;
+			uint64_t                        hash;
+		};
+
+		std::mutex                                  g_HashCacheMutex;
+		std::unordered_map<std::string, HashedFile> g_HashCache;
+	}
+
 	SourceStamp
 	stampOf(const std::filesystem::path& path)
 	{
@@ -162,16 +180,31 @@ namespace assetlib
 		if (ec)
 			return {};
 
-		const auto written = std::filesystem::last_write_time(path, ec);
+		const auto mtime = std::filesystem::last_write_time(path, ec);
 		if (ec)
 			return {};
 
-		// Seconds, not the native tick: file_time_type's resolution and epoch are implementation
-		// defined, and a stamp has to survive being written on one machine and compared on another.
-		const auto seconds =
-			std::chrono::duration_cast<std::chrono::seconds>(written.time_since_epoch()).count();
+		const std::string key = path.string();
 
-		return SourceStamp{ static_cast<uint64_t>(size), static_cast<int64_t>(seconds) };
+		{
+			const std::lock_guard lock(g_HashCacheMutex);
+
+			const auto cached = g_HashCache.find(key);
+			if (cached != g_HashCache.end() && cached->second.size == size &&
+			    cached->second.mtime == mtime)
+				return SourceStamp{ size, cached->second.hash };
+		}
+
+		const std::optional<uint64_t> hash = core::file::hash_file(path);
+		if (!hash)
+			return {};
+
+		{
+			const std::lock_guard lock(g_HashCacheMutex);
+			g_HashCache[key] = HashedFile{ size, mtime, *hash };
+		}
+
+		return SourceStamp{ size, *hash };
 	}
 
 	namespace

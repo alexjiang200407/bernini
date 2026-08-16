@@ -332,11 +332,13 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     maps into `<Data>/Textures/`.
   * Both may be populated simultaneously, and normally are: a baked material keeps its routes so it can
     be reopened, re-authored and re-baked.
-  * `routeStamps` — parallel to `routes`: the size + mtime each source measured when the bake read it.
-    `bakeIsStale(material, dir)` re-stats the sources and reports whether the triplet still reflects
-    them. Editing a source therefore surfaces as a stale bake rather than silently rendering the old
-    cooked textures. Size+mtime, not a content hash: verifying a hash would mean reading every source on
-    every load, and a false positive only costs a rebake. **Baking is a PBR notion** — `bakeMaterial`
+  * `routeStamps` — parallel to `routes`: the size + content hash each source measured when the bake
+    read it. `bakeIsStale(material, dir)` re-measures the sources and reports whether the triplet still
+    reflects them. Editing a source therefore surfaces as a stale bake rather than silently rendering the
+    old cooked textures. Content, not mtime: a `git pull` or `checkout` rewrites mtimes without changing
+    a byte, and a stamp that noticed would re-bake every asset and dirty the containers in git. The read
+    that costs is paid once — `stampOf` memoizes against size and mtime, so a source already hashed
+    re-stamps for a stat. **Baking is a PBR notion** — `bakeMaterial`
     rejects any other model, and `bakeIsStale` reports one as never-stale, because it has no bake step to
     have drifted from.
   * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
