@@ -46,6 +46,27 @@ output, so a re-bake can never be reproducible.
   *Rejected: widening the readers to accept both layouts, because the assetlib "modify existing
   assets" ability is coming and will own the upgrade properly.*
 
+- **ADR-6 — The two make-style "output newer than input" checks keep their mtime ordering, via a new
+  `mtimeOf`.** `material_bake.cpp`'s `isUpToDate` and `env_bake.cpp`'s `bakeRoute` skip a re-encode
+  when the target's mtime beats the source's. They read `SourceStamp::mtime`, so ADR-1 forces the
+  question; they now call `mtimeOf` (`src/fs_util.h`) directly. Mtime is the right tool here and a
+  stamp is not: the target records nothing about what produced it, so "is this map current" is a
+  question about *when*, not *what*. *Rejected: comparing `stampOf(source)` against the material's
+  `routeStamps` — tried, and it broke map reuse across materials. `routeStamps` is empty for a bake
+  composed from a graph, so every such bake re-encodes a map another material had just written;
+  `MaterialBake_test.cpp`'s "nothing changed: the existing map is reused" catches it.* The residual
+  cost is a needless re-encode after a checkout, which produces a byte-identical file and so dirties
+  nothing.
+
+- **ADR-7 — This repo's own committed bakes are migrated with zeroed stamps, not re-baked.**
+  `assets/Sky/forest.bsky`, `assets/EnvLighting/forest.benvl` and the two
+  `assets/Materials/apples/*.bmaterial` are fixtures the suites load, so ADR-5's break would take CI
+  with it — and their sources are not in this repo, so they cannot be re-baked. A one-shot script
+  bumped each major and zeroed the stamps. Zero is the honest value: it reads as never-stamped,
+  which is the verdict a missing source already produced, so no test's meaning moves. *Rejected:
+  reinterpreting the old mtime bits as a hash, which would leave a committed file asserting a
+  provenance that was never measured.*
+
 ## Non-goals
 
 - The assetlib migration/upgrade ability for existing assets. It comes later, and until it lands
@@ -64,8 +85,9 @@ output, so a re-bake can never be reproducible.
 - `just test core` — a file hashed in chunks equals the same bytes hashed in one call, and a file
   whose mtime moved but whose content did not hashes the same.
 - Round-trip serialization at the new major for all four formats.
-- The existing tests that move `last_write_time` to *force* staleness
-  (`MaterialBake_test.cpp`) are inverted: they must now prove the opposite.
+- `just test` in full: `assets/Sky/forest.bsky`, `assets/EnvLighting/forest.benvl` and the apple
+  materials are loaded by the bgl, gamelib and assetlib suites, so ADR-7's migration is gated by all
+  of them rather than by an assertion of its own.
 
 ## Commits
 
@@ -73,5 +95,8 @@ output, so a re-bake can never be reproducible.
 2. `feat(core): hash a file without making it resident` — `core::file::hash_file`, streaming
    FNV-1a over fixed chunks. Gate: `just test core`.
 3. `feat(assetlib): stamp bake sources by content, not mtime` — `SourceStamp` becomes
-   `{size, hash}`, `stampOf` streams and memoizes, the four serializers and their majors follow, and
-   the docs that describe the old shape are corrected. Gate: `just test assetlib`.
+   `{size, hash}`, `stampOf` streams and memoizes, the four serializers and their majors follow,
+   `renameAsset` re-stamps a `.bvat` whose inputs it rewrote, and the docs that describe the old
+   shape are corrected. Gate: `just test assetlib`.
+4. `chore(assets): migrate the committed bakes to the content stamp` — the four in-repo fixtures at
+   their new majors (ADR-7). Gate: `just test`.
