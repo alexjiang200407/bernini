@@ -1,5 +1,4 @@
 #pragma once
-#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -34,15 +33,6 @@ namespace assetlib
 	loadVat(const std::filesystem::path& path);
 
 	/**
-	 * The mounted overload: `path` is data-root-relative and resolved through `fileSystem`, so the
-	 * bake may equally be a loose file or an entry in an archive.
-	 *
-	 * @throws std::runtime_error if the container is absent, cannot be read, or is malformed.
-	 */
-	[[nodiscard]] BVat
-	loadVat(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	/**
 	 * Everything but the pixels: the header, the chunk table and the table chunks alone, leaving
 	 * `positionsKtx2` / `normalsKtx2` empty. The pixel chunks are the overwhelming bulk of the
 	 * file and are never read, so `describe` and any whole-project survey must come through here
@@ -53,10 +43,6 @@ namespace assetlib
 	 */
 	[[nodiscard]] BVat
 	loadVatTables(const std::filesystem::path& path);
-
-	/** The mounted overload of loadVatTables, and just as seek-only. */
-	[[nodiscard]] BVat
-	loadVatTables(const core::file::IFileSystem& fileSystem, std::string_view path);
 
 	/** The three inputs a `.bvat` was baked from. See loadVatRefs. */
 	struct VatRefs
@@ -75,7 +61,4 @@ namespace assetlib
 	[[nodiscard]] VatRefs
 	loadVatRefs(const std::filesystem::path& path);
 
-	/** The mounted overload of loadVatRefs, and just as seek-only. */
-	[[nodiscard]] VatRefs
-	loadVatRefs(const core::file::IFileSystem& fileSystem, std::string_view path);
 }

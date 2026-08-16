@@ -12,6 +12,8 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace
@@ -611,5 +613,37 @@ namespace assetlib
 		}
 
 		return out;
+	}
+
+	// The public form: what a container records, with nothing stat'd. AssetStore::Describe is the
+	// one that also checks whether what it records is still true.
+	std::string
+	describe(const BMaterial& material)
+	{
+		return describe(material, nullptr);
+	}
+
+	std::string
+	describe(const BSky& sky)
+	{
+		return describe(sky, nullptr);
+	}
+
+	std::string
+	describe(const BEnvLighting& lighting)
+	{
+		return describe(lighting, nullptr);
+	}
+
+	std::string
+	describe(const BEnv& env)
+	{
+		return describe(env, nullptr);
+	}
+
+	std::string
+	describe(const BVat& vat)
+	{
+		return describe(vat, nullptr);
 	}
 }

@@ -659,10 +659,15 @@ main(int argc, char** argv)
 
 			// Optional: a container describes on its own, and only a root lets the stamps be checked
 			// against what is actually there.
-			std::optional<core::file::LooseFileSystem> mount;
+			std::optional<assetlib::AssetStore> store;
 			if (!dataRoot.empty())
-				mount.emplace(dataRoot);
-			const core::file::IFileSystem* fileSystem = mount.has_value() ? &*mount : nullptr;
+				store.emplace(dataRoot);
+
+			// With a project the stamps are checked against what is on disk; without one only what
+			// the container records can be reported.
+			const auto described = [&store](const auto& asset) {
+				return store.has_value() ? store->Describe(asset) : assetlib::describe(asset);
+			};
 
 			switch (sniff(path))
 			{
@@ -670,16 +675,16 @@ main(int argc, char** argv)
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << assetlib::describe(assetlib::loadMaterial(path), fileSystem);
+				std::cout << described(assetlib::loadMaterial(path));
 				break;
 			case ContainerType::kEnv:
-				std::cout << assetlib::describe(assetlib::loadEnv(path), fileSystem);
+				std::cout << described(assetlib::loadEnv(path));
 				break;
 			case ContainerType::kSky:
-				std::cout << assetlib::describe(assetlib::loadSky(path), fileSystem);
+				std::cout << described(assetlib::loadSky(path));
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), fileSystem);
+				std::cout << described(assetlib::loadEnvLighting(path));
 				break;
 			case ContainerType::kSkeleton:
 				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
@@ -693,7 +698,7 @@ main(int argc, char** argv)
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << assetlib::describe(assetlib::loadVatTables(path), fileSystem);
+				std::cout << described(assetlib::loadVatTables(path));
 				break;
 			}
 		}

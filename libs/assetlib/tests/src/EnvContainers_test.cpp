@@ -6,6 +6,7 @@
 
 #include <core/io/ByteWriter.h>
 
+#include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 

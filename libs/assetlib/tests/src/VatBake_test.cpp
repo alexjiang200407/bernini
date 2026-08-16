@@ -20,6 +20,7 @@
 
 #include "MountAt.h"
 #include "VatFixture.h"
+#include "mounted_io.h"
 #include <assetlib/AssetStore.h>
 
 using namespace assetlib;

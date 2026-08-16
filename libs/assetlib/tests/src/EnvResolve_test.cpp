@@ -10,6 +10,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 

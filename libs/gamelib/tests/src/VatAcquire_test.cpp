@@ -484,22 +484,20 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 
 		// Read through the archive alone, and confirm the drift is really visible there -- without
 		// this the section would pass for the wrong reason.
-		const auto archive = std::make_shared<assetlib::PakFile>(root.path / "Drifted.bpak");
-		REQUIRE(
-			assetlib::vatIsStale(
-				assetlib::loadVatTables(*archive, bvatRel.generic_string()),
-				*archive));
+		// Read as a store, because a mount alone is not something outside assetlib can read through.
+		const auto archive  = std::make_shared<assetlib::PakFile>(root.path / "Drifted.bpak");
+		const auto archived = assetlib::AssetStore(root.path / "nowhere", archive);
+
+		REQUIRE(archived.VatIsStale(archived.LoadVatTables(bvatRel.generic_string())));
 
 		// A data root that does not exist: a re-bake would have nowhere to write and would throw.
-		const auto nowhere = root.path / "nowhere";
-
-		auto packed = game::AssetManager(scene, assetlib::AssetStore(nowhere, archive));
+		auto packed = game::AssetManager(scene, archived);
 
 		const auto fromArchive = packed.AcquireVatMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 
 		CHECK(fromArchive.geom.IsValid());
 		CHECK(fromArchive.clips.size() == vat.clips.size());
-		CHECK_FALSE(fs::exists(nowhere));
+		CHECK_FALSE(fs::exists(archived.GetDataRoot()));
 	}
 
 	/**

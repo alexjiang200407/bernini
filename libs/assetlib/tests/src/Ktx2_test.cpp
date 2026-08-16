@@ -2,6 +2,7 @@
 #include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 

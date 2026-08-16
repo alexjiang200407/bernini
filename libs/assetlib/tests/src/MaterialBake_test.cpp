@@ -9,6 +9,7 @@
 #include <catch2/catch_approx.hpp>
 
 #include "MountAt.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 
