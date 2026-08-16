@@ -294,7 +294,7 @@ namespace assetlib
 			{
 				const VatRefs               refs = loadVatRefs(file.path);
 				const std::filesystem::path derived =
-					desc.dataRoot / vatPathFor(refs.mesh, refs.animations);
+					store.GetDataRoot() / vatPathFor(refs.mesh, refs.animations);
 				if (!std::filesystem::equivalent(file.path, derived, ec) &&
 				    !std::filesystem::exists(derived))
 					std::filesystem::rename(file.path, derived, ec);

@@ -199,8 +199,8 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 
 	BSky sky = RoutedSky(root);
 	bakeSky(sky, { root.path });
-	const std::string store = sky.sky.source;
-	const std::string baked = sky.sky.baked;
+	const std::string source = sky.sky.source;
+	const std::string baked  = sky.sky.baked;
 
 	SECTION("a current bake is what is drawn")
 	{
@@ -212,7 +212,7 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	SECTION("a baked map that was never written falls back to the source")
 	{
 		std::filesystem::remove(root.path / baked);
-		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == store);
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
 
 		BSky unbaked = RoutedSky(root);
 		CHECK(envMapToDraw(unbaked.sky, MountAt(root.path)) == unbaked.sky.source);
@@ -222,7 +222,7 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	// baked map is kept even though the stamp says it no longer reflects anything.
 	SECTION("a deleted source keeps the baked map")
 	{
-		std::filesystem::remove(root.path / store);
+		std::filesystem::remove(root.path / source);
 		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
 	}
 
@@ -230,12 +230,12 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	{
 		root.AddSource("sky_src.ktx2", 16, 1.0f);
 		REQUIRE(isSkyBakeStale(sky, MountAt(root.path)));
-		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == store);
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
 	}
 
 	SECTION("neither on disk throws, naming both")
 	{
-		std::filesystem::remove(root.path / store);
+		std::filesystem::remove(root.path / source);
 		std::filesystem::remove(root.path / baked);
 		CHECK_THROWS_AS(envMapToDraw(sky.sky, MountAt(root.path)), std::runtime_error);
 

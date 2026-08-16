@@ -45,10 +45,10 @@ namespace
 
 	// Bakes a material whose base colour reads `source`, and saves it as `<root>/Materials/<name>`.
 	BMaterial
-	BakeAndSave(const DataRoot& root, const char* name, const char* store)
+	BakeAndSave(const DataRoot& root, const char* name, const char* source)
 	{
 		BMaterial material;
-		material.pbr.routes[0] = { store, 0 };
+		material.pbr.routes[0] = { source, 0 };
 
 		bakeMaterial(material, MaterialBakeDesc{ root.path });
 		saveMaterial(material, root.path / "Materials" / name);

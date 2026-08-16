@@ -71,10 +71,10 @@ namespace assetlib::test
 	 * `Materials/<name>`, and returns it -- so a test can name the maps the bake wrote.
 	 */
 	inline BMaterial
-	BakeAndSave(const DataRoot& root, const char* name, const char* store)
+	BakeAndSave(const DataRoot& root, const char* name, const char* source)
 	{
 		BMaterial material;
-		material.pbr.routes[0] = { store, 0 };
+		material.pbr.routes[0] = { source, 0 };
 
 		bakeMaterial(material, MaterialBakeDesc{ root.path });
 		saveMaterial(material, root.path / "Materials" / name);

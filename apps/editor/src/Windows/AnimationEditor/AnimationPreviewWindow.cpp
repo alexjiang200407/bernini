@@ -16,6 +16,7 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
@@ -353,8 +354,10 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 
 		try
 		{
-			const assetlib::BMaterial material = assetlib::loadMaterial(m_DataRoot / relPath);
-			if (assetlib::drawsLoose(material, m_DataRoot))
+			const assetlib::AssetStore store(m_DataRoot);
+
+			const assetlib::BMaterial material = store.LoadMaterial(relPath);
+			if (store.DrawsLoose(material))
 				loose.push_back(relPath);
 		}
 		catch (const std::exception& e)
