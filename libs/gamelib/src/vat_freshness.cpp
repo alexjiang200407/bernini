@@ -3,42 +3,70 @@
 #include <assetlib/bvat_io.h>
 #include <assetlib/vat_bake.h>
 
-#include <core/file/LooseFileSystem.h>
+#include <core/err/util.h>
 
 namespace game
 {
 	assetlib::BVat
 	EnsureVatBaked(
-		const std::filesystem::path& dataRoot,
-		std::string_view             meshRelPath,
-		std::string_view             animationsRelPath)
+		const assetlib::AssetStore& store,
+		std::string_view            meshRelPath,
+		std::string_view            animationsRelPath)
 	{
-		const auto bvatAbs = dataRoot / assetlib::vatPathFor(meshRelPath, animationsRelPath);
+		const std::string bvatRel =
+			assetlib::vatPathFor(meshRelPath, animationsRelPath).generic_string();
+
+		// The whole store's answer and not this path's: an overlay over an archive is writable even
+		// for a `.bvat` only the archive carries, and re-baking that one into the overlay is exactly
+		// what an edited rig needs.
+		const bool trusted = store.IsReadOnly();
 
 		// Loaded whole before the staleness check: the fresh path needs the pixel chunks anyway,
 		// so one read serves both, and only the rare stale case pays for pixels it then discards.
-		std::error_code ec;
-		if (std::filesystem::exists(bvatAbs, ec))
+		if (store.Exists(bvatRel))
 		{
 			// A `.bvat` that will not parse -- truncated, or written before a major bump -- is
-			// treated as one that is not there. It is wholly derived and git-ignored, so re-baking it
-			// is always available and always cheaper than failing the load it was meant to serve.
+			// treated as one that is not there. It is wholly derived, so re-baking it is always
+			// cheaper than failing the load it was meant to serve; a store with nowhere to bake
+			// says so below rather than propagating a parse error.
 			try
 			{
-				auto vat = assetlib::loadVat(bvatAbs);
-				if (!assetlib::vatIsStale(vat, core::file::LooseFileSystem(dataRoot)) &&
-				    assetlib::normalizePath(vat.animations) ==
-				        assetlib::normalizePath(animationsRelPath))
+				auto vat = store.LoadVat(bvatRel);
+
+				// The clip-set check binds even when the stamps are not asked about: a bake of the
+				// wrong clips drawn as if it were the right ones is worse than a refusal.
+				const bool rightClips = assetlib::normalizePath(vat.animations) ==
+				                        assetlib::normalizePath(animationsRelPath);
+
+				if (rightClips && (trusted || !store.VatIsStale(vat)))
 					return vat;
 			}
 			catch (const std::exception&)
 			{}
 		}
 
+		core::throw_runtime_error_if(
+			trusted,
+			"vat: no usable bake of '{}' in a read-only store, and there is nowhere to make one",
+			bvatRel);
+
 		auto vat = assetlib::bakeVat(
-			assetlib::VatBakeDesc{ dataRoot,
-		                           std::string(meshRelPath),
-		                           std::string(animationsRelPath) });
+			store,
+			assetlib::VatBakeDesc{ std::string(meshRelPath), std::string(animationsRelPath) });
+
+		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- so
+		// the directory the bake lands in is made rather than assumed. Named here rather than left
+		// to saveVat, which would blame the file for a directory that was never made.
+		const std::filesystem::path bvatAbs = store.GetDataRoot() / bvatRel;
+
+		std::error_code ec;
+		std::filesystem::create_directories(bvatAbs.parent_path(), ec);
+		core::throw_runtime_error_if(
+			static_cast<bool>(ec),
+			"vat: cannot make '{}' to bake into: {}",
+			bvatAbs.parent_path().string(),
+			ec.message());
+
 		assetlib::saveVat(vat, bvatAbs);
 		return vat;
 	}

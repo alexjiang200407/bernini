@@ -58,9 +58,14 @@ namespace core::file
 		Resolve(std::string_view path) const noexcept;
 
 		/**
-		 * Whether the mount answering `path` is read-only -- the question a caller regenerating a
-		 * derived file asks, and not the same as IsReadOnly(): a loose overlay over an archive is
-		 * writable for a path the overlay carries and read-only for one only the archive does.
+		 * Whether the mount answering `path` is read-only, which is not the same as IsReadOnly(): a
+		 * loose overlay over an archive is writable for a path the overlay carries and read-only for
+		 * one only the archive does.
+		 *
+		 * Not the question a caller regenerating a derived file asks -- that one wants "is there
+		 * anywhere at all to write", which is IsReadOnly(); see the `.bvat` decision in
+		 * docs/plans/archive.md. This is for a caller deciding what to do about *this* path, which
+		 * is what a delete does when it chooses between unlinking and tombstoning.
 		 *
 		 * Falls back to IsReadOnly() when nothing answers.
 		 */

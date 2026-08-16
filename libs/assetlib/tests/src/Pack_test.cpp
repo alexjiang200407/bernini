@@ -228,7 +228,9 @@ namespace
 		saveAnimations(fixture.animations, root.path / "Animations/rig.banim");
 
 		saveVat(
-			bakeVat(VatBakeDesc{ root.path, "Meshes/rig.bmesh", "Animations/rig.banim" }),
+			bakeVat(
+				AssetStore(root.path),
+				VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
 			root.path / "Meshes/rig.bvat");
 	}
 }

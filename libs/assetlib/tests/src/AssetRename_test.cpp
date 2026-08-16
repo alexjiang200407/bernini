@@ -406,7 +406,9 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	save(mesh, root.path / "Meshes/rig.bmesh");
 
 	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
-	saveVat(bakeVat(VatBakeDesc{ root.path, "Meshes/rig.bmesh", "Animations/rig.banim" }), baked);
+	saveVat(
+		bakeVat(AssetStore(root.path), VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
+		baked);
 
 	REQUIRE(
 		Rename(root, "Skeletons/rig.bskel", "Skeletons/hero.bskel").status ==
