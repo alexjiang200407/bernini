@@ -54,7 +54,9 @@ namespace assetlib
 		 * Writes the table, commits the archive over `target`, and leaves this writer spent -- a
 		 * second Finish throws.
 		 *
-		 * Entries are sorted by path, so packing one tree twice produces identical bytes.
+		 * Entries are sorted by path, so the table and the pool do not depend on the order Add was
+		 * called in. Payload placement does: they were streamed as they arrived. Reproducible bytes
+		 * therefore belong to a caller that adds in a fixed order, which is what packProject does.
 		 *
 		 * @throws std::runtime_error if the archive cannot be written, flushed or renamed.
 		 */

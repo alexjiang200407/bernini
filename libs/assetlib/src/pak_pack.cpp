@@ -38,6 +38,9 @@ namespace assetlib
 			return normalizeRef(file.lexically_relative(dataRoot).generic_string());
 		}
 
+		// Sorted, because directory-iteration order is not the same on two filesystems and the walk
+		// order is the order payloads land in. Without this an archive is only reproducible per
+		// machine, which is no use to anyone diffing or caching a shipped one.
 		std::vector<std::filesystem::path>
 		filesUnder(const std::filesystem::path& dataRoot)
 		{
@@ -47,6 +50,7 @@ namespace assetlib
 				if (entry.is_regular_file())
 					out.push_back(entry.path());
 			}
+			std::ranges::sort(out);
 			return out;
 		}
 

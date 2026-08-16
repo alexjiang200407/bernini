@@ -200,8 +200,8 @@ flowchart TD
   caller that wants the bake on a worker thread first and the acquire after.
 * **Unless the store has nowhere to write** — an archive alone. `pack` bakes every `.bvat` as it
   packs, so what a shipped mount carries is used without asking whether it is stale; one it does
-  not carry throws, because it cannot be made. See the `.bvat` decision in
-  [the archive plan](plans/archive.md).
+  not carry throws, because it cannot be made. See the `.bvat` rule in
+  [archives.md](archives.md).
 * **Stale includes the animations path** — a container whose recorded `.banim` is not the one
   requested is never returned. With one bake file per pair the mismatch only arises from a name
   collision or a hand-copied file, and it degrades to a re-bake, never to loading wrong clips.
