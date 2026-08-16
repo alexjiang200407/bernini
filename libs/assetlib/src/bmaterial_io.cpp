@@ -9,6 +9,8 @@
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	using core::io::ByteReader;

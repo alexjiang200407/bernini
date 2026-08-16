@@ -184,6 +184,33 @@ namespace assetlib
 		[[nodiscard]] ResolvedEnvironment
 		ResolveEnvironment(const std::filesystem::path& benvPath) const;
 
+		// --- Describe --------------------------------------------------------------------------
+
+		/**
+		 * What a container holds, as text for a person, with every routed source stat'd through the
+		 * mount and compared against the stamp its bake recorded -- so a stale bake is visible.
+		 *
+		 * The free `assetlib::describe` reports what a container records and stops there. This is
+		 * the form that can also say whether what it records is still true, which needs a project
+		 * to check against.
+		 */
+		[[nodiscard]] std::string
+		Describe(const BMaterial& material) const;
+
+		[[nodiscard]] std::string
+		Describe(const BSky& sky) const;
+
+		[[nodiscard]] std::string
+		Describe(const BEnvLighting& lighting) const;
+
+		/** For a `.benv`, which holds no pixels: whether each file it names is actually there. */
+		[[nodiscard]] std::string
+		Describe(const BEnv& env) const;
+
+		/** Pass the tables-only form (LoadVatTables) -- nothing here reads a texel. */
+		[[nodiscard]] std::string
+		Describe(const BVat& vat) const;
+
 	private:
 		std::filesystem::path                          m_DataRoot;
 		std::shared_ptr<const core::file::IFileSystem> m_Files;

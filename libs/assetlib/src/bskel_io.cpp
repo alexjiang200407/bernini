@@ -10,6 +10,8 @@
 
 #include <core/file/file.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace

@@ -48,14 +48,6 @@ namespace assetlib
 	bakeVat(const AssetStore& store, const VatBakeDesc& desc);
 
 	/**
-	 * Whether any of the three inputs `vat` was baked from has changed -- or gone -- since, by
-	 * SourceStamp. A stale `.bvat` is re-baked, never an error: it is wholly derived, and seconds
-	 * of CPU skinning away from fresh.
-	 */
-	[[nodiscard]] bool
-	vatIsStale(const BVat& vat, const core::file::IFileSystem& fileSystem);
-
-	/**
 	 * The path form the bake records in the container: lexically normal, generic separators.
 	 * Compare a requested path against a `BVat`'s recorded one through this, never raw.
 	 */

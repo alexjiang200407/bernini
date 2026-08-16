@@ -1,5 +1,6 @@
 #include <assetlib/asset_describe.h>
 
+#include "mounted_io.h"
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>

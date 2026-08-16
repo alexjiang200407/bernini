@@ -10,6 +10,8 @@
 #include "baked_name.h"
 #include "fs_util.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace

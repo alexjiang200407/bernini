@@ -9,6 +9,8 @@
 
 #include <core/file/file.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	using core::throw_runtime_error;

@@ -11,6 +11,7 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "bmesh_texture.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 
