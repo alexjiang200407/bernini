@@ -77,10 +77,9 @@ namespace assetlib
 		 * nothing here collects -- worth it, because one written before a major bump would otherwise
 		 * make a project unopenable.
 		 *
-		 * @throws std::runtime_error if `dataRoot` is not a directory, or if a *referrer* -- a `.bmesh`,
-		 *         `.bmaterial`, `.banim`, `.benv`, `.bsky` or `.benvl` -- below it cannot be read. Fatal
-		 *         on purpose, and for the reason the prune is: edges we cannot see are edges we would
-		 *         delete through.
+		 * @throws std::runtime_error if a *referrer* -- a `.bmesh`, `.bmaterial`, `.banim`, `.benv`,
+		 *         `.bsky` or `.benvl` -- in `store` cannot be read. Fatal on purpose, and for the
+		 *         reason the prune is: edges we cannot see are edges we would delete through.
 		 */
 		[[nodiscard]] static AssetRefGraph
 		Scan(const AssetStore& store);
