@@ -69,7 +69,9 @@ namespace assetlib
 				if (!vatIsStale(tables, loose))
 					continue;
 
-				saveVat(bakeVat(VatBakeDesc{ dataRoot, tables.mesh, tables.animations }), file);
+				saveVat(
+					bakeVat(AssetStore(dataRoot), VatBakeDesc{ tables.mesh, tables.animations }),
+					file);
 				++rebaked;
 			}
 			return rebaked;

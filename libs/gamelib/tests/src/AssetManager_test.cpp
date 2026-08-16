@@ -4,12 +4,16 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
 #include <assetlib/image_io.h>
+#include <assetlib/pak_io.h>
+#include <assetlib/pak_pack.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
+#include <core/file/LayeredFileSystem.h>
+#include <core/file/LooseFileSystem.h>
 #include <gamelib/AssetManager.h>
 
 namespace
@@ -160,12 +164,25 @@ namespace
 		bgl::SceneViewRef                 view;
 		std::optional<game::AssetManager> assets;
 
-		explicit Fixture(const char* name, game::AssetManagerOptions options = {}) :
-			root(name), gfx(bgl::CreateGraphics(HeadlessOptions()))
+		explicit Fixture(const char* name, game::AssetManagerOptions withOptions = {}) :
+			root(name), gfx(bgl::CreateGraphics(HeadlessOptions())), options(withOptions)
 		{
 			scene = gfx->CreateScene(AssetSceneDesc());
 			view  = gfx->CreateSceneView(scene, 16);
 			assets.emplace(scene, root.path, options);
+		}
+
+		/**
+		 * Rebuilds the manager over a different store, dropping everything the old one held.
+		 *
+		 * The scene is kept: an archive mounted over the same scene uploads its own copies, which is
+		 * what makes "the same tree, read two ways" comparable in one test.
+		 */
+		void
+		Remount(assetlib::AssetStore store)
+		{
+			assets.reset();
+			assets.emplace(scene, std::move(store), options);
 		}
 
 		// The manager is non-copyable, so these would be implicitly deleted anyway; say so, because
@@ -178,6 +195,8 @@ namespace
 
 		Fixture&
 		operator=(Fixture&&) = delete;
+
+		game::AssetManagerOptions options;
 
 		game::AssetManager&
 		operator*()
@@ -844,4 +863,97 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 
 		CHECK_THROWS_AS((*fx).AcquireEnvironment("Environments/raw.benv"), std::runtime_error);
 	}
+}
+
+namespace
+{
+	// Packs everything the fixture has written so far, and returns a store reading the archive alone.
+	assetlib::AssetStore
+	Archived(const Fixture& fx)
+	{
+		static_cast<void>(assetlib::packProject(
+			assetlib::AssetStore(fx.root.path),
+			assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
+
+		return assetlib::AssetStore(
+			fx.root.path,
+			std::make_shared<assetlib::PakFile>(fx.root.path / "Data.bpak"));
+	}
+}
+
+/**
+ * The archive must not change what the manager builds. A shipped project reads the same tree the
+ * editor did, so a mesh acquired from a `.bpak` has to bring the same materials and the same
+ * textures, cascade the same way, and share on a second ask exactly as the loose one does.
+ */
+TEST_CASE("AssetManager acquires a mesh's tree out of an archive", "[gamelib][assets][archive]")
+{
+	Fixture fx("bernini_am_archive");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+
+	fx.Remount(Archived(fx));
+
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+	REQUIRE(geom.IsValid());
+	CHECK((*fx).GeomRefCount(geom) == 1);
+
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const auto                tex = (*fx).AcquireTexture("Textures/a.ktx2");
+
+	// The same tree the loose acquire builds: the mesh holds the material, which holds the texture.
+	CHECK((*fx).MaterialRefCount(mat) == 2);
+	CHECK((*fx).TextureRefCount(tex) == 2);
+
+	(*fx).ReleaseMaterial(mat);
+	(*fx).ReleaseTexture(tex);
+	(*fx).ReleaseGeom(geom);
+
+	CHECK((*fx).GeomRefCount(geom) == 0);
+	CHECK((*fx).MaterialRefCount(mat) == 0);
+	CHECK((*fx).TextureRefCount(tex) == 0);
+}
+
+/**
+ * The overlay the editor writes: an edited material sits loose over its packed twin, and the loose
+ * one is what loads. This is the case that would fail silently -- both spellings resolve, so a
+ * manager reading the wrong layer draws the old material rather than failing.
+ */
+TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib][assets][archive]")
+{
+	Fixture fx("bernini_am_overlay");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteTexture(fx.root.path / "Textures" / "b.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+
+	static_cast<void>(assetlib::packProject(
+		assetlib::AssetStore(fx.root.path),
+		assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
+
+	// Edited after packing: the archive still names a.ktx2, the loose copy names b.ktx2.
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/b.ktx2");
+
+	auto mount = std::make_shared<core::file::LayeredFileSystem>();
+	mount->Mount(std::make_shared<core::file::LooseFileSystem>(fx.root.path));
+	mount->Mount(std::make_shared<assetlib::PakFile>(fx.root.path / "Data.bpak"));
+
+	fx.Remount(assetlib::AssetStore(fx.root.path, std::move(mount)));
+
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	REQUIRE(mat.IsValid());
+
+	// The edited material's texture is the one held, and the packed material's is untouched.
+	const auto edited = (*fx).AcquireTexture("Textures/b.ktx2");
+	const auto packed = (*fx).AcquireTexture("Textures/a.ktx2");
+
+	CHECK((*fx).TextureRefCount(edited) == 2);
+	CHECK((*fx).TextureRefCount(packed) == 1);
 }

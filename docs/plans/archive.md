@@ -455,10 +455,26 @@ fresh as part of packing, so what is in the archive is correct by construction. 
 resolves out of a mount that reports itself read-only, `AcquireVatMesh` uses it without asking
 whether it is stale.
 
-In the editor this costs nothing, because `IsReadOnly` is the *answering* mount's answer, not the
-search path's: a rig edited in the editor resolves to the loose overlay, which is writable, so the
+In the editor this costs nothing: a mount with any writable layer keeps checking staleness, so a
 re-bake happens exactly as it does today and the fresh `.bvat` lands in the overlay like any other
 edit. Only a shipped mount — archive alone — takes the trusting branch.
+
+**Amended at task 8: the whole mount's answer, not the answering mount's.** This first said
+`IsReadOnly` should be the answer of whichever mount resolved the `.bvat`, which turns out to break
+the very case the paragraph above promises. Take a rig whose `.bvat` is still only in the archive
+and whose `.bmesh` has just been edited into the overlay. Per-path, the `.bvat` resolves to the
+archive, reads read-only, and is *trusted* — so the editor animates the edited mesh from a bake of
+the old one. Silent, and a wrong picture rather than a failure, which is the class of bug this plan
+says it is most exposed to.
+
+Asking the whole mount instead — "is there anywhere at all to put a rebuilt derived file" — gets
+both cases right: an overlay is writable even for a path only the archive carries, so that `.bvat`
+is re-baked into the overlay; an archive alone is not, so it is trusted. It also needs nothing new
+on the seam, where per-path would have wanted a seventh `IFileSystem` member.
+
+A `.bvat` *missing* from a read-only mount is the other half: `pack` only re-bakes the ones already
+there, so a rig nothing acquired before packing ships without one. That is an error naming the file,
+not a bake attempt that fails somewhere inside `saveVat` on a directory that was never there.
 
 **Rejected: bake to a scratch directory beside the archive.** It reintroduces a writable data root
 at runtime, which is the thing shipping an archive is meant to remove, and it would let a shipped
