@@ -2,8 +2,8 @@
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include "util/VatSynth.h"
 #include "util/VelocityReadback.h"
-#include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -15,109 +15,7 @@ namespace
 	constexpr uint32_t c_Width  = 800;
 	constexpr uint32_t c_Height = 600;
 
-	// The synthesized VAT: a 4-vertex quad that translates +1 in X between its two frames, so a
-	// pose is readable as an offset -- frame f puts the quad on [f-1, f+1]. Two clips share the
-	// same two rows and differ only in loop, so the wrap and the clamp are probed against one
-	// texture. Rows: [origin, +1, +1 (pad)] -- the pad duplicates the *last* frame, exactly as the
-	// bake writes it, which is what makes it the wrong row for a loop's seam to read.
-	constexpr uint32_t c_Columns = 4;
-	constexpr uint32_t c_Rows    = 3;
-
-	constexpr uint32_t c_LoopClip  = 0;
-	constexpr uint32_t c_ClampClip = 1;
-
-	// 30 fps: RenderJob::time t at rate 1 is frame 30 * t.
-	constexpr float c_SampleRate = 30.0f;
-
-	const glm::vec3 c_BoundsMin(-1.5f, -1.5f, -1.0f);
-	const glm::vec3 c_BoundsMax(2.5f, 1.5f, 1.0f);
-
-	// Corner order (also column order): bottom-left, bottom-right, top-left, top-right.
-	const std::array<glm::vec3, 4> c_QuadAtOrigin = { {
-		{ -1.0f, -1.0f, 0.0f },
-		{ 1.0f, -1.0f, 0.0f },
-		{ -1.0f, 1.0f, 0.0f },
-		{ 1.0f, 1.0f, 0.0f },
-	} };
-
-	uint16_t
-	PackUnorm16(float value)
-	{
-		return static_cast<uint16_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 65535.0f));
-	}
-
-	void
-	WritePositionRow(assetlib::ImageData& image, uint32_t row, float offsetX)
-	{
-		auto* texel = reinterpret_cast<uint16_t*>(
-			image.pixels.data() + uint64_t(row) * image.subresources[0].rowPitch);
-
-		const glm::vec3 extent = c_BoundsMax - c_BoundsMin;
-		for (const glm::vec3& corner : c_QuadAtOrigin)
-		{
-			const glm::vec3 moved  = corner + glm::vec3(offsetX, 0.0f, 0.0f);
-			const glm::vec3 packed = (moved - c_BoundsMin) / extent;
-			texel[0]               = PackUnorm16(packed.x);
-			texel[1]               = PackUnorm16(packed.y);
-			texel[2]               = PackUnorm16(packed.z);
-			texel[3]               = 65535;
-			texel += 4;
-		}
-	}
-
-	assetlib::ImageData
-	MakeImage(assetlib::VkFormat format, uint32_t texelBytes)
-	{
-		auto image      = assetlib::ImageData();
-		image.width     = c_Columns;
-		image.height    = c_Rows;
-		image.mipLevels = 1;
-		image.arraySize = 1;
-		image.vkFormat  = format;
-
-		const uint64_t pitch = uint64_t(c_Columns) * texelBytes;
-		image.pixels         = core::fixed_buffer<std::byte>(pitch * c_Rows);
-		image.subresources.push_back({ 0, pitch, pitch * c_Rows });
-		return image;
-	}
-
-	assetlib::ImageData
-	MakePositionTexture()
-	{
-		auto image = MakeImage(assetlib::VkFormat::R16G16B16A16_UNORM, 8);
-		WritePositionRow(image, 0, 0.0f);
-		WritePositionRow(image, 1, 1.0f);
-		WritePositionRow(image, 2, 1.0f);  // the pad: a duplicate of the last frame
-		return image;
-	}
-
-	assetlib::ImageData
-	MakeNormalTexture()
-	{
-		auto image = MakeImage(assetlib::VkFormat::R8G8B8A8_UNORM, 4);
-		for (size_t i = 0; i < image.pixels.size(); i += 4)
-		{
-			image.pixels[i + 0] = std::byte{ 128 };
-			image.pixels[i + 1] = std::byte{ 128 };
-			image.pixels[i + 2] = std::byte{ 255 };
-			image.pixels[i + 3] = std::byte{ 255 };
-		}
-		return image;
-	}
-
-	std::vector<bgl::VatVertex>
-	MakeQuadVertices()
-	{
-		auto verts = std::vector<bgl::VatVertex>(4);
-		for (size_t i = 0; i < 4; ++i)
-		{
-			verts[i].position = c_QuadAtOrigin[i];
-			verts[i].normal   = glm::vec3(0.0f, 0.0f, 1.0f);
-			verts[i].uv       = glm::vec2(i % 2 == 0 ? 0.0f : 1.0f, i < 2 ? 1.0f : 0.0f);
-			verts[i].tangent  = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-		}
-		return verts;
-	}
+	using namespace bgl::test::vat_synth;
 
 	// ~52 px per world unit: focal length 300 / tan(30 deg) = 519.6 px at 10 units. A pose with
 	// offset d covers x in [d-1, d+1], so each probe below sits at least 0.25 world units (13 px)
@@ -167,25 +65,12 @@ TEST_CASE("VAT playback follows the clock", "[vat][playback][render]")
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
-	const auto positions = scene->AddTextureAsset(MakePositionTexture(), "vat-play-positions");
-	const auto normals   = scene->AddTextureAsset(MakeNormalTexture(), "vat-play-normals");
-
 	auto material            = bgl::PbrMaterialDesc();
 	material.baseColorFactor = glm::vec4(0.85f, 0.45f, 0.15f, 1.0f);
 	material.metallicFactor  = 0.0f;
 	material.roughnessFactor = 0.6f;
-	const auto pbr           = scene->CreatePbrMaterial(material);
 
-	auto desc      = bgl::VatGeomDesc();
-	desc.positions = positions;
-	desc.normals   = normals;
-	desc.boundsMin = c_BoundsMin;
-	desc.boundsMax = c_BoundsMax;
-	desc.clips     = { { 0, 2, c_SampleRate, true }, { 0, 2, c_SampleRate, false } };
-
-	const auto verts   = MakeQuadVertices();
-	const auto indices = std::array<uint32_t, 6>{ { 0, 1, 2, 2, 1, 3 } };
-	const auto geom    = scene->AddVatMeshGeom(verts, indices, desc, pbr);
+	const auto geom = AddSlidingQuadGeom(*scene, scene->CreatePbrMaterial(material));
 
 	auto camera = bgl::Camera();
 	camera

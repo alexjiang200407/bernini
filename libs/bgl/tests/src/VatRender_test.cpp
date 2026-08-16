@@ -2,7 +2,7 @@
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
-#include <assetlib_structs/ImageData.h>
+#include "util/VatSynth.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -46,50 +46,19 @@ namespace
 		{ 0.5f, 0.5f, 0.0f },
 	} };
 
-	uint16_t
-	PackUnorm16(float value)
-	{
-		return static_cast<uint16_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 65535.0f));
-	}
+	using bgl::test::vat_synth::MakeFlatNormalTexture;
+	using bgl::test::vat_synth::MakeImage;
 
 	void
 	WritePositionRow(assetlib::ImageData& image, uint32_t row, std::span<const glm::vec3> corners)
 	{
-		auto* texel = reinterpret_cast<uint16_t*>(
-			image.pixels.data() + uint64_t(row) * image.subresources[0].rowPitch);
-
-		const glm::vec3 extent = c_BoundsMax - c_BoundsMin;
-		for (const glm::vec3& corner : corners)
-		{
-			const glm::vec3 packed = (corner - c_BoundsMin) / extent;
-			texel[0]               = PackUnorm16(packed.x);
-			texel[1]               = PackUnorm16(packed.y);
-			texel[2]               = PackUnorm16(packed.z);
-			texel[3]               = 65535;
-			texel += 4;
-		}
-	}
-
-	assetlib::ImageData
-	MakeImage(assetlib::VkFormat format, uint32_t texelBytes)
-	{
-		auto image      = assetlib::ImageData();
-		image.width     = c_Columns;
-		image.height    = c_Rows;
-		image.mipLevels = 1;
-		image.arraySize = 1;
-		image.vkFormat  = format;
-
-		const uint64_t pitch = uint64_t(c_Columns) * texelBytes;
-		image.pixels         = core::fixed_buffer<std::byte>(pitch * c_Rows);
-		image.subresources.push_back({ 0, pitch, pitch * c_Rows });
-		return image;
+		bgl::test::vat_synth::WritePositionRow(image, row, corners, c_BoundsMin, c_BoundsMax);
 	}
 
 	assetlib::ImageData
 	MakePositionTexture()
 	{
-		auto image = MakeImage(assetlib::VkFormat::R16G16B16A16_UNORM, 8);
+		auto image = MakeImage(c_Columns, c_Rows, assetlib::VkFormat::R16G16B16A16_UNORM, 8);
 
 		WritePositionRow(image, 0, c_FlatQuad);
 		WritePositionRow(image, 1, c_ShearedQuad);
@@ -102,17 +71,7 @@ namespace
 	assetlib::ImageData
 	MakeNormalTexture()
 	{
-		auto image = MakeImage(assetlib::VkFormat::R8G8B8A8_UNORM, 4);
-
-		// +Z everywhere: the quads never tilt, only translate in their plane.
-		for (size_t i = 0; i < image.pixels.size(); i += 4)
-		{
-			image.pixels[i + 0] = std::byte{ 128 };
-			image.pixels[i + 1] = std::byte{ 128 };
-			image.pixels[i + 2] = std::byte{ 255 };
-			image.pixels[i + 3] = std::byte{ 255 };
-		}
-		return image;
+		return MakeFlatNormalTexture(c_Columns, c_Rows);
 	}
 
 	std::vector<bgl::VatVertex>
@@ -146,41 +105,21 @@ namespace
 	const glm::vec3 c_TriBoundsMin(-2.0f, -1.5f, -1.0f);
 	const glm::vec3 c_TriBoundsMax(2.0f, 1.5f, 1.0f);
 
-	assetlib::ImageData
-	MakeTriImage(assetlib::VkFormat format, uint32_t texelBytes)
-	{
-		auto image      = assetlib::ImageData();
-		image.width     = 6;
-		image.height    = 2;  // frame 0 and its pad
-		image.mipLevels = 1;
-		image.arraySize = 1;
-		image.vkFormat  = format;
-
-		const uint64_t pitch = uint64_t(image.width) * texelBytes;
-		image.pixels         = core::fixed_buffer<std::byte>(pitch * image.height);
-		image.subresources.push_back({ 0, pitch, pitch * image.height });
-		return image;
-	}
+	constexpr uint32_t c_TriColumns = 6;
+	constexpr uint32_t c_TriRows    = 2;  // frame 0 and its pad
 
 	assetlib::ImageData
 	MakeTriPositionTexture()
 	{
-		auto image = MakeTriImage(assetlib::VkFormat::R16G16B16A16_UNORM, 8);
-
-		const glm::vec3 extent = c_TriBoundsMax - c_TriBoundsMin;
-		for (uint32_t row = 0; row < image.height; ++row)
+		auto image = MakeImage(c_TriColumns, c_TriRows, assetlib::VkFormat::R16G16B16A16_UNORM, 8);
+		for (uint32_t row = 0; row < c_TriRows; ++row)
 		{
-			auto* texel = reinterpret_cast<uint16_t*>(
-				image.pixels.data() + uint64_t(row) * image.subresources[0].rowPitch);
-			for (const glm::vec3& corner : c_TwoTriangles)
-			{
-				const glm::vec3 packed = (corner - c_TriBoundsMin) / extent;
-				texel[0]               = PackUnorm16(packed.x);
-				texel[1]               = PackUnorm16(packed.y);
-				texel[2]               = PackUnorm16(packed.z);
-				texel[3]               = 65535;
-				texel += 4;
-			}
+			bgl::test::vat_synth::WritePositionRow(
+				image,
+				row,
+				c_TwoTriangles,
+				c_TriBoundsMin,
+				c_TriBoundsMax);
 		}
 		return image;
 	}
@@ -188,15 +127,7 @@ namespace
 	assetlib::ImageData
 	MakeTriNormalTexture()
 	{
-		auto image = MakeTriImage(assetlib::VkFormat::R8G8B8A8_UNORM, 4);
-		for (size_t i = 0; i < image.pixels.size(); i += 4)
-		{
-			image.pixels[i + 0] = std::byte{ 128 };
-			image.pixels[i + 1] = std::byte{ 128 };
-			image.pixels[i + 2] = std::byte{ 255 };
-			image.pixels[i + 3] = std::byte{ 255 };
-		}
-		return image;
+		return MakeFlatNormalTexture(c_TriColumns, c_TriRows);
 	}
 
 	// Two submeshes of one triangle each, materials 0 and 1. Vertex data is position-only zeros:
