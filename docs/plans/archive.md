@@ -1,9 +1,9 @@
 # Asset archives
 
 One `.bpak` file in place of a tree of loose assets, mounted behind the data-root-relative path
-every reference in the project is already written against. An archive is never written into: the
-editor mounts one and writes its edits as loose files that shadow it, and an explicit *Sync* folds
-the overlay back into a freshly repacked archive.
+every reference in the project is already written against. An archive is never written into, and
+never read back into the editor: the editor authors the loose tree, `pack` turns that tree into an
+archive, and a shipped game mounts it.
 
 ---
 
@@ -13,11 +13,11 @@ The four the feature was asked, with the short answer and where it is argued:
 
 | | |
 |---|---|
-| **How does this affect the workflow?** | Barely, by construction. Drag-and-drop, import, save and delete all still write loose files. What changes is that the Content Explorer shows the union of the archive and the loose overlay, and gains a *Sync* action. See [the editor is a copy-on-write overlay](#the-editor-mounts-the-archive-writes-loose-and-syncs). |
-| **Can we still drag and drop and write, after the editor uses the archive?** | Yes — and nothing is ever written *into* the archive. A write lands as a loose file that takes precedence over its packed twin; *Sync* repacks. That is the same first-hit-wins mount the runtime uses, so the editor is not a special case. |
+| **How does this affect the workflow?** | It does not. Drag-and-drop, import, save and delete all still write loose files, and the Content Explorer still lists the loose tree. `pack` is a step at ship time. See [the editor never sees an archive](#the-editor-never-sees-an-archive-pack-makes-one-to-ship). |
+| **Can we still drag and drop and write, after the editor uses the archive?** | Yes — the editor does not use one. Nothing is ever written *into* an archive, and nothing is read out of one in the editor either: assets are version-tracked as separate files, so the loose tree stays the source of truth and the archive is the artifact built from it. |
 | **How should the archives be organised?** | One `Data.bpak` per project by default, indexed by the same `normalizeRef` data-root-relative path everything already keys on. Splitting is an argument to `pack`, not a rule. See [one archive per project](#one-archive-per-project-by-default-databpak-mounted-as-one-layer). |
 | **What shouldn't be archived?** | *An archive carries what the runtime reads and nothing that produces it* — out go `textures_src/`, unimported source art, the `.berniniproject` and the shader cache. See [the exclusion table](#what-should-not-be-archived). |
-| **Should we support archived and non-archived?** | Yes, permanently, and loose always wins. It is one ordered `LayeredFileSystem`, and that single rule is the debug workflow, the editor overlay, patching and modding. See [both, always](#both-archived-and-non-archived-always-and-loose-wins). |
+| **Should we support archived and non-archived?** | Yes, permanently, and loose always wins. It is one ordered `LayeredFileSystem`, and that single rule is the debug workflow, patching and modding. See [both, always](#both-archived-and-non-archived-always-and-loose-wins). |
 
 ---
 
@@ -99,7 +99,7 @@ Fragmentation is a real but second-order cost. The wins that hold up:
 
 ## Design decisions
 
-### The editor mounts the archive, writes loose, and syncs.
+### The editor never sees an archive; `pack` makes one to ship.
 
 The editor opens a project as an ordered mount — the loose `Data/` tree first, `Data.bpak` behind it
 — and every write it makes lands in the loose tree. Drag-and-drop still writes a `.bmesh` into
@@ -153,6 +153,42 @@ from it that the loose-only design did not need:
   show packed entries alongside loose ones with the loose one winning. Its own task, and the largest
   single one in the feature.
 
+**Reversed, 2026-08-16 — the rejected alternative above is the one taken.** The editor mounts
+nothing. It reads and writes the loose `Data/` tree, as it always did, and `pack` turns that tree
+into an archive to ship. Nothing reads one back into the editor.
+
+The reason is version control, and it outweighs what the mount bought: a project's assets are
+tracked as *separate files*. One packed blob is the wrong unit — it defeats diffing, it defeats LFS's
+per-file dedup, and every edit rewrites the whole container. The loose tree is the source of truth
+and the archive is a build artifact derived from it, so the arrow only ever points one way.
+
+The objection that got this rejected the first time — that the packed form is never loaded until the
+day it has to work — was the strongest argument for the mount, and it is answered by where the tests
+ended up rather than by the editor. `AssetManager_test` acquires a mesh, its materials and its
+textures out of a `.bpak`, `VatAcquire_test` acquires from a read-only mount, and `assetlib_cli list`
+reads one back. The packed path runs on every test run; it does not need the editor to exercise it.
+
+Everything the copy-on-write design existed to solve then dissolves rather than being solved:
+
+- **Editing a packed asset.** There are none in the editor, so no shadowing, no overlay, no
+  ordering rule.
+- **Deleting one.** Likewise. Every asset the editor lists is a loose file it can unlink, which is
+  what makes `Data/.overlay.json`, the tombstone manifest and its three rules unnecessary.
+- **Sync.** There is nothing to fold back. The way to refresh an archive is to run `pack` again.
+- **The Content Explorer.** It browses a real directory and now only ever has to, so it stays a
+  `QFileSystemModel` — which gives it shell icons, directory watching and sorting for free. The
+  largest single task in the feature is not made cheaper, it is deleted.
+
+What this costs, stated plainly: a packed project cannot be opened in the editor to inspect what
+shipped. That is a real capability given up, and the trade is deliberate — what it protects is that
+an asset the editor lists is always one the editor can act on.
+
+**What the reversal did not touch.** The seam is the feature, and it stands: every read in
+`assetlib` goes through `AssetStore`, `gamelib`'s `AssetManager` takes one, and a *shipped game*
+mounts a `.bpak` through exactly the same paths the editor uses on a directory. `pack`, `list`, the
+format, the ranged reads and the read-only `.bvat` rule are all unaffected. What went was the
+editor's half of the mount, and the tasks that existed only to serve it.
+
 ### The tombstone manifest: one JSON file, cleared by every Sync.
 
 `Data/.overlay.json`, written by `assetlib` (which already links `nlohmann_json`
@@ -188,6 +224,11 @@ emptied at each sync, one file is easier to reason about than N.
 travels with the project; the overlay is working state that dies at the next sync. Different
 lifetimes should not share a file.
 
+**Reversed, 2026-08-16.** Nothing is built. The manifest existed so the editor could delete an asset
+it could not unlink; with the editor never mounting an archive, every asset it lists is a loose file
+and delete is `remove`. `LayeredFileSystem::SetMask` stays — it is the general mechanism, and patch
+archives are the consumer that would want it — but nothing writes a mask today.
+
 ### What should not be archived
 
 | excluded | why |
@@ -196,7 +237,6 @@ lifetimes should not share a file.
 | `.glb` / `.hdr` and anything else awaiting import | same |
 | the `.berniniproject` file | editor metadata, not runtime data |
 | the shader cache (`.bsc`, `pipelines.psolib`) | per-machine, write-back, disposable — an archive entry would be write-once and wrong |
-| `Data/.overlay.json` | overlay working state; packed, it would mask the archive's own contents |
 | `Levels/` | **included** when they exist — no `.blevel` type is registered yet, so today the rule below would skip them; `pack` counts unclaimed extensions so that stays visible |
 | `Textures/` (baked) | **included**, and it is most of the bytes |
 | `.bvat` | **included**, and packed fresh — see below |
@@ -343,14 +383,13 @@ way and is what would catch a shared cursor being introduced later.
 
 ### Both archived and non-archived, always, and loose wins.
 
-Yes, permanently, and not as a transitional state. Consumers that need loose forever: the editor's
-overlay, the golden-image tests, and a standalone baked model directory
+Yes, permanently, and not as a transitional state. Consumers that need loose forever: the editor,
+the golden-image tests, and a standalone baked model directory
 ([AssetManager.h:508](../../libs/gamelib/include/gamelib/AssetManager.h)).
 
 `LayeredFileSystem` resolves in order and takes the first hit, loose-first and archive-second, so an
-unpacked file shadows its packed twin. That one rule is four features:
+unpacked file shadows its packed twin. That one rule is three features:
 
-- the **editor overlay** — every edit is a loose file that wins over what is packed;
 - the **debug workflow** — drop one `.bmaterial` next to the exe and re-run;
 - **patching** — ship a later archive, or a loose fix, ahead of the base;
 - **mods** — the same, authored by someone else.
@@ -472,6 +511,12 @@ both cases right: an overlay is writable even for a path only the archive carrie
 is re-baked into the overlay; an archive alone is not, so it is trusted. It also needs nothing new
 on the seam, where per-path would have wanted a seventh `IFileSystem` member.
 
+**Unchanged by the 2026-08-16 reversal, though its example is gone.** The editor mounts nothing now,
+so the edited-mesh-over-packed-`.bvat` case above can no longer arise there. The rule and the
+amendment both stand as written: they are about *any* mount with a writable layer, which is still
+what a loose data root, a modding search path and the standalone baked-model directory are. Only the
+motivating story changed.
+
 A `.bvat` *missing* from a read-only mount is the other half: `pack` only re-bakes the ones already
 there, so a rig nothing acquired before packing ships without one. That is an error naming the file,
 not a bake attempt that fails somewhere inside `saveVat` on a directory that was never there.
@@ -490,7 +535,7 @@ build spend seconds skinning on first load.
 | `core` | new `core::file::IFileSystem`, `FileStamp`, `LooseFileSystem`, `LayeredFileSystem`, `write_atomic` | none; additive |
 | `assetlib` | new `AssetStore`, the read mount and the writable root as one, with the loaders as methods; every `load*` gains an `IFileSystem&` overload; `readChunksFromFile` → `readChunks`; KTX2 via `ktxTexture2_CreateFromMemory`; the staleness predicates have their `dataRoot` parameter replaced by a filesystem; `AssetRefGraph::Scan` and the texture prune walk the mount union instead of the data root; new `pak_io`; new `pack` CLI command | **highest.** The staleness predicates decide which representation a material draws; a wrong verdict is a silent visual change, not a failure |
 | `gamelib` | `AssetManager` takes a `LayeredFileSystem`; the path-taking constructor stays and builds a loose mount, so every existing caller compiles unchanged; `AcquireVatMesh` respects a read-only mount | moderate |
-| `apps/editor` | `Project` opens a mount rather than a data root; the Content Explorer comes off `QFileSystemModel` to show the union; delete writes a tombstone; a *Sync* action repacks | **high, and the largest single task.** The Content Explorer indexes straight into its model in a dozen places |
+| `apps/editor` | `Project` holds an `AssetStore` over the loose `Data/` tree instead of a bare data root, and hands it to `MainWindow`'s `AssetManager` and the texture prune. Nothing else: the Content Explorer stays a `QFileSystemModel`, delete stays `remove`, and there is no *Sync* — see the 2026-08-16 reversal | low, once the reversal took the mount out of it |
 | docs | new `docs/archives.md`; `ROADMAP.md` line under Asset Streaming Pipeline | — |
 
 The path-taking `load*` overloads are all kept, reading the file directly rather than through a
@@ -509,8 +554,9 @@ Bottom-up by layer, one PR each.
 All six interface members — `Exists`, `Stat`, `Read`, `ReadRange`, `Enumerate`, `IsReadOnly` — plus
 `core::file::FileStamp`; a directory-backed implementation; an ordered mount list that takes the
 first hit and reports both which mount answered and whether *that* mount is read-only; a mask set on
-the search path, so a tombstoned path reads as absent (task 10 persists the set, this task only
-honours one); and `write_atomic`, which task 6 needs and nothing in the tree offers below `bgl`.
+the search path, so a masked path reads as absent (task 10 was to have persisted the set and was
+dropped, so nothing sets a mask today — it stays as the mechanism patch archives would want); and
+`write_atomic`, which task 6 needs and nothing in the tree offers below `bgl`.
 Nothing calls any of it yet — dead scaffolding at the bottom layer, justified by its tests.
 *Gate:* new `core_tests` cases — a `LooseFileSystem` over a temp tree round-trips whole and ranged
 reads and reports stamps matching `std::filesystem`; a ranged read past EOF throws rather than
@@ -569,7 +615,8 @@ throwing.
 **6. `assetlib_cli pack` (and `list`).**
 Walks a data root, applies the exclusion rule, bakes stale `.bvat` fresh, writes one `.bpak`. The
 walk and the rule live in `assetlib` (`packProject`), not in the CLI, because the gate is an
-`assetlib_tests` gate and the editor's *Sync* calls the same thing in task 10.
+`assetlib_tests` gate. (This also said the editor's *Sync* would call the same thing in task 10;
+task 10 was dropped, and `packProject` remains the one place the rule lives.)
 
 Not through `core::file::write_atomic`, as this plan first said: `PakWriter` landed in task 2 as a
 *streaming* writer that already syncs a temp beside the target and renames, so an interrupted pack
@@ -612,32 +659,25 @@ case acquires a mesh, its materials and its textures out of a `.bpak` and gets h
 loose acquire; a loose-over-archive `LayeredFileSystem` resolves an overridden `.bmaterial` to the loose
 one; `VatAcquire_test` acquires from a read-only mount without re-baking.
 
-**9. The editor opens a mount, and the Content Explorer shows the union.**
-`Project` grows the mount (loose `Data/` over `Data.bpak` when one is present) and hands it to
-everything that took a data root. `AssetFileModel` comes off `QFileSystemModel` — the largest single
-change in the feature, because the views index straight into that model in a dozen places — and
-lists the union with the loose entry winning, marking which is which. Writes are unaffected: they
-were always loose and still are.
-*Gate:* `editor_tests` — `AssetFileModel_test` over a mount lists every packed asset, lists a loose
-asset that has no packed twin, and lists a shadowed pair exactly once resolving to the loose one;
-`Project_test` opens a project with and without a `Data.bpak` and gets the same asset set;
-the existing import and thumbnail suites pass unchanged.
+**9. The editor holds an `AssetStore`.** *(Landed as #373, then narrowed.)*
+`Project` holds a loose `AssetStore` over `Data/` and hands it to everything that took a data root;
+`MainWindow` builds the `AssetManager` from it. Originally this task also mounted `Data.bpak` behind
+the loose tree and took `AssetFileModel` off `QFileSystemModel` so the Content Explorer could list
+the union. Both were reverted when the editor stopped seeing archives -- see the decision above. The
+model went back to `QFileSystemModel`, which lists the real filesystem and does it better.
+*Gate:* `editor_tests` -- a project reads and writes its loose tree, and an archive sitting beside it
+changes nothing about what it reads.
 
-**10. Delete writes a tombstone, and *Sync* repacks.**
-`Data/.overlay.json` in `assetlib` — read, write, and the three rules above. Delete of a packed asset
-writes a tombstone rather than failing; `Sync` repacks archive ∪ overlay − tombstones through
-`PakWriter` and `write_atomic`, then removes the absorbed loose files and the manifest.
-Ordering matters and is the risk: the new archive is committed *before* any loose file is removed,
-so an interrupted sync leaves redundant loose files rather than lost work.
-*Gate:* `assetlib_tests` — the manifest round-trips, a tombstone is not written for a loose-only
-delete, and writing a tombstoned path clears its entry. `editor_tests` — deleting a packed asset
-makes it absent from the model and from `AssetRefGraph`, and it is gone from the archive after a
-sync; a sync interrupted after the repack and before the cleanup loses nothing and is idempotent
-when re-run; an asset edited, synced and edited again round-trips its content both times.
+**10. ~~Delete writes a tombstone, and *Sync* repacks.~~ Dropped.**
+The tombstone manifest and *Sync* existed to let the editor edit and delete packed assets and fold
+the result back. With the editor never mounting an archive there is nothing to shadow, nothing to
+mask and nothing to fold: every asset it lists is a loose file it can unlink. `pack` is how an
+archive is refreshed.
 
 **11. Docs and roadmap.**
 `docs/archives.md` — the format, the mount model, the exclusion rule, the read-only `.bvat` rule, and
-the overlay/sync workflow. `ROADMAP.md` gains the sub-bullets under Asset Streaming Pipeline. The
+where an archive sits in the workflow (built by `pack` from the loose tree, mounted by a shipped
+game, never read back into the editor). `ROADMAP.md` gains the sub-bullets under Asset Streaming Pipeline. The
 pieces of this plan worth keeping move there, and the plan is deleted.
 *Gate:* the doc's every claim carries a file reference, and `just format` is clean.
 
@@ -651,11 +691,9 @@ pieces of this plan worth keeping move there, and the plan is deleted.
 - **Streaming / partial residency.** `Asset Streaming Pipeline` is the roadmap line above this one,
   and it is a different feature that this one is a prerequisite for.
 - **Splitting one project across several archives from the editor.** `pack` takes a file list, so
-  `Base.bpak` + `DLC1.bpak` is available from the CLI; *Sync* writes back to the single archive the
-  project was opened with, and choosing which of several to fold into is a UI question with no
-  answer yet.
-- **Patch archives shipped over a base.** The pieces exist after task 10 — mount order for override,
-  tombstones for removal — but a patch is authored, versioned and validated, and none of that is
-  here.
+  `Base.bpak` + `DLC1.bpak` is available from the CLI; the editor has no pack UI at all.
+- **Patch archives shipped over a base.** The mechanisms exist — mount order for override,
+  `LayeredFileSystem::SetMask` for removal — but a patch is authored, versioned and validated, and
+  none of that is here.
 - **Migrating `bgl`'s `WriteFileAtomic` onto `core::file::write_atomic`.** A cleanup this feature has
   no reason to carry.

@@ -1,6 +1,5 @@
 #pragma once
 #include <assetlib/AssetStore.h>
-#include <assetlib/pak_pack.h>
 
 class Project
 {
@@ -99,36 +98,26 @@ public:
 		return m_ProjectFile.parent_path() / c_DataDirectoryName;
 	}
 
-	/** Where the project's archive is, whether or not one has been packed. */
-	[[nodiscard]] std::filesystem::path
-	GetArchiveFile() const noexcept
-	{
-		return m_ProjectFile.parent_path() / assetlib::c_DefaultArchiveName;
-	}
-
 	/**
-	 * What the project reads its assets through, and writes them to.
+	 * What the project reads its assets through, and writes them to: the loose `Data/` tree.
 	 *
-	 * The loose `Data/` tree over `Data.bpak` when one has been packed, loose alone when none has.
-	 * Both are the same to a reader; the difference is only that a packed project can ship. Writes
-	 * always land on `Data/` -- an archive entry cannot be replaced in place, which is what makes
-	 * the loose layer an overlay rather than a cache.
-	 *
-	 * Rebuilt by ReloadStore, which is what a pack or a *Sync* during the session calls.
+	 * Never an archive. The editor authors the tree -- separate files, which is the unit version
+	 * control wants -- and `pack` turns that tree into an archive to ship. Nothing reads one back
+	 * here, so every asset the editor lists is one the editor can write.
 	 */
 	[[nodiscard]] const assetlib::AssetStore&
 	GetStore() const noexcept
 	{
-		// Create and Open both mount before they hand a Project back, so this holds for every
-		// Project that exists. It is an invariant of those two functions rather than of the type,
-		// which is what the assert is for.
+		// Create and Open both fill the store in before they hand a Project back, so this holds for
+		// every Project that exists. It is an invariant of those two functions rather than of the
+		// type, which is what the assert is for.
 		assert(
 			m_Store.has_value() &&
-			"a Project is mounted by Create or Open before it is handed out");
+			"a Project's store is built by Create or Open before it is handed out");
 		return *m_Store;
 	}
 
-	/** Re-reads the archive, picking up one that has just been packed or replaced. */
+	/** Re-points the store at the data directory. */
 	void
 	ReloadStore();
 
@@ -138,9 +127,9 @@ private:
 	static constexpr auto c_DataDirectoryName = "Data";
 	static constexpr auto c_FormatVersion     = 1;
 
-	// Held rather than built per call: mounting an archive reads its header and entry table, which
-	// is not something an accessor should do. optional because a Project is default-constructed
-	// before Open fills it in.
+	// Held rather than built per call: GetStore hands out a reference and is noexcept, and the
+	// constructor throws on a data root that has gone. optional because a Project is
+	// default-constructed before Open fills it in.
 	std::optional<assetlib::AssetStore> m_Store;
 
 	std::string           m_Name;

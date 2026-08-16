@@ -1,7 +1,5 @@
 #include "Project/Project.h"
 
-#include <assetlib/pak_io.h>
-#include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 #include <nlohmann/json.hpp>
 
@@ -113,23 +111,9 @@ Project::Save() const
 void
 Project::ReloadStore()
 {
-	const std::filesystem::path dataRoot = GetDataDirectory();
-	const std::filesystem::path archive  = GetArchiveFile();
-
-	std::error_code ec;
-	if (!std::filesystem::is_regular_file(archive, ec) || ec)
-	{
-		// No archive packed: the loose tree is the whole project, which is every project until
-		// somebody ships one.
-		m_Store.emplace(dataRoot);
-		return;
-	}
-
-	// Loose first: an edited asset shadows its packed twin, which is what makes the loose tree an
-	// overlay. PakFile reports itself read-only, so the store's writable layer stays `Data/`.
-	auto mount = std::make_shared<core::file::LayeredFileSystem>();
-	mount->Mount(std::make_shared<core::file::LooseFileSystem>(dataRoot));
-	mount->Mount(std::make_shared<assetlib::PakFile>(archive));
-
-	m_Store.emplace(dataRoot, std::move(mount));
+	// Loose, always. The editor authors the tree, not the archive: assets are version-tracked as
+	// separate files, and one packed blob is the wrong unit for that. An archive is what `pack`
+	// makes from this tree to ship, and what a shipped game mounts -- it is never read back here,
+	// so an asset the editor lists is always an asset the editor can write.
+	m_Store.emplace(GetDataDirectory());
 }
