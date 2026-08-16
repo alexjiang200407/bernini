@@ -168,6 +168,11 @@ namespace bgl
 		// FrameIndex, which cycles over the backbuffer ring.
 		uint64_t m_FrameCounter = 0;
 
+		// The last draw's unjittered camera pair, for the resolve; see Draw.
+		glm::mat4 m_TaaClipToView{ 1.0f };
+		glm::mat4 m_TaaViewToPrevClip{ 1.0f };
+		glm::vec2 m_TaaJitter{ 0.0f };
+
 		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
 		uint64_t                                                 m_NextCaptureId = 1;
 

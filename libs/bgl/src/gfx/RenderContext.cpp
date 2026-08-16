@@ -484,6 +484,14 @@ namespace bgl
 
 		m_ShadingChanged |= view->AdvanceShading();
 
+		const glm::mat4 invView = glm::inverse(job.camera.GetView());
+
+		// What the resolve tells a surface's own motion from the camera's with. One camera stands
+		// for the target, so a frame of several draws disables it rather than choosing.
+		m_TaaClipToView     = glm::inverse(job.camera.GetProjection());
+		m_TaaViewToPrevClip = prevCamera.unjitteredViewProj * invView;
+		m_TaaJitter         = jitter;
+
 		const uint32_t drawIdx = m_DrawCount++;
 
 		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
@@ -513,7 +521,7 @@ namespace bgl
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.viewState.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
+		draw.viewState.cameraPos = glm::vec3(invView[3]);
 
 		draw.lighting.env         = view->GetEnvironmentMap();
 		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();
@@ -618,6 +626,11 @@ namespace bgl
 			taaArgs.pointSampler    = m_PointClampSampler;
 			taaArgs.linearSampler   = m_LinearClampSampler;
 			taaArgs.viewport        = viewport;
+			taaArgs.depth           = rt.GetDepthSrv();
+			taaArgs.clipToView      = m_TaaClipToView;
+			taaArgs.viewToPrevClip  = m_TaaViewToPrevClip;
+			taaArgs.jitter          = m_TaaJitter;
+			taaArgs.cameraPairValid = m_DrawCount == 1;
 			taaArgs.historyValid    = rt.IsHistoryValid() && !m_ShadingChanged;
 			taaArgs.cameraStill     = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);

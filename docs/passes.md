@@ -42,8 +42,8 @@ flowchart TD
 render targets and the imported `depth` texture as their depth attachment — **every pass that binds
 the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
-`TaaResolve` reads `sceneColor`, the velocity buffer and the previous accumulation and writes the
-next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
+`TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
+writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
 writer of the backbuffer;
 `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
@@ -379,8 +379,11 @@ history and the pass is never attached.
 See [Temporal Antialiasing](docs/taa.md) for why the clamp is in YCoCg, why the blend is luma-weighted
 and why the resolve writes history rather than the backbuffer.
 
-* **In:** `sceneColor`, `motionVectors` and the previous history as shader resources; a point sampler
-  for the two read 1:1 and a linear one for the reprojected history, both owned by `RenderContext`.
+* **In:** `sceneColor`, `motionVectors`, `depth` and the previous history as shader resources; a
+  point sampler for the three read 1:1 and a linear one for the reprojected history, both owned by
+  `RenderContext`. Depth is read for one thing: what the camera alone would move each pixel by,
+  which is subtracted from the written velocity to find a surface's own motion
+  ([Temporal Antialiasing](docs/taa.md)).
 * **Out:** the current history. `PostProcess` is then pointed at it instead of `sceneColor`.
 * **The first frame, and the first after a resize, take the scene colour whole** — `historyValid` is
   false and there is no accumulation to blend against. So does the first frame after the scene's

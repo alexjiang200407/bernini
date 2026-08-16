@@ -26,6 +26,16 @@ namespace bgl
 		{
 			SrvHandle sceneColor;
 			SrvHandle motionVectors;
+			SrvHandle depth;
+
+			// The unjittered camera this frame and last -- this frame's inverse projection, and
+			// this frame's view space into last frame's clip -- so the resolve can tell a surface's
+			// own motion from the camera's at each pixel's depth. One camera stands for the frame,
+			// so a frame of several draws leaves the pair invalid.
+			glm::mat4 clipToView{ 1.0f };
+			glm::mat4 viewToPrevClip{ 1.0f };
+			glm::vec2 jitter{ 0.0f };
+			bool      cameraPairValid = false;
 
 			// Last frame's accumulation, and the one this frame writes. Distinct textures: a
 			// resource cannot be an SRV and an RTV in the same pass.

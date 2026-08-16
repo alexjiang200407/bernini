@@ -4,6 +4,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include "util/VatSynth.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -167,6 +168,7 @@ namespace
 
 	using ScenePopulator = void (*)(const bgl::SceneRef&, const bgl::SceneViewRef&);
 	using CameraProvider = bgl::Camera (*)(int frame);
+	using ClockProvider  = float (*)(int frame);
 
 	bgl::Camera
 	StillCamera(int)
@@ -174,15 +176,22 @@ namespace
 		return Camera();
 	}
 
-	// Renders the populated scene for `frames` frames, each from `cameraAt(frame)`, and writes the
-	// last one to `path`.
+	float
+	StoppedClock(int)
+	{
+		return 0.0f;
+	}
+
+	// Renders the populated scene for `frames` frames, each from `cameraAt(frame)` at
+	// `clockAt(frame)`, and writes the last one to `path`.
 	void
 	RenderTo(
 		const std::string& path,
 		bool               taaEnabled,
 		int                frames,
 		ScenePopulator     populate = AddQuad,
-		CameraProvider     cameraAt = StillCamera)
+		CameraProvider     cameraAt = StillCamera,
+		ClockProvider      clockAt  = StoppedClock)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
@@ -207,6 +216,7 @@ namespace
 		for (int frame = 0; frame < frames; ++frame)
 		{
 			job.camera = cameraAt(frame);
+			job.time   = clockAt(frame);
 			gfx->DrawFrame(target, job);
 		}
 
@@ -327,6 +337,129 @@ namespace
 		}
 
 		gfx->ScreenshotPng(target, path);
+	}
+
+	// An animating surface under a still camera: the fixture's VAT quad, tilted like the others,
+	// dark, floating in front of a flat mid-grey backdrop, sweeping back and forth along its own X.
+	// Every pixel it sweeps over is background whose own motion is zero -- which no pan can
+	// produce, and which is where its outline smears. The sweep is `c_AnimSweepFrames` rendered
+	// frames long, so the edges cross about two texels a frame, as a limb does at 1080p.
+	constexpr float c_AnimQuadScale   = 2.0f;
+	constexpr int   c_AnimSweepFrames = 18;
+	constexpr int   c_AnimSweeps      = 7;
+	constexpr float c_AnimQuadGrey    = 0.08f;
+	constexpr float c_BackdropGrey    = 0.5f;
+	constexpr float c_BackdropSize    = 60.0f;
+
+	// One clip frame per sweep at the fixture's sample rate; the capture lands on an odd multiple
+	// of a whole clip frame, so the quad has just arrived at c_Step from the left.
+	constexpr float c_AnimStepSeconds =
+		1.0f / (bgl::test::vat_synth::c_SampleRate * c_AnimSweepFrames);
+	constexpr int c_AnimFrames = c_AnimSweepFrames * c_AnimSweeps + 1;
+
+	float
+	AnimationClock(int frame)
+	{
+		return static_cast<float>(frame) * c_AnimStepSeconds;
+	}
+
+	// A slow slide under the whole animation, arriving at x = 0 on the capture frame: about a third
+	// of a texel per frame on the backdrop, half on the quad, so the camera's motion is neither
+	// zero nor enough to carry the mesh's own.
+	constexpr float c_AnimDriftStep = 0.03f;
+
+	bgl::Camera
+	AnimDriftCamera(int frame)
+	{
+		return CameraAt(-static_cast<float>(c_AnimFrames - 1 - frame) * c_AnimDriftStep);
+	}
+
+	glm::mat4
+	AnimatedQuadTransform()
+	{
+		return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
+		       glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)) *
+		       glm::scale(glm::mat4(1.0f), glm::vec3(c_AnimQuadScale));
+	}
+
+	void
+	AddVatQuadOverBackdrop(
+		const bgl::SceneRef&                    scene,
+		const bgl::SceneViewRef&                view,
+		const bgl::ISceneView::VatInstanceDesc& desc)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		auto backdrop = scene->AddPlaneGeom(
+			1,
+			1,
+			c_BackdropSize,
+			c_BackdropSize,
+			scene->CreatePbrMaterial(Grey(c_BackdropGrey)));
+		view->CreateStaticMeshInstance(backdrop, glm::mat4(1.0f));
+
+		const auto quad = bgl::test::vat_synth::AddSlidingQuadGeom(
+			*scene,
+			scene->CreatePbrMaterial(Grey(c_AnimQuadGrey)));
+		view->CreateVatMeshInstance(quad, AnimatedQuadTransform(), desc);
+	}
+
+	void
+	AddAnimatingQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		AddVatQuadOverBackdrop(scene, view, { bgl::test::vat_synth::c_LoopClip, 0.0f, 1.0f });
+	}
+
+	// The pose the animation is captured at, held: the reference the outline is read against.
+	// Frame 1 of the clip, which is the pose an odd number of sweeps arrives at.
+	constexpr float c_ArrivedPhase = 1.0f;
+
+	void
+	AddArrivedQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		AddVatQuadOverBackdrop(
+			scene,
+			view,
+			{ bgl::test::vat_synth::c_LoopClip, c_ArrivedPhase, 0.0f });
+	}
+
+	// Where a point of the quad's bake space lands on screen when the pose is at `offset`.
+	glm::ivec2
+	AnimatedQuadPx(float offset, glm::vec3 bakePoint)
+	{
+		const glm::vec4 world =
+			AnimatedQuadTransform() * glm::vec4(bakePoint + glm::vec3(offset, 0.0f, 0.0f), 1.0f);
+		const glm::vec4 clip = Camera().GetViewProjection() * world;
+		const glm::vec2 ndc  = glm::vec2(clip) / clip.w;
+		return glm::ivec2(
+			std::lround((ndc.x * 0.5f + 0.5f) * static_cast<float>(c_Width)),
+			std::lround((ndc.y * -0.5f + 0.5f) * static_cast<float>(c_Height)));
+	}
+
+	// The box the whole quad sits in at the captured pose, with room for its outline's smear.
+	struct PxBox
+	{
+		int x, y, w, h;
+	};
+
+	PxBox
+	ArrivedQuadBox()
+	{
+		constexpr int c_Margin = 6;
+
+		int minX = c_Width, minY = c_Height, maxX = 0, maxY = 0;
+		for (const glm::vec3& corner : bgl::test::vat_synth::c_QuadAtOrigin)
+		{
+			const glm::ivec2 px = AnimatedQuadPx(bgl::test::vat_synth::c_Step, corner);
+			minX                = std::min(minX, px.x);
+			minY                = std::min(minY, px.y);
+			maxX                = std::max(maxX, px.x);
+			maxY                = std::max(maxY, px.y);
+		}
+		return { minX - c_Margin,
+			     minY - c_Margin,
+			     maxX - minX + 2 * c_Margin,
+			     maxY - minY + 2 * c_Margin };
 	}
 }
 
@@ -688,4 +821,122 @@ TEST_CASE(
 	// reads as the converged one does -- unless it is still carrying the old material.
 	CHECK(
 		lightEdit == Catch::Approx(lightAfter).margin(std::abs(lightBefore - lightAfter) * 0.15f));
+}
+
+// The outline of an animating mesh, as a number: the same pose drawn animating into and drawn
+// held, both under TAA. The raw pair is the instrument's guard -- pixel-identical, so anything
+// the TAA pair differs by is the resolve's doing. A pan never sees this: the mesh and its
+// backdrop share the camera's motion, but under a still camera a silhouette pixel half covered
+// by the mesh carries either its velocity or the backdrop's zero, by which fragment won its
+// centre, and the backdrop beside it reports zero motion and banks the passing edge's contrast
+// as if it were at rest. Together those smear the outline into a doubled edge, which is what
+// the Animation panel showed and what the resolve's neighbourhood motion now answers.
+//
+// The same renders also say whether the moving edges still *resolve*: the tilted top edge's
+// stair-step against the unjittered render. Alias energy cannot tell a resolved edge from a
+// smeared one -- both are smooth -- so that half only guards that accumulation on a moving mesh
+// keeps working; the outline figure is what tells the two apart. One case for both, since each
+// render is a device creation.
+TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][vat][render]")
+{
+	using namespace bgl::test::vat_synth;
+
+	const std::string held     = "assets/golden/taa_anim_held.got.png";
+	const std::string animated = "assets/golden/taa_anim_moving.got.png";
+	const std::string heldRaw  = "assets/golden/taa_anim_held_raw.got.png";
+	const std::string movedRaw = "assets/golden/taa_anim_moving_raw.got.png";
+
+	RenderTo(held, true, c_ConvergeFrames, AddArrivedQuadOverBackdrop);
+	RenderTo(
+		animated,
+		true,
+		c_AnimFrames,
+		AddAnimatingQuadOverBackdrop,
+		StillCamera,
+		AnimationClock);
+	RenderTo(heldRaw, false, 1, AddArrivedQuadOverBackdrop);
+	RenderTo(
+		movedRaw,
+		false,
+		c_AnimFrames,
+		AddAnimatingQuadOverBackdrop,
+		StillCamera,
+		AnimationClock);
+
+	const PxBox box = ArrivedQuadBox();
+
+	const float pose    = bgl::test::FrameDelta(movedRaw, heldRaw, box.x, box.y, box.w, box.h);
+	const float outline = bgl::test::FrameDelta(animated, held, box.x, box.y, box.w, box.h);
+
+	INFO("quad box delta, animating against held: raw = " << pose << ", resolved = " << outline);
+
+	// The animation must have arrived at exactly the held pose, or the figure below measures the
+	// pose and not the resolve.
+	REQUIRE(pose == 0.0f);
+
+	// Measured 6.9e-4 with the pixel's own motion alone -- the doubled outline -- and 1.25e-4 with
+	// the neighbourhood's; the bound sits between, nearer the fix.
+	CHECK(outline < 3.0e-4f);
+
+	// The same under a drifting camera, which is what tells a surface's own motion from the
+	// camera's: a pan alone must not dilate (the hashed figures depend on it), an animating mesh
+	// under one still must.
+	const std::string heldDrift  = "assets/golden/taa_anim_drift_held.got.png";
+	const std::string movedDrift = "assets/golden/taa_anim_drift_moving.got.png";
+	const std::string driftRaw   = "assets/golden/taa_anim_drift_moving_raw.got.png";
+
+	RenderTo(heldDrift, true, c_AnimFrames, AddArrivedQuadOverBackdrop, AnimDriftCamera);
+	RenderTo(
+		movedDrift,
+		true,
+		c_AnimFrames,
+		AddAnimatingQuadOverBackdrop,
+		AnimDriftCamera,
+		AnimationClock);
+	RenderTo(
+		driftRaw,
+		false,
+		c_AnimFrames,
+		AddAnimatingQuadOverBackdrop,
+		AnimDriftCamera,
+		AnimationClock);
+
+	const float driftPose = bgl::test::FrameDelta(driftRaw, heldRaw, box.x, box.y, box.w, box.h);
+	const float driftOutline =
+		bgl::test::FrameDelta(movedDrift, heldDrift, box.x, box.y, box.w, box.h);
+
+	INFO(
+		"quad box delta under a drifting camera, animating against held: raw = "
+		<< driftPose << ", resolved = " << driftOutline);
+
+	// Measured 8.8e-4 reprojecting by each pixel's own vector and 2.9e-4 by the neighbour that
+	// moves most on its own; the still-camera bound above would sit 3% over the latter.
+	REQUIRE(driftPose == 0.0f);
+	CHECK(driftOutline < 5.0e-4f);
+
+	const glm::ivec2 topEdge       = AnimatedQuadPx(c_Step, glm::vec3(0.0f, 1.0f, 0.0f));
+	constexpr int    c_EdgeBoxSize = 32;
+
+	const auto energy = [&](const std::string& path) {
+		return bgl::test::AliasEnergy(
+			path,
+			topEdge.x - c_EdgeBoxSize / 2,
+			topEdge.y - c_EdgeBoxSize / 2,
+			c_EdgeBoxSize,
+			c_EdgeBoxSize);
+	};
+
+	const float aliased = energy(movedRaw);
+	const float resting = energy(held);
+	const float moving  = energy(animated);
+
+	INFO(
+		"edge alias energy: unjittered = " << aliased << ", held = " << resting
+										   << ", animating = " << moving);
+
+	// The unjittered edge has to be aliased in the first place, or the ratios below are vacuous;
+	// a dark quad on mid grey at this tilt measures 6.6e-4.
+	CHECK(aliased > 4e-4f);
+	CHECK(resting < aliased * 0.6f);
+	CHECK(moving < aliased * 0.6f);
 }

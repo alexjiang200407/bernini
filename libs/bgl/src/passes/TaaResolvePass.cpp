@@ -68,6 +68,11 @@ namespace bgl
 		                    BarrierAccessFlag::kShaderResource,
 		                    BarrierLayout::kShaderResource })
 			.AddTextureArg(
+				TextureArg{ std::string(c_DepthName),
+		                    BarrierSyncFlag::kPixelShader,
+		                    BarrierAccessFlag::kShaderResource,
+		                    BarrierLayout::kShaderResource })
+			.AddTextureArg(
 				TextureArg{ args.prevHistoryName,
 		                    BarrierSyncFlag::kPixelShader,
 		                    BarrierAccessFlag::kShaderResource,
@@ -111,6 +116,26 @@ namespace bgl
 			if (auto u = taa["motionVectors"]; u.IsValid())
 			{
 				u = args.motionVectors;
+			}
+			if (auto u = taa["depth"]; u.IsValid())
+			{
+				u = args.depth;
+			}
+			if (auto u = taa["clipToView"]; u.IsValid())
+			{
+				u = args.clipToView;
+			}
+			if (auto u = taa["viewToPrevClip"]; u.IsValid())
+			{
+				u = args.viewToPrevClip;
+			}
+			if (auto u = taa["jitter"]; u.IsValid())
+			{
+				u = args.jitter;
+			}
+			if (auto u = taa["cameraPairValid"]; u.IsValid())
+			{
+				u = args.cameraPairValid ? 1.0f : 0.0f;
 			}
 			if (auto u = taa["pointSampler"]; u.IsValid())
 			{
