@@ -178,10 +178,11 @@ AnimationPreviewWindow::LoadMesh(
 			if (!animations.empty())
 			{
 				progress.Report(0, 0, "Baking animation textures...");
-				const assetlib::BVat vat = game::EnsureVatBaked(m_DataRoot, rel, animations);
-				vatBoundsMin             = vat.boundsMin;
-				vatBoundsMax             = vat.boundsMax;
-				vatBounded               = true;
+				const assetlib::BVat vat =
+					game::EnsureVatBaked(assetlib::AssetStore(m_DataRoot), rel, animations);
+				vatBoundsMin = vat.boundsMin;
+				vatBoundsMax = vat.boundsMax;
+				vatBounded   = true;
 			}
 		});
 

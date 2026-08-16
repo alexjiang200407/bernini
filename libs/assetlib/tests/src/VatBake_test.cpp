@@ -260,11 +260,10 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	saveAnimations(fixture.animations, root / "Animations/rig.banim");
 
 	auto desc       = VatBakeDesc();
-	desc.dataRoot   = root;
 	desc.mesh       = "Meshes/rig.bmesh";
 	desc.animations = "Animations/rig.banim";
 
-	const BVat vat = bakeVat(desc);
+	const BVat vat = bakeVat(AssetStore(root), desc);
 	CHECK(vat.mesh == "Meshes/rig.bmesh");
 	CHECK(vat.skeleton == "Skeletons/rig.bskel");
 	CHECK(vat.animations == "Animations/rig.banim");
