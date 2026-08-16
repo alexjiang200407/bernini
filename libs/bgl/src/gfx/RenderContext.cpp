@@ -386,6 +386,7 @@ namespace bgl
 		m_ShadingChanged   = false;
 		m_OutlineMaskDrawn = false;
 		++m_FrameCounter;
+		rt.AdvanceFrameCount();
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			c_BackbufferName,
@@ -450,10 +451,11 @@ namespace bgl
 
 		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
 		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
-		// that moves every frame.
+		// that moves every frame. Indexed by the target's own frame count, not this context's: with
+		// two targets drawn per frame each would otherwise see every second term of the sequence.
 		const glm::vec2 jitter = m_ActiveTarget->IsTaaEnabled() ?
 		                             HaltonJitter(
-										 m_FrameCounter,
+										 m_ActiveTarget->GetFrameCount(),
 										 viewport.maxX - viewport.minX,
 										 viewport.maxY - viewport.minY) :
 		                             glm::vec2(0.0f);
@@ -531,10 +533,11 @@ namespace bgl
 		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
 		constexpr uint64_t c_AlphaHashPeriod = 1024;
 
-		draw.viewState.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
-		                                   static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
-		                                   0.0f;
-		draw.lighting.skybox         = view->GetSkybox();
+		draw.viewState.alphaHashSeed =
+			m_ActiveTarget->IsTaaEnabled() ?
+				static_cast<float>(m_ActiveTarget->GetFrameCount() % c_AlphaHashPeriod) :
+				0.0f;
+		draw.lighting.skybox = view->GetSkybox();
 
 		if (draw.lighting.skybox.has_value())
 		{

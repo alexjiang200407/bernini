@@ -59,10 +59,14 @@ from there, live, because the comparison is what shows a temporal artifact.
   able to hide. The subtraction is in the *mesh* shader deliberately: see the shared-module hazard in
   [Slang Shaders](docs/slang_shaders.md).
 
-* **Halton(2, 3), eight terms.** Long enough to cover the footprint, short enough that the ghosting
-  tail stays inside what the blend weight forgives. The sequence is 1-based, because term 0 of every
-  radical inverse is 0 — a frame that samples exactly where an unjittered one does contributes
-  nothing new.
+* **Halton(2, 3), eight terms, indexed by the target's own frame count.** Long enough to cover the
+  footprint, short enough that the ghosting tail stays inside what the blend weight forgives. The
+  sequence is 1-based, because term 0 of every radical inverse is 0 — a frame that samples exactly
+  where an unjittered one does contributes nothing new. The index is `RenderTargetBase::GetFrameCount`,
+  not the renderer's frame counter, for the reason the history ping-pong is per target (below): two
+  viewports drawn by one renderer would otherwise each see every second term — four lopsided
+  positions instead of the footprint — and a third would change what the first two converge to.
+  The alpha hash seed advances on the same count.
 
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
@@ -384,10 +388,12 @@ Two couplings worth knowing:
   writes it as zero — the store must start empty, and a scene alpha of 1 would decode as a huge
   variance.
 
-* **The ping-pong is per target, not per frame counter.** `GetCurrentHistoryIndex()` is state the target
-  owns and `AdvanceHistory()` flips at `EndFrame`. Deriving it from a context-wide frame counter
-  would break the moment two targets are drawn at different rates — each target's history has to
-  alternate on *its* frames.
+* **The ping-pong is per target, not per frame counter — and so is the jitter index.**
+  `GetCurrentHistoryIndex()` is state the target owns and `AdvanceHistory()` flips at `EndFrame`;
+  `GetFrameCount()` is the target's and `BeginFrame` advances it. Deriving either from a
+  context-wide frame counter breaks the moment two targets are drawn per frame or at different
+  rates — each target's history has to alternate on *its* frames, and its jitter has to walk the
+  whole sequence on them.
 
 * **Turning it off discards the accumulation; it does not pause it.** The frames the history would
   have to bridge are never rendered, so resuming across the gap would reproject a stale image. The

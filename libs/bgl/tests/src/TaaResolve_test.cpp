@@ -940,3 +940,59 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 	CHECK(resting < aliased * 0.6f);
 	CHECK(moving < aliased * 0.6f);
 }
+
+// The jitter sequence is the target's, not the renderer's. Two viewports drawn each frame by one
+// renderer -- the level editor beside the Animation panel -- would otherwise each see every second
+// term of the eight, four lopsided sub-pixel positions instead of the footprint, and a third
+// viewport would change what the first two converge to. Bit-identical, since the second target
+// cannot reach the first's accumulation by any route but the shared counter.
+TEST_CASE(
+	"A target's jitter walks the whole sequence however many targets share the renderer",
+	"[taa][render]")
+{
+	const std::string alone  = "assets/golden/taa_targets_alone.got.png";
+	const std::string shared = "assets/golden/taa_targets_shared.got.png";
+
+	const auto render = [&](const std::string& path, bool secondTarget) {
+		auto gfx = bgl::CreateGraphics(TestOptions());
+		REQUIRE(gfx != nullptr);
+
+		auto targetDesc       = bgl::RenderTargetDesc();
+		targetDesc.width      = static_cast<int>(c_Width);
+		targetDesc.height     = static_cast<int>(c_Height);
+		targetDesc.headless   = true;
+		targetDesc.taaEnabled = true;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		auto other  = secondTarget ? gfx->CreateRenderTarget(targetDesc) : bgl::RenderTargetRef();
+
+		auto scene = gfx->CreateScene(QuadSceneDesc());
+		auto view  = gfx->CreateSceneView(scene, 4);
+		AddQuad(scene, view);
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = Camera();
+		job.viewport = FullViewport();
+
+		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+		{
+			gfx->DrawFrame(target, job);
+			if (other != nullptr)
+			{
+				gfx->DrawFrame(other, job);
+			}
+		}
+
+		gfx->ScreenshotPng(target, path);
+	};
+
+	render(alone, false);
+	render(shared, true);
+
+	const float delta =
+		bgl::test::FrameDelta(alone, shared, c_EdgeBoxX, c_EdgeBoxY, c_EdgeBox, c_EdgeBox);
+
+	INFO("edge box delta, alone against sharing the renderer: " << delta);
+	CHECK(delta == 0.0f);
+}
