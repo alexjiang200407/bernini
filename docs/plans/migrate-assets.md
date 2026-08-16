@@ -2,71 +2,63 @@
 
 ## Context
 
-[stamp-content-hash](./stamp-content-hash.md) replaced `SourceStamp`'s mtime with a content hash and
-bumped four container majors, deliberately leaving every existing file unreadable — its ADR-5 named
-this ability as what would own the upgrade. Until it lands, `bernini-test-project` cannot be opened:
-27 of its containers (23 `.bmaterial` at v9, 2 `.bsky` and 2 `.benvl` at v1) fail with
-`unsupported version … re-bake`.
+[stamp-content-hash](./stamp-content-hash.md) bumped four container majors and deliberately left
+every existing file unreadable, its ADR-5 naming a migration ability as what would own the upgrade.
+This branch built one: first with maintained legacy readers, then — after that was rejected as the
+accumulation the mechanism exists to prevent — as throwaway per-change programs.
 
-The sources are all still there under `Data/textures_src/`, so the upgrade does not have to be lossy.
-A stamp can be recomputed from the file it named, and a bake that was fresh before stays fresh.
+Both were removed before landing. With one developer, one project and nothing online, a format change
+is cheaper to absorb by hand than to build machinery for, and the machinery would have to be kept
+correct across every format change in the meantime.
 
-This is stacked on `feat/stamp-content-hash` — the new `SourceStamp` has to exist for any of it to
-compile — and retargets to `master` when #371 merges.
+What the branch delivers instead is the `.bvat` fix, which is needed *more* without a migration, and
+a spec so the design is not re-derived when it is finally wanted.
 
 ## Decisions
 
-- **ADR-1 — Migration recomputes each stamp from the live source, and zeroes it only when the size
-  disagrees.** The recorded size is the one piece of the old stamp that still means something, so it
-  is the evidence: same size, and the source is almost certainly the one the bake read, so the fresh
-  hash keeps the bake fresh and nothing re-bakes. Different size, and the source genuinely changed
-  since, so a zeroed stamp reads stale — which is the truth. *Rejected: zeroing every stamp, which
-  would re-bake all 27 and reintroduce exactly the churn the parent change removed; and recomputing
-  unconditionally, which would bless a source edited since the bake and leave the triplet claiming a
-  texture it was never built from.*
+- **ADR-1 — No migration system now.** The triggers that make one necessary — concurrent developers
+  with long-lived branches, an engine that is online, projects whose sources do not travel with them
+  — are all still false. Until then a format change is: bump the major, carry the one project across
+  by hand, move on. *Rejected: landing the mechanism anyway "since it is written", which buys an
+  unused subsystem that must stay correct through every format change the next months bring.*
 
-- **ADR-2 — A legacy reader per major that exists, beside the current one in that format's own
-  file.** `.bmaterial` v9, `.bsky` v1, `.benvl` v1. The old and new layouts differ only in how the
-  stamp's second 8 bytes are read, so the parse is shared and the major is a parameter — a second
-  copy of `readPbr` is how two readers start disagreeing about a format. *Rejected: a general
-  version-upgrade registry chaining arbitrary majors, which is machinery for hops nobody has
-  designed.*
+- **ADR-2 — The design is written down rather than kept.**
+  [docs/specs/asset_container_migration.md](../specs/asset_container_migration.md) records the
+  problem, the trigger, and the conclusions this branch reached the expensive way: throwaway programs
+  over maintained readers, collapse over chain, why frozen writers are the same trap as versioned
+  readers, and what a schema would and would not buy. The working implementation stays recoverable
+  from this branch's history. *Rejected: leaving it in the code as the record, which is a subsystem
+  pretending to be a document.*
 
-- **ADR-3 — A CLI subcommand, run by hand.** `assetlib_cli migrate <dataRoot> [--dry-run]`, walking
-  the tree. *Rejected: migrating on project open in the editor, because it would turn a read into a
-  bulk rewrite of LFS-tracked binaries with no one having asked for it.*
+- **ADR-3 — `docs/specs/` is a new kind of document, and the index says how it differs.** A doc
+  describes code that exists; a plan records a change that happened; a spec describes code that does
+  not exist yet and the trigger that will call for it. It is deleted when the thing lands. *Rejected:
+  filing it under `docs/plans/`, where every other file is the record of a change that shipped.*
 
-- **ADR-4 — An unreadable `.bvat` is treated as absent and re-baked, not migrated.**
-  `EnsureVatBaked` (`libs/gamelib/src/vat_freshness.cpp`) calls `loadVat` outside any `try`, so the
-  parent change turned a `.bvat` at the old major into a thrown error — contradicting
-  [docs/vat.md](../vat.md), which already states a stale `.bvat` is "re-baked, never an error". It is
-  git-ignored and wholly derived, so catching the load failure is both the fix and the reason it
-  needs no legacy reader. *Rejected: giving `.bvat` a legacy reader like the rest, which upgrades a
-  file that re-bakes in seconds anyway.*
+- **ADR-4 — An unreadable `.bvat` is treated as absent and re-baked.** `EnsureVatBaked` called
+  `loadVat` outside any `try`, so the parent change turned a `.bvat` at the old major into a thrown
+  error — contradicting [docs/vat.md](../vat.md), which already stated a stale `.bvat` is "re-baked,
+  never an error". It is git-ignored and wholly derived. This is independent of migration and is the
+  one piece of the branch that lands. *Rejected: leaving it, which would make a bumped major an error
+  for every project that had ever baked one.*
 
 ## Non-goals
 
-- Any format other than the three with a legacy reader. `.benv` carries no stamp and no version
-  bump; `.bmesh`, `.bskel` and `.banim` were untouched by the parent change.
-- Running the migration over `bernini-test-project`. The ability lands here; pointing it at that repo
-  is a separate, deliberate act against a repo this PR does not own.
-- Backing up what it rewrites. The projects it runs on are in git, which is the backup.
-- An editor-side prompt when an open fails on version.
+- Any migration mechanism: the runner, the per-migration build rule, the legacy readers. All removed.
+- Carrying `bernini-test-project` across the stamp change. A one-off script does that when wanted, as
+  one already did for this repo's own committed fixtures.
+- The schema work. Its case is in the spec; it should be decided on the serialization argument, not
+  as a way to unblock migrations.
 
 ## Acceptance
 
-- `just test assetlib` — the suite synthesizes v9/v1 containers, migrates them and asserts:
-  - the result loads at the new major, with the stamp the live source actually hashes to;
-  - a source whose size no longer matches lands zeroed rather than blessed;
-  - `--dry-run` reports every file and writes none;
-  - a file already at the current major is left untouched, not rewritten;
-  - a corrupt or unknown-major file is reported as failed without aborting the run.
-- `just test gamelib` — a `.bvat` whose bytes cannot be parsed is re-baked rather than thrown from.
+- `just test gamelib` — a `.bvat` whose bytes cannot be parsed is re-baked rather than thrown from,
+  for both a stale major and a truncated file.
+- `just test` — nothing else moved.
 
 ## Commits
 
 1. `docs(plans): plan the container migration` — this file.
-2. `fix(gamelib): re-bake a .bvat that cannot be read` — ADR-4, with its test. Gate:
-   `just test gamelib`.
-3. `feat(assetlib): migrate containers written before the content stamp` — the legacy readers,
-   `migrateAssets`, and the CLI subcommand. Gate: `just test assetlib`.
+2. `fix(gamelib): re-bake a .bvat that cannot be read` — ADR-4, with its test.
+3. `docs(specs): the container migration problem, and how we will solve it` — ADR-1 to ADR-3, and the
+   removal of the mechanism this branch had built.
