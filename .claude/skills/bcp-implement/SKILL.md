@@ -23,17 +23,18 @@ PR base differ.
 
 **No work starts until the request has been grilled.** Run
 [bcp-grill](.claude/skills/bcp-grill/SKILL.md) on the prompt: survey narrowly, interrogate the
-intent, and close on a consensus the user has confirmed. Every invocation, including a two-line fix
-— the grill scales down, it is never skipped, and with nobody at the keyboard it stops and waits
-rather than answering itself.
+intent, and close on a consensus once every question has its answer. Every invocation, including a
+two-line fix — the grill scales down, it is never skipped, and with nobody at the keyboard it stops
+and waits on its questions rather than answering itself.
 
 It decides what this skill cannot: whether the change is wanted at all, which layer owns it, what it
 is explicitly *not* doing, and what proves it works. It is also where *this is too big for one PR*
 surfaces, which sends the work to [bcp-feature](.claude/skills/bcp-feature/SKILL.md) before anything
 is cut.
 
-Once the consensus is confirmed, write it into `docs/plans/<name>.md` as the document's head — an
-Architecture Decision Record, one entry per decision:
+Once the grill closes, write the consensus straight into `docs/plans/<name>.md` as the document's
+head — do not ask for a chat confirmation first; the user confirms it by reviewing this file where it
+lands, as the PR's first commit. It is an Architecture Decision Record, one entry per decision:
 
 ```markdown
 # <name> — implementation plan
@@ -55,7 +56,10 @@ Decisions and boundaries only — **no implementation steps**. § 3 appends the 
 and that is the whole document.
 
 The plan is the **first commit of the PR**, so a reviewer reads the boundaries before the diff, and
-[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 4 later reads the diff back against them.
+[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 4 later reads the diff back against them. That
+review *is* the consensus's confirmation: a boundary the user disagrees with comes back as a comment
+on the plan file, and [bcp-revise](.claude/skills/bcp-revise/SKILL.md) amends the ADR and whatever
+was built on it in the same revision.
 
 It is **kept**, where a feature's plan is deleted at landing
 ([bcp-feature § 5](.claude/skills/bcp-feature/SKILL.md)) — and the difference is what is in it, not
@@ -262,8 +266,8 @@ sentence twice starts skimming both.
 
 ## Rules
 
-- **Never start without the grill.** § 0 has no size threshold and no escape hatch, and an
-  unconfirmed consensus is not one.
+- **Never start without the grill.** § 0 has no size threshold and no escape hatch, and a question
+  the user never answered is not one that closed.
 - **Never claim a test passed without running it.** If a step was skipped, say so.
 - **Do not commit unprompted.** The user reviews the diff first unless they asked for the PR.
 - **Push back.** If the request is wrong, or a shortcut would break a layering rule or a documented

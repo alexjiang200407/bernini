@@ -1,6 +1,6 @@
 ---
 name: bcp-grill
-description: Use before any implementation work begins — interrogates a vague intent until the reason, the boundaries and the acceptance are agreed, then closes on a consensus the user confirms. Runs as § 0 of bcp-implement and bcp-feature, and is also invocable alone. Writes nothing until the consensus closes. Triggers: "grill me on X", "bcp-grill", and every bcp-implement or bcp-feature invocation.
+description: Use before any implementation work begins — interrogates a vague intent until the reason, the boundaries and the acceptance are agreed, then closes on a consensus that goes straight into the plan, where the user confirms it by review. Runs as § 0 of bcp-implement and bcp-feature, and is also invocable alone. Writes nothing until the consensus closes. Triggers: "grill me on X", "bcp-grill", and every bcp-implement or bcp-feature invocation.
 ---
 
 # Grilling a request
@@ -101,8 +101,8 @@ that catches *this fix is at the wrong layer* while the fix is still hypothetica
 
 ## 3. Close the grill
 
-The grill ends when **you can state the consensus back and the user confirms it** — not when you run
-out of questions.
+The grill ends when **every question has an answer and you can state the consensus back** — not
+when you run out of questions, and not on a chat reply to the summary.
 
 State it as four headings, around ten lines, no implementation:
 
@@ -113,16 +113,18 @@ Non-goals   — what this is explicitly not doing
 Acceptance  — the gate that proves it: suite, tag, golden image, assertion
 ```
 
-Then ask for confirmation and **wait**. A summary the user did not answer is not a consensus.
+Then **do not ask for confirmation** — write it. The caller puts it down as the head of
+`docs/plans/<name>.md` and carries on: see [bcp-implement § 0](.claude/skills/bcp-implement/SKILL.md)
+and [bcp-feature § 0](.claude/skills/bcp-feature/SKILL.md). Invoked alone, the grill stops here and
+the consensus stays in chat for whichever skill runs next.
 
-Once confirmed, the caller writes it as the head of `docs/plans/<name>.md` — see
-[bcp-implement § 0](.claude/skills/bcp-implement/SKILL.md) and
-[bcp-feature § 0](.claude/skills/bcp-feature/SKILL.md). Invoked alone, the grill stops here and the
-consensus stays in chat for whichever skill runs next.
-
-That document is worth a glance, not a close read. Reviewing it tests only whether the summary is
-faithful to a conversation that already happened — which is the part a model gets wrong least. Spend
-the attention on the acceptance check instead.
+The user confirms it **where it lands, by review**: the plan is the first commit of the PR under
+bcp-implement and its own PR under bcp-feature, so the boundaries are the first thing a reviewer
+reads and a wrong one comes back as a review comment, which [bcp-revise](.claude/skills/bcp-revise/SKILL.md)
+acts on. Waiting for a chat "yes" first was tried and dropped: it tests only whether the summary is
+faithful to a conversation that already happened — the part a model gets wrong least — and it left
+unattended sessions idle on a question that was not one. The *questions* still block (below); the
+summary of their answers does not.
 
 ## No human, no grill
 
@@ -139,6 +141,8 @@ assumptions this skill exists to prevent, and they are the ones that survive int
 
 - **Write nothing before § 3 closes.** Not a plan, not a stub, not a file.
 - **Never answer your own questions.** Ask, then wait.
+- **Never wait on the summary.** Once the questions are answered, the consensus is written, not
+  asked; the user confirms it by reviewing the plan.
 - **Never grill from an unread repo,** and never design during the survey.
 - **Ask in batches**, and let each answer change the next question.
 - **A grill that overturns the request succeeded.** "We do not need this" is the cheapest outcome

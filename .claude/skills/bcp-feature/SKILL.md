@@ -17,7 +17,7 @@ one.
 ```
 bcp-feature <name> <prompt>
   │
-  ├─ § 0  grill the request → consensus the user confirms  (nothing is created yet)
+  ├─ § 0  grill the request → consensus, written straight in  (nothing is created yet)
   ├─ § 1  cut feat/<name> from origin/master, empty, and publish it
   ├─ § 2  plan PR      → watch → revise → user merges
   ├─ § 3  task 1 PR    → watch → revise → user merges
@@ -73,8 +73,10 @@ plan: docs/plans/culling.md
 ## 0. Grill before you cut
 
 **Nothing is created until the request has been grilled** — not the branch, not the tracker, not the
-plan. Run [bcp-grill](.claude/skills/bcp-grill/SKILL.md) on the prompt and close on a consensus the
-user has confirmed. With nobody at the keyboard it stops and waits rather than answering itself.
+plan. Run [bcp-grill](.claude/skills/bcp-grill/SKILL.md) on the prompt and close on a consensus once
+every question has its answer — no chat confirmation of the summary; the user confirms it by
+reviewing § 2's plan PR, whose head it is. With nobody at the keyboard it stops and waits on its
+questions rather than answering itself.
 
 It runs ahead of § 1 because it is allowed to conclude that this feature should not exist: that the
 work is one PR to `master` after all ([bcp-implement](.claude/skills/bcp-implement/SKILL.md)), that
@@ -137,7 +139,7 @@ of that survey — spawn it with `subagent_type: bcp-docmap`, one tier below you
 returns the answer plus the lines
 it rests on, which is what the plan's *what the survey found* section wants anyway.
 
-Write `docs/plans/<name>.md`. The first four sections are § 0's confirmed consensus and the rest is
+Write `docs/plans/<name>.md`. The first four sections are § 0's consensus and the rest is
 the working-out beneath it — the order matters, because a reader who disagrees with the boundaries
 should find that out before reading the decomposition that assumes them:
 
