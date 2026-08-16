@@ -1,8 +1,8 @@
 #include <assetlib/bmaterial_io.h>
 
-#include <core/file/LooseFileSystem.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/magic.h>
+#include <core/file/LooseFileSystem.h>
 
 #include "fs_util.h"
 #include "string_io.h"

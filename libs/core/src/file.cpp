@@ -77,10 +77,9 @@ namespace core::file
 			for (uint64_t offset = 0; offset < stamp->size;)
 			{
 				const uint64_t taken = std::min<uint64_t>(c_HashChunkBytes, stamp->size - offset);
-
 				const std::vector<std::byte> chunk = fileSystem.ReadRange(path, offset, taken);
-				hash = hash_bytes(chunk.data(), chunk.size(), hash);
 
+				hash = hash_bytes(chunk.data(), chunk.size(), hash);
 				offset += taken;
 			}
 		}
