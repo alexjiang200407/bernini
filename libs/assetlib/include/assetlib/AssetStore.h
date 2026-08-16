@@ -153,8 +153,9 @@ namespace assetlib
 		// --- Staleness -------------------------------------------------------------------------
 
 		/**
-		 * The size and mtime of `path`, or a zeroed stamp when the mount does not hold it -- which
-		 * never compares equal to a real one, so an absent source reads as stale.
+		 * The size and content hash of `path`, or a zeroed stamp when the mount does not hold it --
+		 * which never compares equal to a real one, so an absent source reads as stale. Hashed as
+		 * the mount serves the bytes, so a source stamps the same loose or packed.
 		 */
 		[[nodiscard]] SourceStamp
 		StampOf(std::string_view path) const;

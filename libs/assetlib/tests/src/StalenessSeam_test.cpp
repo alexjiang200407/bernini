@@ -70,7 +70,7 @@ TEST_CASE("stampOf reads the same numbers through a mount as by path", "[stalese
 	const SourceStamp direct = stampOf(scratch.path / "textures_src/skin.ktx2");
 	REQUIRE(direct.size != 0);
 
-	// FileStamp and SourceStamp are the same two numbers; this is the one place that says so.
+	// The bytes are what is hashed, so the mount that served them cannot change the answer.
 	CHECK(stampOf(loose, "textures_src/skin.ktx2") == direct);
 	CHECK(stampOf(pak, "textures_src/skin.ktx2") == direct);
 
@@ -81,6 +81,20 @@ TEST_CASE("stampOf reads the same numbers through a mount as by path", "[stalese
 	{
 		CHECK(stampOf(loose, "textures_src/gone.ktx2") == SourceStamp{});
 		CHECK(stampOf(pak, "textures_src/gone.ktx2") == SourceStamp{});
+	}
+
+	// A route can name a file outside the project -- picking one from the file dialog is all it
+	// takes. The OS resolves it and an archive cannot carry it at all, so a directory that answered
+	// would reach one verdict loose and another packed: the divergence the seam exists to prevent.
+	SECTION("a path escaping the root is absent, whichever mount is asked")
+	{
+		const fs::path outside = scratch.path.parent_path() / "stale_seam_outside.ktx2";
+		Write(outside, "not this project's");
+
+		CHECK(stampOf(loose, "../stale_seam_outside.ktx2") == SourceStamp{});
+		CHECK(stampOf(pak, "../stale_seam_outside.ktx2") == SourceStamp{});
+
+		fs::remove(outside);
 	}
 }
 

@@ -220,15 +220,20 @@ namespace assetlib
 	SourceStamp
 	stampOf(const core::file::IFileSystem& fileSystem, std::string_view path)
 	{
-		// A directory resolves to a host path, which is an identity the memo above can key on. Taken
-		// because it is the hot case -- a staleness sweep asks about the same texture once per
-		// material, and the editor's mount is always a directory.
-		if (const auto* loose = dynamic_cast<const core::file::LooseFileSystem*>(&fileSystem))
-			return stampOf(loose->GetRoot() / path);
-
+		// Asked first, and of the mount rather than of the host: a path that escapes the root is
+		// absent here even though the OS would resolve it, and the fast path below would not know
+		// that. A route pointing outside the project must read the same way against a directory as
+		// against an archive, which cannot carry it at all.
 		const std::optional<core::file::FileStamp> stamp = fileSystem.Stat(path);
 		if (!stamp.has_value())
 			return {};
+
+		// A directory resolves to a host path, which is an identity the memo above can key on. Taken
+		// because it is the hot case -- a staleness sweep asks about the same texture once per
+		// material, and the editor's mount is always a directory. Normalized so that two spellings
+		// of one file are one cache entry.
+		if (const auto* loose = dynamic_cast<const core::file::LooseFileSystem*>(&fileSystem))
+			return stampOf((loose->GetRoot() / path).lexically_normal());
 
 		// Uncached: nothing else identifies a mount well enough to key on. An archive is read once
 		// at load rather than swept, so what this costs is one pass over the entry rather than a
