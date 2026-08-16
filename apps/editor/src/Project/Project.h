@@ -1,4 +1,6 @@
 #pragma once
+#include <assetlib/AssetStore.h>
+#include <assetlib/pak_pack.h>
 
 class Project
 {
@@ -97,11 +99,49 @@ public:
 		return m_ProjectFile.parent_path() / c_DataDirectoryName;
 	}
 
+	/** Where the project's archive is, whether or not one has been packed. */
+	[[nodiscard]] std::filesystem::path
+	GetArchiveFile() const noexcept
+	{
+		return m_ProjectFile.parent_path() / assetlib::c_DefaultArchiveName;
+	}
+
+	/**
+	 * What the project reads its assets through, and writes them to.
+	 *
+	 * The loose `Data/` tree over `Data.bpak` when one has been packed, loose alone when none has.
+	 * Both are the same to a reader; the difference is only that a packed project can ship. Writes
+	 * always land on `Data/` -- an archive entry cannot be replaced in place, which is what makes
+	 * the loose layer an overlay rather than a cache.
+	 *
+	 * Rebuilt by ReloadStore, which is what a pack or a *Sync* during the session calls.
+	 */
+	[[nodiscard]] const assetlib::AssetStore&
+	GetStore() const noexcept
+	{
+		// Create and Open both mount before they hand a Project back, so this holds for every
+		// Project that exists. It is an invariant of those two functions rather than of the type,
+		// which is what the assert is for.
+		assert(
+			m_Store.has_value() &&
+			"a Project is mounted by Create or Open before it is handed out");
+		return *m_Store;
+	}
+
+	/** Re-reads the archive, picking up one that has just been packed or replaced. */
+	void
+	ReloadStore();
+
 private:
 	Project() = default;
 
 	static constexpr auto c_DataDirectoryName = "Data";
 	static constexpr auto c_FormatVersion     = 1;
+
+	// Held rather than built per call: mounting an archive reads its header and entry table, which
+	// is not something an accessor should do. optional because a Project is default-constructed
+	// before Open fills it in.
+	std::optional<assetlib::AssetStore> m_Store;
 
 	std::string           m_Name;
 	std::filesystem::path m_ProjectFile;

@@ -36,6 +36,13 @@ namespace assetlib
 		std::vector<std::string> materialsDrawingLoose;
 	};
 
+	/**
+	 * What `pack` writes and the editor looks for, beside the data root rather than inside it: an
+	 * archive of a tree is not a member of it, and one packed into the tree it came from would be a
+	 * candidate for the next pack.
+	 */
+	inline constexpr std::string_view c_DefaultArchiveName = "Data.bpak";
+
 	struct PackDesc
 	{
 		/** The `.bpak` to write. Replaced only once the whole archive is on disk. */
