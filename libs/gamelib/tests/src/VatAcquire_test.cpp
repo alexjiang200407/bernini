@@ -19,6 +19,7 @@
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <core/file/file.h>
 
 // The end-to-end gate the plan reserves for gamelib: .gltf-shaped data synthesized to disk, baked
 // through the assetlib API on demand, loaded, drawn, and asserted on pixels -- the one test that
@@ -513,4 +514,45 @@ TEST_CASE("EnsureVatBaked owns the freshness rule", "[vat]")
 		game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
 	REQUIRE(restamped.clips.size() == 1);
 	CHECK(restamped.clips[0].frameCount == 4);
+}
+
+// A `.bvat` written before a container major bump does not parse. It is wholly derived and
+// git-ignored, so the load must fall through to a bake -- the alternative is that raising a major
+// makes every project that ever baked one unopenable until something sweeps them.
+TEST_CASE("A .bvat that cannot be read is re-baked, not thrown from", "[vat]")
+{
+	DataRoot root("bernini_vat_unreadable");
+	WriteRig(root.path);
+	const auto bvat = root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+
+	(void)game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+	REQUIRE(fs::exists(bvat));
+
+	SECTION("a stale container major")
+	{
+		// The major sits right after the magic, and every reader checks it before anything else.
+		auto bytes = core::file::read_file_bytes(bvat.string());
+		REQUIRE(bytes.size() > 6);
+		bytes[4] = std::byte{ 0 };
+		bytes[5] = std::byte{ 0 };
+		std::ofstream(bvat, std::ios::binary | std::ios::trunc)
+			.write(
+				reinterpret_cast<const char*>(bytes.data()),
+				static_cast<std::streamsize>(bytes.size()));
+
+		const auto rebaked =
+			game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+		REQUIRE(rebaked.clips.size() == 1);
+		CHECK(rebaked.stringPool.at(rebaked.clips[0].nameOffset) == "slide");
+	}
+
+	SECTION("a truncated file")
+	{
+		std::ofstream(bvat, std::ios::binary | std::ios::trunc) << "not a bvat";
+
+		const auto rebaked =
+			game::EnsureVatBaked(root.path, "Meshes/rig.bmesh", "Animations/rig.banim");
+		REQUIRE(rebaked.clips.size() == 1);
+		CHECK(rebaked.stringPool.at(rebaked.clips[0].nameOffset) == "slide");
+	}
 }

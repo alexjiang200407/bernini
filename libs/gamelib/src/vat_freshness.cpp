@@ -18,11 +18,19 @@ namespace game
 		std::error_code ec;
 		if (std::filesystem::exists(bvatAbs, ec))
 		{
-			auto vat = assetlib::loadVat(bvatAbs);
-			if (!assetlib::vatIsStale(vat, dataRoot) &&
-			    assetlib::normalizePath(vat.animations) ==
-			        assetlib::normalizePath(animationsRelPath))
-				return vat;
+			// A `.bvat` that will not parse -- truncated, or written before a major bump -- is
+			// treated as one that is not there. It is wholly derived and git-ignored, so re-baking it
+			// is always available and always cheaper than failing the load it was meant to serve.
+			try
+			{
+				auto vat = assetlib::loadVat(bvatAbs);
+				if (!assetlib::vatIsStale(vat, dataRoot) &&
+				    assetlib::normalizePath(vat.animations) ==
+				        assetlib::normalizePath(animationsRelPath))
+					return vat;
+			}
+			catch (const std::exception&)
+			{}
 		}
 
 		auto vat = assetlib::bakeVat(

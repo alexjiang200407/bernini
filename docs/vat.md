@@ -29,9 +29,10 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **A `.bvat` is a build product, not an asset.** Wholly derived from the three inputs it stamps
   (`.bmesh`, `.bskel`, `.banim`), git-ignored, written beside its mesh and named for the pair —
   `<mesh>@<clips>-<hash>.bvat`, `assetlib::vatPathFor` — so each clip set bakes once and switching
-  between them re-bakes nothing. Re-baked — never errored — when `vatIsStale` says an input moved
-  *or* it was baked from a different `.banim` than the one requested (`game::EnsureVatBaked` owns
-  that rule). The editor's Content Explorer does not list it, and deleting any of its inputs
+  between them re-bakes nothing. Re-baked — never errored — when `vatIsStale` says an input moved,
+  when it was baked from a different `.banim` than the one requested, *or* when it will not parse at
+  all, which a container written before a major bump does not (`game::EnsureVatBaked` owns that
+  rule). The editor's Content Explorer does not list it, and deleting any of its inputs
   sweeps it rather than being blocked by it (`DeletionPlan::derived`). `SourceStamp` is
   `{size, content-hash}`, so a checkout that rewrites mtimes without changing bytes re-bakes
   nothing.
