@@ -34,7 +34,10 @@ namespace bgl
 		m_ResourceManager(std::move(resourceManager)), m_TaaEnabled(desc.taaEnabled),
 		m_TaaAllocated(desc.taaEnabled)
 	{
-		SetSize(static_cast<uint32_t>(desc.width), static_cast<uint32_t>(desc.height));
+		SetSize(
+			static_cast<uint32_t>(desc.width),
+			static_cast<uint32_t>(desc.height),
+			desc.renderScale);
 
 		if (!desc.headless)
 		{
@@ -77,6 +80,13 @@ namespace bgl
 	void
 	RenderTarget::CreateAttachments()
 	{
+		CreateOutputAttachments();
+		CreateRenderAttachments();
+	}
+
+	void
+	RenderTarget::CreateOutputAttachments()
+	{
 		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
 		{
 			auto texDesc          = TextureDesc();
@@ -96,101 +106,6 @@ namespace bgl
 
 			m_Backbuffers[i].rtv = m_ResourceManager->CreateRtv(m_Backbuffers[i].texture, rtvDesc);
 		}
-
-		auto depthDesc   = TextureDesc();
-		depthDesc.width  = GetWidth();
-		depthDesc.height = GetHeight();
-		depthDesc.format = c_DepthFormat;
-		depthDesc.usage  = TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
-		depthDesc.initialLayout = BarrierLayout::kDepthWrite;
-		depthDesc.debugName     = "Depth Buffer";
-		depthDesc.clearValue.SetDepthStencil(1.0f, 0);
-
-		m_DepthTexture = m_ResourceManager->CreateTexture(depthDesc);
-
-		auto dsvDesc      = DsvDesc();
-		dsvDesc.format    = c_DepthFormat;
-		dsvDesc.debugName = "Depth Buffer DSV";
-
-		m_DepthDsv = m_ResourceManager->CreateDsv(m_DepthTexture, dsvDesc);
-
-		auto depthSrvDesc      = SrvDesc();
-		depthSrvDesc.format    = c_DepthFormat;
-		depthSrvDesc.debugName = "Depth Buffer SRV";
-
-		m_DepthSrv = m_ResourceManager->CreateSrv(m_DepthTexture, depthSrvDesc);
-
-		auto motionDesc   = TextureDesc();
-		motionDesc.width  = GetWidth();
-		motionDesc.height = GetHeight();
-		motionDesc.format = c_MotionFormat;
-		// kSRV as well: the buffer exists to be resampled by a later pass, and Metal bakes the usage
-		// into the texture at creation rather than deriving it from how it is bound.
-		motionDesc.usage = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-		motionDesc.initialLayout = BarrierLayout::kRenderTarget;
-		motionDesc.debugName     = "Motion Vectors";
-		motionDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
-
-		m_MotionTexture = m_ResourceManager->CreateTexture(motionDesc);
-
-		auto motionRtvDesc      = RtvDesc();
-		motionRtvDesc.format    = c_MotionFormat;
-		motionRtvDesc.debugName = "Motion Vectors RTV";
-
-		m_MotionRtv = m_ResourceManager->CreateRtv(m_MotionTexture, motionRtvDesc);
-
-		auto sceneColorDesc   = TextureDesc();
-		sceneColorDesc.width  = GetWidth();
-		sceneColorDesc.height = GetHeight();
-		sceneColorDesc.format = c_SceneColorFormat;
-		sceneColorDesc.usage =
-			TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-		sceneColorDesc.initialLayout = BarrierLayout::kRenderTarget;
-		sceneColorDesc.debugName     = "Scene Color";
-		sceneColorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
-
-		m_SceneColorTexture = m_ResourceManager->CreateTexture(sceneColorDesc);
-
-		auto sceneColorRtvDesc      = RtvDesc();
-		sceneColorRtvDesc.format    = c_SceneColorFormat;
-		sceneColorRtvDesc.debugName = "Scene Color RTV";
-
-		m_SceneColorRtv = m_ResourceManager->CreateRtv(m_SceneColorTexture, sceneColorRtvDesc);
-
-		auto sceneColorSrvDesc      = SrvDesc();
-		sceneColorSrvDesc.format    = c_SceneColorFormat;
-		sceneColorSrvDesc.debugName = "Scene Color SRV";
-
-		m_SceneColorSrv = m_ResourceManager->CreateSrv(m_SceneColorTexture, sceneColorSrvDesc);
-
-		auto motionSrvDesc      = SrvDesc();
-		motionSrvDesc.format    = c_MotionFormat;
-		motionSrvDesc.debugName = "Motion Vectors SRV";
-
-		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);
-
-		auto maskDesc   = TextureDesc();
-		maskDesc.width  = GetWidth();
-		maskDesc.height = GetHeight();
-		maskDesc.format = c_OutlineMaskFormat;
-		maskDesc.usage  = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-		maskDesc.initialLayout = BarrierLayout::kRenderTarget;
-		maskDesc.debugName     = "Outline Mask";
-		maskDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
-
-		m_OutlineMaskTexture = m_ResourceManager->CreateTexture(maskDesc);
-
-		auto maskRtvDesc      = RtvDesc();
-		maskRtvDesc.format    = c_OutlineMaskFormat;
-		maskRtvDesc.debugName = "Outline Mask RTV";
-
-		m_OutlineMaskRtv = m_ResourceManager->CreateRtv(m_OutlineMaskTexture, maskRtvDesc);
-
-		auto maskSrvDesc      = SrvDesc();
-		maskSrvDesc.format    = c_OutlineMaskFormat;
-		maskSrvDesc.debugName = "Outline Mask SRV";
-
-		m_OutlineMaskSrv = m_ResourceManager->CreateSrv(m_OutlineMaskTexture, maskSrvDesc);
 
 		if (!m_TaaAllocated)
 		{
@@ -226,7 +141,113 @@ namespace bgl
 	}
 
 	void
+	RenderTarget::CreateRenderAttachments()
+	{
+		auto depthDesc   = TextureDesc();
+		depthDesc.width  = GetRenderWidth();
+		depthDesc.height = GetRenderHeight();
+		depthDesc.format = c_DepthFormat;
+		depthDesc.usage  = TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
+		depthDesc.initialLayout = BarrierLayout::kDepthWrite;
+		depthDesc.debugName     = "Depth Buffer";
+		depthDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+		m_DepthTexture = m_ResourceManager->CreateTexture(depthDesc);
+
+		auto dsvDesc      = DsvDesc();
+		dsvDesc.format    = c_DepthFormat;
+		dsvDesc.debugName = "Depth Buffer DSV";
+
+		m_DepthDsv = m_ResourceManager->CreateDsv(m_DepthTexture, dsvDesc);
+
+		auto depthSrvDesc      = SrvDesc();
+		depthSrvDesc.format    = c_DepthFormat;
+		depthSrvDesc.debugName = "Depth Buffer SRV";
+
+		m_DepthSrv = m_ResourceManager->CreateSrv(m_DepthTexture, depthSrvDesc);
+
+		auto motionDesc   = TextureDesc();
+		motionDesc.width  = GetRenderWidth();
+		motionDesc.height = GetRenderHeight();
+		motionDesc.format = c_MotionFormat;
+		// kSRV as well: the buffer exists to be resampled by a later pass, and Metal bakes the usage
+		// into the texture at creation rather than deriving it from how it is bound.
+		motionDesc.usage = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+		motionDesc.initialLayout = BarrierLayout::kRenderTarget;
+		motionDesc.debugName     = "Motion Vectors";
+		motionDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+		m_MotionTexture = m_ResourceManager->CreateTexture(motionDesc);
+
+		auto motionRtvDesc      = RtvDesc();
+		motionRtvDesc.format    = c_MotionFormat;
+		motionRtvDesc.debugName = "Motion Vectors RTV";
+
+		m_MotionRtv = m_ResourceManager->CreateRtv(m_MotionTexture, motionRtvDesc);
+
+		auto sceneColorDesc   = TextureDesc();
+		sceneColorDesc.width  = GetRenderWidth();
+		sceneColorDesc.height = GetRenderHeight();
+		sceneColorDesc.format = c_SceneColorFormat;
+		sceneColorDesc.usage =
+			TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+		sceneColorDesc.initialLayout = BarrierLayout::kRenderTarget;
+		sceneColorDesc.debugName     = "Scene Color";
+		sceneColorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+		m_SceneColorTexture = m_ResourceManager->CreateTexture(sceneColorDesc);
+
+		auto sceneColorRtvDesc      = RtvDesc();
+		sceneColorRtvDesc.format    = c_SceneColorFormat;
+		sceneColorRtvDesc.debugName = "Scene Color RTV";
+
+		m_SceneColorRtv = m_ResourceManager->CreateRtv(m_SceneColorTexture, sceneColorRtvDesc);
+
+		auto sceneColorSrvDesc      = SrvDesc();
+		sceneColorSrvDesc.format    = c_SceneColorFormat;
+		sceneColorSrvDesc.debugName = "Scene Color SRV";
+
+		m_SceneColorSrv = m_ResourceManager->CreateSrv(m_SceneColorTexture, sceneColorSrvDesc);
+
+		auto motionSrvDesc      = SrvDesc();
+		motionSrvDesc.format    = c_MotionFormat;
+		motionSrvDesc.debugName = "Motion Vectors SRV";
+
+		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);
+
+		auto maskDesc   = TextureDesc();
+		maskDesc.width  = GetRenderWidth();
+		maskDesc.height = GetRenderHeight();
+		maskDesc.format = c_OutlineMaskFormat;
+		maskDesc.usage  = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+		maskDesc.initialLayout = BarrierLayout::kRenderTarget;
+		maskDesc.debugName     = "Outline Mask";
+		maskDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+		m_OutlineMaskTexture = m_ResourceManager->CreateTexture(maskDesc);
+
+		auto maskRtvDesc      = RtvDesc();
+		maskRtvDesc.format    = c_OutlineMaskFormat;
+		maskRtvDesc.debugName = "Outline Mask RTV";
+
+		m_OutlineMaskRtv = m_ResourceManager->CreateRtv(m_OutlineMaskTexture, maskRtvDesc);
+
+		auto maskSrvDesc      = SrvDesc();
+		maskSrvDesc.format    = c_OutlineMaskFormat;
+		maskSrvDesc.debugName = "Outline Mask SRV";
+
+		m_OutlineMaskSrv = m_ResourceManager->CreateSrv(m_OutlineMaskTexture, maskSrvDesc);
+	}
+
+	void
 	RenderTarget::ReleaseAttachments() noexcept
+	{
+		ReleaseOutputAttachments();
+		ReleaseRenderAttachments();
+	}
+
+	void
+	RenderTarget::ReleaseOutputAttachments() noexcept
 	{
 		for (Backbuffer& backbuffer : m_Backbuffers)
 		{
@@ -248,9 +269,16 @@ namespace bgl
 			history = {};
 		}
 
-		// The accumulation cannot be rescaled, so a resize starts it over.
 		m_HistoryValid        = false;
 		m_CurrentHistoryIndex = 0;
+	}
+
+	void
+	RenderTarget::ReleaseRenderAttachments() noexcept
+	{
+		// The accumulation describes samples the new grid does not take, so whatever rebuilds these
+		// starts it over -- the buffers themselves are the output's and stay.
+		m_HistoryValid = false;
 
 		if (!m_OutlineMaskSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_OutlineMaskSrv, false);
@@ -336,7 +364,7 @@ namespace bgl
 	{
 		ReleaseAttachments();
 
-		SetSize(width, height);
+		SetSize(width, height, GetRenderScale());
 
 		if (m_Layer != nullptr)
 		{
@@ -349,5 +377,21 @@ namespace bgl
 		m_FrameFences.fill(0);
 		m_FrameIndex         = 0;
 		m_LastPresentedIndex = 0;
+	}
+
+	void
+	RenderTarget::SetRenderScale(float scale)
+	{
+		if (scale == GetRenderScale())
+		{
+			return;
+		}
+
+		// Only what the render size sizes. The backbuffers and the histories are the output's and a
+		// scale does not move it, so the frame ring keeps describing textures that still exist and
+		// needs no reset.
+		ReleaseRenderAttachments();
+		SetSize(GetWidth(), GetHeight(), scale);
+		CreateRenderAttachments();
 	}
 }

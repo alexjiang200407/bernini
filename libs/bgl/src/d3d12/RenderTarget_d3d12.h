@@ -268,9 +268,17 @@ namespace bgl
 		void
 		ResizeBackbuffers(uint32_t width, uint32_t height) override;
 
+		void
+		SetRenderScale(float scale) override;
+
 	private:
 		void
 		CreateSwapchain(HWND hWnd);
+
+		// Rebuilds every backbuffer handle and attachment against the sizes now recorded, and
+		// resets the frame ring -- the half a resize and a scale change have in common.
+		void
+		RecreateRenderTargets();
 
 		void
 		CreateRenderTargets();
@@ -280,6 +288,20 @@ namespace bgl
 
 		void
 		CreateAttachments();
+
+		// Split by which size owns them: a render scale rebuilds only the render half, where a
+		// resize rebuilds both.
+		void
+		CreateRenderAttachments();
+
+		void
+		CreateHistoryAttachments();
+
+		void
+		DestroyRenderAttachments();
+
+		void
+		DestroyHistoryAttachments();
 
 		void
 		DestroyRenderTargets();

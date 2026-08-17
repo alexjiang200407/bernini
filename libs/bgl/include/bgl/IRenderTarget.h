@@ -11,10 +11,16 @@ namespace bgl
 	 */
 	struct RenderTargetDesc
 	{
+		// The output size: what is presented, captured, and accumulated into.
 		int  width      = 0;
 		int  height     = 0;
 		bool headless   = false;
 		bool taaEnabled = false;
+
+		// How dense the grid the geometry passes render on is, relative to the output size. Below
+		// 1.0 the TAA resolve reconstructs the output from the jittered render frames; above it,
+		// the same resolve is a downsample. Nothing outside the resolve sees both grids.
+		float renderScale = 1.0f;
 
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless.
@@ -39,11 +45,23 @@ namespace bgl
 		IRenderTarget&
 		operator=(const IRenderTarget&) noexcept = delete;
 
+		/** The output size: the backbuffer's, the TAA history's, and every capture's. */
 		virtual uint32_t
 		GetWidth() const noexcept = 0;
 
 		virtual uint32_t
 		GetHeight() const noexcept = 0;
+
+		/**
+		 * The size the geometry passes render at -- the output size scaled by
+		 * `RenderTargetDesc::renderScale` and floored at one pixel. Equal to the output size at
+		 * scale 1.0.
+		 */
+		[[nodiscard]] virtual uint32_t
+		GetRenderWidth() const noexcept = 0;
+
+		[[nodiscard]] virtual uint32_t
+		GetRenderHeight() const noexcept = 0;
 
 		/** Whether temporal AA is running on this target -- jitter applied and history accumulated. */
 		[[nodiscard]] virtual bool

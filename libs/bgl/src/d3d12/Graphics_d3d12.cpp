@@ -97,6 +97,12 @@ namespace bgl
 		}
 
 		void
+		SetRenderScale(const RenderTargetRef& target, float scale) override
+		{
+			m_Context->SetRenderScale(target, scale);
+		}
+
+		void
 		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath) override
 		{
 			m_Context->ScreenshotPng(target, filepath);

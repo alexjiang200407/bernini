@@ -5,6 +5,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VatSynth.h"
+#include "util/jitter.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -998,4 +999,140 @@ TEST_CASE(
 
 	INFO("edge box delta, alone against sharing the renderer: " << delta);
 	CHECK(delta == 0.0f);
+}
+
+// The two grids and how one derives from the other. Every figure this file measures is read at the
+// default scale, where they coincide -- so what this pins is that the default really is the
+// coincidence, and that a scale moves the render grid and nothing else.
+TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][render]")
+{
+	auto gfx = bgl::CreateGraphics(TestOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc       = bgl::RenderTargetDesc();
+	targetDesc.width      = static_cast<int>(c_Width);
+	targetDesc.height     = static_cast<int>(c_Height);
+	targetDesc.headless   = true;
+	targetDesc.taaEnabled = true;
+
+	SECTION("the default scale leaves the two the same size")
+	{
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK(target->GetRenderWidth() == target->GetWidth());
+		CHECK(target->GetRenderHeight() == target->GetHeight());
+	}
+
+	SECTION("a scale below one renders on a coarser grid, presenting at the same size")
+	{
+		targetDesc.renderScale = 0.5f;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK(target->GetWidth() == c_Width);
+		CHECK(target->GetHeight() == c_Height);
+		CHECK(target->GetRenderWidth() == c_Width / 2);
+		CHECK(target->GetRenderHeight() == c_Height / 2);
+	}
+
+	SECTION("a scale above one supersamples, and still presents at the same size")
+	{
+		targetDesc.renderScale = 2.0f;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK(target->GetWidth() == c_Width);
+		CHECK(target->GetRenderWidth() == c_Width * 2);
+	}
+
+	SECTION("a resize keeps the scale")
+	{
+		targetDesc.renderScale = 0.5f;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		gfx->Resize(target, c_Width * 2, c_Height * 2);
+
+		CHECK(target->GetWidth() == c_Width * 2);
+		CHECK(target->GetRenderWidth() == c_Width);
+	}
+
+	SECTION("the scale can be changed on a live target, without moving the output")
+	{
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto scene = gfx->CreateScene(QuadSceneDesc());
+		auto view  = gfx->CreateSceneView(scene, 4);
+		AddQuad(scene, view);
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = Camera();
+		job.viewport = FullViewport();
+
+		gfx->DrawFrame(target, job);
+
+		auto* base = target->As<bgl::RenderTargetBase>();
+		REQUIRE(base != nullptr);
+
+		// What a scale change must not disturb: the output grid, and so the backbuffers and the two
+		// histories allocated against it.
+		const bgl::TextureHandle backbuffer = base->GetBackbufferTexture(0);
+		const bgl::TextureHandle history    = base->GetHistoryTexture(0);
+
+		REQUIRE(base->IsHistoryValid());
+
+		gfx->SetRenderScale(target, 0.5f);
+
+		CHECK(target->GetWidth() == c_Width);
+		CHECK(target->GetHeight() == c_Height);
+		CHECK(target->GetRenderWidth() == c_Width / 2);
+		CHECK(target->GetRenderHeight() == c_Height / 2);
+
+		// The same textures, not merely the same size: rebuilding them would cost the frame ring its
+		// fences and the accumulation its buffers, for a change that moved neither grid they sit on.
+		CHECK(base->GetBackbufferTexture(0) == backbuffer);
+		CHECK(base->GetHistoryTexture(0) == history);
+
+		// The accumulation is dropped even though its buffers are kept: it describes samples the new
+		// render grid does not take.
+		CHECK_FALSE(base->IsHistoryValid());
+
+		// The frame after must still draw: every attachment the geometry passes write was released
+		// and rebuilt underneath it.
+		CHECK_NOTHROW(gfx->DrawFrame(target, job));
+	}
+
+	SECTION("a scale that is not a positive number is the caller's error")
+	{
+		targetDesc.renderScale = 0.0f;
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+
+		targetDesc.renderScale = -1.0f;
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+
+		targetDesc.renderScale = std::numeric_limits<float>::quiet_NaN();
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+	}
+}
+
+// Eight positions walk one render pixel, and the resolve at scale 1.0 is what every measured figure
+// in this file was taken against -- so the length must not move there. It grows only where the
+// output grid is denser than the render one and those eight would have to serve four pixels each.
+TEST_CASE("The jitter sequence grows only when the output grid is denser", "[taa]")
+{
+	CHECK(bgl::JitterSequenceLength(256, 256, 256, 256) == bgl::c_JitterSequenceLength);
+
+	// Supersampling: every output pixel already sees several render samples per frame.
+	CHECK(bgl::JitterSequenceLength(512, 512, 256, 256) == bgl::c_JitterSequenceLength);
+
+	CHECK(bgl::JitterSequenceLength(128, 128, 256, 256) == 4 * bgl::c_JitterSequenceLength);
+
+	// Capped: past this the tail costs more than the phases are worth.
+	CHECK(bgl::JitterSequenceLength(64, 64, 256, 256) == bgl::c_MaxJitterSequenceLength);
 }

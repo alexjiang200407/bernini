@@ -245,6 +245,9 @@ namespace bgl
 		void
 		ResizeBackbuffers(uint32_t width, uint32_t height) override;
 
+		void
+		SetRenderScale(float scale) override;
+
 	private:
 		struct Backbuffer
 		{
@@ -262,10 +265,24 @@ namespace bgl
 		void
 		CreateAttachments();
 
+		// Split by which size owns them: a render scale rebuilds only the render half, where a
+		// resize rebuilds both.
+		void
+		CreateOutputAttachments();
+
+		void
+		CreateRenderAttachments();
+
 		// Frees every texture and view the ring owns. Immediate, not deferred: the caller has
 		// already idled the GPU for this target, which is the precondition ResizeBackbuffers states.
 		void
 		ReleaseAttachments() noexcept;
+
+		void
+		ReleaseOutputAttachments() noexcept;
+
+		void
+		ReleaseRenderAttachments() noexcept;
 
 		// Blits the frame just recorded into the layer's next drawable and presents it. Null layer
 		// (headless) is a no-op.
