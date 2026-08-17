@@ -4,11 +4,8 @@
 #include <QWidget>
 
 #include <assetlib/asset_refs.h>
-#include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BMeshImport.h>
 
 #include "Thumbnails/TexturePreviewCache.h"
-#include "Windows/AssetImporter/AssetImporterDialog.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "ui_ContentExplorerWindow.h"
@@ -60,121 +57,6 @@ public:
 	{
 		return m_TexturePreviews;
 	}
-
-	/**
-	 * Derives a `.bmaterial` from every PBR material `imported` carries, writes it under `materialDir`,
-	 * and points each submesh cut from it at the file (relative to `dataRoot`, like every asset
-	 * reference). Each is routed at the `texN.ktx2` files `writeTextures` puts in `textureDir`.
-	 *
-	 * Non-PBR materials are skipped, leaving their submeshes unassigned -- which both runtimes already
-	 * render unlit. Every file is written before any submesh is pointed at one, so a failure part-way
-	 * leaves a mesh naming only materials that exist.
-	 *
-	 * Public, and taking everything it needs, because the import that calls it cannot be driven from a
-	 * test -- it is behind a modal dialog -- and this is the half worth pinning.
-	 *
-	 * @param stems The file stem to write each material under, index-aligned with
-	 *        `imported.materials` and empty where no file is wanted. The dialog shows these before the
-	 *        import runs, so they are given rather than derived -- deriving them here as well is how a
-	 *        preview and a file come to disagree. See editor::MaterialStems for the defaults.
-	 * @throws std::runtime_error if a file cannot be written, or if `stems` does not cover
-	 *         `imported.materials` -- which means the source was rewritten between the probe that
-	 *         named them and the parse that produced these materials.
-	 */
-	static void
-	WriteImportedMaterials(
-		const assetlib::imp::BMeshImport& imported,
-		assetlib::BMesh&                  mesh,
-		const std::filesystem::path&      dataRoot,
-		const std::filesystem::path&      materialDir,
-		const std::filesystem::path&      textureDir,
-		std::span<const QString>          stems);
-
-	/**
-	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
-	 * and points `mesh` at the skeleton by a data-root-relative path.
-	 *
-	 * The skeleton is not optional and is deliberately not behind the dialog's checkbox. A joint index
-	 * is a bare number into a bone array, so a mesh carrying joints while naming no skeleton is one
-	 * `assetlib::save` refuses outright; the clips are the half a user can decline.
-	 *
-	 * Does nothing when the import carried no skin, which is what a static mesh is.
-	 *
-	 * @throws std::runtime_error if either file cannot be written.
-	 */
-	static void
-	WriteImportedRig(
-		const assetlib::imp::BMeshImport& imported,
-		assetlib::BMesh&                  mesh,
-		const std::filesystem::path&      dataRoot,
-		const std::filesystem::path&      bskelPath,
-		const std::filesystem::path&      banimPath,
-		bool                              writeClips);
-
-	/**
-	 * Writes `mesh` to `bmeshPath`, creating the directory the path names first: an import aimed
-	 * at a subfolder lands at `Meshes/<folder>/`, which nothing else creates -- `assetlib::save`
-	 * opens the file where it stands.
-	 *
-	 * @throws std::runtime_error if the file cannot be written.
-	 */
-	static void
-	WriteImportedMesh(const assetlib::BMesh& mesh, const std::filesystem::path& bmeshPath);
-
-	/** A file an import writes, and whether the import is the one that made it. */
-	struct ImportedFile
-	{
-		std::filesystem::path path;
-		bool                  existed = false;  // whether it was there before the import started
-	};
-
-	/** A directory an import writes into, and whether the import is the one that made it. */
-	struct ImportedDir
-	{
-		std::filesystem::path path;             // empty when the import writes no such directory
-		bool                  existed = false;  // whether it was there before the import started
-		std::string_view      categoryRoot;  // the category it sits under, never itself removable
-	};
-
-	/**
-	 * Deletes what an import got as far as writing, so a cancelled or failed one leaves nothing behind:
-	 * a `.bmesh` naming textures that were never extracted, or a half-supercompressed texture folder.
-	 *
-	 * Only what the import itself created, and never anything that was already there -- a texture folder
-	 * that predates the import is left alone, files and all, because the user was asked before it was
-	 * written into and its other contents are not ours to delete.
-	 *
-	 * A materials folder shared with another import is why the material files are listed in `files`
-	 * one by one: the folder cannot be taken down, so the only way to leave the other import intact is
-	 * to remove exactly the files this one wrote.
-	 */
-	static void
-	RollBack(std::span<const ImportedFile> files, std::span<const ImportedDir> dirs);
-
-	/**
-	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
-	 *
-	 * What lets an import with the mesh turned off find the rig its clips belong to.
-	 *
-	 * @throws std::runtime_error if more than one rig matches, since which one the clips attach to
-	 *         would otherwise depend on directory order.
-	 */
-	[[nodiscard]] static std::filesystem::path
-	FindMatchingSkeleton(const std::filesystem::path& dataRoot, const assetlib::Skeleton& skeleton);
-
-	/**
-	 * Writes only `imported`'s clips, attached to a rig already in the project -- what an import with
-	 * the mesh turned off does, and how a rig whose animations the artist exported one per file gets
-	 * all of them without a copy of the geometry each time.
-	 *
-	 * @throws std::runtime_error if the file carries no clips or no rig, or if no skeleton in
-	 *         `dataRoot` matches the one it was authored against.
-	 */
-	static void
-	WriteImportedClips(
-		const assetlib::imp::BMeshImport& imported,
-		const std::filesystem::path&      dataRoot,
-		const std::filesystem::path&      banimPath);
 
 Q_SIGNALS:
 	/**
@@ -232,61 +114,6 @@ private:
 	 */
 	void
 	NavigateBack();
-
-	/** What became of an import, so a multi-file drop knows whether to carry on with the next one. */
-	enum class ImportOutcome
-	{
-		kImported,
-		kCancelled,  // by the user, on the loading screen
-		kBlocked,    // an asset of that name already exists; reported to the user
-		kFailed,     // already reported to the user
-	};
-
-	/** What the import dialog asked for. */
-	struct ImportOptions
-	{
-		// Every file to write, already inside its own category.
-		ImportOutputs outputs;
-
-		bool mesh         = true;  // off imports only the pieces below -- see ImportMesh
-		bool textures     = false;
-		bool pbrMaterials = false;  // ignored without textures -- a material routes at those
-		bool animations   = false;  // the clips; the skeleton rides with the mesh
-	};
-
-	/**
-	 * Converts a dropped glTF/glb into the engine's on-disk form.
-	 *
-	 * Which category each piece lands in is decided by what it is, not by where the drop happened: the
-	 * mesh under `Meshes/`, the rig under `Skeletons/`, the clips under `Animations/`.
-	 * `options.destinations` says where inside each -- a project's references are written against that
-	 * layout, so an import may organise within a category and never across one.
-	 *
-	 * Parsing and supercompressing the textures run on a worker thread behind a cancellable loading
-	 * screen: they take long enough to freeze the editor. Nothing there touches bgl. The material
-	 * graphs are built afterwards, back on the UI thread -- their nodes own QPixmaps, which belong to
-	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
-	 *
-	 * Refuses to overwrite anything, reports a failure to the user, and on either a failure or a cancel
-	 * removes the half-written files it had produced -- see RollBack.
-	 *
-	 * What counts as a collision differs by category. A materials folder may be shared with another
-	 * import, since `options.outputs` names each file, so only a colliding *file* refuses this one. A
-	 * texture folder may not: `writeTextures` names its output by index, so one already there is
-	 * another import's and writing into it would overwrite that import's files.
-	 */
-	[[nodiscard]] ImportOutcome
-	ImportMesh(const QString& sourceFile, const ImportOptions& options);
-
-	/**
-	 * Converts a dropped Radiance `.hdr` into the environment family: a `.bsky`, the `.benvl`
-	 * convolved from the same radiance, and the `.benv` naming the pair.
-	 *
-	 * Unlike ImportMesh there is no RollBack here -- `assetlib::importEnvironment` undoes its own
-	 * half-written work, including on a cancel, so the editor has nothing to clean up after.
-	 */
-	[[nodiscard]] ImportOutcome
-	ImportEnvironment(const QString& sourceFile);
 
 	/** Detaches the models and disables the explorer, leaving both views empty. */
 	void
