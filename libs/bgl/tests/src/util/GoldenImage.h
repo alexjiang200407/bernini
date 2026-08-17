@@ -89,4 +89,31 @@ namespace bgl::test
 		const std::string& path,
 		const std::string& referencePath,
 		float              threshold = 0.02f);
+
+	/**
+	 * Mean absolute difference between `path` and `truthPath` box-downsampled by `factor`, over the
+	 * `w` x `h` box at (`x`, `y`) in `path`'s pixels — each channel in [0,1], so zero is agreement.
+	 *
+	 * The truth is a render of the same frame at `factor` times the linear resolution, unjittered
+	 * and unaccumulated: `factor`^2 samples per pixel, box-filtered down here rather than written
+	 * back out. It is the only instrument in this file that can say a frame is *right* rather than
+	 * merely unchanged or self-consistent — a golden pins the former, `AliasEnergy` measures energy
+	 * without asking whether it belongs, and moire scores as detail under both.
+	 *
+	 * Absolute rather than squared, deliberately: squaring rewards a blur that splits the difference
+	 * over a sharp answer half a pixel out of phase, which is the wrong way round for a measurement
+	 * about reconstructing sub-pixel structure.
+	 *
+	 * @throws std::runtime_error if either image cannot be read, the truth is not exactly `factor`
+	 *         times the candidate in both axes, or the box is not wholly inside the candidate.
+	 */
+	[[nodiscard]] float
+	MeanAbsDiffToTruth(
+		const std::string& path,
+		const std::string& truthPath,
+		int                factor,
+		int                x,
+		int                y,
+		int                w,
+		int                h);
 }

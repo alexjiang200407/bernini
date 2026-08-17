@@ -12,6 +12,7 @@
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 namespace
 {
@@ -35,6 +36,10 @@ namespace
 		uint32_t width    = c_Width;
 		uint32_t height   = c_Height;
 		float    fovScale = 1.0f;
+
+		// The output size is `width` x `height` whatever this is; below 1.0 the geometry passes draw
+		// on a coarser grid and the resolve reconstructs the frame back onto the output one.
+		float renderScale = 1.0f;
 
 		[[nodiscard]] float
 		TanHalfFov() const noexcept
@@ -483,11 +488,12 @@ namespace
 		auto gfx = bgl::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
-		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(frame.width);
-		targetDesc.height     = static_cast<int>(frame.height);
-		targetDesc.headless   = true;
-		targetDesc.taaEnabled = taaEnabled;
+		auto targetDesc        = bgl::RenderTargetDesc();
+		targetDesc.width       = static_cast<int>(frame.width);
+		targetDesc.height      = static_cast<int>(frame.height);
+		targetDesc.headless    = true;
+		targetDesc.taaEnabled  = taaEnabled;
+		targetDesc.renderScale = frame.renderScale;
 
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
@@ -1238,6 +1244,11 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 // lighting the stochastic path samples, so the converged hashed card should match it pixel for
 // pixel, and the display curve cancels out of the ratio. `survived` below 1 is coverage the
 // resolve destroyed; the frame-to-frame delta is the flicker where it is being rebuilt.
+//
+// Run at both render scales. What the hash generates is a render-size decision the LOD bias makes,
+// and reconstructing onto a denser output grid must not move it: both sides of the ratio render at
+// the same scale, so a shift in `survived` would be the reconstruction reaching into the coverage
+// rather than the accumulation it is supposed to reach into.
 TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][taa][render]")
 {
 	struct Rung
@@ -1252,6 +1263,11 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 	} };
 
 	const float tanHalfFov = std::tan(glm::radians(30.0f));
+
+	const float scale = GENERATE(1.0f, 0.5f);
+	const Frame scaledFrame{ c_Width, c_Height, 1.0f, scale };
+
+	CAPTURE(scale);
 
 	for (const auto& rung : c_Rungs)
 	{
@@ -1277,9 +1293,16 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 			MeanMipAlpha(strandImage, hi),
 			mipF - std::floor(mipF));
 
-		const auto base = std::string("assets/golden/strand_coverage_") + rung.name;
+		const auto base = std::string("assets/golden/strand_coverage_") + rung.name + "_" +
+		                  std::to_string(static_cast<int>(scale * 100.0f));
 
-		PatchScene hashed = MakeCardScene(std::move(strandImage), true, false, rung.cameraZ);
+		PatchScene hashed = MakeCardScene(
+			std::move(strandImage),
+			true,
+			false,
+			rung.cameraZ,
+			bgl::LayerType::kHashed,
+			scaledFrame);
 		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
 		{
 			hashed.gfx->DrawFrame(hashed.target, hashed.job);
@@ -1303,7 +1326,8 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 			true,
 			false,
 			rung.cameraZ,
-			bgl::LayerType::kBlend);
+			bgl::LayerType::kBlend,
+			scaledFrame);
 		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
 		{
 			blend.gfx->DrawFrame(blend.target, blend.job);
@@ -1320,19 +1344,28 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 		// WARN rather than INFO so the figures print on a passing run too: the deficit and its
 		// trend with distance are what this instrument exists to show.
 		WARN(
-			rung.name << ": span " << spanPx << "px  mip " << mipF << "  chain mean alpha "
-					  << expected << "  blend luma " << blendMean.Luma() << "  survived "
-					  << survived << "  flicker " << flicker);
+			rung.name << " at render scale " << scale << ": span " << spanPx << "px  mip " << mipF
+					  << "  chain mean alpha " << expected << "  blend luma " << blendMean.Luma()
+					  << "  survived " << survived << "  flicker " << flicker);
 
-		// 0.74 near and mid, 1.05 far, measured; the wiping resolve scored 0.23. Below 1 is the
-		// minification sharpening trading mid-band energy for far-field crispness -- values under
-		// the cutoff are crushed before the step limit re-conserves coverage -- and the bracket
-		// guards both directions: hair that vanishes and hair that doubles.
+		// 0.74 near and mid, 1.05 far, measured at full render scale; the wiping resolve scored
+		// 0.23. Below 1 is the minification sharpening trading mid-band energy for far-field
+		// crispness -- values under the cutoff are crushed before the step limit re-conserves
+		// coverage -- and the bracket guards both directions: hair that vanishes and hair that
+		// doubles.
+		//
+		// Half render scale puts every rung at twice its footprint, and coverage rises with it: 1.57
+		// far, measured. That is the render size and not the reconstruction, which is why the ceiling
+		// moves with the scale rather than the floor. The `[resolution]` sweep is the evidence -- it
+		// renders at 128 and 64 with no reconstruction anywhere and the same hashed-against-blend
+		// ratio is already 1.29 and 1.62 there.
 		CHECK(survived > 0.6f);
-		CHECK(survived < 1.4f);
+		CHECK(survived < (scale < 1.0f ? 1.8f : 1.4f));
 
-		// 1.8e-5 to 4.4e-5 measured -- sharpened alpha leaves few partial values to flip coins
-		// with. The wiping resolve's rebuild cycle scored 7.5e-4 to 1.8e-3.
+		// 1.8e-5 to 4.4e-5 measured at full render scale, and 1.0e-4 to 1.6e-4 at half, where each
+		// output pixel takes a strong sample only on the phases that serve it -- sharpened alpha
+		// still leaves few partial values to flip coins with. The wiping resolve's rebuild cycle
+		// scored 7.5e-4 to 1.8e-3.
 		CHECK(flicker < 2e-4f);
 	}
 }
@@ -1502,6 +1535,27 @@ TEST_CASE(
 				LayerName(layer) << " " << size << "x" << size << ": flicker = " << m.flicker
 								 << "  detail = " << m.detail << "  luma = " << m.luma);
 		}
+	}
+}
+
+// The rung the output-resolution accumulation adds, and the one the editor's Render Scale now
+// produces: the same frame at the same output density, drawn on half the grid and reconstructed back
+// onto it. The strand's pixel footprint on the *output* grid is unchanged, so what this isolates is
+// what the reconstruction costs -- and what it must not do is move the coverage the hash generates,
+// which is a render-size decision the LOD bias makes and this does not touch.
+TEST_CASE(
+	"A hashed card is measured across render scales",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const float scale : { 1.0f, 0.5f })
+	{
+		const Frame frame{ c_Width, c_Height, 1.0f, scale };
+		const auto  m =
+			MeasureStrands(frame, "scale_" + std::to_string(static_cast<int>(scale * 100.0f)));
+
+		WARN(
+			"render scale " << scale << ": flicker = " << m.flicker << "  detail = " << m.detail
+							<< "  luma = " << m.luma << "  box = " << m.boxSize);
 	}
 }
 
