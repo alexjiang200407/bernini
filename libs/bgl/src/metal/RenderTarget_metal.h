@@ -37,18 +37,6 @@ namespace bgl
 		~RenderTarget() noexcept override;
 
 		[[nodiscard]] uint32_t
-		GetWidth() const noexcept override
-		{
-			return m_Width;
-		}
-
-		[[nodiscard]] uint32_t
-		GetHeight() const noexcept override
-		{
-			return m_Height;
-		}
-
-		[[nodiscard]] uint32_t
 		GetFrameIndex() const noexcept override
 		{
 			return m_FrameIndex;
@@ -291,11 +279,9 @@ namespace bgl
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
 
-		uint32_t m_Width          = 0;
-		uint32_t m_Height         = 0;
-		bool     m_TaaEnabled     = false;
-		bool     m_OutlineEnabled = true;
-		bool     m_TaaAllocated   = false;
+		bool m_TaaEnabled     = false;
+		bool m_OutlineEnabled = true;
+		bool m_TaaAllocated   = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};

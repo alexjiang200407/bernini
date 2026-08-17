@@ -31,10 +31,11 @@ namespace bgl
 		CommandQueueRef         queue,
 		ResourceManagerRef      resourceManager) :
 		m_Device(std::move(device)), m_Queue(std::move(queue)),
-		m_ResourceManager(std::move(resourceManager)), m_Width(static_cast<uint32_t>(desc.width)),
-		m_Height(static_cast<uint32_t>(desc.height)), m_TaaEnabled(desc.taaEnabled),
+		m_ResourceManager(std::move(resourceManager)), m_TaaEnabled(desc.taaEnabled),
 		m_TaaAllocated(desc.taaEnabled)
 	{
+		SetSize(static_cast<uint32_t>(desc.width), static_cast<uint32_t>(desc.height));
+
 		if (!desc.headless)
 		{
 			if (desc.wnd == nullptr)
@@ -55,7 +56,7 @@ namespace bgl
 			// would forbid.
 			m_Layer->setFramebufferOnly(false);
 			m_Layer->setDrawableSize(
-				CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
+				CGSize{ static_cast<CGFloat>(GetWidth()), static_cast<CGFloat>(GetHeight()) });
 		}
 
 		for (CommandAllocatorRef& allocator : m_FrameAllocators)
@@ -79,8 +80,8 @@ namespace bgl
 		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
 		{
 			auto texDesc          = TextureDesc();
-			texDesc.width         = m_Width;
-			texDesc.height        = m_Height;
+			texDesc.width         = GetWidth();
+			texDesc.height        = GetHeight();
 			texDesc.format        = c_BackbufferFormat;
 			texDesc.usage         = TextureUsageFlag::kRenderTarget;
 			texDesc.initialLayout = BarrierLayout::kRenderTarget;
@@ -97,8 +98,8 @@ namespace bgl
 		}
 
 		auto depthDesc   = TextureDesc();
-		depthDesc.width  = m_Width;
-		depthDesc.height = m_Height;
+		depthDesc.width  = GetWidth();
+		depthDesc.height = GetHeight();
 		depthDesc.format = c_DepthFormat;
 		depthDesc.usage  = TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
 		depthDesc.initialLayout = BarrierLayout::kDepthWrite;
@@ -120,8 +121,8 @@ namespace bgl
 		m_DepthSrv = m_ResourceManager->CreateSrv(m_DepthTexture, depthSrvDesc);
 
 		auto motionDesc   = TextureDesc();
-		motionDesc.width  = m_Width;
-		motionDesc.height = m_Height;
+		motionDesc.width  = GetWidth();
+		motionDesc.height = GetHeight();
 		motionDesc.format = c_MotionFormat;
 		// kSRV as well: the buffer exists to be resampled by a later pass, and Metal bakes the usage
 		// into the texture at creation rather than deriving it from how it is bound.
@@ -139,8 +140,8 @@ namespace bgl
 		m_MotionRtv = m_ResourceManager->CreateRtv(m_MotionTexture, motionRtvDesc);
 
 		auto sceneColorDesc   = TextureDesc();
-		sceneColorDesc.width  = m_Width;
-		sceneColorDesc.height = m_Height;
+		sceneColorDesc.width  = GetWidth();
+		sceneColorDesc.height = GetHeight();
 		sceneColorDesc.format = c_SceneColorFormat;
 		sceneColorDesc.usage =
 			TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
@@ -169,8 +170,8 @@ namespace bgl
 		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);
 
 		auto maskDesc   = TextureDesc();
-		maskDesc.width  = m_Width;
-		maskDesc.height = m_Height;
+		maskDesc.width  = GetWidth();
+		maskDesc.height = GetHeight();
 		maskDesc.format = c_OutlineMaskFormat;
 		maskDesc.usage  = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
 		maskDesc.initialLayout = BarrierLayout::kRenderTarget;
@@ -199,8 +200,8 @@ namespace bgl
 		for (uint32_t i = 0; i < m_History.size(); ++i)
 		{
 			auto historyDesc   = TextureDesc();
-			historyDesc.width  = m_Width;
-			historyDesc.height = m_Height;
+			historyDesc.width  = GetWidth();
+			historyDesc.height = GetHeight();
 			historyDesc.format = c_SceneColorFormat;
 			historyDesc.usage =
 				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
@@ -335,12 +336,12 @@ namespace bgl
 	{
 		ReleaseAttachments();
 
-		m_Width  = width;
-		m_Height = height;
+		SetSize(width, height);
+
 		if (m_Layer != nullptr)
 		{
 			m_Layer->setDrawableSize(
-				CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
+				CGSize{ static_cast<CGFloat>(GetWidth()), static_cast<CGFloat>(GetHeight()) });
 		}
 		CreateAttachments();
 

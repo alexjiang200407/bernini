@@ -60,18 +60,6 @@ namespace bgl
 		operator=(RenderTarget&&) noexcept = delete;
 
 		[[nodiscard]] uint32_t
-		GetWidth() const noexcept override
-		{
-			return static_cast<uint32_t>(m_Width);
-		}
-
-		[[nodiscard]] uint32_t
-		GetHeight() const noexcept override
-		{
-			return static_cast<uint32_t>(m_Height);
-		}
-
-		[[nodiscard]] uint32_t
 		GetFrameIndex() const noexcept override
 		{
 			return m_FrameIndex;
@@ -306,8 +294,6 @@ namespace bgl
 		bool  m_TaaAllocated   = false;
 		bool  m_EnableDebug    = false;
 		void* m_Wnd            = nullptr;
-		int   m_Width          = 0;
-		int   m_Height         = 0;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 

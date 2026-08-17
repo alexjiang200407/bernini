@@ -34,6 +34,18 @@ namespace bgl
 		RenderTargetBase&
 		operator=(RenderTargetBase&&) noexcept = delete;
 
+		[[nodiscard]] uint32_t
+		GetWidth() const noexcept final
+		{
+			return m_Width;
+		}
+
+		[[nodiscard]] uint32_t
+		GetHeight() const noexcept final
+		{
+			return m_Height;
+		}
+
 		/** The frame-in-flight index the next frame records into. */
 		[[nodiscard]] virtual uint32_t
 		GetFrameIndex() const noexcept = 0;
@@ -196,7 +208,24 @@ namespace bgl
 	protected:
 		RenderTargetBase() noexcept = default;
 
+		/**
+		 * Records the size every attachment is allocated at. Called from a backend's constructor
+		 * before it creates them, and again from its `ResizeBackbuffers`.
+		 *
+		 * @pre both dimensions are non-zero.
+		 */
+		void
+		SetSize(uint32_t width, uint32_t height) noexcept
+		{
+			gassert(width > 0 && height > 0, "A render target cannot be zero-sized");
+
+			m_Width  = width;
+			m_Height = height;
+		}
+
 	private:
+		uint32_t m_Width      = 0;
+		uint32_t m_Height     = 0;
 		uint64_t m_FrameCount = 0;
 	};
 }
