@@ -2,15 +2,11 @@
 
 #include <QString>
 
+#include <assetlib/skeleton.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
-namespace assetlib
-{
-	struct Skeleton;
-}
-
-namespace editor::import
+namespace editor
 {
 	/**
 	 * Derives a `.bmaterial` from every PBR material `imported` carries, writes it under `materialDir`,
@@ -30,7 +26,7 @@ namespace editor::import
 	 *         named them and the parse that produced these materials.
 	 */
 	void
-	WriteMaterials(
+	WriteImportedMaterials(
 		const assetlib::imp::BMeshImport& imported,
 		assetlib::BMesh&                  mesh,
 		const std::filesystem::path&      dataRoot,
@@ -51,7 +47,7 @@ namespace editor::import
 	 * @throws std::runtime_error if either file cannot be written.
 	 */
 	void
-	WriteRig(
+	WriteImportedRig(
 		const assetlib::imp::BMeshImport& imported,
 		assetlib::BMesh&                  mesh,
 		const std::filesystem::path&      dataRoot,
@@ -67,7 +63,7 @@ namespace editor::import
 	 * @throws std::runtime_error if the file cannot be written.
 	 */
 	void
-	WriteMesh(const assetlib::BMesh& mesh, const std::filesystem::path& bmeshPath);
+	WriteImportedMesh(const assetlib::BMesh& mesh, const std::filesystem::path& bmeshPath);
 
 	/**
 	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
@@ -89,20 +85,20 @@ namespace editor::import
 	 *         `dataRoot` matches the one it was authored against.
 	 */
 	void
-	WriteClips(
+	WriteImportedClips(
 		const assetlib::imp::BMeshImport& imported,
 		const std::filesystem::path&      dataRoot,
 		const std::filesystem::path&      banimPath);
 
 	/** A file an import writes, and whether the import is the one that made it. */
-	struct WrittenFile
+	struct ImportedFile
 	{
 		std::filesystem::path path;
 		bool                  existed = false;  // whether it was there before the import started
 	};
 
 	/** A directory an import writes into, and whether the import is the one that made it. */
-	struct WrittenDir
+	struct ImportedDir
 	{
 		std::filesystem::path path;             // empty when the import writes no such directory
 		bool                  existed = false;  // whether it was there before the import started
@@ -122,5 +118,5 @@ namespace editor::import
 	 * to remove exactly the files this one wrote.
 	 */
 	void
-	RollBack(std::span<const WrittenFile> files, std::span<const WrittenDir> dirs);
+	RollBackImport(std::span<const ImportedFile> files, std::span<const ImportedDir> dirs);
 }

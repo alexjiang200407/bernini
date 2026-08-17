@@ -6,10 +6,10 @@
 
 class QWidget;
 
-namespace editor::import
+namespace editor
 {
 	/** What became of an import, so a multi-file drop knows whether to carry on with the next one. */
-	enum class Outcome
+	enum class ImportOutcome
 	{
 		kImported,
 		kCancelled,  // by the user, on the loading screen
@@ -18,7 +18,7 @@ namespace editor::import
 	};
 
 	/** What the import dialog asked for. */
-	struct Options
+	struct ImportOptions
 	{
 		// Every file to write, already inside its own category.
 		ImportOutputs outputs;
@@ -43,7 +43,7 @@ namespace editor::import
 	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
 	 *
 	 * Refuses to overwrite anything, reports a failure to the user, and on either a failure or a cancel
-	 * removes the half-written files it had produced -- see RollBack.
+	 * removes the half-written files it had produced -- see RollBackImport.
 	 *
 	 * What counts as a collision differs by category. A materials folder may be shared with another
 	 * import, since `options.outputs` names each file, so only a colliding *file* refuses this one. A
@@ -52,20 +52,20 @@ namespace editor::import
 	 *
 	 * @param parent The widget the loading screen and every message box are parented to.
 	 */
-	[[nodiscard]] Outcome
+	[[nodiscard]] ImportOutcome
 	ImportMesh(
-		QWidget*       parent,
-		const QString& dataRoot,
-		const QString& sourceFile,
-		const Options& options);
+		QWidget*             parent,
+		const QString&       dataRoot,
+		const QString&       sourceFile,
+		const ImportOptions& options);
 
 	/**
 	 * Converts a Radiance `.hdr` into the environment family: a `.bsky`, the `.benvl` convolved from
 	 * the same radiance, and the `.benv` naming the pair.
 	 *
-	 * Unlike ImportMesh there is no RollBack here -- `assetlib::importEnvironment` undoes its own
+	 * Unlike ImportMesh there is no RollBackImport here -- `assetlib::importEnvironment` undoes its own
 	 * half-written work, including on a cancel, so the editor has nothing to clean up after.
 	 */
-	[[nodiscard]] Outcome
+	[[nodiscard]] ImportOutcome
 	ImportEnvironment(QWidget* parent, const QString& dataRoot, const QString& sourceFile);
 }

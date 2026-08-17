@@ -70,8 +70,6 @@ lives beside it, and the split is by responsibility rather than by line count:
   (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
   because what a widget *does* is behaviour.
 
-`docs/plans/editor-refactor.md` records why, and which files were deliberately left for later.
-
 ## Rules
 
 - Qt is editor only don't link to other targets

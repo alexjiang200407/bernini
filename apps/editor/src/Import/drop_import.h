@@ -5,7 +5,7 @@
 class QMimeData;
 class QWidget;
 
-namespace editor::import
+namespace editor
 {
 	/** Whether `localFile` names a mesh source the importer accepts. */
 	[[nodiscard]] bool
@@ -22,7 +22,7 @@ namespace editor::import
 
 	/** Whether `mime` carries at least one local file an import could take. */
 	[[nodiscard]] bool
-	AcceptsDrop(const QMimeData& mime);
+	AcceptsImportDrop(const QMimeData& mime);
 
 	/**
 	 * Imports every file in `mime` that an import can take, asking for each one's options in turn.
@@ -34,5 +34,5 @@ namespace editor::import
 	 * user's "stop" by immediately putting the next options dialog in front of them.
 	 */
 	void
-	RunDrop(QWidget* parent, const QString& dataRoot, const QMimeData& mime);
+	RunImportDrop(QWidget* parent, const QString& dataRoot, const QMimeData& mime);
 }

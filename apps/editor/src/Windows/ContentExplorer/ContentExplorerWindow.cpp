@@ -442,7 +442,7 @@ ContentExplorerWindow::ShowAssetMenu(
 void
 ContentExplorerWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::import::AcceptsDrop(*event->mimeData()))
+	if (editor::AcceptsImportDrop(*event->mimeData()))
 		event->acceptProposedAction();
 }
 
@@ -459,7 +459,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 	if (m_RootPath.isEmpty())
 		return;
 
-	editor::import::RunDrop(this, m_RootPath, *event->mimeData());
+	editor::RunImportDrop(this, m_RootPath, *event->mimeData());
 	event->acceptProposedAction();
 }
 

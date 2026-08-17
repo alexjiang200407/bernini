@@ -31,7 +31,7 @@ TEST_CASE("A mesh import aimed at a new subfolder creates it", "[importedmesh]")
 	const fs::path bmeshPath = root.path / "Meshes" / "animals" / "unit.bmesh";
 
 	const assetlib::BMesh mesh;
-	editor::import::WriteMesh(mesh, bmeshPath);
+	editor::WriteImportedMesh(mesh, bmeshPath);
 
 	CHECK(fs::exists(bmeshPath));
 }

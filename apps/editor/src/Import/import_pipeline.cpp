@@ -49,14 +49,14 @@ namespace
 	}
 }
 
-namespace editor::import
+namespace editor
 {
-	Outcome
+	ImportOutcome
 	ImportMesh(
-		QWidget*       parent,
-		const QString& dataRootPath,
-		const QString& sourceFile,
-		const Options& options)
+		QWidget*             parent,
+		const QString&       dataRootPath,
+		const QString&       sourceFile,
+		const ImportOptions& options)
 	{
 		namespace fs = std::filesystem;
 
@@ -102,7 +102,7 @@ namespace editor::import
 		const fs::path banimPath = under(options.outputs.animations);
 
 		// Only what this import may actually write.
-		auto files = std::vector<WrittenFile>();
+		auto files = std::vector<ImportedFile>();
 		if (options.mesh)
 		{
 			files.push_back({ bmeshPath, fs::exists(bmeshPath, ec) });
@@ -126,13 +126,13 @@ namespace editor::import
 			}
 		}
 
-		const std::array<WrittenDir, 2> dirs = { {
+		const std::array<ImportedDir, 2> dirs = { {
 			{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
 			{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
 		} };
 
 		auto replaced = QStringList();
-		for (const WrittenFile& file : files)
+		for (const ImportedFile& file : files)
 			if (file.existed)
 				replaced << QString::fromStdWString(file.path.wstring());
 
@@ -143,7 +143,7 @@ namespace editor::import
 			replaced << QString::fromStdWString(textureDir.wstring());
 
 		if (ReportImportConflict(parent, name, replaced))
-			return Outcome::kBlocked;
+			return ImportOutcome::kBlocked;
 
 		// Parsing the glTF and, above all, Basis-supercompressing its textures take long enough to
 		// freeze the editor for minutes on a large asset. None of it touches bgl, so it runs on a worker.
@@ -203,10 +203,16 @@ namespace editor::import
 							tangents.skipped,
 							qPrintable(name));
 
-					WriteRig(*imported, *mesh, dataRoot, bskelPath, banimPath, options.animations);
+					WriteImportedRig(
+						*imported,
+						*mesh,
+						dataRoot,
+						bskelPath,
+						banimPath,
+						options.animations);
 
 					if (importMaterials)
-						WriteMaterials(
+						WriteImportedMaterials(
 							*imported,
 							*mesh,
 							dataRoot,
@@ -214,14 +220,14 @@ namespace editor::import
 							textureDir,
 							options.outputs.materialStems);
 
-					WriteMesh(*mesh, bmeshPath);
+					WriteImportedMesh(*mesh, bmeshPath);
 				}
 				else if (options.animations)
 				{
-					WriteClips(*imported, dataRoot, banimPath);
+					WriteImportedClips(*imported, dataRoot, banimPath);
 				}
 
-				return Outcome::kImported;
+				return ImportOutcome::kImported;
 			}
 			catch (const std::exception& e)
 			{
@@ -232,27 +238,27 @@ namespace editor::import
 		// A cancelled cook throws where it stood, so the textures may be half-written and the mesh may
 		// name materials that never landed. Neither outcome may leave that behind for the user to trip
 		// over.
-		RollBack(files, dirs);
+		RollBackImport(files, dirs);
 
 		if (result.Cancelled())
-			return Outcome::kCancelled;
+			return ImportOutcome::kCancelled;
 
 		QMessageBox::warning(
 			parent,
 			"Import Asset",
 			QString("Failed to import '%1':\n\n%2").arg(name, result.error));
 
-		return Outcome::kFailed;
+		return ImportOutcome::kFailed;
 	}
 
-	Outcome
+	ImportOutcome
 	ImportEnvironment(QWidget* parent, const QString& dataRoot, const QString& sourceFile)
 	{
 		const QString name = QFileInfo(sourceFile).fileName();
 
 		EnvironmentImporterDialog dialog(sourceFile, dataRoot, parent);
 		if (dialog.exec() != QDialog::Accepted)
-			return Outcome::kCancelled;
+			return ImportOutcome::kCancelled;
 
 		auto desc        = assetlib::EnvImportDesc();
 		desc.dataRoot    = std::filesystem::path(dataRoot.toStdWString());
@@ -277,7 +283,7 @@ namespace editor::import
 		}
 
 		if (ReportImportConflict(parent, name, replaced))
-			return Outcome::kBlocked;
+			return ImportOutcome::kBlocked;
 
 		// Projecting the source and convolving it are seconds to minutes of pure CPU, and none of it
 		// touches bgl -- so it runs on a worker, as the mesh import's cook does.
@@ -293,17 +299,17 @@ namespace editor::import
 			background::Cancellable::kYes);
 
 		if (result.Completed())
-			return Outcome::kImported;
+			return ImportOutcome::kImported;
 
 		// Nothing to undo: a failed or cancelled importEnvironment has already taken back what it wrote.
 		if (result.Cancelled())
-			return Outcome::kCancelled;
+			return ImportOutcome::kCancelled;
 
 		QMessageBox::warning(
 			parent,
 			"Import Environment",
 			QString("Failed to import '%1':\n\n%2").arg(name, result.error));
 
-		return Outcome::kFailed;
+		return ImportOutcome::kFailed;
 	}
 }

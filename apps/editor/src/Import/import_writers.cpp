@@ -13,10 +13,10 @@
 #include <assetlib/container_format.h>
 #include <assetlib/skeleton.h>
 
-namespace editor::import
+namespace editor
 {
 	void
-	WriteMaterials(
+	WriteImportedMaterials(
 		const assetlib::imp::BMeshImport& imported,
 		assetlib::BMesh&                  mesh,
 		const std::filesystem::path&      dataRoot,
@@ -89,7 +89,7 @@ namespace editor::import
 	}
 
 	void
-	WriteRig(
+	WriteImportedRig(
 		const assetlib::imp::BMeshImport& imported,
 		assetlib::BMesh&                  mesh,
 		const std::filesystem::path&      dataRoot,
@@ -120,7 +120,7 @@ namespace editor::import
 	}
 
 	void
-	WriteMesh(const assetlib::BMesh& mesh, const std::filesystem::path& bmeshPath)
+	WriteImportedMesh(const assetlib::BMesh& mesh, const std::filesystem::path& bmeshPath)
 	{
 		std::filesystem::create_directories(bmeshPath.parent_path());
 		assetlib::save(mesh, bmeshPath);
@@ -185,7 +185,7 @@ namespace editor::import
 	}
 
 	void
-	WriteClips(
+	WriteImportedClips(
 		const assetlib::imp::BMeshImport& imported,
 		const std::filesystem::path&      dataRoot,
 		const std::filesystem::path&      banimPath)
@@ -216,17 +216,17 @@ namespace editor::import
 	}
 
 	void
-	RollBack(std::span<const WrittenFile> files, std::span<const WrittenDir> dirs)
+	RollBackImport(std::span<const ImportedFile> files, std::span<const ImportedDir> dirs)
 	{
 		namespace fs = std::filesystem;
 
 		std::error_code ec;
 
-		for (const WrittenFile& file : files)
+		for (const ImportedFile& file : files)
 			if (!file.existed)
 				fs::remove(file.path, ec);
 
-		for (const WrittenDir& dir : dirs)
+		for (const ImportedDir& dir : dirs)
 		{
 			// remove_all is recursive, so the folder it is handed had better be the one this import made.
 			// An empty path means the import wrote no such folder; a path naming the category root itself

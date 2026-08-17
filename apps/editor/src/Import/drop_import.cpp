@@ -9,7 +9,7 @@
 
 #include <assetlib/bmesh_gltf.h>
 
-namespace editor::import
+namespace editor
 {
 	bool
 	IsImportableMesh(const QString& localFile)
@@ -25,7 +25,7 @@ namespace editor::import
 	}
 
 	bool
-	AcceptsDrop(const QMimeData& mime)
+	AcceptsImportDrop(const QMimeData& mime)
 	{
 		if (!mime.hasUrls())
 			return false;
@@ -37,7 +37,7 @@ namespace editor::import
 	}
 
 	void
-	RunDrop(QWidget* parent, const QString& dataRoot, const QMimeData& mime)
+	RunImportDrop(QWidget* parent, const QString& dataRoot, const QMimeData& mime)
 	{
 		for (const QUrl& url : mime.urls())
 		{
@@ -48,7 +48,7 @@ namespace editor::import
 
 			if (IsImportableEnvironment(file))
 			{
-				if (ImportEnvironment(parent, dataRoot, file) == Outcome::kCancelled)
+				if (ImportEnvironment(parent, dataRoot, file) == ImportOutcome::kCancelled)
 					break;
 				continue;
 			}
@@ -73,14 +73,14 @@ namespace editor::import
 			if (dialog.exec() != QDialog::Accepted)
 				continue;
 
-			auto options         = Options();
+			auto options         = ImportOptions();
 			options.outputs      = dialog.GetOutputs();
 			options.mesh         = dialog.GetImportMesh();
 			options.textures     = dialog.GetImportTextures();
 			options.pbrMaterials = dialog.CanImportPbrMaterials();
 			options.animations   = dialog.GetImportAnimations();
 
-			if (ImportMesh(parent, dataRoot, file, options) == Outcome::kCancelled)
+			if (ImportMesh(parent, dataRoot, file, options) == ImportOutcome::kCancelled)
 				break;
 		}
 	}
