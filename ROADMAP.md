@@ -59,6 +59,10 @@ and portability.
   - [x] GPU sort for transparent depth ordering — replaces the per-frame CPU sort. Bitonic, one
     workgroup, capped at 1024 transparent instances; a multi-group radix sort is the scale-up.
   - [x] Texture Asset Import
+  - [x] Per-instance material override — one mesh, a different material per instance, resolved into
+    the cached `SubmeshInstance` so the draw pays nothing and an instance may change PSO bucket. For
+    tens of hand-placed instances; crowd kit variation is the atlasing line under Crowd Variation,
+    not this. No editor surface yet (see Level Editor for Battles).
   - [x] Editor Material Graph
     - [x] Choose Material Type: PBR only for now
     - [x] Choose Material Options: e.g. Alpha Mode
@@ -381,6 +385,9 @@ and portability.
   - [ ] Navmesh Gen.
   - [ ] Weather Editor
   - [ ] Drag and Drop Buildings & Meshes
+    - [ ] Per-instance material override in the details panel — which submeshes wear an override
+      against the geom's default, and setting one. The mechanism ships (see Materials); this needs
+      the placement and selection above it first.
 - [ ] In-game UI
   - [ ] Adopt UI runtime e.g. Noesis
   - [ ] Controller/focus
