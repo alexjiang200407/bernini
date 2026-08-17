@@ -179,30 +179,44 @@ has to *compute* one first. That compute pass is the only genuinely new machiner
 
 Bottom-up by layer, each with its gate.
 
-**1 — `bgl`: the skinned geom and its GPU tables.** The IDL structs, `GeomType::kSkinnedMesh`, the
-new `PsoType`, and `IScene::AddSkinnedMeshGeom` uploading bone / clip / sample buffers, with the
-per-bone depth derived at upload. Validates the skeleton signature against the `AnimationSet`, that
+**1 — `bgl`: the skinned geom and its GPU tables.** *(landed)* The IDL structs,
+`GeomType::kSkinnedMesh`, and `IScene::AddSkinnedMeshGeom` uploading bone / clip / sample buffers,
+with the per-bone depth derived at upload. Validates the two containers against each other, that
 every submesh carries `joints0` and `weights0`, and the bone-count cap. **The instance half lands
 here too** — `ISceneView::SkinnedInstanceDesc` and `CreateSkinnedMeshInstance`, writing an
-`EntryBuffer<idl::SkinnedState>` beside `m_VatStates`, and the palette range each instance owns.
-Both halves of the seam in one task, because task 2 needs real `SkinnedState` records to dispatch
-against and task 3 needs placed instances to render. Nothing draws it yet — dead scaffolding,
-justified because the tests call it.
+`EntryBuffer<idl::SkinnedState>` beside `m_VatStates`. Both halves of the seam in one task, because
+task 2 needs real `SkinnedState` records to dispatch against and task 3 needs placed instances to
+render. Nothing draws it yet — dead scaffolding, justified because the tests call it.
 *Gate:* `bgl_tests` builds a small rig, adds the geom, creates an instance, reads the geom tables
 and the instance's `SkinnedState` back and asserts both; each documented refusal throws.
+
+*Three things this task moved, and why:*
+- **The `PsoType` bucket went to task 3.** `ForwardPass` holds a `std::array<PsoConfig, c_PsoCount>`
+  under a `static_assert` that every row names a pixel shader, and `Init` builds a kernel for every
+  PSO at device bring-up — so a bucket declared before `Forward_SkinnedMesh.slang` exists fails every
+  test that creates a device. A skinned submesh resolves to `PsoType::kInvalid` until task 3, which
+  is the value the counting sort already skips, so the instance uploads and simply draws nothing.
+- **The palette went to task 2.** It is written by the GPU, so it is not a CPU-mirrored
+  `RangeBuffer` like everything else here; it belongs with the pass that writes it rather than with
+  the tables that are uploaded.
+- **The skeleton-signature check went to task 4.** Computing a `Skeleton`'s signature needs
+  `assetlib`, which `bgl` does not link, so `bgl` can only check that the bone counts agree. The
+  signature is a stale-cook check — a loader's concern — and `gamelib`'s acquire is where it belongs.
 
 **2 — `bgl`: the pose compute pass.** `PoseSkinned.slang` — workgroup per instance, thread per bone
 (strided above the group size), clip sampled at `time` with nlerp between the two frames it falls
 between, hierarchy walked by depth level with a barrier per level, multiplied by `inverseBind`,
-written as `float3x4`. Dispatched twice per instance for `time` and `prevTime` (ADR-5).
-`SkinnedPosePass` ordered ahead of `ForwardPass`. Still nothing draws.
+written as `float3x4`. Dispatched twice per instance for `time` and `prevTime` (ADR-5). Owns the
+palette buffer and the range each instance holds in it. `SkinnedPosePass` ordered ahead of
+`ForwardPass`. Still nothing draws.
 *Gate:* **acceptance 2** — palette readback asserted bone-for-bone, at an integral and a fractional
 frame, plus a `rate = 0` hold and a looping clip's wrap across its seam.
 
-**3 — `bgl`: draw it.** `Forward_SkinnedMesh.slang`: decode `joints0`/`weights0`, four palette
-matrices, linear blend on position, normal and tangent; the `prevTime` palette gives the previous
-clip position at the `common.slang:25` seam, so motion vectors fall out. `ForwardPass` wiring for
-the new bucket.
+**3 — `bgl`: draw it.** `PsoType::kOpaque_SkinnedMesh_PBR` and its `c_Psos` row, and
+`Forward_SkinnedMesh.slang`: decode `joints0`/`weights0`, four palette matrices, linear blend on
+position, normal and tangent; the `prevTime` palette gives the previous clip position at the
+`common.slang:25` seam, so motion vectors fall out. `ForwardPass` binds the skinned buffers and
+maps the bucket in `util.cpp`.
 *Gate:* **acceptance 1 and 3** — bind-pose-equals-static, the golden image, and the
 animating-vs-held velocity assertion. GPU validation run (**acceptance 5**).
 
@@ -210,6 +224,7 @@ animating-vs-held velocity assertion. GPU validation run (**acceptance 5**).
 `.bmesh` + `.bskel` + `.banim` through the `AssetStore` and returning a geom plus a clip table, and
 `CreateSkinnedInstance`. No bake and no freshness rule — unlike VAT there is no derived product, the
 containers *are* the source, which is most of why this task is small.
+It also owns the `skeletonSignature` check, which `bgl` cannot make (see task 1).
 *Gate:* `gamelib_tests` acquires a fixture rig, shares the geom on a second acquire, and releases to
 zero; a mismatched skeleton signature is refused.
 

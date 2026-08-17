@@ -1,6 +1,8 @@
 #pragma once
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
@@ -276,6 +278,48 @@ namespace bgl
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
 			const VatGeomDesc&              desc) = 0;
+
+		/**
+		 * Adds one mesh of a loaded BMesh as skinned geometry: the bind-pose submeshes upload exactly
+		 * as AddStaticMeshGeom does, and every instance's pose is computed each frame from `skeleton`
+		 * and `animations` instead of being fetched from a bake. The rig's bones, clip table and
+		 * sample pool upload with the geometry and are shared by every instance of it.
+		 *
+		 * Unlike VAT this takes the containers as they are: `Skeleton` and `AnimationSet` are
+		 * `assetlib_structs` PODs with nothing to decode, so there is no desc to mirror them into.
+		 *
+		 * Each submesh must carry `joints0` and `weights0` -- a submesh with no skin binding has no
+		 * bones to follow and would draw its bind pose while the rest of the mesh moved. Culling
+		 * bounds come from each submesh's cooked bind-pose sphere, which is the one thing this shares
+		 * with the static path and not with VAT: a skinned submesh has no all-clips box to widen to
+		 * yet, so a pose that leaves the bind-pose sphere can cull early.
+		 *
+		 * `materials` must resolve every submesh to an opaque `kPBR` material, the same constraint
+		 * VAT carries and for the same reason: no other variant of the pipeline exists.
+		 *
+		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
+		 * @param meshIndex   Index into `mesh.meshes`.
+		 * @param materials   Materials parallel to `mesh.materials`, resolved by the caller.
+		 * @param skeleton    The rig the mesh's joint indices address.
+		 * @param animations  Clips cooked against `skeleton`.
+		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones or more
+		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
+		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
+		 *         clip whose samples fall outside the pool, a submesh without skin binding, or a
+		 *         submesh whose material does not resolve to opaque kPBR.
+		 *
+		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
+		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
+		 * since-reordered rig of the same bone count therefore passes this door and animates wrongly.
+		 * Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
+		 */
+		virtual GeomHandle
+		AddSkinnedMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const assetlib::Skeleton&       skeleton,
+			const assetlib::AnimationSet&   animations) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

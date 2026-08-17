@@ -17,10 +17,11 @@ namespace bgl
 
 		// Paired positionally with SceneView::GetInstanceBuffers(); shorten one and you must
 		// shorten the other.
-		static constexpr std::array<BufferInfo, 3> c_InstanceBufferInfo = { {
+		static constexpr std::array<BufferInfo, 4> c_InstanceBufferInfo = { {
 			{ "scene.instanceBuffer" },
 			{ "scene.meshInstanceBuffer" },
 			{ "scene.vatStateBuffer" },
+			{ "scene.skinnedStateBuffer" },
 		} };
 
 		constexpr std::string_view c_SelectedInstancesName = "scene.selectedInstances";
@@ -92,6 +93,15 @@ namespace bgl
 			m_VatStates.Init(std::move(vatStateBufferDesc), m_ResourceManager);
 		}
 
+		{
+			// One entry, for the same reason as the VAT states above.
+			auto skinnedStateBufferDesc         = EntryBufferDesc();
+			skinnedStateBufferDesc.initialCount = 1;
+			skinnedStateBufferDesc.debugName    = "Skinned State Buffer";
+
+			m_SkinnedStates.Init(std::move(skinnedStateBufferDesc), m_ResourceManager);
+		}
+
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
@@ -153,6 +163,7 @@ namespace bgl
 		m_InstanceBuffer.Release();
 		m_MeshBuffer.Release();
 		m_VatStates.Release();
+		m_SkinnedStates.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -228,7 +239,7 @@ namespace bgl
 				"GeomHandle passed to CreateVatMeshInstance has expired or is invalid");
 		}
 
-		const Scene::VatGeomInfo vat = m_SceneRaw->GetGeomVatInfo(geom.handle.index);
+		const Scene::AnimGeomInfo vat = m_SceneRaw->GetGeomVatInfo(geom.handle.index);
 		if (desc.clip >= vat.clipCount)
 		{
 			throw SceneError(
@@ -255,7 +266,51 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState)
+	SceneView::CreateSkinnedMeshInstance(
+		GeomHandle                 geom,
+		glm::mat4                  transform,
+		const SkinnedInstanceDesc& desc)
+	{
+		if (geom.geomType != GeomType::kSkinnedMesh)
+		{
+			throw SceneError(
+				"GeomHandle passed to CreateSkinnedMeshInstance must be of type kSkinnedMesh");
+		}
+
+		if (!m_SceneRaw->IsGeomAlive(geom))
+		{
+			throw SceneError(
+				"GeomHandle passed to CreateSkinnedMeshInstance has expired or is invalid");
+		}
+
+		const Scene::AnimGeomInfo rig = m_SceneRaw->GetGeomSkinnedInfo(geom.handle.index);
+		if (desc.clip >= rig.clipCount)
+		{
+			throw SceneError(
+				"SkinnedInstanceDesc::clip passed to CreateSkinnedMeshInstance is out of "
+				"range for the geom's clip table");
+		}
+
+		auto state  = idl::SkinnedState();
+		state.geom  = rig.record;
+		state.clip  = desc.clip;
+		state.phase = desc.phase;
+		state.rate  = desc.rate;
+
+		const core::slot_handle stateHandle = m_SkinnedStates.Add(state);
+		try
+		{
+			return CreateInstance(geom, transform, stateHandle);
+		}
+		catch (...)
+		{
+			m_SkinnedStates.Erase(stateHandle);
+			throw;
+		}
+	}
+
+	MeshInstanceHandle
+	SceneView::CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle animState)
 	{
 		try
 		{
@@ -269,17 +324,25 @@ namespace bgl
 			mesh.submeshes = submeshes;
 
 			// Only a real handle: assigning a null one would write its index over the null
-			// sentinel the Entry defaults to.
-			if (vatState)
+			// sentinel the Entry defaults to. Which field it lands in follows the geom's type --
+			// the two are never both set.
+			if (animState)
 			{
-				mesh.vatState = vatState;
+				if (geom.geomType == GeomType::kSkinnedMesh)
+				{
+					mesh.skinnedState = animState;
+				}
+				else
+				{
+					mesh.vatState = animState;
+				}
 			}
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
-			auto& meta    = m_MeshBuffer.MetaAt(meshHandle.index);
-			meta.geomType = geom.geomType;
-			meta.vatState = vatState;
+			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
+			meta.geomType  = geom.geomType;
+			meta.animState = animState;
 
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
@@ -338,9 +401,16 @@ namespace bgl
 			}
 		}
 
-		if (meta.vatState)
+		if (meta.animState)
 		{
-			m_VatStates.Erase(meta.vatState);
+			if (meta.geomType == GeomType::kSkinnedMesh)
+			{
+				m_SkinnedStates.Erase(meta.animState);
+			}
+			else
+			{
+				m_VatStates.Erase(meta.animState);
+			}
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
@@ -473,12 +543,13 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
-		if (meta.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
-		                                            material.layerType != LayerType::kOpaque))
+		if (meta.geomType != GeomType::kStaticMesh &&
+		    (material.materialType != MaterialType::kPBR ||
+		     material.layerType != LayerType::kOpaque))
 		{
 			throw SceneError(
-				"SetSubmeshMaterialOverride: a VAT instance takes only an opaque kPBR material -- "
-				"the VAT pipeline has no other variant yet");
+				"SetSubmeshMaterialOverride: an animated instance takes only an opaque kPBR "
+				"material -- neither the VAT nor the skinned pipeline has another variant yet");
 		}
 
 		meta.overrides[submeshIndex] = material;

@@ -41,6 +41,11 @@ set(IDL_CPP_SOURCES
     VatClip.slang
     VatGeom.slang
     VatState.slang
+    BoneSample.slang
+    SkinnedBone.slang
+    SkinnedClip.slang
+    SkinnedGeom.slang
+    SkinnedState.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public

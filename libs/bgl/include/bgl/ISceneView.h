@@ -67,6 +67,34 @@ namespace bgl
 			const VatInstanceDesc& desc) = 0;
 
 		/**
+		 * The skinned tier's counterpart of VatInstanceDesc, and deliberately the same three fields:
+		 * both tiers derive their pose from RenderJob::time alone, so a unit can be moved between
+		 * them without its playback record being rewritten.
+		 *
+		 * The pose at time `t` is frame `phase + t * rate * sampleRate` of the clip, wrapped when it
+		 * loops and clamped to its last frame when it does not; a fractional frame blends the two it
+		 * falls between. `rate = 0` holds an instance on `phase` under any clock.
+		 */
+		struct SkinnedInstanceDesc
+		{
+			uint32_t clip  = 0;
+			float    phase = 0.0f;  // frames, may be fractional
+			float    rate  = 1.0f;  // multiplier on the clip's authored sampleRate
+		};
+
+		/**
+		 * The kSkinnedMesh counterpart of CreateStaticMeshInstance. Deleted through the same
+		 * DeleteMeshInstance as any other placement.
+		 *
+		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, or `desc.clip` is out of range.
+		 */
+		virtual MeshInstanceHandle
+		CreateSkinnedMeshInstance(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			const SkinnedInstanceDesc& desc) = 0;
+
+		/**
 		 * Removes a mesh instance from this view. The geometry it referenced is left
 		 * intact; the shared Scene's reference count for that geometry is decremented
 		 * so the geometry can later be removed by Scene::DeleteGeom.

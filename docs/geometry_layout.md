@@ -139,7 +139,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>`. |
+| `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>`, plus one playback entry — `vatState` or `skinnedState`, never both, null on a static mesh. |
 | `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
 | `Vertex` | [Vertex.slang](libs/bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
