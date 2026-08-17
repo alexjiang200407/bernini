@@ -328,8 +328,9 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 
 	QMenu* scale = render->addMenu("Render Scale");
 	scale->setStatusTip(
-		"Render the viewports at a fraction of their window and stretch the result back over it, "
-		"to judge a resolution-dependent artifact on a display that does not have that density.");
+		"Render the viewports at a fraction of their window and let the temporal resolve "
+		"reconstruct it, to judge a resolution-dependent artifact on a display that does not have "
+		"that density.");
 
 	auto* group = new QActionGroup(scale);
 	group->setExclusive(true);
