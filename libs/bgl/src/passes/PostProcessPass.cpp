@@ -95,6 +95,10 @@ namespace bgl
 			{
 				u = args.sampler;
 			}
+			if (auto u = tonemap["maskSampler"]; u.IsValid())
+			{
+				u = args.maskSampler;
+			}
 			if (auto u = tonemap["outlineEnabled"]; u.IsValid())
 			{
 				u = args.outlineEnabled ? 1u : 0u;

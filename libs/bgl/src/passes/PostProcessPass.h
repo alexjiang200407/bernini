@@ -30,17 +30,23 @@ namespace bgl
 		{
 			// The last HDR stage's output: scene colour directly, or the freshly resolved history
 			// when the target has TAA on.
-			SrvHandle     source;
-			std::string   sourceName;
-			RtvHandle     backBuffer;
+			SrvHandle   source;
+			std::string sourceName;
+			RtvHandle   backBuffer;
+
+			// Point where the source is already on the backbuffer's grid, which is every frame the
+			// resolve ran and every unscaled one; linear is what carries a render-resolution scene
+			// colour across when it did not.
 			SamplerHandle sampler;
 			Viewport      viewport;
 
 			// Set only when an outline-mask pass ran this frame; the shader samples the mask
-			// behind the flag, so a disabled frame binds nothing.
-			SrvHandle outlineMask;
-			glm::vec2 maskSize{ 0.0f };
-			bool      outlineEnabled = false;
+			// behind the flag, so a disabled frame binds nothing. The mask is on the render grid
+			// and its dilate is a coverage test, so it is point-sampled whatever the source is.
+			SrvHandle     outlineMask;
+			SamplerHandle maskSampler;
+			glm::vec2     maskSize{ 0.0f };
+			bool          outlineEnabled = false;
 		};
 
 		PostProcessPass() = default;

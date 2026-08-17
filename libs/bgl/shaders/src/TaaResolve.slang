@@ -19,12 +19,30 @@ struct TaaResolveData
     // sample, so the surface behind it sits at the centre less the jitter.
     float2 jitter;
 
-    // sceneColor and motionVectors are read 1:1 and want no filtering; the history is reprojected
-    // to an arbitrary sub-pixel position and goes through SampleHistoryCatmullRom's bilinear taps.
+    // sceneColor and motionVectors are read at their own texel centres and want no filtering; the
+    // history is reprojected to an arbitrary sub-pixel position and goes through
+    // SampleHistoryCatmullRom's bilinear taps. The linear sampler also carries the scene colour to
+    // the output grid on a frame with no history to reproject.
     SamplerState.Handle pointSampler;
     SamplerState.Handle linearSampler;
 
-    float2 texelSize;
+    // The two grids. sceneColor, motionVectors and depth are on the render one; this pass, the
+    // history and the backbuffer are on the output one. Equal at render scale 1.0.
+    float2 renderSize;
+    float2 renderTexelSize;
+    float2 outputTexelSize;
+
+    // This frame's offset from a render pixel's centre, in render texels -- where the current
+    // frame's sample actually landed, which is what decides how much of it each output pixel takes.
+    float2 jitterTexels;
+
+    // Output pixels per render pixel along each axis, at least one. The phases the kernel below
+    // normalizes over.
+    float2 subPixels;
+
+    // Whether the two grids differ at all. Only the no-history path reads it: everything else is
+    // written so that one sample per output pixel falls out as the untouched render-grid resolve.
+    float resampling;
 
     // How much of the resolved pixel comes from this frame. Zero history -- the first frame, or the
     // first after a resize -- takes the scene colour whole.
@@ -135,6 +153,41 @@ float3 SampleHistoryCatmullRom(float2 uv, float2 texel)
     return sum / weight;
 }
 
+// Reciprocal of twice the squared width of the reconstruction kernel below, at one output pixel per
+// render pixel. PhaseWeight scales it with the sub-pixel count, which is what holds that width at
+// 0.4 of an *output* pixel wherever the grids differ.
+static const float c_SampleWeightK = 3.125;
+
+// How much of this frame an output pixel takes along one axis, given how far its centre sits from
+// where the frame's sample landed -- divided by the same kernel averaged over the sub-pixel phases
+// one render sample serves.
+//
+// The division is what the accumulation depends on. Undivided, the kernel would scale the blend by
+// the jitter's phase even where there is nothing to choose between, and at one output pixel per
+// render pixel -- every render scale of 1.0 -- it would change an image nothing else here changes.
+// Normalized, that case is a single phase whose weight is its own mean, which is exactly one, and
+// the kernel only ever redistributes a frame's weight between the sub-pixels sharing its sample.
+//
+// Separable, and normalized per axis rather than once over the pair, so that identity is exact
+// rather than approached: x/x is one, where exp(-a)*exp(-b) is not exp(-(a+b)).
+float PhaseWeight(float offset, float jitterTexel, float subPixels)
+{
+    // Width is 0.4 of an *output* pixel, which is 0.4 of a render pixel only where the two grids
+    // coincide. A kernel kept at render width would let an output pixel take a strong share of a
+    // sample a whole output pixel away, and reconstruct the frame softer than a plain filtered
+    // upscale of it -- measured, and the reason this factor is here.
+    float k = c_SampleWeightK * subPixels * subPixels;
+
+    float sum = 0.0;
+    for (float i = 0.0; i < subPixels; i += 1.0)
+    {
+        float d = (i + 0.5) / subPixels - 0.5 + jitterTexel;
+        sum += exp(-k * d * d);
+    }
+
+    return exp(-k * offset * offset) * subPixels / sum;
+}
+
 // The motion the camera alone gives a surface at `depth` behind `uv`, in the velocity buffer's
 // convention; a written vector less this is the surface's own motion (docs/taa.md).
 float2 CameraMotion(float2 uv, float depth)
@@ -173,11 +226,26 @@ float ObjectTexels(float2 uv, float2 motion, float2 texel)
 float4 PSMain(VSOut input) : SV_Target
 {
     let pointClamp = gTaaResolveData.pointSampler;
-    let texel = gTaaResolveData.texelSize;
+    let texel = gTaaResolveData.renderTexelSize;
 
-    float4 current = gTaaResolveData.sceneColor.SampleLevel(pointClamp, input.uv, 0.0);
+    // Where this output pixel sits on the render grid, and the render pixel whose jittered sample
+    // landed nearest to it -- every sample of a frame shares one offset, so the nearest is found by
+    // rounding rather than searched for.
+    float2 renderPos = input.uv * gTaaResolveData.renderSize;
+    float2 samplePixel = floor(renderPos + gTaaResolveData.jitterTexels) + 0.5;
 
-    float2 motion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, input.uv, 0.0).xy;
+    // One render sample per output pixel makes the pixel's own texel the nearest sample and the
+    // interpolated uv its centre already. Reconstructing that centre instead would land a rounding
+    // step away, which the neighbourhood clamp and the motion discriminator both read -- and that
+    // step is the entire difference between this resolve and the render-grid one it replaces.
+    bool resampling = gTaaResolveData.resampling != 0.0;
+
+    float2 sampleUv = resampling ? samplePixel * texel : input.uv;
+    float2 sampleOffset = resampling ? (renderPos - samplePixel) + gTaaResolveData.jitterTexels : gTaaResolveData.jitterTexels;
+
+    float4 current = gTaaResolveData.sceneColor.SampleLevel(pointClamp, sampleUv, 0.0);
+
+    float2 motion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, sampleUv, 0.0).xy;
 
     // Motion is jitter-free, so rest measures zero up to fma residue -- this admits that residue
     // and no real motion, which is never a thousandth of a texel per frame.
@@ -202,7 +270,7 @@ float4 PSMain(VSOut input) : SV_Target
     float3 m1 = centre;
     float3 m2 = centre * centre;
     float2 dilatedMotion = motion;
-    float dilatedObjectTexels = max(ObjectTexels(input.uv, motion, texel), c_ObjectTexels);
+    float dilatedObjectTexels = max(ObjectTexels(sampleUv, motion, texel), c_ObjectTexels);
     float neighbourhoodTexels = length(motion / texel);
 
     for (int y = -1; y <= 1; ++y)
@@ -214,7 +282,7 @@ float4 PSMain(VSOut input) : SV_Target
                 continue;
             }
 
-            float2 tapUv = input.uv + float2(x, y) * texel;
+            float2 tapUv = sampleUv + float2(x, y) * texel;
             float3 tap = RgbToYCoCg(gTaaResolveData.sceneColor.SampleLevel(pointClamp, tapUv, 0.0).rgb);
 
             boxMin = min(boxMin, tap);
@@ -257,10 +325,16 @@ float4 PSMain(VSOut input) : SV_Target
     // accumulation stays there for the life of the target. Alpha starts the variance below at zero.
     if (!onScreen || gTaaResolveData.historyValid == 0.0)
     {
-        return float4(current.rgb, 0.0);
+        // Filtered onto the output grid rather than point-taken: there is no accumulation to build
+        // the frame out of jittered samples yet, so this one frame is a plain resample.
+        float3 whole = gTaaResolveData.resampling != 0.0
+                           ? gTaaResolveData.sceneColor.SampleLevel(gTaaResolveData.linearSampler, input.uv, 0.0).rgb
+                           : current.rgb;
+
+        return float4(whole, 0.0);
     }
 
-    float3 history = SampleHistoryCatmullRom(historyUv, texel);
+    float3 history = SampleHistoryCatmullRom(historyUv, gTaaResolveData.outputTexelSize);
 
     // A running average of the 3x3's own *spatial* luma variance, kept in the history's alpha --
     // free because PostProcess writes the backbuffer opaque. Spatial, not temporal, so a ghost's
@@ -303,7 +377,14 @@ float4 PSMain(VSOut input) : SV_Target
     const float c_MotionWeightTexels = 1.0;
 
     float motionScale = lerp(1.0, c_MaxMotionWeightScale, saturate(length(dilatedMotion / texel) / c_MotionWeightTexels));
-    float weight = motionScale * gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
+
+    // On a grid denser than the render one, an output pixel no sample landed near this frame takes
+    // almost none of it and waits for the phase that serves it.
+    float sampleWeight = PhaseWeight(sampleOffset.x, gTaaResolveData.jitterTexels.x, gTaaResolveData.subPixels.x) *
+                         PhaseWeight(sampleOffset.y, gTaaResolveData.jitterTexels.y, gTaaResolveData.subPixels.y);
+
+    float weight =
+        sampleWeight * motionScale * gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 

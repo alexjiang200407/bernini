@@ -630,12 +630,25 @@ namespace bgl
 		const auto viewport =
 			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
 
+		const auto renderSize = glm::vec2(
+			static_cast<float>(rt.GetRenderWidth()),
+			static_cast<float>(rt.GetRenderHeight()));
+
 		auto postProcessArgs       = PostProcessPass::Args();
 		postProcessArgs.source     = rt.GetSceneColorSrv();
 		postProcessArgs.sourceName = std::string(c_SceneColorName);
 		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
-		postProcessArgs.sampler    = m_PointClampSampler;
 		postProcessArgs.viewport   = viewport;
+
+		// With the resolve running, the source is the history and already on this viewport's grid,
+		// so a point tap is what keeps it exact. Without it, the scene colour arrives on the render
+		// grid and something has to carry it across.
+		const bool sourceOnOutputGrid =
+			rt.IsTaaEnabled() ||
+			(rt.GetRenderWidth() == rt.GetWidth() && rt.GetRenderHeight() == rt.GetHeight());
+
+		postProcessArgs.sampler = sourceOnOutputGrid ? m_PointClampSampler : m_LinearClampSampler;
+		postProcessArgs.maskSampler = m_PointClampSampler;
 
 		if (m_OutlineMaskDrawn)
 		{
@@ -663,6 +676,7 @@ namespace bgl
 			taaArgs.pointSampler    = m_PointClampSampler;
 			taaArgs.linearSampler   = m_LinearClampSampler;
 			taaArgs.viewport        = viewport;
+			taaArgs.renderSize      = renderSize;
 			taaArgs.depth           = rt.GetDepthSrv();
 			taaArgs.clipToView      = m_TaaClipToView;
 			taaArgs.viewToPrevClip  = m_TaaViewToPrevClip;

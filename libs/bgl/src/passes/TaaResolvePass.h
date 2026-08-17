@@ -15,6 +15,10 @@ namespace bgl
 	 * Accumulates this frame's jittered scene colour into the temporal history, reprojecting the
 	 * previous one through the velocity buffer and clamping it to the 3x3 neighbourhood.
 	 *
+	 * The one pass that spans both of a target's grids: it reads the render-resolution frame and
+	 * writes the output-resolution history, so a render scale is reconstructed here rather than
+	 * stretched at present.
+	 *
 	 * It writes the history and nothing else. `PostProcess` reads what it produced and applies the
 	 * display curve, so anything that must sit between a resolved scene and the screen -- bloom,
 	 * grading -- has a stage to live in rather than arriving as a change to this shader.
@@ -49,7 +53,13 @@ namespace bgl
 
 			SamplerHandle pointSampler;
 			SamplerHandle linearSampler;
-			Viewport      viewport;
+
+			// The output grid: the history's, and what this pass rasterizes over.
+			Viewport viewport;
+
+			// The grid the scene colour, the velocity buffer and the depth are on. Equal to the
+			// viewport's extent at render scale 1.0, where the resolve is a plain accumulation.
+			glm::vec2 renderSize{ 0.0f };
 
 			// False on the first frame, the first after a resize, and the first after the scene's
 			// shading changed; the resolve then takes the scene colour whole rather than blending

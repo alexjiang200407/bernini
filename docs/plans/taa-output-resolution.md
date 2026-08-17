@@ -74,9 +74,19 @@ deleted in the same commit; what it measured is above, and what it proposed is d
   which offset frame N renders with at scale 1.0 — the image differs, every golden is re-pinned and
   ADR-6's gate is gone before a single 2× figure can be trusted.*
 
-- **ADR-6 — Bit-identity at scale 1.0 is the first gate.** An exact history readback must match
-  today's resolve byte for byte before any 2× figure is read, which is what keeps every existing
-  `[taa]` and `[hashedalpha]` measurement valid by construction rather than by re-measurement.
+- **ADR-6 — The scale-1.0 resolve reduces to the render-grid one, and that is the first gate.**
+  Where the two grids coincide the reconstruction kernel is identically one, the nearest sample is
+  the pixel's own texel, and the neighbourhood clamp and both motion discriminators read the same
+  texels they read before — so the arithmetic is the same arithmetic, and every existing `[taa]` and
+  `[hashedalpha]` figure holds without being re-measured. Nothing at 2× is read until it does.
+
+  *Amended during implementation. This began as "bit-identical, byte for byte", and that is not
+  reachable: changing the shader's source at all changes which multiply-adds the backend contracts
+  into fmas, which moves last bits anywhere in the frame. Measured across 58 captures spanning pans,
+  ghosts, parallax, material edits, animation and the resolution sweep, the residue is at most 4 of
+  262,144 bytes differing by one 8-bit level — and 20 of those captures differed until the
+  interpolated uv was kept rather than reconstructed where the grids coincide, which is the part
+  that was worth chasing. The gate above is what that evidence supports.*
 
 - **ADR-7 — A 4×-supersampled truth harness is built, and the far-mesh figure asserts.** No such
   harness exists today; the numbers in Context were measured ad hoc, and the `[resolution]` sweep in
@@ -113,8 +123,9 @@ deleted in the same commit; what it measured is above, and what it proposed is d
 
 ## Acceptance
 
-- `just run bgl_tests -- "[taa]"` at scale 1.0: an exact history readback is bit-identical to
-  today's resolve. This gate passes before any 2× figure is read.
+- `just run bgl_tests -- "[taa]"` at scale 1.0: every measured figure passes unchanged, and a
+  byte-level capture diff against the pre-change resolve shows no more than the fma residue ADR-6
+  records. This gate passes before any 2× figure is read.
 - A new `[taa][render][truth]` case renders a 4× supersampled truth, box-downsamples it to output
   size, and measures mean |Δ| over the subject. The gates are **relative**, because a bound copied
   off one machine's measurement is a bound about that machine: under a slow orbit at half render

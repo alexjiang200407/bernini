@@ -176,8 +176,10 @@ the first as history.
 
 When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
 `HaltonJitter` ([util/jitter.h](libs/bgl/src/util/jitter.h)) that `RenderContext::Draw`
-left-multiplies onto it, so the sample grid walks the pixel footprint across eight frames. The
-client's `Camera` never sees it. **A velocity is about the surface, not the sample pattern**, so both
+left-multiplies onto it, so the sample grid walks a *render* pixel's footprint. Across eight frames
+where the render and output grids coincide; across more when the output grid is denser and each of
+its sub-pixels wants that walk of its own ([Temporal Antialiasing](docs/taa.md)). The client's
+`Camera` never sees it. **A velocity is about the surface, not the sample pattern**, so both
 clip positions are de-jittered against their own frame's offset before differencing. For geometry
 that happens **in the mesh shader**, which subtracts `ViewData::jitter` / `prevJitter` in clip space
 as it fills `ForwardVSOut::clip` and `prevClip` — `SV_Position` keeps its offset, those two do not,
@@ -386,12 +388,21 @@ history and the pass is never attached.
 See [Temporal Antialiasing](docs/taa.md) for why the clamp is in YCoCg, why the blend is luma-weighted
 and why the resolve writes history rather than the backbuffer.
 
+**It is the one pass that spans both of a target's grids.** `sceneColor`, `motionVectors` and
+`depth` are on the render grid; the history it writes is on the output one, and it rasterizes over
+the latter. So a render scale is *reconstructed* here rather than stretched at present: each output
+pixel takes the render sample whose jitter landed nearest it, weighted by how near, while the
+neighbourhood clamp and both motion discriminators stay on the render 3x3 around that sample. Where
+the two grids coincide the weight is identically one and the pass is the render-grid accumulation it
+has always been.
+
 * **In:** `sceneColor`, `motionVectors`, `depth` and the previous history as shader resources; a
-  point sampler for the three read 1:1 and a linear one for the reprojected history, both owned by
-  `RenderContext`. Depth is read for one thing: what the camera alone would move each pixel by,
-  which is subtracted from the written velocity to find a surface's own motion
+  point sampler for the three read at their own texel centres and a linear one for the reprojected
+  history, both owned by `RenderContext`. Depth is read for one thing: what the camera alone would
+  move each pixel by, which is subtracted from the written velocity to find a surface's own motion
   ([Temporal Antialiasing](docs/taa.md)).
-* **Out:** the current history. `PostProcess` is then pointed at it instead of `sceneColor`.
+* **Out:** the current history, at the target's output size. `PostProcess` is then pointed at it
+  instead of `sceneColor`.
 * **The first frame, and the first after a resize, take the scene colour whole** — `historyValid` is
   false and there is no accumulation to blend against. So does the first frame after the scene's
   shading changed, where the accumulation exists but describes a material that is gone; see
@@ -414,8 +425,8 @@ the stage rather than those steps: everything between a resolved scene and the s
 grading, exposure adaptation — belongs here as it lands.
 
 The outline width is **4 px at a 2160-line target, scaled by the mask's height** — not a fixed texel
-count. A target rendered below its window's resolution (`RenderTargetWindow`'s render scale) is
-stretched back up on present, so a texel-count outline thickens on screen as the scale drops. It is
+count. The mask is on the render grid while the image around it is reconstructed onto the output
+one, so a texel-count outline would thicken on screen as the render scale drops. It is
 floored at one texel, so a small viewport still shows a selection, and capped at eight, because the
 dilate is a `(2r+1)^2` tap loop and a supersampled target would otherwise pay quadratically for a
 contour no thicker on screen.

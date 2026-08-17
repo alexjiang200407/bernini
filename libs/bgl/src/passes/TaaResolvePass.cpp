@@ -96,8 +96,23 @@ namespace bgl
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
 		gassert(m_Kernel.pipeline.IsInitialized(), "TaaResolve pipeline must be initialized");
 
-		const float width  = args.viewport.maxX - args.viewport.minX;
-		const float height = args.viewport.maxY - args.viewport.minY;
+		const auto outputSize = glm::vec2(
+			args.viewport.maxX - args.viewport.minX,
+			args.viewport.maxY - args.viewport.minY);
+
+		gassert(
+			args.renderSize.x > 0.0f && args.renderSize.y > 0.0f,
+			"TaaResolve needs a non-degenerate render size");
+
+		// The jitter reaches the shader twice over: in NDC, which is where CameraMotion undoes it,
+		// and in render texels, which is where the sample it moved actually landed.
+		const glm::vec2 jitterTexels = args.jitter * glm::vec2(0.5f, -0.5f) * args.renderSize;
+
+		// One phase unless the output grid is the denser of the two, which is what leaves the
+		// reconstruction kernel at unity everywhere a render scale does not upscale.
+		const auto subPixels = glm::vec2(
+			std::max(1.0f, std::ceil(outputSize.x / args.renderSize.x)),
+			std::max(1.0f, std::ceil(outputSize.y / args.renderSize.y)));
 
 		// Keyed on the Slang global's name as reflection reports it, so this string must track the
 		// ConstantBuffer declaration in TaaResolve.slang.
@@ -145,9 +160,29 @@ namespace bgl
 			{
 				u = args.linearSampler;
 			}
-			if (auto u = taa["texelSize"]; u.IsValid())
+			if (auto u = taa["renderSize"]; u.IsValid())
 			{
-				u = glm::vec2(1.0f / width, 1.0f / height);
+				u = args.renderSize;
+			}
+			if (auto u = taa["renderTexelSize"]; u.IsValid())
+			{
+				u = 1.0f / args.renderSize;
+			}
+			if (auto u = taa["outputTexelSize"]; u.IsValid())
+			{
+				u = 1.0f / outputSize;
+			}
+			if (auto u = taa["jitterTexels"]; u.IsValid())
+			{
+				u = jitterTexels;
+			}
+			if (auto u = taa["subPixels"]; u.IsValid())
+			{
+				u = subPixels;
+			}
+			if (auto u = taa["resampling"]; u.IsValid())
+			{
+				u = args.renderSize == outputSize ? 0.0f : 1.0f;
 			}
 			if (auto u = taa["blendWeight"]; u.IsValid())
 			{
