@@ -168,11 +168,16 @@ from there, live, because the comparison is what shows a temporal artifact.
   under a still camera, and under an orbit 0.87 → 0.68 — the held mesh under the same orbit
   measures 0.95, so the animating one now resolves *better* than a static one under a pan, which
   is the silhouette parallax the σ-box leaves and closest-fragment dilation would take.
-  Tightening the clamp box by the neighbourhood's motion as well — the dilated fetch keeps the
-  pixel's own tightness, so a backdrop pixel beside a moving edge fetches from where the mesh was
-  under the min/max box — was measured on the same ears at parity, 0.672 either way, and left
-  out: the box's min/max already holds the mesh's colour there. The thin-feature case on hashed
-  coverage is still better served by keeping the hash cell near pixel size (below).
+  Tightening the clamp box by the fetch's motion as well — the dilated fetch keeps the pixel's
+  own tightness, so a backdrop pixel beside a moving edge fetches from where the mesh was under
+  the min/max box — was measured twice and left out twice: on the close-up ears at parity (0.672
+  either way), and at a 1080p grid from a quarter texel of the borrowed vector, where it added
+  nothing the motion-weighted blend (below) had not already taken (the coyote's residue over
+  48/255 against its held self 353 with the blend alone, 352 with both) and cost the grazing
+  hashed strand 15% more flicker under a slow pan (1.48e-3 → 1.69e-3 at half a texel a frame),
+  because at that speed a σ box fully tight is the always-on box the next bullet rejects. The
+  thin-feature case on hashed coverage is still better served by keeping the hash cell near pixel
+  size (below).
 
 * **The clamp box is min/max at rest and tightens to mean ± σ under motion.** Always-on variance
   clipping was tried first and rejected: tighter everywhere means snapping converged stochastic
@@ -184,23 +189,37 @@ from there, live, because the comparison is what shows a temporal artifact.
   tightening on the pixel's own motion (fully tight from one texel per frame) takes the resting
   image out of the trade entirely: motion has the jitter removed, so a still camera reads exactly
   zero and every resting figure is bit-identical to min/max. Measured on a panned hashed-alpha
-  ramp over a lit backdrop: trailing-band error 1.73e-3 → 1.30e-3 against a 1.7e-4 still floor,
-  leading-band 2.58e-3 → 2.28e-3, grazing pan flicker 0.0024 → 0.0021, every resting bound
-  unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
+  ramp over a lit backdrop: trailing-band error 1.73e-3 → 1.30e-3 against a 1.7e-4 still floor
+  (1.38e-3 by the time the motion-weighted blend below was measured against it, after the mip
+  and coverage work in between), leading-band 2.58e-3 → 2.28e-3, grazing pan flicker
+  0.0024 → 0.0021, every resting bound unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
   otherwise escape.
 
-* **Not velocity-scaled either.** A blend weight ramped by reprojection distance — long accumulation
-  at rest, short under motion — is the standard answer to wanting both, and measured no better than a
-  constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
-  clamp already bounds ghosting, so there is no second problem for the weight to solve.
+* **A moving pixel leans further on the frame it can see — up to twice the base weight from one
+  texel of fetch motion.** The clamp bounds *where* an admitted history may land; nothing bounds
+  how long it stays, and what the clamp cannot pull out is the wake. First measured against the
+  empty-background pan and rejected there (0.00669 → 0.00673) — that instrument is edge spread,
+  and the box collapses onto the backdrop's own colour and scrubs the trail by itself. Against the
+  wake over *detail* the ramp is worth a third: 9.9e-5 → 6.9e-5; the animating quad's outline
+  1.25e-4 → 1.04e-4 still and 2.9e-4 → 2.3e-4 drifting; the coyote's 1080p residue over 48/255
+  against its held self 660 → 353; the panned hashed ramp's trailing band 1.38e-3 → 1.23e-3 at
+  two texels a frame and 1.21e-3 → 1.16e-3 at half a texel, its pan frame-to-frame 2.37e-3 →
+  2.28e-3, and the grazing strand's pan flicker within 2% at either speed. Rest is exactly zero
+  motion, so every resting figure is bit-identical — which is the difference from a *global*
+  doubling, which triples resting hashed flicker and is out. Capped at twice: at four times the
+  wake halves again but the hashed ramp's trailing band reaches 1.6e-3, where that band's guard
+  stops telling the σ box from the min/max one. No suite bound sits between the two states: the
+  margins are within what one GPU differs from another by on these instruments (the hashed pan
+  flicker pins Apple and Ada apart by a third), so the mechanism is guarded by these figures and
+  the coyote harness, not by a red-before line.
 
 * **The weight does deepen where remembered stochastic spread lives.** What a converged stochastic
   region still flickers by is the accumulation's residual variance, which scales with the blend
   weight and which no clamp box reaches — and the variance store (below) is a per-pixel map of
   exactly where that residual lives. The resolve divides the weight by the remembered sigma,
   floored at a quarter of the base so the accumulation still tracks a change a resting camera is
-  watching. This is not the velocity-scaled ramp rejected above: the gate is the store, not the
-  motion, and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
+  watching. This is separate from the motion ramp above: the gate is the store, not the motion,
+  and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
   deepening cannot ghost. It is also what makes a lower render resolution stop flickering more
   than a higher one: the distant strand card measured 7.7e-5 / 1.37e-4 / 2.51e-4 of frame-to-frame
   noise at 256/128/64 and measures 2.4e-5 / 4.2e-5 / 7.5e-5 with the deepening — every rung below
@@ -361,10 +380,11 @@ Two couplings worth knowing:
   The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
   any distance and anisotropic filtering resolves that axis.
 
-* **The blend weight trades flicker against settling time, not against ghosting.** This is the
-  opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
-  from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the trail left
-  behind a pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
+* **The base blend weight trades flicker against settling time, not against ghosting.** This is
+  the opposite of the intuition and it is measured: at an equal convergence budget, halving the
+  weight from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the
+  trail left behind an empty-background pan by 2% — nothing (the wake over *detail* is the figure
+  the motion ramp above does move). Ghosting is bounded by the neighbourhood clamp, which is doing
   essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
   actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
   camera stops. 0.025 is where that starts to show. The variance-guided deepening (above) is how the

@@ -588,9 +588,10 @@ TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
 
 	INFO("wake delta against the converged still: " << ghost);
 
-	// Measured 1.2e-4, which is convergence-state noise; a ghost the clamp admitted would sit an
-	// order of magnitude above. Depth-based disocclusion rejection was measured against this very
-	// number and moved it nowhere -- the clamp owns the wake.
+	// Measured 1.2e-4 with a constant blend, 6.9e-5 with the weight ramped by fetch motion --
+	// convergence-state noise either way; a ghost the clamp admitted would sit an order of
+	// magnitude above. Depth-based disocclusion rejection was measured against this very number
+	// and moved it nowhere -- the clamp owns the wake.
 	CHECK(ghost < 1.0e-3f);
 }
 
@@ -874,8 +875,10 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 	// pose and not the resolve.
 	REQUIRE(pose == 0.0f);
 
-	// Measured 6.9e-4 with the pixel's own motion alone -- the doubled outline -- and 1.25e-4 with
-	// the neighbourhood's; the bound sits between, nearer the fix.
+	// Measured 6.9e-4 with the pixel's own motion alone -- the doubled outline -- 1.25e-4 with the
+	// neighbourhood's, and 1.04e-4 with the blend weighted by the fetch's motion; the bound sits
+	// between the first two, nearer the fix. The last step is not bounded apart: its margin is
+	// within what one GPU differs from another by here.
 	CHECK(outline < 3.0e-4f);
 
 	// The same under a drifting camera, which is what tells a surface's own motion from the
@@ -909,8 +912,8 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 		"quad box delta under a drifting camera, animating against held: raw = "
 		<< driftPose << ", resolved = " << driftOutline);
 
-	// Measured 8.8e-4 reprojecting by each pixel's own vector and 2.9e-4 by the neighbour that
-	// moves most on its own; the still-camera bound above would sit 3% over the latter.
+	// Measured 8.8e-4 reprojecting by each pixel's own vector, 2.9e-4 by the neighbour that moves
+	// most on its own, and 2.3e-4 with the blend weighted by that fetch's motion.
 	REQUIRE(driftPose == 0.0f);
 	CHECK(driftOutline < 5.0e-4f);
 

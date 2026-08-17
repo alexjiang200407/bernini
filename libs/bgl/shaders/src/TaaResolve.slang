@@ -298,7 +298,12 @@ float4 PSMain(VSOut input) : SV_Target
     const float c_ConvergeKnee = 8.0;
     const float c_MinWeightScale = 0.25;
 
-    float weight = gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
+    // Capped at twice: docs/taa.md has where the hashed pan's trailing-band guard stops it.
+    const float c_MaxMotionWeightScale = 2.0;
+    const float c_MotionWeightTexels = 1.0;
+
+    float motionScale = lerp(1.0, c_MaxMotionWeightScale, saturate(length(dilatedMotion / texel) / c_MotionWeightTexels));
+    float weight = motionScale * gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 

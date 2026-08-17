@@ -57,6 +57,17 @@ under motion, which at 1080p a limb crosses more texels per frame to reach.
   leaving it as a follow-up, which the first version did on an 8% edge figure — the user asked, and
   the pin is a bit-identical image with and without a second target.*
 
+- **ADR-6 — The blend weight follows the fetch's motion (2026-08-16, the user's call after the
+  review).** A moving pixel takes up to twice the base weight from the current frame, gated on the
+  motion it fetches by, so rest is bit-identical by construction. Measured before it was asked
+  for: the coyote's 1080p outline residue 660 → 353 pixels over 48/255, the wake over slats
+  9.9e-5 → 6.9e-5, the hashed pan's trailing band better at every speed, every resting figure to
+  the digit. *Reverses the blend half of the non-goal below. Rejected: a global doubling of the
+  weight, which triples resting hashed flicker; a four-times ramp, which the hashed pan's
+  trailing-band guard stops; and tightening the σ box on the fetch's motion from a quarter texel,
+  asked for with it, because on this baseline it added nothing the weight had not taken and cost
+  the grazing hashed strand 15% more flicker under a slow pan.*
+
 ## Non-goals
 
 - Static-mesh instances whose transform changes: `Forward_StaticMesh.slang` reprojects the *current*
@@ -65,7 +76,8 @@ under motion, which at 1080p a limb crosses more texels per frame to reach.
 - The skinned tier (it does not exist yet), and hashed alpha on VAT (a VAT geom demands an opaque
   material).
 - The jitter sequence itself, the base blend weight, and the resting variance widening at true
-  rest.
+  rest. *Amended 2026-08-16 by ADR-6: the weight now ramps with fetch motion; the base weight, the
+  sequence and the resting widening stay out.*
 - Depth-based disocclusion rejection: depth is read for the camera's own motion only (ADR-4), not
   to reject history, which `docs/taa.md` measured and rejected on hashed alpha.
 
@@ -97,9 +109,13 @@ under motion, which at 1080p a limb crosses more texels per frame to reach.
    `[hashedalpha]` figures identical to master's.
 5. `fix(bgl): walk the jitter sequence per target` — the frame count on `RenderTargetBase`, the
    two uses in `RenderContext`, the case. Gate: (c) red before, bit-identical after.
-6. `fix(bgl): unproject the sky's ray through the two inverses, not the inverse of the product` —
+6. `fix(bgl): unproject the sky's ray through the pieces, not the inverse of their product` —
    found by the reviewer's eyes at half render scale on a 1080p panel, where the report's jaggies
    survived commits 4 and 5: a still sky reported up to half a texel of motion between jitter
    phases, so every silhouette against it was fetched off-texel each frame. One line in
    `RenderContext`, the case in `MotionVectors_test`, `docs/passes.md`. Gate: the case red before,
    green after; every `[taa]` and `[hashedalpha]` figure identical.
+7. `fix(bgl): let the blend weight follow the fetch's motion` — ADR-6: one ramp in the resolve
+   and the `docs/taa.md` bullets it rewrites, the box tightening measured and left out. Gate:
+   `[taa]`, `[hashedalpha]` and `[vat]` green with the figures in ADR-6, every resting figure
+   identical.
