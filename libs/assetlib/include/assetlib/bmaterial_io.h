@@ -45,32 +45,4 @@ namespace assetlib
 	 */
 	[[nodiscard]] SourceStamp
 	stampOf(const std::filesystem::path& path);
-
-	/**
-	 * Whether `material`'s baked triplet no longer reflects the source textures its routes name.
-	 * `dataRoot` is the project's Data directory: every texture path a material stores is relative to
-	 * it, not to the material file.
-	 *
-	 * True when a routed source has changed, gone missing, or was never stamped (i.e. the material
-	 * has routes but has never been baked), or when a map the triplet names is no longer on disk.
-	 * False for a material with no routes at all -- an imported triplet-only material has no sources
-	 * to be stale against, and no routes to fall back to -- and false when every routed source still
-	 * measures exactly as it did at bake time and every baked map is present.
-	 *
-	 * This is the rebake question, not the draw question: see drawsLoose.
-	 */
-	[[nodiscard]] bool
-	bakeIsStale(const BMaterial& material, const std::filesystem::path& dataRoot);
-
-	/**
-	 * Whether `material` draws from its authoring routes rather than its baked triplet. Derived from
-	 * the disk, never stored -- a material cannot claim a triplet it does not have.
-	 *
-	 * A stale bake falls back to the routes it was composited from, but only routes that are still
-	 * there can be sampled. A material whose sources have gone is stale and unbakeable, yet loose is
-	 * not a representation it can draw either, so it keeps its triplet: degraded where a map is also
-	 * missing, rather than failing to open a file that does not exist.
-	 */
-	[[nodiscard]] bool
-	drawsLoose(const BMaterial& material, const std::filesystem::path& dataRoot);
 }

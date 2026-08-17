@@ -18,6 +18,8 @@
 
 #include "ref_paths.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	using core::throw_runtime_error;
@@ -269,10 +271,9 @@ namespace assetlib
 	}
 
 	BVat
-	bakeVat(const VatBakeDesc& desc)
+	bakeVat(const AssetStore& store, const VatBakeDesc& desc)
 	{
-		const std::filesystem::path meshPath = desc.dataRoot / desc.mesh;
-		const BMesh                 mesh     = load(meshPath);
+		const BMesh mesh = store.LoadMesh(desc.mesh);
 
 		// A static mesh fails the in-memory bake anyway; refusing here names the actual gap --
 		// there is no rig to load -- instead of failing to open a file with no name.
@@ -281,27 +282,23 @@ namespace assetlib
 				"vat: '{}' names no skeleton, so there is no rig to bake",
 				desc.mesh);
 
-		const std::filesystem::path animationsPath = desc.dataRoot / desc.animations;
-
-		BVat vat = bakeVat(
-			mesh,
-			loadSkeleton(desc.dataRoot / mesh.skeleton),
-			loadAnimations(animationsPath));
+		BVat vat =
+			bakeVat(mesh, store.LoadSkeleton(mesh.skeleton), store.LoadAnimations(desc.animations));
 
 		vat.mesh            = normalizePath(desc.mesh);
 		vat.skeleton        = normalizePath(mesh.skeleton);
 		vat.animations      = normalizePath(desc.animations);
-		vat.meshStamp       = stampOf(meshPath);
-		vat.skeletonStamp   = stampOf(desc.dataRoot / mesh.skeleton);
-		vat.animationsStamp = stampOf(animationsPath);
+		vat.meshStamp       = store.StampOf(vat.mesh);
+		vat.skeletonStamp   = store.StampOf(vat.skeleton);
+		vat.animationsStamp = store.StampOf(vat.animations);
 		return vat;
 	}
 
 	bool
-	vatIsStale(const BVat& vat, const std::filesystem::path& dataRoot)
+	vatIsStale(const BVat& vat, const core::file::IFileSystem& fileSystem)
 	{
-		return stampOf(dataRoot / vat.mesh) != vat.meshStamp ||
-		       stampOf(dataRoot / vat.skeleton) != vat.skeletonStamp ||
-		       stampOf(dataRoot / vat.animations) != vat.animationsStamp;
+		return stampOf(fileSystem, vat.mesh) != vat.meshStamp ||
+		       stampOf(fileSystem, vat.skeleton) != vat.skeletonStamp ||
+		       stampOf(fileSystem, vat.animations) != vat.animationsStamp;
 	}
 }

@@ -9,6 +9,8 @@
 #include "fs_util.h"
 #include "string_io.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace
@@ -72,5 +74,11 @@ namespace assetlib
 	{
 		const auto bytes = core::file::read_file_bytes(path.string());
 		return deserializeEnv(bytes);
+	}
+
+	BEnv
+	loadEnv(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeEnv(fileSystem.Read(path));
 	}
 }

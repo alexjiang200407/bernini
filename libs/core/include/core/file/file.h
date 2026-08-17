@@ -2,6 +2,8 @@
 
 namespace core::file
 {
+	class IFileSystem;
+
 	std::vector<std::byte>
 	read_file_bytes(const std::string& filePath);
 
@@ -17,6 +19,17 @@ namespace core::file
 	[[nodiscard]] std::optional<uint64_t>
 	hash_file(const std::filesystem::path& filePath);
 
+	/**
+	 * The same hash of the same bytes, read through a mount rather than off the host filesystem, in
+	 * the same fixed-size chunks -- so an entry in an archive larger than memory still hashes, and a
+	 * file hashes to the same value loose or packed.
+	 *
+	 * @param path A mount key: data-root-relative, `/`-separated, already normalized.
+	 * @return Nullopt if the mount does not carry `path`, or if a read fails partway through it.
+	 */
+	[[nodiscard]] std::optional<uint64_t>
+	hash_file(const IFileSystem& fileSystem, std::string_view path);
+
 	std::filesystem::path
 	get_library_path();
 
@@ -26,4 +39,20 @@ namespace core::file
 	std::filesystem::path
 	get_executable_path();
 
+	/**
+	 * Writes `bytes` to `path` via a sibling temp file, flushed to the device and then renamed, so a
+	 * crash mid-write leaves either the previous contents or the new ones and never a truncated file
+	 * that still looks readable. The flush is what extends that from a process crash to a power
+	 * loss: closing a stream only hands the bytes to the OS cache.
+	 *
+	 * The temp name carries the process id and a counter, because several processes may write to
+	 * one directory at once.
+	 *
+	 * @throws std::runtime_error naming the OS's reason if the temp cannot be written or the rename
+	 *         cannot be committed. Unlike the shader cache's equivalent this does not degrade to a
+	 *         warning: its caller writes a shipped artifact, where a silent failure is discovered by
+	 *         whoever loads half a project.
+	 */
+	void
+	write_atomic(const std::filesystem::path& path, std::span<const std::byte> bytes);
 }

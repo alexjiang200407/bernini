@@ -50,36 +50,6 @@ namespace assetlib
 		const CancelToken& cancel = {});
 
 	/**
-	 * Whether `sky`'s baked map no longer reflects the source its route names. False when unrouted --
-	 * there is no source to have drifted from -- and true when the source changed, went missing, was
-	 * never baked, or when the map the route names is no longer on disk.
-	 *
-	 * That last case is the same rule the material triplet follows: a bake cannot claim a map that is
-	 * not there to sample, so a deleted one reads as stale rather than as up to date.
-	 */
-	[[nodiscard]] bool
-	isSkyBakeStale(const BSky& sky, const std::filesystem::path& dataRoot);
-
-	/** isSkyBakeStale over the lighting pair: stale when either route is. */
-	[[nodiscard]] bool
-	isEnvLightingBakeStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot);
-
-	/**
-	 * The map a consumer draws for `route`, data-root relative: the baked RGB9E5 while that is on
-	 * disk and current, and the float source it was compiled from while it is not.
-	 *
-	 * The rule a material follows -- see drawsLoose. A stale or never-written bake falls back to
-	 * what it was compiled from, but only a source that is still there can be sampled, so a route
-	 * whose source has gone keeps its baked map. Two representations of one image: the fallback
-	 * costs memory and skips the shipping compile, it does not change what is drawn.
-	 *
-	 * @throws std::runtime_error when neither is on disk, which is the only case a consumer cannot
-	 *         draw at all.
-	 */
-	[[nodiscard]] const std::string&
-	envMapToDraw(const EnvMapRoute& route, const std::filesystem::path& dataRoot);
-
-	/**
 	 * Whether `fileName` is a name bakeSky or bakeEnvLighting could have written:
 	 * `<group>_<16 hex digits>.ktx2` for an environment group. The counterpart of isBakedMapName,
 	 * disjoint from it by group name, and what lets the texture prune consider environment maps

@@ -1,5 +1,10 @@
 #include <assetlib/texture_prune.h>
 
+#include <core/err/util.h>
+#include <core/file/LooseFileSystem.h>
+
+#include "ref_paths.h"
+
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bsky_io.h>
@@ -8,6 +13,8 @@
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
+
+#include "mounted_io.h"
 
 namespace assetlib
 {
@@ -28,34 +35,35 @@ namespace assetlib
 		}
 
 		/**
-		 * The mark phase: the name of every baked map that some material, sky or lighting asset below
-		 * `dataRoot` still points at. An unreadable asset is fatal, and deliberately so -- its maps
+		 * The mark phase: the name of every baked map that some material, sky or lighting asset in
+		 * `files` still points at. An unreadable asset is fatal, and deliberately so -- its maps
 		 * cannot be marked, and they would then be swept as garbage.
+		 *
+		 * Reads the whole mount and not only the writable layer: a packed material holds a loose map
+		 * alive exactly as a loose one does, and marking only what can be deleted would sweep the maps
+		 * that the archive is the sole referrer of.
 		 */
 		LiveSet
-		markLiveMaps(const std::filesystem::path& dataRoot)
+		markLiveMaps(const core::file::IFileSystem& files)
 		{
 			auto live = LiveSet();
 
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(dataRoot))
+			for (const std::string& key : files.Enumerate())
 			{
-				if (!entry.is_regular_file())
-					continue;
-
-				const auto unreadable = [&entry](const char* what, const std::exception& e) {
+				const auto unreadable = [&key](const char* what, const std::exception& e) {
 					return std::runtime_error(
 						"assetlib::findUnusedBakedTextures: cannot read the " + std::string(what) +
-						" '" + entry.path().string() +
+						" '" + key +
 						"', so the baked maps it references cannot be known: " + e.what());
 				};
 
-				const auto extension = entry.path().extension();
+				const std::string extension = extensionOf(key);
 				if (extension == c_MaterialExtension)
 				{
 					auto material = BMaterial();
 					try
 					{
-						material = loadMaterial(entry.path());
+						material = loadMaterial(files, key);
 					}
 					catch (const std::exception& e)
 					{
@@ -74,8 +82,7 @@ namespace assetlib
 
 					case ShadingModel::kCount:
 						throw std::runtime_error(
-							"assetlib::findUnusedBakedTextures: the material '" +
-							entry.path().string() +
+							"assetlib::findUnusedBakedTextures: the material '" + key +
 							"' names an unknown shading model, so its baked maps cannot be known");
 					}
 				}
@@ -83,7 +90,7 @@ namespace assetlib
 				{
 					try
 					{
-						markMap(live, loadSky(entry.path()).sky.baked);
+						markMap(live, loadSky(files, key).sky.baked);
 					}
 					catch (const std::exception& e)
 					{
@@ -95,7 +102,7 @@ namespace assetlib
 				{
 					try
 					{
-						const BEnvLighting lighting = loadEnvLighting(entry.path());
+						const BEnvLighting lighting = loadEnvLighting(files, key);
 						markMap(live, lighting.prefilter.baked);
 						markMap(live, lighting.irradiance.baked);
 					}
@@ -112,22 +119,29 @@ namespace assetlib
 	}
 
 	TexturePruneScan
-	findUnusedBakedTextures(const TexturePruneDesc& desc)
+	findUnusedBakedTextures(const AssetStore& store, const TexturePruneDesc& desc)
 	{
-		if (!std::filesystem::is_directory(desc.dataRoot))
-			throw std::runtime_error(
-				"assetlib::findUnusedBakedTextures: the data root '" + desc.dataRoot.string() +
-				"' is not a directory");
+		// Checked even though a source built from a path already was: this one may have been built
+		// over a mount, whose constructor cannot check a writable layer that is allowed not to exist
+		// yet. The sweep unlinks files, and a data root that is not there would report a clean
+		// project instead of the caller error it is.
+		if (!std::filesystem::is_directory(store.GetDataRoot()))
+			core::throw_runtime_error(
+				"assetlib::findUnusedBakedTextures: the data root '{}' is not a directory",
+				store.GetDataRoot().string());
+
+		const core::file::IFileSystem& files = store.GetFiles();
 
 		auto scan = TexturePruneScan();
 
-		const LiveSet live       = markLiveMaps(desc.dataRoot);
+		const LiveSet live       = markLiveMaps(files);
 		scan.materialsScanned    = live.materials;
 		scan.environmentsScanned = live.environments;
 		scan.liveMaps            = live.maps.size();
 
-		// Nothing has ever been baked here, so nothing can have been orphaned.
-		const std::filesystem::path textureDir = desc.dataRoot / desc.textureDir;
+		// The sweep stays on the writable layer while the mark read the whole mount: a packed entry
+		// cannot be unlinked, so proposing one would be proposing a deletion nobody can carry out.
+		const std::filesystem::path textureDir = store.GetDataRoot() / desc.textureDir;
 		if (!std::filesystem::is_directory(textureDir))
 			return scan;
 
@@ -159,14 +173,14 @@ namespace assetlib
 	}
 
 	TexturePruneResult
-	deleteUnusedBakedTextures(const TexturePruneScan& scan, const TexturePruneDesc& desc)
+	deleteUnusedBakedTextures(const TexturePruneScan& scan, const AssetStore& store)
 	{
 		auto result = TexturePruneResult();
 
 		for (const UnusedTexture& texture : scan.unused)
 		{
 			std::error_code ec;
-			const bool      removed = std::filesystem::remove(desc.dataRoot / texture.path, ec);
+			const bool removed = std::filesystem::remove(store.GetDataRoot() / texture.path, ec);
 
 			// One locked map must not abandon the rest of the sweep.
 			if (ec)

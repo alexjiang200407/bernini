@@ -60,4 +60,5 @@ namespace assetlib
 	 */
 	[[nodiscard]] VatRefs
 	loadVatRefs(const std::filesystem::path& path);
+
 }

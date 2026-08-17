@@ -1,3 +1,4 @@
+#include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 #include <core/hash.h>
 
@@ -89,4 +90,51 @@ TEST_CASE("A file that cannot be opened has no hash", "[hash]")
 	REQUIRE(
 		core::file::hash_file(std::filesystem::temp_directory_path() / "core_hash_absent.bin") ==
 		std::nullopt);
+}
+
+/**
+ * The mounted overload has to agree with the host one on the same bytes, or a source would stamp
+ * differently loose and packed and every staleness verdict would flip at the mount boundary.
+ *
+ * Sizes straddling the 64 KiB chunk boundary again, because this reads through ReadRange rather
+ * than a stream and the chunking is written twice.
+ */
+TEST_CASE("Hashing through a mount equals hashing the file it resolves to", "[hash]")
+{
+	constexpr size_t c_Chunk = 64 * 1024;
+
+	const std::filesystem::path root = std::filesystem::temp_directory_path() / "core_hash_mount";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root);
+
+	const core::file::LooseFileSystem files(root);
+
+	for (const size_t size :
+	     { size_t{ 0 }, size_t{ 1 }, c_Chunk - 1, c_Chunk, c_Chunk + 1, 3 * c_Chunk + 17 })
+	{
+		INFO("size " << size);
+
+		const std::vector<std::byte> bytes = Pattern(size);
+		{
+			std::ofstream out(root / "payload.bin", std::ios::binary);
+			out.write(
+				reinterpret_cast<const char*>(bytes.data()),
+				static_cast<std::streamsize>(bytes.size()));
+		}
+
+		const std::optional<uint64_t> mounted = core::file::hash_file(files, "payload.bin");
+
+		REQUIRE(mounted.has_value());
+		REQUIRE(mounted == core::file::hash_file(root / "payload.bin"));
+		REQUIRE(*mounted == core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed()));
+	}
+
+	std::filesystem::remove_all(root);
+}
+
+TEST_CASE("A path a mount does not carry has no hash", "[hash]")
+{
+	const core::file::LooseFileSystem files(std::filesystem::temp_directory_path());
+
+	REQUIRE(core::file::hash_file(files, "core_hash_absent.bin") == std::nullopt);
 }

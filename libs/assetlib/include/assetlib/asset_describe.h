@@ -17,6 +17,10 @@ namespace assetlib
 	 *
 	 * The text is for a person, not a parser: it is not stable across versions, and nothing reads it
 	 * back. `assetlib_cli describe` prints it; the editor can surface it in an asset inspector.
+	 *
+	 * These report what a container records and nothing more. To have each routed source stat'd and
+	 * compared against the stamp its bake wrote -- so a stale bake is visible -- describe through a
+	 * project instead: `AssetStore::Describe`.
 	 */
 
 	/**
@@ -33,23 +37,19 @@ namespace assetlib
 	 * Describes a material: its mode, factors, the baked texture triplet, and the per-channel routing
 	 * table with each route's bake provenance.
 	 *
-	 * Routes are reported against `dataRoot` when one is given: each routed source is stat'd and its
-	 * live stamp compared with the one recorded at bake time, so a stale bake is visible here. Passing
-	 * an empty path skips that and reports the recorded stamps alone.
+	 * The recorded stamps alone; AssetStore::Describe is the form that checks them.
 	 */
 	[[nodiscard]] std::string
-	describe(const BMaterial& material, const std::filesystem::path& dataRoot = {});
+	describe(const BMaterial& material);
 
 	/**
 	 * Describes a sky: how the backdrop presents it, and its one radiance route with that route's bake
 	 * provenance.
 	 *
-	 * `dataRoot` is used exactly as it is for a material -- given one, each routed source is stat'd and
-	 * compared against the stamp the bake recorded, so a stale bake is visible here. Passing an empty
-	 * path reports the recorded stamps alone.
+	 * The recorded stamps alone, as for a material.
 	 */
 	[[nodiscard]] std::string
-	describe(const BSky& sky, const std::filesystem::path& dataRoot = {});
+	describe(const BSky& sky);
 
 	/**
 	 * Describes the lighting derived from a sky: the exposure it was measured at, and the prefilter and
@@ -59,16 +59,16 @@ namespace assetlib
 	 * makes both untrustworthy.
 	 */
 	[[nodiscard]] std::string
-	describe(const BEnvLighting& lighting, const std::filesystem::path& dataRoot = {});
+	describe(const BEnvLighting& lighting);
 
 	/**
 	 * Describes an environment: the `.bsky` and `.benvl` it composes.
 	 *
-	 * A `.benv` holds no pixels, so with a `dataRoot` the useful question is whether what it names is
-	 * actually there -- each reference is resolved against the root and reported missing if it is not.
+	 * A `.benv` holds no pixels, so the useful question is whether what it names is actually there --
+	 * which only AssetStore::Describe can answer.
 	 */
 	[[nodiscard]] std::string
-	describe(const BEnv& env, const std::filesystem::path& dataRoot = {});
+	describe(const BEnv& env);
 
 	/** Describes a skeleton: its signature, and each bone's parent and bind pose. */
 	[[nodiscard]] std::string
@@ -90,10 +90,9 @@ namespace assetlib
 	 * Describes a VAT bake: its texture pair's dimensions and bounds, each clip's rows, each
 	 * submesh's columns, and the three inputs it was baked from with their stamps.
 	 *
-	 * Given a `dataRoot`, each input is stat'd and compared against the stamp the bake recorded, so
-	 * a stale bake is reported. Pass the tables-only form (loadVatTables) -- nothing here reads the
+	 * Pass the tables-only form (loadVatTables) -- nothing here reads the
 	 * pixels, and a whole-project survey must not pay for them.
 	 */
 	[[nodiscard]] std::string
-	describe(const BVat& vat, const std::filesystem::path& dataRoot = {});
+	describe(const BVat& vat);
 }

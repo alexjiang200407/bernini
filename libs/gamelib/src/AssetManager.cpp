@@ -68,7 +68,14 @@ namespace game
 		bgl::SceneRef         scene,
 		std::filesystem::path dataRoot,
 		AssetManagerOptions   options) :
-		m_Scene(std::move(scene)), m_DataRoot(std::move(dataRoot)), m_Options(options)
+		AssetManager(std::move(scene), assetlib::AssetStore(std::move(dataRoot)), options)
+	{}
+
+	AssetManager::AssetManager(
+		bgl::SceneRef        scene,
+		assetlib::AssetStore store,
+		AssetManagerOptions  options) :
+		m_Scene(std::move(scene)), m_Store(std::move(store)), m_Options(options)
 	{
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
 		// still be there -- and with a bare reference that was only true if the caller happened to
@@ -149,7 +156,7 @@ namespace game
 		auto key = std::string(relPath);
 
 		const bgl::TextureAssetHandle handle = m_Scene->AddTextureAsset(
-			prefetch != nullptr ? std::move(decoded) : assetlib::loadKTX2(m_DataRoot / key),
+			prefetch != nullptr ? std::move(decoded) : m_Store.LoadTexture(key),
 			key);
 
 		m_TextureByPath.emplace(key, handle.textureSlot.index);
@@ -161,17 +168,17 @@ namespace game
 	AssetManager::Environment
 	AssetManager::AcquireEnvironment(std::string_view relPath)
 	{
-		const assetlib::BEnv env = assetlib::loadEnv(m_DataRoot / relPath);
+		const assetlib::BEnv env = m_Store.LoadEnv(relPath);
 
 		const auto acquireRoute = [this](const assetlib::EnvMapRoute& route) {
-			return AcquireTexture(assetlib::envMapToDraw(route, m_DataRoot));
+			return AcquireTexture(m_Store.EnvMapToDraw(route));
 		};
 
 		Environment out;
 
 		if (!env.sky.empty())
 		{
-			const assetlib::BSky sky = assetlib::loadSky(m_DataRoot / env.sky);
+			const assetlib::BSky sky = m_Store.LoadSky(env.sky);
 			out.skybox               = acquireRoute(sky.sky);
 			out.skyMipLevel          = sky.mipLevel;
 			out.skyRotationY         = sky.rotationY;
@@ -179,11 +186,10 @@ namespace game
 
 		if (!env.lighting.empty())
 		{
-			const assetlib::BEnvLighting lighting =
-				assetlib::loadEnvLighting(m_DataRoot / env.lighting);
-			out.prefilter  = acquireRoute(lighting.prefilter);
-			out.irradiance = acquireRoute(lighting.irradiance);
-			out.exposure   = lighting.exposure;
+			const assetlib::BEnvLighting lighting = m_Store.LoadEnvLighting(env.lighting);
+			out.prefilter                         = acquireRoute(lighting.prefilter);
+			out.irradiance                        = acquireRoute(lighting.irradiance);
+			out.exposure                          = lighting.exposure;
 		}
 
 		return out;
@@ -213,9 +219,9 @@ namespace game
 		auto key = std::string(relPath);
 
 		// Load first, in its own statement: the order in which a call's arguments are evaluated is
-		// unspecified, so passing `loadMaterial(m_DataRoot / key)` alongside `std::move(key)` lets the
+		// unspecified, so passing `m_Store.LoadMaterial(key)` alongside `std::move(key)` lets the
 		// compiler move `key` out from under the path it is supposed to build.
-		const assetlib::BMaterial material = assetlib::loadMaterial(m_DataRoot / key);
+		const assetlib::BMaterial material = m_Store.LoadMaterial(key);
 
 		return CreateMaterial(material, std::move(key), prefetch);
 	}
@@ -235,7 +241,7 @@ namespace game
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
 		// cannot be sampled, so the material falls back to the routes that produced it -- when those
 		// are still there to fall back to.
-		const bool loose = assetlib::drawsLoose(material, m_DataRoot);
+		const bool loose = m_Store.DrawsLoose(material);
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
 		const std::vector<std::string> paths = MaterialTextures(material, loose);
@@ -276,7 +282,7 @@ namespace game
 			return record.handle;
 		}
 
-		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);
+		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
 
 		if (meshIndex >= mesh.meshes.size())
 		{
@@ -352,9 +358,9 @@ namespace game
 		}
 
 		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
-		const auto vat     = EnsureVatBaked(m_DataRoot, relPath, animationsRelPath);
+		const auto vat     = EnsureVatBaked(m_Store, relPath, animationsRelPath);
 
-		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);
+		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),

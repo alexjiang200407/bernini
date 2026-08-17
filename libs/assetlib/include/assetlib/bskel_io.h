@@ -27,4 +27,5 @@ namespace assetlib
 	/** @throws std::runtime_error if the file cannot be read or is malformed. */
 	[[nodiscard]] Skeleton
 	loadSkeleton(const std::filesystem::path& path);
+
 }

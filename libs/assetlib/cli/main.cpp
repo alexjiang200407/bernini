@@ -1,4 +1,5 @@
 #include <CLI/CLI.hpp>
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -18,6 +19,8 @@
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/pak_io.h>
+#include <assetlib/pak_pack.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib/vat_bake.h>
@@ -27,6 +30,7 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
+#include <core/file/LooseFileSystem.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -354,6 +358,27 @@ main(int argc, char** argv)
 	prune->add_flag("--dry-run", pruneDryRun, "List what would be deleted and delete nothing");
 	prune->add_flag("-y,--yes", pruneYes, "Delete without asking for confirmation");
 
+	std::string packDataRoot;
+	std::string packTarget;
+
+	auto* pack = app.add_subcommand(
+		"pack",
+		"Write a project's data root into one .bpak archive of everything the runtime reads");
+	pack->add_option("-d,--data-root", packDataRoot, "Project data directory to pack")
+		->required()
+		->check(CLI::ExistingDirectory);
+	pack->add_option(
+		"-o,--out",
+		packTarget,
+		"Archive to write (default: Data.bpak beside the data root)");
+
+	std::string listArchive;
+
+	auto* list = app.add_subcommand("list", "Print the entry table of a .bpak");
+	list->add_option("archive", listArchive, "The .bpak to read")
+		->required()
+		->check(CLI::ExistingFile);
+
 	std::string stripInput;
 	std::string stripOut;
 	bool        stripYes = false;
@@ -431,11 +456,10 @@ main(int argc, char** argv)
 		try
 		{
 			auto desc       = assetlib::VatBakeDesc();
-			desc.dataRoot   = vatDataRoot;
 			desc.mesh       = vatMesh;
 			desc.animations = vatAnimations;
 
-			const assetlib::BVat vat = assetlib::bakeVat(desc);
+			const assetlib::BVat vat = assetlib::bakeVat(assetlib::AssetStore(vatDataRoot), desc);
 
 			const std::filesystem::path out = vatOut.empty() ?
 			                                      std::filesystem::path(vatDataRoot) /
@@ -633,22 +657,34 @@ main(int argc, char** argv)
 			// a file or a diff without spdlog's timestamps and level prefixes in the way.
 			const auto dataRoot = std::filesystem::path(describeDataRoot);
 
+			// Optional: a container describes on its own, and only a root lets the stamps be checked
+			// against what is actually there.
+			std::optional<assetlib::AssetStore> store;
+			if (!dataRoot.empty())
+				store.emplace(dataRoot);
+
+			// With a project the stamps are checked against what is on disk; without one only what
+			// the container records can be reported.
+			const auto describe = [&store](const auto& asset) {
+				return store.has_value() ? store->Describe(asset) : assetlib::describe(asset);
+			};
+
 			switch (sniff(path))
 			{
 			case ContainerType::kMesh:
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << assetlib::describe(assetlib::loadMaterial(path), dataRoot);
+				std::cout << describe(assetlib::loadMaterial(path));
 				break;
 			case ContainerType::kEnv:
-				std::cout << assetlib::describe(assetlib::loadEnv(path), dataRoot);
+				std::cout << describe(assetlib::loadEnv(path));
 				break;
 			case ContainerType::kSky:
-				std::cout << assetlib::describe(assetlib::loadSky(path), dataRoot);
+				std::cout << describe(assetlib::loadSky(path));
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << assetlib::describe(assetlib::loadEnvLighting(path), dataRoot);
+				std::cout << describe(assetlib::loadEnvLighting(path));
 				break;
 			case ContainerType::kSkeleton:
 				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
@@ -662,7 +698,7 @@ main(int argc, char** argv)
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << assetlib::describe(assetlib::loadVatTables(path), dataRoot);
+				std::cout << describe(assetlib::loadVatTables(path));
 				break;
 			}
 		}
@@ -712,10 +748,9 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			auto desc     = assetlib::AssetRefScanDesc();
-			desc.dataRoot = refsDataRoot;
+			const assetlib::AssetStore store{ std::filesystem::path(refsDataRoot) };
 
-			const auto graph = assetlib::AssetRefGraph::Scan(desc);
+			const auto graph = assetlib::AssetRefGraph::Scan(store);
 
 			spdlog::info(
 				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets and {} VAT "
@@ -776,15 +811,94 @@ main(int argc, char** argv)
 		}
 	}
 
+	if (*pack)
+	{
+		try
+		{
+			const assetlib::AssetStore store{ std::filesystem::path(packDataRoot) };
+
+			auto desc   = assetlib::PackDesc();
+			desc.target = packTarget.empty() ? std::filesystem::path(packDataRoot).parent_path() /
+			                                       assetlib::c_DefaultArchiveName :
+			                                   std::filesystem::path(packTarget);
+
+			const assetlib::PackReport report = assetlib::packProject(store, desc);
+
+			if (report.vatsRebaked != 0)
+				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
+
+			spdlog::info(
+				"Packed {} entries, {} MB of payload, into '{}'",
+				report.entries,
+				report.payloadBytes / (1024ull * 1024),
+				desc.target.string());
+
+			if (!report.materialsDrawingLoose.empty())
+			{
+				spdlog::warn(
+					"{} of the packed materials still draw from authoring sources, which an "
+					"archive does not carry -- bake them or they ship untextured:",
+					report.materialsDrawingLoose.size());
+
+				for (const std::string& material : report.materialsDrawingLoose)
+					spdlog::warn("  {}", material);
+			}
+
+			// Said rather than left implicit: an extension nothing claims is an extension the
+			// archive does not carry, and a runtime container missing from every archive is a
+			// failure that would otherwise surface as a missing asset at load.
+			std::vector<std::pair<std::string, uint32_t>> skipped(
+				report.skippedByExtension.begin(),
+				report.skippedByExtension.end());
+			std::ranges::sort(skipped);
+
+			for (const auto& [extension, count] : skipped)
+			{
+				spdlog::info(
+					"  skipped {:>4} x '{}' -- no asset type claims it",
+					count,
+					extension.empty() ? "(no extension)" : extension);
+			}
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("pack failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*list)
+	{
+		try
+		{
+			const assetlib::PakFile archive{ std::filesystem::path(listArchive) };
+
+			// Straight to stdout: this is the command's output, and it is meant to diff.
+			for (const std::string& entry : archive.Enumerate())
+			{
+				const core::file::FileStamp stamp = archive.Stat(entry).value();
+				std::cout << std::format("{:>12}  {:>12}  {}\n", stamp.size, stamp.mtime, entry);
+			}
+
+			std::cout << std::flush;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("list failed: {}", e.what());
+			return 1;
+		}
+	}
+
 	if (*prune)
 	{
 		try
 		{
+			const assetlib::AssetStore store{ std::filesystem::path(pruneDataRoot) };
+
 			auto desc       = assetlib::TexturePruneDesc();
-			desc.dataRoot   = pruneDataRoot;
 			desc.textureDir = pruneTextureDir;
 
-			const auto scan = assetlib::findUnusedBakedTextures(desc);
+			const auto scan = assetlib::findUnusedBakedTextures(store, desc);
 
 			spdlog::info(
 				"Scanned {} materials and {} environment assets: {} baked maps still referenced, "
@@ -822,7 +936,7 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			const auto result = assetlib::deleteUnusedBakedTextures(scan, desc);
+			const auto result = assetlib::deleteUnusedBakedTextures(scan, store);
 
 			spdlog::info(
 				"Deleted {} textures, reclaiming {}",

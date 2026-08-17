@@ -34,6 +34,7 @@
 #include <QTreeView>
 #include <QUrl>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
@@ -630,9 +631,9 @@ ContentExplorerWindow::DeleteWithPlanner(
 		return;
 	}
 
-	auto desc     = assetlib::AssetRefScanDesc();
-	desc.dataRoot = m_RootPath.toStdWString();
-
+	// Built inside the worker, not beside it: an AssetStore over a root that has gone throws, and
+	// out here that would leave a Qt slot rather than the loading screen's error.
+	auto store = std::optional<assetlib::AssetStore>();
 	auto graph = std::optional<assetlib::AssetRefGraph>();
 
 	// The scan parses every mesh and material in the project, so it runs off the UI thread. It reads
@@ -641,7 +642,8 @@ ContentExplorerWindow::DeleteWithPlanner(
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Delete", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking references...");
-			graph = assetlib::AssetRefGraph::Scan(desc);
+			store.emplace(std::filesystem::path(m_RootPath.toStdWString()));
+			graph = assetlib::AssetRefGraph::Scan(*store);
 		});
 
 	if (!scanned.Completed())
@@ -768,7 +770,7 @@ ContentExplorerWindow::DeleteWithPlanner(
 	if (confirm.clickedButton() != remove)
 		return;
 
-	const assetlib::DeletionResult result = assetlib::deleteAsset(plan, desc);
+	const assetlib::DeletionResult result = assetlib::deleteAsset(plan, *store);
 
 	switch (result.status)
 	{
@@ -866,9 +868,9 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 	const int     slash   = asset.lastIndexOf('/');
 	const QString to      = slash < 0 ? newName : asset.left(slash + 1) + newName;
 
-	auto desc     = assetlib::AssetRefScanDesc();
-	desc.dataRoot = m_RootPath.toStdWString();
-
+	// Built inside the worker, not beside it: an AssetStore over a root that has gone throws, and
+	// out here that would leave a Qt slot rather than the loading screen's error.
+	auto store = std::optional<assetlib::AssetStore>();
 	auto graph = std::optional<assetlib::AssetRefGraph>();
 
 	// Off the UI thread for the reason Delete's scan is: it parses every mesh and material in the
@@ -876,7 +878,8 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Rename", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking references...");
-			graph = assetlib::AssetRefGraph::Scan(desc);
+			store.emplace(std::filesystem::path(m_RootPath.toStdWString()));
+			graph = assetlib::AssetRefGraph::Scan(*store);
 		});
 
 	if (!scanned.Completed())
@@ -957,7 +960,7 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 		QString("Renaming %1").arg(QFileInfo(asset).fileName()),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Rewriting references...");
-			result = assetlib::renameAsset(plan, desc);
+			result = assetlib::renameAsset(plan, *store);
 		});
 
 	if (!renamed.Completed())

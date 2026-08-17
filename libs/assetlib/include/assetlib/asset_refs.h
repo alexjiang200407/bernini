@@ -3,6 +3,8 @@
 
 namespace assetlib
 {
+	class AssetStore;
+
 	/** The kinds of asset file a project holds, one file extension each. */
 	enum class AssetType : uint32_t
 	{
@@ -43,11 +45,6 @@ namespace assetlib
 		operator==(const AssetRef&, const AssetRef&) = default;
 	};
 
-	struct AssetRefScanDesc
-	{
-		std::filesystem::path dataRoot;  // the project's Data directory
-	};
-
 	/**
 	 * The asset kind `path`'s extension names, or nullopt for anything this project stores no assets of --
 	 * a `.txt`, a `.glb` waiting to be imported, a directory.
@@ -81,13 +78,12 @@ namespace assetlib
 		 * nothing here collects -- worth it, because one written before a major bump would otherwise
 		 * make a project unopenable.
 		 *
-		 * @throws std::runtime_error if `dataRoot` is not a directory, or if a *referrer* -- a `.bmesh`,
-		 *         `.bmaterial`, `.banim`, `.benv`, `.bsky` or `.benvl` -- below it cannot be read. Fatal
-		 *         on purpose, and for the reason the prune is: edges we cannot see are edges we would
-		 *         delete through.
+		 * @throws std::runtime_error if a *referrer* -- a `.bmesh`, `.bmaterial`, `.banim`, `.benv`,
+		 *         `.bsky` or `.benvl` -- in `store` cannot be read. Fatal on purpose, and for the
+		 *         reason the prune is: edges we cannot see are edges we would delete through.
 		 */
 		[[nodiscard]] static AssetRefGraph
-		Scan(const AssetRefScanDesc& desc);
+		Scan(const AssetStore& store);
 
 		/** The edges naming `asset`. Empty means nothing holds it, and it can be deleted. */
 		[[nodiscard]] std::span<const AssetRef>
@@ -120,12 +116,31 @@ namespace assetlib
 			return m_Edges;
 		}
 
-		/** What the graph was scanned against; every path in it is relative to this. */
+		/** Where a rename or a delete writes; every path in the graph is relative to this. */
 		[[nodiscard]] const std::filesystem::path&
 		DataRoot() const noexcept
 		{
 			return m_DataRoot;
 		}
+
+		/**
+		 * Whether the scan saw `path` as a file.
+		 *
+		 * Answered from the snapshot rather than from the disk, so it agrees with the edges beside it:
+		 * a plan built from this graph describes the project as the scan found it, and re-stat'ing one
+		 * path at plan time would make that one answer newer than the rest.
+		 */
+		[[nodiscard]] bool
+		Contains(std::string_view path) const;
+
+		/**
+		 * Every file the scan saw beneath `directory`, sorted, and empty when there are none.
+		 *
+		 * A mount enumerates files and not directories, so a directory *is* what is under it: one that
+		 * holds nothing does not exist to ask about, however it looks in a file browser.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		GetFilesUnder(std::string_view directory) const;
 
 		std::vector<AssetRef> broken;  // `target` is named by `referrer`, but is not on disk
 
@@ -148,6 +163,9 @@ namespace assetlib
 		core::str::unordered_str_map<Range> m_ByTarget;
 
 		std::filesystem::path m_DataRoot;
+
+		// Every file the scan enumerated, sorted: what Contains and GetFilesUnder answer from.
+		std::vector<std::string> m_Files;
 	};
 
 	/** What a deletion would destroy, and what stands in its way. */
@@ -257,7 +275,7 @@ namespace assetlib
 	 * Pass the `desc` the plan's graph was scanned with -- the path is relative to its `dataRoot`.
 	 */
 	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetRefScanDesc& desc);
+	deleteAsset(const DeletionPlan& plan, const AssetStore& store);
 
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
@@ -328,5 +346,5 @@ namespace assetlib
 	 *         a plan built by planRename never holds one, so that is a caller error, not weather.
 	 */
 	RenameResult
-	renameAsset(const RenamePlan& plan, const AssetRefScanDesc& desc);
+	renameAsset(const RenamePlan& plan, const AssetStore& store);
 }

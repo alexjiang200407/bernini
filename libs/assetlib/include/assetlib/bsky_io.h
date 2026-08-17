@@ -32,4 +32,5 @@ namespace assetlib
 	 */
 	[[nodiscard]] BSky
 	loadSky(const std::filesystem::path& path);
+
 }

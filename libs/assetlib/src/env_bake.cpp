@@ -10,6 +10,8 @@
 #include "baked_name.h"
 #include "fs_util.h"
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace
@@ -74,20 +76,20 @@ namespace assetlib
 		}
 
 		bool
-		routeIsStale(const EnvMapRoute& route, const std::filesystem::path& dataRoot)
+		routeIsStale(const EnvMapRoute& route, const core::file::IFileSystem& fileSystem)
 		{
 			if (route.source.empty())
 				return false;
 
 			// A zeroed stamp means never baked; stampOf zeroes a missing file. Neither can equal a
 			// live source's stamp, so both fall out of this comparison as stale.
-			if (stampOf(dataRoot / route.source) != route.stamp)
+			if (stampOf(fileSystem, route.source) != route.stamp)
 				return true;
 
 			// Named is not the same as present: a map deleted since the bake leaves the route
 			// pointing at a file there is nothing to sample. A bake cannot claim what it cannot
 			// produce, so that is stale and not up to date.
-			return route.baked.empty() || stampOf(dataRoot / route.baked).size == 0;
+			return route.baked.empty() || stampOf(fileSystem, route.baked).size == 0;
 		}
 	}
 
@@ -129,27 +131,27 @@ namespace assetlib
 	}
 
 	bool
-	isSkyBakeStale(const BSky& sky, const std::filesystem::path& dataRoot)
+	isSkyBakeStale(const BSky& sky, const core::file::IFileSystem& fileSystem)
 	{
-		return routeIsStale(sky.sky, dataRoot);
+		return routeIsStale(sky.sky, fileSystem);
 	}
 
 	bool
-	isEnvLightingBakeStale(const BEnvLighting& lighting, const std::filesystem::path& dataRoot)
+	isEnvLightingBakeStale(const BEnvLighting& lighting, const core::file::IFileSystem& fileSystem)
 	{
-		return routeIsStale(lighting.prefilter, dataRoot) ||
-		       routeIsStale(lighting.irradiance, dataRoot);
+		return routeIsStale(lighting.prefilter, fileSystem) ||
+		       routeIsStale(lighting.irradiance, fileSystem);
 	}
 
 	const std::string&
-	envMapToDraw(const EnvMapRoute& route, const std::filesystem::path& dataRoot)
+	envMapToDraw(const EnvMapRoute& route, const core::file::IFileSystem& fileSystem)
 	{
-		const bool bakedOnDisk = !route.baked.empty() && stampOf(dataRoot / route.baked).size != 0;
+		const bool bakedOnDisk = !route.baked.empty() && stampOf(fileSystem, route.baked).size != 0;
 
-		if (bakedOnDisk && !routeIsStale(route, dataRoot))
+		if (bakedOnDisk && !routeIsStale(route, fileSystem))
 			return route.baked;
 
-		if (!route.source.empty() && stampOf(dataRoot / route.source).size != 0)
+		if (!route.source.empty() && stampOf(fileSystem, route.source).size != 0)
 			return route.source;
 
 		if (bakedOnDisk)

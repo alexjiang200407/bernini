@@ -2,6 +2,7 @@
 #include <assetlib_structs/BMesh.h>
 
 #include "chunk_io.h"
+#include "mounted_io.h"
 
 using namespace assetlib;
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 
 class Project
 {
@@ -97,11 +98,39 @@ public:
 		return m_ProjectFile.parent_path() / c_DataDirectoryName;
 	}
 
+	/**
+	 * What the project reads its assets through, and writes them to: the loose `Data/` tree.
+	 *
+	 * Never an archive. The editor authors the tree -- separate files, which is the unit version
+	 * control wants -- and `pack` turns that tree into an archive to ship. Nothing reads one back
+	 * here, so every asset the editor lists is one the editor can write.
+	 */
+	[[nodiscard]] const assetlib::AssetStore&
+	GetStore() const noexcept
+	{
+		// Create and Open both fill the store in before they hand a Project back, so this holds for
+		// every Project that exists. It is an invariant of those two functions rather than of the
+		// type, which is what the assert is for.
+		assert(
+			m_Store.has_value() &&
+			"a Project's store is built by Create or Open before it is handed out");
+		return *m_Store;
+	}
+
+	/** Re-points the store at the data directory. */
+	void
+	ReloadStore();
+
 private:
 	Project() = default;
 
 	static constexpr auto c_DataDirectoryName = "Data";
 	static constexpr auto c_FormatVersion     = 1;
+
+	// Held rather than built per call: GetStore hands out a reference and is noexcept, and the
+	// constructor throws on a data root that has gone. optional because a Project is
+	// default-constructed before Open fills it in.
+	std::optional<assetlib::AssetStore> m_Store;
 
 	std::string           m_Name;
 	std::filesystem::path m_ProjectFile;

@@ -1,6 +1,10 @@
 #include "Project/Project.h"
 
 #include "util/QtSupport.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib/bmaterial_io.h>
+#include <assetlib/pak_pack.h>
+#include <assetlib_structs/BMaterial.h>
 
 #include <QTemporaryDir>
 #include <nlohmann/json.hpp>
@@ -258,5 +262,48 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 		// Only the categories themselves, at the top. A folder that merely shares the name is the user's.
 		CHECK_FALSE(Project::IsRequiredDirectory("Meshes/Meshes"));
 		CHECK_FALSE(Project::IsRequiredDirectory("Props"));
+	}
+}
+
+/**
+ * The editor's store is the loose tree and only ever the loose tree.
+ *
+ * An archive is what `pack` makes from this tree to ship, and what a shipped game mounts. Reading
+ * one back here would list assets the editor cannot write, and would make the version-tracked unit
+ * a single packed blob rather than the separate files it wants to be.
+ */
+TEST_CASE("A project reads and writes the loose tree, archive or not", "[project]")
+{
+	const Sandbox sandbox;
+	const auto    file = sandbox.ProjectFile();
+
+	Project created = Project::Create(file, "MyGame");
+
+	auto material                 = assetlib::BMaterial();
+	material.name                 = "skin";
+	material.pbr.baseColorTexture = "Textures/skin.ktx2";
+	assetlib::saveMaterial(material, created.GetDataDirectory() / "Materials/skin.bmaterial");
+
+	created.ReloadStore();
+
+	CHECK(created.GetStore().GetDataRoot() == created.GetDataDirectory());
+	CHECK(created.GetStore().Exists("Materials/skin.bmaterial"));
+
+	// Everything the store answers for is writable, which is the property that lets the editor act
+	// on anything it lists.
+	CHECK_FALSE(created.GetStore().IsReadOnly());
+
+	SECTION("an archive beside the project changes nothing about what it reads")
+	{
+		static_cast<void>(assetlib::packProject(
+			assetlib::AssetStore(created.GetDataDirectory()),
+			assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
+
+		// Gone from the tree: the archive still holds it, and that is deliberately not consulted.
+		fs::remove(created.GetDataDirectory() / "Materials/skin.bmaterial");
+
+		Project reopened = Project::Open(file);
+
+		CHECK_FALSE(reopened.GetStore().Exists("Materials/skin.bmaterial"));
 	}
 }

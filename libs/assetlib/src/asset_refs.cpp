@@ -1,3 +1,4 @@
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 
 #include <assetlib/banim_io.h>
@@ -11,7 +12,11 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
+#include <core/file/LooseFileSystem.h>
+
 #include "ref_paths.h"
+
+#include "mounted_io.h"
 
 namespace assetlib
 {
@@ -40,44 +45,24 @@ namespace assetlib
 			edges.push_back(AssetRef{ referrer, normalizeRef(target), kind });
 		}
 
-		/** Every file beneath `directory`, relative to the data root -- all of which it takes with it. */
-		std::vector<std::string>
-		filesUnder(const std::filesystem::path& dataRoot, const std::string& directory)
-		{
-			auto out = std::vector<std::string>();
-
-			for (const auto& entry :
-			     std::filesystem::recursive_directory_iterator(dataRoot / directory))
-			{
-				if (!entry.is_regular_file())
-					continue;
-
-				out.push_back(normalizeRef(
-					std::filesystem::relative(entry.path(), dataRoot).generic_string()));
-			}
-
-			std::ranges::sort(out);
-			return out;
-		}
-
 		/** Every material a `.bmesh` names, in `mesh.materials` order, and the skeleton it skins to. */
 		void
 		collectMeshEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			MeshRefs refs;
 			try
 			{
-				refs = loadMeshRefs(file);
+				refs = loadMeshRefs(files, referrer);
 			}
 			catch (const std::exception& e)
 			{
 				// Fatal, as it is for the prune: a mesh we cannot read is a mesh whose materials we cannot
 				// see, and we would then delete one of them out from under it.
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the mesh '" + file.string() +
+					"assetlib::AssetRefGraph: cannot read the mesh '" + referrer +
 					"', so the assets it references cannot be known: " + e.what());
 			}
 
@@ -90,19 +75,19 @@ namespace assetlib
 		/** The skeleton a `.banim`'s clips were resampled against. */
 		void
 		collectAnimationEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			std::string skeleton;
 			try
 			{
-				skeleton = loadAnimationSkeletonPath(file);
+				skeleton = loadAnimationSkeletonPath(files, referrer);
 			}
 			catch (const std::exception& e)
 			{
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the clip set '" + file.string() +
+					"assetlib::AssetRefGraph: cannot read the clip set '" + referrer +
 					"', so the skeleton it references cannot be known: " + e.what());
 			}
 
@@ -112,14 +97,14 @@ namespace assetlib
 		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
 		void
 		collectVatEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			VatRefs refs;
 			try
 			{
-				refs = loadVatRefs(file);
+				refs = loadVatRefs(files, referrer);
 			}
 			catch (const std::exception&)
 			{
@@ -135,19 +120,19 @@ namespace assetlib
 		/** The baked triplet a `.bmaterial` names, and the sources its channels route from. */
 		void
 		collectMaterialEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			auto material = BMaterial();
 			try
 			{
-				material = loadMaterial(file);
+				material = loadMaterial(files, referrer);
 			}
 			catch (const std::exception& e)
 			{
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the material '" + file.string() +
+					"assetlib::AssetRefGraph: cannot read the material '" + referrer +
 					"', so the textures it references cannot be known: " + e.what());
 			}
 
@@ -166,7 +151,7 @@ namespace assetlib
 
 			case ShadingModel::kCount:
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: the material '" + file.string() +
+					"assetlib::AssetRefGraph: the material '" + referrer +
 					"' names an unknown shading model, so its textures cannot be known");
 			}
 		}
@@ -186,18 +171,18 @@ namespace assetlib
 		/** The radiance a `.bsky` routes, and the map its bake wrote. */
 		void
 		collectSkyEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			try
 			{
-				addRouteEdges(edges, referrer, loadSky(file).sky);
+				addRouteEdges(edges, referrer, loadSky(files, referrer).sky);
 			}
 			catch (const std::exception& e)
 			{
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the sky '" + file.string() +
+					"assetlib::AssetRefGraph: cannot read the sky '" + referrer +
 					"', so the textures it references cannot be known: " + e.what());
 			}
 		}
@@ -205,21 +190,20 @@ namespace assetlib
 		/** Both halves of a `.benvl`: each names a source and the map convolved from it. */
 		void
 		collectEnvLightingEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			try
 			{
-				const BEnvLighting lighting = loadEnvLighting(file);
+				const BEnvLighting lighting = loadEnvLighting(files, referrer);
 				addRouteEdges(edges, referrer, lighting.prefilter);
 				addRouteEdges(edges, referrer, lighting.irradiance);
 			}
 			catch (const std::exception& e)
 			{
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the environment lighting '" +
-					file.string() +
+					"assetlib::AssetRefGraph: cannot read the environment lighting '" + referrer +
 					"', so the textures it references cannot be known: " + e.what());
 			}
 		}
@@ -227,20 +211,20 @@ namespace assetlib
 		/** The pair a `.benv` composes. It holds no pixels, so these are its only edges. */
 		void
 		collectEnvironmentEdges(
-			std::vector<AssetRef>&       edges,
-			const std::filesystem::path& file,
-			const std::string&           referrer)
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
 		{
 			try
 			{
-				const BEnv env = loadEnv(file);
+				const BEnv env = loadEnv(files, referrer);
 				addEdge(edges, referrer, env.sky, RefKind::kEnvironmentPart);
 				addEdge(edges, referrer, env.lighting, RefKind::kEnvironmentPart);
 			}
 			catch (const std::exception& e)
 			{
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the environment '" + file.string() +
+					"assetlib::AssetRefGraph: cannot read the environment '" + referrer +
 					"', so the assets it composes cannot be known: " + e.what());
 			}
 		}
@@ -273,63 +257,78 @@ namespace assetlib
 		return std::nullopt;
 	}
 
-	AssetRefGraph
-	AssetRefGraph::Scan(const AssetRefScanDesc& desc)
+	bool
+	AssetRefGraph::Contains(std::string_view path) const
 	{
-		if (!std::filesystem::is_directory(desc.dataRoot))
-			throw std::runtime_error(
-				"assetlib::AssetRefGraph: the data root '" + desc.dataRoot.string() +
-				"' is not a directory");
+		return std::ranges::binary_search(m_Files, normalizeRef(path));
+	}
+
+	std::vector<std::string>
+	AssetRefGraph::GetFilesUnder(std::string_view directory) const
+	{
+		// Normalized like every other query here, and then stripped of a trailing separator: a
+		// directory named with one would otherwise build a `//` prefix and match nothing at all.
+		std::string prefix = normalizeRef(directory);
+		while (prefix.ends_with('/')) prefix.pop_back();
+		prefix += '/';
+
+		const auto first = std::ranges::lower_bound(m_Files, prefix);
+		const auto last  = std::ranges::partition_point(
+			std::ranges::subrange(first, m_Files.end()),
+			[&prefix](const std::string& path) { return path.starts_with(prefix); });
+
+		return std::vector<std::string>(first, last);
+	}
+
+	AssetRefGraph
+	AssetRefGraph::Scan(const AssetStore& store)
+	{
+		const core::file::IFileSystem& files = store.GetFiles();
 
 		auto graph       = AssetRefGraph();
-		graph.m_DataRoot = desc.dataRoot;
+		graph.m_DataRoot = store.GetDataRoot();
+		graph.m_Files    = files.Enumerate();
+		std::ranges::sort(graph.m_Files);
 
 		auto edges = std::vector<AssetRef>();
 
-		for (const auto& entry : std::filesystem::recursive_directory_iterator(desc.dataRoot))
+		for (const std::string& referrer : graph.m_Files)
 		{
-			if (!entry.is_regular_file())
-				continue;
-
-			const std::filesystem::path& file = entry.path();
-			const std::string            kind = lowerExtension(file);
-
-			const std::string referrer =
-				normalizeRef(std::filesystem::relative(file, desc.dataRoot).generic_string());
+			const std::string kind = extensionOf(referrer);
 
 			if (kind == c_MeshExtension)
 			{
-				collectMeshEdges(edges, file, referrer);
+				collectMeshEdges(edges, files, referrer);
 				++graph.meshesScanned;
 			}
 			else if (kind == c_MaterialExtension)
 			{
-				collectMaterialEdges(edges, file, referrer);
+				collectMaterialEdges(edges, files, referrer);
 				++graph.materialsScanned;
 			}
 			else if (kind == c_SkyExtension)
 			{
-				collectSkyEdges(edges, file, referrer);
+				collectSkyEdges(edges, files, referrer);
 				++graph.environmentsScanned;
 			}
 			else if (kind == c_EnvLightingExtension)
 			{
-				collectEnvLightingEdges(edges, file, referrer);
+				collectEnvLightingEdges(edges, files, referrer);
 				++graph.environmentsScanned;
 			}
 			else if (kind == c_EnvironmentExtension)
 			{
-				collectEnvironmentEdges(edges, file, referrer);
+				collectEnvironmentEdges(edges, files, referrer);
 				++graph.environmentsScanned;
 			}
 			else if (kind == c_AnimationExtension)
 			{
-				collectAnimationEdges(edges, file, referrer);
+				collectAnimationEdges(edges, files, referrer);
 				++graph.clipSetsScanned;
 			}
 			else if (kind == c_VatExtension)
 			{
-				collectVatEdges(edges, file, referrer);
+				collectVatEdges(edges, files, referrer);
 				++graph.vatsScanned;
 			}
 		}
@@ -353,7 +352,7 @@ namespace assetlib
 
 			graph.m_ByTarget.emplace(target, Range{ i, end - i });
 
-			if (!std::filesystem::exists(desc.dataRoot / target))
+			if (!graph.Contains(target))
 				graph.broken.insert(
 					graph.broken.end(),
 					graph.m_Edges.begin() + i,
@@ -437,8 +436,8 @@ namespace assetlib
 						}))
 						continue;
 
-					// A target that is not on disk is a broken edge, not something to delete.
-					if (!std::filesystem::exists(graph.DataRoot() / edge.target))
+					// A target the scan did not see is a broken edge, not something to delete.
+					if (!graph.Contains(edge.target))
 						continue;
 
 					cascade.push_back(edge.target);
@@ -461,10 +460,16 @@ namespace assetlib
 		requireInsideDataRoot("assetlib::planDeletion", plan.target);
 
 		// A directory is not an asset, and has no kind: that is what nullopt says.
+		//
+		// A mount enumerates files, so an *empty* directory is invisible to the scan. It still
+		// exists on the writable layer, and that is the only layer one can be removed from -- so the
+		// disk answers for that case alone, the way the prune's sweep does.
 		auto referrers = std::vector<AssetRef>();
-		if (std::filesystem::is_directory(graph.DataRoot() / plan.target))
+
+		std::vector<std::string> contents = graph.GetFilesUnder(plan.target);
+		if (!contents.empty() || std::filesystem::is_directory(graph.DataRoot() / plan.target))
 		{
-			plan.contents = filesUnder(graph.DataRoot(), plan.target);
+			plan.contents = std::move(contents);
 			referrers     = graph.ReferrersInto(plan.target);
 		}
 		else
@@ -506,19 +511,45 @@ namespace assetlib
 	}
 
 	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetRefScanDesc& desc)
+	deleteAsset(const DeletionPlan& plan, const AssetStore& store)
 	{
 		if (!plan.Allowed())
 			return DeletionResult{ DeletionStatus::kRefused, {} };
 
-		const std::filesystem::path path = desc.dataRoot / plan.target;
+		const std::filesystem::path path = store.GetDataRoot() / plan.target;
+
+		// A plan can name assets only the archive holds -- the target, a member of the directory it
+		// names, something its cascade frees, or a bake derived from it. `remove` reports no error
+		// for a path that was never there, so each would come back kDeleted having touched nothing
+		// while staying readable through the mount. Task 10's tombstone is what answers this.
+		//
+		// Inert on a loose store, where the mount is the data root: what is not on disk is not in
+		// the mount either.
+		const auto onlyInMount = [&store](const std::string& key) {
+			return !std::filesystem::exists(store.GetDataRoot() / key) && store.Exists(key);
+		};
+
+		auto unreachable = std::vector<std::string>();
+
+		if (plan.IsDirectory())
+			std::ranges::copy_if(plan.contents, std::back_inserter(unreachable), onlyInMount);
+		else if (onlyInMount(plan.target))
+			unreachable.push_back(plan.target);
+
+		std::ranges::copy_if(plan.cascade, std::back_inserter(unreachable), onlyInMount);
+		std::ranges::copy_if(plan.derived, std::back_inserter(unreachable), onlyInMount);
+
+		if (!unreachable.empty())
+			return DeletionResult{ DeletionStatus::kFailed,
+				                   "'" + unreachable.front() +
+				                       "' is only in a read-only mount, so it cannot be unlinked" };
 
 		// The bakes first: they reference the target, so no failure below leaves one standing on
 		// inputs that are gone. Already-vanished ones count as deleted, as the target itself does.
 		std::error_code ec;
 		for (const std::string& bake : plan.derived)
 		{
-			std::filesystem::remove(desc.dataRoot / bake, ec);
+			std::filesystem::remove(store.GetDataRoot() / bake, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}
@@ -538,7 +569,7 @@ namespace assetlib
 		// a failure part-way never leaves a referenced asset missing.
 		for (const std::string& freed : plan.cascade)
 		{
-			std::filesystem::remove(desc.dataRoot / freed, ec);
+			std::filesystem::remove(store.GetDataRoot() / freed, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}

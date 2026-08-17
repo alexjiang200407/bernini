@@ -1,5 +1,7 @@
 #include "chunk_io.h"
 
+#include "CheckedFileReader.h"
+#include "MountedFileReader.h"
 #include "fs_util.h"
 
 #include <core/err/util.h>
@@ -87,7 +89,7 @@ namespace assetlib::chunk
 			throw_runtime_error("{}: chunk extends past end of stream", m_What);
 	}
 
-	std::unordered_map<uint32_t, std::vector<std::byte>>
+	ChunkData
 	readChunksFromFile(
 		const std::filesystem::path& path,
 		uint32_t                     magic,
@@ -95,65 +97,69 @@ namespace assetlib::chunk
 		std::span<const uint32_t>    ids,
 		std::string_view             what)
 	{
-		const std::string prefix(what);
+		CheckedFileReader source(path, what);
+		return readChunks(source, magic, versionMajor, ids, what);
+	}
 
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ifstream in(path, std::ios::binary);
-		if (!in)
-			throw std::runtime_error(
-				fileErrorMessage(prefix + ": cannot open file for reading", path));
+	ChunkData
+	readChunksFrom(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		uint32_t                       magic,
+		uint16_t                       versionMajor,
+		std::span<const uint32_t>      ids,
+		std::string_view               what)
+	{
+		MountedFileReader source(fileSystem, path, what);
+		return readChunks(source, magic, versionMajor, ids, what);
+	}
 
-		std::error_code ec;
-		const auto      fileSize = std::filesystem::file_size(path, ec);
-		if (ec)
-			throw std::runtime_error(fileErrorMessage(prefix + ": cannot size file", path));
-
-		// Every offset and size below comes out of the file, so each is checked against the real size
-		// before anything is allocated or seeked to. Subtraction rather than addition: a crafted
-		// offset near UINT64_MAX would wrap past the sum.
-		const auto checkRange = [&](uint64_t bytes, uint64_t offset) {
-			if (bytes > fileSize || offset > fileSize - bytes)
-				throw_runtime_error("{}: chunk extends past end of file", what);
-		};
-
-		const auto readAt = [&](void* dst, uint64_t bytes, uint64_t offset) {
-			checkRange(bytes, offset);
-
-			in.seekg(static_cast<std::streamoff>(offset));
-			in.read(static_cast<char*>(dst), static_cast<std::streamsize>(bytes));
-			if (!in)
-				throw std::runtime_error(fileErrorMessage(prefix + ": failed to read file", path));
-		};
-
+	ChunkData
+	readChunks(
+		IRangeReader&             source,
+		uint32_t                  magic,
+		uint16_t                  versionMajor,
+		std::span<const uint32_t> ids,
+		std::string_view          what)
+	{
 		Header header{};
-		readAt(&header, sizeof(header), 0);
+		source.ReadAt(&header, sizeof(header), 0);
 		checkHeader(header, magic, versionMajor, what);
 
-		checkRange(
-			static_cast<uint64_t>(header.chunkCount) * sizeof(Entry),
-			header.chunkTableOffset);
+		const uint64_t tableBytes = static_cast<uint64_t>(header.chunkCount) * sizeof(Entry);
+		source.CheckRange(tableBytes, header.chunkTableOffset);
 
 		std::vector<Entry> table(header.chunkCount);
 		if (!table.empty())
-			readAt(table.data(), table.size() * sizeof(Entry), header.chunkTableOffset);
+			source.ReadAt(table.data(), tableBytes, header.chunkTableOffset);
 
-		std::unordered_map<uint32_t, std::vector<std::byte>> out;
+		// Sized before anything is read, so the payloads land in one buffer rather than one
+		// allocation each.
+		std::vector<ChunkData::Slot> slots;
+		uint64_t                     total = 0;
 		for (const Entry& entry : table)
 		{
 			if (std::ranges::find(ids, entry.id) == ids.end())
 				continue;
 
-			checkRange(entry.byteSize, entry.offset);
+			source.CheckRange(entry.byteSize, entry.offset);
 
-			std::vector<std::byte> chunk(entry.byteSize);
-			if (!chunk.empty())
-				readAt(chunk.data(), chunk.size(), entry.offset);
-
-			out.emplace(entry.id, std::move(chunk));
+			slots.push_back(
+				{ entry.id, static_cast<uint32_t>(total), static_cast<uint32_t>(entry.byteSize) });
+			total += entry.byteSize;
 		}
 
-		return out;
+		std::vector<std::byte> bytes(total);
+		for (size_t i = 0; i < slots.size(); ++i)
+		{
+			if (slots[i].size == 0)
+				continue;
+
+			const Entry& entry = *std::ranges::find(table, slots[i].id, &Entry::id);
+			source.ReadAt(bytes.data() + slots[i].offset, slots[i].size, entry.offset);
+		}
+
+		return ChunkData(std::move(bytes), std::move(slots));
 	}
 
 	std::vector<char>

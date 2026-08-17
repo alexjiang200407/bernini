@@ -19,6 +19,7 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/NodeDelegateModelRegistry>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
@@ -732,7 +733,17 @@ MaterialEditorWindow::RefreshActions()
 	if (const assetlib::BMaterial* material =
 	        m_MaterialGraphs[static_cast<size_t>(graphIndex)].onDisk.Get(materialPath))
 	{
-		stale        = assetlib::bakeIsStale(*material, m_DataRoot);
+		// This is a UI refresh, called from a dozen places and never from inside a handler, so a
+		// data root that has gone leaves the pessimistic default rather than throwing out of a slot.
+		try
+		{
+			stale = assetlib::AssetStore(m_DataRoot).BakeIsStale(*material);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
+		}
+
 		bakedSummary = BakedTexturesSummary(*material);
 	}
 

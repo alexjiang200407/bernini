@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
@@ -86,6 +87,17 @@ namespace game
 			std::filesystem::path dataRoot,
 			AssetManagerOptions   options = {});
 
+		/**
+		 * The mounted form: assets resolve through `store`, which may be a directory, a `.bpak`, or a
+		 * loose overlay over one. The path-taking constructor above is this one over a loose store.
+		 *
+		 * @throws bgl::SceneError if `scene` is null.
+		 */
+		AssetManager(
+			bgl::SceneRef        scene,
+			assetlib::AssetStore store,
+			AssetManagerOptions  options = {});
+
 		/** Releases everything still held, in dependency order. */
 		~AssetManager();
 
@@ -93,11 +105,18 @@ namespace game
 		AssetManager&
 		operator=(const AssetManager&) = delete;
 
-		/** The Data directory this manager resolves against. */
+		/** The Data directory this manager writes to. */
 		[[nodiscard]] const std::filesystem::path&
 		DataRoot() const noexcept
 		{
-			return m_DataRoot;
+			return m_Store.GetDataRoot();
+		}
+
+		/** Where it reads: a directory, an archive, or a loose overlay over one. */
+		[[nodiscard]] const assetlib::AssetStore&
+		GetStore() const noexcept
+		{
+			return m_Store;
 		}
 
 		// --- Acquire: load, or share what is already loaded. Each call takes a reference. --------
@@ -159,12 +178,16 @@ namespace game
 		 * from the rig's baked texture pair instead of skinned -- or shares it from a previous
 		 * call, acquiring its materials like AcquireMesh does.
 		 *
-		 * The pair's `.bvat` (assetlib::vatPathFor: beside the mesh, one file per clip set) is never
-		 * trusted stale: missing, or out of date against the stamps of the three inputs it was
-		 * baked from, it is re-baked from `relPath` + `animationsRelPath` and rewritten in place
-		 * (see EnsureVatBaked, which owns the rule and can run the bake off the render thread).
-		 * It is a derived build product -- a bake is seconds of CPU skinning, and the file is
-		 * never committed.
+		 * The pair's `.bvat` (assetlib::vatPathFor: beside the mesh, one file per clip set) is a
+		 * derived build product -- a bake is seconds of CPU skinning, and the file is never
+		 * committed. Missing, or out of date against the stamps of the three inputs it was baked
+		 * from, it is re-baked from `relPath` + `animationsRelPath` and written to the store's
+		 * writable layer, which may be an overlay that did not hold it before (see EnsureVatBaked,
+		 * which owns the rule and can run the bake off the render thread).
+		 *
+		 * **Unless the store has nowhere to write at all.** A shipped mount is an archive `pack`
+		 * baked every `.bvat` into, so what it carries is used without asking whether it is stale;
+		 * one it does not carry cannot be made, and throws.
 		 *
 		 * While the geom is live, every acquire must name the `.banim` it was first acquired
 		 * with: a shared acquire returns the cached clip table without reading the container, so
@@ -514,9 +537,9 @@ namespace game
 		void
 		DestroyGeom(GeomRecord& record);
 
-		bgl::SceneRef         m_Scene;
-		std::filesystem::path m_DataRoot;
-		AssetManagerOptions   m_Options;
+		bgl::SceneRef        m_Scene;
+		assetlib::AssetStore m_Store;
+		AssetManagerOptions  m_Options;
 
 		core::str::unordered_str_map<uint32_t> m_TextureByPath;
 		core::str::unordered_str_map<uint64_t> m_MaterialByPath;

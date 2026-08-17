@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 
 namespace assetlib
 {
@@ -10,7 +11,6 @@ namespace assetlib
 	 */
 	struct TexturePruneDesc
 	{
-		std::filesystem::path dataRoot;  // the project's Data directory
 		std::filesystem::path textureDir = "Textures";
 	};
 
@@ -45,7 +45,7 @@ namespace assetlib
 	 *         as garbage.
 	 */
 	[[nodiscard]] TexturePruneScan
-	findUnusedBakedTextures(const TexturePruneDesc& desc);
+	findUnusedBakedTextures(const AssetStore& store, const TexturePruneDesc& desc = {});
 
 	struct TexturePruneResult
 	{
@@ -66,5 +66,5 @@ namespace assetlib
 	 * or editing a material between the scan and this call invalidates the scan -- take a fresh one.
 	 */
 	TexturePruneResult
-	deleteUnusedBakedTextures(const TexturePruneScan& scan, const TexturePruneDesc& desc);
+	deleteUnusedBakedTextures(const TexturePruneScan& scan, const AssetStore& store);
 }

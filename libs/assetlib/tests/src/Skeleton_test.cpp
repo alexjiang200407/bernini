@@ -4,6 +4,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 
 using namespace assetlib;

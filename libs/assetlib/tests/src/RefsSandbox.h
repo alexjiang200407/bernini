@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 
 #include <assetlib/benv_io.h>
@@ -38,16 +39,16 @@ namespace assetlib::test
 		}
 		~DataRoot() { fs::remove_all(path); }
 
-		AssetRefScanDesc
-		Desc() const
+		AssetStore
+		Source() const
 		{
-			return AssetRefScanDesc{ path };
+			return AssetStore(path);
 		}
 
 		AssetRefGraph
 		Scan() const
 		{
-			return AssetRefGraph::Scan(Desc());
+			return AssetRefGraph::Scan(Source());
 		}
 	};
 

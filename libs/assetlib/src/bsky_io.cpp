@@ -10,6 +10,8 @@
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	using core::io::ByteReader;
@@ -73,5 +75,11 @@ namespace assetlib
 	{
 		const auto bytes = core::file::read_file_bytes(path.string());
 		return deserializeSky(bytes);
+	}
+
+	BSky
+	loadSky(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeSky(fileSystem.Read(path));
 	}
 }

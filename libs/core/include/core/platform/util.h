@@ -26,4 +26,24 @@ namespace core
 	 */
 	[[nodiscard]] std::filesystem::path
 	expand_home(std::string_view path);
+
+	/**
+	 * Flushes `path`'s contents to the storage device, so what was written survives a power loss and
+	 * not merely a process crash. Closing a stream only hands the bytes to the OS cache.
+	 *
+	 * @return false if the file could not be opened or the flush failed. Reported rather than
+	 *         thrown, because only the caller knows whether losing the write matters.
+	 */
+	[[nodiscard]] bool
+	sync_file(const std::filesystem::path& path) noexcept;
+
+	/**
+	 * The directory-entry counterpart of sync_file: makes a rename into `directory` durable.
+	 *
+	 * On POSIX a renamed file's contents can be durable while the entry naming it is not, so both
+	 * are needed. On Win32 the rename is journaled and a directory handle cannot be flushed, so
+	 * this succeeds without doing anything.
+	 */
+	[[nodiscard]] bool
+	sync_directory(const std::filesystem::path& directory) noexcept;
 }

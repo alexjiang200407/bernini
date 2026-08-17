@@ -192,11 +192,16 @@ flowchart TD
   never sets `RenderJob::time`) freezes the instance at `phase`.
 
 ### `AssetManager::AcquireVatMesh`
-* **Bake-on-demand writes to the data root** — @post a missing or stale `.bvat` is baked from
-  `relPath` + `animationsRelPath` and saved beside the mesh. The bake is seconds of CPU skinning;
-  call it accordingly (load screens, not per-frame). `game::EnsureVatBaked` is that step alone —
-  no upload, no bgl — for a caller that wants the bake on a worker thread first and the acquire
-  after.
+* **Bake-on-demand writes to the store's writable layer** — @post a missing or stale `.bvat` is
+  baked from `relPath` + `animationsRelPath` and saved beside the mesh. Reads go through the mount,
+  so a rig that resolves out of an archive bakes correctly and the result lands in the overlay,
+  which may not have held it before. The bake is seconds of CPU skinning; call it accordingly (load
+  screens, not per-frame). `game::EnsureVatBaked` is that step alone — no upload, no bgl — for a
+  caller that wants the bake on a worker thread first and the acquire after.
+* **Unless the store has nowhere to write** — an archive alone. `pack` bakes every `.bvat` as it
+  packs, so what a shipped mount carries is used without asking whether it is stale; one it does
+  not carry throws, because it cannot be made. See the `.bvat` rule in
+  [archives.md](archives.md).
 * **Stale includes the animations path** — a container whose recorded `.banim` is not the one
   requested is never returned. With one bake file per pair the mismatch only arises from a name
   collision or a hand-copied file, and it degrades to a re-bake, never to loading wrong clips.
@@ -213,7 +218,8 @@ flowchart TD
 ```cpp
 auto assets = game::AssetManager(scene, dataRoot);
 
-// Loads the pair's bake beside the mesh, or bakes it from the mesh + clips if missing/stale.
+// Loads the pair's bake beside the mesh, or bakes it from the mesh + clips if missing/stale --
+// unless the store is read-only, where what is there is trusted as packed.
 const auto vat = assets.AcquireVatMesh("Meshes/coyote.bmesh", "Animations/coyote.banim");
 
 for (uint32_t i = 0; i < c_CrowdSize; ++i)

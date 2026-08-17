@@ -402,6 +402,30 @@ and portability.
   - [ ] Hair Physics
   - [ ] Hit Stop
   - [ ] Ballistics e.g. Arrows, Boulders
-- [ ] Asset Streaming Pipeline
+- [ ] Asset Streaming Pipeline — the archive and the read seam under it shipped, see
+  [docs/archives.md](docs/archives.md)
+  - [x] `core::file::IFileSystem` — one read seam (`Exists`/`Stat`/`Read`/`ReadRange`/`Enumerate`/
+    `IsReadOnly`) over a directory (`LooseFileSystem`), an archive (`assetlib::PakFile`) or an
+    ordered search path over both (`LayeredFileSystem`, first hit wins). Concurrent by contract.
+  - [x] `.bpak` — header, 16-byte-aligned payloads, entry table, string pool. `PakWriter` streams to
+    a temp and renames, so a project is not bounded by RAM and an interrupted pack leaves the
+    previous archive intact; `pack` walks sorted, so one tree packs to identical bytes on any
+    machine.
+  - [x] `assetlib::AssetStore` — the read mount and the writable data root as one object, with every
+    loader and staleness predicate on it. `gamelib::AssetManager` takes one, so a scene loads out of
+    an archive through exactly the paths it loads a directory through.
+  - [x] `assetlib_cli pack` / `list` — the exclusion rule is derived from the registered asset types,
+    not a list, and unclaimed extensions are counted rather than dropped silently.
+  - [x] Ranged reads preserved through the seam — a chunk-table survey reads a few hundred bytes per
+    container, not the whole project.
+  - [x] `.bvat` under a read-only mount is trusted rather than re-baked; `pack` bakes stale ones
+    fresh so a shipped archive is correct by construction.
+  - [ ] Per-entry compression — the format reserves the flag; picking a codec wants a measurement.
+  - [ ] `mmap`-backed reads — the alignment is there for it; the seam does not hand out a borrowed
+    span yet.
+  - [ ] Partial residency: load a mip range or a meshlet range rather than a whole entry. `ReadRange`
+    is the hook, and this is the line the rest of this milestone actually means.
+  - [ ] Patch archives over a base — mount order gives override and `SetMask` gives removal, but
+    authoring, versioning and validation do not exist.
 - [ ] CPU Spatial Partitioning
 - [ ] Game Serialization

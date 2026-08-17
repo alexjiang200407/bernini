@@ -32,4 +32,5 @@ namespace assetlib
 	 */
 	[[nodiscard]] BEnvLighting
 	loadEnvLighting(const std::filesystem::path& path);
+
 }

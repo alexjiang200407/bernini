@@ -10,6 +10,9 @@
 
 #include <catch2/catch_approx.hpp>
 
+#include "MountAt.h"
+#include "mounted_io.h"
+
 using namespace assetlib;
 
 namespace
@@ -130,10 +133,10 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 	const BSky sky = loadSky(sandbox.DataRoot() / result.sky);
 	CHECK_FALSE(sky.sky.baked.empty());
 	CHECK(sandbox.Has(sky.sky.baked));
-	CHECK_FALSE(isSkyBakeStale(sky, sandbox.DataRoot()));
+	CHECK_FALSE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
 
 	const BEnvLighting lighting = loadEnvLighting(sandbox.DataRoot() / result.lighting);
-	CHECK_FALSE(isEnvLightingBakeStale(lighting, sandbox.DataRoot()));
+	CHECK_FALSE(isEnvLightingBakeStale(lighting, MountAt(sandbox.DataRoot())));
 
 	// A constant environment's exposure is 1 / (0.96 * radiance) -- the same value bakeEnvLighting
 	// derives, which is what says the import ran the real bake rather than a shortcut.

@@ -10,6 +10,8 @@
 
 #include <core/file/file.h>
 
+#include "mounted_io.h"
+
 namespace assetlib
 {
 	namespace
@@ -58,5 +60,11 @@ namespace assetlib
 	loadSkeleton(const std::filesystem::path& path)
 	{
 		return deserializeSkeleton(core::file::read_file_bytes(path.string()));
+	}
+
+	Skeleton
+	loadSkeleton(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return deserializeSkeleton(fileSystem.Read(path));
 	}
 }
