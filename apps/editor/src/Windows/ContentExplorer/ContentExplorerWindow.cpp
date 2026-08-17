@@ -4,6 +4,7 @@
 #include "Project/Project.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
+#include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "util/asset_paths.h"
@@ -455,7 +456,7 @@ ContentExplorerWindow::ShowAssetMenu(
 		parent = view.rootIndex();
 
 	const QString parentPath = model.filePath(parent);
-	const QString asset      = AssetAt(model, index, m_RootPath);
+	const QString asset      = editor::AssetAt(model, index, m_RootPath);
 
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
@@ -467,7 +468,7 @@ ContentExplorerWindow::ShowAssetMenu(
 	if (!asset.isEmpty())
 	{
 		menu.addSeparator();
-		if (IsMaterialAsset(asset))
+		if (editor::IsMaterialAsset(asset))
 			bake = menu.addAction("Bake");
 		rename        = menu.addAction("Rename");
 		remove        = menu.addAction("Delete");
@@ -486,29 +487,6 @@ ContentExplorerWindow::ShowAssetMenu(
 		DeleteAsset(asset);
 	else if (removeCascade != nullptr && chosen == removeCascade)
 		DeleteAssetCascade(asset);
-}
-
-bool
-ContentExplorerWindow::IsMaterialAsset(const QString& asset)
-{
-	const std::optional<assetlib::AssetType> type =
-		assetlib::assetTypeFromExtension(asset.toStdWString());
-	return type && *type == assetlib::AssetType::kMaterial;
-}
-
-bool
-ContentExplorerWindow::IsValidAssetFileName(const QString& name)
-{
-	static const QRegularExpression c_Invalid(QStringLiteral(R"([<>:"/\\|?*\x00-\x1f])"));
-
-	// The DOS device names, which Windows reserves with or without an extension: NUL.ktx2 opens a
-	// device, not a file.
-	static const QRegularExpression c_Reserved(
-		QStringLiteral(R"(^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$)"),
-		QRegularExpression::CaseInsensitiveOption);
-
-	return !name.isEmpty() && !name.startsWith('.') && !name.endsWith('.') && !name.endsWith(' ') &&
-	       !name.contains(c_Invalid) && !c_Reserved.match(name).hasMatch();
 }
 
 void
@@ -558,30 +536,6 @@ ContentExplorerWindow::BakeMaterial(const QString& asset)
 	// The thumbnail cache watches the material's mtime and repaints itself; the Material Editor does
 	// not, and is showing what this file said before the bake.
 	Q_EMIT MaterialBaked(asset);
-}
-
-QString
-ContentExplorerWindow::AssetAt(
-	const QFileSystemModel& model,
-	const QModelIndex&      index,
-	const QString&          dataRoot)
-{
-	if (!index.isValid() || dataRoot.isEmpty())
-		return {};
-
-	const QString path     = model.filePath(index);
-	const QString relative = QDir(dataRoot).relativeFilePath(path);
-
-	// Something outside the project is not the project's to delete, whatever it is named.
-	if (relative.isEmpty() || relative == "." || relative.startsWith(".."))
-		return {};
-
-	if (model.isDir(index))
-	{
-		return Project::IsRequiredDirectory(relative.toStdWString()) ? QString() : relative;
-	}
-
-	return assetlib::assetTypeFromExtension(path.toStdWString()) ? relative : QString();
 }
 
 bool
@@ -839,7 +793,7 @@ ContentExplorerWindow::RenameAsset(const QString& asset)
 	if (!ok || entered.isEmpty() || entered == stem)
 		return;
 
-	if (!IsValidAssetFileName(entered))
+	if (!editor::IsValidAssetFileName(entered))
 	{
 		QMessageBox::warning(
 			this,
