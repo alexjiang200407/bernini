@@ -3,10 +3,9 @@
 #include <QStringList>
 #include <QWidget>
 
-#include <assetlib/asset_refs.h>
-
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"
+#include "Windows/ContentExplorer/AssetOperations.h"
 
 #include "ui_ContentExplorerWindow.h"
 
@@ -25,7 +24,7 @@ public:
 	/**
 	 * A function that returns the asset paths that are still open
 	 */
-	using AssetsHeldOpenFn = std::function<QStringList()>;
+	using AssetsHeldOpenFn = AssetOperations::AssetsHeldOpenFn;
 
 	/**
 	 * `assetsHeldOpen` has no default because it guards a deletion. An open graph holds a material in
@@ -133,62 +132,13 @@ private:
 	void
 	ShowAssetMenu(QAbstractItemView& view, QFileSystemModel& model, const QPoint& pos);
 
-	/**
-	 * Whether the Material Editor holds `absolute` -- or, when it is a directory, anything beneath it
-	 * -- open. What every on-disk operation here is gated on, because an open graph's next Save would
-	 * write the old state straight back.
-	 */
-	[[nodiscard]] bool
-	IsHeldOpen(const QString& absolute, bool isDirectory) const;
-
-	/**
-	 * Deletes `asset` (data-root-relative), having first established that nothing references it: no
-	 * material samples the texture, no mesh names the material.
-	 *
-	 * Deleting a mesh is never refused -- the materials it named are shareable assets. They stay
-	 * where they are, and the maps a deleted material leaves behind are what Clean Unused Textures
-	 * sweeps.
-	 */
+	/** Re-roots the grid when the folder it is sitting in or under has been deleted. */
 	void
-	DeleteAsset(const QString& asset);
+	OnDirectoryDeleted(const QString& absolute);
 
-	/**
-	 * DeleteAsset, taking also every asset that nothing would reference once the target is gone --
-	 * listed in the confirmation first, and blocked by the Material Editor holding any of it open.
-	 */
+	/** Follows the grid to where the folder it is sitting in or under has been renamed to. */
 	void
-	DeleteAssetCascade(const QString& asset);
-
-	/** The body Delete and Delete Cascade share; `planner` is the one thing they differ by. */
-	void
-	DeleteWithPlanner(
-		const QString& asset,
-		assetlib::DeletionPlan (*planner)(const assetlib::AssetRefGraph&, std::string_view));
-
-	/**
-	 * Renames `asset` (data-root-relative) in place, rewriting every asset that references it so the
-	 * rename never breaks an edge -- which is why it is not blocked by references the way Delete is.
-	 * The dialog edits a file's stem alone: the extension says what the asset is, and renaming must
-	 * not change that.
-	 */
-	void
-	RenameAsset(const QString& asset);
-
-	/**
-	 * Composites the material at `asset` (data-root-relative) down to its baked triplet and rewrites it,
-	 * on the loading-screen worker. Reads the material off disk, so it bakes the routes last saved --
-	 * see the Material Editor's Save.
-	 */
-	void
-	BakeMaterial(const QString& asset);
-
-	/**
-	 * `parentPath` rather than a QModelIndex: this runs a modal below, and QFileSystemModel populates on
-	 * a worker whose row insertions invalidate every index into it. The index is re-derived from the
-	 * path once the dialog is down.
-	 */
-	void
-	AddDirectory(QFileSystemModel* model, const QString& parentPath);
+	OnDirectoryRenamed(const QString& fromAbsolute, const QString& toAbsolute);
 
 	void
 	UpdateEmptyPlaceholder();
@@ -199,7 +149,7 @@ private:
 	QLabel*                   m_EmptyPlaceholder = nullptr;
 	QString                   m_RootPath;
 	QStringList               m_History;
-	AssetsHeldOpenFn          m_AssetsHeldOpen;
+	AssetOperations*          m_Operations = nullptr;
 
 	// A pure-CPU decode with no renderer behind it, so the explorer stands its own cache instead of
 	// being handed one the way the GPU-backed AssetThumbnailCache is.
