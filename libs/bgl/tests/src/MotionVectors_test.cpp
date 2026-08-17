@@ -91,7 +91,13 @@ namespace
 		bgl::SceneViewRef      view;
 		bgl::RenderTargetBase* targetBase = nullptr;
 
-		explicit MotionFixture(bool taaEnabled = false)
+		uint32_t width  = c_Width;
+		uint32_t height = c_Height;
+
+		explicit MotionFixture(
+			bool     taaEnabled = false,
+			uint32_t w          = c_Width,
+			uint32_t h          = c_Height) : width(w), height(h)
 		{
 			auto opts                     = bgl::GraphicsOptions();
 			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -102,8 +108,8 @@ namespace
 			REQUIRE(gfx != nullptr);
 
 			auto targetDesc       = bgl::RenderTargetDesc();
-			targetDesc.width      = static_cast<int>(c_Width);
-			targetDesc.height     = static_cast<int>(c_Height);
+			targetDesc.width      = static_cast<int>(width);
+			targetDesc.height     = static_cast<int>(height);
 			targetDesc.headless   = true;
 			targetDesc.taaEnabled = taaEnabled;
 
@@ -149,7 +155,7 @@ namespace
 			auto job     = bgl::RenderJob();
 			job.view     = view;
 			job.camera   = camera;
-			job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+			job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
 
 			gfx->DrawFrame(target, job);
 		}
@@ -157,14 +163,17 @@ namespace
 		std::vector<glm::vec2>
 		ReadMotionVectors()
 		{
-			return bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), c_Width, c_Height);
+			return bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), width, height);
 		}
 	};
 
 	glm::vec2
-	CentrePixel(const std::vector<glm::vec2>& motion)
+	CentrePixel(
+		const std::vector<glm::vec2>& motion,
+		uint32_t                      width  = c_Width,
+		uint32_t                      height = c_Height)
 	{
-		return motion[static_cast<size_t>(c_Height / 2) * c_Width + (c_Width / 2)];
+		return motion[static_cast<size_t>(height / 2) * width + (width / 2)];
 	}
 }
 
@@ -280,6 +289,67 @@ TEST_CASE("A camera yaw displaces the skybox horizontally", "[motionvectors][ren
 
 	// A yaw is horizontal; any vertical component means an axis got crossed.
 	CHECK(sky.y == Catch::Approx(0.0f).margin(2e-3));
+}
+
+// The sky's ray is unprojected through a matrix built on the CPU. Inverting the composed
+// rotation-and-projection in one go mixes the projection's near-scaled rows into the rotation, and
+// which way the garbage rounds depends on the jitter folded into the projection -- so at some
+// target sizes the ray a pixel gets differs between jitter phases by up to half a texel: a still
+// sky reporting motion, which the resolve turns into a blur along every silhouette against it. This
+// is the size and field of view the report came from -- half render scale on a 1080p panel -- where
+// the composed inverse measured 0.25 texel on average and 0.5 at worst; the square fixture never
+// showed it. Every phase pair is read, since the residue is the phase's.
+TEST_CASE(
+	"Jitter leaves a still, turned camera's sky reporting no motion",
+	"[jitter][motionvectors][render]")
+{
+	constexpr uint32_t c_PanelWidth  = 960;
+	constexpr uint32_t c_PanelHeight = 540;
+
+	// Nearer than the fixture's plane: a game camera's few thousand to one, which is what
+	// sharpens the ill-conditioning under test.
+	constexpr float c_PanelNear = 0.1f;
+
+	auto fixture = MotionFixture(true, c_PanelWidth, c_PanelHeight);
+	fixture.AddSkybox();
+
+	// Yawed and pitched, so no axis of the view lines up with the projection's.
+	const glm::vec3 eye{ 4.0f, 2.0f, 7.0f };
+	auto            camera = bgl::Camera();
+	camera.LookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(45.0f),
+			static_cast<float>(c_PanelWidth) / static_cast<float>(c_PanelHeight),
+			c_PanelNear,
+			c_Far);
+
+	float maxTexels = 0.0f;
+	int   nanTexels = 0;
+	for (int frame = 0; frame < 5; ++frame)
+	{
+		fixture.RenderFrom(camera);
+		if (frame == 0)
+		{
+			continue;
+		}
+
+		for (const glm::vec2& texel : fixture.ReadMotionVectors())
+		{
+			if (std::isnan(texel.x) || std::isnan(texel.y))
+			{
+				++nanTexels;
+				continue;
+			}
+			maxTexels =
+				std::max(maxTexels, glm::length(texel * glm::vec2(c_PanelWidth, c_PanelHeight)));
+		}
+	}
+
+	INFO("largest resting sky motion = " << maxTexels << " texels, NaN texels = " << nanTexels);
+
+	// Composed from the pieces: 1e-4 texel. Inverse of the composition: 0.5.
+	CHECK(nanTexels == 0);
+	CHECK(maxTexels < 0.01f);
 }
 
 // Nothing drew the background, so it keeps the cleared value. A consumer reads that as "did not

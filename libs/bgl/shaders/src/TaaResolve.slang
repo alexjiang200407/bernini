@@ -5,6 +5,19 @@ struct TaaResolveData
     TextureHandle sceneColor;
     TextureHandle history;
     TextureHandle motionVectors;
+    TextureHandle depth;
+
+    // The unjittered camera this frame and last -- this frame's inverse projection, and its view
+    // space into last frame's clip -- for what the camera alone moves a surface by at a pixel's
+    // depth. Not the inverse view-projection: docs/taa.md has why. Not valid when more than one
+    // draw fed the frame.
+    float4x4 clipToView;
+    float4x4 viewToPrevClip;
+    float cameraPairValid;
+
+    // This frame's sub-pixel offset in NDC: a pixel's depth is the fragment's at the jittered
+    // sample, so the surface behind it sits at the centre less the jitter.
+    float2 jitter;
 
     // sceneColor and motionVectors are read 1:1 and want no filtering; the history is reprojected
     // to an arbitrary sub-pixel position and goes through SampleHistoryCatmullRom's bilinear taps.
@@ -122,6 +135,40 @@ float3 SampleHistoryCatmullRom(float2 uv, float2 texel)
     return sum / weight;
 }
 
+// The motion the camera alone gives a surface at `depth` behind `uv`, in the velocity buffer's
+// convention; a written vector less this is the surface's own motion (docs/taa.md).
+float2 CameraMotion(float2 uv, float depth)
+{
+    float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0) - gTaaResolveData.jitter;
+    float4 view = mul(gTaaResolveData.clipToView, float4(ndc, depth, 1.0));
+    view /= view.w;
+
+    float4 prevClip = mul(gTaaResolveData.viewToPrevClip, view);
+    float2 prevNdc = prevClip.xy / prevClip.w;
+
+    return (ndc - prevNdc) * float2(0.5, -0.5);
+}
+
+float ObjectTexels(float2 uv, float2 motion, float2 texel)
+{
+    if (gTaaResolveData.cameraPairValid == 0.0)
+    {
+        return 0.0;
+    }
+
+    // The far plane is the sky or nothing: neither animates, and at infinity a translation's
+    // parallax and an emptied pixel's zero would both read as motion of their own.
+    const float c_FarPlane = 0.99999;
+
+    float depth = gTaaResolveData.depth.SampleLevel(gTaaResolveData.pointSampler, uv, 0.0).r;
+    if (depth >= c_FarPlane)
+    {
+        return 0.0;
+    }
+
+    return length((motion - CameraMotion(uv, depth)) / texel);
+}
+
 [shader("pixel")]
 float4 PSMain(VSOut input) : SV_Target
 {
@@ -131,18 +178,32 @@ float4 PSMain(VSOut input) : SV_Target
     float4 current = gTaaResolveData.sceneColor.SampleLevel(pointClamp, input.uv, 0.0);
 
     float2 motion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, input.uv, 0.0).xy;
-    float2 historyUv = input.uv - motion;
+
+    // Motion is jitter-free, so rest measures zero up to fma residue -- this admits that residue
+    // and no real motion, which is never a thousandth of a texel per frame.
+    const float c_RestingTexels = 1e-3;
+
+    // What a surface must move by on its own before a neighbour's vector is worth borrowing: a
+    // twentieth of a texel doubles no edge, and clears the reconstruction's residue on a static
+    // surface -- measured bit-identical under an orbit -- by an order of magnitude.
+    const float c_ObjectTexels = 0.05;
 
     // The 3x3 the history is admitted from: min/max bounds at rest, tightening to mean +/- sigma
     // as the pixel moves. On stochastic coverage the min/max box spans both populations whole and
     // admits every dragged mixture -- the smear a hashed surface trails at a distance -- where the
     // sigma box recentres on the majority. Motion is jitter-free, so rest is exactly min/max.
     // The trade-off history is in docs/taa.md.
+    //
+    // The same 3x3 yields the vector of whichever neighbour moves most on its own, which stands in
+    // for the surface at a silhouette (docs/taa.md), and the longest motion in the neighbourhood.
     float3 centre = RgbToYCoCg(current.rgb);
     float3 boxMin = centre;
     float3 boxMax = centre;
     float3 m1 = centre;
     float3 m2 = centre * centre;
+    float2 dilatedMotion = motion;
+    float dilatedObjectTexels = max(ObjectTexels(input.uv, motion, texel), c_ObjectTexels);
+    float neighbourhoodTexels = length(motion / texel);
 
     for (int y = -1; y <= 1; ++y)
     {
@@ -160,8 +221,20 @@ float4 PSMain(VSOut input) : SV_Target
             boxMax = max(boxMax, tap);
             m1 += tap;
             m2 += tap * tap;
+
+            float2 tapMotion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, tapUv, 0.0).xy;
+            neighbourhoodTexels = max(neighbourhoodTexels, length(tapMotion / texel));
+
+            float tapObjectTexels = ObjectTexels(tapUv, tapMotion, texel);
+            if (tapObjectTexels > dilatedObjectTexels)
+            {
+                dilatedObjectTexels = tapObjectTexels;
+                dilatedMotion = tapMotion;
+            }
         }
     }
+
+    float2 historyUv = input.uv - dilatedMotion;
 
     // Fully tight from one texel of motion per frame. The sigma box is kept inside the min/max
     // box: nine bounded samples can put mu +/- sigma outside it, and outside it the clamp would
@@ -197,9 +270,9 @@ float4 PSMain(VSOut input) : SV_Target
 
     // Motion empties the store: the sweep of passing content reads as spread, and a box opened on
     // it the frame the camera stops re-admits exactly the wake the clamp exists to scrub. Motion
-    // is jitter-free, so rest measures zero up to fma residue -- the threshold admits that residue
-    // and no real motion, which is never a thousandth of a texel per frame.
-    float resting = (gTaaResolveData.cameraStill != 0.0 && tightness < 1e-3) ? 1.0 : 0.0;
+    // anywhere in the 3x3, not the pixel's own: the backdrop beside a moving mesh reports zero
+    // and would otherwise bank the passing silhouette's contrast, then shelter its wake.
+    float resting = (gTaaResolveData.cameraStill != 0.0 && neighbourhoodTexels < c_RestingTexels) ? 1.0 : 0.0;
     float variance = lerp(varPrev, sigma.x * sigma.x, gTaaResolveData.blendWeight) * resting;
 
     // On stochastic coverage a resting pixel's 3x3 sometimes shows no survivor, the box collapses
@@ -225,7 +298,12 @@ float4 PSMain(VSOut input) : SV_Target
     const float c_ConvergeKnee = 8.0;
     const float c_MinWeightScale = 0.25;
 
-    float weight = gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
+    // Capped at twice: docs/taa.md has where the hashed pan's trailing-band guard stops it.
+    const float c_MaxMotionWeightScale = 2.0;
+    const float c_MotionWeightTexels = 1.0;
+
+    float motionScale = lerp(1.0, c_MaxMotionWeightScale, saturate(length(dilatedMotion / texel) / c_MotionWeightTexels));
+    float weight = motionScale * gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 

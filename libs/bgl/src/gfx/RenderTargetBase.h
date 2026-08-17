@@ -155,6 +155,24 @@ namespace bgl
 		AdvanceHistory() noexcept = 0;
 
 		/**
+		 * How many frames have begun on this target. What the jitter sequence and the alpha hash
+		 * seed advance on: per target, like the history ping-pong, so a target drawn every other
+		 * frame -- two viewports sharing a renderer -- still walks the whole sequence rather than
+		 * every second term of it.
+		 */
+		[[nodiscard]] uint64_t
+		GetFrameCount() const noexcept
+		{
+			return m_FrameCount;
+		}
+
+		void
+		AdvanceFrameCount() noexcept
+		{
+			++m_FrameCount;
+		}
+
+		/**
 		 * Presents the frame just submitted, then advances to the index the next one records into.
 		 * A headless target presents nothing and advances round-robin; a windowed one takes the
 		 * index back from its swapchain.
@@ -177,5 +195,8 @@ namespace bgl
 
 	protected:
 		RenderTargetBase() noexcept = default;
+
+	private:
+		uint64_t m_FrameCount = 0;
 	};
 }

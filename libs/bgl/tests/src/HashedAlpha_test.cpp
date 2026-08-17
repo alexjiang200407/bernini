@@ -1111,8 +1111,9 @@ TEST_CASE("A pan leaves no smear across a hashed alpha ramp", "[hashedalpha][ren
 	CHECK(on.trailFloor < 5e-4f);
 	CHECK(on.leadFloor < 5e-4f);
 
-	// Measured 1.73e-3 with the min/max clamp box and 1.30e-3 with the motion-gated sigma box;
-	// the bound sits between them so the wide box cannot return unnoticed. The residual above the
+	// Measured 1.73e-3 with the min/max clamp box, 1.30e-3 with the motion-gated sigma box (1.38e-3
+	// after the mip and coverage work since), and 1.23e-3 with the blend weighted by the fetch's
+	// motion; the bound sits between the first two so the wide box cannot return unnoticed. The residual above the
 	// floor is reprojection incoherence -- the sprinkle zone's motion alternates between strand
 	// and backdrop -- which no clamp box can reach.
 	CHECK(on.trail < 1.6e-3f);

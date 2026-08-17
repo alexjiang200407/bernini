@@ -59,10 +59,14 @@ from there, live, because the comparison is what shows a temporal artifact.
   able to hide. The subtraction is in the *mesh* shader deliberately: see the shared-module hazard in
   [Slang Shaders](docs/slang_shaders.md).
 
-* **Halton(2, 3), eight terms.** Long enough to cover the footprint, short enough that the ghosting
-  tail stays inside what the blend weight forgives. The sequence is 1-based, because term 0 of every
-  radical inverse is 0 — a frame that samples exactly where an unjittered one does contributes
-  nothing new.
+* **Halton(2, 3), eight terms, indexed by the target's own frame count.** Long enough to cover the
+  footprint, short enough that the ghosting tail stays inside what the blend weight forgives. The
+  sequence is 1-based, because term 0 of every radical inverse is 0 — a frame that samples exactly
+  where an unjittered one does contributes nothing new. The index is `RenderTargetBase::GetFrameCount`,
+  not the renderer's frame counter, for the reason the history ping-pong is per target (below): two
+  viewports drawn by one renderer would otherwise each see every second term — four lopsided
+  positions instead of the footprint — and a third would change what the first two converge to.
+  The alpha hash seed advances on the same count.
 
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
@@ -111,8 +115,8 @@ from there, live, because the comparison is what shows a temporal artifact.
   trust — a material editor rewriting on every keystroke pays one unaccumulated frame per rewrite,
   which is a frame it was going to pay anyway for the edits that did change something.
 
-* **Depth has an SRV now, and the resolve still does not read it.** Depth-based disocclusion
-  rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
+* **Depth is read for one thing only: what the camera alone would move a pixel by.** Depth-based
+  disocclusion rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
   surface nearer than the neighbourhood shows — was built and measured once the SRV existed, and
   rejected on those measurements. Every ghost instrument scored it at parity: the wake a receding
   occluder leaves is already scrubbed by the neighbourhood clamp within a frame or two, over empty
@@ -120,17 +124,60 @@ from there, live, because the comparison is what shows a temporal artifact.
   it did move was flicker on stochastic coverage — a grazing hashed pan trebled, 0.0024 → 0.0067 —
   because a hashed pixel's depth flips between strand and backdrop every frame, so single-frame
   depth cannot tell "the strand left" from "the strand's coin came up tails", and the ghost halo
-  that *is* visible on hair hugs the sprinkle zone where that ambiguity lives. What stands is the
-  depth SRV and its frame-graph tracking ([Passes Overview](docs/passes.md)), which any future
-  depth reader starts from.
+  that *is* visible on hair hugs the sprinkle zone where that ambiguity lives. What the resolve
+  does read depth for is the next bullet's discriminator — reconstructing a pixel's world position
+  and reprojecting it through last frame's unjittered camera, so a written vector minus that is
+  the surface's *own* motion — which never gates on depth flipping frame to frame, only on the
+  velocity a surviving fragment wrote against its own depth. The SRV and its frame-graph tracking
+  are in [Passes Overview](docs/passes.md).
 
-* **Not velocity-dilated either.** Reprojecting by the longest velocity in the 3×3 — the no-depth
-  stand-in for closest-fragment dilation — measured worse everywhere it was meant to help: panning
-  over a hashed patch went from 0.0029 to 0.0040–0.0073 of frame-to-frame noise. On stochastic
-  coverage a pixel whose fragment was discarded carries zero motion, and an exact-texel fetch by
-  zero *pins* the noise field; "correcting" it to the surface's velocity re-samples that field at a
-  fresh fractional offset every frame, which is flicker. The thin-feature case it exists for is
-  better served by keeping the hash cell near pixel size (below), which attacks the cause.
+* **Velocity-dilated by the neighbour that moves most on its own.** Reprojecting by the longest
+  velocity in the 3×3 — the no-depth stand-in for closest-fragment dilation — was first measured on
+  pans and rejected: panning over a hashed patch went from 0.0029 to 0.0040–0.0073 of frame-to-frame
+  noise, because a discarded hashed fragment carries the backdrop's motion and an exact-texel fetch
+  by it *pins* the noise field, where "correcting" it to the strand's velocity re-samples that field
+  at a fresh fractional offset every frame. What dilation exists for is a mesh **animating** — a
+  silhouette pixel half covered by the mesh carries either its velocity or the backdrop's, by which
+  fragment won its centre, so the edge mixture reprojects from the wrong place on alternate pixels
+  and the outline doubles, which is what the Animation panel showed under a still camera and under
+  an orbit. The two are told apart by **object motion**: each tap's written vector minus what the
+  camera alone gives a surface at that tap's depth (`CameraMotion`), and the pixel borrows the
+  vector of whichever neighbour moves most on its own, above `c_ObjectTexels`. A static surface, a
+  hashed strand's survivor or its discard, and the sky all measure zero object motion under any
+  camera, so the hashed pan never dilates and every pan and resting figure is bit-identical; only a
+  genuinely animating surface does, still camera or moving.
+
+  Three things make the reconstruction exact enough to trust at a twentieth of a texel, each
+  measured on the exact history readback of static geometry under an orbit, sky and no sky, close
+  and grazing: it goes through this frame's inverse *projection* and then a rigid view-to-previous
+  -clip matrix, never the inverse view-projection, whose w row cancels catastrophically towards the
+  far plane while its xyz rows round independently of it, so a point reconstructed through it
+  wanders off its own view ray by up to half a texel — which under any camera reads as motion; it
+  reconstructs at the pixel centre *less the jitter*, where the fragment whose depth was written
+  actually sits, since on an oblique surface the depth slope times the jitter reads as parallax;
+  and the far plane counts as no object motion at all — it is the sky or nothing, neither of which
+  animates, and at infinity a translation's parallax and an emptied pixel's zero would both read as
+  motion of their own (reprojecting it as a direction was tried, and a rotated skybox's own
+  reprojection differs from it enough to dilate every silhouette against the sky). A frame of
+  several draws has no one camera to reconstruct with and reprojects by each pixel's own vector.
+
+  Measured on the tilted VAT quad sweeping over a flat backdrop, animated-against-held under TAA
+  with the raw pair at exactly 0: still camera 6.9e-4 → 1.25e-4, drifting camera 8.8e-4 → 2.9e-4.
+  Off the suite, on the test project's coyote through a throwaway headless harness, against the
+  still-camera converged image of the same pose: its ears in close-up 1.16 → 0.67 (mean |Δ|/255)
+  under a still camera, and under an orbit 0.87 → 0.68 — the held mesh under the same orbit
+  measures 0.95, so the animating one now resolves *better* than a static one under a pan, which
+  is the silhouette parallax the σ-box leaves and closest-fragment dilation would take.
+  Tightening the clamp box by the fetch's motion as well — the dilated fetch keeps the pixel's
+  own tightness, so a backdrop pixel beside a moving edge fetches from where the mesh was under
+  the min/max box — was measured twice and left out twice: on the close-up ears at parity (0.672
+  either way), and at a 1080p grid from a quarter texel of the borrowed vector, where it added
+  nothing the motion-weighted blend (below) had not already taken (the coyote's residue over
+  48/255 against its held self 353 with the blend alone, 352 with both) and cost the grazing
+  hashed strand 15% more flicker under a slow pan (1.48e-3 → 1.69e-3 at half a texel a frame),
+  because at that speed a σ box fully tight is the always-on box the next bullet rejects. The
+  thin-feature case on hashed coverage is still better served by keeping the hash cell near pixel
+  size (below).
 
 * **The clamp box is min/max at rest and tightens to mean ± σ under motion.** Always-on variance
   clipping was tried first and rejected: tighter everywhere means snapping converged stochastic
@@ -142,23 +189,37 @@ from there, live, because the comparison is what shows a temporal artifact.
   tightening on the pixel's own motion (fully tight from one texel per frame) takes the resting
   image out of the trade entirely: motion has the jitter removed, so a still camera reads exactly
   zero and every resting figure is bit-identical to min/max. Measured on a panned hashed-alpha
-  ramp over a lit backdrop: trailing-band error 1.73e-3 → 1.30e-3 against a 1.7e-4 still floor,
-  leading-band 2.58e-3 → 2.28e-3, grazing pan flicker 0.0024 → 0.0021, every resting bound
-  unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
+  ramp over a lit backdrop: trailing-band error 1.73e-3 → 1.30e-3 against a 1.7e-4 still floor
+  (1.38e-3 by the time the motion-weighted blend below was measured against it, after the mip
+  and coverage work in between), leading-band 2.58e-3 → 2.28e-3, grazing pan flicker
+  0.0024 → 0.0021, every resting bound unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
   otherwise escape.
 
-* **Not velocity-scaled either.** A blend weight ramped by reprojection distance — long accumulation
-  at rest, short under motion — is the standard answer to wanting both, and measured no better than a
-  constant: the trail moved 0.00669 → 0.00673, which is nothing. It buys nothing here because the
-  clamp already bounds ghosting, so there is no second problem for the weight to solve.
+* **A moving pixel leans further on the frame it can see — up to twice the base weight from one
+  texel of fetch motion.** The clamp bounds *where* an admitted history may land; nothing bounds
+  how long it stays, and what the clamp cannot pull out is the wake. First measured against the
+  empty-background pan and rejected there (0.00669 → 0.00673) — that instrument is edge spread,
+  and the box collapses onto the backdrop's own colour and scrubs the trail by itself. Against the
+  wake over *detail* the ramp is worth a third: 9.9e-5 → 6.9e-5; the animating quad's outline
+  1.25e-4 → 1.04e-4 still and 2.9e-4 → 2.3e-4 drifting; the coyote's 1080p residue over 48/255
+  against its held self 660 → 353; the panned hashed ramp's trailing band 1.38e-3 → 1.23e-3 at
+  two texels a frame and 1.21e-3 → 1.16e-3 at half a texel, its pan frame-to-frame 2.37e-3 →
+  2.28e-3, and the grazing strand's pan flicker within 2% at either speed. Rest is exactly zero
+  motion, so every resting figure is bit-identical — which is the difference from a *global*
+  doubling, which triples resting hashed flicker and is out. Capped at twice: at four times the
+  wake halves again but the hashed ramp's trailing band reaches 1.6e-3, where that band's guard
+  stops telling the σ box from the min/max one. No suite bound sits between the two states: the
+  margins are within what one GPU differs from another by on these instruments (the hashed pan
+  flicker pins Apple and Ada apart by a third), so the mechanism is guarded by these figures and
+  the coyote harness, not by a red-before line.
 
 * **The weight does deepen where remembered stochastic spread lives.** What a converged stochastic
   region still flickers by is the accumulation's residual variance, which scales with the blend
   weight and which no clamp box reaches — and the variance store (below) is a per-pixel map of
   exactly where that residual lives. The resolve divides the weight by the remembered sigma,
   floored at a quarter of the base so the accumulation still tracks a change a resting camera is
-  watching. This is not the velocity-scaled ramp rejected above: the gate is the store, not the
-  motion, and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
+  watching. This is separate from the motion ramp above: the gate is the store, not the motion,
+  and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
   deepening cannot ghost. It is also what makes a lower render resolution stop flickering more
   than a higher one: the distant strand card measured 7.7e-5 / 1.37e-4 / 2.51e-4 of frame-to-frame
   noise at 256/128/64 and measures 2.4e-5 / 4.2e-5 / 7.5e-5 with the deepening — every rung below
@@ -179,12 +240,18 @@ from there, live, because the comparison is what shows a temporal artifact.
   to zero. Spatial spread averaged over time rather than temporal deviation, because a ghost's
   history deviates from the frame under it exactly as a real mixture does, but only real
   stochastic coverage keeps producing spread *inside* single frames. The widening exists only at
-  true rest, gated on the pixel's motion being zero **and** the CPU comparing this frame's
+  true rest, gated on the whole 3×3's motion being zero **and** the CPU comparing this frame's
   unjittered view-projection bitwise against last frame's — a pixel's motion alone cannot gate it,
   since empty pixels report zero velocity under any camera and would bank a passing edge's
-  contrast during a pan. Resting history reprojects onto itself and cannot ghost, so the widening
-  is free there: converged distant coverage 0.23 → 0.97–0.98 of the blend reference, resting
-  flicker 7× down, and the pan trail bit-identical to the unwidened resolve.
+  contrast during a pan; and its own motion alone is not enough under a still camera either, since
+  the backdrop beside an animating mesh reports zero while the silhouette sweeps over it, banked
+  that silhouette's contrast, and then widened its box and deepened its weight over exactly the
+  wake the clamp exists to scrub. It is the other half of the still-camera outline figure quoted
+  above, from the same off-suite harness: on the coyote's ears the dilation alone measures
+  1.16 → 0.98 and this gate alone 1.16 → 0.97; together, 0.67.
+  Resting history reprojects onto itself and cannot ghost, so the widening is free there:
+  converged distant coverage 0.23 → 0.97–0.98 of the blend reference, resting flicker 7× down,
+  and the pan trail bit-identical to the unwidened resolve.
 
 ---
 
@@ -313,10 +380,11 @@ Two couplings worth knowing:
   The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
   any distance and anisotropic filtering resolves that axis.
 
-* **The blend weight trades flicker against settling time, not against ghosting.** This is the
-  opposite of the intuition and it is measured: at an equal convergence budget, halving the weight
-  from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the trail left
-  behind a pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
+* **The base blend weight trades flicker against settling time, not against ghosting.** This is
+  the opposite of the intuition and it is measured: at an equal convergence budget, halving the
+  weight from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the
+  trail left behind an empty-background pan by 2% — nothing (the wake over *detail* is the figure
+  the motion ramp above does move). Ghosting is bounded by the neighbourhood clamp, which is doing
   essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
   actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
   camera stops. 0.025 is where that starts to show. The variance-guided deepening (above) is how the
@@ -340,10 +408,12 @@ Two couplings worth knowing:
   writes it as zero — the store must start empty, and a scene alpha of 1 would decode as a huge
   variance.
 
-* **The ping-pong is per target, not per frame counter.** `GetCurrentHistoryIndex()` is state the target
-  owns and `AdvanceHistory()` flips at `EndFrame`. Deriving it from a context-wide frame counter
-  would break the moment two targets are drawn at different rates — each target's history has to
-  alternate on *its* frames.
+* **The ping-pong is per target, not per frame counter — and so is the jitter index.**
+  `GetCurrentHistoryIndex()` is state the target owns and `AdvanceHistory()` flips at `EndFrame`;
+  `GetFrameCount()` is the target's and `BeginFrame` advances it. Deriving either from a
+  context-wide frame counter breaks the moment two targets are drawn per frame or at different
+  rates — each target's history has to alternate on *its* frames, and its jitter has to walk the
+  whole sequence on them.
 
 * **Turning it off discards the accumulation; it does not pause it.** The frames the history would
   have to bridge are never rendered, so resuming across the gap would reproject a stale image. The
@@ -384,4 +454,11 @@ Two couplings worth knowing:
 
 * **A converged TAA frame is not reproducible in one frame.** Any test that asserts on TAA output has
   to drive a fixed number of frames first; a golden captured on frame 1 asserts nothing about the
-  algorithm. `TaaResolve_test.cpp` uses 24 — two passes of the eight-term sequence.
+  algorithm. `TaaResolve_test.cpp` converges for 100 — several times the blend's time constant,
+  not merely a pass or two over the eight-term sequence.
+
+* **A moving mesh is measured against itself held, never against a still frame.** The animating
+  VAT cases render the same pose twice — sweeping into it and held on it — and read the resolve's
+  difference; the unresolved pair is the guard that the poses are pixel-identical. A difference
+  against a *converged* still would score the honest sub-pixel gap between a history accumulated
+  along a moving path and one accumulated at rest as though it were a ghost.

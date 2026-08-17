@@ -386,6 +386,7 @@ namespace bgl
 		m_ShadingChanged   = false;
 		m_OutlineMaskDrawn = false;
 		++m_FrameCounter;
+		rt.AdvanceFrameCount();
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
 		m_FrameGraph.ImportTexture(
 			c_BackbufferName,
@@ -450,10 +451,11 @@ namespace bgl
 
 		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
 		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
-		// that moves every frame.
+		// that moves every frame. Indexed by the target's own frame count, not this context's: with
+		// two targets drawn per frame each would otherwise see every second term of the sequence.
 		const glm::vec2 jitter = m_ActiveTarget->IsTaaEnabled() ?
 		                             HaltonJitter(
-										 m_FrameCounter,
+										 m_ActiveTarget->GetFrameCount(),
 										 viewport.maxX - viewport.minX,
 										 viewport.maxY - viewport.minY) :
 		                             glm::vec2(0.0f);
@@ -484,6 +486,14 @@ namespace bgl
 
 		m_ShadingChanged |= view->AdvanceShading();
 
+		const glm::mat4 invView = glm::inverse(job.camera.GetView());
+
+		// What the resolve tells a surface's own motion from the camera's with. One camera stands
+		// for the target, so a frame of several draws disables it rather than choosing.
+		m_TaaClipToView     = glm::inverse(job.camera.GetProjection());
+		m_TaaViewToPrevClip = prevCamera.unjitteredViewProj * invView;
+		m_TaaJitter         = jitter;
+
 		const uint32_t drawIdx = m_DrawCount++;
 
 		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
@@ -513,7 +523,7 @@ namespace bgl
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.viewState.cameraPos = glm::vec3(glm::inverse(job.camera.GetView())[3]);
+		draw.viewState.cameraPos = glm::vec3(invView[3]);
 
 		draw.lighting.env         = view->GetEnvironmentMap();
 		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();
@@ -523,10 +533,11 @@ namespace bgl
 		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
 		constexpr uint64_t c_AlphaHashPeriod = 1024;
 
-		draw.viewState.alphaHashSeed = m_ActiveTarget->IsTaaEnabled() ?
-		                                   static_cast<float>(m_FrameCounter % c_AlphaHashPeriod) :
-		                                   0.0f;
-		draw.lighting.skybox         = view->GetSkybox();
+		draw.viewState.alphaHashSeed =
+			m_ActiveTarget->IsTaaEnabled() ?
+				static_cast<float>(m_ActiveTarget->GetFrameCount() % c_AlphaHashPeriod) :
+				0.0f;
+		draw.lighting.skybox = view->GetSkybox();
 
 		if (draw.lighting.skybox.has_value())
 		{
@@ -540,8 +551,12 @@ namespace bgl
 				skyRotation = glm::rotate(glm::mat4(1.0f), rotationY, glm::vec3(0.0f, 1.0f, 0.0f));
 			}
 
+			// Composed from the pieces, the jitter as an exact translation: inverting their product
+			// folds the jitter into the rotation and a still sky reports motion (docs/passes.md).
 			draw.lighting.skyboxClipToWorld =
-				skyRotation * glm::inverse(camera.rotationOnlyViewProj);
+				skyRotation * glm::transpose(viewNoTranslation) *
+				glm::inverse(job.camera.GetProjection()) *
+				glm::translate(glm::mat4(1.0f), glm::vec3(-jitter, 0.0f));
 
 			// Undoes the spin the ray direction was baked with before reprojecting, so a rotated
 			// skybox reports the camera's motion and not its own offset. rotationY is authoring
@@ -618,6 +633,11 @@ namespace bgl
 			taaArgs.pointSampler    = m_PointClampSampler;
 			taaArgs.linearSampler   = m_LinearClampSampler;
 			taaArgs.viewport        = viewport;
+			taaArgs.depth           = rt.GetDepthSrv();
+			taaArgs.clipToView      = m_TaaClipToView;
+			taaArgs.viewToPrevClip  = m_TaaViewToPrevClip;
+			taaArgs.jitter          = m_TaaJitter;
+			taaArgs.cameraPairValid = m_DrawCount == 1;
 			taaArgs.historyValid    = rt.IsHistoryValid() && !m_ShadingChanged;
 			taaArgs.cameraStill     = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
