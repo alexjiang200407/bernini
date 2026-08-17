@@ -142,11 +142,12 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
 	auto geomBuffers = scene->GetBuffers();
-	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, pbrBuffer, looseBuffer, vatGeomBuffer, vatClipBuffer, vatColumnBuffer] =
+	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, pbrBuffer, looseBuffer, vatGeomBuffer, clipBuffer, vatColumnBuffer, skinnedGeomBuffer, skinnedBoneBuffer, boneSampleBuffer] =
 		geomBuffers;
 
 	auto instBuffers = view->GetInstanceBuffers();
-	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, vatStateBuffer] = instBuffers;
+	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, vatStateBuffer, skinnedStateBuffer] =
+		instBuffers;
 
 	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
 	// one submesh-instance per submesh (the cube has exactly one).

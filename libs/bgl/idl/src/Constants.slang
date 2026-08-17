@@ -33,3 +33,13 @@ public static const uint cTransparentSortGroupSize = 512; // one thread per comp
 // Fills the sort's tail so padding never displaces a real entry. Reserved: TransparentDepthKeys
 // caps real keys below it, or padding could sort into the drawn prefix.
 public static const uint cSortPadKey = 0xFFFFFFFF;
+
+// A root bone's `parent`, matching assetlib's own sentinel for one.
+public static const uint cInvalidBone = 0xFFFFFFFF;
+
+// Bones per rig. One workgroup poses one instance and holds every bone's model transform in
+// groupshared memory to walk the hierarchy, so this is a groupshared budget, not taste: at 48 bytes
+// per affine transform it reserves 12 KiB, inside Vulkan's guaranteed 16 KiB floor (D3D12 allows 32
+// KiB, Metal more) with room left for anything else the pass needs. A rig past this must be split
+// or the pass must spill to a buffer.
+public static const uint cMaxBonesPerRig = 256;

@@ -3,7 +3,7 @@
 import Range;
 import RangeWithCount;
 import TextureHandle;
-import VatClip;
+import Clip;
 
 // One rig's baked clip set: the texture pair every instance of the geom fetches, and the tables
 // that address it. Positions are unorm-packed in one box over every frame of every clip -- per-
@@ -18,7 +18,7 @@ public struct VatGeom
     public float4 boundsMin;
     public float4 boundsExtent;
 
-    public RangeWithCount<VatClip> clips;
+    public RangeWithCount<Clip> clips;
 
     // One entry per submesh of the geom: vertex `v` of submesh `s` is texture column
     // `columnBases[s] + v`, the same submesh-local index the vertexMap step yields.

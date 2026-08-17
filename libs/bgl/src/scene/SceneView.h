@@ -29,8 +29,10 @@ namespace bgl
 		// pso for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
-		// kVatMesh only: the instance's playback record, freed with the instance.
-		core::slot_handle vatState;
+		// The instance's playback record, freed with the instance: a VatState for a kVatMesh
+		// placement, a SkinnedState for a kSkinnedMesh one, null for a static one. `geomType` is
+		// what says which buffer it indexes.
+		core::slot_handle animState;
 	};
 
 	/**
@@ -67,6 +69,12 @@ namespace bgl
 		MeshInstanceHandle
 		CreateVatMeshInstance(GeomHandle geom, glm::mat4 transform, const VatInstanceDesc& desc)
 			override;
+
+		MeshInstanceHandle
+		CreateSkinnedMeshInstance(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			const SkinnedInstanceDesc& desc) override;
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
@@ -169,7 +177,7 @@ namespace bgl
 		auto
 		GetInstanceBuffers()
 		{
-			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_VatStates);
+			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_VatStates, m_SkinnedStates);
 		}
 
 		/**
@@ -241,12 +249,14 @@ namespace bgl
 		RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex);
 
 		/**
-		 * The body both instance creators share: copies the geom's submesh range, writes the
-		 * per-placement Mesh (with `vatState`, null for a static one) and one resolved
-		 * SubmeshInstance per submesh. The caller has already validated the geom.
+		 * Writes the records a placement is made of -- the per-placement Mesh, with `animState` routed
+		 * onto the field the geom's type reads, and one resolved SubmeshInstance per submesh.
+		 *
+		 * Validates nothing: `geom` must already be a live geom of the type the public creator above
+		 * accepts, and `animState` a state slot of the buffer that type reads. Only those three call it.
 		 */
 		MeshInstanceHandle
-		CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState);
+		WritePlacement(GeomHandle geom, glm::mat4 transform, core::slot_handle animState);
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
@@ -303,6 +313,7 @@ namespace bgl
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
 		EntryBuffer<idl::VatState>       m_VatStates;
+		EntryBuffer<idl::SkinnedState>   m_SkinnedStates;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;
