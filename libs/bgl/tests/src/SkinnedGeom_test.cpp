@@ -187,7 +187,7 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 
 	const auto                               skeleton   = MakeRig();
 	const auto                               animations = MakeClips();
-	const std::array<bgl::MaterialHandle, 1> materials  = { material };
+	const std::array<bgl::MaterialHandle, 1> materials  = { { material } };
 
 	const auto geom =
 		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, skeleton, animations);
@@ -302,7 +302,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	auto* view       = viewHandle->As<bgl::SceneView>();
 	REQUIRE(view != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { OpaquePbr(scene) };
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 	const auto                               geom =
 		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips());
 	REQUIRE(geom.IsValid());
@@ -369,7 +369,7 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { OpaquePbr(scene) };
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 
 	const auto add = [&](const assetlib::Skeleton&     skeleton,
 	                     const assetlib::AnimationSet& animations,
@@ -433,7 +433,7 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 	{
 		auto cutout                                     = bgl::PbrMaterialDesc();
 		cutout.layerType                                = bgl::LayerType::kMask;
-		const std::array<bgl::MaterialHandle, 1> masked = { scene->CreatePbrMaterial(cutout) };
+		const std::array<bgl::MaterialHandle, 1> masked = { { scene->CreatePbrMaterial(cutout) } };
 
 		CHECK_THROWS_AS(
 			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, masked, MakeRig(), MakeClips()),
@@ -462,7 +462,7 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { OpaquePbr(scene) };
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 
 	// The offsets a clean add takes. Every range allocator hands back the lowest free block, so if a
 	// failed add left anything behind, the *next* add lands somewhere else -- which is the only
@@ -475,11 +475,12 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 		auto        buffers = scene->GetBuffers();
 		const auto& record =
 			std::get<10>(buffers)[scene->GetGeomSkinnedInfo(geom.handle.index).record];
-		const auto taken =
-			std::array<uint32_t, 4>{ record.bones.offsetStart,
-			                         record.samples.offsetStart,
-			                         record.clips.range.offsetStart,
-			                         scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart };
+		const auto taken = std::array<uint32_t, 4>{
+			{ record.bones.offsetStart,
+			  record.samples.offsetStart,
+			  record.clips.range.offsetStart,
+			  scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart }
+		};
 		scene->DeleteGeom(geom);
 		return taken;
 	};
@@ -502,7 +503,8 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 
 	auto masked                                              = bgl::PbrMaterialDesc();
 	masked.layerType                                         = bgl::LayerType::kMask;
-	const std::array<bgl::MaterialHandle, 1> maskedMaterials = { scene->CreatePbrMaterial(masked) };
+	const std::array<bgl::MaterialHandle, 1> maskedMaterials = { { scene->CreatePbrMaterial(
+		masked) } };
 	CHECK_THROWS(
 		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, maskedMaterials, MakeRig(), MakeClips()));
 
