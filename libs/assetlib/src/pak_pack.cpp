@@ -1,3 +1,4 @@
+#include <assetlib/AssetStore.h>
 #include <assetlib/pak_pack.h>
 
 #include <assetlib/asset_refs.h>

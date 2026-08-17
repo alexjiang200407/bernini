@@ -1,5 +1,8 @@
 #pragma once
-#include "checked_read.h"
+#include <core/file/IFileSystem.h>
+
+#include "ChunkData.h"
+#include "IRangeReader.h"
 #include <core/err/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
@@ -161,7 +164,7 @@ namespace assetlib::chunk
 	 *
 	 * @throws std::runtime_error if the source cannot be read, or is malformed.
 	 */
-	[[nodiscard]] std::unordered_map<uint32_t, std::vector<std::byte>>
+	[[nodiscard]] ChunkData
 	readChunks(
 		IRangeReader&             source,
 		uint32_t                  magic,
@@ -170,7 +173,7 @@ namespace assetlib::chunk
 		std::string_view          what);
 
 	/** readChunks against a file on disk: one open, one seek per chunk. */
-	[[nodiscard]] std::unordered_map<uint32_t, std::vector<std::byte>>
+	[[nodiscard]] ChunkData
 	readChunksFromFile(
 		const std::filesystem::path& path,
 		uint32_t                     magic,
@@ -179,7 +182,7 @@ namespace assetlib::chunk
 		std::string_view             what);
 
 	/** readChunks against a mounted filesystem, which may be an archive. */
-	[[nodiscard]] std::unordered_map<uint32_t, std::vector<std::byte>>
+	[[nodiscard]] ChunkData
 	readChunksFrom(
 		const core::file::IFileSystem& fileSystem,
 		std::string_view               path,

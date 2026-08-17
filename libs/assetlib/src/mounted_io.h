@@ -107,7 +107,12 @@ namespace assetlib
 		const std::filesystem::path&   benvPath,
 		const core::file::IFileSystem& fileSystem);
 
-	/** The mounted form of describe: each routed source stat'd, so a stale bake is visible. */
+	/**
+	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.
+	 *
+	 * @param fileSystem Null to report what the container records and stop, which is what the public
+	 *        `describe` overloads are -- one body serves both rather than two that can drift.
+	 */
 	[[nodiscard]] std::string
 	describe(const BMaterial& material, const core::file::IFileSystem* fileSystem);
 

@@ -224,7 +224,7 @@ namespace assetlib
 		// absent here even though the OS would resolve it, and the fast path below would not know
 		// that. A route pointing outside the project must read the same way against a directory as
 		// against an archive, which cannot carry it at all.
-		const std::optional<core::file::FileStamp> stamp = fileSystem.Stat(path);
+		const auto stamp = fileSystem.Stat(path);
 		if (!stamp.has_value())
 			return {};
 

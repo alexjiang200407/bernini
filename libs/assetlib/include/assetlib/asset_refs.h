@@ -1,9 +1,10 @@
 #pragma once
-#include <assetlib/AssetStore.h>
 #include <core/str/str.h>
 
 namespace assetlib
 {
+	class AssetStore;
+
 	/** The kinds of asset file a project holds, one file extension each. */
 	enum class AssetType : uint32_t
 	{

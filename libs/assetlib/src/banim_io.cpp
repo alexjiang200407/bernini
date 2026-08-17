@@ -129,14 +129,13 @@ namespace assetlib
 			ChunkId::kSkeletonRef) } };
 
 		std::string
-		skeletonPathFromChunks(const std::unordered_map<uint32_t, std::vector<std::byte>>& chunks)
+		skeletonPathFromChunks(const chunk::ChunkData& chunks)
 		{
-			const auto it = chunks.find(uint32_t(ChunkId::kSkeletonRef));
-			if (it == chunks.end())
+			if (!chunks.Contains(uint32_t(ChunkId::kSkeletonRef)))
 				return {};
 
 			AnimationSet animations;
-			unpackSkeletonRef(animations, it->second);
+			unpackSkeletonRef(animations, chunks.Get(uint32_t(ChunkId::kSkeletonRef)));
 			return animations.skeleton;
 		}
 	}

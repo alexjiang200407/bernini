@@ -148,21 +148,25 @@ namespace assetlib
 		};
 
 		MeshRefs
-		refsFromChunks(const std::unordered_map<uint32_t, std::vector<std::byte>>& chunks)
+		refsFromChunks(const chunk::ChunkData& chunks)
 		{
 			// Absent, not malformed: both chunks are optional, and a mesh that names neither is
 			// exactly what a static import produces.
 			MeshRefs refs;
-			if (const auto it = chunks.find(uint32_t(ChunkId::kMaterialPaths)); it != chunks.end())
+			if (const std::span<const std::byte> paths =
+			        chunks.Get(uint32_t(ChunkId::kMaterialPaths));
+			    !paths.empty())
 				refs.materials = chunk::unpackStrings(
 					std::span<const char>(
-						reinterpret_cast<const char*>(it->second.data()),
-						it->second.size()));
+						reinterpret_cast<const char*>(paths.data()),
+						paths.size()));
 
-			if (const auto it = chunks.find(uint32_t(ChunkId::kSkeletonPath)); it != chunks.end())
+			if (const std::span<const std::byte> skeleton =
+			        chunks.Get(uint32_t(ChunkId::kSkeletonPath));
+			    !skeleton.empty())
 				refs.skeleton.assign(
-					reinterpret_cast<const char*>(it->second.data()),
-					it->second.size());
+					reinterpret_cast<const char*>(skeleton.data()),
+					skeleton.size());
 
 			return refs;
 		}

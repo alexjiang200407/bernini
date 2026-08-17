@@ -1,3 +1,4 @@
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 
 #include <assetlib/banim_io.h>

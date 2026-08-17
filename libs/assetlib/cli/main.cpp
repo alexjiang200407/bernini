@@ -665,7 +665,7 @@ main(int argc, char** argv)
 
 			// With a project the stamps are checked against what is on disk; without one only what
 			// the container records can be reported.
-			const auto described = [&store](const auto& asset) {
+			const auto describe = [&store](const auto& asset) {
 				return store.has_value() ? store->Describe(asset) : assetlib::describe(asset);
 			};
 
@@ -675,16 +675,16 @@ main(int argc, char** argv)
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << described(assetlib::loadMaterial(path));
+				std::cout << describe(assetlib::loadMaterial(path));
 				break;
 			case ContainerType::kEnv:
-				std::cout << described(assetlib::loadEnv(path));
+				std::cout << describe(assetlib::loadEnv(path));
 				break;
 			case ContainerType::kSky:
-				std::cout << described(assetlib::loadSky(path));
+				std::cout << describe(assetlib::loadSky(path));
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << described(assetlib::loadEnvLighting(path));
+				std::cout << describe(assetlib::loadEnvLighting(path));
 				break;
 			case ContainerType::kSkeleton:
 				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
@@ -698,7 +698,7 @@ main(int argc, char** argv)
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << described(assetlib::loadVatTables(path));
+				std::cout << describe(assetlib::loadVatTables(path));
 				break;
 			}
 		}

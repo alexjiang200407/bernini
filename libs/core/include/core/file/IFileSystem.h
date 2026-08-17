@@ -3,11 +3,12 @@
 namespace core::file
 {
 	/**
-	 * A file's size and modification time, which is what a caller compares to decide whether what it
-	 * holds still describes the file.
+	 * What the filesystem records about a file -- size and modification time -- answerable without
+	 * reading a byte of it.
 	 *
-	 * Deliberately not `assetlib::SourceStamp`, which is the same two fields serialized into asset
-	 * containers: that is a file format, and it is defined in a library above this one.
+	 * Deliberately not `assetlib::SourceStamp`, which a bake writes into a container and which keys
+	 * on a content *hash*, because a checkout rewrites mtimes without changing a byte. The cheap
+	 * question and the durable one; only the second is a file format, defined a library above this.
 	 */
 	struct FileStamp
 	{

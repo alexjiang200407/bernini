@@ -1,6 +1,6 @@
 #include <assetlib/pak_io.h>
 
-#include "checked_read.h"
+#include "CheckedFileReader.h"
 #include "fs_util.h"
 #include "ref_paths.h"
 #include <assetlib_structs/magic.h>

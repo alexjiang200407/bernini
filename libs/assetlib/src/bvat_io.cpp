@@ -188,8 +188,6 @@ namespace assetlib
 
 	namespace
 	{
-		using ChunkMap = std::unordered_map<uint32_t, std::vector<std::byte>>;
-
 		/**
 		 * The table chunks arrive through two doors -- typed and validated from chunk::Reader on a
 		 * full deserialize, raw bytes from readChunksFromFile on a seek-only one -- and the tables
@@ -197,8 +195,8 @@ namespace assetlib
 		 */
 		struct TableSource
 		{
-			const chunk::Reader* reader = nullptr;
-			const ChunkMap*      chunks = nullptr;
+			const chunk::Reader*    reader = nullptr;
+			const chunk::ChunkData* chunks = nullptr;
 
 			template <typename T>
 			std::vector<T>
@@ -207,16 +205,16 @@ namespace assetlib
 				if (reader != nullptr)
 					return reader->Read<T>(id);
 
-				const auto it = chunks->find(static_cast<uint32_t>(id));
-				if (it == chunks->end())
+				const std::span<const std::byte> bytes = chunks->Get(static_cast<uint32_t>(id));
+				if (bytes.empty())
 					return {};
 
-				if (it->second.size() % sizeof(T) != 0)
-					throw_runtime_error(
-						"bvat: chunk byte size is not a multiple of the element size");
+				core::throw_runtime_error_if(
+					bytes.size() % sizeof(T) != 0,
+					"bvat: chunk byte size is not a multiple of the element size");
 
-				std::vector<T> out(it->second.size() / sizeof(T));
-				std::memcpy(out.data(), it->second.data(), it->second.size());
+				std::vector<T> out(bytes.size() / sizeof(T));
+				std::memcpy(out.data(), bytes.data(), bytes.size());
 				return out;
 			}
 		};
@@ -291,14 +289,14 @@ namespace assetlib
 		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(ChunkId::kInputs) } };
 
 		VatRefs
-		refsFromChunks(const std::unordered_map<uint32_t, std::vector<std::byte>>& chunks)
+		refsFromChunks(const chunk::ChunkData& chunks)
 		{
-			const auto it = chunks.find(uint32_t(ChunkId::kInputs));
-			if (it == chunks.end())
-				throw_runtime_error("bvat: the inputs chunk is missing");
+			core::throw_runtime_error_if(
+				!chunks.Contains(uint32_t(ChunkId::kInputs)),
+				"bvat: the inputs chunk is missing");
 
 			BVat vat;
-			unpackInputs(vat, it->second);
+			unpackInputs(vat, chunks.Get(uint32_t(ChunkId::kInputs)));
 			return VatRefs{ vat.mesh, vat.skeleton, vat.animations };
 		}
 	}
