@@ -49,6 +49,29 @@ QML/Qt Quick was deliberately not used: the editor is a docked, dense-widget too
 - `./qt`    — `.ui` files (Designer-owned layout), organised per component
 - `./tests` — `editor_tests`
 
+## What belongs in a window, and what does not
+
+A `*Window` owns its widgets, where they are rooted, and what its signals mean. Everything else
+lives beside it, and the split is by responsibility rather than by line count:
+
+- **A job that is not the window's** gets its own directory. `src/Import/` is the worked example:
+  importing a glTF is not something a file browser does, so `import_writers` (what an import writes),
+  `import_pipeline` (the cook behind its loading screen) and `drop_import` (what a drop takes and
+  what it runs) sit outside `Windows/` entirely, and the Content Explorer is one caller.
+- **A stateful job the window drives** becomes a collaborator type it owns —
+  `AssetOperations` for the Content Explorer's on-disk actions, `MaterialGraphSet` for the material
+  editor's graphs-and-submeshes table. Where such a type moves the ground out from under a view, it
+  says so by signal rather than reaching for the view (`AssetOperations::DirectoryDeleted`); a
+  collaborator that touched a model would just be the window again under another name.
+- **A rule that takes what it needs** becomes a free function in a `lower_case` file:
+  `asset_rules`, `material_io`, `graph_compiler`, `material_graph`. This is also the *only* way most
+  editor behaviour becomes testable — see § What is testable below.
+- **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
+  (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
+  because what a widget *does* is behaviour.
+
+`docs/plans/editor-refactor.md` records why, and which files were deliberately left for later.
+
 ## Rules
 
 - Qt is editor only don't link to other targets
@@ -127,21 +150,22 @@ tests lean on exactly that.
 
 A `MaterialEditorWindow` **without a device has no submesh graphs at all** — they are built
 from the preview's geometry, and there is no preview. So its per-submesh behaviour cannot
-be driven through the window. Where such a rule is worth pinning, lift it out as a `static`
-that takes what it needs (`IsAlreadyDefault`, `OutputCentre`) and test that. Both of those
-paid for themselves the day they were written, each catching a bug in the code they were
-extracted from.
+be driven through the window. Where such a rule is worth pinning, lift it into a free function
+that takes what it needs (`editor::IsSameMaterialFile` in `material_io.h`, `OutputCentre` in
+`material_graph.h`) and test that. Both of those paid for themselves the day they were written,
+each catching a bug in the code they were extracted from.
 
 Two things a test cannot drive, and why:
 
 - **Modal dialogs** (`QFileDialog`, `QMessageBox`, `QInputDialog`, `QMenu::exec`) are
   called directly on the concrete Qt types, with no injection seam. Triggering one from
-  a test hangs it. This is what keeps `ContentExplorerWindow::ImportMesh` and `BakeMaterial`,
-  `MainWindow::NewProject`/`OpenProject`/`CleanUnusedTextures`, and
-  `MaterialEditorWindow`'s save/open uncovered. Hoisting a rule out as a `static` that takes
-  what it needs is what unlocks it, and the import is the worked example: `WriteImportedMaterials`,
-  `WriteImportedRig` and `RollBack` are each driven directly by a test, so what an import
-  *writes* and what a failed one *deletes* are pinned even though the import itself is not.
+  a test hangs it. This is what keeps `editor::import::ImportMesh`, `AssetOperations`'
+  Delete/Rename/Bake, `MainWindow::NewProject`/`OpenProject`/`CleanUnusedTextures`, and
+  `MaterialEditorWindow`'s save/open uncovered. Hoisting a rule out into a free function that
+  takes what it needs is what unlocks it, and the import is the worked example:
+  `editor::import::WriteMaterials`, `WriteRig` and `RollBack` are each driven directly by a
+  test, so what an import *writes* and what a failed one *deletes* are pinned even though the
+  import itself is not.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
