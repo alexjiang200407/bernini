@@ -72,11 +72,10 @@ namespace bgl
 				m_Pbr,
 				m_Loose,
 				m_VatGeoms,
-				m_VatClips,
+				m_Clips,
 				m_VatColumns,
 				m_SkinnedGeoms,
 				m_SkinnedBones,
-				m_SkinnedClips,
 				m_BoneSamples);
 		}
 
@@ -396,13 +395,15 @@ namespace bgl
 		EntryBuffer<idl::PbrMaterial>      m_Pbr;
 		EntryBuffer<idl::LoosePbrMaterial> m_Loose;
 
+		// One clip table for every animated tier: a Clip means the same thing to both, so a second
+		// buffer of the same element type would only be two things to grow.
+		RangeBuffer<idl::Clip> m_Clips;
+
 		EntryBuffer<idl::VatGeom> m_VatGeoms;
-		RangeBuffer<idl::VatClip> m_VatClips;
 		RangeBuffer<uint32_t>     m_VatColumns;
 
 		EntryBuffer<idl::SkinnedGeom> m_SkinnedGeoms;
 		RangeBuffer<idl::SkinnedBone> m_SkinnedBones;
-		RangeBuffer<idl::SkinnedClip> m_SkinnedClips;
 		RangeBuffer<idl::BoneSample>  m_BoneSamples;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;

@@ -219,7 +219,7 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
-		return CreateInstance(geom, transform, core::slot_handle{});
+		return WritePlacement(geom, transform, core::slot_handle{});
 	}
 
 	MeshInstanceHandle
@@ -256,7 +256,7 @@ namespace bgl
 		const core::slot_handle stateHandle = m_VatStates.Add(state);
 		try
 		{
-			return CreateInstance(geom, transform, stateHandle);
+			return WritePlacement(geom, transform, stateHandle);
 		}
 		catch (...)
 		{
@@ -300,7 +300,7 @@ namespace bgl
 		const core::slot_handle stateHandle = m_SkinnedStates.Add(state);
 		try
 		{
-			return CreateInstance(geom, transform, stateHandle);
+			return WritePlacement(geom, transform, stateHandle);
 		}
 		catch (...)
 		{
@@ -310,7 +310,7 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle animState)
+	SceneView::WritePlacement(GeomHandle geom, glm::mat4 transform, core::slot_handle animState)
 	{
 		try
 		{

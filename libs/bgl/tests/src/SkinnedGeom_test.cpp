@@ -194,11 +194,13 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 	REQUIRE(geom.IsValid());
 	REQUIRE(geom.geomType == bgl::GeomType::kSkinnedMesh);
 
+	// Positional, in Scene::GetBuffers() order -- the clip table is shared with the VAT tier and
+	// therefore sits with it, ahead of the skinned arenas.
 	auto  buffers      = scene->GetBuffers();
+	auto& clips        = std::get<8>(buffers);
 	auto& skinnedGeoms = std::get<10>(buffers);
 	auto& bones        = std::get<11>(buffers);
-	auto& clips        = std::get<12>(buffers);
-	auto& samples      = std::get<13>(buffers);
+	auto& samples      = std::get<12>(buffers);
 
 	const bgl::Scene::AnimGeomInfo info = scene->GetGeomSkinnedInfo(geom.handle.index);
 	REQUIRE(info.record);
@@ -227,15 +229,16 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 	{
 		const uint32_t clipRoot = record.clips.range.offsetStart;
 
-		const bgl::idl::SkinnedClip& looping = clips.AtIndex(clipRoot + 0);
-		CHECK(looping.firstSample == 0);
+		const bgl::idl::Clip& looping = clips.AtIndex(clipRoot + 0);
+		CHECK(looping.firstFrame == 0);
 		CHECK(looping.frameCount == 2);
 		CHECK(looping.sampleRate == Catch::Approx(30.0f));
 		CHECK(looping.loop == 1);
 
-		// The second clip's samples start a whole frame-major frame in, not one sample in.
-		const bgl::idl::SkinnedClip& held = clips.AtIndex(clipRoot + 1);
-		CHECK(held.firstSample == 2 * c_BoneCount);
+		// The pool is frame-major and idl::Clip addresses frames, so the second clip's base is a
+		// frame index -- 2 -- not the sample index (2 * boneCount) assetlib stores.
+		const bgl::idl::Clip& held = clips.AtIndex(clipRoot + 1);
+		CHECK(held.firstFrame == 2);
 		CHECK(held.frameCount == 1);
 		CHECK(held.sampleRate == Catch::Approx(60.0f));
 		CHECK(held.loop == 0);
@@ -304,7 +307,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips());
 	REQUIRE(geom.IsValid());
 
-	auto desc  = bgl::ISceneView::SkinnedInstanceDesc();
+	auto desc  = bgl::SkinnedInstanceDesc();
 	desc.clip  = 1;
 	desc.phase = 4.5f;
 	desc.rate  = 2.0f;
@@ -448,4 +451,60 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 	// would show up here as a geom slot or a submesh range that never came back.
 	const auto good = add(MakeRig(), MakeClips());
 	CHECK(good.IsValid());
+}
+
+TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { OpaquePbr(scene) };
+
+	// The offsets a clean add takes. Every range allocator hands back the lowest free block, so if a
+	// failed add left anything behind, the *next* add lands somewhere else -- which is the only
+	// evidence of a leak that does not need an occupancy accessor the buffers do not expose.
+	const auto offsetsOfAFreshAdd = [&] {
+		const auto geom =
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips());
+		REQUIRE(geom.IsValid());
+
+		auto        buffers = scene->GetBuffers();
+		const auto& record =
+			std::get<10>(buffers)[scene->GetGeomSkinnedInfo(geom.handle.index).record];
+		const auto taken =
+			std::array<uint32_t, 4>{ record.bones.offsetStart,
+			                         record.samples.offsetStart,
+			                         record.clips.range.offsetStart,
+			                         scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart };
+		scene->DeleteGeom(geom);
+		return taken;
+	};
+
+	const std::array<uint32_t, 4> before = offsetsOfAFreshAdd();
+
+	// One refusal from each side of AddPreparedMesh: the rig checks run before any geometry is
+	// committed, the skin-binding and material checks run after the mesh has been cooked, and
+	// AttachSkinnedRecords' own rollback is what has to hold for the second kind.
+	auto badRig            = MakeRig();
+	badRig.bones[1].parent = 2;
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, badRig, MakeClips()));
+
+	auto shortPool                = MakeClips();
+	shortPool.clips[1].frameCount = 4;
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), shortPool));
+
+	CHECK_THROWS(
+		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, MakeRig(), MakeClips()));
+
+	auto masked                                              = bgl::PbrMaterialDesc();
+	masked.layerType                                         = bgl::LayerType::kMask;
+	const std::array<bgl::MaterialHandle, 1> maskedMaterials = { scene->CreatePbrMaterial(masked) };
+	CHECK_THROWS(
+		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, maskedMaterials, MakeRig(), MakeClips()));
+
+	CHECK(offsetsOfAFreshAdd() == before);
 }

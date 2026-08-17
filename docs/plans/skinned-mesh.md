@@ -42,7 +42,7 @@ allocation per instance per frame.
 
 **ADR-3 — `RenderJob::time` stays the only per-frame input.** An instance is spawned with
 `{clip, phase, rate}` and never touched again, exactly as `VatInstanceDesc` is
-(`ISceneView.h:50`). *Rejected:* a CPU-driven per-instance time, which would fork the editor's
+(`bgl/InstanceDesc.h`). *Rejected:* a CPU-driven per-instance time, which would fork the editor's
 transport from the game clock and re-introduce the per-unit CPU update ADR-1 refuses.
 
 **ADR-4 — the bgl seam takes `assetlib_structs` types directly.** `bgl` links `assetlib_structs`
@@ -82,6 +82,16 @@ over under ADR-5.
 **ADR-9 — the Animation panel previews skinned or `.bvat`, switchable.** *Rejected:* skinned
 replacing VAT preview. Being able to A/B the two is how a bad bake gets caught, and it is the
 skinned↔VAT comparison `ROADMAP.md:146` wants, arriving early and nearly free.
+
+**ADR-10 — one `idl::Clip` and one clip buffer for every animated tier.** A clip's frame span,
+authored rate and loop flag mean the same thing to VAT and to a skinned rig, so `firstFrame` is "where
+this clip's frame 0 sits in the tier's own frame space" — a texture row for VAT, a frame of the
+frame-major sample pool for a skinned rig — and both allocate out of one `scene.clipBuffer`.
+*Rejected:* a `SkinnedClip` byte-identical to `VatClip` in a second buffer of the same element type,
+which is what the plan originally described. It duplicates the struct the roadmap's per-clip metadata
+(root motion, locomotion speed, notifies) will have to grow, and gives the scene a second arena to
+grow for no gain. The cost is that `firstFrame`'s *unit* depends on the tier; the alternative was two
+structs that would drift.
 
 ## Non-goals
 
@@ -203,6 +213,10 @@ and the instance's `SkinnedState` back and asserts both; each documented refusal
   `assetlib`, which `bgl` does not link, so `bgl` can only check that the bone counts agree. The
   signature is a stale-cook check — a loader's concern — and `gamelib`'s acquire is where it belongs.
 
+*And two things review added to it:* the `Clip` merge of ADR-10, and moving the instance descs out of
+`ISceneView` into `bgl/InstanceDesc.h` so they are `bgl::VatInstanceDesc` rather than
+`bgl::ISceneView::VatInstanceDesc`.
+
 **2 — `bgl`: the pose compute pass.** `PoseSkinned.slang` — workgroup per instance, thread per bone
 (strided above the group size), clip sampled at `time` with nlerp between the two frames it falls
 between, hierarchy walked by depth level with a barrier per level, multiplied by `inverseBind`,
@@ -232,6 +246,17 @@ zero; a mismatched skeleton signature is refused.
 `AnimationPreviewWindow` acquires through whichever is selected and respawns on a clip change the
 way it does today. The transport is untouched (ADR-3).
 *Gate:* **acceptance 4**.
+
+**5b — the scene's buffer registration stops being positional.** *(added by review of task 1.)*
+`Scene::ImportResources` walks `GetBuffers()` with `std::apply` and takes each buffer's FrameGraph
+name positionally out of a parallel `c_BufferInfo` array; `SceneView` has the same pair. Adding a
+buffer means editing two lists in lockstep and a test's structured bindings, and nothing catches a
+mis-pairing — a buffer would simply be imported under its neighbour's name. Every buffer already
+takes a `debugName` at `Init`; giving it its graph name too lets `ImportResources` ask the buffer and
+deletes both parallel arrays. Independent of the skinned path — it is only listed here because this
+feature is what made the tedium visible.
+*Gate:* both arrays gone, `just test` unchanged, and one test that a buffer reports the name it was
+initialised with.
 
 **6 — docs, and the plan comes out.** `docs/skinning.md` as the subsystem page — the pose pass, the
 palette layout and its lifetime, the `prevTime` constraint from ADR-5, the interface→file table;

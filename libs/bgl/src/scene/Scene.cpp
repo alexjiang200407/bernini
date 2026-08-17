@@ -25,7 +25,7 @@ namespace bgl
 
 		// Order MUST stay in lockstep with Scene::GetBuffers() and with
 		// ForwardPass's c_ForwardDataBuffers.
-		static constexpr std::array<BufferInfo, 14> c_BufferInfo = {
+		static constexpr std::array<BufferInfo, 13> c_BufferInfo = {
 			{ { "scene.submeshBuffer" },
 			  { "scene.meshletBuffer" },
 			  { "scene.vertexMapBuffer" },
@@ -34,11 +34,10 @@ namespace bgl
 			  { "scene.pbrMaterialBuffer" },
 			  { "scene.looseMaterialBuffer" },
 			  { "scene.vatGeomBuffer" },
-			  { "scene.vatClipBuffer" },
+			  { "scene.clipBuffer" },
 			  { "scene.vatColumnBuffer" },
 			  { "scene.skinnedGeomBuffer" },
 			  { "scene.skinnedBoneBuffer" },
-			  { "scene.skinnedClipBuffer" },
 			  { "scene.boneSampleBuffer" } }
 		};
 
@@ -377,11 +376,11 @@ namespace bgl
 		}
 
 		{
-			auto vatClipBufferDesc         = RangeBufferDesc();
-			vatClipBufferDesc.initialCount = 1;
-			vatClipBufferDesc.debugName    = "Vat Clip Buffer";
+			auto clipBufferDesc         = RangeBufferDesc();
+			clipBufferDesc.initialCount = 1;
+			clipBufferDesc.debugName    = "Clip Buffer";
 
-			m_VatClips.Init(std::move(vatClipBufferDesc), m_ResourceManager);
+			m_Clips.Init(std::move(clipBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -407,14 +406,6 @@ namespace bgl
 			skinnedBoneBufferDesc.debugName    = "Skinned Bone Buffer";
 
 			m_SkinnedBones.Init(std::move(skinnedBoneBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto skinnedClipBufferDesc         = RangeBufferDesc();
-			skinnedClipBufferDesc.initialCount = 1;
-			skinnedClipBufferDesc.debugName    = "Skinned Clip Buffer";
-
-			m_SkinnedClips.Init(std::move(skinnedClipBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -658,7 +649,7 @@ namespace bgl
 	{
 		try
 		{
-			auto clips = std::vector<idl::VatClip>();
+			auto clips = std::vector<idl::Clip>();
 			clips.reserve(desc.clips.size());
 			for (const VatClipDesc& clip : desc.clips)
 			{
@@ -673,7 +664,7 @@ namespace bgl
 			record.normals   = idl::TextureHandle{ SrvDescriptorFor(desc.normals.textureSlot) };
 			record.boundsMin = glm::vec4(desc.boundsMin, 0.0f);
 			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
-			record.clips        = rollback.Track(m_VatClips, m_VatClips.Add(std::span(clips)));
+			record.clips        = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
 			record.columnBases  = rollback.Track(m_VatColumns, m_VatColumns.Add(columnBases));
 
 			GeomRecord& geom = m_Geoms[base.handle.index];
@@ -848,6 +839,14 @@ namespace bgl
 				throw SceneError("skinned geometry: a clip with no frames has no pose to sample");
 			}
 
+			// idl::Clip addresses frames, not samples, so a base that is not a whole number of
+			// frames in has no representation -- and would silently truncate to the frame below.
+			if (clip.firstSample % boneCount != 0)
+			{
+				throw SceneError(
+					"skinned geometry: a clip's first sample is not on a frame boundary");
+			}
+
 			const uint64_t end = static_cast<uint64_t>(clip.firstSample) +
 			                     static_cast<uint64_t>(clip.frameCount) * boneCount;
 			if (end > animations.samples.size())
@@ -895,12 +894,15 @@ namespace bgl
 				      glm::vec4(sample.scale, 0.0f) });
 			}
 
-			auto clips = std::vector<idl::SkinnedClip>();
+			auto clips = std::vector<idl::Clip>();
 			clips.reserve(animations.clips.size());
 			for (const assetlib::AnimationClip& clip : animations.clips)
 			{
 				clips.push_back(
-					{ clip.firstSample, clip.frameCount, clip.sampleRate, clip.loop ? 1u : 0u });
+					{ clip.firstSample / boneCount,
+				      clip.frameCount,
+				      clip.sampleRate,
+				      clip.loop ? 1u : 0u });
 			}
 
 			auto rollback = GeomRollback();
@@ -908,7 +910,7 @@ namespace bgl
 			auto record      = idl::SkinnedGeom();
 			record.bones     = rollback.Track(m_SkinnedBones, m_SkinnedBones.Add(std::span(bones)));
 			record.samples   = rollback.Track(m_BoneSamples, m_BoneSamples.Add(std::span(samples)));
-			record.clips     = rollback.Track(m_SkinnedClips, m_SkinnedClips.Add(std::span(clips)));
+			record.clips     = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
 			record.boneCount = boneCount;
 			record.maxDepth  = maxDepth;
 
@@ -1643,7 +1645,7 @@ namespace bgl
 		if (record.vatGeom)
 		{
 			const idl::VatGeom vat = m_VatGeoms[record.vatGeom];
-			m_VatClips.EraseByIndex(vat.clips.range.offsetStart);
+			m_Clips.EraseByIndex(vat.clips.range.offsetStart);
 			m_VatColumns.EraseByIndex(vat.columnBases.offsetStart);
 			m_VatGeoms.Erase(record.vatGeom);
 		}
@@ -1653,7 +1655,7 @@ namespace bgl
 			const idl::SkinnedGeom skinned = m_SkinnedGeoms[record.skinnedGeom];
 			m_SkinnedBones.EraseByIndex(skinned.bones.offsetStart);
 			m_BoneSamples.EraseByIndex(skinned.samples.offsetStart);
-			m_SkinnedClips.EraseByIndex(skinned.clips.range.offsetStart);
+			m_Clips.EraseByIndex(skinned.clips.range.offsetStart);
 			m_SkinnedGeoms.Erase(record.skinnedGeom);
 		}
 

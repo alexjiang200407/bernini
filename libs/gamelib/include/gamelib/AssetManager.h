@@ -272,10 +272,10 @@ namespace game
 		 */
 		bgl::MeshInstanceHandle
 		CreateVatInstance(
-			bgl::SceneViewRef                       view,
-			bgl::GeomHandle                         geom,
-			const glm::mat4&                        transform,
-			const bgl::ISceneView::VatInstanceDesc& desc);
+			bgl::SceneViewRef           view,
+			bgl::GeomHandle             geom,
+			const glm::mat4&            transform,
+			const bgl::VatInstanceDesc& desc);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was

@@ -1,10 +1,10 @@
 // THIS IS A FILE GENERATED FROM SkinnedGeom.slang. DO NOT EDIT MANUALLY
 
 import BoneSample;
+import Clip;
 import Range;
 import RangeWithCount;
 import SkinnedBone;
-import SkinnedClip;
 
 // One rig as the GPU sees it: the bone table a hierarchy walk reads, the clip table an instance
 // indexes, and the sample pool both address. Unlike VatGeom this carries no textures -- a skinned
@@ -13,7 +13,7 @@ public struct SkinnedGeom
 {
     public Range<SkinnedBone> bones;
     public Range<BoneSample> samples;
-    public RangeWithCount<SkinnedClip> clips;
+    public RangeWithCount<Clip> clips;
 
     // What makes a frame addressable: the pool is frame-major, so one frame is a contiguous run of
     // exactly this many samples. Equal to the bone table's length.

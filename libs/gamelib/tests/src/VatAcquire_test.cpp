@@ -319,7 +319,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 			view,
 			vat.geom,
 			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 1.0f, 0.0f });
+			bgl::VatInstanceDesc{ 0, 1.0f, 0.0f });
 
 		gfx->DrawFrame(target, job);
 		const auto* png = "assets/golden/vat_acquire_frame1.got.png";
@@ -346,7 +346,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 			view,
 			vat.geom,
 			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 1.0f, 0.0f });
+			bgl::VatInstanceDesc{ 0, 1.0f, 0.0f });
 
 		// The editor's held-open guard refuses this; a file manager cannot be refused.
 		fs::remove(root.path / "Animations/rig.banim");
@@ -403,7 +403,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 			view,
 			rebaked.geom,
 			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 1.0f, 0.0f });
+			bgl::VatInstanceDesc{ 0, 1.0f, 0.0f });
 
 		gfx->DrawFrame(target, job);
 		const auto* png = "assets/golden/vat_acquire_rebake.got.png";

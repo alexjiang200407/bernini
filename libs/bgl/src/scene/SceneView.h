@@ -249,13 +249,14 @@ namespace bgl
 		RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex);
 
 		/**
-		 * The body every instance creator shares: copies the geom's submesh range, writes the
-		 * per-placement Mesh -- routing `animState` onto the field the geom's type reads, null for a
-		 * static one -- and one resolved SubmeshInstance per submesh. The caller has already
-		 * validated the geom.
+		 * Writes the records a placement is made of -- the per-placement Mesh, with `animState` routed
+		 * onto the field the geom's type reads, and one resolved SubmeshInstance per submesh.
+		 *
+		 * Validates nothing: `geom` must already be a live geom of the type the public creator above
+		 * accepts, and `animState` a state slot of the buffer that type reads. Only those three call it.
 		 */
 		MeshInstanceHandle
-		CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle animState);
+		WritePlacement(GeomHandle geom, glm::mat4 transform, core::slot_handle animState);
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
