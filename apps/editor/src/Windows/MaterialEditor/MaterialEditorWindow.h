@@ -5,7 +5,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 
-#include "Windows/MaterialEditor/CachedMaterial.h"
+#include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
 class TexturePreviewCache;
@@ -130,19 +130,6 @@ private:
 	void
 	RefreshActions();
 
-	/** Drops every graph's cached parse, for a caller that has just rewritten one on disk. */
-	void
-	ForgetMaterialsOnDisk();
-
-	/** The graph backing the selected submesh, or -1 when nothing is selected. */
-	[[nodiscard]] int
-	CurrentGraph() const noexcept;
-
-	/** The graph already open for `materialPath` (file-wise), or -1 -- so submeshes sharing a material
-	 *  share one graph. */
-	[[nodiscard]] int
-	FindGraphForPath(const QString& materialPath) const;
-
 	MaterialEditorWindowDesc m_Desc;
 
 	std::filesystem::path m_DataRoot;
@@ -153,30 +140,7 @@ private:
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
-	// Submeshes naming the same material path share one graph, so editing it once updates every
-	// submesh wearing it. `submeshes` lists the ones it drives.
-	struct MaterialGraph
-	{
-		std::unique_ptr<MaterialGraphModel> model;
-		std::unique_ptr<MaterialGraphScene> scene;
-
-		QString materialPath;
-
-		CachedMaterial onDisk;
-
-		// The live material this graph is previewed through. Created once and rewritten in place on
-		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's
-		// loose-material buffer is a fixed-size slot pool.
-		bgl::MaterialHandle preview;
-
-		std::vector<uint32_t> submeshes;
-	};
-	std::vector<MaterialGraph> m_MaterialGraphs;
-
-	// Submesh index -> index into m_MaterialGraphs (or -1). The submesh selector and every per-submesh
-	// mesh binding are indexed by submesh; the graphs are keyed by material, so this bridges the two.
-	std::vector<int> m_GraphForSubmesh;
-	int              m_CurrentSubmesh = -1;
+	MaterialGraphSet m_Graphs;
 
 	QComboBox*         m_SubmeshSelector    = nullptr;
 	QComboBox*         m_OutputSelector     = nullptr;
