@@ -104,11 +104,14 @@ above it not yet written.
    held-open guard, and reports back by signal so re-rooting a deleted or renamed folder stays
    the window's job.
    Gate: `just run editor_tests -- "[contentexplorer]"`.
-5. `refactor(editor): lift the material editor's graph table into MaterialGraphSet` — the three
-   entangled members and the lookups over them.
+5. `refactor(editor): move the material editor's file operations to material_io` — `BuildMaterial`,
+   `BakedTexturesSummary`, `IsAlreadyDefault`, `DefaultMaterialPath`, `GenerateTangents`; and
+   `OutputCentre` to `material_graph`, which already owns the graph-model free functions.
    Gate: `just run editor_tests -- "[materialeditor],[materialgraph]"`.
-6. `refactor(editor): move the material editor's file operations to material_io` — `BuildMaterial`,
-   `BakedTexturesSummary`, `IsAlreadyDefault`, `DefaultMaterialPath`, `GenerateTangents`.
+6. `refactor(editor): lift the material editor's graph table into MaterialGraphSet` — the three
+   entangled members and the lookups over them. After 5, not before: the table's
+   already-open-for-this-path lookup is one of the rules 5 moves, and a new type reaching back into
+   the window for it would be the dependency this whole change is removing.
    Gate: `just run editor_tests -- "[materialeditor],[materialgraph]"`.
 7. `refactor(editor): move the material editor's widget assembly and graph compile out` — the
    constructor's layout into `material_editor_ui`, `CompileGraph` into `graph_compiler`.

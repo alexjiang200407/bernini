@@ -53,34 +53,6 @@ public:
 	Reset();
 
 	/**
-	 * Whether the mesh already names `materialPath` for the submesh -- in which case Set Default
-	 * Material would rewrite the `.bmesh` to say what it already says.
-	 *
-	 * `boundPath` is what the `.bmesh` names (empty when the submesh is unbound, which is never
-	 * "already default"). The two are compared as *files*, not as strings: they reach here by
-	 * different routes -- one from a file dialog, one from the mesh's own relative path resolved
-	 * against the data root -- and can spell the same file differently.
-	 */
-	[[nodiscard]] static bool
-	IsAlreadyDefault(const QString& boundPath, const QString& materialPath);
-
-	/**
-	 * The scene point a graph should be centred on: the middle of its output node, not its corner --
-	 * a node centred by its corner hangs off the left of the panel. Empty for a graph with no sink.
-	 */
-	[[nodiscard]] static std::optional<QPointF>
-	OutputCentre(MaterialGraphModel& model);
-
-	/**
-	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
-	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
-	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and the
-	 * Content Explorer's Bake is what rewrites them.
-	 */
-	[[nodiscard]] static QString
-	BakedTexturesSummary(const assetlib::BMaterial& material);
-
-	/**
 	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph
 	 * would not stick: the graph still holds it, and the next Save writes it straight back.
 	 */
@@ -124,15 +96,6 @@ private:
 	void
 	RefreshTangentWarning();
 
-	/**
-	 * Derives tangents for the previewed `.bmesh`, rewrites it, and reloads the preview from it.
-	 *
-	 * Reloading is what makes the new tangents visible, and it rebuilds the graphs from what the mesh
-	 * names -- so an unsaved edit is lost, which the user is asked about first.
-	 */
-	void
-	GenerateTangents();
-
 	void
 	CompileGraph(int graphIndex);
 
@@ -155,17 +118,11 @@ private:
 	void
 	SaveCurrentMaterial(bool saveAs);
 
-	[[nodiscard]] QString
-	DefaultMaterialPath() const;
-
 	void
 	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
 
 	void
 	OpenMaterialInto(int graphIndex, const QString& path, bool interactive = true);
-
-	[[nodiscard]] assetlib::BMaterial
-	BuildMaterial(int graphIndex, const QString& materialPath) const;
 
 	class MaterialOutputNode*
 	ResetGraph(int graphIndex, const QJsonObject& graph);

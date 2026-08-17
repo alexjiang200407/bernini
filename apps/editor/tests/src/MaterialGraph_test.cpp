@@ -1,4 +1,3 @@
-#include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
@@ -375,7 +374,7 @@ TEST_CASE("A graph with no sink has nowhere to centre", "[materialgraph]")
 	MaterialGraphModel model(Registry());
 	model.addNode("Texture");
 
-	REQUIRE_FALSE(MaterialEditorWindow::OutputCentre(model).has_value());
+	REQUIRE_FALSE(OutputCentre(model).has_value());
 }
 
 TEST_CASE("The graph centres on the middle of the sink, not its corner", "[materialgraph]")
@@ -390,7 +389,7 @@ TEST_CASE("The graph centres on the middle of the sink, not its corner", "[mater
 	const QPointF pos(220.0, 40.0);
 	model.setNodeData(sink, NodeRole::Position, pos);
 
-	const auto centre = MaterialEditorWindow::OutputCentre(model);
+	const auto centre = OutputCentre(model);
 	REQUIRE(centre.has_value());
 
 	// Centred by its corner, the node hangs off the left of the panel.
@@ -414,7 +413,7 @@ TEST_CASE("An unmeasured sink centres on its corner", "[materialgraph]")
 
 	REQUIRE_FALSE(model.nodeData(sink, NodeRole::Size).value<QSize>().isValid());
 
-	const auto centre = MaterialEditorWindow::OutputCentre(model);
+	const auto centre = OutputCentre(model);
 	REQUIRE(centre.has_value());
 	CHECK(*centre == pos);
 }
@@ -435,7 +434,7 @@ TEST_CASE("Resizing the view keeps the sink centred", "[materialgraph]")
 	view.setSceneRect(QRectF(0.0, 0.0, 4000.0, 3000.0));
 	view.resize(400, 300);
 
-	const auto centre = MaterialEditorWindow::OutputCentre(model);
+	const auto centre = OutputCentre(model);
 	REQUIRE(centre.has_value());
 
 	view.centerOn(*centre);

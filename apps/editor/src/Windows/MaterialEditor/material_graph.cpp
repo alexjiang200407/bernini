@@ -209,3 +209,21 @@ BuildImportedMaterialGraph(
 		                           static_cast<QtNodes::PortIndex>(wire.outputPort) });
 	}
 }
+
+std::optional<QPointF>
+OutputCentre(MaterialGraphModel& model)
+{
+	const QtNodes::NodeId outputId = model.OutputNodeId();
+	if (outputId == QtNodes::InvalidNodeId)
+		return std::nullopt;
+
+	const QPointF pos  = model.nodeData(outputId, QtNodes::NodeRole::Position).value<QPointF>();
+	const QSize   size = model.nodeData(outputId, QtNodes::NodeRole::Size).value<QSize>();
+
+	// A node is only measured once it has a graphics object, so a model with no scene reports -1 x -1.
+	// Half of that would centre just off the node's corner, which is worse than its corner.
+	if (!size.isValid())
+		return pos;
+
+	return pos + QPointF(size.width() * 0.5, size.height() * 0.5);
+}

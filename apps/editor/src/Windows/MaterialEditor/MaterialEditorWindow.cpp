@@ -34,6 +34,7 @@
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
@@ -210,7 +211,16 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_GenerateTangents->setToolTip(QStringLiteral(
 		"Derive a tangent for every submesh of this mesh that has none, and rewrite the .bmesh."));
 	m_GenerateTangents->hide();
-	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() { GenerateTangents(); });
+	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() {
+		if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+			return;
+
+		const std::filesystem::path meshPath = m_Preview->MeshPath();
+
+		// Reloading is what puts the new vertex layout in front of the renderer.
+		if (editor::GenerateTangents(this, meshPath))
+			m_Preview->LoadMesh(meshPath);
+	});
 	propertiesLayout->addWidget(m_GenerateTangents);
 
 	propertiesLayout->addStretch(1);
@@ -335,50 +345,6 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	}
 
 	return output;
-}
-
-std::optional<QPointF>
-MaterialEditorWindow::OutputCentre(MaterialGraphModel& model)
-{
-	const QtNodes::NodeId outputId = model.OutputNodeId();
-	if (outputId == QtNodes::InvalidNodeId)
-		return std::nullopt;
-
-	const QPointF pos  = model.nodeData(outputId, QtNodes::NodeRole::Position).value<QPointF>();
-	const QSize   size = model.nodeData(outputId, QtNodes::NodeRole::Size).value<QSize>();
-
-	// A node is only measured once it has a graphics object, so a model with no scene reports -1 x -1.
-	// Half of that would centre just off the node's corner, which is worse than its corner.
-	if (!size.isValid())
-		return pos;
-
-	return pos + QPointF(size.width() * 0.5, size.height() * 0.5);
-}
-
-QString
-MaterialEditorWindow::BakedTexturesSummary(const assetlib::BMaterial& material)
-{
-	// A baked triplet is a PBR notion, and a material carries one only once it has been baked -- so a
-	// never-baked or non-PBR material has nothing to list. A kLoose material keeps the triplet of its
-	// last bake, which is still worth showing: "current baked textures, if any".
-	if (material.shadingModel != assetlib::ShadingModel::kPbr)
-		return {};
-
-	const assetlib::PbrParams& pbr = material.pbr;
-	if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty())
-		return {};
-
-	const auto line = [](const char* label, const std::string& path) {
-		return QStringLiteral("%1: %2").arg(
-			QLatin1String(label),
-			path.empty() ? QStringLiteral("—") : QString::fromStdString(path));
-	};
-
-	return QStringLiteral("Baked textures\n%1\n%2\n%3")
-	    .arg(
-			line("Base color", pbr.baseColorTexture),
-			line("Normal", pbr.normalTexture),
-			line("ORM", pbr.ormTexture));
 }
 
 void
@@ -565,7 +531,7 @@ int
 MaterialEditorWindow::FindGraphForPath(const QString& materialPath) const
 {
 	for (size_t i = 0; i < m_MaterialGraphs.size(); ++i)
-		if (IsAlreadyDefault(m_MaterialGraphs[i].materialPath, materialPath))
+		if (editor::IsSameMaterialFile(m_MaterialGraphs[i].materialPath, materialPath))
 			return static_cast<int>(i);
 
 	return -1;
@@ -616,73 +582,6 @@ MaterialEditorWindow::RefreshTangentWarning()
 }
 
 void
-MaterialEditorWindow::GenerateTangents()
-{
-	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
-		return;
-
-	const std::filesystem::path meshPath = m_Preview->MeshPath();
-
-	auto confirm = QMessageBox(this);
-	confirm.setWindowTitle(QStringLiteral("Generate Tangents"));
-	confirm.setIcon(QMessageBox::Question);
-	confirm.setText(QStringLiteral("Derive tangents for '%1'?")
-	                    .arg(QString::fromStdString(meshPath.filename().string())));
-	confirm.setInformativeText(QStringLiteral(
-		"Every submesh that has none gains one, and the mesh is rewritten and reloaded. Unsaved "
-		"graph edits are lost, and a submesh that already has tangents keeps the authored ones."));
-
-	auto* run = confirm.addButton(QStringLiteral("Generate"), QMessageBox::AcceptRole);
-	confirm.addButton(QMessageBox::Cancel);
-	confirm.setDefaultButton(run);
-	confirm.exec();
-
-	if (confirm.clickedButton() != run)
-		return;
-
-	auto result = assetlib::TangentGenResult();
-
-	// Reading, deriving and writing a whole mesh is not instant, and none of it touches bgl.
-	const background::TaskResult done = background::RunWithLoadingScreen(
-		this,
-		QStringLiteral("Generate Tangents"),
-		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Deriving tangents...");
-
-			assetlib::BMesh mesh = assetlib::load(meshPath);
-			result               = assetlib::generateTangents(mesh);
-
-			if (result.generated > 0)
-				assetlib::save(mesh, meshPath);
-		});
-
-	if (!done.Completed())
-	{
-		QMessageBox::warning(
-			this,
-			QStringLiteral("Generate Tangents"),
-			QStringLiteral("Could not rewrite the mesh:\n\n%1").arg(done.error));
-		return;
-	}
-
-	if (result.generated == 0)
-	{
-		QMessageBox::information(
-			this,
-			QStringLiteral("Generate Tangents"),
-			QStringLiteral(
-				"Nothing to do: %1 submeshes already have tangents, and %2 cannot have one derived "
-				"(no normals, no UVs, or no triangles).")
-				.arg(result.kept)
-				.arg(result.skipped));
-		return;
-	}
-
-	// Reloading is what puts the new vertex layout in front of the renderer.
-	m_Preview->LoadMesh(meshPath);
-}
-
-void
 MaterialEditorWindow::RefreshActions()
 {
 	const int  graphIndex = CurrentGraph();
@@ -705,7 +604,7 @@ MaterialEditorWindow::RefreshActions()
 	const QString boundPath = m_Preview != nullptr ?
 	                              m_Preview->SubmeshMaterialPaths().value(m_CurrentSubmesh) :
 	                              QString();
-	const bool    isDefault = IsAlreadyDefault(boundPath, materialPath);
+	const bool    isDefault = editor::IsSameMaterialFile(boundPath, materialPath);
 
 	RefreshTangentWarning();
 
@@ -744,7 +643,7 @@ MaterialEditorWindow::RefreshActions()
 			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
 		}
 
-		bakedSummary = BakedTexturesSummary(*material);
+		bakedSummary = editor::BakedTexturesSummary(*material);
 	}
 
 	m_BakedTexturesLabel->setText(bakedSummary);
@@ -780,37 +679,6 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 		texture->SetTexturePath(path);
 }
 
-assetlib::BMaterial
-MaterialEditorWindow::BuildMaterial(int graphIndex, const QString& materialPath) const
-{
-	const MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
-
-	assetlib::BMaterial material =
-		CompileMaterial(*entry.model, QFileInfo(materialPath).completeBaseName(), m_DataRoot);
-
-	// A material already on disk keeps whatever a previous bake produced: the triplet and its
-	// provenance. Rebuilding purely from the graph would throw the optimized textures away on every
-	// Save. If the routes have since changed, the stamps no longer match and the bake reports stale.
-	const auto file = std::filesystem::path(materialPath.toStdWString());
-	if (std::filesystem::exists(file))
-	{
-		try
-		{
-			const assetlib::BMaterial existing = assetlib::loadMaterial(file);
-			material.pbr.baseColorTexture      = existing.pbr.baseColorTexture;
-			material.pbr.normalTexture         = existing.pbr.normalTexture;
-			material.pbr.ormTexture            = existing.pbr.ormTexture;
-			material.pbr.routeStamps           = existing.pbr.routeStamps;
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialEditor: could not read the existing material: %s", e.what());
-		}
-	}
-
-	return material;
-}
-
 void
 MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 {
@@ -826,7 +694,9 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 		path = QFileDialog::getSaveFileName(
 			window(),
 			QStringLiteral("Save Material"),
-			path.isEmpty() ? DefaultMaterialPath() : path,
+			path.isEmpty() ?
+				editor::DefaultMaterialPath(m_DataRoot, m_SubmeshSelector->currentText()) :
+				path,
 			QStringLiteral("Bernini Material (*.bmaterial)"));
 		if (path.isEmpty())
 			return;  // cancelled
@@ -838,7 +708,7 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	try
 	{
 		assetlib::saveMaterial(
-			BuildMaterial(graphIndex, path),
+			editor::BuildMaterial(*entry.model, path, m_DataRoot),
 			std::filesystem::path(path.toStdWString()));
 	}
 	catch (const std::exception& e)
@@ -885,48 +755,6 @@ MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 
 	AttachMaterialToMesh(submeshIndex, path);
 	RefreshActions();
-}
-
-bool
-MaterialEditorWindow::IsAlreadyDefault(const QString& boundPath, const QString& materialPath)
-{
-	if (boundPath.isEmpty() || materialPath.isEmpty())
-		return false;
-
-	// Not QFileInfo's own comparison: it falls back to canonicalFilePath(), which is *empty* for a
-	// file that does not exist -- so two different missing paths compare equal, and a material whose
-	// file has been deleted would grey the button out on any mesh.
-	//
-	// weakly_canonical resolves the part of the path that does exist and normalises the rest, so it
-	// works either way. Case-insensitively, because this is a Windows tool (see the editor CLAUDE.md).
-	const auto normalise = [](const QString& path) {
-		const auto source = std::filesystem::path(path.toStdWString());
-
-		std::error_code ec;
-		const auto      resolved = std::filesystem::weakly_canonical(source, ec);
-
-		return QString::fromStdWString(
-			ec ? source.lexically_normal().wstring() : resolved.wstring());
-	};
-
-	return normalise(boundPath).compare(normalise(materialPath), Qt::CaseInsensitive) == 0;
-}
-
-QString
-MaterialEditorWindow::DefaultMaterialPath() const
-{
-	const QString name = m_SubmeshSelector->currentText();
-
-	if (m_DataRoot.empty())
-		return name;
-
-	auto dir = m_DataRoot / Project::c_MaterialsDirectoryName;
-
-	std::error_code ec;
-	if (!std::filesystem::is_directory(dir, ec))
-		dir = m_DataRoot;
-
-	return QString::fromStdWString((dir / name.toStdWString()).wstring());
 }
 
 void
