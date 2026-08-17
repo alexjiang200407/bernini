@@ -1,4 +1,4 @@
-import idl.VatClip;
+import idl.Clip;
 import idl.VatGeom;
 import idl.VatState;
 import types.EntryBuffer;
@@ -12,6 +12,6 @@ public struct VatData
 {
     public EntryBuffer<VatGeom> vatGeomBuffer;
     public EntryBuffer<VatState> vatStateBuffer;
-    public RangeBuffer<VatClip> vatClipBuffer;
+    public RangeBuffer<Clip> clipBuffer;
     public RangeBuffer<uint> vatColumnBuffer;
 };

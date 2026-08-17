@@ -31,6 +31,7 @@ set(IDL_CPP_SOURCES
     Mesh.slang
     DebugRecord.slang
     Constants.slang
+    Clip.slang
     PbrMaterial.slang
     LoosePbrMaterial.slang
     ChannelSource.slang
@@ -38,9 +39,12 @@ set(IDL_CPP_SOURCES
     ErrorCode.slang
     DispatchArgs.slang
     BaseTable.slang
-    VatClip.slang
     VatGeom.slang
     VatState.slang
+    BoneSample.slang
+    SkinnedBone.slang
+    SkinnedGeom.slang
+    SkinnedState.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public

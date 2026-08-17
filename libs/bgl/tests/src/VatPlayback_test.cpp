@@ -204,7 +204,7 @@ TEST_CASE("VAT playback follows the clock", "[vat][playback][render]")
 	job.camera   = camera;
 	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-	using VatDesc = bgl::ISceneView::VatInstanceDesc;
+	using VatDesc = bgl::VatInstanceDesc;
 
 	SECTION("a fractional phase blends the two poses it falls between")
 	{

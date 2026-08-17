@@ -42,7 +42,7 @@ allocation per instance per frame.
 
 **ADR-3 — `RenderJob::time` stays the only per-frame input.** An instance is spawned with
 `{clip, phase, rate}` and never touched again, exactly as `VatInstanceDesc` is
-(`ISceneView.h:50`). *Rejected:* a CPU-driven per-instance time, which would fork the editor's
+(`bgl/InstanceDesc.h`). *Rejected:* a CPU-driven per-instance time, which would fork the editor's
 transport from the game clock and re-introduce the per-unit CPU update ADR-1 refuses.
 
 **ADR-4 — the bgl seam takes `assetlib_structs` types directly.** `bgl` links `assetlib_structs`
@@ -82,6 +82,16 @@ over under ADR-5.
 **ADR-9 — the Animation panel previews skinned or `.bvat`, switchable.** *Rejected:* skinned
 replacing VAT preview. Being able to A/B the two is how a bad bake gets caught, and it is the
 skinned↔VAT comparison `ROADMAP.md:146` wants, arriving early and nearly free.
+
+**ADR-10 — one `idl::Clip` and one clip buffer for every animated tier.** A clip's frame span,
+authored rate and loop flag mean the same thing to VAT and to a skinned rig, so `firstFrame` is "where
+this clip's frame 0 sits in the tier's own frame space" — a texture row for VAT, a frame of the
+frame-major sample pool for a skinned rig — and both allocate out of one `scene.clipBuffer`.
+*Rejected:* a `SkinnedClip` byte-identical to `VatClip` in a second buffer of the same element type,
+which is what the plan originally described. It duplicates the struct the roadmap's per-clip metadata
+(root motion, locomotion speed, notifies) will have to grow, and gives the scene a second arena to
+grow for no gain. The cost is that `firstFrame`'s *unit* depends on the tier; the alternative was two
+structs that would drift.
 
 ## Non-goals
 
@@ -179,30 +189,48 @@ has to *compute* one first. That compute pass is the only genuinely new machiner
 
 Bottom-up by layer, each with its gate.
 
-**1 — `bgl`: the skinned geom and its GPU tables.** The IDL structs, `GeomType::kSkinnedMesh`, the
-new `PsoType`, and `IScene::AddSkinnedMeshGeom` uploading bone / clip / sample buffers, with the
-per-bone depth derived at upload. Validates the skeleton signature against the `AnimationSet`, that
+**1 — `bgl`: the skinned geom and its GPU tables.** *(landed)* The IDL structs,
+`GeomType::kSkinnedMesh`, and `IScene::AddSkinnedMeshGeom` uploading bone / clip / sample buffers,
+with the per-bone depth derived at upload. Validates the two containers against each other, that
 every submesh carries `joints0` and `weights0`, and the bone-count cap. **The instance half lands
 here too** — `ISceneView::SkinnedInstanceDesc` and `CreateSkinnedMeshInstance`, writing an
-`EntryBuffer<idl::SkinnedState>` beside `m_VatStates`, and the palette range each instance owns.
-Both halves of the seam in one task, because task 2 needs real `SkinnedState` records to dispatch
-against and task 3 needs placed instances to render. Nothing draws it yet — dead scaffolding,
-justified because the tests call it.
+`EntryBuffer<idl::SkinnedState>` beside `m_VatStates`. Both halves of the seam in one task, because
+task 2 needs real `SkinnedState` records to dispatch against and task 3 needs placed instances to
+render. Nothing draws it yet — dead scaffolding, justified because the tests call it.
 *Gate:* `bgl_tests` builds a small rig, adds the geom, creates an instance, reads the geom tables
 and the instance's `SkinnedState` back and asserts both; each documented refusal throws.
+
+*Three things this task moved, and why:*
+- **The `PsoType` bucket went to task 3.** `ForwardPass` holds a `std::array<PsoConfig, c_PsoCount>`
+  under a `static_assert` that every row names a pixel shader, and `Init` builds a kernel for every
+  PSO at device bring-up — so a bucket declared before `Forward_SkinnedMesh.slang` exists fails every
+  test that creates a device. A skinned submesh resolves to `PsoType::kInvalid` until task 3, which
+  is the value the counting sort already skips, so the instance uploads and simply draws nothing.
+- **The palette went to task 2.** It is written by the GPU, so it is not a CPU-mirrored
+  `RangeBuffer` like everything else here; it belongs with the pass that writes it rather than with
+  the tables that are uploaded.
+- **The skeleton-signature check went to task 4.** Computing a `Skeleton`'s signature needs
+  `assetlib`, which `bgl` does not link, so `bgl` can only check that the bone counts agree. The
+  signature is a stale-cook check — a loader's concern — and `gamelib`'s acquire is where it belongs.
+
+*And two things review added to it:* the `Clip` merge of ADR-10, and moving the instance descs out of
+`ISceneView` into `bgl/InstanceDesc.h` so they are `bgl::VatInstanceDesc` rather than
+`bgl::ISceneView::VatInstanceDesc`.
 
 **2 — `bgl`: the pose compute pass.** `PoseSkinned.slang` — workgroup per instance, thread per bone
 (strided above the group size), clip sampled at `time` with nlerp between the two frames it falls
 between, hierarchy walked by depth level with a barrier per level, multiplied by `inverseBind`,
-written as `float3x4`. Dispatched twice per instance for `time` and `prevTime` (ADR-5).
-`SkinnedPosePass` ordered ahead of `ForwardPass`. Still nothing draws.
+written as `float3x4`. Dispatched twice per instance for `time` and `prevTime` (ADR-5). Owns the
+palette buffer and the range each instance holds in it. `SkinnedPosePass` ordered ahead of
+`ForwardPass`. Still nothing draws.
 *Gate:* **acceptance 2** — palette readback asserted bone-for-bone, at an integral and a fractional
 frame, plus a `rate = 0` hold and a looping clip's wrap across its seam.
 
-**3 — `bgl`: draw it.** `Forward_SkinnedMesh.slang`: decode `joints0`/`weights0`, four palette
-matrices, linear blend on position, normal and tangent; the `prevTime` palette gives the previous
-clip position at the `common.slang:25` seam, so motion vectors fall out. `ForwardPass` wiring for
-the new bucket.
+**3 — `bgl`: draw it.** `PsoType::kOpaque_SkinnedMesh_PBR` and its `c_Psos` row, and
+`Forward_SkinnedMesh.slang`: decode `joints0`/`weights0`, four palette matrices, linear blend on
+position, normal and tangent; the `prevTime` palette gives the previous clip position at the
+`common.slang:25` seam, so motion vectors fall out. `ForwardPass` binds the skinned buffers and
+maps the bucket in `util.cpp`.
 *Gate:* **acceptance 1 and 3** — bind-pose-equals-static, the golden image, and the
 animating-vs-held velocity assertion. GPU validation run (**acceptance 5**).
 
@@ -210,6 +238,7 @@ animating-vs-held velocity assertion. GPU validation run (**acceptance 5**).
 `.bmesh` + `.bskel` + `.banim` through the `AssetStore` and returning a geom plus a clip table, and
 `CreateSkinnedInstance`. No bake and no freshness rule — unlike VAT there is no derived product, the
 containers *are* the source, which is most of why this task is small.
+It also owns the `skeletonSignature` check, which `bgl` cannot make (see task 1).
 *Gate:* `gamelib_tests` acquires a fixture rig, shares the geom on a second acquire, and releases to
 zero; a mismatched skeleton signature is refused.
 
@@ -217,6 +246,17 @@ zero; a mismatched skeleton signature is refused.
 `AnimationPreviewWindow` acquires through whichever is selected and respawns on a clip change the
 way it does today. The transport is untouched (ADR-3).
 *Gate:* **acceptance 4**.
+
+**5b — the scene's buffer registration stops being positional.** *(added by review of task 1.)*
+`Scene::ImportResources` walks `GetBuffers()` with `std::apply` and takes each buffer's FrameGraph
+name positionally out of a parallel `c_BufferInfo` array; `SceneView` has the same pair. Adding a
+buffer means editing two lists in lockstep and a test's structured bindings, and nothing catches a
+mis-pairing — a buffer would simply be imported under its neighbour's name. Every buffer already
+takes a `debugName` at `Init`; giving it its graph name too lets `ImportResources` ask the buffer and
+deletes both parallel arrays. Independent of the skinned path — it is only listed here because this
+feature is what made the tedium visible.
+*Gate:* both arrays gone, `just test` unchanged, and one test that a buffer reports the name it was
+initialised with.
 
 **6 — docs, and the plan comes out.** `docs/skinning.md` as the subsystem page — the pose pass, the
 palette layout and its lifetime, the `prevTime` constraint from ADR-5, the interface→file table;
