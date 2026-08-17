@@ -285,7 +285,7 @@ AnimationPreviewWindow::LoadMesh(
 							  GetPreviewViewRef(),
 							  vat.geom,
 							  placement.world,
-							  bgl::ISceneView::VatInstanceDesc{ 0, 0.0f, 1.0f }) });
+							  bgl::VatInstanceDesc{ 0, 0.0f, 1.0f }) });
 					out.clips    = vat.clips;
 					m_ActiveClip = 0;
 				}
@@ -467,7 +467,7 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index)
 					GetPreviewViewRef(),
 					draw.geom,
 					draw.world,
-					bgl::ISceneView::VatInstanceDesc{ index, 0.0f, 1.0f });
+					bgl::VatInstanceDesc{ index, 0.0f, 1.0f });
 			}
 			catch (const std::exception& e)
 			{

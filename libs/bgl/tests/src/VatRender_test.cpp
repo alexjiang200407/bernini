@@ -255,7 +255,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 			return glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0f));
 		};
 
-		using VatDesc = bgl::ISceneView::VatInstanceDesc;
+		using VatDesc = bgl::VatInstanceDesc;
 		view->CreateVatMeshInstance(geom, at(-3.2f, 0.0f), VatDesc{ 0, 0.0f });
 		view->CreateVatMeshInstance(geom, at(0.0f, 0.0f), VatDesc{ 0, 1.0f });
 		view->CreateVatMeshInstance(geom, at(3.2f, 0.0f), VatDesc{ 1, 0.0f });
@@ -297,10 +297,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 	SECTION("a clip index past the table is refused")
 	{
 		CHECK_THROWS_AS(
-			view->CreateVatMeshInstance(
-				geom,
-				glm::mat4(1.0f),
-				bgl::ISceneView::VatInstanceDesc{ 2, 0.0f }),
+			view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 2, 0.0f }),
 			bgl::SceneError);
 	}
 
@@ -310,10 +307,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 
 		const auto cube = scene->AddCubeGeom(pbr);
 		CHECK_THROWS_AS(
-			view->CreateVatMeshInstance(
-				cube,
-				glm::mat4(1.0f),
-				bgl::ISceneView::VatInstanceDesc{ 0, 0.0f }),
+			view->CreateVatMeshInstance(cube, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f }),
 			bgl::SceneError);
 	}
 
@@ -350,10 +344,8 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 
 	SECTION("an override cannot smuggle a cutout onto a VAT instance")
 	{
-		const auto instance = view->CreateVatMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+		const auto instance =
+			view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f });
 
 		auto cutout          = bgl::PbrMaterialDesc();
 		cutout.layerType     = bgl::LayerType::kMask;
@@ -374,10 +366,8 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 
 	SECTION("deleting the instance and the geom leaves the scene clean")
 	{
-		const auto instance = view->CreateVatMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+		const auto instance =
+			view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f });
 
 		gfx->DrawFrame(target, job);
 
@@ -466,10 +456,7 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 		const auto geom  = scene->AddVatMeshGeom(mesh, 0, materials, desc);
 		REQUIRE(geom.geomType == bgl::GeomType::kVatMesh);
 
-		view->CreateVatMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+		view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f });
 
 		gfx->DrawFrame(target, job);
 		const auto* png = "assets/golden/vat_mesh_columns.got.png";
@@ -485,10 +472,7 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 		desc.columnBases = { 0, 0 };
 		const auto geom  = scene->AddVatMeshGeom(mesh, 0, materials, desc);
 
-		view->CreateVatMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::ISceneView::VatInstanceDesc{ 0, 0.0f });
+		view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f });
 
 		gfx->DrawFrame(target, job);
 		const auto* png = "assets/golden/vat_mesh_columns_zero.got.png";

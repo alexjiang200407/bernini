@@ -542,10 +542,10 @@ namespace game
 
 	bgl::MeshInstanceHandle
 	AssetManager::CreateVatInstance(
-		bgl::SceneViewRef                       view,
-		bgl::GeomHandle                         geom,
-		const glm::mat4&                        transform,
-		const bgl::ISceneView::VatInstanceDesc& desc)
+		bgl::SceneViewRef           view,
+		bgl::GeomHandle             geom,
+		const glm::mat4&            transform,
+		const bgl::VatInstanceDesc& desc)
 	{
 		if (!view)
 			throw bgl::SceneError("CreateVatInstance requires a valid SceneView");

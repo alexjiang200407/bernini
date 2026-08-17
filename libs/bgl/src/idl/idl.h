@@ -1,6 +1,8 @@
 #pragma once
 
+#include "idl/BoneSample.h"
 #include "idl/ChannelSource.h"
+#include "idl/Clip.h"
 #include "idl/Constants.h"
 #include "idl/CullStats.h"
 #include "idl/CullView.h"
@@ -13,8 +15,10 @@
 #include "idl/PbrMaterial.h"
 #include "idl/Range.h"
 #include "idl/RangeWithCount.h"
+#include "idl/SkinnedBone.h"
+#include "idl/SkinnedGeom.h"
+#include "idl/SkinnedState.h"
 #include "idl/Submesh.h"
-#include "idl/VatClip.h"
 #include "idl/VatGeom.h"
 #include "idl/VatState.h"
 #include "idl/VertexLayout.h"
