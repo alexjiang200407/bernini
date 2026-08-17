@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QPointF>
 #include <QString>
 
 #include <QtNodes/NodeDelegateModelRegistry>
@@ -59,6 +60,13 @@ CompileMaterial(
 	MaterialGraphModel&          model,
 	const QString&               name,
 	const std::filesystem::path& dataRoot);
+
+/**
+ * The scene point a graph should be centred on: the middle of its output node, not its corner -- a
+ * node centred by its corner hangs off the left of the panel. Empty for a graph with no sink.
+ */
+[[nodiscard]] std::optional<QPointF>
+OutputCentre(MaterialGraphModel& model);
 
 /** The maps a glTF material names, as absolute paths. Empty where it names none. */
 struct ImportedMaterialMaps

@@ -1,4 +1,4 @@
-#include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include "Windows/MaterialEditor/material_io.h"
 
 #include "util/QtSupport.h"
 
@@ -22,21 +22,19 @@
 
 TEST_CASE("An unbound submesh is never already default", "[materialeditor]")
 {
-	CHECK_FALSE(
-		MaterialEditorWindow::IsAlreadyDefault(QString(), "C:/Data/Materials/Leaf.bmaterial"));
+	CHECK_FALSE(editor::IsSameMaterialFile(QString(), "C:/Data/Materials/Leaf.bmaterial"));
 }
 
 TEST_CASE("An unsaved graph is never already default", "[materialeditor]")
 {
 	// Nothing on disk to bind: Save first. Enabling the button here would bind a path to nothing.
-	CHECK_FALSE(
-		MaterialEditorWindow::IsAlreadyDefault("C:/Data/Materials/Leaf.bmaterial", QString()));
+	CHECK_FALSE(editor::IsSameMaterialFile("C:/Data/Materials/Leaf.bmaterial", QString()));
 }
 
 TEST_CASE("The material the mesh already names is already default", "[materialeditor]")
 {
 	CHECK(
-		MaterialEditorWindow::IsAlreadyDefault(
+		editor::IsSameMaterialFile(
 			"C:/Data/Materials/Leaf.bmaterial",
 			"C:/Data/Materials/Leaf.bmaterial"));
 }
@@ -44,7 +42,7 @@ TEST_CASE("The material the mesh already names is already default", "[materialed
 TEST_CASE("A different material is not already default", "[materialeditor]")
 {
 	CHECK_FALSE(
-		MaterialEditorWindow::IsAlreadyDefault(
+		editor::IsSameMaterialFile(
 			"C:/Data/Materials/Leaf.bmaterial",
 			"C:/Data/Materials/Wood.bmaterial"));
 }
@@ -56,14 +54,14 @@ TEST_CASE("The same file spelled differently is still already default", "[materi
 	// forward slashes. Same file. Windows only: elsewhere the native separator already is a forward
 	// slash, and a backslash is an ordinary character in a name rather than a separator at all.
 	CHECK(
-		MaterialEditorWindow::IsAlreadyDefault(
+		editor::IsSameMaterialFile(
 			"C:\\Data\\Materials\\Leaf.bmaterial",
 			"C:/Data/Materials/Leaf.bmaterial"));
 #endif
 
 	// A data root that is not already normalised resolves through a parent segment.
 	CHECK(
-		MaterialEditorWindow::IsAlreadyDefault(
+		editor::IsSameMaterialFile(
 			"C:/Data/Textures/../Materials/Leaf.bmaterial",
 			"C:/Data/Materials/Leaf.bmaterial"));
 }
@@ -85,9 +83,8 @@ TEST_CASE("A real file reached two ways is already default", "[materialeditor]")
 
 	const QString viaParent = QDir(dir.path()).filePath("./Leaf.bmaterial");
 
-	CHECK(MaterialEditorWindow::IsAlreadyDefault(path, viaParent));
-	CHECK_FALSE(
-		MaterialEditorWindow::IsAlreadyDefault(path, QDir(dir.path()).filePath("Other.bmaterial")));
+	CHECK(editor::IsSameMaterialFile(path, viaParent));
+	CHECK_FALSE(editor::IsSameMaterialFile(path, QDir(dir.path()).filePath("Other.bmaterial")));
 }
 
 TEST_CASE("Two materials that do not exist are still told apart", "[materialeditor]")
@@ -95,9 +92,7 @@ TEST_CASE("Two materials that do not exist are still told apart", "[materialedit
 	// A material can be deleted out from under a mesh that still names it. If the two compared equal
 	// merely by both being absent, Set Default Material would grey out on every mesh.
 	CHECK_FALSE(
-		MaterialEditorWindow::IsAlreadyDefault(
-			"C:/Nowhere/Leaf.bmaterial",
-			"C:/Nowhere/Wood.bmaterial"));
+		editor::IsSameMaterialFile("C:/Nowhere/Leaf.bmaterial", "C:/Nowhere/Wood.bmaterial"));
 }
 
 TEST_CASE("Case is not what tells two materials apart", "[materialeditor]")
@@ -105,7 +100,7 @@ TEST_CASE("Case is not what tells two materials apart", "[materialeditor]")
 	// Windows: the .bmesh's path comes back from std::filesystem, a file dialog's from the shell, and
 	// they need not agree on case.
 	CHECK(
-		MaterialEditorWindow::IsAlreadyDefault(
+		editor::IsSameMaterialFile(
 			"C:/Data/Materials/Leaf.bmaterial",
 			"C:/data/materials/leaf.bmaterial"));
 }
@@ -120,7 +115,7 @@ TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
 	material.pbr.normalTexture    = "Textures/normal_c3d4.ktx2";
 	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
 
-	const QString summary = MaterialEditorWindow::BakedTexturesSummary(material);
+	const QString summary = editor::BakedTexturesSummary(material);
 
 	CHECK(summary.contains("Textures/basecolor_a1b2.ktx2"));
 	CHECK(summary.contains("Textures/normal_c3d4.ktx2"));
@@ -135,7 +130,7 @@ TEST_CASE("A material with no baked triplet lists nothing", "[materialeditor]")
 	material.shadingModel          = assetlib::ShadingModel::kPbr;
 	material.pbr.routes[0].texture = "textures_src/albedo.ktx2";  // a source route, not a baked map
 
-	CHECK(MaterialEditorWindow::BakedTexturesSummary(material).isEmpty());
+	CHECK(editor::BakedTexturesSummary(material).isEmpty());
 }
 
 TEST_CASE(
@@ -149,7 +144,7 @@ TEST_CASE(
 	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
 	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
 
-	const QString summary = MaterialEditorWindow::BakedTexturesSummary(material);
+	const QString summary = editor::BakedTexturesSummary(material);
 
 	REQUIRE_FALSE(summary.isEmpty());
 	CHECK(summary.contains(QString::fromUtf8("—")));

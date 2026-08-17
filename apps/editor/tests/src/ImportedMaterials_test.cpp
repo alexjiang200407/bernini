@@ -1,4 +1,4 @@
-#include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Import/import_writers.h"
 
 #include "Windows/AssetImporter/material_stems.h"
 #include "util/QtSupport.h"
@@ -121,7 +121,7 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	const auto imported = ImportWith({ PbrMaterial() }, { "Rust" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -164,7 +164,7 @@ TEST_CASE("A non-PBR material is left behind, and its submesh unassigned", "[imp
 	const auto imported = ImportWith({ PbrMaterial(), unlit }, { "Metal", "Sign" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -226,7 +226,7 @@ TEST_CASE("Imported material names are made safe and unique", "[importedmaterial
 		{ "Rust", "Rust", "", "wood/oak", ".." });
 	auto mesh = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -261,7 +261,7 @@ TEST_CASE("A stem list that no longer fits the source is refused", "[importedmat
 	auto       mesh     = assetlib::toBMesh(imported);
 
 	CHECK_THROWS_AS(
-		ContentExplorerWindow::WriteImportedMaterials(
+		editor::WriteImportedMaterials(
 			imported,
 			mesh,
 			project.Data(),
@@ -280,7 +280,7 @@ TEST_CASE("A material is written under the stem it was handed", "[importedmateri
 	const auto imported = ImportWith({ PbrMaterial() }, { "Rust" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -307,7 +307,7 @@ TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
 	const auto imported = ImportWith({ PbrMaterial(), PbrMaterial() }, { "Kept", "Dropped" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -330,7 +330,7 @@ TEST_CASE(
 	const auto first     = ImportWith({ PbrMaterial() }, { "Fur" });
 	auto       firstMesh = assetlib::toBMesh(first);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		first,
 		firstMesh,
 		project.Data(),
@@ -342,7 +342,7 @@ TEST_CASE(
 	const auto second     = ImportWith({ PbrMaterial() }, { "Fur" });
 	auto       secondMesh = assetlib::toBMesh(second);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		second,
 		secondMesh,
 		project.Data(),
@@ -350,11 +350,11 @@ TEST_CASE(
 		project.TextureDir(),
 		QStringList{ "fur_grey" });
 
-	const std::array<ContentExplorerWindow::ImportedFile, 1> written = { {
+	const std::array<editor::ImportedFile, 1> written = { {
 		{ project.MaterialDir() / "fur_grey.bmaterial", false },
 	} };
 
-	ContentExplorerWindow::RollBack(written, {});
+	editor::RollBackImport(written, {});
 
 	// The folder is not this import's to take down, so undoing it means removing exactly the files it
 	// wrote -- the other import's work has to survive a failure that had nothing to do with it.
@@ -375,7 +375,7 @@ TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedm
 
 	auto mesh = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -401,7 +401,7 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 	const auto imported = ImportWith({ leaves }, { "Leaves" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -437,7 +437,7 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 	const auto imported = ImportWith({ shared }, { "Shared" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	ContentExplorerWindow::WriteImportedMaterials(
+	editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),

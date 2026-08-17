@@ -1,4 +1,5 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Windows/ContentExplorer/asset_rules.h"
 
 #include "Project/Project.h"
 #include "Thumbnails/TexturePreviewCache.h"
@@ -317,8 +318,7 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 	QFileSystemModel model;
 	model.setRootPath(sandbox.DataRootPath());
 
-	const QString asset =
-		ContentExplorerWindow::AssetAt(model, IndexFor(model, path), sandbox.DataRootPath());
+	const QString asset = editor::AssetAt(model, IndexFor(model, path), sandbox.DataRootPath());
 
 	CHECK(asset == QString(sample.asset));
 }
@@ -327,13 +327,13 @@ TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
 {
 	// Baking composites a material's routes into its triplet, so it means nothing for a mesh, a texture
 	// or a directory -- the menu offers it for a `.bmaterial` alone. By the extension, case and all.
-	CHECK(ContentExplorerWindow::IsMaterialAsset("Materials/skin.bmaterial"));
-	CHECK(ContentExplorerWindow::IsMaterialAsset("Materials/skin.BMATERIAL"));
+	CHECK(editor::IsMaterialAsset("Materials/skin.bmaterial"));
+	CHECK(editor::IsMaterialAsset("Materials/skin.BMATERIAL"));
 
-	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset("Meshes/tree.bmesh"));
-	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset("Textures/base.ktx2"));
-	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset("textures_src/kirk"));  // a directory
-	CHECK_FALSE(ContentExplorerWindow::IsMaterialAsset(""));
+	CHECK_FALSE(editor::IsMaterialAsset("Meshes/tree.bmesh"));
+	CHECK_FALSE(editor::IsMaterialAsset("Textures/base.ktx2"));
+	CHECK_FALSE(editor::IsMaterialAsset("textures_src/kirk"));  // a directory
+	CHECK_FALSE(editor::IsMaterialAsset(""));
 }
 
 TEST_CASE("A rename accepts only names every platform can round-trip", "[contentexplorer]")
@@ -342,24 +342,24 @@ TEST_CASE("A rename accepts only names every platform can round-trip", "[content
 	// from a test. The project's data root is shared across platforms, so the strictest one -- Windows
 	// -- decides: its reserved characters, and the trailing dot or space it silently strips. A leading
 	// dot is refused because it hides the file on the others.
-	CHECK(ContentExplorerWindow::IsValidAssetFileName("tree"));
-	CHECK(ContentExplorerWindow::IsValidAssetFileName("tree_02 final"));
-	CHECK(ContentExplorerWindow::IsValidAssetFileName("tree_v1.2"));  // a dot inside is a name
-	CHECK(ContentExplorerWindow::IsValidAssetFileName("console"));    // reserved only when exact
-	CHECK(ContentExplorerWindow::IsValidAssetFileName("com10"));      // the devices stop at 9
+	CHECK(editor::IsValidAssetFileName("tree"));
+	CHECK(editor::IsValidAssetFileName("tree_02 final"));
+	CHECK(editor::IsValidAssetFileName("tree_v1.2"));  // a dot inside is a name
+	CHECK(editor::IsValidAssetFileName("console"));    // reserved only when exact
+	CHECK(editor::IsValidAssetFileName("com10"));      // the devices stop at 9
 
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName(""));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName(".hidden"));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("tree."));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("tree "));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a/b"));  // one component, not a path
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a\\b"));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a:b"));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("a?b"));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName(QString("a%1b").arg(QChar(0x07))));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("NUL"));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("nul.ktx2"));
-	CHECK_FALSE(ContentExplorerWindow::IsValidAssetFileName("Com3"));
+	CHECK_FALSE(editor::IsValidAssetFileName(""));
+	CHECK_FALSE(editor::IsValidAssetFileName(".hidden"));
+	CHECK_FALSE(editor::IsValidAssetFileName("tree."));
+	CHECK_FALSE(editor::IsValidAssetFileName("tree "));
+	CHECK_FALSE(editor::IsValidAssetFileName("a/b"));  // one component, not a path
+	CHECK_FALSE(editor::IsValidAssetFileName("a\\b"));
+	CHECK_FALSE(editor::IsValidAssetFileName("a:b"));
+	CHECK_FALSE(editor::IsValidAssetFileName("a?b"));
+	CHECK_FALSE(editor::IsValidAssetFileName(QString("a%1b").arg(QChar(0x07))));
+	CHECK_FALSE(editor::IsValidAssetFileName("NUL"));
+	CHECK_FALSE(editor::IsValidAssetFileName("nul.ktx2"));
+	CHECK_FALSE(editor::IsValidAssetFileName("Com3"));
 }
 
 TEST_CASE("The directories the project is scaffolded with cannot be deleted", "[contentexplorer]")
@@ -383,7 +383,7 @@ TEST_CASE("The directories the project is scaffolded with cannot be deleted", "[
 	const QModelIndex index = IndexFor(model, sandbox.DataRootPath() + "/" + category);
 
 	REQUIRE(model.isDir(index));
-	CHECK(ContentExplorerWindow::AssetAt(model, index, sandbox.DataRootPath()).isEmpty());
+	CHECK(editor::AssetAt(model, index, sandbox.DataRootPath()).isEmpty());
 }
 
 TEST_CASE("A folder the user made is theirs to delete", "[contentexplorer]")
@@ -399,14 +399,11 @@ TEST_CASE("A folder the user made is theirs to delete", "[contentexplorer]")
 	const QModelIndex index = IndexFor(model, sandbox.DataRootPath() + "/textures_src/kirk");
 
 	REQUIRE(model.isDir(index));
-	CHECK(
-		ContentExplorerWindow::AssetAt(model, index, sandbox.DataRootPath()) ==
-		QString("textures_src/kirk"));
+	CHECK(editor::AssetAt(model, index, sandbox.DataRootPath()) == QString("textures_src/kirk"));
 
 	SECTION("but a click that landed on no row at all is not")
 	{
-		CHECK(
-			ContentExplorerWindow::AssetAt(model, QModelIndex(), sandbox.DataRootPath()).isEmpty());
+		CHECK(editor::AssetAt(model, QModelIndex(), sandbox.DataRootPath()).isEmpty());
 	}
 }
 
@@ -424,7 +421,7 @@ TEST_CASE("A file outside the project is not an asset of it", "[contentexplorer]
 
 	const QModelIndex index = IndexFor(model, QString::fromStdString(outside.string()));
 
-	CHECK(ContentExplorerWindow::AssetAt(model, index, sandbox.DataRootPath()).isEmpty());
+	CHECK(editor::AssetAt(model, index, sandbox.DataRootPath()).isEmpty());
 }
 
 TEST_CASE("Back has nowhere to go until the explorer has been somewhere", "[contentexplorer]")

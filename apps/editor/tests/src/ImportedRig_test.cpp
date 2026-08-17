@@ -1,5 +1,5 @@
+#include "Import/import_writers.h"
 #include "Project/Project.h"
-#include "Windows/ContentExplorer/ContentExplorerWindow.h"
 
 #include "util/QtSupport.h"
 
@@ -111,7 +111,7 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 	const auto      imported = SkinnedImport();
 	assetlib::BMesh mesh;
 
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		imported,
 		mesh,
 		root.Data(),
@@ -139,7 +139,7 @@ TEST_CASE("The clips are written only when the import asked for them", "[importe
 	const auto      imported = SkinnedImport();
 	assetlib::BMesh mesh;
 
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		imported,
 		mesh,
 		root.Data(),
@@ -164,7 +164,7 @@ TEST_CASE("A static import writes no rig at all", "[importedrig]")
 	const TempRoot  root;
 	assetlib::BMesh mesh;
 
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		assetlib::imp::BMeshImport(),
 		mesh,
 		root.Data(),
@@ -179,7 +179,9 @@ TEST_CASE("A static import writes no rig at all", "[importedrig]")
 
 // A failed or cancelled import may not leave a rig behind, and may not take one that was already
 // there either -- the user was asked before it was overwritten, but only about the files it names.
-TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it", "[importedrig]")
+TEST_CASE(
+	"RollBackImport removes the rig an import wrote, and keeps what predated it",
+	"[importedrig]")
 {
 	const TempRoot root;
 
@@ -191,7 +193,7 @@ TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it"
 
 	const auto      imported = SkinnedImport();
 	assetlib::BMesh mesh;
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		imported,
 		mesh,
 		root.Data(),
@@ -202,13 +204,13 @@ TEST_CASE("RollBack removes the rig an import wrote, and keeps what predated it"
 	REQUIRE(fs::exists(root.Bskel()));
 	REQUIRE(fs::exists(root.Banim()));
 
-	const std::array<ContentExplorerWindow::ImportedFile, 3> files = { {
+	const std::array<editor::ImportedFile, 3> files = { {
 		{ root.Bskel(), false },
 		{ root.Banim(), false },
 		{ kept, true },
 	} };
 
-	ContentExplorerWindow::RollBack(files, {});
+	editor::RollBackImport(files, {});
 
 	CHECK_FALSE(fs::exists(root.Bskel()));
 	CHECK_FALSE(fs::exists(root.Banim()));
@@ -236,7 +238,7 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 	REQUIRE(assetlib::isSkinned(mesh));
 	REQUIRE_THROWS(assetlib::save(mesh, bmeshPath));
 
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		imported,
 		mesh,
 		root.Data(),
@@ -256,7 +258,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 	const auto     imported = SkinnedImport();
 
 	assetlib::BMesh mesh;
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		imported,
 		mesh,
 		root.Data(),
@@ -265,7 +267,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		/*writeClips*/ false);
 
 	// The same rig, under a name nothing could guess from the animation file.
-	const auto found = ContentExplorerWindow::FindMatchingSkeleton(root.Data(), imported.skeleton);
+	const auto found = editor::FindMatchingSkeleton(root.Data(), imported.skeleton);
 	CHECK(found == root.Bskel());
 
 	// Directory order is unspecified, so silently picking one would make the .banim's reference
@@ -275,7 +277,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 	{
 		assetlib::BMesh second;
 		const fs::path twin = root.Data() / Project::c_SkeletonsDirectoryName / "coyote_twin.bskel";
-		ContentExplorerWindow::WriteImportedRig(
+		editor::WriteImportedRig(
 			SkinnedImport(),
 			second,
 			root.Data(),
@@ -285,7 +287,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 
 		REQUIRE(fs::exists(twin));
 		CHECK_THROWS_AS(
-			ContentExplorerWindow::FindMatchingSkeleton(root.Data(), imported.skeleton),
+			editor::FindMatchingSkeleton(root.Data(), imported.skeleton),
 			std::runtime_error);
 	}
 
@@ -294,7 +296,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		assetlib::Skeleton other  = imported.skeleton;
 		other.bones[1].nameOffset = other.stringPool.add("tail");
 
-		CHECK(ContentExplorerWindow::FindMatchingSkeleton(root.Data(), other).empty());
+		CHECK(editor::FindMatchingSkeleton(root.Data(), other).empty());
 	}
 
 	// The signature covers names and parents and deliberately not the bind pose, which is what lets
@@ -304,7 +306,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		assetlib::Skeleton rebound            = imported.skeleton;
 		rebound.bones[1].bindPose.translation = glm::vec3(0.0f, 99.0f, 0.0f);
 
-		CHECK(ContentExplorerWindow::FindMatchingSkeleton(root.Data(), rebound) == root.Bskel());
+		CHECK(editor::FindMatchingSkeleton(root.Data(), rebound) == root.Bskel());
 	}
 }
 
@@ -316,7 +318,7 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	const auto     imported = SkinnedImport();
 
 	assetlib::BMesh mesh;
-	ContentExplorerWindow::WriteImportedRig(
+	editor::WriteImportedRig(
 		imported,
 		mesh,
 		root.Data(),
@@ -325,7 +327,7 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 		/*writeClips*/ false);
 
 	const fs::path runPath = root.Data() / Project::c_AnimationsDirectoryName / "coyote_run.banim";
-	ContentExplorerWindow::WriteImportedClips(imported, root.Data(), runPath);
+	editor::WriteImportedClips(imported, root.Data(), runPath);
 
 	REQUIRE(fs::exists(runPath));
 
@@ -345,13 +347,13 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 	// Nothing has been imported yet, so there is no skeleton these clips could address. Writing them
 	// anyway would leave a .banim naming a file that does not exist.
 	CHECK_THROWS_AS(
-		ContentExplorerWindow::WriteImportedClips(imported, root.Data(), root.Banim()),
+		editor::WriteImportedClips(imported, root.Data(), root.Banim()),
 		std::runtime_error);
 
 	SECTION("and so is a file carrying no clips")
 	{
 		assetlib::BMesh mesh;
-		ContentExplorerWindow::WriteImportedRig(
+		editor::WriteImportedRig(
 			imported,
 			mesh,
 			root.Data(),
@@ -363,7 +365,7 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 		clipless.animations.clips.clear();
 
 		CHECK_THROWS_AS(
-			ContentExplorerWindow::WriteImportedClips(clipless, root.Data(), root.Banim()),
+			editor::WriteImportedClips(clipless, root.Data(), root.Banim()),
 			std::runtime_error);
 	}
 }

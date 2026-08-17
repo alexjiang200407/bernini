@@ -1,4 +1,4 @@
-#include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Import/import_writers.h"
 
 #include <assetlib_structs/BMesh.h>
 
@@ -31,7 +31,7 @@ TEST_CASE("A mesh import aimed at a new subfolder creates it", "[importedmesh]")
 	const fs::path bmeshPath = root.path / "Meshes" / "animals" / "unit.bmesh";
 
 	const assetlib::BMesh mesh;
-	ContentExplorerWindow::WriteImportedMesh(mesh, bmeshPath);
+	editor::WriteImportedMesh(mesh, bmeshPath);
 
 	CHECK(fs::exists(bmeshPath));
 }

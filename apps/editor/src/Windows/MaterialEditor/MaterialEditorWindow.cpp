@@ -33,43 +33,16 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
+#include "Windows/MaterialEditor/graph_compiler.h"
+#include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 
 namespace
 {
-	struct OutputType
-	{
-		const char* label;
-		const char* modelName;
-	};
-
-	constexpr std::array<OutputType, 4> c_OutputTypes = { {
-		{ "Opaque", "MaterialOutput" },
-		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
-		{ "Alpha Blend", "BlendedMaterialOutput" },
-		{ "Hashed Alpha", "HashedAlphaMaterialOutput" },
-	} };
-
-	bgl::LayerType
-	ToLayerType(assetlib::AlphaMode mode) noexcept
-	{
-		switch (mode)
-		{
-		case assetlib::AlphaMode::kMask:
-			return bgl::LayerType::kMask;
-		case assetlib::AlphaMode::kBlend:
-			return bgl::LayerType::kBlend;
-		case assetlib::AlphaMode::kHashed:
-			return bgl::LayerType::kHashed;
-		case assetlib::AlphaMode::kOpaque:
-			break;
-		}
-		return bgl::LayerType::kOpaque;
-	}
-
 	/** Whether the graph routes anything into the sink's normal channels. */
 	bool
 	RoutesNormalMap(const MaterialOutputNode& output)
@@ -93,24 +66,19 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 {
 	auto* splitter = new QSplitter(Qt::Horizontal, this);
 
-	auto* leftPanel  = new QWidget(splitter);
-	auto* leftLayout = new QVBoxLayout(leftPanel);
-	leftLayout->setContentsMargins(0, 0, 0, 0);
-	leftLayout->setSpacing(0);
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(splitter);
 
-	// A material properties panel down the left of the graph: what the material *is* -- the file it is
-	// bound to, its actions, which submesh, the output type, and its baked textures -- kept apart from
-	// the board that wires it.
-	auto* graphSplitter = new QSplitter(Qt::Horizontal, leftPanel);
-
-	auto* propertiesPanel  = new QWidget(graphSplitter);
-	auto* propertiesLayout = new QVBoxLayout(propertiesPanel);
-	propertiesLayout->setContentsMargins(4, 4, 4, 4);
-
-	// Material file actions, acting on the selected submesh's graph.
-	m_OpenButton   = new QPushButton(QStringLiteral("Open..."), propertiesPanel);
-	m_SaveButton   = new QPushButton(QStringLiteral("Save"), propertiesPanel);
-	m_SaveAsButton = new QPushButton(QStringLiteral("Save As..."), propertiesPanel);
+	m_GraphView          = ui.graphView;
+	m_OpenButton         = ui.open;
+	m_SaveButton         = ui.save;
+	m_SaveAsButton       = ui.saveAs;
+	m_SetDefaultButton   = ui.setDefault;
+	m_GenerateTangents   = ui.generateTangents;
+	m_SubmeshSelector    = ui.submeshSelector;
+	m_OutputSelector     = ui.outputSelector;
+	m_MaterialLabel      = ui.materialLabel;
+	m_BakedTexturesLabel = ui.bakedTextures;
+	m_TangentWarning     = ui.tangentWarning;
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
@@ -119,117 +87,44 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 			QString(),
 			QStringLiteral("Bernini Material (*.bmaterial)"));
 		if (!path.isEmpty())
-			OpenMaterialInto(CurrentGraph(), path);
+			OpenMaterialInto(m_Graphs.Current(), path);
 	});
 	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
 	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
 
-	auto* fileActions = new QHBoxLayout();
-	fileActions->setContentsMargins(0, 0, 0, 0);
-	fileActions->addWidget(m_OpenButton);
-	fileActions->addWidget(m_SaveButton);
-	fileActions->addWidget(m_SaveAsButton);
-	propertiesLayout->addLayout(fileActions);
-
-	m_SetDefaultButton = new QPushButton(QStringLiteral("Set Default Material"), propertiesPanel);
-	m_SetDefaultButton->setToolTip(QStringLiteral(
-		"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads with "
-		"it.\nThe preview only overrides the instances in front of you until you do."));
 	connect(m_SetDefaultButton, &QPushButton::clicked, this, [this]() {
-		SetDefaultMaterial(m_CurrentSubmesh);
+		SetDefaultMaterial(m_Graphs.CurrentSubmesh());
 	});
-	propertiesLayout->addWidget(m_SetDefaultButton);
 
-	// The path of the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes to.
-	m_MaterialLabel = new QLabel(propertiesPanel);
-	m_MaterialLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-	m_MaterialLabel->setWordWrap(true);
-	m_MaterialLabel->setStyleSheet("color: gray;");
+	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() {
+		if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+			return;
 
-	// A path has no spaces to wrap at, so the label's minimum width would otherwise be a whole
-	// directory name and become the floor for the panel -- and for the splitter above it. Ignored
-	// drops it out of that calculation; the tooltip carries the path once it is too narrow to read.
-	m_MaterialLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	propertiesLayout->addWidget(m_MaterialLabel);
+		const std::filesystem::path meshPath = m_Preview->MeshPath();
 
-	propertiesLayout->addSpacing(8);
+		// Reloading is what puts the new vertex layout in front of the renderer.
+		if (editor::GenerateTangents(this, meshPath))
+			m_Preview->LoadMesh(meshPath);
+	});
 
-	propertiesLayout->addWidget(new QLabel(QStringLiteral("Submesh"), propertiesPanel));
-	m_SubmeshSelector = new QComboBox(propertiesPanel);
-	m_SubmeshSelector->setPlaceholderText("No submesh");
-	m_SubmeshSelector->setEnabled(false);
 	connect(
 		m_SubmeshSelector,
 		&QComboBox::currentIndexChanged,
 		this,
 		&MaterialEditorWindow::SelectSubmesh);
-	propertiesLayout->addWidget(m_SubmeshSelector);
 
-	// The graph's sink, chosen rather than dragged in: a material has exactly one, and which one it is
-	// *is* the alpha mode. The context menu does not offer them (see MaterialGraphScene).
-	propertiesLayout->addWidget(new QLabel(QStringLiteral("Output"), propertiesPanel));
-	m_OutputSelector = new QComboBox(propertiesPanel);
-	for (const OutputType& type : c_OutputTypes)
-		m_OutputSelector->addItem(QLatin1String(type.label));
-	m_OutputSelector->setEnabled(false);
-	m_OutputSelector->setToolTip(QStringLiteral(
-		"Alpha Tested adds a base-color alpha input and a cutoff: pixels below it are "
-		"discarded. Alpha Blend uses that alpha to blend the surface, back-to-front, with no "
-		"cutoff."));
 	connect(
 		m_OutputSelector,
 		&QComboBox::
 			activated,  // activated, not currentIndexChanged: only a user's pick swaps the sink
 		this,
 		&MaterialEditorWindow::SetOutputType);
-	propertiesLayout->addWidget(m_OutputSelector);
 
-	// The material's current baked textures, if any. Read-only: the graph authors the routes they are
-	// composited from, and the Content Explorer's Bake is what rewrites them.
-	m_BakedTexturesLabel = new QLabel(propertiesPanel);
-	m_BakedTexturesLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-	m_BakedTexturesLabel->setWordWrap(true);
-	m_BakedTexturesLabel->setStyleSheet("color: gray;");
-	m_BakedTexturesLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	m_BakedTexturesLabel->hide();
-	propertiesLayout->addWidget(m_BakedTexturesLabel);
-
-	// A normal map routed onto a submesh with no tangent renders as nothing: the shader rebuilds the
-	// map's frame from the tangent and falls back to the geometric normal without one. Silent until
-	// this said so.
-	m_TangentWarning = new QLabel(propertiesPanel);
-	m_TangentWarning->setWordWrap(true);
-	m_TangentWarning->setStyleSheet("color: #d08770;");
-	m_TangentWarning->setText(
-		QStringLiteral("This submesh has no tangents, so its normal map is being ignored."));
-	m_TangentWarning->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	m_TangentWarning->hide();
-	propertiesLayout->addWidget(m_TangentWarning);
-
-	m_GenerateTangents = new QPushButton(QStringLiteral("Generate Tangents"), propertiesPanel);
-	m_GenerateTangents->setToolTip(QStringLiteral(
-		"Derive a tangent for every submesh of this mesh that has none, and rewrite the .bmesh."));
-	m_GenerateTangents->hide();
-	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() { GenerateTangents(); });
-	propertiesLayout->addWidget(m_GenerateTangents);
-
-	propertiesLayout->addStretch(1);
-
-	m_GraphView = new MaterialGraphView(graphSplitter);  // its scene is set per selected submesh
 	connect(
 		m_GraphView,
 		&MaterialGraphView::TextureDropped,
 		this,
 		&MaterialEditorWindow::AddTextureNode);
-
-	// The properties panel keeps its width; the graph takes the rest.
-	graphSplitter->addWidget(propertiesPanel);
-	graphSplitter->addWidget(m_GraphView);
-	graphSplitter->setStretchFactor(0, 0);
-	graphSplitter->setStretchFactor(1, 1);
-	graphSplitter->setSizes({ 250, 800 });
-
-	leftLayout->addWidget(graphSplitter);
 
 	// Model Preview. It renders the editor's shared Scene through a SceneView of its own, so the
 	// geometry pools are sized once (in config.json) rather than split across two scenes.
@@ -268,7 +163,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews);
 
-	splitter->addWidget(leftPanel);
+	splitter->addWidget(ui.leftPanel);
 	splitter->addWidget(rightPanel);
 
 	// The preview should start with a good share of the width (~38%)
@@ -302,9 +197,9 @@ MaterialEditorWindow::~MaterialEditorWindow()
 MaterialOutputNode*
 MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 {
-	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
-	const bool current = CurrentGraph() == graphIndex;
+	const bool current = m_Graphs.Current() == graphIndex;
 	if (current)
 		m_GraphView->setScene(nullptr);
 
@@ -315,7 +210,7 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	if (graph.isEmpty())
 	{
 		const QtNodes::NodeId outputId =
-			entry.model->addNode(QLatin1String(c_OutputTypes[0].modelName));
+			entry.model->addNode(QLatin1String(editor::c_OutputTypes[0].modelName));
 		entry.model->setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
 	}
 	else
@@ -337,58 +232,14 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	return output;
 }
 
-std::optional<QPointF>
-MaterialEditorWindow::OutputCentre(MaterialGraphModel& model)
-{
-	const QtNodes::NodeId outputId = model.OutputNodeId();
-	if (outputId == QtNodes::InvalidNodeId)
-		return std::nullopt;
-
-	const QPointF pos  = model.nodeData(outputId, QtNodes::NodeRole::Position).value<QPointF>();
-	const QSize   size = model.nodeData(outputId, QtNodes::NodeRole::Size).value<QSize>();
-
-	// A node is only measured once it has a graphics object, so a model with no scene reports -1 x -1.
-	// Half of that would centre just off the node's corner, which is worse than its corner.
-	if (!size.isValid())
-		return pos;
-
-	return pos + QPointF(size.width() * 0.5, size.height() * 0.5);
-}
-
-QString
-MaterialEditorWindow::BakedTexturesSummary(const assetlib::BMaterial& material)
-{
-	// A baked triplet is a PBR notion, and a material carries one only once it has been baked -- so a
-	// never-baked or non-PBR material has nothing to list. A kLoose material keeps the triplet of its
-	// last bake, which is still worth showing: "current baked textures, if any".
-	if (material.shadingModel != assetlib::ShadingModel::kPbr)
-		return {};
-
-	const assetlib::PbrParams& pbr = material.pbr;
-	if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty())
-		return {};
-
-	const auto line = [](const char* label, const std::string& path) {
-		return QStringLiteral("%1: %2").arg(
-			QLatin1String(label),
-			path.empty() ? QStringLiteral("—") : QString::fromStdString(path));
-	};
-
-	return QStringLiteral("Baked textures\n%1\n%2\n%3")
-	    .arg(
-			line("Base color", pbr.baseColorTexture),
-			line("Normal", pbr.normalTexture),
-			line("ORM", pbr.ormTexture));
-}
-
 void
 MaterialEditorWindow::FrameOnOutput()
 {
-	const int graphIndex = CurrentGraph();
+	const int graphIndex = m_Graphs.Current();
 	if (graphIndex < 0)
 		return;
 
-	const MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 	if (entry.model == nullptr || m_GraphView->scene() != entry.scene.get())
 		return;
 
@@ -408,8 +259,7 @@ MaterialEditorWindow::WatchOutputNode(int graphIndex)
 {
 	// Recompile whenever anything the material depends on changes. The sink is the only one, and every
 	// upstream edit reaches it through setInData.
-	MaterialOutputNode* output =
-		m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
+	MaterialOutputNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output != nullptr)
 	{
 		connect(output, &MaterialOutputNode::Changed, this, [this, graphIndex]() {
@@ -422,16 +272,16 @@ MaterialEditorWindow::WatchOutputNode(int graphIndex)
 void
 MaterialEditorWindow::SetOutputType(int comboIndex)
 {
-	const int graphIndex = CurrentGraph();
+	const int graphIndex = m_Graphs.Current();
 	if (graphIndex < 0)
 		return;
-	if (comboIndex < 0 || comboIndex >= static_cast<int>(c_OutputTypes.size()))
+	if (comboIndex < 0 || comboIndex >= static_cast<int>(editor::c_OutputTypes.size()))
 		return;
 
-	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
 	const QString modelName =
-		QLatin1String(c_OutputTypes[static_cast<size_t>(comboIndex)].modelName);
+		QLatin1String(editor::c_OutputTypes[static_cast<size_t>(comboIndex)].modelName);
 	if (!entry.model->SetOutputType(modelName))
 		return;
 
@@ -444,25 +294,26 @@ MaterialEditorWindow::SetOutputType(int comboIndex)
 void
 MaterialEditorWindow::SyncOutputSelector()
 {
-	const int graphIndex = CurrentGraph();
+	const int graphIndex = m_Graphs.Current();
 
 	m_OutputSelector->setEnabled(graphIndex >= 0);
 	if (graphIndex < 0)
 		return;
 
-	const MaterialOutputNode* output =
-		m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
+	const MaterialOutputNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output == nullptr)
 		return;
 
-	const auto it = std::ranges::find_if(c_OutputTypes, [&output](const OutputType& type) {
-		return output->name() == QLatin1String(type.modelName);
-	});
-	if (it == c_OutputTypes.end())
+	const auto it =
+		std::ranges::find_if(editor::c_OutputTypes, [&output](const editor::OutputType& type) {
+			return output->name() == QLatin1String(type.modelName);
+		});
+	if (it == editor::c_OutputTypes.end())
 		return;
 
 	const QSignalBlocker blocker(m_OutputSelector);
-	m_OutputSelector->setCurrentIndex(static_cast<int>(std::distance(c_OutputTypes.begin(), it)));
+	m_OutputSelector->setCurrentIndex(
+		static_cast<int>(std::distance(editor::c_OutputTypes.begin(), it)));
 }
 
 void
@@ -474,9 +325,7 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
-	m_MaterialGraphs.clear();
-	m_GraphForSubmesh.assign(static_cast<size_t>(submeshNames.size()), -1);
-	m_CurrentSubmesh = -1;
+	m_Graphs.Reset(static_cast<int>(submeshNames.size()));
 
 	const QStringList materialPaths =
 		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths() : QStringList();
@@ -490,21 +339,18 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 		// A submesh naming a material an earlier one already opened joins its graph, so editing that
 		// material once updates every submesh wearing it. Only a real file is shared; an unbound
 		// submesh gets its own blank graph.
-		if (const int shared = materialPath.isEmpty() ? -1 : FindGraphForPath(materialPath);
+		if (const int shared = materialPath.isEmpty() ? -1 : m_Graphs.FindForPath(materialPath);
 		    shared >= 0)
 		{
-			MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(shared)];
-			entry.submeshes.push_back(static_cast<uint32_t>(index));
-			m_GraphForSubmesh[static_cast<size_t>(index)] = shared;
+			m_Graphs.Share(shared, index);
 
+			const MaterialGraphSet::Graph& entry = m_Graphs.At(shared);
 			if (entry.preview.IsValid())
 				m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(index), entry.preview);
 			continue;
 		}
 
-		const int graphIndex = static_cast<int>(m_MaterialGraphs.size());
-		m_MaterialGraphs.emplace_back().submeshes.push_back(static_cast<uint32_t>(index));
-		m_GraphForSubmesh[static_cast<size_t>(index)] = graphIndex;
+		const int graphIndex = m_Graphs.Add(index);
 
 		ResetGraph(graphIndex, QJsonObject());
 
@@ -530,7 +376,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 {
 	// int with Qt's -1 sentinel at the slot boundary (currentIndexChanged's signature); it becomes
 	// an optional here, so a cleared selector explicitly clears the outline too.
-	const bool valid = index >= 0 && index < static_cast<int>(m_GraphForSubmesh.size());
+	const bool valid = m_Graphs.HasSubmesh(index);
 
 	if (m_Preview != nullptr)
 		m_Preview->SetSelectedSubmesh(
@@ -541,158 +387,58 @@ MaterialEditorWindow::SelectSubmesh(int index)
 
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a
 	// material have in common.
-	m_CurrentSubmesh = index;
+	m_Graphs.SetCurrentSubmesh(index);
 
-	const int graphIndex = m_GraphForSubmesh[static_cast<size_t>(index)];
-	m_GraphView->setScene(
-		graphIndex >= 0 ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].scene.get() : nullptr);
+	const int graphIndex = m_Graphs.ForSubmesh(index);
+	m_GraphView->setScene(graphIndex >= 0 ? m_Graphs.At(graphIndex).scene.get() : nullptr);
 
 	SyncOutputSelector();
 	FrameOnOutput();
 	RefreshActions();
 }
 
-int
-MaterialEditorWindow::CurrentGraph() const noexcept
-{
-	if (m_CurrentSubmesh < 0 || m_CurrentSubmesh >= static_cast<int>(m_GraphForSubmesh.size()))
-		return -1;
-
-	return m_GraphForSubmesh[static_cast<size_t>(m_CurrentSubmesh)];
-}
-
-int
-MaterialEditorWindow::FindGraphForPath(const QString& materialPath) const
-{
-	for (size_t i = 0; i < m_MaterialGraphs.size(); ++i)
-		if (IsAlreadyDefault(m_MaterialGraphs[i].materialPath, materialPath))
-			return static_cast<int>(i);
-
-	return -1;
-}
-
 QStringList
 MaterialEditorWindow::OpenMaterialPaths() const
 {
-	auto paths = QStringList();
-	for (const MaterialGraph& graph : m_MaterialGraphs)
-		if (!graph.materialPath.isEmpty())
-			paths << graph.materialPath;
-
-	return paths;
+	return m_Graphs.OpenPaths();
 }
 
 void
 MaterialEditorWindow::RefreshMaterialState()
 {
-	ForgetMaterialsOnDisk();
+	m_Graphs.ForgetOnDisk();
 	RefreshActions();
-}
-
-void
-MaterialEditorWindow::ForgetMaterialsOnDisk()
-{
-	for (MaterialGraph& entry : m_MaterialGraphs) entry.onDisk.Forget();
 }
 
 void
 MaterialEditorWindow::RefreshTangentWarning()
 {
-	const int graphIndex = CurrentGraph();
+	const int graphIndex = m_Graphs.Current();
 
 	const MaterialOutputNode* output =
-		graphIndex >= 0 ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode() :
-						  nullptr;
+		graphIndex >= 0 ? m_Graphs.At(graphIndex).model->OutputNode() : nullptr;
 
 	// Only where it is actionable: a mesh on disk to rewrite, a normal map that is being thrown
 	// away, and a submesh that has no tangent to throw it away with.
-	const bool missing = m_Preview != nullptr && !m_Preview->MeshPath().empty() &&
-	                     m_CurrentSubmesh >= 0 &&
-	                     !m_Preview->SubmeshHasTangent(static_cast<uint32_t>(m_CurrentSubmesh)) &&
-	                     output != nullptr && RoutesNormalMap(*output);
+	const bool missing =
+		m_Preview != nullptr && !m_Preview->MeshPath().empty() && m_Graphs.CurrentSubmesh() >= 0 &&
+		!m_Preview->SubmeshHasTangent(static_cast<uint32_t>(m_Graphs.CurrentSubmesh())) &&
+		output != nullptr && RoutesNormalMap(*output);
 
 	m_TangentWarning->setVisible(missing);
 	m_GenerateTangents->setVisible(missing);
 }
 
 void
-MaterialEditorWindow::GenerateTangents()
-{
-	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
-		return;
-
-	const std::filesystem::path meshPath = m_Preview->MeshPath();
-
-	auto confirm = QMessageBox(this);
-	confirm.setWindowTitle(QStringLiteral("Generate Tangents"));
-	confirm.setIcon(QMessageBox::Question);
-	confirm.setText(QStringLiteral("Derive tangents for '%1'?")
-	                    .arg(QString::fromStdString(meshPath.filename().string())));
-	confirm.setInformativeText(QStringLiteral(
-		"Every submesh that has none gains one, and the mesh is rewritten and reloaded. Unsaved "
-		"graph edits are lost, and a submesh that already has tangents keeps the authored ones."));
-
-	auto* run = confirm.addButton(QStringLiteral("Generate"), QMessageBox::AcceptRole);
-	confirm.addButton(QMessageBox::Cancel);
-	confirm.setDefaultButton(run);
-	confirm.exec();
-
-	if (confirm.clickedButton() != run)
-		return;
-
-	auto result = assetlib::TangentGenResult();
-
-	// Reading, deriving and writing a whole mesh is not instant, and none of it touches bgl.
-	const background::TaskResult done = background::RunWithLoadingScreen(
-		this,
-		QStringLiteral("Generate Tangents"),
-		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Deriving tangents...");
-
-			assetlib::BMesh mesh = assetlib::load(meshPath);
-			result               = assetlib::generateTangents(mesh);
-
-			if (result.generated > 0)
-				assetlib::save(mesh, meshPath);
-		});
-
-	if (!done.Completed())
-	{
-		QMessageBox::warning(
-			this,
-			QStringLiteral("Generate Tangents"),
-			QStringLiteral("Could not rewrite the mesh:\n\n%1").arg(done.error));
-		return;
-	}
-
-	if (result.generated == 0)
-	{
-		QMessageBox::information(
-			this,
-			QStringLiteral("Generate Tangents"),
-			QStringLiteral(
-				"Nothing to do: %1 submeshes already have tangents, and %2 cannot have one derived "
-				"(no normals, no UVs, or no triangles).")
-				.arg(result.kept)
-				.arg(result.skipped));
-		return;
-	}
-
-	// Reloading is what puts the new vertex layout in front of the renderer.
-	m_Preview->LoadMesh(meshPath);
-}
-
-void
 MaterialEditorWindow::RefreshActions()
 {
-	const int  graphIndex = CurrentGraph();
+	const int  graphIndex = m_Graphs.Current();
 	const bool hasGraph   = graphIndex >= 0;
 
 	m_OpenButton->setEnabled(hasGraph);
 	m_SaveAsButton->setEnabled(hasGraph);
 
-	const QString materialPath =
-		hasGraph ? m_MaterialGraphs[static_cast<size_t>(graphIndex)].materialPath : QString();
+	const QString materialPath = hasGraph ? m_Graphs.At(graphIndex).materialPath : QString();
 
 	// "Save" needs somewhere to write. The default sphere has no backing asset, so it stays disabled
 	// there until the graph has been given a path by Save As.
@@ -702,10 +448,10 @@ MaterialEditorWindow::RefreshActions()
 	// sphere is procedural and has neither.
 	const bool hasMesh = m_Preview != nullptr && !m_Preview->MeshPath().empty();
 
-	const QString boundPath = m_Preview != nullptr ?
-	                              m_Preview->SubmeshMaterialPaths().value(m_CurrentSubmesh) :
-	                              QString();
-	const bool    isDefault = IsAlreadyDefault(boundPath, materialPath);
+	const QString boundPath =
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(m_Graphs.CurrentSubmesh()) :
+							   QString();
+	const bool isDefault = editor::IsSameMaterialFile(boundPath, materialPath);
 
 	RefreshTangentWarning();
 
@@ -730,8 +476,7 @@ MaterialEditorWindow::RefreshActions()
 	// both this and the baked-texture listing below.
 	bool    stale = true;
 	QString bakedSummary;
-	if (const assetlib::BMaterial* material =
-	        m_MaterialGraphs[static_cast<size_t>(graphIndex)].onDisk.Get(materialPath))
+	if (const assetlib::BMaterial* material = m_Graphs.At(graphIndex).onDisk.Get(materialPath))
 	{
 		// This is a UI refresh, called from a dozen places and never from inside a handler, so a
 		// data root that has gone leaves the pessimistic default rather than throwing out of a slot.
@@ -744,7 +489,7 @@ MaterialEditorWindow::RefreshActions()
 			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
 		}
 
-		bakedSummary = BakedTexturesSummary(*material);
+		bakedSummary = editor::BakedTexturesSummary(*material);
 	}
 
 	m_BakedTexturesLabel->setText(bakedSummary);
@@ -767,11 +512,11 @@ MaterialEditorWindow::RefreshActions()
 void
 MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePos)
 {
-	const int graphIndex = CurrentGraph();
+	const int graphIndex = m_Graphs.Current();
 	if (graphIndex < 0)
 		return;
 
-	MaterialGraphModel& model = *m_MaterialGraphs[static_cast<size_t>(graphIndex)].model;
+	MaterialGraphModel& model = *m_Graphs.At(graphIndex).model;
 
 	const QtNodes::NodeId nodeId = model.addNode(QStringLiteral("Texture"));
 	model.setNodeData(nodeId, QtNodes::NodeRole::Position, scenePos);
@@ -780,45 +525,14 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 		texture->SetTexturePath(path);
 }
 
-assetlib::BMaterial
-MaterialEditorWindow::BuildMaterial(int graphIndex, const QString& materialPath) const
-{
-	const MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
-
-	assetlib::BMaterial material =
-		CompileMaterial(*entry.model, QFileInfo(materialPath).completeBaseName(), m_DataRoot);
-
-	// A material already on disk keeps whatever a previous bake produced: the triplet and its
-	// provenance. Rebuilding purely from the graph would throw the optimized textures away on every
-	// Save. If the routes have since changed, the stamps no longer match and the bake reports stale.
-	const auto file = std::filesystem::path(materialPath.toStdWString());
-	if (std::filesystem::exists(file))
-	{
-		try
-		{
-			const assetlib::BMaterial existing = assetlib::loadMaterial(file);
-			material.pbr.baseColorTexture      = existing.pbr.baseColorTexture;
-			material.pbr.normalTexture         = existing.pbr.normalTexture;
-			material.pbr.ormTexture            = existing.pbr.ormTexture;
-			material.pbr.routeStamps           = existing.pbr.routeStamps;
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialEditor: could not read the existing material: %s", e.what());
-		}
-	}
-
-	return material;
-}
-
 void
 MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 {
-	const int graphIndex = CurrentGraph();
+	const int graphIndex = m_Graphs.Current();
 	if (graphIndex < 0)
 		return;
 
-	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
+	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
 	QString path = entry.materialPath;
 	if (saveAs || path.isEmpty())
@@ -826,7 +540,9 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 		path = QFileDialog::getSaveFileName(
 			window(),
 			QStringLiteral("Save Material"),
-			path.isEmpty() ? DefaultMaterialPath() : path,
+			path.isEmpty() ?
+				editor::DefaultMaterialPath(m_DataRoot, m_SubmeshSelector->currentText()) :
+				path,
 			QStringLiteral("Bernini Material (*.bmaterial)"));
 		if (path.isEmpty())
 			return;  // cancelled
@@ -838,7 +554,7 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	try
 	{
 		assetlib::saveMaterial(
-			BuildMaterial(graphIndex, path),
+			editor::BuildMaterial(*entry.model, path, m_DataRoot),
 			std::filesystem::path(path.toStdWString()));
 	}
 	catch (const std::exception& e)
@@ -855,15 +571,16 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 
 	// Every graph, not just this one: Save As can put a second graph on a path another already
 	// holds, and a stamp cannot separate two writes inside one millisecond.
-	ForgetMaterialsOnDisk();
+	m_Graphs.ForgetOnDisk();
 
 	// A submesh with no material yet is bound by its first Save -- there is nothing to overwrite, and
 	// leaving it unbound would mean saving a material the mesh never references. Once it has one,
 	// Save writes only the `.bmaterial`: rebinding the mesh is Set Default Material's job, and doing
 	// it here would edit the shared asset every time the user pressed Ctrl+S.
-	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(m_CurrentSubmesh).isEmpty())
+	const int submesh = m_Graphs.CurrentSubmesh();
+	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(submesh).isEmpty())
 	{
-		AttachMaterialToMesh(m_CurrentSubmesh, path);
+		AttachMaterialToMesh(submesh, path);
 	}
 
 	RefreshActions();
@@ -872,61 +589,16 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 void
 MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 {
-	if (submeshIndex < 0 || submeshIndex >= static_cast<int>(m_GraphForSubmesh.size()))
-		return;
-
-	const int graphIndex = m_GraphForSubmesh[static_cast<size_t>(submeshIndex)];
+	const int graphIndex = m_Graphs.ForSubmesh(submeshIndex);
 	if (graphIndex < 0)
 		return;
 
-	const QString path = m_MaterialGraphs[static_cast<size_t>(graphIndex)].materialPath;
+	const QString path = m_Graphs.At(graphIndex).materialPath;
 	if (path.isEmpty())
 		return;  // nothing on disk to point the mesh at; Save first
 
 	AttachMaterialToMesh(submeshIndex, path);
 	RefreshActions();
-}
-
-bool
-MaterialEditorWindow::IsAlreadyDefault(const QString& boundPath, const QString& materialPath)
-{
-	if (boundPath.isEmpty() || materialPath.isEmpty())
-		return false;
-
-	// Not QFileInfo's own comparison: it falls back to canonicalFilePath(), which is *empty* for a
-	// file that does not exist -- so two different missing paths compare equal, and a material whose
-	// file has been deleted would grey the button out on any mesh.
-	//
-	// weakly_canonical resolves the part of the path that does exist and normalises the rest, so it
-	// works either way. Case-insensitively, because this is a Windows tool (see the editor CLAUDE.md).
-	const auto normalise = [](const QString& path) {
-		const auto source = std::filesystem::path(path.toStdWString());
-
-		std::error_code ec;
-		const auto      resolved = std::filesystem::weakly_canonical(source, ec);
-
-		return QString::fromStdWString(
-			ec ? source.lexically_normal().wstring() : resolved.wstring());
-	};
-
-	return normalise(boundPath).compare(normalise(materialPath), Qt::CaseInsensitive) == 0;
-}
-
-QString
-MaterialEditorWindow::DefaultMaterialPath() const
-{
-	const QString name = m_SubmeshSelector->currentText();
-
-	if (m_DataRoot.empty())
-		return name;
-
-	auto dir = m_DataRoot / Project::c_MaterialsDirectoryName;
-
-	std::error_code ec;
-	if (!std::filesystem::is_directory(dir, ec))
-		dir = m_DataRoot;
-
-	return QString::fromStdWString((dir / name.toStdWString()).wstring());
 }
 
 void
@@ -955,9 +627,7 @@ MaterialEditorWindow::Reset()
 	// No graphics device, so there is no preview to drive the rebuild.
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
-	m_MaterialGraphs.clear();
-	m_GraphForSubmesh.clear();
-	m_CurrentSubmesh = -1;
+	m_Graphs.Clear();
 	RefreshActions();
 }
 
@@ -1008,7 +678,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 void
 MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool interactive)
 {
-	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_MaterialGraphs.size()))
+	if (!m_Graphs.Holds(graphIndex))
 		return;
 
 	auto material = assetlib::BMaterial();
@@ -1073,7 +743,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		output->load(seed);
 	}
 
-	m_MaterialGraphs[static_cast<size_t>(graphIndex)].materialPath = path;
+	m_Graphs.At(graphIndex).materialPath = path;
 
 	CompileGraph(graphIndex);
 	RefreshActions();
@@ -1084,93 +754,10 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 {
 	if (m_Preview == nullptr || m_Desc.renderer == nullptr)
 		return;
-	if (graphIndex < 0 || graphIndex >= static_cast<int>(m_MaterialGraphs.size()))
+	if (!m_Graphs.Holds(graphIndex))
 		return;
 
-	const MaterialOutputNode* output =
-		m_MaterialGraphs[static_cast<size_t>(graphIndex)].model->OutputNode();
-	if (output == nullptr)
-		return;
-
-	auto desc            = bgl::LoosePbrMaterialDesc();
-	desc.baseColorFactor = output->BaseColorFactor();
-	desc.metallicFactor  = output->MetallicFactor();
-	desc.roughnessFactor = output->RoughnessFactor();
-
-	desc.layerType          = ToLayerType(output->GetAlphaMode());
-	desc.alphaCutoff        = output->GetAlphaCutoff();
-	desc.transmissionFactor = output->GetTransmission();
-
-	const auto route = [&](unsigned int channel) {
-		const ChannelData::Route wired = output->Route(channel);
-
-		auto out    = bgl::ChannelRouteDesc();
-		out.texture = wired.texture;
-		out.channel = wired.channel;
-		return out;
-	};
-
-	// The channel runs come from BMaterial.h, which owns the `routes` array a graph is saved into.
-	// A literal offset here would silently disagree with the baker the moment a channel is added.
-	const auto channel = [](const assetlib::ChannelGroup& group, size_t component) {
-		return static_cast<unsigned int>(assetlib::channelIndex(group, component));
-	};
-
-	for (size_t i = 0; i < desc.baseColor.size(); ++i)
-		desc.baseColor[i] = route(channel(assetlib::c_BaseColorChannels, i));
-	for (size_t i = 0; i < desc.orm.size(); ++i)
-		desc.orm[i] = route(channel(assetlib::c_OrmChannels, i));
-	for (size_t i = 0; i < desc.normal.size(); ++i)
-		desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
-
-	MaterialGraph& entry = m_MaterialGraphs[static_cast<size_t>(graphIndex)];
-
-	// An in-place rewrite keeps the handle, so the instances already overriding with it follow the
-	// edit with no rebinding -- but only while the PSO bucket is unchanged. The bucket comes from the
-	// handle's layer, which an update cannot rewrite, so changing the alpha mode needs a new material
-	// or it would keep the old pass.
-	Renderer* renderer = m_Desc.renderer;
-
-	if (entry.preview.IsValid() && entry.preview.layerType == desc.layerType)
-	{
-		// Fire-and-forget on every keystroke; the instances already override with this handle, so the
-		// in-place rewrite is all the edit needs.
-		renderer->Post([renderer, handle = entry.preview, desc] {
-			try
-			{
-				renderer->GetScene()->UpdateLoosePbrMaterial(handle, desc);
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MaterialEditor: could not update a preview material: %s", e.what());
-			}
-		});
-		return;
-	}
-
-	const bgl::MaterialHandle previous = entry.preview;
-
-	// Bind the replacement before destroying what it replaces: a deleted material leaves its slot to
-	// be reused, and an instance still overriding with it would silently wear whatever lands there. The
-	// override (SetSubmeshMaterial) and the delete are both posted, so they run in that order.
-	entry.preview =
-		renderer->Invoke([&] { return renderer->GetScene()->CreateLoosePbrMaterial(desc); });
-	for (const uint32_t submesh : entry.submeshes)
-		m_Preview->SetSubmeshMaterial(submesh, entry.preview);
-
-	if (previous.IsValid())
-	{
-		renderer->Post([renderer, previous] {
-			try
-			{
-				renderer->GetScene()->DeleteMaterial(previous);
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MaterialEditor: could not delete a preview material: %s", e.what());
-			}
-		});
-	}
+	editor::CompilePreviewMaterial(m_Graphs.At(graphIndex), *m_Desc.renderer, *m_Preview);
 }
 
 void
@@ -1182,7 +769,7 @@ MaterialEditorWindow::ReleasePreviewMaterials()
 	// Synchronous: the graphs must not be drawn after this returns, and the render loop draws on the
 	// same thread this runs on, so the deletes land between frames.
 	m_Desc.renderer->Invoke([&] {
-		for (MaterialGraph& entry : m_MaterialGraphs)
+		for (MaterialGraphSet::Graph& entry : m_Graphs.All())
 		{
 			if (!entry.preview.IsValid())
 				continue;

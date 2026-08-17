@@ -5,7 +5,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 
-#include "Windows/MaterialEditor/CachedMaterial.h"
+#include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 
 class TexturePreviewCache;
@@ -53,34 +53,6 @@ public:
 	Reset();
 
 	/**
-	 * Whether the mesh already names `materialPath` for the submesh -- in which case Set Default
-	 * Material would rewrite the `.bmesh` to say what it already says.
-	 *
-	 * `boundPath` is what the `.bmesh` names (empty when the submesh is unbound, which is never
-	 * "already default"). The two are compared as *files*, not as strings: they reach here by
-	 * different routes -- one from a file dialog, one from the mesh's own relative path resolved
-	 * against the data root -- and can spell the same file differently.
-	 */
-	[[nodiscard]] static bool
-	IsAlreadyDefault(const QString& boundPath, const QString& materialPath);
-
-	/**
-	 * The scene point a graph should be centred on: the middle of its output node, not its corner --
-	 * a node centred by its corner hangs off the left of the panel. Empty for a graph with no sink.
-	 */
-	[[nodiscard]] static std::optional<QPointF>
-	OutputCentre(MaterialGraphModel& model);
-
-	/**
-	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
-	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
-	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and the
-	 * Content Explorer's Bake is what rewrites them.
-	 */
-	[[nodiscard]] static QString
-	BakedTexturesSummary(const assetlib::BMaterial& material);
-
-	/**
 	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph
 	 * would not stick: the graph still holds it, and the next Save writes it straight back.
 	 */
@@ -124,15 +96,6 @@ private:
 	void
 	RefreshTangentWarning();
 
-	/**
-	 * Derives tangents for the previewed `.bmesh`, rewrites it, and reloads the preview from it.
-	 *
-	 * Reloading is what makes the new tangents visible, and it rebuilds the graphs from what the mesh
-	 * names -- so an unsaved edit is lost, which the user is asked about first.
-	 */
-	void
-	GenerateTangents();
-
 	void
 	CompileGraph(int graphIndex);
 
@@ -155,36 +118,17 @@ private:
 	void
 	SaveCurrentMaterial(bool saveAs);
 
-	[[nodiscard]] QString
-	DefaultMaterialPath() const;
-
 	void
 	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
 
 	void
 	OpenMaterialInto(int graphIndex, const QString& path, bool interactive = true);
 
-	[[nodiscard]] assetlib::BMaterial
-	BuildMaterial(int graphIndex, const QString& materialPath) const;
-
 	class MaterialOutputNode*
 	ResetGraph(int graphIndex, const QJsonObject& graph);
 
 	void
 	RefreshActions();
-
-	/** Drops every graph's cached parse, for a caller that has just rewritten one on disk. */
-	void
-	ForgetMaterialsOnDisk();
-
-	/** The graph backing the selected submesh, or -1 when nothing is selected. */
-	[[nodiscard]] int
-	CurrentGraph() const noexcept;
-
-	/** The graph already open for `materialPath` (file-wise), or -1 -- so submeshes sharing a material
-	 *  share one graph. */
-	[[nodiscard]] int
-	FindGraphForPath(const QString& materialPath) const;
 
 	MaterialEditorWindowDesc m_Desc;
 
@@ -196,30 +140,7 @@ private:
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
-	// Submeshes naming the same material path share one graph, so editing it once updates every
-	// submesh wearing it. `submeshes` lists the ones it drives.
-	struct MaterialGraph
-	{
-		std::unique_ptr<MaterialGraphModel> model;
-		std::unique_ptr<MaterialGraphScene> scene;
-
-		QString materialPath;
-
-		CachedMaterial onDisk;
-
-		// The live material this graph is previewed through. Created once and rewritten in place on
-		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's
-		// loose-material buffer is a fixed-size slot pool.
-		bgl::MaterialHandle preview;
-
-		std::vector<uint32_t> submeshes;
-	};
-	std::vector<MaterialGraph> m_MaterialGraphs;
-
-	// Submesh index -> index into m_MaterialGraphs (or -1). The submesh selector and every per-submesh
-	// mesh binding are indexed by submesh; the graphs are keyed by material, so this bridges the two.
-	std::vector<int> m_GraphForSubmesh;
-	int              m_CurrentSubmesh = -1;
+	MaterialGraphSet m_Graphs;
 
 	QComboBox*         m_SubmeshSelector    = nullptr;
 	QComboBox*         m_OutputSelector     = nullptr;
