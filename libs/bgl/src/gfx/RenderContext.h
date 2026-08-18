@@ -13,6 +13,7 @@
 #include "passes/OutlineMaskPass.h"
 #include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
+#include "passes/SkinnedPosePass.h"
 #include "passes/SkyboxPass.h"
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
@@ -179,6 +180,7 @@ namespace bgl
 		OutlineMaskPass      m_OutlineMask;
 		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;
+		SkinnedPosePass      m_SkinnedPose;
 		TransparentSortPass  m_TransparentSort;
 
 		SamplerHandle m_PointClampSampler;

@@ -917,6 +917,7 @@ namespace bgl
 			GeomRecord& geom = m_Geoms[base.handle.index];
 			geom.skinnedGeom = m_SkinnedGeoms.Add(record);
 			geom.clipCount   = static_cast<uint32_t>(clips.size());
+			geom.boneCount   = boneCount;
 
 			rollback.Commit();
 
