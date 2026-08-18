@@ -109,7 +109,8 @@ namespace
 		using Sink = std::function<void(
 			std::shared_ptr<assetlib::BMesh>,
 			std::shared_ptr<CookedMeshes>,
-			std::shared_ptr<game::TexturePrefetch>)>;
+			std::shared_ptr<game::TexturePrefetch>,
+			std::string)>;  // why the read failed, or empty
 
 		LoadTask(
 			QString               path,
@@ -130,6 +131,7 @@ namespace
 			std::shared_ptr<assetlib::BMesh>       mesh;
 			std::shared_ptr<CookedMeshes>          cooked;
 			std::shared_ptr<game::TexturePrefetch> prefetch;
+			std::string                            failure;
 
 			try
 			{
@@ -168,13 +170,13 @@ namespace
 			}
 			catch (const std::exception& e)
 			{
-				qWarning("AssetThumbnail: cannot read '%s': %s", qPrintable(m_Path), e.what());
+				failure = e.what();
 				mesh.reset();
 				cooked.reset();
 				prefetch.reset();
 			}
 
-			m_Sink(std::move(mesh), std::move(cooked), std::move(prefetch));
+			m_Sink(std::move(mesh), std::move(cooked), std::move(prefetch), std::move(failure));
 		}
 
 	private:
@@ -360,7 +362,8 @@ AssetThumbnailCache::Request(const QString& path)
 	auto sink = [this, path, material, stamp](
 					std::shared_ptr<assetlib::BMesh>       mesh,
 					std::shared_ptr<CookedMeshes>          cooked,
-					std::shared_ptr<game::TexturePrefetch> prefetch) {
+					std::shared_ptr<game::TexturePrefetch> prefetch,
+					std::string                            failure) {
 		QMetaObject::invokeMethod(
 			this,
 			[this,
@@ -369,6 +372,7 @@ AssetThumbnailCache::Request(const QString& path)
 		     mesh     = std::move(mesh),
 		     cooked   = std::move(cooked),
 		     prefetch = std::move(prefetch),
+		     failure  = std::move(failure),
 		     stamp]() mutable {
 				auto pending     = PendingRender();
 				pending.path     = path;
@@ -377,6 +381,7 @@ AssetThumbnailCache::Request(const QString& path)
 				pending.cooked   = std::move(cooked);
 				pending.prefetch = std::move(prefetch);
 				pending.stamp    = stamp;
+				pending.failure  = QString::fromStdString(failure);
 
 				Enqueue(path, pending.type, std::move(pending));
 			},
@@ -400,11 +405,13 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 	if (!IsClaimed(path))
 		return;
 
-	// The worker failed: no prefetch, and for a mesh no mesh or cook either.
+	// The worker failed: no prefetch, and for a mesh no mesh or cook either. A failure on the
+	// file's content -- an unreadable container -- will fail the same way on every repaint, so it
+	// is remembered until the file changes, with its reason for the tile to show.
 	if (pending.prefetch == nullptr ||
 	    (type == ThumbnailType::kMesh && (pending.mesh == nullptr || pending.cooked == nullptr)))
 	{
-		Abandon(path);
+		Reject(path, pending.stamp, pending.failure);
 		return;
 	}
 

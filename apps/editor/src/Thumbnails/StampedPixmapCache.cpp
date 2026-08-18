@@ -16,6 +16,16 @@ StampedPixmapCache::Lookup(const QString& path) const
 	return entry->pixmap;
 }
 
+QString
+StampedPixmapCache::GetRejection(const QString& path) const
+{
+	const Entry* entry = m_Cache.object(path);
+	if (entry == nullptr || !entry->pixmap.isNull() || entry->stamp != editor::FileStamp(path))
+		return {};
+
+	return entry->rejection;
+}
+
 std::optional<qint64>
 StampedPixmapCache::BeginRequest(const QString& path)
 {
@@ -62,7 +72,7 @@ StampedPixmapCache::Abandon(const QString& path) noexcept
 }
 
 void
-StampedPixmapCache::Reject(const QString& path, qint64 stamp)
+StampedPixmapCache::Reject(const QString& path, qint64 stamp, const QString& reason)
 {
 	m_Claimed.remove(path);
 
@@ -71,7 +81,8 @@ StampedPixmapCache::Reject(const QString& path, qint64 stamp)
 	    entry != nullptr && entry->stamp == stamp && !entry->pixmap.isNull())
 		return;
 
-	m_Cache.insert(path, new Entry{ QPixmap(), stamp }, 1);
+	m_Cache.insert(path, new Entry{ QPixmap(), stamp, reason }, 1);
+	Q_EMIT Rejected(path, reason);
 }
 
 void

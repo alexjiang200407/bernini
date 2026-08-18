@@ -251,3 +251,29 @@ TEST_CASE("An empty path is never claimed", "[thumbnails]")
 	REQUIRE_FALSE(cache.BeginRequest("").has_value());
 	REQUIRE_FALSE(cache.IsClaimed(""));
 }
+
+TEST_CASE("A rejection carries its reason until the file changes", "[thumbnails]")
+{
+	// An unreadable container's own message is what the tile shows; it belongs to the content that
+	// failed, so a rewritten file starts clean.
+	const Sandbox sandbox;
+	TestCache     cache;
+	QSignalSpy    rejected(&cache, &StampedPixmapCache::Rejected);
+
+	const QString path = sandbox.Write("stale.bmesh");
+	REQUIRE(cache.GetRejection(path).isEmpty());
+
+	const std::optional<qint64> stamp = cache.BeginRequest(path);
+	REQUIRE(stamp.has_value());
+	cache.Reject(path, *stamp, "bmesh: format 3 predates the schema table");
+
+	REQUIRE(rejected.count() == 1);
+	REQUIRE(rejected.at(0).at(1).toString() == "bmesh: format 3 predates the schema table");
+	REQUIRE(cache.GetRejection(path) == "bmesh: format 3 predates the schema table");
+	REQUIRE(cache.Lookup(path).isNull());
+
+	// The reason belongs to the content: under another stamp it is not the file's any more.
+	TestCache other;
+	other.Reject(path, editor::FileStamp(path) - 1, "an older failure");
+	REQUIRE(other.GetRejection(path).isEmpty());
+}
